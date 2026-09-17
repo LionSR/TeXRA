@@ -27,6 +27,7 @@ import { DEFAULT_MODELS } from '@model/modelOptionsBasic';
 import { platform } from '@platform/platform';
 import { effectRuntime } from '@platform/processRuntime';
 import { workspaceRoots } from '@platform/workspaceRoots';
+import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
 import { MEMORY_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import {
   formatTexraApprovalPolicy,
@@ -240,7 +241,7 @@ const HARNESS_COLOR_ENABLED = process.env.HARNESS_COLOR_ENABLED !== '0';
 const HARNESS_RESOURCES_PATH = resolveCliResourcesPath();
 const HARNESS_CLI_CONTEXT: CliContext = {
   approvalPolicy: TEXRA_APPROVAL_POLICY_DEFAULT,
-  cliConfig: {},
+  config: new MemoryConfigProvider(),
   commandName: 'texra',
   configWarnings: [],
   cwd: HARNESS_CWD,

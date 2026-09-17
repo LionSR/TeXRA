@@ -8,12 +8,12 @@ import { Effect } from 'effect';
 import { describe, it, vi } from 'vitest';
 
 // Local imports
-import { KNOWN_TEXRA_KEYS } from '@cli/schemas/knownKeys';
 import * as logger from '@logger/logUtils';
 import { TEXRA_APPROVAL_POLICY_CONFIG_KEY } from '@shared/approvalPolicy';
 import {
   ALL_SETTINGS,
   AGENT_SKILLS_CONFIG_KEY,
+  CLI_CONFIG_SLOT_KEYS,
   CLI_STATE_SETTINGS,
   DEFAULT_GIT_AUTHOR_EMAIL,
   DEFAULT_GIT_AUTHOR_NAME,
@@ -370,6 +370,12 @@ describe('catalog-derived settings snapshots', () => {
     }
   });
 });
+
+/**
+ * The set the CLI builds from this same export for its unknown-key walk over
+ * `.texra/config.json` (`packages/cli/src/runtime/cliConfig.ts`).
+ */
+const KNOWN_TEXRA_KEYS: ReadonlySet<string> = new Set(CLI_CONFIG_SLOT_KEYS);
 
 describe('knownKeys derivation', () => {
   it('recognizes config-slot CLI keys, but warns on state.json keys in config.json', () => {

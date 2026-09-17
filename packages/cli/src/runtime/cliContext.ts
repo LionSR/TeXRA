@@ -4,7 +4,7 @@ import path from 'node:path';
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
 import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
 import {
-  TEXRA_APPROVAL_POLICY_DEFAULT,
+  TEXRA_APPROVAL_POLICY_CONFIG_KEY,
   TEXRA_APPROVAL_POLICY_NO_INPUT_DEFAULT,
   parseTexraApprovalPolicy,
   type TexraApprovalPolicy,
@@ -13,14 +13,16 @@ import type { SkillSourceOptions } from '@skills/skillSources';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { isNonEmptyString } from '@utils/text/stringUtils';
 
+import type { ConfigProvider } from '@platform/interfaces';
 import {
   CLI_OUTPUT_FORMATS,
+  CLI_OUTPUT_FORMAT_CONFIG_KEY,
   type CliOutputFormat,
-} from '../schemas/cliSettings';
+} from '@shared/schemas';
 import {
   isCliSupportedModelId,
   loadCliStartupConfig,
-  type CliConfigValues,
+  readCliConfigSetting,
 } from './cliConfig';
 import { resolveCliResourcesPath } from './resourcesPath';
 import type { Stats } from 'node:fs';
@@ -52,8 +54,12 @@ export interface CliContext {
   readonly commandName: string;
   readonly version: string;
   readonly resourcesPath: string;
-  readonly cliConfig: CliConfigValues;
-  readonly configFilePath?: string;
+  /**
+   * The one config provider of this process, opened before the platform and
+   * installed as the workspace roots' config by `initCliPlatform`: every
+   * setting read after startup resolves through this same pair of stores.
+   */
+  readonly config: ConfigProvider;
   readonly configWarnings: readonly string[];
   readonly envAgent?: string;
   readonly envModel?: string;
@@ -369,18 +375,16 @@ export async function buildCliContext(
   const ambient = init.ambient ?? readCliAmbientState();
   const env = init.env ?? process.env;
   const cwd = await resolveCliCwd(init.globalArgs.cwd);
-  // Workspace file first, user file second — the same order
-  // `workspaceRoots().config` gives the extension and desktop hosts. This is
-  // the pre-runtime caller of both readers, which is why it goes through
-  // `loadCliStartupConfig` rather than the process runtime.
-  const [loadedConfig, userApprovalPolicy] = await loadCliStartupConfig(
+  // The project file over the user file, resolved by the same
+  // `JsonConfigProvider` `workspaceRoots().config` gives the extension and
+  // desktop hosts — and, from `initCliPlatform` on, this host too. This is the
+  // pre-runtime open, which is why it goes through `loadCliStartupConfig`
+  // rather than the process runtime.
+  const { config, warnings } = await loadCliStartupConfig(
     cwd,
     init.storageRoot,
   );
-  const configWarnings = [
-    ...loadedConfig.warnings,
-    ...userApprovalPolicy.warnings,
-  ];
+  const configWarnings = [...warnings];
   const envModel = pickEnvModel(env, configWarnings);
   // `--no-color` is an explicit force-disable: layer it onto the ambient
   // per-stream gates rather than recomputing them, so `NO_COLOR`/`FORCE_COLOR`/
@@ -389,23 +393,24 @@ export async function buildCliContext(
   const stdoutColorEnabled = !noColor && ambient.stdoutColorEnabled;
   const stderrColorEnabled = !noColor && ambient.stderrColorEnabled;
   const noInput = init.globalArgs.noInput === true;
-  // The flag is validated by citty (`type: 'enum'`) and the two config tiers
-  // by Zod, each with its own path-labelled warning — the environment is the
-  // only tier that can still carry an unvalidated string. `--no-input` skips
-  // the env and config tiers entirely, so it also skips their warnings.
+  // The flag is validated by citty (`type: 'enum'`) and the config tiers by
+  // the catalog row's own schema, which also supplies the value when no tier
+  // set one — the environment is the only tier that can still carry an
+  // unvalidated string. `--no-input` skips the env and config tiers entirely,
+  // so it also skips their warnings.
   const approvalPolicy =
     init.globalArgs.approvalPolicy ??
     (noInput
       ? TEXRA_APPROVAL_POLICY_NO_INPUT_DEFAULT
       : (pickEnvApprovalPolicy(env, configWarnings) ??
-        loadedConfig.values.approvalPolicy ??
-        userApprovalPolicy.value ??
-        TEXRA_APPROVAL_POLICY_DEFAULT));
+        readCliConfigSetting<TexraApprovalPolicy>(
+          config,
+          TEXRA_APPROVAL_POLICY_CONFIG_KEY,
+        )));
   const outputFormat: CliOutputFormat =
     init.globalArgs.outputFormat ??
     pickEnvOutputFormat(env, configWarnings) ??
-    loadedConfig.values.outputFormat ??
-    'text';
+    readCliConfigSetting<CliOutputFormat>(config, CLI_OUTPUT_FORMAT_CONFIG_KEY);
   return {
     storageRoot: init.storageRoot,
     cwd,
@@ -421,8 +426,7 @@ export async function buildCliContext(
     commandName: resolveCliCommandName(readCliEntrypointPath()),
     version: await readCliVersion(),
     resourcesPath: resolveCliResourcesPath(),
-    cliConfig: loadedConfig.values,
-    configFilePath: loadedConfig.path,
+    config,
     configWarnings,
     envAgent: envValue(env, 'TEXRA_AGENT'),
     envModel,

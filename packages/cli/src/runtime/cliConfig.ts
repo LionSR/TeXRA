@@ -1,57 +1,63 @@
-import { readFile } from 'node:fs/promises';
-import * as path from 'node:path';
-
+// Third-party imports
+import { Effect } from 'effect';
 import { MODEL_CONFIGS, ModelProvider } from 'llm-zoo';
-import { z } from 'zod';
 
-import { Effect, Result } from 'effect';
-import { isFileNotFoundError } from '@common/errors';
-import { safeParseJson } from '@common/parsing/safeParseJson';
-import { JsonStore } from '@platform/defaults/jsonStore';
+// Local imports - platform
+import { JsonConfigProvider } from '@platform/defaults/jsonConfigProvider';
+import { nodeFileServices, type JsonStore } from '@platform/defaults/jsonStore';
 import {
   DEFAULT_NODE_STORAGE_ROOT,
-  TEXRA_CONFIG_FILE_NAME,
   workspaceTexraConfigPath,
 } from '@platform/defaults/nodeStorage';
-import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
+import { openTexraConfigStores } from '@platform/defaults/nodeStores';
 import {
-  TexraApprovalPolicyInputSchema,
-  type TexraApprovalPolicy,
-} from '@shared/approvalPolicy';
+  resolveGlobalStoragePath,
+  resolveWorkspaceStoragePath,
+} from '@platform/defaults/workspaceStorage';
+import type { ConfigProvider } from '@platform/interfaces';
+
+// Local imports - shared
 import { canonicalConfigKey } from '@shared/config/configKeys';
-import { isObject } from '@utils/core';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { readConfigSetting } from '@shared/config/settingsAccess';
+import { CLI_CONFIG_SLOT_KEYS, settingByKey } from '@shared/schemas';
 
+// Local imports - utilities
 import {
-  CLI_OUTPUT_FORMATS,
-  CLI_SETTING_PATHS,
-  type CliOutputFormat,
-} from '../schemas/cliSettings';
-import { KNOWN_TEXRA_KEYS } from '../schemas/knownKeys';
+  platformSettingsStores,
+  readSettingFrom,
+  writePlatformSetting,
+} from '@utils/config/platformSettings';
+import { isObject } from '@utils/core';
 
-export const CLI_BUILTIN_DEFAULT_MODEL = 'deepseekproT';
+// Local file imports
+import { writeTextStderr } from './logSinks';
 
-interface CliCommandConfig {
+/**
+ * The model a `texra` command starts on when nothing else names one.
+ *
+ * A deliberate cheap-start choice, not a recommendation: the terminal client
+ * is the surface someone tries first, often with one freshly pasted provider
+ * key, so the built-in default is the cheapest capable model rather than the
+ * strongest. `--model`, `TEXRA_MODEL`, and the `texra.model` /
+ * `texra.chat.model` / `texra.run.model` rows all outrank it, and a model this
+ * machine cannot run falls back to an available one with a notice.
+ */
+export const CLI_CHEAP_START_MODEL = 'deepseekproT';
+
+/** The `texra.*` command sections whose members are `agent` and `model`. */
+const COMMAND_ROLES = ['chat', 'run'] as const;
+export type CliCommandRole = (typeof COMMAND_ROLES)[number];
+
+/** Agent and model for one command, after the section/top-level fallthrough. */
+export interface CliCommandDefaults {
   readonly agent?: string;
   readonly model?: string;
-}
-
-export interface CliConfigValues extends CliCommandConfig {
-  readonly outputFormat?: CliOutputFormat;
-  readonly approvalPolicy?: TexraApprovalPolicy;
-  readonly chat?: CliCommandConfig;
-  readonly run?: CliCommandConfig;
-}
-
-interface LoadedCliConfig {
-  readonly path?: string;
-  readonly values: CliConfigValues;
-  readonly warnings: readonly string[];
-}
-
-interface UserApprovalPolicy {
-  readonly value?: TexraApprovalPolicy;
-  readonly warnings: readonly string[];
+  /**
+   * Which config tier supplied `model`. The model decision labels its choice
+   * with the tier it came from, and the label decides how an unavailable model
+   * is reported, so the merged read still names the file behind the value.
+   */
+  readonly modelScope?: 'workspace-config' | 'user-config';
 }
 
 export function isCliSupportedModelId(model: string): boolean {
@@ -103,380 +109,173 @@ export function resolveKnownCliModelId(model: string): string | undefined {
   return normalizedMatches.length === 1 ? normalizedMatches[0] : undefined;
 }
 
-const NonEmptyStringSchema = z.string().trim().min(1);
-const ModelSchema = NonEmptyStringSchema.refine(isCliSupportedModelId, {
-  message: 'unknown model',
-});
-const OutputFormatSchema = z.enum(CLI_OUTPUT_FORMATS);
-
-type CliScalarFields = Required<Omit<CliConfigValues, 'chat' | 'run'>>;
-type CliRequiredCommandConfig = Required<CliCommandConfig>;
-
-/** One `[key, schema]` pair whose schema output matches `T`'s type for that
- *  same key — so a transposed pair (e.g. `model`'s key with an output-format
- *  schema) is a compile error at the declaration below, not just a runtime
- *  mismatch caught by `pickFields`. */
-type FieldSchemaEntry<T> = {
-  [K in keyof T]-?: readonly [K, z.ZodType<T[K]>];
-}[keyof T];
-
-/** Single source of truth for the top-level scalar fields: `pickFields` walks
- *  this one list to produce both the picked value and its validation warning
- *  in the same pass, instead of each being a separately re-declared walk. */
-const TOP_LEVEL_FIELD_SCHEMAS: ReadonlyArray<
-  FieldSchemaEntry<CliScalarFields>
-> = [
-  ['agent', NonEmptyStringSchema],
-  ['model', ModelSchema],
-  ['outputFormat', OutputFormatSchema],
-  // The approval-policy module's own tolerant input form, so a hand-edited
-  // " Yolo" reads the same way here as at every other parse of user text.
-  ['approvalPolicy', TexraApprovalPolicyInputSchema],
-];
-
-/** Same role as {@link TOP_LEVEL_FIELD_SCHEMAS}, for the `chat`/`run` command
- *  sections — shared by `pickCommandSection`. */
-const COMMAND_FIELD_SCHEMAS: ReadonlyArray<
-  FieldSchemaEntry<CliRequiredCommandConfig>
-> = [
-  ['agent', NonEmptyStringSchema],
-  ['model', ModelSchema],
-];
-const COMMAND_SECTIONS = ['chat', 'run'] as const;
-
-const TOP_LEVEL_KEYS = new Set<string>(
-  CLI_SETTING_PATHS.map(canonicalConfigKey),
-);
-const COMMAND_KEYS = new Set(COMMAND_FIELD_SCHEMAS.map(([key]) => key));
-
-function isKnownConfigKey(key: string): boolean {
-  return TOP_LEVEL_KEYS.has(key) || KNOWN_TEXRA_KEYS.has(key);
+/** The process's config provider, plus the workspace file's diagnostics. */
+export interface CliStartupConfig {
+  /**
+   * The one provider of this process: `buildCliContext` resolves the startup
+   * rows through it and `initCliPlatform` installs this same instance as the
+   * workspace roots' config, so a value `texra config` writes is the value the
+   * next run reads — including when the project file cannot be written and
+   * both ends fall back to the internal workspace store.
+   */
+  readonly config: ConfigProvider;
+  readonly warnings: readonly string[];
 }
 
-function warnUnknownKeys(
-  warnings: string[],
-  filePath: string,
-  record: Record<string, unknown>,
-  allowed: ReadonlySet<string>,
-  prefix = '',
-): void {
-  for (const key of Object.keys(record)) {
-    if (
-      !allowed.has(key) &&
-      !isKnownConfigKey(prefix ? `${prefix}${key}` : key)
-    ) {
-      warnings.push(`Ignoring unknown ${filePath} key "${prefix}${key}".`);
-    }
-  }
+/** A config-slot catalog row, read and validated through its own schema. */
+export function readCliConfigSetting<T>(
+  config: ConfigProvider,
+  key: string,
+): T {
+  const entry = settingByKey(key);
+  if (!entry) throw new Error(`No setting catalog entry for key: ${key}`);
+  return readConfigSetting(entry, config) as T;
 }
 
-/** Picks every `[key, schema]` pair present and valid in `record`, reading
- *  each field under `keyFor(key)` (the raw key for command sections, the
- *  canonical `texra.*` key at the top level), and pushing one warning per
- *  invalid field into `warnings` in the same pass — a value and its warning
- *  can no longer drift apart by only calling one of two walks. `fields`'
- *  declaration site is checked against `T` (see {@link FieldSchemaEntry});
- *  only this loop body — not the caller — needs to assert the per-iteration
- *  correlation back to a specific `K`. */
-function pickFields<T extends object>(
-  record: Record<string, unknown>,
-  fields: ReadonlyArray<FieldSchemaEntry<T>>,
-  keyFor: (key: keyof T) => string,
-  warnings: string[],
-  filePath: string,
-  prefix = '',
-): Partial<T> {
-  const picked: Partial<T> = {};
-  for (const [key, schema] of fields) {
-    const storedKey = keyFor(key);
-    if (!Object.hasOwn(record, storedKey)) continue;
-    const parsed = schema.safeParse(record[storedKey]);
-    if (parsed.success) {
-      picked[key] = parsed.data as T[typeof key];
-    } else {
-      warnings.push(
-        `Ignoring invalid ${filePath} key "${prefix}${storedKey}".`,
-      );
-    }
-  }
-  return picked;
-}
-
-interface PickConfigOptions {
-  /** Gates only the *top-level* unknown-key check — the shared user config
-   *  holds rows the other hosts honor and the CLI doesn't (see
-   *  {@link parseCliConfigValues}). The `chat`/`run` sections underneath a
-   *  known top-level key are CLI-exclusive structure in every host (nothing
-   *  else reads or writes `texra.chat.*`/`texra.run.*`), so an unknown key
-   *  nested inside one of them always warns regardless of this flag — a
-   *  typo like `texra.chat.modle` is a bug report worth surfacing even when
-   *  the file's other top-level rows are being read leniently. */
-  readonly reportUnknownKeys: boolean;
-  /** Restricts which command sections get read (and thus warned about) —
-   *  `undefined` means all of {@link COMMAND_SECTIONS}. A caller that only
-   *  resolves `chat` values has no use warning about a `run.*` typo, and
-   *  every extra field read is a field a caller invoked on every loop
-   *  iteration (e.g. a caller that re-resolves chat defaults after one
-   *  session ends and another starts) can print the same warning again on
-   *  the next pass. */
-  readonly sections?: ReadonlySet<(typeof COMMAND_SECTIONS)[number]>;
-  /** Restricts which top-level scalar fields get read — same rationale as
-   *  `sections`, one level up. */
-  readonly topLevelFields?: ReadonlySet<keyof CliScalarFields>;
-}
-
-function pickCommandSection(
-  record: Record<string, unknown>,
-  section: (typeof COMMAND_SECTIONS)[number],
-  warnings: string[],
-  filePath: string,
-): CliCommandConfig | undefined {
-  const sectionKey = canonicalConfigKey(section);
-  if (!Object.hasOwn(record, sectionKey)) return undefined;
-  const sectionValue = record[sectionKey];
-  if (!isObject(sectionValue)) {
-    warnings.push(`Ignoring invalid ${filePath} key "${sectionKey}".`);
-    return undefined;
-  }
-  const prefix = `${sectionKey}.`;
-  // Always checked: chat.*/run.* are CLI-exclusive structure, so a typo'd
-  // key here is never a false positive the way a shared top-level row is.
-  warnUnknownKeys(warnings, filePath, sectionValue, COMMAND_KEYS, prefix);
-  return pickFields<CliRequiredCommandConfig>(
-    sectionValue,
-    COMMAND_FIELD_SCHEMAS,
-    (key) => key,
-    warnings,
-    filePath,
-    prefix,
-  );
-}
-
-function pickConfigValues(
-  record: Record<string, unknown>,
-  warnings: string[],
-  filePath: string,
-  options: PickConfigOptions,
-): CliConfigValues {
-  if (options.reportUnknownKeys) {
-    warnUnknownKeys(warnings, filePath, record, TOP_LEVEL_KEYS);
-  }
-  const wantsSection = (section: (typeof COMMAND_SECTIONS)[number]): boolean =>
-    options.sections?.has(section) ?? true;
-  const chat = wantsSection('chat')
-    ? pickCommandSection(record, 'chat', warnings, filePath)
-    : undefined;
-  const run = wantsSection('run')
-    ? pickCommandSection(record, 'run', warnings, filePath)
-    : undefined;
-  const topLevelFields = options.topLevelFields
-    ? TOP_LEVEL_FIELD_SCHEMAS.filter(([key]) =>
-        options.topLevelFields?.has(key),
-      )
-    : TOP_LEVEL_FIELD_SCHEMAS;
+/**
+ * Agent and model for one command: its own `texra.chat` / `texra.run` section
+ * over the top-level `texra.agent` / `texra.model` rows, both resolved through
+ * the process's config provider (workspace file over user file).
+ *
+ * Runs after `initCliPlatform`, which installs the roots holding that provider.
+ */
+export function cliCommandDefaults(role: CliCommandRole): CliCommandDefaults {
+  const stores = platformSettingsStores();
+  const sectionKey = canonicalConfigKey(role);
+  const section =
+    readSettingFrom<CliCommandDefaults | undefined>(stores, sectionKey) ?? {};
+  const modelKey = section.model ? sectionKey : canonicalConfigKey('model');
+  const model =
+    section.model ?? readSettingFrom<string | undefined>(stores, modelKey);
   return {
-    ...pickFields<CliScalarFields>(
-      record,
-      topLevelFields,
-      canonicalConfigKey,
-      warnings,
-      filePath,
-    ),
-    ...(chat ? { chat } : {}),
-    ...(run ? { run } : {}),
+    agent:
+      section.agent ??
+      readSettingFrom<string | undefined>(stores, canonicalConfigKey('agent')),
+    model,
+    ...(model === undefined
+      ? {}
+      : {
+          modelScope:
+            stores.config.inspect(modelKey)?.workspaceValue === undefined
+              ? ('user-config' as const)
+              : ('workspace-config' as const),
+        }),
   };
-}
-
-/** Parses one config file's values and warnings in a single walk — the
- *  single source of truth for both is {@link TOP_LEVEL_FIELD_SCHEMAS} /
- *  {@link COMMAND_FIELD_SCHEMAS}, read once per field. `filePath` is only
- *  used to word warning messages; pass the caller's best label for `value`'s
- *  origin (a real path, or a description) when there isn't one on disk.
- *  `reportUnknownKeys` (default `true`) should be `false` for the shared
- *  user-level config file: it holds rows the other hosts honor and the CLI
- *  doesn't, so flagging them as "unknown" would be a false positive — the
- *  same reasoning {@link loadUserApprovalPolicy} documents for that file.
- *  `topLevelFields`/`sections` scope which fields get read at all — use
- *  them when a caller only consumes a subset (see {@link PickConfigOptions}). */
-export function parseCliConfigValues(
-  value: unknown,
-  filePath: string,
-  options: Partial<PickConfigOptions> = {},
-): { readonly values: CliConfigValues; readonly warnings: readonly string[] } {
-  const warnings: string[] = [];
-  const values = isObject(value)
-    ? pickConfigValues(value, warnings, filePath, {
-        ...options,
-        reportUnknownKeys: options.reportUnknownKeys ?? true,
-      })
-    : {};
-  return { values, warnings };
-}
-
-/**
- * Read and JSON-parse a TeXRA config file, distinguishing "file does not
- * exist" (silently defaulted by both callers) from a read/parse/shape
- * problem (surfaced as a single warning) from a successfully parsed object.
- * Shared by {@link loadWorkspaceCliConfig} and {@link loadUserApprovalPolicy},
- * which otherwise duplicate this read-catch-parse-validate sequence.
- *
- * This function IS the filesystem boundary adapter: the `readFile` rejection
- * is folded into the three-way result here rather than thrown on (migration
- * PRD R7).
- */
-type JsonConfigFileResult =
-  | { readonly status: 'missing' }
-  | { readonly status: 'warning'; readonly warning: string }
-  | { readonly status: 'ok'; readonly parsed: Record<string, unknown> };
-
-function readJsonConfigFile(
-  filePath: string,
-): Effect.Effect<JsonConfigFileResult> {
-  return Effect.tryPromise({
-    try: () => readFile(filePath, 'utf8'),
-    catch: (cause) => ensureError(cause),
-  }).pipe(
-    Effect.match({
-      onFailure: (error): JsonConfigFileResult =>
-        isFileNotFoundError(error)
-          ? { status: 'missing' }
-          : {
-              status: 'warning',
-              warning: `Could not read ${filePath}: ${toErrorMessage(error)}`,
-            },
-      onSuccess: (raw): JsonConfigFileResult => {
-        const parseResult = safeParseJson(raw);
-        if (Result.isFailure(parseResult)) {
-          return {
-            status: 'warning',
-            warning: `Could not parse ${filePath}: ${toErrorMessage(parseResult.failure)}`,
-          };
-        }
-        if (!isObject(parseResult.success)) {
-          return {
-            status: 'warning',
-            warning: `Ignoring ${filePath}; expected a JSON object.`,
-          };
-        }
-        return { status: 'ok', parsed: parseResult.success };
-      },
-    }),
-  );
-}
-
-/**
- * The workspace `.texra/config.json` layer, as a program: its one caller that
- * runs before the process runtime exists (`buildCliContext`) settles it on a
- * bare run, and every caller after that (`resolveChatDefaults`,
- * `readCliAgentRoster`) settles it on the process runtime like any other
- * program. The reader itself is service-free and says nothing about which.
- */
-export function loadWorkspaceCliConfig(
-  cwd: string,
-): Effect.Effect<LoadedCliConfig> {
-  return Effect.gen(function* () {
-    const filePath = workspaceTexraConfigPath(cwd);
-    const result = yield* readJsonConfigFile(filePath);
-    if (result.status === 'missing') return { values: {}, warnings: [] };
-    if (result.status === 'warning') {
-      return { path: filePath, values: {}, warnings: [result.warning] };
-    }
-    const { values, warnings } = parseCliConfigValues(result.parsed, filePath);
-    return { path: filePath, values, warnings };
-  });
-}
-
-/**
- * The user-level layer of `texra.approvalPolicy`
- * (`~/.texra/v1/global-storage/config.json`).
- *
- * The extension and desktop hosts resolve this row through `workspaceRoots().config`,
- * which layers the project `.texra/config.json` over the user file. The CLI
- * resolves its approval policy in `buildCliContext`, before `initCliPlatform`
- * creates that provider, so it reads the user layer here rather than standing
- * up a second config provider — otherwise a policy set once in `/config` (or
- * by the extension) is honored by two hosts and silently ignored by the third.
- *
- * Only this one key is read. The other CLI config fields are either
- * workspace-scoped or already resolve their own user layer (`chatDefaults`),
- * and unknown keys are not reported: the file is shared by all three hosts and
- * holds rows the CLI does not honor.
- */
-function loadUserApprovalPolicy(
-  storageRoot: string = DEFAULT_NODE_STORAGE_ROOT,
-): Effect.Effect<UserApprovalPolicy> {
-  return Effect.gen(function* () {
-    const filePath = path.join(
-      resolveGlobalStoragePath(storageRoot),
-      TEXRA_CONFIG_FILE_NAME,
-    );
-    const result = yield* readJsonConfigFile(filePath);
-    if (result.status === 'missing') return { warnings: [] };
-    if (result.status === 'warning') return { warnings: [result.warning] };
-
-    const { values, warnings } = parseCliConfigValues(result.parsed, filePath, {
-      reportUnknownKeys: false,
-      topLevelFields: new Set(['approvalPolicy']),
-      sections: new Set(),
-    });
-    return { value: values.approvalPolicy, warnings };
-  });
-}
-
-/**
- * The one bare run edge in this file, and the one caller that needs it:
- * `buildCliContext` resolves both config layers BEFORE `initCliPlatform` (and
- * with it `installCliProcessRuntime`), so there is no process runtime to
- * borrow yet; the two readers are service-free. Pinned in
- * `BARE_EFFECT_RUN_SITES`. Every other caller of these readers runs after the
- * platform is up and settles them on the process runtime.
- */
-export function loadCliStartupConfig(
-  cwd: string,
-  storageRoot?: string,
-): Promise<readonly [LoadedCliConfig, UserApprovalPolicy]> {
-  return Effect.runPromise(
-    Effect.all(
-      [loadWorkspaceCliConfig(cwd), loadUserApprovalPolicy(storageRoot)],
-      { concurrency: 'unbounded' },
-    ),
-  );
 }
 
 /**
  * Update the workspace chat-agent default without replacing unrelated config.
- * Nested command defaults remain a JSON object under the canonical
- * `texra.chat` key.
+ * Nested command defaults remain a JSON object under the canonical `texra.chat`
+ * key, written through the catalog's own write path so the row's schema
+ * validates it and the write lands in the store this process reads back.
  */
 export const setWorkspaceCliChatAgent = Effect.fn(
   'cliConfig.setWorkspaceCliChatAgent',
-)(function* (cwd: string, agent: string | undefined) {
+)(function* (agent: string | undefined) {
   const trimmed = agent?.trim();
   if (agent !== undefined && !trimmed) {
     return yield* Effect.fail(
       new Error('The default chat agent must not be empty.'),
     );
   }
-  const store = yield* JsonStore.open(workspaceTexraConfigPath(cwd));
-  const snapshot = store.snapshot();
   const sectionKey = canonicalConfigKey('chat');
-  const existing = isObject(snapshot[sectionKey]) ? snapshot[sectionKey] : {};
-  const next = { ...existing };
+  const existing =
+    readSettingFrom<CliCommandDefaults | undefined>(
+      platformSettingsStores(),
+      sectionKey,
+    ) ?? {};
+  const next: { agent?: string; model?: string } = { ...existing };
   if (trimmed) next.agent = trimmed;
   else delete next.agent;
-  yield* store.set(sectionKey, Object.keys(next).length > 0 ? next : undefined);
+  yield* writePlatformSetting(
+    sectionKey,
+    Object.keys(next).length > 0 ? next : undefined,
+  );
 });
 
-export function resolveConfiguredAgent(
-  config: CliConfigValues | undefined,
-  command: 'chat' | 'run',
-): string | undefined {
-  return config?.[command]?.agent ?? config?.agent;
+/** Canonical `texra.*` keys the CLI recognizes in `.texra/config.json`. */
+const KNOWN_CONFIG_KEYS: ReadonlySet<string> = new Set(CLI_CONFIG_SLOT_KEYS);
+
+/** The two members of a `texra.chat` / `texra.run` section. */
+const COMMAND_SECTION_KEYS: ReadonlySet<string> = new Set(['agent', 'model']);
+
+const COMMAND_SECTION_CONFIG_KEYS: ReadonlySet<string> = new Set(
+  COMMAND_ROLES.map(canonicalConfigKey),
+);
+
+/**
+ * Names the project-file keys nothing reads — a typo (`texra.modle`,
+ * `texra.chat.modle`) is otherwise a setting that silently never applies. Only
+ * the workspace file is walked: the user file is shared by all three hosts and
+ * holds rows the CLI does not honor, so its unrecognized keys are not the
+ * CLI's to report.
+ */
+function unknownKeyWarnings(
+  store: JsonStore,
+  filePath: string,
+): readonly string[] {
+  const warnings: string[] = [];
+  for (const key of store.keys()) {
+    if (!KNOWN_CONFIG_KEYS.has(key)) {
+      warnings.push(`Ignoring unknown ${filePath} key "${key}".`);
+      continue;
+    }
+    if (!COMMAND_SECTION_CONFIG_KEYS.has(key)) continue;
+    const section = store.get<unknown>(key);
+    if (!isObject(section)) continue;
+    for (const nested of Object.keys(section)) {
+      if (COMMAND_SECTION_KEYS.has(nested)) continue;
+      warnings.push(`Ignoring unknown ${filePath} key "${key}.${nested}".`);
+    }
+  }
+  return warnings;
 }
 
-export function commandConfigModel(
-  config: CliConfigValues | undefined,
-  command: 'chat' | 'run',
-): string | undefined {
-  return config?.[command]?.model ?? config?.model;
+/**
+ * Malformed or unwritable project config is actionable degradation, not
+ * routine progress noise, so it reaches stderr immediately rather than joining
+ * the `--quiet`-gated warnings the caller prints.
+ */
+function showPersistentConfigWarning(message: string): void {
+  writeTextStderr(`[warn] [cli.config] ${message}`);
+}
+
+/**
+ * The one bare run edge of the CLI's config, and the one caller that needs it:
+ * `buildCliContext` opens the config stores BEFORE `initCliPlatform` (and with
+ * it `installCliProcessRuntime`), so there is no process runtime to borrow yet;
+ * the program needs the filesystem and nothing else. Pinned in
+ * `BARE_EFFECT_RUN_SITES`.
+ *
+ * The storage paths come from the pure calculators rather than
+ * `WorkspaceStorageProvider`'s getters: opening a config store must not create
+ * a directory under a storage root a command (`clone`) may only be able to
+ * read.
+ */
+export function loadCliStartupConfig(
+  cwd: string,
+  storageRoot: string = DEFAULT_NODE_STORAGE_ROOT,
+): Promise<CliStartupConfig> {
+  return Effect.runPromise(
+    Effect.provide(
+      Effect.gen(function* () {
+        const stores = yield* openTexraConfigStores(
+          {
+            getStoragePath: () => resolveWorkspaceStoragePath(storageRoot, cwd),
+            getGlobalStoragePath: () => resolveGlobalStoragePath(storageRoot),
+          },
+          cwd,
+          showPersistentConfigWarning,
+        );
+        return {
+          config: new JsonConfigProvider(stores),
+          warnings: unknownKeyWarnings(
+            stores.workspace,
+            workspaceTexraConfigPath(cwd),
+          ),
+        };
+      }),
+      nodeFileServices,
+    ),
+  );
 }

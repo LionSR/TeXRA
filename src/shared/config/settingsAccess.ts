@@ -61,11 +61,7 @@ export function settingDefault(entry: StateSettingEntry): unknown {
 
 /**
  * Read a state-backed setting, falling back to (and validating against) the
- * entry's schema. A stored value that no longer validates resolves to the
- * default rather than propagating a stale/invalid value — but only after
- * warning, matching `getValidatedConfig`'s #7470 fix: an invalid *persisted*
- * value (as opposed to simply absent, which returns above) must not vanish
- * without a trace. Both `ConfigProvider` and `StateStore` expose the same
+ * entry's schema. Both `ConfigProvider` and `StateStore` expose the same
  * `get(key, default)`, so the read dispatches uniformly on the resolved slot.
  */
 export function readSetting(
@@ -74,13 +70,40 @@ export function readSetting(
   host: SettingHost = 'vscode',
 ): unknown {
   const slot = settingSlot(entry, host);
+  return slot === 'config'
+    ? readConfigSetting(entry, stores.config)
+    : validateStored(entry, stores[slot].get<unknown>(entry.key));
+}
+
+/**
+ * {@link readSetting} for a row whose slot is `config`, over a
+ * {@link ConfigProvider} alone. The CLI resolves its startup rows
+ * (`texra.approvalPolicy`, `texra.outputFormat`) before the state stores of
+ * that process exist, and this is the whole rule for a config-backed row, so
+ * both readers run the same body rather than two that can drift.
+ */
+export function readConfigSetting(
+  entry: StateSettingEntry,
+  config: ConfigProvider,
+): unknown {
   // Read the scope the row is written to: `writeSetting` targets
   // `entry.configTarget`, so a global-target row read through the merged
   // `get()` could report a workspace value the settings view can never write.
-  const raw =
-    slot === 'config' && entry.configTarget === 'global'
-      ? stores.config.inspect<unknown>(entry.key)?.globalValue
-      : stores[slot].get<unknown>(entry.key);
+  return validateStored(
+    entry,
+    entry.configTarget === 'global'
+      ? config.inspect<unknown>(entry.key)?.globalValue
+      : config.get<unknown>(entry.key),
+  );
+}
+
+/**
+ * A stored value against the row's schema. Absent resolves to the schema
+ * default; a stored value that no longer validates resolves to it too — but
+ * only after warning, matching `getValidatedConfig`'s #7470 fix: an invalid
+ * *persisted* value must not vanish without a trace.
+ */
+function validateStored(entry: StateSettingEntry, raw: unknown): unknown {
   if (raw === undefined) {
     return settingDefault(entry);
   }

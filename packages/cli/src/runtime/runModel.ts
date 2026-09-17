@@ -2,8 +2,8 @@ import type { RunModelCandidate } from '@model/runModelDecision';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
-  CLI_BUILTIN_DEFAULT_MODEL,
-  commandConfigModel,
+  CLI_CHEAP_START_MODEL,
+  cliCommandDefaults,
   resolveKnownCliModelId,
 } from './cliConfig';
 import { CliUsageError, type CliContext } from './cliContext';
@@ -35,11 +35,8 @@ function cliRunModelCandidates(
   return [
     { model: explicit, reason: 'explicit-override' },
     { model: context.envModel, reason: 'environment' },
-    {
-      model: commandConfigModel(context.cliConfig, role),
-      reason: 'command-config',
-    },
-    { model: CLI_BUILTIN_DEFAULT_MODEL, reason: 'builtin-default' },
+    { model: cliCommandDefaults(role).model, reason: 'command-config' },
+    { model: CLI_CHEAP_START_MODEL, reason: 'builtin-default' },
   ];
 }
 

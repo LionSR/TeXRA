@@ -1,3 +1,6 @@
+// Local imports - platform
+import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
+
 // Local imports - CLI runtime
 import type { CliContext } from '@cli/runtime/cliContext';
 
@@ -15,7 +18,7 @@ const BASE_CLI_CONTEXT = {
   commandName: 'texra',
   version: '0.0.0',
   resourcesPath: '/tmp/resources',
-  cliConfig: {},
+  config: new MemoryConfigProvider(),
   configWarnings: [],
   skillSourceOptions: {},
 } satisfies CliContext;
