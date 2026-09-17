@@ -304,17 +304,24 @@ export const runAgent = Effect.fn('runAgent')(function* (
                 );
             if (Exit.isFailure(current)) {
               failures.push(Cause.squash(current.cause));
-            } else if (stableStringify(current.value) === priorEndStable) {
-              const finalization = yield* Effect.exit(
-                finalizeRun(runSession, {
-                  runId,
-                  outcome: restoredOutcome,
-                }),
-              );
-              if (Exit.isFailure(finalization))
-                failures.push(Cause.squash(finalization.cause));
-              else if (!finalization.value.ok)
-                failures.push(finalization.value.error);
+            } else {
+              const currentStable = stableStringify(current.value);
+              if (
+                currentStable !== undefined &&
+                priorEndStable !== undefined &&
+                currentStable === priorEndStable
+              ) {
+                const finalization = yield* Effect.exit(
+                  finalizeRun(runSession, {
+                    runId,
+                    outcome: restoredOutcome,
+                  }),
+                );
+                if (Exit.isFailure(finalization))
+                  failures.push(Cause.squash(finalization.cause));
+                else if (!finalization.value.ok)
+                  failures.push(finalization.value.error);
+              }
             }
           }
         }
