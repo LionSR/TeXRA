@@ -50,7 +50,7 @@ import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 import { runInSession } from './RunContext';
 import { mediaNeedsVisionWarning } from './mediaVisionWarning';
-import type { AgentRunShape } from './run/AgentRun';
+import type { AgentRunShape, ToolPolicy } from './run/AgentRun';
 import type { SessionHandle } from './SessionHandle';
 import type { SessionHostInteractions } from './HostInteractions';
 import type {
@@ -61,28 +61,29 @@ import type {
 const logger = createLog('AgentLaunchContext');
 
 /**
- * Immutable per-run tool policy, read from the run's `AgentRun` service.
- *
- * A frozen value the loop takes from context runs without an
- * `AsyncLocalStorage` frame — the property an SDK embedder wants.
- */
-export interface ToolPolicy {
-  /** Hide tools whose approval prompts cannot be answered in this host mode. */
-  readonly approvalPromptsUnavailable?: boolean;
-  /** Hide tools unavailable because the current host/runtime cannot support them. */
-  readonly runtimeUnavailableTools?: readonly string[];
-  /** Stop a tool-use run after one model/tool cycle instead of waiting. */
-  readonly stopAfterCycle?: boolean;
-}
-
-/**
  * The run's own facts, declared once on {@link AgentRunShape}: the launch
  * resolves them and the run's `AgentRun` service carries them for the rest of
- * the run's life, so neither side can drift from the other.
+ * the run's life, so neither side can drift from the other. The run narrows
+ * `setting` to its resolved tool list; every other fact reaches the service
+ * exactly as the launch resolved it.
  */
 type LaunchResolvedRunFacts = Pick<
   AgentRunShape,
-  'runId' | 'session' | 'workingDirectory' | 'delegationAgentScope'
+  | 'runId'
+  | 'session'
+  | 'workingDirectory'
+  | 'delegationAgentScope'
+  | 'config'
+  | 'setting'
+  | 'prompt'
+  | 'logger'
+  | 'parentStage'
+  | 'toolPolicy'
+  | 'stores'
+  | 'userVarChannels'
+  | 'initialUserMessageForTranscript'
+  | 'usageMonitor'
+  | 'interrupt'
 >;
 
 export interface AgentLaunchContext extends LaunchResolvedRunFacts {
@@ -104,38 +105,16 @@ export interface AgentLaunchContext extends LaunchResolvedRunFacts {
    * user's stored preferences are not touched; the choice is the run's.
    */
   readonly ownApiKeyFallback: boolean;
-  /** Immutable per-run tool policy. */
-  readonly toolPolicy: ToolPolicy;
-  /**
-   * The process secret store and global state the launch read from its
-   * `Secrets` / `AppState` services, so every Promise-tier read below the
-   * launch (routing, credentials, tool availability) uses the same stores.
-   */
-  readonly stores: ModelOptionStores;
-  config: AgentConfig;
-  setting: AgentSetting;
-  prompt: AgentPrompt;
-  logger: AgentTrace;
-  userVarChannels: UserVariableChannels;
-  /** Initial user row to log after the loop has inserted launch media. */
-  initialUserMessageForTranscript?: string;
   /** Description from the exact registry entry selected for this launch. */
-  resolvedAgentDescription?: string;
-  usageMonitor: UsageMonitor;
-  parentStage: StageHandle;
-  attachedMemoryMisses: AttachedMemoryMiss[];
+  readonly resolvedAgentDescription?: string;
+  readonly attachedMemoryMisses: AttachedMemoryMiss[];
   /**
-   * The run's one stop. Every stop entry — a host kill through the run
-   * handle, the live tool-use flow context, the launch handle's interrupt
-   * before the run has a handle of its own — completes
-   * {@link AgentLaunchContext.stopped}, and the run's program is interrupted
-   * from it. Nothing else stops a run.
-   */
-  interrupt: () => void;
-  /**
-   * Completed by {@link AgentLaunchContext.interrupt}. The runner races it
-   * once, at the boundary that owns the run's program, so a stop reaches the
-   * loop as a fiber interruption whose finalizers record the halt.
+   * The run's one stop, completed by {@link AgentRunShape.interrupt} — a host
+   * kill through the run handle, the live tool-use flow context, or the launch
+   * handle's interrupt before the run has a handle of its own. The runner
+   * races it once, at the boundary that owns the run's program, so a stop
+   * reaches the loop as a fiber interruption whose finalizers record the halt.
+   * Nothing else stops a run.
    */
   readonly stopped: Deferred.Deferred<void>;
   /**

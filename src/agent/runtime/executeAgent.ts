@@ -4,7 +4,6 @@ import { Cause, Deferred, Effect, Exit, Fiber, Layer } from 'effect';
 
 import { logConversationProgress, type AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import type { AgentSetting } from '@agent/core/definition/AgentDataclass';
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
 import { acquireResumedRunOwnership } from '@agent/storage/runLifecycle';
 import { persistedParentRunId } from '@agent/storage/runRecords';
@@ -111,7 +110,7 @@ type ToolUseLaunchVariant =
  */
 function runLayerFor(
   ctx: AgentLaunchContext,
-  shared: SubagentRunOptions & { readonly setting: AgentSetting },
+  shared: SubagentRunOptions,
   toolInjections: ToolInjections['Service'],
   onIdle: (() => void) | undefined,
   inScope: <A>(operation: () => A) => A,
@@ -120,7 +119,6 @@ function runLayerFor(
   return modelInvokerLayer().pipe(
     Layer.provideMerge(
       agentRunLayer(ctx, {
-        setting: shared.setting,
         parentRunId: shared.parentRunId ?? null,
         tools: shared.tools,
         toolInjections,
@@ -198,7 +196,6 @@ function launchToolUseRun(
   ctx: AgentLaunchContext,
   handle: RunHandle,
   shared: SubagentRunOptions & {
-    readonly setting: AgentSetting;
     /** The process injections the Effect-typed caller read for this run. */
     readonly toolInjections: ToolInjections['Service'];
   },
@@ -262,7 +259,7 @@ function launchToolUseRun(
  */
 function launchReflectionRun(
   ctx: AgentLaunchContext,
-  options: ExecuteAgentOptions & { readonly setting: AgentSetting },
+  options: ExecuteAgentOptions,
   inScope: <A>(operation: () => A) => A,
 ): Effect.Effect<AgentRuntimeFlowResult, Error, AgentRunServices> {
   const { runId } = ctx;
@@ -600,14 +597,14 @@ export function executeAgent(
                 return yield* launchToolUseRun(
                   ctx,
                   handle,
-                  { ...options, parentRunId, setting, toolInjections },
+                  { ...options, parentRunId, toolInjections },
                   { kind: 'fresh', onIdle: options.onIdle },
                   runInScope,
                 );
               }
               return yield* launchReflectionRun(
                 ctx,
-                { ...options, parentRunId, setting },
+                { ...options, parentRunId },
                 runInScope,
               );
             }),
@@ -711,7 +708,7 @@ const resumeToolUseWithOwnedLease = Effect.fn('resumeToolUseWithOwnedLease')(
             : launchToolUseRun(
                 ctx,
                 handle,
-                { ...options, setting, parentRunId, toolInjections },
+                { ...options, parentRunId, toolInjections },
                 {
                   kind: 'resume',
                   resume,

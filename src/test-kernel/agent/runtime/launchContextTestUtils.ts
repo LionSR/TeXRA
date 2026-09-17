@@ -82,6 +82,7 @@ export function createTestLaunchContext({
     logger,
     parentStage: logger.openStage(`Run: ${config.agent}`),
     userVarChannels: {},
+    initialUserMessageForTranscript: undefined,
     toolPolicy: {},
     attachedMemoryMisses: [],
     usageMonitor: new UsageMonitor(

@@ -266,9 +266,10 @@ describe('runFlowWithLifecycle', () => {
 
   it('delivers subagent aborts through the terminal callback', async () => {
     const { runId, ctx } = lifecycleFixture();
-    ctx.attachedMemoryMisses = [
-      { path: '/memories/missing.md', reason: 'not found' },
-    ];
+    ctx.attachedMemoryMisses.push({
+      path: '/memories/missing.md',
+      reason: 'not found',
+    });
     const onError = vi.fn();
 
     const result = await Effect.runPromise(
