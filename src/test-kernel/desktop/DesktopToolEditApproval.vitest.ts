@@ -76,9 +76,6 @@ async function loadApprovalModules(workspacePath = '/workspace') {
     getConfigBeforePlatformInit: vi.fn(
       <T>(_path: string, defaultValue: T) => defaultValue,
     ),
-    getValidatedConfig: vi.fn(
-      <T>(_path: string, _schema: unknown, defaultValue: T) => defaultValue,
-    ),
   }));
   mocks.doMock('@utils/files/workspaceFS', async () => {
     const actual = await vi.importActual<

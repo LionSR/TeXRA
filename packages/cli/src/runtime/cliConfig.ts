@@ -15,7 +15,7 @@ import {
 } from '@platform/defaults/nodeStorage';
 import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
 import {
-  TexraApprovalPolicySchema,
+  TexraApprovalPolicyInputSchema,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
 import { canonicalConfigKey } from '@shared/config/configKeys';
@@ -129,15 +129,9 @@ const TOP_LEVEL_FIELD_SCHEMAS: ReadonlyArray<
   ['agent', NonEmptyStringSchema],
   ['model', ModelSchema],
   ['outputFormat', OutputFormatSchema],
-  // Same normalization the catalog row (`stateSettings.ts`) applies for the
-  // other hosts, so a hand-edited " Yolo" reads the same way in all three.
-  [
-    'approvalPolicy',
-    z.preprocess(
-      (raw) => (typeof raw === 'string' ? raw.trim().toLowerCase() : raw),
-      TexraApprovalPolicySchema,
-    ),
-  ],
+  // The approval-policy module's own tolerant input form, so a hand-edited
+  // " Yolo" reads the same way here as at every other parse of user text.
+  ['approvalPolicy', TexraApprovalPolicyInputSchema],
 ];
 
 /** Same role as {@link TOP_LEVEL_FIELD_SCHEMAS}, for the `chat`/`run` command

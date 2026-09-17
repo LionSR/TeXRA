@@ -11,7 +11,6 @@ import path from 'node:path';
 
 import { Cause, Effect, FileSystem } from 'effect';
 import { sync as globSync } from 'glob';
-import { z } from 'zod';
 
 import { TEMP_EXTENSIONS } from '@housekeeping/constants';
 import { LaTeXdiffService } from '@latex/latexdiff';
@@ -21,13 +20,13 @@ import {
   LATEXDIFF_TEMP_FILE_LOCATIONS,
   type FileLocation,
 } from '@shared/schemas';
+import { readPlatformSetting } from '@utils/config/platformSettings';
 import { generateShortId } from '@utils/core';
 import {
   createExternalLocation,
   createWorkspaceLocation,
 } from '@utils/files/fileLocation';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { getValidatedConfig } from '@utils/config/configUtils';
 import { isStrictlyWithin } from '@utils/core/pathCore';
 
 export type BuildDisplayFn = (
@@ -211,11 +210,9 @@ const createTempFileWithCleanup = Effect.fn('createTempFileWithCleanup')(
       return yield* Effect.fail(new Error('No workspace folder open'));
     }
 
-    const location = getValidatedConfig(
-      'texra.latexdiff.tempFileLocation',
-      z.enum(LATEXDIFF_TEMP_FILE_LOCATIONS),
-      'sameDirectory',
-    );
+    const location = readPlatformSetting<
+      (typeof LATEXDIFF_TEMP_FILE_LOCATIONS)[number]
+    >('texra.latexdiff.tempFileLocation');
 
     const originalPath = entry.request.path;
     const ext = path.extname(originalPath);

@@ -3,6 +3,18 @@ import { z } from 'zod';
 export const TEXRA_APPROVAL_POLICIES = ['never', 'ask', 'yolo'] as const;
 export const TexraApprovalPolicySchema = z.enum(TEXRA_APPROVAL_POLICIES);
 export type TexraApprovalPolicy = z.infer<typeof TexraApprovalPolicySchema>;
+/**
+ * The tolerant input form of {@link TexraApprovalPolicySchema}: the one place
+ * a hand-written spelling (` Yolo `) is trimmed and lowercased before the
+ * enum. Every reader of user-authored text — the CLI's `.texra/config.json`
+ * parse, `/approval`, the settings dropdown — parses through this; persisted
+ * and wire values keep the strict enum, which is also what the settings
+ * catalog needs to derive the dropdown's options from the row.
+ */
+export const TexraApprovalPolicyInputSchema = z.preprocess(
+  (raw) => (typeof raw === 'string' ? raw.trim().toLowerCase() : raw),
+  TexraApprovalPolicySchema,
+);
 export const TEXRA_APPROVAL_POLICY_DEFAULT: TexraApprovalPolicy = 'ask';
 /**
  * The policy a `--no-input` run falls back to. Deliberately divergent from
@@ -64,9 +76,7 @@ export function formatTexraApprovalPolicy(policy: TexraApprovalPolicy): string {
 export function parseTexraApprovalPolicy(
   input: string,
 ): TexraApprovalPolicy | undefined {
-  const parsed = TexraApprovalPolicySchema.safeParse(
-    input.trim().toLowerCase(),
-  );
+  const parsed = TexraApprovalPolicyInputSchema.safeParse(input);
   return parsed.success ? parsed.data : undefined;
 }
 

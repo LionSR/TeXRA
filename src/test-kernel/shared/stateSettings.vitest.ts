@@ -38,8 +38,6 @@ import {
   CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
   MODEL_COMPACTION_THRESHOLD_SETTING,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
-  ModelCompactionThresholdPercentSchema,
-  ModelRetryMaxAttemptsSchema,
 } from '@shared/schemas';
 import type {
   DerivedSettingsSnapshot,
@@ -69,7 +67,6 @@ import {
   isStored,
   makeFakeSettingsStores,
 } from '@test/support/settingsStoresFake';
-import { getValidatedConfig } from '@utils/config/configUtils';
 
 const VALID_STORES: ReadonlySet<SettingStore> = new Set<SettingStore>([
   'config',
@@ -521,28 +518,22 @@ describe('settingsAccess', () => {
   // "does not mask a compaction value that runtime still reads directly" case
   // turned out not to be obsolete: the settings row must never display a
   // number the runtime is not actually using. Row and runtime now share one
-  // resolution rule — the *merged* config scope, validated against the row's
-  // own schema — so this pins both halves. A `configTarget: 'global'` on
-  // either row breaks the workspace-override case; dropping validation from
-  // either runtime reader breaks the out-of-range case.
-  it('resolves reliability rows exactly as their runtime readers do', async () => {
+  // reader (`readSetting`), so what is left to pin is the resolution it must
+  // keep: the *merged* config scope, validated against the row's own schema.
+  // A `configTarget: 'global'` on either row breaks the workspace-override
+  // case; dropping the row's bounds breaks the out-of-range case.
+  it('resolves reliability rows on the merged scope, bounded by their schema', async () => {
     const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
     const reliabilityRows = [
       {
         setting: MODEL_COMPACTION_THRESHOLD_SETTING,
-        schema: ModelCompactionThresholdPercentSchema,
         inRange: 40,
         outOfRange: 101,
       },
-      {
-        setting: MODEL_RETRY_MAX_ATTEMPTS_SETTING,
-        schema: ModelRetryMaxAttemptsSchema,
-        inRange: 4,
-        outOfRange: 6,
-      },
+      { setting: MODEL_RETRY_MAX_ATTEMPTS_SETTING, inRange: 4, outOfRange: 6 },
     ];
     try {
-      for (const { setting, schema, inRange, outOfRange } of reliabilityRows) {
+      for (const { setting, inRange, outOfRange } of reliabilityRows) {
         const entry = settingsViewSettingByKey(setting.configKey);
         assert.ok(entry, `missing settings-view row ${setting.configKey}`);
         assert.equal(
@@ -550,14 +541,18 @@ describe('settingsAccess', () => {
           undefined,
           `${setting.configKey} must not narrow itself to one config scope`,
         );
-        for (const stored of [undefined, inRange, outOfRange]) {
+        const cases = [
+          [undefined, setting.defaultValue],
+          [inRange, inRange],
+          [outOfRange, setting.defaultValue],
+        ] as const;
+        for (const [stored, expected] of cases) {
           const { stores, config } = makeFakeSettingsStores();
           if (stored !== undefined) config.set(setting.configKey, stored);
           await installPlatform({}, { config });
           assert.equal(
             readSetting(entry, stores, 'vscode'),
-            // The exact expression both runtime readers use.
-            getValidatedConfig(setting.configKey, schema, setting.defaultValue),
+            expected,
             `${setting.configKey} stored=${String(stored)}`,
           );
         }

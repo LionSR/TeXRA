@@ -7,8 +7,8 @@
 import { Effect } from 'effect';
 
 import { workspaceRoots } from '@platform/workspaceRoots';
-
 import type { ConfigTarget, ConfigWriteFailed } from '@platform/interfaces';
+import { readPlatformSetting } from '@utils/config/platformSettings';
 
 export interface SubscriptionPreferenceUpdate {
   readonly effective: boolean;
@@ -32,7 +32,7 @@ export function createSubscriptionPreference(
   configKey: string,
 ): SubscriptionPreference {
   function isPrefer(): boolean {
-    return workspaceRoots().config.get<boolean>(configKey, false);
+    return readPlatformSetting<boolean>(configKey);
   }
 
   function setPrefer(
@@ -48,7 +48,7 @@ export function createSubscriptionPreference(
       // write never reaches it, and one that normalizes it is what the caller
       // sees.
       Effect.map(() => ({
-        effective: config.get<boolean>(configKey, false),
+        effective: readPlatformSetting<boolean>(configKey),
         target,
       })),
     );

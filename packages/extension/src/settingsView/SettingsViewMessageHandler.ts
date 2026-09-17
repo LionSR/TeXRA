@@ -99,7 +99,6 @@ import {
   refreshToolAvailability,
 } from '@tools/toolAvailability';
 import { goalList } from '@tools/goal';
-import { getConfig } from '@utils/config/configUtils';
 import { getProviderKeyUrl } from '@utils/config/providerConfig';
 import { setToolEnabled } from '@utils/config/constants';
 import { platformSettingsStores } from '@utils/config/platformSettings';
@@ -177,12 +176,14 @@ export class SettingsViewMessageHandler {
     });
     this.profileController = new SettingsProfileController({
       host: 'vscode',
-      globalState,
+      // The Models-tab toggles resolve through the catalog's own slots, so the
+      // controller takes the session's three stores rather than one store and
+      // a config reader.
+      stores: session.roots,
       // The key-status read is an Effect; this is the boundary that holds a
       // runtime to settle it on.
       loadProviderKeyStatuses: () =>
         this.runtime.runPromise(loadApiKeyStatusMap(secrets, API_PROVIDERS)),
-      getConfig,
     });
     this.subscriptionUsage = new SubscriptionUsageService({ secrets });
     this.profileKeyController = new SettingsProfileKeyController({

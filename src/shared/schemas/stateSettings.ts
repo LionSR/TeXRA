@@ -224,11 +224,6 @@ export interface StateSettingEntry {
    * when the key is absent. `schema.parse(undefined)` yields that default.
    */
   readonly schema: z.ZodType;
-  /**
-   * Optional normalization for legacy persisted values before schema validation.
-   * Keep migration mappings in the domain parser referenced here, not the row.
-   */
-  readonly normalizePersisted?: (raw: unknown) => unknown;
   /** Short label for compact settings UIs; falls back to the stripped key. */
   readonly title?: string;
   /** Human-readable description, shared across every host that renders it. */
@@ -783,12 +778,11 @@ const CORE_SETTINGS: readonly StateSettingEntry[] = [
   ...CORE_TREE_SETTINGS,
   surfacedSetting({
     key: TEXRA_APPROVAL_POLICY_CONFIG_KEY,
+    // Strict on purpose: `settingEnumOptions` derives the dropdown from a
+    // `ZodEnum` row, and the tolerant spelling is the approval-policy module's
+    // `TexraApprovalPolicyInputSchema`, which every reader of user-authored
+    // text parses through.
     schema: TexraApprovalPolicySchema.prefault(TEXRA_APPROVAL_POLICY_DEFAULT),
-    // Hand-edited config files carry spacing/casing variants; the row owns that
-    // normalization so every reader through `readSetting` accepts what
-    // `parseTexraApprovalPolicy` has always accepted.
-    normalizePersisted: (raw) =>
-      typeof raw === 'string' ? raw.trim().toLowerCase() : raw,
     title: 'Approval policy',
     description:
       'Deny, ask, or auto-approve Bash and tool edits for this workspace. Under Ask, the two toggles below control each kind independently.',

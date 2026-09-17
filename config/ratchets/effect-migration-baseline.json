@@ -19,10 +19,10 @@
       "src/agent/runtime/runAgent.ts": 1,
       "src/agent/runtime/sessionGraph.ts": 2,
       "src/agent/storage/childRunOutput.ts": 1,
-      "src/model/subscriptionPreference.ts": 2,
+      "src/model/subscriptionPreference.ts": 1,
       "src/tools/agentCliShared.ts": 1,
       "src/tools/delegation/nativeSubagentStrategy.ts": 1,
-      "src/utils/config/configUtils.ts": 3,
+      "src/utils/config/configUtils.ts": 2,
       "src/utils/config/platformSettings.ts": 1,
       "src/utils/files/storageFS.ts": 1,
       "src/utils/files/workspaceFS.ts": 2

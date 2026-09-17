@@ -1,14 +1,6 @@
 // Local imports
-import { createLog } from '@logger/logUtils';
 import type { ConfigProvider } from '@platform/interfaces';
 import { tryWorkspaceRoots, workspaceRoots } from '@platform/workspaceRoots';
-import { getCoreSettingDefault } from '@shared/schemas';
-import { toErrorMessage } from '@utils/errors/errorMessage';
-
-// Third-party imports
-import type { ZodType } from 'zod';
-
-const log = createLog('configUtils');
 
 /**
  * Gets a value from the host's native TeXRA configuration.
@@ -18,10 +10,14 @@ const log = createLog('configUtils');
  * - Host settings such as `latex-workshop.*` must use the host adapter rather
  *   than this shared configuration path.
  *
- * @param path Configuration path (e.g., 'agents' or 'api.engine')
- * Cataloged keys resolve their schema default even when an SDK consumer
- * supplies a structurally valid provider that only honors caller fallbacks.
+ * A cataloged `texra.*` key resolves its own schema default inside the
+ * provider (`ConfigProvider.get`'s documented resolution order), so
+ * `defaultValue` is for keys the catalog does not own. A key whose value has a
+ * constrained shape (enum, bounded number, structured record) belongs on the
+ * catalog and reads through `readPlatformSetting`/`readSettingFrom`, which
+ * validate it against the row's schema.
  *
+ * @param path Configuration path (e.g., 'agents' or 'api.engine')
  * @param defaultValue Optional fallback for keys the catalog does not own
  * @returns The configured, catalog-default, or caller-fallback value
  */
@@ -31,19 +27,16 @@ export function getConfig<T>(path: string, defaultValue?: T): T {
 
 /**
  * {@link getConfig} over an explicit provider: the configuration of the
- * workspace the caller was handed (a tool call's `roots.config`), resolved
- * the same way — configured value, else the catalog default, else the
- * caller's fallback.
+ * workspace the caller was handed (a tool call's `roots.config`), resolved by
+ * that provider's own documented order — configured value, catalog default,
+ * then the caller's fallback.
  */
 export function readConfig<T>(
   config: ConfigProvider,
   path: string,
   defaultValue?: T,
 ): T {
-  const configured = config.get<T | undefined>(path);
-  if (configured !== undefined) return configured;
-  const catalogDefault = getCoreSettingDefault(path) as T | undefined;
-  return catalogDefault === undefined ? (defaultValue as T) : catalogDefault;
+  return config.get<T>(path, defaultValue as T);
 }
 
 /**
@@ -56,60 +49,4 @@ export function getConfigBeforePlatformInit<T>(
   defaultValue: T,
 ): T {
   return tryWorkspaceRoots()?.config.get(path, defaultValue) ?? defaultValue;
-}
-
-/**
- * Reads a configuration value and validates it against a Zod schema, returning
- * `defaultValue` when the setting is unset or fails validation.
- *
- * Prefer this over `getConfig<T>(path, default)` whenever the value has a
- * constrained shape (enums, bounded numbers, structured records). `getConfig`
- * only *asserts* the type at the call site — a stale or hand-edited
- * `settings.json` can still feed through a value that violates it. Passing the
- * authoritative schema (e.g. the `z.enum(...)` built from a `coreSettings.ts`
- * constant) makes that schema the single shared contract for both the type and
- * the runtime check, so drift surfaces as a clean fallback rather than an
- * invalid value flowing downstream.
- *
- * An unset setting parses as `undefined` and is expected to fail most
- * schemas (enums, bounded numbers) — that's normal, not corruption, so it
- * falls back to `defaultValue` silently. A setting the user *did* set but
- * that fails validation (hand-edited/stale `settings.json`) instead warns
- * before falling back, so an invalid user setting doesn't silently drop.
- */
-export function getValidatedConfig<T>(
-  path: string,
-  schema: ZodType<T>,
-  defaultValue: T,
-): T {
-  return readValidatedConfig(
-    workspaceRoots().config,
-    path,
-    schema,
-    defaultValue,
-  );
-}
-
-/**
- * {@link getValidatedConfig} over an explicit provider. Session-owned code
- * uses this form so the setting comes from the session it already holds,
- * without re-entering an ambient workspace-roots frame.
- */
-export function readValidatedConfig<T>(
-  config: ConfigProvider,
-  path: string,
-  schema: ZodType<T>,
-  defaultValue: T,
-): T {
-  const raw = readConfig<unknown>(config, path);
-  const result = schema.safeParse(raw);
-  if (result.success) return result.data;
-  // Warn only when the user explicitly set the value (global, workspace, or
-  // workspace folder); an unset setting failing the schema is normal.
-  if (config.isExplicitlySet(path)) {
-    log.warn(
-      `Ignoring invalid value for setting "${path}": ${toErrorMessage(result.error)}`,
-    );
-  }
-  return defaultValue;
 }

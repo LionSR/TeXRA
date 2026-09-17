@@ -13,13 +13,12 @@
  */
 import * as os from 'node:os';
 
-import type { ConfigProvider } from '@platform/interfaces';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import {
   CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
   CHILD_RUN_CONCURRENCY_BUDGET_SETTING,
-  ChildRunConcurrencyBudgetSchema,
 } from '@shared/schemas';
-import { readValidatedConfig } from '@utils/config/configUtils';
+import { readSettingFrom } from '@utils/config/platformSettings';
 
 import type { RunRegistry } from './runRegistry';
 import type { SessionHandle } from './SessionHandle';
@@ -35,13 +34,11 @@ import type { SessionHandle } from './SessionHandle';
  * webview and must stay free of `node:os`.
  */
 export function resolveChildRunConcurrencyBudget(
-  config: ConfigProvider,
+  stores: SettingsStores,
 ): number {
-  const configured = readValidatedConfig(
-    config,
+  const configured = readSettingFrom<number>(
+    stores,
     CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
-    ChildRunConcurrencyBudgetSchema,
-    CHILD_RUN_CONCURRENCY_BUDGET_SETTING.defaultValue,
   );
   if (configured !== CHILD_RUN_CONCURRENCY_BUDGET_SETTING.auto) {
     return configured;
@@ -58,7 +55,5 @@ export function resolveChildRunConcurrencyBudget(
  * (`RunRegistry.childRunBudget`) and re-pin it here on every launch.
  */
 export function childRunBudgetFor(session: SessionHandle, runs: RunRegistry) {
-  return runs.childRunBudget(
-    resolveChildRunConcurrencyBudget(session.roots.config),
-  );
+  return runs.childRunBudget(resolveChildRunConcurrencyBudget(session.roots));
 }

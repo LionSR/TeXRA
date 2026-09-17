@@ -84,10 +84,7 @@ export function readSetting(
   if (raw === undefined) {
     return settingDefault(entry);
   }
-  const normalized = entry.normalizePersisted
-    ? entry.normalizePersisted(raw)
-    : raw;
-  const result = entry.schema.safeParse(normalized);
+  const result = entry.schema.safeParse(raw);
   if (result.success) {
     return result.data;
   }
