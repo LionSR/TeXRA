@@ -1,28 +1,16 @@
 // Local imports
+import {
+  buildToolDashboardItems,
+  isExternalToolDefVisible,
+} from '@controllers/settingsView/ToolDashboardData';
 import type { StateStore } from '@platform/interfaces';
 import type { ProcessRuntime } from '@platform/processRuntime';
+import type { ToolDashboardItem } from '@shared/schemas';
 import {
-  EXTERNAL_TOOL_DEFS,
+  findExternalToolDef,
   type ExternalToolDef,
 } from '@tools/externalToolDefs';
-import { runExternalToolChecks } from '@tools/toolAvailability';
-import { isDefaultToolUnavailableOnHost } from '@tools/registry';
-import { getDisabledToolIds, setToolEnabled } from '@utils/config/constants';
-
-export interface CliToolStatusRecord {
-  readonly id: string;
-  readonly name: string;
-  readonly category: string;
-  readonly enabled: boolean | null;
-  readonly detected: boolean | null;
-  readonly status: string;
-  readonly statusLabel?: string;
-  readonly statusDetail?: string;
-  readonly toggleable: boolean;
-  readonly installCommand?: string;
-  readonly authCommand?: string;
-  readonly note?: string;
-}
+import { setToolEnabled } from '@utils/config/constants';
 
 type CliToolGuideKind = 'install' | 'auth';
 
@@ -31,80 +19,31 @@ export interface CliToolGuide {
   readonly command?: string;
 }
 
-function getCliToolDefs(): ExternalToolDef[] {
-  return EXTERNAL_TOOL_DEFS.filter(
-    (def) =>
-      !def.hideFromDashboard &&
-      !(
-        def.tools.length > 0 &&
-        def.tools.every((name) => isDefaultToolUnavailableOnHost(name, 'cli'))
-      ),
-  );
-}
-
-function noteForTool(
-  def: ExternalToolDef,
-  detected: boolean | null,
-  statusLabel?: string,
-): string {
-  if (detected === false && def.installCommand) return def.installCommand;
-  return (
-    statusLabel ?? def.authNote ?? def.configNotes ?? def.installCommand ?? ''
-  );
-}
-
 /**
- * `state` is the process global state the caller holds (the composition root's
- * `CliPlatformServices`, or the `AppState` service), so the disabled-tool read
- * and the toggle that follows it hit the same store.
+ * The external integrations `texra tools` manages: the shared dashboard
+ * projection for the CLI host, minus the built-in groups that need no setup.
+ *
+ * `runtime` is the process runtime the composition root installed, so the
+ * disabled-tool read inside the builder (`AppState`) and the toggle that
+ * follows it hit the same store.
  */
 export async function readCliToolStatuses(
   runtime: ProcessRuntime,
-  state: StateStore,
-): Promise<CliToolStatusRecord[]> {
-  const checks = new Map(
-    (await runtime.runPromise(runExternalToolChecks())).map((r) => [r.id, r]),
-  );
-  const disabledIds = getDisabledToolIds(state);
-
-  return getCliToolDefs().map((def) => {
-    // `runProbes` maps over the same EXTERNAL_TOOL_DEFS this filters, so the
-    // lookup always hits; the `??` arms are shape-level defaults, not reachable
-    // states. The probe already decides `status` and the raw dependency
-    // outcome (`detected`), so neither is re-derived here.
-    const check = checks.get(def.id);
-    const toggleable = def.toggleable === true;
-    const status = check?.status ?? 'unknown';
-    const detected = check?.detected ?? null;
-    return {
-      id: def.id,
-      name: def.name,
-      category: def.category,
-      enabled: toggleable ? !disabledIds.has(def.id) : null,
-      detected,
-      status,
-      statusLabel: check?.statusLabel,
-      statusDetail: check?.statusDetail,
-      toggleable,
-      installCommand: def.installCommand,
-      authCommand: def.authCommand,
-      note: noteForTool(def, detected, check?.statusLabel),
-    };
-  });
+): Promise<ToolDashboardItem[]> {
+  const items = await runtime.runPromise(buildToolDashboardItems('cli'));
+  return items.filter((item) => item.requiresSetup);
 }
 
 export async function readCliToolStatus(
   runtime: ProcessRuntime,
-  state: StateStore,
   id: string,
-): Promise<CliToolStatusRecord | undefined> {
-  return (await readCliToolStatuses(runtime, state)).find(
-    (record) => record.id === id,
-  );
+): Promise<ToolDashboardItem | undefined> {
+  return (await readCliToolStatuses(runtime)).find((item) => item.id === id);
 }
 
 function findCliToolDef(id: string): ExternalToolDef | undefined {
-  return getCliToolDefs().find((def) => def.id === id);
+  const def = findExternalToolDef(id);
+  return def && isExternalToolDefVisible(def, 'cli') ? def : undefined;
 }
 
 export function readCliToolGuide(
@@ -144,6 +83,42 @@ export async function setCliToolEnabled(
   return true;
 }
 
+/**
+ * The raw dependency probe outcome behind a dashboard status: `null` only when
+ * the probe itself failed, which is the one case the status carries no yes/no
+ * answer about the dependency.
+ */
+export function cliToolDetected(item: ToolDashboardItem): boolean | null {
+  return item.status === 'unknown' ? null : item.status === 'available';
+}
+
+/** The toggle state, or `null` for a group that cannot be toggled. */
+export function cliToolEnabled(item: ToolDashboardItem): boolean | null {
+  return item.toggleable === true ? (item.enabled ?? null) : null;
+}
+
+function cliToolCommand(
+  item: ToolDashboardItem,
+  kind: 'command' | 'auth',
+): string | undefined {
+  for (const action of item.installActions) {
+    if (action.kind === kind) return action.command;
+  }
+  return undefined;
+}
+
+function cliToolNote(item: ToolDashboardItem): string {
+  const installCommand = cliToolCommand(item, 'command');
+  if (cliToolDetected(item) === false && installCommand) return installCommand;
+  return (
+    item.statusLabel ??
+    item.authNote ??
+    item.configNotes ??
+    installCommand ??
+    ''
+  );
+}
+
 function formatCliBoolean(value: boolean | null): string {
   if (value == null) return '-';
   return value ? 'yes' : 'no';
@@ -161,40 +136,40 @@ export function formatCliToolMissingInstallCommandMessage(id: string): string {
   return `No install command is registered for ${id}.`;
 }
 
-export function formatCliToolList(
-  records: readonly CliToolStatusRecord[],
-): string {
-  if (records.length === 0) return 'No external tools found.';
+export function formatCliToolList(items: readonly ToolDashboardItem[]): string {
+  if (items.length === 0) return 'No external tools found.';
   const header = 'ID\tNAME\tCATEGORY\tENABLED\tDETECTED\tNOTE';
-  const rows = records.map((record) =>
+  const rows = items.map((item) =>
     [
-      record.id,
-      record.name,
-      record.category,
-      formatCliBoolean(record.enabled),
-      formatCliBoolean(record.detected),
-      record.note ?? '',
+      item.id,
+      item.name,
+      item.category,
+      formatCliBoolean(cliToolEnabled(item)),
+      formatCliBoolean(cliToolDetected(item)),
+      cliToolNote(item),
     ].join('\t'),
   );
   return [header, ...rows].join('\n');
 }
 
-export function formatCliToolStatus(record: CliToolStatusRecord): string {
+export function formatCliToolStatus(item: ToolDashboardItem): string {
+  const installCommand = cliToolCommand(item, 'command');
+  const authCommand = cliToolCommand(item, 'auth');
+  const note = cliToolNote(item);
   const lines: string[] = [
-    `id: ${record.id}`,
-    `name: ${record.name}`,
-    `category: ${record.category}`,
-    `status: ${record.status}`,
-    `enabled: ${formatCliBoolean(record.enabled)}`,
-    `detected: ${formatCliBoolean(record.detected)}`,
+    `id: ${item.id}`,
+    `name: ${item.name}`,
+    `category: ${item.category}`,
+    `status: ${item.status}`,
+    `enabled: ${formatCliBoolean(cliToolEnabled(item))}`,
+    `detected: ${formatCliBoolean(cliToolDetected(item))}`,
   ];
-  if (record.statusLabel) lines.push(`statusLabel: ${record.statusLabel}`);
-  if (record.note) lines.push(`note: ${record.note}`);
-  if (record.installCommand)
-    lines.push(`installCommand: ${record.installCommand}`);
-  if (record.authCommand) lines.push(`authCommand: ${record.authCommand}`);
-  if (record.statusDetail) {
-    lines.push('', record.statusDetail);
+  if (item.statusLabel) lines.push(`statusLabel: ${item.statusLabel}`);
+  if (note) lines.push(`note: ${note}`);
+  if (installCommand) lines.push(`installCommand: ${installCommand}`);
+  if (authCommand) lines.push(`authCommand: ${authCommand}`);
+  if (item.statusDetail) {
+    lines.push('', item.statusDetail);
   }
   return lines.join('\n');
 }

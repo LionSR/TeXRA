@@ -48,38 +48,31 @@ interface CliToolGuideResult {
 }
 
 async function listTools(context: CliContext): Promise<number> {
-  // The init call hands back the state store it just wired, so the status read
-  // and any follow-up toggle hit the same store.
+  // The init call hands back the process runtime it just wired, so the status
+  // read and any follow-up toggle hit the same state store.
   const services = await initCliPlatform({ ...context, quietLogs: true });
-  const records = await readCliToolStatuses(
-    services.runtime,
-    services.globalState,
-  );
+  const items = await readCliToolStatuses(services.runtime);
 
   emitCliResult(context, {
-    json: records,
-    ndjson: records.map((tool) => ({ kind: 'tool-status', tool })),
-    text: formatCliToolList(records),
+    json: items,
+    ndjson: items.map((tool) => ({ kind: 'tool-status', tool })),
+    text: formatCliToolList(items),
   });
   return CliExitCode.Success;
 }
 
 async function showTool(context: CliContext, id: string): Promise<number> {
   const services = await initCliPlatform({ ...context, quietLogs: true });
-  const record = await readCliToolStatus(
-    services.runtime,
-    services.globalState,
-    id,
-  );
-  if (!record) {
+  const item = await readCliToolStatus(services.runtime, id);
+  if (!item) {
     writeTextStderr(formatCliToolNotFoundMessage(id));
     return CliExitCode.Usage;
   }
 
   emitCliResult(context, {
-    json: record,
-    ndjson: { kind: 'tool-status', tool: record },
-    text: formatCliToolStatus(record),
+    json: item,
+    ndjson: { kind: 'tool-status', tool: item },
+    text: formatCliToolStatus(item),
   });
   return CliExitCode.Success;
 }

@@ -13,7 +13,10 @@ import { Effect } from 'effect';
 import type { ToolHost } from '@agent/core/tools/ToolTypes';
 import { AppState } from '@platform/interfaces';
 import type { ToolCommandKind, ToolDashboardItem } from '@shared/schemas';
-import { findExternalToolDef } from '@tools/externalToolDefs';
+import {
+  findExternalToolDef,
+  type ExternalToolDef,
+} from '@tools/externalToolDefs';
 import {
   isDefaultToolUnavailableOnHost,
   type RegisteredToolName,
@@ -150,10 +153,28 @@ const BUILTIN_TOOLS: (Omit<
 // ============================================================
 
 /**
+ * Whether an external tool group belongs on `host`'s dashboard. A group that
+ * hides itself, or whose every tool declares itself unavailable on the asking
+ * host, is not shown there and cannot be installed, authed or toggled from it.
+ */
+export function isExternalToolDefVisible(
+  def: ExternalToolDef,
+  host: ToolHost,
+): boolean {
+  return (
+    def.hideFromDashboard !== true &&
+    !(
+      def.tools.length > 0 &&
+      def.tools.every((name) => isDefaultToolUnavailableOnHost(name, host))
+    )
+  );
+}
+
+/**
  * Build the complete tool dashboard items list.
  *
- * @param host - the product host asking. A built-in group whose every tool
- *   declares itself unavailable on that host is dropped rather than shown as
+ * @param host - the product host asking. A group whose every tool declares
+ *   itself unavailable on that host is dropped rather than shown as
  *   "available": host exclusion removes those tools from the resolved roster,
  *   so they can never be called there.
  * @param cachedResults - when provided, skips network probes and uses
@@ -179,7 +200,7 @@ export const buildToolDashboardItems = Effect.fn('buildToolDashboardItems')(
     const externalItems: ToolDashboardItem[] = [];
     for (const { id, tools, status, statusLabel, statusDetail } of results) {
       const def = findExternalToolDef(id);
-      if (!def || def.hideFromDashboard) continue;
+      if (!def || !isExternalToolDefVisible(def, host)) continue;
       externalItems.push({
         id: def.id,
         name: def.name,
