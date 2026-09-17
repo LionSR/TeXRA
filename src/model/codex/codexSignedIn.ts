@@ -4,6 +4,7 @@
  * `../signedInProbe`.
  */
 import { createSignedInProbe, type SignedInProbe } from '../signedInProbe';
+import type { Effect } from 'effect';
 
 const signedIn = createSignedInProbe();
 
@@ -16,6 +17,6 @@ export function setCodexSignedInProbe(next: SignedInProbe): void {
 }
 
 /** Whether a ChatGPT (Codex) subscription session is currently signed in. */
-export function isCodexSignedIn(): Promise<boolean> {
+export function isCodexSignedIn(): Effect.Effect<boolean> {
   return signedIn.isSignedIn();
 }

@@ -268,10 +268,9 @@ export const resolveSubscriptionCredential = Effect.fn(
       catch: ensureError,
     });
     if (profile === null) return null;
-    const signedIn = yield* Effect.tryPromise({
-      try: () => inScope(isXaiSignedIn),
-      catch: ensureError,
-    });
+    // No `inScope`: the probe reads the stored OAuth session, not the
+    // workspace-roots frame.
+    const signedIn = yield* isXaiSignedIn();
     if (!signedIn) {
       log.warn(
         `Prefer Grok subscription is on but no Grok session is signed in: model ${config.name} bills the xAI API key.`,

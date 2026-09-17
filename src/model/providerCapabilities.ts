@@ -13,7 +13,6 @@ import {
 } from '@shared/schemas';
 import { readPlatformSetting } from '@utils/config/platformSettings';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
-import { ensureError } from '@utils/errors/errorMessage';
 
 import { resolveRuntimeModelConfig } from './runtimeModelRegistry';
 
@@ -155,16 +154,13 @@ const signedInSubscriptionUsageRoute = Effect.fn(
     config: ModelConfig,
     useOpenRouter: boolean,
   ) => ProviderCapabilityProfile | null,
-  isSignedIn: () => boolean | Promise<boolean>,
+  isSignedIn: () => Effect.Effect<boolean>,
 ): Effect.fn.Return<UsageRoute | undefined, Error, LanguageModel> {
   const config = yield* resolveRuntimeModelConfig(modelId);
   if (!config) return undefined;
   const capabilities = resolveCapabilities(config, getUseOpenRouter());
   if (!capabilities) return undefined;
-  const signedIn = yield* Effect.tryPromise({
-    try: async () => isSignedIn(),
-    catch: ensureError,
-  });
+  const signedIn = yield* isSignedIn();
   return signedIn ? capabilities.usageRoute : undefined;
 });
 

@@ -3,6 +3,7 @@
  * semantics (signed-out default, install-once) live in `../signedInProbe`.
  */
 import { createSignedInProbe, type SignedInProbe } from '../signedInProbe';
+import type { Effect } from 'effect';
 
 const signedIn = createSignedInProbe();
 
@@ -15,6 +16,6 @@ export function setXaiSignedInProbe(next: SignedInProbe): void {
 }
 
 /** Whether a Grok (xAI) subscription session is currently signed in. */
-export function isXaiSignedIn(): Promise<boolean> {
+export function isXaiSignedIn(): Effect.Effect<boolean> {
   return signedIn.isSignedIn();
 }
