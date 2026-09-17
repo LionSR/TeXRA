@@ -272,7 +272,7 @@ describe('completedRunArchive facade', () => {
       createHostRunActions({
         session: taskSession,
         runAgentRequest,
-        loadModelOptions: async () => [],
+        loadModelOptions: () => Effect.succeed([]),
         promptForApiKey: () => Effect.void,
         showInfo: () => Effect.void,
         showWarning: () => Effect.void,

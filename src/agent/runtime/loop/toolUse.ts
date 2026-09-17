@@ -337,16 +337,17 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       ...run.userVarChannels,
       [USER_VAR_MODEL]: bound.modelId,
     };
-    const prompts = yield* Effect.tryPromise({
-      try: () =>
-        buildInitialToolUsePrompts(run.prompt, promptVars, logger, {
-          workspace: session.roots.workspace,
-          resolvedToolNames,
-          hasDelegationTools: hasDelegationTool(resolvedToolNames),
-          isChild,
-        }),
-      catch: ensureError,
-    });
+    const prompts = yield* buildInitialToolUsePrompts(
+      run.prompt,
+      promptVars,
+      logger,
+      {
+        workspace: session.roots.workspace,
+        resolvedToolNames,
+        hasDelegationTools: hasDelegationTool(resolvedToolNames),
+        isChild,
+      },
+    );
     systemPrompt = prompts.systemPrompt
       ? `${prompts.systemPrompt}\n${prompts.instructionSuffix}`
       : prompts.instructionSuffix;
@@ -769,10 +770,10 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
               );
             }
             if (!afterError && !followUps.hasQueued()) {
-              const continuation = yield* Effect.tryPromise({
-                try: () => maybeBuildGoalContinuation(session, runId),
-                catch: ensureError,
-              });
+              const continuation = yield* maybeBuildGoalContinuation(
+                session,
+                runId,
+              );
               if (continuation && !followUps.hasQueued()) {
                 batch = { synthetic: true, text: continuation };
               }

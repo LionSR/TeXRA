@@ -6,7 +6,6 @@ import { Effect } from 'effect';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { TraceEmitter } from '@agent/trace';
-import { buildInitialToolUsePrompts } from '@agent/prompt/PromptBuilder';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import {
   ACTIVE_SKILLS_SNAPSHOT_MAX_SKILLS,

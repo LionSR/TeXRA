@@ -1,3 +1,6 @@
+// Third-party imports
+import { Effect } from 'effect';
+
 // Local imports
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { RunRequest } from '@agent/core/state/runRequests';
@@ -14,6 +17,7 @@ import {
   type RunId,
 } from '@shared/schemas';
 import { formatRoundStageLabel } from '@shared/runs/runStatusDisplay';
+import { ensureError } from '@utils/errors/errorMessage';
 import { pluralize } from '@utils/text/stringUtils';
 import type { RunOutputsSource } from './runOutputs';
 
@@ -43,7 +47,10 @@ interface ProgressFollowUpWorkspace {
 }
 
 interface ProgressFollowUpControllerDeps {
-  loadModelOptions(): Promise<readonly ProgressFollowUpModelOption[]>;
+  loadModelOptions(): Effect.Effect<
+    readonly ProgressFollowUpModelOption[],
+    Error
+  >;
   state: ProgressFollowUpState;
   workspace: ProgressFollowUpWorkspace;
 }
@@ -80,22 +87,31 @@ interface CompileFixerInput {
 export class ProgressFollowUpController {
   constructor(private readonly deps: ProgressFollowUpControllerDeps) {}
 
-  async planCompileFixerForRun(
+  planCompileFixerForRun(
     runId: RunId,
     runConfig: AgentConfig | undefined,
-  ): Promise<ProgressFollowUpPlan> {
-    const modelOptions = await this.deps.loadModelOptions();
-    const compileFailures = Object.values(
-      this.deps.state.getCompileFailures(runId),
-    ).flat();
+  ): Effect.Effect<ProgressFollowUpPlan, Error> {
+    return this.deps.loadModelOptions().pipe(
+      Effect.flatMap((modelOptions) => {
+        const compileFailures = Object.values(
+          this.deps.state.getCompileFailures(runId),
+        ).flat();
 
-    return this.planCompileFixer({
-      runId,
-      runConfig,
-      compileFailures,
-      runOutputs: this.deps.state.getOutputFiles(runId),
-      modelOptions,
-    });
+        // The planner below still reads the workspace through the
+        // Promise-tier `RelativeFS` port, so this is where that edge lives.
+        return Effect.tryPromise({
+          try: () =>
+            this.planCompileFixer({
+              runId,
+              runConfig,
+              compileFailures,
+              runOutputs: this.deps.state.getOutputFiles(runId),
+              modelOptions,
+            }),
+          catch: ensureError,
+        });
+      }),
+    );
   }
 
   async planCompileFixer(

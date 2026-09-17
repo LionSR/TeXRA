@@ -163,13 +163,14 @@ export function createDesktopHostRequests(
     createHostRunActions({
       session,
       runAgentRequest: run.runAgentRequest,
-      loadModelOptions: async () =>
-        modelOptionsFrom(
-          await runtime.runPromise(
+      loadModelOptions: () =>
+        Effect.flatMap(runtime.contextEffect, (context) =>
+          Effect.provideContext(
             readModelAvailabilityInputs({
               secrets: options.secrets,
               globalState: options.globalState,
-            }),
+            }).pipe(Effect.map(modelOptionsFrom)),
+            context,
           ),
         ),
       // Only the "ask the user for a key" step is host-specific: on the

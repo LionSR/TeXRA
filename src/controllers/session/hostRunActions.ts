@@ -44,7 +44,7 @@ import { LaunchSurfaceSchema } from '@shared/session/surface';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 import { unique } from '@utils/core';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
   ApiKeyPromptFailed,
@@ -109,7 +109,10 @@ export interface HostRunActionPorts {
       onRun?: () => void;
     },
   ): Effect.Effect<void, Error>;
-  loadModelOptions(): Promise<readonly ProgressFollowUpModelOption[]>;
+  loadModelOptions(): Effect.Effect<
+    readonly ProgressFollowUpModelOption[],
+    Error
+  >;
   /**
    * Ask the user for a provider key; the controller re-reads the store. A
    * host that could not ask fails with `ApiKeyPromptFailed`; a user who
@@ -562,10 +565,7 @@ export const createHostRunActions = (
           );
         }
         const config = yield* readConfig(runId);
-        const plan = yield* Effect.tryPromise({
-          try: () => followUp.planCompileFixerForRun(runId, config),
-          catch: ensureError,
-        });
+        const plan = yield* followUp.planCompileFixerForRun(runId, config);
         if (plan.kind === 'warning') {
           yield* ports.showWarning(plan.message);
         } else if (plan.kind === 'info') {

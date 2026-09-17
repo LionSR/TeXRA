@@ -7,10 +7,14 @@
  * no Zod schema backs it.
  */
 
+// Third-party imports
+import { Effect } from 'effect';
+
 // Local imports - utils
 import { createLog } from '@logger/logUtils';
 import { OUTPUT_DOCUMENT_TAG } from '@shared/schemas';
 import { ensureArray, isObject } from '@utils/core';
+import { ensureError } from '@utils/errors/errorMessage';
 
 // Local imports
 import { removeCDATA } from './xmlCdata';
@@ -141,13 +145,18 @@ export function extractContentFromXMLbyTagMultiple(
  * @param outputContent The content to extract scratchpad from
  * @param thinkingTag The XML tag name used for the scratchpad content
  */
-export async function extractScratchpad(
+export const extractScratchpad = Effect.fn('xml.extractScratchpad')(function* (
   outputContent: string,
   thinkingTag: string = 'scratchpad',
-): Promise<string | null> {
+): Effect.fn.Return<string | null, Error> {
   const extractedContent = extractTextFromTag(outputContent, thinkingTag);
-  return extractedContent ? await formatContent(extractedContent) : null;
-}
+  if (!extractedContent) return null;
+  // Pandoc/Turndown formatting is the one foreign edge this extraction has.
+  return yield* Effect.tryPromise({
+    try: () => formatContent(extractedContent),
+    catch: ensureError,
+  });
+});
 
 export interface MultipleExtractionResult {
   documents: NamedDocument[] | null;
