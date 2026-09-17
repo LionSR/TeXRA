@@ -12,7 +12,6 @@ import { MemoryStateStore } from '@platform/defaults/memoryState';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import type { RunId, OutputFileInfo } from '@shared/schemas';
-import { getCoreSettingDefault } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { captureLogEntries } from '@test/support/logSinkCapture';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
@@ -32,21 +31,6 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@utils/system/execUtils', () => ({
   executeCommand: mocks.executeCommand,
-}));
-
-// Mirrors production: JsonConfigProvider resolves the settings-catalog default
-// when no user value is stored, so callers no longer pass a literal fallback.
-vi.mock('@utils/config/configUtils', () => ({
-  getConfig: <T>(key: string, fallback?: T) =>
-    (getCoreSettingDefault(key) as T | undefined) ?? (fallback as T),
-  readConfig: <T>(
-    config: { get<V>(key: string): V | undefined },
-    key: string,
-    fallback?: T,
-  ) =>
-    config.get<T>(key) ??
-    (getCoreSettingDefault(key) as T | undefined) ??
-    (fallback as T),
 }));
 
 describe('LaTeXdiffService shadow output', () => {

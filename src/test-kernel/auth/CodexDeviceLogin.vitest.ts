@@ -2,7 +2,7 @@ import { it } from '@effect/vitest';
 import { Cause, Deferred, Effect, Exit, Fiber } from 'effect';
 import { FetchHttpClient } from 'effect/unstable/http';
 import { TestClock } from 'effect/testing';
-import { afterEach, describe, expect, vi } from 'vitest';
+import { describe, expect, vi } from 'vitest';
 
 import type { CodexSessionCoordinator } from '@auth/codex/CodexSessionCoordinator';
 import { loginWithDeviceCode } from '@auth/codex/codexDeviceLogin';
@@ -15,31 +15,30 @@ import { jsonResponse } from '@test/support/fetchTestUtils';
 
 /**
  * Drive the flow through the wire: the usercode endpoint answers once, and
- * every token poll goes to `onPoll`.
+ * every token poll goes to `onPoll`. The fetch is handed to the flow through
+ * the `FetchHttpClient.Fetch` reference rather than installed on the global,
+ * so nothing here depends on test ordering.
  */
-function stubDeviceEndpoints(
+function deviceEndpointsFetch(
   userCode: Record<string, unknown>,
   onPoll: (init: RequestInit | undefined) => Promise<Response>,
-): void {
-  vi.stubGlobal(
-    'fetch',
-    vi.fn<typeof fetch>(async (input, init) => {
-      const url = String(input);
-      if (String(url) === CODEX_DEVICE_USERCODE_URL) {
-        expect(new Headers(init?.headers).get('content-type')).toBe(
-          'application/json',
-        );
-        return jsonResponse({
-          device_auth_id: 'device-auth-id',
-          user_code: 'ABCD-EFGH',
-          interval: 5,
-          ...userCode,
-        });
-      }
-      if (String(url) === CODEX_DEVICE_TOKEN_URL) return onPoll(init);
-      throw new Error(`Unexpected fetch: ${url}`);
-    }),
-  );
+): typeof fetch {
+  return vi.fn<typeof fetch>(async (input, init) => {
+    const url = String(input);
+    if (String(url) === CODEX_DEVICE_USERCODE_URL) {
+      expect(new Headers(init?.headers).get('content-type')).toBe(
+        'application/json',
+      );
+      return jsonResponse({
+        device_auth_id: 'device-auth-id',
+        user_code: 'ABCD-EFGH',
+        interval: 5,
+        ...userCode,
+      });
+    }
+    if (String(url) === CODEX_DEVICE_TOKEN_URL) return onPoll(init);
+    throw new Error(`Unexpected fetch: ${url}`);
+  });
 }
 
 function coordinatorStub(): CodexSessionCoordinator {
@@ -52,16 +51,12 @@ const settle = Effect.promise(
 );
 
 describe('Codex device login', () => {
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-
   it.effect(
     'does not exchange a token when interruption lands during a poll',
     () =>
       Effect.gen(function* () {
         const inFlight = createDeferred<Response>();
-        stubDeviceEndpoints({}, () => inFlight.promise);
+        const fetchMock = deviceEndpointsFetch({}, () => inFlight.promise);
         const coordinator = coordinatorStub();
         const shown = yield* Deferred.make<void>();
         const onPrompt = vi.fn(() => {
@@ -70,7 +65,7 @@ describe('Codex device login', () => {
         const fiber = yield* Effect.forkChild(
           loginWithDeviceCode({ coordinator, onPrompt }).pipe(
             Effect.provide(FetchHttpClient.layer),
-            Effect.provideService(FetchHttpClient.Fetch, globalThis.fetch),
+            Effect.provideService(FetchHttpClient.Fetch, fetchMock),
           ),
         );
         yield* Deferred.await(shown);
@@ -99,7 +94,7 @@ describe('Codex device login', () => {
     'lets the session store finish when interruption lands while it runs',
     () =>
       Effect.gen(function* () {
-        stubDeviceEndpoints({}, async () =>
+        const fetchMock = deviceEndpointsFetch({}, async () =>
           jsonResponse({
             authorization_code: 'authorization-code',
             code_verifier: 'code-verifier',
@@ -119,7 +114,7 @@ describe('Codex device login', () => {
         const fiber = yield* Effect.forkChild(
           loginWithDeviceCode({ coordinator, onPrompt }).pipe(
             Effect.provide(FetchHttpClient.layer),
-            Effect.provideService(FetchHttpClient.Fetch, globalThis.fetch),
+            Effect.provideService(FetchHttpClient.Fetch, fetchMock),
           ),
         );
         yield* Deferred.await(shown);
@@ -151,7 +146,7 @@ describe('Codex device login', () => {
     () =>
       Effect.gen(function* () {
         let polls = 0;
-        stubDeviceEndpoints({ expires_in: 12 }, async () => {
+        const fetchMock = deviceEndpointsFetch({ expires_in: 12 }, async () => {
           polls += 1;
           return jsonResponse({ error: 'authorization_pending' }, 403);
         });
@@ -165,7 +160,7 @@ describe('Codex device login', () => {
             onPrompt,
           }).pipe(
             Effect.provide(FetchHttpClient.layer),
-            Effect.provideService(FetchHttpClient.Fetch, globalThis.fetch),
+            Effect.provideService(FetchHttpClient.Fetch, fetchMock),
           ),
         );
         yield* Deferred.await(shown);
