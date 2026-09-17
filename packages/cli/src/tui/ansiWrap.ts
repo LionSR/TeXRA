@@ -6,6 +6,7 @@ import {
   ANSI_ESCAPE_START,
   ansiEscapeEnd,
 } from '@cli/runtime/ansiEscapes';
+import { terminalColumns } from '@cli/runtime/terminalText';
 
 const MIN_WRAP_WIDTH = 1;
 
@@ -103,8 +104,13 @@ export function wrapAnsiToWidth(
   width?: number,
   preserveMarkdownPrefix = false,
 ): string {
-  if (width == null || !Number.isFinite(width)) return text;
-  const columns = Math.max(MIN_WRAP_WIDTH, Math.floor(width));
+  const columns = terminalColumns({
+    width,
+    fallback: undefined,
+    min: MIN_WRAP_WIDTH,
+  });
+  // An unknown width has no column budget to wrap against; leave the text as is.
+  if (columns === undefined) return text;
 
   return text
     .split('\n')

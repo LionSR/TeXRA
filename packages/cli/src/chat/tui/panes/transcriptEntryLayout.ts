@@ -1,7 +1,7 @@
 // Declarative conversation-entry geometry shared by Ink renderers, viewport
 // budgeting, static scrollback, and print-once full output.
 
-import { textDisplayWidth } from '@cli/runtime/terminalText';
+import { terminalColumns, textDisplayWidth } from '@cli/runtime/terminalText';
 import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
 import {
   COLOR_BORDER,
@@ -178,11 +178,12 @@ export function transcriptColumns(
   width: number | undefined,
   inset = 0,
 ): number {
-  const raw =
-    width != null && Number.isFinite(width)
-      ? width
-      : DEFAULT_TRANSCRIPT_COLUMNS;
-  return Math.max(1, Math.floor(raw) - inset);
+  return terminalColumns({
+    width,
+    fallback: DEFAULT_TRANSCRIPT_COLUMNS,
+    min: 1,
+    inset,
+  });
 }
 
 function wrapWithPrefix(

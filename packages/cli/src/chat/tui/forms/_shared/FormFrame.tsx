@@ -8,6 +8,7 @@ import { KeyHints, type KeyHint } from '@cli/tui/ui/KeyHints';
 import { BorderedPanel } from '@cli/tui/ui/BorderedPanel';
 import { COLOR_ERROR, COLOR_HINT } from '@cli/tui/ui/colors';
 import { LoadingIndicator } from '@cli/tui/ui/LoadingIndicator';
+import { terminalColumns } from '@cli/runtime/terminalText';
 import { clamp } from '@utils/core';
 
 const FORM_FRAME_MAX_WIDTH = 80;
@@ -27,11 +28,18 @@ interface FormFrameProps {
 }
 
 export function formFrameWidth(columns: number | undefined): number {
-  const normalized =
-    columns != null && Number.isFinite(columns) && columns > 0
-      ? Math.floor(columns)
-      : FORM_FRAME_MAX_WIDTH;
-  return clamp(normalized, 1, FORM_FRAME_MAX_WIDTH);
+  // A non-positive report (no TTY behind `useWindowSize`) is an unknown width
+  // rather than a zero-column frame, so it takes the fallback too.
+  const reported = columns != null && columns > 0 ? columns : undefined;
+  return clamp(
+    terminalColumns({
+      width: reported,
+      fallback: FORM_FRAME_MAX_WIDTH,
+      min: 1,
+    }),
+    1,
+    FORM_FRAME_MAX_WIDTH,
+  );
 }
 
 export function FormFrame(props: FormFrameProps): React.JSX.Element {

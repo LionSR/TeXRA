@@ -29,6 +29,35 @@ function normalizeColumns(width: number): number {
   return Math.max(0, Math.floor(width));
 }
 
+/**
+ * Normalize a reported terminal width into whole usable columns.
+ *
+ * A width that is absent or non-finite is unknown, so `fallback` stands in for
+ * it — pass `undefined` to let "unknown" propagate to the caller instead. The
+ * resolved width is then floored, reduced by `inset` (gutters the caller
+ * already owns), and finally clamped up to `min`.
+ *
+ * The order is load-bearing: flooring after the inset would let a fractional
+ * width survive it, and clamping before it would let a wide inset push the
+ * result back under `min`. `fallback` goes through the same pipeline as a real
+ * width, so a caller's inset applies to it too.
+ */
+export function terminalColumns<Fallback extends number | undefined>({
+  width,
+  fallback,
+  min,
+  inset = 0,
+}: {
+  readonly width: number | undefined;
+  readonly fallback: Fallback;
+  readonly min: number;
+  readonly inset?: number;
+}): number | Fallback {
+  const resolved = width != null && Number.isFinite(width) ? width : fallback;
+  if (resolved === undefined) return fallback;
+  return Math.max(min, Math.floor(resolved) - inset);
+}
+
 /** Hard-clip to `width` display columns with no ellipsis. */
 export function clipToWidth(text: string, width: number): string {
   return sliceAnsi(text, 0, normalizeColumns(width));

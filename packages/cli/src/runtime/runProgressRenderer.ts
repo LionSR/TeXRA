@@ -34,6 +34,7 @@ import { formatCompactDuration, pluralize } from '@utils/text/stringUtils';
 
 import {
   safeTerminalText,
+  terminalColumns,
   textDisplayWidth,
   truncateSummaryToWidth,
 } from './terminalText';
@@ -332,7 +333,11 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     nameOnlySubagents: string,
     elapsed: string,
   ): number {
-    const columns = normalizeTerminalColumns(this.getColumns());
+    const columns = terminalColumns({
+      width: this.getColumns(),
+      fallback: undefined,
+      min: 0,
+    });
     if (!this.ansi || columns == null) {
       return ACTIVE_CHILD_DESCRIPTION_MAX_LENGTH;
     }
@@ -391,13 +396,6 @@ function formatActiveChildren(
       : '';
   const task = safeDescription ? ` — ${safeDescription}` : '';
   return `${label}: ${first.label}${task}${suffix}`;
-}
-
-function normalizeTerminalColumns(
-  columns: number | undefined,
-): number | undefined {
-  if (columns == null || !Number.isFinite(columns)) return undefined;
-  return Math.max(0, Math.floor(columns));
 }
 
 function isMultiRound(rounds: number | undefined): rounds is number {

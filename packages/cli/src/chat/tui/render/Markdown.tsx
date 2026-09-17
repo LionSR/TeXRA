@@ -6,7 +6,7 @@
 import { memo } from 'react';
 import { Text } from 'ink';
 
-import { fillRows } from '@cli/runtime/terminalText';
+import { fillRows, terminalColumns } from '@cli/runtime/terminalText';
 import { renderAnsiMarkdown } from './ansiMarkdown';
 
 interface MarkdownProps {
@@ -28,10 +28,11 @@ export const Markdown = memo(function Markdown(
     width: props.width,
     colorEnabled: props.colorEnabled,
   });
-  const columns =
-    props.width == null || !Number.isFinite(props.width)
-      ? undefined
-      : Math.max(1, Math.floor(props.width));
+  const columns = terminalColumns({
+    width: props.width,
+    fallback: undefined,
+    min: 1,
+  });
   return (
     <Text>
       {props.fillWidth === true && columns !== undefined
