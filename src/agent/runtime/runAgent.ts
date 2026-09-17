@@ -183,6 +183,7 @@ export const runAgent = Effect.fn('runAgent')(function* (
     const priorEnd = shouldRegister
       ? null
       : yield* getRunRecords(runSession, runId).readRunEnd();
+    const priorEndStable = stableStringify(priorEnd);
     yield* failIfLaunchStopped(launchStopped);
     if (!shouldRegister && !(yield* getRunRecords(runSession, runId).exists()))
       return yield* Effect.fail(new Error(`Run not found: ${runId}`));
@@ -303,9 +304,7 @@ export const runAgent = Effect.fn('runAgent')(function* (
                 );
             if (Exit.isFailure(current)) {
               failures.push(Cause.squash(current.cause));
-            } else if (
-              stableStringify(current.value) === stableStringify(priorEnd)
-            ) {
+            } else if (stableStringify(current.value) === priorEndStable) {
               const finalization = yield* Effect.exit(
                 finalizeRun(runSession, {
                   runId,
