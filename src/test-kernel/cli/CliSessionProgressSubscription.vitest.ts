@@ -174,7 +174,7 @@ function rowFields(record: CliNdjsonRecord): {
 
 function projectionOver(session: SessionHandle) {
   const writeRecord = recordWriter();
-  const detach = attachCliSessionProgressProjection(
+  const detachProjection = attachCliSessionProgressProjection(
     effectRuntime(),
     session,
     writeRecord,
@@ -189,6 +189,8 @@ function projectionOver(session: SessionHandle) {
   /** The event lines alone: the roster is a derivation, asserted apart. */
   const records = (): CliNdjsonRecord[] =>
     all().filter((record) => record.event !== 'run.children');
+  /** The projection's drain, run for the suite's Promise-shaped tests. */
+  const detach = (): Promise<void> => Effect.runPromise(detachProjection());
   return { writeRecord, all, records, publish, detach };
 }
 

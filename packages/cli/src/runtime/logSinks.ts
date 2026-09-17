@@ -148,32 +148,27 @@ function writeRaw(key: StreamKey, text: string): void {
   runtime.runSync(guardedStreamWrite(key, stream, text, () => undefined));
 }
 
+// A waiting write takes the direct path unconditionally. Its callers are the
+// exit edges — the resume hint, the chat TUI's teardown warning, and the
+// shutdown sequence's final flush, which runs after `disposeProcessRuntime` —
+// so it must never reach for the process runtime, and the settle callback is
+// the promise's own resolve rather than a run nested inside another.
 function writeRawAndWait(key: StreamKey, text: string): Promise<void> {
   const stream = openStream(key);
   if (!stream) return Promise.resolve();
-  const runtime = tryProcessRuntime();
-  if (!runtime) {
-    return new Promise<void>((resolve) => {
-      bestEffortStreamWrite(
-        () =>
-          stream.write(text, (error) => {
-            if (error) closed[key] = true;
-            resolve();
-          }),
-        () => {
-          closed[key] = true;
+  return new Promise<void>((resolve) => {
+    bestEffortStreamWrite(
+      () =>
+        stream.write(text, (error) => {
+          if (error) closed[key] = true;
           resolve();
-        },
-      );
-    });
-  }
-  return runtime.runPromise(
-    Effect.callback<void>((resume) => {
-      runtime.runSync(
-        guardedStreamWrite(key, stream, text, () => resume(Effect.void)),
-      );
-    }),
-  );
+        }),
+      () => {
+        closed[key] = true;
+        resolve();
+      },
+    );
+  });
 }
 
 export function writeTextStdout(text: string): void {
