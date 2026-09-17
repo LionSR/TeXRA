@@ -33,7 +33,6 @@ import {
   DOCUMENT_NAME_REGEX,
   extractContentFromXMLbyTagMultiple,
   extractDocuments,
-  extractTextFromTag,
   type NamedDocument,
 } from '@utils/text/xmlExtraction';
 
@@ -86,12 +85,6 @@ const XML_PARSER_OPTIONS = {
   ignoreDeclaration: true,
 } as const;
 
-/** Human-readable descriptions for document extraction methods */
-const EXTRACTION_METHOD_MESSAGES: Record<string, string> = {
-  latex_document: 'from legacy <latex_document> tag',
-  latex: 'from \\documentclass block',
-};
-
 export class XmlOutputManager {
   constructor(
     private readonly agentConfig: AgentConfig,
@@ -116,7 +109,9 @@ export class XmlOutputManager {
 
     if (result.documents) {
       const suffix =
-        EXTRACTION_METHOD_MESSAGES[result.method] ?? 'using fallback method';
+        result.method === 'latex'
+          ? 'from \\documentclass block'
+          : 'using fallback method';
       logInternal(
         this.logger,
         `Recovered ${OUTPUT_DOCUMENTS_TAG} ${suffix} (${formatResultCount(result.documents.length, 'document')})`,
@@ -353,19 +348,7 @@ export class XmlOutputManager {
         }
       }
 
-      // A response that carries an explicit <latex_document> has named its final
-      // answer, and an untagged fence has not — a model may well emit an example
-      // or a draft fence before the tagged answer. So the tagged tier below wins
-      // outright and this one stands down, exactly as it did before fence
-      // recovery moved here. Reads the raw response, which agrees with the
-      // cdataWrapped text the tagged tier parses: addCdataToTagsMultiple only
-      // wraps the thinking and document tags, never <latex_document>.
-      const taggedLatexDocument = extractTextFromTag(
-        rawOutputContent,
-        'latex_document',
-      );
-
-      if (!documents && soleExpectedFile && !taggedLatexDocument) {
+      if (!documents && soleExpectedFile) {
         // This fully unlabeled tier is intentionally stricter than
         // filename-header recovery: without a trusted file label, only fences
         // explicitly marked latex/tex are treated as output. It handles the
@@ -399,9 +382,9 @@ export class XmlOutputManager {
 
       if (!documents && soleExpectedFile) {
         // Agents expected to write exactly one file whose model regressed to a
-        // legacy single-doc shape (<latex_document> or a bare \documentclass)
-        // can still be recovered: pass that filename so the fallback can
-        // synthesize a named document. Agents with several expected files
+        // legacy single-doc shape (a bare \documentclass block) can still be
+        // recovered: pass that filename so the fallback can synthesize a named
+        // document. Agents with several expected files
         // cannot safely recover — without per-document names there's no way to
         // route content (and without a preferredName this call would just
         // repeat the earlier one).

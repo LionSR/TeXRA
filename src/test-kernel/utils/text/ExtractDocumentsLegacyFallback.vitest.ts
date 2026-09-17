@@ -17,22 +17,6 @@ describe('extractDocuments legacy fallback', () => {
     ]);
   });
 
-  it('recovers a single doc from <latex_document> when name hint is provided', () => {
-    const xml =
-      'Preamble prose.<latex_document>\\documentclass{article}\n' +
-      '\\begin{document}Hi\\end{document}</latex_document>';
-
-    const result = extractDocuments(xml, 'documents', 'Draft/Draft1.tex');
-
-    expect(result.method).toBe('latex_document');
-    expect(result.documents).toEqual([
-      {
-        name: 'Draft/Draft1.tex',
-        content: '\\documentclass{article}\n\\begin{document}Hi\\end{document}',
-      },
-    ]);
-  });
-
   it('recovers a single doc from a bare \\documentclass block', () => {
     const xml =
       'No wrapper at all. \\documentclass[prl]{revtex4-2}\n' +
@@ -52,8 +36,8 @@ describe('extractDocuments legacy fallback', () => {
 
   it('skips fallback when no name hint is provided', () => {
     const xml =
-      '<latex_document>\n\\documentclass{article}\n' +
-      '\\begin{document}x\\end{document}\n</latex_document>';
+      'No wrapper at all. \\documentclass{article}\n' +
+      '\\begin{document}x\\end{document}';
 
     const result = extractDocuments(xml, 'documents');
 
