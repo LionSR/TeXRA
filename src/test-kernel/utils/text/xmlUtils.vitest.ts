@@ -14,9 +14,9 @@ vi.mock('@utils/system/toolUtils', async (importOriginal) => ({
 describe('xmlUtils CDATA handling', () => {
   it.each([
     {
-      tag: 'latex_document',
+      tag: 'document',
       input:
-        '<latex_document><![CDATA[Text with <xml-like> LaTeX & comments]]></latex_document>',
+        '<document><![CDATA[Text with <xml-like> LaTeX & comments]]></document>',
     },
     {
       tag: 'document',
@@ -32,11 +32,10 @@ describe('xmlUtils CDATA handling', () => {
 
   it.each([
     {
-      tag: 'latex_document',
-      input:
-        '<latex_document><![CDATA[Text with <xml-like> LaTeX</latex_document>',
+      tag: 'document',
+      input: '<document><![CDATA[Text with <xml-like> LaTeX</document>',
       expected:
-        '<latex_document><![CDATA[<![CDATA[Text with <xml-like> LaTeX]]></latex_document>',
+        '<document><![CDATA[<![CDATA[Text with <xml-like> LaTeX]]></document>',
     },
     {
       tag: 'document',

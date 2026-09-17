@@ -65,6 +65,7 @@ export function buildCodexCommandToolLog(
     ),
     input: { command: options.command },
     ...(output && { output }),
+    ...(options.exit_code != null && { exitCode: options.exit_code }),
     ...(isError && { error: `Command failed (${exitInfo})` }),
     status: toolStatus,
   };

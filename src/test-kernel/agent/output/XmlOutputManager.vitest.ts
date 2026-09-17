@@ -1309,42 +1309,6 @@ Appendix.
       }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
-  // A tagged <latex_document> is the model's declared final answer; an
-  // untagged fence before it is an example or a draft. Both agent shapes must
-  // prefer the tag, or fence recovery would overwrite the answer with a draft.
-  for (const [name, inputFiles, options] of [
-    ['single-input edit agents', ['paper.tex'], {} satisfies XmlManagerOptions],
-    [
-      'single-artifact agents',
-      ['page1.png'],
-      { outputFiles: ['paper.tex'] } satisfies XmlManagerOptions,
-    ],
-  ] satisfies readonly (readonly [
-    string,
-    readonly string[],
-    XmlManagerOptions,
-  ])[]) {
-    it.live(
-      `prefers a tagged <latex_document> over an earlier untagged fence for ${name}`,
-      () =>
-        Effect.gen(function* () {
-          const outputs = yield* writeAndSplitDocuments(
-            [
-              '```latex',
-              '\\section{Draft}',
-              '```',
-              '<latex_document>\\section{Final}\\end{document}</latex_document>',
-            ],
-            [...inputFiles],
-            options,
-          );
-
-          expectSources(outputs, ['paper.tex']);
-          yield* expectWritten('paper.tex', '\\section{Final}\n');
-        }).pipe(Effect.provide(nodePlatformLayer)),
-    );
-  }
-
   it.live(
     'leaves an unlabeled block unmatched when identical base files make the match ambiguous',
     () =>

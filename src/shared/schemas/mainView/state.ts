@@ -57,8 +57,12 @@ const ModelAvailabilityKindSchema = z.enum([
   // The same, on the user's Grok (xAI) subscription.
   'xai-subscription-access',
   // Editor-hosted Copilot access is keyless but distinct from ChatGPT.
-  // Permission state is reported by the VS Code host.
-  'copilot-access',
+  // Permission state is reported by the VS Code host, and each kind below is
+  // `copilot-` + that host port's own access word
+  // (`LanguageModelAccessState`): the wire states the fact once, and
+  // `computeModelOptions` builds the kind from the word rather than
+  // translating between two vocabularies.
+  'copilot-allowed',
   'copilot-consent-required',
   'copilot-unavailable',
   'provider-unavailable',
@@ -102,7 +106,7 @@ export const MODEL_AVAILABILITY_STATUS = {
     available: true,
     requiresKey: false,
   },
-  'copilot-access': {
+  'copilot-allowed': {
     label: 'Copilot subscription',
     available: true,
     requiresKey: false,

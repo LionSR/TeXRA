@@ -61,55 +61,21 @@ describe('normalizeToolUseData', () => {
   });
 
   it('retains only the scalar exit code needed by renderers', () => {
-    const topLevel = normalizeToolUseData({
+    const normalized = normalizeToolUseData({
       toolName: 'Bash',
-      exit_code: 7,
+      exitCode: 7,
       output: 'failed',
       status: 'completed',
     });
-    const nested = normalizeToolUseData({
-      toolName: 'Bash',
-      output: { exitCode: 3, output: 'failed' },
-      status: 'completed',
-    });
 
-    expect(topLevel?.exitCode).toBe(7);
-    expect(nested?.exitCode).toBe(3);
-    expect(topLevel).not.toHaveProperty('parsed');
-  });
-
-  it('derives the exit code from prose when no structured field exists', () => {
-    const fromError = normalizeToolUseData({
-      toolName: 'Bash',
-      error: 'Command failed (exit 7)',
-      status: 'failed',
-    });
-    const fromSummary = normalizeToolUseData({
-      toolName: 'Bash',
-      output: {
-        summary: 'Background bash failed with exit code 2.',
-      },
-      status: 'failed',
-    });
-
-    expect(fromError?.exitCode).toBe(7);
-    expect(fromSummary?.exitCode).toBe(2);
-  });
-
-  it('prefers a structured exit code over prose', () => {
-    const normalized = normalizeToolUseData({
-      toolName: 'Bash',
-      exit_code: 7,
-      error: 'Command failed (exit 3)',
-      status: 'failed',
-    });
     expect(normalized?.exitCode).toBe(7);
+    expect(normalized).not.toHaveProperty('parsed');
   });
 
-  it('leaves exitCode unset when prose mentions no exit code', () => {
+  it('leaves exitCode unset when the row states none, prose regardless', () => {
     const normalized = normalizeToolUseData({
       toolName: 'Bash',
-      error: 'cancelled by user',
+      error: 'Command failed (exit 3)',
       status: 'failed',
     });
     expect(normalized?.exitCode).toBeUndefined();

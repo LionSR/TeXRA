@@ -151,7 +151,7 @@ export async function extractScratchpad(
 
 export interface MultipleExtractionResult {
   documents: NamedDocument[] | null;
-  method: 'simple' | 'latex_document' | 'latex' | 'none';
+  method: 'simple' | 'latex' | 'none';
 }
 
 /**
@@ -159,24 +159,22 @@ export interface MultipleExtractionResult {
  *
  * Primary path looks for <document name="..."> children inside the unified
  * <documents> container. When that finds nothing and a single-file recovery
- * hint is supplied, the extractor falls back through the legacy single-doc
- * shapes (<latex_document>, bare \documentclass) and synthesizes a
- * one-document result named after the hint. Without a hint, recovery is
- * skipped because a synthesized document with no name has no unambiguous
- * destination.
+ * hint is supplied, the extractor falls back to the legacy single-doc shape
+ * (a bare \documentclass block) and synthesizes a one-document result named
+ * after the hint. Without a hint, recovery is skipped because a synthesized
+ * document with no name has no unambiguous destination.
  *
  * Fenced ```latex/```tex blocks are deliberately NOT recovered here: this
  * function reads the whole response including the model's thinking tag, so a
  * fence inside the scratchpad would win over the real answer. Fence recovery
  * belongs to `collectLatexFencedBlocks`, which strips the thinking tag first
  * and parses fences per CommonMark. `XmlOutputManager` runs that tier ahead of
- * this one, except when the response carries an explicit <latex_document>:
- * a tagged final answer outranks an untagged fence, so this tier keeps it.
+ * this one.
  *
  * @param outputContent The raw output content to extract from
  * @param containerTag The container tag to look for documents within
- * @param preferredName Recovery hint — when set, treat single-doc legacy
- *   shapes as a one-document result named after the hint
+ * @param preferredName Recovery hint — when set, treat the single-doc legacy
+ *   shape as a one-document result named after the hint
  * @returns Extraction result with documents array and method used
  */
 export function extractDocuments(
@@ -198,14 +196,6 @@ export function extractDocuments(
   }
 
   if (preferredName) {
-    const tagged = extractTextFromTag(outputContent, 'latex_document');
-    if (tagged) {
-      return {
-        documents: [{ content: tagged, name: preferredName }],
-        method: 'latex_document',
-      };
-    }
-
     const bare = outputContent.match(/\\documentclass[\s\S]*?\\end{document}/);
     if (bare) {
       return {

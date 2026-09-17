@@ -291,7 +291,7 @@ function formatCliModelRecovery(entry: CliModelAccess): string | undefined {
       return 'Choose a supported provider route or another model.';
     case 'subscription-access':
     case 'xai-subscription-access':
-    case 'copilot-access':
+    case 'copilot-allowed':
     case undefined:
       return undefined;
     case 'copilot-consent-required':
