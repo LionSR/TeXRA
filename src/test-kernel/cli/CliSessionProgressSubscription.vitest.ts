@@ -330,8 +330,8 @@ describe('attachCliSessionProgressProjection', () => {
         draft: {
           type: 'run.start',
           aggregateId: childAggregate,
-          identity: { kind: 'multiAgentWorkflow', workflowName: 'delegate' },
-          category: AgentCategory.Workflow,
+          identity: { kind: 'agent', agent: 'review' },
+          category: AgentCategory.ToolUse,
           isRemote: false,
           userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
           parent: { id: runId },
@@ -349,11 +349,8 @@ describe('attachCliSessionProgressProjection', () => {
             children: [
               {
                 childRunId,
-                agentName: 'delegate',
-                identity: {
-                  kind: 'multiAgentWorkflow',
-                  workflowName: 'delegate',
-                },
+                agentName: 'review',
+                identity: { kind: 'agent', agent: 'review' },
                 status: 'ready',
               },
             ],
@@ -366,7 +363,7 @@ describe('attachCliSessionProgressProjection', () => {
         draft: {
           type: 'run.activate',
           aggregateId: childAggregate,
-          category: AgentCategory.Workflow,
+          category: AgentCategory.ToolUse,
           isRemote: false,
         },
       });

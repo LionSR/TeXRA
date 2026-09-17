@@ -37,11 +37,12 @@ function childRow(child: RunView) {
  * same-type updates never collapse.
  *
  * The one record that is not an event is `run.children`, a parent's live
- * child roster. It is derived from the fold beside each row — the parent's
- * `childIds` and each child's own `RunView` — and written when that
- * derivation changes, so it needs no second channel and no ordering
- * machinery: the roster a line reports is the state the fold held when the
- * preceding row went out.
+ * child roster. It is derived from the fold — the parent's `childIds` and
+ * each child's own `RunView` — on every level the fold publishes, and
+ * written only when that derivation changes, so it carries no channel of its
+ * own. It is ordered against the lines by the fold's own cursor: a view that
+ * has folded past the tail's last written row waits for the tail, so a
+ * roster never precedes a row it already reports.
  *
  * Detaching drains: the tail runs to the ordinal captured at detach, so the
  * last line published before the run settled is on the wire before the
@@ -80,35 +81,43 @@ export function attachCliSessionProgressProjection(
 
   /** The roster last written per parent, so an unchanged one writes no line. */
   const writtenRosters = new Map<RunId, string>();
+  /** A fold ahead of the tail: its roster waits for the lines that produced
+   *  it, so a roster never precedes the row it reports. */
+  let rosterPending = false;
   const emitRosters = (): void => {
     const view = SubscriptionRef.getUnsafe(session.view);
-    for (const [runId, run] of view.runs) {
+    rosterPending = view.cursor > delivered;
+    if (rosterPending) return;
+    for (const [parentRunId, run] of view.runs) {
       // A parent whose roster emptied still owes its closing line; one that
       // never had a child owes nothing.
-      if (run.childIds.length === 0 && !writtenRosters.has(runId)) continue;
-      const children: Array<ReturnType<typeof childRow>> = [];
-      for (const childId of run.childIds) {
+      if (run.childIds.length === 0 && !writtenRosters.has(parentRunId))
+        continue;
+      const children = run.childIds.flatMap((childId) => {
         const child = view.runs.get(childId);
         // A live child only: the roster reports who is still going, and a
-        // child that ended keeps its own `run.end` line.
-        if (child === undefined || isTerminalOutcomePhase(child.status))
-          continue;
-        children.push(childRow(child));
-      }
+        // child that ended carries its outcome on its own `run.end` line.
+        return child === undefined || isTerminalOutcomePhase(child.status)
+          ? []
+          : [childRow(child)];
+      });
       const wire = JSON.stringify(children);
-      if (writtenRosters.get(runId) === wire) continue;
-      writtenRosters.set(runId, wire);
-      emit('run.children', { runId, children });
+      if (writtenRosters.get(parentRunId) === wire) continue;
+      writtenRosters.set(parentRunId, wire);
+      emit('run.children', { runId: parentRunId, children });
     }
   };
 
   const settleIfDrained = (): void => {
     if (stopAt === undefined || delivered < stopAt) return;
+    // `stopAt` is the plane's ordinal, which no fold can be past, so the
+    // roster gate is open here and the last one goes out with the drain.
     emitRosters();
     resolveDrained();
   };
   const passed = (commit: number): void => {
     delivered = Math.max(delivered, commit);
+    if (rosterPending) emitRosters();
     settleIfDrained();
   };
 
@@ -122,7 +131,6 @@ export function attachCliSessionProgressProjection(
         if (stopAt !== undefined && event.commit > stopAt) return;
         const { type, ...payload } = event;
         emit(type, payload);
-        emitRosters();
         passed(event.commit);
       }),
     ),
@@ -130,6 +138,12 @@ export function attachCliSessionProgressProjection(
   const coordinateFiber = runtime.runFork(
     Stream.runForEach(SubscriptionRef.changes(drainedTo), (commit) =>
       Effect.sync(() => passed(commit)),
+    ),
+  );
+  // The roster's own source: the fold, whose every level is a candidate.
+  const rosterFiber = runtime.runFork(
+    Stream.runForEach(SubscriptionRef.changes(session.view), () =>
+      Effect.sync(emitRosters),
     ),
   );
 
@@ -140,5 +154,6 @@ export function attachCliSessionProgressProjection(
     await drained;
     runtime.runFork(Fiber.interrupt(fiber));
     runtime.runFork(Fiber.interrupt(coordinateFiber));
+    runtime.runFork(Fiber.interrupt(rosterFiber));
   };
 }
