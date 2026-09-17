@@ -52,7 +52,6 @@ import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
 import { installCliProcessRuntime } from './cliProcessRuntime';
-import { cliAgentResume } from './cliAgentResume';
 import { getCliSecrets } from './cliSecrets';
 import {
   flushNdjsonStdout,
@@ -402,7 +401,6 @@ export async function initCliPlatform(
       const cliSecrets = getCliSecrets(context.storageRoot);
       const platform = createNodePlatform({
         lifecycle,
-        agentResume: cliAgentResume,
         agentDirectories,
       });
       // One process, one project: the process roots are the `--cwd` workspace.

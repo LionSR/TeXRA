@@ -27,18 +27,15 @@ import {
 import { JsonConfigProvider } from './jsonConfigProvider';
 import { nodeFilesystem } from './nodeFilesystem';
 import { canonicalizeWorkspacePath } from './nodeWorkspace';
-import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '../languageModel';
 import type { WorkspaceRoots } from '../workspaceRoots';
 import type { JsonConfigProviderOptions } from './jsonConfigProvider';
 import type {
   AgentDirectoriesPort,
-  AgentResumePort,
   ConfigProvider,
   LifecycleHost,
   StateStore,
   ToolMissingHandler,
 } from '../interfaces';
-import type { LanguageModelPort } from '../languageModel';
 import type { Platform } from '../platform';
 
 /**
@@ -49,10 +46,7 @@ import type { Platform } from '../platform';
  */
 export interface NodePlatformServices {
   readonly lifecycle: LifecycleHost;
-  readonly agentResume: AgentResumePort;
   readonly agentDirectories: AgentDirectoriesPort;
-  /** Editor-host subscription models; defaults to the unavailable port. */
-  readonly languageModel?: LanguageModelPort;
   /** Optional process-host capability; absent means no-op (see `Platform`). */
   readonly toolMissingHandler?: ToolMissingHandler;
 }
@@ -118,9 +112,7 @@ export function createNodePlatform(services: NodePlatformServices): Platform {
   return {
     fs: nodeFilesystem,
     lifecycle: services.lifecycle,
-    agentResume: services.agentResume,
     agentDirectories: services.agentDirectories,
-    languageModel: services.languageModel ?? UNAVAILABLE_LANGUAGE_MODEL_PORT,
     // Missing-tool reporting remains an optional process-host capability;
     // omitting it is the no-op, which is what both Node hosts want.
     toolMissingHandler: services.toolMissingHandler,

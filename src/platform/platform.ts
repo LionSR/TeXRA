@@ -9,13 +9,11 @@
  * Pattern: Composition Root (Mark Seemann) + Frozen Object.
  */
 import type {
-  AgentResumePort,
   AgentDirectoriesPort,
   FileSystemProvider,
   ToolMissingHandler,
   LifecycleHost,
 } from './interfaces';
-import type { LanguageModelPort } from './languageModel';
 
 /**
  * The process-true platform services a host must provide.
@@ -31,6 +29,10 @@ import type { LanguageModelPort } from './languageModel';
  * (`@platform/workspaceRoots`), carried by each `SessionHandle`, so one
  * process can hold sessions rooted in several folders.
  *
+ * The resume port and the editor language-model bridge are not here either:
+ * a root hands both straight to `installProcessRuntime`, served as the
+ * `AgentResume` and `LanguageModel` Effect services and read only there.
+ *
  * Note on logging: diagnostics are their own subsystem. Hosts install their
  * log sink via `logSink.setLogSink` directly; the platform abstraction doesn't
  * carry a log backend.
@@ -38,10 +40,7 @@ import type { LanguageModelPort } from './languageModel';
 export interface Platform {
   readonly fs: FileSystemProvider;
   readonly lifecycle: LifecycleHost;
-  readonly agentResume: AgentResumePort;
   readonly agentDirectories: AgentDirectoriesPort;
-  /** Subscription-backed models exposed by the active editor host. */
-  readonly languageModel: LanguageModelPort;
   /**
    * Surfaces a tool-missing error to the user. Single-implementer (VS Code) —
    * hosts without a UI for this omit it; callers treat an absent port as a

@@ -17,6 +17,7 @@ import {
   createNodeStorageProvider,
   DEFAULT_NODE_STORAGE_ROOT,
 } from '@platform/defaults/nodeStorage';
+import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '@platform/languageModel';
 
 import type { AgentPlatform } from './index.js';
 
@@ -65,11 +66,14 @@ export function nodePlatform(options: NodePlatformOptions): AgentPlatform {
   });
   return {
     secrets: environmentSecrets,
+    // The two process ports `composeProcess` serves: this platform resumes
+    // nothing and has no editor behind it.
+    agentResume: {
+      tryResumeRun: () => Effect.succeed(false),
+    },
+    languageModel: UNAVAILABLE_LANGUAGE_MODEL_PORT,
     ...createNodePlatform({
       lifecycle: createLifecycleHost(),
-      agentResume: {
-        tryResumeRun: () => Effect.succeed(false),
-      },
       agentDirectories: {
         custom: () => Effect.succeed(options.agentsDir),
         builtIn: () => Effect.succeed(''),
