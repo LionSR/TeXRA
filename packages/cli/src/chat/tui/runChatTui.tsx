@@ -308,7 +308,7 @@ export async function runChat(
   }
 
   const inputHistory = await runtime.runPromise(
-    loadInputHistory(() => services.globalStorage),
+    loadInputHistory(services.globalStorage),
   );
 
   // DA1 sentinel discovery runs *before* Ink mounts so it owns the raw-mode

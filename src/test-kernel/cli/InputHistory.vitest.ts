@@ -17,14 +17,14 @@ describe('CLI TUI input history', () => {
 
   it.live('persists entries across loads and skips adjacent duplicates', () =>
     Effect.gen(function* () {
-      const history = yield* loadInputHistory(() => storage);
+      const history = yield* loadInputHistory(storage);
       yield* Effect.all(
         [history.push('alpha'), history.push('alpha'), history.push('beta')],
         { concurrency: 'unbounded' },
       );
       yield* history.push('   ');
 
-      const reloaded = yield* loadInputHistory(() => storage);
+      const reloaded = yield* loadInputHistory(storage);
 
       expect(reloaded.length()).toBe(2);
       expect(reloaded.at(0)).toBe('alpha');
@@ -36,7 +36,7 @@ describe('CLI TUI input history', () => {
       // Another CLI writes between two submissions identical in this cache.
       yield* reloaded.push('gamma');
       yield* history.push('beta');
-      const combined = yield* loadInputHistory(() => storage);
+      const combined = yield* loadInputHistory(storage);
       expect(
         Array.from({ length: combined.length() }, (_, index) =>
           combined.at(index),
@@ -47,7 +47,7 @@ describe('CLI TUI input history', () => {
 
   it.live('reverse-finds the most recent matching entry first', () =>
     Effect.gen(function* () {
-      const history = yield* loadInputHistory(() => storage);
+      const history = yield* loadInputHistory(storage);
       yield* history.push('build the project');
       yield* history.push('run the tests');
       yield* history.push('build the docs');
