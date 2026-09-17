@@ -14,6 +14,7 @@ import { type FileSystem, Layer, type Path } from 'effect';
 // Local imports
 import {
   sessionFsLayer,
+  type GlobalStorageFs,
   type StorageFs,
   type WorkspaceFs,
 } from '@platform/rootedFs';
@@ -38,7 +39,10 @@ export const nodePlatformLayer = Layer.mergeAll(
 export function rootedFsLayer(roots: {
   readonly workspace: string | undefined;
   readonly storage: string;
-}): Layer.Layer<WorkspaceFs | StorageFs | FileSystem.FileSystem | Path.Path> {
+  readonly globalStorage: string;
+}): Layer.Layer<
+  WorkspaceFs | StorageFs | GlobalStorageFs | FileSystem.FileSystem | Path.Path
+> {
   return Layer.provideMerge(sessionFsLayer(roots), nodePlatformLayer);
 }
 
