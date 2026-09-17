@@ -48,7 +48,13 @@ interface LoopbackOAuthCoordinator<S> {
 
 export interface OAuthLoopbackLoginOptions<S> {
   coordinator: LoopbackOAuthCoordinator<S>;
-  openBrowser: (url: string) => void | Promise<void>;
+  /**
+   * Show (and normally open) the consent URL. A program, so the host's own
+   * presentation runs on this flow's fibers and its failure — typically a
+   * {@link LoopbackTransportUnavailableError} — reaches the caller through
+   * the error channel instead of a rejection this flow has to re-wrap.
+   */
+  openBrowser: (url: string) => Effect.Effect<void, unknown>;
   /** Registered callback ports, tried in order. */
   ports: readonly number[];
   /** Path segment of the registered redirect URI (e.g. `/auth/callback`). */
@@ -182,17 +188,13 @@ function loginWithOAuthLoopback<S>(
 ): Effect.Effect<S, unknown, HttpClient.HttpClient> {
   const { coordinator, openBrowser, ports, callbackPath, displayName } =
     options;
-  // The setup prefix is uninterruptible to preserve the Promise
-  // implementation's observable ordering: it bound the server, armed the
-  // callback wait, and invoked `openBrowser` before its first cancellation
-  // check, so a launcher that never settles must still be started and an
-  // abort must still settle the login. The launch promise is consumed on a
-  // detached fiber: interruption of the login abandons the join but never
-  // the launcher, and a late launch failure dies on that fiber with a typed
-  // error — observed and inert — where the old code swallowed a late
-  // rejection with a `.catch` no-op. Interruption is observed from the
-  // launcher join onward — the same points the old code raced against its
-  // cancellation promise.
+  // The setup prefix is uninterruptible: it binds the server, arms the
+  // callback wait, and starts `openBrowser` before its first cancellation
+  // check, so a launcher that never settles is still started and an abort
+  // still settles the login. The launcher runs on a detached fiber:
+  // interruption of the login abandons the join but never the launcher, and a
+  // late launch failure dies on that fiber — observed and inert.
+  // Interruption is observed from the launcher join onward.
   const setup = Effect.uninterruptible(
     Effect.gen(function* () {
       const { server, port } = yield* Effect.acquireRelease(
@@ -255,14 +257,13 @@ function loginWithOAuthLoopback<S>(
           }),
       );
 
-      // Invoked synchronously here (the old Promise code's ordering), then
-      // observed by the detached fiber the login joins below.
-      const launchPromise = Promise.resolve(openBrowser(authorize.url));
+      // `startImmediately` is the launcher's ordering: it begins here, inside
+      // the uninterruptible prefix, and is joined below before the callback
+      // wait opens — a host that cannot reach a browser fails fast instead of
+      // leaving the flow waiting for a callback nobody can deliver.
       const browserLaunch = yield* Effect.forkDetach(
-        Effect.tryPromise<void, unknown>({
-          try: () => launchPromise,
-          catch: (error) => error,
-        }),
+        openBrowser(authorize.url),
+        { startImmediately: true },
       );
       return { authorize, code, browserLaunch };
     }),

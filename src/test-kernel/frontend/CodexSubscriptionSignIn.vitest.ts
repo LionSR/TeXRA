@@ -66,15 +66,11 @@ function loopbackSession() {
 function loginByOpeningBrowser({
   openBrowser,
 }: {
-  openBrowser: (url: string) => Promise<void>;
+  openBrowser: (url: string) => Effect.Effect<void, unknown>;
 }) {
-  return Effect.tryPromise({
-    try: async () => {
-      await openBrowser('https://auth.openai.com/authorize?x=1');
-      return loopbackSession();
-    },
-    catch: (error) => error,
-  });
+  return openBrowser('https://auth.openai.com/authorize?x=1').pipe(
+    Effect.as(loopbackSession()),
+  );
 }
 
 function mockLoopbackSuccess(): void {

@@ -15,7 +15,12 @@ import { SubscriptionUsageService } from '@controllers/modelAccess/subscriptionU
 import { SettingsProfileKeyController } from '@controllers/settingsView/SettingsProfileKeyController';
 import { SettingsProfileController } from '@controllers/settingsView/SettingsProfileController';
 import { SettingsModelSelectionController } from '@controllers/settingsView/SettingsModelSelectionController';
-import type { ExternalOpener, MessageHost, PromptHost } from '@hosts/uiHosts';
+import type {
+  ExternalOpenFailed,
+  ExternalOpener,
+  MessageHost,
+  PromptHost,
+} from '@hosts/uiHosts';
 import {
   API_PROVIDERS,
   invalidateApiKeyCache,
@@ -85,7 +90,15 @@ interface DesktopCredentialSettingsControllerOptions extends SettingsStatePorts 
    */
   readonly prompt: Pick<PromptHost, 'input' | 'confirm' | 'info'>;
   readonly externalOpener: Pick<ExternalOpener, 'openExternal'> & {
-    openSubscriptionSignInUrl(url: string): Promise<void>;
+    /**
+     * Open the loopback consent URL, failing the way {@link ExternalOpener}
+     * does. Separate from `openExternal` only because this one must not raise
+     * the window's own "could not open" dialog: the sign-in flow reports a
+     * missing browser itself, and falls back to a device code instead.
+     */
+    openSubscriptionSignInUrl(
+      url: string,
+    ): Effect.Effect<void, ExternalOpenFailed>;
     presentSubscriptionSignInUrl(
       url: string,
       productName: string,
@@ -386,31 +399,32 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
           ),
         );
       },
-      presentSignInUrl: async (url) => {
-        // Promise-shaped for the loopback flow, which awaits the browser open
-        // before it starts the callback wait and reads the transport failure
-        // off the rejection. The program settles on the process runtime.
-        await this.options.runtime.runPromise(
-          Effect.tryPromise({
-            try: async () => {
-              await this.options.externalOpener.openSubscriptionSignInUrl(url);
-            },
-            catch: (cause) =>
+      // The loopback flow runs this to completion before it starts the
+      // callback wait, so a window that cannot reach a browser fails the
+      // transport here rather than waiting for a callback nobody can deliver.
+      presentSignInUrl: (url) =>
+        this.options.externalOpener.openSubscriptionSignInUrl(url).pipe(
+          Effect.mapError(
+            (failure) =>
               new LoopbackTransportUnavailableError(
                 `Could not open a browser for ${displayName} sign-in.`,
-                { cause },
+                { cause: failure.cause },
               ),
-          }),
-        );
-        // Informational only — awaiting would block the OAuth callback, and a
-        // presenter failure is contained rather than failing the callback wait.
-        this.presentInBackground(displayName, () =>
-          this.options.externalOpener.presentSubscriptionSignInUrl(
-            url,
-            displayName,
           ),
-        );
-      },
+          Effect.andThen(
+            Effect.sync(() => {
+              // Informational only — awaiting would block the OAuth callback,
+              // and a presenter failure is contained rather than failing the
+              // callback wait.
+              this.presentInBackground(displayName, () =>
+                this.options.externalOpener.presentSubscriptionSignInUrl(
+                  url,
+                  displayName,
+                ),
+              );
+            }),
+          ),
+        ),
     };
   }
 

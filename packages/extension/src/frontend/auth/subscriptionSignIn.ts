@@ -55,31 +55,36 @@ function vscodePresenter(
           }
         });
     },
-    presentSignInUrl: async (url) => {
-      // `openExternal` always targets the system default browser. The loopback
-      // callback accepts the redirect from *any* browser, so ask up front
-      // instead of racing an auto-launched tab against a dismissible toast —
-      // users whose subscription lives in a different browser (e.g. default is
-      // Safari but the provider is signed in on Chrome) get a link they can
-      // paste there instead.
-      const choice = await vscode.window.showInformationMessage(
-        `Sign in with ${displayName}. If your ${sessionName} session is in a different browser than your OS default, copy the link and open it there instead.`,
-        { modal: true },
-        OPEN_DEFAULT_BROWSER,
-        COPY_SIGN_IN_LINK,
-      );
-      if (choice === COPY_SIGN_IN_LINK) {
-        await vscode.env.clipboard.writeText(url);
-        void vscode.window.showInformationMessage(
-          `Sign-in link copied. Paste it into the browser where you use ${copyTarget}.`,
+    presentSignInUrl: (url) =>
+      Effect.gen(function* () {
+        // `openExternal` always targets the system default browser. The
+        // loopback callback accepts the redirect from *any* browser, so ask up
+        // front instead of racing an auto-launched tab against a dismissible
+        // toast — users whose subscription lives in a different browser (e.g.
+        // default is Safari but the provider is signed in on Chrome) get a
+        // link they can paste there instead.
+        const choice = yield* Effect.promise(() =>
+          vscode.window.showInformationMessage(
+            `Sign in with ${displayName}. If your ${sessionName} session is in a different browser than your OS default, copy the link and open it there instead.`,
+            { modal: true },
+            OPEN_DEFAULT_BROWSER,
+            COPY_SIGN_IN_LINK,
+          ),
         );
-        return;
-      }
-      if (choice !== OPEN_DEFAULT_BROWSER) {
-        throw new SubscriptionSignInCancelled();
-      }
-      await vscode.env.openExternal(vscode.Uri.parse(url));
-    },
+        if (choice === COPY_SIGN_IN_LINK) {
+          yield* Effect.promise(() => vscode.env.clipboard.writeText(url));
+          void vscode.window.showInformationMessage(
+            `Sign-in link copied. Paste it into the browser where you use ${copyTarget}.`,
+          );
+          return;
+        }
+        if (choice !== OPEN_DEFAULT_BROWSER) {
+          return yield* Effect.fail(new SubscriptionSignInCancelled());
+        }
+        yield* Effect.promise(() =>
+          vscode.env.openExternal(vscode.Uri.parse(url)),
+        );
+      }),
   };
 }
 

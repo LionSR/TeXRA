@@ -56,22 +56,28 @@ export function shouldUseSubscriptionDeviceCode(
  * not hide the only manual route behind that wait. Print the URL once — later
  * status lines must not re-emit it (progress sinks append, not replace).
  */
-async function writeCliLoopbackSignInProgress(options: {
+function writeCliLoopbackSignInProgress(options: {
   readonly writeProgress: (message: string) => void;
   readonly displayName: string;
   readonly url: string;
   readonly noBrowser: boolean;
-}): Promise<void> {
+}): Effect.Effect<void> {
   const { writeProgress, displayName, url, noBrowser } = options;
-  writeProgress(`${displayName} sign-in URL:\n${url}`);
-  if (noBrowser) return;
+  return Effect.gen(function* () {
+    writeProgress(`${displayName} sign-in URL:\n${url}`);
+    if (noBrowser) return;
 
-  writeProgress('Browser launch in progress...');
-  if (await tryOpenBrowser(url)) {
-    writeProgress('Browser opened; the same URL works in another browser.');
-    return;
-  }
-  writeProgress('Automatic browser launch failed; open the sign-in URL above.');
+    writeProgress('Browser launch in progress...');
+    // Infallible by construction: `tryOpenBrowser` answers false rather than
+    // rejecting, so the launch outcome is a value, not a failure.
+    if (yield* Effect.promise(() => tryOpenBrowser(url))) {
+      writeProgress('Browser opened; the same URL works in another browser.');
+      return;
+    }
+    writeProgress(
+      'Automatic browser launch failed; open the sign-in URL above.',
+    );
+  });
 }
 
 type CliSubscriptionSignOutResult =
