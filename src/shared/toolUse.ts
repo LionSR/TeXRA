@@ -66,32 +66,6 @@ function formatOutputText(content: unknown): string {
   return serialized.trimEnd();
 }
 
-/** Matches an exit code stated in prose, e.g. "Command failed (exit 7)" or
- *  "Background bash failed with exit code 2." — the shape delegated
- *  sub-agents and tool error messages use when no structured field exists. */
-const EXIT_CODE_PROSE = /\bexit(?: code)?\s+(\d+)\b/i;
-
-function normalizedExitCode(
-  data: unknown,
-  input: unknown,
-  proseText: string,
-): number | undefined {
-  for (const candidate of [data, input]) {
-    if (!isObject(candidate)) continue;
-    const raw =
-      candidate.exitCode ??
-      candidate.exit_code ??
-      (isObject(candidate.output) ? candidate.output.exitCode : undefined);
-    if (typeof raw === 'number' && Number.isInteger(raw)) return raw;
-    if (typeof raw === 'string' && /^\d+$/.test(raw)) return Number(raw);
-  }
-  // Last resort: some emitters (delegated sub-agents, background bash
-  // delivery) state the exit code only in their error/summary prose. Derive
-  // it here, once, so renderers never scan output text themselves.
-  const match = EXIT_CODE_PROSE.exec(proseText);
-  return match ? Number(match[1]) : undefined;
-}
-
 export function normalizeToolUseData(data: unknown): NormalizedToolUse | null {
   const parseResult = ToolUseLogSchema.safeParse(data);
   if (!parseResult.success) return null;
@@ -113,17 +87,14 @@ export function normalizeToolUseData(data: unknown): NormalizedToolUse | null {
   const isUserFeedback = userInstructionText.length > 0;
 
   const headerSummary = summaryText || (isUserFeedback ? '' : errorText);
-  const exitCode = normalizedExitCode(
-    data,
-    validated.input,
-    [errorText, headerSummary, outputText].join('\n'),
-  );
 
   return {
     toolName,
     errorText,
     outputText,
-    ...(exitCode !== undefined ? { exitCode } : {}),
+    ...(validated.exitCode !== undefined
+      ? { exitCode: validated.exitCode }
+      : {}),
     userInstructionText,
     input: validated.input,
     isUserFeedback,

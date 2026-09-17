@@ -83,6 +83,7 @@ describe('buildCodexCommandToolLog', () => {
         command: 'lake env lean MPS/ParentHamiltonian/UniqueGroundState.lean',
       },
       output: 'warning: rebuilding',
+      exitCode: 0,
       status: 'completed',
     });
   });
@@ -104,6 +105,7 @@ describe('buildCodexCommandToolLog', () => {
           'lake env lean MPS/ParentHamiltonian/UniqueGroundState.lean --very-long-flag value',
       },
       output: '(exit 1)',
+      exitCode: 1,
       error: 'Command failed (exit 1)',
       status: 'failed',
     });
@@ -122,6 +124,7 @@ describe('buildCodexCommandToolLog', () => {
       summary: 'lake build',
       input: { command: 'lake build' },
       output: 'sandbox denied',
+      exitCode: 0,
       error: 'Command failed (exit 0)',
       status: 'failed',
     });

@@ -74,6 +74,9 @@ export const ToolUseLogSchema = z.object({
   summary: z.string().optional(),
   error: z.string().optional(),
   userInstruction: z.string().optional(),
+  /** The one spelling of a command row's exit code: the builder that owns the
+   *  code states it here, and renderers read it instead of scraping prose. */
+  exitCode: z.int().optional(),
   status: ToolCallStatusSchema.optional(),
 });
 export type ToolUseLog = z.infer<typeof ToolUseLogSchema>;
