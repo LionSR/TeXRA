@@ -2,16 +2,17 @@
  * Subprocess wrappers for the `lake` commands invoked by `lean_project`.
  *
  * The VS Code Lean extension exposes these as command IDs; the direct adapter
- * has to run the real `lake` binary itself. We serialize per-workspace via an
- * in-process semaphore so two agents in the same TeXRA instance can't fire two
+ * has to run the real `lake` binary itself. We serialize per-workspace on an
+ * in-process lane so two agents in the same TeXRA instance can't fire two
  * concurrent `lake build` invocations against the same `.lake/build`.
  */
 
 import * as path from 'node:path';
 
-import { Effect, Semaphore } from 'effect';
+import { Effect } from 'effect';
 import { execa } from 'execa';
 
+import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 import { deriveCommandStderr } from '@utils/system/execUtils';
 
 const LAKE_RUN_TIMEOUT_MS = 10 * 60 * 1000;
@@ -23,14 +24,11 @@ const LAKE_MAX_OUTPUT_CHARS = 4 * 1024 * 1024;
 const LAKE_PROCESS_MAX_BUFFER_CHARS = 100_000_000;
 
 /**
- * One single-permit semaphore per workspace root. `users` counts the
- * invocations holding or waiting on it so the entry can be dropped once the
- * workspace goes idle, keeping the map from growing with every root visited.
+ * One exclusive lane per workspace root. `withPerKeyLane` owns the entries:
+ * it drops a root's lane once the last invocation holding or waiting on it
+ * settles, so the map does not grow with every root visited.
  */
-const workspaceLocks = new Map<
-  string,
-  { readonly semaphore: Semaphore.Semaphore; users: number }
->();
+const workspaceLanes = new Map<string, PerKeyLane>();
 
 function capOutput(output: string): string {
   if (output.length <= LAKE_MAX_OUTPUT_CHARS) return output;
@@ -64,33 +62,14 @@ export const runLakeCommand = (
   options: LakeCommandOptions,
 ): Effect.Effect<LakeCommandResult> =>
   options.serialize
-    ? serializeOnWorkspace(options.workspaceRoot, executeLake(options))
+    ? // `path.resolve` stays inside the suspend: a relative `workspaceRoot`
+      // resolves against the process cwd at run time, as it did before.
+      Effect.suspend(() =>
+        executeLake(options).pipe(
+          withPerKeyLane(workspaceLanes, path.resolve(options.workspaceRoot)),
+        ),
+      )
     : executeLake(options);
-
-function serializeOnWorkspace(
-  workspaceRoot: string,
-  work: Effect.Effect<LakeCommandResult>,
-): Effect.Effect<LakeCommandResult> {
-  return Effect.suspend(() => {
-    const workspaceKey = path.resolve(workspaceRoot);
-    const lock = workspaceLocks.get(workspaceKey) ?? {
-      semaphore: Semaphore.makeUnsafe(1),
-      users: 0,
-    };
-    workspaceLocks.set(workspaceKey, lock);
-    lock.users += 1;
-    return lock.semaphore.withPermit(work).pipe(
-      Effect.ensuring(
-        Effect.sync(() => {
-          lock.users -= 1;
-          if (lock.users === 0 && workspaceLocks.get(workspaceKey) === lock) {
-            workspaceLocks.delete(workspaceKey);
-          }
-        }),
-      ),
-    );
-  });
-}
 
 /** The raw `lake` spawn, split out so its exact execa result type stays
  *  inferred rather than widened by the generic `Result`. */
@@ -125,9 +104,9 @@ function executeLake(
   // `.lake/build`: the next `build`/`clean` would then run concurrently with
   // an orphan, which is exactly what this module's lock exists to prevent.
   // The returned canceller terminates the child and awaits its exit, and the
-  // interrupt only propagates once that finishes — so `withPermit` and the
-  // `users` bookkeeping in `serializeOnWorkspace` release after the process
-  // is gone. A bare abort signal is not enough: Effect aborts the controller
+  // interrupt only propagates once that finishes — so the workspace lane is
+  // handed to the next waiter only after the process is gone. A bare abort
+  // signal is not enough: Effect aborts the controller
   // but does not wait for the abortee.
   return Effect.callback<LakeExecaResult>((resume) => {
     const child = spawnLake(options);

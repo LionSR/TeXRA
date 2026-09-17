@@ -12,7 +12,7 @@
  * `.`/`..` resolution) should import from '@utils/core/pathCore' instead.
  *
  * String validation/formatting primitives live in @utils/text/stringUtils;
- * per-key async serialization lives in @utils/core/keyedMutex.
+ * per-key async serialization lives in @utils/core/perKeyQueue.
  */
 import { customAlphabet, nanoid } from 'nanoid';
 import { basename as pathBasename, extname as pathExtname } from 'pathe';

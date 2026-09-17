@@ -28,7 +28,6 @@ import {
   monacoThemeForHostTheme,
   type MonacoModule,
 } from '@shared/monaco/monacoLoader';
-import { KeyedMutex } from '@utils/core/keyedMutex';
 
 import { getDesktopChromeFontSize } from './desktopTypography';
 import {
@@ -116,7 +115,8 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
   // history and cursor — recreating a model on every switch would lose both.
   const models = new Map<string, TextModel>();
   const pendingModelLoads = new Map<string, Promise<TextModel | undefined>>();
-  const modelSyncs = new KeyedMutex<string>();
+  // The tail of each path's model-sync lane; see `onModelSyncLane`.
+  const modelSyncTails = new Map<string, Promise<void>>();
   const writeEpochs = new Map<string, number>();
   const activeWrites = new Map<string, number>();
   const dirtyPaths = new Set<string>();
@@ -411,8 +411,35 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
     return ownedLoad;
   }
 
+  /**
+   * Run `sync` after every sync already queued for `path`, one at a time.
+   *
+   * The repo's one per-key lane is `withPerKeyLane` (`@utils/core/perKeyQueue`),
+   * but it is an Effect combinator and this renderer runs no Effect programs:
+   * importing `effect` here would put all six of the pane's promise boundaries
+   * under the `catch:effect-importer` ratchet, i.e. rewrite the pane's error
+   * handling in a change about lanes. So this is that same hand-off in promise
+   * form — each entrant awaits the tail it found and installs its own.
+   *
+   * The tail waits for the settlement rather than the value, so a failed sync
+   * neither poisons the path's lane nor is swallowed: the failure still
+   * reaches the caller through the returned promise. The path's entry leaves
+   * the map once its last entrant settles.
+   */
+  function onModelSyncLane(
+    path: string,
+    sync: () => Promise<void>,
+  ): Promise<void> {
+    const result = (modelSyncTails.get(path) ?? Promise.resolve()).then(sync);
+    const tail: Promise<void> = Promise.allSettled([result]).then(() => {
+      if (modelSyncTails.get(path) === tail) modelSyncTails.delete(path);
+    });
+    modelSyncTails.set(path, tail);
+    return result;
+  }
+
   function syncCleanModel(path: string, model: TextModel): Promise<void> {
-    return modelSyncs.runExclusive(path, async () => {
+    return onModelSyncLane(path, async () => {
       if (disposed || models.get(path) !== model || dirtyPaths.has(path))
         return;
       const version = model.getVersionId();

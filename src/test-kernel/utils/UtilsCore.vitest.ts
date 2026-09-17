@@ -16,7 +16,6 @@ import {
   type FlushableDebounce,
 } from '@utils/core';
 import { deriveRunId, truncatedHexId } from '@utils/core/idHash';
-import { KeyedMutex } from '@utils/core/keyedMutex';
 
 describe('getBasename', () => {
   it.each([
@@ -92,60 +91,6 @@ function deferred(): Deferred {
   });
   return { promise, release };
 }
-
-describe('KeyedMutex', () => {
-  it('serializes operations that use the same key', async () => {
-    const mutex = new KeyedMutex<string>();
-    const order: string[] = [];
-    const firstBlocked = deferred();
-
-    const first = mutex.runExclusive('shared', async () => {
-      order.push('first:start');
-      await firstBlocked.promise;
-      order.push('first:end');
-    });
-    const second = mutex.runExclusive('shared', async () => {
-      order.push('second');
-    });
-
-    await vi.waitFor(() => expect(order).toEqual(['first:start']));
-    firstBlocked.release();
-    await Promise.all([first, second]);
-
-    expect(order).toEqual(['first:start', 'first:end', 'second']);
-  });
-
-  it('allows independent keys to run concurrently', async () => {
-    const mutex = new KeyedMutex<string>();
-    const started: string[] = [];
-    const blocked = deferred();
-
-    const first = mutex.runExclusive('first', async () => {
-      started.push('first');
-      await blocked.promise;
-    });
-    const second = mutex.runExclusive('second', async () => {
-      started.push('second');
-    });
-
-    await vi.waitFor(() => expect(started).toEqual(['first', 'second']));
-    blocked.release();
-    await Promise.all([first, second]);
-  });
-
-  it('releases a key when an operation rejects', async () => {
-    const mutex = new KeyedMutex<string>();
-
-    await expect(
-      mutex.runExclusive('shared', async () => {
-        throw new Error('operation failed');
-      }),
-    ).rejects.toThrow('operation failed');
-    await expect(
-      mutex.runExclusive('shared', async () => 'recovered'),
-    ).resolves.toBe('recovered');
-  });
-});
 
 describe('coalesceAsync', () => {
   it('shares one in-flight computation across concurrent callers', async () => {
