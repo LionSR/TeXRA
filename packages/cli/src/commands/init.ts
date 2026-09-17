@@ -96,11 +96,11 @@ function initWarning(
 
 function initNextSteps(warning: InitSummary['warning']): readonly string[] {
   if (!warning) {
-    return ['Next: run `texra` for the launcher, or `texra chat` to start.'];
+    return ['Next: run `texra` to start a chat.'];
   }
   return [
     `Next: ${warning.recovery}`,
-    'After a model is available, run `texra` for the launcher or `texra chat` to start.',
+    'After a model is available, run `texra` to start a chat.',
   ];
 }
 

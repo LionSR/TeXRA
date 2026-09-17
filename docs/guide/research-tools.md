@@ -159,7 +159,7 @@ Specialist research agents are tuned for different stages of the work. Pick one 
       { text: 'lean_diagnostics', variant: 'info' },
       { text: 'lean_inspect', variant: 'info' },
       { text: 'lean_loogle', variant: 'neutral' },
-      { text: 'lake build', variant: 'neutral' },
+      { text: 'lean_project', variant: 'neutral' },
     ] },
   ]"
 />

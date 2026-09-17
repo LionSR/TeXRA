@@ -27,7 +27,7 @@ export interface InputHistory {
 
 /** Each I/O operation owns its database scope; browsing remains synchronous. */
 export const loadInputHistory = (
-  globalStorage: () => string,
+  globalStorage: string,
 ): Effect.Effect<InputHistory, Error> =>
   Effect.gen(function* () {
     const access = <A, E>(operation: Effect.Effect<A, E, Database>) =>
@@ -38,11 +38,7 @@ export const loadInputHistory = (
             catch: ensureError,
           }),
         );
-        const storage = yield* Effect.try({
-          try: globalStorage,
-          catch: ensureError,
-        });
-        return yield* withScopedDatabase(storage, ownerId, operation);
+        return yield* withScopedDatabase(globalStorage, ownerId, operation);
       });
     const read = Effect.flatMap(Database, (database) =>
       database.readInputHistory(),
