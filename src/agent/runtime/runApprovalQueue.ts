@@ -14,7 +14,7 @@
  * takes it from context instead of resolving a session.
  */
 
-import { Context, Effect, Semaphore } from 'effect';
+import { Context, Effect } from 'effect';
 
 import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
 import type {
@@ -25,6 +25,7 @@ import type {
 import type { DeletionMode } from '@shared/session/database';
 import type { RequestError } from '@shared/session/requestErrors';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
+import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 
 import type { SessionHostInteractions } from './HostInteractions';
 
@@ -162,17 +163,10 @@ interface RunApprovalController {
 function createRunApprovalController(
   bypass: RunApprovalBypass,
 ): RunApprovalController {
-  // One permit per run: the lane a run's prompts take in turn. A lane is
-  // held for the session's life, like the bypass values beside it.
-  const lanes = new Map<RunId | undefined, Semaphore.Semaphore>();
-  const laneOf = (runId: RunId | undefined): Semaphore.Semaphore => {
-    let lane = lanes.get(runId);
-    if (lane === undefined) {
-      lane = Semaphore.makeUnsafe(1);
-      lanes.set(runId, lane);
-    }
-    return lane;
-  };
+  // One exclusive lane per run: the queue a run's prompts take in turn, in
+  // the order they were enqueued. `withPerKeyLane` owns the entries, so a
+  // run's lane leaves the map once its last prompt settles.
+  const lanes = new Map<RunId | undefined, PerKeyLane>();
 
   return {
     bypass,
@@ -180,13 +174,11 @@ function createRunApprovalController(
       runId: RunId | undefined,
       approval: QueuedApproval<A, E, R>,
     ): Effect.Effect<A, E, R> {
-      return laneOf(runId).withPermit(
-        Effect.suspend(() =>
-          runId && bypass.isBypassed(runId)
-            ? approval.bypassed
-            : approval.prompt,
-        ),
-      );
+      // The suspend runs once this prompt reaches the head of the lane, so
+      // the bypass is still read at dispatch rather than at enqueue.
+      return Effect.suspend(() =>
+        runId && bypass.isBypassed(runId) ? approval.bypassed : approval.prompt,
+      ).pipe(withPerKeyLane(lanes, runId));
     },
   };
 }
