@@ -110,7 +110,7 @@
     "@octokit/request": "^10.0.16",
     "@octokit/request-error": "^7.1.2",
     "@openai/codex-sdk": "^0.154.0",
-    "@openrouter/sdk": "^1.2.119",
+    "@openrouter/sdk": "^1.2.120",
     "@supabase/supabase-js": "2.116.0",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/xterm": "^6.0.0",
