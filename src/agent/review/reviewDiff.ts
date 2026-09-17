@@ -79,7 +79,10 @@ function makeGit(cwd: string): SimpleGit {
 function tryMakeGit(cwd: string): SimpleGit | null {
   try {
     return makeGit(cwd);
-  } catch {
+  } catch (err) {
+    log.debug(
+      `Cannot open ${cwd} as a git working tree: ${toErrorMessage(err)}`,
+    );
     return null;
   }
 }

@@ -3,6 +3,7 @@ import * as path from 'node:path';
 import { Cause, Effect, FileSystem } from 'effect';
 
 import type { AgentTrace } from '@agent/trace';
+import { isFileNotFoundError } from '@common/errors';
 import { compileLatex2Pdf, type CompileLatex2PdfResult } from '@latex/texTools';
 import { hasLatexCompiler } from '@latex/latexToolchain';
 import type { WorkspaceFs } from '@platform/rootedFs';
@@ -336,9 +337,18 @@ const compileOne = Effect.fn('reflection.compileOne')(function* (
   // A stale log from a previous attempt at this round is only ever cleared
   // once this file's outcome is known — clearing it up front would leave a
   // crash mid-check masquerading as success. A log that is not there is
-  // already clear, which is the only failure this ignores.
+  // already clear, which is the only failure this passes over silently; any
+  // other one leaves last round's log in place, so it is named.
   const clearStaleLogs = fsCall(() => AbsoluteFS.delete(logAbsolutePath)).pipe(
-    Effect.ignore,
+    Effect.catch((error) =>
+      isFileNotFoundError(error)
+        ? Effect.void
+        : Effect.sync(() => {
+            ctx.logger.warn(
+              `Compile check: could not clear stale log ${logRelativePath}: ${toErrorMessage(error)}`,
+            );
+          }),
+    ),
   );
 
   const attempt = Effect.gen(function* (): Generator<

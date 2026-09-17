@@ -103,7 +103,7 @@ export function listRemoteAgents(): Effect.Effect<RemoteAgentListItem[]> {
   }).pipe(
     Effect.catch((error: RemoteAgentListError) =>
       Effect.sync(() => {
-        log.debug(`Error listing remote agents: ${error.message}`);
+        log.warn(`Error listing remote agents: ${error.message}`);
         return [];
       }),
     ),
