@@ -157,11 +157,11 @@ interface AutoResumeOptions {
  */
 /**
  * A chat-session host call this controller drives faulted. The model
- * selection reads the process stores and the settled wait is the interrupted
- * run's own promise; neither reports a normal outcome this way.
+ * selection reads the process stores, which does not report a normal outcome
+ * this way.
  */
 class ChatSessionCallFailed extends Data.TaggedError('ChatSessionCallFailed')<{
-  readonly member: 'selectRunnableModel' | 'awaitInterruptedRun';
+  readonly member: 'selectRunnableModel';
   readonly message: string;
   readonly cause: unknown;
 }> {}
@@ -1006,15 +1006,7 @@ export function createChatSessionController(
       // any failure) is already reported by the run's own recovery.
       await runtime.runPromise(
         Effect.ignoreCause(
-          Effect.tryPromise({
-            try: () => session.runPromise ?? Promise.resolve(),
-            catch: (cause) =>
-              new ChatSessionCallFailed({
-                member: 'awaitInterruptedRun',
-                message: 'The interrupted run did not settle cleanly.',
-                cause,
-              }),
-          }),
+          Effect.tryPromise(() => session.runPromise ?? Promise.resolve()),
         ),
       );
       if (batch.superseded) return true;

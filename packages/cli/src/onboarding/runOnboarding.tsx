@@ -258,12 +258,13 @@ const runOnboardingFlow = Effect.fn('runOnboardingFlow')(function* (options: {
     // global-state write fails (read-only home, permissions), tell the user
     // rather than silently re-prompting later with no explanation.
     yield* setOnboardingDeclined(options.stores.globalState, true).pipe(
-      Effect.catch(() =>
-        Effect.sync(() =>
+      Effect.catch((error) =>
+        Effect.sync(() => {
+          warnOnboardingFailure('Saving the skip flag', error);
           writeTextStderr(
             "Note: couldn't save your choice, so you may be asked again next time.",
-          ),
-        ),
+          );
+        }),
       ),
     );
   } else if (resolution.configured) {
