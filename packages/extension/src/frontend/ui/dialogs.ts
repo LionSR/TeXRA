@@ -2,6 +2,7 @@
 import * as path from 'node:path';
 
 // Third-party imports
+import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports - utilities

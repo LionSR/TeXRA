@@ -79,14 +79,8 @@ class AgentDirectoryManager {
             globalState.get<string>(GlobalStateKey.CUSTOM_AGENT_DIR, ''),
         },
         issueReporter: {
-          // The one wrap of this host's notification edge; the editor's own
-          // rejection travels on as the port's failure, as the awaited call's
-          // did.
           report: (message, docsId) =>
-            Effect.tryPromise({
-              try: () => showLoggedMessageWithDocs(CHANNEL, message, docsId),
-              catch: (cause) => cause,
-            }),
+            showLoggedMessageWithDocs(CHANNEL, message, docsId),
         },
       }),
     };
