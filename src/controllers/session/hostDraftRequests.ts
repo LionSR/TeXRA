@@ -1,4 +1,5 @@
 /** Shared draft operations and the process recorder's originating request. */
+import { Buffer } from 'node:buffer';
 import * as path from 'node:path';
 
 import { Deferred, Effect, FileSystem, Option } from 'effect';
@@ -10,6 +11,7 @@ import { polishTextWithAI } from '@agent/runtime/textEnhancement';
 import { createLog } from '@logger/logUtils';
 import { AppState } from '@platform/interfaces';
 import type { LanguageModel } from '@platform/languageModel';
+import type { StorageFs } from '@platform/rootedFs';
 import { Secrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { HostRequest } from '@shared/session/hostRequest';
@@ -26,7 +28,7 @@ import {
 import { THREE_DAYS_MS } from '@utils/config/constants';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
-  savePastedImageBase64,
+  savePastedImageBuffer,
   type PastedImageSaveFailed,
 } from '@utils/files/pastedImageUtils';
 import type { HttpClient } from 'effect/unstable/http';
@@ -147,6 +149,7 @@ export class HostDraftRequests {
     | Secrets
     | FileSystem.FileSystem
     | LanguageModel
+    | StorageFs
     | HttpClient.HttpClient
   > {
     switch (request.kind) {
@@ -169,8 +172,8 @@ export class HostDraftRequests {
       case 'savePastedImage':
         return {
           kind: 'savedImage',
-          fileName: yield* savePastedImageBase64(
-            request.base64,
+          fileName: yield* savePastedImageBuffer(
+            Buffer.from(request.base64, 'base64'),
             request.fileName,
           ),
         };

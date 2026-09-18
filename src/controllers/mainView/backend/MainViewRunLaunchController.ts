@@ -36,7 +36,7 @@ import { Cancelled, Rejected } from '@shared/session/requestErrors';
 import { assertNever } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { isPastedImage } from '@utils/files/pastedImageName';
-import { getPastedImageFullPath } from '@utils/files/pastedImageUtils';
+import { pastedImageFullPath } from '@utils/files/pastedImageUtils';
 
 type LaunchRequest = Extract<HostRequest, { kind: 'launch' }>;
 
@@ -61,6 +61,8 @@ function buildLaunchRequest(
   instruction: string,
   agent: string,
   agentCategory: AgentCategory,
+  /** The session's storage root, under which its pasted images live. */
+  storageRoot: string,
   team?: {
     readonly delegationAgentScope: AgentDelegationScope;
     readonly cli: { readonly multiAgentPresetId: string };
@@ -107,7 +109,7 @@ function buildLaunchRequest(
       outputFiles: [],
       toolConfig: toolConfigResult.data,
       mediaFiles: launch.mediaFiles.map((file) =>
-        isPastedImage(file) ? getPastedImageFullPath(file) : file,
+        isPastedImage(file) ? pastedImageFullPath(storageRoot, file) : file,
       ),
     },
   });
@@ -124,6 +126,10 @@ export function prepareSurfaceLaunch(
   { launch, instruction }: LaunchRequest,
   host: MainViewRunLaunchHost,
   workspaceState: StateStore,
+  /** The requesting session's storage root, carried as data: the pasted-image
+   *  paths it names are joined onto it rather than resolved from an ambient
+   *  read at this depth. */
+  storageRoot: string,
 ): Effect.Effect<ValidatedRunRequest, Rejected | Cancelled, GlobalStorageFs> {
   return Effect.gen(function* () {
     let preparation: LaunchPreparation;
@@ -138,7 +144,13 @@ export function prepareSurfaceLaunch(
               valid: false,
               message: 'Choose an agent, a model, and a run type first.',
             }
-          : buildLaunchRequest(launch, instruction, agent, launch.sessionType);
+          : buildLaunchRequest(
+              launch,
+              instruction,
+              agent,
+              launch.sessionType,
+              storageRoot,
+            );
     } else {
       const teamId = launch.selectedTeamId || undefined;
       if (!teamId)
@@ -187,6 +199,7 @@ export function prepareSurfaceLaunch(
                 instruction,
                 resolution.fields.agent,
                 AgentCategory.ToolUse,
+                storageRoot,
                 resolution.fields,
               );
           if (resolution.partial)

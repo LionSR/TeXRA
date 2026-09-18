@@ -55,6 +55,9 @@ function createHost() {
 
 const workspaceState = new FakeStateStore();
 
+/** The requesting session's storage root, under which its pasted images live. */
+const STORAGE_ROOT = '/papers/first/.texra';
+
 function launchRequest(
   patch: Record<string, unknown> = {},
 ): Extract<HostRequest, { kind: 'launch' }> {
@@ -71,6 +74,7 @@ function launchTeam(host: ReturnType<typeof createHost>, teamId = 'physicist') {
       launchRequest({ launchTarget: 'team', selectedTeamId: teamId }),
       host,
       workspaceState,
+      STORAGE_ROOT,
     ),
   );
 }
@@ -87,6 +91,7 @@ describe('main-view run launch controller', () => {
           launchRequest({ agent: { toolUse: 'orchestrator' } }),
           createHost(),
           workspaceState,
+          STORAGE_ROOT,
         ),
       );
 
@@ -110,6 +115,7 @@ describe('main-view run launch controller', () => {
               launchRequest({ model: '' }),
               createHost(),
               workspaceState,
+              STORAGE_ROOT,
             ),
           ),
         );
@@ -129,6 +135,7 @@ describe('main-view run launch controller', () => {
             launchRequest({ sessionType: 'workflow' }),
             createHost(),
             workspaceState,
+            STORAGE_ROOT,
           ),
         ),
       );
@@ -231,6 +238,7 @@ describe('main-view run launch controller', () => {
             }),
             host,
             workspaceState,
+            STORAGE_ROOT,
           ),
         );
 

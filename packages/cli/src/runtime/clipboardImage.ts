@@ -18,6 +18,9 @@ import { join } from 'node:path';
 import { promisify } from 'node:util';
 
 import { isFileNotFoundError } from '@common/errors';
+import type { ProcessRuntime } from '@platform/processRuntime';
+import { withSessionFs } from '@platform/rootedFs';
+import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { generatePastedImageName } from '@utils/files/pastedImageName';
 import { savePastedImageBuffer } from '@utils/files/pastedImageUtils';
 import { createTexraTempDir } from '@utils/files/tempDir';
@@ -118,12 +121,15 @@ async function readClipboardPngWindows(
 }
 
 /**
- * Read an image from the OS clipboard, persist it to the shared `pasted/`
- * storage dir, and return its location. Returns `{ ok: false, reason }` when
+ * Read an image from the OS clipboard, persist it under `roots`' own `pasted/`
+ * directory, and return its location. Returns `{ ok: false, reason }` when
  * the clipboard holds no image or the platform/tooling is unsupported — callers
  * surface `reason` and leave the text draft untouched.
  */
-export async function attachClipboardImage(): Promise<ClipboardAttachResult> {
+export async function attachClipboardImage(
+  runtime: ProcessRuntime,
+  roots: Pick<WorkspaceRoots, 'workspace' | 'storage'>,
+): Promise<ClipboardAttachResult> {
   const plat = osPlatform();
   if (plat !== 'darwin' && plat !== 'linux' && plat !== 'win32') {
     return { ok: false, reason: `Image paste is not supported on ${plat}.` };
@@ -163,7 +169,9 @@ export async function attachClipboardImage(): Promise<ClipboardAttachResult> {
     }
 
     const fileName = generatePastedImageName('png');
-    const path = await savePastedImageBuffer(read, fileName);
+    const path = await runtime.runPromise(
+      withSessionFs(roots, savePastedImageBuffer(read, fileName)),
+    );
     return { ok: true, path, mediaType: 'image/png', displayName: fileName };
   } finally {
     await rm(dir, { recursive: true, force: true }).catch(() => {});

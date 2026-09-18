@@ -66,6 +66,7 @@ import {
   withSessionFs,
   WorkspaceFs,
   type GlobalStorageFs,
+  type StorageFs,
 } from '@platform/rootedFs';
 import type { PlatformSecrets } from '@platform/secrets';
 import { presentLaunchedProgressRun } from '@progressView/progressNavigation';
@@ -520,6 +521,7 @@ export function createExtensionHostRequests(
           signInForRemoteAgentCatalog: runSignInCommand,
         },
         session.roots.workspaceState,
+        session.roots.storage,
       );
       yield* fromHost('texra.execute', () =>
         runCommand('texra.execute', prepared),
@@ -841,7 +843,7 @@ export function createExtensionHostRequests(
   function dispatch(
     request: HostRequest,
     port: string,
-  ): Effect.Effect<HostOutcome, Error, ProcessServices> {
+  ): Effect.Effect<HostOutcome, Error, ProcessServices | StorageFs> {
     return Effect.gen(function* () {
       switch (request.kind) {
         case 'openFile':
@@ -1083,8 +1085,11 @@ export function createExtensionHostRequests(
   return {
     // The bridge takes the dispatch program itself: it runs on the fiber the
     // webview's message pump already owns, and its failure reaches the
-    // bridge's refusal-versus-defect fold as the value the arm carried.
-    handleHostRequest: dispatch,
+    // bridge's refusal-versus-defect fold as the value the arm carried. Over
+    // this session's rooted filesystems: the root a request writes under is
+    // chosen here, at the host edge, not read at the depth that writes.
+    handleHostRequest: (request, port) =>
+      withSessionFs(session.roots, dispatch(request, port)),
     closePort: draftRequests.closePort,
     dispose: draftRequests.dispose,
   };

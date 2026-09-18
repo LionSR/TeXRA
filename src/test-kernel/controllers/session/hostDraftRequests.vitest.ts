@@ -13,9 +13,11 @@ import {
   LanguageModel,
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
 } from '@platform/languageModel';
+import { StorageFs } from '@platform/rootedFs';
 import { Secrets } from '@platform/secrets';
 import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
+import type { RootedFileSystem } from '@utils/files/rootedFileSystem';
 
 // The recorder module answers in Effects, so every double returns one: a
 // bare `vi.fn()` would hand the take fiber `undefined` to yield.
@@ -41,6 +43,9 @@ const processStores = Layer.mergeAll(
   Secrets.layer(new FakeSecrets({ [apiKeySecretName('openai')]: 'sk-test' })),
   AppState.layer(new FakeStateStore()),
   FileSystem.layerNoop({}),
+  // The pasted-image arm's storage view; this suite exercises the recorder,
+  // so nothing here reads it.
+  Layer.succeed(StorageFs)({} as RootedFileSystem),
   // `polishTextWithAI` is mocked, but the request handler's type keeps the
   // real signature's `LanguageModel` requirement.
   LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT),
@@ -53,6 +58,7 @@ const storesWithoutCredential = Layer.mergeAll(
   Secrets.layer(new FakeSecrets()),
   AppState.layer(new FakeStateStore()),
   FileSystem.layerNoop({}),
+  Layer.succeed(StorageFs)({} as RootedFileSystem),
   LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT),
   testHttpClientLayer,
 );
