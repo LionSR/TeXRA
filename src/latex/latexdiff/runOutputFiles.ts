@@ -27,7 +27,7 @@ import {
   createRunStorageLocation,
   pathToLocationIn,
 } from '@utils/files/fileLocation';
-import { findRunDir } from '@utils/files/runStorageFs';
+import { findRunDirUnder } from '@utils/files/runStorageFs';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { hasExtension } from '@utils/core/pathCore';
 import { isDirectory, isFile } from '@utils/files/fsEntryType';
@@ -102,6 +102,7 @@ const collectTexFiles = Effect.fn('latexdiff.collectTexFiles')(function* (
 export const scanRunDirForOutputs = Effect.fn('latexdiff.scanRunDir')(
   function* (
     runId: RunId,
+    storageRoot: string,
     workspaceRoot: string | undefined,
     inputFile: string,
     extraBaseFiles: string[] | undefined,
@@ -110,7 +111,7 @@ export const scanRunDirForOutputs = Effect.fn('latexdiff.scanRunDir')(
   ): Effect.fn.Return<RoundIndexed<OutputFileInfo> | null, never> {
     const scan = Effect.gen(function* () {
       const runDirAbsolute = yield* Effect.tryPromise({
-        try: () => findRunDir(runId),
+        try: () => findRunDirUnder(storageRoot, runId),
         catch: ensureError,
       });
       if (!runDirAbsolute) return null;

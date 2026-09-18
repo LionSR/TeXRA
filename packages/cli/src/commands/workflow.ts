@@ -412,6 +412,7 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
               try: () =>
                 resolveWorkflowOutput(output, outputDir, result, runContext, {
                   expectedOutputFiles,
+                  storageRoot: session.roots.storage,
                   tryCommitPublication,
                 }),
               catch: ensureError,

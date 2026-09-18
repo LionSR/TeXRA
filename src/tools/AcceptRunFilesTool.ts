@@ -41,9 +41,9 @@ import { entryExists, absentReason } from '@utils/files/fsEntryExists';
 import { readNormalizedFile } from '@utils/files/fsDurability';
 import { formatResultCount, pluralize } from '@utils/text/stringUtils';
 import {
-  findExistingRunStoragePath,
-  getOriginalSnapshotPath,
-  inspectRunStorageEntry,
+  findExistingRunStoragePathUnder,
+  originalSnapshotPathUnder,
+  inspectRunStorageEntryUnder,
 } from '@utils/files/runStorageFs';
 import { ensureError } from '@utils/errors/errorMessage';
 
@@ -210,7 +210,10 @@ Parameters map directly to subagent-result delivery attributes:
       const session = call.run.session;
       const directory = yield* Effect.tryPromise({
         try: () =>
-          call.inScope(() => findExistingRunStoragePath(input.execution_id)),
+          findExistingRunStoragePathUnder(
+            call.roots.storage,
+            input.execution_id,
+          ),
         catch: ensureError,
       });
       if (
@@ -281,8 +284,10 @@ Parameters map directly to subagent-result delivery attributes:
             // Determine original content for diff display. In-place workflow
             // outputs can make source and destination the same workspace file, so
             // the pre-run snapshot is the only reliable "before" image.
-            const snapshotPath = call.inScope(() =>
-              getOriginalSnapshotPath(runId, dest.relativePath),
+            const snapshotPath = originalSnapshotPathUnder(
+              call.roots.storage,
+              runId,
+              dest.relativePath,
             );
             const snapshotExists = yield* fileAt(processFs, snapshotPath).pipe(
               Effect.mapError(ensureError),
@@ -443,8 +448,8 @@ Parameters map directly to subagent-result delivery attributes:
 
   /**
    * Resolves a source file by checking run storage first, then workspace.
-   * In run-storage mode, files live under StorageFS. In workspace mode,
-   * files are written directly to the workspace.
+   * In run-storage mode, files live under the call's storage root. In
+   * workspace mode, files are written directly to the workspace.
    */
   private readonly resolveSourceFile = Effect.fn(
     'AcceptRunFilesTool.resolveSourceFile',
@@ -459,7 +464,8 @@ Parameters map directly to subagent-result delivery attributes:
     FileSystem.FileSystem | WorkspaceFs
   > {
     const entry = yield* Effect.tryPromise({
-      try: () => call.inScope(() => inspectRunStorageEntry(runId, runPath)),
+      try: () =>
+        inspectRunStorageEntryUnder(call.roots.storage, runId, runPath),
       catch: ensureError,
     });
     switch (entry.kind) {

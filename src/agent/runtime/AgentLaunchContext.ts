@@ -535,6 +535,7 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
           // names, readable-file reads and CWD resolve against this project's
           // folder rather than whatever roots the calling fiber carries.
           workspacePath: session.roots.workspace,
+          storageRoot: session.roots.storage,
           delegationAgentScope: config.delegationAgentScope,
           stageId,
         },

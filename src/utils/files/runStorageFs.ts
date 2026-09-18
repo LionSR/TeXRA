@@ -23,30 +23,19 @@ import { getPathSegments } from '@utils/core/pathCore';
 import { createRunStorageLocation } from './fileLocation';
 import { AbsoluteFS } from './absoluteFS';
 import { isDirectory, isFile, isSymlink } from './fsEntryType';
-import { StorageFS } from './storageFS';
 
 export const CHANNEL = 'runStorage';
 const log = createLog(CHANNEL);
 
 /*
- * Each path helper below has a rooted form taking the storage root as data —
- * for code that holds a session's roots, such as a run's `RunFileService`
- * — and an ambient form that resolves the calling context's storage root and
- * delegates to it.
+ * Every path helper below takes the storage root as data. A caller holds that
+ * root already — a tool call's `roots`, a run's session roots, or a host's
+ * `WorkspaceRoots` — so none of them reads an ambient root (#12421).
  */
-
-/** The calling context's storage root, for the ambient forms. */
-function ambientStorageRoot(): string {
-  return StorageFS.fullPath('.');
-}
 
 /** A run's directory under `storageRoot`. */
 export function runDirUnder(storageRoot: string, id: RunId): string {
   return path.join(storageRoot, resolveRunStoragePath(id));
-}
-
-export function getRunDir(id: RunId): string {
-  return runDirUnder(ambientStorageRoot(), id);
 }
 
 /** A workspace file's pre-run snapshot path under `storageRoot`. */
@@ -61,27 +50,28 @@ export function originalSnapshotPathUnder(
   );
 }
 
-export function getOriginalSnapshotPath(
-  runId: RunId,
-  workspaceRelativePath: string,
-): string {
-  return originalSnapshotPathUnder(
-    ambientStorageRoot(),
-    runId,
-    workspaceRelativePath,
-  );
-}
-
-export async function findExistingRunStoragePath(
+/**
+ * The run-storage-relative path of `segments` under `storageRoot` when it
+ * exists, so a caller that addresses run storage by relative path (the
+ * storage view's own vocabulary) keeps doing so.
+ */
+export async function findExistingRunStoragePathUnder(
+  storageRoot: string,
   ...segments: string[]
 ): Promise<string | undefined> {
   const storagePath = resolveRunStoragePath(...segments);
-  return (await StorageFS.exists(storagePath)) ? storagePath : undefined;
+  return (await AbsoluteFS.exists(path.join(storageRoot, storagePath)))
+    ? storagePath
+    : undefined;
 }
 
-export async function findRunDir(id: RunId): Promise<string | undefined> {
-  const rel = await findExistingRunStoragePath(id);
-  return rel ? StorageFS.fullPath(rel) : undefined;
+/** A run's directory under `storageRoot`, when that directory exists. */
+export async function findRunDirUnder(
+  storageRoot: string,
+  id: RunId,
+): Promise<string | undefined> {
+  const rel = await findExistingRunStoragePathUnder(storageRoot, id);
+  return rel ? path.join(storageRoot, rel) : undefined;
 }
 
 type RunStorageEntryInspection =
@@ -93,9 +83,11 @@ type RunStorageEntryInspection =
   | { readonly kind: 'missing' }
   | { readonly kind: 'invalid'; readonly reason: string };
 
-async function storageEntryType(target: string): Promise<number | undefined> {
+async function storageEntryType(
+  absolutePath: string,
+): Promise<number | undefined> {
   try {
-    return (await StorageFS.stat(target)).type;
+    return (await AbsoluteFS.stat(absolutePath)).type;
   } catch (error) {
     if (isFileNotFoundError(error)) return undefined;
     throw error;
@@ -103,10 +95,11 @@ async function storageEntryType(target: string): Promise<number | undefined> {
 }
 
 /**
- * Inspect one run-relative run-storage entry without following a
- * workspace-mirror symlink.
+ * Inspect one run-relative run-storage entry under `storageRoot` without
+ * following a workspace-mirror symlink.
  */
-export async function inspectRunStorageEntry(
+export async function inspectRunStorageEntryUnder(
+  storageRoot: string,
   runId: RunId,
   relativePath: string,
 ): Promise<RunStorageEntryInspection> {
@@ -139,25 +132,20 @@ export async function inspectRunStorageEntry(
       ),
   ];
   for (const ancestor of ancestors) {
-    const ancestorType = await storageEntryType(ancestor);
+    const ancestorPath = path.join(storageRoot, ancestor);
+    const ancestorType = await storageEntryType(ancestorPath);
     if (ancestorType === undefined) return { kind: 'missing' };
     if (isSymlink(ancestorType)) {
-      return {
-        kind: 'symlink',
-        absolutePath: StorageFS.fullPath(ancestor),
-      };
+      return { kind: 'symlink', absolutePath: ancestorPath };
     }
     if (!isDirectory(ancestorType)) {
-      return {
-        kind: 'unsupported',
-        absolutePath: StorageFS.fullPath(ancestor),
-      };
+      return { kind: 'unsupported', absolutePath: ancestorPath };
     }
   }
 
-  const type = await storageEntryType(entry);
+  const absolutePath = path.join(storageRoot, entry);
+  const type = await storageEntryType(absolutePath);
   if (type === undefined) return { kind: 'missing' };
-  const absolutePath = StorageFS.fullPath(entry);
   if (isSymlink(type)) return { kind: 'symlink', absolutePath };
   if (isFile(type)) {
     return {
@@ -178,10 +166,6 @@ export async function ensureRunDirUnder(
   await AbsoluteFS.ensureDir(runDirUnder(storageRoot, id));
 }
 
-export async function ensureRunDir(id: RunId): Promise<void> {
-  await ensureRunDirUnder(ambientStorageRoot(), id);
-}
-
 /** An absolute path inside a run's directory under `storageRoot`. */
 export function runStorageAbsolutePathUnder(
   storageRoot: string,
@@ -191,14 +175,16 @@ export function runStorageAbsolutePathUnder(
   return path.join(storageRoot, resolveRunStoragePath(id, workspaceRelative));
 }
 
-export function runStorageLocationFromAbsolutePath(
+/** Locate `absolutePath` inside one named run's directory under `storageRoot`. */
+export function runStorageLocationInRunUnder(
+  storageRoot: string,
   absolutePath: string,
   runId: RunId,
 ): RunStorageFileLocation | undefined {
   if (!path.isAbsolute(absolutePath)) return undefined;
   const relativePath = resolveRunStorageRelativePath(
     absolutePath,
-    getRunDir(runId),
+    runDirUnder(storageRoot, runId),
   );
   if (!relativePath) return undefined;
   return createRunStorageLocation(absolutePath, relativePath, runId);
@@ -227,13 +213,6 @@ export function runStorageLocationUnder(
     entrySegments.join('/'),
     runId.data,
   );
-}
-
-/** Recover run identity from an absolute run-storage path. */
-export function runStorageLocationFromAnyAbsolutePath(
-  absolutePath: string,
-): RunStorageFileLocation | undefined {
-  return runStorageLocationUnder(ambientStorageRoot(), absolutePath);
 }
 
 export async function ensureParentDir(filePath: string): Promise<void> {

@@ -52,7 +52,7 @@ import {
 import { assertNever, unique } from '@utils/core';
 import { readPlatformSetting } from '@utils/config/platformSettings';
 import { readNormalizedFile } from '@utils/files/fsDurability';
-import { findExistingRunStoragePath } from '@utils/files/runStorageFs';
+import { findExistingRunStoragePathUnder } from '@utils/files/runStorageFs';
 import { getPathSegments } from '@utils/core/pathCore';
 import { formatBytes, splitContentLines } from '@utils/text/stringUtils';
 
@@ -1013,7 +1013,11 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     const displayPath = `/executions/${runId}/files/${filePath}`;
     assertNoParentTraversal(filePath);
     const fullPath = yield* executionsRead(context, () =>
-      findExistingRunStoragePath(runId, filePath),
+      findExistingRunStoragePathUnder(
+        context.session.roots.storage,
+        runId,
+        filePath,
+      ),
     );
     if (!fullPath) {
       return yield* Effect.fail(
