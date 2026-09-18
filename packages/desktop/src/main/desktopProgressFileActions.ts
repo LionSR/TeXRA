@@ -216,6 +216,7 @@ export class DesktopProgressFileActions {
         pathToLocationIn(this.host.session.roots.workspace, editedFile),
         '_diff',
         DEFAULT_MATH_MARKUP,
+        { cwd: this.host.session.roots.workspace },
       ),
     );
 

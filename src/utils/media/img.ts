@@ -143,7 +143,14 @@ const resizeImageIfNeeded = Effect.fn('img.resizeImageIfNeeded')(function* (
         ];
         const result = yield* Effect.tryPromise({
           try: (signal) =>
-            executeCommand(convertArgs, { channel: CHANNEL, signal }),
+            executeCommand(convertArgs, {
+              channel: CHANNEL,
+              // Both operands are absolute paths, so the conversion is
+              // independent of where it runs: the process cwd is the honest
+              // root rather than a workspace this module never receives.
+              cwd: process.cwd(),
+              signal,
+            }),
           catch: conversionFailure,
         });
         if (!result.success) {
@@ -243,6 +250,8 @@ const singlePagePdf2Png = Effect.fn('img.singlePagePdf2Png')(function* (
     try: (signal) =>
       executeCommand(convertArgs, {
         channel: CHANNEL,
+        // Absolute input and output paths: see `resizeImageIfNeeded`.
+        cwd: process.cwd(),
         signal,
         killProcessTree: true,
       }),

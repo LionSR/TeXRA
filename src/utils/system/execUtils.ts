@@ -18,7 +18,6 @@ import treeKill from 'tree-kill';
 import { createLog } from '@logger/logUtils';
 import type { ExecResult } from '@shared/schemas';
 import { onAbort as onAbortSignal } from '@utils/core';
-import { workspaceRootPath } from '@utils/files/workspaceFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getGitAuthorEnv } from '@utils/system/gitAuthorEnv';
 import { IS_WINDOWS, extendEnvPath } from '@utils/system/platformPaths';
@@ -163,22 +162,6 @@ function logCommandStderr(
 }
 
 /**
- * The workspace root, or the process cwd when there is no workspace to name.
- *
- * A caller that runs before any roots are installed (the pre-platform
- * `git --version` probe `executeCommandSync` documents above) has no workspace
- * at all, so the cwd is the honest answer rather than a retargeted one.
- * Reading the roots throws in that state.
- */
-function workspacePathOrProcessCwd(): string {
-  try {
-    return workspaceRootPath() ?? process.cwd();
-  } catch {
-    return process.cwd();
-  }
-}
-
-/**
  * Signal a process and all of its descendants.
  *
  * Two platform strategies, each picking the most reliable mechanism:
@@ -228,7 +211,16 @@ export interface ExecuteCommandBaseOptions {
   truncate?: boolean;
   env?: Record<string, string>;
   timeout?: number;
-  cwd?: string;
+  /**
+   * Working directory for the command, and the `PROJECT_DIR` the child sees.
+   *
+   * Required — not optional — so every caller names the root it holds (a run's
+   * session roots, a tool call's `roots.workspace`, the host's roots at
+   * command entry) instead of the command reaching for an ambient one
+   * (#12421). `undefined` is the honest answer only where the caller itself
+   * has no folder, and it fails the run the same way the ambient miss did.
+   */
+  cwd: string | undefined;
   stdin?: string;
   /** Called with stdout chunks as they arrive, enabling live output streaming. */
   onStdout?: (chunk: string) => void;
@@ -283,7 +275,7 @@ export interface ExecuteCommandBaseOptions {
  */
 export async function executeCommand(
   command: string | string[],
-  options: ExecuteCommandBaseOptions = {},
+  options: ExecuteCommandBaseOptions,
 ): Promise<ExecResult> {
   // Hoisted so the finally block can clear them on both success and error paths.
   let shellTimeoutId: ReturnType<typeof setTimeout> | undefined;
@@ -295,7 +287,7 @@ export async function executeCommand(
       return resultFromProcessOutput(null, 'Command aborted by user', 130);
     }
 
-    const workspacePath = options.cwd ?? workspaceRootPath();
+    const workspacePath = options.cwd;
     if (!workspacePath) {
       throw new Error('No workspace path found');
     }
@@ -490,8 +482,8 @@ export async function executeCommand(
 /**
  * Synchronous companion to executeCommand for APIs that must return a value
  * synchronously, such as native binary resolvers passed to SDK constructors.
- * If no cwd is passed and the platform is not initialized yet, this falls back
- * to process.cwd(); prefer executeCommand for normal workspace command run.
+ * `cwd` is required, like {@link executeCommand}'s; prefer `executeCommand`
+ * for normal workspace command runs.
  */
 export function executeCommandSync(
   command: readonly [string, ...string[]],
@@ -501,14 +493,15 @@ export function executeCommandSync(
     truncate?: boolean;
     env?: Record<string, string>;
     timeout?: number;
-    cwd?: string;
+    /** See {@link ExecuteCommandBaseOptions.cwd}. */
+    cwd: string;
     /** Skip wrapper logging (pre-platform CLI callers whose sink is the console). */
     quiet?: boolean;
-  } = {},
+  },
 ): ExecResult {
   try {
     const [cmd, ...args] = command;
-    const workspacePath = options.cwd ?? workspacePathOrProcessCwd();
+    const workspacePath = options.cwd;
     const execaOptions: SyncOptions = {
       cwd: workspacePath,
       env: commandEnv(workspacePath, options.env),

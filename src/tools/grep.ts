@@ -161,7 +161,9 @@ const runGrep = Effect.fn('GrepTool.execute')(function* (
   const result = yield* Effect.promise(() =>
     ports.inScope(() =>
       executeCommand(command, {
-        cwd: root,
+        // No `working_directory` on the call means the search runs from the
+        // session's own workspace root, which the call carries as data.
+        cwd: root ?? ports.workspaceRoot,
         channel: CHANNEL,
         truncate: false,
         maxBuffer: GREP_MAX_BUFFER_CHARS,

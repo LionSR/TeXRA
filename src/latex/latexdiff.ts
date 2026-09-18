@@ -120,8 +120,17 @@ export class LaTeXdiffService {
     inputLocation: FileLocation,
     editedLocation: FileLocation,
     suffix = '_diff',
-    mathMarkup?: MathMarkupOption,
-    options?: { cwd?: string; subtype?: string; outputDirectory?: string },
+    mathMarkup: MathMarkupOption | undefined,
+    options: {
+      /**
+       * Directory latexdiff runs in. Required so the caller names the root it
+       * holds — a run's session roots, or the host's at command entry — rather
+       * than the command reaching for an ambient one (#12421).
+       */
+      cwd: string | undefined;
+      subtype?: string;
+      outputDirectory?: string;
+    },
   ): Effect.Effect<LaTeXdiffResult, never, FileSystem.FileSystem> {
     return Effect.gen({ self: this }, function* () {
       const inputFile = inputLocation.absolutePath;
@@ -151,7 +160,7 @@ export class LaTeXdiffService {
 
       const diffFileName = generateDiffFileName(editedFile, suffix);
       const outputDirectory =
-        options?.outputDirectory ?? path.dirname(inputFile);
+        options.outputDirectory ?? path.dirname(inputFile);
       const outputPath = path.join(outputDirectory, diffFileName);
 
       yield* Effect.logDebug(
@@ -161,7 +170,7 @@ export class LaTeXdiffService {
       const result = yield* this.commandExecutor.executeDiff(
         inputFile,
         editedFile,
-        { mathMarkup, subtype: options?.subtype, cwd: options?.cwd },
+        { mathMarkup, subtype: options.subtype, cwd: options.cwd },
       );
       if (!result.stdout) {
         return yield* Effect.fail(new Error('Latexdiff produced no output'));
@@ -254,8 +263,8 @@ export class LaTeXdiffService {
     baseLocation: FileLocation,
     outputLocation: FileLocation,
     round: number,
-    mathMarkup?: MathMarkupOption,
-    options?: { cwd?: string; outputDirectory?: string },
+    mathMarkup: MathMarkupOption | undefined,
+    options: { cwd: string | undefined; outputDirectory?: string },
   ): Effect.Effect<LaTeXdiffResult, never, FileSystem.FileSystem> {
     return Effect.gen({ self: this }, function* () {
       if (!(yield* this.bothFilesExist(baseLocation, outputLocation))) {
@@ -282,8 +291,8 @@ export class LaTeXdiffService {
     secondLocation: FileLocation,
     fromRound: number,
     toRound: number,
-    mathMarkup?: MathMarkupOption,
-    options?: { cwd?: string; outputDirectory?: string },
+    mathMarkup: MathMarkupOption | undefined,
+    options: { cwd: string | undefined; outputDirectory?: string },
   ): Effect.Effect<LaTeXdiffResult, never, FileSystem.FileSystem> {
     return Effect.gen({ self: this }, function* () {
       if (!(yield* this.bothFilesExist(firstLocation, secondLocation))) {

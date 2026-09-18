@@ -113,7 +113,7 @@ function launchBackgroundRun(emit: (sink: ExecChunkSink) => void) {
       emitted = resolve;
     });
     vi.spyOn(execUtils, 'executeCommand').mockImplementation(
-      async (_command, options = {}) => {
+      async (_command, options) => {
         emit(options);
         emitted();
         return processExit;
