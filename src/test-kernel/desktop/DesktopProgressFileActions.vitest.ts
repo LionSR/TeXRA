@@ -1,5 +1,5 @@
 import * as path from 'node:path';
-import { Effect } from 'effect';
+import { Context, Effect } from 'effect';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -7,10 +7,10 @@ import type { SessionHandle } from '@agent/runtime';
 
 import type { LaTeXdiffResult } from '@latex/latexdiff';
 import type { DiffRunOutcome, DiffRunResult } from '@latex/latexdiff/types';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type { OutputFileInfo } from '@shared/schemas';
 import { Rejected } from '@shared/session/requestErrors';
 import { FakeStateStore } from '@test/support/FakePlatform';
-import { testRuntime } from '@test/support/testProcessRuntime';
 import { createModuleMocks } from '@test/support/moduleMocks';
 
 import { createStubDesktopAgentRunHost } from './desktopAgentRunTestHarness.ts';
@@ -152,9 +152,11 @@ async function loadFileActions(options: {
         roots: { workspace: absolutePath('workspace') },
       } as unknown as SessionHandle,
       globalState: new FakeStateStore(),
-      // Every latexdiff program this suite reaches is mocked; the runtime is
-      // only where the actions read the window's services from.
-      runtime: testRuntime(),
+      // Every latexdiff program this suite reaches is mocked, so the services
+      // the actions take from the window's runtime are never read.
+      runtime: {
+        contextEffect: Effect.succeed(Context.empty()),
+      } as unknown as ProcessRuntime,
     },
   );
 
@@ -169,7 +171,7 @@ async function loadFileActions(options: {
 /** The window's run: the actions are programs, and the bridge that calls them
  *  settles them on the window's runtime. */
 function run<A, E>(program: Effect.Effect<A, E>): Promise<A> {
-  return testRuntime().runPromise(program);
+  return Effect.runPromise(program);
 }
 
 describe('DesktopProgressFileActions latexdiff', () => {
