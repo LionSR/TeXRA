@@ -20,11 +20,13 @@ const mocks = vi.hoisted(() => ({
   compileLatex2Pdf: vi.fn((): Effect.Effect<{ ok: boolean; logTail: string }> =>
     Effect.succeed({ ok: true, logTail: '' }),
   ),
-  pathToLocation: vi.fn((absolutePath: string) => ({
-    kind: 'workspace' as const,
-    absolutePath,
-    relativePath: 'paper.tex',
-  })),
+  pathToLocationIn: vi.fn(
+    (_root: string | undefined, absolutePath: string) => ({
+      kind: 'workspace' as const,
+      absolutePath,
+      relativePath: 'paper.tex',
+    }),
+  ),
   executeCommand: vi.fn(
     async (_command: string, ..._args: unknown[]) => undefined,
   ),
@@ -42,7 +44,7 @@ vi.mock('@common/files/fileTypeUtils', () => ({
 }));
 
 vi.mock('@utils/files/fileLocation', () => ({
-  pathToLocation: mocks.pathToLocation,
+  pathToLocationIn: mocks.pathToLocationIn,
 }));
 
 vi.mock('@latex/texTools', () => ({

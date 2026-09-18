@@ -94,7 +94,7 @@ import {
 
 import { getProviderKeyUrl } from '@utils/config/providerConfig';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
-import { pathToLocation } from '@utils/files/fileLocation';
+import { pathToLocationIn } from '@utils/files/fileLocation';
 import {
   locateInWorkspace,
   workspaceRelativePath,
@@ -304,14 +304,14 @@ export function createExtensionHostRequests(
       compareFiles: (baseFile, editedFile) =>
         runCommand(
           'texra.compare',
-          pathToLocation(baseFile),
-          pathToLocation(editedFile),
+          pathToLocationIn(session.roots.workspace, baseFile),
+          pathToLocationIn(session.roots.workspace, editedFile),
         ),
       acceptEditedFile: (baseFile, editedFile, copyMeta) =>
         runCommand<boolean>(
           'texra.acceptEdited',
-          pathToLocation(baseFile),
-          pathToLocation(editedFile),
+          pathToLocationIn(session.roots.workspace, baseFile),
+          pathToLocationIn(session.roots.workspace, editedFile),
           copyMeta,
         ),
       mergeFile: (baseFile, editedFile) =>

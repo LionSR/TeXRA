@@ -153,7 +153,7 @@ describe('LatexMediaManager PDF compilation', () => {
 
       const workspaceState = AgentWorkspaceState.create();
       const roots = workspaceRoots();
-      const manager = new LatexMediaManager(logger, roots.config);
+      const manager = new LatexMediaManager(logger, roots);
       yield* manager
         .processInputFiles(
           inputPaths.map(createExternalLocation),
@@ -242,7 +242,7 @@ describe('LatexMediaManager figure baseDir resolution (issue #7228)', () => {
         const workspaceState = AgentWorkspaceState.create();
         const manager = new LatexMediaManager(
           logger,
-          workspaceRoots().config,
+          workspaceRoots(),
           new RunFileService(runId, workspaceRoots()),
         ) as unknown as LatexMediaManagerFigureInternals;
         yield* manager.extractFiguresFromFiles(

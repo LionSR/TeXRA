@@ -19,7 +19,7 @@ import {
 
 // Local imports - utilities
 import { getFileStem } from '@utils/core';
-import { pathToLocation } from '@utils/files/fileLocation';
+import { pathToLocationIn } from '@utils/files/fileLocation';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'OpenBuildUtils';
@@ -242,9 +242,13 @@ async function prepareLatexBuild(
   const compiled = await runtime.runPromise(
     withSessionFs(
       roots,
-      compileLatex2Pdf(pathToLocation(uri.fsPath), roots.config, {
-        outputDirectory: outDir,
-      }),
+      compileLatex2Pdf(
+        pathToLocationIn(roots.workspace, uri.fsPath),
+        roots.config,
+        {
+          outputDirectory: outDir,
+        },
+      ),
     ),
   );
   if (!compiled.ok) {

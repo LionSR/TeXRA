@@ -71,26 +71,6 @@ async function pathExists(filePath: string): Promise<boolean> {
 
 async function loadApprovalModules(workspacePath = '/workspace') {
   vi.resetModules();
-  type MockLocation =
-    | { kind: 'workspace'; absolutePath: string; relativePath: string }
-    | { kind: 'external'; absolutePath: string };
-  const toMockLocation = (filePath: string): MockLocation => {
-    if (!path.isAbsolute(filePath)) {
-      return {
-        kind: 'workspace',
-        absolutePath: path.join(workspacePath, filePath),
-        relativePath: filePath,
-      };
-    }
-    if (filePath.startsWith(`${workspacePath}/`)) {
-      return {
-        kind: 'workspace',
-        absolutePath: filePath,
-        relativePath: filePath.slice(`${workspacePath}/`.length),
-      };
-    }
-    return { kind: 'external', absolutePath: filePath };
-  };
   mocks.doMock('@utils/config/configUtils', () => ({
     getConfig: vi.fn(() => 'sameDirectory'),
     readConfig: vi.fn(() => 'sameDirectory'),
@@ -98,17 +78,6 @@ async function loadApprovalModules(workspacePath = '/workspace') {
       <T>(_path: string, defaultValue: T) => defaultValue,
     ),
   }));
-  mocks.doMock('@utils/files/workspaceFS', async () => {
-    const actual = await vi.importActual<
-      typeof import('@utils/files/workspaceFS')
-    >('@utils/files/workspaceFS');
-    return {
-      ...actual,
-      pathToLocation(filePath: string): MockLocation {
-        return toMockLocation(filePath);
-      },
-    };
-  });
 
   const [{ installPlatform }, { nodeFilesystem }] = await Promise.all([
     import('@test/support/setupPlatform'),

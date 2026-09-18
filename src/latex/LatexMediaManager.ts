@@ -5,12 +5,12 @@ import * as path from 'node:path';
 import { Effect, FileSystem } from 'effect';
 
 // Local imports
-import type { ConfigProvider } from '@platform/interfaces';
 import type { WorkspaceFs } from '@platform/rootedFs';
+import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { FileLocation } from '@shared/schemas';
 import { ToolConfig } from '@shared/schemas';
 import { filterNotNullish, unique } from '@utils/core';
-import { pathToLocation } from '@utils/files/fileLocation';
+import { pathToLocationIn } from '@utils/files/fileLocation';
 import { RunFileService } from '@utils/files/runStorage';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { fsCall } from '@utils/errors/fsCall';
@@ -74,8 +74,11 @@ export interface LatexTrace {
 export class LatexMediaManager {
   constructor(
     private readonly logger: LatexTrace,
-    /** The session's configuration: the settings a PDF or TikZ compile reads. */
-    private readonly config: ConfigProvider,
+    /**
+     * The session's roots: the settings a PDF or TikZ compile reads, and the
+     * workspace every extracted or compiled path is located against.
+     */
+    private readonly roots: WorkspaceRoots,
     private readonly fileService?: RunFileService,
   ) {}
 
@@ -147,7 +150,9 @@ export class LatexMediaManager {
         'Unable to mirror figure dependency',
         (absolutePath) =>
           fsCall(() =>
-            fileService.mirrorWorkspaceFile(pathToLocation(absolutePath)),
+            fileService.mirrorWorkspaceFile(
+              pathToLocationIn(this.roots.workspace, absolutePath),
+            ),
           ),
       );
     });
@@ -168,7 +173,7 @@ export class LatexMediaManager {
       const fs = yield* FileSystem.FileSystem;
       const buildDir = path.join(path.dirname(file.absolutePath), 'build');
       yield* fs.makeDirectory(buildDir, { recursive: true });
-      const compiled = yield* compileLatex2Pdf(file, this.config, {
+      const compiled = yield* compileLatex2Pdf(file, this.roots.config, {
         outputDirectory: buildDir,
       });
       if (!compiled.ok) {
@@ -181,7 +186,10 @@ export class LatexMediaManager {
         return undefined;
       }
 
-      const pdfLocation = pathToLocation(compiled.pdfPath);
+      const pdfLocation = pathToLocationIn(
+        this.roots.workspace,
+        compiled.pdfPath,
+      );
       const written = yield* fs.exists(pdfLocation.absolutePath);
       if (!written) {
         this.logger.warn(
@@ -318,13 +326,14 @@ export class LatexMediaManager {
         const deps = yield* this.collectDependencies(file);
         if (deps.length === 0) continue;
 
+        const workspaceRoot = this.roots.workspace;
         yield* this.forEachFile(
           deps,
           (absolutePath) => absolutePath,
           'Unable to mirror LaTeX dependency',
           (absolutePath) =>
             Effect.gen(function* () {
-              const depLocation = pathToLocation(absolutePath);
+              const depLocation = pathToLocationIn(workspaceRoot, absolutePath);
               const isTex = hasExtension(absolutePath, '.tex');
               yield* fsCall(() =>
                 fileService.mirrorWorkspaceFile(depLocation, {
@@ -436,6 +445,7 @@ export class LatexMediaManager {
 
       if (candidates.length === 0) return;
 
+      const workspaceRoot = this.roots.workspace;
       yield* this.forEachFile(
         candidates,
         (absolutePath) => absolutePath,
@@ -445,7 +455,9 @@ export class LatexMediaManager {
             const stats = yield* fs.stat(absolutePath);
             if (stats.type !== 'File') return;
             yield* fsCall(() =>
-              fileService.mirrorWorkspaceFile(pathToLocation(absolutePath)),
+              fileService.mirrorWorkspaceFile(
+                pathToLocationIn(workspaceRoot, absolutePath),
+              ),
             );
           }),
       );
@@ -526,7 +538,10 @@ export class LatexMediaManager {
         // files when the .tex is symlinked into run storage.
         const baseDir = yield* resolveLatexDir(file.absolutePath);
         const fileLocations = figures.map((relativePath) =>
-          pathToLocation(path.normalize(path.join(baseDir, relativePath))),
+          pathToLocationIn(
+            this.roots.workspace,
+            path.normalize(path.join(baseDir, relativePath)),
+          ),
         );
 
         // A figure that no longer exists cannot be compiled into the PDF or
@@ -575,7 +590,7 @@ export class LatexMediaManager {
       const tikzResults = yield* Effect.forEach(
         files,
         (file) =>
-          TikzPictureManager.compile(file, this.config).pipe(
+          TikzPictureManager.compile(file, this.roots).pipe(
             // The fan-out continues past an individual failure. A failed
             // compile is reported by TikzPictureManager itself; everything
             // else (standalone generation, the filesystem) lands here and

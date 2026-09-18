@@ -19,7 +19,7 @@ import {
   type WorkspacePathPorts,
 } from '@tools/pathResolution';
 import { executed } from '@tools/core/result';
-import { pathToLocation } from '@utils/files/fileLocation';
+import { pathToLocationIn } from '@utils/files/fileLocation';
 import { runStorageLocationFromAbsolutePath } from '@utils/files/runStorageFs';
 import { hasExtension } from '@utils/core/pathCore';
 
@@ -152,6 +152,6 @@ const resolvePdfLocation = Effect.fn('OpenPdfTool.resolvePdfLocation')(
         ports.toolRoot(),
       ),
     );
-    return pathToLocation(resolved.absolute);
+    return pathToLocationIn(ports.workspaceRoot, resolved.absolute);
   },
 );

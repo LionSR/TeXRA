@@ -2,7 +2,7 @@ import { Effect, FileSystem } from 'effect';
 
 import { withLogChannel } from '@logger/effectLog';
 import { filterNotNull, filterNotNullish, ensureArray } from '@utils/core';
-import { pathToLocation } from '@utils/files/fileLocation';
+import { pathToLocationIn } from '@utils/files/fileLocation';
 import { pathExists } from '@utils/files/fsDurability';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
@@ -138,6 +138,7 @@ const runTexcount = Effect.fn('texcount.runTexcount')(function* (
 
 const getIndividualCounts = Effect.fn('texcount.getIndividualCounts')(
   function* (
+    workspaceRoot: string | undefined,
     paths: readonly string[],
     channel: string,
     includeReferenced: boolean,
@@ -146,7 +147,10 @@ const getIndividualCounts = Effect.fn('texcount.getIndividualCounts')(
       paths,
       (filePath) =>
         Effect.gen(function* () {
-          const absolutePath = pathToLocation(filePath).absolutePath;
+          const absolutePath = pathToLocationIn(
+            workspaceRoot,
+            filePath,
+          ).absolutePath;
           const reason = yield* rejectionReason(absolutePath);
           if (reason) {
             return { output: null, error: reason };
@@ -180,6 +184,7 @@ const getIndividualCounts = Effect.fn('texcount.getIndividualCounts')(
 );
 
 const getSummedCount = Effect.fn('texcount.getSummedCount')(function* (
+  workspaceRoot: string | undefined,
   paths: readonly string[],
   channel: string,
 ) {
@@ -191,7 +196,10 @@ const getSummedCount = Effect.fn('texcount.getSummedCount')(function* (
     paths,
     (filePath) =>
       Effect.gen(function* () {
-        const absolutePath = pathToLocation(filePath).absolutePath;
+        const absolutePath = pathToLocationIn(
+          workspaceRoot,
+          filePath,
+        ).absolutePath;
         const reason = yield* rejectionReason(absolutePath);
         if (reason) return { filePath, reason, chinese: false };
         return {
@@ -254,6 +262,7 @@ const getSummedCount = Effect.fn('texcount.getSummedCount')(function* (
 });
 
 export const getTeXCount = Effect.fn('texcount.getTeXCount')(function* (
+  workspaceRoot: string | undefined,
   filePaths: string | string[],
   { mode = 'separate', channel }: TexcountOptions = {},
 ): Effect.fn.Return<TexcountResult, never, FileSystem.FileSystem> {
@@ -272,6 +281,7 @@ export const getTeXCount = Effect.fn('texcount.getTeXCount')(function* (
 
     if (mode === 'sum') {
       const { output, errors } = yield* getSummedCount(
+        workspaceRoot,
         trimmedPaths,
         resolvedChannel,
       );
@@ -282,6 +292,7 @@ export const getTeXCount = Effect.fn('texcount.getTeXCount')(function* (
     }
 
     const { outputs, errors } = yield* getIndividualCounts(
+      workspaceRoot,
       trimmedPaths,
       resolvedChannel,
       mode === 'include',
@@ -338,8 +349,14 @@ export function parseTeXCountStats(output: string): TeXCountStat[] {
 }
 
 export const getTeXCountStats = Effect.fn('texcount.getTeXCountStats')(
-  function* (filePaths: string | string[], channel: string = CHANNEL) {
-    const { output } = yield* getTeXCount(filePaths, { channel });
+  function* (
+    workspaceRoot: string | undefined,
+    filePaths: string | string[],
+    channel: string = CHANNEL,
+  ) {
+    const { output } = yield* getTeXCount(workspaceRoot, filePaths, {
+      channel,
+    });
     return output
       ? `TeX Count Statistics:<texcount>\n${output}\n</texcount>\n\n`
       : null;

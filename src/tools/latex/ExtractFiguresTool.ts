@@ -10,7 +10,7 @@ import { formatToolOutput } from '@tools/formatting';
 import { resolveAndFormat } from '@tools/pathResolution';
 import { defineTool } from '@tools/core/define';
 import { unique } from '@utils/core';
-import { pathToLocation } from '@utils/files/fileLocation';
+import { pathToLocationIn } from '@utils/files/fileLocation';
 import { formatResultCount } from '@utils/text/stringUtils';
 import {
   buildLimitedAttachments,
@@ -38,7 +38,7 @@ const extractFigures = Effect.fn('ExtractLatexFiguresTool.execute')(function* ({
   const { path, display } = yield* resolveLatexFile(texPath);
 
   const figurePaths = yield* extractFigurePathsFromLatex(
-    pathToLocation(path.absolute),
+    pathToLocationIn(call.roots.workspace, path.absolute),
   );
   const uniqueFigures = unique(figurePaths);
 

@@ -9,7 +9,7 @@ import type { WorkspaceFs } from '@platform/rootedFs';
 import { type ToolFileAttachment, type ToolResult } from '@shared/schemas';
 import { formatToolOutput } from '@tools/formatting';
 import { defineTool } from '@tools/core/define';
-import { pathToLocation } from '@utils/files/fileLocation';
+import { pathToLocationIn } from '@utils/files/fileLocation';
 import { formatResultCount } from '@utils/text/stringUtils';
 import {
   buildLimitedAttachments,
@@ -41,7 +41,7 @@ const extractTikzFigures = Effect.fn('ExtractTikzFiguresTool.execute')(
   > {
     const call = yield* ToolCall;
     const { path, display } = yield* resolveLatexFile(texPath);
-    const location = pathToLocation(path.absolute);
+    const location = pathToLocationIn(call.roots.workspace, path.absolute);
 
     const tikzFigures = yield* TikzPictureManager.extract(location);
     if (tikzFigures.length === 0) {
@@ -67,7 +67,7 @@ const extractTikzFigures = Effect.fn('ExtractTikzFiguresTool.execute')(
     if (compile) {
       const compiledPaths = yield* TikzPictureManager.compile(
         location,
-        call.roots.config,
+        call.roots,
       );
       if (compiledPaths.length > 0) {
         // Convert FileLocation[] to string[] for legacy attachment API

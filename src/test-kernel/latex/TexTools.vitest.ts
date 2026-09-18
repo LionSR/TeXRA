@@ -19,7 +19,7 @@ import type { ExecResult } from '@shared/schemas';
 import { fakePath } from '@test/support/FakePlatform';
 import { rootedFsLayer } from '@test/support/fsTestUtils';
 import { installPlatform } from '@test/support/setupPlatform';
-import { pathToLocation } from '@utils/files/fileLocation';
+import { pathToLocationIn } from '@utils/files/fileLocation';
 
 const mocks = vi.hoisted(() => ({
   runToolWithCheck: vi.fn(),
@@ -50,7 +50,7 @@ function compile(
 ): Effect.Effect<CompileLatex2PdfResult> {
   const roots = workspaceRoots();
   return compileLatex2Pdf(
-    pathToLocation(path.join(workspacePath, sourceFile)),
+    pathToLocationIn(roots.workspace, path.join(workspacePath, sourceFile)),
     roots.config,
     { outputDirectory },
   ).pipe(Effect.provide(rootedFsLayer(roots)));

@@ -111,7 +111,7 @@ import { freshRunState, type RunState } from '@shared/session/runStateFold';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
-import { pathToLocation } from '@utils/files/fileLocation';
+import { pathToLocationIn } from '@utils/files/fileLocation';
 import { extractScratchpad } from '@utils/text/xmlExtraction';
 import { AgentRun } from '../run/AgentRun';
 import { compactIfNeeded } from '../run/compaction';
@@ -254,11 +254,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     roots.workspace,
     logger,
   );
-  const latexMediaManager = new LatexMediaManager(
-    logger,
-    roots.config,
-    fileService,
-  );
+  const latexMediaManager = new LatexMediaManager(logger, roots, fileService);
   const totalRounds = Math.max(
     setting.rounds ?? 2,
     userRequestTemplateCount(prompt.userRequest),
@@ -487,7 +483,10 @@ export const runReflection = Effect.fn('reflection.run')(function* (
 
     if (config.toolConfig.attachTeXCount && files.length > 0) {
       const counted = yield* Effect.exit(
-        getTeXCountStats(files.map((f) => f.absolutePath)),
+        getTeXCountStats(
+          roots.workspace,
+          files.map((f) => f.absolutePath),
+        ),
       );
       if (Exit.isFailure(counted)) {
         if (Cause.hasInterrupts(counted.cause)) return yield* Effect.interrupt;
@@ -1189,7 +1188,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
       try: () =>
         run.inScope(() =>
           fileService.prepareRunWorkspace(baseFiles, {
-            linkFiles: collectRunSupportFiles(config),
+            linkFiles: collectRunSupportFiles(roots.workspace, config),
           }),
         ),
       catch: ensureError,
@@ -1357,11 +1356,14 @@ export const runReflection = Effect.fn('reflection.run')(function* (
   );
 });
 
-function collectRunSupportFiles(agentConfig: {
-  readonly contextFiles: readonly string[];
-  readonly mediaFiles: readonly string[];
-  readonly inputFiles: readonly string[];
-}): FileLocation[] {
+function collectRunSupportFiles(
+  workspaceRoot: string | undefined,
+  agentConfig: {
+    readonly contextFiles: readonly string[];
+    readonly mediaFiles: readonly string[];
+    readonly inputFiles: readonly string[];
+  },
+): FileLocation[] {
   const extras = new Map<string, FileLocation>();
   for (const value of [
     ...agentConfig.contextFiles,
@@ -1369,7 +1371,7 @@ function collectRunSupportFiles(agentConfig: {
     ...agentConfig.inputFiles,
   ]) {
     if (!value) continue;
-    const location = pathToLocation(value);
+    const location = pathToLocationIn(workspaceRoot, value);
     extras.set(fileLocationDisplayPath(location), location);
   }
   return [...extras.values()];

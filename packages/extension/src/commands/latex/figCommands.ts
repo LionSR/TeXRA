@@ -12,7 +12,7 @@ import { TikzPictureManager } from '@latex/TikzPictureManager';
 import { createLog } from '@logger/logUtils';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import { withSessionFs } from '@platform/rootedFs';
-import { pathToLocation } from '@utils/files/fileLocation';
+import { pathToLocationIn } from '@utils/files/fileLocation';
 import { pluralize, truncateWithEllipsis } from '@utils/text/stringUtils';
 
 const CHANNEL = 'FigCommands';
@@ -33,7 +33,9 @@ export async function handleExtractTikzFigures(
       log.debug(`Processing LaTeX file for TikZ figures: ${filePath}`);
 
       const labeledTikzPictures = await runtime.runPromise(
-        TikzPictureManager.extract(pathToLocation(filePath)),
+        TikzPictureManager.extract(
+          pathToLocationIn(session.roots.workspace, filePath),
+        ),
       );
 
       if (labeledTikzPictures.length > 0) {
@@ -94,8 +96,8 @@ export async function handleCompileTikzFigures(
             withSessionFs(
               roots,
               TikzPictureManager.compile(
-                pathToLocation(filePath),
-                roots.config,
+                pathToLocationIn(roots.workspace, filePath),
+                roots,
               ),
             ),
           );

@@ -31,7 +31,7 @@ import type { Rejected } from '@shared/session/requestErrors';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   createExternalLocation,
-  pathToLocation,
+  pathToLocationIn,
 } from '@utils/files/fileLocation';
 import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
 
@@ -126,8 +126,8 @@ export class DesktopProgressFileActions {
   acceptEditedFile(baseFile: string, editedFile: string): Promise<boolean> {
     return this.host.runtime.runPromise(
       acceptEditedFileReplace(
-        pathToLocation(baseFile),
-        pathToLocation(editedFile),
+        pathToLocationIn(this.host.session.roots.workspace, baseFile),
+        pathToLocationIn(this.host.session.roots.workspace, editedFile),
         {
           confirm: (message) =>
             Effect.promise(() => this.ui.confirmAcceptFile(message)),
@@ -189,8 +189,8 @@ export class DesktopProgressFileActions {
     const service = new LaTeXdiffService(DESKTOP_LATEXDIFF_CHANNEL);
     const result = await this.host.runtime.runPromise(
       service.runDiff(
-        pathToLocation(baseFile),
-        pathToLocation(editedFile),
+        pathToLocationIn(this.host.session.roots.workspace, baseFile),
+        pathToLocationIn(this.host.session.roots.workspace, editedFile),
         '_diff',
         DEFAULT_MATH_MARKUP,
       ),

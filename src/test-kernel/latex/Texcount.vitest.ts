@@ -82,8 +82,10 @@ describe('texcount diagnostics', () => {
       yield* withPlatform();
       const logs = captureLogEntries();
 
-      const pinned = yield* getTeXCount('   ', { channel: 'pinnedTexcount' });
-      const defaulted = yield* getTeXCount('');
+      const pinned = yield* getTeXCount(fakePath('workspace'), '   ', {
+        channel: 'pinnedTexcount',
+      });
+      const defaulted = yield* getTeXCount(fakePath('workspace'), '');
 
       expect(pinned).toEqual({
         output: null,
@@ -112,7 +114,7 @@ describe('texcount diagnostics', () => {
       yield* withPlatform();
       const logs = captureLogEntries();
 
-      const result = yield* getTeXCount('missing.tex', {
+      const result = yield* getTeXCount(fakePath('workspace'), 'missing.tex', {
         channel: 'pinnedTexcount',
       });
 
@@ -137,7 +139,7 @@ describe('texcount diagnostics', () => {
         });
         const logs = captureLogEntries();
 
-        const result = yield* getTeXCount('main.tex', {
+        const result = yield* getTeXCount(fakePath('workspace'), 'main.tex', {
           channel: 'pinnedTexcount',
         });
 
@@ -174,7 +176,7 @@ describe('texcount diagnostics', () => {
         });
         const logs = captureLogEntries();
 
-        const result = yield* getTeXCount('main.tex', {
+        const result = yield* getTeXCount(fakePath('workspace'), 'main.tex', {
           channel: 'pinnedTexcount',
         });
 

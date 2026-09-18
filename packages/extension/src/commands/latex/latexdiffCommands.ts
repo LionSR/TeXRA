@@ -54,7 +54,7 @@ import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latexConfig';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { pathToLocation } from '@utils/files/fileLocation';
+import { pathToLocationIn } from '@utils/files/fileLocation';
 import { checkToolInstalled } from '@utils/system/toolUtils';
 import type { Effect } from 'effect';
 
@@ -140,7 +140,7 @@ async function openLatexdiffResult(
   runtime: ProcessRuntime,
   options: { scheduleViewer?: boolean } = {},
 ): Promise<OpenedLatexdiffResult | undefined> {
-  const diffLocation = pathToLocation(diffFilePath);
+  const diffLocation = pathToLocationIn(session.roots.workspace, diffFilePath);
 
   if (!(await AbsoluteFS.exists(diffLocation.absolutePath))) {
     await showLoggedMessage(
@@ -391,14 +391,17 @@ async function handleLatexdiff(
   }
 
   await withLatexdiffTool('latexdiff', 'Error creating LaTeX diff', () => {
-    const fileToUseLocation = pathToLocation(fileToUse);
+    const fileToUseLocation = pathToLocationIn(
+      session.roots.workspace,
+      fileToUse,
+    );
     return runDiffAndOpen(
       session,
       'latexdiff',
       (mathMarkup) =>
         latexdiffService.runDiff(
           fileToUseLocation,
-          pathToLocation(editedFile),
+          pathToLocationIn(session.roots.workspace, editedFile),
           '_diff',
           mathMarkup,
         ),
@@ -417,7 +420,10 @@ async function handleLatexdiffvc(
   const fileToUse = await resolveDiffBase(inputFile, baseFile);
   if (!fileToUse) return;
   await withLatexdiffTool('latexdiff-vc', 'Error creating LaTeX diff', () => {
-    const fileToUseLocation = pathToLocation(fileToUse);
+    const fileToUseLocation = pathToLocationIn(
+      session.roots.workspace,
+      fileToUse,
+    );
     return runDiffAndOpen(
       session,
       'latexdiff-vc',
