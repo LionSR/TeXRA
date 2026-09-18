@@ -1,5 +1,4 @@
 import { Effect } from 'effect';
-import { z } from 'zod';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { deriveResumability, finalizeRun } from '@agent/storage';
@@ -137,15 +136,16 @@ describe('deriveResumability', () => {
     ).resolves.toEqual({ kind: 'none' });
   });
 
-  it('reports malformed metadata as unreadable even with a snapshot', async () => {
+  it('reports unreadable metadata as unreadable even with a snapshot', async () => {
     const runId = 'ac000a' as RunId;
     await writeMeta(runId, {});
     await writeSnapshot(runId);
     vi.spyOn(session, 'readRunRecords').mockReturnValue(
-      Effect.die(
-        new z.ZodError([
-          { code: 'custom', path: [], message: 'corrupt run metadata' },
-        ]),
+      Effect.fail(
+        new DatabaseReadFailed({
+          path: 'session.db',
+          cause: new Error('corrupt run metadata'),
+        }),
       ),
     );
 
@@ -153,8 +153,8 @@ describe('deriveResumability', () => {
       Effect.runPromise(deriveResumability(runId, session)),
     ).resolves.toMatchObject({
       kind: 'unreadable',
-      fault: 'metadata-malformed',
-      cause: 'run metadata is malformed',
+      fault: 'metadata-unreadable',
+      cause: 'run metadata could not be read (corrupt run metadata)',
     });
   });
 

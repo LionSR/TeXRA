@@ -1,7 +1,6 @@
 import { Effect, Stream, SubscriptionRef } from 'effect';
 import { it } from '@effect/vitest';
 import { beforeEach, describe, expect } from 'vitest';
-import { z } from 'zod';
 
 import { getRunRecords } from '@agent/storage';
 import { readRunChildren } from '@agent/storage/runLifecycle';
@@ -9,6 +8,7 @@ import {
   aggregateId,
   AgentConfigFieldsSchema,
   type RunId,
+  type SessionEvent,
   type SessionEventDraft,
 } from '@shared/schemas';
 import { testRuntime } from '@test/support/testProcessRuntime';
@@ -118,14 +118,23 @@ describe('canonical run records', () => {
     expect(await run(records.readWorkspaceFiles())).toEqual(['a.tex', 'b.tex']);
   });
 
-  it('preserves malformed-record failures instead of a default', async () => {
-    const malformed = new z.ZodError([]);
+  it('reports a malformed record as a corrupt-record failure, not a default', async () => {
     const reader = Object.create(session) as typeof session;
-    reader.readRunRecords = () => Effect.die(malformed);
+    reader.readRunRecords = () =>
+      Effect.succeed([
+        {
+          type: 'run.record',
+          aggregateId: aggregateId('run', runId),
+          record: 'not a record',
+        } as unknown as SessionEvent,
+      ]);
     const result = await run(
       getRunRecords(reader, runId).readRunRecord().pipe(Effect.result),
     );
-    expect(result).toMatchObject({ _tag: 'Failure', failure: malformed });
+    expect(result).toMatchObject({
+      _tag: 'Failure',
+      failure: { _tag: 'RunRecordCorrupt', runId },
+    });
   });
 
   it('joins child labels through the declared creation edge', async () => {
