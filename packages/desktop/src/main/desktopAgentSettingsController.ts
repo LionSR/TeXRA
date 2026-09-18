@@ -499,15 +499,19 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
           customDir,
         });
 
-        const written = yield* Effect.tryPromise({
-          try: () => writeTemplateAgentFile(plan, this.resourcesPath),
-          catch: (cause) =>
-            new AgentSettingsActionFailed({
-              member: 'writeTemplateAgentFile',
-              message: `The agent template could not be written: ${toErrorMessage(cause)}`,
-              cause,
-            }),
-        });
+        const written = yield* writeTemplateAgentFile(
+          plan,
+          this.resourcesPath,
+        ).pipe(
+          Effect.mapError(
+            (cause) =>
+              new AgentSettingsActionFailed({
+                member: 'writeTemplateAgentFile',
+                message: `The agent template could not be written: ${toErrorMessage(cause)}`,
+                cause,
+              }),
+          ),
+        );
         if (!written.ok) {
           yield* this.notifications.showErrorMessage(written.message);
           return;

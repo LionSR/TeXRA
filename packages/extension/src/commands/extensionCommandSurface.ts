@@ -91,7 +91,7 @@ export function createExtensionCommandActions(
       runtime.runPromise(
         latexHandleAcceptEdited(baseLocation, editedLocation, copyMeta),
       ),
-    indentTeX: () => handleIndentTeX(session),
+    indentTeX: () => handleIndentTeX(session, runtime),
     signIn: () => runtime.runPromise(authSignIn),
     signInChatGpt: () => settingsViewProvider.signInSubscription('chatgpt'),
     signInGrok: () => settingsViewProvider.signInSubscription('grok'),
@@ -110,8 +110,8 @@ export function createExtensionCommandActions(
         vscode.Uri.parse(`https://texra.ai/guide/${page}.html`),
       );
     },
-    indentCurrentTeX: () => latexIndentCurrentTeX(session),
-    fixCompilation: () => latexFixCompilation(session),
+    indentCurrentTeX: () => latexIndentCurrentTeX(session, runtime),
+    fixCompilation: () => latexFixCompilation(session, runtime),
     getTeXCount: () => latexGetTeXCount(session, runtime),
     extractTikzFigures: () => latexExtractTikzFigures(session, runtime),
     compileTikzFigures: () => latexCompileTikzFigures(session, runtime),

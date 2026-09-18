@@ -1,7 +1,9 @@
+import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 
-import { Effect, Layer, ManagedRuntime } from 'effect';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { Effect, FileSystem, Layer, ManagedRuntime } from 'effect';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { inquiryRecordsLayer } from '@controllers/session/inquiryRecords';
 
 import { processOwnerId } from '@platform/defaults/nodeProcesses';
@@ -21,10 +23,8 @@ import {
 } from '@test/support/setupPlatform';
 
 const mocks = vi.hoisted(() => ({
-  deleteFile: vi.fn(async () => undefined),
-  copyFile: vi.fn(async () => undefined),
-  ensureDir: vi.fn(async () => undefined),
-  fileExists: vi.fn(async () => false),
+  /** The custom agents directory, a real temp path per test. */
+  customDirectory: vi.fn(() => ''),
   applySettingsTeamRoster:
     vi.fn<
       typeof import('@controllers/settingsView/SettingsTeamRosterController').applySettingsTeamRoster
@@ -80,7 +80,7 @@ vi.mock('@frontend/agents/AgentDirectoryManager', () => ({
   // The readers as the manager declares them: `AgentHandlers` runs them on
   // its own runtime, so a promise-returning double is not what it calls.
   agentDirectories: {
-    custom: () => Effect.succeed('/custom'),
+    custom: () => Effect.sync(() => mocks.customDirectory()),
     getDirectory: (source: AgentSource) =>
       Effect.promise(() => mocks.getSourceDirectory(source)),
   },
@@ -104,15 +104,6 @@ vi.mock('@shared/settingsView/handlers/agentSelectionHandlers', () => ({
   buildAgentSelectionMessage: vi.fn(),
   buildCustomAgentDirMessage: vi.fn(),
 }));
-vi.mock('@utils/files/absoluteFS', () => ({
-  AbsoluteFS: {
-    copy: mocks.copyFile,
-    delete: mocks.deleteFile,
-    ensureDir: mocks.ensureDir,
-    exists: mocks.fileExists,
-  },
-}));
-
 function createHandlers(): AgentHandlers {
   return new AgentHandlers(
     {
@@ -153,14 +144,46 @@ const CUSTOMIZE_MY_AGENT = {
   agentName: 'my-agent',
 } as const;
 
+const AGENT_YAML = 'name: my-agent\n';
+
 const APPLY_AGENT_MODE_PRESET = {
   command: 'applyAgentModePreset',
   presetId: 'my-preset',
 } as const;
 
+/** Whether `target` names an entry, read through the same filesystem the
+ *  handlers write with. */
+function onDisk(target: string): Promise<boolean> {
+  return testRuntime().runPromise(
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      return yield* fs.exists(target);
+    }),
+  );
+}
+
 describe('AgentHandlers custom-agent file actions', () => {
-  beforeEach(() => {
+  // Real roots: the handlers copy and delete through the standard library's
+  // `FileSystem`, so the copy that lands and the file that survives are what
+  // these tests read back.
+  let root: string;
+  let bundledDir: string;
+  let customDir: string;
+
+  beforeEach(async () => {
     vi.clearAllMocks();
+    root = await mkdtemp(path.join(tmpdir(), 'texra-agent-handlers-'));
+    bundledDir = path.join(root, 'bundled');
+    customDir = path.join(root, 'custom');
+    await mkdir(path.join(bundledDir, 'writing'), { recursive: true });
+    await writeFile(
+      path.join(bundledDir, 'writing', 'my-agent.yaml'),
+      AGENT_YAML,
+    );
+    mocks.customDirectory.mockReturnValue(customDir);
+    mocks.getAgent.mockReturnValue({
+      path: path.join(customDir, 'my-agent.yaml'),
+    });
     const { globalStorage } = createFakeWorkspaceRoots();
     initTestProcessRuntime(
       ManagedRuntime.make(
@@ -174,6 +197,10 @@ describe('AgentHandlers custom-agent file actions', () => {
         ),
       ),
     );
+  });
+
+  afterEach(async () => {
+    await rm(root, { recursive: true, force: true });
   });
 
   it('logs notification failures after applying a team preset', async () => {
@@ -221,7 +248,9 @@ describe('AgentHandlers custom-agent file actions', () => {
   });
 
   it('rejects deletion outside the configured custom directory', async () => {
-    mocks.getAgent.mockReturnValueOnce({ path: '/bundled/my-agent.yaml' });
+    const outside = path.join(bundledDir, 'my-agent.yaml');
+    await writeFile(outside, AGENT_YAML);
+    mocks.getAgent.mockReturnValueOnce({ path: outside });
 
     await createHandlers().handleDeleteCustomAgent(DELETE_MY_AGENT);
 
@@ -230,30 +259,30 @@ describe('AgentHandlers custom-agent file actions', () => {
       'Refusing to delete: file is not inside the custom agents directory.',
     );
     expect(mocks.showWarningMessage).not.toHaveBeenCalled();
-    expect(mocks.deleteFile).not.toHaveBeenCalled();
+    expect(await onDisk(outside)).toBe(true);
   });
 
   it('preserves the source-relative path when creating a custom copy', async () => {
     mocks.getAgent.mockReturnValueOnce({
-      path: path.join(path.sep, 'bundled', 'writing', 'my-agent.yaml'),
+      path: path.join(bundledDir, 'writing', 'my-agent.yaml'),
     });
-    mocks.getSourceDirectory.mockResolvedValueOnce(
-      path.join(path.sep, 'bundled'),
-    );
+    mocks.getSourceDirectory.mockResolvedValueOnce(bundledDir);
 
     await customizeAgent(createHandlers());
 
-    expect(mocks.copyFile).toHaveBeenCalledWith(
-      path.join(path.sep, 'bundled', 'writing', 'my-agent.yaml'),
-      path.join(path.sep, 'custom', 'writing', 'my-agent.yaml'),
-      { overwrite: true },
-    );
+    // The copy lands under the custom directory at the path the agent had
+    // relative to its source directory — `writing/` is preserved.
+    expect(
+      await readFile(path.join(customDir, 'writing', 'my-agent.yaml'), 'utf8'),
+    ).toBe(AGENT_YAML);
     expect(mocks.refreshAfterAgentMutation).toHaveBeenCalledOnce();
   });
 
   it('rejects a custom-copy target outside the configured directory', async () => {
-    mocks.getAgent.mockReturnValueOnce({ path: '/outside/my-agent.yaml' });
-    mocks.getSourceDirectory.mockResolvedValueOnce('/bundled');
+    mocks.getAgent.mockReturnValueOnce({
+      path: path.join(root, 'outside', 'my-agent.yaml'),
+    });
+    mocks.getSourceDirectory.mockResolvedValueOnce(bundledDir);
 
     await customizeAgent(createHandlers());
 
@@ -261,6 +290,7 @@ describe('AgentHandlers custom-agent file actions', () => {
       'test',
       'Refusing to copy: target path escapes the custom agents directory.',
     );
-    expect(mocks.copyFile).not.toHaveBeenCalled();
+    // The refusal precedes the directory creation, so nothing was written.
+    expect(await onDisk(customDir)).toBe(false);
   });
 });

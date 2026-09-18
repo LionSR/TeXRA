@@ -1,3 +1,6 @@
+// Third-party imports
+import { Effect } from 'effect';
+
 // Local imports - log
 import { createLog } from '@logger/logUtils';
 import { runToolWithCheck } from '@utils/system/toolUtils';
@@ -9,21 +12,25 @@ const log = createLog(CHANNEL);
 
 export const TEXFMT_CONFIG_KEY = 'texra.latex.texfmtConfig';
 
-export async function runTexFmt(
-  filePath: string,
-  workspaceRoot: string | undefined,
-  texfmtConfig: string | undefined = getConfig<string>(TEXFMT_CONFIG_KEY),
-): Promise<boolean> {
-  try {
+export const runTexFmt = Effect.fn('latex.runTexFmt')(
+  function* (
+    filePath: string,
+    workspaceRoot: string | undefined,
+    texfmtConfig: string | undefined = getConfig<string>(TEXFMT_CONFIG_KEY),
+  ) {
     const args = [
       ...(texfmtConfig ? ['--config', texfmtConfig] : ['--nowrap']),
       filePath,
     ];
 
-    const result = await runToolWithCheck('tex-fmt', args, {
-      channel: CHANNEL,
-      cwd: workspaceRoot,
-      showError: true,
+    const result = yield* Effect.tryPromise({
+      try: () =>
+        runToolWithCheck('tex-fmt', args, {
+          channel: CHANNEL,
+          cwd: workspaceRoot,
+          showError: true,
+        }),
+      catch: (cause) => cause,
     });
     if (!result || !result.success) {
       return false;
@@ -31,8 +38,11 @@ export async function runTexFmt(
 
     log.info(`Formatted ${filePath}`);
     return true;
-  } catch (err) {
-    log.error(`Error running tex-fmt: ${toErrorMessage(err)}`);
-    return false;
-  }
-}
+  },
+  Effect.catch((err) =>
+    Effect.sync(() => {
+      log.error(`Error running tex-fmt: ${toErrorMessage(err)}`);
+      return false;
+    }),
+  ),
+);

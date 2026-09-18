@@ -1,11 +1,10 @@
 import * as path from 'node:path';
-import { setTimeout as delay } from 'node:timers/promises';
+
+import { Effect, FileSystem } from 'effect';
 
 import { sync as globSync } from 'glob';
 
-import { isFileNotFoundError } from '@common/errors';
 import { createLog } from '@logger/logUtils';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { runToolWithCheck } from '@utils/system/toolUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getConfig } from '@utils/config/configUtils';
@@ -23,24 +22,31 @@ export const LATEXINDENT_CONFIG_KEY = 'texra.latex.latexindentConfig';
  */
 let missingLatexindentReported = false;
 
-async function cleanupIndentLog(logPath: string): Promise<void> {
-  try {
-    await AbsoluteFS.delete(logPath);
-    log.debug(`Removed ${logPath}`);
-  } catch (err) {
-    if (isFileNotFoundError(err)) {
-      log.debug(`No indent.log to remove at ${logPath}`);
-    } else {
-      log.warn(`Error removing indent.log: ${toErrorMessage(err)}`);
-    }
-  }
-}
+const cleanupIndentLog = Effect.fn('latex.cleanupIndentLog')(function* (
+  logPath: string,
+) {
+  const fs = yield* FileSystem.FileSystem;
+  // `remove` with `force` treats a path that is not there as the
+  // post-condition, exactly as the facade's provider-level delete did, so
+  // only a real failure is reported.
+  const removed = yield* fs.remove(logPath, { force: true }).pipe(
+    Effect.as(true),
+    Effect.catch((err) =>
+      Effect.sync(() => {
+        log.warn(`Error removing indent.log: ${toErrorMessage(err)}`);
+        return false;
+      }),
+    ),
+  );
+  if (removed) log.debug(`Removed ${logPath}`);
+});
 
 /** Delete all files matching backup glob patterns in a directory. */
-async function cleanupBackupFiles(
+const cleanupBackupFiles = Effect.fn('latex.cleanupBackupFiles')(function* (
   fileBaseName: string,
   fileDir: string,
-): Promise<void> {
+) {
+  const fs = yield* FileSystem.FileSystem;
   const backupFiles = [
     `${fileBaseName}.tex.bak*`,
     `${fileBaseName}.bak*`,
@@ -51,32 +57,34 @@ async function cleanupBackupFiles(
   );
 
   for (const backupFile of backupFiles) {
-    try {
-      await AbsoluteFS.delete(backupFile);
-      log.debug(`Removed backup file: ${backupFile}`);
-    } catch (err) {
-      if (!isFileNotFoundError(err)) {
-        log.warn(
-          `Error removing backup file ${backupFile}: ${toErrorMessage(err)}`,
-        );
-      }
-    }
+    const removed = yield* fs.remove(backupFile, { force: true }).pipe(
+      Effect.as(true),
+      Effect.catch((err) =>
+        Effect.sync(() => {
+          log.warn(
+            `Error removing backup file ${backupFile}: ${toErrorMessage(err)}`,
+          );
+          return false;
+        }),
+      ),
+    );
+    if (removed) log.debug(`Removed backup file: ${backupFile}`);
   }
-}
+});
 
 /**
  * `workspacePath` is the root a relative `filePath` resolves against and the
  * cwd latexindent runs in — the caller's own session root, held as data, not
  * the roots the calling fiber happens to carry.
  */
-export async function runLatexIndent(
-  filePath: string,
-  workspacePath: string | undefined,
-  latexindentConfig: string | undefined = getConfig<string>(
-    LATEXINDENT_CONFIG_KEY,
-  ),
-): Promise<boolean> {
-  try {
+export const runLatexIndent = Effect.fn('latex.runLatexIndent')(
+  function* (
+    filePath: string,
+    workspacePath: string | undefined,
+    latexindentConfig: string | undefined = getConfig<string>(
+      LATEXINDENT_CONFIG_KEY,
+    ),
+  ) {
     // Resolve workspace-relative paths to absolute so cleanup works correctly.
     // Some callers (latexCommands, housekeeping/indent) pass relative paths.
     const absolutePath =
@@ -90,36 +98,43 @@ export async function runLatexIndent(
     }
     args.push(absolutePath);
 
-    const result = await runToolWithCheck('latexindent', args, {
-      channel: CHANNEL,
-      cwd: workspacePath,
-      showError: !missingLatexindentReported,
+    const result = yield* Effect.tryPromise({
+      try: () =>
+        runToolWithCheck('latexindent', args, {
+          channel: CHANNEL,
+          cwd: workspacePath,
+          showError: !missingLatexindentReported,
+        }),
+      catch: (cause) => cause,
     });
     if (result === false) missingLatexindentReported = true;
     const success = Boolean(result && result.success);
 
     if (success) {
       // Wait a moment for the file system to stabilize after a successful write
-      await delay(100);
+      yield* Effect.sleep(100);
     }
 
     // Always clean up backup files — latexindent creates .bak before modifying,
     // so a crash or failure can still leave orphaned backups.
     const fileBaseName = path.basename(absolutePath, '.tex');
     const fileDir = path.dirname(absolutePath);
-    await cleanupBackupFiles(fileBaseName, fileDir);
-    await cleanupIndentLog(path.join(fileDir, 'indent.log'));
+    yield* cleanupBackupFiles(fileBaseName, fileDir);
+    yield* cleanupIndentLog(path.join(fileDir, 'indent.log'));
     // latexindent may also create indent.log at the process cwd (workspace root)
     if (workspacePath && fileDir !== workspacePath) {
-      await cleanupIndentLog(path.join(workspacePath, 'indent.log'));
+      yield* cleanupIndentLog(path.join(workspacePath, 'indent.log'));
     }
 
     if (success) {
       log.info(`Indented ${absolutePath}`);
     }
     return success;
-  } catch (err) {
-    log.error(`Error running LaTeX indent: ${toErrorMessage(err)}`);
-    return false;
-  }
-}
+  },
+  Effect.catch((err) =>
+    Effect.sync(() => {
+      log.error(`Error running LaTeX indent: ${toErrorMessage(err)}`);
+      return false;
+    }),
+  ),
+);

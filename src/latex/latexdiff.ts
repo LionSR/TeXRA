@@ -1,13 +1,14 @@
 import * as path from 'node:path';
 
-import { Effect } from 'effect';
+import { Effect, FileSystem, PlatformError } from 'effect';
 
-import { formatError, isFileNotFoundError } from '@common/errors';
+import { formatError } from '@common/errors';
 import { withLogChannel } from '@logger/effectLog';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { FileLocation } from '@shared/schemas';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { ensureError } from '@utils/errors/errorMessage';
+import { readNormalizedFile } from '@utils/files/fsDurability';
+import { entryExists } from '@utils/files/fsEntryExists';
 import { pathToLocationIn } from '@utils/files/fileLocation';
 import { executeCommand } from '@utils/system/execUtils';
 import {
@@ -83,10 +84,12 @@ export class LaTeXdiffService {
       });
   }
 
-  private read(absolutePath: string): Effect.Effect<string, Error> {
-    return Effect.tryPromise({
-      try: () => AbsoluteFS.read(absolutePath),
-      catch: ensureError,
+  private read(
+    absolutePath: string,
+  ): Effect.Effect<string, PlatformError.PlatformError, FileSystem.FileSystem> {
+    return Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      return yield* readNormalizedFile(fs, absolutePath);
     });
   }
 
@@ -94,7 +97,11 @@ export class LaTeXdiffService {
   private readDiffInputs(
     inputLocation: FileLocation,
     editedLocation: FileLocation,
-  ): Effect.Effect<[string, string] | null, Error> {
+  ): Effect.Effect<
+    [string, string] | null,
+    PlatformError.PlatformError,
+    FileSystem.FileSystem
+  > {
     return Effect.all(
       [
         this.read(inputLocation.absolutePath),
@@ -102,8 +109,9 @@ export class LaTeXdiffService {
       ],
       { concurrency: 2 },
     ).pipe(
-      Effect.catchIf(isFileNotFoundError, () =>
-        Effect.succeed<[string, string] | null>(null),
+      Effect.catchIf(
+        (error) => error.reason._tag === 'NotFound',
+        () => Effect.succeed<[string, string] | null>(null),
       ),
     );
   }
@@ -114,7 +122,7 @@ export class LaTeXdiffService {
     suffix = '_diff',
     mathMarkup?: MathMarkupOption,
     options?: { cwd?: string; subtype?: string; outputDirectory?: string },
-  ): Effect.Effect<LaTeXdiffResult> {
+  ): Effect.Effect<LaTeXdiffResult, never, FileSystem.FileSystem> {
     return Effect.gen({ self: this }, function* () {
       const inputFile = inputLocation.absolutePath;
       const editedFile = editedLocation.absolutePath;
@@ -164,13 +172,9 @@ export class LaTeXdiffService {
         this.roots?.workspace,
         outputPath,
       );
-      yield* Effect.tryPromise({
-        try: async () => {
-          await AbsoluteFS.ensureDir(outputDirectory);
-          await AbsoluteFS.write(outputLocation.absolutePath, result.stdout);
-        },
-        catch: ensureError,
-      });
+      const fs = yield* FileSystem.FileSystem;
+      yield* fs.makeDirectory(outputDirectory, { recursive: true });
+      yield* fs.writeFileString(outputLocation.absolutePath, result.stdout);
       yield* this.fileProcessor.processDiffFile(outputLocation, editedLocation);
 
       yield* Effect.logDebug(
@@ -196,7 +200,7 @@ export class LaTeXdiffService {
     inputLocation: FileLocation,
     commitHash: string,
     mathMarkup?: MathMarkupOption,
-  ): Effect.Effect<LaTeXdiffResult> {
+  ): Effect.Effect<LaTeXdiffResult, never, FileSystem.FileSystem> {
     return Effect.gen({ self: this }, function* () {
       const inputFile = inputLocation.absolutePath;
       if (!hasDocumentEnvironment(yield* this.read(inputFile))) {
@@ -255,7 +259,7 @@ export class LaTeXdiffService {
     round: number,
     mathMarkup?: MathMarkupOption,
     options?: { cwd?: string; outputDirectory?: string },
-  ): Effect.Effect<LaTeXdiffResult> {
+  ): Effect.Effect<LaTeXdiffResult, never, FileSystem.FileSystem> {
     return Effect.gen({ self: this }, function* () {
       if (!(yield* this.bothFilesExist(baseLocation, outputLocation))) {
         const message = `Could not generate latexdiff for round ${round}. Files not found: ${baseLocation.absolutePath} or ${outputLocation.absolutePath}`;
@@ -283,7 +287,7 @@ export class LaTeXdiffService {
     toRound: number,
     mathMarkup?: MathMarkupOption,
     options?: { cwd?: string; outputDirectory?: string },
-  ): Effect.Effect<LaTeXdiffResult> {
+  ): Effect.Effect<LaTeXdiffResult, never, FileSystem.FileSystem> {
     return Effect.gen({ self: this }, function* () {
       if (!(yield* this.bothFilesExist(firstLocation, secondLocation))) {
         const message = `Could not generate latexdiff between rounds. Files not found: ${firstLocation.absolutePath} or ${secondLocation.absolutePath}`;
@@ -308,15 +312,21 @@ export class LaTeXdiffService {
   private bothFilesExist(
     first: FileLocation,
     second: FileLocation,
-  ): Effect.Effect<boolean, Error> {
-    const exists = (location: FileLocation) =>
-      Effect.tryPromise({
-        try: () => AbsoluteFS.exists(location.absolutePath),
-        catch: ensureError,
-      });
-    return Effect.all([exists(first), exists(second)], {
-      concurrency: 2,
-    }).pipe(Effect.map(([a, b]) => a && b));
+  ): Effect.Effect<
+    boolean,
+    PlatformError.PlatformError,
+    FileSystem.FileSystem
+  > {
+    return Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      return yield* Effect.all(
+        [
+          entryExists(fs, first.absolutePath),
+          entryExists(fs, second.absolutePath),
+        ],
+        { concurrency: 2 },
+      ).pipe(Effect.map(([a, b]) => a && b));
+    });
   }
 
   private getGitRoot(cwd: string): Effect.Effect<string | null, Error> {

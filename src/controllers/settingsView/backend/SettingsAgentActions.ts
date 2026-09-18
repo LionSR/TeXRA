@@ -2,7 +2,7 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, FileSystem } from 'effect';
 
 // Local imports - controllers
 import type { SettingsAgentDirectoryController } from '@controllers/settingsView/SettingsAgentDirectoryController';
@@ -16,9 +16,8 @@ import {
   type SettingsMessageFor,
 } from '@shared/schemas';
 // Local imports - utilities
-import { AbsoluteFS } from '@utils/files/absoluteFS';
+import { entryExists } from '@utils/files/fsEntryExists';
 import { isStrictlyWithin } from '@utils/core/pathCore';
-import { ensureError } from '@utils/errors/errorMessage';
 
 /**
  * One step of a settings agent action: the host's own failure, on the process
@@ -175,14 +174,9 @@ export function createSettingsAgentActions(
           return;
         }
 
-        yield* Effect.tryPromise({
-          try: () => AbsoluteFS.ensureDir(path.dirname(targetPath)),
-          catch: ensureError,
-        });
-        const targetExists = yield* Effect.tryPromise({
-          try: () => AbsoluteFS.exists(targetPath),
-          catch: ensureError,
-        });
+        const fs = yield* FileSystem.FileSystem;
+        yield* fs.makeDirectory(path.dirname(targetPath), { recursive: true });
+        const targetExists = yield* entryExists(fs, targetPath);
         if (targetExists) {
           const overwrite = yield* options.confirmAction(
             `A custom copy already exists: ${path.basename(targetPath)}`,
@@ -191,11 +185,7 @@ export function createSettingsAgentActions(
           if (!overwrite) return;
         }
 
-        yield* Effect.tryPromise({
-          try: () =>
-            AbsoluteFS.copy(entryPath, targetPath, { overwrite: true }),
-          catch: ensureError,
-        });
+        yield* fs.copy(entryPath, targetPath, { overwrite: true });
         yield* options.openDocument(targetPath);
         yield* options.showInfoMessage(
           `Created custom copy: ${path.basename(targetPath)}`,
@@ -227,10 +217,10 @@ export function createSettingsAgentActions(
         );
         if (!confirmed) return;
 
-        yield* Effect.tryPromise({
-          try: () => AbsoluteFS.delete(entryPath, { recursive: false }),
-          catch: ensureError,
-        });
+        const fs = yield* FileSystem.FileSystem;
+        // `force` is the facade's delete: a path already gone is the
+        // post-condition, not a failure.
+        yield* fs.remove(entryPath, { force: true });
         yield* options.showInfoMessage(
           `Deleted custom agent: ${message.agentName}`,
         );

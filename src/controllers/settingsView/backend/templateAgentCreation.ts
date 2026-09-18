@@ -1,6 +1,9 @@
 // Standard library imports
 import * as path from 'node:path';
 
+// Third-party imports
+import { Effect, FileSystem } from 'effect';
+
 // Local imports - agent
 import {
   AGENT_TEMPLATE_FILES,
@@ -10,7 +13,8 @@ import {
 // Local imports - shared
 import type { AgentCategory } from '@shared/schemas';
 // Local imports - utilities
-import { AbsoluteFS } from '@utils/files/absoluteFS';
+import { readNormalizedFile } from '@utils/files/fsDurability';
+import { entryExists } from '@utils/files/fsEntryExists';
 
 /**
  * "Create an agent from a bundled template" is one operation with one set of
@@ -51,24 +55,25 @@ export interface TemplateAgentFilePlan {
  * `resourcesRoot` is the packaged `…/resources` directory that holds
  * `templates/<kind>.yaml`.
  */
-export async function writeTemplateAgentFile(
-  plan: TemplateAgentFilePlan,
-  resourcesRoot: string,
-): Promise<{ ok: true } | { ok: false; message: string }> {
-  if (await AbsoluteFS.exists(plan.filePath)) {
+export const writeTemplateAgentFile = Effect.fn(
+  'settings.writeTemplateAgentFile',
+)(function* (plan: TemplateAgentFilePlan, resourcesRoot: string) {
+  const fs = yield* FileSystem.FileSystem;
+  if (yield* entryExists(fs, plan.filePath)) {
     return {
       ok: false,
       message: `A file named "${plan.fileName}" already exists in the custom agents folder.`,
-    };
+    } as const;
   }
-  const raw = await AbsoluteFS.read(
+  const raw = yield* readNormalizedFile(
+    fs,
     path.join(
       resourcesRoot,
       'templates',
       AGENT_TEMPLATE_FILES[plan.templateKind],
     ),
   );
-  await AbsoluteFS.write(
+  yield* fs.writeFileString(
     plan.filePath,
     renderAgentTemplateString(raw, {
       AGENT_NAME: plan.baseName,
@@ -76,5 +81,5 @@ export async function writeTemplateAgentFile(
       TOOLS_YAML: DEFAULT_AGENT_TEMPLATE_TOOLS_YAML,
     }),
   );
-  return { ok: true };
-}
+  return { ok: true } as const;
+});

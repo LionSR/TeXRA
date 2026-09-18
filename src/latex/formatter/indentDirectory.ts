@@ -1,10 +1,12 @@
 import * as path from 'node:path';
 
+import { Effect, FileSystem, Path, PlatformError } from 'effect';
+
 import { createLog } from '@logger/logUtils';
 import { EXCLUDED_DIRS } from '@shared/constants/latexTiming';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { isDirectory, isFile, isSymlink } from '@utils/files/fsEntryType';
+import { readDirectoryTypedTolerant } from '@utils/files/fsDurability';
+import { entryExists } from '@utils/files/fsEntryExists';
 import { hasExtension } from '@utils/core/pathCore';
 
 import { resolveLatexFormatter, type LatexFormatter } from './texFormatter';
@@ -43,14 +45,20 @@ export type IndentLatexResult =
  * relative `directory` resolves against the process cwd.
  * @param directory The directory to process (relative to workspace). If not provided, uses the root.
  * @param progressCallback Optional callback for progress updates
- * @returns Promise<IndentLatexResult> The formatting outcome
+ * @returns The formatting outcome
  */
-export async function indentLatexFilesInDirectory(
+export const indentLatexFilesInDirectory = Effect.fn(
+  'latex.indentLatexFilesInDirectory',
+)(function* (
   workspaceRoot: string | undefined,
   directory: string = '.',
   progressCallback?: (message: string, increment?: number) => void,
   formatter: LatexFormatter | null = resolveLatexFormatter(),
-): Promise<IndentLatexResult> {
+): Effect.fn.Return<
+  IndentLatexResult,
+  PlatformError.PlatformError,
+  FileSystem.FileSystem | Path.Path
+> {
   log.debug(`Starting LaTeX indentation process for directory: ${directory}`);
 
   if (!formatter) {
@@ -60,7 +68,8 @@ export async function indentLatexFilesInDirectory(
   const { id, configPath: config, run: runFormatter } = formatter;
   log.debug(`Formatter: ${id}, Config: ${config}`);
 
-  if (config && !(await AbsoluteFS.exists(config))) {
+  const fs = yield* FileSystem.FileSystem;
+  if (config && !(yield* entryExists(fs, config))) {
     log.error(`Formatter config file not found at ${config}`);
     return {
       status: 'missing-config',
@@ -72,55 +81,68 @@ export async function indentLatexFilesInDirectory(
 
   let indentedCount = 0;
 
-  async function walkDirectory(dirPath: string): Promise<void> {
-    const entries = await AbsoluteFS.readDir(dirPath);
+  // The tolerant listing is the facade's `readDir`: its provider typed each
+  // entry from the `readdir` dirent, so one entry whose type could not be read
+  // never cost the whole directory.
+  const walkDirectory = Effect.fn('latex.indentWalkDirectory')(function* (
+    dirPath: string,
+  ): Effect.fn.Return<
+    void,
+    PlatformError.PlatformError,
+    FileSystem.FileSystem | Path.Path
+  > {
+    const entries = yield* readDirectoryTypedTolerant(dirPath);
     for (const [name, type] of entries) {
       if (EXCLUDED_DIRS.has(name.toLowerCase()) || name.includes('Diffs')) {
         continue;
       }
 
       // Skip symlinks to avoid cycles; we have no realpath/visited guard.
-      if (isSymlink(type)) {
+      if (type === 'SymbolicLink') {
         continue;
       }
 
       const fullPath = path.join(dirPath, name);
 
-      if (isDirectory(type)) {
-        await walkDirectory(fullPath);
+      if (type === 'Directory') {
+        yield* walkDirectory(fullPath);
         continue;
       }
 
-      if (!isFile(type) || !hasExtension(name, '.tex')) {
+      if (type !== 'File' || !hasExtension(name, '.tex')) {
         continue;
       }
 
       progressCallback?.(`Indenting ${path.basename(fullPath)}...`, 0);
       log.debug(`Processing file: ${fullPath}`);
 
-      try {
-        if (await runFormatter(fullPath, workspaceRoot, config)) {
-          log.info(`Successfully formatted: ${fullPath}`);
-          indentedCount++;
-        } else {
-          log.error(`Failed to format ${fullPath}`);
-        }
-      } catch (err) {
-        log.error(`Error formatting file ${fullPath}: ${toErrorMessage(err)}`);
+      // Both formatters report a failed run as `false`, so a per-file
+      // recovery here would have nothing left to catch.
+      if (yield* runFormatter(fullPath, workspaceRoot, config)) {
+        log.info(`Successfully formatted: ${fullPath}`);
+        indentedCount++;
+      } else {
+        log.error(`Failed to format ${fullPath}`);
       }
     }
-  }
+  });
 
-  try {
-    const absoluteDirectory = path.isAbsolute(directory)
-      ? directory
-      : path.resolve(workspaceRoot ?? '.', directory);
-    await walkDirectory(absoluteDirectory);
+  const absoluteDirectory = path.isAbsolute(directory)
+    ? directory
+    : path.resolve(workspaceRoot ?? '.', directory);
 
-    log.info(`${indentedCount} .tex files have been formatted in ${directory}`);
-    return { status: 'formatted', directory, count: indentedCount };
-  } catch (err) {
-    log.error(`Error during indentation process: ${toErrorMessage(err)}`);
-    return { status: 'error', directory, count: 0, error: err };
-  }
-}
+  return yield* walkDirectory(absoluteDirectory).pipe(
+    Effect.map((): IndentLatexResult => {
+      log.info(
+        `${indentedCount} .tex files have been formatted in ${directory}`,
+      );
+      return { status: 'formatted', directory, count: indentedCount };
+    }),
+    Effect.catch((err) =>
+      Effect.sync<IndentLatexResult>(() => {
+        log.error(`Error during indentation process: ${toErrorMessage(err)}`);
+        return { status: 'error', directory, count: 0, error: err };
+      }),
+    ),
+  );
+});

@@ -18,8 +18,8 @@ import {
   type RunStorageFileLocation,
 } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { createRunStorageLocation } from '@utils/files/fileLocation';
+import { entryExists } from '@utils/files/fsEntryExists';
 import { RunFileService } from '@utils/files/runStorage';
 import { checkToolInstalled } from '@utils/system/toolUtils';
 import { readSettingFrom } from '@utils/config/platformSettings';
@@ -113,11 +113,12 @@ export class LatexDiffManager {
    */
   private ensureWorkspaceDependency(
     targetLocation: FileLocation | null | undefined,
-  ): Effect.Effect<void> {
+  ): Effect.Effect<void, never, FileSystem.FileSystem> {
     if (!targetLocation) return Effect.void;
     const dependencyPath = targetLocation.absolutePath;
     return Effect.gen({ self: this }, function* () {
-      const exists = yield* fsCall(() => AbsoluteFS.exists(dependencyPath));
+      const fs = yield* FileSystem.FileSystem;
+      const exists = yield* entryExists(fs, dependencyPath);
       if (!exists) return;
       yield* fsCall(() => this.fileService.mirrorWorkspaceFile(targetLocation));
     }).pipe(
@@ -204,9 +205,10 @@ export class LatexDiffManager {
         // nothing to diff against. Skip those pairs rather than gating the
         // whole call, so the between-round branch below still runs.
         const candidatePairs = collectPairs((entry) => entry.base);
+        const fs = yield* FileSystem.FileSystem;
         const baseExists = yield* Effect.forEach(
           candidatePairs,
-          ([, base]) => fsCall(() => AbsoluteFS.exists(base.absolutePath)),
+          ([, base]) => entryExists(fs, base.absolutePath),
           { concurrency: 'unbounded' },
         );
         const basePairs = candidatePairs.filter(
@@ -344,7 +346,7 @@ export class LatexDiffManager {
       base: FileLocation,
       revised: FileLocation,
       cwd: string,
-    ) => Effect.Effect<LaTeXdiffResult>;
+    ) => Effect.Effect<LaTeXdiffResult, never, FileSystem.FileSystem>;
     label: string;
     pdfStemSuffix: string;
     diffDirectory: DiffOutputDirectory;

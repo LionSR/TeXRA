@@ -518,9 +518,11 @@ export class AgentHandlers {
           customDir,
         });
 
-        const written = await writeTemplateAgentFile(
-          templatePlan,
-          path.join(this.ctx.extensionContext.extensionPath, 'resources'),
+        const written = await this.runtime.runPromise(
+          writeTemplateAgentFile(
+            templatePlan,
+            path.join(this.ctx.extensionContext.extensionPath, 'resources'),
+          ),
         );
         if (!written.ok) {
           await vscode.window.showWarningMessage(written.message);
