@@ -50,7 +50,7 @@ const logger = createChannelTrace('agentRunLifecycle');
 export interface RunFlowLifecycleOptions {
   /** The launching run: the parent edge on the handle; a child may park at WAITING. */
   parentRunId?: RunId;
-  onError?: (error: unknown, result: AgentFlowResult) => void | Promise<void>;
+  onError?: (error: unknown, result: AgentFlowResult) => void;
   /**
    * Fires once with the live per-run handle, right after it is tracked (F-2) —
    * the additive exposure of the control handle (`.trace`, `.result`, interrupt
@@ -113,7 +113,7 @@ interface FinalizeRunTerminalParams {
    * gets reports the same terminal fact as the `run.end` row. Guarded: a
    * throwing hook cannot abort finalization.
    */
-  readonly deliver?: (outcome: RunOutcome) => void | Promise<void>;
+  readonly deliver?: (outcome: RunOutcome) => void;
 }
 
 interface FinalizeRunTerminalResult {
@@ -252,8 +252,8 @@ export const finalizeRunTerminal = Effect.fn('finalizeRunTerminal')(function* (
   }
   if (params.deliver) {
     const deliver = params.deliver;
-    yield* Effect.tryPromise({
-      try: async () => deliver(outcome),
+    yield* Effect.try({
+      try: () => deliver(outcome),
       catch: ensureError,
     }).pipe(
       Effect.catch((deliveryError) =>
@@ -431,7 +431,7 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
       outcome: RunOutcome;
       error?: ResultEvent['error'];
       output?: RunEndOutput;
-      deliver?: (outcome: RunOutcome) => void | Promise<void>;
+      deliver?: (outcome: RunOutcome) => void;
     }) =>
       finalizeRunTerminal({
         session,

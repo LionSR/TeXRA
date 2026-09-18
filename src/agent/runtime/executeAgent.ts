@@ -377,10 +377,7 @@ export interface SubagentRunOptions {
    * the returned result and do not manufacture an error for this callback.
    * Distinct from host-level resume-plumbing error surfaces.
    */
-  onRunError?: (
-    error: unknown,
-    result: AgentFlowResult,
-  ) => void | Promise<void>;
+  onRunError?: (error: unknown, result: AgentFlowResult) => void;
   /** Fires once with the live per-run handle right after it is tracked (F-2). */
   onRun?: (handle: AgentRunHandle) => Effect.Effect<void, Error>;
 }

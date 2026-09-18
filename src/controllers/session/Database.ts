@@ -575,10 +575,7 @@ export const databaseLayer = (
             ),
           );
           for (const owner of owners) {
-            const verdict = yield* Effect.tryPromise({
-              try: () => proveOwnerLiveness(ownerIdentity(owner)),
-              catch: writeFailed,
-            });
+            const verdict = yield* proveOwnerLiveness(ownerIdentity(owner));
             if (
               verdict !== 'dead' &&
               !(mode === 'single' && verdict === 'unprovable')
@@ -1014,10 +1011,7 @@ export const databaseLayer = (
               return { ownerId: owner, liveness: 'self' as const };
             return {
               ownerId: owner,
-              liveness: yield* Effect.tryPromise({
-                try: () => proveOwnerLiveness(ownerIdentity(owner)),
-                catch: readFailed,
-              }),
+              liveness: yield* proveOwnerLiveness(ownerIdentity(owner)),
             };
           }),
         readInputBatch: (ids, fromCommit, checkedIds = ids) =>
@@ -1162,10 +1156,7 @@ export const databaseLayer = (
             );
             const owner = observed.owner;
             if (owner !== null && owner !== identity.ownerId) {
-              const verdict = yield* Effect.tryPromise({
-                try: () => proveOwnerLiveness(ownerIdentity(owner)),
-                catch: writeFailed,
-              });
+              const verdict = yield* proveOwnerLiveness(ownerIdentity(owner));
               if (verdict !== 'dead') {
                 return yield* Effect.fail(
                   writeFailed(
