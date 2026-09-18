@@ -194,9 +194,13 @@ export function createDesktopSettingsIpc(
     );
   }
 
+  // Every memory program runs over this project's storage view, built from
+  // the roots this window already holds.
   async function postMemoryData(): Promise<void> {
     options.postToRenderer(
-      await runtime.runPromise(memoryController.getMemoryDataMessage()),
+      await runtime.runPromise(
+        withSessionFs(roots, memoryController.getMemoryDataMessage()),
+      ),
     );
   }
 
@@ -206,9 +210,9 @@ export function createDesktopSettingsIpc(
    * `null` after prompting.
    */
   async function postMemoryMutation(
-    mutation: Effect.Effect<unknown>,
+    mutation: Effect.Effect<unknown, never, StorageFs>,
   ): Promise<void> {
-    const message = await runtime.runPromise(mutation);
+    const message = await runtime.runPromise(withSessionFs(roots, mutation));
     if (message != null) options.postToRenderer(message);
   }
 
@@ -219,7 +223,10 @@ export function createDesktopSettingsIpc(
    */
   async function postMemoryPreview(storagePath: string): Promise<void> {
     const previewed = await runtime.runPromise(
-      Effect.exit(memoryController.getMemoryPreviewMessage(storagePath)),
+      withSessionFs(
+        roots,
+        Effect.exit(memoryController.getMemoryPreviewMessage(storagePath)),
+      ),
     );
     if (Exit.isSuccess(previewed)) {
       options.postToRenderer(previewed.value);

@@ -2,7 +2,7 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect, FileSystem, Stream } from 'effect';
+import { Effect, type FileSystem, Option, Stream } from 'effect';
 import { z } from 'zod';
 
 // Local imports
@@ -10,13 +10,12 @@ import { Runs } from '@agent/runtime/runRegistry';
 import { ToolCall } from '@agent/runtime/ToolCall';
 import type { ToolServices } from '@agent/runtime/ToolServices';
 import { createLog } from '@logger/logUtils';
-import type { FileStat } from '@platform/interfaces';
 import { MEMORY_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
+import { StorageFs } from '@platform/rootedFs';
 import { ToolError, type RunId, type ToolResult } from '@shared/schemas';
 import { replaceLiteralMatches } from '@tools/fileEditFlow';
 import {
   deleteMemoryPath,
-  MemoryFileUnwritable,
   memoryPathExists,
   readMemoryFile,
   renameMemoryPath,
@@ -27,7 +26,6 @@ import {
 } from '@tools/memory/memoryFileSystem';
 import { executed } from '@tools/core/result';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { isDirectory } from '@utils/files/fsEntryType';
 import {
   formatBytes,
   formatRelativeTime,
@@ -60,23 +58,6 @@ import {
 } from './memoryMeta';
 
 const log = createLog('MemoryTool');
-
-/** Create a memory directory and its parents. */
-const ensureMemoryDir = Effect.fn('MemoryTool.ensureMemoryDir')(function* (
-  storagePath: string,
-  storageRoot: string,
-) {
-  const fs = yield* FileSystem.FileSystem;
-  // The call's own storage root, taken as data and joined here, so an
-  // absolute path never asks a rooted view for a later workspace root.
-  yield* fs
-    .makeDirectory(path.resolve(storageRoot, storagePath), { recursive: true })
-    .pipe(
-      Effect.mapError(
-        (cause) => new MemoryFileUnwritable({ storagePath, cause }),
-      ),
-    );
-});
 
 const MEMORY_PATH_DESCRIPTION = `Path under ${MEMORY_DISPLAY_ROOT} (e.g. ${MEMORY_DISPLAY_ROOT}/notes.md).`;
 
@@ -163,9 +144,8 @@ export type MemoryToolInput = z.infer<typeof MemoryToolInputSchema>;
 /** Canonical pair of display path (`/memories/...`) and storage path. */
 type MemoryLocation = { display: string; storage: string };
 
-/** Ambient facts captured at the tool invocation boundary. */
+/** The run facts a memory write is attributed to. */
 type MemoryInvocation = {
-  readonly storageRoot: string;
   readonly runId: RunId | undefined;
   readonly agentName: string | undefined;
 };
@@ -208,18 +188,12 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
       const runs = yield* Runs;
       const runId = call.run?.runId;
       const invocation = {
-        storageRoot: call.roots.storage,
         runId,
         agentName:
           runId === undefined ? undefined : runs.getHandle(runId)?.agentName,
       } satisfies MemoryInvocation;
       return yield* this.run(input, invocation);
-    }).pipe(
-      Effect.catchTags({
-        MemoryEntryUnreadable: (error) => Effect.die(error.cause),
-        MemoryFileUnwritable: (error) => Effect.die(error.cause),
-      }),
-    );
+    }).pipe(Effect.catchTag('PlatformError', (error) => Effect.die(error)));
   }
 
   private readonly run = Effect.fn('MemoryTool.run')(function* (
@@ -246,7 +220,6 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
         // fresh session is reliably a bare `view` with no path.
         return yield* this.view(
           yield* locate(input.path ?? MEMORY_DISPLAY_ROOT),
-          invocation,
           input.view_range ?? undefined,
           input.offset ?? 0,
           input.limit ?? 100,
@@ -276,17 +249,16 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
         );
       }
       case 'delete':
-        return yield* this.delete(yield* locate(input.path), invocation);
+        return yield* this.delete(yield* locate(input.path));
       case 'rename':
         return yield* this.rename(
           yield* locate(input.old_path),
           yield* locate(input.new_path),
-          invocation,
         );
       case 'pin':
-        return yield* this.pin(yield* locate(input.path), invocation);
+        return yield* this.pin(yield* locate(input.path));
       case 'unpin':
-        return yield* this.unpin(yield* locate(input.path), invocation);
+        return yield* this.unpin(yield* locate(input.path));
     }
   });
 
@@ -302,7 +274,6 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
         resolvedPath,
         content,
         createMeta(invocation.agentName, invocation.runId, existingMeta),
-        invocation.storageRoot,
       ),
   );
 
@@ -326,27 +297,20 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
    */
   private readonly requireEditableFile = Effect.fn(
     'MemoryTool.requireEditableFile',
-  )(function* (
-    resolvedPath: string,
-    inputPath: string,
-    invocation: MemoryInvocation,
-  ) {
+  )(function* (resolvedPath: string, inputPath: string) {
     const errorMsg = `The path ${inputPath} does not exist or is a directory.`;
-    const stats = yield* statMemoryEntry(
-      resolvedPath,
-      invocation.storageRoot,
-    ).pipe(
+    const stats = yield* statMemoryEntry(resolvedPath).pipe(
       // The collapse is deliberate, but the real error is kept on the
       // ToolError and named in the log, so a permission fault is not lost
       // behind "does not exist".
-      Effect.catchTag('MemoryEntryUnreadable', (error) => {
+      Effect.catch((error) => {
         log.warn(
-          `Memory entry ${inputPath} could not be read: ${toErrorMessage(error.cause)}`,
+          `Memory entry ${inputPath} could not be read: ${toErrorMessage(error)}`,
         );
-        return Effect.fail(new ToolError(errorMsg, { cause: error.cause }));
+        return Effect.fail(new ToolError(errorMsg, { cause: error }));
       }),
     );
-    if (isDirectory(stats.type)) {
+    if (stats.type === 'Directory') {
       return yield* Effect.fail(new ToolError(errorMsg));
     }
   });
@@ -354,16 +318,12 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
   private readonly view = Effect.fn('MemoryTool.view')(function* (
     this: MemoryTool,
     loc: MemoryLocation,
-    invocation: MemoryInvocation,
     viewRange?: [number, number],
     offset = 0,
     limit = 100,
   ) {
     const { display: inputPath, storage: resolvedPath } = loc;
-    const exists = yield* memoryPathExists(
-      resolvedPath,
-      invocation.storageRoot,
-    );
+    const exists = yield* memoryPathExists(resolvedPath);
 
     // Handle non-existent root directory gracefully - return empty listing
     // instead of error (consistent with MemoryViewMessageHandler behavior)
@@ -381,13 +341,9 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
       );
     }
 
-    const stats = yield* statMemoryEntry(resolvedPath, invocation.storageRoot);
-    if (isDirectory(stats.type)) {
-      const allEntries = yield* this.buildDirectoryListing(
-        resolvedPath,
-        stats,
-        invocation,
-      );
+    const stats = yield* statMemoryEntry(resolvedPath);
+    if (stats.type === 'Directory') {
+      const allEntries = yield* this.buildDirectoryListing(resolvedPath, stats);
       yield* recordToolFileRead(inputPath);
 
       const { page, start, end, total } = paginateToolListing(
@@ -403,10 +359,7 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
       );
     }
 
-    const { meta, content } = yield* readMemoryFile(
-      resolvedPath,
-      invocation.storageRoot,
-    );
+    const { meta, content } = yield* readMemoryFile(resolvedPath);
     yield* recordToolFileRead(inputPath);
     const lines = splitContentLines(content);
 
@@ -434,18 +387,20 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
     invocation: MemoryInvocation,
   ) {
     const { display: inputPath, storage: resolvedPath } = loc;
-    const exists = yield* memoryPathExists(
-      resolvedPath,
-      invocation.storageRoot,
-    );
+    const exists = yield* memoryPathExists(resolvedPath);
     if (exists) {
       return yield* Effect.fail(
         new ToolError(`File ${inputPath} already exists.`),
       );
     }
 
-    yield* ensureMemoryDir(MEMORY_STORAGE_DIR, invocation.storageRoot);
-    yield* ensureMemoryDir(path.dirname(resolvedPath), invocation.storageRoot);
+    // Relative to the session's storage root, which the view captured when
+    // its layer was built, so no path here names a root of its own.
+    const storageFs = yield* StorageFs;
+    yield* storageFs.makeDirectory(MEMORY_STORAGE_DIR, { recursive: true });
+    yield* storageFs.makeDirectory(path.dirname(resolvedPath), {
+      recursive: true,
+    });
     yield* this.writeAttributed(resolvedPath, fileText, invocation);
     yield* recordToolFileRead(inputPath);
 
@@ -471,15 +426,12 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
       );
     }
 
-    yield* this.requireEditableFile(resolvedPath, inputPath, invocation);
+    yield* this.requireEditableFile(resolvedPath, inputPath);
 
     const readGate = yield* this.requireViewBeforeModify(inputPath);
     if (readGate) return readGate;
 
-    const { content, meta } = yield* readMemoryFile(
-      resolvedPath,
-      invocation.storageRoot,
-    );
+    const { content, meta } = yield* readMemoryFile(resolvedPath);
     const replacement = replaceLiteralMatches({
       content,
       search: oldStr,
@@ -512,15 +464,12 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
     invocation: MemoryInvocation,
   ) {
     const { display: inputPath, storage: resolvedPath } = loc;
-    yield* this.requireEditableFile(resolvedPath, inputPath, invocation);
+    yield* this.requireEditableFile(resolvedPath, inputPath);
 
     const readGate = yield* this.requireViewBeforeModify(inputPath);
     if (readGate) return readGate;
 
-    const { content, meta } = yield* readMemoryFile(
-      resolvedPath,
-      invocation.storageRoot,
-    );
+    const { content, meta } = yield* readMemoryFile(resolvedPath);
     const lines = content.split('\n');
     const totalLines = lines.length;
     if (insertLine < 0 || insertLine > totalLines) {
@@ -555,13 +504,9 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
   private readonly delete = Effect.fn('MemoryTool.delete')(function* (
     this: MemoryTool,
     loc: MemoryLocation,
-    invocation: MemoryInvocation,
   ) {
     const { display: inputPath, storage: resolvedPath } = loc;
-    const exists = yield* memoryPathExists(
-      resolvedPath,
-      invocation.storageRoot,
-    );
+    const exists = yield* memoryPathExists(resolvedPath);
     if (!exists) {
       return yield* Effect.fail(
         new ToolError(`The path ${inputPath} does not exist.`),
@@ -571,7 +516,7 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
     const readGate = yield* this.requireViewBeforeModify(inputPath, 'deleting');
     if (readGate) return readGate;
 
-    yield* deleteMemoryPath(resolvedPath, invocation.storageRoot);
+    yield* deleteMemoryPath(resolvedPath);
     return executed(
       `Successfully deleted ${inputPath}`,
       `Deleted: ${inputPath}`,
@@ -582,15 +527,11 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
     this: MemoryTool,
     oldLoc: MemoryLocation,
     newLoc: MemoryLocation,
-    invocation: MemoryInvocation,
   ) {
     const { display: oldPathInput, storage: resolvedOldPath } = oldLoc;
     const { display: newPathInput, storage: resolvedNewPath } = newLoc;
 
-    const oldExists = yield* memoryPathExists(
-      resolvedOldPath,
-      invocation.storageRoot,
-    );
+    const oldExists = yield* memoryPathExists(resolvedOldPath);
     if (!oldExists) {
       return yield* Effect.fail(
         new ToolError(`The path ${oldPathInput} does not exist.`),
@@ -603,21 +544,14 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
     );
     if (readGate) return readGate;
 
-    const newExists = yield* memoryPathExists(
-      resolvedNewPath,
-      invocation.storageRoot,
-    );
+    const newExists = yield* memoryPathExists(resolvedNewPath);
     if (newExists) {
       return yield* Effect.fail(
         new ToolError(`The destination ${newPathInput} already exists.`),
       );
     }
 
-    yield* renameMemoryPath(
-      resolvedOldPath,
-      resolvedNewPath,
-      invocation.storageRoot,
-    );
+    yield* renameMemoryPath(resolvedOldPath, resolvedNewPath);
     return executed(
       `Successfully renamed ${oldPathInput} to ${newPathInput}`,
       `Renamed: ${oldPathInput} to ${newPathInput}`,
@@ -627,16 +561,11 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
   private readonly pin = Effect.fn('MemoryTool.pin')(function* (
     this: MemoryTool,
     loc: MemoryLocation,
-    invocation: MemoryInvocation,
   ) {
     const { display: inputPath, storage: resolvedPath } = loc;
-    yield* this.requireEditableFile(resolvedPath, inputPath, invocation);
+    yield* this.requireEditableFile(resolvedPath, inputPath);
 
-    const result = yield* setMemoryPinned(
-      resolvedPath,
-      true,
-      invocation.storageRoot,
-    );
+    const result = yield* setMemoryPinned(resolvedPath, true);
     if (result.status === 'already') {
       return executed(
         `The memory file ${inputPath} is already pinned.`,
@@ -660,16 +589,11 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
   private readonly unpin = Effect.fn('MemoryTool.unpin')(function* (
     this: MemoryTool,
     loc: MemoryLocation,
-    invocation: MemoryInvocation,
   ) {
     const { display: inputPath, storage: resolvedPath } = loc;
-    yield* this.requireEditableFile(resolvedPath, inputPath, invocation);
+    yield* this.requireEditableFile(resolvedPath, inputPath);
 
-    const result = yield* setMemoryPinned(
-      resolvedPath,
-      false,
-      invocation.storageRoot,
-    );
+    const result = yield* setMemoryPinned(resolvedPath, false);
     if (result.status === 'already') {
       return executed(
         `The memory file ${inputPath} is not pinned.`,
@@ -686,24 +610,20 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
   /** Rows for an already-stat'ed directory; `rootStats` is the caller's snapshot so the root row and the is-a-directory decision are one observation. */
   private readonly buildDirectoryListing = Effect.fn(
     'MemoryTool.buildDirectoryListing',
-  )(function* (
-    resolvedPath: string,
-    rootStats: FileStat,
-    invocation: MemoryInvocation,
-  ) {
+  )(function* (resolvedPath: string, rootStats: FileSystem.File.Info) {
     const entries = yield* Stream.runCollect(
-      walkMemoryDirectory(
-        resolvedPath,
-        '',
-        {
-          maxDepth: DIRECTORY_LISTING_DEPTH,
-          includeDirs: true,
-        },
-        invocation.storageRoot,
-      ),
+      walkMemoryDirectory(resolvedPath, '', {
+        maxDepth: DIRECTORY_LISTING_DEPTH,
+        includeDirs: true,
+      }),
     );
     return [
-      formatListingRow(resolvedPath, rootStats.size, rootStats.mtime, null),
+      formatListingRow(
+        resolvedPath,
+        Number(rootStats.size),
+        Option.getOrUndefined(rootStats.mtime)?.getTime() ?? 0,
+        null,
+      ),
       ...entries.map((entry) =>
         formatListingRow(
           entry.storagePath,

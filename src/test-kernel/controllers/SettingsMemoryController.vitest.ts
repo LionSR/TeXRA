@@ -13,9 +13,6 @@ const mocks = vi.hoisted(() => ({
   loadMemoryItems: vi.fn(),
   loadMemoryPreview: vi.fn(),
   setMemoryPinned: vi.fn(),
-  // The real StorageFS.delete resolves a promise; the controller now awaits
-  // it inside Effect.tryPromise, which needs a thenable back.
-  storageDelete: vi.fn(async () => undefined),
 }));
 
 vi.mock('@platform/defaults/workspaceStorage', () => ({
@@ -26,8 +23,8 @@ vi.mock('@tools/memory/memoryFileSystem', async (importOriginal) => {
   const actual =
     await importOriginal<typeof import('@tools/memory/memoryFileSystem')>();
   return {
-    // The tagged filesystem failures stay real: the controller constructs
-    // MemoryFileUnwritable around its own StorageFS.delete.
+    // `deleteMemoryPath` stays real: it is the call whose target path and
+    // options this suite pins, on the storage view provided below.
     ...actual,
     loadMemoryItems: mocks.loadMemoryItems,
     loadMemoryPreview: mocks.loadMemoryPreview,
@@ -35,15 +32,17 @@ vi.mock('@tools/memory/memoryFileSystem', async (importOriginal) => {
   };
 });
 
-vi.mock('@utils/files/storageFS', () => ({
-  StorageFS: {
-    delete: mocks.storageDelete,
-  },
-}));
-
 // Imported after vi.mock so the mocked dependencies are in place.
 import { SettingsMemoryController } from '@controllers/settingsView/SettingsMemoryController';
+import { StorageFs } from '@platform/rootedFs';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import type { RootedFileSystem } from '@utils/files/rootedFileSystem';
+
+/** The session's storage view, with the one operation this suite exercises. */
+const storageRemove = vi.fn(() => Effect.void);
+const storageFsStub = {
+  remove: storageRemove,
+} as unknown as RootedFileSystem;
 
 function createController(options?: {
   confirmResponses?: readonly boolean[];
@@ -77,8 +76,8 @@ describe('SettingsMemoryController', () => {
         }),
         null,
       );
-      assert.equal(mocks.storageDelete.mock.calls.length, 0);
-    }),
+      assert.equal(storageRemove.mock.calls.length, 0);
+    }).pipe(Effect.provideService(StorageFs, storageFsStub)),
   );
 
   it.effect('deletes confirmed memory files and returns refreshed data', () =>
@@ -91,12 +90,12 @@ describe('SettingsMemoryController', () => {
         displayPath: 'item.md',
       });
 
-      assert.deepEqual(mocks.storageDelete.mock.calls[0], [
+      assert.deepEqual(storageRemove.mock.calls[0], [
         'mem/item.md',
         { recursive: true },
       ]);
       assert.equal(message?.command, SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY);
-    }),
+    }).pipe(Effect.provideService(StorageFs, storageFsStub)),
   );
 
   it.effect(
@@ -110,6 +109,6 @@ describe('SettingsMemoryController', () => {
 
         assert.equal(yield* controller.setMemoryPinned('item.md', true), null);
         assert.equal(hosts.prompt.messages.at(-1)?.kind, 'warning');
-      }),
+      }).pipe(Effect.provideService(StorageFs, storageFsStub)),
   );
 });

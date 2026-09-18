@@ -9,6 +9,7 @@ import {
   runCliMemory,
 } from '@cli/runtime/memory';
 import type { ProcessRuntime } from '@platform/processRuntime';
+import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { MemoryViewItem } from '@shared/schemas';
 import { loadMemoryItems } from '@tools/memory/memoryFileSystem';
 
@@ -18,6 +19,11 @@ interface MemoryListFormProps {
   /** The process runtime the listing runs on, from the surface that
    *  registered this form. */
   readonly runtime: ProcessRuntime;
+  /** The roots the listing's storage view is built from. */
+  readonly roots: Pick<
+    WorkspaceRoots,
+    'workspace' | 'storage' | 'globalStorage'
+  >;
   readonly availableRows?: number;
   readonly onSelect: (storagePath: string) => void;
   readonly onClose: () => void;
@@ -29,10 +35,9 @@ export function MemoryListForm(props: MemoryListFormProps): React.JSX.Element {
       title="/memory"
       loadingLabel="Loading memories..."
       load={async () =>
-        (await runCliMemory(props.runtime, loadMemoryItems())).slice(
-          0,
-          CLI_MEMORY_LIST_LIMIT,
-        )
+        (
+          await runCliMemory(props.runtime, props.roots, loadMemoryItems())
+        ).slice(0, CLI_MEMORY_LIST_LIMIT)
       }
       items={(entries) =>
         entries.map((item) => ({

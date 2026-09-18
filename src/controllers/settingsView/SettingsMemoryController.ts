@@ -16,17 +16,6 @@ interface SettingsMemoryControllerDeps {
   prompt: Pick<PromptHost, 'confirm' | 'warning'>;
 }
 
-/**
- * Re-raise a memory-filesystem failure as the cause it wraps. The memory
- * path has no recovery above this point, so the host edge's `runPromise`
- * rejects with that instance rather than with a tagged wrapper nobody reads.
- */
-function raiseCause<A, E extends { readonly cause: unknown }, R>(
-  effect: Effect.Effect<A, E, R>,
-): Effect.Effect<A, never, R> {
-  return Effect.catch(effect, (error) => Effect.die(error.cause));
-}
-
 type SettingsMemoryMessage =
   | {
       command: typeof SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY;
@@ -43,7 +32,7 @@ export class SettingsMemoryController {
   readonly getMemoryDataMessage = Effect.fn(
     'SettingsMemoryController.getMemoryDataMessage',
   )(function* () {
-    const items = yield* raiseCause(loadMemoryItems());
+    const items = yield* Effect.orDie(loadMemoryItems());
     return {
       command: SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY,
       items,
@@ -54,7 +43,7 @@ export class SettingsMemoryController {
     'SettingsMemoryController.getMemoryPreviewMessage',
   )(function* (storagePath: string) {
     const resolvedPath = resolveMemoryStoragePath(storagePath);
-    const preview = yield* raiseCause(loadMemoryPreview(resolvedPath));
+    const preview = yield* Effect.orDie(loadMemoryPreview(resolvedPath));
     return {
       command: SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY_PREVIEW,
       preview,
@@ -77,7 +66,7 @@ export class SettingsMemoryController {
       input: { storagePath: string; displayPath: string },
     ) {
       // A declined delete is `false`, a value. `PromptFailed` is not matched
-      // here for the same reason `raiseCause` above re-raises: the memory tab
+      // here for the same reason the memory reads are `orDie`: the memory tab
       // has no recovery for a window that cannot show a dialog, so it reaches
       // the host edge as the host's own fault rather than as a silent no-op.
       const confirmed = yield* Effect.orDie(
@@ -89,7 +78,7 @@ export class SettingsMemoryController {
       if (!confirmed) return null;
 
       const storagePath = resolveMemoryStoragePath(input.storagePath);
-      yield* raiseCause(deleteMemoryPath(storagePath));
+      yield* Effect.orDie(deleteMemoryPath(storagePath));
       return yield* this.getMemoryDataMessage();
     },
   );
@@ -102,7 +91,7 @@ export class SettingsMemoryController {
     pinned: boolean,
   ) {
     const resolvedPath = resolveMemoryStoragePath(storagePath);
-    const result = yield* raiseCause(setMemoryPinned(resolvedPath, pinned));
+    const result = yield* Effect.orDie(setMemoryPinned(resolvedPath, pinned));
     if (result.status === 'cap-reached') {
       yield* Effect.orDie(
         this.deps.prompt.warning(

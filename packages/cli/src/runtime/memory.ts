@@ -2,12 +2,11 @@ import { Effect } from 'effect';
 
 import type { ProcessRuntime } from '@platform/processRuntime';
 import { resolveMemoryStoragePath } from '@platform/defaults/workspaceStorage';
+import { withSessionFs, type StorageFs } from '@platform/rootedFs';
+import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { MemoryViewItem } from '@shared/schemas';
 import { MEMORY_DISPLAY_ROOT } from '@tools/memory/constants';
-import {
-  loadMemoryPreview,
-  type MemoryEntryUnreadable,
-} from '@tools/memory/memoryFileSystem';
+import { loadMemoryPreview } from '@tools/memory/memoryFileSystem';
 import { displayToStoragePath, toDisplayPath } from '@tools/memory/memoryUtils';
 import { filterNotNullish, normalizeFilePath } from '@utils/core';
 import {
@@ -102,17 +101,17 @@ export const loadCliMemoryDetail = Effect.fn('cli.loadCliMemoryDetail')(
 /**
  * The CLI's run edge for a memory program (PRD run-edge category a): the
  * command action, the slash-command handler, and the list form each call
- * this once, on the runtime their surface already holds. An unreadable
- * memory ends the command with the error the filesystem raised, not with the
- * tagged wrapper — the CLI's error reporter prints that message.
+ * this once, on the runtime their surface already holds, over the storage
+ * view of the roots that surface holds — the root is chosen here rather than
+ * read inside the program. An unreadable memory ends the command with the
+ * error the filesystem raised; the CLI's error reporter prints that message.
  */
 export function runCliMemory<A>(
   runtime: ProcessRuntime,
-  program: Effect.Effect<A, MemoryEntryUnreadable>,
+  roots: Pick<WorkspaceRoots, 'workspace' | 'storage' | 'globalStorage'>,
+  program: Effect.Effect<A, unknown, StorageFs>,
 ): Promise<A> {
-  return runtime.runPromise(
-    Effect.catch(program, (error) => Effect.die(error.cause)),
-  );
+  return runtime.runPromise(withSessionFs(roots, Effect.orDie(program)));
 }
 
 export function formatCliMemoryPreview(detail: CliMemoryDetail): string {

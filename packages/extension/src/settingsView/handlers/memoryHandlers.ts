@@ -40,9 +40,15 @@ export class MemoryHandlers {
     private readonly session: SessionHandle,
   ) {}
 
+  /** Every memory program below runs over this session's storage view: the
+   *  root is chosen here, at the host edge, not read inside the read. */
+  private run<A, E>(program: Effect.Effect<A, E, StorageFs>): Promise<A> {
+    return this.runtime.runPromise(withSessionFs(this.session.roots, program));
+  }
+
   async sendMemoryData(webview: vscode.Webview): Promise<void> {
     await webview.postMessage(
-      await this.runtime.runPromise(this.memory.getMemoryDataMessage()),
+      await this.run(this.memory.getMemoryDataMessage()),
     );
   }
 
@@ -56,7 +62,7 @@ export class MemoryHandlers {
     data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.GET_MEMORY_PREVIEW>,
   ): Promise<void> {
     await this.ctx.withActiveWebview(async (webview) => {
-      const delivered = await this.runtime.runPromise(
+      const delivered = await this.run(
         Effect.exit(
           Effect.flatMap(
             this.memory.getMemoryPreviewMessage(data.storagePath),
@@ -92,12 +98,9 @@ export class MemoryHandlers {
       'Failed to open memory file',
       async () => {
         const resolvedPath = resolveMemoryStoragePath(data.storagePath);
-        const absolutePath = await this.runtime.runPromise(
-          withSessionFs(
-            this.session.roots,
-            Effect.flatMap(Effect.service(StorageFs), (storageFs) =>
-              storageFs.resolve(resolvedPath),
-            ),
+        const absolutePath = await this.run(
+          Effect.flatMap(Effect.service(StorageFs), (storageFs) =>
+            storageFs.resolve(resolvedPath),
           ),
         );
         const fileUri = vscode.Uri.file(absolutePath);
@@ -125,14 +128,11 @@ export class MemoryHandlers {
         const resolvedPath = resolveMemoryStoragePath();
         // One program over the session's storage view: create the folder and
         // hand back the same view's absolute path for it.
-        const absolutePath = await this.runtime.runPromise(
-          withSessionFs(
-            this.session.roots,
-            Effect.flatMap(Effect.service(StorageFs), (storageFs) =>
-              Effect.flatMap(
-                storageFs.makeDirectory(resolvedPath, { recursive: true }),
-                () => storageFs.resolve(resolvedPath),
-              ),
+        const absolutePath = await this.run(
+          Effect.flatMap(Effect.service(StorageFs), (storageFs) =>
+            Effect.flatMap(
+              storageFs.makeDirectory(resolvedPath, { recursive: true }),
+              () => storageFs.resolve(resolvedPath),
             ),
           ),
         );
@@ -148,7 +148,7 @@ export class MemoryHandlers {
   async handleDeleteMemory(
     data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.DELETE_MEMORY>,
   ): Promise<void> {
-    const posted = await this.runtime.runPromise(
+    const posted = await this.run(
       Effect.exit(
         Effect.flatMap(this.memory.deleteMemory(data), (message) =>
           message == null
@@ -178,7 +178,7 @@ export class MemoryHandlers {
       this.ctx,
       `Failed to ${pinned ? 'pin' : 'unpin'} memory`,
       async () => {
-        const message = await this.runtime.runPromise(
+        const message = await this.run(
           this.memory.setMemoryPinned(storagePath, pinned),
         );
         if (message != null) {

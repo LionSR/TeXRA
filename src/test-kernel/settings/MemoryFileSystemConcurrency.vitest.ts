@@ -1,26 +1,31 @@
 // Node imports
-import { Buffer } from 'node:buffer';
+import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import * as path from 'node:path';
-import { Readable } from 'node:stream';
 import { setTimeout as delay } from 'node:timers/promises';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect, Stream } from 'effect';
-import { afterEach, describe, expect, vi } from 'vitest';
+import { Effect, FileSystem, Path, Stream } from 'effect';
+import { afterEach, describe, expect } from 'vitest';
 
 // Local imports
-import { FileType, type FileStat } from '@platform/interfaces';
 import { MEMORY_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
+import { StorageFs } from '@platform/rootedFs';
 import {
   countPinnedMemories,
   walkMemoryDirectory,
 } from '@tools/memory/memoryFileSystem';
-import { StorageFS } from '@utils/files/storageFS';
+import {
+  rootedFileSystem,
+  type RootedFileSystem,
+} from '@utils/files/rootedFileSystem';
+
+import { nodePlatformLayer } from '../support/fsTestUtils';
 
 const MEMORY_LISTING_CONCURRENCY = 8;
 const FILE_COUNT_PER_DIRECTORY = 12;
-const TEST_TIMESTAMP = Date.parse('2026-01-01T00:00:00.000Z');
+
 function frontmatter(...extraFields: string[]): string {
   return [
     '---',
@@ -35,76 +40,72 @@ function frontmatter(...extraFields: string[]): string {
 const TEST_FRONTMATTER = frontmatter();
 const PINNED_FRONTMATTER = frontmatter('pinned: true');
 
-function memoryFiles(): [string, number][] {
-  return Array.from(
-    { length: FILE_COUNT_PER_DIRECTORY },
-    (_, index): [string, number] => [`note-${index}.md`, FileType.File],
-  );
+const roots: string[] = [];
+
+/** A temp storage root with an empty memory directory under it. */
+async function makeStorageRoot(): Promise<string> {
+  const root = await mkdtemp(path.join(tmpdir(), 'texra-memory-'));
+  roots.push(root);
+  await mkdir(path.join(root, MEMORY_STORAGE_DIR), { recursive: true });
+  return root;
 }
 
-function readStreamFromText(
-  text: string,
-): ReturnType<typeof StorageFS.createReadStream> {
-  return Readable.from([Buffer.from(text)]) as unknown as ReturnType<
-    typeof StorageFS.createReadStream
-  >;
-}
-
-function testFileStat(content: string): FileStat {
-  return {
-    type: FileType.File,
-    ctime: TEST_TIMESTAMP,
-    mtime: TEST_TIMESTAMP,
-    size: Buffer.byteLength(content),
-  };
-}
+/** The session's storage view over `root`, as `sessionFsLayer` builds it. */
+const storageViewOf = (root: string): Effect.Effect<RootedFileSystem> =>
+  Effect.gen(function* () {
+    return rootedFileSystem(
+      root,
+      yield* FileSystem.FileSystem,
+      yield* Path.Path,
+    );
+  }).pipe(Effect.provide(nodePlatformLayer));
 
 describe('memory filesystem listing', () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
+  afterEach(async () => {
+    await Promise.all(
+      roots.splice(0).map((root) => rm(root, { recursive: true, force: true })),
+    );
   });
 
   it.effect(
     'bounds metadata reads while walking large memory directories',
     () =>
       Effect.gen(function* () {
-        vi.spyOn(StorageFS, 'readDir').mockImplementation(async (target) => {
-          if (target === MEMORY_STORAGE_DIR) {
-            return [
-              ['alpha', FileType.Directory],
-              ['beta', FileType.Directory],
-            ];
+        const root = yield* Effect.promise(async () => {
+          const created = await makeStorageRoot();
+          for (const dir of ['alpha', 'beta']) {
+            await mkdir(path.join(created, MEMORY_STORAGE_DIR, dir));
+            for (let index = 0; index < FILE_COUNT_PER_DIRECTORY; index += 1) {
+              await writeFile(
+                path.join(created, MEMORY_STORAGE_DIR, dir, `note-${index}.md`),
+                TEST_FRONTMATTER,
+              );
+            }
           }
-          if (
-            target === path.join(MEMORY_STORAGE_DIR, 'alpha') ||
-            target === path.join(MEMORY_STORAGE_DIR, 'beta')
-          ) {
-            return memoryFiles();
-          }
-          throw new Error(`Unexpected readDir target: ${target}`);
+          return created;
         });
 
         let activeMetadataReads = 0;
         let maxActiveMetadataReads = 0;
-        vi.spyOn(StorageFS, 'stat').mockImplementation(async () => {
-          activeMetadataReads += 1;
-          maxActiveMetadataReads = Math.max(
-            maxActiveMetadataReads,
-            activeMetadataReads,
-          );
-
-          await delay(5);
-          activeMetadataReads -= 1;
-          return testFileStat(TEST_FRONTMATTER);
-        });
-
-        vi.spyOn(StorageFS, 'createReadStream').mockImplementation(() =>
-          readStreamFromText(TEST_FRONTMATTER),
-        );
+        const view = yield* storageViewOf(root);
+        const storageFs: RootedFileSystem = {
+          ...view,
+          stat: (target) =>
+            Effect.gen(function* () {
+              activeMetadataReads += 1;
+              maxActiveMetadataReads = Math.max(
+                maxActiveMetadataReads,
+                activeMetadataReads,
+              );
+              yield* Effect.promise(() => delay(5));
+              activeMetadataReads -= 1;
+              return yield* view.stat(target);
+            }),
+        };
 
         const items = yield* Stream.runCollect(
           walkMemoryDirectory(MEMORY_STORAGE_DIR),
-        );
+        ).pipe(Effect.provideService(StorageFs, storageFs));
 
         expect(items).toHaveLength(FILE_COUNT_PER_DIRECTORY * 2);
         expect(maxActiveMetadataReads).toBeGreaterThan(1);
@@ -118,48 +119,58 @@ describe('memory filesystem listing', () => {
     'stops metadata reads once the pinned-memory limit is reached',
     () =>
       Effect.gen(function* () {
-        const cyclePath = path.join(MEMORY_STORAGE_DIR, 'cycle');
-        const files: [string, number][] = [
-          ['cycle', FileType.Directory | FileType.SymbolicLink],
-          ...Array.from({ length: 100 }, (_, index): [string, number] => [
-            `pinned-${index}.md`,
-            FileType.File,
-          ]),
-        ];
-        vi.spyOn(StorageFS, 'exists').mockResolvedValue(true);
-        vi.spyOn(StorageFS, 'readDir').mockResolvedValue(files);
-        vi.spyOn(StorageFS, 'stat').mockImplementation(async (target) => {
-          if (target === cyclePath) {
-            throw new Error('The symlink cycle must not be statted');
+        const root = yield* Effect.promise(async () => {
+          const created = await makeStorageRoot();
+          const memoryDir = path.join(created, MEMORY_STORAGE_DIR);
+          // A symlink back onto the tree: the walk must never descend or stat
+          // it, since nothing here keeps a realpath/visited set.
+          await symlink(memoryDir, path.join(memoryDir, 'cycle'));
+          for (let index = 0; index < 100; index += 1) {
+            await writeFile(
+              path.join(memoryDir, `pinned-${index}.md`),
+              PINNED_FRONTMATTER,
+            );
           }
-          return testFileStat(PINNED_FRONTMATTER);
+          return created;
         });
-        const readStream = vi
-          .spyOn(StorageFS, 'createReadStream')
-          .mockImplementation(() => readStreamFromText(PINNED_FRONTMATTER));
 
-        expect(yield* countPinnedMemories(1)).toBe(1);
-        expect(readStream.mock.calls.length).toBeLessThan(files.length);
+        const cyclePath = path.join(MEMORY_STORAGE_DIR, 'cycle');
+        let headReads = 0;
+        const view = yield* storageViewOf(root);
+        const storageFs: RootedFileSystem = {
+          ...view,
+          stat: (target) =>
+            target === cyclePath
+              ? Effect.die(new Error('The symlink cycle must not be statted'))
+              : view.stat(target),
+          stream: (target, options) => {
+            headReads += 1;
+            return view.stream(target, options);
+          },
+        };
+
+        const pinned = yield* countPinnedMemories(1).pipe(
+          Effect.provideService(StorageFs, storageFs),
+        );
+
+        expect(pinned).toBe(1);
+        expect(headReads).toBeLessThan(100);
       }),
   );
 
   it.effect('fails the walk with the filesystem error itself', () =>
     Effect.gen(function* () {
-      const cause = Object.assign(
-        new Error('ENOENT: no such file or directory'),
-        {
-          code: 'ENOENT',
-        },
-      );
-      vi.spyOn(StorageFS, 'readDir').mockRejectedValue(cause);
+      const root = yield* Effect.promise(makeStorageRoot);
+      const storageFs = yield* storageViewOf(root);
 
       const failure = yield* Effect.flip(
-        Stream.runDrain(walkMemoryDirectory(MEMORY_STORAGE_DIR)),
-      );
+        Stream.runDrain(
+          walkMemoryDirectory(path.join(MEMORY_STORAGE_DIR, 'absent')),
+        ),
+      ).pipe(Effect.provideService(StorageFs, storageFs));
 
-      expect(failure._tag).toBe('MemoryEntryUnreadable');
-      expect(failure.cause).toBe(cause);
-      expect(failure.cause).toMatchObject({ code: 'ENOENT' });
+      expect(failure._tag).toBe('PlatformError');
+      expect(failure.reason._tag).toBe('NotFound');
     }),
   );
 });
