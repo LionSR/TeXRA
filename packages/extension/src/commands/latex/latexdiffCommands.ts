@@ -54,11 +54,6 @@ import { checkToolInstalled } from '@utils/system/toolUtils';
 
 const log = createLog(CHANNEL);
 
-// A single module-scope instance is intentional: it constructs before
-// `initPlatform()` runs, and reads the timeout per-diff via a thunk, so the
-// value is never frozen at construction time.
-const latexdiffService = new LaTeXdiffService(CHANNEL);
-
 type LatexdiffTool = 'latexdiff' | 'latexdiff-vc';
 
 /**
@@ -363,7 +358,7 @@ const handleLatexdiff = Effect.fnUntraced(function* (
       session,
       'latexdiff',
       (mathMarkup) =>
-        latexdiffService.runDiff(
+        new LaTeXdiffService(CHANNEL, session.roots).runDiff(
           pathToLocationIn(session.roots.workspace, fileToUse),
           pathToLocationIn(session.roots.workspace, editedFile),
           '_diff',
@@ -390,7 +385,7 @@ const handleLatexdiffvc = Effect.fnUntraced(function* (
       session,
       'latexdiff-vc',
       (mathMarkup) =>
-        latexdiffService.runDiffVc(
+        new LaTeXdiffService(CHANNEL, session.roots).runDiffVc(
           pathToLocationIn(session.roots.workspace, fileToUse),
           commitHash,
           mathMarkup,
@@ -490,7 +485,10 @@ const handleRunLatexdiff = Effect.fnUntraced(function* (
                   mathMarkup,
                   generateBetweenRoundDiffs,
                   runDiscovery: createLatexRunDiscovery(session),
-                  latexdiff: { channel: CHANNEL, service: latexdiffService },
+                  latexdiff: {
+                    channel: CHANNEL,
+                    service: new LaTeXdiffService(CHANNEL, session.roots),
+                  },
                   progress,
                 }),
               );

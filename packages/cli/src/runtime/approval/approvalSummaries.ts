@@ -206,7 +206,7 @@ export function formatBashApprovalSummary(payload: BashPermission): string {
 }
 
 function toolEditDiffLines(
-  request: Omit<ToolEditApprovalRequest, 'permission'>,
+  request: Omit<ToolEditApprovalRequest, 'permission' | 'roots'>,
 ): readonly string[] {
   const hunks = buildDiffHunks(
     request.originalContent,
@@ -234,7 +234,7 @@ function boundedToolEditDiffLines(
 }
 
 function toolEditApprovalSummary(
-  request: Omit<ToolEditApprovalRequest, 'permission'>,
+  request: Omit<ToolEditApprovalRequest, 'permission' | 'roots'>,
   diffLines: readonly string[],
 ): string {
   const header = `Tool edit requested by ${request.sourceTool}: ${request.path}`;
@@ -246,7 +246,7 @@ function toolEditApprovalSummary(
 }
 
 export function buildToolEditApprovalContent(
-  request: Omit<ToolEditApprovalRequest, 'permission'>,
+  request: Omit<ToolEditApprovalRequest, 'permission' | 'roots'>,
 ): CliApprovalContent {
   const diffLines = toolEditDiffLines(request);
   const boundedDiffLines = boundedToolEditDiffLines(diffLines);

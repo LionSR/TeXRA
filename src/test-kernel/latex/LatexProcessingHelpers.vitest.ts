@@ -71,7 +71,9 @@ afterEach(async () => {
 describe('DiffFileProcessor line formatting', () => {
   it('preserves package blank-line insertion order', () => {
     const processed = (
-      new DiffFileProcessor() as unknown as DiffFileProcessorInternals
+      new DiffFileProcessor(
+        workspaceRoots().config,
+      ) as unknown as DiffFileProcessorInternals
     ).processLineByLine(
       [
         '% !TEX root = main.tex',

@@ -81,9 +81,7 @@ export async function downloadArXivSource(
             progressCallback: (message, increment) =>
               progress.report({ message, increment }),
             workspaceRoot: session.roots.workspace ?? '',
-            formatter: autoIndent
-              ? resolveLatexFormatter(session.roots.config)
-              : null,
+            formatter: autoIndent ? resolveLatexFormatter(session.roots) : null,
             autoIndent,
             destination,
           }),

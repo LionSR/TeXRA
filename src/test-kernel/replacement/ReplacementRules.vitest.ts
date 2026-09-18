@@ -3,6 +3,8 @@
 
 import { strict as assert } from 'node:assert';
 import { describe, it } from 'vitest';
+import { workspaceRoots } from '@platform/workspaceRoots';
+import { readConfig } from '@utils/config/configUtils';
 import replacementEngine, {
   applyReplacements,
   NON_REGEX_CATEGORIES,
@@ -475,7 +477,9 @@ describe('personal style contextual replacements', () => {
       '$\\mathrm{Tr}$ and $\\mathrm{tr}$',
     ].join('\n');
 
-    const result = replacementEngine.applyAll(input);
+    const result = replacementEngine.applyAll(input, (key) =>
+      readConfig(workspaceRoots().config, key),
+    );
 
     const expected = [
       '\\newcommand{\\tr}{\\mathrm{Tr}}',

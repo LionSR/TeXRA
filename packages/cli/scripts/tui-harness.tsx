@@ -1349,6 +1349,7 @@ if (SHOW_EDIT_APPROVAL) {
     // below, so the harness holds that program and never runs it.
     const releaseStagedPreview = session().interactions.presentToolEdit({
       ...request,
+      roots: session().roots,
       permission,
     });
     requestHarnessApproval(

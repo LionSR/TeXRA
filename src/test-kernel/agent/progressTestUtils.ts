@@ -330,11 +330,12 @@ export function bashApprovalRequest(request: {
 
 /** A tool-edit request carrying the prompt the tool boundary prepares. */
 export function toolEditApprovalRequest(
-  request: Omit<ToolEditApprovalRequest, 'permission'>,
+  request: Omit<ToolEditApprovalRequest, 'permission' | 'roots'>,
   session: SessionHandle = sessionWithInteractions(undefined),
 ): ToolEditApprovalRequest {
   return {
     ...request,
+    roots: session.roots,
     permission: prepareToolEditApprovalPrompt(session, {
       requestId: `approval-${generateShortId()}`,
       request,

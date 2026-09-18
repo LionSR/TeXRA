@@ -45,7 +45,7 @@ export type IndentLatexResult =
  * relative `directory` resolves against the process cwd.
  * @param formatter The resolved formatter, or null when formatting is disabled.
  * The caller resolves it from its own workspace configuration
- * (`resolveLatexFormatter(roots.config)`), so this never reads the roots the
+ * (`resolveLatexFormatter(roots)`), so this never reads the roots the
  * calling fiber happens to carry.
  * @param directory The directory to process (relative to workspace). If not provided, uses the root.
  * @param progressCallback Optional callback for progress updates

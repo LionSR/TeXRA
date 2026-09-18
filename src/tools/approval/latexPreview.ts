@@ -20,7 +20,8 @@ import {
   LATEXDIFF_TEMP_FILE_LOCATIONS,
   type FileLocation,
 } from '@shared/schemas';
-import { readPlatformSetting } from '@utils/config/platformSettings';
+import type { WorkspaceRoots } from '@platform/workspaceRoots';
+import { readSettingFrom } from '@utils/config/platformSettings';
 import { generateShortId } from '@utils/core';
 import {
   createExternalLocation,
@@ -41,12 +42,13 @@ interface LatexPreviewDisplayOptions {
 /** Interface for entries that support LaTeX preview operations */
 export interface LatexPreviewEntry {
   /**
-   * The request this preview belongs to. `workspacePath` is the session root
-   * the temp files are placed under; these programs run outside the tool
-   * call, so it rides the request rather than being read from an ambient
+   * The request this preview belongs to. Its `roots` are the session's: the
+   * temp files are placed under that workspace and the diff reads its
+   * settings from those slots. These programs run outside the tool call, so
+   * the roots ride the request rather than being read from an ambient
    * workspace scope.
    */
-  request: { path: string; workspacePath?: string | undefined };
+  request: { path: string; roots: WorkspaceRoots };
   originalUri: { fsPath: string };
   proposedUri: { fsPath: string };
   originalContent: string;
@@ -71,8 +73,6 @@ const TEXRA_TEMP_DIR = '.texra-temp';
 const TEMP_ID_LENGTH = 8;
 /** The suffix latexdiff's output file carries after the proposed file's stem. */
 const DIFF_SUFFIX = '_diff';
-
-const latexdiffService = new LaTeXdiffService('ToolEditApproval');
 
 type PreviewFs = FileSystem.FileSystem;
 
@@ -205,14 +205,14 @@ const createTempFileWithCleanup = Effect.fn('createTempFileWithCleanup')(
     content: string,
     suffix: string,
   ): Effect.fn.Return<string, unknown, PreviewFs> {
-    const workspacePath = entry.request.workspacePath;
+    const workspacePath = entry.request.roots.workspace;
     if (!workspacePath) {
       return yield* Effect.fail(new Error('No workspace folder open'));
     }
 
-    const location = readPlatformSetting<
+    const location = readSettingFrom<
       (typeof LATEXDIFF_TEMP_FILE_LOCATIONS)[number]
-    >('texra.latexdiff.tempFileLocation');
+    >(entry.request.roots, 'texra.latexdiff.tempFileLocation');
 
     const originalPath = entry.request.path;
     const ext = path.extname(originalPath);
@@ -304,7 +304,7 @@ export const previewProposedLatex = (
       yield* Effect.tryPromise({
         try: () =>
           options.openBuildDisplay(
-            tempPathToLocation(entry.request.workspacePath, tempPath),
+            tempPathToLocation(entry.request.roots.workspace, tempPath),
             {
               preserveFocus: true,
             },
@@ -364,13 +364,16 @@ export const runLatexdiff = (
         ),
       );
 
-      const result = yield* latexdiffService.runDiff(
-        tempPathToLocation(entry.request.workspacePath, originalPath),
-        tempPathToLocation(entry.request.workspacePath, proposedPath),
+      const result = yield* new LaTeXdiffService(
+        'ToolEditApproval',
+        entry.request.roots,
+      ).runDiff(
+        tempPathToLocation(entry.request.roots.workspace, originalPath),
+        tempPathToLocation(entry.request.roots.workspace, proposedPath),
         DIFF_SUFFIX,
         'coarse',
         {
-          cwd: entry.request.workspacePath ?? outputDirectory,
+          cwd: entry.request.roots.workspace ?? outputDirectory,
           subtype: options.subtype,
           outputDirectory,
         },
@@ -384,7 +387,7 @@ export const runLatexdiff = (
       if (entry.isSettled()) return;
 
       const diffLocation = tempPathToLocation(
-        entry.request.workspacePath,
+        entry.request.roots.workspace,
         result.diffPath,
       );
       yield* Effect.tryPromise({

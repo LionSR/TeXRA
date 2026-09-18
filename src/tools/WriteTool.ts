@@ -12,6 +12,7 @@ import {
   applyApprovedFileEdit,
   resolveWritableTarget,
 } from '@tools/fileEditFlow';
+import { readConfig } from '@utils/config/configUtils';
 import { countLines } from '@utils/text/stringUtils';
 
 // Local file imports
@@ -33,6 +34,7 @@ const write = Effect.fn('WriteFileTool.execute')(function* (
   unknown,
   ToolCall | FileSystem.FileSystem | WorkspaceFs
 > {
+  const call = yield* ToolCall;
   const prepared = yield* resolveWritableTarget(input.path, {
     missing: 'allow',
   });
@@ -41,7 +43,9 @@ const write = Effect.fn('WriteFileTool.execute')(function* (
   }
   const { path, displayPath, exists, originalContent } = prepared.target;
   const proposedContent = isTexFile(path)
-    ? replacementEngine.applyFor(input.content, 'tex-write')
+    ? replacementEngine.applyFor(input.content, 'tex-write', (key) =>
+        readConfig(call.roots.config, key),
+      )
     : input.content;
 
   return yield* applyApprovedFileEdit({

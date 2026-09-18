@@ -206,7 +206,10 @@ export class DesktopProgressFileActions {
   }
 
   async runLatexdiffFile(baseFile: string, editedFile: string): Promise<void> {
-    const service = new LaTeXdiffService(DESKTOP_LATEXDIFF_CHANNEL);
+    const service = new LaTeXdiffService(
+      DESKTOP_LATEXDIFF_CHANNEL,
+      this.host.session.roots,
+    );
     const result = await this.host.runtime.runPromise(
       service.runDiff(
         pathToLocationIn(this.host.session.roots.workspace, baseFile),
@@ -267,7 +270,10 @@ export class DesktopProgressFileActions {
         runDiscovery: createLatexRunDiscovery(this.host.session),
         latexdiff: {
           channel: DESKTOP_LATEXDIFF_CHANNEL,
-          service: new LaTeXdiffService(DESKTOP_LATEXDIFF_CHANNEL),
+          service: new LaTeXdiffService(
+            DESKTOP_LATEXDIFF_CHANNEL,
+            this.host.session.roots,
+          ),
         },
         progress,
       }),
