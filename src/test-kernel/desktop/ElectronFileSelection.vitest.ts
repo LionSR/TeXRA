@@ -3,6 +3,7 @@ import { dirname, join } from 'node:path';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { ProcessRuntime } from '@platform/processRuntime';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
 type DesktopFileSelectionModule =
@@ -30,6 +31,9 @@ const BASE_FILE_OPTIONS = [
 describe('desktop file selection', () => {
   const tempDirs = useTempDirs();
   let workspacePath: string;
+  /** The runtime the listing and drop programs below settle on; installed by
+   *  `createFileSelection`, as the desktop window installs its own. */
+  let runtime: ProcessRuntime;
 
   beforeEach(async () => {
     workspacePath = await makeTempDir('texra-files-', tempDirs);
@@ -61,10 +65,10 @@ describe('desktop file selection', () => {
     // Read after the load: `loadDesktopFileSelection` resets the module
     // registry and installs a fresh process runtime.
     const { testRuntime } = await import('@test/support/testProcessRuntime');
+    runtime = testRuntime();
     return createDesktopFileSelection({
       workspacePath,
       showOpenFileDialog: vi.fn(async () => undefined),
-      runtime: testRuntime(),
       ...overrides,
     });
   }
@@ -72,7 +76,7 @@ describe('desktop file selection', () => {
   it('lists the base and edited candidates of the paper', async () => {
     const files = await createFileSelection();
 
-    const options = await files.fileOptions();
+    const options = await runtime.runPromise(files.fileOptions());
 
     expect(options.baseFile).toEqual(BASE_FILE_OPTIONS);
     expect(options.editedFile).toEqual(
@@ -87,7 +91,7 @@ describe('desktop file selection', () => {
   it('lists nothing without a workspace', async () => {
     const files = await createFileSelection({ workspacePath: undefined });
 
-    expect(await files.fileOptions()).toEqual({
+    expect(await runtime.runPromise(files.fileOptions())).toEqual({
       baseFile: [],
       editedFile: [],
       commit: ['HEAD'],
@@ -122,17 +126,21 @@ describe('desktop file selection', () => {
 
     expect(await files.pickFiles('context')).toBeNull();
     expect(
-      await files.attachDroppedFiles(
-        [
-          join(workspacePath, 'notes.md'),
-          join(workspacePath, 'sections'),
-          '/elsewhere/x.tex',
-        ],
-        'context',
+      await runtime.runPromise(
+        files.attachDroppedFiles(
+          [
+            join(workspacePath, 'notes.md'),
+            join(workspacePath, 'sections'),
+            '/elsewhere/x.tex',
+          ],
+          'context',
+        ),
       ),
     ).toEqual(['notes.md']);
     await expect(
-      files.attachDroppedFiles([join(workspacePath, 'sections')], 'input'),
+      runtime.runPromise(
+        files.attachDroppedFiles([join(workspacePath, 'sections')], 'input'),
+      ),
     ).rejects.toMatchObject({ _tag: 'Rejected' });
   });
 
@@ -141,7 +149,9 @@ describe('desktop file selection', () => {
     await symlink(loop, loop);
     const files = await createFileSelection();
 
-    expect((await files.fileOptions()).baseFile).toEqual(BASE_FILE_OPTIONS);
+    expect((await runtime.runPromise(files.fileOptions())).baseFile).toEqual(
+      BASE_FILE_OPTIONS,
+    );
   });
 
   it('rejects a listing of a missing workspace loudly', async () => {
@@ -149,6 +159,6 @@ describe('desktop file selection', () => {
       workspacePath: join(workspacePath, 'missing'),
     });
 
-    await expect(files.fileOptions()).rejects.toThrow();
+    await expect(runtime.runPromise(files.fileOptions())).rejects.toThrow();
   });
 });

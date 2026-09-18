@@ -112,7 +112,9 @@ interface DesktopHostRequestsOptions {
   postToRenderer(message: unknown): boolean | void;
   /** A host-initiated change to the surface (PRD 8.5). */
   postSurfaceAction(action: SurfaceActionMessage['action']): void;
-  signIn(): Promise<void>;
+  /** Start the browser sign-in. The failure is the sign-in's own; the arm
+   *  below names it for the request dialog. */
+  signIn(): Effect.Effect<void, unknown>;
   getCustomAgentDirectory(): Effect.Effect<
     string,
     AgentDirectoriesFailed,
@@ -125,7 +127,7 @@ interface DesktopHostRequestsOptions {
   >;
   openExternalUrl(url: string): Effect.Effect<void, PreviewUnavailable>;
   /** Re-probe the LaTeX toolchain. */
-  recheckTools(): Promise<void>;
+  recheckTools(): Effect.Effect<void, never, ProcessServices>;
   /** The process runtime this window was handed; every request arm below runs
    *  on it. */
   runtime: ProcessRuntime;
@@ -279,12 +281,10 @@ export function createDesktopHostRequests(
       // lifecycle callback, after the request has already completed.
       startRun: (request) => {
         runtime.runFork(
-          Effect.tryPromise({
-            try: () => run.runValidated(request),
-            catch: (error) => error,
-          }).pipe(
-            Effect.catch((error) =>
+          run.runValidated(request).pipe(
+            Effect.catchCause((cause) =>
               Effect.suspend(() => {
+                const error = Cause.squash(cause);
                 logger.error('Desktop merge run failed', {
                   data: toLogData(error),
                 });
@@ -829,9 +829,7 @@ export function createDesktopHostRequests(
           const { paths: dropped, category } = request;
           return {
             kind: 'files',
-            paths: yield* fromHost('files.attachDroppedFiles', () =>
-              options.files.attachDroppedFiles(dropped, category),
-            ),
+            paths: yield* options.files.attachDroppedFiles(dropped, category),
           };
         }
         case 'launch': {
@@ -841,7 +839,13 @@ export function createDesktopHostRequests(
             session.roots.workspaceState,
             session.roots.storage,
           );
-          yield* fromHost('run.runValidated', () => run.runValidated(launch));
+          yield* run
+            .runValidated(launch)
+            .pipe(
+              Effect.mapError((cause) =>
+                hostFailure('run.runValidated', cause),
+              ),
+            );
           return done;
         }
         case 'extractFigures':
@@ -875,13 +879,15 @@ export function createDesktopHostRequests(
           yield* agentConfigBanner(request);
           return done;
         case 'recheckDependencies':
-          yield* fromHost('recheckTools', () => options.recheckTools());
+          yield* options.recheckTools();
           return done;
         case 'openInstallGuide':
           postDesktopSettingsView(options.postToRenderer, 'tools');
           return done;
         case 'signIn':
-          yield* fromHost('signIn', () => options.signIn());
+          yield* options
+            .signIn()
+            .pipe(Effect.mapError((cause) => hostFailure('signIn', cause)));
           return done;
         case 'dismissBanner':
           yield* options.snapshot.dismissBanner(request.banner);

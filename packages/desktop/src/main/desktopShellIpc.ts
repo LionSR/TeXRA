@@ -66,7 +66,7 @@ interface DesktopShellActionFactoryOptions extends Pick<
   openLogFolder(): Effect.Effect<void, PreviewUnavailable>;
   openPath(filePath: string): Effect.Effect<void, PreviewUnavailable>;
   openWorkspaceFolder(): Promise<void>;
-  signIn(): Promise<void>;
+  signIn(): Effect.Effect<void, unknown>;
   onAsyncError: (error: unknown) => void;
   /** The process runtime the composition root built; every shell action's
    *  program is forked on it rather than on a bare `Effect.run*`. */
@@ -160,7 +160,7 @@ export function createDesktopShellActions(
   }
 
   return {
-    signIn: () => runShellAction(hostCall(() => options.signIn())),
+    signIn: () => runShellAction(onShellFailure(options.signIn())),
     openAgentDirectory,
     openDesktopDocs: () =>
       runShellAction(onShellFailure(options.openExternalUrl(DESKTOP_DOCS_URL))),

@@ -1,7 +1,7 @@
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { Effect, FileSystem } from 'effect';
+import { Effect, FileSystem, type PlatformError } from 'effect';
 
 import {
   getFileListConfig,
@@ -11,8 +11,8 @@ import { getIncludedExtensions } from '@common/files/fileTypeUtils';
 import { attachDroppedPaths } from '@controllers/mainView/MainViewDroppedFilesController';
 import { workspaceFileOptions } from '@controllers/session/workspaceFileOptions';
 import { relativeToRoot } from '@platform/defaults/nodeWorkspace';
-import type { ProcessRuntime } from '@platform/processRuntime';
 import type { DocumentFileType, FileOptions } from '@shared/schemas';
+import { Rejected } from '@shared/session/requestErrors';
 import { normalizeFilePath } from '@utils/core';
 
 interface DesktopFileSelectionDialogOptions {
@@ -28,9 +28,6 @@ interface DesktopFileSelectionOptions {
   showOpenFileDialog(
     options: DesktopFileSelectionDialogOptions,
   ): Promise<string[] | undefined>;
-  /** The process runtime the window was handed; the catalog listing and the
-   *  dropped-path probe below settle on it. */
-  runtime: ProcessRuntime;
 }
 
 /**
@@ -40,8 +37,14 @@ interface DesktopFileSelectionOptions {
  */
 export interface DesktopFileSelection {
   /** The launcher's single-slot catalogs: base candidates, edited
-   *  candidates, and the commit list's fixed head. */
-  fileOptions(): Promise<FileOptions>;
+   *  candidates, and the commit list's fixed head. The listing takes the
+   *  process `FileSystem` from context, as the snapshot port it answers
+   *  declares. */
+  fileOptions(): Effect.Effect<
+    FileOptions,
+    PlatformError.PlatformError,
+    FileSystem.FileSystem
+  >;
   /**
    * The native picker for one multi-file list. Resolves to the chosen
    * files, workspace-relative where they are inside the paper, or null when
@@ -54,12 +57,17 @@ export interface DesktopFileSelection {
   /**
    * Paths dropped onto the launcher: the regular files inside the paper
    * whose extension the target category admits, workspace-relative. The
-   * same plan the extension applies; a drop that attaches nothing rejects.
+   * same plan the extension applies; a drop that attaches nothing fails with
+   * the `Rejected` the request answers the surface with.
    */
   attachDroppedFiles(
     paths: readonly string[],
     category: DocumentFileType,
-  ): Promise<string[]>;
+  ): Effect.Effect<
+    string[],
+    PlatformError.PlatformError | Rejected,
+    FileSystem.FileSystem
+  >;
 }
 
 const DIALOG_TITLE_BY_FILE_TYPE: Record<ListableFileType, string> = {
@@ -115,8 +123,7 @@ export function createDesktopFileSelection(
 ): DesktopFileSelection {
   const { workspacePath } = options;
   return {
-    fileOptions: () =>
-      options.runtime.runPromise(workspaceFileOptions(workspacePath)),
+    fileOptions: () => workspaceFileOptions(workspacePath),
     async pickFiles(fileType, currentFile) {
       if (!workspacePath) return null;
       const listConfig = getFileListConfig(fileType);
@@ -142,18 +149,33 @@ export function createDesktopFileSelection(
         toWorkspaceRelative(workspacePath, file),
       );
     },
-    async attachDroppedFiles(paths, category) {
-      const resolved = workspacePath
-        ? await options.runtime.runPromise(
-            Effect.forEach(
-              paths,
-              (raw) => droppedWorkspaceFile(workspacePath, raw),
-              { concurrency: 'unbounded' },
-            ),
+    attachDroppedFiles(paths, category) {
+      const probed: Effect.Effect<
+        Array<string | null>,
+        PlatformError.PlatformError,
+        FileSystem.FileSystem
+      > = workspacePath
+        ? Effect.forEach(
+            paths,
+            (raw) => droppedWorkspaceFile(workspacePath, raw),
+            { concurrency: 'unbounded' },
           )
-        : paths.map(() => null);
-      return attachDroppedPaths(resolved, getIncludedExtensions(category))
-        .paths;
+        : Effect.succeed(paths.map(() => null));
+      return Effect.flatMap(probed, (resolved) =>
+        // The plan signals "nothing was attached" by throwing the `Rejected`
+        // the request answers with, so that refusal belongs on the failure
+        // channel; anything else it could throw stays a defect, as it was
+        // when this member answered with a promise.
+        Effect.try({
+          try: () =>
+            attachDroppedPaths(resolved, getIncludedExtensions(category)).paths,
+          catch: (cause) => cause,
+        }).pipe(
+          Effect.catch((cause) =>
+            cause instanceof Rejected ? Effect.fail(cause) : Effect.die(cause),
+          ),
+        ),
+      );
     },
   };
 }

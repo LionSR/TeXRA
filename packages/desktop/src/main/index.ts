@@ -730,11 +730,15 @@ function createWindow(options: {
     chooseDesktopOAuthProvider((messageBoxOptions) =>
       dialog.showMessageBox(window, messageBoxOptions),
     );
-  const signIn = async (): Promise<void> => {
-    const provider = await chooseOAuthProvider();
-    if (provider === undefined) return;
-    await desktopAuth.signIn(provider);
-  };
+  const signIn = (): Effect.Effect<void, unknown> =>
+    Effect.gen(function* () {
+      const provider = yield* Effect.tryPromise({
+        try: chooseOAuthProvider,
+        catch: (cause) => cause,
+      });
+      if (provider === undefined) return;
+      yield* desktopAuth.signIn(provider);
+    });
   const signInForRemoteAgentCatalog = () =>
     Effect.tryPromise({
       try: async () => {
@@ -961,7 +965,6 @@ function createWindow(options: {
     const files = createDesktopFileSelection({
       workspacePath: project.root,
       showOpenFileDialog: openFileDialog,
-      runtime,
     });
     // Both diff hosts are built once per window, which shows several open
     // projects at once; each project's Review pane is addressed by its own
@@ -985,15 +988,16 @@ function createWindow(options: {
       stores: project.session.roots,
       secrets: options.secrets,
       fileOptions: () =>
-        Effect.tryPromise({
-          try: () => files.fileOptions(),
-          catch: (cause) =>
-            new HostSnapshotReadFailed({
-              member: 'fileOptions',
-              message: 'The project file lists could not be read.',
-              cause,
-            }),
-        }),
+        files.fileOptions().pipe(
+          Effect.mapError(
+            (cause) =>
+              new HostSnapshotReadFailed({
+                member: 'fileOptions',
+                message: 'The project file lists could not be read.',
+                cause,
+              }),
+          ),
+        ),
       readRecentCommits: () =>
         Effect.tryPromise({
           try: () => recentCommitsOf(project),
@@ -1061,14 +1065,11 @@ function createWindow(options: {
       showFirstRunWalkthrough: () => shellActions.showFirstRunWalkthrough(),
       onboarding: requireOnboardingIpc(),
       openExternalUrl: requestPreviewHost.openExternal,
-      recheckTools: async () => {
-        await runtime.runPromise(
-          refreshToolAvailability({
-            workspaceRoot: project.roots.workspace,
-            config: project.roots.config,
-          }),
-        );
-      },
+      recheckTools: () =>
+        refreshToolAvailability({
+          workspaceRoot: project.roots.workspace,
+          config: project.roots.config,
+        }),
       logger: console,
     });
     const port = runtime.runSync(
@@ -1507,36 +1508,43 @@ function createWindow(options: {
       kickoffSetup: () =>
         Effect.gen(function* () {
           const setupSession = activeProject().session;
-          yield* Effect.tryPromise({
-            try: async () => {
-              // The project the user started setup in, taken before the first await:
-              // the run and its presentation belong to it even when the window
-              // moves to another project while the model resolves and agents load.
-              const binding = activeBinding();
-              if (!binding) {
-                throw new Error('Open a folder before running setup.');
-              }
-              const { buildDesktopSetupRunRequest } =
-                await import('@controllers/onboarding/setupLaunch');
-              const request = await runtime.runPromise(
-                buildDesktopSetupRunRequest(
-                  setupSession.roots,
-                  options.secrets,
+          // The project the user started setup in, taken before the first
+          // suspension: the run and its presentation belong to it even when
+          // the window moves to another project while the model resolves and
+          // agents load.
+          const binding = activeBinding();
+          // The window's services, so the model resolution, the agent load and
+          // the launch below are one program on this runtime's context rather
+          // than three nested runs behind a promise.
+          const context = yield* runtime.contextEffect;
+          yield* Effect.gen(function* () {
+            if (!binding) {
+              return yield* Effect.fail(
+                new Error('Open a folder before running setup.'),
+              );
+            }
+            const { buildDesktopSetupRunRequest } = yield* Effect.tryPromise({
+              try: () => import('@controllers/onboarding/setupLaunch'),
+              catch: (error) => error,
+            });
+            const request = yield* buildDesktopSetupRunRequest(
+              setupSession.roots,
+              options.secrets,
+            );
+            if (!request) {
+              return yield* Effect.fail(
+                new Error(
+                  'No model is available for your current credentials. Sign in with ChatGPT or add a provider or coding-plan API key in Models, then try setup again.',
                 ),
               );
-              if (!request) {
-                throw new Error(
-                  'No model is available for your current credentials. Sign in with ChatGPT or add a provider or coding-plan API key in Models, then try setup again.',
-                );
-              }
-              // Idempotent: joins the in-flight/initialized registry so a kickoff
-              // racing the startup `loadAgents()` cannot hit "Could not find agent:
-              // setup" (mirrors `setupAssistantCommand.launchSetupAssistant`).
-              await runtime.runPromise(loadAgents());
-              await binding.run.runValidated(request);
-            },
-            catch: (error) => error,
+            }
+            // Idempotent: joins the in-flight/initialized registry so a kickoff
+            // racing the startup `loadAgents()` cannot hit "Could not find agent:
+            // setup" (mirrors `setupAssistantCommand.launchSetupAssistant`).
+            yield* loadAgents();
+            yield* binding.run.runValidated(request);
           }).pipe(
+            Effect.provideContext(context),
             Effect.catch((error) =>
               Effect.gen(function* () {
                 if (error instanceof Cancelled) return;

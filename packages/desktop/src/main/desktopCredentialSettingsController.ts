@@ -115,7 +115,7 @@ interface DesktopCredentialSettingsControllerOptions extends SettingsStatePorts 
   };
   readonly notifications: MessageHost;
   readonly auth: {
-    signIn(): Promise<void>;
+    signIn(): Effect.Effect<void, unknown>;
     signOut(): Promise<void>;
   };
   readonly subscriptionUsage?: Pick<
@@ -291,7 +291,9 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
         }).pipe(Effect.orDie),
     });
     this.profileHandlers = {
-      signIn: () => options.auth.signIn(),
+      // The settings view's Sign in button is a host entry, so the sign-in
+      // program settles here.
+      signIn: () => options.runtime.runPromise(options.auth.signIn()),
       signOut: () => options.auth.signOut(),
       setProviderKey: (message) =>
         options.runtime.runPromise(
