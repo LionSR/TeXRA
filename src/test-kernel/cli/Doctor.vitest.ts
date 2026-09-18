@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 // Third-party imports
+import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { subset } from 'semver';
 import stripAnsi from 'strip-ansi';
@@ -99,20 +100,23 @@ type DoctorProbes = NonNullable<Parameters<typeof buildDoctorReport>[1]>;
 
 // A signed-in report on supported Node with no model available and a partially
 // installed LaTeX toolchain; tests override only the probes they care about.
+// The builder is a program, so this helper is where it is run.
 function buildReport(
   probes: Partial<DoctorProbes> = {},
   reportContext: CliContext = context,
 ): Promise<DoctorReport> {
-  return buildDoctorReport(reportContext, {
-    nodeVersion: '24.15.0',
-    authProfile: async () => ({ authenticated: true }),
-    modelAccessList: async () => [],
-    latexToolchain: async () => latexProbe,
-    pathStat: async () => directory,
-    pathAccess: async () => undefined,
-    usageLoggingOptOut: () => null,
-    ...probes,
-  });
+  return Effect.runPromise(
+    buildDoctorReport(reportContext, {
+      nodeVersion: '24.15.0',
+      authProfile: Effect.succeed({ authenticated: true }),
+      modelAccessList: Effect.succeed([]),
+      latexToolchain: Effect.succeed(latexProbe),
+      pathStat: () => Effect.succeed(directory),
+      pathAccess: () => Effect.void,
+      usageLoggingOptOut: () => null,
+      ...probes,
+    }),
+  );
 }
 
 // The same report with one available model and a fully installed LaTeX
@@ -124,8 +128,8 @@ function buildReadyReport(
   return buildReport(
     {
       authProfile,
-      modelAccessList: async () => availableModels,
-      latexToolchain: async () => allInstalledLatexProbe,
+      modelAccessList: Effect.succeed(availableModels),
+      latexToolchain: Effect.succeed(allInstalledLatexProbe),
     },
     reportContext,
   );
@@ -137,23 +141,6 @@ function checkById(
 ): DoctorReport['checks'][number] | undefined {
   return report.checks.find((check) => check.id === id);
 }
-
-const accountLabelCases: Array<{
-  profile: { authenticated: boolean; accountLabel: string };
-  expected: string;
-}> = [
-  {
-    profile: {
-      authenticated: true,
-      accountLabel: 'user@example.edu',
-    },
-    expected: 'Signed in as user@example.edu.',
-  },
-  {
-    profile: { authenticated: true, accountLabel: 'team@internal' },
-    expected: 'Signed in as team@internal.',
-  },
-];
 
 const colorCases: Array<{
   name: string;
@@ -189,7 +176,7 @@ describe('CLI doctor', () => {
   it('reports failed checks and exits nonzero', async () => {
     const report = await buildReport({
       nodeVersion: '20.1.0',
-      authProfile: async () => ({ authenticated: false }),
+      authProfile: Effect.succeed({ authenticated: false }),
     });
 
     expect(report.ok).toBe(false);
@@ -254,7 +241,7 @@ describe('CLI doctor', () => {
 
   it('reports loaded workspace config warnings', async () => {
     const report = await buildReadyReport(
-      async () => ({ authenticated: true }),
+      Effect.succeed({ authenticated: true }),
       {
         ...context,
         configWarnings: ['Ignoring invalid model.'],
@@ -303,19 +290,17 @@ describe('CLI doctor', () => {
   });
 
   it('falls back to unknown for an empty auth account label', async () => {
-    const report = await buildReadyReport(async () => ({
-      authenticated: true,
-      accountLabel: '',
-    }));
+    const report = await buildReadyReport(
+      Effect.succeed({ authenticated: true, accountLabel: '' }),
+    );
 
     expect(checkById(report, 'auth')?.message).toBe('Signed in as unknown.');
   });
 
   it('emits stable ndjson record kinds', async () => {
-    const report = await buildReadyReport(async () => ({
-      authenticated: true,
-      accountLabel: 'Ada',
-    }));
+    const report = await buildReadyReport(
+      Effect.succeed({ authenticated: true, accountLabel: 'Ada' }),
+    );
 
     const records = doctorNdjsonRecords(report, NDJSON_TS);
 

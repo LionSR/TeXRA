@@ -3,6 +3,7 @@ import { constants as fsConstants } from 'node:fs';
 import { access, stat } from 'node:fs/promises';
 
 // Third-party imports
+import { Data, Effect } from 'effect';
 import { satisfies as semverSatisfies } from 'semver';
 
 // Local imports
@@ -51,24 +52,46 @@ interface DirectoryStat {
   isDirectory(): boolean;
 }
 
+/**
+ * The failure of a probe this module drives itself: the two Node `fs` reads,
+ * the LaTeX toolchain probe and the telemetry consent read. It carries the
+ * value the foreign edge threw, so the check that recovers from it renders the
+ * same hint it rendered when it caught the rejection. The two probes the CLI
+ * root supplies are programs already and keep their own `Error` failure.
+ */
+class DoctorProbeFailed extends Data.TaggedError('DoctorProbeFailed')<{
+  readonly cause: unknown;
+}> {}
+
+const probeFailure = (cause: unknown): DoctorProbeFailed =>
+  new DoctorProbeFailed({ cause });
+
 interface DoctorDependencies {
   readonly nodeVersion?: string;
   /**
-   * The account read is an Effect, and only the CLI root holds a runtime to
-   * settle it on, so this is a probe the caller supplies rather than one this
-   * module defaults to — the same contract as `modelAccessList` below.
+   * The account read the CLI root hands over: the program itself, yielded by
+   * the auth check below rather than settled into a Promise first — the same
+   * contract as `modelAccessList`.
    */
-  readonly authProfile?: () => Promise<CliAuthProfile>;
+  readonly authProfile?: Effect.Effect<CliAuthProfile, Error>;
   /**
    * Model availability needs the process stores, which only the CLI root
    * holds, so this is the one probe the caller supplies rather than one this
    * module defaults to. It is absent exactly when platform init failed, and
    * `initError` then skips the model check that would read it.
    */
-  readonly modelAccessList?: () => Promise<readonly CliModelAccess[]>;
-  readonly latexToolchain?: () => Promise<LatexToolchainProbe>;
-  readonly pathStat?: (filePath: string) => Promise<DirectoryStat>;
-  readonly pathAccess?: (filePath: string, mode?: number) => Promise<void>;
+  readonly modelAccessList?: Effect.Effect<readonly CliModelAccess[], Error>;
+  readonly latexToolchain?: Effect.Effect<
+    LatexToolchainProbe,
+    DoctorProbeFailed
+  >;
+  readonly pathStat?: (
+    filePath: string,
+  ) => Effect.Effect<DirectoryStat, DoctorProbeFailed>;
+  readonly pathAccess?: (
+    filePath: string,
+    mode?: number,
+  ) => Effect.Effect<void, DoctorProbeFailed>;
   readonly usageLoggingOptOut?: () => UsageLoggingOptOut;
 }
 
@@ -170,167 +193,189 @@ function checkNode(version: string): DoctorCheck {
   );
 }
 
-async function checkDirectory(
+function checkDirectory(
   id: string,
   name: string,
   dir: string,
   deps: ResolvedDoctorDependencies,
-): Promise<DoctorCheck> {
-  try {
-    const info = await deps.pathStat(dir);
+): Effect.Effect<DoctorCheck> {
+  return Effect.gen(function* () {
+    const info = yield* deps.pathStat(dir);
     if (!info.isDirectory()) {
       return fail(id, name, `${dir} exists but is not a directory.`);
     }
-    await deps.pathAccess(dir, fsConstants.R_OK | fsConstants.W_OK);
+    yield* deps.pathAccess(dir, fsConstants.R_OK | fsConstants.W_OK);
     return pass(id, name, dir);
-  } catch (error) {
-    return failFromError(
-      id,
-      name,
-      `${dir} is not readable and writable.`,
-      error,
-    );
-  }
+  }).pipe(
+    Effect.catch((failure) =>
+      Effect.succeed(
+        failFromError(
+          id,
+          name,
+          `${dir} is not readable and writable.`,
+          failure.cause,
+        ),
+      ),
+    ),
+  );
 }
 
-async function checkAuth(
+function checkAuth(
   deps: ResolvedDoctorDependencies,
-): Promise<DoctorCheck> {
-  try {
-    const profile = await deps.authProfile();
-    if (profile.authenticated) {
-      const accountLabel = profile.accountLabel || 'unknown';
-      return pass(
-        'auth',
-        RESEARCHER_ACCESS.label,
-        `Signed in as ${accountLabel}.`,
-      );
-    }
-    if (profile.sessionState === 'transient') {
+): Effect.Effect<DoctorCheck> {
+  return deps.authProfile.pipe(
+    Effect.map((profile) => {
+      if (profile.authenticated) {
+        const accountLabel = profile.accountLabel || 'unknown';
+        return pass(
+          'auth',
+          RESEARCHER_ACCESS.label,
+          `Signed in as ${accountLabel}.`,
+        );
+      }
+      if (profile.sessionState === 'transient') {
+        return warn(
+          'auth',
+          RESEARCHER_ACCESS.label,
+          'The authentication service is temporarily unavailable.',
+          'Your stored session is intact; retry once the service is reachable rather than signing in again.',
+        );
+      }
       return warn(
         'auth',
         RESEARCHER_ACCESS.label,
-        'The authentication service is temporarily unavailable.',
-        'Your stored session is intact; retry once the service is reachable rather than signing in again.',
+        'Not signed in.',
+        'Run `texra login` for the hosted research-agent catalog, or add a provider API key with `texra setup`.',
       );
-    }
-    return warn(
-      'auth',
-      RESEARCHER_ACCESS.label,
-      'Not signed in.',
-      'Run `texra login` for the hosted research-agent catalog, or add a provider API key with `texra setup`.',
-    );
-  } catch (error) {
-    return failFromError(
-      'auth',
-      RESEARCHER_ACCESS.label,
-      `Could not read ${RESEARCHER_ACCESS.label} sign-in state.`,
-      error,
-    );
-  }
+    }),
+    Effect.catch((error) =>
+      Effect.succeed(
+        failFromError(
+          'auth',
+          RESEARCHER_ACCESS.label,
+          `Could not read ${RESEARCHER_ACCESS.label} sign-in state.`,
+          error,
+        ),
+      ),
+    ),
+  );
 }
 
-async function checkModels(
+function checkModels(
   deps: ResolvedDoctorDependencies,
-): Promise<DoctorCheck> {
-  try {
-    const models = await deps.modelAccessList();
-    const available = models.filter((entry) => entry.available);
-    if (available.length > 0) {
-      return pass(
+): Effect.Effect<DoctorCheck> {
+  return deps.modelAccessList.pipe(
+    Effect.map((models) => {
+      const available = models.filter((entry) => entry.available);
+      if (available.length > 0) {
+        return pass(
+          'models',
+          'Models',
+          `${formatResultCount(available.length, 'model')} available.`,
+        );
+      }
+      return fail(
         'models',
         'Models',
-        `${formatResultCount(available.length, 'model')} available.`,
+        'No model is currently available.',
+        'Run `texra models list --all` to inspect access, sign in with `texra login`, or add a provider API key with `texra setup`.',
       );
-    }
-    return fail(
-      'models',
-      'Models',
-      'No model is currently available.',
-      'Run `texra models list --all` to inspect access, sign in with `texra login`, or add a provider API key with `texra setup`.',
-    );
-  } catch (error) {
-    return failFromError(
-      'models',
-      'Models',
-      'Could not compute model availability.',
-      error,
-    );
-  }
-}
-
-async function checkLatex(
-  deps: ResolvedDoctorDependencies,
-): Promise<DoctorCheck[]> {
-  try {
-    const probe = await deps.latexToolchain();
-    const checks: DoctorCheck[] = [];
-    if (!probe.hasCompiler) {
-      checks.push(
-        fail(
-          'latex.compiler',
-          'LaTeX compiler',
-          'No supported LaTeX compiler was found on PATH.',
-          'Install latexmk or pdflatex.',
+    }),
+    Effect.catch((error) =>
+      Effect.succeed(
+        failFromError(
+          'models',
+          'Models',
+          'Could not compute model availability.',
+          error,
         ),
-      );
-    }
-    checks.push(
-      ...probe.tools.map((tool) => {
-        if (tool.installed) {
-          return pass(`latex.${tool.name}`, `LaTeX ${tool.name}`, tool.purpose);
-        }
-        const status = tool.required ? fail : warn;
-        return status(
-          `latex.${tool.name}`,
-          `LaTeX ${tool.name}`,
-          `${tool.name} was not found on PATH.`,
-          `Install ${tool.name} or a TeX distribution that provides it.`,
-        );
-      }),
-    );
-    return checks;
-  } catch (error) {
-    return [
-      failFromError(
-        'latex',
-        'LaTeX toolchain',
-        'Could not probe the LaTeX toolchain.',
-        error,
       ),
-    ];
-  }
+    ),
+  );
 }
 
-async function checkConfig(
+function checkLatex(
+  deps: ResolvedDoctorDependencies,
+): Effect.Effect<DoctorCheck[]> {
+  return deps.latexToolchain.pipe(
+    Effect.map((probe) => {
+      const checks: DoctorCheck[] = [];
+      if (!probe.hasCompiler) {
+        checks.push(
+          fail(
+            'latex.compiler',
+            'LaTeX compiler',
+            'No supported LaTeX compiler was found on PATH.',
+            'Install latexmk or pdflatex.',
+          ),
+        );
+      }
+      checks.push(
+        ...probe.tools.map((tool) => {
+          if (tool.installed) {
+            return pass(
+              `latex.${tool.name}`,
+              `LaTeX ${tool.name}`,
+              tool.purpose,
+            );
+          }
+          const status = tool.required ? fail : warn;
+          return status(
+            `latex.${tool.name}`,
+            `LaTeX ${tool.name}`,
+            `${tool.name} was not found on PATH.`,
+            `Install ${tool.name} or a TeX distribution that provides it.`,
+          );
+        }),
+      );
+      return checks;
+    }),
+    Effect.catch((failure) =>
+      Effect.succeed([
+        failFromError(
+          'latex',
+          'LaTeX toolchain',
+          'Could not probe the LaTeX toolchain.',
+          failure.cause,
+        ),
+      ]),
+    ),
+  );
+}
+
+function checkConfig(
   context: CliContext,
   deps: ResolvedDoctorDependencies,
-): Promise<DoctorCheck> {
+): Effect.Effect<DoctorCheck> {
   // The project file the config provider layers over the user file. Its
   // readability is asked here rather than carried on the context: the provider
   // answers with values, and this check is the one caller that needs the path.
   const filePath = workspaceTexraConfigPath(context.cwd);
-  const readable = await deps
-    .pathAccess(filePath, fsConstants.R_OK)
-    .then(() => true)
-    .catch(() => false);
-  if (context.configWarnings.length > 0) {
-    return warn(
-      'config',
-      'Config',
-      `Workspace config has warnings: ${filePath}`,
-      context.configWarnings.join(' '),
-    );
-  }
-  if (!readable) {
-    return skip(
-      'config',
-      'Config',
-      'No readable workspace CLI config file found.',
-      'Optional defaults may be placed in .texra/config.json.',
-    );
-  }
-  return pass('config', 'Config', `Workspace config: ${filePath}`);
+  return deps.pathAccess(filePath, fsConstants.R_OK).pipe(
+    Effect.as(true),
+    // The probe's answer, not a swallowed failure: an unreadable file is
+    // exactly the `skip` row below, and it is reported there.
+    Effect.catch(() => Effect.succeed(false)),
+    Effect.map((readable) => {
+      if (context.configWarnings.length > 0) {
+        return warn(
+          'config',
+          'Config',
+          `Workspace config has warnings: ${filePath}`,
+          context.configWarnings.join(' '),
+        );
+      }
+      if (!readable) {
+        return skip(
+          'config',
+          'Config',
+          'No readable workspace CLI config file found.',
+          'Optional defaults may be placed in .texra/config.json.',
+        );
+      }
+      return pass('config', 'Config', `Workspace config: ${filePath}`);
+    }),
+  );
 }
 
 /**
@@ -344,66 +389,92 @@ async function checkConfig(
 const USAGE_STILL_RECORDED_NOTE =
   'Rounds that used a subscription are still recorded, because they meter your plan.';
 
-function checkTelemetry(deps: ResolvedDoctorDependencies): DoctorCheck {
-  let optOut: UsageLoggingOptOut;
-  try {
-    optOut = deps.usageLoggingOptOut();
-  } catch (error) {
-    return failFromError(
-      'telemetry',
-      'Usage logging',
-      'Could not read the usage-logging setting.',
-      error,
-    );
-  }
-
-  if (optOut?.source === 'environment') {
-    return skip(
-      'telemetry',
-      'Usage logging',
-      `Off (${optOut.envVar} is set).`,
-      USAGE_STILL_RECORDED_NOTE,
-    );
-  }
-  if (optOut?.source === 'setting') {
-    return skip(
-      'telemetry',
-      'Usage logging',
-      `Off (${TELEMETRY_ENABLED_KEY}).`,
-      USAGE_STILL_RECORDED_NOTE,
-    );
-  }
-  return check(
-    'telemetry',
-    'Usage logging',
-    'pass',
-    'On: model, token counts, and cost per round, sent while signed in. No prompt or document text.',
-    `Turn it off with TEXRA_NO_TELEMETRY=1, or "${TELEMETRY_ENABLED_KEY}": false in .texra/config.json.`,
+function checkTelemetry(
+  deps: ResolvedDoctorDependencies,
+): Effect.Effect<DoctorCheck> {
+  return Effect.try({
+    try: (): UsageLoggingOptOut => deps.usageLoggingOptOut(),
+    catch: probeFailure,
+  }).pipe(
+    Effect.map((optOut) => {
+      if (optOut?.source === 'environment') {
+        return skip(
+          'telemetry',
+          'Usage logging',
+          `Off (${optOut.envVar} is set).`,
+          USAGE_STILL_RECORDED_NOTE,
+        );
+      }
+      if (optOut?.source === 'setting') {
+        return skip(
+          'telemetry',
+          'Usage logging',
+          `Off (${TELEMETRY_ENABLED_KEY}).`,
+          USAGE_STILL_RECORDED_NOTE,
+        );
+      }
+      return check(
+        'telemetry',
+        'Usage logging',
+        'pass',
+        'On: model, token counts, and cost per round, sent while signed in. No prompt or document text.',
+        `Turn it off with TEXRA_NO_TELEMETRY=1, or "${TELEMETRY_ENABLED_KEY}": false in .texra/config.json.`,
+      );
+    }),
+    Effect.catch((failure) =>
+      Effect.succeed(
+        failFromError(
+          'telemetry',
+          'Usage logging',
+          'Could not read the usage-logging setting.',
+          failure.cause,
+        ),
+      ),
+    ),
   );
 }
+
+/**
+ * The foreign edges this module drives itself, each wrapped exactly once: a
+ * rejection becomes a {@link DoctorProbeFailed} carrying what was thrown, and
+ * the check that recovers from it renders that value as its hint.
+ */
+const statPath = (
+  filePath: string,
+): Effect.Effect<DirectoryStat, DoctorProbeFailed> =>
+  Effect.tryPromise({ try: () => stat(filePath), catch: probeFailure });
+
+const accessPath = (
+  filePath: string,
+  mode?: number,
+): Effect.Effect<void, DoctorProbeFailed> =>
+  Effect.tryPromise({ try: () => access(filePath, mode), catch: probeFailure });
+
+const latexToolchainProbe: Effect.Effect<
+  LatexToolchainProbe,
+  DoctorProbeFailed
+> = Effect.tryPromise({ try: probeLatexToolchain, catch: probeFailure });
 
 /**
  * Stand-in for the one probe this module cannot build for itself. Unreachable:
  * the caller omits `modelAccessList` only when platform init failed, and that
  * sets `initError`, which skips the model check before it is ever called.
  */
-const missingModelAccessProbe = (): Promise<never> =>
-  Promise.reject(
-    new Error(
-      'Model availability needs the platform stores the CLI root holds; doctor was given neither a model probe nor a platform init error.',
-    ),
-  );
+const missingModelAccessProbe: Effect.Effect<never, Error> = Effect.fail(
+  new Error(
+    'Model availability needs the platform stores the CLI root holds; doctor was given neither a model probe nor a platform init error.',
+  ),
+);
 
 /**
- * Same contract for the account read: the CLI root settles the auth profile
- * on the runtime it holds, or reports a platform init error.
+ * Same contract for the account read: the CLI root hands over the account
+ * program, or reports a platform init error.
  */
-const missingAuthProfileProbe = (): Promise<never> =>
-  Promise.reject(
-    new Error(
-      'The account check needs the process runtime the CLI root holds; doctor was given neither an auth probe nor a platform init error.',
-    ),
-  );
+const missingAuthProfileProbe: Effect.Effect<never, Error> = Effect.fail(
+  new Error(
+    'The account check needs the process runtime the CLI root holds; doctor was given neither an auth probe nor a platform init error.',
+  ),
+);
 
 /**
  * Same contract for the telemetry consent read: the CLI root passes the
@@ -415,56 +486,58 @@ const missingUsageLoggingOptOut = (): never => {
   );
 };
 
-export async function buildDoctorReport(
+export function buildDoctorReport(
   context: CliContext,
   deps: DoctorDependencies = {},
-  initError?: unknown,
-): Promise<DoctorReport> {
+  initError?: Error,
+): Effect.Effect<DoctorReport> {
   const resolved = {
     nodeVersion: deps.nodeVersion ?? process.versions.node,
     authProfile: deps.authProfile ?? missingAuthProfileProbe,
     modelAccessList: deps.modelAccessList ?? missingModelAccessProbe,
-    latexToolchain: deps.latexToolchain ?? probeLatexToolchain,
-    pathStat: deps.pathStat ?? stat,
-    pathAccess: deps.pathAccess ?? access,
+    latexToolchain: deps.latexToolchain ?? latexToolchainProbe,
+    pathStat: deps.pathStat ?? statPath,
+    pathAccess: deps.pathAccess ?? accessPath,
     usageLoggingOptOut: deps.usageLoggingOptOut ?? missingUsageLoggingOptOut,
   };
-  // A platform-init failure takes out every dependency-based check
-  // (auth/models/telemetry), so surface it once here rather than as N
-  // unrelated-looking failures. The checks that do not need the platform
-  // (node, workspace, resources, LaTeX, config) still run.
-  const sessionDependentChecks =
-    initError == null
-      ? [
-          await checkAuth(resolved),
-          await checkModels(resolved),
-          checkTelemetry(resolved),
-        ]
-      : [
-          failFromError(
-            'platform',
-            'Platform init',
-            'Could not initialize the TeXRA platform.',
-            initError,
-          ),
-        ];
-  const checks: DoctorCheck[] = [
-    checkNode(resolved.nodeVersion),
-    await checkDirectory('workspace', 'Workspace', context.cwd, resolved),
-    await checkDirectory(
-      'resources',
-      'Packaged resources',
-      context.resourcesPath,
-      resolved,
-    ),
-    ...sessionDependentChecks,
-    ...(await checkLatex(resolved)),
-    await checkConfig(context, resolved),
-  ];
-  return {
-    ok: !checks.some((check) => check.status === 'fail'),
-    checks,
-  };
+  return Effect.gen(function* () {
+    // A platform-init failure takes out every dependency-based check
+    // (auth/models/telemetry), so surface it once here rather than as N
+    // unrelated-looking failures. The checks that do not need the platform
+    // (node, workspace, resources, LaTeX, config) still run.
+    const sessionDependentChecks =
+      initError == null
+        ? [
+            yield* checkAuth(resolved),
+            yield* checkModels(resolved),
+            yield* checkTelemetry(resolved),
+          ]
+        : [
+            failFromError(
+              'platform',
+              'Platform init',
+              'Could not initialize the TeXRA platform.',
+              initError,
+            ),
+          ];
+    const checks: DoctorCheck[] = [
+      checkNode(resolved.nodeVersion),
+      yield* checkDirectory('workspace', 'Workspace', context.cwd, resolved),
+      yield* checkDirectory(
+        'resources',
+        'Packaged resources',
+        context.resourcesPath,
+        resolved,
+      ),
+      ...sessionDependentChecks,
+      ...(yield* checkLatex(resolved)),
+      yield* checkConfig(context, resolved),
+    ];
+    return {
+      ok: !checks.some((check) => check.status === 'fail'),
+      checks,
+    };
+  });
 }
 
 export function doctorExitCode(report: DoctorReport): number {
