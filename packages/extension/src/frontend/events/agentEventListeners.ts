@@ -41,14 +41,18 @@ function handleRequestOpenFile(
   runtime: ProcessRuntime,
   payload: RequestOpenFilePayload,
 ): Promise<boolean> {
-  return openBuildDisplayIfTex(session, payload.location, runtime, {
-    preserveFocus: payload.preserveFocus,
-  }).catch((err) => {
-    log.warn(
-      `Failed to open file ${payload.location.absolutePath}: ${toErrorMessage(err)}`,
-    );
-    return false;
-  });
+  return runtime
+    .runPromise(
+      openBuildDisplayIfTex(session, payload.location, {
+        preserveFocus: payload.preserveFocus,
+      }),
+    )
+    .catch((err) => {
+      log.warn(
+        `Failed to open file ${payload.location.absolutePath}: ${toErrorMessage(err)}`,
+      );
+      return false;
+    });
 }
 
 /**

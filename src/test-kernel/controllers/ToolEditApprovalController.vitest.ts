@@ -2,7 +2,7 @@
 import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
-import { Effect, type FileSystem } from 'effect';
+import { Effect, Exit, type FileSystem, type Path } from 'effect';
 import pDefer, { type DeferredPromise } from 'p-defer';
 import { describe, expect, it, onTestFinished, vi } from 'vitest';
 
@@ -29,7 +29,7 @@ const RUN = RunIdSchema.parse('ab12cd');
 
 /** The controller's verbs are Effects; this is the host wiring point's run. */
 function run<A, E>(
-  program: Effect.Effect<A, E, FileSystem.FileSystem>,
+  program: Effect.Effect<A, E, FileSystem.FileSystem | Path.Path>,
 ): Promise<A> {
   return testRuntime().runPromise(program);
 }
@@ -112,7 +112,7 @@ function createTestHost() {
         return Effect.promise(() => staging.promise).pipe(Effect.as(preview));
       },
       revealApprovalSurface: () => Effect.void,
-      openBuildDisplay: async () => {},
+      openBuildDisplay: (() => Effect.void) as BuildDisplayFn,
       reportError: vi.fn(),
       decide: vi.fn(() => Effect.void),
     },
@@ -277,10 +277,21 @@ describe('tool edit approval controller', () => {
     const controller = createController(testHost.host);
     const events: string[] = [];
     const builds: DeferredPromise<void>[] = [];
+    // The host build is a program now, and its own settlement is what a
+    // release waits for, so the event it records belongs inside it.
     const openBuildDisplay = vi.fn(() => {
       const build = pDefer<void>();
       builds.push(build);
-      return build.promise;
+      return Effect.tryPromise({
+        try: () => build.promise,
+        catch: (error) => error,
+      }).pipe(
+        Effect.onExit((exit) =>
+          Effect.sync(() => {
+            events.push(Exit.isSuccess(exit) ? 'build-done' : 'build-failed');
+          }),
+        ),
+      );
     });
     testHost.host.openBuildDisplay = openBuildDisplay;
     testHost.preview.dispose.mockImplementation(() =>
@@ -298,16 +309,21 @@ describe('tool edit approval controller', () => {
         options: { openBuildDisplay: BuildDisplayFn },
       ) => {
         latexPreview.injectedOptions.push(options);
-        return Effect.sync(() => {
+        return Effect.gen(function* () {
           entry.workspaceTempCleanup.push(
             Effect.sync(() => {
               events.push('temp-cleanup');
             }),
           );
-          const build = options.openBuildDisplay(diffLocation);
-          void build.then(
-            () => events.push('build-done'),
-            () => events.push('build-failed'),
+          // Started and left running, which is what the real program's settle
+          // race produces: the fiber that yielded the display is interrupted
+          // and the host build keeps going with nobody holding it. A failed
+          // build is reported by the program that started it, so it is
+          // absorbed here rather than escaping the display program.
+          yield* Effect.forkDetach(
+            options
+              .openBuildDisplay(diffLocation)
+              .pipe(Effect.catchCause(() => Effect.void)),
           );
         });
       },
@@ -344,7 +360,7 @@ describe('tool edit approval controller', () => {
 
     // A settle stops admission: the callback the program already holds opens
     // no second build for a request nobody is looking at.
-    await latexPreview.injectedOptions[0].openBuildDisplay(diffLocation);
+    await run(latexPreview.injectedOptions[0].openBuildDisplay(diffLocation));
     expect(openBuildDisplay).toHaveBeenCalledOnce();
 
     // A build that fails settles too, so a release joins that one as well

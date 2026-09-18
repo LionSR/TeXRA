@@ -9,7 +9,7 @@
 
 import path from 'node:path';
 
-import { Cause, Deferred, Effect, FileSystem } from 'effect';
+import { Cause, Deferred, Effect, FileSystem, type Path } from 'effect';
 import { sync as globSync } from 'glob';
 
 import { TEMP_EXTENSIONS } from '@housekeeping/constants';
@@ -30,10 +30,15 @@ import {
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { isStrictlyWithin } from '@utils/core/pathCore';
 
+/**
+ * The host's build-and-show display, as the program it is: the preview
+ * programs below yield it, and the approval controller forks it so a build
+ * outlives the preview whose settle race interrupts it.
+ */
 export type BuildDisplayFn = (
   location: FileLocation,
   options?: { preserveFocus?: boolean },
-) => Promise<void>;
+) => Effect.Effect<void, unknown, PreviewServices>;
 
 interface LatexPreviewDisplayOptions {
   openBuildDisplay: BuildDisplayFn;
@@ -74,13 +79,18 @@ const TEMP_ID_LENGTH = 8;
 /** The suffix latexdiff's output file carries after the proposed file's stem. */
 const DIFF_SUFFIX = '_diff';
 
-type PreviewFs = FileSystem.FileSystem;
+/**
+ * What the preview programs and the host build they call take from the
+ * runtime a host runs them on: the temp files this module stages, and the
+ * workspace-rooted compile a build display runs behind them.
+ */
+type PreviewServices = FileSystem.FileSystem | Path.Path;
 
 /** Silently attempt to delete a file or directory, ignoring errors */
 const silentDelete = (
   targetPath: string,
   kind: 'file' | 'dir',
-): Effect.Effect<void, never, PreviewFs> =>
+): Effect.Effect<void, never, FileSystem.FileSystem> =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     // What `BaseFS.delete` reached on the process provider: a non-directory
@@ -102,7 +112,7 @@ const silentDelete = (
 /** Delete a file and the LaTeX auxiliary files built beside it */
 const deleteWithAuxFiles = (
   filePath: string,
-): Effect.Effect<void, never, PreviewFs> =>
+): Effect.Effect<void, never, FileSystem.FileSystem> =>
   Effect.suspend(() => {
     const ext = path.extname(filePath);
     // An extensionless file (extname returns '') has no suffix to strip:
@@ -125,8 +135,8 @@ const deleteWithAuxFiles = (
 /** Register cleanup with the entry, or run it now if the entry already settled */
 const registerCleanup = (
   entry: LatexPreviewEntry,
-  cleanup: Effect.Effect<void, never, PreviewFs>,
-): Effect.Effect<void, never, PreviewFs> =>
+  cleanup: Effect.Effect<void, never, FileSystem.FileSystem>,
+): Effect.Effect<void, never, FileSystem.FileSystem> =>
   Effect.suspend(() => {
     if (entry.isSettled()) return cleanup;
     entry.workspaceTempCleanup.push(cleanup);
@@ -140,8 +150,8 @@ const registerCleanup = (
 const withLatexOperation = (
   entry: LatexPreviewEntry,
   operationName: string,
-  operation: Effect.Effect<void, unknown, PreviewFs>,
-): Effect.Effect<void, never, PreviewFs> =>
+  operation: Effect.Effect<void, unknown, PreviewServices>,
+): Effect.Effect<void, never, PreviewServices> =>
   Effect.suspend(() => {
     if (entry.latexOperationInProgress) return Effect.void;
     entry.latexOperationInProgress = true;
@@ -173,7 +183,7 @@ const withLatexOperation = (
 const readFileWithFallback = (
   uri: { fsPath: string },
   fallback: string,
-): Effect.Effect<string, never, PreviewFs> =>
+): Effect.Effect<string, never, PreviewServices> =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     // `BaseFS.readBytes` returned the raw bytes: no line-ending normalization
@@ -204,7 +214,7 @@ const createTempFileWithCleanup = Effect.fn('createTempFileWithCleanup')(
     entry: LatexPreviewEntry,
     content: string,
     suffix: string,
-  ): Effect.fn.Return<string, unknown, PreviewFs> {
+  ): Effect.fn.Return<string, unknown, PreviewServices> {
     const workspacePath = entry.request.roots.workspace;
     if (!workspacePath) {
       return yield* Effect.fail(new Error('No workspace folder open'));
@@ -284,7 +294,7 @@ function tempPathToLocation(
 export const previewProposedLatex = (
   entry: LatexPreviewEntry,
   options: LatexPreviewDisplayOptions,
-): Effect.Effect<void, never, PreviewFs> =>
+): Effect.Effect<void, never, PreviewServices> =>
   withLatexOperation(
     entry,
     'Preview',
@@ -301,16 +311,10 @@ export const previewProposedLatex = (
 
       if (entry.isSettled()) return;
 
-      yield* Effect.tryPromise({
-        try: () =>
-          options.openBuildDisplay(
-            tempPathToLocation(entry.request.roots.workspace, tempPath),
-            {
-              preserveFocus: true,
-            },
-          ),
-        catch: (error) => error,
-      });
+      yield* options.openBuildDisplay(
+        tempPathToLocation(entry.request.roots.workspace, tempPath),
+        { preserveFocus: true },
+      );
     }),
   );
 
@@ -325,7 +329,7 @@ interface LatexdiffOptions extends LatexPreviewDisplayOptions {
 export const runLatexdiff = (
   entry: LatexPreviewEntry,
   options: LatexdiffOptions,
-): Effect.Effect<void, never, PreviewFs> =>
+): Effect.Effect<void, never, PreviewServices> =>
   withLatexOperation(
     entry,
     'LaTeXdiff',
@@ -390,10 +394,6 @@ export const runLatexdiff = (
         entry.request.roots.workspace,
         result.diffPath,
       );
-      yield* Effect.tryPromise({
-        try: () =>
-          options.openBuildDisplay(diffLocation, { preserveFocus: true }),
-        catch: (error) => error,
-      });
+      yield* options.openBuildDisplay(diffLocation, { preserveFocus: true });
     }),
   );

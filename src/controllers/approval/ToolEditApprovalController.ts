@@ -28,7 +28,15 @@
  */
 
 // Third-party imports
-import { Cause, Deferred, Effect, Exit, type FileSystem } from 'effect';
+import {
+  Cause,
+  Deferred,
+  Effect,
+  Exit,
+  Fiber,
+  type FileSystem,
+  type Path,
+} from 'effect';
 
 // Local imports
 import { isLatexFile } from '@common/files/fileTypeUtils';
@@ -52,12 +60,13 @@ import { normalizeLineEndings } from '@utils/text/stringUtils';
 const log = createLog('ToolEditApproval');
 
 /**
- * The one service the programs this controller composes take from the
- * runtime a host runs them on: the LaTeX preview programs read and write the
- * temp files they stage. Every method here carries it, so a host provides it
- * once, at its run.
+ * The services the programs this controller composes take from the runtime a
+ * host runs them on: the LaTeX preview programs read and write the temp files
+ * they stage, and the host build they call compiles against the session's
+ * roots. Every method here carries them, so a host provides them once, at its
+ * run.
  */
-type PreviewFs = FileSystem.FileSystem;
+type PreviewServices = FileSystem.FileSystem | Path.Path;
 
 /** The host view of one staged request, live until the request is decided. */
 export interface ToolEditPreview {
@@ -90,7 +99,7 @@ export interface ToolEditPreviewContext {
    * runs this on a fiber of its own, where its view framework handed it a
    * plain callback.
    */
-  discard(): Effect.Effect<void, never, PreviewFs>;
+  discard(): Effect.Effect<void, never, PreviewServices>;
 }
 
 export interface ToolEditApprovalHost {
@@ -108,9 +117,9 @@ export interface ToolEditApprovalHost {
    */
   revealApprovalSurface?(): Effect.Effect<void, unknown>;
   /**
-   * The host's build display, still a promise: it is the face the LaTeX
-   * preview programs call, and the raw handle a release holds once a preview
-   * program's settle race has interrupted the fiber that started a build.
+   * The host's build display: the program the LaTeX preview programs yield,
+   * forked below so a release still holds a handle on it once a preview
+   * program's settle race has interrupted the fiber that started it.
    */
   readonly openBuildDisplay: BuildDisplayFn;
   reportError(message: string): void;
@@ -210,7 +219,7 @@ export class ToolEditApprovalController {
   /** Release a staged preview when its request is decided, by any surface. */
   handleSessionEvent(
     event: SessionEvent,
-  ): Effect.Effect<void, never, PreviewFs> {
+  ): Effect.Effect<void, never, PreviewServices> {
     return Effect.suspend(() =>
       event.type === 'request.decided'
         ? this.detach(this.startRelease(event.requestId))
@@ -225,7 +234,7 @@ export class ToolEditApprovalController {
    */
   present(
     request: ToolEditApprovalRequest,
-  ): Effect.Effect<void, unknown, PreviewFs> {
+  ): Effect.Effect<void, unknown, PreviewServices> {
     return Effect.suspend(() => {
       if (this.disposed) {
         return Effect.fail(
@@ -268,7 +277,7 @@ export class ToolEditApprovalController {
     requestId: string;
     action: ToolEditApprovalAction;
     feedback?: string;
-  }): Effect.Effect<void, never, PreviewFs> {
+  }): Effect.Effect<void, never, PreviewServices> {
     return Effect.suspend(() => {
       const entry = this.requests.get(payload.requestId);
       if (!entry) return Effect.void;
@@ -330,7 +339,7 @@ export class ToolEditApprovalController {
 
   /** Drop every staged preview. The requests stay pending in the fold: the
    *  runs that opened them close them with the fibers waiting on them. */
-  dispose(): Effect.Effect<void, never, PreviewFs> {
+  dispose(): Effect.Effect<void, never, PreviewServices> {
     return Effect.suspend(() => {
       if (this.disposed) return Effect.void;
       this.disposed = true;
@@ -358,7 +367,7 @@ export class ToolEditApprovalController {
    * releases for one request, which {@link dispose} and that host call
    * produce together, all settle on the one cleanup in flight.
    */
-  release(requestId: string): Effect.Effect<void, never, PreviewFs> {
+  release(requestId: string): Effect.Effect<void, never, PreviewServices> {
     return Effect.suspend(() => this.startRelease(requestId));
   }
 
@@ -374,7 +383,7 @@ export class ToolEditApprovalController {
   private stage(
     request: ToolEditApprovalRequest,
     initialization: InitializingToolEditApproval,
-  ): Effect.Effect<void, unknown, PreviewFs> {
+  ): Effect.Effect<void, unknown, PreviewServices> {
     const { requestId, relativePath } = request.permission;
     return this.options.host
       .stagePreview(request, {
@@ -446,7 +455,9 @@ export class ToolEditApprovalController {
     return !this.requests.has(requestId);
   }
 
-  private discard(requestId: string): Effect.Effect<void, never, PreviewFs> {
+  private discard(
+    requestId: string,
+  ): Effect.Effect<void, never, PreviewServices> {
     return Effect.suspend(() => {
       const state = this.requests.get(requestId);
       if (state?.phase === 'initializing') {
@@ -480,7 +491,7 @@ export class ToolEditApprovalController {
   private decideFromPayload(
     entry: InitializingToolEditApproval,
     decision: RequestDecision,
-  ): Effect.Effect<void, never, PreviewFs> {
+  ): Effect.Effect<void, never, PreviewServices> {
     const { request } = entry;
     const { requestId } = request.permission;
     this.requests.delete(requestId);
@@ -536,7 +547,7 @@ export class ToolEditApprovalController {
    */
   private startRelease(
     requestId: string,
-  ): Effect.Effect<void, never, PreviewFs> {
+  ): Effect.Effect<void, never, PreviewServices> {
     // A release already in flight for this request is doing exactly this
     // work, on the entry it has already dropped: join it, rather than read
     // an empty map and report the preview gone while it is still going.
@@ -579,7 +590,7 @@ export class ToolEditApprovalController {
   private cleanup(
     requestId: string,
     entry: ToolEditApprovalState,
-  ): Effect.Effect<void, never, PreviewFs> {
+  ): Effect.Effect<void, never, PreviewServices> {
     const { host } = this.options;
     return Effect.gen(function* () {
       const staging = yield* Deferred.await(entry.inFlight);
@@ -632,8 +643,8 @@ export class ToolEditApprovalController {
    */
   private admit(
     entry: PendingToolEditApproval,
-    action: () => Effect.Effect<void, unknown, PreviewFs>,
-  ): Effect.Effect<void, never, PreviewFs> {
+    action: () => Effect.Effect<void, unknown, PreviewServices>,
+  ): Effect.Effect<void, never, PreviewServices> {
     const settled = Deferred.makeUnsafe<void>();
     const join = Deferred.await(settled);
     entry.inFlightActions.add(join);
@@ -666,48 +677,51 @@ export class ToolEditApprovalController {
    * it, and a release joins it through the entry, never through this fork.
    */
   private detach(
-    program: Effect.Effect<void, never, PreviewFs>,
-  ): Effect.Effect<void, never, PreviewFs> {
+    program: Effect.Effect<void, never, PreviewServices>,
+  ): Effect.Effect<void, never, PreviewServices> {
     return Effect.forkDetach(program).pipe(Effect.asVoid);
   }
 
   /**
-   * The display callback the preview programs get for one entry. It refuses
-   * to start a build for a request that already settled, and it registers
-   * the host's raw build promise while the build runs: the program's settle
-   * race interrupts its own fiber and resolves, leaving the host build
-   * running with no handle on it, and this promise is what {@link release}
-   * joins so the build is not still reading the temp files it deletes.
+   * The display program the preview programs get for one entry. It refuses to
+   * start a build for a request that already settled, and it runs the host's
+   * build on a fiber of its own: the program's settle race interrupts the
+   * fiber that yielded this one, which must not take the build down with it,
+   * and the join registered here is what {@link release} waits on so the
+   * build is not still reading the temp files it deletes.
    */
   private buildDisplayFor(entry: PendingToolEditApproval): BuildDisplayFn {
-    return (location, options) => {
-      // The program's own settled check and this call are separate steps, so
-      // a settle can land between them: refuse to start work for a request
-      // nobody is looking at.
-      if (entry.isSettled()) return Promise.resolve();
+    return (location, options) =>
+      Effect.suspend(() => {
+        // The program's own settled check and this call are separate steps, so
+        // a settle can land between them: refuse to start work for a request
+        // nobody is looking at.
+        if (entry.isSettled()) return Effect.void;
 
-      const build = this.options.host.openBuildDisplay(location, options);
-      // The raw promise as a join that settles when it does, either way: a
-      // failed build is reported by the program that started it, and this set
-      // is ordering, not a second error channel.
-      const join = Effect.exit(
-        Effect.tryPromise({ try: () => build, catch: (error) => error }),
-      ).pipe(Effect.asVoid);
-      entry.inFlightActions.add(join);
-      // Withdraw on either outcome. A handler on both sides rather than
-      // `finally`, which would re-throw a failed build's rejection into a
-      // promise nobody awaits.
-      const withdraw = (): void => {
-        entry.inFlightActions.delete(join);
-      };
-      void build.then(withdraw, withdraw);
-      return build;
-    };
+        // Registered before the fork, in this same step, and withdrawn from
+        // the build's own exit rather than from the caller's: an interrupted
+        // caller leaves the build running, which is exactly what a release
+        // still has to wait for. A join never fails — a failed build is
+        // reported by the program that started it.
+        const settled = Deferred.makeUnsafe<void>();
+        const join = Deferred.await(settled);
+        entry.inFlightActions.add(join);
+        return Effect.forkDetach(
+          this.options.host.openBuildDisplay(location, options).pipe(
+            Effect.onExit(() =>
+              Effect.sync(() => {
+                entry.inFlightActions.delete(join);
+                Deferred.doneUnsafe(settled, Effect.void);
+              }),
+            ),
+          ),
+        ).pipe(Effect.flatMap(Fiber.join));
+      });
   }
 
   private previewProposed(
     entry: PendingToolEditApproval,
-  ): Effect.Effect<void, unknown, PreviewFs> {
+  ): Effect.Effect<void, unknown, PreviewServices> {
     return Effect.suspend(() =>
       isLatexFile(entry.request.path)
         ? previewProposedLatex(entry, {
@@ -719,7 +733,7 @@ export class ToolEditApprovalController {
 
   private approve(
     entry: PendingToolEditApproval,
-  ): Effect.Effect<void, unknown, PreviewFs> {
+  ): Effect.Effect<void, unknown, PreviewServices> {
     return entry.preview.readProposedContent().pipe(
       Effect.matchCauseEffect({
         onFailure: (cause) =>

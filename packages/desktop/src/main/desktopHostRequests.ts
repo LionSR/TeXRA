@@ -180,20 +180,20 @@ export function createDesktopHostRequests(
    *  other rejection is tagged with the member it came from. `message` is the
    *  rejection's own text and `cause` the value it was thrown with, so the
    *  fold below and the bridge's log read exactly what `await` handed over. */
+  const hostFailure = (
+    member: string,
+    cause: unknown,
+  ): HostCallFailed | RequestRefusal =>
+    isRequestRefusal(cause)
+      ? cause
+      : new HostCallFailed({ member, message: toErrorMessage(cause), cause });
   const fromHost = <A>(
     member: string,
     call: () => Promise<A>,
   ): Effect.Effect<A, HostCallFailed | RequestRefusal> =>
     Effect.tryPromise({
       try: call,
-      catch: (cause) =>
-        isRequestRefusal(cause)
-          ? cause
-          : new HostCallFailed({
-              member,
-              message: toErrorMessage(cause),
-              cause,
-            }),
+      catch: (cause) => hostFailure(member, cause),
     });
   // Shared controllers propagate request failures to the dispatcher: the
   // notice IS the refusal the request answers with, and the request rethrows
@@ -588,9 +588,13 @@ export function createDesktopHostRequests(
         if (!result.success) {
           return yield* Effect.fail(new Rejected({ reason: result.message }));
         }
-        yield* fromHost('host.openBuildDisplay', () =>
-          host.openBuildDisplay(createExternalLocation(result.diffPath)),
-        );
+        yield* host
+          .openBuildDisplay(createExternalLocation(result.diffPath))
+          .pipe(
+            Effect.catch((cause) =>
+              Effect.fail(hostFailure('host.openBuildDisplay', cause)),
+            ),
+          );
         return;
       }
       const packed = yield* Effect.provide(

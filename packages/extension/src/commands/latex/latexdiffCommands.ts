@@ -148,7 +148,6 @@ interface OpenedLatexdiffResult {
 const openLatexdiffResult = Effect.fnUntraced(function* (
   session: SessionHandle,
   diffFilePath: string,
-  runtime: ProcessRuntime,
   options: { scheduleViewer?: boolean } = {},
 ) {
   const diffLocation = pathToLocationIn(session.roots.workspace, diffFilePath);
@@ -169,13 +168,9 @@ const openLatexdiffResult = Effect.fnUntraced(function* (
   // the command's report. The caller decides whether to schedule a viewer
   // from `viewerReady`; a generated path alone is not enough when external
   // compilation failed (#10553).
-  const viewerReady = yield* Effect.tryPromise({
-    try: () =>
-      prepareBuildDisplay(session, diffLocation, runtime, {
-        preserveFocus: true,
-        scheduleViewer: options.scheduleViewer,
-      }),
-    catch: ensureError,
+  const viewerReady = yield* prepareBuildDisplay(session, diffLocation, {
+    preserveFocus: true,
+    scheduleViewer: options.scheduleViewer,
   });
   return { diffLocation, viewerReady } satisfies OpenedLatexdiffResult;
 });
@@ -228,7 +223,6 @@ const restorePreparedViewerTarget = (
 const prepareLatexdiffResultsAndScheduleViewer = Effect.fnUntraced(function* (
   session: SessionHandle,
   results: readonly DiffRunResult[],
-  runtime: ProcessRuntime,
 ) {
   let lastViewerLocation: FileLocation | undefined;
   let lastProcessedLocation: FileLocation | undefined;
@@ -239,12 +233,9 @@ const prepareLatexdiffResultsAndScheduleViewer = Effect.fnUntraced(function* (
       const suffix = result.description ? ` (${result.description})` : '';
 
       if (result.success) {
-        const opened = yield* openLatexdiffResult(
-          session,
-          result.diffPath,
-          runtime,
-          { scheduleViewer: false },
-        );
+        const opened = yield* openLatexdiffResult(session, result.diffPath, {
+          scheduleViewer: false,
+        });
         if (opened) {
           lastProcessedLocation = opened.diffLocation;
           log.debug(`Successfully generated diff: ${result.diffPath}${suffix}`);
@@ -271,7 +262,11 @@ const prepareLatexdiffResultsAndScheduleViewer = Effect.fnUntraced(function* (
             yield* restorePreparedViewerTarget(lastViewerLocation);
         }
         if (viewerTargetReady) {
-          runtime.runFork(scheduleViewerDisplay);
+          // Detached: the viewer confirmation fires long after this finalizer
+          // returns, exactly as the fork on the entry's runtime did.
+          yield* Effect.forkDetach(scheduleViewerDisplay, {
+            startImmediately: true,
+          });
         }
       }),
     ),
@@ -289,7 +284,6 @@ const runDiffAndOpen = Effect.fnUntraced(function* (
   runDiff: (
     mathMarkup: MathMarkupOption,
   ) => Effect.Effect<LaTeXdiffResult, never, FileSystem.FileSystem>,
-  runtime: ProcessRuntime,
 ) {
   const mathMarkup = yield* promptForLatexdiffMathMarkup(session);
   if (!mathMarkup) return;
@@ -302,7 +296,7 @@ const runDiffAndOpen = Effect.fnUntraced(function* (
     // message — the text `formatError` prefixed before.
     return yield* Effect.fail(new Error(result.message));
   }
-  yield* openLatexdiffResult(session, result.diffPath, runtime);
+  yield* openLatexdiffResult(session, result.diffPath);
 });
 
 /**
@@ -334,7 +328,6 @@ const handleLatexdiff = Effect.fnUntraced(function* (
   inputFile: string,
   baseFile: string,
   editedFile: string,
-  runtime: ProcessRuntime,
 ) {
   const fileToUse = yield* resolveDiffBase(inputFile, baseFile);
   if (!fileToUse) return;
@@ -353,18 +346,14 @@ const handleLatexdiff = Effect.fnUntraced(function* (
   yield* withLatexdiffTool(
     'latexdiff',
     'Error creating LaTeX diff',
-    runDiffAndOpen(
-      session,
-      'latexdiff',
-      (mathMarkup) =>
-        new LaTeXdiffService(CHANNEL, session.roots).runDiff(
-          pathToLocationIn(session.roots.workspace, fileToUse),
-          pathToLocationIn(session.roots.workspace, editedFile),
-          '_diff',
-          mathMarkup,
-          { cwd: session.roots.workspace },
-        ),
-      runtime,
+    runDiffAndOpen(session, 'latexdiff', (mathMarkup) =>
+      new LaTeXdiffService(CHANNEL, session.roots).runDiff(
+        pathToLocationIn(session.roots.workspace, fileToUse),
+        pathToLocationIn(session.roots.workspace, editedFile),
+        '_diff',
+        mathMarkup,
+        { cwd: session.roots.workspace },
+      ),
     ),
   );
 });
@@ -374,23 +363,18 @@ const handleLatexdiffvc = Effect.fnUntraced(function* (
   inputFile: string,
   baseFile: string,
   commitHash: string,
-  runtime: ProcessRuntime,
 ) {
   const fileToUse = yield* resolveDiffBase(inputFile, baseFile);
   if (!fileToUse) return;
   yield* withLatexdiffTool(
     'latexdiff-vc',
     'Error creating LaTeX diff',
-    runDiffAndOpen(
-      session,
-      'latexdiff-vc',
-      (mathMarkup) =>
-        new LaTeXdiffService(CHANNEL, session.roots).runDiffVc(
-          pathToLocationIn(session.roots.workspace, fileToUse),
-          commitHash,
-          mathMarkup,
-        ),
-      runtime,
+    runDiffAndOpen(session, 'latexdiff-vc', (mathMarkup) =>
+      new LaTeXdiffService(CHANNEL, session.roots).runDiffVc(
+        pathToLocationIn(session.roots.workspace, fileToUse),
+        commitHash,
+        mathMarkup,
+      ),
     ),
   );
 });
@@ -519,11 +503,7 @@ const handleRunLatexdiff = Effect.fnUntraced(function* (
         );
       }
 
-      yield* prepareLatexdiffResultsAndScheduleViewer(
-        session,
-        results,
-        runtime,
-      );
+      yield* prepareLatexdiffResultsAndScheduleViewer(session, results);
     }),
   );
 });
@@ -538,14 +518,14 @@ export function registerLatexdiffCommands(
       id: 'texra.latexdiff',
       handler: (inputFile: string, baseFile: string, editedFile: string) =>
         runtime.runPromise(
-          handleLatexdiff(session, inputFile, baseFile, editedFile, runtime),
+          handleLatexdiff(session, inputFile, baseFile, editedFile),
         ),
     },
     {
       id: 'texra.latexdiffvc',
       handler: (inputFile: string, baseFile: string, commitHash: string) =>
         runtime.runPromise(
-          handleLatexdiffvc(session, inputFile, baseFile, commitHash, runtime),
+          handleLatexdiffvc(session, inputFile, baseFile, commitHash),
         ),
     },
     {

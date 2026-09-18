@@ -1,12 +1,11 @@
 import { access } from 'node:fs/promises';
 import path from 'node:path';
 
-import { Data, Effect } from 'effect';
+import { Data, Effect, type FileSystem, type Path } from 'effect';
 
 import { isFileNotFoundError } from '@common/errors';
 import { isLatexFile } from '@common/files/fileTypeUtils';
 import type { ExternalOpener, MessageHost } from '@hosts/uiHosts';
-import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import { withSessionFs } from '@platform/rootedFs';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { FileLocation } from '@shared/schemas';
@@ -35,11 +34,9 @@ interface DesktopShellAdapter {
  * the permanent one an earlier ruling allowed. An Effect-native caller yields
  * a member; the host entries that answer a framework callback run it once.
  *
- * `openBuildDisplayIn` still answers with the core {@link BuildDisplayFn},
- * which is `Promise`-shaped for a reason that is not this fan-out's: the
- * approval controller registers the raw build promise in a request's
- * `inFlightActions` so a build with no cancellation signal outlives the
- * preview program whose settle race interrupts it.
+ * `openBuildDisplayIn` answers with the core {@link BuildDisplayFn}, a
+ * program like the rest: the approval controller forks it onto a fiber of its
+ * own so a build outlives the preview program whose settle race interrupts it.
  */
 interface DesktopPreviewHost {
   /**
@@ -69,8 +66,6 @@ interface DesktopPreviewHost {
 interface DesktopPreviewHostOptions extends DesktopOverlayPostOptions {
   shell: DesktopShellAdapter;
   showErrorMessage?: MessageHost['showErrorMessage'];
-  /** The process runtime a LaTeX preview compiles on. */
-  runtime: ProcessRuntime;
 }
 
 /**
@@ -189,7 +184,7 @@ export function createDesktopPreviewHost(
   function buildDisplayProgram(
     roots: WorkspaceRoots,
     fileLocation: FileLocation,
-  ): Effect.Effect<void, unknown, ProcessServices> {
+  ): Effect.Effect<void, unknown, FileSystem.FileSystem | Path.Path> {
     return Effect.gen(function* () {
       const sourcePath = fileLocation.absolutePath;
       yield* ensurePathExists(sourcePath);
@@ -245,11 +240,8 @@ export function createDesktopPreviewHost(
   }
 
   return {
-    // The one member still bound to a Promise-shaped core type, so the build
-    // program runs on the runtime this host was handed.
-    openBuildDisplayIn: (roots) => async (location) => {
-      await options.runtime.runPromise(buildDisplayProgram(roots, location));
-    },
+    openBuildDisplayIn: (roots) => (location) =>
+      buildDisplayProgram(roots, location),
     openExternal,
     openPath: openPathProgram,
   };
