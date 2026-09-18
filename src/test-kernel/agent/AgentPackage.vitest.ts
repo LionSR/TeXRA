@@ -171,10 +171,16 @@ vi.mock('@agent/runtime', async () => {
   };
 });
 
-vi.mock('@controllers/session/sessionLayer', () => ({
-  disposeProcessRuntime: mocks.disposeRuntime,
-  installProcessRuntime: mocks.installRuntime,
-}));
+vi.mock('@controllers/session/sessionLayer', async () => {
+  const { Effect: effect } = await import('effect');
+  return {
+    // The double records when the disposal runs, not when the composition
+    // builds it: `disposeProcessRuntime` answers a program now.
+    disposeProcessRuntime: (runtime: unknown) =>
+      effect.suspend(() => mocks.disposeRuntime(runtime)),
+    installProcessRuntime: mocks.installRuntime,
+  };
+});
 
 vi.mock('@tools/agentCliSessionStores', () => ({
   registerRuntimeShutdownHandlers: (

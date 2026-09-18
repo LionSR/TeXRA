@@ -75,6 +75,8 @@ const mocks = vi.hoisted(() => ({
   // onShutdown so a test can run them and assert the usage-log dispose was
   // wired.
   shutdownHandlers: [] as Array<Effect.Effect<void, unknown>>,
+  /** Records the usage-log dispose when its program runs. */
+  disposeUsageLog: vi.fn(),
 }));
 
 vi.mock('@cli/runtime/supabaseAuth', async () => {
@@ -132,13 +134,14 @@ vi.mock('@platform/defaults/nodeHost', () => ({
 }));
 
 // The two lifecycle arms are Effects the host runs, so the doubles answer
-// with one rather than `undefined`.
+// with one rather than `undefined`. `dispose` records when its program runs,
+// not when the host builds it: the shutdown registration holds the program.
 vi.mock('@telemetry/UsageLogService', async () => {
   const { Effect: effect } = await import('effect');
   return {
     UsageLogService: {
       initialize: vi.fn(() => effect.void),
-      dispose: vi.fn(() => effect.void),
+      dispose: () => effect.sync(mocks.disposeUsageLog),
     },
   };
 });
@@ -268,10 +271,10 @@ describe('CLI platform init', () => {
     );
 
     // The dispose handler must be registered on shutdown so queued entries flush.
-    expect(vi.mocked(UsageLogService.dispose)).not.toHaveBeenCalled();
+    expect(mocks.disposeUsageLog).not.toHaveBeenCalled();
     for (const handler of mocks.shutdownHandlers)
       await Effect.runPromise(handler);
-    expect(vi.mocked(UsageLogService.dispose)).toHaveBeenCalled();
+    expect(mocks.disposeUsageLog).toHaveBeenCalled();
   });
 
   it('retries after seed failure without publishing platform, session, or signals', async () => {
