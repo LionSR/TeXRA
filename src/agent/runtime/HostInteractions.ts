@@ -120,11 +120,15 @@ export interface HostInteractions {
    * never committed. It pairs with `presentToolEdit` — every host that
    * stages implements both, and a host that stages nothing implements
    * neither, which is why this port is optional like the rest of this
-   * surface. A host whose release is asynchronous (a diff view to close,
-   * temp files to delete) returns that promise, the way `openPdf` does, so
-   * the session can wait for the cleanup it asked for.
+   * surface. An `Effect`, the way `openPdf` is: the cleanup a host's release
+   * needs (a diff view to close, temp files to delete) is a program this
+   * call builds and the session composes into its own, so the session waits
+   * for the cleanup it asked for without running a fiber of its own — which
+   * a VS Code-free zone has no runtime to do. Built when the preview is
+   * staged, run only if that one case arrives, so the body of this call
+   * stages nothing and undoes nothing on its own.
    */
-  releaseToolEdit?(requestId: string): Promise<void> | void;
+  releaseToolEdit?(requestId: string): Effect.Effect<void, unknown>;
   dispose?(): void;
 }
 
@@ -223,30 +227,25 @@ export class SessionHostInteractions implements HostInteractions {
    * bound to the attachment that staged: the stack may have changed by the
    * time the release runs, and a release sent to whichever host is newest
    * then would be a no-op on a host that staged nothing while the one that
-   * did kept its diff and temp files. The handle awaits an asynchronous
-   * release and warn-logs a failure rather than propagating it, so the
-   * caller's own outcome is never masked by cleanup.
+   * did kept its diff and temp files. `undefined` is "nothing is staged":
+   * either no attached host stages previews, or the one that did releases
+   * nothing. The release itself is the host's own program, run by the caller
+   * that holds it — a cleanup failure is that caller's to report, so it
+   * never masks the outcome of the call that staged.
    */
-  presentToolEdit(request: ToolEditApprovalRequest): () => Promise<void> {
+  presentToolEdit(
+    request: ToolEditApprovalRequest,
+  ): Effect.Effect<void, unknown> | undefined {
     const { requestId } = request.permission;
     const active = this.activeAttachment;
     if (!active?.interactions.presentToolEdit) {
       logger.info(
         `No attached host stages tool-edit previews: request ${requestId} is answerable from its payload alone.`,
       );
-      return () => Promise.resolve();
+      return undefined;
     }
     active.interactions.presentToolEdit(request);
-    return async () => {
-      try {
-        await active.interactions.releaseToolEdit?.(requestId);
-      } catch (error) {
-        logger.warn(
-          `Failed to release the tool-edit preview staged for request ${requestId}`,
-          { data: error },
-        );
-      }
-    };
+    return active.interactions.releaseToolEdit?.(requestId);
   }
 
   dispose(): void {

@@ -387,14 +387,19 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         );
       },
       // An open that never committed leaves the staged preview with no
-      // decision to release it; this is that release, and the promise it
-      // returns is what the session waits on: closing the diff view and
-      // deleting the temp files behind it is asynchronous.
-      // The one run of a controller program the session itself waits on:
-      // closing the diff view and deleting the temp files behind it is
-      // asynchronous, and the refusal is not reported until it is done.
+      // decision to release it; this is that release, composed into the
+      // session's own program rather than run here: closing the diff view
+      // and deleting the temp files behind it is asynchronous, and the
+      // refusal is not reported until it is done. The controller's programs
+      // take this window's services from the runtime's context, which the
+      // session that composes them does not carry.
       releaseToolEdit: (requestId) =>
-        this.runtime.runPromise(this.toolEditApprovals.release(requestId)),
+        Effect.flatMap(this.runtime.contextEffect, (context) =>
+          Effect.provideContext(
+            this.toolEditApprovals.release(requestId),
+            context,
+          ),
+        ),
     });
     // Terminal-error toasts come from the run's `result` event: this
     // re-emits `requestShow*` through the session's interactions, reaching

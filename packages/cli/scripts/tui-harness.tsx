@@ -1342,8 +1342,13 @@ if (SHOW_EDIT_APPROVAL) {
       relativePath: request.path,
     });
     // The preview the durable payload cannot carry is staged on the host,
-    // exactly as `requestToolEditApproval` stages it.
-    session().interactions.presentToolEdit({ ...request, permission });
+    // exactly as `requestToolEditApproval` stages it. Staging hands back the
+    // release for an open that never commits; this request is opened right
+    // below, so the harness holds that program and never runs it.
+    const releaseStagedPreview = session().interactions.presentToolEdit({
+      ...request,
+      permission,
+    });
     requestHarnessApproval(
       request.runId,
       { kind: 'toolEdit', data: permission },

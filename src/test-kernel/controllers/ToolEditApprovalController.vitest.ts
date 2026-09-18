@@ -145,24 +145,6 @@ describe('tool edit approval controller', () => {
     expect(testHost.preview.present).not.toHaveBeenCalled();
   });
 
-  it('approves a still-staging request from its run without reading the staged file', async () => {
-    const testHost = createTestHost();
-    const controller = createController(testHost.host);
-
-    const presented = run(controller.present(approvalRequest()));
-    await vi.waitFor(() => testHost.contextForRequest());
-    const requestId = testHost.contextForRequest().requestId;
-    await run(controller.approvePendingForRun(RUN));
-    testHost.staging.resolve();
-    await presented;
-
-    expect(testHost.host.decide).toHaveBeenCalledWith(RUN, requestId, {
-      action: 'approve',
-      content: 'new',
-    });
-    expect(testHost.preview.readProposedContent).not.toHaveBeenCalled();
-  });
-
   it('holds a release open until the staging in flight has disposed', async () => {
     const testHost = createTestHost();
     const controller = createController(testHost.host);

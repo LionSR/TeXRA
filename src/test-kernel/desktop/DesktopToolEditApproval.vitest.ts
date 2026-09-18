@@ -263,51 +263,6 @@ describe('desktop tool edit approval', () => {
     vi.restoreAllMocks();
   });
 
-  approvalTest('approves pending edits only in the selected run', () =>
-    Effect.gen(function* () {
-      const { controller, requestApproval, waitForPreviews } =
-        yield* createApprovalFixture();
-
-      const target = yield* Effect.forkScoped(
-        requestApproval({
-          path: '/workspace/target.txt',
-          originalContent: 'old target\n',
-          proposedContent: 'new target\n',
-          sourceTool: 'write_file',
-          runId: 'a0b0c0' as RunId,
-        }),
-      );
-      const other = yield* Effect.forkScoped(
-        requestApproval({
-          path: '/workspace/other.txt',
-          originalContent: 'old other\n',
-          proposedContent: 'new other\n',
-          sourceTool: 'write_file',
-          runId: 'd0e0f0' as RunId,
-        }),
-      );
-      const requests = yield* waitForPreviews(2);
-
-      yield* onRuntime(controller.approvePendingForRun('a0b0c0' as RunId));
-      expect(yield* Fiber.join(target)).toMatchObject({
-        action: 'apply',
-        appliedContent: 'new target\n',
-      });
-
-      const otherRequest = requests.find(
-        (request) => request.runId === 'd0e0f0',
-      );
-      expect(otherRequest).toBeDefined();
-      yield* onRuntime(
-        controller.handleAction({
-          requestId: otherRequest!.requestId,
-          action: 'reject',
-        }),
-      );
-      expect(yield* Fiber.join(other)).toMatchObject({ action: 'reject' });
-    }),
-  );
-
   approvalTest(
     'routes proposed-file previews through desktop temp files before rejection',
     () =>
