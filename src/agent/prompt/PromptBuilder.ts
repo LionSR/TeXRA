@@ -1,5 +1,5 @@
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, FileSystem } from 'effect';
 
 // Local imports - agent
 import type { AgentTrace } from '@agent/trace/AgentTrace';
@@ -81,13 +81,10 @@ export const getSystemPromptWithRules = Effect.fn('prompt.systemWithRules')(
     systemPrompt: string,
     userVars: TemplateVars,
     workspace: string | undefined,
-  ): Effect.fn.Return<string, Error> {
+  ): Effect.fn.Return<string, Error, FileSystem.FileSystem> {
     const parts = [yield* renderPrompt(systemPrompt, userVars)];
 
-    const rules = yield* Effect.tryPromise({
-      try: () => loadTexraRules(workspace),
-      catch: ensureError,
-    });
+    const rules = yield* loadTexraRules(workspace);
     if (rules) parts.push(rules);
 
     // Append attached memories (read-only context from orchestrator)
@@ -134,7 +131,11 @@ export class PromptBuilder {
   /**
    * Render the initial system, prefix, and request prompts for round 0.
    */
-  public buildInitialPrompts(): Effect.Effect<InitialPrompts, Error> {
+  public buildInitialPrompts(): Effect.Effect<
+    InitialPrompts,
+    Error,
+    FileSystem.FileSystem
+  > {
     return Effect.all(
       [
         getSystemPromptWithRules(
@@ -210,7 +211,11 @@ export const buildInitialToolUsePrompts = Effect.fn('prompt.initialToolUse')(
       hasDelegationTools?: boolean;
       isChild?: boolean;
     },
-  ): Effect.fn.Return<InitialPrompts & { instructionSuffix: string }, Error> {
+  ): Effect.fn.Return<
+    InitialPrompts & { instructionSuffix: string },
+    Error,
+    FileSystem.FileSystem
+  > {
     const builder = new PromptBuilder(
       agentPrompt,
       userVars,
