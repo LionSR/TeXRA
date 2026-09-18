@@ -116,14 +116,9 @@ describe('applyHelperModelPreference', () => {
         const result = yield* resolve(configFor('opus', 'workflow'));
 
         expect(result.model).toBe('chatonly');
-        expect(readModelAvailabilityInputs).toHaveBeenCalledWith(
-          STORES,
-          ['chatonly'],
-          // The launching run hands its session frame down; this suite calls
-          // the preference directly, so it is the default "already in the
-          // frame" one.
-          expect.any(Function),
-        );
+        expect(readModelAvailabilityInputs).toHaveBeenCalledWith(STORES, [
+          'chatonly',
+        ]);
       }),
   );
 

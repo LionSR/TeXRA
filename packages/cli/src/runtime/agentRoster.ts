@@ -32,7 +32,7 @@ export const readCliAgentRoster = Effect.fn('readCliAgentRoster')(function* (
   const roster = createWorkspaceAgentRosterController(roots);
   return {
     ...roster.snapshot(),
-    defaultChatAgent: cliCommandDefaults('chat').agent,
+    defaultChatAgent: cliCommandDefaults(roots, 'chat').agent,
     agentKeys: byCategory(
       (category) => roster.getEnabledAgentKeys(category) ?? 'all',
     ),

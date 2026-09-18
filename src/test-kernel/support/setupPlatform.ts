@@ -160,13 +160,14 @@ export function installHostAuth(auth: SupabaseAuthShape): void {
 }
 
 /**
- * The installed fake host's two process stores, as the model-option and CLI
- * history readers take them. Read per call, not captured: a suite that
- * reinstalls its host mid-test sees the new one.
+ * The installed fake host's stores, as the model-option and CLI history
+ * readers take them: the secret store plus the roots' three setting slots.
+ * Read per call, not captured: a suite that reinstalls its host mid-test sees
+ * the new one.
  */
 export function hostStores(): ModelOptionStores {
   const { secrets, roots } = installedHost();
-  return { secrets, globalState: roots.globalState };
+  return { ...roots, secrets };
 }
 
 function installedSetup(): SetupPlatformShape {

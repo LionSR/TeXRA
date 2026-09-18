@@ -212,8 +212,8 @@ export function createDesktopHostRequests(
         Effect.flatMap(runtime.contextEffect, (context) =>
           Effect.provideContext(
             readModelAvailabilityInputs({
+              ...session.roots,
               secrets: options.secrets,
-              globalState: options.globalState,
             }).pipe(Effect.map(modelOptionsFrom)),
             context,
           ),

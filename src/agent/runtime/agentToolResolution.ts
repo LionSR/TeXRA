@@ -32,11 +32,9 @@ import { createLog } from '@logger/logUtils';
 import {
   modelOptionsFrom,
   readModelAvailabilityInputs,
-  type ModelAvailabilityScope,
   type ModelOptionStores,
 } from '@model/computeModelOptions';
 import type { LanguageModel } from '@platform/languageModel';
-import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { AgentDelegationScope, ToolDefinition } from '@shared/schemas';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
 import { getDefaultToolRegistry } from '@tools/registry';
@@ -68,23 +66,21 @@ interface ResolveAgentToolsInput {
    * service, or a caller-owned list for a flow that injects its own.
    */
   toolInjections: ToolInjections['Service'];
-  /** The run's workspace settings slots, which the injections' predicates read. */
-  settings: SettingsStores;
   /**
-   * The process secret store and global state (`Secrets` / `AppState`): the
-   * user's disabled-tool set, and the provider keys behind the delegation
-   * roster's model availability.
+   * The run's stores: the session's three setting slots, which the injections'
+   * predicates and the user's disabled-tool set read, and the secret store
+   * behind the delegation roster's model availability.
    */
   stores: ModelOptionStores;
   /** The run's pinned delegation roster scope, when this is a delegated run. */
   delegationScope?: AgentDelegationScope;
   /**
-   * The run's session frame, applied around the model-availability and worktree
-   * reads this resolver makes. It is handed in rather than wrapped around the
-   * call because this resolver is an Effect, so a wrapper would enter the frame
-   * around building the program instead of around running it.
+   * The run's session frame, applied around the worktree read this resolver
+   * makes. It is handed in rather than wrapped around the call because this
+   * resolver is an Effect, so a wrapper would enter the frame around building
+   * the program instead of around running it.
    */
-  inScope?: ModelAvailabilityScope;
+  inScope?: <A>(operation: () => A) => A;
 }
 
 /**
@@ -98,13 +94,12 @@ interface ResolveAgentToolsInput {
 function availableDelegationModelNamesForTools(
   tools: readonly ToolDefinition[],
   stores: ModelOptionStores,
-  inScope: ModelAvailabilityScope | undefined,
 ): Effect.Effect<readonly string[] | null | undefined, never, LanguageModel> {
   if (!hasDelegationTool(tools.map((tool) => tool.name))) {
     return Effect.succeed(undefined);
   }
 
-  return readModelAvailabilityInputs(stores, undefined, inScope).pipe(
+  return readModelAvailabilityInputs(stores).pipe(
     Effect.map((inputs) =>
       availableModelNamesFromOptions(modelOptionsFrom(inputs)),
     ),
@@ -142,7 +137,6 @@ export const resolveAgentTools = Effect.fn('resolveAgentTools')(function* ({
   approvalPromptsUnavailable,
   runtimeUnavailableTools,
   toolInjections,
-  settings,
   stores,
   inScope,
   delegationScope,
@@ -186,7 +180,7 @@ export const resolveAgentTools = Effect.fn('resolveAgentTools')(function* ({
     resolvedNames.add(name);
   }
   for (const injection of toolInjections.list()) {
-    if (!injection.shouldInject(settings)) continue;
+    if (!injection.shouldInject(stores)) continue;
     if (resolvedNames.has(injection.toolName)) continue;
     if (!passesRuntimeGates(injection.toolName)) continue;
     const tool = effectiveRegistry.get(injection.toolName);
@@ -201,7 +195,6 @@ export const resolveAgentTools = Effect.fn('resolveAgentTools')(function* ({
   const availableModelNames = yield* availableDelegationModelNamesForTools(
     resolved,
     stores,
-    inScope,
   );
   // The worktree read resolves inside the caller's frame. The run's pinned
   // delegation scope is already explicit data from AgentRun, so both facts

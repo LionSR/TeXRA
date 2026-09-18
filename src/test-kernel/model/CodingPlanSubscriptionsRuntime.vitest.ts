@@ -106,7 +106,9 @@ describe('coding-plan subscription runtime', () => {
         hostStores().globalState.update(GlobalStateKey.GLM_USE_CHINA, useChina),
       );
 
-      expect(resolveGlmRoute({ useOpenRouter: false })).toEqual(expected);
+      expect(
+        resolveGlmRoute({ stores: hostStores(), useOpenRouter: false }),
+      ).toEqual(expected);
     },
   );
 
@@ -172,10 +174,12 @@ describe('coding-plan subscription runtime', () => {
       if (modelBaseUrl) MODEL_CONFIGS.glm52.baseUrl = modelBaseUrl;
 
       const canonical = resolveGlmRoute({
+        stores: hostStores(),
         baseUrl: modelBaseUrl,
         useOpenRouter,
       });
       const endpoint = resolveRouteEndpoint(
+        hostStores(),
         { name: 'glm52', provider: ModelProvider.GLM, baseUrl: modelBaseUrl },
         useOpenRouter,
       );
@@ -189,7 +193,7 @@ describe('coding-plan subscription runtime', () => {
       expect(endpoint.usageRoute).toBe(usageRoute);
       expect(
         await Effect.runPromise(
-          activeSubscriptionUsageRoute('glm52', hostStores().secrets).pipe(
+          activeSubscriptionUsageRoute(hostStores(), 'glm52').pipe(
             Effect.provide(
               LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT),
             ),
@@ -207,11 +211,12 @@ describe('coding-plan subscription runtime', () => {
       hostStores().globalState.update(GlobalStateKey.GLM_CODING_PLAN, true),
     );
 
-    expect(resolveGlmRoute({ useOpenRouter: false }).route).toBe(
-      'official-coding-plan',
-    );
+    expect(
+      resolveGlmRoute({ stores: hostStores(), useOpenRouter: false }).route,
+    ).toBe('official-coding-plan');
     expect(
       resolveGlmRoute({
+        stores: hostStores(),
         useOpenRouter: false,
         declinedRoutes: ['glm-coding-plan-subscription'],
       }).route,

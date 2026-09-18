@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { FakeSecrets } from '@test/support/FakePlatform';
+import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 
 const mocks = vi.hoisted(() => ({
   getCliAuthProfile: vi.fn(),
@@ -58,6 +59,7 @@ const { loadCliDetailedAccountStatusLines, loadCliModelAccessOverview } =
   await import('@cli/runtime/apiStatus');
 
 const secrets = new FakeSecrets();
+const stores = makeFakeSettingsStores().stores;
 
 function lineFor(lines: readonly string[], route: string): string {
   const matches = lines.filter((line) => line.startsWith(`${route}:`));
@@ -88,7 +90,9 @@ function accountStatusLines(): Promise<string[]> {
   // The status program reads subscription usage, whose credential reads take
   // the process HTTP client from context — so it settles on the kernel's
   // runtime, not a bare one.
-  return testRuntime().runPromise(loadCliDetailedAccountStatusLines(secrets));
+  return testRuntime().runPromise(
+    loadCliDetailedAccountStatusLines(stores, secrets),
+  );
 }
 
 function renderPreferenceRoute(
@@ -243,7 +247,7 @@ describe('CLI model-access status lines', () => {
     );
 
     const lines = await testRuntime().runPromise(
-      loadCliDetailedAccountStatusLines(secrets, {
+      loadCliDetailedAccountStatusLines(stores, secrets, {
         now: 1_800_000_000_000,
       }),
     );
@@ -378,7 +382,7 @@ describe('CLI model-access status lines', () => {
     );
 
     await expect(
-      Effect.runPromise(loadCliModelAccessOverview(secrets)),
+      Effect.runPromise(loadCliModelAccessOverview(stores, secrets)),
     ).resolves.toEqual({
       access: {
         preferences: {

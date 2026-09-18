@@ -10,6 +10,7 @@ import { SubscriptionUsageService } from '@controllers/modelAccess/subscriptionU
 import { activeSubscriptionUsageRoute } from '@model/codingPlanSubscriptions';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import {
   isEmptyUsage,
   type SubscriptionUsageProvider,
@@ -60,6 +61,8 @@ interface StatusBarProps {
    * that opened it — this component owns no runtime of its own.
    */
   readonly secrets: PlatformSecrets;
+  /** The three setting slots the subscription route probe reads. */
+  readonly stores: SettingsStores;
   readonly runtime: ProcessRuntime;
   readonly childListFocused?: boolean;
   readonly childListSelectionKillable?: boolean;
@@ -75,8 +78,12 @@ interface StatusBarProps {
 
 export function StatusBar(props: StatusBarProps): React.JSX.Element {
   const subscriptionUsage = useMemo(
-    () => new SubscriptionUsageService({ secrets: props.secrets }),
-    [props.secrets],
+    () =>
+      new SubscriptionUsageService({
+        secrets: props.secrets,
+        stores: props.stores,
+      }),
+    [props.secrets, props.stores],
   );
   const { write: writeStderr } = useStderr();
   const activeRunId = useSignal(selectedRunIdSignal);
@@ -176,7 +183,12 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
       subscriptionInFlightKeyRef.current = readKey;
       const requestGeneration = ++subscriptionRequestGenerationRef.current;
       void props.runtime
-        .runPromise(activeSubscriptionUsageRoute(accessModel, props.secrets))
+        .runPromise(
+          activeSubscriptionUsageRoute(
+            { ...props.stores, secrets: props.secrets },
+            accessModel,
+          ),
+        )
         .then((route) => {
           if (
             subscriptionDesiredKeyRef.current !== readKey ||

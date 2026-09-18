@@ -445,7 +445,7 @@ export const createHostRunActions = (
         const exhaustionReason = exhaustionReasonOf(request);
         let fallback = getRuntimeModelDirectFallback(
           request.model,
-          getUseOpenRouter(),
+          getUseOpenRouter(session.roots),
         );
         if (!fallback) {
           yield* ports.showInfo(
@@ -464,7 +464,7 @@ export const createHostRunActions = (
         if (!prepared || !isRetryPending(runId, requestId)) return;
         const currentFallback = getRuntimeModelDirectFallback(
           request.model,
-          getUseOpenRouter(),
+          getUseOpenRouter(session.roots),
         );
         if (!currentFallback) {
           yield* ports.showInfo(modelsChanged);
@@ -479,7 +479,7 @@ export const createHostRunActions = (
           if (!prepared || !isRetryPending(runId, requestId)) return;
           const finalFallback = getRuntimeModelDirectFallback(
             request.model,
-            getUseOpenRouter(),
+            getUseOpenRouter(session.roots),
           );
           if (!finalFallback || finalFallback.provider !== fallback.provider) {
             yield* ports.showInfo(modelsChanged);

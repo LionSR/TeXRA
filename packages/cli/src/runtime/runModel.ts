@@ -29,6 +29,7 @@ export function assertExplicitModelKnown(
 }
 
 function cliRunModelCandidates(
+  stores: CliModelStores,
   context: CliContext,
   modelOverride: string | undefined,
   role: 'chat' | 'run',
@@ -37,15 +38,15 @@ function cliRunModelCandidates(
   return [
     { model: explicit, reason: 'explicit-override' },
     { model: context.envModel, reason: 'environment' },
-    { model: cliCommandDefaults(role).model, reason: 'command-config' },
+    { model: cliCommandDefaults(stores, role).model, reason: 'command-config' },
     { model: CLI_CHEAP_START_MODEL, reason: 'builtin-default' },
   ];
 }
 
 /**
- * `stores` is the secret store and global state availability is computed from,
- * handed over by the command's own `initCliPlatform` result rather than looked
- * up again here.
+ * `stores` is the secret store and the three setting slots availability and the
+ * command's configured default are read from, handed over by the command's own
+ * `initCliPlatform` result rather than looked up again here.
  */
 export const selectCliRunModel = Effect.fn('selectCliRunModel')(function* (
   context: CliContext,
@@ -58,7 +59,7 @@ export const selectCliRunModel = Effect.fn('selectCliRunModel')(function* (
   // caller as the `CliUsageError` the command surfaces, exactly as the
   // former try/catch around the await did.
   const resolution = yield* Effect.try({
-    try: () => cliRunModelCandidates(context, modelOverride, role),
+    try: () => cliRunModelCandidates(stores, context, modelOverride, role),
     catch: ensureError,
   }).pipe(
     Effect.flatMap((candidates) =>

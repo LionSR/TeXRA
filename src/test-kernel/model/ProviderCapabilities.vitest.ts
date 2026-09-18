@@ -81,6 +81,7 @@ describe('provider capabilities', () => {
 
   it('resolves ChatGPT subscription profile from model routing context', () => {
     const capabilities = resolveCodexSubscriptionCapabilities(
+      hostStores(),
       gpt55Config,
       false,
     );
@@ -100,7 +101,11 @@ describe('provider capabilities', () => {
     'caps ChatGPT-subscription %s to the Codex 272k input / 400k context budget',
     (id) => {
       const model = MODEL_CONFIGS[id];
-      const capabilities = resolveCodexSubscriptionCapabilities(model, false);
+      const capabilities = resolveCodexSubscriptionCapabilities(
+        hostStores(),
+        model,
+        false,
+      );
 
       expect(model.codexSubscription).toBe(true);
       expect(capabilities).toMatchObject({
@@ -124,7 +129,7 @@ describe('provider capabilities', () => {
       });
 
       expect(
-        resolveCodexSubscriptionCapabilities(gpt55Config, false),
+        resolveCodexSubscriptionCapabilities(hostStores(), gpt55Config, false),
       ).toMatchObject({
         inputTokenLimit: 872_000,
         contextWindow: 1_000_000,
@@ -140,7 +145,7 @@ describe('provider capabilities', () => {
       });
 
       expect(
-        resolveCodexSubscriptionCapabilities(gpt55Config, false),
+        resolveCodexSubscriptionCapabilities(hostStores(), gpt55Config, false),
       ).toMatchObject({
         inputTokenLimit: CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.defaultValue,
       });
@@ -151,6 +156,7 @@ describe('provider capabilities', () => {
 describe('ChatGPT subscription model routing', () => {
   function subscriptionCapabilities(useOpenRouter: boolean) {
     return resolveCodexSubscriptionCapabilities(
+      hostStores(),
       MODEL_CONFIGS.gpt55,
       useOpenRouter,
     );
@@ -166,27 +172,35 @@ describe('ChatGPT subscription model routing', () => {
     await installSubscriptionPlatform({ useOpenRouter: true });
 
     expect(subscriptionCapabilities(true)).toBeNull();
-    await expect(run(isCodexSubscriptionActive('gpt55'))).resolves.toBe(false);
+    await expect(
+      run(isCodexSubscriptionActive(hostStores(), 'gpt55')),
+    ).resolves.toBe(false);
   });
 
   it('routes an eligible direct OpenAI model through the preferred subscription', async () => {
     await installSubscriptionPlatform();
 
     expect(subscriptionCapabilities(false)).not.toBeNull();
-    await expect(run(isCodexSubscriptionActive('gpt55'))).resolves.toBe(true);
+    await expect(
+      run(isCodexSubscriptionActive(hostStores(), 'gpt55')),
+    ).resolves.toBe(true);
   });
 
   it('reports eligible models inactive while signed out', async () => {
     await installSubscriptionPlatform({ signedIn: false });
 
-    await expect(run(isCodexSubscriptionActive('gpt55'))).resolves.toBe(false);
+    await expect(
+      run(isCodexSubscriptionActive(hostStores(), 'gpt55')),
+    ).resolves.toBe(false);
   });
 
   it('reports unknown model identifiers inactive', async () => {
     await installSubscriptionPlatform();
 
     await expect(
-      run(isCodexSubscriptionActive('unknown-subscription-model')),
+      run(
+        isCodexSubscriptionActive(hostStores(), 'unknown-subscription-model'),
+      ),
     ).resolves.toBe(false);
   });
 });

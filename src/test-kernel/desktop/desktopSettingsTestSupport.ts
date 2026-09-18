@@ -15,6 +15,7 @@ import { unsupported } from '@shared/utils/dispatcher';
 import type { SettingsStatePorts } from '@shared/settingsView/types';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { FakeSecrets } from '@test/support/FakePlatform';
+import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 
 const noOp = async (): Promise<void> => undefined;
 
@@ -87,7 +88,7 @@ export function createStubDesktopCredentialSettingsController(
       setGrokPreferSubscription: noOp,
     },
     modelSelectionController: new SettingsModelSelectionController({
-      globalState: state.globalState,
+      stores: { ...makeFakeSettingsStores().stores, ...state },
       secrets: new FakeSecrets(),
       // The same wiring the desktop root does: the read is an Effect, run on
       // the runtime this process holds.

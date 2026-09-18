@@ -16,6 +16,7 @@ import {
 import { StorageFs } from '@platform/rootedFs';
 import { Secrets } from '@platform/secrets';
 import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
+import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import type { RootedFileSystem } from '@utils/files/rootedFileSystem';
 
@@ -78,8 +79,15 @@ it.effect(
         Effect.succeed('A conserved quantity.'),
       );
       const requests = new HostDraftRequests();
-      const first = { roots: { storage: '/papers/first' } } as SessionHandle;
-      const second = { roots: { storage: '/papers/second' } } as SessionHandle;
+      const first = {
+        roots: { storage: '/papers/first', ...makeFakeSettingsStores().stores },
+      } as SessionHandle;
+      const second = {
+        roots: {
+          storage: '/papers/second',
+          ...makeFakeSettingsStores().stores,
+        },
+      } as SessionHandle;
       const snapshot = vi.fn();
       const unsubscribe = requests.subscribe(snapshot);
 
@@ -181,7 +189,9 @@ it.effect(
         Effect.succeed('/papers/first/recordings/take.wav'),
       );
       const requests = new HostDraftRequests();
-      const session = { roots: { storage: '/papers/first' } } as SessionHandle;
+      const session = {
+        roots: { storage: '/papers/first', ...makeFakeSettingsStores().stores },
+      } as SessionHandle;
 
       const take = yield* Effect.forkChild(
         requests.handle(

@@ -8,13 +8,19 @@ import {
   LanguageModel,
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
 } from '@platform/languageModel';
+import type { SettingsStores } from '@shared/config/settingsAccess';
+import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 
 const events: string[] = [];
 const mocks = vi.hoisted(() => ({
   isCodexSubscriptionActive:
-    vi.fn<(model: string) => Effect.Effect<boolean, Error>>(),
+    vi.fn<
+      (stores: SettingsStores, model: string) => Effect.Effect<boolean, Error>
+    >(),
   isXaiSubscriptionActive:
-    vi.fn<(model: string) => Effect.Effect<boolean, Error>>(),
+    vi.fn<
+      (stores: SettingsStores, model: string) => Effect.Effect<boolean, Error>
+    >(),
   reportProbeFailure: vi.fn(),
   hasUsableApiKey:
     vi.fn<
@@ -26,6 +32,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 const secrets = {} as PlatformSecrets;
+const stores = makeFakeSettingsStores().stores;
 
 vi.mock('@model/providerCapabilities', async (importOriginal) => {
   const actual =
@@ -53,7 +60,7 @@ const { hasUsableSetupCredential } =
 
 function hasCredential(): Promise<boolean> {
   return Effect.runPromise(
-    hasUsableSetupCredential(secrets, mocks.reportProbeFailure).pipe(
+    hasUsableSetupCredential(stores, secrets, mocks.reportProbeFailure).pipe(
       // The subscription probes yield the `LanguageModel` service by type;
       // both are mocked, so the port is never read.
       Effect.provide(LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT)),

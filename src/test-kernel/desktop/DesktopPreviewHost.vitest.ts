@@ -177,8 +177,7 @@ describe('desktop preview host', () => {
             subtitle: '/paper',
           },
           secrets,
-          globalState,
-          workspaceState: session.roots.workspaceState,
+          stores: session.roots,
           fileOptions: () => Effect.promise(() => files.fileOptions()),
           readRecentCommits: () =>
             Effect.succeed({ commits: [], isGitRepo: false }),

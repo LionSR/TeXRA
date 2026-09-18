@@ -602,7 +602,7 @@ describe('createWorkflowScriptAgentRunner', () => {
       expect(mocks.exists).toHaveBeenCalledWith(workspacePath('figure.pdf'));
       expect(mocks.selectAvailableDelegationModel).toHaveBeenCalledWith({
         parentModel: 'parent-model',
-        withScope: expect.any(Function),
+        settings: expect.objectContaining({ globalState: expect.anything() }),
       });
       expect(mocks.executeSubagentInBand).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -1691,7 +1691,7 @@ describe('createWorkflowScriptAgentRunner', () => {
         );
         expect(mocks.selectAvailableDelegationModel).toHaveBeenCalledWith({
           parentModel: 'parent-model',
-          withScope: expect.any(Function),
+          settings: expect.objectContaining({ globalState: expect.anything() }),
         });
         expect(mocks.preparedOptions[0]).toEqual(
           expect.objectContaining({

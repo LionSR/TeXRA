@@ -48,11 +48,18 @@ vi.mock('@frontend/ui/errorHandlingUtils', () => ({
 }));
 
 const { testRuntime } = await import('@test/support/testProcessRuntime');
+const { makeFakeSettingsStores } =
+  await import('@test/support/settingsStoresFake');
 const { signInWithSubscription } =
   await import('@frontend/auth/subscriptionSignIn');
 
 const signInWithChatGptSubscription = (channel: string) =>
-  signInWithSubscription(channel, 'chatgpt', testRuntime());
+  signInWithSubscription(
+    makeFakeSettingsStores().stores,
+    channel,
+    'chatgpt',
+    testRuntime(),
+  );
 
 function loopbackSession() {
   return {

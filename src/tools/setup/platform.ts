@@ -21,6 +21,7 @@ import { isCodexSubscriptionActive } from '@model/providerCapabilities';
 import { CHATGPT_SETUP_MODEL } from '@model/setupModelDefaults';
 import type { LanguageModel } from '@platform/languageModel';
 import { Secrets } from '@platform/secrets';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 
 /**
  * Why a host command invocation never ran to completion, read off what the
@@ -140,7 +141,9 @@ class SubscriptionProbeFailed extends Data.TaggedError(
 /** Subscription access reported separately from provider API keys. */
 export const getChatGptSubscriptionStatus = Effect.fn(
   'getChatGptSubscriptionStatus',
-)(function* (): Effect.fn.Return<
+)(function* (
+  stores: SettingsStores,
+): Effect.fn.Return<
   { signedIn: boolean; enabled: boolean },
   SubscriptionProbeFailed,
   Secrets | LanguageModel
@@ -149,7 +152,10 @@ export const getChatGptSubscriptionStatus = Effect.fn(
   const status = yield* getCodexStatus(secrets);
   // Routing is only consulted for a signed-in account, as the `&&` did.
   if (!status.signedIn) return { signedIn: false, enabled: false };
-  const enabled = yield* isCodexSubscriptionActive(CHATGPT_SETUP_MODEL).pipe(
+  const enabled = yield* isCodexSubscriptionActive(
+    stores,
+    CHATGPT_SETUP_MODEL,
+  ).pipe(
     Effect.mapError(
       (cause) =>
         new SubscriptionProbeFailed({

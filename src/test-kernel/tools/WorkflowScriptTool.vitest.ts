@@ -934,7 +934,7 @@ return null`;
 
       expect(mocks.selectAvailableDelegationModel).toHaveBeenCalledWith({
         parentModel: 'parent-model',
-        withScope: expect.any(Function),
+        settings: expect.objectContaining({ globalState: expect.anything() }),
       });
       expect(mocks.registerRun).toHaveBeenCalledWith(
         testDefaultSession(),

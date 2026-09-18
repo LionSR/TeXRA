@@ -287,6 +287,8 @@ describe('CLI history runtime', () => {
     vi.mocked(initLocalCliPlatform).mockResolvedValue({
       ...host.platform,
       globalStorage: host.roots.globalStorage,
+      config: host.roots.config,
+      workspaceState: host.roots.workspaceState,
       globalState: host.roots.globalState,
       secrets: host.secrets,
       session: Effect.succeed(testDefaultSession()),

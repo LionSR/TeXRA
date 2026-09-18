@@ -60,6 +60,7 @@ import {
 } from '@platform/interfaces';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import {
   RUN_OUTCOME,
@@ -280,12 +281,12 @@ export interface ChatSessionControllerInit {
   readonly cwd: string;
   readonly getSlashCommandContext: () => SlashCommandContext;
   /**
-   * The process stores a retry's credential work reads, threaded from the
-   * `CliPlatformServices` the chat entry point already holds rather than
-   * looked up again here.
+   * The process secret store and the three setting slots a retry's credential
+   * work reads, threaded from the `CliPlatformServices` the chat entry point
+   * already holds rather than looked up again here.
    */
   readonly secrets: PlatformSecrets;
-  readonly state: StateStore;
+  readonly stores: SettingsStores;
   /** The process runtime this controller runs its programs on, captured once
    *  here: the controller lives for the length of the chat session, and its
    *  Promise-facing methods are that session's run edge. */
@@ -350,7 +351,7 @@ export function createChatSessionController(
     cwd,
     getSlashCommandContext,
     secrets,
-    state,
+    stores,
     runtime,
   } = init;
   let interruptedContinuation: InterruptedContinuationBatch | undefined;
@@ -756,7 +757,7 @@ export function createChatSessionController(
       // honored by `isCancellationRequested`, which `resumeRun` re-reads once
       // this returns, rather than starting an agent the user cancelled.
       const adoptResumedRun = Effect.fn('adoptResumedRun')(function* () {
-        yield* setCliHelperModel(state, config.model);
+        yield* setCliHelperModel(stores.globalState, config.model);
         adoptRunConfig(config, 'history');
         clearLocalTranscript();
         followUpQueue.clear();
@@ -949,7 +950,7 @@ export function createChatSessionController(
         focusRun(runId);
         session.runExitCode = CliExitCode.Success;
 
-        yield* setCliHelperModel(state, config.model).pipe(
+        yield* setCliHelperModel(stores.globalState, config.model).pipe(
           Effect.mapError(
             (cause) =>
               new StateWriteFailed({
@@ -1117,7 +1118,7 @@ export function createChatSessionController(
           const currentAgent = meta.agent || initialAgent;
           const currentModel = meta.model || initialModel;
           const selection = yield* selectCliRunnableModel(currentModel, {
-            stores: { secrets, globalState: state, runtime },
+            stores: { ...stores, secrets, runtime },
             fallbackReason: meta.model ? meta.modelSource : initialModelSource,
             noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
               CHAT_API_MODE_MODEL_RECOVERY,
@@ -1135,7 +1136,7 @@ export function createChatSessionController(
                 }),
             ),
           );
-          yield* setCliHelperModel(state, selection.model).pipe(
+          yield* setCliHelperModel(stores.globalState, selection.model).pipe(
             Effect.mapError(
               (cause) =>
                 new StateWriteFailed({

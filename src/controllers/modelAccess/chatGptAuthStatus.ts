@@ -13,13 +13,15 @@ import { Effect } from 'effect';
 import { getCodexStatus } from '@auth/codex';
 import { isPreferCodexSubscription } from '@model/codex/codexPreference';
 import type { PlatformSecrets } from '@platform/secrets';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { ChatGptAuthStatus } from '@shared/schemas';
 
 export function getChatGptAuthStatus(
+  stores: SettingsStores,
   secrets: PlatformSecrets,
 ): Effect.Effect<ChatGptAuthStatus> {
   return Effect.map(getCodexStatus(secrets), (status) => ({
     ...status,
-    preferSubscription: isPreferCodexSubscription(),
+    preferSubscription: isPreferCodexSubscription(stores),
   }));
 }

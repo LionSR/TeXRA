@@ -581,7 +581,11 @@ describe('model availability', () => {
           ([, config]) =>
             !config.retired &&
             !config.deprecated &&
-            resolveCodexSubscriptionCapabilities(config, false) !== null,
+            resolveCodexSubscriptionCapabilities(
+              hostStores(),
+              config,
+              false,
+            ) !== null,
         )
         .map(([model]) => model);
 

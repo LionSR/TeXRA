@@ -966,10 +966,8 @@ function createWindow(options: {
     );
     const snapshot = createHostSnapshotSource({
       project: projectDisplayOf(project.key, project.root),
-      globalState: options.globalState,
-      workspaceState: project.session.roots.workspaceState,
+      stores: project.session.roots,
       secrets: options.secrets,
-      inScope: (read) => runInSession(project.session, read),
       fileOptions: () =>
         Effect.tryPromise({
           try: () => files.fileOptions(),
@@ -1139,6 +1137,7 @@ function createWindow(options: {
   };
   const subscriptionUsage = new SubscriptionUsageService({
     secrets: options.secrets,
+    stores: activeProject().session.roots,
   });
   const settingsUi: DesktopSettingsUiHost = {
     showInfoMessage,
@@ -1268,7 +1267,7 @@ function createWindow(options: {
     const credentialSettingsController =
       new DefaultDesktopCredentialSettingsController({
         runtime,
-        inScope: (read) => runInSession(project.session, read),
+        stores: project.roots,
         workspaceState: project.roots.workspaceState,
         globalState: options.globalState,
         config: project.roots.config,
@@ -1470,7 +1469,11 @@ function createWindow(options: {
       // shared by every host (extension, desktop, CLI) so this credential-gating
       // logic can't drift between them.
       hasCredential: () =>
-        hasUsableSetupCredential(options.secrets, credentialLog.warn),
+        hasUsableSetupCredential(
+          activeProject().session.roots,
+          options.secrets,
+          credentialLog.warn,
+        ),
       // Launch the setup conversation when the user clicks "Run Setup" on the
       // setup card, mirroring the extension's `launchSetupAssistant` →
       // launch path: resolve a model the user's credentials can call,
@@ -1494,7 +1497,10 @@ function createWindow(options: {
               const { buildDesktopSetupRunRequest } =
                 await import('@controllers/onboarding/setupLaunch');
               const request = await runtime.runPromise(
-                buildDesktopSetupRunRequest(options.secrets),
+                buildDesktopSetupRunRequest(
+                  setupSession.roots,
+                  options.secrets,
+                ),
               );
               if (!request) {
                 throw new Error(
@@ -1915,8 +1921,8 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
               records: projectRecords,
               warn,
               stores: {
+                ...platformInit.processRoots,
                 secrets: platformInit.secrets,
-                globalState: platformInit.globalState,
               },
               runtime,
             }),

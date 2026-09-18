@@ -97,7 +97,10 @@ export async function showCliSessionStatus(
   const activeChildSessions = runningChildCount(view, countedParent);
   const model = run?.model ?? (meta.model || context.initialModel);
   const prospectiveRoute = await context.runtime.runPromise(
-    activeSubscriptionUsageRoute(model, context.secrets),
+    activeSubscriptionUsageRoute(
+      { ...context.stores, secrets: context.secrets },
+      model,
+    ),
   );
   appendLocalAssistantTranscript(
     formatCliSessionStatus({

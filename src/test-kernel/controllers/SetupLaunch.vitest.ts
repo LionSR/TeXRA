@@ -11,6 +11,7 @@ import {
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
 } from '@platform/languageModel';
 import { FakeSecrets } from '@test/support/FakePlatform';
+import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 
 /**
  * `selectSetupCredentialModelExcludingOpenRouter` is the credential-priority
@@ -82,6 +83,7 @@ beforeEach(() => {
  * here: `hasUsableApiKey` is mocked, so the store is only passed through.
  */
 const secrets = new FakeSecrets();
+const stores = makeFakeSettingsStores().stores;
 
 /** Run a setup-launch program with the one process service its subscription
  *  probes yield: the unavailable port, since this host has no editor. */
@@ -96,7 +98,11 @@ function selectCredentialModel(
   includeOpenRouter?: boolean,
 ): Promise<string | null> {
   return runSetup(
-    selectSetupCredentialModelExcludingOpenRouter(secrets, includeOpenRouter),
+    selectSetupCredentialModelExcludingOpenRouter(
+      stores,
+      secrets,
+      includeOpenRouter,
+    ),
   );
 }
 
@@ -108,14 +114,16 @@ function selectCredentialModel(
  * launch - rather than by re-deriving the projection here.
  */
 async function desktopSetupModel(): Promise<string | null> {
-  const request = await runSetup(buildDesktopSetupRunRequest(secrets));
+  const request = await runSetup(buildDesktopSetupRunRequest(stores, secrets));
   return request?.config.model ?? null;
 }
 
 function launchModel(
   includeAccessListFallback: boolean,
 ): Promise<{ model: string; reason: string } | null> {
-  return runSetup(resolveSetupLaunchModel(secrets, includeAccessListFallback));
+  return runSetup(
+    resolveSetupLaunchModel(stores, secrets, includeAccessListFallback),
+  );
 }
 
 function mockDirectApiKey(provider: string): void {

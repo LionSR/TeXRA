@@ -13,6 +13,7 @@ import {
 } from '@controllers/modelAccess/subscriptionProviders';
 import type { ConfigTarget } from '@platform/interfaces';
 import { Secrets } from '@platform/secrets';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import { ACCOUNT_OUTCOME } from '@shared/copy/accountAuth';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -142,11 +143,11 @@ export const signInCliSubscription = Effect.fn(
  */
 export const signOutCliSubscription = Effect.fn(
   'subscriptionLogin.signOutCliSubscription',
-)(function* (providerId: SubscriptionProviderId) {
+)(function* (stores: SettingsStores, providerId: SubscriptionProviderId) {
   const provider = subscriptionProvider(providerId);
   const secrets = yield* Secrets;
   yield* provider.signOut(secrets).pipe(Effect.mapError(ensureError));
-  return yield* provider.setPreferSubscription(false).pipe(
+  return yield* provider.setPreferSubscription(stores, false).pipe(
     Effect.mapError(ensureError),
     Effect.match({
       onFailure: (error): CliSubscriptionSignOutResult => ({

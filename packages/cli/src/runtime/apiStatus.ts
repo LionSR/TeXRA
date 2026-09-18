@@ -3,6 +3,7 @@ import { Effect } from 'effect';
 import { SubscriptionUsageService } from '@controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
 import { configuredApiKeyProviders } from '@model/apiProviders';
 import type { PlatformSecrets } from '@platform/secrets';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import { CODING_PLAN_SUBSCRIPTIONS } from '@shared/codingPlanSubscriptions';
 import { formatSubscriptionUsageSummary } from '@shared/subscriptionUsagePresentation';
 import type { SubscriptionUsageSnapshot } from '@shared/schemas';
@@ -59,9 +60,9 @@ export interface CliModelAccessOverview {
  */
 export const loadCliModelAccessOverview = Effect.fn(
   'apiStatus.loadCliModelAccessOverview',
-)(function* (secrets: PlatformSecrets) {
+)(function* (stores: SettingsStores, secrets: PlatformSecrets) {
   const [access, profile] = yield* Effect.all(
-    [readCliModelAccessStatus(secrets), readCliAuthProfile] as const,
+    [readCliModelAccessStatus(stores, secrets), readCliAuthProfile] as const,
     { concurrency: 'unbounded' },
   );
   const lines = [
@@ -118,6 +119,7 @@ function formatModelPreferenceLine(
 export const loadCliDetailedAccountStatusLines = Effect.fn(
   'apiStatus.loadCliDetailedAccountStatusLines',
 )(function* (
+  stores: SettingsStores,
   secrets: PlatformSecrets,
   options: {
     readonly subscriptionUsage?: SubscriptionUsageReader;
@@ -126,7 +128,7 @@ export const loadCliDetailedAccountStatusLines = Effect.fn(
 ) {
   const [access, profile, providers] = yield* Effect.all(
     [
-      readCliModelAccessStatus(secrets),
+      readCliModelAccessStatus(stores, secrets),
       readCliAuthProfile,
       configuredApiKeyProviders(secrets),
     ] as const,
@@ -137,7 +139,8 @@ export const loadCliDetailedAccountStatusLines = Effect.fn(
   // every read below forces a refresh, so the service is built over the caller's
   // secret store here rather than held as a module singleton.
   const usageReader =
-    options.subscriptionUsage ?? new SubscriptionUsageService({ secrets });
+    options.subscriptionUsage ??
+    new SubscriptionUsageService({ secrets, stores });
   const [chatGptUsage, codingPlanUsageEntries] = yield* Effect.all(
     [
       access.chatGptSignedIn

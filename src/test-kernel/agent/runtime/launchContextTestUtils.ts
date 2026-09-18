@@ -15,7 +15,7 @@ import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { UsageMonitor } from '@agent/runtime/UsageMonitor';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import { AgentCategory, type RunId } from '@shared/schemas';
-import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
+import { fakeStores } from '@test/support/FakePlatform';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 
@@ -76,7 +76,7 @@ export function createTestLaunchContext({
     prompt: AgentPromptSchema.parse({}),
     ownApiKeyFallback: false,
     // The launch stores a real run carries; no fixture reads through them.
-    stores: { secrets: new FakeSecrets(), globalState: new FakeStateStore() },
+    stores: fakeStores(),
     runId,
     session,
     logger,

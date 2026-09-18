@@ -8,7 +8,7 @@ import {
 } from '@model/setupModelDefaults';
 import { resolveCodexSubscriptionCapabilities } from '@model/providerCapabilities';
 import { API_PROVIDERS } from '@model/apiProviders';
-import { setupPlatform } from '@test/support/setupPlatform';
+import { hostStores, setupPlatform } from '@test/support/setupPlatform';
 
 /**
  * The setup pins are literal data. An llm-zoo bump that retires or deprecates
@@ -43,6 +43,7 @@ describe('SETUP_MODEL_BY_PROVIDER', () => {
     assert.equal(CHATGPT_SETUP_MODEL, SETUP_MODEL_BY_PROVIDER.openai);
     assert.ok(
       resolveCodexSubscriptionCapabilities(
+        hostStores(),
         MODEL_CONFIGS[CHATGPT_SETUP_MODEL],
         false,
       ),

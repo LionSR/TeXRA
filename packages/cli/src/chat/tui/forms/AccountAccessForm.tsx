@@ -23,6 +23,7 @@ import { useCancellableEffect } from '@cli/tui/useCancellableEffect';
 import { LoadingIndicator } from '@cli/tui/ui/LoadingIndicator';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import {
   CHATGPT_AUTH,
   DEVICE_CODE_DESCRIPTION,
@@ -44,6 +45,8 @@ interface AccountAccessFormProps {
    * arrive as props from the surface that opened this form.
    */
   readonly secrets: PlatformSecrets;
+  /** The three setting slots the access overview reads its preferences from. */
+  readonly stores: SettingsStores;
   readonly runtime: ProcessRuntime;
   readonly onSelect: (value: AccountAccessFormValue) => void;
   readonly onCancel: () => void;
@@ -192,7 +195,7 @@ export function AccountAccessForm(
     (isCancelled) => {
       setStatus(null);
       void props.runtime
-        .runPromise(loadCliModelAccessOverview(props.secrets))
+        .runPromise(loadCliModelAccessOverview(props.stores, props.secrets))
         .then((overview) => {
           if (!isCancelled()) setStatus({ state: 'loaded', overview });
         })

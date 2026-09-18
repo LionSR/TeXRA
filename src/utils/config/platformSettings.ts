@@ -1,4 +1,4 @@
-import type { ConfigWriteFailed } from '@platform/interfaces';
+import type { ConfigTarget, ConfigWriteFailed } from '@platform/interfaces';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import { settingByKey, type SettingHost } from '@shared/schemas';
 import {
@@ -86,9 +86,12 @@ export function readSettingFrom<T>(stores: SettingsStores, key: string): T {
 }
 
 /**
- * Write a catalog-modeled setting through the shared write path, so the row's
- * schema validation and its declared `onWrite` effects apply to runtime callers
- * as well as to the settings UIs.
+ * Write a catalog-modeled setting to the stores the caller already holds — the
+ * write-side counterpart of {@link readSettingFrom}, resolving the same slot
+ * from the same catalog row and applying the same `onWrite` effects. A caller
+ * that reads a setting from its own roots writes it back through here, so the
+ * read and the write cannot answer for two different workspaces, and the row's
+ * schema validation applies to runtime callers as well as to the settings UIs.
  *
  * A value the row's schema rejects is a defect of the program, not a member of
  * the declared `ConfigWriteFailed | Error` channel: it is raised inside
@@ -97,15 +100,22 @@ export function readSettingFrom<T>(stores: SettingsStores, key: string): T {
  * setting write resolves through `resolveStateSettingWrite`, which `safeParse`s
  * before reaching the shared path — and a malformed catalog row is a bug to
  * fix rather than a condition to catch.
+ *
+ * `target` overrides the config scope a config-slot row is written to, for the
+ * one caller that keeps a value in whichever scope already holds it (the
+ * "prefer my subscription" switches); state-slot rows ignore it.
  */
-export function writePlatformSetting(
+export function writeSettingTo(
+  stores: SettingsStores,
   key: string,
   value: unknown,
+  target?: ConfigTarget,
 ): Effect.Effect<void, ConfigWriteFailed | Error> {
   return writeSetting(
     requireEntry(key),
     value,
-    platformSettingsStores(),
+    stores,
     processSettingHost,
+    target,
   );
 }

@@ -15,7 +15,6 @@ import {
 } from '@model/computeModelOptions';
 import { getRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import type { LanguageModel } from '@platform/languageModel';
-import type { SettingsStores } from '@shared/config/settingsAccess';
 import { AgentCategory } from '@shared/schemas';
 
 import { getHelperModelName } from './helperModelName';
@@ -35,18 +34,15 @@ export class HelperModelUnavailable extends Data.TaggedError(
 /**
  * Bind the configured helper model into the caller's scope.
  *
- * `stores` are the process secret store and global state the caller already
- * holds (the `Secrets` / `AppState` services, or the stores a host root
- * threaded down), so helper resolution reads the same stores as the run that
- * asked for it; `roots` are the setting slots beside them (a session's
- * `session.roots`, or the process roots a host composition root opened),
- * which the bind reads the model toggles and the OpenRouter preference from.
- * A helper has no persisted conversation format and no launch
- * async-local frame; it never takes the tool-use output haircut.
+ * `stores` are the secret store and the three setting slots the caller
+ * already holds (a session's `roots` plus the `Secrets` service, or the stores
+ * a host root threaded down), so helper resolution, the model toggles and the
+ * OpenRouter preference all read the same stores as the run that asked for it.
+ * A helper has no persisted conversation format; it never takes the tool-use
+ * output haircut.
  */
 export const helperModel = Effect.fn('helperModel')(function* (
   stores: ModelOptionStores,
-  roots: SettingsStores,
 ): Effect.fn.Return<
   BoundModel,
   HelperModelUnavailable | Error,
@@ -65,7 +61,6 @@ export const helperModel = Effect.fn('helperModel')(function* (
   return yield* bindModel({
     config,
     stores,
-    roots,
     compatibilityKey: null,
     agentCategory: AgentCategory.Workflow,
     // Helper calls are deterministic one-shots, never sampled.

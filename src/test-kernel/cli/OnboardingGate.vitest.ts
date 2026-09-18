@@ -61,7 +61,7 @@ describe('maybeRunCliOnboarding gate', () => {
       .mockReturnValue(Effect.succeed(false));
     services = {
       ...createFakePlatform(),
-      globalState: createFakeWorkspaceRoots().globalState,
+      ...createFakeWorkspaceRoots(),
       secrets: new FakeSecrets(),
       runtime: testRuntime(),
     };

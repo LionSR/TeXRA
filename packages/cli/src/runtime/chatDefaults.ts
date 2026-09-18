@@ -2,6 +2,7 @@ import {
   decideRunModel,
   type RunModelDecisionReason,
 } from '@model/runModelDecision';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import { isImplicitDefaultEligible } from '@shared/constants/agents';
 
 import { CLI_CHEAP_START_MODEL, cliCommandDefaults } from './cliConfig';
@@ -35,6 +36,8 @@ type ChatDefaultValueSource = Extract<
 >;
 
 interface ResolveChatDefaultsInit {
+  /** The setting slots the `texra.chat` section is read from. */
+  readonly stores: SettingsStores;
   readonly agentOverride?: string;
   readonly modelOverride?: string;
   readonly envAgent?: string;
@@ -55,7 +58,7 @@ export function resolveChatDefaults(
   const overrideModel = init.modelOverride?.trim();
   const envAgent = usableConfiguredAgent(init.envAgent);
   const envModel = init.envModel?.trim();
-  const configured = cliCommandDefaults('chat');
+  const configured = cliCommandDefaults(init.stores, 'chat');
   const agent =
     overrideAgent || envAgent || usableConfiguredAgent(configured.agent);
 

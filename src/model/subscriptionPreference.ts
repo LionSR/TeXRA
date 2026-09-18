@@ -6,9 +6,12 @@
  */
 import { Effect } from 'effect';
 
-import { workspaceRoots } from '@platform/workspaceRoots';
 import type { ConfigTarget, ConfigWriteFailed } from '@platform/interfaces';
-import { readPlatformSetting } from '@utils/config/platformSettings';
+import type { SettingsStores } from '@shared/config/settingsAccess';
+import {
+  readSettingFrom,
+  writeSettingTo,
+} from '@utils/config/platformSettings';
 
 export interface SubscriptionPreferenceUpdate {
   readonly effective: boolean;
@@ -16,41 +19,46 @@ export interface SubscriptionPreferenceUpdate {
 }
 
 interface SubscriptionPreference {
-  isPrefer(): boolean;
+  isPrefer(stores: SettingsStores): boolean;
   /**
    * Persist the preference and report the scope it landed in. An `Effect`, so
    * the caller's program owns the write and its failure rather than receiving
    * a rejection it cannot compose.
    */
   setPrefer(
+    stores: SettingsStores,
     enabled: boolean,
-  ): Effect.Effect<SubscriptionPreferenceUpdate, ConfigWriteFailed>;
+  ): Effect.Effect<SubscriptionPreferenceUpdate, ConfigWriteFailed | Error>;
 }
 
-/** Build a prefer-subscription switch for a single config key. */
+/**
+ * Build a prefer-subscription switch for a single config key. Both halves take
+ * the setting slots of the workspace they answer for, so the value a host reads
+ * back is the one it just wrote.
+ */
 export function createSubscriptionPreference(
   configKey: string,
 ): SubscriptionPreference {
-  function isPrefer(): boolean {
-    return readPlatformSetting<boolean>(configKey);
+  function isPrefer(stores: SettingsStores): boolean {
+    return readSettingFrom<boolean>(stores, configKey);
   }
 
   function setPrefer(
+    stores: SettingsStores,
     enabled: boolean,
-  ): Effect.Effect<SubscriptionPreferenceUpdate, ConfigWriteFailed> {
-    const { config } = workspaceRoots();
-
-    const inspection = config.inspect<boolean>(configKey);
+  ): Effect.Effect<SubscriptionPreferenceUpdate, ConfigWriteFailed | Error> {
+    // The scope that currently controls the value: a project that already
+    // names the preference keeps owning it, everyone else writes the user
+    // file. Passed to the catalog write path as the explicit target, so the
+    // row's schema still validates the value.
+    const inspection = stores.config.inspect<boolean>(configKey);
     const target: ConfigTarget =
       inspection?.workspaceValue !== undefined ? 'workspace' : 'global';
-    return config.update(configKey, enabled, target).pipe(
+    return writeSettingTo(stores, configKey, enabled, target).pipe(
       // The effective value is read after the write: a store that refuses the
       // write never reaches it, and one that normalizes it is what the caller
       // sees.
-      Effect.map(() => ({
-        effective: readPlatformSetting<boolean>(configKey),
-        target,
-      })),
+      Effect.map(() => ({ effective: isPrefer(stores), target })),
     );
   }
 

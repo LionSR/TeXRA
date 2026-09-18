@@ -33,10 +33,6 @@ import {
   shouldRouteModelThroughOpenRouter,
 } from '@model/openRouterRouting';
 import { exposeApiKey, getApiKey, type ApiProvider } from '@model/apiProviders';
-import {
-  CALLING_SCOPE,
-  type ModelAvailabilityScope,
-} from '@model/computeModelOptions';
 import type { StateStore } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
 import type {
@@ -44,6 +40,7 @@ import type {
   ModelCompatibilityKey,
   UsageRoute,
 } from '@shared/schemas';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { ensureError } from '@utils/errors/errorMessage';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
@@ -190,25 +187,22 @@ const codexAuthFailure = (error: unknown): Error =>
 export const resolveSubscriptionCredential = Effect.fn(
   'resolveSubscriptionCredential',
 )(function* (
+  stores: SettingsStores,
   config: ModelConfig,
   useOpenRouter: boolean,
   secrets: PlatformSecrets,
-  inScope: ModelAvailabilityScope,
   declinedRoutes: readonly DeclinableUsageRoute[] = [],
 ): Effect.fn.Return<SubscriptionRoute | null, Error, HttpClient.HttpClient> {
   const provider = resolveDirectModelApiKeyProvider(config);
   if (provider === undefined) return null;
   if (config.provider === ModelProvider.OPENAI) {
     if (declinedRoutes.includes('chatgpt-subscription')) return null;
-    // The capability read consults the project's subscription preference
-    // and context-window setting through the workspace roots, so it runs in
-    // the run's frame like every other host read here; a host read that
-    // throws stays in the typed channel.
+    // The capability read consults the subscription preference and
+    // context-window setting of the workspace the caller handed in; a host
+    // read that throws stays in the typed channel.
     const profile = yield* Effect.try({
       try: () =>
-        inScope(() =>
-          resolveCodexSubscriptionCapabilities(config, useOpenRouter),
-        ),
+        resolveCodexSubscriptionCapabilities(stores, config, useOpenRouter),
       catch: ensureError,
     });
     if (profile === null) return null;
@@ -261,14 +255,10 @@ export const resolveSubscriptionCredential = Effect.fn(
     if (declinedRoutes.includes('xai-subscription')) return null;
     const profile = yield* Effect.try({
       try: () =>
-        inScope(() =>
-          resolveXaiSubscriptionCapabilities(config, useOpenRouter),
-        ),
+        resolveXaiSubscriptionCapabilities(stores, config, useOpenRouter),
       catch: ensureError,
     });
     if (profile === null) return null;
-    // No `inScope`: the probe reads the stored OAuth session, not the
-    // workspace-roots frame.
     const signedIn = yield* isXaiSignedIn();
     if (!signedIn) {
       log.warn(
@@ -317,17 +307,15 @@ export const resolveSubscriptionCredential = Effect.fn(
  *
  * A program, because the key read behind it is one ({@link getApiKey}). The
  * endpoint resolution is a synchronous host read — a per-provider dashboard
- * endpoint, the China-region switch — so it runs inside `inScope`, the
- * caller's own workspace-roots frame: a fiber resumes outside the frame its
- * caller entered, so the frame is passed rather than wrapped around the call
- * (see {@link ModelAvailabilityScope}).
+ * endpoint, the China-region switch — over `stores`, the setting slots of the
+ * workspace the caller holds.
  */
 export const resolveRouteCredential = Effect.fn('resolveRouteCredential')(
   function* (
+    stores: SettingsStores,
     config: ModelConfig,
     useOpenRouter: boolean,
     secrets: PlatformSecrets,
-    inScope: ModelAvailabilityScope = CALLING_SCOPE,
     declinedRoutes?: readonly DeclinableUsageRoute[],
   ) {
     const provider = useOpenRouter
@@ -353,9 +341,7 @@ export const resolveRouteCredential = Effect.fn('resolveRouteCredential')(
     });
     const endpoint = yield* Effect.try({
       try: () =>
-        inScope(() =>
-          resolveRouteEndpoint(config, useOpenRouter, declinedRoutes),
-        ),
+        resolveRouteEndpoint(stores, config, useOpenRouter, declinedRoutes),
       catch: ensureError,
     });
     return {
@@ -410,7 +396,7 @@ function applyShortModelNamePreference(
 export function resolveModelCompatibilityKey(
   originalConfig: ModelConfig,
   globalState: StateStore,
-  useOpenRouter = getUseOpenRouter(),
+  useOpenRouter: boolean,
   ownApiKeyFallback = false,
 ): ModelCompatibilityKey | undefined {
   if (shouldUseInternalValidationModel()) {

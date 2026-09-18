@@ -423,12 +423,12 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
       (yield* inferLaunchModelCompatibilityKey(runId, session)) ??
       null;
     yield* failIfLaunchStopped(input.stopped);
-    // The run's model is bound from the process stores the launch already
-    // has in scope, so routing and key availability read the same secret
-    // store and global state the rest of the run does.
+    // The run's model is bound from the stores the launch already has: the
+    // session's own setting slots, so routing and the provider switches
+    // answer for this run's workspace, and the process secret store.
     const stores: ModelOptionStores = {
+      ...session.roots,
       secrets: yield* Secrets,
-      globalState: yield* AppState,
     };
 
     const residency = yield* session.transcripts.acquireRunResidency(runId);

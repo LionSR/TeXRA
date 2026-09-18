@@ -15,6 +15,7 @@ import type { ModelOptionData } from '@shared/schemas';
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
+import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 
 /** The controller's deps are file-local; derive them from its constructor. */
 type SettingsModelSelectionControllerDeps = ConstructorParameters<
@@ -43,7 +44,7 @@ function createController(
   overrides: Partial<SettingsModelSelectionControllerDeps> = {},
 ): SettingsModelSelectionController {
   return new SettingsModelSelectionController({
-    globalState: new FakeStateStore(),
+    stores: makeFakeSettingsStores().stores,
     secrets: new FakeSecrets(),
     resolveModelOptions,
     getCopilotRoutes: async () => new Map(),
@@ -80,9 +81,12 @@ function sonnet46CopilotRoutes(
 describe('SettingsModelSelectionController', () => {
   it('does not expose a reasoning selector for Kimi K3 fixed max effort', async () => {
     const controller = createController({
-      globalState: new FakeStateStore({
-        [GlobalStateKey.REASONING_LEVELS]: { kimi3: 'low' },
-      }),
+      stores: {
+        ...makeFakeSettingsStores().stores,
+        globalState: new FakeStateStore({
+          [GlobalStateKey.REASONING_LEVELS]: { kimi3: 'low' },
+        }),
+      },
     });
 
     const { models } = await controller.buildSelectionData();
@@ -139,7 +143,9 @@ describe('SettingsModelSelectionController', () => {
       },
       [GlobalStateKey.HELPER_MODEL]: 'gpt55',
     });
-    const controller = createController({ globalState });
+    const controller = createController({
+      stores: { ...makeFakeSettingsStores().stores, globalState },
+    });
 
     expect((await controller.buildSelectionData()).helperModel).toBe('gpt55');
 
@@ -164,7 +170,9 @@ describe('SettingsModelSelectionController', () => {
     const globalState = new FakeStateStore({
       [GlobalStateKey.MODEL_SELECTION]: onlyGpt55,
     });
-    const controller = createController({ globalState });
+    const controller = createController({
+      stores: { ...makeFakeSettingsStores().stores, globalState },
+    });
 
     await expect(
       Effect.runPromise(
@@ -181,7 +189,9 @@ describe('SettingsModelSelectionController', () => {
         disabledDefaults: DEFAULT_MODELS,
       },
     });
-    const controller = createController({ globalState });
+    const controller = createController({
+      stores: { ...makeFakeSettingsStores().stores, globalState },
+    });
 
     const { models } = await controller.buildSelectionData();
     const enabled = models.filter((model) => model.enabled);
@@ -222,9 +232,12 @@ describe('SettingsModelSelectionController', () => {
         .filter((model) => model.enabled)
         .map((model) => model.name);
     const malformed = createController({
-      globalState: new FakeStateStore({
-        [GlobalStateKey.MODEL_SELECTION]: { enabledExtras: null },
-      }),
+      stores: {
+        ...makeFakeSettingsStores().stores,
+        globalState: new FakeStateStore({
+          [GlobalStateKey.MODEL_SELECTION]: { enabledExtras: null },
+        }),
+      },
     });
 
     expect(await enabledNames(malformed)).toEqual(

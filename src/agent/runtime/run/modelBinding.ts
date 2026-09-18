@@ -43,10 +43,7 @@ import {
   type ModelOrigin,
   type VscodeLanguageModelConfiguration,
 } from '@llm/turn';
-import {
-  CALLING_SCOPE,
-  type ModelOptionStores,
-} from '@model/computeModelOptions';
+import { type ModelOptionStores } from '@model/computeModelOptions';
 import {
   reasoningEffortOverrides,
   supportsReasoningLevel,
@@ -68,7 +65,6 @@ import {
   isKimiCodeExclusiveModel,
   isKimiSubscriptionEligible,
 } from '@shared/model/kimiCodeRetryGate';
-import type { SettingsStores } from '@shared/config/settingsAccess';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { readConfig } from '@utils/config/configUtils';
 import { readSettingFrom } from '@utils/config/platformSettings';
@@ -154,16 +150,15 @@ export interface BoundModel {
 
 interface BindModelInput {
   readonly config: ModelConfig;
-  /** The run's process secret store and global state, from the launch. */
-  readonly stores: ModelOptionStores;
   /**
-   * The session's three setting slots, as data like {@link stores}: the
-   * Models-tab toggles read live from `roots.config` on every bind, and the
-   * OpenRouter preference resolves through the catalog against
-   * `roots.globalState`, so a contended multi-session run reads its own
-   * session's values, never the ambient process frame.
+   * The run's stores, from the launch: the process secret store plus the
+   * session's three setting slots. The Models-tab toggles read live from
+   * `stores.config` on every bind and the OpenRouter preference resolves
+   * through the catalog against `stores.globalState`, so a contended
+   * multi-session run reads its own session's values, never the ambient
+   * process frame.
    */
-  readonly roots: SettingsStores;
+  readonly stores: ModelOptionStores;
   /** A persisted conversation format wins over today's default route. */
   readonly compatibilityKey?: ModelCompatibilityKey | null;
   /**
@@ -181,8 +176,6 @@ interface BindModelInput {
   readonly agentCategory: AgentCategory;
   /** The route default's temperature; the request may override per turn. */
   readonly temperature: number;
-  /** Runs a Promise-tier read inside the launch's async-local frame. */
-  readonly inScope?: <A>(operation: () => A) => A;
 }
 
 type Protocol = ModelConfiguration['protocol'];
@@ -346,7 +339,7 @@ function configurationFor(
   // the retired OpenAI handler base sent. The Anthropic arm never read the
   // setting and keeps the provider default.
   const parallelToolCalls = readConfig<boolean>(
-    input.roots.config,
+    input.stores.config,
     'texra.model.openaiParallelToolCalls',
   );
   const base = binding(config, credential);
@@ -393,7 +386,7 @@ function configurationFor(
       const summary: 'auto' | null =
         !isGpt5 ||
         readConfig<boolean>(
-          input.roots.config,
+          input.stores.config,
           'texra.model.gpt5ReasoningSummary',
         )
           ? 'auto'
@@ -485,7 +478,7 @@ function configurationFor(
           // (and background execution becomes reachable); off, every round
           // resends the full transcript and nothing is retained.
           store: readConfig<boolean>(
-            input.roots.config,
+            input.stores.config,
             'texra.model.useGoogleInteractionsServerState',
           ),
           thinkingLevel:
@@ -857,9 +850,8 @@ export function releaseBindingUploads(
 export const bindModel = Effect.fn('bindModel')(function* (
   input: BindModelInput,
 ): Effect.fn.Return<BoundModel, Error, Scope.Scope | HttpClient.HttpClient> {
-  const inScope = input.inScope ?? CALLING_SCOPE;
   const useOpenRouter = readSettingFrom<boolean>(
-    input.roots,
+    input.stores,
     GlobalStateKey.USE_OPENROUTER,
   );
   // The wire identity the preference promises, applied to the bound config
@@ -911,10 +903,10 @@ export const bindModel = Effect.fn('bindModel')(function* (
     config = kimiCodeEffectiveConfig(
       config,
       yield* resolveKimiCodeRoutingFacts(
+        input.stores,
         input.stores.secrets,
         onOpenRouter,
         input.declinedRoutes,
-        inScope,
       ),
     );
   }
@@ -954,10 +946,10 @@ export const bindModel = Effect.fn('bindModel')(function* (
   const subscription =
     protocol === 'openai-responses' || protocol === 'xai-chat'
       ? yield* resolveSubscriptionCredential(
+          input.stores,
           config,
           selectedOpenRouter,
           input.stores.secrets,
-          inScope,
           input.declinedRoutes,
         )
       : null;
@@ -967,10 +959,10 @@ export const bindModel = Effect.fn('bindModel')(function* (
     credential = subscription.credential;
   } else {
     credential = yield* resolveRouteCredential(
+      input.stores,
       config,
       onOpenRouter,
       input.stores.secrets,
-      inScope,
       input.declinedRoutes,
     );
   }
@@ -990,7 +982,7 @@ export const bindModel = Effect.fn('bindModel')(function* (
         modelName: config.name,
         agentCategory: input.agentCategory,
       },
-      input.roots.config,
+      input.stores.config,
     ) &&
     responsesWebSocketSelected(credential, input.stores.globalState);
   const model =

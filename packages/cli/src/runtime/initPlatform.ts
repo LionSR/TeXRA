@@ -38,13 +38,17 @@ import {
   DEFAULT_NODE_STORAGE_ROOT,
 } from '@platform/defaults/nodeStorage';
 import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import { sessionStoreClearedMessage } from '@shared/copy/sessionStore';
 import type { SessionOpenError } from '@shared/session/database';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { UsageLogService } from '@telemetry/UsageLogService';
 import { registerRuntimeShutdownHandlers } from '@tools/agentCliSessionStores';
 import { seedDisabledToolDefaults } from '@tools/toolAvailability';
-import { initProcessSettingHost } from '@utils/config/platformSettings';
+import {
+  initProcessSettingHost,
+  platformSettingsStores,
+} from '@utils/config/platformSettings';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
@@ -94,36 +98,42 @@ type CliPlatformInitOptions = Pick<
  * leaving each caller to re-enter the ambient `platform()` singleton for a
  * value the composition root was holding all along.
  */
-export type CliPlatformServices = Pick<Platform, 'lifecycle'> & {
-  /**
-   * The one Effect runtime of this process, built (or joined) by this root:
-   * every entry point runs its programs on it and threads it to the modules
-   * that run programs at a Promise edge, instead of looking it up.
-   */
-  readonly runtime: ProcessRuntime;
-  /** The process's cross-workspace storage root, from the roots built below. */
-  readonly globalStorage: string;
-  /** The stores this root opened, handed over rather than read back. */
-  readonly globalState: StateStore;
-  readonly secrets: PlatformSecrets;
-  /**
-   * The process roots this init installed: one process, one project (the
-   * `--cwd` workspace). Undefined only when another root installed the
-   * platform before this init ran (a test harness's fake host), so the
-   * caller that needs them reports their absence rather than reading the
-   * ambient roots.
-   */
-  readonly roots?: WorkspaceRoots;
-  /**
-   * The process session over the process roots: one CLI process, one
-   * project, one persistent session, opened by the first entry point that
-   * runs this Effect (`chat`, `run`, `resume`, `history`) and
-   * handed to every later one as the same handle. `auth`, `doctor`,
-   * `models`, `skills`, `tools` and `init` never run it, so a storage root
-   * nothing can write to fails a command only when it asks for a transcript.
-   */
-  readonly session: Effect.Effect<SessionHandle, SessionOpenError>;
-};
+export type CliPlatformServices = Pick<Platform, 'lifecycle'> &
+  SettingsStores & {
+    /**
+     * The one Effect runtime of this process, built (or joined) by this root:
+     * every entry point runs its programs on it and threads it to the modules
+     * that run programs at a Promise edge, instead of looking it up.
+     */
+    readonly runtime: ProcessRuntime;
+    /** The process's cross-workspace storage root, from the roots built below. */
+    readonly globalStorage: string;
+    /**
+     * The stores this root opened, handed over rather than read back. `config`,
+     * `workspaceState` and `globalState` are the three slots a catalog setting
+     * resolves against, so a read or write through `readSettingFrom` /
+     * `writeSettingTo` answers for this process's project without entering the
+     * ambient roots scope.
+     */
+    readonly secrets: PlatformSecrets;
+    /**
+     * The process roots this init installed: one process, one project (the
+     * `--cwd` workspace). Undefined only when another root installed the
+     * platform before this init ran (a test harness's fake host), so the
+     * caller that needs them reports their absence rather than reading the
+     * ambient roots.
+     */
+    readonly roots?: WorkspaceRoots;
+    /**
+     * The process session over the process roots: one CLI process, one
+     * project, one persistent session, opened by the first entry point that
+     * runs this Effect (`chat`, `run`, `resume`, `history`) and
+     * handed to every later one as the same handle. `auth`, `doctor`,
+     * `models`, `skills`, `tools` and `init` never run it, so a storage root
+     * nothing can write to fails a command only when it asks for a transcript.
+     */
+    readonly session: Effect.Effect<SessionHandle, SessionOpenError>;
+  };
 
 function logAt(
   level: 'debug' | 'info' | 'warn' | 'error',
@@ -402,13 +412,10 @@ export async function initCliPlatform(
         Effect.cached(
           initializeDefaultSession({
             responseTextProcessing: createTexraResponseTextProcessing(
-              createAgentResponseTextConnector(
-                {
-                  secrets: cliSecrets,
-                  globalState,
-                },
-                roots,
-              ),
+              createAgentResponseTextConnector({
+                ...roots,
+                secrets: cliSecrets,
+              }),
             ),
           }).pipe(
             Effect.tap((session) =>
@@ -489,8 +496,16 @@ export async function initCliPlatform(
   // process-wide singleton: the secret store is the same stateless view over
   // this process's storage root the composition block installed, and the
   // application state is the store that install opened before it.
+  // The three setting slots this process answers a catalog row from: the roots
+  // this init installed when it built them, and otherwise the roots whichever
+  // foreign root installed the platform published (a test harness's fake host)
+  // — resolved once here through the funnel's own accessor, which is exactly
+  // what each of these readers used to do for itself.
+  const settingSlots = installedRoots ?? platformSettingsStores();
   const cliServices: CliPlatformServices = {
     runtime,
+    config: settingSlots.config,
+    workspaceState: settingSlots.workspaceState,
     // The pure path calculator over this process's storage root (no mkdir),
     // so every CLI entry, including the ones that find the platform already
     // installed, names one root without touching the filesystem again.

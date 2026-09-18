@@ -291,9 +291,10 @@ export function createExtensionHostRequests(
       loadModelOptions: () =>
         Effect.flatMap(runtime.contextEffect, (context) =>
           Effect.provideContext(
-            readModelAvailabilityInputs({ secrets, globalState }).pipe(
-              Effect.map(modelOptionsFrom),
-            ),
+            readModelAvailabilityInputs({
+              ...session.roots,
+              secrets,
+            }).pipe(Effect.map(modelOptionsFrom)),
             context,
           ),
         ),
@@ -828,7 +829,7 @@ export function createExtensionHostRequests(
       switch (action) {
         case 'signInChatGpt':
           yield* fromHost('signInWithSubscription', () =>
-            signInWithSubscription(CHANNEL, 'chatgpt', runtime),
+            signInWithSubscription(session.roots, CHANNEL, 'chatgpt', runtime),
           );
           yield* refreshAfterCredentialChange;
           return;
@@ -1054,7 +1055,8 @@ export function createExtensionHostRequests(
           yield* fromHost('env.openExternal', () =>
             vscode.env.openExternal(
               vscode.Uri.parse(
-                (request.provider && getProviderKeyUrl(request.provider)) ||
+                (request.provider &&
+                  getProviderKeyUrl(session.roots, request.provider)) ||
                   'https://texra.ai/guide/installation#setting-up-api-keys',
               ),
             ),

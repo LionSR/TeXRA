@@ -6,9 +6,14 @@
  *
  * Canonical read path: every key read here is registered in the state-setting
  * catalog (`src/shared/schemas/stateSettings.ts`) and read via
- * `readPlatformSetting()`, which resolves the default from the entry's schema
+ * `readSettingFrom()`, which resolves the default from the entry's schema
  * and snaps an invalid/stale stored value back to that default. A key that
  * has no catalog entry should be catalogued, not given another read path.
+ *
+ * Every function here takes the three setting slots it answers for. Nothing in
+ * this module looks a host up, so a read answers for the workspace its caller
+ * holds rather than for whichever roots frame the calling fiber happens to
+ * carry.
  */
 
 import type { ConfigWriteFailed } from '@platform/interfaces';
@@ -17,30 +22,37 @@ import {
   PROVIDER_URLS,
   type ProviderStateEntry,
 } from '@shared/constants/providers';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { readPlatformSetting, writePlatformSetting } from './platformSettings';
+import { readSettingFrom, writeSettingTo } from './platformSettings';
 import type { Effect } from 'effect';
 
 const PROVIDERS: ReadonlyMap<string, ProviderStateEntry> = new Map(
   PROVIDER_STATE_ENTRIES.map((provider) => [provider.id, provider]),
 );
 
-function regionSet(provider: string): boolean | undefined {
+function regionSet(
+  stores: SettingsStores,
+  provider: string,
+): boolean | undefined {
   const region = PROVIDERS.get(provider)?.region;
   // Region keys are catalog-modeled, so the default comes from the entry's
   // schema (kept aligned with the registry's `region.default` by the
   // state-settings guardrail suite).
-  return region ? readPlatformSetting<boolean>(region.key) : undefined;
+  return region ? readSettingFrom<boolean>(stores, region.key) : undefined;
 }
 
 // ---------------------------------------------------------------------------
 // Endpoint
 // ---------------------------------------------------------------------------
 
-export function getProviderEndpoint(provider: string): string {
+export function getProviderEndpoint(
+  stores: SettingsStores,
+  provider: string,
+): string {
   const key = PROVIDERS.get(provider)?.endpointKey;
   // Catalog-modeled (see PROVIDER_ENDPOINT_SETTINGS in stateSettings.ts).
-  return key ? readPlatformSetting<string>(key) : '';
+  return key ? readSettingFrom<string>(stores, key) : '';
 }
 
 export function supportsCustomEndpoint(provider: string): boolean {
@@ -52,44 +64,52 @@ export function supportsCustomEndpoint(provider: string): boolean {
 // ---------------------------------------------------------------------------
 
 export function getProviderDisplayName(
+  stores: SettingsStores,
   provider: string,
   defaultName: string,
 ): string {
   const region = PROVIDERS.get(provider)?.region;
   if (!region?.displayName) return defaultName;
-  return regionSet(provider) ? region.displayName : defaultName;
+  return regionSet(stores, provider) ? region.displayName : defaultName;
 }
 
-export function getProviderKeyUrl(provider: string): string | undefined {
+export function getProviderKeyUrl(
+  stores: SettingsStores,
+  provider: string,
+): string | undefined {
   // PROVIDER_URLS is a Record<string, string>, so this lookup is typed as
   // string even for an unknown provider; the guard is what makes it honest.
   const defaultUrl = PROVIDER_URLS[provider];
   if (!defaultUrl) return undefined;
   const region = PROVIDERS.get(provider)?.region;
   if (!region) return defaultUrl;
-  const isSet = regionSet(provider);
+  const isSet = regionSet(stores, provider);
   if (isSet === true && region.keyUrlWhenSet) return region.keyUrlWhenSet;
   if (isSet === false && region.keyUrlWhenUnset) return region.keyUrlWhenUnset;
   return defaultUrl;
 }
 
 /** Whether a provider routes through its China-region endpoint. */
-export function useChinaRegion(provider: string): boolean {
-  return regionSet(provider) ?? false;
+export function useChinaRegion(
+  stores: SettingsStores,
+  provider: string,
+): boolean {
+  return regionSet(stores, provider) ?? false;
 }
 
 // ---------------------------------------------------------------------------
 // Standalone toggles
 // ---------------------------------------------------------------------------
 
-export function getGLMCodingPlan(): boolean {
-  return readPlatformSetting<boolean>(GlobalStateKey.GLM_CODING_PLAN);
+export function getGLMCodingPlan(stores: SettingsStores): boolean {
+  return readSettingFrom<boolean>(stores, GlobalStateKey.GLM_CODING_PLAN);
 }
 
 export function setGLMCodingPlan(
+  stores: SettingsStores,
   enabled: boolean,
 ): Effect.Effect<void, ConfigWriteFailed | Error> {
-  return writePlatformSetting(GlobalStateKey.GLM_CODING_PLAN, enabled);
+  return writeSettingTo(stores, GlobalStateKey.GLM_CODING_PLAN, enabled);
 }
 
 /**
@@ -99,8 +119,8 @@ export function setGLMCodingPlan(
  * Catalog-modeled (see `stateSettings.ts`), so the default comes from the
  * schema via the shared accessor.
  */
-export function getPreferKimiCode(): boolean {
-  return readPlatformSetting<boolean>(GlobalStateKey.KIMI_CODE_PREFER);
+export function getPreferKimiCode(stores: SettingsStores): boolean {
+  return readSettingFrom<boolean>(stores, GlobalStateKey.KIMI_CODE_PREFER);
 }
 
 /**
@@ -108,6 +128,6 @@ export function getPreferKimiCode(): boolean {
  * `stateSettings.ts`), so the default comes from the schema via the shared
  * accessor.
  */
-export function getUseOpenRouter(): boolean {
-  return readPlatformSetting<boolean>(GlobalStateKey.USE_OPENROUTER);
+export function getUseOpenRouter(stores: SettingsStores): boolean {
+  return readSettingFrom<boolean>(stores, GlobalStateKey.USE_OPENROUTER);
 }

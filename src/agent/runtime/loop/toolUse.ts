@@ -50,6 +50,7 @@ import {
 import { RunLedger, RunLedgerRefused } from '@shared/session/runLedger';
 import { freshRunState, type RunState } from '@shared/session/runStateFold';
 import { goalOf, pauseGoal, setGoalSessionAutoApproval } from '@tools/goal';
+import { getUseOpenRouter } from '@utils/config/providerConfig';
 import { ensureError } from '@utils/errors/errorMessage';
 
 import { AgentRun } from '../run/AgentRun';
@@ -225,6 +226,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       const nextKey = resolveModelCompatibilityKey(
         nextConfig,
         run.stores.globalState,
+        getUseOpenRouter(run.stores),
       );
       if (!nextKey) return `Unsupported model provider: ${nextConfig.provider}`;
       return current.compatibilityKey === nextKey
@@ -280,12 +282,10 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       const next = yield* bindModel({
         config: nextConfig,
         stores: run.stores,
-        roots: run.session.roots,
         compatibilityKey: current.compatibilityKey,
         declinedRoutes: state.declinedRoutes,
         agentCategory: run.config.agentCategory,
         temperature: run.setting.temperature,
-        inScope: run.inScope,
       }).pipe(Scope.provide(run.scope));
       userChannels[USER_VAR_MODEL] = next.modelId;
       const switched = yield* ledger.appendBatch(runId, state, [

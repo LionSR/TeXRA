@@ -11,6 +11,7 @@ import { ModelProvider, type ModelConfig } from 'llm-zoo';
 import { resolveGlmRoute } from '@model/glmRouting';
 import { OPENROUTER_BASE_URL } from '@model/openRouterEndpoint';
 import { normalizeProviderEndpoint } from '@model/providerEndpoint';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { DeclinableUsageRoute, UsageRoute } from '@shared/schemas';
 import {
   getProviderEndpoint,
@@ -24,8 +25,14 @@ import {
  */
 export const OPENAI_DEFAULT_ENDPOINT = 'https://api.openai.com/v1';
 
-/** Provider default base URLs; region-dependent ones resolve at read time. */
-const BASE_URLS: Record<ModelProvider, string | (() => string) | null> = {
+/**
+ * Provider default base URLs; region-dependent ones resolve at read time, from
+ * the setting slots the caller answers for.
+ */
+const BASE_URLS: Record<
+  ModelProvider,
+  string | ((stores: SettingsStores) => string) | null
+> = {
   [ModelProvider.GOOGLE]: 'https://generativelanguage.googleapis.com',
   [ModelProvider.OPENAI]: OPENAI_DEFAULT_ENDPOINT,
   [ModelProvider.ANTHROPIC]: 'https://api.anthropic.com',
@@ -34,17 +41,17 @@ const BASE_URLS: Record<ModelProvider, string | (() => string) | null> = {
   // China: api.moonshot.cn, International: api.moonshot.ai. Keys are
   // platform-specific. Kimi Code models never reach here: their coding
   // baseUrl wins as the per-model override.
-  [ModelProvider.MOONSHOT]: () =>
-    `https://${useChinaRegion('moonshot') ? 'api.moonshot.cn' : 'api.moonshot.ai'}/v1`,
-  [ModelProvider.DASHSCOPE]: () =>
+  [ModelProvider.MOONSHOT]: (stores) =>
+    `https://${useChinaRegion(stores, 'moonshot') ? 'api.moonshot.cn' : 'api.moonshot.ai'}/v1`,
+  [ModelProvider.DASHSCOPE]: (stores) =>
     `https://${
-      useChinaRegion('dashscope')
+      useChinaRegion(stores, 'dashscope')
         ? 'dashscope.aliyuncs.com'
         : 'dashscope-intl.aliyuncs.com'
     }/compatible-mode/v1`,
   // China: api.minimaxi.com (note the extra 'i'), International: api.minimax.io
-  [ModelProvider.MINIMAX]: () =>
-    `https://${useChinaRegion('minimax') ? 'api.minimaxi.com' : 'api.minimax.io'}/v1`,
+  [ModelProvider.MINIMAX]: (stores) =>
+    `https://${useChinaRegion(stores, 'minimax') ? 'api.minimaxi.com' : 'api.minimax.io'}/v1`,
   // Resolved by `resolveGlmRoute`, which carries the usage classification.
   [ModelProvider.GLM]: null,
   [ModelProvider.META]: 'https://api.meta.ai/v1',
@@ -58,12 +65,14 @@ interface RouteEndpoint {
 }
 
 export function resolveRouteEndpoint(
+  stores: SettingsStores,
   config: Pick<ModelConfig, 'name' | 'provider' | 'baseUrl'>,
   useOpenRouter: boolean,
   declinedRoutes?: readonly DeclinableUsageRoute[],
 ): RouteEndpoint {
   if (config.provider === ModelProvider.GLM) {
     const route = resolveGlmRoute({
+      stores,
       baseUrl: config.baseUrl,
       useOpenRouter,
       declinedRoutes,
@@ -74,12 +83,12 @@ export function resolveRouteEndpoint(
   }
   if (config.baseUrl) return { baseUrl: config.baseUrl };
   if (useOpenRouter) return { baseUrl: OPENROUTER_BASE_URL };
-  const customUrl = getProviderEndpoint(config.provider);
+  const customUrl = getProviderEndpoint(stores, config.provider);
   if (customUrl) {
     return { baseUrl: `https://${normalizeProviderEndpoint(customUrl)}` };
   }
   const baseUrl = BASE_URLS[config.provider];
-  const resolved = typeof baseUrl === 'function' ? baseUrl() : baseUrl;
+  const resolved = typeof baseUrl === 'function' ? baseUrl(stores) : baseUrl;
   if (resolved === null) {
     throw new Error(
       `Model ${config.name} has no HTTP endpoint for provider ${config.provider}.`,

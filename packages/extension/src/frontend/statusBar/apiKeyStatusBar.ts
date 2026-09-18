@@ -6,6 +6,7 @@ import * as vscode from 'vscode';
 import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
 import { hasAnyUsableSetupCredential } from '@commands/setup/setupAssistantCommand';
 import type { PlatformSecrets } from '@platform/secrets';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 
 interface ApiKeyStatusBarItems {
   /** The setup pill: shown only while no usable credential exists. */
@@ -29,11 +30,15 @@ interface ApiKeyStatusBarItems {
  * that set: it serves the remote-agent catalog, not model access.
  */
 export const refreshApiKeyStatusBar = Effect.fn('refreshApiKeyStatusBar')(
-  function* (secrets: PlatformSecrets, items: ApiKeyStatusBarItems) {
+  function* (
+    stores: SettingsStores,
+    secrets: PlatformSecrets,
+    items: ApiKeyStatusBarItems,
+  ) {
     const { setup, tasks } = items;
     if (!setup) return;
 
-    if (yield* hasAnyUsableSetupCredential(secrets)) {
+    if (yield* hasAnyUsableSetupCredential(stores, secrets)) {
       setup.hide();
       tasks?.show();
       return;

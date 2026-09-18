@@ -29,6 +29,7 @@ import {
   isKimiSubscriptionEligible,
   type KimiSubscriptionModelFields,
 } from '@shared/model/kimiCodeRetryGate';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import { getPreferKimiCode } from '@utils/config/providerConfig';
 
 import { hasUsableApiKey } from './apiProviders';
@@ -104,10 +105,9 @@ class KimiCodeHostFactUnreadable extends Data.TaggedError(
  * routes the asking run declines: a declined coding subscription reads as
  * "prefer off" for that run without touching the user's switch.
  *
- * `inScope` is the caller's workspace-roots frame, for the same reason the
- * availability read takes one: the switch is a workspace-scoped setting, and
- * a fiber that resumes after the key read is no longer inside the frame its
- * caller entered. A caller already in the frame it wants omits it.
+ * `stores` are the setting slots the switch is read from — the caller's own,
+ * so the answer is for the caller's workspace rather than for whichever roots
+ * frame the fiber happens to carry.
  *
  * The switch read is a step of the program rather than a synchronous call
  * inside `Effect.map`: a host whose state store throws answers the channel
@@ -116,10 +116,10 @@ class KimiCodeHostFactUnreadable extends Data.TaggedError(
  * defect.
  */
 export function resolveKimiCodeRoutingFacts(
+  stores: SettingsStores,
   secrets: PlatformSecrets,
   useOpenRouter: boolean,
   declinedRoutes?: readonly DeclinableUsageRoute[],
-  inScope: <A>(read: () => A) => A = (read) => read(),
 ): Effect.Effect<
   KimiCodeRoutingFacts,
   SecretsFailed | KimiCodeHostFactUnreadable
@@ -127,7 +127,7 @@ export function resolveKimiCodeRoutingFacts(
   return Effect.gen(function* () {
     const keySet = yield* hasUsableApiKey(secrets, 'kimiCode');
     const preferKimiCode = yield* Effect.try({
-      try: () => inScope(getPreferKimiCode),
+      try: () => getPreferKimiCode(stores),
       catch: (cause) =>
         new KimiCodeHostFactUnreadable({
           message:

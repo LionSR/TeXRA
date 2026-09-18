@@ -201,6 +201,7 @@ export async function runChat(
   const defaults = await runtime.runPromise(
     Effect.map(loadAgents(), () =>
       resolveChatDefaults({
+        stores: services,
         agentOverride: explicitAgent ?? setupAgentOverride,
         modelOverride: initialResume?.config.model ?? init.modelOverride,
         envAgent: context.envAgent,
@@ -258,7 +259,7 @@ export async function runChat(
     session,
     runtimeSession,
     secrets: services.secrets,
-    state: services.globalState,
+    stores: services,
     runtime: services.runtime,
     processCwd: process.cwd(),
     initialAgent: agent,
@@ -419,7 +420,7 @@ export async function runChat(
     cwd: context.cwd,
     getSlashCommandContext: slashCommandContext,
     secrets: services.secrets,
-    state: services.globalState,
+    stores: services,
     runtime,
   });
   disposables.add(setCliAgentResumeHandler(chatController.tryResumeRun));
@@ -467,7 +468,7 @@ export async function runChat(
   // Pre-register the slash commands the input palette uses.
   registerBuiltinSlashCommands({
     secrets: services.secrets,
-    state: services.globalState,
+    stores: services,
     runtime,
     runtimeSession,
     canSelectAgent: () => chatTuiCanStartRootRun(session),
@@ -486,6 +487,7 @@ export async function runChat(
       applyCliModelSelection(nextModel, slashCommandContext()),
     onModelAccessSelect: (route, output) =>
       applyCliModelAccessSelection(
+        services,
         runtime,
         route,
         slashCommandContext(),
@@ -495,7 +497,7 @@ export async function runChat(
     // registry's own defaults are exactly these handlers. Only `/login` needs
     // an override, to carry this session's CliContext.
     onLoginSelect: (value, output) =>
-      loginFromChat(value, runtime, context, output),
+      loginFromChat(value, services, runtime, context, output),
     onMemorySelect: (storagePath) =>
       showCliMemoryPreview(runtime, runtimeSession.roots, storagePath),
     onSkillSelect: chatController.activateSkill,
@@ -512,6 +514,7 @@ export async function runChat(
   const ink = render(
     <App
       secrets={services.secrets}
+      stores={services}
       runtime={runtime}
       session={runtimeSession}
       onSubmit={(line, mediaFiles, images) =>

@@ -11,6 +11,7 @@ import {
 } from '@model/setupModelDefaults';
 import type { LanguageModel } from '@platform/languageModel';
 import type { PlatformSecrets } from '@platform/secrets';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /** True when any provider has a usable API key in secret storage or the environment. */
@@ -92,18 +93,19 @@ export function probeSetupCredential<R>(
  * `onProbeFailure`; `null` when neither subscription is signed in.
  */
 export function setupSubscriptionModel(
+  stores: SettingsStores,
   onProbeFailure: (message: string) => void,
 ): Effect.Effect<string | null, never, LanguageModel> {
   return Effect.gen(function* () {
     const hasChatGptSubscription = yield* probeSetupCredential(
-      isCodexSubscriptionActive(CHATGPT_SETUP_MODEL).pipe(
+      isCodexSubscriptionActive(stores, CHATGPT_SETUP_MODEL).pipe(
         Effect.mapError(setupCredentialProbeFailed('ChatGPT subscription')),
       ),
       onProbeFailure,
     );
     if (hasChatGptSubscription) return CHATGPT_SETUP_MODEL;
     const hasGrokSubscription = yield* probeSetupCredential(
-      isXaiSubscriptionActive(XAI_SETUP_MODEL).pipe(
+      isXaiSubscriptionActive(stores, XAI_SETUP_MODEL).pipe(
         Effect.mapError(setupCredentialProbeFailed('Grok subscription')),
       ),
       onProbeFailure,
@@ -118,11 +120,15 @@ export function setupSubscriptionModel(
  * after being reported through `onProbeFailure`.
  */
 export function hasUsableSetupCredential(
+  stores: SettingsStores,
   secrets: PlatformSecrets,
   onProbeFailure: (message: string) => void,
 ): Effect.Effect<boolean, never, LanguageModel> {
   return Effect.gen(function* () {
-    const subscriptionModel = yield* setupSubscriptionModel(onProbeFailure);
+    const subscriptionModel = yield* setupSubscriptionModel(
+      stores,
+      onProbeFailure,
+    );
     if (subscriptionModel !== null) return true;
     return yield* hasAnyUsableProviderApiKey(secrets, onProbeFailure);
   });

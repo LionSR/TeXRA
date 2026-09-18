@@ -162,7 +162,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       'progressView',
     );
     this.onboardingFunnel = new OnboardingFunnelRefresher({
-      hasCredential: () => hasAnyUsableSetupCredential(secrets),
+      hasCredential: () => hasAnyUsableSetupCredential(session.roots, secrets),
       flags: globalState,
       apply: (transition) => {
         this.snapshot.setOnboarding(transition.state);
@@ -193,8 +193,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     const roots = session.roots;
     this.snapshot = createHostSnapshotSource({
       project: projectDisplayOf(session.roots.storage, roots.workspace),
-      globalState,
-      workspaceState: roots.workspaceState,
+      stores: roots,
       secrets,
       fileOptions: () =>
         workspaceFileOptions(roots.workspace).pipe(
@@ -238,7 +237,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       // Already an Effect program: the typed port lets the banner read it
       // directly instead of settling it on the runtime first.
       apiKeyBanner: () =>
-        hasUsableSetupCredential(this.secrets, (message) =>
+        hasUsableSetupCredential(this.session.roots, this.secrets, (message) =>
           log.warn(message),
         ).pipe(
           Effect.map((usable) => ({ visible: !usable })),

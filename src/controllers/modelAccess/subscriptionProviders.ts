@@ -44,6 +44,7 @@ import {
 } from '@model/xai/xaiPreference';
 import type { ConfigWriteFailed } from '@platform/interfaces';
 import { Secrets, type PlatformSecrets } from '@platform/secrets';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { HttpClient } from 'effect/unstable/http';
 
@@ -133,15 +134,16 @@ export interface SubscriptionProvider {
    * signed-out, with the cause logged by the probe.
    */
   getStatus(secrets: PlatformSecrets): Effect.Effect<SubscriptionAccount>;
-  isPreferSubscription(): boolean;
+  isPreferSubscription(stores: SettingsStores): boolean;
   /**
    * Persist the preference and report the scope it landed in. An `Effect`, like
    * every other write of a catalog-backed setting, so a host runs it at its own
    * edge and owns the failure.
    */
   setPreferSubscription(
+    stores: SettingsStores,
     enabled: boolean,
-  ): Effect.Effect<SubscriptionPreferenceUpdate, ConfigWriteFailed>;
+  ): Effect.Effect<SubscriptionPreferenceUpdate, ConfigWriteFailed | Error>;
 }
 
 /** Fields the flow reads off a provider session; providers carry more. */
@@ -176,10 +178,11 @@ interface SubscriptionProviderBindings<Coordinator, Session> {
       | null
       | undefined,
   ) => string;
-  readonly isPrefer: () => boolean;
+  readonly isPrefer: (stores: SettingsStores) => boolean;
   readonly setPrefer: (
+    stores: SettingsStores,
     enabled: boolean,
-  ) => Effect.Effect<SubscriptionPreferenceUpdate, ConfigWriteFailed>;
+  ) => Effect.Effect<SubscriptionPreferenceUpdate, ConfigWriteFailed | Error>;
 }
 
 /**
@@ -277,8 +280,8 @@ const CHATGPT_PROVIDER = defineSubscriptionProvider({
   loginWithDeviceCode: (options) => codexLoginWithDeviceCode(options),
   loginWithLoopback: (options) => codexLoginWithLoopback(options),
   accountLabel: (account) => codexAccountLabel(account),
-  isPrefer: () => isPreferCodexSubscription(),
-  setPrefer: (enabled) => setPreferCodexSubscription(enabled),
+  isPrefer: (stores) => isPreferCodexSubscription(stores),
+  setPrefer: (stores, enabled) => setPreferCodexSubscription(stores, enabled),
 });
 
 /**
@@ -296,8 +299,8 @@ const GROK_PROVIDER = defineSubscriptionProvider({
   loginWithDeviceCode: (options) => xaiLoginWithDeviceCode(options),
   loginWithLoopback: (options) => xaiLoginWithLoopback(options),
   accountLabel: (account) => xaiAccountLabel(account),
-  isPrefer: () => isPreferXaiSubscription(),
-  setPrefer: (enabled) => setPreferXaiSubscription(enabled),
+  isPrefer: (stores) => isPreferXaiSubscription(stores),
+  setPrefer: (stores, enabled) => setPreferXaiSubscription(stores, enabled),
 });
 
 /** Canonical catalog of OAuth subscription providers, shared by every host. */

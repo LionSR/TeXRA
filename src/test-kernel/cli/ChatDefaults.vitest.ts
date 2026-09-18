@@ -6,8 +6,12 @@ import { resolveChatDefaults } from '@cli/runtime/chatDefaults';
 import { CLI_CHEAP_START_MODEL } from '@cli/runtime/cliConfig';
 import { FakeConfigProvider } from '@test/support/FakePlatform';
 import { installPlatform } from '@test/support/setupPlatform';
+import { platformSettingsStores } from '@utils/config/platformSettings';
 
-type ChatDefaultsInit = Parameters<typeof resolveChatDefaults>[0];
+type ChatDefaultsInit = Omit<
+  Parameters<typeof resolveChatDefaults>[0],
+  'stores'
+>;
 
 /**
  * Installs a host whose workspace roots read `workspace` as the project
@@ -29,7 +33,9 @@ async function expectChatDefaults(
   init: ChatDefaultsInit,
   expected: Record<string, unknown>,
 ): Promise<void> {
-  expect(resolveChatDefaults(init)).toMatchObject(expected);
+  expect(
+    resolveChatDefaults({ ...init, stores: platformSettingsStores() }),
+  ).toMatchObject(expected);
 }
 
 describe('CLI chat defaults', () => {

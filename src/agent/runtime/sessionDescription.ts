@@ -109,7 +109,7 @@ export const generateSessionDescription = Effect.fn(
   const instruction = getDisplayedInstruction(config);
   if (!instruction) return;
   yield* Effect.gen(function* () {
-    const bound = yield* helperModel(stores, session.roots);
+    const bound = yield* helperModel(stores);
     const text = yield* helperCompletion(bound, {
       userPrompt: buildUserPrompt(config.agent, agentDescription, instruction),
       systemPrompt: SYSTEM_PROMPT,

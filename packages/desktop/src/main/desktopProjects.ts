@@ -208,7 +208,7 @@ function openProjectSession(
     const session = yield* openSessionEffect({
       roots,
       responseTextProcessing: createTexraResponseTextProcessing(
-        createAgentResponseTextConnector(stores, roots),
+        createAgentResponseTextConnector(stores),
       ),
     });
     return yield* Effect.try({

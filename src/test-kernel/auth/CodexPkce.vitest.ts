@@ -15,7 +15,7 @@ import {
   generatePkcePair,
 } from '@auth/oauth/pkce';
 import { resolveCodexSubscriptionCapabilities } from '@model/providerCapabilities';
-import { setupPlatform } from '@test/support/setupPlatform';
+import { hostStores, setupPlatform } from '@test/support/setupPlatform';
 
 /** A minimal OpenAI `ModelConfig` fixture, overridable per test. */
 function openAIModel(overrides: Partial<ModelConfig> = {}): ModelConfig {
@@ -139,8 +139,11 @@ describe('codex model eligibility', () => {
     ],
   )('$name', ({ overrides, eligible }) => {
     expect(
-      resolveCodexSubscriptionCapabilities(openAIModel(overrides), false) !==
-        null,
+      resolveCodexSubscriptionCapabilities(
+        hostStores(),
+        openAIModel(overrides),
+        false,
+      ) !== null,
     ).toBe(eligible);
   });
 });

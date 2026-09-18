@@ -14,6 +14,7 @@ import {
 } from '@model/apiProviders';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
 import {
   getProviderDisplayName,
@@ -32,6 +33,7 @@ interface ApiProviderQuickPickItem extends vscode.QuickPickItem {
  * confirmation prompts or messaging (see SettingsProfileKeyController).
  */
 function createProfileKeyController(
+  stores: SettingsStores,
   secrets: PlatformSecrets,
   refreshAfterKeyChange: (provider: string) => Promise<void>,
 ): SettingsProfileKeyController {
@@ -41,10 +43,11 @@ function createProfileKeyController(
     externalOpener: new VscodeExternalOpener(),
     getProviderDisplayName: (provider) =>
       getProviderDisplayName(
+        stores,
         provider,
         PROVIDER_DISPLAY_NAMES[provider] ?? provider,
       ),
-    getProviderKeyUrl,
+    getProviderKeyUrl: (provider) => getProviderKeyUrl(stores, provider),
     refreshAfterKeyChange,
     reportFailure: async (message, error) => {
       await showLoggedErrorMessage(CHANNEL, message, error);
@@ -57,6 +60,7 @@ function createProfileKeyController(
  * portal without closing the input box, so the user can paste straight away.
  */
 async function promptForApiKey(
+  stores: SettingsStores,
   provider: ApiProvider,
 ): Promise<string | undefined> {
   const ib = vscode.window.createInputBox();
@@ -73,7 +77,7 @@ async function promptForApiKey(
   ib.buttons = [getKeyButton];
   ib.onDidTriggerButton((button) => {
     if (button === getKeyButton) {
-      const keyUrl = getProviderKeyUrl(provider);
+      const keyUrl = getProviderKeyUrl(stores, provider);
       if (keyUrl) void vscode.env.openExternal(vscode.Uri.parse(keyUrl));
     }
   });
@@ -114,6 +118,7 @@ async function pickApiProvider(
  * optional `provider` is parsed at the dispatch boundary.
  */
 export async function setApiKey(
+  stores: SettingsStores,
   secrets: PlatformSecrets,
   refreshAfterKeyChange: (provider: string) => Promise<void>,
   runtime: ProcessRuntime,
@@ -130,11 +135,12 @@ export async function setApiKey(
 
   if (!target) return;
 
-  const apiKey = await promptForApiKey(target);
+  const apiKey = await promptForApiKey(stores, target);
   if (!apiKey) return;
 
   await runtime.runPromise(
     createProfileKeyController(
+      stores,
       secrets,
       refreshAfterKeyChange,
     ).commitProviderKey(target, apiKey),
@@ -146,6 +152,7 @@ export async function setApiKey(
  * command registry in #3781 batch 4.
  */
 export async function removeApiKey(
+  stores: SettingsStores,
   secrets: PlatformSecrets,
   refreshAfterKeyChange: (provider: string) => Promise<void>,
   runtime: ProcessRuntime,
@@ -163,6 +170,7 @@ export async function removeApiKey(
 
   await runtime.runPromise(
     createProfileKeyController(
+      stores,
       secrets,
       refreshAfterKeyChange,
     ).removeProviderKey(provider),

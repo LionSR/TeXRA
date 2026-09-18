@@ -69,7 +69,7 @@ describe('maybeRunCliOnboarding headless parity', () => {
             yield* maybeOnboarding(
               {
                 ...createFakePlatform(),
-                globalState: createFakeWorkspaceRoots().globalState,
+                ...createFakeWorkspaceRoots(),
                 secrets: new FakeSecrets(),
                 runtime: testRuntime(),
               },

@@ -17,6 +17,7 @@ import {
   CODING_PLAN_SUBSCRIPTIONS,
   type CodingPlanSubscription,
 } from '@shared/codingPlanSubscriptions';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { UsageRoute } from '@shared/schemas';
 import { isKimiSubscriptionEligible } from '@shared/model/kimiCodeRetryGate';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -26,38 +27,48 @@ import {
   getUseOpenRouter,
   setGLMCodingPlan,
 } from '@utils/config/providerConfig';
-import { writePlatformSetting } from '@utils/config/platformSettings';
+import { writeSettingTo } from '@utils/config/platformSettings';
+
+/**
+ * What a coding-plan answer reads: the setting slots behind the plan toggles
+ * and routing switches, plus the secret store behind the plan's own API key.
+ */
+export interface ModelSubscriptionStores extends SettingsStores {
+  readonly secrets: PlatformSecrets;
+}
 
 export interface CodingPlanSubscriptionRuntime {
   readonly descriptor: CodingPlanSubscription;
-  readonly getEnabled: () => boolean;
+  readonly getEnabled: (stores: SettingsStores) => boolean;
   /**
    * Persist the toggle through the shared config write path. An `Effect`, like
    * every other write of a catalog-backed setting, so the caller's program
    * composes it and owns the failure.
    */
   readonly setEnabled: (
+    stores: SettingsStores,
     enabled: boolean,
   ) => Effect.Effect<void, ConfigWriteFailed | Error>;
 }
 
 function isGlmCodingPlanActive(
+  stores: ModelSubscriptionStores,
   modelId: string,
-  secrets: PlatformSecrets,
 ): Effect.Effect<boolean, Error, LanguageModel> {
   return Effect.gen(function* () {
     const config = yield* resolveRuntimeModelConfig(modelId);
     if (config?.provider !== ModelProvider.GLM) return false;
 
     const route = resolveGlmRoute({
+      stores,
       baseUrl: config.baseUrl,
       useOpenRouter: shouldRouteModelThroughOpenRouter(
         config,
-        getUseOpenRouter(),
+        getUseOpenRouter(stores),
       ),
     });
     if (route.route !== 'official-coding-plan') return false;
-    return yield* hasUsableApiKey(secrets, 'glm');
+    return yield* hasUsableApiKey(stores.secrets, 'glm');
   });
 }
 
@@ -68,15 +79,19 @@ function isGlmCodingPlanActive(
  * toggle, a stored key, and the "Prefer Kimi Code" switch.
  */
 function isKimiCodeSubscriptionActive(
+  stores: ModelSubscriptionStores,
   modelId: string,
-  secrets: PlatformSecrets,
 ): Effect.Effect<boolean, Error, LanguageModel> {
   return Effect.gen(function* () {
     const config = yield* resolveRuntimeModelConfig(modelId);
     if (!config || !isKimiSubscriptionEligible(config)) return false;
     return isKimiCodeRoute(
       config,
-      yield* resolveKimiCodeRoutingFacts(secrets, getUseOpenRouter()),
+      yield* resolveKimiCodeRoutingFacts(
+        stores,
+        stores.secrets,
+        getUseOpenRouter(stores),
+      ),
     );
   });
 }
@@ -89,8 +104,8 @@ const RUNTIME_BY_ID = {
   },
   kimiCode: {
     getEnabled: getPreferKimiCode,
-    setEnabled: (enabled) =>
-      writePlatformSetting(GlobalStateKey.KIMI_CODE_PREFER, enabled),
+    setEnabled: (stores, enabled) =>
+      writeSettingTo(stores, GlobalStateKey.KIMI_CODE_PREFER, enabled),
     isActiveForModel: isKimiCodeSubscriptionActive,
   },
 } as const satisfies Record<
@@ -105,8 +120,8 @@ const RUNTIME_BY_ID = {
      * "which subscription serves this model next".
      */
     readonly isActiveForModel: (
+      stores: ModelSubscriptionStores,
       modelId: string,
-      secrets: PlatformSecrets,
     ) => Effect.Effect<boolean, Error, LanguageModel>;
   }
 >;
@@ -127,8 +142,8 @@ export const codingPlanSubscriptionRuntimes: readonly CodingPlanSubscriptionRunt
 
 /** Resolve the coding plan currently serving a model, if any. */
 function activeCodingPlanForModel(
+  stores: ModelSubscriptionStores,
   modelId: string,
-  secrets: PlatformSecrets,
 ): Effect.Effect<
   CodingPlanSubscriptionRuntime | undefined,
   Error,
@@ -137,7 +152,7 @@ function activeCodingPlanForModel(
   return Effect.forEach(
     RUNTIMES,
     (runtime) =>
-      Effect.map(runtime.isActiveForModel(modelId, secrets), (active) => ({
+      Effect.map(runtime.isActiveForModel(stores, modelId), (active) => ({
         runtime,
         active,
       })),
@@ -164,13 +179,13 @@ function activeCodingPlanForModel(
  * module stays free of the coding-plan runtime, which reads stored keys.
  */
 export function activeSubscriptionUsageRoute(
+  stores: ModelSubscriptionStores,
   modelId: string,
-  secrets: PlatformSecrets,
 ): Effect.Effect<UsageRoute | undefined, Error, LanguageModel> {
   return Effect.gen(function* () {
-    const oauthRoute = yield* oauthSubscriptionUsageRoute(modelId);
+    const oauthRoute = yield* oauthSubscriptionUsageRoute(stores, modelId);
     if (oauthRoute !== undefined) return oauthRoute;
-    const plan = yield* activeCodingPlanForModel(modelId, secrets);
+    const plan = yield* activeCodingPlanForModel(stores, modelId);
     return plan?.descriptor.usageRoute;
   });
 }

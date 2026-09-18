@@ -69,7 +69,11 @@ export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
     isEmpty: (models) => !models.some((model) => model.available),
     closeEmptyOnEnter: true,
     items: (models) =>
-      modelSelectItemsForCli(models, props.getModelSwitchDisabledReason),
+      modelSelectItemsForCli(
+        props.stores,
+        models,
+        props.getModelSwitchDisabledReason,
+      ),
     selectable: props.selectable,
     onSelect: (value) => props.onSelect?.(value),
     onClose: props.onClose,

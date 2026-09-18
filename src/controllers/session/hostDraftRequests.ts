@@ -154,17 +154,14 @@ export class HostDraftRequests {
   > {
     switch (request.kind) {
       case 'polish': {
-        // The helper model behind the polish is resolved against the process
-        // stores; a host port takes no services, so they are read here.
+        // The helper model behind the polish is resolved against the session's
+        // setting slots and the process secret store; a host port takes no
+        // services, so the secret store is read here.
         const stores = {
+          ...session.roots,
           secrets: yield* Secrets,
-          globalState: yield* AppState,
         };
-        const text = yield* polishTextWithAI(
-          request.text,
-          stores,
-          session.roots,
-        ).pipe(
+        const text = yield* polishTextWithAI(request.text, stores).pipe(
           Effect.mapError((error) => new Rejected({ reason: error.message })),
         );
         return { kind: 'text', text };
@@ -274,6 +271,7 @@ export class HostDraftRequests {
       // calling frame, and the resolved credential reaches the
       // transcription as data.
       const credential = yield* resolveRouteCredential(
+        take.session.roots,
         MODEL_CONFIGS['gpt4o'],
         false,
         secrets,

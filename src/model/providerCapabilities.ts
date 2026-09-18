@@ -11,7 +11,8 @@ import {
   CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
   type UsageRoute,
 } from '@shared/schemas';
-import { readPlatformSetting } from '@utils/config/platformSettings';
+import type { SettingsStores } from '@shared/config/settingsAccess';
+import { readSettingFrom } from '@utils/config/platformSettings';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 
 import { resolveRuntimeModelConfig } from './runtimeModelRegistry';
@@ -25,6 +26,7 @@ export interface ProviderCapabilityProfile {
 }
 
 interface ProviderCapabilityKey {
+  readonly stores: SettingsStores;
   readonly model: ModelConfig;
   readonly useOpenRouter: boolean;
 }
@@ -74,6 +76,7 @@ function isCodexSubscriptionEligible(model: ModelConfig): boolean {
 
 /** Resolve the active ChatGPT-subscription (Codex) provider profile. */
 function resolveCodexSubscriptionProfile({
+  stores,
   model,
   useOpenRouter,
 }: ProviderCapabilityKey): ProviderCapabilityProfile | null {
@@ -82,7 +85,10 @@ function resolveCodexSubscriptionProfile({
   if (model.openRouterOnly) return null;
   if (!isCodexSubscriptionEligible(model)) return null;
   const inputTokenLimit = Math.min(
-    readPlatformSetting<number>(CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.configKey),
+    readSettingFrom<number>(
+      stores,
+      CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.configKey,
+    ),
     model.contextWindow,
   );
   const contextWindow = Math.min(
@@ -102,11 +108,16 @@ function resolveCodexSubscriptionProfile({
  * subscription preference is off or the model is not Codex-eligible.
  */
 export function resolveCodexSubscriptionCapabilities(
+  stores: SettingsStores,
   config: ModelConfig,
   useOpenRouter: boolean,
 ): ProviderCapabilityProfile | null {
-  if (!isPreferCodexSubscription()) return null;
-  return resolveCodexSubscriptionProfile({ model: config, useOpenRouter });
+  if (!isPreferCodexSubscription(stores)) return null;
+  return resolveCodexSubscriptionProfile({
+    stores,
+    model: config,
+    useOpenRouter,
+  });
 }
 
 /**
@@ -121,8 +132,10 @@ export function resolveCodexSubscriptionCapabilities(
 const signedInSubscriptionUsageRoute = Effect.fn(
   'providerCapabilities.signedInSubscriptionUsageRoute',
 )(function* (
+  stores: SettingsStores,
   modelId: string,
   resolveCapabilities: (
+    stores: SettingsStores,
     config: ModelConfig,
     useOpenRouter: boolean,
   ) => ProviderCapabilityProfile | null,
@@ -130,7 +143,11 @@ const signedInSubscriptionUsageRoute = Effect.fn(
 ): Effect.fn.Return<UsageRoute | undefined, Error, LanguageModel> {
   const config = yield* resolveRuntimeModelConfig(modelId);
   if (!config) return undefined;
-  const capabilities = resolveCapabilities(config, getUseOpenRouter());
+  const capabilities = resolveCapabilities(
+    stores,
+    config,
+    getUseOpenRouter(stores),
+  );
   if (!capabilities) return undefined;
   const signedIn = yield* isSignedIn();
   return signedIn ? capabilities.usageRoute : undefined;
@@ -145,14 +162,16 @@ const signedInSubscriptionUsageRoute = Effect.fn(
  */
 export const oauthSubscriptionUsageRoute = Effect.fn(
   'providerCapabilities.oauthSubscriptionUsageRoute',
-)(function* (modelId: string) {
+)(function* (stores: SettingsStores, modelId: string) {
   return (
     (yield* signedInSubscriptionUsageRoute(
+      stores,
       modelId,
       resolveCodexSubscriptionCapabilities,
       isCodexSignedIn,
     )) ??
     (yield* signedInSubscriptionUsageRoute(
+      stores,
       modelId,
       resolveXaiSubscriptionCapabilities,
       isXaiSignedIn,
@@ -163,9 +182,10 @@ export const oauthSubscriptionUsageRoute = Effect.fn(
 /** Whether the model currently routes through a signed-in ChatGPT subscription. */
 export const isCodexSubscriptionActive = Effect.fn(
   'providerCapabilities.isCodexSubscriptionActive',
-)(function* (modelId: string) {
+)(function* (stores: SettingsStores, modelId: string) {
   return (
     (yield* signedInSubscriptionUsageRoute(
+      stores,
       modelId,
       resolveCodexSubscriptionCapabilities,
       isCodexSignedIn,
@@ -180,10 +200,11 @@ export const isCodexSubscriptionActive = Effect.fn(
  * token hits the same `api.x.ai` surface as an API key.
  */
 export function resolveXaiSubscriptionCapabilities(
+  stores: SettingsStores,
   config: ModelConfig,
   useOpenRouter: boolean,
 ): ProviderCapabilityProfile | null {
-  if (!isPreferXaiSubscription()) return null;
+  if (!isPreferXaiSubscription(stores)) return null;
   if (useOpenRouter) return null;
   if (config.provider !== ModelProvider.XAI) return null;
   if (config.openRouterOnly) return null;
@@ -196,9 +217,10 @@ export function resolveXaiSubscriptionCapabilities(
 /** Whether the model currently routes through a signed-in Grok subscription. */
 export const isXaiSubscriptionActive = Effect.fn(
   'providerCapabilities.isXaiSubscriptionActive',
-)(function* (modelId: string) {
+)(function* (stores: SettingsStores, modelId: string) {
   return (
     (yield* signedInSubscriptionUsageRoute(
+      stores,
       modelId,
       resolveXaiSubscriptionCapabilities,
       isXaiSignedIn,
