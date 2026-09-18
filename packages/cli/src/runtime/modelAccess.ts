@@ -332,17 +332,15 @@ export function formatCliModelDetails(entry: CliModelAccess): string {
   return lines.join('\n');
 }
 
-function loadCliModelAccessList(
+/** The caller's preloaded list, or one computed now. */
+const loadCliModelAccessList = Effect.fn('loadCliModelAccessList')(function* (
   options: CliModelAccessEntryOptions,
-): Effect.Effect<
-  readonly CliModelAccess[],
-  Effect.Error<ReturnType<typeof getCliModelAccessList>>,
-  Effect.Services<ReturnType<typeof getCliModelAccessList>>
-> {
-  return options.accessList != null
-    ? Effect.succeed(options.accessList)
-    : getCliModelAccessList({ stores: options.stores });
-}
+) {
+  const models: readonly CliModelAccess[] =
+    options.accessList ??
+    (yield* getCliModelAccessList({ stores: options.stores }));
+  return models;
+});
 
 export const loadCliModelAccessEntry = Effect.fn('loadCliModelAccessEntry')(
   function* (model: string, options: CliModelAccessEntryOptions) {
