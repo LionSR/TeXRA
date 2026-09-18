@@ -85,7 +85,9 @@ function useAsyncStatusView<Status, View extends StatusViewBase>(options: {
   };
 }): {
   readonly view: View;
-  readonly refresh: () => Promise<void>;
+  /** The read as a program: the mount runs it, and a row that writes first
+   *  sequences it after its own write in one run. */
+  readonly refresh: () => Effect.Effect<void>;
   readonly mark: (updater: (current: View) => Partial<View>) => void;
 } {
   const [view, setView] = useState<View>(options.initial);
@@ -105,44 +107,53 @@ function useAsyncStatusView<Status, View extends StatusViewBase>(options: {
     );
   }, []);
 
-  const refresh = useCallback(async () => {
-    const request = ++requestSequence.current;
-    if (mounted.current) {
-      setView(
-        (current) => ({ ...current, loading: true, error: false }) as View,
-      );
-    }
-    await options.runtime.runPromise(
-      options.load().pipe(
-        Effect.matchCause({
-          onSuccess: (status) => {
-            if (!mounted.current || request !== requestSequence.current) return;
-            setView(options.buildView(status));
-          },
-          onFailure: (cause) => {
-            if (!mounted.current || request !== requestSequence.current) return;
-            setView(
-              (current) =>
-                ({ ...current, loading: false, error: true }) as View,
-            );
-            // The squashed cause is the value the runtime would have rejected
-            // this read with, so the surface's error hook still sees the
-            // failure the status module reported.
-            options.onErrorRef.current?.(Cause.squash(cause));
-          },
-        }),
-      ),
-    );
-  }, [options.load, options.runtime, options.buildView, options.onErrorRef]);
+  // `suspend` so the sequence number is claimed when the read starts, not
+  // when its program is built: a row that composes this after a write must
+  // not reserve the slot before that write lands.
+  const refresh = useCallback(
+    (): Effect.Effect<void> =>
+      Effect.suspend(() => {
+        const request = ++requestSequence.current;
+        if (mounted.current) {
+          setView(
+            (current) => ({ ...current, loading: true, error: false }) as View,
+          );
+        }
+        return options.load().pipe(
+          Effect.matchCause({
+            onSuccess: (status) => {
+              if (!mounted.current || request !== requestSequence.current) {
+                return;
+              }
+              setView(options.buildView(status));
+            },
+            onFailure: (cause) => {
+              if (!mounted.current || request !== requestSequence.current) {
+                return;
+              }
+              setView(
+                (current) =>
+                  ({ ...current, loading: false, error: true }) as View,
+              );
+              // The squashed cause is the value the runtime would have
+              // rejected this read with, so the surface's error hook still
+              // sees the failure the status module reported.
+              options.onErrorRef.current?.(Cause.squash(cause));
+            },
+          }),
+        );
+      }),
+    [options.load, options.buildView, options.onErrorRef],
+  );
 
   useEffect(() => {
     mounted.current = true;
-    void refresh();
+    void options.runtime.runPromise(refresh());
     return () => {
       mounted.current = false;
       requestSequence.current += 1;
     };
-  }, [refresh]);
+  }, [refresh, options.runtime]);
 
   return { view, refresh, mark };
 }
@@ -209,39 +220,43 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
   // `onWrite.invalidatesModelOptions` marks the rows whose change re-routes
   // models — so this form keeps no key list of its own. `null` is the shared
   // reset convention (delete the key so the schema default reappears).
-  const applyUpdate = async (
+  const applyUpdate = (
     entry: SurfacedSettingEntry,
     value: unknown,
-  ): Promise<void> => {
-    const result = await runtime.runPromise(
-      applyStateSettingUpdate(entry.key, value, {
+  ): Effect.Effect<void, Error> =>
+    Effect.gen(function* () {
+      const result = yield* applyStateSettingUpdate(entry.key, value, {
         host: 'cli',
         stores,
         onApprovalPolicyChanged: props.onApprovalPolicyChanged,
-      }),
-    );
-    const label = entry.title ?? entry.key;
-    switch (result.kind) {
-      case 'applied':
-        break;
-      case 'rejected':
-      case 'failed':
-        // ConfigForm rolls its optimistic value back on a rejection and reports
-        // it, so a refused write must throw rather than read as applied.
-        throw new Error(
-          `Failed to update "${label}": ${toErrorMessage(result.error)}`,
-          { cause: result.error },
-        );
-      case 'ignored':
-      case 'workspace-required':
-        throw new Error(
-          `Setting "${label}" is not writable from /config (${result.kind}).`,
-        );
-    }
-    if (entry.onWrite?.invalidatesModelOptions) {
-      bumpCodexPreferenceVersion();
-    }
-  };
+      });
+      const label = entry.title ?? entry.key;
+      switch (result.kind) {
+        case 'applied':
+          break;
+        case 'rejected':
+        case 'failed':
+          // ConfigForm rolls its optimistic value back on a failure and
+          // reports it, so a refused write must fail rather than read as
+          // applied.
+          return yield* Effect.fail(
+            new Error(
+              `Failed to update "${label}": ${toErrorMessage(result.error)}`,
+              { cause: result.error },
+            ),
+          );
+        case 'ignored':
+        case 'workspace-required':
+          return yield* Effect.fail(
+            new Error(
+              `Setting "${label}" is not writable from /config (${result.kind}).`,
+            ),
+          );
+      }
+      if (entry.onWrite?.invalidatesModelOptions) {
+        bumpCodexPreferenceVersion();
+      }
+    });
 
   return (
     <ConfigForm
@@ -250,6 +265,7 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
       readValue={(entry) => readSetting(entry, stores, 'cli')}
       writeValue={(entry, value) => applyUpdate(entry, value)}
       resetValue={(entry) => applyUpdate(entry, null)}
+      runtime={runtime}
       formLinks={[
         {
           name: 'agents',
@@ -282,15 +298,20 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
           <ProviderApiKeyForm
             availableRows={props.availableRows}
             statusView={apiKeyStatusView}
-            onSave={async (provider, key) => {
-              await props.runtime.runPromise(
-                saveProviderApiKey(secrets, provider, key),
-              );
-              markApiKey((current) => ({
-                statuses: { ...current.statuses, [provider]: 'set' },
-              }));
-              await refreshApiKeyStatuses();
-            }}
+            // This port still takes a Promise (its other consumer is the
+            // slash-command form), so the save and the refresh that follows
+            // it settle as one program under one run.
+            onSave={(provider, key) =>
+              runtime.runPromise(
+                Effect.gen(function* () {
+                  yield* saveProviderApiKey(secrets, provider, key);
+                  markApiKey((current) => ({
+                    statuses: { ...current.statuses, [provider]: 'set' },
+                  }));
+                  yield* refreshApiKeyStatuses();
+                }),
+              )
+            }
             onDone={onBack}
             onCancel={onBack}
           />
@@ -299,23 +320,24 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
           <GitHubTokenForm
             availableRows={props.availableRows}
             statusView={githubTokenStatusView}
-            onSave={async (token) => {
-              await props.runtime.runPromise(
-                storeCredential(secrets, {
+            runtime={runtime}
+            onSave={(token) =>
+              Effect.gen(function* () {
+                yield* storeCredential(secrets, {
                   secretName: GITHUB_TOKEN_STORAGE_KEY,
                   value: token,
                   kind: 'github',
-                }),
-              );
-              markGitHubToken(() => ({ status: 'secret' }));
-              await refreshGitHubTokenStatus();
-            }}
-            onRemove={async () => {
-              await props.runtime.runPromise(
-                secrets.delete(GITHUB_TOKEN_STORAGE_KEY),
-              );
-              await refreshGitHubTokenStatus();
-            }}
+                });
+                markGitHubToken(() => ({ status: 'secret' }));
+                yield* refreshGitHubTokenStatus();
+              })
+            }
+            onRemove={() =>
+              Effect.gen(function* () {
+                yield* secrets.delete(GITHUB_TOKEN_STORAGE_KEY);
+                yield* refreshGitHubTokenStatus();
+              })
+            }
             onDone={onBack}
             onCancel={onBack}
           />

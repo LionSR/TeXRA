@@ -542,9 +542,8 @@ describe('/config slash command wiring', () => {
     openCliSlashCommandForm('config', '');
     const props = await renderConfigFormProps();
 
-    await props.writeValue(
-      entryByKey(TEXRA_APPROVAL_POLICY_CONFIG_KEY),
-      'yolo',
+    await Effect.runPromise(
+      props.writeValue(entryByKey(TEXRA_APPROVAL_POLICY_CONFIG_KEY), 'yolo'),
     );
 
     expect(config.get(TEXRA_APPROVAL_POLICY_CONFIG_KEY, 'ask')).toBe('yolo');
@@ -555,7 +554,7 @@ describe('/config slash command wiring', () => {
     const { stores, config } = makeFakeSettingsStores();
     const props = await openConfigFormProps(stores);
     const markCommits = entryByKey(WorkspaceStateKey.GIT_MARK_COMMITS);
-    await props.writeValue(markCommits, false);
+    await Effect.runPromise(props.writeValue(markCommits, false));
 
     expect(isStored(config, WorkspaceStateKey.GIT_MARK_COMMITS)).toBe(true);
     expect(props.readValue(markCommits)).toBe(false);
@@ -589,10 +588,10 @@ describe('/config slash command wiring', () => {
     const props = await openConfigFormProps(stores);
     const authorName = entryByKey(WorkspaceStateKey.GIT_AUTHOR_NAME);
 
-    await props.writeValue(authorName, 'someone-else');
+    await Effect.runPromise(props.writeValue(authorName, 'someone-else'));
     expect(isStored(config, WorkspaceStateKey.GIT_AUTHOR_NAME)).toBe(true);
 
-    await props.resetValue(authorName);
+    await Effect.runPromise(props.resetValue(authorName));
     // The key is deleted, so reads fall back to the default identity.
     expect(isStored(config, WorkspaceStateKey.GIT_AUTHOR_NAME)).toBe(false);
     expect(props.readValue(authorName)).toBe(DEFAULT_GIT_AUTHOR_NAME);
@@ -605,7 +604,7 @@ describe('/config slash command wiring', () => {
     );
     const props = await openConfigFormProps(stores);
     const preferKimiCode = entryByKey(GlobalStateKey.KIMI_CODE_PREFER);
-    await props.writeValue(preferKimiCode, true);
+    await Effect.runPromise(props.writeValue(preferKimiCode, true));
 
     expect(globalState.get(GlobalStateKey.KIMI_CODE_PREFER)).toBe(true);
     expect(props.readValue(entryByKey(GlobalStateKey.USE_OPENROUTER))).toBe(
@@ -616,7 +615,7 @@ describe('/config slash command wiring', () => {
     await Effect.runPromise(
       globalState.update(GlobalStateKey.USE_OPENROUTER, true),
     );
-    await props.writeValue(preferKimiCode, false);
+    await Effect.runPromise(props.writeValue(preferKimiCode, false));
     expect(globalState.get(GlobalStateKey.USE_OPENROUTER)).toBe(true);
   });
 });
