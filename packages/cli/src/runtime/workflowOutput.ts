@@ -148,7 +148,6 @@ export type CliWorkflowRunResult = CliRunResult & {
 
 interface WorkflowOutputResolutionOptions {
   readonly expectedOutputFiles?: readonly string[];
-  readonly runDirectory?: string;
   /** Storage root of the session that ran the workflow. */
   readonly storageRoot: string;
   readonly tryCommitPublication?: () => boolean;
@@ -247,8 +246,7 @@ export async function resolveWorkflowOutput(
   context: CliContext,
   options: WorkflowOutputResolutionOptions,
 ): Promise<CliWorkflowRunResult> {
-  const runDirectory =
-    options.runDirectory ?? runDirUnder(options.storageRoot, result.runId);
+  const runDirectory = runDirUnder(options.storageRoot, result.runId);
   const baseResult = { ...result, workingDirectory: context.cwd, runDirectory };
   // Only completed runs may publish to user-requested destinations. Partial or
   // rejected artifacts remain inspectable in run storage through baseResult.

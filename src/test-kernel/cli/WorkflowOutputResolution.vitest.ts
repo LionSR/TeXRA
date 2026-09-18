@@ -18,10 +18,13 @@ import {
 } from '@shared/schemas';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
+import { runDirUnder } from '@utils/files/runStorageFs';
 
 type WorkflowResult = Parameters<typeof resolveWorkflowOutput>[2];
 
 const tempDirs = useTempDirs();
+
+const TEST_RUN_ID = 'workflow-output-test' as RunId;
 
 /** Writes a generated file under `<cwd>/run/` and returns its absolute path. */
 async function writeRunFile(
@@ -68,7 +71,7 @@ function workflowResult(
         removed: null,
       })),
     },
-    runId: 'workflow-output-test' as RunId,
+    runId: TEST_RUN_ID,
   };
 }
 
@@ -86,7 +89,6 @@ describe('CLI workflow output resolution', () => {
         {
           expectedOutputFiles: ['a.tex', 'b.tex'],
           storageRoot: join(cwd, 'storage'),
-          runDirectory: join(cwd, 'run'),
         },
       ),
     ).rejects.toThrow(/b\.tex/);
@@ -109,7 +111,7 @@ describe('CLI workflow output resolution', () => {
         RUN_OUTCOME.CANCELLED,
       ),
       testContext(cwd),
-      { storageRoot: join(cwd, 'storage'), runDirectory: join(cwd, 'run') },
+      { storageRoot: join(cwd, 'storage') },
     );
     const resultForDirectory = await resolveWorkflowOutput(
       undefined,
@@ -122,7 +124,6 @@ describe('CLI workflow output resolution', () => {
       {
         expectedOutputFiles: ['paper.tex'],
         storageRoot: join(cwd, 'storage'),
-        runDirectory: join(cwd, 'run'),
       },
     );
 
@@ -130,7 +131,7 @@ describe('CLI workflow output resolution', () => {
       expect(result).toMatchObject({
         outcome: RUN_OUTCOME.CANCELLED,
         workingDirectory: cwd,
-        runDirectory: join(cwd, 'run'),
+        runDirectory: runDirUnder(join(cwd, 'storage'), TEST_RUN_ID),
       });
       expect(Object.hasOwn(result, 'status')).toBe(false);
       expect(Object.hasOwn(result, 'terminalStatus')).toBe(false);
@@ -162,7 +163,6 @@ describe('CLI workflow output resolution', () => {
       {
         expectedOutputFiles: ['a.tex', 'b.tex'],
         storageRoot: join(cwd, 'storage'),
-        runDirectory: join(cwd, 'run'),
       },
     );
 
@@ -210,7 +210,6 @@ describe('CLI workflow output resolution', () => {
       {
         expectedOutputFiles,
         storageRoot: join(cwd, 'storage'),
-        runDirectory: join(cwd, 'run'),
       },
     );
 
@@ -253,7 +252,6 @@ describe('CLI workflow output resolution', () => {
       {
         expectedOutputFiles: ['paper/main.tex', 'paper/chapters/series.tex'],
         storageRoot: join(cwd, 'storage'),
-        runDirectory: join(cwd, 'run'),
       },
     );
 
@@ -302,7 +300,6 @@ describe('CLI workflow output resolution', () => {
       {
         expectedOutputFiles: ['paper/main.tex', 'paper/chapters/main.tex'],
         storageRoot: join(cwd, 'storage'),
-        runDirectory: join(cwd, 'run'),
       },
     );
 
@@ -339,7 +336,6 @@ describe('CLI workflow output resolution', () => {
         {
           expectedOutputFiles: ['paper/input.tex'],
           storageRoot: join(cwd, 'storage'),
-          runDirectory: join(cwd, 'run'),
         },
       ),
     ).rejects.toThrow(/paper[/\\]input\.tex/);
@@ -384,7 +380,6 @@ describe('CLI workflow output resolution', () => {
         {
           expectedOutputFiles: ['chapters/series.tex'],
           storageRoot: join(cwd, 'storage'),
-          runDirectory: join(cwd, 'run'),
         },
       ),
     ).rejects.toThrow(/chapters[/\\]series\.tex/);
@@ -406,7 +401,6 @@ describe('CLI workflow output resolution', () => {
       {
         expectedOutputFiles: ['a.tex'],
         storageRoot: join(cwd, 'storage'),
-        runDirectory: join(cwd, 'run'),
       },
     );
 
@@ -430,7 +424,6 @@ describe('CLI workflow output resolution', () => {
       testContext(cwd),
       {
         storageRoot: join(cwd, 'storage'),
-        runDirectory: join(cwd, 'run'),
       },
     );
 
@@ -464,7 +457,6 @@ describe('CLI workflow output resolution', () => {
       testContext(cwd),
       {
         storageRoot: join(cwd, 'storage'),
-        runDirectory: join(cwd, 'run'),
       },
     );
 
