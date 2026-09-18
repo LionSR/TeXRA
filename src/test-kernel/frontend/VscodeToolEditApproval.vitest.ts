@@ -115,7 +115,7 @@ function createDecideSpy() {
 function onRuntime<A, E>(
   program: Effect.Effect<A, E, FileSystem.FileSystem>,
 ): Promise<A> {
-  return effectRuntime().runPromise(program);
+  return testRuntime().runPromise(program);
 }
 
 interface ApprovalHarness {
