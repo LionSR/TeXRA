@@ -1,5 +1,5 @@
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, Fiber } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports - common
@@ -66,32 +66,27 @@ const triggerLaTeXBuild = (
     });
 
   return Effect.gen(function* () {
-    yield* Effect.tryPromise({
-      try: () =>
-        openFileInEditor(fileUri.fsPath, {
-          preserveFocus: true,
-          save: true,
-          reuseVisible: true,
-        }),
-      catch: buildFailed,
-    });
+    yield* openFileInEditor(fileUri.fsPath, {
+      preserveFocus: true,
+      save: true,
+      reuseVisible: true,
+    }).pipe(Effect.mapError(buildFailed));
 
-    const diagnosticsWait = waitForDiagnosticsChange(
-      fileUri,
-      DIAGNOSTIC_UPDATE_TIMEOUT_MS,
+    // Subscribed on this frame, before the build is triggered, so an update
+    // the build produces is not missed. The wait is the `finally` of the
+    // build attempt: the build command never fails on its own — it warn-logs
+    // — so sequencing the two is what makes the wait run however the build
+    // went.
+    const diagnosticsWait = yield* Effect.forkChild(
+      waitForDiagnosticsChange(fileUri, DIAGNOSTIC_UPDATE_TIMEOUT_MS),
+      { startImmediately: true },
     );
 
-    // The wait is the `finally` of the build attempt: the build command never
-    // fails on its own — it warn-logs — so sequencing the two is what makes
-    // the wait run however the build went.
     yield* invokeLatexWorkshopBuild(
       fileUri,
       CHANNEL,
       'Failed to trigger LaTeX build',
     );
-    yield* Effect.tryPromise({
-      try: () => diagnosticsWait,
-      catch: buildFailed,
-    });
+    yield* Fiber.join(diagnosticsWait);
   });
 };

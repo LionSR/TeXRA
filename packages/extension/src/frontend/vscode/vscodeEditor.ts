@@ -4,12 +4,24 @@
  * Provides common helpers for opening and manipulating files in VS Code editors.
  */
 
+import { Data, Effect } from 'effect';
 import * as vscode from 'vscode';
 
-import { createLog } from '@logger/logUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-const log = createLog('vscodeEditor');
+/**
+ * Why an editor call produced no editor: VS Code would not read the document
+ * at all, it read it and would not show it, or it would not write the file
+ * back. The three are separate answers because only the first says anything
+ * about the file itself, and only the last leaves content unsaved.
+ */
+export class EditorOpenFailed extends Data.TaggedError('EditorOpenFailed')<{
+  readonly reason:
+    'document-open-failed' | 'editor-unavailable' | 'save-failed';
+  readonly message: string;
+  readonly absolutePath: string;
+  readonly cause: unknown;
+}> {}
 
 /**
  * Clamp a 1-based line number to a 0-based VS Code line index. Floors first
@@ -41,6 +53,24 @@ function findVisibleEditor(uri: vscode.Uri): vscode.TextEditor | undefined {
   );
 }
 
+/** Show `document`, reporting VS Code's refusal as `editor-unavailable`. */
+function showTextDocument(
+  uri: vscode.Uri,
+  document: vscode.TextDocument,
+  options: vscode.TextDocumentShowOptions,
+): Effect.Effect<vscode.TextEditor, EditorOpenFailed> {
+  return Effect.tryPromise({
+    try: () => vscode.window.showTextDocument(document, options),
+    catch: (cause) =>
+      new EditorOpenFailed({
+        reason: 'editor-unavailable',
+        message: `Could not show ${uri.fsPath} in an editor: ${toErrorMessage(cause)}`,
+        absolutePath: uri.fsPath,
+        cause,
+      }),
+  });
+}
+
 /**
  * Show `existingEditor`'s document if one is already open for `uri`,
  * otherwise open and show `uri` fresh. `openFileInEditor` skips this entirely
@@ -48,21 +78,32 @@ function findVisibleEditor(uri: vscode.Uri): vscode.TextEditor | undefined {
  * already-open, already-focused editor is reused without another
  * `showTextDocument` call.
  */
-async function showDocument(
+function showDocument(
   uri: vscode.Uri,
   existingEditor: vscode.TextEditor | undefined,
   preserveFocus: boolean,
-): Promise<vscode.TextEditor> {
+): Effect.Effect<vscode.TextEditor, EditorOpenFailed> {
   if (existingEditor) {
-    return vscode.window.showTextDocument(existingEditor.document, {
+    return showTextDocument(uri, existingEditor.document, {
       viewColumn: existingEditor.viewColumn,
       preserveFocus,
     });
   }
-  const document = await vscode.workspace.openTextDocument(uri);
-  return vscode.window.showTextDocument(document, {
-    preview: false,
-    preserveFocus,
+  return Effect.gen(function* () {
+    const document = yield* Effect.tryPromise({
+      try: () => vscode.workspace.openTextDocument(uri),
+      catch: (cause) =>
+        new EditorOpenFailed({
+          reason: 'document-open-failed',
+          message: `Could not open ${uri.fsPath}: ${toErrorMessage(cause)}`,
+          absolutePath: uri.fsPath,
+          cause,
+        }),
+    });
+    return yield* showTextDocument(uri, document, {
+      preview: false,
+      preserveFocus,
+    });
   });
 }
 
@@ -70,8 +111,12 @@ async function showDocument(
  * Open a file in a VS Code editor, optionally positioning the cursor at a
  * line, saving a dirty document, and (with `reuseVisible`) reusing an
  * already-visible editor without re-showing it.
+ *
+ * A refusal is the typed `EditorOpenFailed`, so every caller decides for
+ * itself what an unopenable file means instead of reading back an absent
+ * editor that was warn-logged somewhere else.
  */
-export async function openFileInEditor(
+export function openFileInEditor(
   absolutePath: string,
   options: {
     line?: number;
@@ -80,8 +125,11 @@ export async function openFileInEditor(
     /** Reuse an already-visible editor without re-showing it. */
     reuseVisible?: boolean;
   } = {},
-): Promise<{ editor: vscode.TextEditor; absolutePath: string } | undefined> {
-  try {
+): Effect.Effect<
+  { editor: vscode.TextEditor; absolutePath: string },
+  EditorOpenFailed
+> {
+  return Effect.gen(function* () {
     const { line, save, reuseVisible } = options;
     const uri = vscode.Uri.file(absolutePath);
     const existingEditor = findVisibleEditor(uri);
@@ -90,7 +138,7 @@ export async function openFileInEditor(
     const editor =
       reuseVisible && existingEditor && preserveFocus
         ? existingEditor
-        : await showDocument(uri, existingEditor, preserveFocus);
+        : yield* showDocument(uri, existingEditor, preserveFocus);
 
     if (line !== undefined) {
       const position = new vscode.Position(toZeroBasedLine(line), 0);
@@ -102,14 +150,18 @@ export async function openFileInEditor(
     }
 
     if (save && editor.document.isDirty) {
-      await editor.document.save();
+      yield* Effect.tryPromise({
+        try: () => editor.document.save(),
+        catch: (cause) =>
+          new EditorOpenFailed({
+            reason: 'save-failed',
+            message: `Could not save ${uri.fsPath}: ${toErrorMessage(cause)}`,
+            absolutePath: uri.fsPath,
+            cause,
+          }),
+      });
     }
 
     return { editor, absolutePath: uri.fsPath };
-  } catch (err) {
-    log.warn(
-      `Failed to open ${absolutePath} in an editor: ${toErrorMessage(err)}`,
-    );
-    return undefined;
-  }
+  });
 }

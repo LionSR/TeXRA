@@ -11,10 +11,13 @@
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 
-import { Cause, Data, Effect, Result } from 'effect';
+import { Cause, Data, Effect, Fiber, Result } from 'effect';
 
 import { promptExtensionInstall } from '@frontend/ui/instruction';
-import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
+import {
+  EditorOpenFailed,
+  openFileInEditor,
+} from '@frontend/vscode/vscodeEditor';
 import { waitForDiagnosticsChange } from '@frontend/vscode/vscodeDiagnostics';
 import { createLog } from '@logger/logUtils';
 import type { StateStore } from '@platform/interfaces';
@@ -40,18 +43,6 @@ import { isStrictlyWithin } from '@utils/core/pathCore';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const log = createLog('VscodeLeanIntegration');
-
-/**
- * Why an editor call in this bridge produced no editor: VS Code would not
- * read the document at all, or it read it and would not show it. The two
- * are separate answers because only the first says anything about the file.
- */
-class EditorOpenFailed extends Data.TaggedError('EditorOpenFailed')<{
-  readonly reason: 'document-open-failed' | 'editor-unavailable';
-  readonly message: string;
-  readonly absolutePath: string;
-  readonly cause: unknown;
-}> {}
 
 /**
  * A Lean 4 command VS Code dispatched and rejected. There is no
@@ -443,31 +434,33 @@ function fetchDiagnosticsForFile(
   absolutePath: string,
 ): Effect.Effect<FetchDiagnosticsResult> {
   return Effect.gen(function* () {
-    // Subscribed before the file is opened, so an update the open itself
-    // triggers is not missed. `Effect.sync` starts that wait here; the
-    // program awaits the same promise below.
-    const diagnosticsWait = yield* Effect.sync(() =>
+    // Subscribed on this frame, before the file is opened, so an update the
+    // open itself triggers is not missed; the program joins the same fiber
+    // below.
+    const diagnosticsWait = yield* Effect.forkChild(
       waitForDiagnosticsChange(vscode.Uri.file(absolutePath), 10000),
+      { startImmediately: true },
     );
 
-    const opened = yield* Effect.promise(() =>
+    const opened = yield* Effect.result(
       openFileInEditor(absolutePath, { preserveFocus: true }),
     );
-    if (!opened) {
-      // Could not be opened in the editor — the file itself is the problem.
+    if (Result.isFailure(opened)) {
+      // Could not be opened in the editor — the file itself is the problem,
+      // and the failure already names it and which step VS Code refused.
       return {
         ok: false,
         kind: 'file_missing',
-        message: `Could not open ${absolutePath} in the editor.`,
+        message: opened.failure.message,
       } satisfies FetchDiagnosticsResult;
     }
 
     noteVscodeLeanServer(workspaceRootForFile(absolutePath));
 
-    yield* Effect.promise(() => diagnosticsWait);
+    yield* Fiber.join(diagnosticsWait);
     return {
       ok: true,
-      diagnostics: getDiagnostics(opened.absolutePath),
+      diagnostics: getDiagnostics(opened.success.absolutePath),
     } satisfies FetchDiagnosticsResult;
   });
 }
@@ -481,10 +474,13 @@ function navigateToFirstError(
     (d) => d.severity === vscode.DiagnosticSeverity.Error,
   );
   if (!firstError) return Effect.void;
-  // `openFileInEditor` reports a refusal by returning nothing, having
-  // already logged it, so this navigation has no failure of its own.
-  return Effect.promise(() =>
-    openFileInEditor(filePath, { line: firstError.range.start.line + 1 }),
+  // The diagnostics are already the caller's answer, so a refusal to
+  // navigate is logged here rather than failing the read that produced them.
+  return openFileInEditor(filePath, {
+    line: firstError.range.start.line + 1,
+  }).pipe(
+    Effect.catch((failure) => Effect.sync(() => log.warn(failure.message))),
+    Effect.asVoid,
   );
 }
 

@@ -5,40 +5,50 @@
  * For formatting, import directly from `@utils/diagnostics/diagnosticFormatting`.
  */
 
+import { Effect, Option } from 'effect';
 import * as vscode from 'vscode';
 
 import { createLog } from '@logger/logUtils';
 
-import { raceWithTimeout } from './raceWithTimeout';
+import { firstEventOrTimeout } from './vscodeEventWait';
 
 const log = createLog('VscodeDiagnostics');
 
 /**
- * Wait for diagnostics to change for a specific file.
- * Uses event subscription with timeout.
+ * Wait for diagnostics to change for a specific file, giving up after
+ * `timeoutMs`.
+ *
+ * Nothing subscribes until this effect runs, so a caller that must not miss
+ * an update its own next action triggers forks it with `startImmediately`
+ * before taking that action and joins the fiber afterwards.
  */
-export async function waitForDiagnosticsChange(
+export function waitForDiagnosticsChange(
   uri: vscode.Uri,
   timeoutMs: number = 3000,
-): Promise<void> {
+): Effect.Effect<void> {
   if (timeoutMs <= 0) {
-    return;
+    return Effect.void;
   }
 
   const targetKey = uri.toString().toLowerCase();
 
-  const raced = await raceWithTimeout<void>(
-    (resolve) =>
+  return firstEventOrTimeout<void>(
+    (report) =>
       vscode.languages.onDidChangeDiagnostics((event) => {
         const hasMatch = event.uris.some(
           (eventUri) => eventUri.toString().toLowerCase() === targetKey,
         );
-        if (hasMatch) resolve();
+        if (hasMatch) report();
       }),
     timeoutMs,
+  ).pipe(
+    Effect.tap((observed) =>
+      Option.isNone(observed)
+        ? Effect.sync(() =>
+            log.debug(`Timed out waiting for diagnostics: ${uri.fsPath}`),
+          )
+        : Effect.void,
+    ),
+    Effect.asVoid,
   );
-
-  if (raced.timedOut) {
-    log.debug(`Timed out waiting for diagnostics: ${uri.fsPath}`);
-  }
 }

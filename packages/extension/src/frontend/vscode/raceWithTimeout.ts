@@ -1,6 +1,8 @@
 /**
- * VS Code event/timeout racing helper, shared by call sites that wait on a
- * one-shot VS Code event with a timeout fallback.
+ * VS Code event/timeout racing helper for a caller that has to hand a promise
+ * back: `VscodeDiffViewHost.revealFirstChange`, whose `DiffViewHost` port is
+ * still Promise-typed. Effect callers use `firstEventOrTimeout` from
+ * `./vscodeEventWait` instead of running this one.
  */
 
 import * as vscode from 'vscode';
