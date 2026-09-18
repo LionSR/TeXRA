@@ -15,18 +15,18 @@
  * function's docstring), so its runtime serves no `AppState` and its install
  * creates nothing under the storage root.
  *
- * This module is the CLI's composition root for that runtime and holds it in
- * a local of its own (rulings ledger, #12720): there is no process-wide slot
- * to read it back from, and nothing below the entries looks one up. The
- * local is the runtime itself, never a boolean beside it -- a boolean goes
- * stale in both directions, true while `selfIdentity()` is still in flight
- * and still true after the disposal, which is how a caller after a platform
- * shutdown ends up selecting a disposed runtime. `disposeCliProcessRuntime`
- * is the one writer that clears it, after the disposal it performs, so the
- * next entry installs rather than joins. `pending` is not that latch: it is
- * the in-flight install itself, so a second caller joins the first rather
- * than racing it to build a second runtime, and it is cleared once that
- * install settles.
+ * This module is the CLI's composition root for that runtime, and every
+ * entry that awaits it holds the result in a local and threads it on: there
+ * is no process-wide runtime slot for anything below an entry to read it
+ * back from (rulings ledger, #12720). Whether one is installed is asked of
+ * the session owner `installProcessRuntime` installs beside it, which
+ * carries the runtime it runs on, rather than tracked in a latch here: a
+ * boolean set beside the install goes stale in both directions -- true while
+ * `selfIdentity()` is still in flight, and still true after the disposal,
+ * which is how a caller after a platform shutdown ends up selecting a
+ * disposed runtime. `pending` is not that latch: it is the in-flight install
+ * itself, so a second caller joins the first rather than racing it to build
+ * a second runtime, and it is cleared once that install settles.
  *
  * The process identity is read before installing, so the map's entries
  * never wait on it and `initCliPlatform`'s open of the default session is
@@ -43,6 +43,7 @@
  */
 import { Effect } from 'effect';
 
+import { installedProcessRuntime } from '@agent/runtime';
 import { SupabaseAuth } from '@auth/SupabaseAuth';
 import { SignInFailed } from '@common/errors/signInFailed';
 import { openAppStateStore } from '@controllers/session/appStateStore';
@@ -79,8 +80,6 @@ interface CliProcessRuntimeInstallState {
   readonly globalState: StateStore | undefined;
 }
 
-/** This process's install, held by the module that performs it. */
-let installed: CliProcessRuntimeInstallState | null = null;
 let pending: Promise<CliProcessRuntimeInstallState> | null = null;
 
 /**
@@ -89,11 +88,11 @@ let pending: Promise<CliProcessRuntimeInstallState> | null = null;
  * this holds both in locals and threads them on, so nothing below the entry
  * looks either up again.
  *
- * The store is read back off the joined runtime rather than off the install
- * record beside it: an already-installed runtime carries the store it serves
- * as `AppState` in its own context, so a join that finds an `AppState`-less
- * install (clone's) fails loudly there instead of handing back an absent
- * store.
+ * The store is read back off the joined runtime, not off a record beside it:
+ * an already-installed runtime carries the store it serves as `AppState` in
+ * its own context, so joining reads it from there rather than from a module
+ * latch that a second root (the test kernel's) would have to remember to
+ * fill.
  *
  * `appState: 'omit'` is `clone`'s: the one platform-less, secrets-only entry,
  * whose token can come from the environment and whose storage root may be
@@ -116,8 +115,11 @@ export function installCliProcessRuntime(
   options?: { readonly appState: 'omit' },
 ): Promise<CliProcessRuntimeInstallState | ProcessRuntime> {
   const omitAppState = options?.appState === 'omit';
-  const current = installed?.runtime;
+  const current = installedProcessRuntime();
   if (current) {
+    // The output plane runs on whichever runtime this process ended up with,
+    // installed here or found installed.
+    setCliLogRuntime(current);
     if (omitAppState) return Promise.resolve(current);
     return current
       .runPromise(AppState)
@@ -190,12 +192,10 @@ export function installCliProcessRuntime(
       },
       lean: directLeanLanguageServices(),
     });
-    const record: CliProcessRuntimeInstallState = { runtime, globalState };
-    installed = record;
     // The output plane runs its Effects on this runtime from here on; the
     // disposal below hands it back the no-runtime state.
     setCliLogRuntime(runtime);
-    return record;
+    return { runtime, globalState };
   })().finally(() => {
     pending = null;
   });
@@ -203,22 +203,20 @@ export function installCliProcessRuntime(
 }
 
 /**
- * Dispose this process's install, if it made one: the CLI's own end of the
- * lifecycle this module owns the start of. The record is cleared after the
- * disposal settles, so a write racing the teardown still reaches the runtime
- * that is unwinding, and only if it is still this install -- one made while
- * this one unwound survives the clear that ends its predecessor.
+ * Dispose this process's runtime, if one is installed: the CLI's own end of
+ * the lifecycle this module owns the start of, asked of the same owner the
+ * install above joins. The output plane is handed back the no-runtime state
+ * after the disposal settles, so a write racing the teardown still reaches
+ * the runtime that is unwinding, exactly as it did before the shutdown began.
  *
  * Registered by `initCliPlatform` as the last shutdown step and called
  * directly by the same root when a failed init must not leave the runtime
  * installed with nothing to dispose it.
  */
 export function disposeCliProcessRuntime(): Promise<void> {
-  const current = installed;
-  if (!current) return Promise.resolve();
-  return disposeProcessRuntime(current.runtime).finally(() => {
-    if (installed !== current) return;
-    installed = null;
+  const runtime = installedProcessRuntime();
+  if (!runtime) return Promise.resolve();
+  return disposeProcessRuntime(runtime).finally(() => {
     setCliLogRuntime(null);
   });
 }

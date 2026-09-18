@@ -1,4 +1,5 @@
 import { installProcessRuntime } from '@controllers/session/sessionLayer';
+import { initTestProcessRuntime } from './testProcessRuntime';
 import { directLeanLanguageServices } from '@tools/lean/direct/directLspAdapter';
 import { createFakeWorkspaceRoots } from './FakePlatform';
 import {
@@ -38,18 +39,20 @@ import {
  */
 const { globalStorage } = createFakeWorkspaceRoots();
 
-installProcessRuntime({
-  processStart: 'vitest',
-  globalStorage,
-  updateCheckStorage: globalStorage,
-  secrets: fakeHostSecrets,
-  appState: fakeHostAppState,
-  // Suites swap the account plane with their host; the default host's
-  // answers signed-out.
-  auth: fakeHostAuth,
-  languageModel: fakeHostLanguageModel,
-  agentResume: fakeHostAgentResume,
-  setup: fakeSetupPlatform,
-  // The Node hosts' layer: inert until a Lean tool is invoked.
-  lean: directLeanLanguageServices(),
-});
+initTestProcessRuntime(
+  installProcessRuntime({
+    processStart: 'vitest',
+    globalStorage,
+    updateCheckStorage: globalStorage,
+    secrets: fakeHostSecrets,
+    appState: fakeHostAppState,
+    // Suites swap the account plane with their host; the default host's
+    // answers signed-out.
+    auth: fakeHostAuth,
+    languageModel: fakeHostLanguageModel,
+    agentResume: fakeHostAgentResume,
+    setup: fakeSetupPlatform,
+    // The Node hosts' layer: inert until a Lean tool is invoked.
+    lean: directLeanLanguageServices(),
+  }),
+);

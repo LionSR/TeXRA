@@ -6,7 +6,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { initCliPlatform } from '@cli/runtime/initPlatform';
 import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
 import { StateWriteFailed } from '@platform/interfaces';
-import { testRuntime } from '@test/support/testProcessRuntime';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { UsageLogService } from '@telemetry/UsageLogService';
 import { createTestSession } from '@test/support/sessionTestUtils';
@@ -357,13 +356,15 @@ describe('CLI platform init', () => {
     mocks.authenticated = true;
     mocks.signInCliSupabase.mockResolvedValue({ account: { label: 'User' } });
 
-    await initCliPlatform(cliContext());
+    // The runtime this root installed, as it hands it back: the root's own
+    // local, not a process-wide read.
+    const { runtime } = await initCliPlatform(cliContext());
 
-    const setup = await testRuntime().runPromise(Effect.service(SetupPlatform));
+    const setup = await runtime.runPromise(Effect.service(SetupPlatform));
     expect(setup.host).toBe('cli');
-    expect(await testRuntime().runPromise(setup.signIn())).toBe(true);
+    expect(await runtime.runPromise(setup.signIn())).toBe(true);
     expect(mocks.signInCliSupabase).toHaveBeenCalledOnce();
-    expect(mocks.signInCliSupabase).toHaveBeenCalledWith(testRuntime(), {
+    expect(mocks.signInCliSupabase).toHaveBeenCalledWith(runtime, {
       openBrowser: true,
     });
   });
