@@ -231,9 +231,10 @@ describe('desktop preview host', () => {
 
     const host = createDesktopPreviewHost({ shell, showErrorMessage, runtime });
 
-    await expect(host.openPath(missingPath)).rejects.toThrow(
-      `File not found: ${missingPath}`,
-    );
+    // The members are programs now, so the suite settles them itself.
+    await expect(
+      runtime.runPromise(host.openPath(missingPath)),
+    ).rejects.toThrow(`File not found: ${missingPath}`);
     expect(showErrorMessage).toHaveBeenCalledWith(
       `File not found: ${missingPath}`,
     );
@@ -257,7 +258,7 @@ describe('desktop preview host', () => {
 
     const host = createDesktopPreviewHost({ shell, showErrorMessage, runtime });
 
-    await expect(host.openPath(filePath)).rejects.toThrow(
+    await expect(runtime.runPromise(host.openPath(filePath))).rejects.toThrow(
       `Cannot access file ${filePath}: permission denied`,
     );
     expect(showErrorMessage).toHaveBeenCalledWith(
@@ -276,7 +277,7 @@ describe('desktop preview host', () => {
 
     const host = createDesktopPreviewHost({ shell, showErrorMessage, runtime });
 
-    await expect(host.openPath(filePath)).rejects.toThrow(
+    await expect(runtime.runPromise(host.openPath(filePath))).rejects.toThrow(
       `Failed to open file ${filePath}: No associated application`,
     );
     expect(showErrorMessage).toHaveBeenCalledTimes(1);
@@ -391,9 +392,11 @@ describe('desktop preview host', () => {
     const host = createDesktopPreviewHost({ shell, showErrorMessage, runtime });
 
     await expect(
-      host.openExternal('https://auth.openai.com/authorize', {
-        reportFailure: false,
-      }),
+      runtime.runPromise(
+        host.openExternal('https://auth.openai.com/authorize', {
+          reportFailure: false,
+        }),
+      ),
     ).rejects.toBe(browserError);
     expect(showErrorMessage).not.toHaveBeenCalled();
   });

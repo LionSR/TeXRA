@@ -3,6 +3,9 @@ import type { TranscriptExportFormat } from '@controllers/progressView/exportTra
 import type { DiffViewHost, MessageHost } from '@hosts/uiHosts';
 import type { InstructionAction } from '@shared/schemas';
 import type { BuildDisplayFn } from '@tools/approval/latexPreview';
+import type { Effect } from 'effect';
+
+import type { PreviewUnavailable } from './desktopPreviewHost.js';
 
 /** Required desktop capabilities used throughout an agent run. */
 export interface DesktopAgentRunHost
@@ -24,7 +27,12 @@ export interface DesktopAgentRunHost
    */
   showErrorDialog(message: string, docsCommand?: string): Promise<void>;
   pickTranscriptExportFormat(): Promise<TranscriptExportFormat | undefined>;
-  openPath(filePath: string, line?: number): Promise<void>;
+  /** `line` is carried for the hosts that can reveal one; the desktop hands
+   *  the path to the OS. */
+  openPath(
+    filePath: string,
+    line?: number,
+  ): Effect.Effect<void, PreviewUnavailable>;
   openBuildDisplay: BuildDisplayFn;
   openDiff: DiffViewHost['openDiff'];
   confirmAcceptFile(message: string): Promise<boolean>;

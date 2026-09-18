@@ -27,7 +27,7 @@ export function createStubDesktopSettingsUiHost(
   overrides: Partial<DesktopSettingsUiHost> = {},
 ): DesktopSettingsUiHost {
   return {
-    openPath: noOp,
+    openPath: () => Effect.void,
     revealRun: async () => 'revealed',
     getRunLabel: () => undefined,
     promptForSecret: async () => undefined,

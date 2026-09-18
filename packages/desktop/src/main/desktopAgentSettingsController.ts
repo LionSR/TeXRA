@@ -46,6 +46,8 @@ import type { SettingsStatePorts } from '@shared/settingsView/types';
 import { createTexraTempDir } from '@utils/files/tempDir';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
+import type { PreviewUnavailable } from './desktopPreviewHost.js';
+
 /**
  * One of the desktop-local calls this controller drives rejected. The members
  * are the template write, the temp-file copy the desktop shows a packaged
@@ -113,7 +115,9 @@ interface DefaultDesktopAgentSettingsControllerOptions extends SettingsStatePort
       source: AgentSource,
     ) => Effect.Effect<string | undefined, AgentDirectoriesFailed>;
     readonly selectCustomAgentDirectory: () => Promise<string | undefined>;
-    readonly openPath: (filePath: string) => Promise<void>;
+    readonly openPath: (
+      filePath: string,
+    ) => Effect.Effect<void, PreviewUnavailable>;
     readonly revealPath: (filePath: string) => Promise<void>;
   };
   readonly renderer: {
@@ -225,11 +229,7 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
       findAgent: (source, name) => getAgent(agentKey(source, name)),
       getCustomAgentDirectory: directory.getCustomAgentDirectory,
       getSourceDirectory: directory.getSourceDirectory,
-      openDocument: (filePath) =>
-        Effect.tryPromise({
-          try: () => directory.openPath(filePath),
-          catch: ensureError,
-        }),
+      openDocument: directory.openPath,
       // The desktop has no editor of its own and hands the path to the OS,
       // so a packaged definition is shown through a temporary copy that the
       // external editor may save without touching the installed bundle.
@@ -247,10 +247,7 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
           yield* FileSystem.FileSystem.use((fs) =>
             fs.copyFile(filePath, target),
           );
-          yield* Effect.tryPromise({
-            try: () => directory.openPath(target),
-            catch: ensureError,
-          });
+          yield* directory.openPath(target);
         }),
       revealFile: (filePath) =>
         Effect.tryPromise({
@@ -446,7 +443,7 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
       );
       return;
     }
-    await this.directory.openPath(result.path);
+    await this.runtime.runPromise(this.directory.openPath(result.path));
   }
 
   /**
@@ -510,16 +507,17 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
           return;
         }
 
-        yield* Effect.tryPromise({
-          try: () => this.directory.openPath(plan.filePath),
-          catch: (cause) =>
-            new ExternalOpenFailed({
-              kind: 'path',
-              target: plan.filePath,
-              message: `The new agent definition could not be opened: ${toErrorMessage(cause)}`,
-              cause,
-            }),
-        });
+        yield* this.directory.openPath(plan.filePath).pipe(
+          Effect.mapError(
+            (cause) =>
+              new ExternalOpenFailed({
+                kind: 'path',
+                target: plan.filePath,
+                message: `The new agent definition could not be opened: ${toErrorMessage(cause)}`,
+                cause,
+              }),
+          ),
+        );
         yield* this.notifications.showInfoMessage(
           `Created custom agent: ${plan.fileName}`,
         );
@@ -578,16 +576,17 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
         );
         const fs = yield* FileSystem.FileSystem;
         yield* fs.writeFileString(target, config);
-        yield* Effect.tryPromise({
-          try: () => this.directory.openPath(target),
-          catch: (cause) =>
-            new ExternalOpenFailed({
-              kind: 'path',
-              target,
-              message: `The hosted agent prompt could not be opened: ${toErrorMessage(cause)}`,
-              cause,
-            }),
-        });
+        yield* this.directory.openPath(target).pipe(
+          Effect.mapError(
+            (cause) =>
+              new ExternalOpenFailed({
+                kind: 'path',
+                target,
+                message: `The hosted agent prompt could not be opened: ${toErrorMessage(cause)}`,
+                cause,
+              }),
+          ),
+        );
       }),
     );
   }

@@ -572,7 +572,8 @@ function createWindow(options: {
     [INSTRUCTION_ACTION.OPEN_MODELS_DOC]: 'Model Documentation',
   };
   /**
-   * The shell-facing `openExternal` as the Effect-typed port's member.
+   * The shell-facing `openExternal` worded for the {@link ExternalOpener}
+   * port: the member is already a program, so this only names the failure.
    * `reportFailure: false` leaves the window's own "could not open" dialog
    * out, for a caller that reports the failure itself.
    */
@@ -580,30 +581,35 @@ function createWindow(options: {
     url: string,
     reportFailure: boolean,
   ): Effect.Effect<void, ExternalOpenFailed> =>
-    Effect.tryPromise({
-      try: () => previewHost.openExternal(url, { reportFailure }),
-      catch: (cause) =>
-        new ExternalOpenFailed({
-          kind: 'url',
-          target: url,
-          message: `The desktop could not open ${url} in the default browser: ${toErrorMessage(cause)}`,
-          cause,
-        }),
-    });
-  /** Open a documentation URL without keeping the caller waiting; the browser
-   *  never opening is reported, not swallowed. */
-  const openExternalInBackground = (url: string): void => {
-    runtime.runFork(
-      Effect.tryPromise({
-        try: () => previewHost.openExternal(url),
-        catch: (cause) =>
+    previewHost.openExternal(url, { reportFailure }).pipe(
+      Effect.mapError(
+        (cause) =>
           new ExternalOpenFailed({
             kind: 'url',
             target: url,
-            message: 'The documentation URL could not be opened.',
+            message: `The desktop could not open ${url} in the default browser: ${toErrorMessage(cause)}`,
             cause,
           }),
-      }).pipe(
+      ),
+    );
+  /**
+   * Open a documentation URL without keeping the caller waiting; the browser
+   * never opening is reported, not swallowed. Its own wording, not
+   * {@link openExternalProgram}'s: this report names the documentation URL
+   * rather than the address the shell refused.
+   */
+  const openExternalInBackground = (url: string): void => {
+    runtime.runFork(
+      previewHost.openExternal(url).pipe(
+        Effect.mapError(
+          (cause) =>
+            new ExternalOpenFailed({
+              kind: 'url',
+              target: url,
+              message: 'The documentation URL could not be opened.',
+              cause,
+            }),
+        ),
         // The handler's parameter is the whole error type this expression can
         // carry, so a second failure added here fails to compile instead of
         // reading as a documentation URL that would not open.
@@ -1314,9 +1320,7 @@ function createWindow(options: {
             ),
         },
         externalOpener: {
-          // The desktop's shell-facing openExternal stays Promise-shaped by
-          // ruling; this is the one adapter onto the Effect-typed port. The
-          // sign-in variant is the same adapter with the window's own
+          // The sign-in variant is the same program with the window's own
           // "could not open" dialog suppressed — the sign-in flow reports a
           // missing browser itself and falls back to a device code.
           openExternal: (url) => openExternalProgram(url, true),
@@ -1355,8 +1359,11 @@ function createWindow(options: {
               cancelId: 1,
             });
             if (result.response === 0) {
-              await previewHost.openExternal(
-                prompt.verificationUrlComplete ?? prompt.verificationUrl,
+              // A dialog callback, not a program: the one run this arm owns.
+              await runtime.runPromise(
+                previewHost.openExternal(
+                  prompt.verificationUrlComplete ?? prompt.verificationUrl,
+                ),
               );
             }
           },
@@ -1390,7 +1397,12 @@ function createWindow(options: {
         renderer: {
           postToRenderer: postForActiveProject,
         },
-        navigation: { openExternal: previewHost.openExternal },
+        // The Tools tab's handlers answer the renderer with a promise, so the
+        // settings IPC arm is where this program runs.
+        navigation: {
+          openExternal: (url) =>
+            runtime.runPromise(previewHost.openExternal(url)),
+        },
         commands: {
           run: async (command: string) => {
             if (projectBindings.get(project.key) !== documentBinding) return;
@@ -1600,7 +1612,10 @@ function createWindow(options: {
     });
     const browserViews = createDesktopBrowserViews({
       getWindow: () => (window.isDestroyed() ? undefined : window),
-      openExternalUrl: (url) => previewHost.openExternal(url),
+      // Electron's window-open handler is the caller here, so the hand-off
+      // runs at this arm rather than reaching the view as a program.
+      openExternalUrl: (url) =>
+        runtime.runPromise(previewHost.openExternal(url)),
       onNavigated: (state) =>
         post({ command: DESKTOP_WORKSPACE_COMMANDS.BROWSER_STATE, ...state }),
       onError: reportAsyncError,

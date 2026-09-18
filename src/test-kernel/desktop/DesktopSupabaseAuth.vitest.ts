@@ -85,7 +85,7 @@ function createTestAuth(options: DesktopAuthTestOptions) {
       createLog(),
     ),
     log = createLog(),
-    openExternalUrl = vi.fn(async () => {}),
+    openExternalUrl = vi.fn(() => Effect.void),
     showInfoMessage = vi.fn(() => Effect.void),
     showErrorMessage = vi.fn(() => Effect.void),
     onSessionChanged = vi.fn(),
@@ -240,7 +240,7 @@ describe('desktop Supabase auth', () => {
   });
 
   it('opens Supabase OAuth with the desktop texra callback URI', async () => {
-    const openExternalUrl = vi.fn(async () => {});
+    const openExternalUrl = vi.fn(() => Effect.void);
     const { oauthClient, auth } = createAuthSetup({ openExternalUrl });
 
     await auth.signIn();
@@ -283,9 +283,11 @@ describe('desktop Supabase auth', () => {
         }),
       },
     };
-    const openExternalUrl = vi.fn(async () => {
-      events.push('open');
-    });
+    const openExternalUrl = vi.fn(() =>
+      Effect.sync(() => {
+        events.push('open');
+      }),
+    );
     const { auth } = createAuthSetup({
       oauthClient,
       callbackState,

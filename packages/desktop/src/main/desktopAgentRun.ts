@@ -101,21 +101,27 @@ export function createDesktopAgentRun(
    * await rejects when its window is torn down beneath it; voiding the
    * promise would leave that rejection unhandled.
    */
-  async function settleHostDialog(
-    dialog: Promise<unknown> | void,
+  async function settleHostProgram(
+    program: Effect.Effect<unknown, unknown>,
     logMessage: string,
   ): Promise<void> {
-    const presented = await runtime.runPromiseExit(
-      Effect.tryPromise({
-        try: async () => dialog,
-        catch: (error) => error,
-      }),
-    );
+    const presented = await runtime.runPromiseExit(program);
     if (Exit.isFailure(presented)) {
       logger.warn(logMessage, {
         data: toLogData(Cause.squash(presented.cause)),
       });
     }
+  }
+
+  /** The same, for a host member that still answers with a promise. */
+  function settleHostDialog(
+    dialog: Promise<unknown> | void,
+    logMessage: string,
+  ): Promise<void> {
+    return settleHostProgram(
+      Effect.tryPromise({ try: async () => dialog, catch: (error) => error }),
+      logMessage,
+    );
   }
 
   const presentationEventHandlers: PresentationEventHandlers<RuntimePresentationEventPayloads> =
@@ -140,7 +146,7 @@ export function createDesktopAgentRun(
       requestOpenFile: (data: RequestOpenFilePayload) =>
         // Desktop has no editor integration to preview through, so the
         // resolved path goes to the preview-with-fallback host directly.
-        settleHostDialog(
+        settleHostProgram(
           host.openPath(data.location.absolutePath),
           'Failed to open requested file on desktop',
         ),

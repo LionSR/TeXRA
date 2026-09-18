@@ -14,7 +14,7 @@ export function createStubDesktopAgentRunHost(
   overrides: Partial<DesktopAgentRunHost> = {},
 ): DesktopAgentRunHost {
   return {
-    openPath: async () => undefined,
+    openPath: () => Effect.void,
     openBuildDisplay: async () => undefined,
     openDiff: async () => undefined,
     confirmAcceptFile: async () => true,

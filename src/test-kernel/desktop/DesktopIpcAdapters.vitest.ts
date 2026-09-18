@@ -48,9 +48,9 @@ async function createShellHarness(
     { postToRenderer },
     {
       getCustomAgentDirectory: async () => '/agents/custom',
-      openExternalUrl: vi.fn(async () => {}),
-      openLogFolder: vi.fn(async () => {}),
-      openPath: vi.fn(async () => {}),
+      openExternalUrl: vi.fn(() => Effect.void),
+      openLogFolder: vi.fn(() => Effect.void),
+      openPath: vi.fn(() => Effect.void),
       openWorkspaceFolder: vi.fn(async () => {}),
       signIn: vi.fn(async () => {}),
       showInfoMessage: vi.fn(),

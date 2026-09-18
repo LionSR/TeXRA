@@ -29,19 +29,31 @@ interface DesktopShellAdapter {
 }
 
 /**
- * The desktop's shell-facing open surface. It deliberately stays
- * `Promise`-shaped — this fan-out is bound across the desktop's browser-view,
- * shell, settings, tooling and credential surfaces, a permanent face by owner
- * ruling — and the composition root adapts `openExternal` onto the
- * Effect-typed `ExternalOpener` port where an Effect-native caller needs it.
+ * The desktop's shell-facing open surface. `openExternal` and `openPath` are
+ * the programs themselves: the owner ruling of 2026-09-18 retires the former
+ * `Promise` face, which the 1.0 clean rule reads as an R1 adapter rather than
+ * the permanent one an earlier ruling allowed. An Effect-native caller yields
+ * a member; the host entries that answer a framework callback run it once.
+ *
+ * `openBuildDisplayIn` still answers with the core {@link BuildDisplayFn},
+ * which is `Promise`-shaped for a reason that is not this fan-out's: the
+ * approval controller registers the raw build promise in a request's
+ * `inFlightActions` so a build with no cancellation signal outlives the
+ * preview program whose settle race interrupts it.
  */
 interface DesktopPreviewHost {
+  /**
+   * `reportFailure` (default `true`) decides whether the window shows its own
+   * "could not open" dialog before the failure reaches the caller. With it
+   * off, the caller reads the shell's own rejection — which is why this
+   * channel is `unknown` rather than {@link PreviewUnavailable}.
+   */
   openExternal(
     url: string,
     options?: { readonly reportFailure?: boolean },
-  ): Promise<void>;
+  ): Effect.Effect<void, unknown>;
   /** Open a workspace file in the OS default application. */
-  openPath(filePath: string): Promise<void>;
+  openPath(filePath: string): Effect.Effect<void, PreviewUnavailable>;
   /**
    * The build-and-show preview of one open paper: a LaTeX source compiles
    * against `roots` (its workspace, its LaTeX settings) and its PDF opens in
@@ -62,7 +74,7 @@ interface DesktopPreviewHostOptions extends DesktopOverlayPostOptions {
  * in its dialog and the rejection its caller sees. The message is the whole
  * sentence the user reads, never a prefix over another one.
  */
-class PreviewUnavailable extends Data.TaggedError('PreviewUnavailable')<{
+export class PreviewUnavailable extends Data.TaggedError('PreviewUnavailable')<{
   readonly message: string;
 }> {}
 
@@ -214,17 +226,14 @@ export function createDesktopPreviewHost(
     });
   }
 
-  // The host boundary: Electron's callers hold Promise-shaped methods, so the
-  // programs above run on the runtime this host was handed.
   return {
+    // The one member still bound to a Promise-shaped core type, so the build
+    // program runs on the runtime this host was handed.
     openBuildDisplayIn: (roots) => async (location) => {
       await options.runtime.runPromise(buildDisplayProgram(roots, location));
     },
-    openExternal: async (url, { reportFailure = true } = {}) => {
-      await options.runtime.runPromise(openExternalProgram(url, reportFailure));
-    },
-    openPath: async (filePath) => {
-      await options.runtime.runPromise(openPathProgram(filePath));
-    },
+    openExternal: (url, { reportFailure = true } = {}) =>
+      openExternalProgram(url, reportFailure),
+    openPath: openPathProgram,
   };
 }
