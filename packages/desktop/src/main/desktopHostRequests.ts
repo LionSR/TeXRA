@@ -40,7 +40,11 @@ import {
 } from '@model/computeModelOptions';
 import type { AgentDirectoriesFailed, StateStore } from '@platform/interfaces';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
-import { sessionFsLayer, type StorageFs } from '@platform/rootedFs';
+import {
+  sessionFsLayer,
+  type GlobalStorageFs,
+  type StorageFs,
+} from '@platform/rootedFs';
 import type { PlatformSecrets } from '@platform/secrets';
 import {
   cloneRoundIndexed,
@@ -101,7 +105,11 @@ interface DesktopHostRequestsOptions {
   /** A host-initiated change to the surface (PRD 8.5). */
   postSurfaceAction(action: SurfaceActionMessage['action']): void;
   signIn(): Promise<void>;
-  getCustomAgentDirectory(): Effect.Effect<string, AgentDirectoriesFailed>;
+  getCustomAgentDirectory(): Effect.Effect<
+    string,
+    AgentDirectoriesFailed,
+    GlobalStorageFs
+  >;
   showFirstRunWalkthrough(): void;
   onboarding: Pick<
     DesktopOnboardingIpc,
