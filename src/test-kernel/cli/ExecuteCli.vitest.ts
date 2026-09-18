@@ -234,7 +234,6 @@ async function loadExecuteCli() {
 type LeaseOptions = {
   beforeLeaseRelease?: () => Effect.Effect<boolean | void, Error>;
   openWorkflowOutput?: RunAgentOptions['openWorkflowOutput'];
-  onRun?: () => void;
   session?: SessionHandle;
   onRunLeaseAcquired?: (runId: RunId) => void;
 };
@@ -711,15 +710,9 @@ describe('executeCliRequest', () => {
       Effect.gen(function* () {
         const { executeCliRequest } = yield* Effect.promise(loadExecuteCli);
         const request = baseRequest();
-        mocks.runAgent.mockImplementationOnce(
-          async (
-            _request: unknown,
-            options: { readonly onRun?: () => void },
-          ) => {
-            options.onRun?.();
-            throw new AgentError('provider boom');
-          },
-        );
+        mocks.runAgent.mockImplementationOnce(async () => {
+          throw new AgentError('provider boom');
+        });
 
         const result = yield* executeCliRequest(request, cliContext());
 
@@ -797,7 +790,6 @@ describe('executeCliRequest', () => {
         yield* settle;
         expect(mocks.finalizeRun).not.toHaveBeenCalled();
         leaseOptions.onRunLeaseAcquired?.('exec-1' as RunId);
-        leaseOptions.onRun?.();
         yield* settle;
         expect(killSpy).toHaveBeenCalledExactlyOnceWith('exec-1', {
           detachActiveChildren: false,
@@ -876,7 +868,6 @@ describe('executeCliRequest', () => {
         expect(leaseOptions.onRunLeaseAcquired).toBeDefined();
         const shutdown = platform.lifecycle.runShutdown();
         leaseOptions.onRunLeaseAcquired?.('exec-1' as RunId);
-        leaseOptions.onRun?.();
         mockCancelledOutcome();
         hangingRun.resolve(COMPLETED_RUN);
 
@@ -996,7 +987,6 @@ describe('executeCliRequest', () => {
         yield* settle;
         expect(leaseOptions).toBeDefined();
         leaseOptions.onRunLeaseAcquired?.('exec-1' as RunId);
-        leaseOptions.onRun?.();
 
         const shutdown = platform.lifecycle.runShutdown();
         hangingRun.resolve(COMPLETED_RUN);
@@ -1036,7 +1026,6 @@ describe('executeCliRequest', () => {
 
         const shutdown = platform.lifecycle.runShutdown();
         leaseOptions.onRunLeaseAcquired?.('exec-1' as RunId);
-        leaseOptions.onRun?.();
         yield* settle;
         yield* leaseOptions.openWorkflowOutput?.(COMPLETED_WORKFLOW_RUN, []) ??
           Effect.void;
@@ -1085,7 +1074,6 @@ describe('executeCliRequest', () => {
         yield* settle;
         expect(leaseOptions).toBeDefined();
         leaseOptions.onRunLeaseAcquired?.('exec-1' as RunId);
-        leaseOptions.onRun?.();
         yield* settle;
         yield* leaseOptions.openWorkflowOutput?.(COMPLETED_WORKFLOW_RUN, []) ??
           Effect.void;
@@ -1131,7 +1119,6 @@ describe('executeCliRequest', () => {
         mocks.runAgent.mockImplementationOnce(
           async (_request: unknown, options: LeaseOptions) => {
             options.onRunLeaseAcquired?.('exec-1' as RunId);
-            options.onRun?.();
             try {
               await effectRuntime().runPromise(
                 options.openWorkflowOutput?.(COMPLETED_WORKFLOW_RUN, []) ??
@@ -1373,7 +1360,6 @@ describe('executeCliConfig', () => {
         expect(leaseOptions.onRunLeaseAcquired).toBeDefined();
         const shutdown = platform.lifecycle.runShutdown();
         leaseOptions.onRunLeaseAcquired?.('exec-1' as RunId);
-        leaseOptions.onRun?.();
         mockCancelledOutcome();
         hangingRun.resolve(COMPLETED_RUN);
 
@@ -1420,7 +1406,6 @@ describe('executeCliConfig', () => {
         expect(leaseOptions.onRunLeaseAcquired).toBeDefined();
         const shutdown = platform.lifecycle.runShutdown();
         leaseOptions.onRunLeaseAcquired?.('exec-1' as RunId);
-        leaseOptions.onRun?.();
         mockCancelledOutcome();
         hangingRun.resolve(COMPLETED_RUN);
 
