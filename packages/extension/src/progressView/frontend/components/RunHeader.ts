@@ -45,7 +45,7 @@ const ACTIVE_STATE_BUTTONS = [
   ELEMENT_IDS.AUTO_TASK_TOGGLE_BTN,
   ELEMENT_IDS.COMPACT_RESPONSE_BTN,
   ELEMENT_IDS.RESTORE_STATE_BTN,
-  ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
+  ELEMENT_IDS.OPEN_RUN_STORAGE_BTN,
   ELEMENT_IDS.EXPORT_TRANSCRIPT_BTN,
   ELEMENT_IDS.COPY_RUN_CONTEXT_BTN,
 ];
@@ -57,14 +57,14 @@ const TERMINAL_STATE_BUTTONS = [
   ELEMENT_IDS.CLEAN_STREAM_BTN,
   ELEMENT_IDS.RESTORE_STATE_BTN,
   ELEMENT_IDS.DIFF_STREAM_BTN,
-  ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
+  ELEMENT_IDS.OPEN_RUN_STORAGE_BTN,
   ELEMENT_IDS.EXPORT_TRANSCRIPT_BTN,
   ELEMENT_IDS.COPY_RUN_CONTEXT_BTN,
 ];
 
 /** A run this process cannot act on: read and export only. */
 const READ_ONLY_BUTTONS = new Set<string>([
-  ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
+  ELEMENT_IDS.OPEN_RUN_STORAGE_BTN,
   ELEMENT_IDS.EXPORT_TRANSCRIPT_BTN,
   ELEMENT_IDS.COPY_RUN_CONTEXT_BTN,
 ]);
@@ -427,9 +427,9 @@ export class RunHeader extends LitElement {
           SessionUiEvents.host({ kind: 'restoreIntoLauncher', runId }),
         );
         return;
-      case ELEMENT_IDS.OPEN_TASK_STORAGE_BTN:
+      case ELEMENT_IDS.OPEN_RUN_STORAGE_BTN:
         this.dispatchEvent(
-          SessionUiEvents.host({ kind: 'openTaskStorage', runId }),
+          SessionUiEvents.host({ kind: 'openRunStorage', runId }),
         );
         return;
       case ELEMENT_IDS.EXPORT_TRANSCRIPT_BTN:

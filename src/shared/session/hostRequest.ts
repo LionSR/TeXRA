@@ -30,7 +30,7 @@ export const HostRequestSchema = z.discriminatedUnion('kind', [
     line: z.int().positive().nullish(),
   }),
   z.object({ kind: z.literal('openLabel'), label: z.string() }),
-  z.object({ kind: z.literal('openTaskStorage'), ...runScoped }),
+  z.object({ kind: z.literal('openRunStorage'), ...runScoped }),
   z.object({ kind: z.literal('exportTranscript'), ...runScoped }),
   z.object({ kind: z.literal('restoreIntoLauncher'), ...runScoped }),
   /** Relaunch a settled run: a workflow through the host's launcher with

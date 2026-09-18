@@ -190,9 +190,9 @@ export class FileList extends LitElement {
       <div class="storage-hint" role="note">
         ${waIcon('folder-open')}
         <span class="storage-hint__text">
-          Files stay in task-run storage until accepted. Click a file to preview
-          it, use Accept to copy it into your workspace, or use the folder
-          button to open the full run.
+          Files stay in run storage until accepted. Click a file to preview it,
+          use Accept to copy it into your workspace, or use the folder button to
+          open the full run.
         </span>
         ${renderIconActionButton({
           id: 'storage-hint-dismiss-button',
