@@ -230,7 +230,7 @@ export class SettingsViewMessageHandler {
       'chatgpt',
       async () => ({
         command: SETTINGS_VIEW_COMMANDS.UPDATE_CHATGPT_AUTH_STATUS,
-        status: await getChatGptAuthStatus(secrets),
+        status: await this.runtime.runPromise(getChatGptAuthStatus(secrets)),
       }),
       ctx,
       secrets,
@@ -241,7 +241,7 @@ export class SettingsViewMessageHandler {
       'grok',
       async () => ({
         command: SETTINGS_VIEW_COMMANDS.UPDATE_GROK_AUTH_STATUS,
-        status: await getGrokAuthStatus(secrets),
+        status: await this.runtime.runPromise(getGrokAuthStatus(secrets)),
       }),
       ctx,
       secrets,

@@ -166,24 +166,34 @@ type DesktopGrokHandlers = Pick<
 const SUBSCRIPTION_STATUS_ROWS: Record<
   SubscriptionProviderId,
   {
-    readonly buildStatusMessage: (secrets: PlatformSecrets) => Promise<unknown>;
+    readonly buildStatusMessage: (
+      secrets: PlatformSecrets,
+    ) => Effect.Effect<unknown>;
     readonly usageProvider?: SubscriptionUsageProvider;
   }
 > = {
   chatgpt: {
-    buildStatusMessage: async (secrets) =>
-      ({
-        command: SETTINGS_VIEW_COMMANDS.UPDATE_CHATGPT_AUTH_STATUS,
-        status: await getChatGptAuthStatus(secrets),
-      }) satisfies UpdateChatGptAuthStatusMessage,
+    buildStatusMessage: (secrets) =>
+      Effect.map(
+        getChatGptAuthStatus(secrets),
+        (status) =>
+          ({
+            command: SETTINGS_VIEW_COMMANDS.UPDATE_CHATGPT_AUTH_STATUS,
+            status,
+          }) satisfies UpdateChatGptAuthStatusMessage,
+      ),
     usageProvider: 'chatgpt',
   },
   grok: {
-    buildStatusMessage: async (secrets) =>
-      ({
-        command: SETTINGS_VIEW_COMMANDS.UPDATE_GROK_AUTH_STATUS,
-        status: await getGrokAuthStatus(secrets),
-      }) satisfies UpdateGrokAuthStatusMessage,
+    buildStatusMessage: (secrets) =>
+      Effect.map(
+        getGrokAuthStatus(secrets),
+        (status) =>
+          ({
+            command: SETTINGS_VIEW_COMMANDS.UPDATE_GROK_AUTH_STATUS,
+            status,
+          }) satisfies UpdateGrokAuthStatusMessage,
+      ),
   },
 };
 
@@ -614,8 +624,10 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
     providerId: SubscriptionProviderId,
   ): Promise<void> {
     this.options.renderer.postToRenderer(
-      await SUBSCRIPTION_STATUS_ROWS[providerId].buildStatusMessage(
-        this.options.secrets,
+      await this.options.runtime.runPromise(
+        SUBSCRIPTION_STATUS_ROWS[providerId].buildStatusMessage(
+          this.options.secrets,
+        ),
       ),
     );
   }
