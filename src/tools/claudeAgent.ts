@@ -457,34 +457,35 @@ function startClaudeAgentLoop(params: {
     initialPrompt,
     store: claudeAgentSessionsFor,
     releaseFallbackClaim: params.releaseFallbackClaim,
-    runProviderTurn: (prompt, _ports, signal) =>
-      Effect.suspend(() => {
-        const forkSession = isFirstTurn && params.forkSession;
-        return runStreamedTurn({
-          prompt,
-          logger,
-          signal,
-          model: params.model,
-          permissionMode: params.permissionMode,
-          effort: params.effort,
-          cwd: params.cwd,
-          additionalDirectories: params.additionalDirectories,
-          env: params.env,
-          resumeSessionId,
-          forkSession,
-          pathToClaudeCodeExecutable: params.pathToClaudeCodeExecutable,
-        }).pipe(
-          Effect.map((turn) => {
-            isFirstTurn = false;
-            if (forkSession && turn.isError) {
-              resumeSessionId = undefined;
-            } else if (turn.sessionId) {
-              resumeSessionId = turn.sessionId;
-            }
-            return turn;
-          }),
-        );
-      }),
+    // `startAgentCliLoop` calls this inside its own `Effect.suspend`, so the
+    // reads below happen per turn, as the awaited closure they replace did.
+    runProviderTurn: (prompt, _ports, signal) => {
+      const forkSession = isFirstTurn && params.forkSession;
+      return runStreamedTurn({
+        prompt,
+        logger,
+        signal,
+        model: params.model,
+        permissionMode: params.permissionMode,
+        effort: params.effort,
+        cwd: params.cwd,
+        additionalDirectories: params.additionalDirectories,
+        env: params.env,
+        resumeSessionId,
+        forkSession,
+        pathToClaudeCodeExecutable: params.pathToClaudeCodeExecutable,
+      }).pipe(
+        Effect.map((turn) => {
+          isFirstTurn = false;
+          if (forkSession && turn.isError) {
+            resumeSessionId = undefined;
+          } else if (turn.sessionId) {
+            resumeSessionId = turn.sessionId;
+          }
+          return turn;
+        }),
+      );
+    },
     resolveSessionIds: (turn) => [fallbackSessionId, turn.sessionId],
     getUsage: (turn) => turn.usage,
     buildUsageStats: (turn) =>
