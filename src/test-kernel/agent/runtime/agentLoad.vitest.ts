@@ -1,8 +1,9 @@
 import { strict as assert } from 'node:assert';
+import { writeFileSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
+import { Effect, FileSystem, Layer } from 'effect';
 import {
   afterAll,
   beforeAll,
@@ -26,9 +27,11 @@ import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import type { GlobalStorageFs } from '@platform/rootedFs';
 import { AgentCategory } from '@shared/schemas';
 import { installPlatform } from '@test/support/setupPlatform';
-import { unusedGlobalStorageFs } from '@test/support/fsTestUtils';
+import {
+  nodePlatformLayer,
+  unusedGlobalStorageFs,
+} from '@test/support/fsTestUtils';
 import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
 
 /**
  * A program over the process's global storage view. Nothing under test here
@@ -36,9 +39,12 @@ import { AbsoluteFS } from '@utils/files/absoluteFS';
  * only satisfies the requirement the catalog readers name.
  */
 function onGlobalStorage<A, E>(
-  program: Effect.Effect<A, E, GlobalStorageFs>,
+  program: Effect.Effect<A, E, GlobalStorageFs | FileSystem.FileSystem>,
 ): Effect.Effect<A, E> {
-  return Effect.provide(program, unusedGlobalStorageFs());
+  return Effect.provide(
+    program,
+    Layer.merge(unusedGlobalStorageFs(), nodePlatformLayer),
+  );
 }
 
 vi.mock('@agent/index', async () => {
@@ -106,33 +112,26 @@ describe('validateAgentYamlContent', () => {
 });
 
 describe('loadAgentSettingAndPrompts', () => {
-  const fileContents = new Map<string, string>();
+  // The loader reads its YAML through the process filesystem, so the
+  // definitions under test are real files in a temp directory of this
+  // suite's own rather than an intercepted read.
+  let definitionDir = '';
 
   function putYaml(entry: AgentEntry, lines: string[]): void {
-    fileContents.set(path.normalize(entry.path), lines.join('\n'));
+    writeFileSync(entry.path, lines.join('\n'));
   }
 
   function customEntry(name: string, category: AgentCategory): AgentEntry {
-    const definitionPath = path.join('/', 'tmp', 'agents', `${name}.yaml`);
+    const definitionPath = path.join(definitionDir, `${name}.yaml`);
     return { source: 'custom', name, path: definitionPath, category };
   }
 
-  beforeEach(() => {
-    fileContents.clear();
+  /** The loader on the process filesystem it reads its definitions through. */
+  const loadDefinition = (entry: AgentEntry) =>
+    loadAgentSettingAndPrompts(entry).pipe(Effect.provide(nodePlatformLayer));
 
-    vi.spyOn(AbsoluteFS, 'exists').mockImplementation(
-      async (filePath: string) => fileContents.has(path.normalize(filePath)),
-    );
-
-    vi.spyOn(AbsoluteFS, 'read').mockImplementation(
-      async (filePath: string) => {
-        const content = fileContents.get(path.normalize(filePath));
-        if (!content) {
-          throw new Error(`File not found: ${filePath}`);
-        }
-        return content;
-      },
-    );
+  beforeAll(async () => {
+    definitionDir = await makeTempDir('texra-agent-load-', tempDirs);
   });
 
   afterEach(() => {
@@ -155,7 +154,7 @@ describe('loadAgentSettingAndPrompts', () => {
         '',
       ]);
 
-      const [, prompts] = yield* loadAgentSettingAndPrompts(entry);
+      const [, prompts] = yield* loadDefinition(entry);
 
       assert.strictEqual(prompts.userRequest, 'unified variant');
     }),
@@ -167,9 +166,9 @@ describe('loadAgentSettingAndPrompts', () => {
       Effect.gen(function* () {
         const entry = customEntry('broken', AgentCategory.Workflow);
 
-        fileContents.set(path.normalize(entry.path), 'name: "unterminated\n');
+        writeFileSync(entry.path, 'name: "unterminated\n');
 
-        const error = yield* Effect.flip(loadAgentSettingAndPrompts(entry));
+        const error = yield* Effect.flip(loadDefinition(entry));
         assert.ok(
           error.message.startsWith(`Failed to parse YAML at ${entry.path}:`),
         );
@@ -218,7 +217,7 @@ describe('loadAgentSettingAndPrompts', () => {
           (identifier: string) => entryByName[identifier.split(':').pop()!],
         );
 
-        const error = yield* Effect.flip(loadAgentSettingAndPrompts(entryA));
+        const error = yield* Effect.flip(loadDefinition(entryA));
         assert.ok(
           error.message.startsWith('Circular "inherits" chain detected:'),
         );

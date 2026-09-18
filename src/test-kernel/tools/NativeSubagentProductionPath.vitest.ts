@@ -1,7 +1,7 @@
 import { writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
-import { Effect, Stream } from 'effect';
+import { Effect, Layer, Stream } from 'effect';
 /**
  * Production-shaped regression for #9531. Agent registration, launch, child
  * looping, persisted resume, result/report writes, parent admission, recovery,
@@ -80,7 +80,10 @@ import {
   setupPlatform,
   type FakeHost,
 } from '@test/support/setupPlatform';
-import { unusedGlobalStorageFs } from '@test/support/fsTestUtils';
+import {
+  nodePlatformLayer,
+  unusedGlobalStorageFs,
+} from '@test/support/fsTestUtils';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
 import { DelegateAgentTool } from '@tools/delegation/DelegationTools';
 import { executeSubagent } from '@tools/delegation/subagentRun';
@@ -545,7 +548,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     await Effect.runPromise(
       Effect.provide(
         refresh({ includeRemote: false }),
-        unusedGlobalStorageFs(),
+        Layer.merge(unusedGlobalStorageFs(), nodePlatformLayer),
       ),
     );
     // The process session over a persistent store: one session per root,

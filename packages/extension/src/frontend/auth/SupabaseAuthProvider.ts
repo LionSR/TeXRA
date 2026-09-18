@@ -1,6 +1,14 @@
 import { randomBytes } from 'node:crypto';
 
-import { Deferred, Effect, Exit, Fiber, Option, Result } from 'effect';
+import {
+  Deferred,
+  Effect,
+  Exit,
+  Fiber,
+  FileSystem,
+  Option,
+  Result,
+} from 'effect';
 import * as vscode from 'vscode';
 
 import { invalidateRemoteAgentsAfterSignOut } from '@agent/index';
@@ -380,7 +388,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   private loadUsableSessions(): Effect.Effect<
     vscode.AuthenticationSession[],
     AuthPortError,
-    GlobalStorageFs | HttpClient.HttpClient
+    GlobalStorageFs | HttpClient.HttpClient | FileSystem.FileSystem
   > {
     return Effect.gen({ self: this }, function* () {
       const session = yield* this.sessionCoordinator.loadSession();
@@ -407,7 +415,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   ): Effect.Effect<
     vscode.AuthenticationSession[],
     AuthPortError,
-    GlobalStorageFs
+    GlobalStorageFs | FileSystem.FileSystem
   > {
     return Effect.gen({ self: this }, function* () {
       if (Date.now() >= session.expiresAt) {
@@ -445,7 +453,11 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   private handleInvalidSession(
     session: SupabaseSession,
     reason: 'expired' | 'invalid',
-  ): Effect.Effect<void, AuthPortError, GlobalStorageFs> {
+  ): Effect.Effect<
+    void,
+    AuthPortError,
+    GlobalStorageFs | FileSystem.FileSystem
+  > {
     return Effect.gen({ self: this }, function* () {
       // The rejected credential is already unusable. Do not call the client's
       // global signOut here: an OAuth callback may have installed a replacement
@@ -583,7 +595,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   ): Effect.Effect<
     vscode.AuthenticationSession,
     unknown,
-    GlobalStorageFs | HttpClient.HttpClient
+    GlobalStorageFs | HttpClient.HttpClient | FileSystem.FileSystem
   > {
     return Effect.scoped(
       Effect.gen({ self: this }, function* () {
@@ -703,7 +715,11 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
    * Used for an already-invalid credential, where `getSessions()` would start
    * its own sign-in prompt and duplicate the caller's authentication action.
    */
-  clearStoredSession(): Effect.Effect<boolean, AuthPortError, GlobalStorageFs> {
+  clearStoredSession(): Effect.Effect<
+    boolean,
+    AuthPortError,
+    GlobalStorageFs | FileSystem.FileSystem
+  > {
     return Effect.gen({ self: this }, function* () {
       const session = yield* this.sessionCoordinator.loadSession();
       if (!session) return false;
@@ -724,7 +740,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   removeStoredSession(): Effect.Effect<
     boolean,
     AuthPortError | SecretsFailed,
-    GlobalStorageFs
+    GlobalStorageFs | FileSystem.FileSystem
   > {
     const cancelPending = this.cancelPendingAttempt();
     return Effect.gen({ self: this }, function* () {
@@ -738,7 +754,11 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
 
   private clearLocalSession(
     sessionId: string,
-  ): Effect.Effect<void, AuthPortError, GlobalStorageFs> {
+  ): Effect.Effect<
+    void,
+    AuthPortError,
+    GlobalStorageFs | FileSystem.FileSystem
+  > {
     return Effect.gen({ self: this }, function* () {
       yield* this.sessionCoordinator.clearSession();
       yield* this.afterLocalSessionCleared(sessionId);
@@ -747,7 +767,11 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
 
   private clearLocalSessionIfCurrent(
     session: SupabaseSession,
-  ): Effect.Effect<boolean, AuthPortError, GlobalStorageFs> {
+  ): Effect.Effect<
+    boolean,
+    AuthPortError,
+    GlobalStorageFs | FileSystem.FileSystem
+  > {
     return Effect.gen({ self: this }, function* () {
       const cleared =
         yield* this.sessionCoordinator.clearSessionIfCurrent(session);
@@ -759,7 +783,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
 
   private afterLocalSessionCleared(
     sessionId: string,
-  ): Effect.Effect<void, never, GlobalStorageFs> {
+  ): Effect.Effect<void, never, GlobalStorageFs | FileSystem.FileSystem> {
     return refreshRemoteAgentCatalogAfterSignOut(
       invalidateRemoteAgentsAfterSignOut(),
       log.warn,

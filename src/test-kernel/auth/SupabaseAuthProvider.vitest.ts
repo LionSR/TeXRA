@@ -1,6 +1,6 @@
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
+import { Effect, Layer } from 'effect';
 import { afterEach, describe, expect, vi } from 'vitest';
 import * as vscode from 'vscode';
 
@@ -110,7 +110,10 @@ import { SupabaseAuthProvider } from '@frontend/auth/SupabaseAuthProvider';
 import type { SupabaseUriHandler } from '@frontend/auth/UriHandler';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { fakeSupabaseAuth } from '@test/support/fakeSupabaseAuth';
-import { unusedGlobalStorageFs } from '@test/support/fsTestUtils';
+import {
+  nodePlatformLayer,
+  unusedGlobalStorageFs,
+} from '@test/support/fsTestUtils';
 
 const PENDING_STATE_PREFIX = 'texra.extension.pendingOAuthState.';
 const TEST_NONCE = '0123456789abcdef0123456789abcdef';
@@ -346,7 +349,9 @@ describe('SupabaseAuthProvider expired-session refresh', () => {
       expect(yield* provider.clearStoredSession()).toBe(false);
 
       expect(clearSessionIfCurrent).not.toHaveBeenCalled();
-    }).pipe(Effect.provide(unusedGlobalStorageFs())),
+    }).pipe(
+      Effect.provide(Layer.merge(unusedGlobalStorageFs(), nodePlatformLayer)),
+    ),
   );
 });
 
@@ -367,7 +372,9 @@ describe('SupabaseAuthProvider model availability', () => {
 
       expect(coordinator.clearSession).toHaveBeenCalledOnce();
       expect(providerMocks.signOut).not.toHaveBeenCalled();
-    }).pipe(Effect.provide(unusedGlobalStorageFs())),
+    }).pipe(
+      Effect.provide(Layer.merge(unusedGlobalStorageFs(), nodePlatformLayer)),
+    ),
   );
 
   it.effect(
@@ -407,7 +414,9 @@ describe('SupabaseAuthProvider model availability', () => {
         expect(
           testDoubles.secrets.get(`${PENDING_STATE_PREFIX}${nonce}`),
         ).toBeUndefined();
-      }).pipe(Effect.provide(unusedGlobalStorageFs())),
+      }).pipe(
+        Effect.provide(Layer.merge(unusedGlobalStorageFs(), nodePlatformLayer)),
+      ),
   );
 });
 

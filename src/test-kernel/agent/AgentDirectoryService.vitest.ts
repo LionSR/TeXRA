@@ -3,7 +3,7 @@ import { strict as assert } from 'node:assert';
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, FileSystem, Layer } from 'effect';
 import { describe, it } from 'vitest';
 
 // Local imports
@@ -11,7 +11,10 @@ import { AgentDirectoryService, agentSourceDirectory } from '@agent/index';
 import type { AgentDirectoryIssueReporter } from '@agent/index/AgentDirectoryService';
 import type { GlobalStorageFs } from '@platform/rootedFs';
 import { workspaceRoots } from '@platform/workspaceRoots';
-import { globalStorageFsTestLayer } from '@test/support/fsTestUtils';
+import {
+  globalStorageFsTestLayer,
+  nodePlatformLayer,
+} from '@test/support/fsTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 import {
   createTempDirPlatform,
@@ -61,10 +64,13 @@ describe('AgentDirectoryService', () => {
   /** The service's readers over the process's global storage view, which the
    *  process runtime serves and this suite provides for `runPromise`. */
   function runDirectories<A, E>(
-    program: Effect.Effect<A, E, GlobalStorageFs>,
+    program: Effect.Effect<A, E, GlobalStorageFs | FileSystem.FileSystem>,
   ): Promise<A> {
     return Effect.runPromise(
-      Effect.provide(program, globalStorageFsTestLayer(storageBase())),
+      Effect.provide(
+        program,
+        Layer.merge(globalStorageFsTestLayer(storageBase()), nodePlatformLayer),
+      ),
     );
   }
 

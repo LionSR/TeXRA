@@ -2,7 +2,7 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, FileSystem } from 'effect';
 
 // Local imports
 import { CUSTOM_AGENTS_STORAGE_DIR } from '@common/storage/storageLayout';
@@ -13,7 +13,7 @@ import {
 } from '@platform/interfaces';
 import { GlobalStorageFs } from '@platform/rootedFs';
 import type { AgentSource } from '@shared/schemas';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
+import { entryExists } from '@utils/files/fsEntryExists';
 
 import {
   BUILTIN_WORKFLOW_AGENTS_DIR,
@@ -63,7 +63,11 @@ export class AgentDirectoryService {
     return Effect.sync(() => this.packagedDir(BUILTIN_TOOL_USE_AGENTS_DIR));
   }
 
-  custom(): Effect.Effect<string, AgentDirectoriesFailed, GlobalStorageFs> {
+  custom(): Effect.Effect<
+    string,
+    AgentDirectoriesFailed,
+    GlobalStorageFs | FileSystem.FileSystem
+  > {
     return Effect.gen({ self: this }, function* () {
       const configuredPath = (
         this.options.customDirectoryStore.get() ?? ''
@@ -79,7 +83,7 @@ export class AgentDirectoryService {
   getAllLocal(): Effect.Effect<
     AgentDirectoryEntry[],
     AgentDirectoriesFailed,
-    GlobalStorageFs
+    GlobalStorageFs | FileSystem.FileSystem
   > {
     return Effect.gen({ self: this }, function* () {
       const [customDir, builtInDir, builtInToolUseDir] = yield* Effect.all(
@@ -140,7 +144,11 @@ export class AgentDirectoryService {
 
   private resolveConfiguredCustomDir(
     configuredPath: string,
-  ): Effect.Effect<string | undefined, AgentDirectoriesFailed> {
+  ): Effect.Effect<
+    string | undefined,
+    AgentDirectoriesFailed,
+    FileSystem.FileSystem
+  > {
     if (!configuredPath) {
       return Effect.succeed(undefined);
     }
@@ -157,10 +165,14 @@ export class AgentDirectoryService {
         return undefined;
       }
 
+      const fs = yield* FileSystem.FileSystem;
       const parentDir = path.dirname(configuredPath);
-      const parentExists = yield* this.portCall(
-        () => AbsoluteFS.exists(parentDir),
-        `Could not inspect the parent of the custom agents directory: ${parentDir}`,
+      const parentExists = yield* entryExists(fs, parentDir).pipe(
+        Effect.mapError(
+          this.failure(
+            `Could not inspect the parent of the custom agents directory: ${parentDir}`,
+          ),
+        ),
       );
       if (!parentExists) {
         this.log.error(
@@ -173,12 +185,19 @@ export class AgentDirectoryService {
         return undefined;
       }
 
-      // createDir, not ensureDir: a regular file at the configured path must
-      // still reject here rather than be handed back as a directory.
-      yield* this.portCall(
-        () => AbsoluteFS.createDir(configuredPath),
-        `Unable to create the custom agents directory: ${configuredPath}`,
-      );
+      // A regular file at the configured path must still reject here rather
+      // than be handed back as a directory: `recursive` (what the provider
+      // behind the facade always passed) succeeds on an existing directory
+      // and fails `EEXIST` on anything else.
+      yield* fs
+        .makeDirectory(configuredPath, { recursive: true })
+        .pipe(
+          Effect.mapError(
+            this.failure(
+              `Unable to create the custom agents directory: ${configuredPath}`,
+            ),
+          ),
+        );
       this.log.debug(
         `Using custom agents directory from setting: ${configuredPath}`,
       );
@@ -198,21 +217,23 @@ export class AgentDirectoryService {
     );
   }
 
+  /** This file's one failure shape, from whatever cause raised it. */
+  private failure(message: string): (cause: unknown) => AgentDirectoriesFailed {
+    return (cause) =>
+      new AgentDirectoriesFailed({ source: 'custom', message, cause });
+  }
+
   /**
-   * One conversion for this file's two promise-shaped dependencies (the
-   * filesystem helpers and the host's issue reporter): the promise is adopted
-   * here and raised as the port's failure, so the readers above compose
-   * instead of catching a rejection they cannot name.
+   * One conversion for this file's remaining promise-shaped dependency, the
+   * host's issue reporter: the promise is adopted here and raised as the
+   * port's failure, so the readers above compose instead of catching a
+   * rejection they cannot name.
    */
   private portCall<A>(
     call: () => Promise<A>,
     message: string,
   ): Effect.Effect<A, AgentDirectoriesFailed> {
-    return Effect.tryPromise({
-      try: call,
-      catch: (cause) =>
-        new AgentDirectoriesFailed({ source: 'custom', message, cause }),
-    });
+    return Effect.tryPromise({ try: call, catch: this.failure(message) });
   }
 }
 
@@ -225,7 +246,11 @@ export class AgentDirectoryService {
 export function agentSourceDirectory(
   directories: AgentDirectoriesPort,
   source: AgentSource,
-): Effect.Effect<string | undefined, AgentDirectoriesFailed, GlobalStorageFs> {
+): Effect.Effect<
+  string | undefined,
+  AgentDirectoriesFailed,
+  GlobalStorageFs | FileSystem.FileSystem
+> {
   switch (source) {
     case 'custom':
       return directories.custom();

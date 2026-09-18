@@ -1,4 +1,4 @@
-import { Data, Effect } from 'effect';
+import { Data, Effect, FileSystem } from 'effect';
 
 import { type MessageHost, NotificationFailed } from '@hosts/uiHosts';
 import type { AgentDirectoriesFailed } from '@platform/interfaces';
@@ -60,7 +60,7 @@ interface DesktopShellActionFactoryOptions extends Pick<
   getCustomAgentDirectory(): Effect.Effect<
     string,
     AgentDirectoriesFailed,
-    GlobalStorageFs
+    GlobalStorageFs | FileSystem.FileSystem
   >;
   openExternalUrl(url: string): Effect.Effect<void, PreviewUnavailable>;
   openLogFolder(): Effect.Effect<void, PreviewUnavailable>;
@@ -100,7 +100,7 @@ export function createDesktopShellActions(
     program: Effect.Effect<
       void,
       ShellActionFailed | NotificationFailed,
-      GlobalStorageFs
+      GlobalStorageFs | FileSystem.FileSystem
     >,
   ): void {
     options.runtime.runFork(

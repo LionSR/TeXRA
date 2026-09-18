@@ -36,7 +36,7 @@ const AGENT_WATCHER_REBUILD_LANE = 'agent-watcher-rebuild';
  */
 async function runSettledEffect<A>(
   runtime: ProcessRuntime,
-  effect: Effect.Effect<A, unknown, GlobalStorageFs>,
+  effect: Effect.Effect<A, unknown, GlobalStorageFs | FileSystem.FileSystem>,
 ): Promise<A> {
   const exit = await runtime.runPromiseExit(effect);
   if (Exit.isSuccess(exit)) return exit.value;
@@ -117,14 +117,18 @@ class AgentDirectoryManager {
   ): Effect.Effect<
     string | undefined,
     AgentDirectoriesFailed,
-    GlobalStorageFs
+    GlobalStorageFs | FileSystem.FileSystem
   > {
     return Effect.suspend(() =>
       agentSourceDirectory(this.getHost().directories, source),
     );
   }
 
-  custom(): Effect.Effect<string, AgentDirectoriesFailed, GlobalStorageFs> {
+  custom(): Effect.Effect<
+    string,
+    AgentDirectoriesFailed,
+    GlobalStorageFs | FileSystem.FileSystem
+  > {
     return Effect.suspend(() => this.getHost().directories.custom());
   }
 
@@ -226,7 +230,7 @@ class AgentDirectoryManager {
   private rebuildAgentWatchers(): Effect.Effect<
     void,
     unknown,
-    GlobalStorageFs
+    GlobalStorageFs | FileSystem.FileSystem
   > {
     return Effect.gen({ self: this }, function* () {
       if (!this.onAgentYamlChange) {

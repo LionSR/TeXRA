@@ -1,4 +1,4 @@
-import { Cause, Effect, Exit } from 'effect';
+import { Cause, Effect, Exit, FileSystem } from 'effect';
 
 import type { SupabaseSession } from '@auth/SupabaseSession';
 import { bumpCodexPreferenceVersion } from '@cli/chat/tui/state/cliState';
@@ -217,7 +217,11 @@ export function loginFromChat(
 const logoutLines = (
   target: CliLogoutTarget,
   secrets: PlatformSecrets,
-): Effect.Effect<readonly string[], never, Secrets | GlobalStorageFs> =>
+): Effect.Effect<
+  readonly string[],
+  never,
+  Secrets | GlobalStorageFs | FileSystem.FileSystem
+> =>
   Effect.gen(function* () {
     const lines: string[] = [];
 

@@ -8,7 +8,7 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import { Cause, Data, Effect, Exit, SubscriptionRef } from 'effect';
+import { Cause, Data, Effect, Exit, FileSystem, SubscriptionRef } from 'effect';
 import { presentAgentFailure, type SessionHandle } from '@agent/runtime';
 import {
   classifyAgentError,
@@ -113,7 +113,7 @@ interface DesktopHostRequestsOptions {
   getCustomAgentDirectory(): Effect.Effect<
     string,
     AgentDirectoriesFailed,
-    GlobalStorageFs
+    GlobalStorageFs | FileSystem.FileSystem
   >;
   showFirstRunWalkthrough(): void;
   onboarding: Pick<

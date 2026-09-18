@@ -28,7 +28,7 @@ import {
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 
 import type { SettingsStatePorts } from '@shared/settingsView/types';
-import type { Effect } from 'effect';
+import type { Effect, FileSystem } from 'effect';
 
 interface AgentControllerFactoryOptions extends SettingsStatePorts {
   /** The host's agent directories as `AgentDirectoriesPort` declares them:
@@ -37,14 +37,14 @@ interface AgentControllerFactoryOptions extends SettingsStatePorts {
   readonly getCustomAgentDirectory: () => Effect.Effect<
     string,
     AgentDirectoriesFailed,
-    GlobalStorageFs
+    GlobalStorageFs | FileSystem.FileSystem
   >;
   readonly getSourceDirectory: (
     source: AgentSource,
   ) => Effect.Effect<
     string | undefined,
     AgentDirectoriesFailed,
-    GlobalStorageFs
+    GlobalStorageFs | FileSystem.FileSystem
   >;
   readonly getAgents?: (category: AgentCategory) => AgentEntry[];
   readonly getVisibleAgents?: (category: AgentCategory) => AgentEntry[];

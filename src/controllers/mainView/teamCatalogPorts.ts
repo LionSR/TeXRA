@@ -1,5 +1,5 @@
 // Local imports
-import { Effect } from 'effect';
+import { Effect, FileSystem } from 'effect';
 import { getAgentsByCategory, loadAgents, refresh } from '@agent/index';
 import { supabaseAuthenticated } from '@auth/SupabaseAuth';
 import type { StateStore } from '@platform/interfaces';
@@ -18,11 +18,15 @@ export function createTeamCatalogPorts(workspaceState: StateStore): {
   readonly ensureCatalogLoaded: () => Effect.Effect<
     void,
     unknown,
-    GlobalStorageFs
+    GlobalStorageFs | FileSystem.FileSystem
   >;
   readonly getAgents: typeof getAgentsByCategory;
   readonly canAccessRemoteCatalog: () => Effect.Effect<boolean>;
-  readonly refreshRemote: () => Effect.Effect<void, unknown, GlobalStorageFs>;
+  readonly refreshRemote: () => Effect.Effect<
+    void,
+    unknown,
+    GlobalStorageFs | FileSystem.FileSystem
+  >;
 } {
   return {
     customPresetsRaw: workspaceState.get<unknown>(

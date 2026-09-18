@@ -2,7 +2,7 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, FileSystem } from 'effect';
 
 // Local imports - platform
 import type {
@@ -26,11 +26,15 @@ interface SettingsAgentDirectoryState {
   getCustomDir(): Effect.Effect<
     string,
     AgentDirectoriesFailed,
-    GlobalStorageFs
+    GlobalStorageFs | FileSystem.FileSystem
   >;
   getSourceDir(
     source: AgentSource,
-  ): Effect.Effect<string | undefined, AgentDirectoriesFailed, GlobalStorageFs>;
+  ): Effect.Effect<
+    string | undefined,
+    AgentDirectoriesFailed,
+    GlobalStorageFs | FileSystem.FileSystem
+  >;
   getAgent(
     source: AgentSource,
     name: string,
@@ -62,7 +66,7 @@ export class SettingsAgentDirectoryController {
   getCustomDirStatus(): Effect.Effect<
     SettingsCustomAgentDirStatus,
     AgentDirectoriesFailed,
-    GlobalStorageFs
+    GlobalStorageFs | FileSystem.FileSystem
   > {
     return Effect.gen({ self: this }, function* () {
       const configuredPath =
@@ -109,7 +113,7 @@ export class SettingsAgentDirectoryController {
   ): Effect.Effect<
     SettingsOpenAgentFolderResult,
     AgentDirectoriesFailed,
-    GlobalStorageFs
+    GlobalStorageFs | FileSystem.FileSystem
   > {
     return Effect.map(this.deps.state.getSourceDir(source), (sourceDir) =>
       sourceDir

@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Fiber } from 'effect';
+import { Deferred, Effect, Fiber, FileSystem, Layer } from 'effect';
 import { beforeAll, beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports
@@ -30,7 +30,10 @@ import { AgentCategory } from '@shared/schemas';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { REPO_ROOT } from '@test/support/repoScan';
-import { unusedGlobalStorageFs } from '@test/support/fsTestUtils';
+import {
+  nodePlatformLayer,
+  unusedGlobalStorageFs,
+} from '@test/support/fsTestUtils';
 import { installPlatform } from '@test/support/setupPlatform';
 import type * as vscode from 'vscode';
 
@@ -40,9 +43,12 @@ import type * as vscode from 'vscode';
  * reads the view the readers name in their requirements.
  */
 function onGlobalStorage<A, E>(
-  program: Effect.Effect<A, E, GlobalStorageFs>,
+  program: Effect.Effect<A, E, GlobalStorageFs | FileSystem.FileSystem>,
 ): Effect.Effect<A, E> {
-  return Effect.provide(program, unusedGlobalStorageFs());
+  return Effect.provide(
+    program,
+    Layer.merge(unusedGlobalStorageFs(), nodePlatformLayer),
+  );
 }
 
 const { listRemoteAgents, ORCHESTRATOR_AGENT } = vi.hoisted(() => {

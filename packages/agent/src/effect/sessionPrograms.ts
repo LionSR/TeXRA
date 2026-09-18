@@ -21,6 +21,7 @@ import {
   Effect,
   Exit,
   Fiber,
+  FileSystem,
   Queue,
   Stream,
   type Cause,
@@ -179,7 +180,7 @@ function admitInput(
 ): Effect.Effect<
   ReturnType<typeof AgentConfigSchema.parse>,
   LaunchError | RunFailure,
-  GlobalStorageFs
+  GlobalStorageFs | FileSystem.FileSystem
 > {
   return Effect.gen(function* () {
     const tools = input.tools ?? [];
