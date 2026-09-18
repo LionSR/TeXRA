@@ -1,28 +1,14 @@
-import * as fs from 'node:fs/promises';
+import { Effect, FileSystem } from 'effect';
 
 import { createLog } from '@logger/logUtils';
 import { filterNotNull } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getPromptFileName } from '@utils/prompt';
-import { normalizeLineEndings } from '@utils/text/stringUtils';
 
+import { readNormalizedFile } from './fsDurability';
 import { workspaceAbsolutePath } from './workspaceFS';
 
 const log = createLog('VarsUtils');
-
-/**
- * The read prompt assembly makes: the file's bytes decoded as UTF-8 — a
- * leading BOM kept, which a `TextDecoder` would strip — with line endings
- * normalized, which is what the retired facade's read gave.
- *
- * `node:fs/promises` rather than the Effect `FileSystem`: prompt assembly is
- * still a Promise-tier chain, lifted once at its launch boundary. The paths
- * reaching here are already absolute: the caller resolves a relative entry
- * against the root it holds as data.
- */
-export async function readPromptFile(target: string): Promise<string> {
-  return normalizeLineEndings((await fs.readFile(target)).toString('utf-8'));
-}
 
 /** A file successfully read for the `${varName}_FILE`/`${varName}_CONTENT` variable pair. */
 export interface FileVarValue {
@@ -41,26 +27,31 @@ export interface FileVarValue {
  * An already-absolute `filePath` passes through it untouched, so a caller that
  * has resolved its own path can hand in `undefined`.
  */
-export async function setVarFromFile(
+export const setVarFromFile = Effect.fn('varsUtils.setVarFromFile')(function* (
   filePath: string,
   varName: string,
   workspaceRoot: string | undefined,
-): Promise<FileVarValue | null> {
-  try {
-    const content = await readPromptFile(
-      workspaceAbsolutePath(workspaceRoot, filePath),
-    );
-    return { file: filePath, content };
-  } catch (error) {
-    // The variable is simply absent from the prompt after this, so a
-    // mistyped path and a permission error must not read like a real absence.
-    log.warn(
-      `Failed to read ${varName} from file ${filePath}: ${toErrorMessage(error)}`,
-      { data: error },
-    );
-    return null;
-  }
-}
+): Effect.fn.Return<FileVarValue | null, never, FileSystem.FileSystem> {
+  const fs = yield* FileSystem.FileSystem;
+  return yield* readNormalizedFile(
+    fs,
+    workspaceAbsolutePath(workspaceRoot, filePath),
+  ).pipe(
+    Effect.map((content) => ({ file: filePath, content })),
+    Effect.catch((error) =>
+      Effect.sync(() => {
+        // The variable is simply absent from the prompt after this, so a
+        // mistyped path and a permission error must not read like a real
+        // absence.
+        log.warn(
+          `Failed to read ${varName} from file ${filePath}: ${toErrorMessage(error)}`,
+          { data: error },
+        );
+        return null;
+      }),
+    ),
+  );
+});
 
 /** The prompt XML built from a file list, plus what the read dropped. */
 export interface XmlFormatFromFilesResult {
@@ -89,35 +80,42 @@ export interface XmlFormatFromFilesResult {
  * @param files List of file paths
  * @returns XML formatted string of the readable files, or null if none are readable
  */
-export async function getXmlFormatFromReadableFiles(
+export const getXmlFormatFromReadableFiles = Effect.fn(
+  'varsUtils.getXmlFormatFromReadableFiles',
+)(function* (
   workspaceRoot: string | undefined,
   files: string[],
-): Promise<XmlFormatFromFilesResult> {
+): Effect.fn.Return<XmlFormatFromFilesResult, never, FileSystem.FileSystem> {
   if (files.length === 0) {
     return { xml: null, readableFiles: [], skipped: [] };
   }
 
-  const skipped: { file: string; reason: string }[] = [];
-  const xmlContents = await Promise.all(
-    files.map(async (file) => {
-      try {
-        const content = await readPromptFile(
-          workspaceAbsolutePath(workspaceRoot, file),
-        );
-        return {
-          file,
-          xml: `<document name="${getPromptFileName(workspaceRoot, file)}">\n${content}\n</document>`,
-        };
-      } catch (err) {
-        skipped.push({ file, reason: String(err) });
-        return null;
-      }
-    }),
+  const fs = yield* FileSystem.FileSystem;
+  const reads = yield* Effect.forEach(
+    files,
+    (file) =>
+      readNormalizedFile(fs, workspaceAbsolutePath(workspaceRoot, file)).pipe(
+        Effect.map((content) => ({
+          document: {
+            file,
+            xml: `<document name="${getPromptFileName(workspaceRoot, file)}">\n${content}\n</document>`,
+          },
+          skipped: null,
+        })),
+        Effect.catch((err) =>
+          Effect.succeed({
+            document: null,
+            skipped: { file, reason: String(err) },
+          }),
+        ),
+      ),
+    { concurrency: 'unbounded' },
   );
-  const readable = xmlContents.filter(filterNotNull);
+
+  const readable = reads.map((read) => read.document).filter(filterNotNull);
   return {
     xml: readable.length > 0 ? readable.map((doc) => doc.xml).join('\n') : null,
     readableFiles: readable.map((doc) => doc.file),
-    skipped,
+    skipped: reads.map((read) => read.skipped).filter(filterNotNull),
   };
-}
+});

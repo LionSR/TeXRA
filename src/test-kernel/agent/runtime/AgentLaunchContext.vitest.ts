@@ -347,7 +347,9 @@ describe('AgentLaunchContext', () => {
           handleStatus: () => {},
           dispose: vi.fn(),
         });
-        mocks.buildVars.mockResolvedValueOnce({ ATTACHED_MEMORY_MISSES: [] });
+        mocks.buildVars.mockReturnValueOnce(
+          Effect.succeed({ ATTACHED_MEMORY_MISSES: [] }),
+        );
         const config = AgentConfigSchema.parse({
           agent: 'chat',
           model: 'gpt55',
@@ -428,7 +430,7 @@ describe('AgentLaunchContext', () => {
           Effect.succeed([{ agentCategory: AgentCategory.ToolUse }, {}]),
         );
         mocks.createTrace.mockReturnValueOnce({ trace, dispose: rawDispose });
-        mocks.buildVars.mockRejectedValueOnce(failure);
+        mocks.buildVars.mockReturnValueOnce(Effect.fail(failure));
 
         try {
           const error = yield* Effect.flip(

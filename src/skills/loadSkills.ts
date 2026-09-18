@@ -2,6 +2,9 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
+// Third-party imports
+import { Effect } from 'effect';
+
 // Local imports - common
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
 import type { ActiveSkillSourceScope } from '@shared/schemas';
@@ -74,44 +77,56 @@ function dupRealpathIssue(
  * Missing roots are treated as empty because user and project skill directories
  * are optional. Per-skill failures are reported and do not abort discovery.
  */
-async function scanSkillRoot(root: string): Promise<SkillRootScan> {
+const scanSkillRoot = Effect.fn('skills.scanSkillRoot')(function* (
+  root: string,
+): Effect.fn.Return<SkillRootScan> {
   const skills: DiscoveredSkill[] = [];
   const errors: SkillLoadIssue[] = [];
   const seenNames = new Set<string>();
   const seenRealPaths = new Set<string>();
 
-  let entries: Dirent[];
-  try {
-    entries = await fs.readdir(root, { withFileTypes: true });
-  } catch (err) {
-    if (!isFileNotFoundError(err)) {
-      errors.push(
-        issue('error', 'read_error', toErrorMessage(err), {
-          path: root,
-        }),
-      );
-    }
-    return { skills, errors };
-  }
+  const entries: Dirent[] | undefined = yield* Effect.tryPromise({
+    try: () => fs.readdir(root, { withFileTypes: true }),
+    catch: (err) => err,
+  }).pipe(
+    Effect.catch((err) =>
+      Effect.sync(() => {
+        if (!isFileNotFoundError(err)) {
+          errors.push(
+            issue('error', 'read_error', toErrorMessage(err), {
+              path: root,
+            }),
+          );
+        }
+        return undefined;
+      }),
+    ),
+  );
+  if (entries === undefined) return { skills, errors };
 
   for (const entry of entries.sort(byName)) {
     if (!entry.isDirectory() && !entry.isSymbolicLink()) continue;
 
     const skillDir = path.join(root, entry.name);
     const skillPath = path.join(skillDir, 'SKILL.md');
-    let realSkillPath: string;
-    try {
-      realSkillPath = await fs.realpath(skillPath);
-    } catch (err) {
-      if (!isFileNotFoundError(err)) {
-        errors.push(
-          issue('warning', 'read_error', toErrorMessage(err), {
-            path: skillPath,
-          }),
-        );
-      }
-      continue;
-    }
+    const realSkillPath: string | undefined = yield* Effect.tryPromise({
+      try: () => fs.realpath(skillPath),
+      catch: (err) => err,
+    }).pipe(
+      Effect.catch((err) =>
+        Effect.sync(() => {
+          if (!isFileNotFoundError(err)) {
+            errors.push(
+              issue('warning', 'read_error', toErrorMessage(err), {
+                path: skillPath,
+              }),
+            );
+          }
+          return undefined;
+        }),
+      ),
+    );
+    if (realSkillPath === undefined) continue;
 
     if (seenRealPaths.has(realSkillPath)) {
       errors.push(dupRealpathIssue(realSkillPath, skillPath));
@@ -119,7 +134,7 @@ async function scanSkillRoot(root: string): Promise<SkillRootScan> {
     }
     seenRealPaths.add(realSkillPath);
 
-    const loaded = await loadSkillDirectory(skillDir, entry.name);
+    const loaded = yield* loadSkillDirectory(skillDir, entry.name);
     errors.push(...loaded.errors);
     if (!loaded.skill) continue;
 
@@ -133,34 +148,44 @@ async function scanSkillRoot(root: string): Promise<SkillRootScan> {
   }
 
   return { skills, errors };
-}
+});
 
 /**
  * Validate a `required` skill source, returning an issue when the path is
  * missing or not a directory. Optional sources skip this check entirely.
  */
-async function validateRequiredSource(
+function validateRequiredSource(
   source: SkillSource,
-): Promise<SkillLoadIssue | undefined> {
-  try {
-    const sourceStat = await fs.stat(source.path);
-    if (sourceStat.isDirectory()) return undefined;
-  } catch (err) {
-    if (isFileNotFoundError(err)) {
-      return issue('error', 'missing_source', 'Skill source does not exist', {
-        path: source.path,
-      });
-    }
-    if (!isNotADirectoryError(err)) {
-      return issue('error', 'source_read_error', toErrorMessage(err), {
-        path: source.path,
-      });
-    }
-  }
-
-  return issue('error', 'invalid_source', 'Skill source is not a directory', {
-    path: source.path,
-  });
+): Effect.Effect<SkillLoadIssue | undefined> {
+  const notADirectory = () =>
+    issue('error', 'invalid_source', 'Skill source is not a directory', {
+      path: source.path,
+    });
+  return Effect.tryPromise({
+    try: () => fs.stat(source.path),
+    catch: (err) => err,
+  }).pipe(
+    Effect.map((sourceStat) =>
+      sourceStat.isDirectory() ? undefined : notADirectory(),
+    ),
+    Effect.catch((err) => {
+      if (isFileNotFoundError(err)) {
+        return Effect.succeed(
+          issue('error', 'missing_source', 'Skill source does not exist', {
+            path: source.path,
+          }),
+        );
+      }
+      if (!isNotADirectoryError(err)) {
+        return Effect.succeed(
+          issue('error', 'source_read_error', toErrorMessage(err), {
+            path: source.path,
+          }),
+        );
+      }
+      return Effect.succeed(notADirectory());
+    }),
+  );
 }
 
 /**
@@ -170,51 +195,53 @@ async function validateRequiredSource(
  * need: a skill name or canonical `SKILL.md` file is accepted only from the
  * first source that provides it.
  */
-export async function discoverSkillSources(
-  sources: readonly SkillSource[],
-): Promise<DiscoverSkillSourcesResult> {
-  const skills: SourcedSkill[] = [];
-  const errors: SkillLoadIssue[] = [];
-  const seenNames = new Set<string>();
-  const seenRealPaths = new Set<string>();
+export const discoverSkillSources = Effect.fn('skills.discoverSkillSources')(
+  function* (
+    sources: readonly SkillSource[],
+  ): Effect.fn.Return<DiscoverSkillSourcesResult> {
+    const skills: SourcedSkill[] = [];
+    const errors: SkillLoadIssue[] = [];
+    const seenNames = new Set<string>();
+    const seenRealPaths = new Set<string>();
 
-  for (const source of sources) {
-    if (source.required === true) {
-      const sourceError = await validateRequiredSource(source);
-      if (sourceError) {
-        errors.push(sourceError);
-        continue;
+    for (const source of sources) {
+      if (source.required === true) {
+        const sourceError = yield* validateRequiredSource(source);
+        if (sourceError) {
+          errors.push(sourceError);
+          continue;
+        }
+      }
+
+      const result = yield* scanSkillRoot(source.path);
+      errors.push(
+        ...result.errors.map((error) =>
+          source.required === true &&
+          error.severity === 'error' &&
+          error.code === 'read_error' &&
+          error.path === source.path
+            ? { ...error, code: 'source_read_error' as const }
+            : error,
+        ),
+      );
+
+      for (const { skill, realPath } of result.skills) {
+        if (seenRealPaths.has(realPath)) {
+          errors.push(dupRealpathIssue(realPath, skill.path, skill.name));
+          continue;
+        }
+
+        if (seenNames.has(skill.name)) {
+          errors.push(dupNameIssue(skill.name, skill.path));
+          continue;
+        }
+
+        seenRealPaths.add(realPath);
+        seenNames.add(skill.name);
+        skills.push({ skill, source });
       }
     }
 
-    const result = await scanSkillRoot(source.path);
-    errors.push(
-      ...result.errors.map((error) =>
-        source.required === true &&
-        error.severity === 'error' &&
-        error.code === 'read_error' &&
-        error.path === source.path
-          ? { ...error, code: 'source_read_error' as const }
-          : error,
-      ),
-    );
-
-    for (const { skill, realPath } of result.skills) {
-      if (seenRealPaths.has(realPath)) {
-        errors.push(dupRealpathIssue(realPath, skill.path, skill.name));
-        continue;
-      }
-
-      if (seenNames.has(skill.name)) {
-        errors.push(dupNameIssue(skill.name, skill.path));
-        continue;
-      }
-
-      seenRealPaths.add(realPath);
-      seenNames.add(skill.name);
-      skills.push({ skill, source });
-    }
-  }
-
-  return { skills, errors };
-}
+    return { skills, errors };
+  },
+);

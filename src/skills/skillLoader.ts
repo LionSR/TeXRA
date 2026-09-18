@@ -3,6 +3,7 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
 // Third-party imports
+import { Effect } from 'effect';
 import { ZodError } from 'zod';
 
 // Local imports - common
@@ -163,60 +164,77 @@ function normalizeSkillDescription(
   return { description, errors };
 }
 
-export async function loadSkillDirectory(
+/**
+ * Read and parse one skill package. Never fails: a missing or malformed
+ * `SKILL.md` answers with the issue list the caller reports, so one bad
+ * directory cannot abort a scan.
+ */
+export function loadSkillDirectory(
   skillDir: string,
   directoryName: string,
-): Promise<LoadedSkill> {
+): Effect.Effect<LoadedSkill> {
   const skillPath = path.join(skillDir, 'SKILL.md');
 
-  try {
-    const content = await fs.readFile(skillPath, 'utf8');
-    const { frontmatter, body } = extractFrontmatter(content);
-    if (!isObject(frontmatter)) {
-      return {
+  return Effect.tryPromise({
+    try: () => fs.readFile(skillPath, 'utf8'),
+    // The raw failure decides the issue code, so it is carried through
+    // unwrapped rather than classified twice.
+    catch: (err) => err,
+  }).pipe(
+    Effect.flatMap((content) =>
+      Effect.try({
+        try: (): LoadedSkill => {
+          const { frontmatter, body } = extractFrontmatter(content);
+          if (!isObject(frontmatter)) {
+            return {
+              errors: [
+                issue(
+                  'error',
+                  'invalid_frontmatter',
+                  'SKILL.md frontmatter must be a YAML object',
+                  { path: skillPath },
+                ),
+              ],
+            };
+          }
+
+          const nameResult = normalizeSkillName(
+            frontmatter,
+            directoryName,
+            skillPath,
+          );
+          const errors = [...nameResult.errors];
+          if (!nameResult.name) return { errors };
+
+          const descriptionResult = normalizeSkillDescription(
+            frontmatter,
+            skillPath,
+            nameResult.name,
+          );
+          errors.push(...descriptionResult.errors);
+          if (!descriptionResult.description) return { errors };
+
+          const skill = SkillSchema.parse({
+            name: nameResult.name,
+            description: descriptionResult.description,
+            body,
+            baseDir: skillDir,
+            path: skillPath,
+          });
+
+          return { skill, errors };
+        },
+        catch: (err) => err,
+      }),
+    ),
+    Effect.catch((err) =>
+      Effect.succeed<LoadedSkill>({
         errors: [
-          issue(
-            'error',
-            'invalid_frontmatter',
-            'SKILL.md frontmatter must be a YAML object',
-            { path: skillPath },
-          ),
+          issue('error', skillReadErrorCode(err), toErrorMessage(err), {
+            path: skillPath,
+          }),
         ],
-      };
-    }
-
-    const nameResult = normalizeSkillName(
-      frontmatter,
-      directoryName,
-      skillPath,
-    );
-    const errors = [...nameResult.errors];
-    if (!nameResult.name) return { errors };
-
-    const descriptionResult = normalizeSkillDescription(
-      frontmatter,
-      skillPath,
-      nameResult.name,
-    );
-    errors.push(...descriptionResult.errors);
-    if (!descriptionResult.description) return { errors };
-
-    const skill = SkillSchema.parse({
-      name: nameResult.name,
-      description: descriptionResult.description,
-      body,
-      baseDir: skillDir,
-      path: skillPath,
-    });
-
-    return { skill, errors };
-  } catch (err) {
-    return {
-      errors: [
-        issue('error', skillReadErrorCode(err), toErrorMessage(err), {
-          path: skillPath,
-        }),
-      ],
-    };
-  }
+      }),
+    ),
+  );
 }

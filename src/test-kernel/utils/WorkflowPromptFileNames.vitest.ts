@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 // Local imports
 import { setupPlatform } from '@test/support/setupPlatform';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import { fakePath } from '@test/support/FakePlatform';
 import { getListOfFiles, getPromptFileName } from '@utils/prompt';
 import { getXmlFormatFromReadableFiles } from '@utils/files/varsUtils';
@@ -38,10 +39,12 @@ describe('workflow prompt file names', () => {
       ]),
     ).toBe('chapter/main.tex, absolute.tex');
 
-    const { xml } = await getXmlFormatFromReadableFiles(root, [
-      fakePath('workspace/chapter/main.tex'),
-      fakePath('outside/absolute.tex'),
-    ]);
+    const { xml } = await testRuntime().runPromise(
+      getXmlFormatFromReadableFiles(root, [
+        fakePath('workspace/chapter/main.tex'),
+        fakePath('outside/absolute.tex'),
+      ]),
+    );
 
     expect(xml).toContain('<document name="chapter/main.tex">');
     expect(xml).toContain('<document name="absolute.tex">');

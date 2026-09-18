@@ -27,7 +27,7 @@ import {
   type AgentSetting,
 } from '@agent/core/definition/AgentDataclass';
 import {
-  buildUserVars,
+  buildUserVars as buildUserVarsEffect,
   getToolFlags,
   resolveOutputFiles,
 } from '@agent/prompt/userVars';
@@ -36,10 +36,16 @@ import { processWorkspaceRoots } from '@platform/workspaceRoots';
 import { AgentCategory } from '@shared/schemas';
 import { setRuntimeSkillSources } from '@skills/runtimeSkills';
 import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import { spiedTrace } from '@test/support/spiedTrace';
 import { writeSkill } from '@test/support/skillFixtures';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { FakeConfigProvider, fakePath } from '@test/support/FakePlatform';
+
+/** The harness runtime supplies the standard-library filesystem prompt
+ *  assembly reads through. */
+const buildUserVars = (...args: Parameters<typeof buildUserVarsEffect>) =>
+  testRuntime().runPromise(buildUserVarsEffect(...args));
 
 // getConfig reads through the platform config provider; drive the setting
 // via this provider instead of patching the ESM export.

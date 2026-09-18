@@ -4,13 +4,15 @@ import * as path from 'node:path';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { Effect } from 'effect';
+
 import {
   formatCliSkillList,
-  readCliRuntimeSkills,
-  readCliSkills,
+  readCliSkills as readCliSkillsEffect,
 } from '@cli/runtime/skills';
 import { defaultSkillSources } from '@skills/skillSources';
 import {
+  loadEnabledRuntimeSkills,
   readDisabledSkills,
   setRuntimeSkillSources,
   skillDisplayItem,
@@ -20,6 +22,9 @@ import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
 const tempRoots = useTempDirs();
+
+const readCliSkills = (...args: Parameters<typeof readCliSkillsEffect>) =>
+  Effect.runPromise(readCliSkillsEffect(...args));
 /** The listing's own setting slots, carried as data by the caller. */
 const settings = makeFakeSettingsStores().stores;
 const disabled = readDisabledSkills(settings);
@@ -189,7 +194,9 @@ describe('CLI skills runtime', () => {
       },
     ]);
 
-    const result = await readCliRuntimeSkills(root, settings);
+    const result = await Effect.runPromise(
+      loadEnabledRuntimeSkills(root, settings),
+    );
 
     expect(
       result.skills.map((entry) => skillDisplayItem(entry, disabled)),

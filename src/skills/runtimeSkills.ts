@@ -1,3 +1,5 @@
+import { Effect } from 'effect';
+
 import {
   ACTIVE_SKILLS_SNAPSHOT_MAX_SKILLS,
   type ActiveSkillSourceScope,
@@ -52,21 +54,17 @@ export function setRuntimeSkillSources(
 }
 
 /**
- * The sources for `workspaceRoot`, or the home folder without one. The root
- * is carried as data by the caller that holds it — a run's session workspace,
- * or the host's at the settings surface that asked (#12421).
+ * Discover the complete runtime source registry, from the sources of
+ * `workspaceRoot` or of the home folder without one. The root is carried as
+ * data by the caller that holds it — a run's session workspace, or the host's
+ * at the settings surface that asked (#12421).
  */
-function runtimeSkillSources(
-  workspaceRoot: string | undefined,
-): readonly SkillSource[] {
-  return resolveRuntimeSkillSources(
-    workspaceRoot ?? safeHomedir() ?? '/nonexistent',
-  );
-}
-
-/** Discover the complete runtime source registry for settings displays. */
 function discoverRuntimeSkills(workspaceRoot: string | undefined) {
-  return discoverSkillSources(runtimeSkillSources(workspaceRoot));
+  return discoverSkillSources(
+    resolveRuntimeSkillSources(
+      workspaceRoot ?? safeHomedir() ?? '/nonexistent',
+    ),
+  );
 }
 
 function sourceLabel(source: SkillSource): string {
@@ -118,17 +116,16 @@ export function skillDisplayItem(
 }
 
 /** Discover the complete inventory for host settings displays. */
-export async function loadRuntimeSkillDisplay(
-  workspaceRoot: string | undefined,
-  stores: SettingsStores,
-) {
-  const disabled = readDisabledSkills(stores);
-  const result = await discoverRuntimeSkills(workspaceRoot);
-  return {
-    skills: result.skills.map((entry) => skillDisplayItem(entry, disabled)),
-    issues: result.errors.map(({ message, path }) => ({ message, path })),
-  };
-}
+export const loadRuntimeSkillDisplay = Effect.fn('skills.runtimeDisplay')(
+  function* (workspaceRoot: string | undefined, stores: SettingsStores) {
+    const disabled = readDisabledSkills(stores);
+    const result = yield* discoverRuntimeSkills(workspaceRoot);
+    return {
+      skills: result.skills.map((entry) => skillDisplayItem(entry, disabled)),
+      issues: result.errors.map(({ message, path }) => ({ message, path })),
+    };
+  },
+);
 
 export function filterDiscoveredSkills(
   result: DiscoverSkillSourcesResult,
@@ -146,12 +143,13 @@ export function filterDiscoveredSkills(
 }
 
 /** Discover only skills that may be injected or explicitly activated. */
-export async function loadEnabledRuntimeSkills(
+export function loadEnabledRuntimeSkills(
   workspaceRoot: string | undefined,
   stores: SettingsStores,
-) {
-  const result = await discoverRuntimeSkills(workspaceRoot);
-  return filterDiscoveredSkills(result, readDisabledSkills(stores));
+): Effect.Effect<DiscoverSkillSourcesResult> {
+  return Effect.map(discoverRuntimeSkills(workspaceRoot), (result) =>
+    filterDiscoveredSkills(result, readDisabledSkills(stores)),
+  );
 }
 
 function formatRuntimeSkillCatalog(skills: readonly SourcedSkill[]): string {
@@ -182,29 +180,27 @@ export function formatRuntimeSkillActivation({
   ].join('\n');
 }
 
-export async function loadRuntimeSkillCatalog(
-  workspaceRoot: string | undefined,
-  stores: SettingsStores,
-): Promise<RuntimeSkillCatalogResult> {
-  const sources = runtimeSkillSources(workspaceRoot);
-  if (sources.length === 0) {
-    return { catalog: '', skills: [], issues: [] };
-  }
-
-  const result = filterDiscoveredSkills(
-    await discoverSkillSources(sources),
-    readDisabledSkills(stores),
-  );
-  // Discovery already orders by source precedence and then skill directory.
-  // Bound that accepted set once here, before either prompt or event projection.
-  const accepted = result.skills.slice(0, ACTIVE_SKILLS_SNAPSHOT_MAX_SKILLS);
-  return {
-    catalog: formatRuntimeSkillCatalog(accepted),
-    skills: accepted.map(({ skill, source }) => ({
-      name: skill.name,
-      description: skill.description,
-      source: source.scope,
-    })),
-    issues: result.errors,
-  };
-}
+export const loadRuntimeSkillCatalog = Effect.fn('skills.runtimeCatalog')(
+  function* (
+    workspaceRoot: string | undefined,
+    stores: SettingsStores,
+  ): Effect.fn.Return<RuntimeSkillCatalogResult> {
+    // The same enabled set the hosts list, projected for the prompt: an empty
+    // source registry discovers nothing and formats to the empty catalog, so
+    // no separate zero-source arm decides that answer.
+    const result = yield* loadEnabledRuntimeSkills(workspaceRoot, stores);
+    // Discovery already orders by source precedence and then skill directory.
+    // Bound that accepted set once here, before either prompt or event
+    // projection.
+    const accepted = result.skills.slice(0, ACTIVE_SKILLS_SNAPSHOT_MAX_SKILLS);
+    return {
+      catalog: formatRuntimeSkillCatalog(accepted),
+      skills: accepted.map(({ skill, source }) => ({
+        name: skill.name,
+        description: skill.description,
+        source: source.scope,
+      })),
+      issues: result.errors,
+    };
+  },
+);

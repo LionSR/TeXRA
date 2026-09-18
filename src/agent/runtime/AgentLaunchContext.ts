@@ -1,6 +1,6 @@
 import * as path from 'node:path';
 
-import { Cause, Deferred, Effect, Exit } from 'effect';
+import { Cause, Deferred, Effect, Exit, FileSystem } from 'effect';
 import { ZodError } from 'zod';
 import { ModelProvider, type ModelConfig } from 'llm-zoo';
 
@@ -394,7 +394,11 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
     input: AgentLaunchInput & { session: SessionHandle },
     runId: RunId,
     resources: Array<() => void>,
-  ): Effect.fn.Return<AgentLaunchContext, Error, Secrets | AppState> {
+  ): Effect.fn.Return<
+    AgentLaunchContext,
+    Error,
+    Secrets | AppState | FileSystem.FileSystem
+  > {
     yield* failIfLaunchStopped(input.stopped);
     const { config, setting, prompt, agentEntry, modelConfig } =
       input.definition;
@@ -524,25 +528,18 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
         },
       );
 
-    const baseVars = yield* Effect.tryPromise({
-      try: async () => {
-        if (setting.agentCategory === AgentCategory.ToolUse) {
-          return buildVars();
-        }
+    const baseVars = yield* Effect.suspend(() => {
+      if (setting.agentCategory === AgentCategory.ToolUse) return buildVars();
 
-        const initStage = parentStage.child('Init');
-        return buildVars(initStage.id).then(
-          (vars) => {
-            initStage.end(RUN_OUTCOME.COMPLETED);
-            return vars;
-          },
-          (error) => {
-            initStage.end(RUN_OUTCOME.FAILED);
-            throw error;
-          },
-        );
-      },
-      catch: ensureError,
+      const initStage = parentStage.child('Init');
+      return buildVars(initStage.id).pipe(
+        Effect.tap(() =>
+          Effect.sync(() => initStage.end(RUN_OUTCOME.COMPLETED)),
+        ),
+        Effect.onError(() =>
+          Effect.sync(() => initStage.end(RUN_OUTCOME.FAILED)),
+        ),
+      );
     });
     yield* failIfLaunchStopped(input.stopped);
 

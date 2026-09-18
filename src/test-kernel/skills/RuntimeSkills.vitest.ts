@@ -16,7 +16,7 @@ import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { StreamLog } from '@shared/session/traceEntries';
 import {
   formatRuntimeSkillActivation,
-  loadRuntimeSkillCatalog,
+  loadRuntimeSkillCatalog as loadRuntimeSkillCatalogEffect,
   setRuntimeSkillSources,
 } from '@skills/runtimeSkills';
 import { setupPlatform } from '@test/support/setupPlatform';
@@ -25,6 +25,10 @@ import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { attachTestTranscriptFold } from '@test/support/sessionTestUtils';
 
 const tempRoots = useTempDirs();
+
+const loadRuntimeSkillCatalog = (
+  ...args: Parameters<typeof loadRuntimeSkillCatalogEffect>
+) => Effect.runPromise(loadRuntimeSkillCatalogEffect(...args));
 
 async function createTempRoot(): Promise<string> {
   return makeTempDir('texra-runtime-skills-', tempRoots);

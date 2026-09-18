@@ -1,5 +1,7 @@
 import * as path from 'node:path';
 
+import { Effect, FileSystem } from 'effect';
+
 import { logFileCategory, logFilesLoaded, type AgentTrace } from '@agent/trace';
 import {
   AgentSetting,
@@ -40,9 +42,9 @@ import {
   listExternalRoots,
   type ExternalRootKind,
 } from '@utils/files/externalRoots';
+import { readNormalizedFile } from '@utils/files/fsDurability';
 import {
   getXmlFormatFromReadableFiles,
-  readPromptFile,
   setVarFromFile,
 } from '@utils/files/varsUtils';
 
@@ -152,7 +154,7 @@ type AttachedMemoriesResult = {
  * @param options.workspacePath - Workspace root of the run's session.
  * @param options.delegationAgentScope - Run-scoped delegation roster. Defaults to the workspace roster.
  */
-export async function buildUserVars(
+export const buildUserVars = Effect.fn('buildUserVars')(function* (
   agentConfig: AgentConfig,
   agentSetting: AgentSetting,
   agentPrompt: AgentPrompt,
@@ -160,28 +162,31 @@ export async function buildUserVars(
   providerFlags: ModelProviderFlags,
   logger: AgentTrace,
   options: BuildUserVarsOptions,
-): Promise<BuiltUserVars> {
+): Effect.fn.Return<BuiltUserVars, Error, FileSystem.FileSystem> {
   // Parallelize independent I/O: required files, memories, and skills
   const [
     { vars: requiredVars, files: requiredFiles },
     attachedMemories,
     runtimeSkills,
-  ] = await Promise.all([
-    getRequiredFileVars(agentSetting, agentPath),
-    getAttachedMemories(agentConfig.memories, options.storageRoot),
-    // AVAILABLE_SKILLS is only substituted into TOOL_USE_INSTRUCTIONS, so the
-    // catalog (a multi-source readdir + per-skill realpath/read/parse) is dead
-    // work for workflow agents. The settings toggle gives users a hard off
-    // switch that skips discovery and leaves AVAILABLE_SKILLS empty.
-    agentSetting.agentCategory === AgentCategory.ToolUse &&
-    AgentSkillsEnabledSchema.parse(
-      readConfig<unknown>(options.config, AGENT_SKILLS_CONFIG_KEY),
-    )
-      ? loadRuntimeSkillCatalog(options.workspacePath, options.settings)
-      : // A fresh object per call, not a shared constant: `skills` is handed
-        // to the snapshot consumer, and a shared array would accumulate.
-        Promise.resolve({ catalog: '', skills: [], issues: [] }),
-  ]);
+  ] = yield* Effect.all(
+    [
+      getRequiredFileVars(agentSetting, agentPath),
+      getAttachedMemories(agentConfig.memories, options.storageRoot),
+      // AVAILABLE_SKILLS is only substituted into TOOL_USE_INSTRUCTIONS, so the
+      // catalog (a multi-source readdir + per-skill realpath/read/parse) is dead
+      // work for workflow agents. The settings toggle gives users a hard off
+      // switch that skips discovery and leaves AVAILABLE_SKILLS empty.
+      agentSetting.agentCategory === AgentCategory.ToolUse &&
+      AgentSkillsEnabledSchema.parse(
+        readConfig<unknown>(options.config, AGENT_SKILLS_CONFIG_KEY),
+      )
+        ? loadRuntimeSkillCatalog(options.workspacePath, options.settings)
+        : // A fresh object per call, not a shared constant: `skills` is handed
+          // to the snapshot consumer, and a shared array would accumulate.
+          Effect.succeed({ catalog: '', skills: [], issues: [] }),
+    ],
+    { concurrency: 'unbounded' },
+  );
 
   for (const issue of runtimeSkills.issues) {
     const location = issue.path ? ` (${issue.path})` : '';
@@ -213,7 +218,7 @@ export async function buildUserVars(
   // (BuiltUserVars) and reach templates through the channel boundary.
   const userVars: BuiltUserVars = {
     ...getBasicVars(agentConfig, providerFlags, options),
-    ...(await getFileVars(
+    ...(yield* getFileVars(
       agentConfig,
       agentSetting,
       logger,
@@ -234,7 +239,7 @@ export async function buildUserVars(
   }
 
   return userVars;
-}
+});
 
 type BasicVars = Pick<
   UserVars,
@@ -389,13 +394,13 @@ type FileCategoryVars = {
 /** File-based variables: readable categories plus the display-only MEDIA slots. */
 type FileVars = FileCategoryVars & Pick<UserVars, 'MEDIA_FILE'>;
 
-async function getFileVars(
+const getFileVars = Effect.fn('userVars.getFileVars')(function* (
   agentConfig: AgentConfig,
   agentSetting: AgentSetting,
   logger: AgentTrace,
   workspaceRoot: string | undefined,
   stageId: string | undefined,
-): Promise<FileVars> {
+): Effect.fn.Return<FileVars, never, FileSystem.FileSystem> {
   // Compiler-checked completeness: every FileVars key starts at its
   // empty-file default here, so a future FileVars key without a matching
   // default is a type error at this literal. The loop below only overwrites
@@ -423,13 +428,13 @@ async function getFileVars(
     const allFiles = getCategoryFiles(agentConfig, prefix);
     const { xml, readableFiles, skipped } =
       allFiles.length > 0
-        ? await getXmlFormatFromReadableFiles(workspaceRoot, allFiles)
+        ? yield* getXmlFormatFromReadableFiles(workspaceRoot, allFiles)
         : { xml: null, readableFiles: [], skipped: [] };
     const primaryFile = readableFiles[0];
     const primaryFileResult =
       primaryFile == null
         ? null
-        : await setVarFromFile(primaryFile, prefix, workspaceRoot);
+        : yield* setVarFromFile(primaryFile, prefix, workspaceRoot);
     const primaryFileOk = primaryFileResult != null;
     if (primaryFile != null && !primaryFileOk) {
       logger.warn(
@@ -485,7 +490,7 @@ async function getFileVars(
   userVars.MEDIA_FILE = mediaFiles[0] ?? null;
 
   return userVars;
-}
+});
 
 /**
  * A required-file variable `X` generates the `X_FILE`/`X_CONTENT` pair, which
@@ -493,96 +498,113 @@ async function getFileVars(
  * or `INPUT` would silently override a fixed variable. Fail loudly when the
  * variables are built instead.
  */
-function assertNoFixedVarCollision(varName: string): void {
+function assertNoFixedVarCollision(
+  varName: string,
+): Effect.Effect<void, Error> {
   for (const generatedKey of [`${varName}_FILE`, `${varName}_CONTENT`]) {
     if (FIXED_USER_VAR_KEYS.has(generatedKey)) {
-      throw new Error(
-        `requiredFilesInternal name "${varName}" generates "${generatedKey}", which collides with a fixed template variable. Rename the required-file variable.`,
+      return Effect.fail(
+        new Error(
+          `requiredFilesInternal name "${varName}" generates "${generatedKey}", which collides with a fixed template variable. Rename the required-file variable.`,
+        ),
       );
     }
   }
+  return Effect.void;
 }
 
 /**
  * Load the files an agent bundles next to its YAML. Paths are resolved against
  * the agent's directory; an absolute path is used as written.
  */
-async function getRequiredFileVars(
-  agentSetting: AgentSetting,
-  agentPath: string,
-): Promise<FileVarsResult> {
-  const vars: RequiredFileVars = {};
-  const files: LoadedFileEntry[] = [];
+const getRequiredFileVars = Effect.fn('userVars.getRequiredFileVars')(
+  function* (
+    agentSetting: AgentSetting,
+    agentPath: string,
+  ): Effect.fn.Return<FileVarsResult, Error, FileSystem.FileSystem> {
+    const vars: RequiredFileVars = {};
+    const files: LoadedFileEntry[] = [];
 
-  for (const [varName, filePath] of Object.entries(
-    agentSetting.requiredFilesInternal,
-  )) {
-    if (!filePath) continue;
+    for (const [varName, filePath] of Object.entries(
+      agentSetting.requiredFilesInternal,
+    )) {
+      if (!filePath) continue;
 
-    assertNoFixedVarCollision(varName);
-    const fullPath = path.resolve(agentPath, filePath);
-    // Resolved against the agent's own directory, so it is already absolute
-    // and needs no workspace root to resolve against.
-    const result = await setVarFromFile(fullPath, varName, undefined);
-    if (result != null) {
-      vars[`${varName}_FILE`] = result.file;
-      vars[`${varName}_CONTENT`] = result.content;
+      yield* assertNoFixedVarCollision(varName);
+      const fullPath = path.resolve(agentPath, filePath);
+      // Resolved against the agent's own directory, so it is already absolute
+      // and needs no workspace root to resolve against.
+      const result = yield* setVarFromFile(fullPath, varName, undefined);
+      if (result != null) {
+        vars[`${varName}_FILE`] = result.file;
+        vars[`${varName}_CONTENT`] = result.content;
+      }
+      files.push({
+        path: fullPath,
+        ok: result != null,
+        varName,
+        source: 'requiredFilesInternal',
+      });
     }
-    files.push({
-      path: fullPath,
-      ok: result != null,
-      varName,
-      source: 'requiredFilesInternal',
-    });
-  }
-  return { vars, files };
-}
+    return { vars, files };
+  },
+);
 
 /**
  * Load attached memory files and format them as an XML block for prompt injection.
  * Memory paths are display paths (e.g. /memories/conventions.md).
  * Returns null if no memories are attached.
  */
-async function getAttachedMemories(
-  memoryPaths: string[],
-  storageRoot: string,
-): Promise<AttachedMemoriesResult> {
-  if (memoryPaths.length === 0) return { xml: null, misses: [] };
+const getAttachedMemories = Effect.fn('userVars.getAttachedMemories')(
+  function* (
+    memoryPaths: string[],
+    storageRoot: string,
+  ): Effect.fn.Return<AttachedMemoriesResult, never, FileSystem.FileSystem> {
+    if (memoryPaths.length === 0) return { xml: null, misses: [] };
 
-  const results = await Promise.all(
-    memoryPaths.map(async (displayPath) => {
-      try {
-        const storagePath = displayToStoragePath(displayPath);
-        const raw = await readPromptFile(path.join(storageRoot, storagePath));
-        // Strip frontmatter metadata — only inject the user-visible content
-        const { content } = parseFrontmatter(raw);
-        const trimmed = content.trim();
-        if (trimmed) {
-          return {
-            xml: `<memory name="${displayPath}">\n${trimmed}\n</memory>`,
-            miss: null,
-          };
-        }
-      } catch (error) {
-        return {
-          xml: null,
-          miss: { path: displayPath, reason: toErrorMessage(error) },
-        };
-      }
-      return { xml: null, miss: null };
-    }),
-  );
+    const fs = yield* FileSystem.FileSystem;
+    const results = yield* Effect.forEach(
+      memoryPaths,
+      (displayPath) =>
+        // `displayToStoragePath` rejects a path outside /memories, which is a
+        // miss on that memory rather than a failed prompt build — the same
+        // answer a failed read gives.
+        Effect.try({
+          try: () => path.join(storageRoot, displayToStoragePath(displayPath)),
+          catch: (error) => error,
+        }).pipe(
+          Effect.flatMap((target) => readNormalizedFile(fs, target)),
+          Effect.map((raw) => {
+            // Strip frontmatter metadata — only inject the user-visible content
+            const trimmed = parseFrontmatter(raw).content.trim();
+            return {
+              xml: trimmed
+                ? `<memory name="${displayPath}">\n${trimmed}\n</memory>`
+                : null,
+              miss: null,
+            };
+          }),
+          Effect.catch((error) =>
+            Effect.succeed({
+              xml: null,
+              miss: { path: displayPath, reason: toErrorMessage(error) },
+            }),
+          ),
+        ),
+      { concurrency: 'unbounded' },
+    );
 
-  const parts = results.map((result) => result.xml).filter(filterNotNull);
-  const misses = results.map((result) => result.miss).filter(filterNotNull);
-  return {
-    xml:
-      parts.length > 0
-        ? `<attached_memories>\n${parts.join('\n')}\n</attached_memories>`
-        : null,
-    misses,
-  };
-}
+    const parts = results.map((result) => result.xml).filter(filterNotNull);
+    const misses = results.map((result) => result.miss).filter(filterNotNull);
+    return {
+      xml:
+        parts.length > 0
+          ? `<attached_memories>\n${parts.join('\n')}\n</attached_memories>`
+          : null,
+      misses,
+    };
+  },
+);
 
 /**
  * The run's normalized output list plus the prompt variable derived from it.

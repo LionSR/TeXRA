@@ -258,7 +258,9 @@ export function createDesktopSettingsIpc(
   }
 
   async function postSkillsList(): Promise<void> {
-    const result = await loadRuntimeSkillDisplay(roots.workspace, roots);
+    const result = await runtime.runPromise(
+      loadRuntimeSkillDisplay(roots.workspace, roots),
+    );
     options.postToRenderer({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_SKILLS_LIST,
       ...result,
