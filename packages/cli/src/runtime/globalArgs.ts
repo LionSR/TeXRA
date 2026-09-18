@@ -1,7 +1,7 @@
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
+import type { CliOutputFormat } from '@shared/schemas';
 import { isNonEmptyString } from '@utils/text/stringUtils';
 
-import type { CliOutputFormat } from '@shared/schemas';
 import type { CliGlobalArgs } from './cliContext';
 
 /**

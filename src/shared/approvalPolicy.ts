@@ -6,12 +6,14 @@ export type TexraApprovalPolicy = z.infer<typeof TexraApprovalPolicySchema>;
 /**
  * The tolerant input form of {@link TexraApprovalPolicySchema}: the one place
  * a hand-written spelling (` Yolo `) is trimmed and lowercased before the
- * enum. Every reader of user-authored text — the CLI's `.texra/config.json`
- * parse, `/approval`, the settings dropdown — parses through this; persisted
- * and wire values keep the strict enum, which is also what the settings
- * catalog needs to derive the dropdown's options from the row.
+ * enum. Reached only through {@link parseTexraApprovalPolicy}, which every
+ * reader of typed-in text — `TEXRA_APPROVAL_POLICY`, `--approval-policy`,
+ * `/approval`, the settings dropdown — calls. Persisted config values keep the
+ * strict enum: the `texra.approvalPolicy` catalog row validates the stored
+ * value for all three hosts and warns when it no longer parses, and the
+ * dropdown's options are derived from that same `ZodEnum`.
  */
-export const TexraApprovalPolicyInputSchema = z.preprocess(
+const TexraApprovalPolicyInputSchema = z.preprocess(
   (raw) => (typeof raw === 'string' ? raw.trim().toLowerCase() : raw),
   TexraApprovalPolicySchema,
 );

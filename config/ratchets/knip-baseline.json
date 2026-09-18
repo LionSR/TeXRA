@@ -878,12 +878,6 @@
       "name": "DownloadSourceOptions"
     },
     {
-      "file": "src/platform/defaults/workspaceStorage.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "resolveWorkspaceStoragePath"
-    },
-    {
       "file": "src/replacement/engine.ts",
       "category": "production-dead",
       "kind": "exports",

@@ -1,8 +1,5 @@
-// Local imports - platform
-import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
-
-// Local imports - CLI runtime
 import type { CliContext } from '@cli/runtime/cliContext';
+import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
 
 const BASE_CLI_CONTEXT = {
   cwd: '/tmp/project',

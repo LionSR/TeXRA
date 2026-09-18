@@ -16,11 +16,13 @@ import {
 } from '@cli/runtime/initConfig';
 import { setWorkspaceCliChatAgent } from '@cli/runtime/cliConfig';
 import { workspaceTexraConfigPath } from '@platform/defaults/nodeStorage';
-import { readSettingFrom } from '@utils/config/platformSettings';
 import { FakeConfigProvider } from '@test/support/FakePlatform';
 import { installPlatform } from '@test/support/setupPlatform';
-import { platformSettingsStores } from '@utils/config/platformSettings';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
+import {
+  platformSettingsStores,
+  readSettingFrom,
+} from '@utils/config/platformSettings';
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs/promises')>();

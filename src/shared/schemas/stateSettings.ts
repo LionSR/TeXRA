@@ -835,9 +835,10 @@ const CORE_SETTINGS: readonly StateSettingEntry[] = [
   surfacedSetting({
     key: TEXRA_APPROVAL_POLICY_CONFIG_KEY,
     // Strict on purpose: `settingEnumOptions` derives the dropdown from a
-    // `ZodEnum` row, and the tolerant spelling is the approval-policy module's
-    // `TexraApprovalPolicyInputSchema`, which every reader of user-authored
-    // text parses through.
+    // `ZodEnum` row, and the tolerant spelling belongs to
+    // `parseTexraApprovalPolicy`, which every reader of typed-in text (the
+    // env var, `--approval-policy`, `/approval`, the dropdown) calls before
+    // a value ever reaches this row.
     schema: TexraApprovalPolicySchema.prefault(TEXRA_APPROVAL_POLICY_DEFAULT),
     title: 'Approval policy',
     description:
