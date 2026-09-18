@@ -8,6 +8,7 @@ import { promptExtensionInstall } from '@frontend/ui/instruction';
 import { createLog } from '@logger/logUtils';
 import type { AgentDirectoriesFailed, StateStore } from '@platform/interfaces';
 import type { ProcessRuntime } from '@platform/processRuntime';
+import type { GlobalStorageFs } from '@platform/rootedFs';
 import { LATEX_WORKSHOP_EXT_ID } from '@shared/constants/latexToolchain';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { registerExternalRoot } from '@utils/files/externalRoots';
@@ -32,8 +33,10 @@ const CUSTOM_AGENT_ROOT_OPTIONS = {
  */
 export function registerAgentDirectoryRoots(
   context: vscode.ExtensionContext,
-): Effect.Effect<void> {
-  const registrations: Array<Effect.Effect<void, AgentDirectoriesFailed>> = [
+): Effect.Effect<void, never, GlobalStorageFs> {
+  const registrations: Array<
+    Effect.Effect<void, AgentDirectoriesFailed, GlobalStorageFs>
+  > = [
     Effect.flatMap(agentDirectories.builtIn(), (directory) =>
       Effect.sync(() =>
         registerExternalRoot(directory, {
@@ -93,7 +96,11 @@ export function registerAgentDirectoryRoots(
  * location via Settings. Registering the same `kind` overwrites the
  * previous slot, so no separate unregister step is needed.
  */
-export function refreshCustomAgentRoot(): Effect.Effect<void> {
+export function refreshCustomAgentRoot(): Effect.Effect<
+  void,
+  never,
+  GlobalStorageFs
+> {
   return agentDirectories.custom().pipe(
     Effect.andThen((custom) =>
       Effect.sync(() =>

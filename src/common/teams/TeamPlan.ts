@@ -247,13 +247,13 @@ function buildTeamOptions(plans: readonly TeamRunPlan[]): TeamOptionData[] {
     });
 }
 
-export function loadTeamOptions<T extends TeamCatalogAgent>(ports: {
+export function loadTeamOptions<T extends TeamCatalogAgent, R = never>(ports: {
   customPresetsRaw: unknown;
-  ensureCatalogLoaded: () => Effect.Effect<void, unknown>;
+  ensureCatalogLoaded: () => Effect.Effect<void, unknown, R>;
   getAgents: (category: AgentCategory) => readonly T[];
   canAccessRemoteCatalog: () => Effect.Effect<boolean>;
-  refreshRemote: () => Effect.Effect<void, unknown>;
-}): Effect.Effect<TeamOptionData[], unknown> {
+  refreshRemote: () => Effect.Effect<void, unknown, R>;
+}): Effect.Effect<TeamOptionData[], unknown, R> {
   return Effect.gen(function* () {
     yield* ports.ensureCatalogLoaded();
     const presets = teamPresets(ports.customPresetsRaw);
@@ -291,19 +291,19 @@ export type TeamLaunchResolution =
       readonly unavailableNames: readonly string[];
     };
 
-export function resolveTeamLaunch<T extends TeamCatalogAgent>(args: {
+export function resolveTeamLaunch<T extends TeamCatalogAgent, R = never>(args: {
   teamId: string;
   customPresetsRaw: unknown;
-  ensureCatalogLoaded: () => Effect.Effect<void, unknown>;
+  ensureCatalogLoaded: () => Effect.Effect<void, unknown, R>;
   getAgents: (category: AgentCategory) => readonly T[];
   canAccessRemoteCatalog: () => Effect.Effect<boolean>;
-  refreshRemote: () => Effect.Effect<void, unknown>;
+  refreshRemote: () => Effect.Effect<void, unknown, R>;
   choose: (
     unavailableNames: readonly string[],
   ) => Promise<TeamAvailabilityChoice | undefined>;
   signIn: () => Effect.Effect<boolean, SignInFailed>;
   providedChoice?: TeamAvailabilityChoice;
-}): Effect.Effect<TeamLaunchResolution, unknown> {
+}): Effect.Effect<TeamLaunchResolution, unknown, R> {
   return Effect.gen(function* () {
     const preset = findTeamPreset(
       teamPresets(args.customPresetsRaw),
@@ -365,17 +365,18 @@ export function resolveTeamLaunch<T extends TeamCatalogAgent>(args: {
   });
 }
 
-export function refreshRemoteCatalogForGaps<T>(
+export function refreshRemoteCatalogForGaps<T, R = never>(
   value: T,
   hasGaps: (value: T) => boolean,
   replan: () => T,
   ports: {
     canAccessRemoteCatalog: () => Effect.Effect<boolean>;
-    refreshRemote: () => Effect.Effect<void, unknown>;
+    refreshRemote: () => Effect.Effect<void, unknown, R>;
   },
 ): Effect.Effect<
   { value: T; remoteCatalogRefreshAttempted: boolean },
-  unknown
+  unknown,
+  R
 > {
   return Effect.gen(function* () {
     // `hasGaps` first, as in the Promise original: a gapless plan must not

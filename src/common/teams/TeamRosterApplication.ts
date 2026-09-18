@@ -36,9 +36,9 @@ type TeamRosterApplicationResult =
       readonly resolution: TeamRosterResolution;
     };
 
-export interface TeamRosterApplicationDeps {
+export interface TeamRosterApplicationDeps<R = never> {
   readonly catalog: TeamRosterCatalog;
-  readonly loadLocalCatalog: () => Effect.Effect<void, unknown>;
+  readonly loadLocalCatalog: () => Effect.Effect<void, unknown, R>;
   readonly canAccessRemoteCatalog: () => Effect.Effect<boolean>;
   /** A decision already supplied by a non-interactive caller. */
   readonly providedChoice?: TeamAvailabilityChoice;
@@ -47,20 +47,20 @@ export interface TeamRosterApplicationDeps {
     unavailableNames: readonly string[],
   ) => Promise<TeamAvailabilityChoice | undefined>;
   readonly signIn: () => Effect.Effect<boolean, SignInFailed>;
-  readonly forceRefreshRemoteCatalog: () => Effect.Effect<void, unknown>;
+  readonly forceRefreshRemoteCatalog: () => Effect.Effect<void, unknown, R>;
 }
 
 /** Host sequence for preflighting and committing one team roster. */
-export function applyTeamRosterWithPreflight(
+export function applyTeamRosterWithPreflight<R = never>(
   presetId: string,
-  deps: TeamRosterApplicationDeps,
-): Effect.Effect<TeamRosterApplicationResult, unknown> {
+  deps: TeamRosterApplicationDeps<R>,
+): Effect.Effect<TeamRosterApplicationResult, unknown, R> {
   return Effect.gen(function* () {
     yield* deps.loadLocalCatalog();
     const initial = deps.catalog.resolvePreset(presetId);
     if (!initial.ok) return { status: 'unknown' as const };
 
-    const preflight = yield* preflightTeamAvailability<ResolvedTeam>({
+    const preflight = yield* preflightTeamAvailability<ResolvedTeam, R>({
       initial,
       unresolvedNames: (value) => value.resolution.unresolvedNames,
       texraHostedNames: new Set(initial.preset.texraHostedAgents),

@@ -24,6 +24,7 @@ import { createTeamCatalogPorts } from '@controllers/mainView/teamCatalogPorts';
 import type { MessageHost } from '@hosts/uiHosts';
 import { createLog } from '@logger/logUtils';
 import type { StateStore } from '@platform/interfaces';
+import type { GlobalStorageFs } from '@platform/rootedFs';
 import {
   AgentCategory,
   DEFAULT_TOOL_CONFIG,
@@ -123,7 +124,7 @@ export function prepareSurfaceLaunch(
   { launch, instruction }: LaunchRequest,
   host: MainViewRunLaunchHost,
   workspaceState: StateStore,
-): Effect.Effect<ValidatedRunRequest, Rejected | Cancelled> {
+): Effect.Effect<ValidatedRunRequest, Rejected | Cancelled, GlobalStorageFs> {
   return Effect.gen(function* () {
     let preparation: LaunchPreparation;
     let infoMessage: string | undefined;

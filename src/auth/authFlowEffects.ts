@@ -51,10 +51,10 @@ export function requireOAuthRedirectUrl(
  * directly from `@agent/index`) so `src/auth/` doesn't take on a dependency
  * on the `agent` subsystem — the reverse edge is the only one baselined.
  */
-export function refreshRemoteAgentCatalogAfterSignOut(
-  invalidateCatalog: Effect.Effect<void>,
+export function refreshRemoteAgentCatalogAfterSignOut<R = never>(
+  invalidateCatalog: Effect.Effect<void, never, R>,
   warn: (message: string) => void,
-): Effect.Effect<void> {
+): Effect.Effect<void, never, R> {
   return invalidateCatalog.pipe(
     Effect.catchCause((cause) =>
       Effect.sync(() => {

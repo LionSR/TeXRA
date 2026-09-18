@@ -49,6 +49,7 @@ import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
 // public Session capabilities carry no process implementation types.
 import { createLog } from '@logger/logUtils';
 import type { ProcessServices } from '@platform/processRuntime';
+import type { GlobalStorageFs } from '@platform/rootedFs';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
   AgentCategory,
@@ -177,7 +178,8 @@ function admitInput(
   input: StartInput,
 ): Effect.Effect<
   ReturnType<typeof AgentConfigSchema.parse>,
-  LaunchError | RunFailure
+  LaunchError | RunFailure,
+  GlobalStorageFs
 > {
   return Effect.gen(function* () {
     const tools = input.tools ?? [];
@@ -240,7 +242,10 @@ function start(
   input: StartInput,
 ): Effect.Effect<Run, LaunchError | RunFailure> {
   return Effect.gen(function* () {
-    const config = yield* admitInput(input);
+    // Over the composition root's own services: the agent scan reads the
+    // configured directories through the process's global storage view, which
+    // this layer carries.
+    const config = yield* admitInput(input).pipe(Effect.provide(services));
     const runId = generateRunId();
     const trace = yield* Queue.unbounded<AgentEvent, RunFailure | Cause.Done>();
     const admitted = yield* Deferred.make<void, RunFailure>();

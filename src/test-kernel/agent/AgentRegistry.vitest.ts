@@ -25,12 +25,25 @@ import {
   type AgentDirectoriesPort,
 } from '@platform/interfaces';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
+import type { GlobalStorageFs } from '@platform/rootedFs';
 import { AgentCategory } from '@shared/schemas';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { REPO_ROOT } from '@test/support/repoScan';
+import { unusedGlobalStorageFs } from '@test/support/fsTestUtils';
 import { installPlatform } from '@test/support/setupPlatform';
 import type * as vscode from 'vscode';
+
+/**
+ * A catalog program over the process's global storage view. This suite's fake
+ * agent directories answer `custom()` from the packaged path, so nothing here
+ * reads the view the readers name in their requirements.
+ */
+function onGlobalStorage<A, E>(
+  program: Effect.Effect<A, E, GlobalStorageFs>,
+): Effect.Effect<A, E> {
+  return Effect.provide(program, unusedGlobalStorageFs);
+}
 
 const { listRemoteAgents, ORCHESTRATOR_AGENT } = vi.hoisted(() => {
   const ORCHESTRATOR_AGENT = {
@@ -131,15 +144,17 @@ describe('agent registry', () => {
     // Use the real bundled agent YAMLs rather than synthetic fixtures.
     await initPlatformWithState({});
     useAgentDirectories();
-    await Effect.runPromise(refresh({ includeRemote: false }));
+    await Effect.runPromise(onGlobalStorage(refresh({ includeRemote: false })));
   });
 
   it('skips root registration when called before agent directory initialization', async () => {
     await expect(
       Effect.runPromise(
-        registerAgentDirectoryRoots({
-          extensionPath,
-        } as vscode.ExtensionContext),
+        onGlobalStorage(
+          registerAgentDirectoryRoots({
+            extensionPath,
+          } as vscode.ExtensionContext),
+        ),
       ),
     ).resolves.toBeUndefined();
 
@@ -155,13 +170,15 @@ describe('agent registry', () => {
 
     await expect(
       Effect.runPromise(
-        registerAgentDirectoryRoots({
-          extensionPath,
-        } as vscode.ExtensionContext),
+        onGlobalStorage(
+          registerAgentDirectoryRoots({
+            extensionPath,
+          } as vscode.ExtensionContext),
+        ),
       ),
     ).resolves.toBeUndefined();
     await expect(
-      Effect.runPromise(loadAgents({ includeRemote: false })),
+      Effect.runPromise(onGlobalStorage(loadAgents({ includeRemote: false }))),
     ).resolves.toBeUndefined();
 
     expect(registerExternalRoot).toHaveBeenCalledWith(
@@ -197,7 +214,7 @@ describe('agent registry', () => {
         // startImmediately: the refresh claims the load lane and parks on the
         // gated directory read before the next assertion runs.
         const pendingRefresh = yield* Effect.forkChild(
-          refresh({ includeRemote: false }),
+          onGlobalStorage(refresh({ includeRemote: false })),
           { startImmediately: true },
         );
 
@@ -223,7 +240,7 @@ describe('agent registry', () => {
       const remoteStarted = Deferred.makeUnsafe<void>();
       return Effect.gen(function* () {
         useAgentDirectories();
-        yield* refresh({ includeRemote: false });
+        yield* onGlobalStorage(refresh({ includeRemote: false }));
 
         let remoteCall = 0;
         listRemoteAgents.mockImplementation(() =>
@@ -239,14 +256,14 @@ describe('agent registry', () => {
         );
 
         const staleInitialization = yield* Effect.forkChild(
-          loadAgents({ includeRemote: true }),
+          onGlobalStorage(loadAgents({ includeRemote: true })),
         );
         yield* Deferred.await(remoteStarted);
         expect(listRemoteAgents).toHaveBeenCalledOnce();
         // startImmediately: the refresh bumps the epoch and takes the lane tail
         // before the stale load is released.
         const forcedRefresh = yield* Effect.forkChild(
-          refresh({ includeRemote: true }),
+          onGlobalStorage(refresh({ includeRemote: true })),
           { startImmediately: true },
         );
 
@@ -265,7 +282,9 @@ describe('agent registry', () => {
             listRemoteAgents.mockImplementation(() =>
               Effect.succeed([ORCHESTRATOR_AGENT]),
             );
-            yield* refresh({ includeRemote: false }).pipe(Effect.orDie);
+            yield* onGlobalStorage(refresh({ includeRemote: false })).pipe(
+              Effect.orDie,
+            );
           }),
         ),
       );
@@ -275,11 +294,11 @@ describe('agent registry', () => {
   it.effect('reloads local-only definitions after sign-out invalidation', () =>
     Effect.gen(function* () {
       useAgentDirectories();
-      yield* refresh({ includeRemote: true });
+      yield* onGlobalStorage(refresh({ includeRemote: true }));
       expect(isRemoteAgent('orchestrator')).toBe(true);
       const remoteFetchCount = listRemoteAgents.mock.calls.length;
 
-      yield* invalidateRemoteAgentsAfterSignOut();
+      yield* onGlobalStorage(invalidateRemoteAgentsAfterSignOut());
 
       expect(isRemoteAgent('orchestrator')).toBe(false);
       expect(listRemoteAgents).toHaveBeenCalledTimes(remoteFetchCount);
@@ -292,7 +311,7 @@ describe('agent registry', () => {
       const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
       return Effect.gen(function* () {
         useAgentDirectories();
-        yield* refresh({ includeRemote: true });
+        yield* onGlobalStorage(refresh({ includeRemote: true }));
         expect(isRemoteAgent('orchestrator')).toBe(true);
         useAgentDirectories({
           builtIn: () =>
@@ -308,7 +327,7 @@ describe('agent registry', () => {
         // startImmediately: removeRemoteEntries runs in the invalidation's
         // synchronous prefix, which the next assertion reads.
         const invalidation = yield* Effect.forkChild(
-          invalidateRemoteAgentsAfterSignOut(),
+          onGlobalStorage(invalidateRemoteAgentsAfterSignOut()),
           { startImmediately: true },
         );
         expect(isRemoteAgent('orchestrator')).toBe(false);
@@ -324,7 +343,9 @@ describe('agent registry', () => {
         Effect.ensuring(
           Effect.gen(function* () {
             useAgentDirectories();
-            yield* refresh({ includeRemote: false }).pipe(Effect.orDie);
+            yield* onGlobalStorage(refresh({ includeRemote: false })).pipe(
+              Effect.orDie,
+            );
             warn.mockRestore();
           }),
         ),
@@ -338,7 +359,7 @@ describe('agent registry', () => {
     const remoteStarted = Deferred.makeUnsafe<void>();
     return Effect.gen(function* () {
       useAgentDirectories();
-      yield* refresh({ includeRemote: false });
+      yield* onGlobalStorage(refresh({ includeRemote: false }));
       let builtInCalls = 0;
       useAgentDirectories({
         builtIn: () =>
@@ -364,7 +385,7 @@ describe('agent registry', () => {
       );
 
       const staleLoad = yield* Effect.forkChild(
-        loadAgents({ includeRemote: true }),
+        onGlobalStorage(loadAgents({ includeRemote: true })),
       );
       yield* Deferred.await(remoteStarted);
       expect(listRemoteAgents).toHaveBeenCalled();
@@ -372,7 +393,7 @@ describe('agent registry', () => {
       // startImmediately: the invalidation strips remote entries and takes the
       // lane tail behind the stale load before that load is released.
       const invalidation = yield* Effect.forkChild(
-        invalidateRemoteAgentsAfterSignOut(),
+        onGlobalStorage(invalidateRemoteAgentsAfterSignOut()),
         { startImmediately: true },
       );
       yield* Deferred.succeed(remoteLoad, undefined);
@@ -410,7 +431,7 @@ describe('agent registry', () => {
       });
 
       try {
-        const failure = yield* Effect.flip(loadAgents());
+        const failure = yield* Effect.flip(onGlobalStorage(loadAgents()));
         expect(String(failure)).toContain('refresh failed');
 
         expect(getAgent('assistant')?.name).toBe('assistant');
@@ -424,18 +445,20 @@ describe('agent registry', () => {
     'includes remote agents in launcher options after local-only startup load',
     () =>
       Effect.gen(function* () {
-        yield* refresh({ includeRemote: false });
+        yield* onGlobalStorage(refresh({ includeRemote: false }));
         expect(
           getVisibleAgents('toolUse').map((agent) => agent.name),
         ).not.toContain('orchestrator');
 
-        const options = yield* computeAgentOptionsData();
+        const options = yield* onGlobalStorage(computeAgentOptionsData());
 
         expect(options.toolUse.map((option) => option.label)).toContain(
           'orchestrator',
         );
       }).pipe(
-        Effect.ensuring(refresh({ includeRemote: false }).pipe(Effect.orDie)),
+        Effect.ensuring(
+          onGlobalStorage(refresh({ includeRemote: false })).pipe(Effect.orDie),
+        ),
       ),
   );
 
@@ -454,12 +477,13 @@ describe('agent registry', () => {
         // startImmediately on both: the refresh claims the load lane and the
         // options read queues behind it, both before the gate opens.
         const pendingRefresh = yield* Effect.forkChild(
-          refresh({ includeRemote: false }),
+          onGlobalStorage(refresh({ includeRemote: false })),
           { startImmediately: true },
         );
-        const options = yield* Effect.forkChild(computeAgentOptionsData(), {
-          startImmediately: true,
-        });
+        const options = yield* Effect.forkChild(
+          onGlobalStorage(computeAgentOptionsData()),
+          { startImmediately: true },
+        );
 
         builtInToolUseDir.resolve();
         yield* Fiber.join(pendingRefresh);
@@ -473,7 +497,9 @@ describe('agent registry', () => {
           Effect.gen(function* () {
             builtInToolUseDir.resolve();
             useAgentDirectories();
-            yield* refresh({ includeRemote: false }).pipe(Effect.orDie);
+            yield* onGlobalStorage(refresh({ includeRemote: false })).pipe(
+              Effect.orDie,
+            );
           }),
         ),
       );

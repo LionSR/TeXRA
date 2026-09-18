@@ -73,6 +73,7 @@ import {
   type StateStore,
 } from '@platform/interfaces';
 import { LanguageModel, type LanguageModelPort } from '@platform/languageModel';
+import { globalStorageFsLayer } from '@platform/rootedFs';
 import { Secrets, type PlatformSecrets } from '@platform/secrets';
 import { SHUTDOWN_PHASE_DEADLINE_MS } from '@platform/defaults/lifecycleHost';
 import { processOwnerId } from '@platform/defaults/nodeProcesses';
@@ -1150,6 +1151,11 @@ export function installProcessRuntime({
         // each session entry's identity layer, rebuilt fresh per root, and the
         // Lean pool is one per process — its servers are shared across roots.
         Layer.provideMerge(lean),
+        // The cross-workspace storage view, one per process: every session
+        // shares this root, so nothing below resolves a global-storage path
+        // against a root of its own. Beside `lean` rather than among
+        // `services` for the same reason — `services` is rebuilt per root.
+        Layer.provideMerge(globalStorageFsLayer(globalStorage)),
         Layer.provideMerge(
           Layer.mergeAll(
             effectDiagnosticsLayer,

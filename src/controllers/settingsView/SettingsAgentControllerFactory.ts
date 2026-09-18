@@ -19,6 +19,7 @@ import {
   type SettingsAgentCatalogState,
 } from '@controllers/settingsView/SettingsAgentCatalogController';
 import type { AgentDirectoriesFailed } from '@platform/interfaces';
+import type { GlobalStorageFs } from '@platform/rootedFs';
 import {
   agentKey,
   type AgentCategory,
@@ -35,11 +36,16 @@ interface AgentControllerFactoryOptions extends SettingsStatePorts {
    *  asked for it instead of an untyped rejection. */
   readonly getCustomAgentDirectory: () => Effect.Effect<
     string,
-    AgentDirectoriesFailed
+    AgentDirectoriesFailed,
+    GlobalStorageFs
   >;
   readonly getSourceDirectory: (
     source: AgentSource,
-  ) => Effect.Effect<string | undefined, AgentDirectoriesFailed>;
+  ) => Effect.Effect<
+    string | undefined,
+    AgentDirectoriesFailed,
+    GlobalStorageFs
+  >;
   readonly getAgents?: (category: AgentCategory) => AgentEntry[];
   readonly getVisibleAgents?: (category: AgentCategory) => AgentEntry[];
 }

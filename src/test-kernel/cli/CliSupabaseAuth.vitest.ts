@@ -7,7 +7,10 @@ import { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
 // Local imports
 import { FakeSecrets } from '@test/support/FakePlatform';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
-import { nodePlatformLayer } from '@test/support/fsTestUtils';
+import {
+  globalStorageFsTestLayer,
+  nodePlatformLayer,
+} from '@test/support/fsTestUtils';
 import {
   LeanLanguageServices,
   type LeanLanguageServicesShape,
@@ -153,6 +156,7 @@ async function loadSupabaseAuth() {
     Layer.mergeAll(
       testHttpClientLayer,
       nodePlatformLayer,
+      globalStorageFsTestLayer(globalStorage),
       Layer.mock(UpdateCheckRecords, {}),
       Layer.mock(LeanLanguageServices, unavailableLeanLanguageServices),
       inquiryRecordsLayer(globalStorage).pipe(

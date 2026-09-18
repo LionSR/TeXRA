@@ -23,7 +23,10 @@ import {
 } from '@platform/languageModel';
 import { fakeStores } from '@test/support/FakePlatform';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
-import { nodePlatformLayer } from '@test/support/fsTestUtils';
+import {
+  nodePlatformLayer,
+  unusedGlobalStorageFs,
+} from '@test/support/fsTestUtils';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 
 const mocks = vi.hoisted(() => ({
@@ -82,6 +85,7 @@ const createAgent = (ui: AgentCreatorUI): Effect.Effect<void, unknown> =>
       Layer.mergeAll(
         nodePlatformLayer,
         testHttpClientLayer,
+        unusedGlobalStorageFs,
         LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT),
       ),
     ),

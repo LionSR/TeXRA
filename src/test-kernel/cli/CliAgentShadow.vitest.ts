@@ -17,11 +17,13 @@ import {
   resolveCliRunAgent,
 } from '@cli/runtime/agents';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
+import { GlobalStorageFs } from '@platform/rootedFs';
 import { AgentCategory } from '@shared/schemas';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { REPO_ROOT } from '@test/support/repoScan';
 import { installPlatform } from '@test/support/setupPlatform';
 import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
+import type { RootedFileSystem } from '@utils/files/rootedFileSystem';
 
 /**
  * A custom *workflow* agent named `assistant` shadows the bundled *tool-use*
@@ -70,7 +72,15 @@ describe('CLI agent validation with a shadowed name', () => {
       },
     );
 
-    await Effect.runPromise(refresh({ includeRemote: false }));
+    // The fake host answers `custom()` from a temp directory of its own, so
+    // nothing in this load reaches the global storage view.
+    await Effect.runPromise(
+      Effect.provideService(
+        refresh({ includeRemote: false }),
+        GlobalStorageFs,
+        {} as RootedFileSystem,
+      ),
+    );
   });
 
   afterAll(async () => {

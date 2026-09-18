@@ -4,10 +4,23 @@ import { Effect } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports
+import type { GlobalStorageFs } from '@platform/rootedFs';
 import { AgentCategory } from '@shared/schemas';
 import type { HostRequest } from '@shared/session/hostRequest';
 import { LaunchSurfaceSchema } from '@shared/session/surface';
+import { unusedGlobalStorageFs } from '@test/support/fsTestUtils';
 import { FakeStateStore } from '@test/support/FakePlatform';
+
+/**
+ * A program over the process's global storage view. Nothing under test here
+ * reads it: the fake agent directories answer `custom()` themselves, so this
+ * only satisfies the requirement the catalog readers name.
+ */
+function onGlobalStorage<A, E>(
+  program: Effect.Effect<A, E, GlobalStorageFs>,
+): Effect.Effect<A, E> {
+  return Effect.provide(program, unusedGlobalStorageFs);
+}
 
 const mocks = vi.hoisted(() => ({
   createTeamCatalogPorts: vi.fn(() => ({ catalog: true })),
@@ -53,10 +66,12 @@ function launchRequest(
 }
 
 function launchTeam(host: ReturnType<typeof createHost>, teamId = 'physicist') {
-  return prepareSurfaceLaunch(
-    launchRequest({ launchTarget: 'team', selectedTeamId: teamId }),
-    host,
-    workspaceState,
+  return onGlobalStorage(
+    prepareSurfaceLaunch(
+      launchRequest({ launchTarget: 'team', selectedTeamId: teamId }),
+      host,
+      workspaceState,
+    ),
   );
 }
 
@@ -67,10 +82,12 @@ describe('main-view run launch controller', () => {
 
   it.effect('prepares ordinary launches without loading the team catalog', () =>
     Effect.gen(function* () {
-      const { config } = yield* prepareSurfaceLaunch(
-        launchRequest({ agent: { toolUse: 'orchestrator' } }),
-        createHost(),
-        workspaceState,
+      const { config } = yield* onGlobalStorage(
+        prepareSurfaceLaunch(
+          launchRequest({ agent: { toolUse: 'orchestrator' } }),
+          createHost(),
+          workspaceState,
+        ),
       );
 
       expect(config).toMatchObject({
@@ -88,10 +105,12 @@ describe('main-view run launch controller', () => {
     () =>
       Effect.gen(function* () {
         const error = yield* Effect.flip(
-          prepareSurfaceLaunch(
-            launchRequest({ model: '' }),
-            createHost(),
-            workspaceState,
+          onGlobalStorage(
+            prepareSurfaceLaunch(
+              launchRequest({ model: '' }),
+              createHost(),
+              workspaceState,
+            ),
           ),
         );
 
@@ -105,10 +124,12 @@ describe('main-view run launch controller', () => {
   it.effect('requires an input file for workflow runs', () =>
     Effect.gen(function* () {
       const error = yield* Effect.flip(
-        prepareSurfaceLaunch(
-          launchRequest({ sessionType: 'workflow' }),
-          createHost(),
-          workspaceState,
+        onGlobalStorage(
+          prepareSurfaceLaunch(
+            launchRequest({ sessionType: 'workflow' }),
+            createHost(),
+            workspaceState,
+          ),
         ),
       );
 
@@ -201,14 +222,16 @@ describe('main-view run launch controller', () => {
         );
 
         // The renderer's selected agent is ignored in favour of the team plan.
-        const { config } = yield* prepareSurfaceLaunch(
-          launchRequest({
-            launchTarget: 'team',
-            selectedTeamId: 'physicist',
-            agent: { toolUse: 'stale-renderer-agent' },
-          }),
-          host,
-          workspaceState,
+        const { config } = yield* onGlobalStorage(
+          prepareSurfaceLaunch(
+            launchRequest({
+              launchTarget: 'team',
+              selectedTeamId: 'physicist',
+              agent: { toolUse: 'stale-renderer-agent' },
+            }),
+            host,
+            workspaceState,
+          ),
         );
 
         expect(config).toMatchObject({

@@ -11,9 +11,9 @@ import {
   AgentDirectoriesFailed,
   type AgentDirectoriesPort,
 } from '@platform/interfaces';
+import { GlobalStorageFs } from '@platform/rootedFs';
 import type { AgentSource } from '@shared/schemas';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
-import { GlobalStorageFS } from '@utils/files/storageFS';
 
 import {
   BUILTIN_WORKFLOW_AGENTS_DIR,
@@ -63,7 +63,7 @@ export class AgentDirectoryService {
     return Effect.sync(() => this.packagedDir(BUILTIN_TOOL_USE_AGENTS_DIR));
   }
 
-  custom(): Effect.Effect<string, AgentDirectoriesFailed> {
+  custom(): Effect.Effect<string, AgentDirectoriesFailed, GlobalStorageFs> {
     return Effect.gen({ self: this }, function* () {
       const configuredPath = (
         this.options.customDirectoryStore.get() ?? ''
@@ -76,7 +76,11 @@ export class AgentDirectoryService {
     });
   }
 
-  getAllLocal(): Effect.Effect<AgentDirectoryEntry[], AgentDirectoriesFailed> {
+  getAllLocal(): Effect.Effect<
+    AgentDirectoryEntry[],
+    AgentDirectoriesFailed,
+    GlobalStorageFs
+  > {
     return Effect.gen({ self: this }, function* () {
       const [customDir, builtInDir, builtInToolUseDir] = yield* Effect.all(
         [this.custom(), this.builtIn(), this.builtInToolUse()],
@@ -104,31 +108,34 @@ export class AgentDirectoryService {
 
   private ensureDefaultCustomDir(): Effect.Effect<
     string,
-    AgentDirectoriesFailed
+    AgentDirectoriesFailed,
+    GlobalStorageFs
   > {
-    return Effect.tryPromise({
-      try: () => GlobalStorageFS.ensureDir(CUSTOM_AGENTS_STORAGE_DIR),
-      catch: (cause) => {
-        this.log.error('Failed to create default custom agents directory', {
-          data: cause,
-        });
-        return new AgentDirectoriesFailed({
-          source: 'custom',
-          message:
-            'Unable to create custom agents directory. Please check permissions.',
-          cause,
-        });
-      },
-    }).pipe(
-      Effect.as(GlobalStorageFS.fullPath(CUSTOM_AGENTS_STORAGE_DIR)),
-      Effect.tap((defaultPath) =>
-        Effect.sync(() => {
-          this.log.debug(
-            `Using default custom agents directory: ${defaultPath}`,
-          );
-        }),
-      ),
-    );
+    return Effect.gen({ self: this }, function* () {
+      const globalStorageFs = yield* GlobalStorageFs;
+      const defaultPath = yield* globalStorageFs
+        .makeDirectory(CUSTOM_AGENTS_STORAGE_DIR, { recursive: true })
+        .pipe(
+          Effect.andThen(() =>
+            globalStorageFs.resolve(CUSTOM_AGENTS_STORAGE_DIR),
+          ),
+          Effect.catch((cause) => {
+            this.log.error('Failed to create default custom agents directory', {
+              data: cause,
+            });
+            return Effect.fail(
+              new AgentDirectoriesFailed({
+                source: 'custom',
+                message:
+                  'Unable to create custom agents directory. Please check permissions.',
+                cause,
+              }),
+            );
+          }),
+        );
+      this.log.debug(`Using default custom agents directory: ${defaultPath}`);
+      return defaultPath;
+    });
   }
 
   private resolveConfiguredCustomDir(
@@ -218,7 +225,7 @@ export class AgentDirectoryService {
 export function agentSourceDirectory(
   directories: AgentDirectoriesPort,
   source: AgentSource,
-): Effect.Effect<string | undefined, AgentDirectoriesFailed> {
+): Effect.Effect<string | undefined, AgentDirectoriesFailed, GlobalStorageFs> {
   switch (source) {
     case 'custom':
       return directories.custom();

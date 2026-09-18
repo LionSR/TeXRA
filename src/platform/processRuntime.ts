@@ -29,6 +29,7 @@ import type { HttpClient } from 'effect/unstable/http';
 
 import type { AgentResume, AppState } from './interfaces';
 import type { LanguageModel } from './languageModel';
+import type { GlobalStorageFs } from './rootedFs';
 import type { Secrets } from './secrets';
 
 /**
@@ -38,11 +39,14 @@ import type { Secrets } from './secrets';
  * `installProcessRuntime`'s `services` layer, plus the standard library's
  * `FileSystem` and `Path`, which the same install provides from
  * `@effect/platform-node` so a program that reads or resolves a file takes
- * them from context instead of building a Node layer of its own.
+ * them from context instead of building a Node layer of its own, and
+ * `GlobalStorageFs`, the cross-workspace storage view every session of the
+ * process shares.
  */
 export type ProcessServices =
   | FileSystem.FileSystem
   | Path.Path
+  | GlobalStorageFs
   | HttpClient.HttpClient
   | InquiryRecords
   | UpdateCheckRecords

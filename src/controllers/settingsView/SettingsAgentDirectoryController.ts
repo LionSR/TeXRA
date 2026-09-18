@@ -9,6 +9,7 @@ import type {
   AgentDirectoriesFailed,
   StateWriteFailed,
 } from '@platform/interfaces';
+import type { GlobalStorageFs } from '@platform/rootedFs';
 
 // Local imports - shared
 import type { AgentCategory, AgentSource } from '@shared/schemas';
@@ -22,10 +23,14 @@ interface SettingsAgentDirectoryEntry {
 interface SettingsAgentDirectoryState {
   getConfiguredCustomDir(): string | undefined;
   setConfiguredCustomDir(path: string): Effect.Effect<void, StateWriteFailed>;
-  getCustomDir(): Effect.Effect<string, AgentDirectoriesFailed>;
+  getCustomDir(): Effect.Effect<
+    string,
+    AgentDirectoriesFailed,
+    GlobalStorageFs
+  >;
   getSourceDir(
     source: AgentSource,
-  ): Effect.Effect<string | undefined, AgentDirectoriesFailed>;
+  ): Effect.Effect<string | undefined, AgentDirectoriesFailed, GlobalStorageFs>;
   getAgent(
     source: AgentSource,
     name: string,
@@ -56,7 +61,8 @@ export class SettingsAgentDirectoryController {
 
   getCustomDirStatus(): Effect.Effect<
     SettingsCustomAgentDirStatus,
-    AgentDirectoriesFailed
+    AgentDirectoriesFailed,
+    GlobalStorageFs
   > {
     return Effect.gen({ self: this }, function* () {
       const configuredPath =
@@ -100,7 +106,11 @@ export class SettingsAgentDirectoryController {
 
   planOpenAgentFolder(
     source: AgentSource,
-  ): Effect.Effect<SettingsOpenAgentFolderResult, AgentDirectoriesFailed> {
+  ): Effect.Effect<
+    SettingsOpenAgentFolderResult,
+    AgentDirectoriesFailed,
+    GlobalStorageFs
+  > {
     return Effect.map(this.deps.state.getSourceDir(source), (sourceDir) =>
       sourceDir
         ? { ok: true, path: sourceDir }

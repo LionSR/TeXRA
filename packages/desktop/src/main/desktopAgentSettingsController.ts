@@ -28,6 +28,7 @@ import { applySettingsTeamRoster } from '@controllers/settingsView/SettingsTeamR
 import { ExternalOpenFailed, type MessageHost } from '@hosts/uiHosts';
 import type { AgentDirectoriesFailed } from '@platform/interfaces';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
+import type { GlobalStorageFs } from '@platform/rootedFs';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   agentKey,
@@ -109,11 +110,16 @@ interface DefaultDesktopAgentSettingsControllerOptions extends SettingsStatePort
      *  that asked for it instead of an untyped rejection. */
     readonly getCustomAgentDirectory: () => Effect.Effect<
       string,
-      AgentDirectoriesFailed
+      AgentDirectoriesFailed,
+      GlobalStorageFs
     >;
     readonly getSourceDirectory: (
       source: AgentSource,
-    ) => Effect.Effect<string | undefined, AgentDirectoriesFailed>;
+    ) => Effect.Effect<
+      string | undefined,
+      AgentDirectoriesFailed,
+      GlobalStorageFs
+    >;
     readonly selectCustomAgentDirectory: () => Promise<string | undefined>;
     readonly openPath: (
       filePath: string,

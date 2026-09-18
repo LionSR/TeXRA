@@ -62,7 +62,11 @@ import {
 } from '@model/computeModelOptions';
 import type { StateStore } from '@platform/interfaces';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
-import { withSessionFs, WorkspaceFs } from '@platform/rootedFs';
+import {
+  withSessionFs,
+  WorkspaceFs,
+  type GlobalStorageFs,
+} from '@platform/rootedFs';
 import type { PlatformSecrets } from '@platform/secrets';
 import { presentLaunchedProgressRun } from '@progressView/progressNavigation';
 import latexPreamble from '@resources/templates/chatExport.tex';
@@ -478,7 +482,9 @@ export function createExtensionHostRequests(
 
   /** The launcher's Send: the surface's selections through the shared
    *  launch preparation, then the one launch command. */
-  function launch(request: Extract<HostRequest, { kind: 'launch' }>) {
+  function launch(
+    request: Extract<HostRequest, { kind: 'launch' }>,
+  ): Effect.Effect<void, unknown, GlobalStorageFs> {
     return Effect.gen(function* () {
       const { launch: form } = request;
       const requestedWorkingDirectory = form.workingDirectory.trim();
@@ -725,7 +731,7 @@ export function createExtensionHostRequests(
 
   function agentConfigBanner(
     request: Extract<HostRequest, { kind: 'agentConfigBanner' }>,
-  ) {
+  ): Effect.Effect<void, unknown, GlobalStorageFs> {
     return Effect.gen(function* () {
       switch (request.action) {
         case 'edit':

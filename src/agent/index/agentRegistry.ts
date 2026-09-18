@@ -4,6 +4,7 @@ import { Data, Effect } from 'effect';
 import { AgentRosterController } from '@agent/roster/AgentRosterController';
 import { createLog } from '@logger/logUtils';
 import { platform } from '@platform/platform';
+import type { GlobalStorageFs } from '@platform/rootedFs';
 import { workspaceRoots, type WorkspaceRoots } from '@platform/workspaceRoots';
 import type {
   AgentCategory as AgentCategoryType,
@@ -110,7 +111,7 @@ export interface LoadAgentsOptions {
  */
 export function loadAgents(
   options: LoadAgentsOptions = {},
-): Effect.Effect<void, AgentCatalogLoadError> {
+): Effect.Effect<void, AgentCatalogLoadError, GlobalStorageFs> {
   const includeRemote = options.includeRemote ?? true;
   return onCatalogLoadLane(
     Effect.suspend(() =>
@@ -129,7 +130,7 @@ export function loadAgents(
 function queueLoad(
   includeRemote: boolean,
   loadEpoch: number,
-): Effect.Effect<void, AgentCatalogLoadError> {
+): Effect.Effect<void, AgentCatalogLoadError, GlobalStorageFs> {
   return Effect.suspend(() => {
     if (loadEpoch !== epoch) return Effect.void;
     return doLoad(includeRemote, loadEpoch).pipe(
@@ -143,7 +144,7 @@ function queueLoad(
 function doLoad(
   includeRemote: boolean,
   loadEpoch: number,
-): Effect.Effect<boolean, AgentCatalogLoadError> {
+): Effect.Effect<boolean, AgentCatalogLoadError, GlobalStorageFs> {
   return Effect.gen(function* () {
     const startTime = Date.now();
 
@@ -275,7 +276,7 @@ export function getCustomAgentScanIssues(): readonly AgentScanIssue[] {
  */
 export function refresh(
   options: LoadAgentsOptions = {},
-): Effect.Effect<void, AgentCatalogLoadError> {
+): Effect.Effect<void, AgentCatalogLoadError, GlobalStorageFs> {
   return Effect.suspend(() => {
     const loadEpoch = ++epoch;
     return onCatalogLoadLane(
@@ -294,7 +295,11 @@ function removeRemoteEntries(): void {
 }
 
 /** Remove remote definitions immediately, then rebuild the local catalog. */
-export function invalidateRemoteAgentsAfterSignOut(): Effect.Effect<void> {
+export function invalidateRemoteAgentsAfterSignOut(): Effect.Effect<
+  void,
+  never,
+  GlobalStorageFs
+> {
   return Effect.suspend(() => {
     removeRemoteEntries();
     return refresh({ includeRemote: false });
@@ -559,7 +564,8 @@ function sortAgentEntries(
  */
 export function computeAgentOptionsData(): Effect.Effect<
   AgentOptionsDataPayload,
-  AgentCatalogLoadError
+  AgentCatalogLoadError,
+  GlobalStorageFs
 > {
   return Effect.map(loadAgents(), () => ({
     workflow: entriesToOptionData(
