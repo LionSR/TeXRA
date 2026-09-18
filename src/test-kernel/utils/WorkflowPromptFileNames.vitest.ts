@@ -4,11 +4,8 @@ import { describe, expect, it } from 'vitest';
 // Local imports
 import { setupPlatform } from '@test/support/setupPlatform';
 import { fakePath } from '@test/support/FakePlatform';
-import {
-  getListOfFiles,
-  getPromptFileName,
-  getXmlFormatFromReadableFiles,
-} from '@utils/prompt';
+import { getListOfFiles, getPromptFileName } from '@utils/prompt';
+import { getXmlFormatFromReadableFiles } from '@utils/files/varsUtils';
 import {
   getExtractedDocOutputFileName,
   getSafeDocumentRelativePath,

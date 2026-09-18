@@ -10,7 +10,6 @@ import type { ConfigProvider } from '@platform/interfaces';
 import type { FileLocation } from '@shared/schemas';
 import { renderPrompt } from '@utils/prompt';
 import { readConfig } from '@utils/config/configUtils';
-import { ensureError } from '@utils/errors/errorMessage';
 import { pathToLocation } from '@utils/files/fileLocation';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 
@@ -38,9 +37,8 @@ const createStandalone = Effect.fn('TikzPictureManager.createStandalone')(
     suffix?: string,
   ) {
     const fs = yield* FileSystem.FileSystem;
-    const standaloneContent = yield* Effect.tryPromise({
-      try: () => renderPrompt(template, { tikzpicture: tikzpictures }),
-      catch: ensureError,
+    const standaloneContent = yield* renderPrompt(template, {
+      tikzpicture: tikzpictures,
     });
 
     const filename = suffix ? `${label}_${suffix}.tex` : `${label}.tex`;

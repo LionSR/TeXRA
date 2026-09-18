@@ -3,7 +3,6 @@ import { Effect } from 'effect';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { goalElapsedMs, type RunId } from '@shared/schemas';
 import { goalOf, isGoalEnabled, type GoalReader } from '@tools/goal';
-import { ensureError } from '@utils/errors/errorMessage';
 import { renderPrompt } from '@utils/prompt';
 import { formatCompactDuration } from '@utils/text/stringUtils';
 
@@ -35,13 +34,9 @@ export const maybeBuildGoalContinuation = Effect.fn('goal.continuation')(
 
     if (!isGoalEnabled(session.roots.config)) return null;
 
-    return yield* Effect.tryPromise({
-      try: () =>
-        renderPrompt(GOAL_CONTINUATION_TEMPLATE, {
-          objective: goal.objective,
-          timeUsed: formatCompactDuration(goalElapsedMs(goal)),
-        }),
-      catch: ensureError,
+    return yield* renderPrompt(GOAL_CONTINUATION_TEMPLATE, {
+      objective: goal.objective,
+      timeUsed: formatCompactDuration(goalElapsedMs(goal)),
     });
   },
 );

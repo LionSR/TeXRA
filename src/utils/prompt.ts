@@ -1,22 +1,9 @@
 import * as path from 'node:path';
 
-import { filterNotNull } from '@utils/core';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
-import {
-  locateInWorkspace,
-  workspaceAbsolutePath,
-} from '@utils/files/workspaceFS';
+import { Effect } from 'effect';
 
-export interface XmlFormatFromFilesResult {
-  readonly xml: string | null;
-  readonly readableFiles: string[];
-  /**
-   * Files dropped from the prompt because they could not be read. Order is
-   * unspecified — the reads settle concurrently — so do not build on it; each
-   * entry names its own file.
-   */
-  readonly skipped: ReadonlyArray<{ file: string; reason: string }>;
-}
+import { ensureError } from '@utils/errors/errorMessage';
+import { locateInWorkspace } from '@utils/files/workspaceFS';
 
 /**
  * File name exposed to prompt XML and workflow output instructions.
@@ -45,54 +32,6 @@ export function getPromptFileName(
 }
 
 /**
- * Get XML formatted string from multiple files
- *
- * Best-effort: a file that cannot be read (moved, renamed, or deleted since the
- * config was saved) is skipped rather than rejecting the whole batch. This
- * mirrors {@link setVarFromFile}, which already tolerates missing files, and
- * keeps prompt-var assembly from hard-failing an agent launch/resume when an
- * input no longer exists on disk. The skip is reported back in `skipped` so the
- * caller can surface it on the run's own channel — a module logger here would
- * drop the reason outside the run that lost the file.
- *
- * @param workspaceRoot Root a relative entry resolves against, held as data
- * @param files List of file paths
- * @returns XML formatted string of the readable files, or null if none are readable
- */
-export async function getXmlFormatFromReadableFiles(
-  workspaceRoot: string | undefined,
-  files: string[],
-): Promise<XmlFormatFromFilesResult> {
-  if (files.length === 0) {
-    return { xml: null, readableFiles: [], skipped: [] };
-  }
-
-  const skipped: { file: string; reason: string }[] = [];
-  const xmlContents = await Promise.all(
-    files.map(async (file) => {
-      try {
-        const content = await AbsoluteFS.read(
-          workspaceAbsolutePath(workspaceRoot, file),
-        );
-        return {
-          file,
-          xml: `<document name="${getPromptFileName(workspaceRoot, file)}">\n${content}\n</document>`,
-        };
-      } catch (err) {
-        skipped.push({ file, reason: String(err) });
-        return null;
-      }
-    }),
-  );
-  const readable = xmlContents.filter(filterNotNull);
-  return {
-    xml: readable.length > 0 ? readable.map((doc) => doc.xml).join('\n') : null,
-    readableFiles: readable.map((doc) => doc.file),
-    skipped,
-  };
-}
-
-/**
  * Convert a list of files to a comma-separated string
  * @param workspaceRoot Root the caller holds as data (see {@link getPromptFileName})
  * @param files List of file paths
@@ -107,23 +46,6 @@ export function getListOfFiles(
     .filter((f) => f.trim() !== '')
     .map((file) => getPromptFileName(workspaceRoot, file))
     .join(', ');
-}
-
-async function resolveValue(value: unknown): Promise<unknown> {
-  // Pass through primitives and Promises unchanged.
-  // Promises are excluded from object handling to avoid iterating their internal properties.
-  if (typeof value !== 'object' || value === null || value instanceof Promise) {
-    return value;
-  }
-  if (Array.isArray(value)) {
-    return Promise.all(value.map(resolveValue));
-  }
-
-  // Recursively resolve all values in the object
-  const entries = await Promise.all(
-    Object.entries(value).map(async ([k, v]) => [k, await resolveValue(v)]),
-  );
-  return Object.fromEntries(entries);
 }
 
 /**
@@ -143,33 +65,38 @@ export function createTexraNunjucksEnvironment(
 let promptEnvironmentPromise: Promise<import('nunjucks').Environment> | null =
   null;
 
-function promptEnvironment(): Promise<import('nunjucks').Environment> {
-  promptEnvironmentPromise ??= import('nunjucks').then(
-    ({ default: nunjucks }) =>
-      createTexraNunjucksEnvironment(
-        nunjucks,
-        new nunjucks.FileSystemLoader('.'),
-      ),
-  );
-  return promptEnvironmentPromise;
-}
+/**
+ * The shared prompt-rendering environment. The lazy `nunjucks` import is this
+ * module's one foreign async edge — memoized, so every render after the first
+ * resolves from the already-settled promise.
+ */
+const promptEnvironment: Effect.Effect<import('nunjucks').Environment, Error> =
+  Effect.tryPromise({
+    try: () =>
+      (promptEnvironmentPromise ??= import('nunjucks').then(
+        ({ default: nunjucks }) =>
+          createTexraNunjucksEnvironment(
+            nunjucks,
+            new nunjucks.FileSystemLoader('.'),
+          ),
+      )),
+    catch: ensureError,
+  });
 
 /**
- * Render a prompt string using nunjucks templating
+ * Render a prompt string using nunjucks templating.
+ *
  * @param prompt The prompt template string
  * @param variables Variables to use in template rendering
- * @returns Rendered prompt string
+ * @returns The rendered prompt; a template error fails with that `Error`
  */
-export async function renderPrompt(
+export const renderPrompt = Effect.fn('prompt.render')(function* (
   prompt: string,
   variables: Record<string, unknown>,
-): Promise<string> {
-  const [environment, resolvedVariables] = await Promise.all([
-    promptEnvironment(),
-    resolveValue(variables),
-  ]);
-  return environment.renderString(
-    prompt,
-    resolvedVariables as Record<string, unknown>,
-  );
-}
+): Effect.fn.Return<string, Error> {
+  const environment = yield* promptEnvironment;
+  return yield* Effect.try({
+    try: () => environment.renderString(prompt, variables),
+    catch: ensureError,
+  });
+});
