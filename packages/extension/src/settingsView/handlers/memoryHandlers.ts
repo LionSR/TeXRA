@@ -134,29 +134,30 @@ export class MemoryHandlers {
   }
 
   handleOpenMemoryFolder() {
+    const resolvedPath = resolveMemoryStoragePath();
     return withHandlerErrorHandling(
       this.ctx,
       'Failed to open memory folder',
-      Effect.gen({ self: this }, function* () {
-        const resolvedPath = resolveMemoryStoragePath();
-        // One program over the session's storage view: create the folder and
-        // hand back the same view's absolute path for it.
-        const absolutePath = yield* this.run(
+      // One program over the session's storage view: create the folder and
+      // hand back the same view's absolute path for it.
+      Effect.flatMap(
+        this.run(
           Effect.flatMap(Effect.service(StorageFs), (storageFs) =>
             Effect.flatMap(
               storageFs.makeDirectory(resolvedPath, { recursive: true }),
               () => storageFs.resolve(resolvedPath),
             ),
           ),
-        );
-        yield* Effect.promise(() =>
-          safeExecuteCommand(
-            'revealFileInOS',
-            [vscode.Uri.file(absolutePath)],
-            this.viewName,
+        ),
+        (absolutePath) =>
+          Effect.promise(() =>
+            safeExecuteCommand(
+              'revealFileInOS',
+              [vscode.Uri.file(absolutePath)],
+              this.viewName,
+            ),
           ),
-        );
-      }),
+      ),
     );
   }
 
@@ -197,14 +198,13 @@ export class MemoryHandlers {
     return withHandlerErrorHandling(
       this.ctx,
       `Failed to ${pinned ? 'pin' : 'unpin'} memory`,
-      Effect.gen({ self: this }, function* () {
-        const message = yield* this.run(
-          this.memory.setMemoryPinned(storagePath, pinned),
-        );
-        if (message != null) {
-          yield* this.ctx.postMessageToActiveWebview(message);
-        }
-      }),
+      Effect.flatMap(
+        this.run(this.memory.setMemoryPinned(storagePath, pinned)),
+        (message) =>
+          message == null
+            ? Effect.void
+            : this.ctx.postMessageToActiveWebview(message),
+      ),
     );
   }
 }

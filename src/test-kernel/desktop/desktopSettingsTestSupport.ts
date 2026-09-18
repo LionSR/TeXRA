@@ -18,8 +18,6 @@ import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 
 const noOp = async (): Promise<void> => undefined;
 
-/** The credential controller's posts and refreshes are programs, not
- *  promises: a stub answers with one that does nothing. */
 const noOpEffect = (): Effect.Effect<void> => Effect.void;
 
 /** Reads the `command` discriminant off a message posted to the renderer. */

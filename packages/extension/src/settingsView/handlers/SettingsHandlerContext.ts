@@ -10,15 +10,12 @@ import type { ExtensionContext, Webview } from 'vscode';
  * it reports through, the VS Code extension context, and the two transport
  * accessors inbound command slices and handler delegates share.
  *
- * Both are programs, not promises. `vscode.Webview.postMessage` is the one
- * foreign edge behind them and it is wrapped by {@link postToWebview} below;
- * everything above it — the `send*` builders, the refresh fan-outs, the
- * delegates' handlers — composes as `Effect` and is settled once per inbound
- * message arm at the dispatcher, which is this host's entry.
- *
- * Ordering is unchanged: a post still completes before a mutation follow-up
- * runs (a settings refresh after a write; hide-banner then credential
- * refresh), because the program sequences them.
+ * Both are programs, not promises: `vscode.Webview.postMessage` is the one
+ * foreign edge behind them and {@link postToWebview} lifts it, so everything
+ * above — builders, refresh fan-outs, delegate handlers — composes and is
+ * settled once per inbound message arm at the dispatcher, this host's entry.
+ * A post still completes before a mutation's follow-up, because the program
+ * sequences them.
  *
  * `withActiveWebview` is the shared "run with the active webview" accessor
  * (`vscode.Webview`). View-wrapper access (`vscode.WebviewView`) stays
@@ -80,23 +77,4 @@ export function withHandlerErrorHandling<E, R>(
       ),
     );
   });
-}
-
-/**
- * `Promise.all` semantics for a fan-out of refresh programs: every program
- * runs to completion even when one of them fails, and the first failure is
- * the result. `Effect.all` alone would interrupt the siblings of a failed
- * program — the awaited `Promise.all` these replace let them finish, and a
- * half-repainted settings view is not an improvement.
- */
-export function allSettledVoid<E, R>(
-  programs: readonly Effect.Effect<void, E, R>[],
-): Effect.Effect<void, E, R> {
-  return Effect.flatMap(
-    Effect.all(programs.map(Effect.exit), { concurrency: 'unbounded' }),
-    (exits) => {
-      const failed = exits.find(Exit.isFailure);
-      return failed ? Effect.failCause(failed.cause) : Effect.void;
-    },
-  );
 }

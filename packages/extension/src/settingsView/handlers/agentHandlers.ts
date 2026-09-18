@@ -54,11 +54,11 @@ import {
   buildCustomAgentDirMessage,
   buildAgentModePresetsMessage,
 } from '@shared/settingsView/handlers/agentSelectionHandlers';
+import { allSettledVoid } from '@utils/core/allSettledVoid';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 
 import {
-  allSettledVoid,
   postToWebview,
   withHandlerErrorHandling,
   type SettingsHandlerContext,
@@ -193,15 +193,14 @@ export class AgentHandlers {
     return withHandlerErrorHandling(
       this.ctx,
       'Failed to update agent visibility',
-      Effect.gen({ self: this }, function* () {
-        yield* this.roster.setAgentEnabled({
+      this.roster
+        .setAgentEnabled({
           category: data.category,
           source: data.agentSource,
           name: data.agentName,
           enabled: data.enabled,
-        });
-        yield* this.refreshAfterAgentMutation();
-      }),
+        })
+        .pipe(Effect.andThen(this.refreshAfterAgentMutation())),
     );
   }
 
@@ -211,14 +210,13 @@ export class AgentHandlers {
     return withHandlerErrorHandling(
       this.ctx,
       'Failed to update agent visibility',
-      Effect.gen({ self: this }, function* () {
-        yield* this.catalogController.setAllAgentsEnabled({
+      this.catalogController
+        .setAllAgentsEnabled({
           category: data.category,
           source: data.source,
           enabled: data.enabled,
-        });
-        yield* this.refreshAfterAgentMutation();
-      }),
+        })
+        .pipe(Effect.andThen(this.refreshAfterAgentMutation())),
     );
   }
 
@@ -357,10 +355,9 @@ export class AgentHandlers {
     return withHandlerErrorHandling(
       this.ctx,
       'Failed to reset custom agent directory',
-      Effect.gen({ self: this }, function* () {
-        yield* this.directoryController.resetCustomDir();
-        yield* this.refreshAgentDirUI();
-      }),
+      this.directoryController
+        .resetCustomDir()
+        .pipe(Effect.andThen(this.refreshAgentDirUI())),
     );
   }
 

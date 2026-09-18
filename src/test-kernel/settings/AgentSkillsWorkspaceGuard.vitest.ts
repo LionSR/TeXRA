@@ -3,8 +3,7 @@ import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  // Both report helpers are awaited by the write path, so the doubles answer
-  // with the promise the real ones return.
+  // Both report helpers are awaited, so the doubles answer with a promise.
   showLoggedErrorMessage: vi.fn(async () => ''),
   showLoggedInfoMessage: vi.fn(async () => ''),
   // The module under test composes `writeSetting`'s Effect, so the standing
@@ -73,8 +72,6 @@ type AgentSkillsHarness = {
 function createHarness(): AgentSkillsHarness {
   const handler = Object.create(SettingsViewMessageHandler.prototype);
   Reflect.set(handler, 'channel', 'SettingsViewMessageHandler');
-  // The snapshot repaint is a program the write path composes, so the double
-  // answers with one.
   Reflect.set(
     handler,
     'postStateSettingSnapshot',

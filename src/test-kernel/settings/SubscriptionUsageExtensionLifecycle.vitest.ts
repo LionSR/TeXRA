@@ -2,8 +2,7 @@ import { Effect } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  // The refresh tail lifts this host command once; the double answers with
-  // the promise the real one returns.
+  // Lifted once by the refresh tail, so the double answers with a promise.
   safeExecuteCommand: vi.fn(async () => undefined),
 }));
 vi.mock('@frontend/system/commandUtils', () => ({
@@ -50,8 +49,7 @@ function createHarness(activeView = true) {
   Reflect.set(handler, 'viewName', 'SettingsView');
   Reflect.set(handler, 'subscriptionUsage', usage);
   Reflect.set(handler, 'runtime', testRuntime());
-  // Every `send*` the refresh tail composes is a program, so a double is one
-  // too: a bare `vi.fn()` would be yielded as an `Effect` and fail.
+  // A bare `vi.fn()` would be yielded as an `Effect` and fail at runtime.
   Reflect.set(
     handler,
     'sendProfileData',

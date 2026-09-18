@@ -83,8 +83,6 @@ async function createHandlerFixture(options: HandlerFixtureOptions = {}) {
     return options.modalChoice ? { title: options.modalChoice } : undefined;
   });
 
-  // The refresh port is a program: the handlers compose it rather than
-  // settling it, so the double answers with one.
   const refreshAfterAgentMutation = vi.fn(
     (_selectedToolUseAgent?: string, _catalogFresh?: boolean) => Effect.void,
   );

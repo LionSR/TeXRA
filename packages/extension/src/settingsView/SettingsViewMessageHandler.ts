@@ -103,6 +103,7 @@ import {
 } from '@tools/toolAvailability';
 import { goalList } from '@tools/goal';
 import { getProviderKeyUrl } from '@utils/config/providerConfig';
+import { allSettledVoid } from '@utils/core/allSettledVoid';
 import { ensureError } from '@utils/errors/errorMessage';
 import { setToolEnabled } from '@utils/config/constants';
 import { AgentHandlers } from './handlers/agentHandlers';
@@ -111,7 +112,6 @@ import { MemoryHandlers } from './handlers/memoryHandlers';
 import { GitHubSubscriptionHandlers } from './handlers/githubSubscriptionHandlers';
 import { SubscriptionHandlers } from './handlers/subscriptionHandlers';
 import {
-  allSettledVoid,
   postToWebview,
   type SettingsHandlerContext,
 } from './handlers/SettingsHandlerContext';
@@ -201,15 +201,17 @@ export class SettingsViewMessageHandler {
       refreshAfterKeyChange: (provider) =>
         this.refreshAfterProviderKeyChange(provider),
       reportFailure: (message, error) =>
-        Effect.gen({ self: this }, function* () {
-          yield* Effect.promise(() =>
-            showLoggedErrorMessage(this.channel, message, error),
-          );
+        Effect.promise(() =>
+          showLoggedErrorMessage(this.channel, message, error),
+        ).pipe(
           // On error, still refresh settings view to reflect current key state.
-          yield* this.withActiveWebview((w) =>
-            this.sendProfileAndModelSelectionData(w),
-          );
-        }).pipe(Effect.orDie),
+          Effect.andThen(
+            this.withActiveWebview((w) =>
+              this.sendProfileAndModelSelectionData(w),
+            ),
+          ),
+          Effect.orDie,
+        ),
     });
     this.agentHandlers = new AgentHandlers(
       ctx,
@@ -318,10 +320,9 @@ export class SettingsViewMessageHandler {
   }
 
   /**
-   * The inbound registry: one settled program per message arm. Every handler
-   * below hands back an `Effect`, and `runPromise` here is the R1 boundary —
-   * the dispatcher's own `MessageHandler` contract is promise-shaped, so this
-   * is the single place a settings message is run.
+   * The inbound registry: one settled program per message arm. `run` is this
+   * host's R1 boundary — the dispatcher's `MessageHandler` contract is
+   * promise-shaped, so it is the only place a settings message is run.
    */
   private createHandlerRegistry(
     context: vscode.ExtensionContext,
@@ -362,13 +363,12 @@ export class SettingsViewMessageHandler {
         run(this.setModelEnabled(message.modelName, message.enabled)),
       setModelReasoningLevel: (message) =>
         run(
-          Effect.gen({ self: this }, function* () {
-            yield* this.modelSelectionController.setReasoningLevel({
+          this.modelSelectionController
+            .setReasoningLevel({
               modelName: message.modelName,
               level: message.level,
-            });
-            yield* this.postModelSelectionData();
-          }),
+            })
+            .pipe(Effect.andThen(this.postModelSelectionData())),
         ),
       requestModelAccess: (message) =>
         this.handleRequestModelAccess(message.modelName, context),
@@ -465,16 +465,17 @@ export class SettingsViewMessageHandler {
         ),
       toggleTool: (message) =>
         run(
-          Effect.gen({ self: this }, function* () {
-            yield* setToolEnabled(
-              message.toolId,
-              message.enabled,
-              this.globalState,
-            );
-            yield* this.withActiveWebview((w) =>
-              this.sendToolDashboardData(w, { skipChecks: true }),
-            );
-          }),
+          setToolEnabled(
+            message.toolId,
+            message.enabled,
+            this.globalState,
+          ).pipe(
+            Effect.andThen(
+              this.withActiveWebview((w) =>
+                this.sendToolDashboardData(w, { skipChecks: true }),
+              ),
+            ),
+          ),
         ),
       runToolCommand: (message) => this.handleRunToolCommand(message),
       applyLatexSettings: (message) =>
@@ -577,9 +578,9 @@ export class SettingsViewMessageHandler {
   }
 
   /**
-   * Run a program with the active view's webview, if available. The active
-   * view is read when the program runs, not when it is built: a panel
-   * disposed between a mutation and its refresh leaves nothing to post to.
+   * Run a program with the active view's webview, if available. The view is
+   * read when the program runs, not when it is built: a panel disposed
+   * between a mutation and its refresh leaves nothing to post to.
    */
   private withActiveWebview<E, R>(
     fn: (webview: vscode.Webview) => Effect.Effect<void, E, R>,
@@ -593,9 +594,7 @@ export class SettingsViewMessageHandler {
   /**
    * Post a message to the active view's webview. A `null` or `undefined`
    * message posts nothing, so callers can forward an optional response
-   * payload without a guard of their own. The program completes only after
-   * the post settles — mutation paths that run a follow-up step depend on
-   * that ordering.
+   * payload without a guard of their own.
    */
   private postMessageToActiveWebview(
     message: unknown,
@@ -606,10 +605,9 @@ export class SettingsViewMessageHandler {
   }
 
   /**
-   * Show one dispatcher-level notice on a detached fiber. The notice is the
-   * host's typed notification program, so a VS Code message surface that
-   * refuses it arrives as `NotificationFailed` and is logged, rather than
-   * leaving a rejected thenable nobody awaited.
+   * Show one dispatcher-level notice on a detached fiber. A message surface
+   * that refuses it arrives as `NotificationFailed` and is logged, rather
+   * than leaving a rejected thenable nobody awaited.
    */
   private forkNotice(notice: Effect.Effect<void, NotificationFailed>): void {
     this.runtime.runFork(
@@ -734,13 +732,14 @@ export class SettingsViewMessageHandler {
   }
 
   private handleSetInlineCriticismEnabled(enabled: boolean) {
-    return Effect.gen({ self: this }, function* () {
-      yield* Effect.tryPromise({
-        try: () => setInlineCriticismEnabled(enabled),
-        catch: ensureError,
-      });
-      yield* this.withActiveWebview((w) => this.sendInlineCriticismEnabled(w));
-    });
+    return Effect.tryPromise({
+      try: () => setInlineCriticismEnabled(enabled),
+      catch: ensureError,
+    }).pipe(
+      Effect.andThen(
+        this.withActiveWebview((w) => this.sendInlineCriticismEnabled(w)),
+      ),
+    );
   }
 
   private sendProfileData(webview: vscode.Webview) {
@@ -763,10 +762,10 @@ export class SettingsViewMessageHandler {
   }
 
   private sendProfileAndModelSelectionData(webview: vscode.Webview) {
-    return Effect.gen({ self: this }, function* () {
-      yield* this.sendProfileData(webview);
-      yield* this.sendModelSelectionData(webview);
-    });
+    return Effect.andThen(
+      this.sendProfileData(webview),
+      this.sendModelSelectionData(webview),
+    );
   }
 
   // ============================================================
@@ -791,20 +790,21 @@ export class SettingsViewMessageHandler {
   }
 
   private sendSkillsList(webview: vscode.Webview) {
-    return Effect.gen({ self: this }, function* () {
-      const result = yield* Effect.tryPromise({
+    return Effect.flatMap(
+      Effect.tryPromise({
         try: () =>
           loadRuntimeSkillDisplay(
             this.session.roots.workspace,
             this.session.roots,
           ),
         catch: ensureError,
-      });
-      yield* postToWebview(webview, {
-        command: SETTINGS_VIEW_COMMANDS.UPDATE_SKILLS_LIST,
-        ...result,
-      });
-    });
+      }),
+      (result) =>
+        postToWebview(webview, {
+          command: SETTINGS_VIEW_COMMANDS.UPDATE_SKILLS_LIST,
+          ...result,
+        }),
+    );
   }
 
   /**
@@ -886,10 +886,10 @@ export class SettingsViewMessageHandler {
       'multi-agent': () => this.rebroadcastSnapshot('multi-agent'),
       profile: () => this.withActiveWebview((w) => this.sendProfileData(w)),
       skills: () =>
-        Effect.gen({ self: this }, function* () {
-          yield* this.rebroadcastSnapshot('skills');
-          yield* this.withActiveWebview((w) => this.sendSkillsList(w));
-        }),
+        Effect.andThen(
+          this.rebroadcastSnapshot('skills'),
+          this.withActiveWebview((w) => this.sendSkillsList(w)),
+        ),
       telemetry: () => this.rebroadcastSnapshot('telemetry'),
     };
     return posters[snapshot]();
@@ -1095,17 +1095,18 @@ export class SettingsViewMessageHandler {
   /** Clear the per-model Copilot route preference (#9659), returning the
    * canonical model to direct-provider routing. */
   private handleClearCopilotRoute(modelName: string) {
-    return Effect.gen({ self: this }, function* () {
-      yield* setCopilotRoutePreference(modelName, false, this.globalState);
-      yield* allSettledVoid([
-        Effect.promise(() =>
-          safeExecuteCommand('texra.refreshAllOptions', [], this.viewName),
-        ).pipe(Effect.asVoid),
-        this.withActiveWebview((webview) =>
-          this.sendModelSelectionData(webview),
-        ),
-      ]);
-    });
+    return setCopilotRoutePreference(modelName, false, this.globalState).pipe(
+      Effect.andThen(
+        allSettledVoid([
+          Effect.promise(() =>
+            safeExecuteCommand('texra.refreshAllOptions', [], this.viewName),
+          ).pipe(Effect.asVoid),
+          this.withActiveWebview((webview) =>
+            this.sendModelSelectionData(webview),
+          ),
+        ]),
+      ),
+    );
   }
 
   /**
@@ -1170,16 +1171,17 @@ export class SettingsViewMessageHandler {
   }
 
   private setModelEnabled(modelName: string, enabled: boolean) {
-    return Effect.gen({ self: this }, function* () {
-      yield* this.modelSelectionController.setModelEnabled({
-        modelName,
-        enabled,
-      });
-      yield* this.postModelSelectionData();
-      // The options cache is invalidated by the writer itself.
-      yield* Effect.promise(() =>
-        safeExecuteCommand('texra.refreshAllOptions', [], this.viewName),
+    return this.modelSelectionController
+      .setModelEnabled({ modelName, enabled })
+      .pipe(
+        Effect.andThen(this.postModelSelectionData()),
+        // The options cache is invalidated by the writer itself.
+        Effect.andThen(
+          Effect.promise(() =>
+            safeExecuteCommand('texra.refreshAllOptions', [], this.viewName),
+          ),
+        ),
+        Effect.asVoid,
       );
-    });
   }
 }

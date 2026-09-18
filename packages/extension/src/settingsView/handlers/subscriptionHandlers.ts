@@ -24,11 +24,10 @@ import type {
   UpdateGrokAuthStatusMessage,
 } from '@shared/schemas';
 import { ACCOUNT_OUTCOME } from '@shared/copy/accountAuth';
-
 import type { SettingsStores } from '@shared/config/settingsAccess';
+import { allSettledVoid } from '@utils/core/allSettledVoid';
 
 import {
-  allSettledVoid,
   postToWebview,
   withHandlerErrorHandling,
   type SettingsHandlerContext,
@@ -85,15 +84,12 @@ export class SubscriptionHandlers {
   }
 
   readonly handleSignIn = () =>
-    Effect.gen({ self: this }, function* () {
-      yield* signInWithSubscription(
-        this.stores,
-        this.ctx.channel,
-        this.providerId,
-        this.runtime,
-      );
-      yield* this.refreshState();
-    });
+    signInWithSubscription(
+      this.stores,
+      this.ctx.channel,
+      this.providerId,
+      this.runtime,
+    ).pipe(Effect.andThen(this.refreshState()));
 
   handleSignOut() {
     const { displayName } = this.provider;
@@ -117,23 +113,19 @@ export class SubscriptionHandlers {
    */
   handleSetPreferSubscription(enabled: boolean) {
     const { displayName } = this.provider;
-    return Effect.gen({ self: this }, function* () {
-      yield* withHandlerErrorHandling(
-        this.ctx,
-        `Could not update the ${displayName} subscription preference`,
-        Effect.gen({ self: this }, function* () {
-          const update = yield* this.provider.setPreferSubscription(
-            this.stores,
-            enabled,
-          );
+    return withHandlerErrorHandling(
+      this.ctx,
+      `Could not update the ${displayName} subscription preference`,
+      Effect.map(
+        this.provider.setPreferSubscription(this.stores, enabled),
+        (update) => {
           if (update.effective !== enabled) {
             void vscode.window.showWarningMessage(
               `A more specific setting still keeps ${displayName} subscription ${update.effective ? 'enabled' : 'disabled'}.`,
             );
           }
-        }),
-      );
-      yield* this.refreshState();
-    });
+        },
+      ),
+    ).pipe(Effect.andThen(this.refreshState()));
   }
 }

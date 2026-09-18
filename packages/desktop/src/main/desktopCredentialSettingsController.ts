@@ -1,5 +1,5 @@
 // Third-party imports
-import { Data, Effect, Exit } from 'effect';
+import { Data, Effect } from 'effect';
 
 // Local imports
 import { LoopbackTransportUnavailableError } from '@auth/oauth/loopbackLogin';
@@ -50,6 +50,7 @@ import { ACCOUNT_OUTCOME } from '@shared/copy/accountAuth';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { SettingsStatePorts } from '@shared/settingsView/types';
 import { getProviderKeyUrl } from '@utils/config/providerConfig';
+import { allSettledVoid } from '@utils/core/allSettledVoid';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 /**
@@ -204,9 +205,8 @@ export interface DesktopCredentialSettingsController {
   readonly grokHandlers: DesktopGrokHandlers;
   readonly modelSelectionController: SettingsModelSelectionController<LanguageModel>;
   /**
-   * The posts and refreshes below are programs: the window's IPC settles one
-   * per inbound message, so a key write and the repaint it triggers are a
-   * single run rather than a chain of them.
+   * The posts and refreshes below are programs, so a key write and the
+   * repaint it triggers are one run at the window's IPC, not a chain of them.
    */
   /** The enabled-model set or a credential changed the model catalog. */
   refreshModelOptions(): Effect.Effect<void, Error, ProcessServices>;
@@ -324,26 +324,8 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
     };
   }
 
-  /**
-   * `Promise.all` semantics for the window's repaint fan-outs: every post runs
-   * to completion even when one fails, and the first failure is the result.
-   * `Effect.all` alone would interrupt the siblings of a failed post, which is
-   * not what the awaited `Promise.all` these replace did.
-   */
-  private allPosted(
-    programs: readonly Effect.Effect<void, Error, ProcessServices>[],
-  ) {
-    return Effect.flatMap(
-      Effect.all(programs.map(Effect.exit), { concurrency: 'unbounded' }),
-      (exits) => {
-        const failed = exits.find(Exit.isFailure);
-        return failed ? Effect.failCause(failed.cause) : Effect.void;
-      },
-    );
-  }
-
   postStartupData() {
-    return this.allPosted([
+    return allSettledVoid([
       this.postProfileData(),
       this.postAuthStatus('chatgpt'),
       this.postAuthStatus('grok'),
@@ -362,10 +344,8 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
     );
   }
 
-  /**
-   * Every open paper reloads the model catalog. Still the window's own
-   * promise-shaped fan-out, lifted once here.
-   */
+  /** Every open paper reloads the model catalog: the window's own
+   *  promise-shaped fan-out, lifted once. */
   refreshModelOptions() {
     return Effect.tryPromise({
       try: () => this.options.onModelOptionsChanged(),
@@ -382,11 +362,10 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
   }
 
   refreshAuthDependentData() {
-    return Effect.gen({ self: this }, function* () {
-      yield* this.postModelSelectionData();
-      yield* this.refreshModelOptions();
-      yield* this.postProfileData();
-    });
+    return this.postModelSelectionData().pipe(
+      Effect.andThen(this.refreshModelOptions()),
+      Effect.andThen(this.postProfileData()),
+    );
   }
 
   /**
@@ -596,12 +575,13 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
     return Effect.gen({ self: this }, function* () {
       const { usageProvider } = SUBSCRIPTION_STATUS_ROWS[providerId];
       if (usageProvider) this.subscriptionUsage.invalidate(usageProvider);
-      yield* this.allPosted([
+      const posts: Effect.Effect<void, Error, ProcessServices>[] = [
         this.postAuthStatus(providerId),
         this.postModelSelectionData(),
         this.refreshModelOptions(),
-        ...(usageProvider ? [this.postSubscriptionUsage()] : []),
-      ]);
+      ];
+      if (usageProvider) posts.push(this.postSubscriptionUsage());
+      yield* allSettledVoid(posts);
       yield* this.credentialChanged();
     });
   }
@@ -617,12 +597,15 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
           toErrorMessage(error),
         ),
       (provider) =>
-        Effect.gen({ self: this }, function* () {
-          yield* provider.signOut(this.options.secrets);
-          yield* this.options.notifications.showInfoMessage(
-            ACCOUNT_OUTCOME.signedOut(provider.displayName),
-          );
-        }),
+        provider
+          .signOut(this.options.secrets)
+          .pipe(
+            Effect.andThen(
+              this.options.notifications.showInfoMessage(
+                ACCOUNT_OUTCOME.signedOut(provider.displayName),
+              ),
+            ),
+          ),
     );
   }
 
