@@ -1,6 +1,8 @@
 import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 
+import { Effect } from 'effect';
+
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
 import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
 import type { ConfigProvider } from '@platform/interfaces';
@@ -200,17 +202,16 @@ async function readCliPackageManifest(): Promise<
     new URL('../package.json', import.meta.url),
   ];
   for (const candidate of candidates) {
-    try {
-      const pkg = JSON.parse(
-        await readFile(candidate, 'utf8'),
-      ) as CliPackageManifest;
-      // Source and bundled `dist/bin` layouts both reach the CLI manifest via
-      // `../../`; keep the fallback for build layouts that place runtime files
-      // one level below the package root.
-      if (pkg.version) return pkg;
-    } catch {
-      // Try the next source/build-layout candidate.
-    }
+    const pkg = await readFile(candidate, 'utf8').then(
+      (text) => JSON.parse(text) as CliPackageManifest,
+      // A candidate that is absent or unreadable is the expected answer for
+      // the layout this build is not: try the next one.
+      () => undefined,
+    );
+    // Source and bundled `dist/bin` layouts both reach the CLI manifest via
+    // `../../`; keep the fallback for build layouts that place runtime files
+    // one level below the package root.
+    if (pkg?.version) return pkg;
   }
   return undefined;
 }
@@ -340,9 +341,9 @@ function pickEnvOutputFormat(
   return undefined;
 }
 
-export async function resolveCliCwd(
+export const resolveCliCwd = Effect.fn('cliContext.resolveCliCwd')(function* (
   cwdFlag: string | undefined,
-): Promise<string> {
+): Effect.fn.Return<string, CliUsageError> {
   // When the user did not pass `--cwd`, `process.cwd()` is correct by
   // construction (the shell can't put us in a directory that doesn't exist).
   // When `--cwd` IS passed, validate it explicitly: a typo or stale path
@@ -352,87 +353,95 @@ export async function resolveCliCwd(
     return canonicalizeWorkspacePath(readCliCwd());
   }
   const requested = path.resolve(cwdFlag);
-  let info: Stats;
-  try {
-    info = await stat(requested);
-  } catch (error: unknown) {
-    if (isFileNotFoundError(error) || isNotADirectoryError(error)) {
-      throw new CliUsageError(`--cwd: path does not exist: ${requested}`);
-    }
-    throw new CliUsageError(
-      `--cwd: cannot access ${requested}: ${toErrorMessage(error)}`,
+  const info: Stats = yield* Effect.tryPromise({
+    try: () => stat(requested),
+    catch: (error: unknown) =>
+      isFileNotFoundError(error) || isNotADirectoryError(error)
+        ? new CliUsageError(`--cwd: path does not exist: ${requested}`)
+        : new CliUsageError(
+            `--cwd: cannot access ${requested}: ${toErrorMessage(error)}`,
+          ),
+  });
+  if (!info.isDirectory()) {
+    return yield* Effect.fail(
+      new CliUsageError(`--cwd: not a directory: ${requested}`),
     );
   }
-  if (!info.isDirectory()) {
-    throw new CliUsageError(`--cwd: not a directory: ${requested}`);
-  }
   return canonicalizeWorkspacePath(requested);
-}
+});
 
-export async function buildCliContext(
-  init: BuildCliContextInit,
-): Promise<CliContext> {
-  const ambient = init.ambient ?? readCliAmbientState();
-  const env = init.env ?? process.env;
-  const cwd = await resolveCliCwd(init.globalArgs.cwd);
-  // The project file over the user file, resolved by the same
-  // `JsonConfigProvider` that `roots.config` gives the extension and desktop
-  // hosts — and, from `initCliPlatform` on, this host too. This is the
-  // pre-runtime open, which is why it goes through `loadCliStartupConfig`
-  // rather than the process runtime.
-  const { config, warnings } = await loadCliStartupConfig(
-    cwd,
-    init.storageRoot,
-  );
-  const configWarnings = [...warnings];
-  const envModel = pickEnvModel(env, configWarnings);
-  // `--no-color` is an explicit force-disable: layer it onto the ambient
-  // per-stream gates rather than recomputing them, so `NO_COLOR`/`FORCE_COLOR`/
-  // TTY precedence stays in one place (`resolveStreamColor`).
-  const noColor = init.globalArgs.noColor === true;
-  const stdoutColorEnabled = !noColor && ambient.stdoutColorEnabled;
-  const stderrColorEnabled = !noColor && ambient.stderrColorEnabled;
-  const noInput = init.globalArgs.noInput === true;
-  // The flag is validated by citty (`type: 'enum'`) and the config tiers by
-  // the catalog row's own schema, which also supplies the value when no tier
-  // set one — the environment is the only tier that can still carry an
-  // unvalidated string. `--no-input` skips the env and config tiers entirely,
-  // so it also skips their warnings.
-  const approvalPolicy =
-    init.globalArgs.approvalPolicy ??
-    (noInput
-      ? TEXRA_APPROVAL_POLICY_NO_INPUT_DEFAULT
-      : (pickEnvApprovalPolicy(env, configWarnings) ??
-        readCliConfigSetting<TexraApprovalPolicy>(
-          config,
-          TEXRA_APPROVAL_POLICY_CONFIG_KEY,
-        )));
-  const outputFormat: CliOutputFormat =
-    init.globalArgs.outputFormat ??
-    pickEnvOutputFormat(env, configWarnings) ??
-    readCliConfigSetting<CliOutputFormat>(config, CLI_OUTPUT_FORMAT_CONFIG_KEY);
-  return {
-    storageRoot: init.storageRoot,
-    cwd,
-    mode: cliMode(init.globalArgs, ambient),
-    outputFormat,
-    approvalPolicy,
-    quietLogs: init.globalArgs.quiet === true,
-    stdoutIsTty: ambient.stdoutIsTty,
-    termIsDumb: ambient.termIsDumb === true,
-    stderrIsTty: ambient.stderrIsTty,
-    stdoutColorEnabled,
-    stderrColorEnabled,
-    commandName: resolveCliCommandName(readCliEntrypointPath()),
-    version: await readCliVersion(),
-    resourcesPath: resolveCliResourcesPath(),
-    config,
-    configWarnings,
-    envAgent: envValue(env, 'TEXRA_AGENT'),
-    envModel,
-    skillSourceOptions: {
-      includeInterop: init.globalArgs.includeInteropSkills === true,
-      additionalPaths: init.globalArgs.skillSourcePaths ?? [],
-    },
-  };
-}
+export const buildCliContext = Effect.fn('cliContext.buildCliContext')(
+  function* (
+    init: BuildCliContextInit,
+  ): Effect.fn.Return<CliContext, CliUsageError | Error> {
+    const ambient = init.ambient ?? readCliAmbientState();
+    const env = init.env ?? process.env;
+    const cwd = yield* resolveCliCwd(init.globalArgs.cwd);
+    // The project file over the user file, resolved by the same
+    // `JsonConfigProvider` that `roots.config` gives the extension and desktop
+    // hosts — and, from `initCliPlatform` on, this host too. This is the
+    // pre-runtime open, which is why it goes through `loadCliStartupConfig`
+    // rather than the process runtime.
+    const { config, warnings } = yield* loadCliStartupConfig(
+      cwd,
+      init.storageRoot,
+    );
+    const configWarnings = [...warnings];
+    const envModel = pickEnvModel(env, configWarnings);
+    // `--no-color` is an explicit force-disable: layer it onto the ambient
+    // per-stream gates rather than recomputing them, so `NO_COLOR`/
+    // `FORCE_COLOR`/TTY precedence stays in one place (`resolveStreamColor`).
+    const noColor = init.globalArgs.noColor === true;
+    const stdoutColorEnabled = !noColor && ambient.stdoutColorEnabled;
+    const stderrColorEnabled = !noColor && ambient.stderrColorEnabled;
+    const noInput = init.globalArgs.noInput === true;
+    // The flag is validated by citty (`type: 'enum'`) and the config tiers by
+    // the catalog row's own schema, which also supplies the value when no tier
+    // set one — the environment is the only tier that can still carry an
+    // unvalidated string. `--no-input` skips the env and config tiers
+    // entirely, so it also skips their warnings.
+    const approvalPolicy =
+      init.globalArgs.approvalPolicy ??
+      (noInput
+        ? TEXRA_APPROVAL_POLICY_NO_INPUT_DEFAULT
+        : (pickEnvApprovalPolicy(env, configWarnings) ??
+          readCliConfigSetting<TexraApprovalPolicy>(
+            config,
+            TEXRA_APPROVAL_POLICY_CONFIG_KEY,
+          )));
+    const outputFormat: CliOutputFormat =
+      init.globalArgs.outputFormat ??
+      pickEnvOutputFormat(env, configWarnings) ??
+      readCliConfigSetting<CliOutputFormat>(
+        config,
+        CLI_OUTPUT_FORMAT_CONFIG_KEY,
+      );
+    return {
+      storageRoot: init.storageRoot,
+      cwd,
+      mode: cliMode(init.globalArgs, ambient),
+      outputFormat,
+      approvalPolicy,
+      quietLogs: init.globalArgs.quiet === true,
+      stdoutIsTty: ambient.stdoutIsTty,
+      termIsDumb: ambient.termIsDumb === true,
+      stderrIsTty: ambient.stderrIsTty,
+      stdoutColorEnabled,
+      stderrColorEnabled,
+      commandName: resolveCliCommandName(readCliEntrypointPath()),
+      // `readCliVersion` keeps its Promise face — `bin/texra.ts`, `root.ts`,
+      // `version.ts` and the chat TUI read it too — so it is wrapped once
+      // here. It answers `unknown` rather than failing.
+      version: yield* Effect.promise(readCliVersion),
+      resourcesPath: resolveCliResourcesPath(),
+      config,
+      configWarnings,
+      envAgent: envValue(env, 'TEXRA_AGENT'),
+      envModel,
+      skillSourceOptions: {
+        includeInterop: init.globalArgs.includeInteropSkills === true,
+        additionalPaths: init.globalArgs.skillSourcePaths ?? [],
+      },
+    };
+  },
+);

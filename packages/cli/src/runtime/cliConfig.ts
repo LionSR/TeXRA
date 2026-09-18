@@ -240,11 +240,10 @@ function showPersistentConfigWarning(message: string): void {
 }
 
 /**
- * The one bare run edge of the CLI's config, and the one caller that needs it:
- * `buildCliContext` opens the config stores BEFORE `initCliPlatform` (and with
- * it `installCliProcessRuntime`), so there is no process runtime to borrow yet;
- * the program needs the filesystem and nothing else. Pinned in
- * `BARE_EFFECT_RUN_SITES`.
+ * The CLI config provider's pre-runtime open, already provided with the file
+ * services it needs: `buildCliContext` yields it before `initCliPlatform` (and
+ * with it `installCliProcessRuntime`) exists, and `contextFromArgs` is the one
+ * place the whole pre-runtime program is run.
  *
  * The storage paths come from the pure calculators rather than
  * `WorkspaceStorageProvider`'s getters: opening a config store must not create
@@ -254,27 +253,25 @@ function showPersistentConfigWarning(message: string): void {
 export function loadCliStartupConfig(
   cwd: string,
   storageRoot: string = DEFAULT_NODE_STORAGE_ROOT,
-): Promise<CliStartupConfig> {
-  return Effect.runPromise(
-    Effect.provide(
-      Effect.gen(function* () {
-        const stores = yield* openTexraConfigStores(
-          {
-            getStoragePath: () => resolveWorkspaceStoragePath(storageRoot, cwd),
-            getGlobalStoragePath: () => resolveGlobalStoragePath(storageRoot),
-          },
-          cwd,
-          showPersistentConfigWarning,
-        );
-        return {
-          config: new JsonConfigProvider(stores),
-          warnings: unknownKeyWarnings(
-            stores.workspace,
-            workspaceTexraConfigPath(cwd),
-          ),
-        };
-      }),
-      nodeFileServices,
-    ),
+): Effect.Effect<CliStartupConfig, Error> {
+  return Effect.provide(
+    Effect.gen(function* () {
+      const stores = yield* openTexraConfigStores(
+        {
+          getStoragePath: () => resolveWorkspaceStoragePath(storageRoot, cwd),
+          getGlobalStoragePath: () => resolveGlobalStoragePath(storageRoot),
+        },
+        cwd,
+        showPersistentConfigWarning,
+      );
+      return {
+        config: new JsonConfigProvider(stores),
+        warnings: unknownKeyWarnings(
+          stores.workspace,
+          workspaceTexraConfigPath(cwd),
+        ),
+      };
+    }),
+    nodeFileServices,
   );
 }

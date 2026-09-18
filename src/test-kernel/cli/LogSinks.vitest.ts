@@ -2,6 +2,7 @@
 import { PassThrough } from 'node:stream';
 
 // Third-party imports
+import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
@@ -156,7 +157,11 @@ describe('CLI questions', () => {
     const input = Object.assign(new PassThrough(), { ref: vi.fn() });
     const output = new PassThrough();
 
-    const answer = askCliQuestion('Choose: ', { input, output });
+    // `runPromise` starts the fiber synchronously, so the readline interface
+    // the acquire opens is listening before the input ends.
+    const answer = Effect.runPromise(
+      askCliQuestion('Choose: ', { input, output }),
+    );
     input.end('continue\n');
 
     await expect(answer).resolves.toBe('continue');

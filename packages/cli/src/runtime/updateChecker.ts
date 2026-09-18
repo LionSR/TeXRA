@@ -136,26 +136,27 @@ type CommandRunner = (
   args: readonly string[],
   timeoutMs: number,
   cwd?: string,
-) => Promise<string | undefined>;
+) => Effect.Effect<string | undefined, Error>;
 
-async function readCommandStdout(
-  command: string,
-  args: readonly string[],
-  timeoutMs: number,
-  cwd?: string,
-): Promise<string | undefined> {
-  // Runs before platform init (chat startup), so pass an
-  // explicit cwd — the wrapper's workspace-root default would throw — no
-  // setting slots, since none are open yet, and quiet: true so wrapper debug
-  // lines can't leak to the console sink.
-  const result = await executeCommand([command, ...args], {
-    timeout: timeoutMs,
-    cwd: cwd ?? (await resolveCliCwd(undefined)),
-    settings: undefined,
-    quiet: true,
+const readCommandStdout: CommandRunner = (command, args, timeoutMs, cwd) =>
+  Effect.gen(function* () {
+    // Runs before platform init (chat startup), so pass an
+    // explicit cwd — the wrapper's workspace-root default would throw — no
+    // setting slots, since none are open yet, and quiet: true so wrapper debug
+    // lines can't leak to the console sink.
+    const workingDir = cwd ?? (yield* resolveCliCwd(undefined));
+    const result = yield* Effect.tryPromise({
+      try: () =>
+        executeCommand([command, ...args], {
+          timeout: timeoutMs,
+          cwd: workingDir,
+          settings: undefined,
+          quiet: true,
+        }),
+      catch: ensureError,
+    });
+    return result.success ? result.stdout : undefined;
   });
-  return result.success ? result.stdout : undefined;
-}
 
 /**
  * Shape of `brew info --json=v2` that we read. Tolerant by design: a single
@@ -197,32 +198,36 @@ function parseHomebrewFormulaVersion(
  * already be fresh enough to offer the right prompt — but report
  * `refreshed: false` so the caller knows the version may be stale.
  */
-export async function fetchLatestHomebrewFormulaVersion(options?: {
+export function fetchLatestHomebrewFormulaVersion(options?: {
   formula?: string;
   timeoutMs?: number;
   cwd?: string;
   runCommand?: CommandRunner;
-}): Promise<UpdateCheckFetchResult> {
-  const formula = options?.formula ?? CLI_HOMEBREW_FORMULA;
-  const runCommand = options?.runCommand ?? readCommandStdout;
-  const timeoutMs = options?.timeoutMs ?? HOMEBREW_COMMAND_TIMEOUT_MS;
-  const refreshStdout = await runCommand(
-    'brew',
-    ['update', '--quiet'],
-    timeoutMs,
-    options?.cwd,
-  );
-  const stdout = await runCommand(
-    'brew',
-    ['info', '--json=v2', formula],
-    timeoutMs,
-    options?.cwd,
-  );
-  return {
-    version:
-      stdout == null ? undefined : parseHomebrewFormulaVersion(stdout, formula),
-    refreshed: refreshStdout != null,
-  };
+}): Effect.Effect<UpdateCheckFetchResult, Error> {
+  return Effect.gen(function* () {
+    const formula = options?.formula ?? CLI_HOMEBREW_FORMULA;
+    const runCommand = options?.runCommand ?? readCommandStdout;
+    const timeoutMs = options?.timeoutMs ?? HOMEBREW_COMMAND_TIMEOUT_MS;
+    const refreshStdout = yield* runCommand(
+      'brew',
+      ['update', '--quiet'],
+      timeoutMs,
+      options?.cwd,
+    );
+    const stdout = yield* runCommand(
+      'brew',
+      ['info', '--json=v2', formula],
+      timeoutMs,
+      options?.cwd,
+    );
+    return {
+      version:
+        stdout == null
+          ? undefined
+          : parseHomebrewFormulaVersion(stdout, formula),
+      refreshed: refreshStdout != null,
+    };
+  });
 }
 
 async function runCliUpdate(method: InstallMethod): Promise<boolean> {
@@ -299,11 +304,7 @@ export async function notifyCliUpdate(context: CliContext): Promise<void> {
       host: 'cli',
       fetchLatest:
         method === 'brew'
-          ? Effect.tryPromise({
-              try: () =>
-                fetchLatestHomebrewFormulaVersion({ cwd: context.cwd }),
-              catch: ensureError,
-            })
+          ? fetchLatestHomebrewFormulaVersion({ cwd: context.cwd })
           : fetchLatestCliVersion().pipe(
               Effect.map((version) => ({
                 version,
@@ -311,19 +312,16 @@ export async function notifyCliUpdate(context: CliContext): Promise<void> {
               })),
             ),
       notify: (latestVersion) =>
-        Effect.tryPromise({
-          try: async () => {
-            writeTextStderr(
-              `A new version of texra is available: ${context.version} → ${style.emphasis(style.success(latestVersion))}`,
-            );
-            const answer = await askCliQuestion(
-              `Update now with \`${style.command(updateCmd)}\`? [Y/n] `,
-            );
-            const normalized = answer.trim().toLowerCase();
-            confirmed =
-              normalized === '' || normalized === 'y' || normalized === 'yes';
-          },
-          catch: ensureError,
+        Effect.gen(function* () {
+          writeTextStderr(
+            `A new version of texra is available: ${context.version} → ${style.emphasis(style.success(latestVersion))}`,
+          );
+          const answer = yield* askCliQuestion(
+            `Update now with \`${style.command(updateCmd)}\`? [Y/n] `,
+          );
+          const normalized = answer.trim().toLowerCase();
+          confirmed =
+            normalized === '' || normalized === 'y' || normalized === 'yes';
         }),
       stampFailure: 'ignore',
     });

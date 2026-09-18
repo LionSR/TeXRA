@@ -13,7 +13,7 @@ import {
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { LogLevel } from '@shared/schemas';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
 import { bestEffortStreamWrite } from './bestEffortStreamWrite';
@@ -224,7 +224,13 @@ export function writeErrorStderr(error: unknown): void {
   writeTextStderr(toErrorMessage(error));
 }
 
-export async function askCliQuestion(
+/**
+ * Ask one question on stdin. The readline interface is the foreign edge and is
+ * wrapped exactly once here: acquire opens it, use awaits the answer, and
+ * release closes it on success, failure and interruption alike — the last of
+ * which the `try`/`finally` this replaced could not see.
+ */
+export function askCliQuestion(
   question: string,
   options: {
     readonly input?: NodeJS.ReadableStream & { ref?: () => void };
@@ -233,29 +239,37 @@ export async function askCliQuestion(
      *  the question is written straight to stderr instead. */
     readonly hidden?: boolean;
   } = {},
-): Promise<string> {
-  const input = options.input ?? process.stdin;
-  // Ink releases its ownership of stdin with `unref()` when a TUI exits.
-  // A following readline prompt must acquire its own live handle or Node can
-  // terminate while the top-level command is still awaiting the answer.
-  input.ref?.();
-  if (options.hidden) writeRawStderr(question);
-  const prompt = createInterface({
-    input,
-    output: options.hidden
-      ? // Swallow readline's echo so the typed secret never reaches the terminal.
-        new Writable({ write: (_chunk, _encoding, callback) => callback() })
-      : (options.output ?? process.stderr),
-    // A swallowing non-TTY output would otherwise leave stdin in canonical
-    // mode, where the TTY driver echoes the secret itself.
-    ...(options.hidden ? { terminal: true } : {}),
-  });
-  try {
-    return await prompt.question(options.hidden ? '' : question);
-  } finally {
-    prompt.close();
-    if (options.hidden) writeRawStderr('\n');
-  }
+): Effect.Effect<string, Error> {
+  return Effect.acquireUseRelease(
+    Effect.sync(() => {
+      const input = options.input ?? process.stdin;
+      // Ink releases its ownership of stdin with `unref()` when a TUI exits.
+      // A following readline prompt must acquire its own live handle or Node
+      // can terminate while the caller is still awaiting the answer.
+      input.ref?.();
+      if (options.hidden) writeRawStderr(question);
+      return createInterface({
+        input,
+        output: options.hidden
+          ? // Swallow readline's echo so the typed secret never reaches the terminal.
+            new Writable({ write: (_chunk, _encoding, callback) => callback() })
+          : (options.output ?? process.stderr),
+        // A swallowing non-TTY output would otherwise leave stdin in canonical
+        // mode, where the TTY driver echoes the secret itself.
+        ...(options.hidden ? { terminal: true } : {}),
+      });
+    }),
+    (prompt) =>
+      Effect.tryPromise({
+        try: () => prompt.question(options.hidden ? '' : question),
+        catch: ensureError,
+      }),
+    (prompt) =>
+      Effect.sync(() => {
+        prompt.close();
+        if (options.hidden) writeRawStderr('\n');
+      }),
+  );
 }
 
 class StderrTextSink implements LogSink {
