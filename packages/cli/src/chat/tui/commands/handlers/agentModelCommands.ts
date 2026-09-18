@@ -1,3 +1,4 @@
+import type { AgentRosterStores } from '@agent/index';
 import {
   assertCliAgentLaunch,
   resolveCliAgentInCategory,
@@ -16,7 +17,6 @@ import {
 } from '@cli/chat/tui/state/cliState';
 import { chatTuiCanStartRootRun } from '@cli/chat/tui/state/sessionRunState';
 import { appendLocalAssistantTranscript } from '@cli/chat/tui/state/transcript';
-import type { AgentRosterStores } from '@agent/index';
 import { AgentCategory } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {

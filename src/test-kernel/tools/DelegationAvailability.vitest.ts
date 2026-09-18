@@ -2,12 +2,12 @@ import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
+import type { ModelOptionStores } from '@model/computeModelOptions';
 import { platform } from '@platform/platform';
 import {
   LanguageModel,
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
 } from '@platform/languageModel';
-import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { ModelOptionData, ToolDefinition } from '@shared/schemas';
 import { fakeProcessServices, hostStores } from '@test/support/setupPlatform';

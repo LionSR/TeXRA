@@ -1,4 +1,5 @@
 // Local imports - skills
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import {
   discoverSkillSources,
   type DiscoverSkillSourcesResult,
@@ -14,7 +15,6 @@ import {
   loadEnabledRuntimeSkills,
   readDisabledSkills,
 } from '@skills/runtimeSkills';
-import type { SettingsStores } from '@shared/config/settingsAccess';
 
 // Local imports - CLI runtime
 import type { CliContext } from './cliContext';

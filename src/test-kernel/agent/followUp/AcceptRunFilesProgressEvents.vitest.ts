@@ -441,6 +441,7 @@ describe('accept_run_files progress events', () => {
             nativeToolTestLayer({
               tracker,
               run: { runId, session: session, toolPolicy: {} },
+              roots: projectRoots,
             }),
           ),
         );

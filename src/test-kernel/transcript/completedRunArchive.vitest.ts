@@ -600,6 +600,7 @@ describe('completedRunArchive facade', () => {
 
         const toolLayer = nativeToolTestLayer({
           run: { session: taskSession, runId, toolPolicy: {} },
+          roots: taskSession.roots,
         });
 
         const endpoint = yield* new ExecutionsTool()
@@ -766,6 +767,7 @@ describe('completedRunArchive facade', () => {
           Effect.provide(
             nativeToolTestLayer({
               run: { session: taskSession, runId, toolPolicy: {} },
+              roots: taskSession.roots,
             }),
           ),
         );

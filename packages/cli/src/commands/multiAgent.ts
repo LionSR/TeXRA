@@ -85,26 +85,12 @@ function formatAttachedFileList(
   ].join('\n');
 }
 
-/**
- * The workspace state this command's init installed, which holds the project's
- * custom team presets. Absent only when another root installed the platform
- * first, and then there is no workspace whose presets to read.
- */
-function multiAgentPresetState(services: CliPlatformServices): StateStore {
-  if (!services.roots) {
-    throw new Error(
-      'texra multi-agent needs the workspace roots its platform init installs.',
-    );
-  }
-  return services.roots.workspaceState;
-}
-
 async function runMultiAgentList(context: CliContext): Promise<number> {
   const services = await initLocalCliPlatform(context);
   const { plans, remoteCatalogRefreshAttempted } =
     await loadCliMultiAgentPresetPlanSet(
       services.runtime,
-      readCliMultiAgentPresets(multiAgentPresetState(services)),
+      readCliMultiAgentPresets(services.workspaceState),
     );
 
   emitCliResult(context, {
@@ -127,7 +113,7 @@ async function runMultiAgentShow(
     await loadCliMultiAgentRunPlan(
       services.runtime,
       { preset: presetIdOrName },
-      multiAgentPresetState(services),
+      services.workspaceState,
     );
 
   emitCliResult(context, {
@@ -164,7 +150,7 @@ export const runMultiAgentPreset = Effect.fn('runMultiAgentPreset')(function* (
       loadCliMultiAgentRunPlan(
         services.runtime,
         init,
-        multiAgentPresetState(services),
+        services.workspaceState,
         { reloadRemoteAgents: !rejectsHeadlessAsk },
       ),
     catch: ensureError,

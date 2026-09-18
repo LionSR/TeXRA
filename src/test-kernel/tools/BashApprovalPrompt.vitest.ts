@@ -88,6 +88,7 @@ describe('requestBashApproval queueing', () => {
             config: Object.fromEntries(keys.map((key) => [key, true])),
           });
           const layer = nativeToolTestLayer({
+            roots: project.roots,
             run: {
               session,
               runId: generateRunId(),

@@ -258,8 +258,6 @@ describe('MemoryTool invocation storage root', () => {
                 Effect.provide(
                   nativeToolTestLayer({
                     roots,
-                    // The call's ambient scope names the OTHER project's roots:
-                    // the view above is what the write must follow.
                   }),
                 ),
               ),

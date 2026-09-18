@@ -53,19 +53,14 @@ interface CliToolGuideResult {
 }
 
 /**
- * The workspace this command's init opened, as the probes read it. Its roots
- * are absent only when another root installed the platform first, and then
- * there is no workspace whose configuration the Zotero port could come from.
+ * The workspace this command's init opened, as the probes read it: the
+ * configuration slot the init always publishes, and its folder, which is
+ * undefined when the process opened none.
  */
 function toolProbeInputs(services: CliPlatformServices): ToolProbeInputs {
-  if (!services.roots) {
-    throw new Error(
-      'texra tools needs the workspace roots its platform init installs.',
-    );
-  }
   return {
-    workspaceRoot: services.roots.workspace,
-    config: services.roots.config,
+    workspaceRoot: services.roots?.workspace,
+    config: services.config,
   };
 }
 

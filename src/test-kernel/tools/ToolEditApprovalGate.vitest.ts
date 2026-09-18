@@ -252,6 +252,7 @@ describe('Tool edit approval gating', () => {
           nativeToolTestLayer({
             tracker,
             run: { runId, session: testDefaultSession(), toolPolicy: {} },
+            roots: project.roots,
           }),
         ),
       );

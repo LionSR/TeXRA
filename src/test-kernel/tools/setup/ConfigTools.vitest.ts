@@ -17,7 +17,7 @@ const updateTool = new UpdateConfigTool();
 
 function createPlatform(initial: Record<string, unknown> = {}) {
   const project = createFakeHost({ config: initial });
-  const layer = nativeToolTestLayer({});
+  const layer = nativeToolTestLayer({ roots: project.roots });
   return { config: project.roots.config, layer };
 }
 

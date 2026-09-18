@@ -4,9 +4,9 @@ import * as path from 'node:path';
 
 // Local imports
 import { escapeTextStrict } from '@shared/utils/xmlEscape';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import { listExternalRoots } from '@utils/files/externalRoots';
 import { isoDateOnly } from '@utils/text/stringUtils';
-import type { SettingsStores } from '@shared/config/settingsAccess';
 import { executeCommand } from '@utils/system/execUtils';
 import { IS_WINDOWS } from './platformPaths';
 import { isWSL } from './wslDetect';

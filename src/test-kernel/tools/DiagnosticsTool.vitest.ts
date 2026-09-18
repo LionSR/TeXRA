@@ -214,6 +214,7 @@ describe('DiagnosticsTool', () => {
                     runId: 'diagnostics-project-scope' as RunId,
                     toolPolicy: {},
                   },
+                  roots: project.roots,
                 }),
               ),
             );
