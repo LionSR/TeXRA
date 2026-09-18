@@ -312,17 +312,26 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
           options.externalOpener.openExternal(message.url),
         ),
     };
+    // Each arm is a settings-view message, so the subscription programs settle
+    // here exactly as the profile arms above do.
     this.chatGptHandlers = {
       signInChatGpt: () => this.signInChatGpt(),
-      signOutChatGpt: () => this.signOutSubscription('chatgpt'),
+      signOutChatGpt: () =>
+        options.runtime.runPromise(this.signOutSubscription('chatgpt')),
       setChatGptPreferSubscription: (message) =>
-        this.setSubscriptionPreference('chatgpt', message.enabled),
+        options.runtime.runPromise(
+          this.setSubscriptionPreference('chatgpt', message.enabled),
+        ),
     };
     this.grokHandlers = {
-      signInGrok: () => this.signInSubscription('grok'),
-      signOutGrok: () => this.signOutSubscription('grok'),
+      signInGrok: () =>
+        options.runtime.runPromise(this.signInSubscription('grok')),
+      signOutGrok: () =>
+        options.runtime.runPromise(this.signOutSubscription('grok')),
       setGrokPreferSubscription: (message) =>
-        this.setSubscriptionPreference('grok', message.enabled),
+        options.runtime.runPromise(
+          this.setSubscriptionPreference('grok', message.enabled),
+        ),
     };
   }
 
@@ -480,7 +489,7 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
     work: (
       provider: ReturnType<typeof subscriptionProvider>,
     ) => Effect.Effect<void, unknown, ProcessServices>,
-  ): Promise<void> {
+  ) {
     const provider = subscriptionProvider(providerId);
     const options = this.options;
     const refresh = this.refreshAfterSubscriptionAuthChange(providerId);
@@ -503,20 +512,16 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
           ),
       ),
     );
-    return options.runtime.runPromise(
-      Effect.gen(function* () {
-        // The refresh is the old `finally`: it runs on every path, and its own
-        // failure replaces whatever the attempt left behind.
-        const attempted = yield* Effect.exit(attempt);
-        yield* refresh;
-        return yield* attempted;
-      }),
-    );
+    return Effect.gen(function* () {
+      // The refresh is the old `finally`: it runs on every path, and its own
+      // failure replaces whatever the attempt left behind.
+      const attempted = yield* Effect.exit(attempt);
+      yield* refresh;
+      return yield* attempted;
+    });
   }
 
-  private signInSubscription(
-    providerId: SubscriptionProviderId,
-  ): Promise<void> {
+  private signInSubscription(providerId: SubscriptionProviderId) {
     return this.withSubscriptionAuthChange(
       providerId,
       (provider, error) =>
@@ -537,7 +542,7 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
 
   /** Also driven by the desktop welcome card, not just the Settings view. */
   signInChatGpt(): Promise<void> {
-    return this.signInSubscription('chatgpt');
+    return this.options.runtime.runPromise(this.signInSubscription('chatgpt'));
   }
 
   /**
@@ -588,9 +593,7 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
     });
   }
 
-  private signOutSubscription(
-    providerId: SubscriptionProviderId,
-  ): Promise<void> {
+  private signOutSubscription(providerId: SubscriptionProviderId) {
     return this.withSubscriptionAuthChange(
       providerId,
       (provider, error) =>
@@ -614,7 +617,7 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
   private setSubscriptionPreference(
     providerId: SubscriptionProviderId,
     enabled: boolean,
-  ): Promise<void> {
+  ) {
     return this.withSubscriptionAuthChange(
       providerId,
       (provider, error) =>

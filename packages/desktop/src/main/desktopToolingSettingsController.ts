@@ -1,3 +1,5 @@
+import { Effect } from 'effect';
+
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
 import {
   buildToolDashboardItems,
@@ -86,8 +88,13 @@ export class DefaultDesktopToolingSettingsController implements DesktopToolingSe
       openToolInstallUrl: (message) =>
         options.navigation.openExternal(message.url),
       installToolExtension: unsupported(NO_EXTENSION_HOSTING),
-      recheckToolStatus: () => this.refreshToolAvailability(),
-      toggleTool: (message) => this.toggleTool(message.toolId, message.enabled),
+      // Each arm is a settings-view message, so its program settles here.
+      recheckToolStatus: () =>
+        options.runtime.runPromise(refreshToolAvailability(this.probeInputs)),
+      toggleTool: (message) =>
+        options.runtime.runPromise(
+          this.toggleTool(message.toolId, message.enabled),
+        ),
       runToolCommand: (message) => this.runToolCommand(message),
     };
     this.latexHandlers = {
@@ -106,7 +113,9 @@ export class DefaultDesktopToolingSettingsController implements DesktopToolingSe
     this.unsubscribeToolAvailability = appSignals.on(
       'toolAvailabilityChanged',
       () => {
-        void this.postToolDashboardData().catch(options.onError);
+        options.runtime.runFork(
+          this.reportingFailure(this.postToolDashboardData()),
+        );
       },
     );
   }
@@ -129,19 +138,30 @@ export class DefaultDesktopToolingSettingsController implements DesktopToolingSe
     );
   }
 
-  async postStartupData(): Promise<void> {
-    await Promise.all([
-      this.postToolDashboardData(),
-      this.postLatexSettingsStatus(),
-    ]);
-    void this.refreshToolAvailability().catch(this.options.onError);
+  postStartupData(): Promise<void> {
+    // The re-probe is not awaited and outlives this run: the cached data is
+    // already posted, and its own `toolAvailabilityChanged` signal repaints
+    // the dashboard through the subscription above when it lands.
+    const reprobe = this.reportingFailure(
+      refreshToolAvailability(this.probeInputs),
+    );
+    return this.options.runtime.runPromise(
+      Effect.all(
+        [this.postToolDashboardData(), this.postLatexSettingsStatus()],
+        { concurrency: 'unbounded' },
+      ).pipe(Effect.andThen(Effect.forkDetach(reprobe)), Effect.asVoid),
+    );
   }
 
-  /** Re-probe external tools. The probe's own `toolAvailabilityChanged`
-   *  signal is what repaints the dashboard, through the subscription above. */
-  private refreshToolAvailability(): Promise<void> {
-    return this.options.runtime.runPromise(
-      refreshToolAvailability(this.probeInputs),
+  /** A post or probe nobody awaits, with its failure reported rather than
+   *  dropped — what the fire-and-forget `.catch(onError)` on it did. */
+  private reportingFailure<A, E, R>(
+    program: Effect.Effect<A, E, R>,
+  ): Effect.Effect<A | void, never, R> {
+    return Effect.catch(program, (error) =>
+      Effect.sync(() => {
+        this.options.onError(error);
+      }),
     );
   }
 
@@ -154,37 +174,39 @@ export class DefaultDesktopToolingSettingsController implements DesktopToolingSe
     };
   }
 
-  private async postToolDashboardData(): Promise<void> {
-    // A cold probe cache stays `undefined` so the build runs the probes;
-    // coercing it to `[]` would render "zero external tools".
-    const items = await this.options.runtime.runPromise(
-      buildToolDashboardItems(
+  private postToolDashboardData() {
+    return Effect.gen({ self: this }, function* () {
+      // A cold probe cache stays `undefined` so the build runs the probes;
+      // coercing it to `[]` would render "zero external tools".
+      const items = yield* buildToolDashboardItems(
         'desktop',
         this.probeInputs,
         getLastCheckResults() ?? undefined,
-      ),
-    );
-    this.options.renderer.postToRenderer({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD,
-      items: items.map(withoutExtensionInstall),
+      );
+      this.options.renderer.postToRenderer({
+        command: SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD,
+        items: items.map(withoutExtensionInstall),
+      });
     });
   }
 
-  private async postLatexSettingsStatus(): Promise<void> {
-    const settings = await this.options.runtime.runPromise(
+  private postLatexSettingsStatus() {
+    return Effect.map(
       this.options.latexToolingController.detectStatus(),
+      (settings) => {
+        this.options.renderer.postToRenderer({
+          command: SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_SETTINGS_STATUS,
+          settings,
+        });
+      },
     );
-    this.options.renderer.postToRenderer({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_SETTINGS_STATUS,
-      settings,
-    });
   }
 
-  private async toggleTool(toolId: string, enabled: boolean): Promise<void> {
-    await this.options.runtime.runPromise(
+  private toggleTool(toolId: string, enabled: boolean) {
+    return Effect.andThen(
       setToolEnabled(toolId, enabled, this.options.globalState),
+      this.postToolDashboardData(),
     );
-    await this.postToolDashboardData();
   }
 
   private async runToolCommand(input: {
