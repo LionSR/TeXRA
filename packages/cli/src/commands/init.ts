@@ -1,6 +1,6 @@
+import { Effect } from 'effect';
+
 import { getVisibleAgents, loadAgents } from '@agent/index';
-import type { ModelOptionStores } from '@model/computeModelOptions';
-import type { ProcessRuntime } from '@platform/processRuntime';
 import { workspaceTexraConfigPath } from '@platform/defaults/nodeStorage';
 import { AgentCategory } from '@shared/schemas';
 import { implicitDefaultToolUseAgents } from '@shared/constants/agents';
@@ -18,6 +18,7 @@ import {
   type InitAnswers,
   type InitConfigShape,
 } from '../runtime/initConfig';
+import { installCliProcessRuntime } from '../runtime/cliProcessRuntime';
 import { initCliPlatform } from '../runtime/initPlatform';
 import { writeTextStderr } from '../runtime/logSinks';
 import {
@@ -32,22 +33,6 @@ import { GLOBAL_ARGS } from './_helpers/globalArgs';
 
 interface InitAgentOption {
   readonly name: string;
-}
-
-async function gatherOptions(
-  stores: ModelOptionStores & { readonly runtime: ProcessRuntime },
-): Promise<{
-  agents: readonly InitAgentOption[];
-  models: CliModelAccess[];
-}> {
-  await stores.runtime.runPromise(loadAgents({ includeRemote: false }));
-  const agents = implicitDefaultToolUseAgents(
-    getVisibleAgents(stores, AgentCategory.ToolUse),
-  );
-  const models = await stores.runtime.runPromise(
-    getCliModelAccessList({ stores }),
-  );
-  return { agents, models };
 }
 
 export function defaultInitAnswers(
@@ -156,27 +141,33 @@ function emitInitSummary(
   });
 }
 
-async function runInit(
+const runInit = Effect.fn('runInit')(function* (
   context: CliContext,
   opts: {
     yes: boolean;
     force: boolean;
     gitignore: boolean | undefined;
   },
-): Promise<number> {
+) {
   // The init call hands back the stores it just wired, so the model list is
   // computed from the same pair the rest of this command writes through.
-  const services = await initCliPlatform({ ...context, quietLogs: true });
+  const services = yield* Effect.promise(() =>
+    initCliPlatform({ ...context, quietLogs: true }),
+  );
 
   const filePath = workspaceTexraConfigPath(context.cwd);
-  if (!opts.force && (await pathExists(filePath))) {
+  if (!opts.force && (yield* Effect.promise(() => pathExists(filePath)))) {
     writeTextStderr(
       `Refusing to overwrite existing config at ${filePath}. Re-run with --force to replace it.`,
     );
     return CliExitCode.Usage;
   }
 
-  const { agents, models } = await gatherOptions(services);
+  yield* loadAgents({ includeRemote: false });
+  const agents = implicitDefaultToolUseAgents(
+    getVisibleAgents(services, AgentCategory.ToolUse),
+  );
+  const models = yield* getCliModelAccessList({ stores: services });
 
   const interactive =
     !opts.yes &&
@@ -188,8 +179,10 @@ async function runInit(
   let gitignore: boolean;
 
   if (interactive) {
-    const { runInitWizard } = await import('../init/runInitWizard');
-    const result = await runInitWizard({
+    const { runInitWizard } = yield* Effect.promise(
+      () => import('../init/runInitWizard'),
+    );
+    const result = yield* runInitWizard({
       agents,
       models,
       colorEnabled: context.stdoutColorEnabled,
@@ -206,15 +199,15 @@ async function runInit(
   }
 
   const config = buildInitConfig(answers);
-  await writeInitConfig(filePath, config);
+  yield* Effect.promise(() => writeInitConfig(filePath, config));
 
   const gitignoreOutcome: GitignoreOutcome | undefined = gitignore
-    ? await ensureTexraGitignored(context.cwd)
+    ? yield* Effect.promise(() => ensureTexraGitignored(context.cwd))
     : undefined;
 
   emitInitSummary(context, filePath, answers, config, models, gitignoreOutcome);
   return CliExitCode.Success;
-}
+});
 
 export const initCommand = defineCliCommand({
   meta: {
@@ -242,13 +235,17 @@ export const initCommand = defineCliCommand({
       description: 'Add .texra/ to .gitignore (non-interactive default: false)',
     },
   },
-  run: (context, ctx) =>
-    runInit(context, {
-      yes: ctx.args.yes === true,
-      force: ctx.args.force === true,
-      gitignore:
-        typeof ctx.args.gitignore === 'boolean'
-          ? ctx.args.gitignore
-          : undefined,
-    }),
+  run: async (context, ctx) => {
+    const runtime = await installCliProcessRuntime(context.storageRoot);
+    return runtime.runPromise(
+      runInit(context, {
+        yes: ctx.args.yes === true,
+        force: ctx.args.force === true,
+        gitignore:
+          typeof ctx.args.gitignore === 'boolean'
+            ? ctx.args.gitignore
+            : undefined,
+      }),
+    );
+  },
 });

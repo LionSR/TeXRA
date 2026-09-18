@@ -229,31 +229,27 @@ const runOnboardingFlow = Effect.fn('runOnboardingFlow')(function* (options: {
   // set; Ink otherwise disables interactive rendering from its CI heuristic.
   // The visible-screen clear keeps scrollback intact so the summary below
   // lands there.
-  const chosen = yield* Effect.tryPromise({
-    try: () =>
-      renderCliPrompt<OnboardingResolution>(
-        (resolve) => (
-          <OnboardingApp
-            secrets={options.stores.secrets}
-            stores={options.stores}
-            runtime={options.stores.runtime}
-            pickerSubtitle={
-              options.firstRun
-                ? 'No provider API key is configured. Choose how to power model calls:'
-                : 'Choose how to power model calls:'
-            }
-            onResolve={resolve}
-          />
-        ),
-        {
-          stdout: process.stdout,
-          stderr: process.stderr,
-          colorEnabled: options.colorEnabled,
-          interactive: true,
-        },
-      ),
-    catch: ensureError,
-  });
+  const chosen = yield* renderCliPrompt<OnboardingResolution>(
+    (resolve) => (
+      <OnboardingApp
+        secrets={options.stores.secrets}
+        stores={options.stores}
+        runtime={options.stores.runtime}
+        pickerSubtitle={
+          options.firstRun
+            ? 'No provider API key is configured. Choose how to power model calls:'
+            : 'Choose how to power model calls:'
+        }
+        onResolve={resolve}
+      />
+    ),
+    {
+      stdout: process.stdout,
+      stderr: process.stderr,
+      colorEnabled: options.colorEnabled,
+      interactive: true,
+    },
+  );
   const resolution: OnboardingResolution = chosen ?? NO_ONBOARDING_RESULT;
 
   if (resolution.declined) {

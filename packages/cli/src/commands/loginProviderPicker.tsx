@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import { Box, Text, useApp } from 'ink';
 
 import { DEFAULT_OAUTH_PROVIDER, type OAuthProvider } from '@auth/config';
@@ -70,9 +71,9 @@ function LoginProviderPicker(props: {
   );
 }
 
-export async function promptForLoginProvider(
+export function promptForLoginProvider(
   colorEnabled = true,
-): Promise<LoginPickerChoice | undefined> {
+): Effect.Effect<LoginPickerChoice | undefined> {
   return renderCliPrompt<LoginPickerChoice | undefined>(
     (resolve) => <LoginProviderPicker onSelect={resolve} />,
     { stdout: process.stdout, stderr: process.stderr, colorEnabled },

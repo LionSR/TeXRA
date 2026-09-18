@@ -1,4 +1,5 @@
 import { defineCommand } from 'citty';
+import { Effect } from 'effect';
 
 import {
   createWorkspaceAgentRosterController,
@@ -45,17 +46,15 @@ function formatConfigValue(value: unknown): string {
   return JSON.stringify(value) ?? String(value);
 }
 
-async function runAgentRosterTeamAction(
-  action: () => Promise<void>,
-): Promise<void> {
-  try {
-    await action();
-  } catch (error: unknown) {
-    if (error instanceof InvalidAgentTeamError) {
-      throw new CliUsageError(error.message);
-    }
-    throw error;
-  }
+/**
+ * The roster refuses an unknown or non-built-in team id in its own right; the
+ * command reports that refusal as a usage error (exit 2) and leaves every
+ * other write failure to the top-level handler.
+ */
+function asTeamUsageError<E>(error: E): E | CliUsageError {
+  return error instanceof InvalidAgentTeamError
+    ? new CliUsageError(error.message)
+    : error;
 }
 
 /**
@@ -73,13 +72,12 @@ function installedRoots(
   return services.roots;
 }
 
-async function showConfig(context: CliContext): Promise<number> {
-  const services = await initLocalCliPlatform(context);
-  const { runtime } = services;
-  const agents = await runtime.runPromise(
-    readCliAgentRoster(installedRoots(services)),
-  );
+const showConfig = Effect.fn('showConfig')(function* (
+  context: CliContext,
+  services: CliPlatformServices,
+) {
   const stores = installedRoots(services);
+  const agents = yield* readCliAgentRoster(stores);
   const settings = Object.fromEntries(
     CLI_STATE_SETTINGS.map((entry) => [
       entry.key,
@@ -99,10 +97,11 @@ async function showConfig(context: CliContext): Promise<number> {
     ].join('\n'),
   });
   return CliExitCode.Success;
-}
+});
 
-async function configureAgentRoster(
+const configureAgentRoster = Effect.fn('configureAgentRoster')(function* (
   context: CliContext,
+  services: CliPlatformServices,
   input: {
     readonly inherit: boolean;
     readonly all: boolean;
@@ -114,13 +113,11 @@ async function configureAgentRoster(
     readonly defaultAgent?: string;
     readonly clearDefaultAgent: boolean;
   },
-): Promise<number> {
-  const services = await initLocalCliPlatform(context);
-  const { runtime } = services;
+) {
   const roots = installedRoots(services);
   // The controller below resolves agent keys, so the registry must be loaded
   // first; the honest roster read happens once, later, where it is emitted.
-  await runtime.runPromise(loadAgents({ includeRemote: false }));
+  yield* loadAgents({ includeRemote: false });
   const roster = createWorkspaceAgentRosterController(roots);
   const customRequested =
     input.workflow !== undefined || input.toolUse !== undefined;
@@ -146,37 +143,32 @@ async function configureAgentRoster(
     );
   }
 
-  if (input.inherit) await runtime.runPromise(roster.setInherited());
-  if (input.all) await runtime.runPromise(roster.setAll());
+  if (input.inherit) yield* roster.setInherited();
+  if (input.all) yield* roster.setAll();
   const teamId = input.team;
   if (teamId) {
-    await runAgentRosterTeamAction(() =>
-      runtime.runPromise(roster.setTeam(teamId)),
-    );
+    yield* roster.setTeam(teamId).pipe(Effect.mapError(asTeamUsageError));
   }
   if (input.workflow !== undefined && input.toolUse !== undefined) {
-    await runtime.runPromise(
-      roster.setCustom({
-        workflow: parseAgentKeys(input.workflow),
-        toolUse: parseAgentKeys(input.toolUse),
-      }),
-    );
+    yield* roster.setCustom({
+      workflow: parseAgentKeys(input.workflow),
+      toolUse: parseAgentKeys(input.toolUse),
+    });
   } else if (input.workflow !== undefined) {
-    await runtime.runPromise(
-      roster.setEnabledAgentKeys('workflow', parseAgentKeys(input.workflow)),
+    yield* roster.setEnabledAgentKeys(
+      'workflow',
+      parseAgentKeys(input.workflow),
     );
   } else if (input.toolUse !== undefined) {
-    await runtime.runPromise(
-      roster.setEnabledAgentKeys('toolUse', parseAgentKeys(input.toolUse)),
-    );
+    yield* roster.setEnabledAgentKeys('toolUse', parseAgentKeys(input.toolUse));
   }
   const defaultTeamId = input.defaultTeam;
   if (defaultTeamId) {
-    await runAgentRosterTeamAction(() =>
-      runtime.runPromise(roster.setDefaultTeam(defaultTeamId)),
-    );
+    yield* roster
+      .setDefaultTeam(defaultTeamId)
+      .pipe(Effect.mapError(asTeamUsageError));
   }
-  if (input.clearDefault) await runtime.runPromise(roster.clearDefaultTeam());
+  if (input.clearDefault) yield* roster.clearDefaultTeam();
   if (input.defaultAgent) {
     const available = roster.getVisibleAgents('toolUse');
     const selected = available.find(
@@ -190,22 +182,20 @@ async function configureAgentRoster(
         `Default chat agent "${input.defaultAgent}" is not in the effective workspace roster. Available agents: ${names || '(none)'}.`,
       );
     }
-    await runtime.runPromise(
-      setWorkspaceCliChatAgent(roots, agentKeyOf(selected)),
-    );
+    yield* setWorkspaceCliChatAgent(roots, agentKeyOf(selected));
   }
   if (input.clearDefaultAgent) {
-    await runtime.runPromise(setWorkspaceCliChatAgent(roots, undefined));
+    yield* setWorkspaceCliChatAgent(roots, undefined);
   }
 
-  const record = await runtime.runPromise(readCliAgentRoster(roots));
+  const record = yield* readCliAgentRoster(roots);
   emitCliResult(context, {
     json: record,
     ndjson: { kind: 'agent-roster', roster: record },
     text: formatCliAgentRoster(record),
   });
   return CliExitCode.Success;
-}
+});
 
 const configAgentsCommand = defineCliCommand({
   meta: {
@@ -248,23 +238,30 @@ const configAgentsCommand = defineCliCommand({
     },
   },
   run: (context, ctx) =>
-    configureAgentRoster(context, {
-      inherit: ctx.args.inherit === true,
-      all: ctx.args.all === true,
-      team: optString(ctx.args.team),
-      workflow: optString(ctx.args.workflow),
-      toolUse: optString(ctx.args['tool-use']),
-      defaultTeam: optString(ctx.args['default-team']),
-      clearDefault: ctx.args['clear-default'] === true,
-      defaultAgent: optString(ctx.args['default-agent']),
-      clearDefaultAgent: ctx.args['clear-default-agent'] === true,
-    }),
+    initLocalCliPlatform(context).then((services) =>
+      services.runtime.runPromise(
+        configureAgentRoster(context, services, {
+          inherit: ctx.args.inherit === true,
+          all: ctx.args.all === true,
+          team: optString(ctx.args.team),
+          workflow: optString(ctx.args.workflow),
+          toolUse: optString(ctx.args['tool-use']),
+          defaultTeam: optString(ctx.args['default-team']),
+          clearDefault: ctx.args['clear-default'] === true,
+          defaultAgent: optString(ctx.args['default-agent']),
+          clearDefaultAgent: ctx.args['clear-default-agent'] === true,
+        }),
+      ),
+    ),
 });
 
 const configShowCommand = defineCliCommand({
   meta: { name: 'show', description: 'Show effective CLI configuration' },
   args: { ...GLOBAL_ARGS },
-  run: showConfig,
+  run: (context) =>
+    initLocalCliPlatform(context).then((services) =>
+      services.runtime.runPromise(showConfig(context, services)),
+    ),
 });
 
 const configEditCommand = defineCliCommand({
@@ -282,14 +279,16 @@ const configEditCommand = defineCliCommand({
     }
     const services = await initLocalCliPlatform(context);
     const { runConfigTui } = await import('../config/runConfigTui');
-    await runConfigTui({
-      stores: installedRoots(services),
-      secrets: services.secrets,
-      runtime: services.runtime,
-      workspaceRoot: services.roots?.workspace,
-      colorEnabled: context.stdoutColorEnabled,
-      onError: writeErrorStderr,
-    });
+    await services.runtime.runPromise(
+      runConfigTui({
+        stores: installedRoots(services),
+        secrets: services.secrets,
+        runtime: services.runtime,
+        workspaceRoot: services.roots?.workspace,
+        colorEnabled: context.stdoutColorEnabled,
+        onError: writeErrorStderr,
+      }),
+    );
     return CliExitCode.Success;
   },
 });

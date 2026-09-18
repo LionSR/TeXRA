@@ -3,6 +3,7 @@
 // per screen, Esc cancels. Returns the collected answers, or `undefined` when
 // the user backs out. Pure config logic lives in runtime/initConfig.
 
+import { Effect } from 'effect';
 import { Text, useApp } from 'ink';
 import { useState } from 'react';
 
@@ -236,7 +237,7 @@ function WizardApp(props: WizardAppProps): React.JSX.Element {
 
 export function runInitWizard(
   options: InitWizardOptions,
-): Promise<InitWizardResult | undefined> {
+): Effect.Effect<InitWizardResult | undefined> {
   return renderCliPrompt<InitWizardResult | undefined>(
     (resolve) => <WizardApp options={options} onResolve={resolve} />,
     {

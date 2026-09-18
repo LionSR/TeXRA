@@ -1,4 +1,5 @@
 import { defineCommand } from 'citty';
+import { Effect } from 'effect';
 
 import { DEFAULT_OAUTH_PROVIDER, isOAuthProvider } from '@auth/config';
 import type { SupabaseSession } from '@auth/SupabaseSession';
@@ -7,6 +8,7 @@ import { isNonEmptyString } from '@utils/text/stringUtils';
 
 import { CliUsageError, type CliContext } from '../runtime/cliContext';
 import { CliExitCode } from '../runtime/exitCodes';
+import { installCliProcessRuntime } from '../runtime/cliProcessRuntime';
 import { initCliPlatform } from '../runtime/initPlatform';
 import {
   githubSelectAccountWarning,
@@ -85,28 +87,6 @@ export function shouldPromptForLoginProvider(
   );
 }
 
-async function runDeviceLogin(context: CliContext): Promise<number> {
-  const { runtime } = await initCliPlatform({ ...context, quietLogs: true });
-  // Human-facing progress goes to stdout only in text mode so the JSON/NDJSON
-  // result stream stays machine-readable (same convention as --no-browser).
-  const writeProgress = cliProgressWriter(context);
-  const deviceResult = await withCliAuthError(() =>
-    runtime.runPromise(
-      signInCliSupabaseDeviceCode({
-        onDeviceCode: (authorization) => {
-          writeProgress(formatCliDeviceAuthMessage(authorization));
-          writeProgress(
-            'Waiting for you to approve in the browser… (Ctrl-C cancels)',
-          );
-        },
-      }),
-    ),
-  );
-  if (!deviceResult.ok) return CliExitCode.ModelOrNetworkError;
-  emitLoginResult(context, deviceResult.value);
-  return CliExitCode.Success;
-}
-
 function emitLoginResult(context: CliContext, session: SupabaseSession): void {
   const expiresAt = new Date(session.expiresAt).toISOString();
   const payload = { authenticated: true, account: session.account, expiresAt };
@@ -117,13 +97,54 @@ function emitLoginResult(context: CliContext, session: SupabaseSession): void {
   });
 }
 
-async function runLogin(
+/**
+ * The whole `texra login` flow: pick the transport when the command was not
+ * told one, bring the platform up, and sign in over the device code or the
+ * loopback browser callback. One program so the picker, the init and the
+ * sign-in share a single run at the command's entry.
+ */
+const runLoginCommand = Effect.fn('runLoginCommand')(function* (
   context: CliContext,
-  init: CliLoginInit,
-): Promise<number> {
-  if (init.device) {
-    return runDeviceLogin(context);
+  requested: CliLoginInit,
+) {
+  let init = requested;
+  if (shouldPromptForLoginProvider(context, init)) {
+    const { promptForLoginProvider } = yield* Effect.promise(
+      () => import('./loginProviderPicker'),
+    );
+    const choice = yield* promptForLoginProvider(context.stdoutColorEnabled);
+    if (!choice) {
+      writeTextStderr('Cancelled. No sign-in started.');
+      return CliExitCode.Success;
+    }
+    init =
+      choice === 'device'
+        ? { ...init, device: true }
+        : { ...init, provider: choice, providerExplicit: true };
   }
+
+  if (init.device) {
+    yield* Effect.promise(() =>
+      initCliPlatform({ ...context, quietLogs: true }),
+    );
+    // Human-facing progress goes to stdout only in text mode so the JSON/NDJSON
+    // result stream stays machine-readable (same convention as --no-browser).
+    const writeProgress = cliProgressWriter(context);
+    const deviceResult = yield* withCliAuthError(
+      signInCliSupabaseDeviceCode({
+        onDeviceCode: (authorization) => {
+          writeProgress(formatCliDeviceAuthMessage(authorization));
+          writeProgress(
+            'Waiting for you to approve in the browser… (Ctrl-C cancels)',
+          );
+        },
+      }),
+    );
+    if (!deviceResult.ok) return CliExitCode.ModelOrNetworkError;
+    emitLoginResult(context, deviceResult.value);
+    return CliExitCode.Success;
+  }
+
   // Bind before the type-guard so TS narrows a local (property access on
   // `init.provider` is not re-narrowed across later statements).
   const provider = init.provider;
@@ -131,31 +152,37 @@ async function runLogin(
     writeTextStderr(unsupportedLoginProviderMessage(provider));
     return CliExitCode.Usage;
   }
-  const { runtime } = await initCliPlatform({ ...context, quietLogs: true });
+  const { runtime } = yield* Effect.promise(() =>
+    initCliPlatform({ ...context, quietLogs: true }),
+  );
   const accountWarning = githubSelectAccountWarning(init);
   if (accountWarning) writeTextStderr(accountWarning);
   if (context.outputFormat === 'text' && !init.noBrowser) {
     writeTextStdout(RESEARCHER_ACCESS_AUTH.startingBrowser(provider));
   }
-  const loginResult = await withCliAuthError(() =>
-    signInCliSupabase(runtime, {
-      provider,
-      openBrowser: !init.noBrowser,
-      selectAccount: init.selectAccount,
-      loginHint: init.loginHint,
-      manualBrowserHint: 'texra login --no-browser',
-      onAuthUrl: (url) => {
-        if (init.noBrowser) {
-          cliProgressWriter(context)(formatCliManualAuthUrlMessage(url));
-        }
-      },
-    }),
+  // The loopback sign-in keeps its Promise face: it owns a sticky-interruption
+  // recovery at that edge, so it is wrapped once here rather than retyped.
+  const loginResult = yield* withCliAuthError(
+    Effect.promise(() =>
+      signInCliSupabase(runtime, {
+        provider,
+        openBrowser: !init.noBrowser,
+        selectAccount: init.selectAccount,
+        loginHint: init.loginHint,
+        manualBrowserHint: 'texra login --no-browser',
+        onAuthUrl: (url) => {
+          if (init.noBrowser) {
+            cliProgressWriter(context)(formatCliManualAuthUrlMessage(url));
+          }
+        },
+      }),
+    ),
   );
   if (!loginResult.ok) return CliExitCode.ModelOrNetworkError;
 
   emitLoginResult(context, loginResult.value);
   return CliExitCode.Success;
-}
+});
 
 export const loginCommand = withUsageSections(
   defineCliCommand({
@@ -191,10 +218,13 @@ export const loginCommand = withUsageSections(
           'Suggest a specific provider account, such as a GitHub username or Google email',
       },
     },
-    run: (context, ctx) => {
+    run: async (context, ctx) => {
       const init = loginInitFromArgs(ctx.args);
       assertLoginTransportExclusive(init);
-      return runLoginCommand(context, init);
+      // The picker runs before any platform init, so the command's one run is
+      // on the process runtime itself; `initCliPlatform` adopts it.
+      const runtime = await installCliProcessRuntime(context.storageRoot);
+      return runtime.runPromise(runLoginCommand(context, init));
     },
   }),
   [
@@ -210,30 +240,6 @@ export const loginCommand = withUsageSections(
   ],
 );
 
-async function runLoginCommand(
-  context: CliContext,
-  init: CliLoginInit,
-): Promise<number> {
-  if (!shouldPromptForLoginProvider(context, init)) {
-    return runLogin(context, init);
-  }
-
-  const { promptForLoginProvider } = await import('./loginProviderPicker');
-  const choice = await promptForLoginProvider(context.stdoutColorEnabled);
-  if (!choice) {
-    writeTextStderr('Cancelled. No sign-in started.');
-    return CliExitCode.Success;
-  }
-  if (choice === 'device') {
-    return runDeviceLogin(context);
-  }
-  return runLogin(context, {
-    ...init,
-    provider: choice,
-    providerExplicit: true,
-  });
-}
-
 export const logoutCommand = defineCliCommand({
   meta: {
     name: 'logout',
@@ -244,18 +250,20 @@ export const logoutCommand = defineCliCommand({
   },
   async run(context) {
     const { runtime } = await initCliPlatform({ ...context, quietLogs: true });
-    const signOutResult = await withCliAuthError(() =>
-      runtime.runPromise(signOutCliSupabase()),
-    );
-    if (!signOutResult.ok) return CliExitCode.ModelOrNetworkError;
+    return runtime.runPromise(
+      Effect.gen(function* () {
+        const signOutResult = yield* withCliAuthError(signOutCliSupabase());
+        if (!signOutResult.ok) return CliExitCode.ModelOrNetworkError;
 
-    const payload = { authenticated: false };
-    emitCliResult(context, {
-      json: payload,
-      ndjson: { kind: 'auth', ...payload },
-      text: 'Signed out.',
-    });
-    return CliExitCode.Success;
+        const payload = { authenticated: false };
+        emitCliResult(context, {
+          json: payload,
+          ndjson: { kind: 'auth', ...payload },
+          text: 'Signed out.',
+        });
+        return CliExitCode.Success;
+      }),
+    );
   },
 });
 
@@ -284,25 +292,31 @@ const authStatusCommand = defineCliCommand({
     ...GLOBAL_ARGS,
   },
   async run(context) {
-    const statusResult = await withCliAuthError(async () => {
-      const { runtime } = await initCliPlatform({
-        ...context,
-        quietLogs: true,
-      });
-      return await runtime.runPromise(getCliAuthProfile());
-    });
-    if (!statusResult.ok) return CliExitCode.ModelOrNetworkError;
-    const profile = statusResult.value;
+    // The init stays inside the fold (a platform that cannot come up is the
+    // same report as a failed profile read), so the run borrows the process
+    // runtime rather than an init result.
+    const runtime = await installCliProcessRuntime(context.storageRoot);
+    return runtime.runPromise(
+      Effect.gen(function* () {
+        const statusResult = yield* withCliAuthError(
+          Effect.promise(() =>
+            initCliPlatform({ ...context, quietLogs: true }),
+          ).pipe(Effect.flatMap(() => getCliAuthProfile())),
+        );
+        if (!statusResult.ok) return CliExitCode.ModelOrNetworkError;
+        const profile = statusResult.value;
 
-    emitCliResult(context, {
-      json: profile,
-      ndjson: { kind: 'auth-status', ...profile },
-      text: [
-        formatAuthStatusLine(profile),
-        ...(profile.note ? [profile.note] : []),
-      ].join('\n'),
-    });
-    return CliExitCode.Success;
+        emitCliResult(context, {
+          json: profile,
+          ndjson: { kind: 'auth-status', ...profile },
+          text: [
+            formatAuthStatusLine(profile),
+            ...(profile.note ? [profile.note] : []),
+          ].join('\n'),
+        });
+        return CliExitCode.Success;
+      }),
+    );
   },
 });
 
