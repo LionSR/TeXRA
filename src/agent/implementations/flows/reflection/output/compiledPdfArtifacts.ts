@@ -14,6 +14,7 @@ import {
 } from '@shared/schemas';
 import { parseWorkflowOutputRoundDir } from '@shared/constants/workflowOutput';
 import { createRunStorageLocation } from '@utils/files/fileLocation';
+import { normalizeFilePath } from '@utils/core';
 import { hasExtension } from '@utils/core/pathCore';
 
 interface PublishCompiledPdfOptions {
@@ -27,8 +28,7 @@ interface PublishCompiledPdfOptions {
 }
 
 function normalizePdfRelativePath(pdfPath: string): string {
-  const parts = pdfPath
-    .replaceAll('\\', '/')
+  const parts = normalizeFilePath(pdfPath)
     .split('/')
     .filter((part) => part && part !== '.' && part !== '..');
   const normalized = parts.length > 0 ? parts.join('/') : 'output.pdf';
@@ -36,7 +36,7 @@ function normalizePdfRelativePath(pdfPath: string): string {
 }
 
 function stripRoundPrefix(relativePath: string, round: number): string {
-  const normalizedPath = relativePath.replaceAll('\\', '/');
+  const normalizedPath = normalizeFilePath(relativePath);
   const separatorIndex = normalizedPath.indexOf('/');
   if (separatorIndex === -1) return normalizedPath;
   const firstSegment = normalizedPath.slice(0, separatorIndex);

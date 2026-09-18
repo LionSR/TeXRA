@@ -10,7 +10,7 @@ import type { CommandId } from '@shared/commands/catalog';
 // Local file imports
 import { executed } from '@tools/core/result';
 import { defineTool } from '../core/define';
-import { SetupPlatform } from './platform';
+import { assertInSetupAllowlist, SetupPlatform } from './platform';
 
 /**
  * Allowlist of VS Code commands the setup agent may invoke.
@@ -62,13 +62,7 @@ const invokeCommand = Effect.fn('InvokeCommandTool.execute')(function* (
   const platform = yield* SetupPlatform;
   const commandId = input.command.trim();
 
-  if (!ALLOWED_COMMANDS.has(commandId)) {
-    return yield* Effect.fail(
-      new ToolError(
-        `Command "${commandId}" is not in the setup allowlist. Allowed: ${[...ALLOWED_COMMANDS].sort().join(', ')}.`,
-      ),
-    );
-  }
+  yield* assertInSetupAllowlist('Command', commandId, ALLOWED_COMMANDS);
 
   const commands = platform.commands;
   if (!commands) {

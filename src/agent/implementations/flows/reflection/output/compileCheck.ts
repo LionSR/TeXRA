@@ -26,6 +26,7 @@ import { runDirUnder } from '@utils/files/runStorageFs';
 import { type RunFileService } from '@utils/files/runStorage';
 import { locateInWorkspace } from '@utils/files/workspaceFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { normalizeFilePath } from '@utils/core';
 import { truncatedHexId } from '@utils/core/idHash';
 import { hasExtension } from '@utils/core/pathCore';
 import { readSettingFrom } from '@utils/config/platformSettings';
@@ -296,7 +297,7 @@ const compileOne = Effect.fn('reflection.compileOne')(function* (
   // it is already added explicitly as `r${currentRound}_` below — without
   // this, a location like `r0/main.tex` would produce `r0_r0_main.tex.log`.
   const rawComparablePath = fileLocationDisplayPath(outputFile.location);
-  const comparablePath = rawComparablePath.replaceAll('\\', '/');
+  const comparablePath = normalizeFilePath(rawComparablePath);
   const roundPrefix = `r${currentRound}/`;
   const pathForSafeName = comparablePath.startsWith(roundPrefix)
     ? comparablePath.slice(roundPrefix.length)
