@@ -13,6 +13,7 @@
 import { Effect, FileSystem } from 'effect';
 
 import type { AgentTrace } from '@agent/trace';
+import type { ConfigProvider } from '@platform/interfaces';
 import type { MessageSchema } from '@llm/turn';
 import {
   fileLocationDisplayPath,
@@ -56,6 +57,7 @@ const partsForFile = Effect.fn('mediaInput.file')(function* (
   location: FileLocation,
   capabilities: MediaCapabilities,
   logger: AgentTrace,
+  config: ConfigProvider,
 ): Effect.fn.Return<MediaInputParts, Error, FileSystem.FileSystem> {
   const path = location.absolutePath;
   const display = fileLocationDisplayPath(location);
@@ -71,7 +73,7 @@ const partsForFile = Effect.fn('mediaInput.file')(function* (
     // after this branch, never before, so a PDF pdf-lib cannot parse still
     // reaches a model that could read it.
     if (capabilities.supportsNativePdf) {
-      const base64 = yield* getBase64EncodedMedia(path);
+      const base64 = yield* getBase64EncodedMedia(path, config);
       return {
         parts: [{ kind: 'document', mimeType: 'application/pdf', base64 }],
         kinds: ['document'],
@@ -108,7 +110,7 @@ const partsForFile = Effect.fn('mediaInput.file')(function* (
       logger.warn(`Skipping ${display}: the model does not accept audio.`);
       return { parts: [], kinds: [] };
     }
-    const base64 = yield* getBase64EncodedMedia(path);
+    const base64 = yield* getBase64EncodedMedia(path, config);
     return { parts: [{ kind: 'audio', mimeType, base64 }], kinds: [] };
   }
   if (!isImageMimeType(mimeType) || mimeType === null) {
@@ -122,20 +124,25 @@ const partsForFile = Effect.fn('mediaInput.file')(function* (
     logger.warn(`Skipping ${display}: the model does not accept images.`);
     return { parts: [], kinds: [] };
   }
-  const base64 = yield* getBase64EncodedMedia(path);
+  const base64 = yield* getBase64EncodedMedia(path, config);
   return { parts: [{ kind: 'image', mimeType, base64 }], kinds: ['image'] };
 });
 
-/** Input parts for a list of attached files, in order. */
+/**
+ * Input parts for a list of attached files, in order. `config` is the
+ * configuration of the run's own session, held as data: the image size limit
+ * answers for that project, not for whichever roots the calling fiber carries.
+ */
 export const mediaInputParts = Effect.fn('mediaInput')(function* (
   locations: readonly FileLocation[],
   capabilities: MediaCapabilities,
   logger: AgentTrace,
+  config: ConfigProvider,
 ): Effect.fn.Return<MediaInputParts, Error, FileSystem.FileSystem> {
   const parts: InputPart[] = [];
   const kinds: MediaAttachmentKind[] = [];
   for (const location of locations) {
-    const loaded = yield* partsForFile(location, capabilities, logger);
+    const loaded = yield* partsForFile(location, capabilities, logger, config);
     parts.push(...loaded.parts);
     kinds.push(...loaded.kinds);
   }

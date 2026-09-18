@@ -146,6 +146,7 @@ export const followUpsLayer: Layer.Layer<
           ),
           bound,
           logger,
+          run.session.roots.config,
         );
         parts.push(...media.parts);
         kinds.push(...media.kinds);

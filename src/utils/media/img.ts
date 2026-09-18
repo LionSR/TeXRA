@@ -7,8 +7,9 @@ import { imageSize } from 'image-size';
 
 // Local imports - log
 import { createLog } from '@logger/logUtils';
+import type { ConfigProvider } from '@platform/interfaces';
 import { getMimeType, isImageMimeType } from '@utils/files/mimeUtils';
-import { getConfig } from '@utils/config/configUtils';
+import { readConfig } from '@utils/config/configUtils';
 import { detectImageTool } from '@utils/system/toolUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { executeCommand } from '@utils/system/execUtils';
@@ -92,13 +93,18 @@ const getImageDimensions = Effect.fn('img.getImageDimensions')(
 /** Maximum image dimension (pixels) accepted by provider APIs. */
 const API_MAX_IMAGE_DIMENSION = 8000;
 
-/** Bytes of an image, resized when it exceeds the maximum dimensions. */
+/**
+ * Bytes of an image, resized when it exceeds the maximum dimensions. The limit
+ * comes from the configuration of the workspace the caller is reading for,
+ * held as data, not from whichever roots the calling fiber carries.
+ */
 const resizeImageIfNeeded = Effect.fn('img.resizeImageIfNeeded')(function* (
   imagePath: string,
+  config: ConfigProvider,
 ) {
   const fs = yield* FileSystem.FileSystem;
   const configuredMaxDimension = yield* Effect.try({
-    try: () => getConfig<number>('texra.maxImageDimension'),
+    try: () => readConfig<number>(config, 'texra.maxImageDimension'),
     catch: conversionFailure,
   });
   const maxDimension = Math.min(
@@ -163,7 +169,7 @@ const resizeImageIfNeeded = Effect.fn('img.resizeImageIfNeeded')(function* (
  * {@link MediaConversionFailed}.
  */
 export const getBase64EncodedMedia = Effect.fn('img.getBase64EncodedMedia')(
-  function* (mediaPath: string) {
+  function* (mediaPath: string, config: ConfigProvider) {
     const fs = yield* FileSystem.FileSystem;
     if (!(yield* fs.exists(mediaPath))) {
       return yield* new MediaConversionFailed({
@@ -172,7 +178,7 @@ export const getBase64EncodedMedia = Effect.fn('img.getBase64EncodedMedia')(
     }
 
     const mediaBytes = yield* isImageMimeType(getMimeType(mediaPath))
-      ? resizeImageIfNeeded(mediaPath)
+      ? resizeImageIfNeeded(mediaPath, config)
       : fs.readFile(mediaPath);
     if (mediaBytes.length === 0) {
       return yield* new MediaConversionFailed({

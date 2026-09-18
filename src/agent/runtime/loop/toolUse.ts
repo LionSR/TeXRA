@@ -375,6 +375,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
             ),
             bound,
             logger,
+            run.session.roots.config,
           )
         : Effect.succeed({ parts: [], kinds: [] }),
     );
