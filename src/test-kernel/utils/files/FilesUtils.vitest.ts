@@ -12,7 +12,10 @@ import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { getMimeType } from '@utils/files/mimeUtils';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { pathToLocation } from '@utils/files/fileLocation';
-import { WorkspaceFS } from '@utils/files/workspaceFS';
+import {
+  workspaceAbsolutePath,
+  workspaceRootPath,
+} from '@utils/files/workspaceFS';
 import { pastedImageFileName } from '@utils/files/pastedImageUtils';
 import { entryExists } from '@utils/files/fsEntryExists';
 import { rootedFileSystem } from '@utils/files/rootedFileSystem';
@@ -58,10 +61,6 @@ describe('BaseFS stat predicates', () => {
 });
 
 // ---------------------------------------------------------------------------
-// WorkspaceFS
-// ---------------------------------------------------------------------------
-
-// ---------------------------------------------------------------------------
 // mimeUtils
 // ---------------------------------------------------------------------------
 
@@ -89,7 +88,7 @@ describe('AbsoluteFS.write', () => {
 
   it('propagates ELOOP without deleting the path or retrying', async () => {
     const location = pathToLocation('file.tex');
-    const expectedPath = WorkspaceFS.toAbsolute('file.tex');
+    const expectedPath = workspaceAbsolutePath(workspaceRootPath(), 'file.tex');
     const cause = new Error('native cause');
     const loopError = new Error('loop detected', {
       cause,

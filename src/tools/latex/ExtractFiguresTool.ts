@@ -54,7 +54,7 @@ const extractFigures = Effect.fn('ExtractLatexFiguresTool.execute')(function* ({
 
   const formattedList = limitedPaths.map(
     (figurePath) =>
-      `- ${call.inScope(() => resolveAndFormat(figurePath, call.workingDirectory)).display}`,
+      `- ${call.inScope(() => resolveAndFormat(call.roots.workspace, figurePath, call.workingDirectory)).display}`,
   );
   const header = `Figures referenced in ${display}`;
   const output = formatToolOutput(header, formattedList);

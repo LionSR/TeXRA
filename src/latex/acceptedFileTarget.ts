@@ -2,20 +2,21 @@
 import path from 'node:path';
 
 // Third-party imports
-import { Effect, FileSystem, type PlatformError } from 'effect';
+import { Cause, Effect, Exit, FileSystem, type PlatformError } from 'effect';
 
 // Local imports
 import { generateDiffFileName } from '@latex/latexdiff/diffFileNameManager';
 import { createLog } from '@logger/logUtils';
+import { WorkspaceFs } from '@platform/rootedFs';
 import type { FileLocation } from '@shared/schemas';
 import { normalizeFilePath } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { WorkspaceFS } from '@utils/files/workspaceFS';
 import {
   createExternalLocation,
   createRunStorageLocation,
   createWorkspaceLocation,
 } from '@utils/files/fileLocation';
+import { locateInWorkspace } from '@utils/files/workspaceFS';
 import { getExtensionLowercase } from '@utils/core/pathCore';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 
@@ -263,12 +264,19 @@ function staleDiffFileLocation(
   return diffLocation;
 }
 
-/** Remove stale diff companions after accepting workspace outputs, keeping successful paths. */
-export async function cleanupAcceptedWorkspaceDiffFiles(
+/**
+ * Remove stale diff companions after accepting workspace outputs, keeping
+ * successful paths. `workspaceRoot` is the accepting session's folder, carried
+ * as data; the deletions go through that session's own confined view.
+ */
+export const cleanupAcceptedWorkspaceDiffFiles = Effect.fn(
+  'acceptedFileTarget.cleanupDiffFiles',
+)(function* (
+  workspaceRoot: string | undefined,
   entries: readonly { outputPath: string; originalPath: string }[],
-): Promise<string[]> {
+): Effect.fn.Return<string[], never, WorkspaceFs> {
   const stale = entries.flatMap(({ outputPath, originalPath }) => {
-    const original = WorkspaceFS.locatePath(originalPath);
+    const original = locateInWorkspace(workspaceRoot, originalPath);
     if (original.kind === 'external') return [];
     const diffLocation = staleDiffFileLocation(original, outputPath, original);
     if (!diffLocation || diffLocation.kind === 'external') return [];
@@ -277,19 +285,24 @@ export async function cleanupAcceptedWorkspaceDiffFiles(
 
   // A missing or locked diff companion does not undo an accepted file, so the
   // sweep keeps every deletion that worked and names the ones that did not
-  // rather than dropping them silently.
-  const settled = await Promise.allSettled(
-    stale.map((relativePath) => WorkspaceFS.delete(relativePath)),
+  // rather than dropping them silently. `force` keeps an already-absent
+  // companion a success, as the platform delete this replaced did.
+  const workspaceFs = yield* WorkspaceFs;
+  const settled = yield* Effect.forEach(
+    stale,
+    (relativePath) =>
+      Effect.exit(workspaceFs.remove(relativePath, { force: true })),
+    { concurrency: 'unbounded' },
   );
   return stale.filter((relativePath, index) => {
     const result = settled[index];
-    if (result.status === 'fulfilled') return true;
+    if (Exit.isSuccess(result)) return true;
     log.warn(
-      `Could not remove the stale diff file ${relativePath}: ${toErrorMessage(result.reason)}`,
+      `Could not remove the stale diff file ${relativePath}: ${toErrorMessage(Cause.squash(result.cause))}`,
     );
     return false;
   });
-}
+});
 
 export function getAcceptedFileTarget(
   baseLocation: FileLocation,

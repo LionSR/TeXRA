@@ -23,6 +23,7 @@ import type { LatexRunDiscoveryPort } from './runDiscovery';
 export const discoverLatestRunOutputs = Effect.fn('discoverLatestRunOutputs')(
   function* (
     discovery: LatexRunDiscoveryPort,
+    workspaceRoot: string | undefined,
     query: {
       agent: string;
       model: string;
@@ -68,6 +69,7 @@ export const discoverLatestRunOutputs = Effect.fn('discoverLatestRunOutputs')(
       // Use all configured input files as diff bases, as the pinned-run path does.
       const scanned = yield* scanRunDirForOutputs(
         candidate.id,
+        workspaceRoot,
         query.inputFile,
         candidate.inputFiles.slice(1),
         channel,

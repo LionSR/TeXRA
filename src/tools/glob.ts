@@ -8,7 +8,6 @@ import { z } from 'zod';
 import { ToolCall } from '@agent/runtime/ToolCall';
 
 // Local imports
-import { WorkspaceFs } from '@platform/rootedFs';
 import { ToolError, ToolResult } from '@shared/schemas';
 import { getGitignoreMatcher } from '@tools/gitignore';
 import { formatToolOutput } from '@tools/formatting';
@@ -51,8 +50,6 @@ interface GlobMatchInfo {
  */
 interface GlobPorts extends WorkspacePathPorts {
   readonly signal: AbortSignal | undefined;
-  /** The root of the call's own workspace view; `undefined` with no folder open. */
-  readonly workspaceRoot: string | undefined;
 }
 
 const runGlob = Effect.fn('GlobTool.execute')(function* (
@@ -61,7 +58,7 @@ const runGlob = Effect.fn('GlobTool.execute')(function* (
 ): Effect.fn.Return<ToolResult, unknown, FileSystem.FileSystem> {
   const root = ports.toolRoot();
   const { path, display } = ports.inScope(() =>
-    resolveAndFormat(input.path ?? undefined, root),
+    resolveAndFormat(ports.workspaceRoot, input.path ?? undefined, root),
   );
   const gitignore = yield* getGitignoreMatcher(ports.workspaceRoot);
 
@@ -101,6 +98,7 @@ const runGlob = Effect.fn('GlobTool.execute')(function* (
       try: () =>
         ports.inScope(() =>
           resolveWorkspaceRelativePath(
+            ports.workspaceRoot,
             // posix.join, not path.join: the base and the match are both
             // POSIX-normalized, and path.join would reintroduce backslashes
             // on Windows. `|| '.'` keeps an empty base a relative join.
@@ -177,7 +175,6 @@ export const GlobTool = defineTool({
     const ports: GlobPorts = {
       ...workspacePathPorts(call),
       signal: yield* Effect.abortSignal,
-      workspaceRoot: (yield* WorkspaceFs).root,
     };
     return yield* runGlob(ports, input);
   }),

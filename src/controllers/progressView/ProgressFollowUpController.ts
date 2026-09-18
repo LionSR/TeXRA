@@ -98,7 +98,7 @@ export class ProgressFollowUpController {
         ).flat();
 
         // The planner below still reads the workspace through the
-        // Promise-tier `RelativeFS` port, so this is where that edge lives.
+        // Promise-tier port its caller builds, so this is where that edge lives.
         return Effect.tryPromise({
           try: () =>
             this.planCompileFixer({

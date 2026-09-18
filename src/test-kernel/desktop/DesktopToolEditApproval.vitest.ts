@@ -104,19 +104,6 @@ async function loadApprovalModules(workspacePath = '/workspace') {
     >('@utils/files/workspaceFS');
     return {
       ...actual,
-      WorkspaceFS: {
-        getPath(): string {
-          return workspacePath;
-        },
-        relativePath(filePath: string): string {
-          return filePath.startsWith(`${workspacePath}/`)
-            ? filePath.slice(`${workspacePath}/`.length)
-            : filePath;
-        },
-        locatePath(filePath: string): MockLocation {
-          return toMockLocation(filePath);
-        },
-      },
       pathToLocation(filePath: string): MockLocation {
         return toMockLocation(filePath);
       },

@@ -414,13 +414,10 @@ Parameters map directly to subagent-result delivery attributes:
       }
 
       // Phase 3: Clean up diff files from workspace for accepted files
-      const cleaned = yield* Effect.tryPromise({
-        try: () =>
-          call.inScope(() =>
-            cleanupAcceptedWorkspaceDiffFiles(acceptedEntries),
-          ),
-        catch: ensureError,
-      });
+      const cleaned = yield* cleanupAcceptedWorkspaceDiffFiles(
+        call.roots.workspace,
+        acceptedEntries,
+      );
       for (const f of cleaned) {
         results.push(`cleaned: ${f}`);
       }

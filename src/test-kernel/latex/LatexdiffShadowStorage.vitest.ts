@@ -23,6 +23,7 @@ import {
   createWorkspaceLocation,
 } from '@utils/files/fileLocation';
 import { getRunDir } from '@utils/files/runStorageFs';
+import { workspaceRootPath } from '@utils/files/workspaceFS';
 import { TaskRunFileService } from '@utils/files/taskRunStorage';
 
 const mocks = vi.hoisted(() => ({
@@ -244,6 +245,7 @@ describe('LaTeXdiffService shadow output', () => {
           1: [output(1, first)],
           2: [output(2, second, './paper.tex')],
         },
+        workspaceRoot: workspaceRootPath(),
         generateBetweenRoundDiffs: true,
         latexdiff: {
           channel: 'test',

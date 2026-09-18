@@ -33,7 +33,6 @@ import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { AcceptRunFilesTool } from '@tools/AcceptRunFilesTool';
 import { type ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import { StorageFS } from '@utils/files/storageFS';
-import { WorkspaceFS } from '@utils/files/workspaceFS';
 
 // Local file imports
 import { autoDecideRequests, createRecordingHost } from '../progressTestUtils';
@@ -187,9 +186,6 @@ function setRunStorageEntries(
 function stubWorkspaceFiles(exists: boolean, content: string) {
   workspaceReads.set('draft.tex', { exists, content });
   workspaceReads.set('paper.tex', { exists, content });
-  // The diff-companion cleanup still runs through the facade, so its delete
-  // stays stubbed.
-  vi.spyOn(WorkspaceFS, 'delete').mockResolvedValue(undefined);
   return workspaceWrites;
 }
 
@@ -236,11 +232,6 @@ describe('accept_run_files progress events', () => {
     vi.spyOn(StorageFS, 'fullPath').mockImplementation(
       (target) => `${storagePath}/${target}`,
     );
-    vi.spyOn(WorkspaceFS, 'locatePath').mockImplementation((target) => ({
-      kind: 'workspace',
-      absolutePath: `${workspacePath}/${target}`,
-      relativePath: target,
-    }));
   });
 
   afterEach(async () => {

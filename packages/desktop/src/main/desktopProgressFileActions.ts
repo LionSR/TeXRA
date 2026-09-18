@@ -237,6 +237,7 @@ export class DesktopProgressFileActions {
         agent: scan?.agent ?? '',
         model: scan?.model ?? '',
         inputFile: scan?.inputFile ?? '',
+        workspaceRoot: this.host.session.roots.workspace,
         outputFiles: scan?.outputFiles,
         runId: runContext.runId ?? null,
         outputsByRound: hasOutputs ? runContext.outputsByRound : null,

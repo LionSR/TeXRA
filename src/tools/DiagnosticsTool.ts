@@ -39,9 +39,13 @@ interface DiagnosticsPorts extends WorkspacePathPorts {
 /** Resolve an input path to an absolute path against the active working directory. */
 function resolveAbsolutePath(
   filePath: string,
-  root: string | undefined,
+  ports: WorkspacePathPorts,
 ): string {
-  return resolveWorkspaceRelativePath(filePath, root).absolute;
+  return resolveWorkspaceRelativePath(
+    ports.workspaceRoot,
+    filePath,
+    ports.toolRoot(),
+  ).absolute;
 }
 
 const DiagnosticsPathSchema = z
@@ -139,7 +143,7 @@ export class DiagnosticsTool extends defineTool({
   ): Effect.fn.Return<ToolResult, ToolError> {
     const { command, path } = input;
     const diagnosticsPath = ports.inScope(() =>
-      resolveAbsolutePath(path, ports.toolRoot()),
+      resolveAbsolutePath(path, ports),
     );
     const linter = ports.readDiagnostics;
     if (!linter) {
@@ -214,7 +218,7 @@ export class DiagnosticsTool extends defineTool({
       const added = yield* Effect.try({
         try: () =>
           ports.inScope(() => {
-            const absolutePath = resolveAbsolutePath(path, ports.toolRoot());
+            const absolutePath = resolveAbsolutePath(path, ports);
             return {
               absolutePath,
               result: addCriticismSink({

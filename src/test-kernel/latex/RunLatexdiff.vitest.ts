@@ -60,6 +60,7 @@ const baseRequest = {
   agent: 'revise',
   model: 'claude-opus-4-8',
   inputFile: 'paper.tex',
+  workspaceRoot: '/workspace',
   runDiscovery,
   generateBetweenRoundDiffs: false,
   latexdiff,
@@ -104,6 +105,7 @@ describe('runLatexdiffForRun', () => {
         expect(result.runId).toBe('abc123');
         expect(mocks.scanRunDirForOutputs).toHaveBeenCalledWith(
           'abc123',
+          '/workspace',
           'paper.tex',
           undefined,
           'test',
@@ -160,6 +162,7 @@ describe('runLatexdiffForRun', () => {
       expect(result.runId).toBe('def456');
       expect(mocks.discoverLatestRunOutputs).toHaveBeenCalledWith(
         runDiscovery,
+        '/workspace',
         {
           agent: 'revise',
           model: 'claude-opus-4-8',

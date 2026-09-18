@@ -8,7 +8,6 @@ import { normalizeFilePath } from '@utils/core';
 import { escapesRoot } from '@utils/core/pathCore';
 
 // Local file imports
-import { RelativeFS } from './relativeFS';
 import {
   annotateExternal,
   locatePathInRoot,
@@ -16,46 +15,21 @@ import {
 } from './workspaceRoot';
 
 /**
- * Static filesystem rooted at the current session's workspace folder.
- * File I/O from {@link RelativeFS}; path resolution via the session's
- * `WorkspaceRoots` + {@link locatePathInRoot}.
+ * The calling context's workspace folder, or `undefined` with none open.
+ *
+ * The one ambient read left in this module, for the callers that still
+ * default their root instead of being handed one (#12421). Every path helper
+ * below is a pure function of the root it is given.
  */
-export class WorkspaceFS extends RelativeFS {
-  protected static override getBasePath(): string {
-    const wsPath = workspaceRoots().workspace;
-    if (!wsPath) {
-      throw new Error('Workspace path is not available.');
-    }
-    return wsPath;
-  }
-
-  public static getPath(): string | undefined {
-    return workspaceRoots().workspace;
-  }
-
-  /**
-   * Workspace-relative path, symlink-aware. A path outside the workspace (or
-   * with no workspace open) comes back as the caller's own path, normalized.
-   */
-  public static relativePath(filePath: string): string {
-    return workspaceRelativePath(this.getPath(), filePath);
-  }
-
-  /** Absolute path from relative. Already-absolute paths pass through. */
-  public static toAbsolute(filePath: string): string {
-    return workspaceAbsolutePath(this.getPath(), filePath);
-  }
-
-  /**
-   * Resolve a path against the workspace root.
-   * Returns 'workspace' or 'external' — callers apply their own policy.
-   */
-  public static locatePath(inputPath: string): ResolvedPath {
-    return locateInWorkspace(this.getPath(), inputPath);
-  }
+export function workspaceRootPath(): string | undefined {
+  return workspaceRoots().workspace;
 }
 
-/** {@link WorkspaceFS.relativePath} against an explicit workspace root. */
+/**
+ * The workspace-relative form of `filePath`, symlink-aware. A path outside
+ * the workspace (or with no workspace open) comes back as the caller's own
+ * path, normalized.
+ */
 export function workspaceRelativePath(
   root: string | undefined,
   filePath: string,
@@ -67,9 +41,8 @@ export function workspaceRelativePath(
 }
 
 /**
- * {@link WorkspaceFS.toAbsolute} against an explicit workspace root: a
- * relative path joins the root, and with no folder open it throws exactly as
- * the static did.
+ * The absolute form of `filePath` against an explicit workspace root: a
+ * relative path joins the root, and with no folder open it throws.
  */
 export function workspaceAbsolutePath(
   root: string | undefined,
@@ -83,9 +56,10 @@ export function workspaceAbsolutePath(
 }
 
 /**
- * {@link WorkspaceFS.locatePath} against an explicit workspace root — the
- * form for code that holds a run's session roots as data rather than reading
- * the calling context's roots scope.
+ * Resolve `inputPath` against an explicit workspace root, for code that holds
+ * a run's session roots as data rather than reading the calling context's
+ * roots scope. Returns 'workspace' or 'external' — callers apply their own
+ * policy.
  */
 export function locateInWorkspace(
   root: string | undefined,

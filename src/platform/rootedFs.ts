@@ -8,8 +8,8 @@
  * it is built. A consumer therefore takes a filesystem from context and can
  * neither read nor influence which workspace it points at, which is what
  * lets the `inScope` wrappers around tool I/O go away: they exist only to
- * put the right value into `workspaceRoots()`'s AsyncLocalStorage before a
- * `WorkspaceFS` call reads it.
+ * put the right value into `workspaceRoots()`'s AsyncLocalStorage before an
+ * ambient-rooted read picks it up.
  */
 
 // Third-party imports

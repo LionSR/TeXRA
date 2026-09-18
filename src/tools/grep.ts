@@ -7,7 +7,6 @@ import { z } from 'zod';
 import { ToolCall } from '@agent/runtime/ToolCall';
 
 // Local imports - tools
-import { WorkspaceFs } from '@platform/rootedFs';
 import { ToolError, type ToolResult } from '@shared/schemas';
 import {
   resolveAndFormat,
@@ -119,8 +118,6 @@ function buildArguments(input: GrepInput): string[] {
  */
 interface GrepPorts extends WorkspacePathPorts {
   readonly signal: AbortSignal | undefined;
-  /** The root of the call's own workspace view; `undefined` with no folder open. */
-  readonly workspaceRoot: string | undefined;
 }
 
 const runGrep = Effect.fn('GrepTool.execute')(function* (
@@ -129,7 +126,7 @@ const runGrep = Effect.fn('GrepTool.execute')(function* (
 ): Effect.fn.Return<ToolResult, unknown, FileSystem.FileSystem> {
   const root = ports.toolRoot();
   const { path, display } = ports.inScope(() =>
-    resolveAndFormat(input.path ?? undefined, root),
+    resolveAndFormat(ports.workspaceRoot, input.path ?? undefined, root),
   );
   const gitignore = yield* getGitignoreMatcher(ports.workspaceRoot);
   const args = buildArguments(input);
@@ -237,7 +234,6 @@ export const GrepTool = defineTool({
     const ports: GrepPorts = {
       ...workspacePathPorts(call),
       signal: yield* Effect.abortSignal,
-      workspaceRoot: (yield* WorkspaceFs).root,
     };
     return yield* runGrep(ports, input);
   }),

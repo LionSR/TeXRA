@@ -17,7 +17,6 @@ import type { OutputFileInfo, ReadonlyRoundIndexed } from '@shared/schemas';
 import { pathExists } from '@utils/files/fsDurability';
 import { getSafeDocumentRelativePath } from '@utils/files/outputFileUtils';
 import { ensureError } from '@utils/errors/errorMessage';
-import { WorkspaceFS } from '@utils/files/workspaceFS';
 
 // Local file imports
 import type {
@@ -112,6 +111,8 @@ const exists = (
 export const runLatexdiffFromMetadata = Effect.fn('latexdiff.runFromMetadata')(
   function* (params: {
     rounds: ReadonlyRoundIndexed<OutputFileInfo>;
+    /** The calling session's workspace folder, or `undefined` with none open. */
+    workspaceRoot: string | undefined;
     mathMarkup?: MathMarkupOption;
     generateBetweenRoundDiffs: boolean;
     latexdiff: LatexdiffRuntime;
@@ -119,13 +120,13 @@ export const runLatexdiffFromMetadata = Effect.fn('latexdiff.runFromMetadata')(
   }): Effect.fn.Return<DiffRunOutcome, Error, FileSystem.FileSystem> {
     const {
       rounds,
+      workspaceRoot,
       mathMarkup,
       generateBetweenRoundDiffs,
       latexdiff,
       progress,
     } = params;
 
-    const workspaceCwd = WorkspaceFS.getPath();
     const immediateResults: DiffRunResult[] = [];
     const operations: DiffOperation[] = [];
     const groupedBySource = new Map<
@@ -153,7 +154,7 @@ export const runLatexdiffFromMetadata = Effect.fn('latexdiff.runFromMetadata')(
           base,
           revised: info.location,
           description,
-          cwd: workspaceCwd ?? path.dirname(base.absolutePath),
+          cwd: workspaceRoot ?? path.dirname(base.absolutePath),
           round,
         });
 
@@ -177,7 +178,7 @@ export const runLatexdiffFromMetadata = Effect.fn('latexdiff.runFromMetadata')(
             base,
             revised,
             description,
-            cwd: workspaceCwd ?? path.dirname(base.absolutePath),
+            cwd: workspaceRoot ?? path.dirname(base.absolutePath),
             fromRound: previous.round,
             toRound: current.round,
           });

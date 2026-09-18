@@ -29,7 +29,7 @@ import {
   type ToolEditApprovalRequest,
 } from '@tools/approval/toolEditApproval';
 import { generateShortId } from '@utils/core';
-import { WorkspaceFS } from '@utils/files/workspaceFS';
+import { workspaceRelativePath } from '@utils/files/workspaceFS';
 
 /**
  * Loosely-typed recording of host emissions. The recording host flattens the
@@ -338,7 +338,10 @@ export function toolEditApprovalRequest(
     permission: prepareToolEditApprovalPrompt(session, {
       requestId: `approval-${generateShortId()}`,
       request,
-      relativePath: WorkspaceFS.relativePath(request.path),
+      relativePath: workspaceRelativePath(
+        session.roots.workspace,
+        request.path,
+      ),
     }),
   };
 }

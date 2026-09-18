@@ -133,7 +133,7 @@ export class ReadFileTool extends defineTool({
       return yield* Effect.fail(new ToolError('Cancelled before execution.'));
     }
     const { path: resolved, display: displayPath } = call.inScope(() =>
-      resolveAndFormat(input.path, call.workingDirectory),
+      resolveAndFormat(call.roots.workspace, input.path, call.workingDirectory),
     );
     const filePath = resolved.fsPath;
 

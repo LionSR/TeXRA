@@ -116,13 +116,10 @@ export function registerLanguageModelTools(
                 }),
                 Effect.provideService(Runs, session.runs),
                 // Every `WorkspaceFs`/`StorageFs` service read in this call
-                // resolves against this session's folders. `inScope` above is
+                // resolves against this session's folders, and path resolution
+                // takes `ToolCall.roots` as data. `inScope` above is
                 // deliberately a no-op: it installs the ambient workspace-roots
-                // frame (`withRunContext`), which nothing on this path needs —
-                // the tools this manifest registers resolve no path through the
-                // `WorkspaceFS` statics that read it. A registration that did
-                // (the latex tools) would read the process's roots here, not
-                // this session's; the statics are deleted next.
+                // frame (`withRunContext`), which nothing on this path needs.
                 Effect.provide(sessionFsLayer(session.roots)),
               );
             }),

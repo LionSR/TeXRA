@@ -31,7 +31,7 @@ describe('resolveWorkspaceRelativePath path protection', () => {
     await installPlatform({ workspacePath });
 
     expect(() =>
-      resolveWorkspaceRelativePath(outsidePath, workspacePath),
+      resolveWorkspaceRelativePath(workspacePath, outsidePath, workspacePath),
     ).toThrow('Path must stay within the working directory.');
   });
 
@@ -44,13 +44,19 @@ describe('resolveWorkspaceRelativePath path protection', () => {
     });
 
     const logicalOutsidePath = outsidePath.replaceAll('\\', '/');
-    expect(resolveWorkspaceRelativePath(outsidePath, workspacePath)).toEqual({
+    expect(
+      resolveWorkspaceRelativePath(workspacePath, outsidePath, workspacePath),
+    ).toEqual({
       relative: logicalOutsidePath,
       absolute: outsidePath,
       fsPath: outsidePath,
     });
     expect(
-      resolveWorkspaceRelativePath('../outside/file.tex', workspacePath),
+      resolveWorkspaceRelativePath(
+        workspacePath,
+        '../outside/file.tex',
+        workspacePath,
+      ),
     ).toEqual({
       relative: logicalOutsidePath,
       absolute: outsidePath,
@@ -76,7 +82,7 @@ describe('resolveWorkspaceRelativePath path protection', () => {
     });
 
     const targetPath = 'packages/extension/resources/agents/proof.yaml';
-    const resolved = resolveWorkspaceRelativePath(targetPath);
+    const resolved = resolveWorkspaceRelativePath(workspacePath, targetPath);
 
     expect(resolved.external?.writable).toBe(false);
     expect(() => assertWritable(resolved, targetPath)).toThrowError(

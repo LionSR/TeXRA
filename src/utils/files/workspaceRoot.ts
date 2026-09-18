@@ -36,7 +36,7 @@ export function annotateExternal(resolved: {
  * Resolve a relative path against a workspace root.
  *
  * Pure path logic — no VS Code, no I/O. Paths escaping via '..' are external.
- * For absolute paths use WorkspaceFS.locatePath() (symlink-aware).
+ * For absolute paths use locateInWorkspace() (symlink-aware).
  */
 export function locatePathInRoot(
   root: string,

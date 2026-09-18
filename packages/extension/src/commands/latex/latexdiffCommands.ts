@@ -508,6 +508,7 @@ async function handleRunLatexdiff(
             runLatexdiffForRun({
               filesystem: nodeFilesystem,
               ...config,
+              workspaceRoot: session.roots.workspace,
               outputsByRound,
               mathMarkup,
               generateBetweenRoundDiffs,

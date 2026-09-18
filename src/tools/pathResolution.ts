@@ -6,7 +6,7 @@ import { relativeToRoot } from '@platform/defaults/nodeWorkspace';
 import { ToolError } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { normalizeFilePath } from '@utils/core';
-import { WorkspaceFS } from '@utils/files/workspaceFS';
+import { locateInWorkspace } from '@utils/files/workspaceFS';
 import {
   findExternalRoot,
   type MatchedExternalRoot,
@@ -21,7 +21,7 @@ export interface WorkspacePathResolution {
   /**
    * The path to pass to filesystem operations.
    * Absolute when operating outside the workspace (e.g. a worktree),
-   * workspace-relative otherwise (for WorkspaceFS compatibility).
+   * workspace-relative otherwise.
    */
   fsPath: string;
   /**
@@ -52,6 +52,8 @@ export function parseWorkingDirectory(
  * this interface with those fields.
  */
 export interface WorkspacePathPorts {
+  /** The workspace root of the call's session; `undefined` with no folder open. */
+  readonly workspaceRoot: string | undefined;
   /**
    * The active working directory, bound to the calling turn. It stays a thunk
    * because {@link parseWorkingDirectory} rejects a relative directory, so each
@@ -69,9 +71,11 @@ export interface WorkspacePathPorts {
  * one place. `call` is structural — a tool's `ToolCall` value satisfies it.
  */
 export const workspacePathPorts = (call: {
+  readonly roots: { readonly workspace: string | undefined };
   readonly workingDirectory?: string;
   readonly inScope: <A>(operation: () => A) => A;
 }): WorkspacePathPorts => ({
+  workspaceRoot: call.roots.workspace,
   toolRoot: () => parseWorkingDirectory(call.workingDirectory),
   inScope: call.inScope,
 });
@@ -90,11 +94,15 @@ export function assertNoParentTraversal(targetPath: string): void {
  * of the workspace root. This supports operating in git worktrees or other
  * directories outside the main workspace.
  *
- * Thin policy wrapper around WorkspaceFS.locatePath() / locatePathInRoot()
- * that throws ToolError when the path escapes the root. Tools use this;
- * non-tool code should call WorkspaceFS.locatePath() directly.
+ * Thin policy wrapper around locateInWorkspace() / locatePathInRoot() that
+ * throws ToolError when the path escapes the root. Tools use this;
+ * non-tool code calls locateInWorkspace() directly.
+ *
+ * `workspaceRoot` is the calling session's workspace folder, carried as data
+ * from the tool's `ToolCall`; `undefined` when no folder is open.
  */
 export function resolveWorkspaceRelativePath(
+  workspaceRoot: string | undefined,
   targetPath?: string,
   root?: string,
 ): WorkspacePathResolution {
@@ -174,7 +182,7 @@ export function resolveWorkspaceRelativePath(
     });
   }
 
-  if (!WorkspaceFS.getPath()) {
+  if (!workspaceRoot) {
     // No workspace — fall back to the allowlist so agent-dir calls still work.
     if (input && path.isAbsolute(input)) {
       return resolveOutsideRoot(
@@ -186,7 +194,7 @@ export function resolveWorkspaceRelativePath(
     throw new ToolError('Workspace path is not available.');
   }
 
-  const resolved = WorkspaceFS.locatePath(input);
+  const resolved = locateInWorkspace(workspaceRoot, input);
 
   if (resolved.kind === 'external') {
     return resolveOutsideRoot(
@@ -262,6 +270,7 @@ export function assertWritable(
  * Returns `path` (resolution with relative/absolute) and `display` (formatted string).
  */
 export function resolveAndFormat(
+  workspaceRoot: string | undefined,
   targetPath?: string,
   root?: string,
 ): {
@@ -269,6 +278,7 @@ export function resolveAndFormat(
   display: string;
 } {
   const path = resolveWorkspaceRelativePath(
+    workspaceRoot,
     targetPath,
     parseWorkingDirectory(root),
   );

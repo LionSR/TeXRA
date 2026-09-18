@@ -9,7 +9,7 @@ import {
   type RunStorageFileLocation,
   type WorkspaceFileLocation,
 } from '@shared/schemas';
-import { locateInWorkspace, WorkspaceFS } from './workspaceFS';
+import { locateInWorkspace, workspaceRootPath } from './workspaceFS';
 
 export function createWorkspaceLocation(
   absolutePath: string,
@@ -66,7 +66,7 @@ export function getFileDirectory(location: FileLocation): string {
  * @returns FileLocation (workspace or external, never runStorage)
  */
 export function pathToLocation(target: string): FileLocation {
-  return pathToLocationIn(WorkspaceFS.getPath(), target);
+  return pathToLocationIn(workspaceRootPath(), target);
 }
 
 /**

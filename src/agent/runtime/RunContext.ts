@@ -4,7 +4,7 @@ import type { SessionHandle } from './SessionHandle';
 
 /**
  * Run host code in the scope of one session, so session-rooted services
- * (`StorageFS`, `WorkspaceFS`) resolve to that session outside any agent run.
+ * (`StorageFS`, `workspaceRootPath`) resolve to that session outside any agent run.
  * A host holding several sessions in one process (the desktop, one per open
  * paper) wraps every touch of a session's storage.
  */

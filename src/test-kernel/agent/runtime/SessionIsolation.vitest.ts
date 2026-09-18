@@ -30,7 +30,7 @@ import {
 } from '@test/support/sessionTestUtils';
 import { generateRunId } from '@utils/core';
 import { StorageFS } from '@utils/files/storageFS';
-import { WorkspaceFS } from '@utils/files/workspaceFS';
+import { workspaceRootPath } from '@utils/files/workspaceFS';
 import { createTestLaunchContext } from './launchContextTestUtils';
 
 const storageMocks = vi.hoisted(() => ({
@@ -75,12 +75,12 @@ describe('session isolation', () => {
     const sessionB = createTestSession({ roots: paperB });
     try {
       await runInSession(sessionA, async () => {
-        expect(WorkspaceFS.getPath()).toBe(fakePath('papers/a'));
+        expect(workspaceRootPath()).toBe(fakePath('papers/a'));
         await StorageFS.ensureDir('.');
         await StorageFS.write('note.txt', 'from a');
       });
       await runInSession(sessionB, async () => {
-        expect(WorkspaceFS.getPath()).toBe(fakePath('papers/b'));
+        expect(workspaceRootPath()).toBe(fakePath('papers/b'));
         await StorageFS.ensureDir('.');
         await StorageFS.write('note.txt', 'from b');
       });
@@ -90,7 +90,7 @@ describe('session isolation', () => {
       expect(await read(fakePath('storage/b/note.txt'))).toBe('from b');
       // Outside both scopes the process roots answer, not either paper.
       expect(workspaceRoots().workspace).toBe(fakePath('workspace'));
-      expect(WorkspaceFS.getPath()).toBe(fakePath('workspace'));
+      expect(workspaceRootPath()).toBe(fakePath('workspace'));
       expect(workspaceRoots().storage).toBe(
         fakePath('workspace/.texra/storage'),
       );

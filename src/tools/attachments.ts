@@ -135,7 +135,13 @@ export const buildFileAttachment = Effect.fn('buildFileAttachment')(function* ({
     ? { path: resolved, display: toPosixPath(resolved.relative) }
     : yield* Effect.try({
         try: () =>
-          call.inScope(() => resolveAndFormat(filePath, call.workingDirectory)),
+          call.inScope(() =>
+            resolveAndFormat(
+              call.roots.workspace,
+              filePath,
+              call.workingDirectory,
+            ),
+          ),
         catch: attachmentFailure(`Failed to resolve attachment ${filePath}`),
       });
   const present = yield* Effect.tryPromise({

@@ -18,7 +18,7 @@ import treeKill from 'tree-kill';
 import { createLog } from '@logger/logUtils';
 import type { ExecResult } from '@shared/schemas';
 import { onAbort as onAbortSignal } from '@utils/core';
-import { WorkspaceFS } from '@utils/files/workspaceFS';
+import { workspaceRootPath } from '@utils/files/workspaceFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getGitAuthorEnv } from '@utils/system/gitAuthorEnv';
 import { IS_WINDOWS, extendEnvPath } from '@utils/system/platformPaths';
@@ -168,11 +168,11 @@ function logCommandStderr(
  * A caller that runs before any roots are installed (the pre-platform
  * `git --version` probe `executeCommandSync` documents above) has no workspace
  * at all, so the cwd is the honest answer rather than a retargeted one.
- * `WorkspaceFS.getPath` throws in that state.
+ * Reading the roots throws in that state.
  */
 function workspacePathOrProcessCwd(): string {
   try {
-    return WorkspaceFS.getPath() ?? process.cwd();
+    return workspaceRootPath() ?? process.cwd();
   } catch {
     return process.cwd();
   }
@@ -295,7 +295,7 @@ export async function executeCommand(
       return resultFromProcessOutput(null, 'Command aborted by user', 130);
     }
 
-    const workspacePath = options.cwd ?? WorkspaceFS.getPath();
+    const workspacePath = options.cwd ?? workspaceRootPath();
     if (!workspacePath) {
       throw new Error('No workspace path found');
     }

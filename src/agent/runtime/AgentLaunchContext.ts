@@ -185,7 +185,7 @@ export const failIfLaunchStopped = (
 
 /**
  * Run `fn` in the scope of the launch's owning session, so session-rooted
- * services (`StorageFS`, `WorkspaceFS`) resolve to the run's session. This is
+ * services (`StorageFS`, `workspaceRootPath`) resolve to the run's session. This is
  * the `inScope` the run layer hands to everything below the launch.
  */
 export function runInLaunchSession<T>(ctx: AgentLaunchContext, fn: () => T): T {
