@@ -1,5 +1,5 @@
 // Third-party imports
-import { Data, Effect } from 'effect';
+import { Data, Effect, PlatformError } from 'effect';
 
 // Local imports
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
@@ -44,13 +44,15 @@ interface ProgressFollowUpWorkspace {
     | {
         kind: 'external';
       };
-  exists(relativePath: string): Promise<boolean>;
+  exists(
+    relativePath: string,
+  ): Effect.Effect<boolean, PlatformError.PlatformError>;
 }
 
 /**
- * The compile-fixer planner still reads the workspace through a
- * Promise-faced port, so its one lift is named here rather than widened to
- * `Error`; `cause` is what the planner rejected with.
+ * The planner's one failure: the workspace probe behind `exists` could not
+ * answer. Named rather than widened to `Error`, so the host arm that shows it
+ * sees what it is; `cause` is the filesystem error itself.
  */
 export class CompileFixerPlanFailed extends Data.TaggedError(
   'CompileFixerPlanFailed',
@@ -114,89 +116,93 @@ export class ProgressFollowUpController {
           this.deps.state.getCompileFailures(runId),
         ).flat();
 
-        // The planner below still reads the workspace through the
-        // Promise-tier port its caller builds, so this is where that edge lives.
-        return Effect.tryPromise({
-          try: () =>
-            this.planCompileFixer({
-              runId,
-              runConfig,
-              compileFailures,
-              runOutputs: this.deps.state.getOutputFiles(runId),
-              modelOptions,
-            }),
-          catch: (cause) =>
-            new CompileFixerPlanFailed({
-              runId,
-              message: toErrorMessage(cause),
-              cause,
-            }),
-        });
+        return this.planCompileFixer({
+          runId,
+          runConfig,
+          compileFailures,
+          runOutputs: this.deps.state.getOutputFiles(runId),
+          modelOptions,
+        }).pipe(
+          Effect.mapError(
+            (cause) =>
+              new CompileFixerPlanFailed({
+                runId,
+                message: toErrorMessage(cause),
+                cause,
+              }),
+          ),
+        );
       }),
     );
   }
 
-  async planCompileFixer(
-    input: CompileFixerInput,
-  ): Promise<ProgressFollowUpPlan> {
-    // The compile-fixer planner is workflow-only; tool-use runs have no plan.
-    const workflowConfig =
-      input.runConfig?.agentCategory === AgentCategory.Workflow
-        ? input.runConfig
-        : undefined;
-    if (!workflowConfig) {
-      return {
-        kind: 'warning',
-        message:
-          'No workflow state found for this stream. Cannot run latexFixer.',
-      };
-    }
+  readonly planCompileFixer = Effect.fn('ProgressFollowUp.planCompileFixer')(
+    function* (
+      this: ProgressFollowUpController,
+      input: CompileFixerInput,
+    ): Effect.fn.Return<ProgressFollowUpPlan, PlatformError.PlatformError> {
+      // The compile-fixer planner is workflow-only; tool-use runs have no plan.
+      const workflowConfig =
+        input.runConfig?.agentCategory === AgentCategory.Workflow
+          ? input.runConfig
+          : undefined;
+      if (!workflowConfig) {
+        return {
+          kind: 'warning',
+          message:
+            'No workflow state found for this stream. Cannot run latexFixer.',
+        };
+      }
 
-    if (input.compileFailures.length === 0) {
-      return {
-        kind: 'info',
-        message: 'No compile failures are recorded for this stream.',
-      };
-    }
+      if (input.compileFailures.length === 0) {
+        return {
+          kind: 'info',
+          message: 'No compile failures are recorded for this stream.',
+        };
+      }
 
-    const model = this.selectWorkflowModel(workflowConfig, input.modelOptions);
-    if (!model) {
-      return {
-        kind: 'warning',
-        message: 'No model is available to launch latexFixer.',
-      };
-    }
+      const model = this.selectWorkflowModel(
+        workflowConfig,
+        input.modelOptions,
+      );
+      if (!model) {
+        return {
+          kind: 'warning',
+          message: 'No model is available to launch latexFixer.',
+        };
+      }
 
-    const targets = await this.compileFixerTargets(
-      workflowConfig,
-      input.compileFailures,
-      input.runOutputs,
-    );
-    if (targets.length === 0) {
-      return {
-        kind: 'warning',
-        message:
-          'No editable workspace file matched the compile failure. Accept the output into the workspace first, then run latexFixer.',
-      };
-    }
+      const targets = yield* this.compileFixerTargets(
+        workflowConfig,
+        input.compileFailures,
+        input.runOutputs,
+      );
+      if (targets.length === 0) {
+        return {
+          kind: 'warning',
+          message:
+            'No editable workspace file matched the compile failure. Accept the output into the workspace first, then run latexFixer.',
+        };
+      }
 
-    const editableFiles = targets.map((target) => target.path);
-    return {
-      kind: 'execute',
-      request: {
-        config: this.buildCompileFixerConfig(
-          workflowConfig,
-          model,
-          editableFiles,
-          this.buildCompileFixerQuestion(
-            input.compileFailures,
-            targets,
-            input.runId,
+      const editableFiles = targets.map((target) => target.path);
+      return {
+        kind: 'execute',
+        request: {
+          config: this.buildCompileFixerConfig(
+            workflowConfig,
+            model,
+            editableFiles,
+            this.buildCompileFixerQuestion(
+              input.compileFailures,
+              targets,
+              input.runId,
+            ),
           ),
-        ),
-      },
-    };
-  }
+        },
+      };
+    },
+  );
 
   private selectWorkflowModel(
     workflowConfig: AgentConfig,
@@ -297,11 +303,14 @@ export class ProgressFollowUpController {
     };
   }
 
-  private async compileFixerTargets(
+  private readonly compileFixerTargets = Effect.fn(
+    'ProgressFollowUp.compileFixerTargets',
+  )(function* (
+    this: ProgressFollowUpController,
     originalConfig: AgentConfig,
     compileFailures: CompileFailure[],
     runOutputs: ReadonlyRoundIndexed<OutputFileInfo>,
-  ): Promise<CompileFixerTarget[]> {
+  ): Effect.fn.Return<CompileFixerTarget[], PlatformError.PlatformError> {
     const preferred = this.compileFixerInputCandidates(
       originalConfig,
       compileFailures,
@@ -314,7 +323,7 @@ export class ProgressFollowUpController {
     for (const candidate of preferred) {
       const location = this.deps.workspace.locatePath(candidate);
       if (location.kind === 'external') continue;
-      const candidateTargets = await this.compileFixerTargetsForCandidate(
+      const candidateTargets = yield* this.compileFixerTargetsForCandidate(
         location.relativePath,
       );
       for (const target of candidateTargets) {
@@ -328,21 +337,24 @@ export class ProgressFollowUpController {
       }
     }
     return [...targetByPath.values()];
-  }
+  });
 
-  private async compileFixerTargetsForCandidate(
+  private readonly compileFixerTargetsForCandidate = Effect.fn(
+    'ProgressFollowUp.compileFixerTargetsForCandidate',
+  )(function* (
+    this: ProgressFollowUpController,
     relativePath: string,
-  ): Promise<CompileFixerTarget[]> {
+  ): Effect.fn.Return<CompileFixerTarget[], PlatformError.PlatformError> {
     const artifact = detectGeneratedLatexdiffArtifact(relativePath);
     if (!artifact) {
-      return (await this.deps.workspace.exists(relativePath))
+      return (yield* this.deps.workspace.exists(relativePath))
         ? [{ path: relativePath }]
         : [];
     }
 
     const sourcePath = artifact.sourcePath;
-    const sourceExists = await this.deps.workspace.exists(sourcePath);
-    const artifactExists = await this.deps.workspace.exists(relativePath);
+    const sourceExists = yield* this.deps.workspace.exists(sourcePath);
+    const artifactExists = yield* this.deps.workspace.exists(relativePath);
     if (!artifactExists) {
       return sourceExists
         ? [{ path: sourcePath, missingLatexdiffArtifact: relativePath }]
@@ -365,7 +377,7 @@ export class ProgressFollowUpController {
       targets.push({ path: sourcePath });
     }
     return targets;
-  }
+  });
 
   /**
    * Prefer the source recorded for the failed generated output. Original

@@ -1,6 +1,6 @@
 import { it as effectIt } from '@effect/vitest';
 /** Completed conversation reads and task reads through the archive facade. */
-import { Effect, Stream, SubscriptionRef } from 'effect';
+import { Effect, Layer, Stream, SubscriptionRef } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const launchMocks = vi.hoisted(() => ({
@@ -53,6 +53,7 @@ import {
 } from '@shared/schemas';
 import type { RunId, TodoItem } from '@shared/schemas';
 import type { StreamLogAppendInput } from '@shared/session/traceEntries';
+import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import {
   createTempDirPlatform,
@@ -276,7 +277,14 @@ describe('completedRunArchive facade', () => {
         promptForApiKey: () => Effect.void,
         showInfo: () => Effect.void,
         showWarning: () => Effect.void,
-      }).pipe(Effect.provide(Secrets.layer(installedHost().secrets))),
+      }).pipe(
+        Effect.provide(
+          Layer.merge(
+            Secrets.layer(installedHost().secrets),
+            nodePlatformLayer,
+          ),
+        ),
+      ),
     );
     await Effect.runPromise(actions.runNew(runId));
     expect(runAgentRequest).toHaveBeenCalledWith({ config });
