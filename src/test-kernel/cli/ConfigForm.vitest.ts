@@ -206,7 +206,7 @@ async function openConfigFormProps(
     state: stores.globalState,
     runtime: testRuntime(),
     runtimeSession: testDefaultSession(),
-    getConfigStores: () => stores,
+    configStores: stores,
   });
   openCliSlashCommandForm('config', '');
   return renderConfigFormProps();
@@ -464,6 +464,7 @@ describe('CliConfigForm API-key status lifecycle', () => {
     const { React } = await loadInk();
     const standalone = await renderInkElement(
       React.createElement(ConfigApp, {
+        stores: makeFakeSettingsStores().stores,
         secrets: formSecrets,
         runtime: testRuntime(),
       }),
@@ -475,7 +476,7 @@ describe('CliConfigForm API-key status lifecycle', () => {
       state: stores.globalState,
       runtime: testRuntime(),
       runtimeSession: testDefaultSession(),
-      getConfigStores: () => stores,
+      configStores: stores,
     });
     openCliSlashCommandForm('config', '');
     const slash = await renderInkElement(
@@ -508,7 +509,7 @@ describe('/config slash command wiring', () => {
       state: stores.globalState,
       runtime: testRuntime(),
       runtimeSession: testDefaultSession(),
-      getConfigStores: () => stores,
+      configStores: stores,
     });
     expect(openCliSlashCommandForm('config', '')).toBe(true);
     expect(activeForm.get()?.commandName).toBe('config');
@@ -533,7 +534,7 @@ describe('/config slash command wiring', () => {
       state: stores.globalState,
       runtime: testRuntime(),
       runtimeSession: testDefaultSession(),
-      getConfigStores: () => stores,
+      configStores: stores,
       onApprovalPolicySelect: (policy) => {
         applied.push(policy);
       },
@@ -568,7 +569,7 @@ describe('/config slash command wiring', () => {
       state: stores.globalState,
       runtime: testRuntime(),
       runtimeSession: testDefaultSession(),
-      getConfigStores: () => stores,
+      configStores: stores,
       onError: () => {
         events.push('error');
       },

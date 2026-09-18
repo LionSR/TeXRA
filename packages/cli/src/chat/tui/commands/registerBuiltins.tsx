@@ -298,7 +298,7 @@ export function registerBuiltinSlashCommands(options: {
   onMemorySelect?: SelectHandler<string>;
   onResumeSelect?: SelectHandler<RunId>;
   onSkillSelect?: SelectHandler<SkillActivation>;
-  getConfigStores?: () => SettingsStores;
+  configStores?: SettingsStores;
   onError?: ErrorHandler;
 }): void {
   const { secrets, state, runtime } = options;
@@ -733,13 +733,12 @@ export function registerBuiltinSlashCommands(options: {
   });
   // Only offer /config when the host wired the stores it reads/writes — a
   // command that can't reach a store would render an inert panel.
-  const getConfigStores = options.getConfigStores;
-  if (getConfigStores) {
+  const configStores = options.configStores;
+  if (configStores) {
     const ConfigFormAdapter = (props: SlashFormProps): React.JSX.Element => {
-      const stores = getConfigStores();
       return (
         <CliConfigForm
-          stores={stores}
+          stores={configStores}
           secrets={secrets}
           runtime={runtime}
           availableRows={props.availableRows}
