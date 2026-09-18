@@ -1,7 +1,6 @@
 import { Effect, Stream, SubscriptionRef } from 'effect';
 import { it } from '@effect/vitest';
 import { beforeEach, describe, expect } from 'vitest';
-import { z } from 'zod';
 
 import { getRunRecords } from '@agent/storage';
 import { readRunChildren } from '@agent/storage/runLifecycle';
@@ -116,16 +115,6 @@ describe('canonical run records', () => {
     await run(records.clearReport());
     expect(await run(records.readReport())).toBeNull();
     expect(await run(records.readWorkspaceFiles())).toEqual(['a.tex', 'b.tex']);
-  });
-
-  it('preserves malformed-record failures instead of a default', async () => {
-    const malformed = new z.ZodError([]);
-    const reader = Object.create(session) as typeof session;
-    reader.readRunRecords = () => Effect.die(malformed);
-    const result = await run(
-      getRunRecords(reader, runId).readRunRecord().pipe(Effect.result),
-    );
-    expect(result).toMatchObject({ _tag: 'Failure', failure: malformed });
   });
 
   it('joins child labels through the declared creation edge', async () => {

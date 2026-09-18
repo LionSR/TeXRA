@@ -1,5 +1,4 @@
 import { Effect } from 'effect';
-import { z } from 'zod';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { createLog } from '@logger/logUtils';
@@ -20,8 +19,7 @@ const log = createLog('Resumability');
  * one place that acts on them. Callers discriminate on this, never on
  * {@link ResumabilityDecision.cause}, which is display text.
  */
-export type ResumabilityFault =
-  'metadata-unreadable' | 'metadata-malformed' | 'checkpoint-unreadable';
+export type ResumabilityFault = 'metadata-unreadable' | 'checkpoint-unreadable';
 
 /**
  * What the durable run facts alone say about continuing a run: a
@@ -65,16 +63,13 @@ export const deriveResumability = Effect.fn('deriveResumability')(function* (
     .pipe(Effect.result);
   if (endResult._tag === 'Failure') {
     const error = endResult.failure;
-    const malformed = error instanceof z.ZodError;
     log.debug(
       `Failed to read the terminal record for ${runId}: ${toErrorMessage(error)}`,
     );
     return {
       kind: 'unreadable',
-      fault: malformed ? 'metadata-malformed' : 'metadata-unreadable',
-      cause: malformed
-        ? 'run metadata is malformed'
-        : `run metadata could not be read (${toErrorMessage(error)})`,
+      fault: 'metadata-unreadable',
+      cause: `run metadata could not be read (${toErrorMessage(error)})`,
     };
   }
   const outcome = endResult.success?.outcome;

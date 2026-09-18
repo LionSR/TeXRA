@@ -100,36 +100,13 @@ vi.mock('@agent/storage/runRecords', async () => {
     ...actual,
     getRunRecords: vi.fn(() =>
       createFakeRunRecords({
-        readConfig: () =>
-          Effect.tryPromise({
-            try: () => mocks.readConfig(),
-            catch: ensureError,
-          }),
-        readRunRecord: () =>
-          Effect.tryPromise({
-            try: () => mocks.readConfig(),
-            catch: ensureError,
-          }),
-        readReport: () =>
-          Effect.tryPromise({
-            try: () => mocks.readReport(),
-            catch: ensureError,
-          }),
-        readResultMeta: () =>
-          Effect.tryPromise({
-            try: () => mocks.readResultMeta(),
-            catch: ensureError,
-          }),
-        readRunEnd: () =>
-          Effect.tryPromise({
-            try: () => mocks.readRunEnd(),
-            catch: ensureError,
-          }),
+        readConfig: () => Effect.promise(() => mocks.readConfig()),
+        readRunRecord: () => Effect.promise(() => mocks.readConfig()),
+        readReport: () => Effect.promise(() => mocks.readReport()),
+        readResultMeta: () => Effect.promise(() => mocks.readResultMeta()),
+        readRunEnd: () => Effect.promise(() => mocks.readRunEnd()),
         readWorkspaceFiles: () =>
-          Effect.tryPromise({
-            try: () => mocks.readWorkspaceFiles(),
-            catch: ensureError,
-          }),
+          Effect.promise(() => mocks.readWorkspaceFiles()),
       }),
     ),
   };

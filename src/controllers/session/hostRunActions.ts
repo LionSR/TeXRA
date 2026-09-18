@@ -51,6 +51,7 @@ import {
   type ReadonlyRoundIndexed,
   type RunId,
 } from '@shared/schemas';
+import type { DatabaseReadFailed } from '@shared/session/database';
 import type { HostRequest } from '@shared/session/hostRequest';
 import {
   Rejected,
@@ -120,18 +121,17 @@ export class RunLaunchFailed extends Data.TaggedError('RunLaunchFailed')<{
 }> {}
 
 /**
- * The run's saved setup could not be read. `getRunRecords().readConfig()`
- * squashes the database read's own `DatabaseReadFailed` and a corrupt
- * record's `ZodError` into one bare `Error` (`@agent/storage/runRecords`), so
- * the read is named here and carries that value as `cause` for the host that
- * classifies it.
+ * The run's saved setup could not be read: the database would not answer, or
+ * it refused the committed `run.record` row. The read is named here and
+ * carries its own failure as `cause`, so the host that classifies it reads
+ * the record read's typed error rather than this wrapper.
  */
 export class RunConfigUnreadable extends Data.TaggedError(
   'RunConfigUnreadable',
 )<{
   readonly runId: RunId;
   readonly message: string;
-  readonly cause: unknown;
+  readonly cause: DatabaseReadFailed;
 }> {}
 
 export interface HostRunActionPorts {

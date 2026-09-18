@@ -6,9 +6,7 @@
  * writes the run ledger.
  */
 
-import { Cause, Effect } from 'effect';
-
-import { z } from 'zod';
+import { Effect } from 'effect';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
@@ -31,7 +29,6 @@ import {
   type SessionEventDraft,
   type RunId,
 } from '@shared/schemas';
-import { ensureError } from '@utils/errors/errorMessage';
 
 /** A child launch projected from its canonical creation fact. */
 export interface ChildRecord {
@@ -142,35 +139,31 @@ export const persistedParentRunId = Effect.fn('persistedParentRunId')(
 /** Native access to named run metadata, with no file-backed read arm. */
 export function getRunRecords(session: SessionHandle, runId: RunId) {
   const id = aggregateId('run', runId);
-  /** Rows are parsed on the way out, so a Zod fault passes through typed. */
-  const asError = <E>(cause: Cause.Cause<E>): Error => {
-    const error = Cause.squash(cause);
-    return error instanceof z.ZodError ? error : ensureError(error);
-  };
   const read = <A>(
     select: (rows: readonly SessionEvent[]) => A,
-  ): Effect.Effect<A, Error> =>
-    session.readRunRecords(runId).pipe(
-      Effect.map(select),
-      Effect.catchCause((cause) => Effect.fail(asError(cause))),
-    );
+  ): Effect.Effect<A, DatabaseReadFailed> =>
+    session.readRunRecords(runId).pipe(Effect.map(select));
   const write = (
     draft: SessionEventDraft,
   ): Effect.Effect<void, DatabaseNotOwner | DatabaseWriteFailed> =>
     session.commit([draft]).pipe(Effect.asVoid);
-  /** The latest `run.record` row; the database reads a closed run as absent. */
-  const recordOf = (rows: readonly SessionEvent[]): RunRecord | null => {
-    const event = rows.findLast(
-      (row) => row.aggregateId === id && row.type === 'run.record',
-    );
-    return event?.type === 'run.record'
-      ? RunRecordSchema.parse(event.record)
-      : null;
-  };
+  /**
+   * The latest `run.record` row; the database reads a closed run as absent.
+   * The row's record needs no parse of its own: `SessionEventSchema` carries
+   * this field as `RunRecordFieldsSchema`, so the database's own decode
+   * already refused a row that does not match it, as `DatabaseReadFailed`.
+   */
+  const readRecord = (): Effect.Effect<RunRecord | null, DatabaseReadFailed> =>
+    read((rows) => {
+      const event = rows.findLast(
+        (row) => row.aggregateId === id && row.type === 'run.record',
+      );
+      return event?.type === 'run.record' ? event.record : null;
+    });
   return {
     /** The run has a `run.start` the database still lists: absent, or
      *  closed by its tombstone, reads false. */
-    exists: (): Effect.Effect<boolean, Error> =>
+    exists: (): Effect.Effect<boolean, DatabaseReadFailed> =>
       read((rows) =>
         rows.some((row) => row.aggregateId === id && row.type === 'run.start'),
       ),
@@ -206,27 +199,28 @@ export function getRunRecords(session: SessionHandle, runId: RunId) {
             (rows) => rows.filter((row) => row.type === 'run.activate').length,
           ),
         ),
-    readRunRecord: (): Effect.Effect<RunRecord | null, Error> => read(recordOf),
-    readConfig: (): Effect.Effect<AgentConfig | null, Error> =>
-      read((rows) => {
-        const record = recordOf(rows);
-        return record && isAgentRunRecord(record) ? record : null;
-      }),
-    readReport: (): Effect.Effect<string | null, Error> =>
+    readRunRecord: readRecord,
+    readConfig: (): Effect.Effect<AgentConfig | null, DatabaseReadFailed> =>
+      readRecord().pipe(
+        Effect.map((record) =>
+          record && isAgentRunRecord(record) ? record : null,
+        ),
+      ),
+    readReport: (): Effect.Effect<string | null, DatabaseReadFailed> =>
       read((rows) => {
         const event = rows.findLast(
           (row) => row.aggregateId === id && row.type === 'run.report',
         );
         return event?.type === 'run.report' ? event.report : null;
       }),
-    readWorkspaceFiles: (): Effect.Effect<string[], Error> =>
+    readWorkspaceFiles: (): Effect.Effect<string[], DatabaseReadFailed> =>
       read((rows) => {
         const event = rows.findLast(
           (row) => row.aggregateId === id && row.type === 'run.workspaceFiles',
         );
         return event?.type === 'run.workspaceFiles' ? event.paths : [];
       }),
-    readResultMeta: (): Effect.Effect<ResultMeta | null, Error> =>
+    readResultMeta: (): Effect.Effect<ResultMeta | null, DatabaseReadFailed> =>
       read((rows) => {
         const event = rows.findLast(
           (row) => row.aggregateId === id && row.type === 'run.result',
@@ -234,7 +228,7 @@ export function getRunRecords(session: SessionHandle, runId: RunId) {
         return event?.type === 'run.result' ? event.result : null;
       }),
     /** The run's terminal fact: outcome, error, usage and the flow's output. */
-    readRunEnd: (): Effect.Effect<RunEnd | null, Error> =>
+    readRunEnd: (): Effect.Effect<RunEnd | null, DatabaseReadFailed> =>
       read((rows) => {
         const end = runEndFromEvents(rows, runId);
         if (!end) return null;
