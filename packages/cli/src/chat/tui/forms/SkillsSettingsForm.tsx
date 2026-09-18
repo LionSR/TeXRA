@@ -31,6 +31,8 @@ interface SkillsSettingsData {
 interface SkillsSettingsFormProps {
   readonly availableRows?: number;
   readonly stores: SettingsStores;
+  /** The session's workspace folder: where project skills are discovered. */
+  readonly workspaceRoot: string | undefined;
   /**
    * The process runtime the shared write path settles on. Ink components run
    * no Effect of their own, so it arrives as a prop from `/config`.
@@ -47,6 +49,7 @@ function requireSetting(key: string) {
 
 async function loadSkillsSettings(
   stores: SettingsStores,
+  workspaceRoot: string | undefined,
 ): Promise<SkillsSettingsData> {
   const disabledNames = readSetting(
     requireSetting(WorkspaceStateKey.DISABLED_SKILLS),
@@ -58,7 +61,7 @@ async function loadSkillsSettings(
     stores,
     'cli',
   ) as ActiveSkillSourceScope[];
-  const result = await loadRuntimeSkillDisplay({
+  const result = await loadRuntimeSkillDisplay(workspaceRoot, {
     names: disabledNames,
     scopes: disabledScopes,
   });
@@ -87,7 +90,7 @@ export function SkillsSettingsForm(
     <AsyncListForm<SkillsSettingsData, SkillToggle>
       title="/config · Skills"
       loadingLabel="Loading skills..."
-      load={() => loadSkillsSettings(props.stores)}
+      load={() => loadSkillsSettings(props.stores, props.workspaceRoot)}
       items={(data) => [
         ...ActiveSkillSourceScopeSchema.options.map((scope) => ({
           value: { kind: 'source' as const, scope },

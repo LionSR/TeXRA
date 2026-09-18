@@ -16,7 +16,6 @@ import { captureLogEntries } from '@test/support/logSinkCapture';
 import { installPlatform } from '@test/support/setupPlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
-import { workspaceRootPath } from '@utils/files/workspaceFS';
 
 // A run may have generated files even when no output facts were recorded.
 const mocks = vi.hoisted(() => ({
@@ -96,7 +95,7 @@ describe('discoverLatestRunOutputs', () => {
         const result = yield* discoverLatestRunOutputs(
           discovery,
           workspaceRoots().storage,
-          workspaceRootPath(),
+          workspaceRoots().workspace,
           MATCHING_QUERY,
           'test',
           platform().fs,
@@ -128,7 +127,7 @@ describe('discoverLatestRunOutputs', () => {
         const result = yield* discoverLatestRunOutputs(
           discovery,
           workspaceRoots().storage,
-          workspaceRootPath(),
+          workspaceRoots().workspace,
           MATCHING_QUERY,
           'test',
           platform().fs,
@@ -154,7 +153,7 @@ describe('discoverLatestRunOutputs', () => {
         const result = yield* discoverLatestRunOutputs(
           discovery,
           workspaceRoots().storage,
-          workspaceRootPath(),
+          workspaceRoots().workspace,
           MATCHING_QUERY,
           'test',
           platform().fs,
@@ -177,7 +176,7 @@ describe('discoverLatestRunOutputs', () => {
           discoverLatestRunOutputs(
             discovery,
             workspaceRoots().storage,
-            workspaceRootPath(),
+            workspaceRoots().workspace,
             MATCHING_QUERY,
             'test',
             platform().fs,
@@ -197,7 +196,7 @@ describe('outputDiscovery diagnostics', () => {
     scanRunDirForOutputs(
       'abc123' as RunId,
       workspaceRoots().storage,
-      workspaceRootPath(),
+      workspaceRoots().workspace,
       'paper.tex',
       undefined,
       'test',

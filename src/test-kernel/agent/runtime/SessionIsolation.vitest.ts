@@ -32,7 +32,6 @@ import {
 } from '@test/support/sessionTestUtils';
 import { generateRunId } from '@utils/core';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
-import { workspaceRootPath } from '@utils/files/workspaceFS';
 import { createTestLaunchContext } from './launchContextTestUtils';
 
 const storageMocks = vi.hoisted(() => ({
@@ -87,11 +86,11 @@ describe('session isolation', () => {
         );
       };
       await runInSession(sessionA, async () => {
-        expect(workspaceRootPath()).toBe(fakePath('papers/a'));
+        expect(workspaceRoots().workspace).toBe(fakePath('papers/a'));
         await writeNote(sessionA, 'from a');
       });
       await runInSession(sessionB, async () => {
-        expect(workspaceRootPath()).toBe(fakePath('papers/b'));
+        expect(workspaceRoots().workspace).toBe(fakePath('papers/b'));
         await writeNote(sessionB, 'from b');
       });
       const read = async (file: string) =>
@@ -100,7 +99,6 @@ describe('session isolation', () => {
       expect(await read(fakePath('storage/b/note.txt'))).toBe('from b');
       // Outside both scopes the process roots answer, not either paper.
       expect(workspaceRoots().workspace).toBe(fakePath('workspace'));
-      expect(workspaceRootPath()).toBe(fakePath('workspace'));
       expect(workspaceRoots().storage).toBe(
         fakePath('workspace/.texra/storage'),
       );

@@ -26,8 +26,10 @@ export async function readCliSkills(
   );
 }
 
-export async function readCliRuntimeSkills(): Promise<DiscoverSkillSourcesResult> {
-  return loadEnabledRuntimeSkills();
+export async function readCliRuntimeSkills(
+  workspaceRoot: string | undefined,
+): Promise<DiscoverSkillSourcesResult> {
+  return loadEnabledRuntimeSkills(workspaceRoot);
 }
 
 export function formatCliSkillIssue(issue: SkillLoadIssue): string {

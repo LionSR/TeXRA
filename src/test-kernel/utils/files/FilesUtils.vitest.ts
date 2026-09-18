@@ -7,15 +7,13 @@ import { it as effectIt } from '@effect/vitest';
 import { Cause, Effect, Exit, FileSystem, Path } from 'effect';
 import { isTexFile } from '@common/files/fileTypeUtils';
 import { platform } from '@platform/platform';
+import { workspaceRoots } from '@platform/workspaceRoots';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { getMimeType } from '@utils/files/mimeUtils';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { pathToLocationIn } from '@utils/files/fileLocation';
-import {
-  workspaceAbsolutePath,
-  workspaceRootPath,
-} from '@utils/files/workspaceFS';
+import { workspaceAbsolutePath } from '@utils/files/workspaceFS';
 import { pastedImageFileName } from '@utils/files/pastedImageUtils';
 import { entryExists } from '@utils/files/fsEntryExists';
 import { rootedFileSystem } from '@utils/files/rootedFileSystem';
@@ -87,8 +85,9 @@ describe('AbsoluteFS.write', () => {
   });
 
   it('propagates ELOOP without deleting the path or retrying', async () => {
-    const location = pathToLocationIn(workspaceRootPath(), 'file.tex');
-    const expectedPath = workspaceAbsolutePath(workspaceRootPath(), 'file.tex');
+    const workspaceRoot = workspaceRoots().workspace;
+    const location = pathToLocationIn(workspaceRoot, 'file.tex');
+    const expectedPath = workspaceAbsolutePath(workspaceRoot, 'file.tex');
     const cause = new Error('native cause');
     const loopError = new Error('loop detected', {
       cause,

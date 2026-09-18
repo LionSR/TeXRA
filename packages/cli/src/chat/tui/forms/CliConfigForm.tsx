@@ -331,6 +331,7 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
           <SkillsSettingsForm
             availableRows={props.availableRows}
             stores={stores}
+            workspaceRoot={props.workspaceRoot}
             runtime={props.runtime}
             onClose={onBack}
           />

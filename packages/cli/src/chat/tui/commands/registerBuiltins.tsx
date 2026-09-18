@@ -541,7 +541,12 @@ export function registerBuiltinSlashCommands(options: {
     (id: RunId) => options.onResumeSelect?.(id),
   );
   const SkillsListFormAdapter = makeSelectFormAdapter(
-    SkillsListForm,
+    (formProps) => (
+      <SkillsListForm
+        workspaceRoot={options.runtimeSession.roots.workspace}
+        {...formProps}
+      />
+    ),
     (value: SkillActivation) => options.onSkillSelect?.(value),
   );
 

@@ -19,8 +19,7 @@
       "src/model/subscriptionPreference.ts": 1,
       "src/tools/agentCliShared.ts": 1,
       "src/utils/config/configUtils.ts": 2,
-      "src/utils/config/platformSettings.ts": 1,
-      "src/utils/files/workspaceFS.ts": 1
+      "src/utils/config/platformSettings.ts": 1
     },
     "new AbortController()": {
       "packages/cli/src/chat/tui/commands/handlers/slashContext.ts": 1,

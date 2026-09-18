@@ -717,7 +717,7 @@ export class SettingsViewMessageHandler {
   }
 
   private async sendSkillsList(webview: vscode.Webview): Promise<void> {
-    const result = await loadRuntimeSkillDisplay();
+    const result = await loadRuntimeSkillDisplay(this.session.roots.workspace);
     await webview.postMessage({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_SKILLS_LIST,
       ...result,

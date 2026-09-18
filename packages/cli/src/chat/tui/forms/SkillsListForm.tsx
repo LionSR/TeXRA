@@ -21,6 +21,8 @@ import { AsyncListForm } from './_shared/ListForm';
 
 interface SkillsListFormProps {
   readonly availableRows?: number;
+  /** The session's workspace folder: where project skills are discovered. */
+  readonly workspaceRoot: string | undefined;
   readonly onSelect: (value: SkillActivation) => void;
   readonly onClose: () => void;
 }
@@ -76,7 +78,7 @@ export function SkillsListForm(props: SkillsListFormProps): React.JSX.Element {
     <AsyncListForm<DiscoverSkillSourcesResult, SkillActivation>
       title="/skills"
       loadingLabel="Loading skills..."
-      load={readCliRuntimeSkills}
+      load={() => readCliRuntimeSkills(props.workspaceRoot)}
       items={(result) => skillSelectItemsForTui(result.skills)}
       isEmpty={(result) => result.skills.length === 0}
       availableRows={props.availableRows}
