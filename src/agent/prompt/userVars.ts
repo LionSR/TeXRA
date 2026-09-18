@@ -33,7 +33,8 @@ import { filterNotNull, unique } from '@utils/core';
 import { isNonEmptyString } from '@utils/text/stringUtils';
 import { getListOfFiles, getPromptFileName } from '@utils/prompt';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { getConfig } from '@utils/config/configUtils';
+import type { ConfigProvider } from '@platform/interfaces';
+import { readConfig } from '@utils/config/configUtils';
 import {
   listExternalRoots,
   type ExternalRootKind,
@@ -106,6 +107,12 @@ export interface BuildUserVarsOptions {
    * roots the calling fiber carries.
    */
   storageRoot: string;
+  /**
+   * Configuration of the same session, held as data for the same reason: the
+   * skills master switch and the default bibliography path answer for this
+   * project, not for whichever roots the calling fiber carries.
+   */
+  config: ConfigProvider;
   delegationAgentScope?: AgentDelegationScope | null;
   /** Explicit trace stage for diagnostics emitted while loading variables. */
   stageId?: string;
@@ -159,7 +166,9 @@ export async function buildUserVars(
     // work for workflow agents. The settings toggle gives users a hard off
     // switch that skips discovery and leaves AVAILABLE_SKILLS empty.
     agentSetting.agentCategory === AgentCategory.ToolUse &&
-    AgentSkillsEnabledSchema.parse(getConfig<unknown>(AGENT_SKILLS_CONFIG_KEY))
+    AgentSkillsEnabledSchema.parse(
+      readConfig<unknown>(options.config, AGENT_SKILLS_CONFIG_KEY),
+    )
       ? loadRuntimeSkillCatalog()
       : // A fresh object per call, not a shared constant: `skills` is handed
         // to the snapshot consumer, and a shared array would accumulate.
@@ -258,7 +267,10 @@ function getBasicVars(
   );
 
   // Get default bib path from settings (empty string if not configured)
-  const defaultBibPath = getConfig<string>('texra.bib.defaultPath');
+  const defaultBibPath = readConfig<string>(
+    options.config,
+    'texra.bib.defaultPath',
+  );
 
   return {
     MODEL: agentConfig.model,
