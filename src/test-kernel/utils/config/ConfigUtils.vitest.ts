@@ -86,7 +86,7 @@ describe('readSettingFrom', () => {
 });
 
 // ---------------------------------------------------------------------------
-// ProviderConfig (#7873 — converge on readPlatformSetting for catalog keys)
+// ProviderConfig (#7873 — converge on readSettingFrom for catalog keys)
 // ---------------------------------------------------------------------------
 
 describe('getProviderEndpoint', () => {

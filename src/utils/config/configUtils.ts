@@ -18,8 +18,8 @@ import { tryProcessWorkspaceRoots } from '@platform/workspaceRoots';
  * provider (`ConfigProvider.get`'s documented resolution order), so
  * `defaultValue` is for keys the catalog does not own. A key whose value has a
  * constrained shape (enum, bounded number, structured record) belongs on the
- * catalog and reads through `readPlatformSetting`/`readSettingFrom`, which
- * validate it against the row's schema.
+ * catalog and reads through `readSettingFrom`, which validates it against
+ * the row's schema.
  *
  * @param config The workspace configuration the caller holds
  * @param path Configuration path (e.g., 'agents' or 'api.engine')
