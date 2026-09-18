@@ -55,13 +55,14 @@ import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
 import { VscodeMessageHost } from '@frontend/hosts/VscodeMessageHost';
 import { chooseTeamAvailabilityViaDialog } from '@frontend/ui/dialogs';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
+import { ExternalOpenFailed } from '@hosts/uiHosts';
 import { parseVersionControlDiffFilename } from '@latex/latexdiff/diffFileNameManager';
 import { createLog } from '@logger/logUtils';
 import {
   modelOptionsFrom,
   readModelAvailabilityInputs,
 } from '@model/computeModelOptions';
-import type { StateStore } from '@platform/interfaces';
+import type { AgentDirectoriesFailed, StateStore } from '@platform/interfaces';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import {
   withSessionFs,
@@ -82,6 +83,7 @@ import {
   Cancelled,
   isRequestRefusal,
   Rejected,
+  type HostRequestFailure,
   type RequestRefusal,
 } from '@shared/session/requestErrors';
 import type {
@@ -166,7 +168,7 @@ interface ExtensionHostRequests {
   handleHostRequest(
     request: HostRequest,
     port: string,
-  ): Effect.Effect<HostOutcome, Error, ProcessServices>;
+  ): Effect.Effect<HostOutcome, HostRequestFailure, ProcessServices>;
   closePort(port: string): void;
   /** Stops a recording this host owns; the take is discarded. */
   dispose(): void;
@@ -373,7 +375,7 @@ export function createExtensionHostRequests(
   const openExportPath = (
     filePath: string,
     kind: TranscriptExportOpenKind,
-  ): Effect.Effect<void, Error> =>
+  ): Effect.Effect<void, ExternalOpenFailed> =>
     Effect.tryPromise({
       try: async () => {
         const uri = vscode.Uri.file(filePath);
@@ -388,7 +390,13 @@ export function createExtensionHostRequests(
         const document = await vscode.workspace.openTextDocument(filePath);
         await vscode.window.showTextDocument(document, { preview: false });
       },
-      catch: ensureError,
+      catch: (cause) =>
+        new ExternalOpenFailed({
+          kind: 'path',
+          target: filePath,
+          message: toErrorMessage(cause),
+          cause,
+        }),
     });
 
   function exportTranscript(runId: RunId) {
@@ -501,7 +509,7 @@ export function createExtensionHostRequests(
    *  launch preparation, then the one launch command. */
   function launch(
     request: Extract<HostRequest, { kind: 'launch' }>,
-  ): Effect.Effect<void, Error, GlobalStorageFs> {
+  ): Effect.Effect<void, HostCallFailed | RequestRefusal, GlobalStorageFs> {
     return Effect.gen(function* () {
       const { launch: form } = request;
       const requestedWorkingDirectory = form.workingDirectory.trim();
@@ -749,7 +757,11 @@ export function createExtensionHostRequests(
 
   function agentConfigBanner(
     request: Extract<HostRequest, { kind: 'agentConfigBanner' }>,
-  ): Effect.Effect<void, Error, GlobalStorageFs> {
+  ): Effect.Effect<
+    void,
+    AgentDirectoriesFailed | HostCallFailed | RequestRefusal,
+    GlobalStorageFs
+  > {
     return Effect.gen(function* () {
       switch (request.action) {
         case 'edit':
@@ -859,7 +871,11 @@ export function createExtensionHostRequests(
   function dispatch(
     request: HostRequest,
     port: string,
-  ): Effect.Effect<HostOutcome, Error, ProcessServices | StorageFs> {
+  ): Effect.Effect<
+    HostOutcome,
+    HostRequestFailure,
+    ProcessServices | StorageFs
+  > {
     return Effect.gen(function* () {
       switch (request.kind) {
         case 'openFile':

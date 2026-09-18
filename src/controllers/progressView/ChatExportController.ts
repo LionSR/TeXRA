@@ -19,9 +19,12 @@
 
 import * as path from 'node:path';
 
-import { Effect, FileSystem } from 'effect';
+import { Effect, FileSystem, type PlatformError } from 'effect';
 
-import { loadChatExportInput } from '@agent/export/loadChatExportInput';
+import {
+  loadChatExportInput,
+  type ChatExportInputUnreadable,
+} from '@agent/export/loadChatExportInput';
 import {
   formatChatAsMarkdown,
   formatChatAsLatex,
@@ -39,9 +42,11 @@ import {
   injectStandaloneTrace,
   type AssembleTraceResult,
 } from '@transcript';
-import { ensureError } from '@utils/errors/errorMessage';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { pathToLocationIn } from '@utils/files/fileLocation';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
+
+import { TranscriptExportFailed } from './transcriptExportFailure';
 
 /** Outcome of loading run data for export. */
 export type ExportInputStatus =
@@ -72,6 +77,21 @@ export type HtmlExportOutcome =
   | { readonly status: 'ok'; readonly result: ChatExportResult }
   | { readonly status: HtmlExportStatus };
 
+/** The host-supplied trace-viewer bundle is unusable. The tag carries the
+ *  minted error as its own cause, so a dialog wording `cause` reads exactly
+ *  the sentence the bare `Error` carried here before. */
+function bundleFailure(
+  message: string,
+): Effect.Effect<never, TranscriptExportFailed> {
+  return Effect.fail(
+    new TranscriptExportFailed({
+      step: 'traceViewerBundle',
+      message,
+      cause: new Error(message),
+    }),
+  );
+}
+
 interface ChatExportControllerDeps {
   /**
    * LaTeX document preamble prepended to `.tex` exports. Host-supplied because
@@ -99,7 +119,7 @@ export class ChatExportController {
   )(function* (
     this: ChatExportController,
     runId: RunId,
-  ): Effect.fn.Return<ExportInputResult, Error> {
+  ): Effect.fn.Return<ExportInputResult, ChatExportInputUnreadable> {
     const { config, exportInput } = yield* loadChatExportInput(
       runId,
       this.deps.session,
@@ -125,7 +145,11 @@ export class ChatExportController {
     this: ChatExportController,
     runId: RunId,
     exportInput: ChatExportInput,
-  ): Effect.fn.Return<ChatExportResult, Error, StorageFs> {
+  ): Effect.fn.Return<
+    ChatExportResult,
+    PlatformError.PlatformError,
+    StorageFs
+  > {
     return yield* this.writeExport(
       runId,
       generateExportFilename(exportInput, 'md'),
@@ -147,7 +171,7 @@ export class ChatExportController {
       exportInput: ChatExportInput,
     ): Effect.fn.Return<
       LatexExportResult,
-      Error,
+      PlatformError.PlatformError,
       FileSystem.FileSystem | StorageFs | WorkspaceFs
     > {
       const { storagePath, absolutePath } = yield* this.writeExport(
@@ -186,10 +210,19 @@ export class ChatExportController {
       standaloneTemplatePath: string,
     ): Effect.fn.Return<
       HtmlExportOutcome,
-      Error,
+      PlatformError.PlatformError | TranscriptExportFailed,
       FileSystem.FileSystem | StorageFs
     > {
-      const traceResult = yield* assembleTrace(runId, this.deps.session);
+      const traceResult = yield* assembleTrace(runId, this.deps.session).pipe(
+        Effect.mapError(
+          (cause) =>
+            new TranscriptExportFailed({
+              step: 'assembleTrace',
+              message: toErrorMessage(cause),
+              cause,
+            }),
+        ),
+      );
       if (traceResult.status !== 'ok') {
         return { status: traceResult.status };
       }
@@ -204,10 +237,8 @@ export class ChatExportController {
       // alongside ENOENT, and `FileSystem.exists` reports it as `BadResource`.
       const fs = yield* FileSystem.FileSystem;
       if (!path.isAbsolute(standaloneTemplatePath)) {
-        return yield* Effect.fail(
-          new Error(
-            `Trace-viewer standalone bundle path must be absolute: ${standaloneTemplatePath}`,
-          ),
+        return yield* bundleFailure(
+          `Trace-viewer standalone bundle path must be absolute: ${standaloneTemplatePath}`,
         );
       }
       const exists = yield* fs.exists(standaloneTemplatePath).pipe(
@@ -219,20 +250,15 @@ export class ChatExportController {
         ),
       );
       if (!exists) {
-        return yield* Effect.fail(
-          new Error(
-            `Trace-viewer standalone bundle missing at ${standaloneTemplatePath}: ` +
-              'rebuild the extension (npm run package:fast) so packages/trace-viewer builds.',
-          ),
+        return yield* bundleFailure(
+          `Trace-viewer standalone bundle missing at ${standaloneTemplatePath}: ` +
+            'rebuild the extension (npm run package:fast) so packages/trace-viewer builds.',
         );
       }
       // The bytes are decoded here rather than by `readFileString`, whose
       // UTF-8 `TextDecoder` strips a BOM the old read kept, and the line
       // endings are normalized as `AbsoluteFS.read` did.
-      const bytes = yield* Effect.mapError(
-        fs.readFile(standaloneTemplatePath),
-        ensureError,
-      );
+      const bytes = yield* fs.readFile(standaloneTemplatePath);
       const template = normalizeLineEndings(
         Buffer.from(bytes).toString('utf-8'),
       );
@@ -268,22 +294,24 @@ export class ChatExportController {
       runId: RunId,
       filename: string,
       content: string,
-    ): Effect.fn.Return<ChatExportResult, Error, StorageFs> {
+    ): Effect.fn.Return<
+      ChatExportResult,
+      PlatformError.PlatformError,
+      StorageFs
+    > {
       const storagePath = `executions/${runId}/${filename}`;
       const storageFs = yield* StorageFs;
-      return yield* Effect.gen(function* () {
-        yield* storageFs.makeDirectory(`executions/${runId}`, {
-          recursive: true,
-        });
-        yield* storageFs.writeFile(
-          storagePath,
-          new TextEncoder().encode(content),
-        );
-        return {
-          storagePath,
-          absolutePath: yield* storageFs.resolve(storagePath),
-        };
-      }).pipe(Effect.mapError(ensureError));
+      yield* storageFs.makeDirectory(`executions/${runId}`, {
+        recursive: true,
+      });
+      yield* storageFs.writeFile(
+        storagePath,
+        new TextEncoder().encode(content),
+      );
+      return {
+        storagePath,
+        absolutePath: yield* storageFs.resolve(storagePath),
+      };
     },
   );
 }

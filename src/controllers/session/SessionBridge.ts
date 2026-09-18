@@ -50,6 +50,7 @@ import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import {
   Internal,
   isRequestRefusal,
+  type HostRequestFailure,
   type RequestError,
 } from '@shared/session/requestErrors';
 import {
@@ -80,16 +81,15 @@ interface SessionBridgeOptions {
    *  the host's transport runs `receive` on. A handler cancels with
    *  `Cancelled` or refuses with `Unavailable` or `Rejected`; anything else
    *  it fails or dies with is a defect, logged here and answered
-   *  `Internal`. The channel is `Error`, not `unknown`: each host lifts a
-   *  Promise-faced capability once, under the member's name, so a bare
-   *  rejection value can no longer reach this fold. Every arm but one is
-   *  tagged; what still widens this to `Error` is the transcript export
-   *  (`ChatExportController`, `compileLatex2Pdf`, `loadChatExportInput`),
-   *  and closing that path closes this channel to a union of tags. */
+   *  `Internal`. The channel is {@link HostRequestFailure}: each host lifts
+   *  a Promise-faced capability once, under the member's name, so every arm
+   *  fails with a tag and a bare rejection value can no longer reach this
+   *  fold. The last arm that widened it to `Error` was the transcript
+   *  export; its steps carry tags now. */
   readonly handleHostRequest: (
     request: HostRequest,
     port: string,
-  ) => Effect.Effect<HostOutcome, Error, ProcessServices>;
+  ) => Effect.Effect<HostOutcome, HostRequestFailure, ProcessServices>;
 }
 
 /** One attached transport port: the host posts `send`'s messages to it. */

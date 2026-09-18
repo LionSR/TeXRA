@@ -9,19 +9,25 @@
 // Node imports
 import * as path from 'node:path';
 
-import { Effect, type FileSystem } from 'effect';
+import { Effect, type FileSystem, type PlatformError } from 'effect';
 
 // Local imports
+import type { ChatExportInputUnreadable } from '@agent/export/loadChatExportInput';
 import type { ChatExportInput } from '@agent/export/schemas';
-import type { MessageHost, NotificationFailed } from '@hosts/uiHosts';
+import type {
+  ExternalOpenFailed,
+  MessageHost,
+  NotificationFailed,
+} from '@hosts/uiHosts';
 import type { StorageFs, WorkspaceFs } from '@platform/rootedFs';
 import type { RunId } from '@shared/schemas';
 import type { Rejected } from '@shared/session/requestErrors';
-import { ensureError } from '@utils/errors/errorMessage';
-import {
+import { toErrorMessage } from '@utils/errors/errorMessage';
+import { TranscriptExportFailed } from './transcriptExportFailure';
+import type {
   ChatExportController,
-  type ExportInputStatus,
-  type HtmlExportOutcome,
+  ExportInputStatus,
+  HtmlExportOutcome,
 } from './ChatExportController';
 
 export type TranscriptExportFormat = 'html' | 'md' | 'tex';
@@ -53,11 +59,12 @@ export const TRANSCRIPT_EXPORT_FORMAT_CHOICES = [
 interface TranscriptExportPorts {
   pickFormat(): Promise<TranscriptExportFormat | undefined>;
   /** Open what was just written. The member is a program: both hosts' open
-   *  verbs are Effects, so nothing is lifted on the way through here. */
+   *  verbs are Effects, so nothing is lifted on the way through here, and
+   *  each host words its own refusal into the port's one tag. */
   openPath(
     filePath: string,
     kind: TranscriptExportOpenKind,
-  ): Effect.Effect<void, Error>;
+  ): Effect.Effect<void, ExternalOpenFailed>;
   showInfo: MessageHost['showInfoMessage'];
   showWarning: MessageHost['showWarningMessage'];
   /** The error notice. A host may answer it by refusing the request instead:
@@ -72,6 +79,22 @@ interface TranscriptExportPorts {
 }
 
 const RUN_NOT_FOUND_MESSAGE = 'This run has no saved data to export.';
+
+/**
+ * Every way a transcript export fails. Each member is a tag: the export's own
+ * steps ({@link TranscriptExportFailed}), the run read
+ * ({@link ChatExportInputUnreadable}), the storage write
+ * (`PlatformError`), the host's open verb ({@link ExternalOpenFailed}), and
+ * the host's notices ({@link NotificationFailed}, or the {@link Rejected} a
+ * host answers an error notice with).
+ */
+type TranscriptExportFailure =
+  | ChatExportInputUnreadable
+  | ExternalOpenFailed
+  | NotificationFailed
+  | PlatformError.PlatformError
+  | Rejected
+  | TranscriptExportFailed;
 
 /** Message for a failed {@link ChatExportController.buildExportInput} status. */
 function exportInputErrorMessage(
@@ -114,17 +137,29 @@ export const exportRunTranscript = Effect.fn('exportRunTranscript')(function* (
   ports: TranscriptExportPorts,
 ): Effect.fn.Return<
   void,
-  Error,
+  TranscriptExportFailure,
   FileSystem.FileSystem | StorageFs | WorkspaceFs
 > {
   const format = yield* Effect.tryPromise({
     try: async () => ports.pickFormat(),
-    catch: ensureError,
+    catch: (cause) =>
+      new TranscriptExportFailed({
+        step: 'pickFormat',
+        message: toErrorMessage(cause),
+        cause,
+      }),
   });
   if (!format) return;
+  // The host's memo is behind this promise: a failed load clears it there, so
+  // the next export retries. Lifted once, here, under its own step.
   const controller = yield* Effect.tryPromise({
     try: async () => ports.getController(),
-    catch: ensureError,
+    catch: (cause) =>
+      new TranscriptExportFailed({
+        step: 'openController',
+        message: toErrorMessage(cause),
+        cause,
+      }),
   });
   if (format === 'html') {
     yield* exportHtml(controller, runId, ports);
@@ -147,7 +182,11 @@ const exportMarkdown = Effect.fn('exportMarkdown')(function* (
   runId: RunId,
   input: ChatExportInput,
   ports: TranscriptExportPorts,
-): Effect.fn.Return<void, Error, StorageFs> {
+): Effect.fn.Return<
+  void,
+  ExternalOpenFailed | NotificationFailed | PlatformError.PlatformError,
+  StorageFs
+> {
   const result = yield* controller.exportAsMarkdown(runId, input);
   yield* ports.openPath(result.absolutePath, 'text');
   yield* ports.showInfo(exportedFileMessage(result.storagePath));
@@ -160,7 +199,7 @@ const exportLatex = Effect.fn('exportLatex')(function* (
   ports: TranscriptExportPorts,
 ): Effect.fn.Return<
   void,
-  Error,
+  ExternalOpenFailed | NotificationFailed | PlatformError.PlatformError,
   FileSystem.FileSystem | StorageFs | WorkspaceFs
 > {
   const result = yield* controller.exportAsLatex(runId, input);
@@ -189,7 +228,15 @@ const exportHtml = Effect.fn('exportHtml')(function* (
   controller: ChatExportController,
   runId: RunId,
   ports: TranscriptExportPorts,
-): Effect.fn.Return<void, Error, FileSystem.FileSystem | StorageFs> {
+): Effect.fn.Return<
+  void,
+  | ExternalOpenFailed
+  | NotificationFailed
+  | PlatformError.PlatformError
+  | Rejected
+  | TranscriptExportFailed,
+  FileSystem.FileSystem | StorageFs
+> {
   const outcome = yield* controller.exportAsHtml(
     runId,
     ports.getTraceViewerTemplate(),

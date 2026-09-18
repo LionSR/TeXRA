@@ -42,6 +42,20 @@ export type RequestError =
   NotOwner | Unavailable | Cancelled | Rejected | Internal;
 
 /**
+ * How a host's request handler fails (PRD one-fold-three-renderers, 8.3):
+ * with a tagged error, always. Three tags are the refusals the bridge folds
+ * onto the wire ({@link RequestRefusal}); every other tag is a defect it
+ * logs and answers `Internal` — but it is a *named* defect, so the log says
+ * which capability produced it. The bound is structural because the tags a
+ * host raises are its own (its lifted capabilities, its preview host, its
+ * housekeeping); what every host owes this channel is that each of them is
+ * a tag, so a bare `new Error(...)` can no longer reach the fold.
+ */
+export interface HostRequestFailure extends Error {
+  readonly _tag: string;
+}
+
+/**
  * A request's refusal, as opposed to its defect: the three a handler may
  * answer the surface with. The bridge folds these onto the wire; every other
  * tag is `Internal`.
