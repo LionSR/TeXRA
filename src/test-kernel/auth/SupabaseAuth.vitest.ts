@@ -13,7 +13,7 @@ import { FakeSecrets } from '@test/support/FakePlatform';
 
 function createAuth(
   secrets: SessionSecretStore,
-  whenReady?: () => Promise<void>,
+  whenReady?: () => Effect.Effect<void, Error>,
 ): SupabaseAuthShape {
   return Effect.runSync(
     createSupabaseAuth({ secrets, ...(whenReady ? { whenReady } : {}) }),
@@ -23,7 +23,7 @@ function createAuth(
 describe('SupabaseAuth probes', () => {
   it('reports not ready when the readiness gate fails', async () => {
     const auth = createAuth(new FakeSecrets(), () =>
-      Promise.reject(new Error('host auth unavailable')),
+      Effect.fail(new Error('host auth unavailable')),
     );
 
     assert.equal(await Effect.runPromise(auth.isReady), false);

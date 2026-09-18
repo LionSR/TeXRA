@@ -122,7 +122,7 @@ function gotrueStorage(
 export interface SupabaseAuthInit {
   readonly secrets: SessionSecretStore;
   readonly log?: SupabaseSessionLog;
-  readonly whenReady?: () => Promise<void>;
+  readonly whenReady?: () => Effect.Effect<void, Error>;
 }
 
 /**
@@ -243,7 +243,7 @@ export function createSupabaseAuth(
     const coordinator = new SupabaseSessionCoordinator({
       storage: secretBackedSessionStorage(init.secrets, SUPABASE_SESSION_KEY),
       getClient: () => client,
-      whenReady: init.whenReady ?? (async () => {}),
+      whenReady: init.whenReady ?? (() => Effect.void),
       tokenRefreshThresholdMs: TOKEN_REFRESH_THRESHOLD_MS,
       log: init.log,
     });

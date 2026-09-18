@@ -136,7 +136,7 @@ function createClient(overrides?: Partial<Client['auth']>): Client {
 }
 
 const COORDINATOR_CONFIG = {
-  whenReady: async () => {},
+  whenReady: () => Effect.void,
   tokenRefreshThresholdMs: 60_000,
 };
 
