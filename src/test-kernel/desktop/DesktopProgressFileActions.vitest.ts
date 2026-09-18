@@ -147,7 +147,10 @@ async function loadFileActions(options: {
     {
       startRun: vi.fn(),
       listWorkspaceCandidateFiles: vi.fn(async () => []),
-      session: { snapshots: { read: vi.fn() } } as unknown as SessionHandle,
+      session: {
+        snapshots: { read: vi.fn() },
+        roots: { workspace: absolutePath('workspace') },
+      } as unknown as SessionHandle,
       globalState: new FakeStateStore(),
       // Every latexdiff program this suite reaches is mocked, so the runtime
       // only has to settle them.

@@ -42,7 +42,7 @@ export function canonicalizeWorkspacePath(workspacePath: string): string {
  * Symlink-aware workspace-relative path: a fast `resolve`-then-compare pass,
  * then a canonicalize-then-compare fallback for paths that resolve through a
  * symlink (e.g. a symlinked folder inside the workspace). Shared by
- * `WorkspaceFS.relativePath` and the desktop native-picker path so the two
+ * `workspaceRelativePath` and the desktop native-picker path so the two
  * stay in sync. Returns `undefined` when `filePath` resolves outside `root`;
  * the caller owns its outside-root fallback (identity vs normalized absolute).
  */

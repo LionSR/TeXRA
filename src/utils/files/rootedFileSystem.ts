@@ -1,7 +1,7 @@
 /**
  * A `FileSystem` confined to one root.
  *
- * The static `WorkspaceFS` / `StorageFS` facades resolve every path against
+ * The static `StorageFS` facade resolves every path against
  * the ambient `workspaceRoots()` at call time, which is why a caller that
  * wants a different root has to enter an AsyncLocalStorage scope around its
  * I/O. A rooted view inverts that: the root is captured when the view is
@@ -38,9 +38,9 @@ export interface RootedFileSystem extends FileSystem.FileSystem {
    *
    * `undefined` only for the workspace view of a session with no folder
    * open, where every operation fails with `BadArgument` — the typed form of
-   * what `WorkspaceFS` threw ("Workspace path is not available."). A consumer
+   * the "Workspace path is not available." throw. A consumer
    * that needs the root as a value (a glob's `cwd`) checks it and does
-   * nothing, exactly as it checked `WorkspaceFS.getPath()`.
+   * nothing.
    */
   readonly root: string | undefined;
   /** The confined absolute path of `target`, for the rare operation that

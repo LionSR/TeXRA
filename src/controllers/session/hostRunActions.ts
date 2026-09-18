@@ -43,7 +43,11 @@ import { Rejected, Unavailable } from '@shared/session/requestErrors';
 import { LaunchSurfaceSchema } from '@shared/session/surface';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 import { unique } from '@utils/core';
-import { WorkspaceFS } from '@utils/files/workspaceFS';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
+import {
+  locateInWorkspace,
+  workspaceAbsolutePath,
+} from '@utils/files/workspaceFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
@@ -305,7 +309,17 @@ export const createHostRunActions = (
     const followUp = new ProgressFollowUpController({
       loadModelOptions: () => ports.loadModelOptions(),
       state: runOutputs,
-      workspace: WorkspaceFS,
+      // The session's own folder, carried as data: the planner resolves and
+      // probes its candidates there rather than through the calling
+      // context's ambient roots.
+      workspace: {
+        locatePath: (target) =>
+          locateInWorkspace(session.roots.workspace, target),
+        exists: (relativePath) =>
+          AbsoluteFS.exists(
+            workspaceAbsolutePath(session.roots.workspace, relativePath),
+          ),
+      },
     });
 
     /** The wire carries the reason as text; an unknown one is no reason. */

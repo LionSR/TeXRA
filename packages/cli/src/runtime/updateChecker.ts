@@ -145,7 +145,7 @@ async function readCommandStdout(
   cwd?: string,
 ): Promise<string | undefined> {
   // Runs before platform init (chat startup), so pass an
-  // explicit cwd — the wrapper's WorkspaceFS default would throw — and
+  // explicit cwd — the wrapper's workspace-root default would throw — and
   // quiet: true so wrapper debug lines can't leak to the console sink.
   const result = await executeCommand([command, ...args], {
     timeout: timeoutMs,

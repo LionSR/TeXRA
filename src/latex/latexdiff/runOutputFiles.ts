@@ -25,10 +25,9 @@ import {
 } from '@shared/constants/workflowOutput';
 import {
   createRunStorageLocation,
-  pathToLocation,
+  pathToLocationIn,
 } from '@utils/files/fileLocation';
 import { findRunDir } from '@utils/files/runStorageFs';
-import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { hasExtension } from '@utils/core/pathCore';
 import { isDirectory, isFile } from '@utils/files/fsEntryType';
@@ -103,6 +102,7 @@ const collectTexFiles = Effect.fn('latexdiff.collectTexFiles')(function* (
 export const scanRunDirForOutputs = Effect.fn('latexdiff.scanRunDir')(
   function* (
     runId: RunId,
+    workspaceRoot: string | undefined,
     inputFile: string,
     extraBaseFiles: string[] | undefined,
     channel: string,
@@ -120,7 +120,7 @@ export const scanRunDirForOutputs = Effect.fn('latexdiff.scanRunDir')(
         catch: ensureError,
       });
 
-      const workspacePath = WorkspaceFS.getPath() ?? '';
+      const workspacePath = workspaceRoot ?? '';
       const toAbs = (f: string): string =>
         path.isAbsolute(f) ? f : path.join(workspacePath, f);
       // Normalize to a forward-slash, extension-less relative key so base files
@@ -138,9 +138,15 @@ export const scanRunDirForOutputs = Effect.fn('latexdiff.scanRunDir')(
         const relSource = workspacePath
           ? path.relative(workspacePath, abs)
           : bf;
-        baseLocationByRelPath.set(toRelKey(relSource), pathToLocation(abs));
+        baseLocationByRelPath.set(
+          toRelKey(relSource),
+          pathToLocationIn(workspaceRoot, abs),
+        );
       }
-      const defaultBaseLocation = pathToLocation(toAbs(inputFile));
+      const defaultBaseLocation = pathToLocationIn(
+        workspaceRoot,
+        toAbs(inputFile),
+      );
 
       const rounds: RoundIndexed<OutputFileInfo> = {};
 

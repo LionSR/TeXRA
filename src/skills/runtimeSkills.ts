@@ -7,7 +7,7 @@ import {
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
 import { readPlatformSetting } from '@utils/config/platformSettings';
-import { WorkspaceFS } from '@utils/files/workspaceFS';
+import { workspaceRootPath } from '@utils/files/workspaceFS';
 import { safeHomedir } from '@utils/system/platformPaths';
 
 import {
@@ -54,7 +54,7 @@ export function setRuntimeSkillSources(
 /** The sources for the calling session's workspace, or the home folder without one. */
 function runtimeSkillSources(): readonly SkillSource[] {
   return resolveRuntimeSkillSources(
-    WorkspaceFS.getPath() ?? safeHomedir() ?? '/nonexistent',
+    workspaceRootPath() ?? safeHomedir() ?? '/nonexistent',
   );
 }
 

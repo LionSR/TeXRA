@@ -23,8 +23,8 @@ interface DebugContext {
   /**
    * The run's session roots, passed as data. A save with a run id lands under
    * the storage root, a save without one under the workspace root — the two
-   * roots the `StorageFS` / `WorkspaceFS` facades read from the ambient
-   * `workspaceRoots()` at call time — and the config provider is the
+   * roots the `StorageFS` facade reads from the ambient `workspaceRoots()`
+   * at call time — and the config provider is the
    * session's own, so the `texra.debug.saveModelIO` guard below cannot throw
    * before platform init.
    */
@@ -52,9 +52,9 @@ interface SaveDebugParams {
  * leaking prompts.
  *
  * Takes the process filesystem from context: the target is an absolute path
- * built from the run's own roots, exactly as `StorageFS` / `WorkspaceFS`
- * resolved theirs, and the write is the same plain (non-atomic) one both
- * facades made through `platform().fs`. A failure is caught and logged, as
+ * built from the run's own roots, exactly as `StorageFS` resolved its own,
+ * and the write is the same plain (non-atomic) one the facade
+ * made through `platform().fs`. A failure is caught and logged, as
  * the old `try`/`catch` did, and never propagates into the run.
  */
 export function maybeSaveDebugObject({
@@ -93,8 +93,8 @@ export function maybeSaveDebugObject({
     const fs = yield* FileSystem.FileSystem;
     const filePath = runId
       ? path.join(roots.storage, resolveRunStoragePath(runId, debugFileName))
-      : // No run id: a workspace-relative name, and the same throw the
-        // `WorkspaceFS` facade made when no folder is open.
+      : // No run id: a workspace-relative name, and the same throw
+        // `workspaceAbsolutePath` makes when no folder is open.
         workspaceAbsolutePath(roots.workspace, debugFileName);
 
     if (runId) {

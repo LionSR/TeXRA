@@ -65,6 +65,12 @@ export interface RunLatexdiffForRunParams {
   readonly agent: string;
   readonly model: string;
   readonly inputFile: string;
+  /**
+   * The calling session's workspace folder, carried as data: the cwd every
+   * diff operation runs in and the root workspace-relative output paths
+   * resolve against. `undefined` when no folder is open.
+   */
+  readonly workspaceRoot: string | undefined;
   /** Agent-owned run listing injected by hosts (metadata auto-discovery). */
   readonly runDiscovery: LatexRunDiscoveryPort;
   readonly filesystem: RunOutputFilesystem;
@@ -97,6 +103,7 @@ export const runLatexdiffForRun = Effect.fn('runLatexdiffForRun')(
       agent,
       model,
       inputFile,
+      workspaceRoot,
       runDiscovery,
       outputFiles,
       mathMarkup,
@@ -118,6 +125,7 @@ export const runLatexdiffForRun = Effect.fn('runLatexdiffForRun')(
       if (parsedRunId.success) {
         const scanned = yield* scanRunDirForOutputs(
           parsedRunId.data,
+          workspaceRoot,
           inputFile,
           outputFiles,
           latexdiff.channel,
@@ -141,6 +149,7 @@ export const runLatexdiffForRun = Effect.fn('runLatexdiffForRun')(
     if (!outputsByRound && !runId) {
       const discovered = yield* discoverLatestRunOutputs(
         runDiscovery,
+        workspaceRoot,
         {
           agent,
           model,
@@ -166,6 +175,7 @@ export const runLatexdiffForRun = Effect.fn('runLatexdiffForRun')(
 
     const outcome = yield* runLatexdiffFromMetadata({
       rounds: outputsByRound,
+      workspaceRoot,
       mathMarkup,
       generateBetweenRoundDiffs,
       latexdiff,

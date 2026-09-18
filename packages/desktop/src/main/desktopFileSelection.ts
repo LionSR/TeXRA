@@ -71,7 +71,7 @@ const DIALOG_TITLE_BY_FILE_TYPE: Record<ListableFileType, string> = {
 function toWorkspaceRelative(workspacePath: string, filePath: string): string {
   const absolutePath = resolve(workspacePath, filePath);
   // relativeToRoot shares the canonicalize-then-compare fallback
-  // WorkspaceFS.relativePath uses, so a native dialog pick that
+  // `workspaceRelativePath` uses, so a native dialog pick that
   // resolves through a symlink (e.g. a symlinked folder inside the workspace)
   // lands workspace-relative here too. Unlike that identity fallback, an
   // outside-workspace pick stays an explicit normalized absolute path: the

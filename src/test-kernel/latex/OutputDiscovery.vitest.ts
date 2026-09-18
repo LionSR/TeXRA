@@ -14,6 +14,7 @@ import type { RunId } from '@shared/schemas';
 import { captureLogEntries } from '@test/support/logSinkCapture';
 import { installPlatform } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
+import { workspaceRootPath } from '@utils/files/workspaceFS';
 
 // A run may have generated files even when no output facts were recorded.
 const mocks = vi.hoisted(() => ({
@@ -92,6 +93,7 @@ describe('discoverLatestRunOutputs', () => {
 
         const result = yield* discoverLatestRunOutputs(
           discovery,
+          workspaceRootPath(),
           MATCHING_QUERY,
           'test',
           platform().fs,
@@ -119,6 +121,7 @@ describe('discoverLatestRunOutputs', () => {
 
         const result = yield* discoverLatestRunOutputs(
           discovery,
+          workspaceRootPath(),
           MATCHING_QUERY,
           'test',
           platform().fs,
@@ -143,6 +146,7 @@ describe('discoverLatestRunOutputs', () => {
 
         const result = yield* discoverLatestRunOutputs(
           discovery,
+          workspaceRootPath(),
           MATCHING_QUERY,
           'test',
           platform().fs,
@@ -164,6 +168,7 @@ describe('discoverLatestRunOutputs', () => {
         const failure = yield* Effect.flip(
           discoverLatestRunOutputs(
             discovery,
+            workspaceRootPath(),
             MATCHING_QUERY,
             'test',
             platform().fs,
@@ -182,6 +187,7 @@ describe('outputDiscovery diagnostics', () => {
   const runScan = (): Effect.Effect<unknown> =>
     scanRunDirForOutputs(
       'abc123' as RunId,
+      workspaceRootPath(),
       'paper.tex',
       undefined,
       'test',
