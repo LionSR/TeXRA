@@ -4,7 +4,7 @@
  */
 
 // Third-party imports
-import { Effect } from 'effect';
+import { Duration, Effect, Exit } from 'effect';
 import { execa } from 'execa';
 
 // Local imports - common
@@ -44,18 +44,29 @@ const log = createLog('xmlConversion');
 /**
  * Cached pandoc availability.
  *
- * A positive answer is cached permanently; a negative one is not, so a user
- * who installs pandoc mid-session is picked up on the next conversion. Two
- * conversions racing a miss each spawn `pandoc --version`, which is the same
- * cost the retry-on-miss rule already paid for every sequential miss.
+ * The TTL is read off the probe's own exit: a positive answer is kept
+ * indefinitely, a negative one expires at once, so a user who installs pandoc
+ * mid-session is picked up on the next conversion. Concurrent conversions
+ * racing a cold miss share the one pending `pandoc --version` rather than
+ * each spawning their own, which is what a batch of documents converting at
+ * once does on a cold start.
+ *
+ * The cache is built on first use and held, because building it is what
+ * allocates the state the sharing lives in — a fresh one per call would
+ * share nothing.
  */
-let pandocAvailable = false;
+let pandocProbe: Effect.Effect<boolean> | undefined;
 
-const isPandocAvailable: Effect.Effect<boolean> = Effect.gen(function* () {
-  if (pandocAvailable) return true;
-  pandocAvailable = yield* checkToolInstalled('pandoc', false);
-  return pandocAvailable;
-});
+const isPandocAvailable: Effect.Effect<boolean> = Effect.suspend(
+  () =>
+    pandocProbe ??
+    Effect.flatMap(
+      Effect.cachedWithTTL(checkToolInstalled('pandoc', false), (exit) =>
+        Exit.isSuccess(exit) && exit.value ? Duration.infinity : 0,
+      ),
+      (probe) => (pandocProbe = probe),
+    ),
+);
 
 const LATEX_REPLACEMENTS: Array<[RegExp, string]> = [
   // Drop list-environment markers; the inner \item lines become bullets below.
