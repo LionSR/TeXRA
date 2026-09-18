@@ -1,13 +1,16 @@
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
+import { Deferred, Effect, Fiber } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   buildVars: vi.fn(),
   createTrace: vi.fn(),
+  helperCompletion: vi.fn(),
+  helperModel: vi.fn(),
   load: vi.fn(),
   retrieveSessionResumeData: vi.fn(),
   resolve: vi.fn(),
+  runFlowWithLifecycle: vi.fn(),
 }));
 
 vi.mock('@agent/index', () => ({
@@ -25,9 +28,24 @@ vi.mock('@agent/prompt/userVars', () => ({ buildUserVars: mocks.buildVars }));
 vi.mock('@agent/runtime/SessionResumeRetrieval', () => ({
   retrieveSessionResumeData: mocks.retrieveSessionResumeData,
 }));
+vi.mock('@agent/runtime/helperModel', async (importActual) => ({
+  ...(await importActual<typeof import('@agent/runtime/helperModel')>()),
+  helperModel: mocks.helperModel,
+  helperCompletion: mocks.helperCompletion,
+}));
+// Only the regression test below replaces `runFlowWithLifecycle`; every other
+// launch in this suite fails during launch-assembly, before the lifecycle, and
+// an unconsumed once-implementation falls back to the real one.
+vi.mock('@agent/runtime/AgentRunLifecycle', async (importActual) => {
+  const actual =
+    await importActual<typeof import('@agent/runtime/AgentRunLifecycle')>();
+  mocks.runFlowWithLifecycle.mockImplementation(actual.runFlowWithLifecycle);
+  return { ...actual, runFlowWithLifecycle: mocks.runFlowWithLifecycle };
+});
 
 import { TraceEmitter } from '@agent/trace';
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
+import type { BoundModel } from '@agent/runtime/run/modelBinding';
 import { registerRun } from '@agent/storage/runLifecycle';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import {
@@ -56,6 +74,8 @@ import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 import { eventsOfType, recordSessionEvents } from '../progressTestUtils';
 
 const LAUNCH_FAILURE = new Error('stop after run activation');
+const RUN_FAILURE = new Error('run flow failure');
+const DESCRIPTION_RUN_ID = 'de5c21' as RunId;
 
 /** The run an aggregate key names: every fact here lives on a run. */
 function runOf(key: AggregateId): RunId {
@@ -275,5 +295,70 @@ describe('native agent launch activation', () => {
           qualifyAggregateId('run', runId),
         );
       }),
+  );
+
+  // Regression: the description join once lived in a generator `finally`,
+  // which the Effect driver never resumes after a failed `yield*` — the
+  // run-failure path left executeAgent with the write still in flight and
+  // auto-supervision interrupted the fiber before it could commit.
+  it.effect('joins the session description fiber on the run-failure path', () =>
+    Effect.gen(function* () {
+      const gate = yield* Deferred.make<string>();
+      const descriptionStarted = yield* Deferred.make<void>();
+      mocks.helperModel.mockImplementationOnce(() =>
+        Effect.succeed({} as BoundModel),
+      );
+      mocks.helperCompletion.mockImplementationOnce(() =>
+        Deferred.succeed(descriptionStarted, undefined).pipe(
+          Effect.andThen(Deferred.await(gate)),
+        ),
+      );
+      // Fail the run only once the description fiber is parked on its gate,
+      // so both sides settle deterministically.
+      mocks.runFlowWithLifecycle.mockImplementationOnce(() =>
+        Deferred.await(descriptionStarted).pipe(
+          Effect.andThen(Effect.fail(RUN_FAILURE)),
+        ),
+      );
+      mocks.resolve.mockReturnValueOnce({ path: '/agents/chat.yaml' });
+      mocks.load.mockReturnValueOnce(
+        Effect.succeed([{ agentCategory: AgentCategory.ToolUse }, {}]),
+      );
+      mocks.createTrace.mockReturnValueOnce({
+        trace: new TraceEmitter(),
+        dispose: vi.fn(),
+      });
+      mocks.buildVars.mockResolvedValueOnce({});
+
+      const session = createTestSession();
+      yield* Effect.addFinalizer(() => session.dispose());
+      const described = AgentConfigSchema.parse({
+        agent: 'chat',
+        model: 'gpt55',
+        agentCategory: AgentCategory.ToolUse,
+        instruction: 'Fix grammar.',
+      });
+      yield* registerRun(session, DESCRIPTION_RUN_ID, described, 'chat', {
+        identity: { kind: 'agent', agent: 'chat' },
+      });
+      const failure = yield* Effect.forkChild(
+        Effect.flip(
+          prepareAgentDefinition({ config: described, session }).pipe(
+            Effect.flatMap((definition) =>
+              executeAgent(definition, DESCRIPTION_RUN_ID, { session }),
+            ),
+            Effect.provide(fakeProcessServices()),
+          ),
+        ),
+      );
+
+      yield* Deferred.await(descriptionStarted);
+      yield* Deferred.succeed(gate, 'Fixing grammar in the introduction');
+      expect(yield* Fiber.join(failure)).toBe(RUN_FAILURE);
+      const view = yield* session.readView([DESCRIPTION_RUN_ID]);
+      expect(view.runs.get(DESCRIPTION_RUN_ID)?.description).toBe(
+        'Fixing grammar in the introduction',
+      );
+    }),
   );
 });

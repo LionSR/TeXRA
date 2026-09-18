@@ -537,7 +537,11 @@ export function executeAgent(
           Deferred.await(ctx.stopped),
         ),
       );
-      try {
+      // The join is `ensuring`, not a generator `finally`: the generator
+      // driver does not resume a `finally` after a failed `yield*`, so a
+      // join written there runs on the success path only and the run's
+      // failure path would release the lease with the write in flight.
+      return yield* Effect.gen(function* () {
         const result = yield* runFlowWithLifecycle(
           ctx,
           (handle) =>
@@ -607,9 +611,7 @@ export function executeAgent(
           );
         }
         return result;
-      } finally {
-        yield* Fiber.join(sessionDescription);
-      }
+      }).pipe(Effect.ensuring(Fiber.join(sessionDescription)));
     });
   }).pipe(
     Effect.uninterruptible,
