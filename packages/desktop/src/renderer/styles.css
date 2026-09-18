@@ -62,8 +62,8 @@ wa-button[hidden] {
   outline-offset: calc(-1 * var(--focus-ring-offset));
 }
 
-/* Named `spin` so a caller can override just the duration, as taskShell.css's
-   .task-environment-refresh does. This shell chrome sits outside the Lit
+/* Named `spin` so a caller can override just the duration, as desktopShell.css's
+   .shell-environment-refresh does. This shell chrome sits outside the Lit
    component tree, so it defines its own keyframe rather than sharing one
    from @shared/styles. */
 @keyframes spin {
@@ -1554,7 +1554,7 @@ wa-card.desktop-onboarding::part(footer) {
 }
 
 /* Small filled circle, shared by every status-indicator dot in the desktop
-   renderer (this file's dirty-file dot, taskShell.css's pending-approval
+   renderer (this file's dirty-file dot, desktopShell.css's pending-approval
    badge). Callers size and color it through --dot-size/--dot-color and add
    their own position/border on top. */
 .status-dot {

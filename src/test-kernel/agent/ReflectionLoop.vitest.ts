@@ -74,7 +74,7 @@ import { fakePath } from '@test/support/FakePlatform';
 import { generateRunId, isObject } from '@utils/core';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { createRunStorageLocation } from '@utils/files/fileLocation';
-import { TaskRunFileService } from '@utils/files/taskRunStorage';
+import { RunFileService } from '@utils/files/runStorage';
 
 import {
   createRecordingHost,
@@ -444,7 +444,7 @@ function agentRunTestLayer(init: LoopInit) {
         toolPolicy: { stopAfterCycle: false },
         userVarChannels: {},
         initialUserMessageForTranscript: 'Write the document.',
-        fileService: new TaskRunFileService(init.runId, init.session.roots),
+        fileService: new RunFileService(init.runId, init.session.roots),
         tools: new MapToolRegistry({}),
         finalToolName: null,
         structured: { value: undefined },
@@ -776,7 +776,7 @@ describe('the reflection round loop', () => {
         const logger = new TraceEmitter();
         const warn = vi.spyOn(logger, 'warn');
         const prepare = vi
-          .spyOn(TaskRunFileService.prototype, 'prepareRunWorkspace')
+          .spyOn(RunFileService.prototype, 'prepareRunWorkspace')
           .mockRejectedValueOnce(new Error('workspace unavailable'));
 
         try {

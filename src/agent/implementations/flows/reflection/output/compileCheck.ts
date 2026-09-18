@@ -24,7 +24,7 @@ import { parseWorkflowOutputRoundDir } from '@shared/constants/workflowOutput';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { createRunStorageLocation } from '@utils/files/fileLocation';
 import { runDirUnder } from '@utils/files/runStorageFs';
-import { type TaskRunFileService } from '@utils/files/taskRunStorage';
+import { type RunFileService } from '@utils/files/runStorage';
 import { locateInWorkspace } from '@utils/files/workspaceFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { fsCall } from '@utils/errors/fsCall';
@@ -42,7 +42,7 @@ import { getOutputFilesByRound, type OutputState } from './outputState';
 interface CompileCheckContext {
   /** The run's session roots: its workspace, storage, and setting stores. */
   roots: WorkspaceRoots;
-  fileService: TaskRunFileService;
+  fileService: RunFileService;
   outputState: OutputState;
   logger: AgentTrace;
   runId: RunId;

@@ -23,7 +23,7 @@ import {
   type RoundIndexed,
   type RoundOutput,
 } from '@shared/schemas';
-import { TaskRunFileService } from '@utils/files/taskRunStorage';
+import { RunFileService } from '@utils/files/runStorage';
 import { formatResultCount } from '@utils/text/stringUtils';
 
 export interface OutputState {
@@ -37,7 +37,7 @@ export interface OutputDependencies {
   readonly config: AgentConfig;
   readonly baseFiles: FileLocation[];
   readonly logger: AgentTrace;
-  readonly fileService: TaskRunFileService;
+  readonly fileService: RunFileService;
   /** The run's session roots, held as data: the pipeline runs on the run's
    *  fiber, which is not guaranteed to sit inside the session's roots scope. */
   readonly roots: WorkspaceRoots;

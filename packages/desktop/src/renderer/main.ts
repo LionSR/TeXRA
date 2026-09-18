@@ -59,17 +59,17 @@ import {
 } from './desktopShortcutRegistry';
 import { createStartupTeamPanel } from './desktopOnboarding';
 import { installDesktopUnsavedCloseWiring } from './desktopUnsavedClose';
-import './taskShell.css';
+import './desktopShell.css';
 import {
   conversationDockTemplate,
   projectChipTemplate,
-  taskSidebarTemplate,
+  shellSidebarTemplate,
   type RailProject,
-} from './taskShell';
+} from './desktopShell';
 import { subagentsPaneTemplate } from './subagentsPane';
 import {
   activeWorkbenchTab,
-  initialDesktopTaskShellState,
+  initialDesktopShellState,
   openWorkbenchTab,
   renameWorkbenchTab,
   setBottomPanelHeight,
@@ -79,10 +79,10 @@ import {
   toggleSidebar,
   toggleSummaryBar,
   workspaceName,
-  type DesktopTaskShellState,
+  type DesktopShellState,
   type WorkbenchTab,
   type WorkbenchPlacement,
-} from '../shared/desktopTaskShell';
+} from '../shared/desktopShellState';
 import { DESKTOP_PROJECT_COMMANDS } from '../shared/desktopProjectMessages';
 import { isSafeAbsolutePdfPath } from '../shared/desktopPdfMessages';
 import { getRendererPlatform } from './rendererPlatform';
@@ -138,7 +138,7 @@ const startupTeamPanel = createStartupTeamPanel({
 });
 
 // =============================================================================
-// Task shell
+// Desktop shell
 // =============================================================================
 //
 // The conversation is the permanent task canvas. Project navigation stays in
@@ -271,21 +271,21 @@ function currentWorkbench() {
   return project;
 }
 
-function shellState(): DesktopTaskShellState {
+function shellState(): DesktopShellState {
   return (
     projectWorkbenches.get(shell.active)?.getState() ??
-    initialDesktopTaskShellState()
+    initialDesktopShellState()
   );
 }
 
-function updateShell(next: DesktopTaskShellState): void {
+function updateShell(next: DesktopShellState): void {
   currentWorkbench().updateState(next);
 }
 
 function layoutChanged(
   session: string,
-  previous: DesktopTaskShellState,
-  next: DesktopTaskShellState,
+  previous: DesktopShellState,
+  next: DesktopShellState,
 ): void {
   if (session !== shell.active || applyingProjectList) return;
   rerenderShell();
@@ -386,7 +386,7 @@ const environmentPopover = createEnvironmentPopover({
     postMessage(command, { ...payload, session: shell.active }),
 });
 
-function taskConversationTemplate(): TemplateResult {
+function shellConversationTemplate(): TemplateResult {
   const startupPanelVisible = startupTeamPanel.isVisible();
   const projects = railProjects();
   const activeProject = activeRailProject(projects);
@@ -410,12 +410,12 @@ function taskConversationTemplate(): TemplateResult {
   // its accessible name.
   const environmentButtonLabel = `${workspaceName(workspacePath)} environment`;
   return html`
-    <main class="task-conversation" aria-label="Task conversation">
-      <header class="task-header">
-        <span class="task-header-button-slot">
+    <main class="shell-conversation" aria-label="Task conversation">
+      <header class="shell-header">
+        <span class="shell-header-button-slot">
           <wa-button
             type="button"
-            class="task-header-button icon-button is-size-l"
+            class="shell-header-button icon-button is-size-l"
             appearance="plain"
             size="s"
             aria-label=${sidebarToggleLabel}
@@ -429,7 +429,7 @@ function taskConversationTemplate(): TemplateResult {
           ${
             sidebarCollapsedWithPendingApproval
               ? html`<span
-                  class="status-dot task-header-pending-approval-badge"
+                  class="status-dot shell-header-pending-approval-badge"
                   aria-hidden="true"
                 ></span>`
               : nothing
@@ -440,14 +440,14 @@ function taskConversationTemplate(): TemplateResult {
             ? projectChipTemplate(projects, activeProject, selectProject)
             : nothing
         }
-        <span class="task-header-spacer"></span>
+        <span class="shell-header-spacer"></span>
         ${
           shellState().summaryBarVisible
             ? html`
                 <wa-button
-                  id="taskEnvironmentButton"
+                  id="shellEnvironmentButton"
                   type="button"
-                  class="task-environment-button btn-secondary"
+                  class="shell-environment-button btn-secondary"
                   appearance="outlined"
                   size="s"
                   aria-label=${environmentButtonLabel}
@@ -462,7 +462,7 @@ function taskConversationTemplate(): TemplateResult {
         }
         <wa-button
           type="button"
-          class="task-header-button icon-button is-size-l"
+          class="shell-header-button icon-button is-size-l"
           appearance="plain"
           size="s"
           aria-label=${commandLabel(DESKTOP_COMMAND_PALETTE_ID)}
@@ -472,36 +472,36 @@ function taskConversationTemplate(): TemplateResult {
           ${waIcon('ellipsis')}
         </wa-button>
         <div
-          class="task-layout-controls"
+          class="shell-layout-controls"
           role="group"
           aria-label="Layout controls"
         >
           ${renderIconActionButton({
-            id: 'taskToggleSummaryBar',
+            id: 'shellToggleSummaryBar',
             icon: 'list-ul',
             label: commandLabel(DESKTOP_LOCAL_COMMANDS.TOGGLE_SUMMARY_BAR),
             tooltip: commandTitle(DESKTOP_LOCAL_COMMANDS.TOGGLE_SUMMARY_BAR),
-            className: 'task-layout-toggle',
+            className: 'shell-layout-toggle',
             size: 'l',
             pressed: shellState().summaryBarVisible,
             onClick: toggleSummaryBarVisibility,
           })}
           ${renderIconActionButton({
-            id: 'taskToggleBottomBar',
+            id: 'shellToggleBottomBar',
             icon: 'window-maximize',
             label: commandLabel(DESKTOP_LOCAL_COMMANDS.TOGGLE_BOTTOM_BAR),
             tooltip: commandTitle(DESKTOP_LOCAL_COMMANDS.TOGGLE_BOTTOM_BAR),
-            className: 'task-layout-toggle',
+            className: 'shell-layout-toggle',
             size: 'l',
             pressed: activeWorkbenchTab(shellState(), 'bottom') != null,
             onClick: toggleBottomBarVisibility,
           })}
           ${renderIconActionButton({
-            id: 'taskToggleSidePanel',
+            id: 'shellToggleSidePanel',
             icon: 'picture-in-picture',
             label: commandLabel(DESKTOP_LOCAL_COMMANDS.TOGGLE_SIDE_PANEL),
             tooltip: commandTitle(DESKTOP_LOCAL_COMMANDS.TOGGLE_SIDE_PANEL),
-            className: 'task-layout-toggle',
+            className: 'shell-layout-toggle',
             size: 'l',
             pressed: activeWorkbenchTab(shellState(), 'right') != null,
             onClick: toggleSidePanelVisibility,
@@ -513,13 +513,13 @@ function taskConversationTemplate(): TemplateResult {
             : nothing
         }
       </header>
-      <div class="task-conversation-body" id="desktop-center">
-        <section class="task-conversation-pane" data-pane="conversation">
+      <div class="shell-conversation-body" id="desktop-center">
+        <section class="shell-conversation-pane" data-pane="conversation">
           ${
             hasWorkspace()
               ? html`
                   <section
-                    class="task-launcher-surface"
+                    class="shell-launcher-surface"
                     data-session=${activeProject ? activeProject.display.key : nothing}
                     ?hidden=${startupPanelVisible}
                   >
@@ -543,7 +543,7 @@ interface SplitPanelElement extends HTMLElement {
 /**
  * Store the split handle's measured size on this project's surface.
  */
-function recordLayoutMeasurement(next: DesktopTaskShellState): void {
+function recordLayoutMeasurement(next: DesktopShellState): void {
   if (applyingProjectList) return;
   projectWorkbenches.get(shell.active)?.updateState(next);
 }
@@ -590,7 +590,7 @@ function projectWorkbenchesTemplate(
     (project) => project.session,
     (project) =>
       html` <div
-        class="task-project-workbench"
+        class="shell-project-workbench"
         data-session=${project.session}
         ?hidden=${project.session !== shell.active || !activeWorkbenchTab(project.getState(), placement)}
       >
@@ -599,12 +599,12 @@ function projectWorkbenchesTemplate(
   )} `;
 }
 
-function taskRightLayoutTemplate(
+function shellRightLayoutTemplate(
   rightTab: WorkbenchTab | undefined,
 ): TemplateResult {
   return html`
     <wa-split-panel
-      class="task-main-split"
+      class="shell-main-split"
       orientation="horizontal"
       primary="end"
       position-in-pixels=${rightTab ? shellState().workbenchWidth : 0}
@@ -612,27 +612,27 @@ function taskRightLayoutTemplate(
       style=${rightTab ? nothing : '--divider-width: 0px'}
       @wa-reposition=${rememberWorkbenchWidth}
     >
-      <span slot="divider" class="task-split-handle">
+      <span slot="divider" class="shell-split-handle">
         ${waIcon('ellipsis')}
       </span>
-      <div slot="start" class="task-main-panel">
-        ${taskConversationTemplate()}
+      <div slot="start" class="shell-main-panel">
+        ${shellConversationTemplate()}
       </div>
-      <div slot="end" class="task-workbench-panel">
+      <div slot="end" class="shell-workbench-panel">
         ${projectWorkbenchesTemplate('right')}
       </div>
     </wa-split-panel>
   `;
 }
 
-function taskMainTemplate(
+function shellMainTemplate(
   rightTab: WorkbenchTab | undefined,
   bottomTab: WorkbenchTab | undefined,
 ): TemplateResult {
-  const rightLayout = taskRightLayoutTemplate(rightTab);
+  const rightLayout = shellRightLayoutTemplate(rightTab);
   return html`
     <wa-split-panel
-      class="task-bottom-split"
+      class="shell-bottom-split"
       orientation="vertical"
       primary="end"
       position-in-pixels=${bottomTab ? shellState().bottomPanelHeight : 0}
@@ -640,11 +640,11 @@ function taskMainTemplate(
       style=${bottomTab ? nothing : '--divider-width: 0px'}
       @wa-reposition=${rememberBottomPanelHeight}
     >
-      <span slot="divider" class="task-bottom-split-handle">
+      <span slot="divider" class="shell-bottom-split-handle">
         ${waIcon('ellipsis')}
       </span>
-      <div slot="start" class="task-main-panel">${rightLayout}</div>
-      <div slot="end" class="task-bottom-workbench-panel">
+      <div slot="start" class="shell-main-panel">${rightLayout}</div>
+      <div slot="end" class="shell-bottom-workbench-panel">
         ${projectWorkbenchesTemplate('bottom')}
       </div>
     </wa-split-panel>
@@ -658,12 +658,12 @@ function selectProject(key: string): void {
 function shellTemplate(): TemplateResult {
   const rightTab = activeWorkbenchTab(shellState(), 'right');
   const bottomTab = activeWorkbenchTab(shellState(), 'bottom');
-  const main = taskMainTemplate(rightTab, bottomTab);
+  const main = shellMainTemplate(rightTab, bottomTab);
   const workbenchOpen = rightTab != null || bottomTab != null;
 
   return html`
     <wa-split-panel
-      class="task-shell ${shellState().sidebarCollapsed ? 'task-shell-collapsed' : ''}"
+      class="shell-frame ${shellState().sidebarCollapsed ? 'shell-frame-collapsed' : ''}"
       orientation="horizontal"
       primary="start"
       position-in-pixels=${shellState().sidebarCollapsed ? 0 : shellState().sidebarWidth}
@@ -674,15 +674,15 @@ function shellTemplate(): TemplateResult {
       data-bottom-panel-open=${String(bottomTab != null)}
       @wa-reposition=${rememberSidebarWidth}
     >
-      <span slot="divider" class="task-split-handle">
+      <span slot="divider" class="shell-split-handle">
         ${waIcon('ellipsis')}
       </span>
       <div
         slot="start"
-        class="task-sidebar-slot"
+        class="shell-sidebar-slot"
         ?hidden=${shellState().sidebarCollapsed}
       >
-        ${taskSidebarTemplate(
+        ${shellSidebarTemplate(
           {
             files: currentWorkbench().editorPane.treeElement,
             filesExpanded: shellState().filesExpanded,
@@ -732,7 +732,7 @@ function shellTemplate(): TemplateResult {
           },
         )}
       </div>
-      <div slot="end" class="task-shell-main-panel">${main}</div>
+      <div slot="end" class="shell-frame-main-panel">${main}</div>
     </wa-split-panel>
   `;
 }
@@ -749,7 +749,7 @@ function observeSurfaceResizes(): void {
   });
   surfaceResizeObserver.disconnect();
   for (const element of document.querySelectorAll(
-    '.task-conversation, .task-workbench',
+    '.shell-conversation, .shell-workbench',
   )) {
     surfaceResizeObserver.observe(element);
   }

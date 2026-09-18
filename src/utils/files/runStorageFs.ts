@@ -25,12 +25,12 @@ import { AbsoluteFS } from './absoluteFS';
 import { isDirectory, isFile, isSymlink } from './fsEntryType';
 import { StorageFS } from './storageFS';
 
-export const CHANNEL = 'taskRunStorage';
+export const CHANNEL = 'runStorage';
 const log = createLog(CHANNEL);
 
 /*
  * Each path helper below has a rooted form taking the storage root as data —
- * for code that holds a session's roots, such as a run's `TaskRunFileService`
+ * for code that holds a session's roots, such as a run's `RunFileService`
  * — and an ambient form that resolves the calling context's storage root and
  * delegates to it.
  */
@@ -297,7 +297,7 @@ export async function createSymlink(
  * Workspace-relative directories that should never be moved into run storage.
  *
  * History folders contain prior run data that is managed separately,
- * so keep them in place even when task-run isolation is enabled.
+ * so keep them in place even when run-storage isolation is enabled.
  */
 const IGNORED_WORKSPACE_ROOTS = new Set(['History', 'history']);
 

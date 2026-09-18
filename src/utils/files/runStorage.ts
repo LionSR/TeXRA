@@ -32,7 +32,7 @@ import { locateInWorkspace } from './workspaceFS';
 
 const log = createLog(CHANNEL);
 
-export class TaskRunFileService {
+export class RunFileService {
   public readonly runDirectory: string;
   private hasPreparedSnapshot = false;
   private readonly mirroredDependencies = new Set<string>();
@@ -57,7 +57,7 @@ export class TaskRunFileService {
    * so the workspace can be restored even after the agent edits files in-place.
    * Additional workspace dependencies (references, auxiliaries, extracted
    * figures, etc.) are mirrored into the active run directory via symlinks so
-   * tools operating inside task-run storage can resolve them using their
+   * tools operating inside run storage can resolve them using their
    * familiar workspace-relative paths.
    */
   public async prepareRunWorkspace(

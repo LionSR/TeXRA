@@ -342,7 +342,7 @@ function createWindow(options: {
     // window off from the shell below it.
     //
     // `hiddenInset` (macOS) keeps the traffic-light buttons but removes the bar,
-    // so the task shell header becomes the drag region. On Windows/Linux,
+    // so the desktop shell header becomes the drag region. On Windows/Linux,
     // `titleBarOverlay` hands us the same arrangement with system controls
     // drawn over our surface.
     titleBarStyle: 'hiddenInset',

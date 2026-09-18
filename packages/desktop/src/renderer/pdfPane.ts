@@ -2,7 +2,7 @@
 // across tab switches like the editor and terminal surfaces, so the viewer's
 // scroll position and zoom survive a layout change.
 
-import type { WorkbenchTab } from '../shared/desktopTaskShell';
+import type { WorkbenchTab } from '../shared/desktopShellState';
 
 /**
  * Convert an absolute filesystem path (already shape-validated by
@@ -42,7 +42,7 @@ export function createPdfPane() {
     // BrowserWindow renders PDFs in iframes through the bundled Chromium
     // PDF plugin with no flag.
     const frame = document.createElement('iframe');
-    frame.classList.add('task-workbench-pdf-frame');
+    frame.classList.add('shell-workbench-pdf-frame');
     frame.setAttribute('title', tab.title);
     // Same-origin so the viewer's controls work; no scripts, so a malformed
     // PDF cannot run JS into the renderer.

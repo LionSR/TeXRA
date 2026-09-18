@@ -168,7 +168,7 @@ describe('resolveChildRunOutput', () => {
           session,
         ),
       );
-      expect(error.message).toContain('not inside task-run storage');
+      expect(error.message).toContain('not inside run storage');
     }),
   );
 });

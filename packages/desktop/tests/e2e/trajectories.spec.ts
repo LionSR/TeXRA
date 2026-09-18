@@ -43,18 +43,18 @@ test('first launch shows a usable launcher chrome', async () => {
   const workspaceDirectory =
     launched.workspacePath.split(/[\\/]/).at(-1) ?? launched.workspacePath;
   const directoryLabel = await launched.page
-    .locator('.task-project-copy strong')
+    .locator('.shell-project-copy strong')
     .first()
     .innerText();
   expect(directoryLabel).toContain(workspaceDirectory);
   await expect(
-    launched.page.locator('.task-header-button[aria-label="Show Commands"]'),
+    launched.page.locator('.shell-header-button[aria-label="Show Commands"]'),
   ).toBeVisible();
   // The conversation view renders the launcher or the no-workspace empty
   // state — both are valid first-launch outcomes. The audit doc tracks which
   // one each user actually hits.
   const mainSection = launched.page.locator(
-    '.task-conversation-pane[data-pane="conversation"]',
+    '.shell-conversation-pane[data-pane="conversation"]',
   );
   await expect(mainSection).toBeVisible();
 });
@@ -155,9 +155,9 @@ test('rapid settings-tab switching does not crash the renderer', async () => {
   }
   // The chrome must still be alive after the burst.
   await expect(
-    launched.page.locator('.task-project-copy strong'),
+    launched.page.locator('.shell-project-copy strong'),
   ).toBeVisible();
-  await expect(launched.page.locator('.task-conversation')).toBeVisible();
+  await expect(launched.page.locator('.shell-conversation')).toBeVisible();
 });
 
 /**
@@ -192,7 +192,7 @@ test('desktop:showDiff opens the in-app Review workbench', async () => {
   }, payload);
 
   const reviewTab = launched.page.locator(
-    '.task-workbench-tab[data-kind="review"][data-active="true"]',
+    '.shell-workbench-tab[data-kind="review"][data-active="true"]',
   );
   await expect(reviewTab).toBeVisible();
   const review = launched.page.locator('.desktop-review-pane');
@@ -242,7 +242,7 @@ test('desktop:showDiff opens the in-app Review workbench', async () => {
     );
   });
   await expect(
-    launched.page.locator('.task-workbench-tab[data-kind="review"]'),
+    launched.page.locator('.shell-workbench-tab[data-kind="review"]'),
   ).toHaveCount(1);
 
   // Close via desktop:closeDiff naming the diff it opened — the Review tab
@@ -259,7 +259,7 @@ test('desktop:showDiff opens the in-app Review workbench', async () => {
     );
   });
   await expect(
-    launched.page.locator('.task-workbench-tab[data-kind="review"]'),
+    launched.page.locator('.shell-workbench-tab[data-kind="review"]'),
   ).toHaveCount(0);
 });
 
@@ -270,8 +270,8 @@ test('desktop:showPdf opens and closes an in-app PDF workbench', async () => {
   const session = await page
     .locator('progress-app')
     .getAttribute('data-session');
-  const pdfTab = page.locator('.task-workbench-tab[data-kind="pdf"]');
-  const frame = page.locator('iframe.task-workbench-pdf-frame');
+  const pdfTab = page.locator('.shell-workbench-tab[data-kind="pdf"]');
+  const frame = page.locator('iframe.shell-workbench-pdf-frame');
 
   await page.evaluate(
     ({ session, pdfPath }) => {

@@ -48,7 +48,7 @@ import {
 } from '@test/support/sessionTestUtils';
 import { isObject } from '@utils/core';
 import { generateRunId, generateShortId } from '@utils/core';
-import { TaskRunFileService } from '@utils/files/taskRunStorage';
+import { RunFileService } from '@utils/files/runStorage';
 
 import { sessionWithInteractions } from '../progressTestUtils';
 
@@ -304,7 +304,7 @@ function agentRunTestLayer(init: LoopInit) {
           'initialUserMessageForTranscript' in init
             ? init.initialUserMessageForTranscript
             : 'Do the thing.',
-        fileService: new TaskRunFileService(init.runId, init.session.roots),
+        fileService: new RunFileService(init.runId, init.session.roots),
         tools: new MapToolRegistry(tools),
         finalToolName: init.finalToolName ?? null,
         structured: init.structured ?? { value: undefined },

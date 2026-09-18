@@ -59,7 +59,7 @@ import {
 import { releaseRunResources } from '@tools/approval';
 import { clearGoal, goalOf, startGoal } from '@tools/goal';
 import { generateRunId, generateShortId } from '@utils/core';
-import { TaskRunFileService } from '@utils/files/taskRunStorage';
+import { RunFileService } from '@utils/files/runStorage';
 
 import {
   eventsOfType,
@@ -263,7 +263,7 @@ function agentRunTestLayer(init: LoopInit) {
         toolPolicy: { stopAfterCycle: init.stopAfterCycle === true },
         userVarChannels: {},
         initialUserMessageForTranscript: 'Do the thing.',
-        fileService: new TaskRunFileService(init.runId, init.session.roots),
+        fileService: new RunFileService(init.runId, init.session.roots),
         tools: new MapToolRegistry({}),
         finalToolName: init.finalToolName ?? null,
         structured: { value: undefined },

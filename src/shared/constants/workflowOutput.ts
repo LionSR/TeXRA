@@ -33,7 +33,7 @@ export function workflowOutputRoundDir(round: number): string {
 /**
  * Build a runDir-relative workflow output path for a round: `r{round}/output.{ext}`.
  *
- * IMPORTANT: callers MUST resolve this through a TaskRunFileService bound to an
+ * IMPORTANT: callers MUST resolve this through a RunFileService bound to an
  * runId. The fixed-stem filename is only collision-safe when combined
  * with per-run run storage; a workspace-scoped resolution would route
  * every round to the same `<workspace>/r{round}/output.{ext}` and clobber

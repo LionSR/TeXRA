@@ -5,7 +5,7 @@ import '@fontsource-variable/geist';
 import '@fontsource-variable/jetbrains-mono';
 import '../src/renderer/styles.css';
 import '../src/renderer/themeTokens.css';
-import '../src/renderer/taskShell.css';
+import '../src/renderer/desktopShell.css';
 import '@shared/wa';
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
@@ -472,7 +472,7 @@ const style = html`<style>
     border-radius: var(--wa-border-radius-l);
   }
 
-  /* desktop frame: the real shell classes from taskShell.css */
+  /* desktop frame: the real shell classes from desktopShell.css */
   .h-desktop {
     display: grid;
     grid-template-columns: 288px minmax(0, 1fr) 240px;
@@ -483,7 +483,7 @@ const style = html`<style>
     color: var(--wa-color-text-normal);
     border: 1px solid var(--wa-color-surface-border);
   }
-  .h-desktop .task-sidebar-brand {
+  .h-desktop .shell-sidebar-brand {
     padding-left: 12px;
   }
   .h-rail-scroll {
@@ -627,7 +627,7 @@ const style = html`<style>
     justify-content: flex-start;
     min-height: 44px;
   }
-  .h-switcher .task-project-copy {
+  .h-switcher .shell-project-copy {
     text-align: left;
     min-width: 0;
   }

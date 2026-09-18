@@ -49,7 +49,7 @@ import { hostStores } from '@test/support/setupPlatform';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { generateRunId, generateShortId } from '@utils/core';
-import { TaskRunFileService } from '@utils/files/taskRunStorage';
+import { RunFileService } from '@utils/files/runStorage';
 
 import {
   autoDecideRequests,
@@ -242,7 +242,7 @@ function agentRunTestLayer(init: HarnessInit) {
         toolPolicy: { stopAfterCycle: init.stopAfterCycle === true },
         userVarChannels: {},
         initialUserMessageForTranscript: 'Run the tools.',
-        fileService: new TaskRunFileService(init.runId, init.session.roots),
+        fileService: new RunFileService(init.runId, init.session.roots),
         tools: new MapToolRegistry(init.tools),
         finalToolName: null,
         structured: { value: undefined },

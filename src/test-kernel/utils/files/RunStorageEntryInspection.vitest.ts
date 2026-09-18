@@ -15,7 +15,7 @@ import {
   inspectRunStorageEntry,
   runStorageLocationFromAnyAbsolutePath,
 } from '@utils/files/runStorageFs';
-import { TaskRunFileService } from '@utils/files/taskRunStorage';
+import { RunFileService } from '@utils/files/runStorage';
 
 const runId = 'abcdef123456' as RunId;
 const storageRoot = path.resolve(path.sep, 'storage');
@@ -181,7 +181,7 @@ describe('inspectRunStorageEntry', () => {
   });
 
   it('preserves source provenance instead of treating workspace inputs as outputs', () => {
-    const fileService = new TaskRunFileService(runId, workspaceRoots());
+    const fileService = new RunFileService(runId, workspaceRoots());
 
     expect(fileService.locateSource('draft.tex')).toEqual({
       kind: 'workspace',

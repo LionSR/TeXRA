@@ -153,7 +153,7 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
       return renderEmptyState({
         icon: 'folder-open',
         title: 'No files found in this workspace.',
-        // h2, not h3: the surrounding "Project" label (taskShell.ts) is a
+        // h2, not h3: the surrounding "Project" label (desktopShell.ts) is a
         // plain div, not a heading, so there's no h1/h2 in this sidebar
         // subtree to nest under.
         headingTag: 'h2',

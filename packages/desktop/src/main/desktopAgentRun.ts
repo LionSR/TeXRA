@@ -126,7 +126,7 @@ export function createDesktopAgentRun(
 
   const presentationEventHandlers: PresentationEventHandlers<RuntimePresentationEventPayloads> =
     {
-      // The desktop task shell keeps the conversation canvas permanently on
+      // The desktop shell keeps the conversation canvas permanently on
       // screen, so there is no separate progress surface to reveal.
       requestEnsureProgressView: () => undefined,
       requestShowError: ({ message, docsCommand }) =>

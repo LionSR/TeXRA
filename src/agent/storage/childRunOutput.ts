@@ -29,7 +29,7 @@ export const resolveChildRunOutput = Effect.fn('resolveChildRunOutput')(
     const reference = runStorageLocationFromAnyAbsolutePath(absolutePath);
     if (!reference) {
       return yield* Effect.fail(
-        new Error('Workflow output is not inside task-run storage.'),
+        new Error('Workflow output is not inside run storage.'),
       );
     }
 

@@ -21,7 +21,7 @@ import {
   createExternalLocation,
   getFileDirectory,
 } from '@utils/files/fileLocation';
-import { TaskRunFileService } from '@utils/files/taskRunStorage';
+import { RunFileService } from '@utils/files/runStorage';
 import { readConfig } from '@utils/config/configUtils';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import {
@@ -89,7 +89,7 @@ export class XmlOutputManager {
   constructor(
     private readonly agentConfig: AgentConfig,
     private readonly logger: AgentTrace,
-    private readonly fileService: TaskRunFileService,
+    private readonly fileService: RunFileService,
     /** The run's round map: a missing-output report records the round and
      *  publishes the whole map, since the fact is a latest-only listing row. */
     private readonly outputState: OutputState,

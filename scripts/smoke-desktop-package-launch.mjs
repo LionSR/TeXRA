@@ -192,7 +192,7 @@ async function waitForReadiness(application) {
         mainApp.isConnected &&
         (mainApp.shadowRoot?.childElementCount ?? 0) > 0;
       const project = document.querySelector(
-        '.task-launcher-surface[data-session]',
+        '.shell-launcher-surface[data-session]',
       );
       const projectReady =
         project instanceof HTMLElement && Boolean(project.dataset.session);

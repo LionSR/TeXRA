@@ -7,17 +7,17 @@
  */
 
 :root {
-  --task-shell-header-height: 48px;
-  --task-shell-icon-box: var(--control-size-s);
-  --task-shell-icon-size: var(--font-size-icon-sm);
-  --task-workbench-tab-height: var(--task-shell-header-height);
-  --task-sidebar-default-width: 288px;
+  --shell-frame-header-height: 48px;
+  --shell-frame-icon-box: var(--control-size-s);
+  --shell-frame-icon-size: var(--font-size-icon-sm);
+  --shell-workbench-tab-height: var(--shell-frame-header-height);
+  --shell-sidebar-default-width: 288px;
   /* Traffic lights end near 70px with the custom hidden-inset position. Keep
      native controls plus a full compact-control gap clear of app content. */
   --macos-titlebar-safe-inset: 92px;
 }
 
-.task-shell {
+.shell-frame {
   --divider-width: 1px;
   --divider-hit-area: 12px;
   --min: 220px;
@@ -31,38 +31,38 @@
   color: var(--wa-color-text-normal);
 }
 
-.task-shell-collapsed {
+.shell-frame-collapsed {
   display: block;
 }
 
-.task-shell::part(panel),
-.task-main-split::part(panel),
-.task-bottom-split::part(panel) {
+.shell-frame::part(panel),
+.shell-main-split::part(panel),
+.shell-bottom-split::part(panel) {
   min-width: 0;
   min-height: 0;
   overflow: hidden;
 }
 
-.task-shell::part(divider),
-.task-main-split::part(divider),
-.task-bottom-split::part(divider) {
+.shell-frame::part(divider),
+.shell-main-split::part(divider),
+.shell-bottom-split::part(divider) {
   background: var(--wa-color-surface-border);
   transition: background-color var(--transition-fast);
 }
 
-.task-shell::part(divider):hover,
-.task-shell::part(divider):focus-visible,
-.task-main-split::part(divider):hover,
-.task-main-split::part(divider):focus-visible,
-.task-bottom-split::part(divider):hover,
-.task-bottom-split::part(divider):focus-visible {
+.shell-frame::part(divider):hover,
+.shell-frame::part(divider):focus-visible,
+.shell-main-split::part(divider):hover,
+.shell-main-split::part(divider):focus-visible,
+.shell-bottom-split::part(divider):hover,
+.shell-bottom-split::part(divider):focus-visible {
   background: var(--wa-color-focus);
 }
 
-.task-shell-main-panel,
-.task-main-panel,
-.task-workbench-panel,
-.task-bottom-workbench-panel {
+.shell-frame-main-panel,
+.shell-main-panel,
+.shell-workbench-panel,
+.shell-bottom-workbench-panel {
   width: 100%;
   height: 100%;
   min-width: 0;
@@ -70,7 +70,7 @@
   overflow: hidden;
 }
 
-.task-main-split {
+.shell-main-split {
   --divider-width: 1px;
   --divider-hit-area: 12px;
   --min: 380px;
@@ -80,7 +80,7 @@
   height: 100%;
 }
 
-.task-bottom-split {
+.shell-bottom-split {
   --divider-width: 1px;
   --divider-hit-area: 12px;
   --min: 180px;
@@ -92,7 +92,7 @@
   min-height: 0;
 }
 
-.task-split-handle {
+.shell-split-handle {
   display: block;
   width: 18px;
   height: 18px;
@@ -103,7 +103,7 @@
   transform: rotate(90deg);
 }
 
-.task-bottom-split-handle {
+.shell-bottom-split-handle {
   display: grid;
   place-items: center;
   width: 18px;
@@ -116,13 +116,13 @@
 
 /* ── Project/task sidebar ─────────────────────────────────────────────── */
 
-.task-sidebar-slot {
+.shell-sidebar-slot {
   position: relative;
   min-width: 0;
   min-height: 0;
 }
 
-.task-sidebar {
+.shell-sidebar {
   position: relative;
   z-index: 4;
   display: grid;
@@ -136,21 +136,21 @@
   overflow: hidden;
 }
 
-.task-sidebar-brand {
+.shell-sidebar-brand {
   display: flex;
   align-items: center;
   gap: 9px;
-  height: var(--task-shell-header-height);
+  height: var(--shell-frame-header-height);
   padding: 0 12px;
   box-sizing: border-box;
   -webkit-app-region: drag;
 }
 
-body[data-desktop-platform='darwin'] .task-sidebar-brand {
+body[data-desktop-platform='darwin'] .shell-sidebar-brand {
   padding-left: var(--macos-titlebar-safe-inset);
 }
 
-.task-sidebar-logo {
+.shell-sidebar-logo {
   display: grid;
   place-items: center;
   width: 25px;
@@ -164,7 +164,7 @@ body[data-desktop-platform='darwin'] .task-sidebar-brand {
   -webkit-app-region: no-drag;
 }
 
-.task-sidebar-product {
+.shell-sidebar-product {
   min-width: 0;
   color: var(--wa-color-text-normal);
   font-size: var(--font-size-lg);
@@ -172,37 +172,37 @@ body[data-desktop-platform='darwin'] .task-sidebar-brand {
   letter-spacing: -0.015em;
 }
 
-.task-sidebar-brand-menu {
+.shell-sidebar-brand-menu {
   display: block;
   font-size: var(--font-size-xs);
   -webkit-app-region: no-drag;
 }
 
-.task-sidebar-brand-menu wa-icon,
-.task-project-chevron,
-.task-section-split-handle wa-icon,
-.task-split-handle wa-icon,
-.task-bottom-split-handle wa-icon,
-.task-header-button wa-icon,
-.task-layout-toggle wa-icon,
-.task-environment-button wa-icon,
-.task-workbench-tab-close wa-icon,
-.task-workbench-close wa-icon {
+.shell-sidebar-brand-menu wa-icon,
+.shell-project-chevron,
+.shell-section-split-handle wa-icon,
+.shell-split-handle wa-icon,
+.shell-bottom-split-handle wa-icon,
+.shell-header-button wa-icon,
+.shell-layout-toggle wa-icon,
+.shell-environment-button wa-icon,
+.shell-workbench-tab-close wa-icon,
+.shell-workbench-close wa-icon {
   display: grid;
   place-items: center;
   width: 1em;
   height: 1em;
-  font-size: var(--task-shell-icon-size);
+  font-size: var(--shell-frame-icon-size);
   line-height: 1;
 }
 
-.task-sidebar-primary {
+.shell-sidebar-primary {
   display: grid;
   gap: 2px;
   padding: 8px 10px 10px;
 }
 
-.task-sidebar-action {
+.shell-sidebar-action {
   position: relative;
   display: block;
   width: 100%;
@@ -210,38 +210,38 @@ body[data-desktop-platform='darwin'] .task-sidebar-brand {
   font-size: var(--font-size);
 }
 
-.task-sidebar-action::part(base) {
+.shell-sidebar-action::part(base) {
   justify-content: flex-start;
   width: 100%;
   min-height: var(--row-height);
   padding: 0 10px;
 }
 
-.task-sidebar-action::part(label) {
+.shell-sidebar-action::part(label) {
   min-width: 0;
   text-align: left;
 }
 
-.task-sidebar-action[data-primary='true'] {
+.shell-sidebar-action[data-primary='true'] {
   font-weight: var(--font-weight-medium);
 }
 
-.task-sidebar-action-icon {
+.shell-sidebar-action-icon {
   display: grid;
   place-items: center;
-  width: var(--task-shell-icon-box);
-  height: var(--task-shell-icon-box);
-  flex: 0 0 var(--task-shell-icon-box);
+  width: var(--shell-frame-icon-box);
+  height: var(--shell-frame-icon-box);
+  flex: 0 0 var(--shell-frame-icon-box);
   color: var(--wa-color-text-quiet);
-  font-size: var(--task-shell-icon-size);
+  font-size: var(--shell-frame-icon-size);
   line-height: 1;
 }
 
-.task-sidebar-action[data-primary='true'] .task-sidebar-action-icon {
+.shell-sidebar-action[data-primary='true'] .shell-sidebar-action-icon {
   color: var(--wa-color-text-normal);
 }
 
-.task-sidebar-scroll {
+.shell-sidebar-scroll {
   --divider-width: 1px;
   --divider-hit-area: 12px;
   --min: 120px;
@@ -254,25 +254,25 @@ body[data-desktop-platform='darwin'] .task-sidebar-brand {
   overflow: hidden;
 }
 
-.task-sidebar-scroll::part(panel) {
+.shell-sidebar-scroll::part(panel) {
   min-width: 0;
   min-height: 0;
   overflow: hidden;
 }
 
-.task-sidebar-scroll::part(divider) {
+.shell-sidebar-scroll::part(divider) {
   min-height: 0;
   overflow: visible;
   background: var(--wa-color-surface-border);
   transition: background-color var(--transition-fast);
 }
 
-.task-sidebar-scroll::part(divider):hover,
-.task-sidebar-scroll::part(divider):focus-visible {
+.shell-sidebar-scroll::part(divider):hover,
+.shell-sidebar-scroll::part(divider):focus-visible {
   background: var(--wa-color-focus);
 }
 
-.task-section-split-handle {
+.shell-section-split-handle {
   display: grid;
   place-items: center;
   width: 18px;
@@ -283,7 +283,7 @@ body[data-desktop-platform='darwin'] .task-sidebar-brand {
   pointer-events: none;
 }
 
-.task-sidebar-section {
+.shell-sidebar-section {
   width: 100%;
   min-width: 0;
   min-height: 0;
@@ -293,30 +293,30 @@ body[data-desktop-platform='darwin'] .task-sidebar-brand {
   scrollbar-width: thin;
 }
 
-.task-history-section {
+.shell-history-section {
   padding-top: 4px;
 }
 
-.task-sidebar-section-label {
+.shell-sidebar-section-label {
   color: var(--wa-color-text-quiet);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
 }
 
-.task-sidebar-section-heading {
+.shell-sidebar-section-heading {
   display: flex;
   align-items: center;
   min-height: 30px;
   padding: 0 8px;
 }
 
-.task-sidebar-section-count {
+.shell-sidebar-section-count {
   margin-left: auto;
   color: var(--wa-color-text-quiet);
   font-size: var(--font-size-xs);
 }
 
-.task-sidebar-section-count::part(base) {
+.shell-sidebar-section-count::part(base) {
   display: inline-grid;
   min-height: 22px;
   min-width: 22px;
@@ -325,50 +325,50 @@ body[data-desktop-platform='darwin'] .task-sidebar-brand {
   line-height: 1;
 }
 
-.task-project-item {
+.shell-project-item {
   display: flex;
   align-items: center;
   gap: 2px;
   margin-top: 4px;
 }
 
-.task-project-row {
+.shell-project-row {
   display: block;
   width: 100%;
   margin-top: 4px;
   color: var(--wa-color-text-normal);
 }
 
-.task-project-item .task-project-row {
+.shell-project-item .shell-project-row {
   flex: 1 1 auto;
   min-width: 0;
   margin-top: 0;
 }
 
-.task-project-fold {
+.shell-project-fold {
   flex: 0 0 auto;
   color: var(--wa-color-text-quiet);
 }
 
 /* Shown while the row is hovered or the control itself has focus. */
-.task-project-close {
+.shell-project-close {
   flex: 0 0 auto;
   opacity: 0;
   color: var(--wa-color-text-quiet);
 }
 
-.task-project-item:hover .task-project-close,
-.task-project-item:focus-within .task-project-close {
+.shell-project-item:hover .shell-project-close,
+.shell-project-item:focus-within .shell-project-close {
   opacity: 1;
 }
 
-.task-project-row::part(base) {
+.shell-project-row::part(base) {
   width: 100%;
   min-height: 48px;
   padding: 5px 8px;
 }
 
-.task-project-row::part(label) {
+.shell-project-row::part(label) {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -377,39 +377,39 @@ body[data-desktop-platform='darwin'] .task-sidebar-brand {
   text-align: left;
 }
 
-.task-project-mark {
+.shell-project-mark {
   color: var(--wa-color-text-normal);
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-semibold);
   box-shadow: var(--desktop-shadow-sm);
 }
 
-.task-project-copy {
+.shell-project-copy {
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
   min-width: 0;
 }
 
-.task-project-copy strong,
-.task-project-copy small {
+.shell-project-copy strong,
+.shell-project-copy small {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.task-project-copy strong {
+.shell-project-copy strong {
   font-size: var(--font-size);
   font-weight: var(--font-weight-medium);
 }
 
-.task-project-copy small {
+.shell-project-copy small {
   margin-top: 1px;
   color: var(--wa-color-text-quiet);
   font-size: var(--font-size-xs);
 }
 
-.task-project-chevron {
+.shell-project-chevron {
   flex: 0 0 auto;
   color: var(--wa-color-text-quiet);
   font-size: var(--font-size-xs);
@@ -418,72 +418,72 @@ body[data-desktop-platform='darwin'] .task-sidebar-brand {
 /* The project this window shows reads as a section heading: its runs sit
    beneath it and the header's project chip names it, so the row itself stays
    plain and only its name firms up. */
-.task-project-row.is-active .task-project-copy strong {
+.shell-project-row.is-active .shell-project-copy strong {
   font-weight: var(--font-weight-semibold);
 }
 
-.task-project-add {
+.shell-project-add {
   display: block;
   width: 100%;
   margin-top: 4px;
   color: var(--wa-color-text-quiet);
 }
 
-.task-project-add::part(base) {
+.shell-project-add::part(base) {
   width: 100%;
   justify-content: flex-start;
   padding: 4px 8px;
   border-style: dashed;
 }
 
-.task-project-files {
+.shell-project-files {
   min-height: 0;
   margin: 3px 0 2px 14px;
   padding-left: 10px;
   border-left: 1px solid var(--wa-color-surface-border);
 }
 
-.task-project-files[hidden] {
+.shell-project-files[hidden] {
   display: none;
 }
 
-.task-project-files .desktop-editor-tree-header {
+.shell-project-files .desktop-editor-tree-header {
   display: none;
 }
 
-.task-project-files .desktop-editor-tree-list {
+.shell-project-files .desktop-editor-tree-list {
   display: block;
   max-height: none;
   padding: 0;
   overflow: visible;
 }
 
-.task-project-files .desktop-editor-tree-row {
+.shell-project-files .desktop-editor-tree-row {
   --indent-size: 1.15em;
 }
 
-.task-project-files .desktop-editor-tree-row::part(item) {
+.shell-project-files .desktop-editor-tree-row::part(item) {
   min-height: 26px;
   padding: 0 4px;
   border-radius: 6px;
 }
 
-.task-project-files .desktop-editor-tree-row::part(expand-button) {
+.shell-project-files .desktop-editor-tree-row::part(expand-button) {
   width: 1.5em;
   height: 1.5em;
 }
 
-.task-project-files .desktop-editor-tree-empty {
+.shell-project-files .desktop-editor-tree-empty {
   padding: 8px;
   color: var(--wa-color-text-quiet);
   font-size: var(--font-size-sm);
 }
 
-.task-sidebar-sessions {
+.shell-sidebar-sessions {
   min-height: 0;
 }
 
-.task-sidebar-sessions > run-tabs {
+.shell-sidebar-sessions > run-tabs {
   display: flex;
   min-width: 0;
   min-height: 0;
@@ -491,7 +491,7 @@ body[data-desktop-platform='darwin'] .task-sidebar-brand {
   --color-border: transparent;
 }
 
-.task-sidebar-footer {
+.shell-sidebar-footer {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 2px;
@@ -499,36 +499,36 @@ body[data-desktop-platform='darwin'] .task-sidebar-brand {
   border-top: 1px solid var(--wa-color-surface-border);
 }
 
-.task-sidebar-footer .task-sidebar-action {
+.shell-sidebar-footer .shell-sidebar-action {
   font-size: var(--font-size-sm);
 }
 
-.task-sidebar-footer .task-sidebar-action::part(base) {
+.shell-sidebar-footer .shell-sidebar-action::part(base) {
   min-height: 34px;
   padding: 0 8px;
 }
 
-.task-sidebar-footer .task-sidebar-action-icon {
+.shell-sidebar-footer .shell-sidebar-action-icon {
   font-size: var(--font-size-icon-sm);
 }
 
 /* ── Task conversation ────────────────────────────────────────────────── */
 
-.task-conversation {
+.shell-conversation {
   position: relative;
   display: grid;
-  grid-template-rows: var(--task-shell-header-height) minmax(0, 1fr);
+  grid-template-rows: var(--shell-frame-header-height) minmax(0, 1fr);
   width: 100%;
   height: 100%;
   min-width: 0;
   min-height: 0;
   background: var(--wa-color-surface-default);
   overflow: hidden;
-  container-name: task-conversation;
+  container-name: shell-conversation;
   container-type: inline-size;
 }
 
-.task-header {
+.shell-header {
   position: relative;
   z-index: 5;
   display: flex;
@@ -546,11 +546,11 @@ body[data-desktop-platform='darwin'] .task-sidebar-brand {
   -webkit-app-region: drag;
 }
 
-.task-header wa-button {
+.shell-header wa-button {
   -webkit-app-region: no-drag;
 }
 
-.task-header-button-slot {
+.shell-header-button-slot {
   position: relative;
   display: inline-flex;
   flex: 0 0 auto;
@@ -560,7 +560,7 @@ body[data-desktop-platform='darwin'] .task-sidebar-brand {
    (RunTab.styles.ts `.has-pending-approval`) — the only cue left when a
    call held at the approval gate is on a run the collapsed sidebar
    currently hides. */
-.task-header-pending-approval-badge {
+.shell-header-pending-approval-badge {
   position: absolute;
   top: 2px;
   right: 2px;
@@ -570,7 +570,7 @@ body[data-desktop-platform='darwin'] .task-sidebar-brand {
   pointer-events: none;
 }
 
-.task-header-title {
+.shell-header-title {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -580,11 +580,11 @@ body[data-desktop-platform='darwin'] .task-sidebar-brand {
   letter-spacing: -0.01em;
 }
 
-.task-header-spacer {
+.shell-header-spacer {
   flex: 1 1 auto;
 }
 
-.task-layout-controls {
+.shell-layout-controls {
   display: flex;
   align-items: center;
   flex: 0 0 auto;
@@ -593,28 +593,28 @@ body[data-desktop-platform='darwin'] .task-sidebar-brand {
   -webkit-app-region: no-drag;
 }
 
-.task-layout-toggle {
+.shell-layout-toggle {
   display: block;
 }
 
-.task-environment-button {
+.shell-environment-button {
   display: block;
   max-width: min(260px, 32vw);
   font-size: var(--font-size-sm);
 }
 
-.task-environment-button::part(label) {
+.shell-environment-button::part(label) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.task-environment-popover {
+.shell-environment-popover {
   --max-width: min(360px, calc(100vw - 28px));
   -webkit-app-region: no-drag;
 }
 
-.task-environment-popover::part(body) {
+.shell-environment-popover::part(body) {
   width: 340px;
   max-width: calc(100vw - 48px);
   max-height: min(680px, calc(100vh - 72px));
@@ -622,7 +622,7 @@ body[data-desktop-platform='darwin'] .task-sidebar-brand {
   overflow-y: auto;
 }
 
-.task-environment-heading {
+.shell-environment-heading {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -634,27 +634,27 @@ body[data-desktop-platform='darwin'] .task-sidebar-brand {
   letter-spacing: -0.01em;
 }
 
-.task-environment-refresh[disabled] wa-icon {
+.shell-environment-refresh[disabled] wa-icon {
   animation: spin 0.9s linear infinite;
 }
 
-.task-environment-section {
+.shell-environment-section {
   padding: 6px 0;
   border-top: 1px solid var(--wa-color-surface-border);
 }
 
-.task-environment-section:first-of-type {
+.shell-environment-section:first-of-type {
   border-top: 0;
 }
 
-.task-environment-section-title {
+.shell-environment-section-title {
   padding: 7px 8px 4px;
   color: var(--wa-color-text-quiet);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
 }
 
-.task-environment-row {
+.shell-environment-row {
   display: grid;
   grid-template-columns: 24px minmax(0, 1fr) auto;
   align-items: center;
@@ -665,24 +665,24 @@ body[data-desktop-platform='darwin'] .task-sidebar-brand {
   font-size: var(--font-size);
 }
 
-.task-environment-row > span {
+.shell-environment-row > span {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.task-environment-row-icon {
+.shell-environment-row-icon {
   display: grid;
   place-items: center;
-  width: var(--task-shell-icon-box);
-  height: var(--task-shell-icon-box);
+  width: var(--shell-frame-icon-box);
+  height: var(--shell-frame-icon-box);
   color: var(--wa-color-text-quiet);
-  font-size: var(--task-shell-icon-size);
+  font-size: var(--shell-frame-icon-size);
   line-height: 1;
 }
 
-.task-environment-trailing {
+.shell-environment-trailing {
   display: inline-flex;
   align-items: center;
   justify-content: flex-end;
@@ -693,33 +693,33 @@ body[data-desktop-platform='darwin'] .task-sidebar-brand {
   text-overflow: ellipsis;
 }
 
-.task-environment-trailing.is-success {
+.shell-environment-trailing.is-success {
   color: var(--color-success);
 }
 
-.task-environment-diff {
+.shell-environment-diff {
   font-variant-numeric: tabular-nums;
 }
 
-.task-environment-diff .is-added {
+.shell-environment-diff .is-added {
   color: var(--color-success);
 }
 
-.task-environment-diff .is-deleted {
+.shell-environment-diff .is-deleted {
   color: var(--color-error);
 }
 
-.task-environment-more {
+.shell-environment-more {
   padding: 3px 8px 4px 40px;
   color: var(--wa-color-text-quiet);
   font-size: var(--font-size-xs);
 }
 
-.task-environment-popover .is-muted {
+.shell-environment-popover .is-muted {
   color: var(--wa-color-text-quiet);
 }
 
-.task-conversation-body {
+.shell-conversation-body {
   position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -729,7 +729,7 @@ body[data-desktop-platform='darwin'] .task-sidebar-brand {
   overflow: hidden;
 }
 
-.task-conversation-pane {
+.shell-conversation-pane {
   display: grid;
   grid-area: 1 / 1;
   grid-template-rows: minmax(0, 1fr);
@@ -737,12 +737,12 @@ body[data-desktop-platform='darwin'] .task-sidebar-brand {
   min-height: 0;
 }
 
-.task-conversation-pane[hidden] {
+.shell-conversation-pane[hidden] {
   display: none;
 }
 
-.task-conversation-pane > *,
-.task-launcher-surface {
+.shell-conversation-pane > *,
+.shell-launcher-surface {
   min-width: 0;
   min-height: 0;
   width: 100%;
@@ -751,8 +751,8 @@ body[data-desktop-platform='darwin'] .task-sidebar-brand {
 
 /* ── Optional workbench ───────────────────────────────────────────────── */
 
-.task-workbench {
-  --workbench-tabs-height: var(--task-shell-header-height);
+.shell-workbench {
+  --workbench-tabs-height: var(--shell-frame-header-height);
   position: relative;
   z-index: 3;
   display: grid;
@@ -765,11 +765,11 @@ body[data-desktop-platform='darwin'] .task-sidebar-brand {
   overflow: hidden;
 }
 
-.task-workbench[data-placement='bottom'] {
-  --workbench-tabs-height: var(--task-workbench-tab-height);
+.shell-workbench[data-placement='bottom'] {
+  --workbench-tabs-height: var(--shell-workbench-tab-height);
 }
 
-.task-workbench-tabs {
+.shell-workbench-tabs {
   display: flex;
   align-items: stretch;
   min-width: 0;
@@ -778,7 +778,7 @@ body[data-desktop-platform='darwin'] .task-sidebar-brand {
   -webkit-app-region: drag;
 }
 
-.task-workbench-tabs-scroll {
+.shell-workbench-tabs-scroll {
   display: flex;
   align-items: stretch;
   flex: 1 1 auto;
@@ -788,11 +788,11 @@ body[data-desktop-platform='darwin'] .task-sidebar-brand {
   -webkit-app-region: no-drag;
 }
 
-.task-workbench-tabs-scroll::-webkit-scrollbar {
+.shell-workbench-tabs-scroll::-webkit-scrollbar {
   display: none;
 }
 
-.task-workbench-tab {
+.shell-workbench-tab {
   position: relative;
   display: flex;
   align-items: center;
@@ -805,17 +805,17 @@ body[data-desktop-platform='darwin'] .task-sidebar-brand {
   user-select: none;
 }
 
-.task-workbench-tab:hover {
+.shell-workbench-tab:hover {
   background: var(--wa-color-toolbar-hover);
   color: var(--wa-color-text-normal);
 }
 
-.task-workbench-tab[data-active='true'] {
+.shell-workbench-tab[data-active='true'] {
   background: var(--wa-color-surface-default);
   color: var(--wa-color-text-normal);
 }
 
-.task-workbench-tab[data-active='true']::after {
+.shell-workbench-tab[data-active='true']::after {
   content: '';
   position: absolute;
   inset: auto 10px 0;
@@ -824,17 +824,17 @@ body[data-desktop-platform='darwin'] .task-sidebar-brand {
   background: var(--wa-color-text-normal);
 }
 
-.task-workbench-tab-icon {
+.shell-workbench-tab-icon {
   display: grid;
   place-items: center;
-  width: var(--task-shell-icon-box);
-  height: var(--task-shell-icon-box);
-  flex: 0 0 var(--task-shell-icon-box);
-  font-size: var(--task-shell-icon-size);
+  width: var(--shell-frame-icon-box);
+  height: var(--shell-frame-icon-box);
+  flex: 0 0 var(--shell-frame-icon-box);
+  font-size: var(--shell-frame-icon-size);
   line-height: 1;
 }
 
-.task-workbench-tab-activate {
+.shell-workbench-tab-activate {
   display: block;
   min-width: 0;
   height: 100%;
@@ -842,7 +842,7 @@ body[data-desktop-platform='darwin'] .task-sidebar-brand {
   color: inherit;
 }
 
-.task-workbench-tab-activate::part(base) {
+.shell-workbench-tab-activate::part(base) {
   justify-content: flex-start;
   width: 100%;
   min-height: var(--workbench-tabs-height);
@@ -851,11 +851,11 @@ body[data-desktop-platform='darwin'] .task-sidebar-brand {
   background: transparent;
 }
 
-.task-workbench-tab-activate::part(label) {
+.shell-workbench-tab-activate::part(label) {
   min-width: 0;
 }
 
-.task-workbench-tab-label {
+.shell-workbench-tab-label {
   display: block;
   min-width: 0;
   overflow: hidden;
@@ -863,7 +863,7 @@ body[data-desktop-platform='darwin'] .task-sidebar-brand {
   white-space: nowrap;
 }
 
-.task-workbench-tab-dirty {
+.shell-workbench-tab-dirty {
   flex: 0 0 auto;
   width: 6px;
   height: 6px;
@@ -871,24 +871,24 @@ body[data-desktop-platform='darwin'] .task-sidebar-brand {
   background: var(--wa-color-text-normal);
 }
 
-.task-workbench-tab-close,
-.task-workbench-close {
+.shell-workbench-tab-close,
+.shell-workbench-close {
   display: block;
   flex: 0 0 auto;
   color: inherit;
 }
 
-.task-workbench-tab-close {
+.shell-workbench-tab-close {
   opacity: 0;
 }
 
-.task-workbench-tab-menu {
+.shell-workbench-tab-menu {
   position: absolute;
   width: 0;
   height: 0;
 }
 
-.task-workbench-tab-menu-anchor {
+.shell-workbench-tab-menu-anchor {
   position: fixed;
   z-index: -1;
   top: var(--context-menu-y, 0);
@@ -901,38 +901,38 @@ body[data-desktop-platform='darwin'] .task-sidebar-brand {
   pointer-events: none;
 }
 
-.task-workbench-tab-menu wa-dropdown-item wa-icon {
+.shell-workbench-tab-menu wa-dropdown-item wa-icon {
   display: grid;
   place-items: center;
-  width: var(--task-shell-icon-box);
-  height: var(--task-shell-icon-box);
-  font-size: var(--task-shell-icon-size);
+  width: var(--shell-frame-icon-box);
+  height: var(--shell-frame-icon-box);
+  font-size: var(--shell-frame-icon-size);
   line-height: 1;
 }
 
-.task-workbench-tab:hover .task-workbench-tab-close,
-.task-workbench-tab[data-active='true'] .task-workbench-tab-close,
-.task-workbench-tab-close:focus-visible {
+.shell-workbench-tab:hover .shell-workbench-tab-close,
+.shell-workbench-tab[data-active='true'] .shell-workbench-tab-close,
+.shell-workbench-tab-close:focus-visible {
   opacity: 0.65;
 }
 
-.task-workbench-tab-close:hover {
+.shell-workbench-tab-close:hover {
   opacity: 1;
 }
 
-.task-workbench-close {
+.shell-workbench-close {
   align-self: center;
   margin: 0 8px;
   -webkit-app-region: no-drag;
 }
 
-body[data-desktop-platform='darwin'] .task-shell-collapsed .task-header {
+body[data-desktop-platform='darwin'] .shell-frame-collapsed .shell-header {
   padding-left: var(--macos-titlebar-safe-inset);
 }
 
-.task-workbench-body,
-.task-workbench-pane,
-.task-workbench-surface {
+.shell-workbench-body,
+.shell-workbench-pane,
+.shell-workbench-surface {
   display: grid;
   grid-template-rows: minmax(0, 1fr);
   min-width: 0;
@@ -941,21 +941,21 @@ body[data-desktop-platform='darwin'] .task-shell-collapsed .task-header {
   overflow: hidden;
 }
 
-.task-workbench-pane[hidden] {
+.shell-workbench-pane[hidden] {
   display: none;
 }
 
-.task-workbench-surface[data-scroll='true'] {
+.shell-workbench-surface[data-scroll='true'] {
   overflow: auto;
 }
 
-.task-workbench-surface > settings-app {
+.shell-workbench-surface > settings-app {
   width: 100%;
   min-width: 0;
   overflow: hidden;
 }
 
-.task-workbench-placeholder {
+.shell-workbench-placeholder {
   display: grid;
   align-content: center;
   place-items: center;
@@ -964,18 +964,18 @@ body[data-desktop-platform='darwin'] .task-shell-collapsed .task-header {
   text-align: center;
 }
 
-.task-workbench-placeholder .empty-state-icon-surface {
+.shell-workbench-placeholder .empty-state-icon-surface {
   margin: 0 auto 12px;
 }
 
-.task-workbench-placeholder .empty-state-title {
+.shell-workbench-placeholder .empty-state-title {
   max-width: 300px;
   margin: 0 0 5px;
   color: var(--wa-color-text-normal);
   font-size: var(--font-size-lg);
 }
 
-.task-workbench-placeholder .empty-state-body {
+.shell-workbench-placeholder .empty-state-body {
   max-width: 300px;
   margin: 0;
   font-size: var(--font-size-sm);
@@ -983,18 +983,18 @@ body[data-desktop-platform='darwin'] .task-shell-collapsed .task-header {
 }
 
 @media (max-width: 1120px) {
-  .task-main-split {
+  .shell-main-split {
     --min: 320px;
     --max: min(720px, calc(100% - 320px));
   }
 }
 
-@container task-conversation (max-width: 560px) {
-  .task-environment-button {
+@container shell-conversation (max-width: 560px) {
+  .shell-environment-button {
     width: var(--control-size-l);
   }
 
-  .task-environment-button::part(base) {
+  .shell-environment-button::part(base) {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1003,43 +1003,43 @@ body[data-desktop-platform='darwin'] .task-shell-collapsed .task-header {
     padding: 0;
   }
 
-  .task-environment-button::part(start) {
+  .shell-environment-button::part(start) {
     margin: 0;
   }
 
-  .task-environment-button wa-icon {
+  .shell-environment-button wa-icon {
     margin: 0;
     line-height: 0;
   }
 
-  .task-environment-button::part(caret),
-  .task-environment-button span {
+  .shell-environment-button::part(caret),
+  .shell-environment-button span {
     display: none;
   }
 }
 
-@container task-conversation (max-width: 420px) {
-  .task-header {
+@container shell-conversation (max-width: 420px) {
+  .shell-header {
     gap: 4px;
     padding-inline: 8px;
   }
 
-  .task-header-title {
+  .shell-header-title {
     display: none;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .task-shell *,
-  .task-shell *::before,
-  .task-shell *::after {
+  .shell-frame *,
+  .shell-frame *::before,
+  .shell-frame *::after {
     scroll-behavior: auto !important;
     transition-duration: 0.01ms !important;
   }
 }
 
 /* A compiled PDF fills its workbench pane; Chromium's viewer draws the chrome. */
-.task-workbench-pdf-frame {
+.shell-workbench-pdf-frame {
   display: block;
   width: 100%;
   height: 100%;
@@ -1051,7 +1051,7 @@ body[data-desktop-platform='darwin'] .task-shell-collapsed .task-header {
  * Projects as rail sections
  * ------------------------------------------------------------------------- */
 
-.task-sidebar-scroll {
+.shell-sidebar-scroll {
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
@@ -1060,39 +1060,39 @@ body[data-desktop-platform='darwin'] .task-shell-collapsed .task-header {
 
 /* A sibling of the row button, not its child: WebAwesome pins a badge
    slotted into a button to the button's corner. */
-.task-project-badge {
+.shell-project-badge {
   flex: 0 0 auto;
   margin: 0 2px;
   font-size: 10px;
   line-height: 1;
 }
 
-.task-project-badge::part(base) {
+.shell-project-badge::part(base) {
   min-width: 16px;
   height: 16px;
   padding: 0 4px;
   line-height: 16px;
 }
 
-.task-project-runs {
+.shell-project-runs {
   margin: 2px 0 4px 10px;
 }
 
-.task-project-files-toggle {
+.shell-project-files-toggle {
   display: block;
   width: 100%;
   margin: 0 0 2px 10px;
   color: var(--wa-color-text-quiet);
 }
 
-.task-project-files-toggle::part(base) {
+.shell-project-files-toggle::part(base) {
   justify-content: flex-start;
   min-height: 26px;
   padding: 2px 8px;
   font-size: var(--font-size-sm);
 }
 
-.task-workflow-calls-note {
+.shell-workflow-calls-note {
   padding: 4px 10px 6px;
   color: var(--wa-color-text-quiet);
   font-size: var(--font-size-sm);
@@ -1100,35 +1100,35 @@ body[data-desktop-platform='darwin'] .task-shell-collapsed .task-header {
 
 /* Opens the Subagents tab on the selected family: the way into a tree the
    rail no longer nests. */
-.task-subagents-open {
+.shell-subagents-open {
   display: block;
   width: 100%;
   margin: 2px 0 4px;
   color: var(--wa-color-text-quiet);
 }
 
-.task-subagents-open::part(base) {
+.shell-subagents-open::part(base) {
   justify-content: flex-start;
   min-height: 26px;
   padding: 2px 8px;
   font-size: var(--font-size-sm);
 }
 
-.task-subagents-open-count {
+.shell-subagents-open-count {
   font-variant-numeric: tabular-nums;
   color: var(--wa-color-text-quiet);
 }
 
 /* The conversation pane's project chip and dock. */
-.task-project-chip {
+.shell-project-chip {
   flex: 0 0 auto;
 }
 
-.task-project-chip wa-button::part(base) {
+.shell-project-chip wa-button::part(base) {
   gap: 6px;
 }
 
-.task-conversation-dock {
+.shell-conversation-dock {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
@@ -1138,14 +1138,14 @@ body[data-desktop-platform='darwin'] .task-shell-collapsed .task-header {
 }
 
 /* The Subagents workbench tab. */
-.task-subagents {
+.shell-subagents {
   display: flex;
   flex-direction: column;
   gap: 10px;
   padding: 8px;
 }
 
-.task-subagents-path {
+.shell-subagents-path {
   display: flex;
   align-items: center;
   gap: 4px;
@@ -1154,33 +1154,33 @@ body[data-desktop-platform='darwin'] .task-shell-collapsed .task-header {
   font-size: var(--font-size-sm);
 }
 
-.task-subagents-path .is-current {
+.shell-subagents-path .is-current {
   color: var(--wa-color-text-normal);
   font-weight: var(--font-weight-medium);
 }
 
-.task-subagents > run-tabs {
+.shell-subagents > run-tabs {
   display: flex;
   min-width: 0;
   --background-color: transparent;
   --color-border: transparent;
 }
 
-.task-subagents-note,
-.task-subagents-empty {
+.shell-subagents-note,
+.shell-subagents-empty {
   padding: 6px 8px;
   color: var(--wa-color-text-quiet);
   font-size: var(--font-size-sm);
 }
 
 /* Project and tab contents retain their DOM nodes while another owner is visible. */
-.task-project-workbench,
-.task-workbench-retained-surface {
+.shell-project-workbench,
+.shell-workbench-retained-surface {
   height: 100%;
   min-height: 0;
 }
 
-.task-project-workbench[hidden],
-.task-workbench-retained-surface[hidden] {
+.shell-project-workbench[hidden],
+.shell-workbench-retained-surface[hidden] {
   display: none;
 }

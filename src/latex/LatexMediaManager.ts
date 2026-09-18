@@ -11,7 +11,7 @@ import type { FileLocation } from '@shared/schemas';
 import { ToolConfig } from '@shared/schemas';
 import { filterNotNullish, unique } from '@utils/core';
 import { pathToLocation } from '@utils/files/fileLocation';
-import { TaskRunFileService } from '@utils/files/taskRunStorage';
+import { RunFileService } from '@utils/files/runStorage';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { fsCall } from '@utils/errors/fsCall';
 import { getExtensionLowercase, hasExtension } from '@utils/core/pathCore';
@@ -76,7 +76,7 @@ export class LatexMediaManager {
     private readonly logger: LatexTrace,
     /** The session's configuration: the settings a PDF or TikZ compile reads. */
     private readonly config: ConfigProvider,
-    private readonly fileService?: TaskRunFileService,
+    private readonly fileService?: RunFileService,
   ) {}
 
   /**

@@ -42,7 +42,7 @@ import {
   buildTerminalTool,
 } from '@tools/structuredOutput';
 import { ensureError } from '@utils/errors/errorMessage';
-import { TaskRunFileService } from '@utils/files/taskRunStorage';
+import { RunFileService } from '@utils/files/runStorage';
 
 import { bindModel, type BoundModel } from './modelBinding';
 import type { HttpClient } from 'effect/unstable/http';
@@ -107,7 +107,7 @@ export interface AgentRunShape {
   readonly userVarChannels: UserVariableChannels;
   /** Initial user row to log after the loop has inserted launch media. */
   readonly initialUserMessageForTranscript: string | undefined;
-  readonly fileService: TaskRunFileService;
+  readonly fileService: RunFileService;
   readonly tools: IToolRegistry;
   /** The synthetic terminal tool, when the config declares an output schema. */
   readonly finalToolName: string | null;
@@ -317,7 +317,7 @@ export const agentRunLayer = (
         stores: ctx.stores,
         userVarChannels: ctx.userVarChannels,
         initialUserMessageForTranscript: ctx.initialUserMessageForTranscript,
-        fileService: new TaskRunFileService(runId, session.roots),
+        fileService: new RunFileService(runId, session.roots),
         tools,
         finalToolName,
         structured,
