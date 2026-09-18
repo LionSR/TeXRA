@@ -1,40 +1,45 @@
+import { Effect } from 'effect';
 import { StatusCodes } from 'http-status-codes';
 import ky, { HTTPError } from 'ky';
 
 import { SUPABASE_CONFIG } from '@auth/config';
+import { ensureError } from '@utils/errors/errorMessage';
 
 import { errorDataToString, FETCH_TIMEOUT_MS } from './errorData';
 import { EdgeFunctionResponseSchema } from './types';
 
-/** Fetch raw remote-agent YAML from the edge function. */
-export async function fetchRemoteAgentConfigYaml(
+/**
+ * Fetch raw remote-agent YAML from the edge function. The edge function is
+ * this file's one foreign edge, wrapped here so its readers compose instead
+ * of each re-adopting the same promise.
+ */
+export const fetchRemoteAgentConfigYaml = (
   agentName: string,
   accessToken: string,
-): Promise<string> {
-  try {
-    const data = await ky
-      .post(SUPABASE_CONFIG.edgeFunctionUrl, {
-        json: { agentName },
-        headers: { Authorization: `Bearer ${accessToken}` },
-        timeout: false,
-        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-      })
-      .json<unknown>();
-    return EdgeFunctionResponseSchema.parse(data).config;
-  } catch (error) {
-    if (error instanceof HTTPError) {
-      const errorText = errorDataToString(error.data) ?? 'Unknown error';
-      throw new Error(
-        mapRemoteAgentConfigHttpError(
-          error.response.status,
-          agentName,
-          errorText,
-        ),
-      );
-    }
-    throw error;
-  }
-}
+): Effect.Effect<string, Error> =>
+  Effect.tryPromise({
+    try: async () => {
+      const data = await ky
+        .post(SUPABASE_CONFIG.edgeFunctionUrl, {
+          json: { agentName },
+          headers: { Authorization: `Bearer ${accessToken}` },
+          timeout: false,
+          signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+        })
+        .json<unknown>();
+      return EdgeFunctionResponseSchema.parse(data).config;
+    },
+    catch: (error) =>
+      error instanceof HTTPError
+        ? new Error(
+            mapRemoteAgentConfigHttpError(
+              error.response.status,
+              agentName,
+              errorDataToString(error.data) ?? 'Unknown error',
+            ),
+          )
+        : ensureError(error),
+  });
 
 /** Maps edge-function HTTP status codes to user-friendly error messages. */
 function mapRemoteAgentConfigHttpError(

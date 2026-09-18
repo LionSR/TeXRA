@@ -43,10 +43,7 @@ export const loadRemoteAgent = Effect.fn('RemoteAgentLoader.loadRemoteAgent')(
     log.info(`Loading remote agent: ${agentName}`);
 
     const attempt = Effect.gen(function* () {
-      const configYaml = yield* Effect.tryPromise({
-        try: () => fetchRemoteAgentConfigYaml(agentName, token),
-        catch: ensureError,
-      });
+      const configYaml = yield* fetchRemoteAgentConfigYaml(agentName, token);
 
       log.debug(`Parsing YAML for remote agent: ${agentName}`);
       const parsedYaml = parseYamlWith(configYaml, AgentDefinitionSchema);

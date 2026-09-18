@@ -57,7 +57,7 @@ vi.mock('@agent/index', () => ({
   refresh: vi.fn(),
 }));
 vi.mock('@agent/remote/remoteAgentConfigClient', () => ({
-  fetchRemoteAgentConfigYaml: vi.fn(),
+  fetchRemoteAgentConfigYaml: vi.fn(() => Effect.succeed('')),
 }));
 vi.mock('@common/teams/TeamRosterApplication', () => ({
   applyTeamRosterWithPreflight: vi.fn(),

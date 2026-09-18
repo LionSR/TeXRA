@@ -1,7 +1,6 @@
 import { Effect } from 'effect';
 import { fetchRemoteAgentConfigYaml } from '@agent/remote/remoteAgentConfigClient';
 import { SupabaseAuth } from '@auth/SupabaseAuth';
-import { ensureError } from '@utils/errors/errorMessage';
 
 /**
  * Fetch a hosted agent's prompt YAML for viewing. Returns null when the user
@@ -15,8 +14,5 @@ export const fetchRemoteAgentPromptYaml = Effect.fn(
   const auth = yield* SupabaseAuth;
   const token = yield* auth.accessToken;
   if (!token) return null;
-  return yield* Effect.tryPromise({
-    try: () => fetchRemoteAgentConfigYaml(agentName, token),
-    catch: ensureError,
-  });
+  return yield* fetchRemoteAgentConfigYaml(agentName, token);
 });

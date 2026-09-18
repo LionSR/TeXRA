@@ -149,7 +149,9 @@ describe('createLanguageModelPort', () => {
 
       expect(port.isAvailable()).toBe(true);
       await expect(
-        port.selectModels({ vendor: 'copilot', version: '2026-07' }),
+        Effect.runPromise(
+          port.selectModels({ vendor: 'copilot', version: '2026-07' }),
+        ),
       ).resolves.toEqual([
         {
           id: 'copilot-gpt-4o',
@@ -175,9 +177,11 @@ describe('createLanguageModelPort', () => {
     const nativeError = new Error('discovery failed');
     mocks.selectChatModels.mockRejectedValue(nativeError);
 
-    await expect(createPort().selectModels({ vendor: 'copilot' })).rejects.toBe(
-      nativeError,
-    );
+    expect(
+      await Effect.runPromise(
+        Effect.flip(createPort().selectModels({ vendor: 'copilot' })),
+      ),
+    ).toBe(nativeError);
     expect(mocks.warn).toHaveBeenCalledWith(
       'LanguageModelPort',
       'Could not discover editor-supplied language models: discovery failed',

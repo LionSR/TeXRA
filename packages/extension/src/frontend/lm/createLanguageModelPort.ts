@@ -1,4 +1,5 @@
 // Third-party imports
+import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
@@ -51,22 +52,26 @@ export function createLanguageModelPort(
   return {
     isAvailable: () => true,
 
-    async selectModels(selector) {
-      try {
-        return (await selectChatModels(selector)).map((model) =>
-          toModelInfo(model, accessInformation),
-        );
-      } catch (error) {
+    selectModels: (selector) =>
+      Effect.tryPromise({
+        try: async () =>
+          (await selectChatModels(selector)).map((model) =>
+            toModelInfo(model, accessInformation),
+          ),
         // The editor's own error travels on unchanged: the one production
         // consumer (`runtimeModelRegistry`) hands it to the caller that asked
         // for discovery, which reads its message.
-        warn(
-          'LanguageModelPort',
-          `Could not discover editor-supplied language models: ${toErrorMessage(error)}`,
-        );
-        throw error;
-      }
-    },
+        catch: (cause) => cause,
+      }).pipe(
+        Effect.tapError((error) =>
+          Effect.sync(() =>
+            warn(
+              'LanguageModelPort',
+              `Could not discover editor-supplied language models: ${toErrorMessage(error)}`,
+            ),
+          ),
+        ),
+      ),
 
     onDidChange(listener) {
       const models = lmApi.onDidChangeChatModels(listener);

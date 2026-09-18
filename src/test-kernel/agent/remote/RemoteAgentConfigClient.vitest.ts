@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { fetchRemoteAgentConfigYaml } from '@agent/remote/remoteAgentConfigClient';
@@ -18,7 +19,9 @@ describe('fetchRemoteAgentConfigYaml', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    const config = await fetchRemoteAgentConfigYaml('remoteWriter', 'token');
+    const config = await Effect.runPromise(
+      fetchRemoteAgentConfigYaml('remoteWriter', 'token'),
+    );
 
     expect(config).toBe('settings: {}\nprompts: {}\n');
     expect(fetchMock).toHaveBeenCalledOnce();
@@ -42,9 +45,11 @@ describe('fetchRemoteAgentConfigYaml', () => {
         vi.fn(async () => new Response('rejected', { status })),
       );
 
-      await expect(
-        fetchRemoteAgentConfigYaml('remoteWriter', 'token'),
-      ).rejects.toThrow(pattern);
+      const failure = await Effect.runPromise(
+        Effect.flip(fetchRemoteAgentConfigYaml('remoteWriter', 'token')),
+      );
+
+      expect(failure.message).toMatch(pattern);
     },
   );
 });

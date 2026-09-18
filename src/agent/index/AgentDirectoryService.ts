@@ -33,7 +33,10 @@ export interface AgentDirectoryEntry {
 }
 
 export interface AgentDirectoryIssueReporter {
-  report(message: string, docsId: AgentDirectoryDocsId): Promise<void>;
+  report(
+    message: string,
+    docsId: AgentDirectoryDocsId,
+  ): Effect.Effect<void, unknown>;
 }
 
 export interface AgentDirectoryServiceOptions {
@@ -206,34 +209,20 @@ export class AgentDirectoryService {
   }
 
   /** The issue reporter is a host push; its own failure is still a failed
-   *  resolution, as the awaited report was. */
+   *  resolution, as the reported program's is. */
   private reportIssue(
     message: string,
     docsId: AgentDirectoryDocsId,
   ): Effect.Effect<void, AgentDirectoriesFailed> {
-    return this.portCall(
-      () => this.options.issueReporter.report(message, docsId),
-      message,
-    );
+    return this.options.issueReporter
+      .report(message, docsId)
+      .pipe(Effect.mapError(this.failure(message)));
   }
 
   /** This file's one failure shape, from whatever cause raised it. */
   private failure(message: string): (cause: unknown) => AgentDirectoriesFailed {
     return (cause) =>
       new AgentDirectoriesFailed({ source: 'custom', message, cause });
-  }
-
-  /**
-   * One conversion for this file's remaining promise-shaped dependency, the
-   * host's issue reporter: the promise is adopted here and raised as the
-   * port's failure, so the readers above compose instead of catching a
-   * rejection they cannot name.
-   */
-  private portCall<A>(
-    call: () => Promise<A>,
-    message: string,
-  ): Effect.Effect<A, AgentDirectoriesFailed> {
-    return Effect.tryPromise({ try: call, catch: this.failure(message) });
   }
 }
 
