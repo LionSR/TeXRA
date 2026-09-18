@@ -467,10 +467,12 @@ export function hasPackageManager(name: SystemPackageManager): boolean {
   const cached = packageManagerAvailability.get(name);
   if (cached !== undefined) return cached;
 
-  // A `--version` probe answers the same from any directory, so it names the
-  // process cwd instead of reaching for a workspace root it does not need.
+  // A `--version` probe answers the same from any directory and for any
+  // project, so it names the process cwd and no setting slots instead of
+  // reaching for a workspace it does not need.
   const available = executeCommandSync([name, '--version'], {
     cwd: process.cwd(),
+    settings: undefined,
   }).success;
   packageManagerAvailability.set(name, available);
   log.debug(

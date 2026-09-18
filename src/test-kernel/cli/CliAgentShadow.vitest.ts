@@ -21,7 +21,7 @@ import { AgentCategory } from '@shared/schemas';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { REPO_ROOT } from '@test/support/repoScan';
-import { installPlatform } from '@test/support/setupPlatform';
+import { hostStores, installPlatform } from '@test/support/setupPlatform';
 import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
 import type { RootedFileSystem } from '@utils/files/rootedFileSystem';
 
@@ -33,6 +33,11 @@ import type { RootedFileSystem } from '@utils/files/rootedFileSystem';
  * probe read `tools` off the shadow. Validation now resolves through the same
  * category-scoped launch resolver the run itself uses.
  */
+/** The roster slots and runtime a CLI agent lookup takes, off the fake host. */
+function cliAgentServices() {
+  return { ...hostStores(), runtime: testRuntime() };
+}
+
 describe('CLI agent validation with a shadowed name', () => {
   const tempDirs: string[] = [];
 
@@ -90,31 +95,43 @@ describe('CLI agent validation with a shadowed name', () => {
   });
 
   it('validates the shadowed name against the tool-use entry launch will run', () => {
-    const entry = resolveCliAgentInCategory('assistant', AgentCategory.ToolUse);
+    const entry = resolveCliAgentInCategory(
+      hostStores(),
+      'assistant',
+      AgentCategory.ToolUse,
+    );
 
     expect(entry?.source).toBe('builtInToolUse');
     expect(entry?.category).toBe(AgentCategory.ToolUse);
-    expect(assertCliAgentLaunch('assistant', entry, 'chat')).toBe(entry);
-    expect(chatToolUseAgentUsageError('assistant')).toBeUndefined();
+    expect(assertCliAgentLaunch(hostStores(), 'assistant', entry, 'chat')).toBe(
+      entry,
+    );
+    expect(
+      chatToolUseAgentUsageError(hostStores(), 'assistant'),
+    ).toBeUndefined();
   });
 
   it('reads delegation support off the tool-use entry, not the shadow', () => {
     expect(
-      resolveCliAgentInCategory('assistant', AgentCategory.Workflow)?.source,
+      resolveCliAgentInCategory(
+        hostStores(),
+        'assistant',
+        AgentCategory.Workflow,
+      )?.source,
     ).toBe('custom');
   });
 
   it('still reports the category mismatch for a workflow-only agent', () => {
     expect(
-      resolveCliAgentInCategory('polish', AgentCategory.ToolUse),
+      resolveCliAgentInCategory(hostStores(), 'polish', AgentCategory.ToolUse),
     ).toBeUndefined();
-    expect(chatToolUseAgentUsageError('polish')).toContain(
+    expect(chatToolUseAgentUsageError(hostStores(), 'polish')).toContain(
       'Agent "polish" is a workflow agent; `texra chat` only handles tool-use agents.',
     );
   });
 
   it('reports an unknown name as missing rather than mismatched', () => {
-    expect(chatToolUseAgentUsageError('no-such-agent')).toContain(
+    expect(chatToolUseAgentUsageError(hostStores(), 'no-such-agent')).toContain(
       'Tool-use agent not found: no-such-agent.',
     );
   });
@@ -125,15 +142,16 @@ describe('CLI agent validation with a shadowed name', () => {
   // unambiguous because the registry is keyed by `source:name`.
   it('refuses a shadowed name for `texra run` and names both candidates', async () => {
     await expect(
-      resolveCliRunAgent(testRuntime(), 'assistant'),
+      resolveCliRunAgent(cliAgentServices(), 'assistant'),
     ).rejects.toThrow(
       'Agent name "assistant" is ambiguous: it matches the workflow agent custom:assistant and the toolUse agent builtInToolUse:assistant. Re-run with the source-qualified name to pick one: `texra run custom:assistant` or `texra run builtInToolUse:assistant`.',
     );
     expect(
-      (await resolveCliRunAgent(testRuntime(), 'custom:assistant')).category,
+      (await resolveCliRunAgent(cliAgentServices(), 'custom:assistant'))
+        .category,
     ).toBe(AgentCategory.Workflow);
     expect(
-      (await resolveCliRunAgent(testRuntime(), 'builtInToolUse:assistant'))
+      (await resolveCliRunAgent(cliAgentServices(), 'builtInToolUse:assistant'))
         .category,
     ).toBe(AgentCategory.ToolUse);
   });
@@ -159,13 +177,18 @@ describe('CLI agent validation with a shadowed name', () => {
   it('resolves a source-qualified identifier to that exact source', () => {
     expect(
       resolveCliAgentInCategory(
+        hostStores(),
         'builtInToolUse:assistant',
         AgentCategory.ToolUse,
       )?.source,
     ).toBe('builtInToolUse');
     // The workflow shadow's own key stays out of the tool-use category.
     expect(
-      resolveCliAgentInCategory('custom:assistant', AgentCategory.ToolUse),
+      resolveCliAgentInCategory(
+        hostStores(),
+        'custom:assistant',
+        AgentCategory.ToolUse,
+      ),
     ).toBeUndefined();
   });
 });

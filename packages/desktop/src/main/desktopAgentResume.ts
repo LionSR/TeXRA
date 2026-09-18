@@ -2,11 +2,7 @@ import { Cause, Effect } from 'effect';
 
 import type { AgentTrace } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
-import {
-  presentAgentFailure,
-  runInSession,
-  type SessionHandle,
-} from '@agent/runtime';
+import { presentAgentFailure, type SessionHandle } from '@agent/runtime';
 import {
   classifyAgentError,
   primaryAgentError,
@@ -69,9 +65,7 @@ export class DesktopProcessResumeOwner {
   ): Effect.Effect<boolean, AgentResumeFailed> {
     for (const session of this.options.sessions()) {
       if (!session.transcripts.has(runId)) continue;
-      return runInSession(session, () =>
-        this.resumeDesktopRun(runId, session, recovery),
-      );
+      return this.resumeDesktopRun(runId, session, recovery);
     }
     return Effect.succeed(false);
   }

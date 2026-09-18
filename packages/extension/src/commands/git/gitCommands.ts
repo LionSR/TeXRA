@@ -49,7 +49,7 @@ export function registerGitCommands(
     {
       id: 'texra.isGitRepository',
       handler: (rootPath?: string) =>
-        isGitRepository(rootPath ?? session.roots.workspace),
+        isGitRepository(rootPath ?? session.roots.workspace, session.roots),
     },
     {
       id: 'texra.getRecentCommits',
@@ -68,7 +68,10 @@ async function getRecentCommits(
   rootPath?: string,
 ): Promise<string[] | null> {
   const workspacePath = rootPath ?? session.roots.workspace;
-  if (!workspacePath || !(await isGitRepository(workspacePath))) {
+  if (
+    !workspacePath ||
+    !(await isGitRepository(workspacePath, session.roots))
+  ) {
     return null;
   }
 
@@ -80,6 +83,8 @@ async function getRecentCommits(
   );
 
   const commits = await readRecentCommitLabels(workspacePath, numberOfCommits, {
+    // The session's own slots: the read answers for this project.
+    settings: session.roots,
     // A failed `git log` comes back as undefined and is answered as an empty
     // list; without this hook that failure would be invisible in this host
     // (the desktop host passes its own onError to the same read).
@@ -110,7 +115,7 @@ function findCommitInHistory(
 
   const verifyResult = executeCommandSync(
     ['git', 'rev-parse', '--verify', `${sanitizedCommit}^{commit}`],
-    { cwd: workspacePath },
+    { cwd: workspacePath, settings: session.roots },
   );
 
   if (!verifyResult.success) {
@@ -119,7 +124,7 @@ function findCommitInHistory(
 
   const labelResult = executeCommandSync(
     ['git', 'show', '-s', `--format=${COMMIT_LABEL_FORMAT}`, sanitizedCommit],
-    { cwd: workspacePath },
+    { cwd: workspacePath, settings: session.roots },
   );
 
   if (!labelResult.success) {
@@ -170,10 +175,13 @@ async function promptGitMissing(): Promise<void> {
   const option = GIT_INSTALL_OPTIONS[process.platform] ?? null;
   const command =
     option &&
-    // A `--version` probe is directory-independent; name the process cwd
-    // rather than the workspace root it does not read.
-    executeCommandSync([option.tool, '--version'], { cwd: process.cwd() })
-      .success
+    // A `--version` probe is directory- and project-independent; name the
+    // process cwd and no setting slots rather than the workspace it does not
+    // read.
+    executeCommandSync([option.tool, '--version'], {
+      cwd: process.cwd(),
+      settings: undefined,
+    }).success
       ? option.command
       : null;
 
@@ -247,8 +255,10 @@ function buildOverleafClonePorts(
       Effect.sync(
         // Directory-independent probe: see `promptGitMissing`.
         () =>
-          executeCommandSync(['git', '--version'], { cwd: process.cwd() })
-            .success,
+          executeCommandSync(['git', '--version'], {
+            cwd: process.cwd(),
+            settings: undefined,
+          }).success,
       ),
     showGitMissing: () => Effect.promise(() => promptGitMissing()),
     listWorkspaceEntries: (workspacePath) =>

@@ -7,7 +7,6 @@ import { Effect } from 'effect';
 import { describe } from 'vitest';
 
 // Local imports
-import { runWithWorkspaceRoots } from '@platform/workspaceRoots';
 import { createFakeHost } from '@test/support/setupPlatform';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 
@@ -18,9 +17,7 @@ const updateTool = new UpdateConfigTool();
 
 function createPlatform(initial: Record<string, unknown> = {}) {
   const project = createFakeHost({ config: initial });
-  const layer = nativeToolTestLayer({
-    inScope: (operation) => runWithWorkspaceRoots(project.roots, operation),
-  });
+  const layer = nativeToolTestLayer({ roots: project.roots });
   return { config: project.roots.config, layer };
 }
 

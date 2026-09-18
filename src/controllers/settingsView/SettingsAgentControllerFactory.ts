@@ -61,7 +61,12 @@ export function createSettingsAgentControllers(
 ): SettingsAgentControllers {
   const { workspaceState, globalState } = options;
   const getAgents = options.getAgents ?? getAgentsByCategory;
-  const getVisibleAgents = options.getVisibleAgents ?? getVisibleRegistryAgents;
+  // The registry roster answers for the slots this host handed over, so the
+  // default port binds them here rather than resolving them per call.
+  const getVisibleAgents =
+    options.getVisibleAgents ??
+    ((category: AgentCategory) =>
+      getVisibleRegistryAgents({ workspaceState, globalState }, category));
   const roster = createWorkspaceAgentRosterController(
     { workspaceState, globalState },
     getAgents,

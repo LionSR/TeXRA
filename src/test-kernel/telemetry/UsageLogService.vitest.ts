@@ -10,7 +10,7 @@ import {
 } from 'vitest';
 
 import * as logger from '@logger/logUtils';
-import { workspaceRoots } from '@platform/workspaceRoots';
+import { processWorkspaceRoots } from '@platform/workspaceRoots';
 import { AgentCategory, TELEMETRY_ENABLED_KEY } from '@shared/schemas';
 import { UsageLogService } from '@telemetry/UsageLogService';
 import { testRuntime } from '@test/support/testProcessRuntime';
@@ -106,10 +106,10 @@ describe('UsageLogService', () => {
       }
     });
 
-    UsageLogService.log(usageEntry('first'), workspaceRoots().config);
+    UsageLogService.log(usageEntry('first'), processWorkspaceRoots().config);
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
 
-    UsageLogService.log(usageEntry('second'), workspaceRoots().config);
+    UsageLogService.log(usageEntry('second'), processWorkspaceRoots().config);
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
     releaseFirstFetch();
@@ -131,10 +131,10 @@ describe('UsageLogService', () => {
       if (callCount === 2) await secondFetchReleased;
     });
 
-    UsageLogService.log(usageEntry('first'), workspaceRoots().config);
+    UsageLogService.log(usageEntry('first'), processWorkspaceRoots().config);
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
 
-    UsageLogService.log(usageEntry('second'), workspaceRoots().config);
+    UsageLogService.log(usageEntry('second'), processWorkspaceRoots().config);
     const disposal = testRuntime().runPromise(UsageLogService.dispose());
 
     releaseFirstFetch();
@@ -186,7 +186,7 @@ describe('UsageLogService', () => {
       await fetchReleased;
     });
 
-    UsageLogService.log(usageEntry('timer'), workspaceRoots().config);
+    UsageLogService.log(usageEntry('timer'), processWorkspaceRoots().config);
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
 
@@ -204,7 +204,10 @@ describe('UsageLogService', () => {
     await expect(disposal).resolves.toBeUndefined();
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(batches.map(batchModels)).toEqual([['timer']]);
-    UsageLogService.log(usageEntry('after-close'), workspaceRoots().config);
+    UsageLogService.log(
+      usageEntry('after-close'),
+      processWorkspaceRoots().config,
+    );
     await vi.advanceTimersByTimeAsync(100);
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
@@ -239,7 +242,7 @@ describe('UsageLogService', () => {
       await fetchReleased;
     });
 
-    UsageLogService.log(usageEntry('slow'), workspaceRoots().config);
+    UsageLogService.log(usageEntry('slow'), processWorkspaceRoots().config);
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
 
     const disposal = testRuntime().runPromise(UsageLogService.dispose());
@@ -281,7 +284,7 @@ describe('UsageLogService', () => {
 
     const { batches, fetchMock } = stubBatchFetch();
 
-    UsageLogService.log(usageEntry('first'), workspaceRoots().config);
+    UsageLogService.log(usageEntry('first'), processWorkspaceRoots().config);
     await vi.advanceTimersByTimeAsync(0);
 
     expect(fetchMock).not.toHaveBeenCalled();
@@ -309,7 +312,7 @@ describe('UsageLogService', () => {
       return jsonResponse(firstFailure);
     });
 
-    UsageLogService.log(usageEntry('first'), workspaceRoots().config);
+    UsageLogService.log(usageEntry('first'), processWorkspaceRoots().config);
     await vi.advanceTimersByTimeAsync(0);
     expect(fetchMock).toHaveBeenCalledTimes(1);
     await vi.advanceTimersByTimeAsync(60_000);
@@ -336,10 +339,10 @@ describe('UsageLogService', () => {
       });
     });
 
-    UsageLogService.log(usageEntry('invalid'), workspaceRoots().config);
+    UsageLogService.log(usageEntry('invalid'), processWorkspaceRoots().config);
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
 
-    UsageLogService.log(usageEntry('valid'), workspaceRoots().config);
+    UsageLogService.log(usageEntry('valid'), processWorkspaceRoots().config);
     releaseRejection();
 
     await vi.advanceTimersByTimeAsync(0);
@@ -365,10 +368,10 @@ describe('UsageLogService', () => {
       }
     });
 
-    UsageLogService.log(usageEntry('first'), workspaceRoots().config);
+    UsageLogService.log(usageEntry('first'), processWorkspaceRoots().config);
     await vi.advanceTimersByTimeAsync(0);
 
-    UsageLogService.log(usageEntry('second'), workspaceRoots().config);
+    UsageLogService.log(usageEntry('second'), processWorkspaceRoots().config);
     await vi.advanceTimersByTimeAsync(0);
 
     expect(fetchMock).toHaveBeenCalledTimes(3);
@@ -392,7 +395,10 @@ describe('UsageLogService', () => {
     async function expectNoOptionalUsageSent(): Promise<void> {
       const { batches, fetchMock } = stubBatchFetch();
 
-      UsageLogService.log(usageEntry('optional'), workspaceRoots().config);
+      UsageLogService.log(
+        usageEntry('optional'),
+        processWorkspaceRoots().config,
+      );
       await vi.advanceTimersByTimeAsync(0);
 
       expect(fetchMock).not.toHaveBeenCalled();
@@ -402,7 +408,11 @@ describe('UsageLogService', () => {
     it('sends nothing while the setting is off', async () => {
       stubAccessToken();
       await Effect.runPromise(
-        workspaceRoots().config.update(TELEMETRY_ENABLED_KEY, false, 'global'),
+        processWorkspaceRoots().config.update(
+          TELEMETRY_ENABLED_KEY,
+          false,
+          'global',
+        ),
       );
 
       await expectNoOptionalUsageSent();
@@ -411,7 +421,7 @@ describe('UsageLogService', () => {
     it('honours a workspace-scoped telemetry opt-out', async () => {
       stubAccessToken();
       await Effect.runPromise(
-        workspaceRoots().config.update(
+        processWorkspaceRoots().config.update(
           TELEMETRY_ENABLED_KEY,
           false,
           'workspace',
@@ -424,10 +434,14 @@ describe('UsageLogService', () => {
     it('does not let a project opt in over a user-wide opt-out', async () => {
       stubAccessToken();
       await Effect.runPromise(
-        workspaceRoots().config.update(TELEMETRY_ENABLED_KEY, false, 'global'),
+        processWorkspaceRoots().config.update(
+          TELEMETRY_ENABLED_KEY,
+          false,
+          'global',
+        ),
       );
       await Effect.runPromise(
-        workspaceRoots().config.update(
+        processWorkspaceRoots().config.update(
           TELEMETRY_ENABLED_KEY,
           true,
           'workspace',
@@ -452,10 +466,14 @@ describe('UsageLogService', () => {
 
       UsageLogService.log(
         usageEntry('before-opt-out'),
-        workspaceRoots().config,
+        processWorkspaceRoots().config,
       );
       await Effect.runPromise(
-        workspaceRoots().config.update(TELEMETRY_ENABLED_KEY, false, 'global'),
+        processWorkspaceRoots().config.update(
+          TELEMETRY_ENABLED_KEY,
+          false,
+          'global',
+        ),
       );
 
       await vi.advanceTimersByTimeAsync(60_000);
@@ -467,19 +485,30 @@ describe('UsageLogService', () => {
     it('resumes sending once the setting is turned back on', async () => {
       stubAccessToken();
       await Effect.runPromise(
-        workspaceRoots().config.update(TELEMETRY_ENABLED_KEY, false, 'global'),
+        processWorkspaceRoots().config.update(
+          TELEMETRY_ENABLED_KEY,
+          false,
+          'global',
+        ),
       );
 
       const { batches, fetchMock } = stubBatchFetch();
 
-      UsageLogService.log(usageEntry('dropped'), workspaceRoots().config);
+      UsageLogService.log(
+        usageEntry('dropped'),
+        processWorkspaceRoots().config,
+      );
       await vi.advanceTimersByTimeAsync(0);
       expect(fetchMock).not.toHaveBeenCalled();
 
       await Effect.runPromise(
-        workspaceRoots().config.update(TELEMETRY_ENABLED_KEY, true, 'global'),
+        processWorkspaceRoots().config.update(
+          TELEMETRY_ENABLED_KEY,
+          true,
+          'global',
+        ),
       );
-      UsageLogService.log(usageEntry('sent'), workspaceRoots().config);
+      UsageLogService.log(usageEntry('sent'), processWorkspaceRoots().config);
       await vi.advanceTimersByTimeAsync(0);
 
       expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -499,7 +528,7 @@ describe('UsageLogService', () => {
       async (usageRoute) => {
         stubAccessToken();
         await Effect.runPromise(
-          workspaceRoots().config.update(
+          processWorkspaceRoots().config.update(
             TELEMETRY_ENABLED_KEY,
             false,
             'global',
@@ -510,7 +539,7 @@ describe('UsageLogService', () => {
 
         UsageLogService.log(
           { ...usageEntry('hosted'), usageRoute },
-          workspaceRoots().config,
+          processWorkspaceRoots().config,
         );
         await vi.advanceTimersByTimeAsync(0);
 
@@ -532,14 +561,18 @@ describe('UsageLogService', () => {
 
       UsageLogService.log(
         { ...usageEntry('byok'), usageRoute: 'api-key' },
-        workspaceRoots().config,
+        processWorkspaceRoots().config,
       );
       UsageLogService.log(
         { ...usageEntry('hosted'), usageRoute: 'chatgpt-subscription' },
-        workspaceRoots().config,
+        processWorkspaceRoots().config,
       );
       await Effect.runPromise(
-        workspaceRoots().config.update(TELEMETRY_ENABLED_KEY, false, 'global'),
+        processWorkspaceRoots().config.update(
+          TELEMETRY_ENABLED_KEY,
+          false,
+          'global',
+        ),
       );
 
       await vi.advanceTimersByTimeAsync(60_000);
@@ -563,10 +596,17 @@ describe('UsageLogService', () => {
 
       const { batches, fetchMock } = stubBatchFetch();
 
-      UsageLogService.log(usageEntry('optional'), workspaceRoots().config);
+      UsageLogService.log(
+        usageEntry('optional'),
+        processWorkspaceRoots().config,
+      );
 
       await Effect.runPromise(
-        workspaceRoots().config.update(TELEMETRY_ENABLED_KEY, false, 'global'),
+        processWorkspaceRoots().config.update(
+          TELEMETRY_ENABLED_KEY,
+          false,
+          'global',
+        ),
       );
       releaseToken();
 
@@ -585,7 +625,11 @@ describe('UsageLogService', () => {
     ])('sends nothing while %s=%s is set', async (name, value) => {
       stubAccessToken();
       await Effect.runPromise(
-        workspaceRoots().config.update(TELEMETRY_ENABLED_KEY, true, 'global'),
+        processWorkspaceRoots().config.update(
+          TELEMETRY_ENABLED_KEY,
+          true,
+          'global',
+        ),
       );
       vi.stubEnv(name, value);
 
@@ -597,13 +641,20 @@ describe('UsageLogService', () => {
       async (value) => {
         stubAccessToken();
         await Effect.runPromise(
-          workspaceRoots().config.update(TELEMETRY_ENABLED_KEY, true, 'global'),
+          processWorkspaceRoots().config.update(
+            TELEMETRY_ENABLED_KEY,
+            true,
+            'global',
+          ),
         );
         vi.stubEnv('TEXRA_NO_TELEMETRY', value);
 
         const { batches, fetchMock } = stubBatchFetch();
 
-        UsageLogService.log(usageEntry('optional'), workspaceRoots().config);
+        UsageLogService.log(
+          usageEntry('optional'),
+          processWorkspaceRoots().config,
+        );
         await vi.advanceTimersByTimeAsync(0);
 
         expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -621,7 +672,7 @@ describe('UsageLogService', () => {
 
       UsageLogService.log(
         { ...usageEntry('hosted'), usageRoute: 'chatgpt-subscription' },
-        workspaceRoots().config,
+        processWorkspaceRoots().config,
       );
       await vi.advanceTimersByTimeAsync(0);
 
@@ -636,7 +687,7 @@ describe('UsageLogService', () => {
       async (value) => {
         stubAccessToken();
         await Effect.runPromise(
-          workspaceRoots().config.update(
+          processWorkspaceRoots().config.update(
             TELEMETRY_ENABLED_KEY,
             value,
             'global',
@@ -645,7 +696,10 @@ describe('UsageLogService', () => {
 
         const { batches, fetchMock } = stubBatchFetch();
 
-        UsageLogService.log(usageEntry('optional'), workspaceRoots().config);
+        UsageLogService.log(
+          usageEntry('optional'),
+          processWorkspaceRoots().config,
+        );
         await vi.advanceTimersByTimeAsync(0);
 
         expect(fetchMock).not.toHaveBeenCalled();
@@ -656,10 +710,14 @@ describe('UsageLogService', () => {
     it('fails closed for a malformed workspace value despite a valid global opt-in', async () => {
       stubAccessToken();
       await Effect.runPromise(
-        workspaceRoots().config.update(TELEMETRY_ENABLED_KEY, true, 'global'),
+        processWorkspaceRoots().config.update(
+          TELEMETRY_ENABLED_KEY,
+          true,
+          'global',
+        ),
       );
       await Effect.runPromise(
-        workspaceRoots().config.update(
+        processWorkspaceRoots().config.update(
           TELEMETRY_ENABLED_KEY,
           'false',
           'workspace',
@@ -668,7 +726,10 @@ describe('UsageLogService', () => {
 
       const { batches, fetchMock } = stubBatchFetch();
 
-      UsageLogService.log(usageEntry('optional'), workspaceRoots().config);
+      UsageLogService.log(
+        usageEntry('optional'),
+        processWorkspaceRoots().config,
+      );
       await vi.advanceTimersByTimeAsync(0);
 
       expect(fetchMock).not.toHaveBeenCalled();

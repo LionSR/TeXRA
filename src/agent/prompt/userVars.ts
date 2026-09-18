@@ -12,6 +12,7 @@ import {
 } from '@agent/core/definition/AgentCycleOptions';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { ConfigProvider } from '@platform/interfaces';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import type {
   AgentDelegationScope,
   AttachedMemoryMiss,
@@ -113,6 +114,13 @@ export interface BuildUserVarsOptions {
    * project, not for whichever roots the calling fiber carries.
    */
   config: ConfigProvider;
+  /**
+   * The three setting slots of the same session, held as data for the same
+   * reason: the run's disabled-skill lists and the delegation roster behind
+   * `WORKFLOW_AGENTS` / `TOOL_USE_AGENTS` answer for this project, not for
+   * whichever roots the calling fiber carries.
+   */
+  settings: SettingsStores;
   delegationAgentScope?: AgentDelegationScope | null;
   /** Explicit trace stage for diagnostics emitted while loading variables. */
   stageId?: string;
@@ -169,7 +177,7 @@ export async function buildUserVars(
     AgentSkillsEnabledSchema.parse(
       readConfig<unknown>(options.config, AGENT_SKILLS_CONFIG_KEY),
     )
-      ? loadRuntimeSkillCatalog(options.workspacePath)
+      ? loadRuntimeSkillCatalog(options.workspacePath, options.settings)
       : // A fresh object per call, not a shared constant: `skills` is handed
         // to the snapshot consumer, and a shared array would accumulate.
         Promise.resolve({ catalog: '', skills: [], issues: [] }),
@@ -254,13 +262,13 @@ function getBasicVars(
   const selfName = agentConfig.agent;
   const scope = options.delegationAgentScope ?? undefined;
   const workflowAgentsList = formatAgentList(
-    getDelegationAgents(AgentCategory.Workflow, scope).filter(
+    getDelegationAgents(options.settings, AgentCategory.Workflow, scope).filter(
       (agent) => agent.name !== selfName,
     ),
     { tools: 'none', collapseDescriptionNewlines: false },
   );
   const toolUseAgentsList = formatAgentList(
-    getDelegationAgents(AgentCategory.ToolUse, scope).filter(
+    getDelegationAgents(options.settings, AgentCategory.ToolUse, scope).filter(
       (agent) => agent.name !== selfName,
     ),
     { tools: 'inline', collapseDescriptionNewlines: false },

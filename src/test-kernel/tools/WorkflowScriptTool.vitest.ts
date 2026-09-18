@@ -329,7 +329,7 @@ beforeEach(async () => {
     Effect.succeed({ result: { action: 'approve' }, autoApproved: false }),
   );
   mocks.startChildRunLoop.mockReturnValue(Effect.forkDetach(Effect.void));
-  mocks.requireWorkflowOrToolUseAgent.mockImplementation((name) => {
+  mocks.requireWorkflowOrToolUseAgent.mockImplementation((_stores, name) => {
     if (name === 'missing-agent') {
       throw new Error(
         "Unknown workflow agent 'missing-agent'. Available: correct",

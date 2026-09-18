@@ -131,7 +131,7 @@ const EXPECTED_DEFAULTS: Record<string, unknown> = {
   [GlobalStateKey.USE_OPENROUTER]: false,
   [GlobalStateKey.KIMI_CODE_PREFER]: false,
   // Region defaults mirror the PROVIDER_REGISTRY `region.default` facts the
-  // `regionSet()` getter reads through `readPlatformSetting`.
+  // `regionSet()` getter reads through `readSettingFrom`.
   [GlobalStateKey.MOONSHOT_USE_CHINA]: true,
   [GlobalStateKey.DASHSCOPE_USE_CHINA]: false,
   [GlobalStateKey.MINIMAX_USE_CHINA]: false,

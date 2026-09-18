@@ -219,10 +219,9 @@ export const runReflection = Effect.fn('reflection.run')(function* (
   }
 
   // ------------------------------------------------------------ services
-  // The run's session roots, as data. This program runs on a fiber that is not
-  // guaranteed to sit inside the launch's roots scope, so the output
-  // pipeline's workspace, storage and setting reads take them from here
-  // instead of from `workspaceRoots()`.
+  // The run's session roots, as data: the output pipeline's workspace,
+  // storage and setting reads take them from here, so the answer cannot
+  // depend on which fiber turn this program resumes in.
   const { roots } = session;
   const getRejectOnCompileFailure = () =>
     readSettingFrom<boolean>(
@@ -485,6 +484,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
       const counted = yield* Effect.exit(
         getTeXCountStats(
           roots.workspace,
+          roots,
           files.map((f) => f.absolutePath),
         ),
       );

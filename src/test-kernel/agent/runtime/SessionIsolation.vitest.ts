@@ -6,11 +6,10 @@ import { Effect } from 'effect';
 
 import { describe, expect, vi } from 'vitest';
 
-import { runInSession } from '@agent/runtime/RunContext';
 import { settleLiveSessionRuns } from '@agent/runtime/SessionHandle';
 import { runFlowWithLifecycle } from '@agent/runtime/AgentRunLifecycle';
 import { Runs } from '@agent/runtime/runRegistry';
-import { workspaceRoots } from '@platform/workspaceRoots';
+import { processWorkspaceRoots } from '@platform/workspaceRoots';
 import {
   AgentCategory,
   RUN_OUTCOME,
@@ -81,20 +80,17 @@ describe('session isolation', () => {
         await mkdir(session.roots.storage, { recursive: true });
         await writeFile(path.join(session.roots.storage, 'note.txt'), note);
       };
-      await runInSession(sessionA, async () => {
-        expect(workspaceRoots().workspace).toBe(fakePath('papers/a'));
-        await writeNote(sessionA, 'from a');
-      });
-      await runInSession(sessionB, async () => {
-        expect(workspaceRoots().workspace).toBe(fakePath('papers/b'));
-        await writeNote(sessionB, 'from b');
-      });
+      expect(sessionA.roots.workspace).toBe(fakePath('papers/a'));
+      await writeNote(sessionA, 'from a');
+      expect(sessionB.roots.workspace).toBe(fakePath('papers/b'));
+      await writeNote(sessionB, 'from b');
       const read = (file: string): Promise<string> => readFile(file, 'utf8');
       expect(await read(fakePath('storage/a/note.txt'))).toBe('from a');
       expect(await read(fakePath('storage/b/note.txt'))).toBe('from b');
-      // Outside both scopes the process roots answer, not either paper.
-      expect(workspaceRoots().workspace).toBe(fakePath('workspace'));
-      expect(workspaceRoots().storage).toBe(
+      // Neither paper's roots are the process's: a session answers from the
+      // record it holds, and the process roots name only the default session.
+      expect(processWorkspaceRoots().workspace).toBe(fakePath('workspace'));
+      expect(processWorkspaceRoots().storage).toBe(
         fakePath('workspace/.texra/storage'),
       );
     } finally {
@@ -172,60 +168,51 @@ describe('session isolation', () => {
   );
 
   /**
-   * #12433, pinned as a known failure until the ambient roots carrier retires
-   * under #12421. The contract below is the one the desktop needs — two open
-   * projects, each its own session, its own storage root — and `main` does not
-   * meet it: the run fiber's read after a contended commit resolves against
-   * the PROCESS roots. `.fails` is the honest encoding, not `.skip`: the case
-   * runs every time, states the contract rather than the defect, and turns red
-   * the day the carrier is gone, which is when its marker comes off. Do not
-   * "fix" it with a `runInSession` / `run.inScope` wrap around the read — that
-   * is the repair the issue rules out; roots have to arrive as data.
+   * #12433, and the reason #12421 retired the carrier. This contract is the
+   * one the desktop needs — two open projects, each its own session, its own
+   * storage root — and an async-local frame could never meet it: a run fiber
+   * resuming after a contended commit resumed outside the frame and read the
+   * PROCESS roots. Roots arrive as data now, so the fiber's answer cannot
+   * depend on which turn it resumes in. The case was `.fails` until the
+   * carrier went; it is green from here.
    */
-  it.fails(
-    'a run fiber keeps its session roots across a contended publisher commit',
-    async () => {
-      const project = createFakeWorkspaceRoots({
-        workspacePath: fakePath('papers/contended'),
-        storagePath: fakePath('storage/contended'),
-      });
-      const session = createTestSession({ roots: project });
-      try {
-        // Job 1: enqueued on the session's one publisher from the process
-        // context, the shape the desktop has (the session opens before any
-        // `runInSession`, so its publisher consumer is woken outside every
-        // session scope).
-        publishTestRunStart(session, 'c0c001' as RunId);
-        // Job 2: the run fiber's own awaited commit, enqueued in the same
-        // synchronous turn, so the publisher is already contended when it runs.
-        const seen = await runInSession(session, () =>
-          Effect.runPromise(
-            Effect.gen(function* () {
-              yield* session.commit([
-                {
-                  type: 'run.start',
-                  aggregateId: aggregateId('run', 'c0c002' as RunId),
-                  identity: { kind: 'agent', agent: 'chat' },
-                  userFollowUpSupport: 'unsupported',
-                  category: 'toolUse',
-                  isRemote: false,
-                  parent: null,
-                },
-              ]);
-              return {
-                workspace: workspaceRoots().workspace,
-                storage: workspaceRoots().storage,
-              };
-            }),
-          ),
-        );
-        expect(seen.workspace).toBe(fakePath('papers/contended'));
-        expect(seen.storage).toBe(fakePath('storage/contended'));
-      } finally {
-        await Effect.runPromise(session.dispose());
-      }
-    },
-  );
+  it('a run fiber keeps its session roots across a contended publisher commit', async () => {
+    const project = createFakeWorkspaceRoots({
+      workspacePath: fakePath('papers/contended'),
+      storagePath: fakePath('storage/contended'),
+    });
+    const session = createTestSession({ roots: project });
+    try {
+      // Job 1: enqueued on the session's one publisher from the process
+      // context, the shape the desktop has.
+      publishTestRunStart(session, 'c0c001' as RunId);
+      // Job 2: the run fiber's own awaited commit, enqueued in the same
+      // synchronous turn, so the publisher is already contended when it runs.
+      const seen = await Effect.runPromise(
+        Effect.gen(function* () {
+          yield* session.commit([
+            {
+              type: 'run.start',
+              aggregateId: aggregateId('run', 'c0c002' as RunId),
+              identity: { kind: 'agent', agent: 'chat' },
+              userFollowUpSupport: 'unsupported',
+              category: 'toolUse',
+              isRemote: false,
+              parent: null,
+            },
+          ]);
+          return {
+            workspace: session.roots.workspace,
+            storage: session.roots.storage,
+          };
+        }),
+      );
+      expect(seen.workspace).toBe(fakePath('papers/contended'));
+      expect(seen.storage).toBe(fakePath('storage/contended'));
+    } finally {
+      await Effect.runPromise(session.dispose());
+    }
+  });
 
   it('a handle interrupt target lands in the run session only', async () => {
     const sessionB = createTestSession();

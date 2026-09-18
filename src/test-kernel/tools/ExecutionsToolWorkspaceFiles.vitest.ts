@@ -19,7 +19,7 @@ import {
 } from '@agent/runtime/SessionHandle';
 import { closeSession } from '@agent/runtime/sessionGraph';
 import { resolveRunStoragePath } from '@platform/defaults/workspaceStorage';
-import { workspaceRoots } from '@platform/workspaceRoots';
+import { processWorkspaceRoots } from '@platform/workspaceRoots';
 import { RUN_PHASE, DEFAULT_TOOL_CONFIG, aggregateId } from '@shared/schemas';
 import {
   RunIdSchema,
@@ -674,7 +674,7 @@ describe('ExecutionsTool', () => {
         Effect.gen(function* () {
           const runId = 'abc123' as RunId;
           const runDir = path.join(
-            workspaceRoots().storage,
+            processWorkspaceRoots().storage,
             resolveRunStoragePath(runId),
           );
           yield* Effect.promise(() => mkdir(runDir, { recursive: true }));

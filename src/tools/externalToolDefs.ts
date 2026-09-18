@@ -21,6 +21,7 @@ import {
 } from '@common/errors/errorPredicates';
 import { createLog } from '@logger/logUtils';
 import { apiKeyEnvName, lookupApiKeyOrigin } from '@model/apiProviders';
+import type { ConfigProvider } from '@platform/interfaces';
 import { Secrets } from '@platform/secrets';
 import type { ToolCategory } from '@shared/schemas';
 import { DELEGATE_MULTI_AGENTS_TOOL_NAME } from '@shared/constants/delegationTools';
@@ -44,7 +45,8 @@ import {
   summarizeLeanServers,
 } from '@tools/lean/leanServerRegistry';
 import { SetupPlatform } from '@tools/setup/platform';
-import { getZoteroPort } from '@tools/zotero/bbtClient';
+import { ZOTERO_PORT_KEY } from '@tools/zotero/bbtClient';
+import { readConfig } from '@utils/config/configUtils';
 import { BinaryResolver } from '@utils/system/binaryResolver';
 import { IS_WINDOWS } from '@utils/system/platformPaths';
 import { isWSL } from '@utils/system/wslDetect';
@@ -114,6 +116,18 @@ class ToolProbeFailed extends Data.TaggedError('ToolProbeFailed')<{
  */
 export type ToolProbeServices = Secrets | SetupPlatform;
 
+/**
+ * The asking workspace, carried into a group's probe as data rather than read
+ * from an ambient scope: the folder the GitHub group asks whether it is a git
+ * repository, and the configuration the Zotero group reads its port from.
+ * Every caller of the availability surface already holds both on the roots it
+ * opened.
+ */
+export interface ToolProbeInputs {
+  readonly workspaceRoot: string | undefined;
+  readonly config: ConfigProvider;
+}
+
 /** Full definition for an external tool group. */
 export interface ExternalToolDef {
   /** Unique group identifier (matches ToolDashboardItem.id). */
@@ -122,11 +136,12 @@ export interface ExternalToolDef {
   readonly tools: readonly RegisteredToolName[];
   /**
    * Optional shared probe result passed to check/status/detail callbacks.
-   * Takes the caller's workspace root as data — the GitHub group's probe asks
-   * whether that folder is a git repository (#12421).
+   * Takes the asking workspace as data — the GitHub group's probe asks whether
+   * that folder is a git repository (#12421), the Zotero group's reads its
+   * port out of that workspace's configuration.
    */
   readonly probe?: (
-    workspaceRoot: string | undefined,
+    inputs: ToolProbeInputs,
   ) => Effect.Effect<unknown, unknown, ToolProbeServices>;
   /** Returns true if the external dependency is available. */
   readonly check: (
@@ -215,6 +230,18 @@ function probeZoteroConnector(port: number): Effect.Effect<boolean> {
   );
 }
 
+/**
+ * The port the Zotero group's own `probe` resolved. The availability layer
+ * types a cached probe result `unknown` because the groups are heterogeneous;
+ * this one's only ever originates from the Zotero group's own `probe`, and a
+ * group that declares a `probe` reaches `check`/`detailCheck` only once that
+ * probe has produced a value — the same bridge `prerequisitesChecks` makes for
+ * the entries whose callbacks are pure over their prerequisites.
+ */
+function zoteroProbePort(probeResult: unknown): number {
+  return probeResult as number;
+}
+
 /** Probe the Better BibTeX JSON-RPC endpoint. */
 function probeZoteroBbt(port: number): Effect.Effect<boolean> {
   return fetchLocalhost(`http://127.0.0.1:${port}/better-bibtex/json-rpc`).pipe(
@@ -229,9 +256,12 @@ const getGitHubPRPrerequisites = Effect.fn('getGitHubPRPrerequisites')(
     const tokenPresent = (yield* getGitHubToken(secrets)) !== undefined;
     // The probe reports "not a repository" as `false` and never rejects; the
     // fiber's signal reaches its `git` spawn, so an interrupted dashboard
-    // refresh kills the process instead of abandoning it.
+    // refresh kills the process instead of abandoning it. An availability
+    // probe carries the workspace root the caller handed it and nothing else:
+    // `ExternalToolDef.probe` takes no setting slots, so the `rev-parse`
+    // spawn names none.
     const inGitRepo = yield* Effect.promise((signal) =>
-      isGitRepository(workspaceRoot, signal),
+      isGitRepository(workspaceRoot, undefined, signal),
     );
     return { tokenPresent, inGitRepo };
   },
@@ -366,7 +396,7 @@ function probeSdkBinaryStatus(config: {
  * boundary because the dashboard's entries are heterogeneous — each group
  * has its own prerequisites shape `T`. Bridging that cached `unknown` back to
  * `T` happens once, here, in `resolve`: a cache miss (`probeResult`
- * undefined) re-probes via `fallback` (defaulting to `probe` itself), and a
+ * undefined) re-derives it via the entry's own `fallback`, and a
  * hit is cast back to `T`, which is safe because the value only ever
  * originated from this same entry's own `probe`. `check`/`statusLabel`/
  * `detailCheck` then receive the resolved `T` directly and stay pure
@@ -375,25 +405,19 @@ function probeSdkBinaryStatus(config: {
  */
 function prerequisitesChecks<T>(config: {
   probe: (
-    workspaceRoot: string | undefined,
+    inputs: ToolProbeInputs,
   ) => Effect.Effect<T, unknown, ToolProbeServices>;
   /**
-   * Re-derives `T` on a cache miss. Defaults to `probe`, which is why the
-   * miss path re-probes without a workspace root: the callbacks that reach it
-   * carry no call context of their own.
+   * Re-derives `T` on a cache miss, which the callbacks reach carrying no
+   * probe inputs of their own — so each entry says here what it can still
+   * answer without a workspace.
    */
-  fallback?: () => Effect.Effect<T, unknown, ToolProbeServices>;
+  fallback: () => Effect.Effect<T, unknown, ToolProbeServices>;
   check: (prereqs: T) => boolean;
   statusLabel: (prereqs: T) => string | undefined;
   detailCheck: (prereqs: T) => string | undefined;
 }): Pick<ExternalToolDef, 'probe' | 'check' | 'statusLabel' | 'detailCheck'> {
-  const {
-    probe,
-    fallback = () => probe(undefined),
-    check,
-    statusLabel,
-    detailCheck,
-  } = config;
+  const { probe, fallback, check, statusLabel, detailCheck } = config;
   const resolve = (
     probeResult: unknown,
   ): Effect.Effect<T, unknown, ToolProbeServices> =>
@@ -514,9 +538,13 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
     configNotes:
       'Zotero must be running with Better BibTeX installed. Port configurable via texra.bib.zoteroPort.',
     toggleable: true,
-    check: () => probeZoteroBbt(getZoteroPort()),
-    detailCheck: Effect.fn('externalToolDefs.zoteroDetail')(function* () {
-      const port = getZoteroPort();
+    probe: ({ config }) =>
+      Effect.succeed(readConfig<number>(config, ZOTERO_PORT_KEY)),
+    check: (probeResult) => probeZoteroBbt(zoteroProbePort(probeResult)),
+    detailCheck: Effect.fn('externalToolDefs.zoteroDetail')(function* (
+      probeResult?: unknown,
+    ) {
+      const port = zoteroProbePort(probeResult);
       const zoteroOk = yield* probeZoteroConnector(port);
       const bbtOk = yield* probeZoteroBbt(port);
       if (zoteroOk && bbtOk) {
@@ -639,7 +667,9 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
     authNote: 'Uses personal access token',
     toggleable: true,
     ...prerequisitesChecks({
-      probe: getGitHubPRPrerequisites,
+      probe: ({ workspaceRoot }) => getGitHubPRPrerequisites(workspaceRoot),
+      // Without a workspace to ask about, the token is still answerable.
+      fallback: () => getGitHubPRPrerequisites(undefined),
       check: ({ tokenPresent, inGitRepo }) => tokenPresent && inGitRepo,
       statusLabel: ({ tokenPresent, inGitRepo }) => {
         if (tokenPresent && inGitRepo) return undefined;

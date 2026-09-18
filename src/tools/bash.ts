@@ -13,6 +13,7 @@ import {
 import type { ChildRunStrategy } from '@agent/runtime/childRunLoop';
 import { ToolCall } from '@agent/runtime/ToolCall';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import {
   BASH_BACKGROUND_LOG_CAP_CHARS,
   BASH_TOOL_DEFAULT_TIMEOUT_MS,
@@ -232,6 +233,11 @@ function createBackgroundBashStrategy(params: {
   command: string;
   timeoutMs: number;
   cwd: string | undefined;
+  /**
+   * The launching session's setting slots, so a `git commit` the background
+   * shell runs carries that paper's configured TeXRA identity.
+   */
+  settings: SettingsStores;
   logger: AgentTrace;
 }): ChildRunStrategy<ExecResult> {
   const { runId, command, logger } = params;
@@ -291,6 +297,7 @@ function createBackgroundBashStrategy(params: {
           startedAt = Date.now();
           return executeCommand(command, {
             cwd: params.cwd,
+            settings: params.settings,
             timeout: params.timeoutMs,
             buffer: false,
             // The string command form gets shell teardown: abort/timeout signal
@@ -443,6 +450,9 @@ export class BashTool extends defineTool({
         try: () =>
           executeCommand(command, {
             cwd,
+            // The call's own session roots: a `git commit` the agent runs
+            // carries this paper's configured identity.
+            settings: toolCall.roots,
             buffer: false,
             timeout: timeoutMs,
             // The string command form gets shell teardown: abort/timeout signal the
@@ -561,6 +571,7 @@ export class BashTool extends defineTool({
                     command,
                     timeoutMs,
                     cwd,
+                    settings: session.roots,
                     logger: childRun.logger,
                   }),
                   // Nobody awaits this run: own late loop failures here as trace

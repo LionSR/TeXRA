@@ -138,12 +138,11 @@ Optional auto-attach from the input LaTeX:
         'delegate_workflow',
         yield* ToolCall,
       );
-      const agent = call.inScope(() =>
-        requireVisibleAgent(
-          'workflow',
-          input.agent,
-          call.delegationAgentScope ?? undefined,
-        ),
+      const agent = requireVisibleAgent(
+        call.roots,
+        'workflow',
+        input.agent,
+        call.delegationAgentScope ?? undefined,
       );
       const agentName = agent.name;
 
@@ -273,12 +272,11 @@ Git worktree support: resolved from the active workspace at runtime.`,
       // New-delegation path: the schema's refine() guarantees exactly one of
       // agent/execution_id is set, so agent is defined here — refine() doesn't
       // narrow types, hence the assertion.
-      const agent = call.inScope(() =>
-        requireVisibleAgent(
-          'toolUse',
-          input.agent!,
-          call.delegationAgentScope ?? undefined,
-        ),
+      const agent = requireVisibleAgent(
+        call.roots,
+        'toolUse',
+        input.agent!,
+        call.delegationAgentScope ?? undefined,
       );
       const agentName = agent.name;
 

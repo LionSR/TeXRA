@@ -16,6 +16,7 @@ import treeKill from 'tree-kill';
 
 // Internal imports
 import { createLog } from '@logger/logUtils';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { ExecResult } from '@shared/schemas';
 import { onAbort as onAbortSignal } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -84,9 +85,14 @@ function subscribeDecodedOutput(
 
 function commandEnv(
   workspacePath: string,
+  settings: SettingsStores | undefined,
   envOverrides?: Record<string, string>,
 ): Record<string, string | undefined> {
-  const env = { ...process.env, ...getGitAuthorEnv(), ...envOverrides };
+  const env = {
+    ...process.env,
+    ...getGitAuthorEnv(settings),
+    ...envOverrides,
+  };
   env.PATH = extendEnvPath(env.PATH);
 
   // Export project context so AI agents can orient themselves immediately.
@@ -221,6 +227,18 @@ export interface ExecuteCommandBaseOptions {
    * has no folder, and it fails the run the same way the ambient miss did.
    */
   cwd: string | undefined;
+  /**
+   * The setting slots the command's git identity is read from: whether this
+   * workspace marks agent commits, and the name and email it marks them with.
+   *
+   * Required — not optional — so every caller names the stores it holds (a
+   * run's session roots, a tool call's `call.roots`, the host's roots at
+   * command entry) instead of the command reaching for an ambient one.
+   * `undefined` is the honest answer only where the caller itself has no
+   * workspace, and it then carries no TeXRA git identity exactly as an
+   * uninitialised ambient read did.
+   */
+  settings: SettingsStores | undefined;
   stdin?: string;
   /** Called with stdout chunks as they arrive, enabling live output streaming. */
   onStdout?: (chunk: string) => void;
@@ -292,7 +310,7 @@ export async function executeCommand(
       throw new Error('No workspace path found');
     }
 
-    const env = commandEnv(workspacePath, options.env);
+    const env = commandEnv(workspacePath, options.settings, options.env);
     const encoding = normalizeEncoding(options.encoding);
 
     const execaOptions: Options = {
@@ -495,6 +513,8 @@ export function executeCommandSync(
     timeout?: number;
     /** See {@link ExecuteCommandBaseOptions.cwd}. */
     cwd: string;
+    /** See {@link ExecuteCommandBaseOptions.settings}. */
+    settings: SettingsStores | undefined;
     /** Skip wrapper logging (pre-platform CLI callers whose sink is the console). */
     quiet?: boolean;
   },
@@ -504,7 +524,7 @@ export function executeCommandSync(
     const workspacePath = options.cwd;
     const execaOptions: SyncOptions = {
       cwd: workspacePath,
-      env: commandEnv(workspacePath, options.env),
+      env: commandEnv(workspacePath, options.settings, options.env),
       encoding: normalizeEncoding(options.encoding),
       timeout: options.timeout,
       reject: false,

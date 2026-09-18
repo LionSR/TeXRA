@@ -3,7 +3,7 @@
 
 import { Box, Text } from 'ink';
 
-import { computeAgentOptionsData } from '@agent/index';
+import { computeAgentOptionsData, type AgentRosterStores } from '@agent/index';
 import { Select } from '@cli/tui/ui/Select';
 import {
   computeSelectWindowSize,
@@ -24,6 +24,9 @@ interface AgentListFormProps {
   /** The process runtime the catalog read runs on, from the surface that
    *  registered this form. */
   readonly runtime: ProcessRuntime;
+  /** The roster slots of this chat's project, from the surface that registered
+   *  this form: the list shows that project's visible agents. */
+  readonly stores: AgentRosterStores;
   readonly currentAgent: string;
   readonly availableRows?: number;
   readonly selectable: boolean;
@@ -147,7 +150,9 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
     title: '/agent',
     loadingLabel: 'Loading agents...',
     load: async () => {
-      const options = await props.runtime.runPromise(computeAgentOptionsData());
+      const options = await props.runtime.runPromise(
+        computeAgentOptionsData(props.stores),
+      );
       return { toolUse: options.toolUse, workflow: options.workflow };
     },
     isEmpty: (groups) => groups.toolUse.length === 0,

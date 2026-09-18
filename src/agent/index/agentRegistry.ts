@@ -5,7 +5,7 @@ import { AgentRosterController } from '@agent/roster/AgentRosterController';
 import { createLog } from '@logger/logUtils';
 import { platform } from '@platform/platform';
 import type { GlobalStorageFs } from '@platform/rootedFs';
-import { workspaceRoots, type WorkspaceRoots } from '@platform/workspaceRoots';
+import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type {
   AgentCategory as AgentCategoryType,
   AgentDelegationScope,
@@ -385,6 +385,17 @@ export function isRemoteAgent(identifier: string | undefined): boolean {
 // =============================================================================
 
 /**
+ * The two state slots the durable roster resolves against: the workspace's own
+ * selection and the cross-workspace defaults. Every roster read is answered for
+ * the workspace whose slots the caller hands over, so a process holding several
+ * sessions never answers one paper's question with another's roster.
+ */
+export type AgentRosterStores = Pick<
+  WorkspaceRoots,
+  'workspaceState' | 'globalState'
+>;
+
+/**
  * Construct the roster controller over the given workspace's stores. This is
  * the one place the durable roster's dependencies are wired, so every host
  * reads and writes the same selection through identical resolution rules. The
@@ -392,7 +403,7 @@ export function isRemoteAgent(identifier: string | undefined): boolean {
  * session roots) rather than this reading the calling context's scope.
  */
 export function createWorkspaceAgentRosterController(
-  roots: Pick<WorkspaceRoots, 'workspaceState' | 'globalState'>,
+  roots: AgentRosterStores,
   getAgents: (category: AgentCategory) => AgentEntry[] = getAgentsByCategory,
 ): AgentRosterController<AgentEntry> {
   const { workspaceState, globalState } = roots;
@@ -413,10 +424,13 @@ export function createWorkspaceAgentRosterController(
  * Agents are already deduplicated by name from the getter functions.
  * No default → undefined means "never configured" (show all).
  */
-export function getVisibleAgents(category: AgentCategory): AgentEntry[] {
-  return createWorkspaceAgentRosterController(
-    workspaceRoots(),
-  ).getVisibleAgents(category);
+export function getVisibleAgents(
+  stores: AgentRosterStores,
+  category: AgentCategory,
+): AgentEntry[] {
+  return createWorkspaceAgentRosterController(stores).getVisibleAgents(
+    category,
+  );
 }
 
 /**
@@ -428,10 +442,11 @@ export function getVisibleAgents(category: AgentCategory): AgentEntry[] {
  * prompt vars can never list a different roster for the same run.
  */
 export function resolveDelegationScopeAgents(
+  stores: AgentRosterStores,
   scope: AgentDelegationScope | undefined,
   category: AgentCategoryType,
 ): AgentEntry[] {
-  if (!scope) return getVisibleAgents(category);
+  if (!scope) return getVisibleAgents(stores, category);
   const keys = scope[category];
 
   // Deduplicated by canonical key: two identifiers that resolve to the same
@@ -462,10 +477,11 @@ export function findAgentByIdentifier(
 
 /** Resolve an identifier to a currently visible agent entry. */
 export function getVisibleAgent(
+  stores: AgentRosterStores,
   category: AgentCategory,
   identifier: string,
 ): AgentEntry | undefined {
-  return findAgentByIdentifier(getVisibleAgents(category), identifier);
+  return findAgentByIdentifier(getVisibleAgents(stores, category), identifier);
 }
 
 /** Resolve an identifier to an agent in a category, ignoring visibility. */
@@ -496,13 +512,14 @@ export function getCategoryAgent(
  * different entry than validation for any name validation resolves.
  */
 export function resolveAgentForLaunch(
+  stores: AgentRosterStores,
   category: AgentCategory,
   identifier: string,
   source?: AgentSource | null,
 ): AgentEntry | undefined {
   return (
     (source ? getAgent(agentKey(source, agentName(identifier))) : undefined) ??
-    getVisibleAgent(category, identifier) ??
+    getVisibleAgent(stores, category, identifier) ??
     getCategoryAgent(category, identifier)
   );
 }
@@ -578,17 +595,24 @@ function sortAgentEntries(
  * Compute typed agent options data for Lit-native rendering.
  * Ensures cache is loaded first.
  */
-export function computeAgentOptionsData(): Effect.Effect<
+export function computeAgentOptionsData(
+  stores: AgentRosterStores,
+): Effect.Effect<
   AgentOptionsDataPayload,
   AgentCatalogLoadError,
   GlobalStorageFs | FileSystem.FileSystem
 > {
   return Effect.map(loadAgents(), () => ({
     workflow: entriesToOptionData(
-      sortAgentEntries(getVisibleAgents('workflow'), [DEFAULT_WORKFLOW_AGENT]),
+      sortAgentEntries(getVisibleAgents(stores, 'workflow'), [
+        DEFAULT_WORKFLOW_AGENT,
+      ]),
     ),
     toolUse: entriesToOptionData(
-      sortAgentEntries(getVisibleAgents('toolUse'), PREFERRED_TOOL_USE_AGENTS),
+      sortAgentEntries(
+        getVisibleAgents(stores, 'toolUse'),
+        PREFERRED_TOOL_USE_AGENTS,
+      ),
     ),
   }));
 }

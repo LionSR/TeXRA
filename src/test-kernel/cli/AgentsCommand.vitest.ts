@@ -69,7 +69,8 @@ type CategoryCatalog = Partial<
 
 function stubCatalog(catalog: CategoryCatalog): void {
   agentCatalogMock.getVisibleAgents.mockImplementation(
-    (category: AgentCategory) => catalog[category]?.visible ?? [],
+    (_stores: unknown, category: AgentCategory) =>
+      catalog[category]?.visible ?? [],
   );
   agentCatalogMock.getAgentsByCategory.mockImplementation(
     (category: AgentCategory) => catalog[category]?.all ?? [],
@@ -178,7 +179,7 @@ describe('CLI agents command', () => {
 
   it('filters agents by category and reports hidden agents in that category', async () => {
     agentCatalogMock.getVisibleAgents.mockImplementation(
-      (category: AgentCategory) => {
+      (_stores: unknown, category: AgentCategory) => {
         if (category !== AgentCategory.ToolUse) {
           throw new Error('workflow agents should not be loaded');
         }

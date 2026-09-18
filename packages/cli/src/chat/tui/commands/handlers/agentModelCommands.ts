@@ -1,3 +1,4 @@
+import type { AgentRosterStores } from '@agent/index';
 import {
   assertCliAgentLaunch,
   resolveCliAgentInCategory,
@@ -24,12 +25,14 @@ import {
 } from './slashContext';
 
 export function chatToolUseAgentUsageError(
+  stores: AgentRosterStores,
   agentName: string,
 ): string | undefined {
   try {
     assertCliAgentLaunch(
+      stores,
       agentName,
-      resolveCliAgentInCategory(agentName, AgentCategory.ToolUse),
+      resolveCliAgentInCategory(stores, agentName, AgentCategory.ToolUse),
       'chat',
     );
     return undefined;
@@ -51,7 +54,7 @@ export function applyInitialCliAgentSelection(
   }
 
   const nextAgent = agentName.trim();
-  const usageError = chatToolUseAgentUsageError(nextAgent);
+  const usageError = chatToolUseAgentUsageError(context.stores, nextAgent);
   if (usageError) {
     setTransientNotice(usageError);
     return;

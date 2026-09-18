@@ -349,7 +349,7 @@ const localRules = {
         },
         messages: {
           forbidden:
-            'initPlatform and initProcessWorkspaceRoots may only be imported by composition roots; use platform() / workspaceRoots() elsewhere.',
+            'initPlatform and initProcessWorkspaceRoots may only be imported by composition roots; elsewhere use platform() and take the workspace roots as data from the session, run or tool call that holds them.',
         },
         schema: [],
       },

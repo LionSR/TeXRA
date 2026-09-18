@@ -276,9 +276,7 @@ export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
       // decision ever reaches is an open that never committed, which
       // `openRequest` owns and runs this for.
       prompt: Effect.suspend(() => {
-        const releaseStaged = call.inScope(() =>
-          session.interactions.presentToolEdit(staged),
-        );
+        const releaseStaged = session.interactions.presentToolEdit(staged);
         return session
           .openRequest(
             runId,

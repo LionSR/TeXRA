@@ -2,8 +2,13 @@ import { defineCommand } from 'citty';
 import { execa } from 'execa';
 import { parse as shellParse } from 'shell-quote';
 
+import type { ToolProbeInputs } from '@tools/externalToolDefs';
+
 import { CliExitCode } from '../runtime/exitCodes';
-import { initCliPlatform } from '../runtime/initPlatform';
+import {
+  initCliPlatform,
+  type CliPlatformServices,
+} from '../runtime/initPlatform';
 import { writeTextStderr } from '../runtime/logSinks';
 import {
   formatCliToolList,
@@ -47,13 +52,25 @@ interface CliToolGuideResult {
   readonly command?: string;
 }
 
+/**
+ * The workspace this command's init opened, as the probes read it: the
+ * configuration slot the init always publishes, and its folder, which is
+ * undefined when the process opened none.
+ */
+function toolProbeInputs(services: CliPlatformServices): ToolProbeInputs {
+  return {
+    workspaceRoot: services.roots?.workspace,
+    config: services.config,
+  };
+}
+
 async function listTools(context: CliContext): Promise<number> {
   // The init call hands back the process runtime it just wired, so the status
   // read and any follow-up toggle hit the same state store.
   const services = await initCliPlatform({ ...context, quietLogs: true });
   const items = await readCliToolStatuses(
     services.runtime,
-    services.roots?.workspace,
+    toolProbeInputs(services),
   );
 
   emitCliResult(context, {
@@ -68,7 +85,7 @@ async function showTool(context: CliContext, id: string): Promise<number> {
   const services = await initCliPlatform({ ...context, quietLogs: true });
   const item = await readCliToolStatus(
     services.runtime,
-    services.roots?.workspace,
+    toolProbeInputs(services),
     id,
   );
   if (!item) {

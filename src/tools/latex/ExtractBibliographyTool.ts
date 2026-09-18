@@ -13,6 +13,7 @@ import {
   summarizeBibliographyEntries,
 } from '@latex/extractBibliography';
 import { WorkspaceFs } from '@platform/rootedFs';
+import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { ToolResult } from '@shared/schemas';
 import { formatToolOutput } from '@tools/formatting';
 import { resolveAndFormat } from '@tools/pathResolution';
@@ -42,12 +43,11 @@ type ExtractBibliographyInput = z.infer<typeof ExtractBibliographyInputSchema>;
 
 const DEFAULT_MAX_ENTRIES = 25;
 
-function formatPathList(
-  workspaceRoot: string | undefined,
-  filePaths: string[],
-): string {
+function formatPathList(roots: WorkspaceRoots, filePaths: string[]): string {
   return filePaths
-    .map((filePath) => resolveAndFormat(workspaceRoot, filePath).display)
+    .map(
+      (filePath) => resolveAndFormat(roots, roots.workspace, filePath).display,
+    )
     .join(', ');
 }
 
@@ -73,12 +73,11 @@ const extractBibliography = Effect.fn('ExtractBibliographyTool.execute')(
       bibPath || readConfig<string>(call.roots.config, 'texra.bib.defaultPath');
 
     if (effectiveBibPath) {
-      const { path: resolved } = call.inScope(() =>
-        resolveAndFormat(
-          call.roots.workspace,
-          effectiveBibPath,
-          call.workingDirectory,
-        ),
+      const { path: resolved } = resolveAndFormat(
+        call.roots,
+        call.roots.workspace,
+        effectiveBibPath,
+        call.workingDirectory,
       );
       // `fsPath` records where the bibliography landed: workspace-relative
       // inside the session's folder, absolute for a path the caller chose
@@ -105,8 +104,9 @@ const extractBibliography = Effect.fn('ExtractBibliographyTool.execute')(
 
     const missingBibliographyNote =
       missingBibliographyFiles.length > 0
-        ? `Missing bibliography files: ${call.inScope(() =>
-            formatPathList(call.roots.workspace, missingBibliographyFiles),
+        ? `Missing bibliography files: ${formatPathList(
+            call.roots,
+            missingBibliographyFiles,
           )}.`
         : undefined;
 

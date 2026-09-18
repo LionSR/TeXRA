@@ -23,7 +23,6 @@ import {
   FOLLOW_UP_WAKE_FAILED_MESSAGE,
   submitFollowUp,
 } from '@agent/followUp/ToolUseFollowUp';
-import { runInSession } from '@agent/runtime/RunContext';
 import { AgentResume } from '@platform/interfaces';
 import {
   emptyUsageStats,
@@ -605,9 +604,7 @@ export function startAgentCliLoop<TTurn>(
       Effect.tryPromise({
         try: () => {
           lastPrompt = followUps.map((f) => f.text).join('\n\n');
-          return runInSession(params.session, () =>
-            runProviderTurn(lastPrompt, ports, signal),
-          );
+          return runProviderTurn(lastPrompt, ports, signal);
         },
         catch: ensureError,
       });

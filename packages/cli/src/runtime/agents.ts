@@ -7,6 +7,7 @@ import {
   loadAgents,
   resolveAgentForLaunch,
   type AgentEntry,
+  type AgentRosterStores,
 } from '@agent/index';
 import { SupabaseAuth } from '@auth/SupabaseAuth';
 import type { ProcessRuntime } from '@platform/processRuntime';
@@ -32,6 +33,16 @@ interface CliAgentListResult {
 }
 
 type CliAgentLaunchMode = 'chat' | 'workflowResume';
+
+/**
+ * What a CLI agent lookup runs on: the roster slots of the one project this
+ * process opened and the runtime its entry point built. Both come off the
+ * `CliPlatformServices` the caller already holds, so no lookup here resolves
+ * the roster from whichever fiber happens to ask.
+ */
+type CliAgentServices = AgentRosterStores & {
+  readonly runtime: ProcessRuntime;
+};
 
 const AGENT_LOOKUP_HINT =
   'Use `texra agents list` for visible starter agents, `texra agents list --all` for every agent, or pass a known launchable agent name from a team preset.';
@@ -104,6 +115,7 @@ export function missingMultiAgentPresetMessage(name: string): string {
  * the pinned-source tier, which is category-blind by design.
  */
 export function resolveCliAgentInCategory(
+  stores: AgentRosterStores,
   identifier: string,
   category: AgentCategory,
 ): AgentEntry | undefined {
@@ -114,6 +126,7 @@ export function resolveCliAgentInCategory(
       : identifier.slice(0, identifier.length - name.length - 1),
   );
   const entry = resolveAgentForLaunch(
+    stores,
     category,
     identifier,
     pinned.success ? pinned.data : undefined,
@@ -122,6 +135,7 @@ export function resolveCliAgentInCategory(
 }
 
 export function assertCliAgentLaunch(
+  stores: AgentRosterStores,
   name: string,
   agent: AgentEntry | undefined,
   mode: CliAgentLaunchMode,
@@ -136,7 +150,7 @@ export function assertCliAgentLaunch(
     target.requiredCategory === AgentCategory.ToolUse
       ? AgentCategory.Workflow
       : AgentCategory.ToolUse;
-  const found = agent ?? resolveCliAgentInCategory(name, otherCategory);
+  const found = agent ?? resolveCliAgentInCategory(stores, name, otherCategory);
   if (!found) throw new CliUsageError(target.missing(name));
   throw new CliUsageError(target.mismatch(name, found.category));
 }
@@ -157,12 +171,13 @@ export function assertCliAgentLaunch(
  * surface holds (`CliPlatformServices.runtime`).
  */
 export async function resolveCliAgent(
-  runtime: ProcessRuntime,
+  services: CliAgentServices,
   name: string,
   lookupCategory?: AgentCategory,
 ): Promise<AgentEntry | undefined> {
+  const { runtime } = services;
   await runtime.runPromise(loadAgents({ includeRemote: false }));
-  const agent = lookupCliAgent(name, lookupCategory);
+  const agent = lookupCliAgent(services, name, lookupCategory);
 
   // Keep the local hit only when a remote-inclusive reload could not change
   // it: a source-qualified name already pins its tier, and a signed-out
@@ -179,15 +194,16 @@ export async function resolveCliAgent(
   }
 
   await runtime.runPromise(loadAgents());
-  return lookupCliAgent(name, lookupCategory);
+  return lookupCliAgent(services, name, lookupCategory);
 }
 
 function lookupCliAgent(
+  stores: AgentRosterStores,
   identifier: string,
   category: AgentCategory | undefined,
 ): AgentEntry | undefined {
   return category
-    ? resolveCliAgentInCategory(identifier, category)
+    ? resolveCliAgentInCategory(stores, identifier, category)
     : getAgent(identifier);
 }
 
@@ -204,15 +220,23 @@ function lookupCliAgent(
  * collision is unrepresentable, not merely unhandled.
  */
 export async function resolveCliRunAgent(
-  runtime: ProcessRuntime,
+  services: CliAgentServices,
   name: string,
 ): Promise<AgentEntry> {
-  const workflow = await resolveCliAgent(runtime, name, AgentCategory.Workflow);
+  const workflow = await resolveCliAgent(
+    services,
+    name,
+    AgentCategory.Workflow,
+  );
   // The pass above already loaded the catalog this lookup reads: it returns
   // before the remote-inclusive reload only for a source-qualified name (which
   // pins one cache key, so it cannot also hit here) or a signed-out session
   // (which has no remote catalog to add).
-  const toolUse = resolveCliAgentInCategory(name, AgentCategory.ToolUse);
+  const toolUse = resolveCliAgentInCategory(
+    services,
+    name,
+    AgentCategory.ToolUse,
+  );
   if (workflow && toolUse) {
     throw new CliUsageError(ambiguousRunAgentMessage(name, workflow, toolUse));
   }
@@ -235,34 +259,37 @@ function ambiguousRunAgentMessage(
  * Resolve and validate an agent for a category-pinned CLI launch.
  */
 export async function resolveCliLaunchAgent(
-  runtime: ProcessRuntime,
+  services: CliAgentServices,
   name: string,
   mode: CliAgentLaunchMode,
 ): Promise<AgentEntry> {
   const target = CLI_AGENT_LAUNCH_TARGETS[mode];
   return assertCliAgentLaunch(
+    services,
     name,
-    await resolveCliAgent(runtime, name, target.requiredCategory),
+    await resolveCliAgent(services, name, target.requiredCategory),
     mode,
   );
 }
 
 export async function loadCliAgentList(
-  runtime: ProcessRuntime,
+  services: CliAgentServices,
   options: CliAgentListOptions = {},
 ): Promise<CliAgentListResult> {
   const includeHidden = options.includeHidden === true;
-  await runtime.runPromise(
+  await services.runtime.runPromise(
     loadAgents(includeHidden ? undefined : { includeRemote: false }),
   );
 
   const agents = collectCliAgents(
+    services,
     includeHidden ? 'all' : 'visible',
     options.category,
   );
   const hiddenCount = includeHidden
     ? 0
-    : collectCliAgents('all', options.category).length - agents.length;
+    : collectCliAgents(services, 'all', options.category).length -
+      agents.length;
 
   return { agents, hiddenCount };
 }
@@ -355,13 +382,14 @@ function cliAgentCatalogHint(category?: AgentCategory): {
 }
 
 function collectCliAgents(
+  stores: AgentRosterStores,
   source: 'all' | 'visible',
   categoryFilter?: AgentCategory,
 ): AgentEntry[] {
   const categories = categoryFilter ? [categoryFilter] : AGENT_CATEGORIES;
   return categories.flatMap((category) =>
     source === 'visible'
-      ? getVisibleAgents(category)
+      ? getVisibleAgents(stores, category)
       : getAgentsByCategory(category),
   );
 }

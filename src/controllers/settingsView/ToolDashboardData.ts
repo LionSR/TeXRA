@@ -16,6 +16,7 @@ import type { ToolCommandKind, ToolDashboardItem } from '@shared/schemas';
 import {
   findExternalToolDef,
   type ExternalToolDef,
+  type ToolProbeInputs,
 } from '@tools/externalToolDefs';
 import {
   isDefaultToolUnavailableOnHost,
@@ -177,9 +178,10 @@ export function isExternalToolDefVisible(
  *   itself unavailable on that host is dropped rather than shown as
  *   "available": host exclusion removes those tools from the resolved roster,
  *   so they can never be called there.
- * @param workspaceRoot - the asking host's workspace folder, carried as data
- *   for the probes that need one (the GitHub group asks whether it is a git
- *   repository). Ignored when `cachedResults` skips the probes.
+ * @param probeInputs - the asking host's workspace folder and configuration,
+ *   carried as data for the probes that need them (the GitHub group asks
+ *   whether the folder is a git repository, the Zotero group reads its port).
+ *   Ignored when `cachedResults` skips the probes.
  * @param cachedResults - when provided, skips network probes and uses
  *   these results (including their `statusDetail`). Used by the toggle
  *   handler for instant UI updates.
@@ -187,7 +189,7 @@ export function isExternalToolDefVisible(
 export const buildToolDashboardItems = Effect.fn('buildToolDashboardItems')(
   function* (
     host: ToolHost,
-    workspaceRoot: string | undefined,
+    probeInputs: ToolProbeInputs,
     cachedResults?: ExternalToolCheckResult[],
   ) {
     const builtinItems: ToolDashboardItem[] = BUILTIN_TOOLS.filter(
@@ -202,7 +204,7 @@ export const buildToolDashboardItems = Effect.fn('buildToolDashboardItems')(
     }));
 
     const results =
-      cachedResults ?? (yield* runExternalToolChecks(workspaceRoot));
+      cachedResults ?? (yield* runExternalToolChecks(probeInputs));
 
     const disabledIds = getDisabledToolIds(yield* AppState);
     const externalItems: ToolDashboardItem[] = [];

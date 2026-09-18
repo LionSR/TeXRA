@@ -8,7 +8,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports
 import { refresh } from '@agent/index/agentRegistry';
-import { workspaceRoots } from '@platform/workspaceRoots';
+import { processWorkspaceRoots } from '@platform/workspaceRoots';
 import type { AgentRosterSelection } from '@shared/schemas';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { getDefaultTeamId } from '@shared/state/onboardingState';
@@ -31,7 +31,7 @@ import type { SetupPlatformShape } from '@tools/setup/platform';
 import { createFakeSetupPlatform } from './fixtures';
 
 function workspaceRoster(): AgentRosterSelection | undefined {
-  return workspaceRoots().workspaceState.get<AgentRosterSelection>(
+  return processWorkspaceRoots().workspaceState.get<AgentRosterSelection>(
     WorkspaceStateKey.AGENT_ROSTER_SELECTION,
   );
 }
@@ -65,7 +65,7 @@ async function clearOnboardingState(): Promise<void> {
   signIn.mockReset();
   signIn.mockReturnValue(Effect.succeed(false));
   await Effect.runPromise(
-    workspaceRoots().workspaceState.update(
+    processWorkspaceRoots().workspaceState.update(
       WorkspaceStateKey.AGENT_ROSTER_SELECTION,
       undefined,
     ),

@@ -231,7 +231,13 @@ export class DiffCommandExecutor {
     execOptions: CommandExecOptions,
   ): Effect.Effect<ExecResult, Error> {
     return Effect.tryPromise({
-      try: (signal) => executeCommand(command, { ...execOptions, signal }),
+      try: (signal) =>
+        executeCommand(command, {
+          ...execOptions,
+          // The roots of the workspace being diffed, held by this executor.
+          settings: this.roots,
+          signal,
+        }),
       catch: ensureError,
     });
   }

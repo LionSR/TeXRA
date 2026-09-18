@@ -12,6 +12,7 @@ import { GlobalStateKey } from '@shared/state/stateKeys';
 import { assertSupported, isUnsupported } from '@shared/utils/dispatcher';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { FakeConfigProvider, FakeStateStore } from '@test/support/FakePlatform';
+import type { ToolProbeInputs } from '@tools/externalToolDefs';
 import type { ExternalToolCheckResult } from '@tools/toolAvailability';
 
 import { commandOf } from './desktopSettingsTestSupport';
@@ -48,7 +49,7 @@ vi.mock(
     >()),
     buildToolDashboardItems: (
       host: string,
-      _workspaceRoot: string | undefined,
+      _probeInputs: ToolProbeInputs,
       cached?: ExternalToolCheckResult[],
     ) => Effect.promise(() => toolData.buildItems(host, cached)),
     planToolTerminalAction: toolData.planTerminalAction,
@@ -58,7 +59,7 @@ vi.mock(
 vi.mock('@tools/toolAvailability', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@tools/toolAvailability')>()),
   getLastCheckResults: () => toolData.lastCheckResults(),
-  refreshToolAvailability: (_workspaceRoot: string | undefined) =>
+  refreshToolAvailability: (_probeInputs: ToolProbeInputs) =>
     Effect.tryPromise({
       try: () => toolData.refreshAvailability(),
       catch: (cause) => cause as Error,

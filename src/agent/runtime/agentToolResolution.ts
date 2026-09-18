@@ -68,19 +68,13 @@ interface ResolveAgentToolsInput {
   toolInjections: ToolInjections['Service'];
   /**
    * The run's stores: the session's three setting slots, which the injections'
-   * predicates and the user's disabled-tool set read, and the secret store
-   * behind the delegation roster's model availability.
+   * predicates, the user's disabled-tool set and the delegation annotation's
+   * worktree opt-in read, and the secret store behind the delegation roster's
+   * model availability.
    */
   stores: ModelOptionStores;
   /** The run's pinned delegation roster scope, when this is a delegated run. */
   delegationScope?: AgentDelegationScope;
-  /**
-   * The run's session frame, applied around the worktree read this resolver
-   * makes. It is handed in rather than wrapped around the call because this
-   * resolver is an Effect, so a wrapper would enter the frame around building
-   * the program instead of around running it.
-   */
-  inScope?: <A>(operation: () => A) => A;
 }
 
 /**
@@ -138,7 +132,6 @@ export const resolveAgentTools = Effect.fn('resolveAgentTools')(function* ({
   runtimeUnavailableTools,
   toolInjections,
   stores,
-  inScope,
   delegationScope,
 }: ResolveAgentToolsInput) {
   const effectiveRegistry = registry ?? getDefaultToolRegistry();
@@ -196,12 +189,13 @@ export const resolveAgentTools = Effect.fn('resolveAgentTools')(function* ({
     resolved,
     stores,
   );
-  // The worktree read resolves inside the caller's frame. The run's pinned
-  // delegation scope is already explicit data from AgentRun, so both facts
-  // travel into the pure annotation mapping without reading run context here.
-  const annotationState = inScope
-    ? inScope(() => readDelegationAnnotationState(delegationScope))
-    : readDelegationAnnotationState(delegationScope);
+  // Both facts travel into the pure annotation mapping as data: the worktree
+  // opt-in is read from the slots this resolution was given, and the run's
+  // pinned delegation scope is already explicit data from AgentRun.
+  const annotationState = readDelegationAnnotationState(
+    stores,
+    delegationScope,
+  );
   return resolved.map((tool) =>
     annotateDelegationAvailability(tool, availableModelNames, annotationState),
   );

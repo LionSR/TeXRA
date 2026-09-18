@@ -1,6 +1,7 @@
 import { Effect, FileSystem } from 'effect';
 
 import { withLogChannel } from '@logger/effectLog';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import { filterNotNull, filterNotNullish, ensureArray } from '@utils/core';
 import { pathToLocationIn } from '@utils/files/fileLocation';
 import { pathExists } from '@utils/files/fsDurability';
@@ -53,6 +54,12 @@ export type TexcountMode = 'separate' | 'include' | 'sum';
 export interface TexcountOptions {
   mode?: TexcountMode;
   channel?: string;
+  /**
+   * Setting slots of the counted workspace, held as data by the caller that
+   * asked (a tool call's roots, a run's session roots, the host command's),
+   * so the spawn names this project's settings rather than an ambient one.
+   */
+  settings: SettingsStores;
 }
 
 interface TexcountResult {
@@ -94,6 +101,7 @@ const rejectionReason = Effect.fn('texcount.rejectionReason')(function* (
  */
 const runTexcount = Effect.fn('texcount.runTexcount')(function* (
   workspaceRoot: string | undefined,
+  settings: SettingsStores,
   args: string[],
   channel: string,
   context: string,
@@ -105,6 +113,7 @@ const runTexcount = Effect.fn('texcount.runTexcount')(function* (
         // The file arguments are workspace-relative, so the root the caller
         // counted for is also the directory texcount resolves them against.
         cwd: workspaceRoot,
+        settings,
         truncate: false,
         showError: true,
         signal,
@@ -143,6 +152,7 @@ const runTexcount = Effect.fn('texcount.runTexcount')(function* (
 const getIndividualCounts = Effect.fn('texcount.getIndividualCounts')(
   function* (
     workspaceRoot: string | undefined,
+    settings: SettingsStores,
     paths: readonly string[],
     channel: string,
     includeReferenced: boolean,
@@ -171,6 +181,7 @@ const getIndividualCounts = Effect.fn('texcount.getIndividualCounts')(
 
           const { stdout, error } = yield* runTexcount(
             workspaceRoot,
+            settings,
             args,
             channel,
             filePath,
@@ -194,6 +205,7 @@ const getIndividualCounts = Effect.fn('texcount.getIndividualCounts')(
 
 const getSummedCount = Effect.fn('texcount.getSummedCount')(function* (
   workspaceRoot: string | undefined,
+  settings: SettingsStores,
   paths: readonly string[],
   channel: string,
 ) {
@@ -254,6 +266,7 @@ const getSummedCount = Effect.fn('texcount.getSummedCount')(function* (
 
   const { stdout, error } = yield* runTexcount(
     workspaceRoot,
+    settings,
     args,
     channel,
     `sum for ${validPaths.join(', ')}`,
@@ -274,7 +287,7 @@ const getSummedCount = Effect.fn('texcount.getSummedCount')(function* (
 export const getTeXCount = Effect.fn('texcount.getTeXCount')(function* (
   workspaceRoot: string | undefined,
   filePaths: string | string[],
-  { mode = 'separate', channel }: TexcountOptions = {},
+  { mode = 'separate', channel, settings }: TexcountOptions,
 ): Effect.fn.Return<TexcountResult, never, FileSystem.FileSystem> {
   const resolvedChannel = channel ?? CHANNEL;
 
@@ -292,6 +305,7 @@ export const getTeXCount = Effect.fn('texcount.getTeXCount')(function* (
     if (mode === 'sum') {
       const { output, errors } = yield* getSummedCount(
         workspaceRoot,
+        settings,
         trimmedPaths,
         resolvedChannel,
       );
@@ -303,6 +317,7 @@ export const getTeXCount = Effect.fn('texcount.getTeXCount')(function* (
 
     const { outputs, errors } = yield* getIndividualCounts(
       workspaceRoot,
+      settings,
       trimmedPaths,
       resolvedChannel,
       mode === 'include',
@@ -361,11 +376,13 @@ export function parseTeXCountStats(output: string): TeXCountStat[] {
 export const getTeXCountStats = Effect.fn('texcount.getTeXCountStats')(
   function* (
     workspaceRoot: string | undefined,
+    settings: SettingsStores,
     filePaths: string | string[],
     channel: string = CHANNEL,
   ) {
     const { output } = yield* getTeXCount(workspaceRoot, filePaths, {
       channel,
+      settings,
     });
     return output
       ? `TeX Count Statistics:<texcount>\n${output}\n</texcount>\n\n`

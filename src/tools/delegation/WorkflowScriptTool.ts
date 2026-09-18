@@ -21,6 +21,7 @@ import {
 } from '@agent/core/definition/AgentConfig';
 import type { ToolServices } from '@agent/runtime/ToolServices';
 import { WorkspaceFs } from '@platform/rootedFs';
+import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { ToolResult, WorkflowAgentProposal } from '@shared/schemas';
 import {
   AgentCategory,
@@ -159,16 +160,14 @@ const fileSystemAt = (
 const persistWorkflowScript = Effect.fn('persistWorkflowScript')(function* (
   script: string,
   submissionId: string,
-  workspaceRoot: string | undefined,
+  roots: WorkspaceRoots,
   workingDirectory: string | undefined,
-  inScope: <A>(operation: () => A) => A,
 ) {
-  const directory = inScope(() =>
-    resolveWorkspaceRelativePath(
-      workspaceRoot,
-      WORKFLOW_SCRIPT_DIRECTORY,
-      workingDirectory,
-    ),
+  const directory = resolveWorkspaceRelativePath(
+    roots,
+    roots.workspace,
+    WORKFLOW_SCRIPT_DIRECTORY,
+    workingDirectory,
   );
   assertWritable(directory, WORKFLOW_SCRIPT_DIRECTORY);
   const directoryFs = yield* fileSystemAt(directory.fsPath);
@@ -178,12 +177,11 @@ const persistWorkflowScript = Effect.fn('persistWorkflowScript')(function* (
   const stem = workflowScriptDraftStem(submissionId);
   for (let suffix = 0; ; suffix += 1) {
     const filename = suffix === 0 ? `${stem}.mjs` : `${stem}-${suffix + 1}.mjs`;
-    const resolved = inScope(() =>
-      resolveWorkspaceRelativePath(
-        workspaceRoot,
-        `${WORKFLOW_SCRIPT_DIRECTORY}/${filename}`,
-        workingDirectory,
-      ),
+    const resolved = resolveWorkspaceRelativePath(
+      roots,
+      roots.workspace,
+      `${WORKFLOW_SCRIPT_DIRECTORY}/${filename}`,
+      workingDirectory,
     );
     assertWritable(resolved, resolved.relative);
     const fs = yield* fileSystemAt(resolved.fsPath);
@@ -307,12 +305,11 @@ Durability: the journal is keyed by meta.name and the agent field within this se
       let scriptPath: string;
       let script: string;
       if (input.scriptPath != null) {
-        const resolved = parent.inScope(() =>
-          resolveWorkspaceRelativePath(
-            parent.roots.workspace,
-            input.scriptPath!,
-            workingDirectory,
-          ),
+        const resolved = resolveWorkspaceRelativePath(
+          parent.roots,
+          parent.roots.workspace,
+          input.scriptPath!,
+          workingDirectory,
         );
         scriptPath = resolved.relative;
         const scriptFs = yield* fileSystemAt(resolved.fsPath);
@@ -337,9 +334,8 @@ Durability: the journal is keyed by meta.name and the agent field within this se
         scriptPath = yield* persistWorkflowScript(
           script,
           submissionId,
-          parent.roots.workspace,
+          parent.roots,
           workingDirectory,
-          parent.inScope,
         );
       }
 
@@ -356,11 +352,10 @@ Durability: the journal is keyed by meta.name and the agent field within this se
         const { meta } = parseWorkflowScript(script);
         return {
           meta,
-          defaultAgent: parent.inScope(() =>
-            requireWorkflowOrToolUseAgent(
-              input.agent,
-              parent.delegationAgentScope ?? undefined,
-            ),
+          defaultAgent: requireWorkflowOrToolUseAgent(
+            parent.roots,
+            input.agent,
+            parent.delegationAgentScope ?? undefined,
           ),
         };
       });

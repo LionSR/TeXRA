@@ -42,6 +42,7 @@ function resolveAbsolutePath(
   ports: WorkspacePathPorts,
 ): string {
   return resolveWorkspaceRelativePath(
+    ports.settings,
     ports.workspaceRoot,
     filePath,
     ports.toolRoot(),
@@ -142,9 +143,7 @@ export class DiagnosticsTool extends defineTool({
     input: Extract<DiagnosticsInput, { command: 'list' | 'count' }>,
   ): Effect.fn.Return<ToolResult, ToolError> {
     const { command, path } = input;
-    const diagnosticsPath = ports.inScope(() =>
-      resolveAbsolutePath(path, ports),
-    );
+    const diagnosticsPath = resolveAbsolutePath(path, ports);
     const linter = ports.readDiagnostics;
     if (!linter) {
       return yield* Effect.fail(
@@ -216,20 +215,19 @@ export class DiagnosticsTool extends defineTool({
       // Path resolution shares the sink's failure report: both are the "add"
       // command failing before it could annotate anything.
       const added = yield* Effect.try({
-        try: () =>
-          ports.inScope(() => {
-            const absolutePath = resolveAbsolutePath(path, ports);
-            return {
+        try: () => {
+          const absolutePath = resolveAbsolutePath(path, ports);
+          return {
+            absolutePath,
+            result: addCriticismSink({
               absolutePath,
-              result: addCriticismSink({
-                absolutePath,
-                line,
-                message,
-                severity,
-                confidence,
-              }),
-            };
-          }),
+              line,
+              message,
+              severity,
+              confidence,
+            }),
+          };
+        },
         catch: (error) => {
           const detail = toErrorMessage(error);
           log.error(`Failed to add criticism: ${detail}`);

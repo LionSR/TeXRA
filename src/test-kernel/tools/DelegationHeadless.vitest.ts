@@ -63,8 +63,11 @@ vi.mock('@agent/runtime/AgentLaunchContext', () => ({
 // agentRegistry's own rule — mirrored here rather than re-implemented.
 vi.mock('@agent/index/agentRegistry', () => ({
   getVisibleAgents: mocks.getVisibleAgents,
-  resolveDelegationScopeAgents: (scope: unknown, category: AgentCategory) =>
-    scope ? [] : mocks.getVisibleAgents(category),
+  resolveDelegationScopeAgents: (
+    _stores: unknown,
+    scope: unknown,
+    category: AgentCategory,
+  ) => (scope ? [] : mocks.getVisibleAgents(category)),
   findAgentByIdentifier: (
     entries: readonly { source: string; name: string }[],
     identifier: string,

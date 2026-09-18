@@ -9,7 +9,7 @@ import {
   readCliToolStatuses,
   setCliToolEnabled,
 } from '@cli/runtime/tools';
-import type { StateStore } from '@platform/interfaces';
+import type { ConfigProvider, StateStore } from '@platform/interfaces';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { ToolDashboardItem } from '@shared/schemas';
 import { toolDependencyStatusLabel } from '@shared/tools/toolDependencyStatusLabels';
@@ -32,6 +32,9 @@ interface ToolsListFormProps {
   readonly runtime: ProcessRuntime;
   /** The session's workspace folder, for the probes that need one. */
   readonly workspaceRoot: string | undefined;
+  /** That same workspace's configuration, which the Zotero probe reads its
+   *  port from. */
+  readonly config: ConfigProvider;
   readonly onClose: () => void;
 }
 
@@ -67,7 +70,12 @@ export function ToolsListForm(props: ToolsListFormProps): React.JSX.Element {
       title="/tools"
       compactTitle="/tools · Toggle available external integrations."
       loadingLabel="Checking tool integrations..."
-      load={() => readCliToolStatuses(props.runtime, props.workspaceRoot)}
+      load={() =>
+        readCliToolStatuses(props.runtime, {
+          workspaceRoot: props.workspaceRoot,
+          config: props.config,
+        })
+      }
       items={(tools) =>
         tools.map((tool) => ({
           value: tool.id,

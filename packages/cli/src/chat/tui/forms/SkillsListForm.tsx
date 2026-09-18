@@ -6,9 +6,11 @@ import { Text } from 'ink';
 
 import { readCliRuntimeSkills } from '@cli/runtime/skills';
 import type { SelectItem } from '@cli/tui/ui/Select';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import { escapeText } from '@shared/utils/xmlEscape';
 import {
   formatRuntimeSkillActivation,
+  readDisabledSkills,
   skillDisplayItem,
 } from '@skills/runtimeSkills';
 import type {
@@ -23,6 +25,8 @@ interface SkillsListFormProps {
   readonly availableRows?: number;
   /** The session's workspace folder: where project skills are discovered. */
   readonly workspaceRoot: string | undefined;
+  /** The session's setting slots, which the disabled-skill set is read from. */
+  readonly stores: SettingsStores;
   readonly onSelect: (value: SkillActivation) => void;
   readonly onClose: () => void;
 }
@@ -48,9 +52,11 @@ export function formatSkillActivationPrompt(skill: SourcedSkill): string {
 
 export function skillSelectItemsForTui(
   skills: readonly SourcedSkill[],
+  stores: SettingsStores,
 ): SelectItem<SkillActivation>[] {
+  const disabled = readDisabledSkills(stores);
   return skills.map((skill) => {
-    const item = skillDisplayItem(skill);
+    const item = skillDisplayItem(skill, disabled);
     return {
       value: {
         name: item.name,
@@ -78,8 +84,8 @@ export function SkillsListForm(props: SkillsListFormProps): React.JSX.Element {
     <AsyncListForm<DiscoverSkillSourcesResult, SkillActivation>
       title="/skills"
       loadingLabel="Loading skills..."
-      load={() => readCliRuntimeSkills(props.workspaceRoot)}
-      items={(result) => skillSelectItemsForTui(result.skills)}
+      load={() => readCliRuntimeSkills(props.workspaceRoot, props.stores)}
+      items={(result) => skillSelectItemsForTui(result.skills, props.stores)}
       isEmpty={(result) => result.skills.length === 0}
       availableRows={props.availableRows}
       description={<Text dimColor>Select a skill to activate it.</Text>}

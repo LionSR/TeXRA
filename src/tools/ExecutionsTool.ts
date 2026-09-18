@@ -121,7 +121,6 @@ class ExecutionsReadFailed extends Data.TaggedError('ExecutionsReadFailed')<{
 interface RunToolContext {
   readonly session: SessionHandle;
   readonly runId: RunId | undefined;
-  readonly inRunScope: <A>(operation: () => A) => A;
 }
 
 /** The one wrap of this tool's Promise collaborators. */
@@ -130,7 +129,7 @@ const executionsRead = <A>(
   read: () => Promise<A>,
 ): Effect.Effect<A, ExecutionsReadFailed> =>
   Effect.tryPromise({
-    try: () => context.inRunScope(read),
+    try: read,
     catch: (cause) => new ExecutionsReadFailed({ cause }),
   });
 
@@ -251,7 +250,6 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     const context: RunToolContext = {
       session: toolCall.run.session,
       runId: toolCall.run.runId,
-      inRunScope: toolCall.inScope,
     };
     return yield* this.run(context, input).pipe(
       Effect.catchTag('ExecutionsReadFailed', (error) =>

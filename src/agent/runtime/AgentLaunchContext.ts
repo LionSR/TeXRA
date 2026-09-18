@@ -48,7 +48,6 @@ import {
 import { createRunTrace, type RunTrace } from '@transcript';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
-import { runInSession } from './RunContext';
 import { mediaNeedsVisionWarning } from './mediaVisionWarning';
 import type { AgentRunShape, ToolPolicy } from './run/AgentRun';
 import type { SessionHandle } from './SessionHandle';
@@ -184,15 +183,6 @@ export const failIfLaunchStopped = (
   );
 
 /**
- * Run `fn` in the scope of the launch's owning session, so session-rooted
- * services (`workspaceRoots()`) resolve to the run's session. This is
- * the `inScope` the run layer hands to everything below the launch.
- */
-export function runInLaunchSession<T>(ctx: AgentLaunchContext, fn: () => T): T {
-  return runInSession(ctx.session, fn);
-}
-
-/**
  * Present a launch error through its targeted host notice (replayed if no
  * host is attached yet) and fail with it claimed: the notice is its one
  * surface, so the launch catch adds no generic toast. No run exists yet, so a
@@ -304,17 +294,12 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
     // resolver validation uses, else the full set for internal agents. Never
     // blind source-priority on a bare name, so launch can't diverge from
     // what was validated.
-    const resolved = yield* Effect.tryPromise({
-      try: async () =>
-        runInSession(input.session, () =>
-          resolveAgentForLaunch(
-            fullConfig.agentCategory,
-            fullConfig.agent,
-            fullConfig.agentSource,
-          ),
-        ),
-      catch: ensureError,
-    });
+    const resolved = resolveAgentForLaunch(
+      input.session.roots,
+      fullConfig.agentCategory,
+      fullConfig.agent,
+      fullConfig.agentSource,
+    );
     const agentEntry =
       resolved ??
       (yield* presentLaunchError(
@@ -533,30 +518,30 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
           workspacePath: session.roots.workspace,
           storageRoot: session.roots.storage,
           config: session.roots.config,
+          settings: session.roots,
           delegationAgentScope: config.delegationAgentScope,
           stageId,
         },
       );
 
     const baseVars = yield* Effect.tryPromise({
-      try: async () =>
-        runInSession(session, async () => {
-          if (setting.agentCategory === AgentCategory.ToolUse) {
-            return buildVars();
-          }
+      try: async () => {
+        if (setting.agentCategory === AgentCategory.ToolUse) {
+          return buildVars();
+        }
 
-          const initStage = parentStage.child('Init');
-          return buildVars(initStage.id).then(
-            (vars) => {
-              initStage.end(RUN_OUTCOME.COMPLETED);
-              return vars;
-            },
-            (error) => {
-              initStage.end(RUN_OUTCOME.FAILED);
-              throw error;
-            },
-          );
-        }),
+        const initStage = parentStage.child('Init');
+        return buildVars(initStage.id).then(
+          (vars) => {
+            initStage.end(RUN_OUTCOME.COMPLETED);
+            return vars;
+          },
+          (error) => {
+            initStage.end(RUN_OUTCOME.FAILED);
+            throw error;
+          },
+        );
+      },
       catch: ensureError,
     });
     yield* failIfLaunchStopped(input.stopped);

@@ -10,7 +10,6 @@ import { afterEach, describe, expect, vi } from 'vitest';
 // Local imports
 import { MEMORY_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import { StorageFs } from '@platform/rootedFs';
-import { runWithWorkspaceRoots } from '@platform/workspaceRoots';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { MEMORY_DISPLAY_ROOT } from '@tools/memory/constants';
@@ -259,13 +258,6 @@ describe('MemoryTool invocation storage root', () => {
                 Effect.provide(
                   nativeToolTestLayer({
                     roots,
-                    // The call's ambient scope names the OTHER project's roots:
-                    // the view above is what the write must follow.
-                    inScope: (operation) =>
-                      runWithWorkspaceRoots(
-                        index === 0 ? second : first,
-                        operation,
-                      ),
                   }),
                 ),
               ),

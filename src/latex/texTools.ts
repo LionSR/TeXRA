@@ -250,6 +250,10 @@ export const compileLatex2Pdf = Effect.fn('compileLatex2Pdf')(function* (
           runToolWithCheck(tool, args, {
             channel,
             cwd: workspacePath,
+            // A compile holds this session's `ConfigProvider` alone, not the
+            // three setting slots, and a TeX engine spawns no git command that
+            // an identity could mark.
+            settings: undefined,
             env,
             timeout,
             signal,

@@ -34,10 +34,6 @@ export {
   tryDefaultSession,
 } from './sessionGraph';
 
-// RunContext: the session scope a host enters around every touch of a
-// session's storage when it holds several sessions in one process.
-export { runInSession } from './RunContext';
-
 // HostInteractions
 export { SessionHostInteractions } from './HostInteractions';
 export type {

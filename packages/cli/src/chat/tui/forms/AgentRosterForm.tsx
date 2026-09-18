@@ -19,7 +19,7 @@ import { KeyHints } from '@cli/tui/ui/KeyHints';
 import { Select, type SelectItem } from '@cli/tui/ui/Select';
 import { computeSelectWindowSize } from '@cli/tui/selectWindow';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
-import { workspaceRoots, type WorkspaceRoots } from '@platform/workspaceRoots';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import {
   AGENT_MODE_PRESETS,
   agentKeyOf,
@@ -52,6 +52,11 @@ interface AgentRosterFormProps {
   /** The process runtime the roster read and the default-agent write run on,
    *  from the config form that owns this one. */
   readonly runtime: ProcessRuntime;
+  /** The settings slots the roster read and every roster write target, from
+   *  the config form that owns this one. */
+  readonly stores: SettingsStores;
+  /** The project the process opened, shown beside the workspace roster. */
+  readonly workspaceRoot: string | undefined;
   readonly availableRows?: number;
   readonly onClose: () => void;
   readonly onError?: (error: unknown) => void;
@@ -101,7 +106,7 @@ const AGENT_ROSTER_SELECT_CHROME_ROWS = 5;
 
 async function loadRosterData(
   runtime: ProcessRuntime,
-  roots: WorkspaceRoots,
+  roots: SettingsStores,
 ): Promise<AgentRosterData> {
   // The roster read loads the local agent catalog the lists below read.
   const record = await runtime.runPromise(readCliAgentRoster(roots));
@@ -116,9 +121,9 @@ export function AgentRosterForm(
   props: AgentRosterFormProps,
 ): React.JSX.Element | null {
   const [mode, setMode] = useState<AgentRosterFormMode>('overview');
-  // Resolved once for the form's lifetime: the roster read, every roster
-  // write and the default chat-agent write below all target these roots.
-  const [roots] = useState(() => workspaceRoots());
+  // The roster read, every roster write and the default chat-agent write
+  // below all target the slots this form was handed.
+  const roots = props.stores;
   const { data, error, reload, reportError } =
     useAsyncListForm<AgentRosterData>({
       load: () => loadRosterData(props.runtime, roots),
@@ -291,7 +296,7 @@ export function AgentRosterForm(
         selectedAgentKeys(data.record.agentKeys.toolUse, data.agents.toolUse),
       ),
       (value) => {
-        const cwd = roots.workspace;
+        const cwd = props.workspaceRoot;
         write(
           () =>
             cwd

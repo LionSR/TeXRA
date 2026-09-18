@@ -10,7 +10,6 @@ import { Data, Effect, type FileSystem, type Path } from 'effect';
 import {
   createAgentResponseTextConnector,
   openSessionEffect,
-  runInSession,
   type SessionHandle,
 } from '@agent/runtime';
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
@@ -178,26 +177,24 @@ async function stopProjectRuns(
   runtime: ProcessRuntime,
 ): Promise<void> {
   const { runs } = session;
-  await runInSession(session, async () => {
-    const stops = runs.getActiveIds().flatMap((runId) => {
-      if (runs.getHandle(runId)?.isChild) return [];
-      return [runs.kill(runId, { detachActiveChildren: false }).settlement];
-    });
-    await runtime.runPromise(Effect.all(stops, { concurrency: 'unbounded' }));
-    for (;;) {
-      const active = runs.getActiveIds();
-      if (active.length === 0) return;
-      await runtime.runPromise(runs.waitForAnyChange(active));
-    }
+  const stops = runs.getActiveIds().flatMap((runId) => {
+    if (runs.getHandle(runId)?.isChild) return [];
+    return [runs.kill(runId, { detachActiveChildren: false }).settlement];
   });
+  await runtime.runPromise(Effect.all(stops, { concurrency: 'unbounded' }));
+  for (;;) {
+    const active = runs.getActiveIds();
+    if (active.length === 0) return;
+    await runtime.runPromise(runs.waitForAnyChange(active));
+  }
 }
 
 /**
- * Open one session over `roots`. The transcript store is opened in the
- * workspace scope (it opens before the session exists); everything
- * after that runs in the session's own scope. The latex text-join helper is
- * bound here against this project's roots, so a workspace override in
- * `.texra/config.json` is the same value a run in this session would read.
+ * Open one session over `roots`. Every fact this project's services answer
+ * with comes from `roots` as data — the approval policy below, and the latex
+ * text-join helper bound here against this project's roots, so a workspace
+ * override in `.texra/config.json` is the same value a run in this session
+ * would read.
  */
 function openProjectSession(
   root: string | undefined,
@@ -212,22 +209,21 @@ function openProjectSession(
       ),
     });
     return yield* Effect.try({
-      try: () =>
-        runInSession(session, () => {
-          session.setApprovalPolicy(
-            readSettingFrom<TexraApprovalPolicy>(
-              roots,
-              TEXRA_APPROVAL_POLICY_CONFIG_KEY,
-            ),
-          );
-          return {
-            key: roots.storage,
-            root,
+      try: () => {
+        session.setApprovalPolicy(
+          readSettingFrom<TexraApprovalPolicy>(
             roots,
-            session,
-            dispose: () => session.dispose(),
-          };
-        }),
+            TEXRA_APPROVAL_POLICY_CONFIG_KEY,
+          ),
+        );
+        return {
+          key: roots.storage,
+          root,
+          roots,
+          session,
+          dispose: () => session.dispose(),
+        };
+      },
       catch: ensureError,
     }).pipe(Effect.onError(() => session.dispose()));
   });

@@ -481,9 +481,10 @@ function noPositionData(
 
 /** Resolve a Lean file once in the invoking project before the host program runs. */
 function leanFilePath(file: string, call: ToolCallShape): string {
-  return call.inScope(
-    () =>
-      resolveAndFormat(call.roots.workspace, file, call.workingDirectory).path
-        .absolute,
-  );
+  return resolveAndFormat(
+    call.roots,
+    call.roots.workspace,
+    file,
+    call.workingDirectory,
+  ).path.absolute;
 }

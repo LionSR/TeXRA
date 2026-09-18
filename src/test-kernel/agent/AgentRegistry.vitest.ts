@@ -33,7 +33,7 @@ import {
   nodePlatformLayer,
   unusedGlobalStorageFs,
 } from '@test/support/fsTestUtils';
-import { installPlatform } from '@test/support/setupPlatform';
+import { hostStores, installPlatform } from '@test/support/setupPlatform';
 import type * as vscode from 'vscode';
 
 /**
@@ -452,10 +452,12 @@ describe('agent registry', () => {
       Effect.gen(function* () {
         yield* onGlobalStorage(refresh({ includeRemote: false }));
         expect(
-          getVisibleAgents('toolUse').map((agent) => agent.name),
+          getVisibleAgents(hostStores(), 'toolUse').map((agent) => agent.name),
         ).not.toContain('orchestrator');
 
-        const options = yield* onGlobalStorage(computeAgentOptionsData());
+        const options = yield* onGlobalStorage(
+          computeAgentOptionsData(hostStores()),
+        );
 
         expect(options.toolUse.map((option) => option.label)).toContain(
           'orchestrator',
@@ -486,7 +488,7 @@ describe('agent registry', () => {
           { startImmediately: true },
         );
         const options = yield* Effect.forkChild(
-          onGlobalStorage(computeAgentOptionsData()),
+          onGlobalStorage(computeAgentOptionsData(hostStores())),
           { startImmediately: true },
         );
 

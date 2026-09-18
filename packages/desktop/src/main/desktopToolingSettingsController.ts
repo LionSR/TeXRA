@@ -15,6 +15,7 @@ import type {
 import { buildSettingsSnapshotMessage } from '@shared/settingsView/handlers/settingsSnapshot';
 import type { SettingsStatePorts } from '@shared/settingsView/types';
 import { unsupported } from '@shared/utils/dispatcher';
+import type { ToolProbeInputs } from '@tools/externalToolDefs';
 import {
   getLastCheckResults,
   refreshToolAvailability,
@@ -140,8 +141,17 @@ export class DefaultDesktopToolingSettingsController implements DesktopToolingSe
    *  signal is what repaints the dashboard, through the subscription above. */
   private refreshToolAvailability(): Promise<void> {
     return this.options.runtime.runPromise(
-      refreshToolAvailability(this.options.workspaceRoot),
+      refreshToolAvailability(this.probeInputs),
     );
+  }
+
+  /** The workspace the probes ask about, from the options this window was
+   *  built with. */
+  private get probeInputs(): ToolProbeInputs {
+    return {
+      workspaceRoot: this.options.workspaceRoot,
+      config: this.options.config,
+    };
   }
 
   private async postToolDashboardData(): Promise<void> {
@@ -150,7 +160,7 @@ export class DefaultDesktopToolingSettingsController implements DesktopToolingSe
     const items = await this.options.runtime.runPromise(
       buildToolDashboardItems(
         'desktop',
-        this.options.workspaceRoot,
+        this.probeInputs,
         getLastCheckResults() ?? undefined,
       ),
     );

@@ -38,7 +38,10 @@ describe('collectReviewDiff (real git repository)', () => {
   let repo: string;
 
   async function git(...args: string[]): Promise<string> {
-    const result = await executeCommand(['git', ...args], { cwd: repo });
+    const result = await executeCommand(['git', ...args], {
+      cwd: repo,
+      settings: undefined,
+    });
     expect(result.success, `git ${args.join(' ')}: ${result.stderr}`).toBe(
       true,
     );

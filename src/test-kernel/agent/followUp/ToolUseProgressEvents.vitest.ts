@@ -18,7 +18,6 @@ import { followUpsLayer } from '@agent/runtime/FollowUps';
 import { ModelInvoker, type InvokeRequest } from '@agent/runtime/ModelInvoker';
 import { rowAggregate, stepRow, type Message } from '@agent/runtime/loop/rows';
 import { runToolUse } from '@agent/runtime/loop/toolUse';
-import { runInSession } from '@agent/runtime/RunContext';
 import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
 import type { BoundModel } from '@agent/runtime/run/modelBinding';
 import { dispatchFactsFor } from '@agent/runtime/run/tools';
@@ -27,7 +26,7 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { UsageMonitor } from '@agent/runtime/UsageMonitor';
 import { TraceEmitter } from '@agent/trace';
 import type { Model, TurnResult } from '@llm/turn';
-import { workspaceRoots } from '@platform/workspaceRoots';
+import { processWorkspaceRoots } from '@platform/workspaceRoots';
 import {
   AgentCategory,
   RUN_OUTCOME,
@@ -312,14 +311,12 @@ function agentRunTestLayer(init: LoopInit) {
         scope,
         declinedRoutes: [],
         pendingModelSwitch: { value: null },
-        inScope: <A>(operation: () => A): A =>
-          runInSession(init.session, operation),
         usageMonitor: new UsageMonitor(
           {
             logger,
             runId: init.runId,
             runStageId: undefined,
-            config: workspaceRoots().config,
+            config: processWorkspaceRoots().config,
           },
           { agentName: 'chat', agentCategory: AgentCategory.ToolUse },
         ),

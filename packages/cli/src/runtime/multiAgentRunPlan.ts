@@ -8,6 +8,7 @@ import {
   teamPlanHasGaps,
   type TeamPreset,
 } from '@common/teams/TeamPlan';
+import type { StateStore } from '@platform/interfaces';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import { byCategory } from '@shared/schemas';
 
@@ -37,8 +38,12 @@ interface MultiAgentPresetPlansLoadResult {
 
 function planCurrentMultiAgentRun(
   init: MultiAgentRunPlanInit,
+  workspaceState: StateStore,
 ): CliMultiAgentPresetRunPlan {
-  const preset = findTeamPreset(readCliMultiAgentPresets(), init.preset);
+  const preset = findTeamPreset(
+    readCliMultiAgentPresets(workspaceState),
+    init.preset,
+  );
   if (!preset) {
     throw new CliUsageError(missingMultiAgentPresetMessage(init.preset));
   }
@@ -65,10 +70,11 @@ function planLoadedCliMultiAgentPresets(
 export async function loadCliMultiAgentRunPlan(
   runtime: ProcessRuntime,
   init: MultiAgentRunPlanInit,
+  workspaceState: StateStore,
   options: { readonly reloadRemoteAgents?: boolean } = {},
 ): Promise<MultiAgentRunPlanLoadResult> {
   await runtime.runPromise(loadAgents({ includeRemote: false }));
-  const localPlan = planCurrentMultiAgentRun(init);
+  const localPlan = planCurrentMultiAgentRun(init, workspaceState);
   if (options.reloadRemoteAgents === false) {
     return {
       plan: localPlan,
@@ -79,7 +85,7 @@ export async function loadCliMultiAgentRunPlan(
     runtime,
     localPlan,
     teamPlanHasGaps,
-    () => planCurrentMultiAgentRun(init),
+    () => planCurrentMultiAgentRun(init, workspaceState),
   );
   return {
     plan: result.value,

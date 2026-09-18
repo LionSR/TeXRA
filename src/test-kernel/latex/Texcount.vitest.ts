@@ -10,10 +10,14 @@ import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { captureLogEntries } from '@test/support/logSinkCapture';
 import { installPlatform } from '@test/support/setupPlatform';
 import { fakePath } from '@test/support/FakePlatform';
+import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 
 const mocks = vi.hoisted(() => ({
   runToolWithCheck: vi.fn(),
 }));
+
+/** The counted workspace's setting slots, carried by the caller as data. */
+const settings = makeFakeSettingsStores().stores;
 
 vi.mock('@utils/system/toolUtils', async (importOriginal) => {
   const actual =
@@ -84,8 +88,11 @@ describe('texcount diagnostics', () => {
 
       const pinned = yield* getTeXCount(fakePath('workspace'), '   ', {
         channel: 'pinnedTexcount',
+        settings,
       });
-      const defaulted = yield* getTeXCount(fakePath('workspace'), '');
+      const defaulted = yield* getTeXCount(fakePath('workspace'), '', {
+        settings,
+      });
 
       expect(pinned).toEqual({
         output: null,
@@ -116,6 +123,7 @@ describe('texcount diagnostics', () => {
 
       const result = yield* getTeXCount(fakePath('workspace'), 'missing.tex', {
         channel: 'pinnedTexcount',
+        settings,
       });
 
       expect(result.output).toBeNull();
@@ -141,6 +149,7 @@ describe('texcount diagnostics', () => {
 
         const result = yield* getTeXCount(fakePath('workspace'), 'main.tex', {
           channel: 'pinnedTexcount',
+          settings,
         });
 
         // The failed probe is best-effort: the count still runs.
@@ -178,6 +187,7 @@ describe('texcount diagnostics', () => {
 
         const result = yield* getTeXCount(fakePath('workspace'), 'main.tex', {
           channel: 'pinnedTexcount',
+          settings,
         });
 
         expect(result.output).toBeNull();

@@ -15,7 +15,7 @@ import {
 
 import { Cause, Data, Effect, Exit, SubscriptionRef } from 'effect';
 import { z } from 'zod';
-import { presentAgentFailure, runInSession } from '@agent/runtime';
+import { presentAgentFailure } from '@agent/runtime';
 import {
   agentSourceDirectory,
   getAgentsByCategory,
@@ -59,6 +59,7 @@ import type { PlatformSecrets } from '@platform/secrets';
 import {
   INSTRUCTION_ACTION,
   RunIdSchema,
+  type AgentCategory,
   type AgentSource,
   type InstructionAction,
 } from '@shared/schemas';
@@ -376,8 +377,7 @@ function createWindow(options: {
   windowResources.add(() => {
     const project = attachedProject;
     attachedProject = undefined;
-    if (project)
-      void runInSession(project.session, () => projectResources.dispose());
+    if (project) projectResources.dispose();
     else projectResources.dispose();
   });
   const ipcRef: {
@@ -916,9 +916,11 @@ function createWindow(options: {
     });
     return result.canceled ? undefined : result.filePaths;
   };
-  const recentCommitsOf = async (workspacePath: string | undefined) => {
-    if (!workspacePath) return { commits: [] as string[], isGitRepo: false };
-    return readRecentCommits(workspacePath, DESKTOP_RECENT_COMMIT_LIMIT, {
+  const recentCommitsOf = async (project: DesktopProject) => {
+    if (!project.root) return { commits: [] as string[], isGitRepo: false };
+    return readRecentCommits(project.root, DESKTOP_RECENT_COMMIT_LIMIT, {
+      // This project's own slots: the read runs for the paper it belongs to.
+      settings: project.roots,
       onError: reportBackgroundError,
     });
   };
@@ -980,7 +982,7 @@ function createWindow(options: {
         }),
       readRecentCommits: () =>
         Effect.tryPromise({
-          try: () => recentCommitsOf(project.root),
+          try: () => recentCommitsOf(project),
           catch: (cause) =>
             new HostSnapshotReadFailed({
               member: 'readRecentCommits',
@@ -1047,7 +1049,10 @@ function createWindow(options: {
       openExternalUrl: requestPreviewHost.openExternal,
       recheckTools: async () => {
         await runtime.runPromise(
-          refreshToolAvailability(project.roots.workspace),
+          refreshToolAvailability({
+            workspaceRoot: project.roots.workspace,
+            config: project.roots.config,
+          }),
         );
       },
       logger: console,
@@ -1096,21 +1101,16 @@ function createWindow(options: {
     for (const [key, binding] of projectBindings) {
       if (open.has(key)) continue;
       projectBindings.delete(key);
-      void runInSession(binding.project.session, () => binding.dispose());
+      binding.dispose();
     }
     for (const [key, project] of open) {
       if (projectBindings.has(key)) continue;
-      projectBindings.set(
-        key,
-        runInSession(project.session, () =>
-          bindProject(project),
-        ) as ProjectBinding,
-      );
+      projectBindings.set(key, bindProject(project));
     }
   };
   windowResources.add(() => {
     for (const binding of projectBindings.values()) {
-      void runInSession(binding.project.session, () => binding.dispose());
+      binding.dispose();
     }
     projectBindings.clear();
   });
@@ -1122,16 +1122,13 @@ function createWindow(options: {
   };
   // Catalog refresh leaves each Surface's selections intact. Applying an
   // agent mode separately sends the chosen root to that project's launcher.
-  // Each project's catalogs are read inside its own session: the presets
-  // come from that project's workspace state, not the caller's. This frame
-  // covers the fiber's start only — it does not survive the first resume —
-  // so the model read holds the same session frame as its own `inScope`.
+  // Each project's catalogs answer for that project: its snapshot source was
+  // built over its own roots, so the presets come from that project's
+  // workspace state, not the caller's.
   const refreshCatalogs = async () => {
     await Promise.all(
       [...projectBindings.values()].map((binding) =>
-        runInSession(binding.project.session, () =>
-          runtime.runPromise(binding.snapshot.refreshCatalogs),
-        ),
+        runtime.runPromise(binding.snapshot.refreshCatalogs),
       ),
     );
   };
@@ -1208,7 +1205,7 @@ function createWindow(options: {
       return postToRendererIfAlive(message);
     };
     if (previous) {
-      void runInSession(previous.session, () => previousResources.dispose());
+      previousResources.dispose();
     }
     projectResources.add(
       installDesktopWindowTitle(window, project.session, project.root, runtime),
@@ -1221,7 +1218,17 @@ function createWindow(options: {
         loadAgents,
         refreshAgents: refresh,
         getAgents: getAgentsByCategory,
-        getVisibleAgents,
+        // One window, many papers: the roster this settings surface shows is
+        // the attached project's, so the slots are bound here rather than
+        // resolved from whichever fiber asks.
+        getVisibleAgents: (category: AgentCategory) =>
+          getVisibleAgents(
+            {
+              workspaceState: project.roots.workspaceState,
+              globalState: options.globalState,
+            },
+            category,
+          ),
       },
       directory: {
         getCustomAgentDirectory: () => options.agentDirectories.custom(),
@@ -1511,9 +1518,7 @@ function createWindow(options: {
               // racing the startup `loadAgents()` cannot hit "Could not find agent:
               // setup" (mirrors `setupAssistantCommand.launchSetupAssistant`).
               await runtime.runPromise(loadAgents());
-              await runInSession(binding.project.session, async () =>
-                binding.run.runValidated(request),
-              );
+              await binding.run.runValidated(request);
             },
             catch: (error) => error,
           }).pipe(
@@ -1645,6 +1650,7 @@ function createWindow(options: {
         getEnvironmentSummary: async () =>
           project.root
             ? ((await readGitEnvironmentSummary(project.root, {
+                settings: project.roots,
                 onError: reportBackgroundError,
               })) ?? EMPTY_DESKTOP_ENVIRONMENT_SUMMARY)
             : EMPTY_DESKTOP_ENVIRONMENT_SUMMARY,
@@ -1673,16 +1679,14 @@ function createWindow(options: {
         binding.project !== activeProject()
       )
         return true;
-      runInSession(binding.project.session, () =>
-        binding.workspace.handleMessage(message),
-      );
+      binding.workspace.handleMessage(message);
       return true;
     },
     disposeRendererResources() {
       // Navigation destroys the document, including its request correlations
       // and recording ownership. Replace its ports while retaining sessions.
       for (const binding of projectBindings.values()) {
-        runInSession(binding.project.session, () => binding.dispose());
+        binding.dispose();
       }
       projectBindings.clear();
       syncProjectBindings();
@@ -1721,12 +1725,10 @@ function createWindow(options: {
     },
   );
   // The desktop-only handlers, in match order. A message every one of them
-  // declines is a session message: the project it names answers it inside
-  // that project's session scope.
+  // declines is a session message: the project it names answers it.
   // Renderer traffic about projects: the list it asks for once it boots, and
-  // the select and close requests. safeParse, not parse: dispatch runs under
-  // `runInSession` with no catch, so a malformed message is dropped, not an
-  // unhandled rejection.
+  // the select and close requests. safeParse, not parse: dispatch has no
+  // catch, so a malformed message is dropped, not an unhandled rejection.
   const projectsIpc: DesktopMessageHandler = {
     handleMessage(message) {
       switch (message.command) {
@@ -1764,15 +1766,12 @@ function createWindow(options: {
   const hostBridge = installDesktopHostBridge(window, {
     onRendererMessage: (message) => {
       if (isDesktopCommandMessage(message)) {
-        void runInSession(activeProject().session, () => {
-          for (const handler of desktopHandlers) {
-            if (handler.handleMessage(message)) return;
-          }
-        });
+        for (const handler of desktopHandlers) {
+          if (handler.handleMessage(message)) break;
+        }
         return;
       }
-      // A session message names its project: that project's port answers it
-      // inside the project's session scope.
+      // A session message names its project: that project's port answers it.
       const addressed = SessionMessageEnvelopeSchema.safeParse(message);
       if (!addressed.success) return;
       const binding = projectBindings.get(addressed.data.session);
@@ -1782,9 +1781,7 @@ function createWindow(options: {
         );
         return;
       }
-      runInSession(binding.project.session, () => {
-        runtime.runFork(binding.port.receive(message));
-      });
+      runtime.runFork(binding.port.receive(message));
     },
   });
   windowResources.add(() => {

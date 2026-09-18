@@ -338,6 +338,7 @@ export function registerBuiltinSlashCommands(options: {
     return (
       <AgentListForm
         runtime={runtime}
+        stores={stores}
         currentAgent={current}
         availableRows={props.availableRows}
         selectable={selectable}
@@ -494,6 +495,7 @@ export function registerBuiltinSlashCommands(options: {
         state={stores.globalState}
         runtime={runtime}
         workspaceRoot={options.runtimeSession.roots.workspace}
+        config={options.runtimeSession.roots.config}
         availableRows={props.availableRows}
         onClose={() => props.onDone(undefined)}
       />
@@ -553,6 +555,7 @@ export function registerBuiltinSlashCommands(options: {
     (formProps) => (
       <SkillsListForm
         workspaceRoot={options.runtimeSession.roots.workspace}
+        stores={options.runtimeSession.roots}
         {...formProps}
       />
     ),

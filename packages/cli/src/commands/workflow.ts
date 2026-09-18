@@ -132,7 +132,7 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
   // Pre-validate the resolved agent so usage errors land before stdin is read
   // or the runtime host starts.
   const agent = yield* Effect.tryPromise({
-    try: () => resolveCliRunAgent(services.runtime, init.agent),
+    try: () => resolveCliRunAgent(services, init.agent),
     catch: ensureError,
   });
   if (agent.category === AgentCategory.ToolUse) {

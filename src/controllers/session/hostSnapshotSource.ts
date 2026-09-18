@@ -196,7 +196,10 @@ export function createHostSnapshotSource(
   }
 
   const loadAgents = Effect.gen(function* () {
-    catalogs = { ...catalogs, agentOptions: yield* computeAgentOptionsData() };
+    catalogs = {
+      ...catalogs,
+      agentOptions: yield* computeAgentOptionsData(options.stores),
+    };
   });
 
   const loadTeams = Effect.gen(function* () {

@@ -62,7 +62,7 @@ import {
   type ModelOrigin,
   type TurnResult,
 } from '@llm/turn';
-import { workspaceRoots } from '@platform/workspaceRoots';
+import { processWorkspaceRoots } from '@platform/workspaceRoots';
 import { DatabaseWriteFailed } from '@shared/session/database';
 import {
   AgentCategory,
@@ -268,9 +268,13 @@ function agentRun(
     scope: Scope.makeUnsafe(),
     declinedRoutes: [],
     pendingModelSwitch: { value: pendingSwitch },
-    inScope: (operation) => operation(),
     usageMonitor: new UsageMonitor(
-      { logger, runId, runStageId: undefined, config: workspaceRoots().config },
+      {
+        logger,
+        runId,
+        runStageId: undefined,
+        config: processWorkspaceRoots().config,
+      },
       { agentName: config.agent, agentCategory: setting.agentCategory },
     ),
     callbacks: { onModelChanged: () => undefined },

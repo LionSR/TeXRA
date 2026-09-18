@@ -15,13 +15,10 @@ const log = createLog('VarsUtils');
  * leading BOM kept, which a `TextDecoder` would strip — with line endings
  * normalized, which is what the retired facade's read gave.
  *
- * `node:fs/promises` rather than the Effect `FileSystem`: prompt assembly runs
- * on the Promise tier inside the launch's `runInSession` frame, and that frame
- * is `AsyncLocalStorage`, which Effect's scheduler does not carry across a
- * fiber yield. The roots-carrier tail of `buildUserVars` still reads it, so
- * this chain stays where the frame holds. The paths reaching here are already
- * absolute: the caller resolves a relative entry against the root it holds as
- * data.
+ * `node:fs/promises` rather than the Effect `FileSystem`: prompt assembly is
+ * still a Promise-tier chain, lifted once at its launch boundary. The paths
+ * reaching here are already absolute: the caller resolves a relative entry
+ * against the root it holds as data.
  */
 export async function readPromptFile(target: string): Promise<string> {
   return normalizeLineEndings((await fs.readFile(target)).toString('utf-8'));

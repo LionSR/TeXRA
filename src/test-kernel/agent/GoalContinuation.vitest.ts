@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { maybeBuildGoalContinuation } from '@agent/goal/maybeBuildGoalContinuation';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { workspaceRoots } from '@platform/workspaceRoots';
+import { processWorkspaceRoots } from '@platform/workspaceRoots';
 import { GOAL_FEATURE_FLAG_KEY, type Goal } from '@shared/schemas';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
@@ -45,7 +45,7 @@ describe('isGoalEnabled', () => {
   ])('$name', async ({ config, expected }) => {
     await installPlatformWithConfig(config);
 
-    expect(isGoalEnabled(workspaceRoots().config)).toBe(expected);
+    expect(isGoalEnabled(processWorkspaceRoots().config)).toBe(expected);
   });
 });
 
@@ -124,7 +124,7 @@ describe('maybeBuildGoalContinuation', () => {
     await goalOnTheRun('objective');
     // Flip just the flag — the goal row is untouched, so the test does not
     // pass trivially.
-    (workspaceRoots().config as FakeConfigProvider).set(
+    (processWorkspaceRoots().config as FakeConfigProvider).set(
       GOAL_FEATURE_FLAG_KEY,
       false,
     );

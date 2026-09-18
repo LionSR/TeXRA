@@ -17,7 +17,6 @@ import type { AgentTrace, StageHandle } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
 import type { ChildTurnKey } from '@agent/storage/runRecords';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { runInSession } from '@agent/runtime/RunContext';
 import { finalizeRunTerminal } from '@agent/runtime/AgentRunLifecycle';
 import { childRunBudgetFor } from '@agent/runtime/childRunBudget';
 import { stepRow } from '@agent/runtime/loop/rows';
@@ -675,8 +674,7 @@ const deliverTurn = Effect.fn('childRunLoop.deliverTurn')(function* <
   const msg = delivered
     ? yield* strategy.formatDelivery(turn, wallTimeMs)
     : yield* Effect.tryPromise({
-        try: async () =>
-          runInSession(params.session, () => strategy.formatError(turn, err)),
+        try: async () => strategy.formatError(turn, err),
         catch: ensureError,
       });
   const resultMeta = strategy.buildResultMeta

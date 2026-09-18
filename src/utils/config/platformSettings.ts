@@ -1,5 +1,5 @@
 import type { ConfigTarget, ConfigWriteFailed } from '@platform/interfaces';
-import { workspaceRoots } from '@platform/workspaceRoots';
+import { processWorkspaceRoots } from '@platform/workspaceRoots';
 import { settingByKey, type SettingHost } from '@shared/schemas';
 import {
   readSetting,
@@ -35,43 +35,27 @@ export function getProcessSettingHost(): SettingHost {
 }
 
 /**
- * The three setting slots for the calling context: the session's workspace
- * config and state, and the process global state. `settingsAccess` resolves
- * `entry.slots[host]` per row over these, so the git-author keys read and
- * write `.texra/config.json` (config) on the CLI while other state-backed
- * keys use the state stores.
+ * The three setting slots of the PROCESS: the roots a composition root
+ * installed beside `initPlatform()`, never a session's. `settingsAccess`
+ * resolves `entry.slots[host]` per row over these, so the git-author keys
+ * read `.texra/config.json` (config) on the CLI while other state-backed keys
+ * use the state stores.
+ *
+ * Two callers, both of them outside every session by construction: the CLI
+ * composition root resolving the slots it is about to publish, and the
+ * delegation tools' `working_directory` Zod transform, which the tool facade
+ * parses before any per-call value reaches it. Everything that holds a
+ * workspace — a tool call's `call.roots`, a run's `session.roots`, a host
+ * command's `session.roots` — reads through {@link readSettingFrom} and gets
+ * the answer for its own project.
  */
-export function platformSettingsStores(): SettingsStores {
-  const roots = workspaceRoots();
+export function processSettingsStores(): SettingsStores {
+  const roots = processWorkspaceRoots();
   return {
     config: roots.config,
     workspaceState: roots.workspaceState,
     globalState: roots.globalState,
   };
-}
-
-/**
- * {@link readSettingFrom} over the calling context's roots, for the callers
- * that hold no workspace of their own: the git-author environment assembled
- * inside `executeCommand`, the worktree opt-in read inside a Zod transform,
- * and the provider-config readers. Code that holds its roots — a tool call, a
- * run, a session, a host command — reads through {@link readSettingFrom}
- * instead.
- *
- * Resolves the setting's default from the entry's schema `.prefault()` — the
- * single default source.
- *
- * Replaces the scattered per-store `get(key, handPassedDefault)` reads
- * whose second argument duplicated the catalog default: the value now comes from
- * the schema, and a stale/invalid stored value snaps back to that default (via
- * `readSetting`'s `safeParse`) rather than propagating. The store slot
- * (`workspaceState` / `globalState` / `config`) is the one the catalog entry
- * declares for this process's host, so the right backing store is picked
- * without the caller naming it. Host-specific convenience readers remain
- * preferable when they also own normalization or side effects.
- */
-export function readPlatformSetting<T>(key: string): T {
-  return readSettingFrom<T>(platformSettingsStores(), key);
 }
 
 /**

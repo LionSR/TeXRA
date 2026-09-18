@@ -9,6 +9,7 @@ import type { ToolDashboardItem } from '@shared/schemas';
 import {
   findExternalToolDef,
   type ExternalToolDef,
+  type ToolProbeInputs,
 } from '@tools/externalToolDefs';
 import { setToolEnabled } from '@utils/config/constants';
 
@@ -25,25 +26,26 @@ export interface CliToolGuide {
  *
  * `runtime` is the process runtime the composition root installed, so the
  * disabled-tool read inside the builder (`AppState`) and the toggle that
- * follows it hit the same store. `workspaceRoot` is the `--cwd` project the
- * same init opened, carried as data for the probes that need one.
+ * follows it hit the same store. `probeInputs` is the `--cwd` project the
+ * same init opened and its configuration, carried as data for the probes
+ * that need them.
  */
 export async function readCliToolStatuses(
   runtime: ProcessRuntime,
-  workspaceRoot: string | undefined,
+  probeInputs: ToolProbeInputs,
 ): Promise<ToolDashboardItem[]> {
   const items = await runtime.runPromise(
-    buildToolDashboardItems('cli', workspaceRoot),
+    buildToolDashboardItems('cli', probeInputs),
   );
   return items.filter((item) => item.requiresSetup);
 }
 
 export async function readCliToolStatus(
   runtime: ProcessRuntime,
-  workspaceRoot: string | undefined,
+  probeInputs: ToolProbeInputs,
   id: string,
 ): Promise<ToolDashboardItem | undefined> {
-  return (await readCliToolStatuses(runtime, workspaceRoot)).find(
+  return (await readCliToolStatuses(runtime, probeInputs)).find(
     (item) => item.id === id,
   );
 }

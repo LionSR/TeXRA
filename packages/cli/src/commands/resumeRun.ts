@@ -147,11 +147,7 @@ export async function runResumeCommand(
       const agent = yield* Effect.result(
         Effect.tryPromise({
           try: () =>
-            resolveCliLaunchAgent(
-              stores.runtime,
-              config.agent,
-              'workflowResume',
-            ),
+            resolveCliLaunchAgent(stores, config.agent, 'workflowResume'),
           catch: ensureError,
         }),
       );

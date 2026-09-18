@@ -206,11 +206,11 @@ export async function runChat(
         modelOverride: initialResume?.config.model ?? init.modelOverride,
         envAgent: context.envAgent,
         envModel: context.envModel,
-        visibleToolUseAgents: getVisibleAgents(AgentCategory.ToolUse),
+        visibleToolUseAgents: getVisibleAgents(services, AgentCategory.ToolUse),
       }),
     ),
   );
-  const agentUsageError = chatToolUseAgentUsageError(defaults.agent);
+  const agentUsageError = chatToolUseAgentUsageError(services, defaults.agent);
   if (agentUsageError) {
     writeTextStderr(agentUsageError);
     return { exitCode: CliExitCode.Usage };
@@ -281,7 +281,10 @@ export async function runChat(
     modelSource: defaults.modelSource,
     cwd: context.cwd,
     approvalPolicy: runtimeSession.approvalPolicy,
-    teamName: readCliMultiAgentPresetName(initialPresetId),
+    teamName: readCliMultiAgentPresetName(
+      runtimeSession.roots.workspaceState,
+      initialPresetId,
+    ),
     cliMultiAgentPresetId: initialPresetId,
     delegationAgentScope:
       initialResume?.config.delegationAgentScope ?? undefined,

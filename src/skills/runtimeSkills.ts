@@ -6,7 +6,8 @@ import {
 } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
-import { readPlatformSetting } from '@utils/config/platformSettings';
+import type { SettingsStores } from '@shared/config/settingsAccess';
+import { readSettingFrom } from '@utils/config/platformSettings';
 import { safeHomedir } from '@utils/system/platformPaths';
 
 import {
@@ -80,10 +81,17 @@ function isSkillDisabled(
   return disabled.names.includes(name) || disabled.scopes.includes(scope);
 }
 
-function readDisabledSkills(): DisabledSkills {
+/**
+ * The disabled names and scopes of one workspace, read from the slots the
+ * caller holds: a host settings surface passes its session roots, a run passes
+ * the roots its prompt is being built for, so the answer is that project's
+ * rather than the calling context's.
+ */
+export function readDisabledSkills(stores: SettingsStores): DisabledSkills {
   return {
-    names: readPlatformSetting<string[]>(WorkspaceStateKey.DISABLED_SKILLS),
-    scopes: readPlatformSetting<ActiveSkillSourceScope[]>(
+    names: readSettingFrom<string[]>(stores, WorkspaceStateKey.DISABLED_SKILLS),
+    scopes: readSettingFrom<ActiveSkillSourceScope[]>(
+      stores,
       WorkspaceStateKey.DISABLED_SKILL_SOURCES,
     ),
   };
@@ -96,7 +104,7 @@ function readDisabledSkills(): DisabledSkills {
  */
 export function skillDisplayItem(
   { skill, source }: SourcedSkill,
-  disabled: DisabledSkills = readDisabledSkills(),
+  disabled: DisabledSkills,
 ): SkillDisplayItem {
   return {
     name: skill.name,
@@ -112,8 +120,9 @@ export function skillDisplayItem(
 /** Discover the complete inventory for host settings displays. */
 export async function loadRuntimeSkillDisplay(
   workspaceRoot: string | undefined,
-  disabled: DisabledSkills = readDisabledSkills(),
+  stores: SettingsStores,
 ) {
+  const disabled = readDisabledSkills(stores);
   const result = await discoverRuntimeSkills(workspaceRoot);
   return {
     skills: result.skills.map((entry) => skillDisplayItem(entry, disabled)),
@@ -123,7 +132,7 @@ export async function loadRuntimeSkillDisplay(
 
 export function filterDiscoveredSkills(
   result: DiscoverSkillSourcesResult,
-  disabled: DisabledSkills = readDisabledSkills(),
+  disabled: DisabledSkills,
 ): DiscoverSkillSourcesResult {
   return {
     skills: result.skills.filter(
@@ -139,9 +148,10 @@ export function filterDiscoveredSkills(
 /** Discover only skills that may be injected or explicitly activated. */
 export async function loadEnabledRuntimeSkills(
   workspaceRoot: string | undefined,
+  stores: SettingsStores,
 ) {
   const result = await discoverRuntimeSkills(workspaceRoot);
-  return filterDiscoveredSkills(result);
+  return filterDiscoveredSkills(result, readDisabledSkills(stores));
 }
 
 function formatRuntimeSkillCatalog(skills: readonly SourcedSkill[]): string {
@@ -174,13 +184,17 @@ export function formatRuntimeSkillActivation({
 
 export async function loadRuntimeSkillCatalog(
   workspaceRoot: string | undefined,
+  stores: SettingsStores,
 ): Promise<RuntimeSkillCatalogResult> {
   const sources = runtimeSkillSources(workspaceRoot);
   if (sources.length === 0) {
     return { catalog: '', skills: [], issues: [] };
   }
 
-  const result = filterDiscoveredSkills(await discoverSkillSources(sources));
+  const result = filterDiscoveredSkills(
+    await discoverSkillSources(sources),
+    readDisabledSkills(stores),
+  );
   // Discovery already orders by source precedence and then skill directory.
   // Bound that accepted set once here, before either prompt or event projection.
   const accepted = result.skills.slice(0, ACTIVE_SKILLS_SNAPSHOT_MAX_SKILLS);

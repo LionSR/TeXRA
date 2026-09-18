@@ -141,9 +141,7 @@ export const followUpsLayer: Layer.Layer<
         );
         if (warning) logger.warn(warning);
         const media = yield* mediaInputParts(
-          run.inScope(() =>
-            files.map((path) => run.fileService.createLocation(path)),
-          ),
+          files.map((path) => run.fileService.createLocation(path)),
           bound,
           logger,
           run.session.roots.config,

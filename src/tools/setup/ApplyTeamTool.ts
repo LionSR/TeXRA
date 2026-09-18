@@ -99,38 +99,34 @@ const applyTeam = Effect.fn('ApplyTeamTool.execute')(function* (
       };
     },
     commitPreset: (preset) =>
-      call.inScope(() =>
-        Effect.gen(function* () {
-          yield* roster.setTeam(preset.id);
-          yield* roster.setDefaultTeam(preset.id);
-          // The setup agent runs this mid-conversation, so an open settings
-          // view is showing a roster this call just replaced.
-          appSignals.emit('agentRosterChanged', undefined);
-        }).pipe(
-          // The roster writes are the port's own failure: the preflight reads
-          // this channel, and the two stores' tags would not name the port.
-          Effect.mapError(
-            (cause) =>
-              new TeamCatalogPortFailed({
-                member: 'commitPreset',
-                message: `The applied team could not be stored: ${toErrorMessage(cause)}`,
-                cause,
-              }),
-          ),
+      Effect.gen(function* () {
+        yield* roster.setTeam(preset.id);
+        yield* roster.setDefaultTeam(preset.id);
+        // The setup agent runs this mid-conversation, so an open settings
+        // view is showing a roster this call just replaced.
+        appSignals.emit('agentRosterChanged', undefined);
+      }).pipe(
+        // The roster writes are the port's own failure: the preflight reads
+        // this channel, and the two stores' tags would not name the port.
+        Effect.mapError(
+          (cause) =>
+            new TeamCatalogPortFailed({
+              member: 'commitPreset',
+              message: `The applied team could not be stored: ${toErrorMessage(cause)}`,
+              cause,
+            }),
         ),
       ),
   };
 
   const result = yield* applyTeamRosterWithPreflight(input.teamId, {
     catalog,
-    loadLocalCatalog: () =>
-      call.inScope(() => loadAgents({ includeRemote: false })),
+    loadLocalCatalog: () => loadAgents({ includeRemote: false }),
     canAccessRemoteCatalog: () => Effect.succeed(authStatus.authenticated),
     providedChoice: input.unavailableAction ?? undefined,
     choose: async () => undefined,
     signIn,
-    forceRefreshRemoteCatalog: () =>
-      call.inScope(() => refresh({ includeRemote: true })),
+    forceRefreshRemoteCatalog: () => refresh({ includeRemote: true }),
   });
 
   if (result.status === 'unknown') {

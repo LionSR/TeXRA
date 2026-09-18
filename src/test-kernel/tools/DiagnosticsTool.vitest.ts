@@ -4,7 +4,6 @@ import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { describe, expect, vi } from 'vitest';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { runWithWorkspaceRoots } from '@platform/workspaceRoots';
 import type { RunId } from '@shared/schemas';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 
@@ -215,8 +214,7 @@ describe('DiagnosticsTool', () => {
                     runId: 'diagnostics-project-scope' as RunId,
                     toolPolicy: {},
                   },
-                  inScope: (operation) =>
-                    runWithWorkspaceRoots(project.roots, operation),
+                  roots: project.roots,
                 }),
               ),
             );
