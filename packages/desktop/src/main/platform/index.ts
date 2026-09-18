@@ -183,10 +183,12 @@ export async function initializeElectronPlatform(
   // The account plane is built before the runtime that serves it, beside the
   // secrets store it reads; the window's sign-in surfaces take it from the
   // init result below.
-  const supabaseAuth = createSupabaseAuth({
-    secrets,
-    log: createSessionLog(console),
-  });
+  const supabaseAuth = Effect.runSync(
+    createSupabaseAuth({
+      secrets,
+      log: createSessionLog(console),
+    }),
+  );
   // The one Effect runtime of this process (PRD 7.7), over the stores it
   // serves: every project's session graph and Promise-facing fiber runs on
   // it, and the entry disposes it last (`disposeProcessRuntime`), after run
