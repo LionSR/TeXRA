@@ -1,5 +1,5 @@
 // Third-party imports
-import { Cause } from 'effect';
+import { Cause, Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 
@@ -8,7 +8,8 @@ const mocks = vi.hoisted(() => ({
   canSendRequest: vi.fn(),
   sendRequest: vi.fn(),
   safeExecuteCommand: vi.fn(async () => undefined),
-  setCopilotRoutePreference: vi.fn(async () => undefined),
+  // The real writer hands back a program, not a promise.
+  setCopilotRoutePreference: vi.fn(() => Effect.void),
   showLoggedErrorMessage: vi.fn<
     (channel: string, message: string, error: unknown) => Promise<void>
   >(async () => undefined),

@@ -14,22 +14,20 @@ import type {
 import { apiKeySecretName, isApiProvider } from '@model/apiProviders';
 // Local imports - platform
 import type { PlatformSecrets } from '@platform/secrets';
-// Local imports - utilities
-import { ensureError } from '@utils/errors/errorMessage';
 
-interface SettingsProfileKeyControllerDeps {
+interface SettingsProfileKeyControllerDeps<R> {
   /** The process secret store the host holds, where the keys are written. */
   secrets: PlatformSecrets;
   prompt: Pick<PromptHost, 'input' | 'info' | 'confirm'>;
   externalOpener: Pick<ExternalOpener, 'openExternal'>;
   getProviderDisplayName(provider: string): string;
   getProviderKeyUrl(provider: string): string | undefined;
-  refreshAfterKeyChange(provider: string): Promise<void>;
+  refreshAfterKeyChange(provider: string): Effect.Effect<void, Error, R>;
   /**
    * Show a failed key action to the user. Required: a rejected placeholder or
    * an unknown provider must never fail silently on any host.
    */
-  reportFailure(message: string, error: unknown): Promise<void>;
+  reportFailure(message: string, error: unknown): Effect.Effect<void, never, R>;
 }
 
 /**
@@ -45,14 +43,19 @@ interface SettingsProfileKeyControllerDeps {
  * (host-controller study Q2), and the host settles the action at its own
  * boundary. The prompt port is an `Effect` too, so a host that could not ask
  * for a key arrives as `PromptFailed` and is reported like any other failed
- * action; the refresh and reporting ports are still Promise-shaped, so each is
- * one `Effect.tryPromise` whose rejection becomes the `Error` this controller
- * reports, exactly as the `try/catch` around them did.
+ * action. The refresh and reporting ports are programs too: each host's
+ * key-dependent refresh and its failure notice are handed over as the
+ * `Effect`s they already were, and this controller settles nothing — the
+ * whole action is one program the host runs at its own message boundary.
+ *
+ * `R` is whatever those two host ports need from context (the language-model
+ * bridge behind a model-availability repaint on both graphical hosts); it is
+ * `never` for a host whose refresh needs nothing.
  */
-export class SettingsProfileKeyController {
-  constructor(private readonly deps: SettingsProfileKeyControllerDeps) {}
+export class SettingsProfileKeyController<R = never> {
+  constructor(private readonly deps: SettingsProfileKeyControllerDeps<R>) {}
 
-  setProviderKey(provider: string): Effect.Effect<void> {
+  setProviderKey(provider: string): Effect.Effect<void, never, R> {
     return this.run(
       provider,
       'set',
@@ -68,11 +71,14 @@ export class SettingsProfileKeyController {
     );
   }
 
-  commitProviderKey(provider: string, apiKey: string): Effect.Effect<void> {
+  commitProviderKey(
+    provider: string,
+    apiKey: string,
+  ): Effect.Effect<void, never, R> {
     return this.run(provider, 'set', this.storeProviderKey(provider, apiKey));
   }
 
-  removeProviderKey(provider: string): Effect.Effect<void> {
+  removeProviderKey(provider: string): Effect.Effect<void, never, R> {
     return this.run(
       provider,
       'remove',
@@ -142,12 +148,12 @@ export class SettingsProfileKeyController {
     provider: string,
     verb: 'set' | 'remove',
     action: Effect.Effect<boolean, Error | PromptFailed>,
-  ): Effect.Effect<void> {
+  ): Effect.Effect<void, never, R> {
     return Effect.gen({ self: this }, function* () {
       const changed = yield* Effect.exit(action);
       if (Exit.isFailure(changed)) {
         if (Cause.hasInterrupts(changed.cause)) return yield* Effect.interrupt;
-        yield* this.report(
+        yield* this.deps.reportFailure(
           `Failed to ${verb} ${this.deps.getProviderDisplayName(provider)} API key`,
           Cause.squash(changed.cause),
         );
@@ -156,17 +162,14 @@ export class SettingsProfileKeyController {
       if (!changed.value) return;
 
       const refreshed = yield* Effect.exit(
-        Effect.tryPromise({
-          try: () => this.deps.refreshAfterKeyChange(provider),
-          catch: ensureError,
-        }),
+        this.deps.refreshAfterKeyChange(provider),
       );
       if (Exit.isFailure(refreshed)) {
         if (Cause.hasInterrupts(refreshed.cause)) {
           return yield* Effect.interrupt;
         }
         const gerund = verb === 'set' ? 'setting' : 'removing';
-        yield* this.report(
+        yield* this.deps.reportFailure(
           `Failed to refresh after ${gerund} ${this.deps.getProviderDisplayName(provider)} API key`,
           Cause.squash(refreshed.cause),
         );
@@ -191,11 +194,6 @@ export class SettingsProfileKeyController {
         Effect.forkDetach({ startImmediately: true }),
         Effect.asVoid,
       );
-  }
-
-  /** Surface a failed action. A host that cannot report dies with it. */
-  private report(message: string, error: unknown): Effect.Effect<void> {
-    return Effect.promise(() => this.deps.reportFailure(message, error));
   }
 }
 

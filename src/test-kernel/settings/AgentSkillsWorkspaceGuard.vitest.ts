@@ -3,8 +3,9 @@ import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  showLoggedErrorMessage: vi.fn(),
-  showLoggedInfoMessage: vi.fn(),
+  // Both report helpers are awaited, so the doubles answer with a promise.
+  showLoggedErrorMessage: vi.fn(async () => ''),
+  showLoggedInfoMessage: vi.fn(async () => ''),
   // The module under test composes `writeSetting`'s Effect, so the standing
   // double is a succeeding one; a test that wants a failure swaps in
   // `Effect.fail` for that call.
@@ -32,6 +33,7 @@ import {
   initializeDefaultSession,
   teardownDefaultSession,
 } from '@agent/runtime/SessionHandle';
+import type { ProcessServices } from '@platform/processRuntime';
 import { processWorkspaceRoots } from '@platform/workspaceRoots';
 import { SettingsViewMessageHandler } from '@settingsView/SettingsViewMessageHandler';
 import { AGENT_SKILLS_CONFIG_KEY } from '@shared/schemas';
@@ -60,18 +62,21 @@ beforeEach(async () => {
 });
 
 type AgentSkillsHarness = {
-  updateStateSetting(key: string, value: unknown): Promise<void>;
+  updateStateSetting(
+    key: string,
+    value: unknown,
+  ): Effect.Effect<void, Error, ProcessServices>;
   postStateSettingSnapshot: ReturnType<typeof vi.fn>;
-};
-
-type SnapshotHarness = {
-  postStateSettingSnapshot(snapshot: 'multi-agent'): Promise<void>;
 };
 
 function createHarness(): AgentSkillsHarness {
   const handler = Object.create(SettingsViewMessageHandler.prototype);
   Reflect.set(handler, 'channel', 'SettingsViewMessageHandler');
-  Reflect.set(handler, 'postStateSettingSnapshot', vi.fn());
+  Reflect.set(
+    handler,
+    'postStateSettingSnapshot',
+    vi.fn(() => Effect.void),
+  );
   // The guard reads the window's session for its workspace root; the suite's
   // beforeEach reopens the process default against the folderless roots.
   Reflect.set(handler, 'session', testDefaultSession());
@@ -89,7 +94,9 @@ describe('agent skills workspace guard', () => {
   it('restores the switch without writing in an empty VS Code window', async () => {
     const handler = createHarness();
 
-    await handler.updateStateSetting(AGENT_SKILLS_CONFIG_KEY, false);
+    await testRuntime().runPromise(
+      handler.updateStateSetting(AGENT_SKILLS_CONFIG_KEY, false),
+    );
 
     expect(mocks.writeSetting).not.toHaveBeenCalled();
     expect(mocks.showLoggedInfoMessage).toHaveBeenCalledWith(
@@ -102,7 +109,9 @@ describe('agent skills workspace guard', () => {
   it('writes user-wide telemetry in an empty VS Code window', async () => {
     const handler = createHarness();
 
-    await handler.updateStateSetting('texra.telemetry.enabled', false);
+    await testRuntime().runPromise(
+      handler.updateStateSetting('texra.telemetry.enabled', false),
+    );
 
     expect(mocks.showLoggedInfoMessage).not.toHaveBeenCalled();
     expect(mocks.writeSetting).toHaveBeenCalledWith(
@@ -122,9 +131,8 @@ describe('agent skills workspace guard', () => {
     const error = new Error('write failed');
     mocks.writeSetting.mockReturnValueOnce(Effect.fail(error));
 
-    await handler.updateStateSetting(
-      GlobalStateKey.DETACH_SUBAGENTS_ON_STOP,
-      true,
+    await testRuntime().runPromise(
+      handler.updateStateSetting(GlobalStateKey.DETACH_SUBAGENTS_ON_STOP, true),
     );
 
     expect(mocks.showLoggedInfoMessage).not.toHaveBeenCalled();
@@ -141,9 +149,11 @@ describe('agent skills workspace guard', () => {
   it('surfaces rejected values and restores the owning snapshot', async () => {
     const handler = createHarness();
 
-    await handler.updateStateSetting(
-      WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS,
-      1000.5,
+    await testRuntime().runPromise(
+      handler.updateStateSetting(
+        WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS,
+        1000.5,
+      ),
     );
 
     expect(mocks.writeSetting).not.toHaveBeenCalled();

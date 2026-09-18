@@ -54,11 +54,13 @@ const { signInWithSubscription } =
   await import('@frontend/auth/subscriptionSignIn');
 
 const signInWithChatGptSubscription = (channel: string) =>
-  signInWithSubscription(
-    makeFakeSettingsStores().stores,
-    channel,
-    'chatgpt',
-    testRuntime(),
+  testRuntime().runPromise(
+    signInWithSubscription(
+      makeFakeSettingsStores().stores,
+      channel,
+      'chatgpt',
+      testRuntime(),
+    ),
   );
 
 function loopbackSession() {

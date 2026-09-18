@@ -89,18 +89,22 @@ function vscodePresenter(
   };
 }
 
-/** Run subscription sign-in and enable subscription routing for the
- * provider's models. */
-export async function signInWithSubscription(
+/**
+ * Run subscription sign-in and enable subscription routing for the provider's
+ * models. The whole flow is one program the caller settles at its own
+ * boundary; `runtime` is here only for the one foreign edge inside it, VS
+ * Code's `withProgress`, which takes a promise.
+ */
+export function signInWithSubscription(
   stores: SettingsStores,
   channel: string,
   providerId: SubscriptionProviderId,
   runtime: ProcessRuntime,
-): Promise<boolean> {
+): Effect.Effect<boolean> {
   const provider = subscriptionProvider(providerId);
   const { displayName, modelFamily } = provider;
 
-  const signIn = Effect.gen(function* () {
+  return Effect.gen(function* () {
     const account: SubscriptionAccount = yield* Effect.tryPromise({
       try: () =>
         vscode.window.withProgress(
@@ -162,6 +166,4 @@ export async function signInWithSubscription(
       ).pipe(Effect.as(false)),
     ),
   );
-
-  return runtime.runPromise(signIn);
 }

@@ -65,7 +65,9 @@ async function expectSendGoalListFailure(
 ): Promise<void> {
   const showErrorMessage = vi.spyOn(vscode.window, 'showErrorMessage');
 
-  await expect(createHandler().sendGoalList(webview)).resolves.toBeUndefined();
+  await expect(
+    testRuntime().runPromise(createHandler().sendGoalList(webview)),
+  ).resolves.toBeUndefined();
 
   expect(showErrorMessage).toHaveBeenCalledWith(expectedError);
 }
@@ -83,7 +85,7 @@ describe('settings goal list', () => {
     );
     const webview = createWebview();
 
-    await createHandler().sendGoalList(webview);
+    await testRuntime().runPromise(createHandler().sendGoalList(webview));
 
     // `runLabel` is the fold's `RunView.label` for this run: the fixture's
     // `run.start` names the `chat` agent, whose display name is `chat`.

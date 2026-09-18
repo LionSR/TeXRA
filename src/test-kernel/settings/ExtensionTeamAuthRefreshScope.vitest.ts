@@ -27,8 +27,8 @@ describe('extension team auth catalog refresh scope', () => {
       texraHostedAgents: ['orchestrator'],
     };
 
-    const result = await withAgentCatalogAuthRefreshDeferred(() =>
-      Effect.runPromise(
+    const result = await Effect.runPromise(
+      withAgentCatalogAuthRefreshDeferred(
         applyTeamRosterWithPreflight('remote-team', {
           catalog: {
             resolvePreset: () => ({

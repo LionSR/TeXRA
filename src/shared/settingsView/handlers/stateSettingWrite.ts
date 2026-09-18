@@ -189,7 +189,7 @@ export function applyStateSettingUpdate(
  * `switch`) so a new snapshot variant fails the object-literal check at both
  * call sites instead of silently falling through a `default`.
  */
-export type SettingsSnapshotPosters = Record<
+export type SettingsSnapshotPosters<T = void | Promise<void>> = Record<
   SettingsViewSnapshot,
-  () => void | Promise<void>
+  () => T
 >;

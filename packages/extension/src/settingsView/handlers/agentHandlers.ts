@@ -42,7 +42,7 @@ import {
 } from '@frontend/ui/dialogs';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import { NotificationFailed } from '@hosts/uiHosts';
-import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
+import type { ProcessServices } from '@platform/processRuntime';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
   agentKey,
@@ -54,10 +54,12 @@ import {
   buildCustomAgentDirMessage,
   buildAgentModePresetsMessage,
 } from '@shared/settingsView/handlers/agentSelectionHandlers';
+import { allSettledVoid } from '@utils/core/allSettledVoid';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 
 import {
+  postToWebview,
   withHandlerErrorHandling,
   type SettingsHandlerContext,
 } from './SettingsHandlerContext';
@@ -78,9 +80,8 @@ export class AgentHandlers {
     private readonly refreshAfterAgentMutation: (
       selectedToolUseAgent?: string,
       agentCatalogAlreadyFresh?: boolean,
-    ) => Promise<void>,
+    ) => Effect.Effect<void, Error, ProcessServices>,
     roots: Pick<WorkspaceRoots, 'workspaceState' | 'globalState'>,
-    private readonly runtime: ProcessRuntime,
   ) {
     const controllers = createSettingsAgentControllers({
       workspaceState: roots.workspaceState,
@@ -148,206 +149,223 @@ export class AgentHandlers {
               cause,
             }),
         }),
-      refreshAfterMutation: () =>
-        Effect.tryPromise({
-          try: () => this.refreshAfterAgentMutation(),
-          catch: ensureError,
-        }),
+      refreshAfterMutation: () => this.refreshAfterAgentMutation(),
     });
   }
 
   /**
-   * The inbound registry's terminal for the four agent-file actions: run one
-   * on this host's runtime and report its failure on the settings channel, as
-   * every sibling handler in this class does.
+   * The inbound registry's terminal for the four agent-file actions: report a
+   * failed one on the settings channel, as every sibling handler in this class
+   * does. The host runs the program it hands back at its message boundary.
    */
   runAgentFileAction(
     command: AgentFileCommand,
     action: Effect.Effect<void, Error, ProcessServices>,
-  ): Promise<void> {
-    return withHandlerErrorHandling(this.ctx, FAILURE_MESSAGES[command], () =>
-      this.runtime.runPromise(action),
+  ) {
+    return withHandlerErrorHandling(
+      this.ctx,
+      FAILURE_MESSAGES[command],
+      action,
     );
   }
 
   // ── Agent selection data ──
 
-  async sendAgentSelectionData(webview: vscode.Webview): Promise<void> {
-    await this.runtime.runPromise(loadAgents());
-    await webview.postMessage(
-      buildAgentSelectionMessage({
-        buildSelectionItems: () => this.catalogController.buildSelectionItems(),
-        getCustomAgentScanIssues,
-      }),
-    );
+  sendAgentSelectionData(webview: vscode.Webview) {
+    return Effect.gen({ self: this }, function* () {
+      yield* loadAgents();
+      yield* postToWebview(
+        webview,
+        buildAgentSelectionMessage({
+          buildSelectionItems: () =>
+            this.catalogController.buildSelectionItems(),
+          getCustomAgentScanIssues,
+        }),
+      );
+    });
   }
 
   // ── Agent selection handlers ──
 
-  async handleSetAgentEnabled(
+  handleSetAgentEnabled(
     data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.SET_AGENT_ENABLED>,
-  ): Promise<void> {
-    await withHandlerErrorHandling(
+  ) {
+    return withHandlerErrorHandling(
       this.ctx,
       'Failed to update agent visibility',
-      async () => {
-        await this.runtime.runPromise(
-          this.roster.setAgentEnabled({
-            category: data.category,
-            source: data.agentSource,
-            name: data.agentName,
-            enabled: data.enabled,
-          }),
-        );
-        await this.refreshAfterAgentMutation();
-      },
+      this.roster
+        .setAgentEnabled({
+          category: data.category,
+          source: data.agentSource,
+          name: data.agentName,
+          enabled: data.enabled,
+        })
+        .pipe(Effect.andThen(this.refreshAfterAgentMutation())),
     );
   }
 
-  async handleSetAllAgentsEnabled(
+  handleSetAllAgentsEnabled(
     data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.SET_ALL_AGENTS_ENABLED>,
-  ): Promise<void> {
-    await withHandlerErrorHandling(
+  ) {
+    return withHandlerErrorHandling(
       this.ctx,
       'Failed to update agent visibility',
-      async () => {
-        await this.runtime.runPromise(
-          this.catalogController.setAllAgentsEnabled({
-            category: data.category,
-            source: data.source,
-            enabled: data.enabled,
-          }),
-        );
-        await this.refreshAfterAgentMutation();
-      },
+      this.catalogController
+        .setAllAgentsEnabled({
+          category: data.category,
+          source: data.source,
+          enabled: data.enabled,
+        })
+        .pipe(Effect.andThen(this.refreshAfterAgentMutation())),
     );
   }
 
-  async handleOpenAgentFolder(
+  handleOpenAgentFolder(
     data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.OPEN_AGENT_FOLDER>,
-  ): Promise<void> {
-    await withHandlerErrorHandling(
+  ) {
+    return withHandlerErrorHandling(
       this.ctx,
       'Failed to open agent folder',
-      async () => {
-        const result = await this.runtime.runPromise(
-          this.directoryController.planOpenAgentFolder(data.folderType),
+      Effect.gen({ self: this }, function* () {
+        const result = yield* this.directoryController.planOpenAgentFolder(
+          data.folderType,
         );
         if (!result.ok) {
-          await showLoggedMessage(
-            this.ctx.channel,
-            `No local directory for agent source: ${data.folderType}`,
+          yield* Effect.promise(() =>
+            showLoggedMessage(
+              this.ctx.channel,
+              `No local directory for agent source: ${data.folderType}`,
+            ),
           );
           return;
         }
-        await vscode.commands.executeCommand(
-          'revealFileInOS',
-          vscode.Uri.file(result.path),
-        );
-      },
+        yield* Effect.tryPromise({
+          try: () =>
+            vscode.commands.executeCommand(
+              'revealFileInOS',
+              vscode.Uri.file(result.path),
+            ),
+          catch: ensureError,
+        });
+      }),
     );
   }
 
-  async handleViewRemoteAgentPrompt(
+  handleViewRemoteAgentPrompt(
     data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.VIEW_REMOTE_AGENT_PROMPT>,
-  ): Promise<void> {
-    await withHandlerErrorHandling(
+  ) {
+    return withHandlerErrorHandling(
       this.ctx,
       'Failed to view remote agent prompt',
-      async () => {
-        const config = await this.runtime.runPromise(
-          fetchRemoteAgentPromptYaml(data.agentName),
-        );
+      Effect.gen({ self: this }, function* () {
+        const config = yield* fetchRemoteAgentPromptYaml(data.agentName);
         if (config == null) {
-          await showLoggedMessage(
-            this.ctx.channel,
-            'Authentication required. Sign in using "TeXRA: Sign In".',
+          yield* Effect.promise(() =>
+            showLoggedMessage(
+              this.ctx.channel,
+              'Authentication required. Sign in using "TeXRA: Sign In".',
+            ),
           );
           return;
         }
 
-        const doc = await vscode.workspace.openTextDocument({
-          content: config,
-          language: 'yaml',
+        yield* Effect.tryPromise({
+          try: async () => {
+            const doc = await vscode.workspace.openTextDocument({
+              content: config,
+              language: 'yaml',
+            });
+            await vscode.window.showTextDocument(doc, { preview: false });
+          },
+          catch: ensureError,
         });
-        await vscode.window.showTextDocument(doc, { preview: false });
-      },
+      }),
     );
   }
 
-  async handleCreateAgent(
+  handleCreateAgent(
     data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.CREATE_AGENT>,
-  ): Promise<void> {
-    if (data.mode === 'template') {
-      await this.createAgentFromTemplate(data.category);
-    } else {
-      await vscode.commands.executeCommand(
-        'texra.createAgentWithAI',
-        data.category,
-      );
-    }
+  ) {
+    return Effect.gen({ self: this }, function* () {
+      if (data.mode === 'template') {
+        yield* this.createAgentFromTemplate(data.category);
+      } else {
+        yield* Effect.tryPromise({
+          try: () =>
+            vscode.commands.executeCommand(
+              'texra.createAgentWithAI',
+              data.category,
+            ),
+          catch: ensureError,
+        });
+      }
 
-    await this.refreshAfterAgentMutation();
+      yield* this.refreshAfterAgentMutation();
+    });
   }
 
-  async handleDeleteCustomAgent(
+  handleDeleteCustomAgent(
     data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.DELETE_CUSTOM_AGENT>,
-  ): Promise<void> {
-    if (this.activeCustomAgentDeletions.has(data.agentName)) return;
-    this.activeCustomAgentDeletions.add(data.agentName);
-
-    try {
-      await this.runAgentFileAction(
+  ) {
+    return Effect.suspend(() => {
+      if (this.activeCustomAgentDeletions.has(data.agentName)) {
+        return Effect.void;
+      }
+      this.activeCustomAgentDeletions.add(data.agentName);
+      return this.runAgentFileAction(
         'deleteCustomAgent',
         this.agentActions.deleteCustomAgent(data),
+      ).pipe(
+        Effect.ensuring(
+          Effect.sync(() => {
+            this.activeCustomAgentDeletions.delete(data.agentName);
+          }),
+        ),
       );
-    } finally {
-      this.activeCustomAgentDeletions.delete(data.agentName);
-    }
+    });
   }
 
   // ── Custom agent directory handlers ──
 
-  async sendCustomAgentDir(webview: vscode.Webview): Promise<void> {
-    await webview.postMessage(
-      await this.runtime.runPromise(
-        buildCustomAgentDirMessage({
-          getCustomDirStatus: () =>
-            this.directoryController.getCustomDirStatus(),
-        }),
-      ),
+  sendCustomAgentDir(webview: vscode.Webview) {
+    return Effect.flatMap(
+      buildCustomAgentDirMessage({
+        getCustomDirStatus: () => this.directoryController.getCustomDirStatus(),
+      }),
+      (message) => postToWebview(webview, message),
     );
   }
 
-  async handleSetCustomAgentDir(): Promise<void> {
-    await withHandlerErrorHandling(
+  handleSetCustomAgentDir() {
+    return withHandlerErrorHandling(
       this.ctx,
       'Failed to set custom agent directory',
-      async () => {
-        const selectedPath = await agentDirectories.promptCustom();
+      Effect.gen({ self: this }, function* () {
+        const selectedPath = yield* Effect.tryPromise({
+          try: () => agentDirectories.promptCustom(),
+          catch: ensureError,
+        });
         if (!selectedPath) return;
-        await this.refreshAgentDirUI();
-      },
+        yield* this.refreshAgentDirUI();
+      }),
     );
   }
 
-  async handleResetCustomAgentDir(): Promise<void> {
-    await withHandlerErrorHandling(
+  handleResetCustomAgentDir() {
+    return withHandlerErrorHandling(
       this.ctx,
       'Failed to reset custom agent directory',
-      async () => {
-        await this.runtime.runPromise(
-          this.directoryController.resetCustomDir(),
-        );
-        await this.refreshAgentDirUI();
-      },
+      this.directoryController
+        .resetCustomDir()
+        .pipe(Effect.andThen(this.refreshAgentDirUI())),
     );
   }
 
   // ── Agent team handlers ──
 
-  async sendAgentModePresets(webview: vscode.Webview): Promise<void> {
-    await webview.postMessage(
+  sendAgentModePresets(webview: vscode.Webview) {
+    return postToWebview(
+      webview,
       buildAgentModePresetsMessage({
         getCustomPresets: () => this.catalogController.getCustomPresets(),
         getOrchestratorAgentNames: () =>
@@ -357,117 +375,102 @@ export class AgentHandlers {
     );
   }
 
-  async handleApplyAgentModePreset(
+  handleApplyAgentModePreset(
     data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.APPLY_AGENT_MODE_PRESET>,
-  ): Promise<void> {
-    await withHandlerErrorHandling(
+  ) {
+    return withHandlerErrorHandling(
       this.ctx,
       'Failed to apply agent team',
-      async () => {
-        await withAgentCatalogAuthRefreshDeferred(() =>
-          this.runtime.runPromise(
-            applySettingsTeamRoster(data.presetId, {
-              catalog: this.catalogController,
-              loadLocalCatalog: () => loadAgents({ includeRemote: false }),
-              canAccessRemoteCatalog: () => supabaseAuthenticated,
-              signIn: runSignInCommand,
-              forceRefreshRemoteCatalog: () =>
-                refreshAgents({ includeRemote: true }),
-              presentation: {
-                chooseTeamAvailability: (prompt) =>
-                  this.chooseTeamAvailability(prompt),
-                // Both notices ride detached fibers, as the voided toast and
-                // the forked error dialog did: the apply flow does not wait
-                // on a toast, and a dialog fault is logged rather than
-                // failing the apply that asked for the notice.
-                showInfoMessage: (message) =>
-                  this.forkInfoNotice(message, 'Team'),
-                showErrorMessage: (message) =>
-                  Effect.forkDetach(
-                    Effect.tryPromise({
-                      try: () => showLoggedMessage(this.ctx.channel, message),
-                      catch: (cause) =>
-                        new NotificationFailed({
-                          member: 'showErrorMessage',
-                          message: toErrorMessage(cause),
-                          cause,
-                        }),
-                    }).pipe(
-                      Effect.catchTag('NotificationFailed', (failure) =>
-                        Effect.sync(() => {
-                          this.ctx.log.warn(
-                            `Error notification failed after handoff: ${failure.message}`,
-                          );
-                        }),
-                      ),
-                    ),
-                  ).pipe(Effect.asVoid),
-              },
-              // The extension's refresh fan-out is still the settings view's
-              // promise-shaped webview transport, so it is lifted here rather
-              // than in the shared controller.
-              refreshAfterApply: (selectedToolUseAgent) =>
+      withAgentCatalogAuthRefreshDeferred(
+        applySettingsTeamRoster(data.presetId, {
+          catalog: this.catalogController,
+          loadLocalCatalog: () => loadAgents({ includeRemote: false }),
+          canAccessRemoteCatalog: () => supabaseAuthenticated,
+          signIn: runSignInCommand,
+          forceRefreshRemoteCatalog: () =>
+            refreshAgents({ includeRemote: true }),
+          presentation: {
+            chooseTeamAvailability: (prompt) =>
+              this.chooseTeamAvailability(prompt),
+            // Both notices ride detached fibers, as the voided toast and the
+            // forked error dialog did: the apply flow does not wait on a
+            // toast, and a dialog fault is logged rather than failing the
+            // apply that asked for the notice.
+            showInfoMessage: (message) => this.forkInfoNotice(message, 'Team'),
+            showErrorMessage: (message) =>
+              Effect.forkDetach(
                 Effect.tryPromise({
-                  try: () =>
-                    this.refreshAfterAgentMutation(selectedToolUseAgent, true),
-                  catch: (cause) => cause,
-                }),
-            }),
-          ),
-        );
-      },
+                  try: () => showLoggedMessage(this.ctx.channel, message),
+                  catch: (cause) =>
+                    new NotificationFailed({
+                      member: 'showErrorMessage',
+                      message: toErrorMessage(cause),
+                      cause,
+                    }),
+                }).pipe(
+                  Effect.catchTag('NotificationFailed', (failure) =>
+                    Effect.sync(() => {
+                      this.ctx.log.warn(
+                        `Error notification failed after handoff: ${failure.message}`,
+                      );
+                    }),
+                  ),
+                ),
+              ).pipe(Effect.asVoid),
+          },
+          refreshAfterApply: (selectedToolUseAgent) =>
+            this.refreshAfterAgentMutation(selectedToolUseAgent, true),
+        }),
+      ),
     );
   }
 
-  async handleSaveAgentModePreset(): Promise<void> {
-    await withHandlerErrorHandling(
+  handleSaveAgentModePreset() {
+    return withHandlerErrorHandling(
       this.ctx,
       'Failed to save agent team',
-      async () => {
-        const name = await vscode.window.showInputBox({
-          prompt: 'Name for the new team',
-          placeHolder: 'e.g. My Research Team',
-          validateInput: (v) => (v.trim() ? null : 'Name cannot be empty'),
-        });
+      Effect.gen({ self: this }, function* () {
+        const name = yield* Effect.promise(() =>
+          vscode.window.showInputBox({
+            prompt: 'Name for the new team',
+            placeHolder: 'e.g. My Research Team',
+            validateInput: (v) => (v.trim() ? null : 'Name cannot be empty'),
+          }),
+        );
         if (!name) return; // cancelled
 
-        await this.runtime.runPromise(loadAgents());
+        yield* loadAgents();
 
-        await this.runtime.runPromise(
-          this.catalogController.saveCurrentPreset(name),
-        );
+        yield* this.catalogController.saveCurrentPreset(name);
 
-        await this.refreshAfterAgentMutation(undefined, true);
+        yield* this.refreshAfterAgentMutation(undefined, true);
 
         void vscode.window.showInformationMessage(
           `Saved team "${name.trim()}"`,
         );
-      },
+      }),
     );
   }
 
-  async handleDeleteAgentModePreset(
+  handleDeleteAgentModePreset(
     data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.DELETE_AGENT_MODE_PRESET>,
-  ): Promise<void> {
-    await withHandlerErrorHandling(
+  ) {
+    return withHandlerErrorHandling(
       this.ctx,
       'Failed to delete agent team',
-      async () => {
+      Effect.gen({ self: this }, function* () {
         const target = this.catalogController.getCustomPreset(data.presetId);
         if (!target) return;
 
-        const confirmed = await confirmModal(
-          `Delete team "${target.name}"?`,
-          'Delete',
+        const confirmed = yield* Effect.promise(() =>
+          confirmModal(`Delete team "${target.name}"?`, 'Delete'),
         );
         if (!confirmed) return;
 
-        await this.runtime.runPromise(
-          this.catalogController.deleteCustomPreset(data.presetId),
-        );
+        yield* this.catalogController.deleteCustomPreset(data.presetId);
 
-        await this.refreshAfterAgentMutation(undefined, true);
-      },
+        yield* this.refreshAfterAgentMutation(undefined, true);
+      }),
     );
   }
 
@@ -494,28 +497,24 @@ export class AgentHandlers {
     return chooseTeamAvailabilityViaDialog(prompt, { modal: true });
   }
 
-  private async createAgentFromTemplate(
-    category: 'workflow' | 'toolUse',
-  ): Promise<void> {
-    await withHandlerErrorHandling(
+  private createAgentFromTemplate(category: 'workflow' | 'toolUse') {
+    return withHandlerErrorHandling(
       this.ctx,
       'Failed to create agent from template',
-      async () => {
-        const name = await vscode.window.showInputBox({
-          prompt: templateAgentNamePrompt(category),
-          placeHolder: 'my_agent',
-          validateInput: (value) =>
-            this.directoryController.validateTemplateName(value),
-        });
+      Effect.gen({ self: this }, function* () {
+        const name = yield* Effect.promise(() =>
+          vscode.window.showInputBox({
+            prompt: templateAgentNamePrompt(category),
+            placeHolder: 'my_agent',
+            validateInput: (value) =>
+              this.directoryController.validateTemplateName(value),
+          }),
+        );
         if (!name) return;
 
-        const customDir = await this.runtime.runPromise(
-          agentDirectories.custom(),
-        );
-        await this.runtime.runPromise(
-          Effect.flatMap(Effect.service(FileSystem.FileSystem), (fs) =>
-            fs.makeDirectory(customDir, { recursive: true }),
-          ),
+        const customDir = yield* agentDirectories.custom();
+        yield* Effect.flatMap(Effect.service(FileSystem.FileSystem), (fs) =>
+          fs.makeDirectory(customDir, { recursive: true }),
         );
 
         const templatePlan = this.directoryController.planTemplateAgent({
@@ -524,38 +523,53 @@ export class AgentHandlers {
           customDir,
         });
 
-        const written = await this.runtime.runPromise(
-          writeTemplateAgentFile(
-            templatePlan,
-            path.join(this.ctx.extensionContext.extensionPath, 'resources'),
-          ),
+        const written = yield* writeTemplateAgentFile(
+          templatePlan,
+          path.join(this.ctx.extensionContext.extensionPath, 'resources'),
         );
         if (!written.ok) {
-          await vscode.window.showWarningMessage(written.message);
+          yield* Effect.promise(() =>
+            vscode.window.showWarningMessage(written.message),
+          );
           return;
         }
 
-        const doc = await vscode.workspace.openTextDocument(
-          vscode.Uri.file(templatePlan.filePath),
-        );
-        await vscode.window.showTextDocument(doc);
-      },
+        yield* Effect.tryPromise({
+          try: async () => {
+            const doc = await vscode.workspace.openTextDocument(
+              vscode.Uri.file(templatePlan.filePath),
+            );
+            await vscode.window.showTextDocument(doc);
+          },
+          catch: ensureError,
+        });
+      }),
     );
   }
 
   /** Refresh agent dir + selection after a directory change. */
-  private async refreshAgentDirUI(): Promise<void> {
-    await agentDirectories.refreshAfterDirChange();
-    const { refreshCustomAgentRoot } = await import('@frontend/setup');
-    await this.runtime.runPromise(refreshCustomAgentRoot());
-    await Promise.all([
-      this.ctx.withActiveWebview(async (w) => {
-        await Promise.all([
-          this.sendCustomAgentDir(w),
-          this.sendAgentSelectionData(w),
-        ]);
-      }),
-      vscode.commands.executeCommand('texra.refreshAllOptions'),
-    ]);
+  private refreshAgentDirUI() {
+    return Effect.gen({ self: this }, function* () {
+      yield* Effect.tryPromise({
+        try: () => agentDirectories.refreshAfterDirChange(),
+        catch: ensureError,
+      });
+      const { refreshCustomAgentRoot } = yield* Effect.promise(
+        () => import('@frontend/setup'),
+      );
+      yield* refreshCustomAgentRoot();
+      yield* allSettledVoid([
+        this.ctx.withActiveWebview((w) =>
+          allSettledVoid([
+            this.sendCustomAgentDir(w),
+            this.sendAgentSelectionData(w),
+          ]),
+        ),
+        Effect.tryPromise({
+          try: () => vscode.commands.executeCommand('texra.refreshAllOptions'),
+          catch: ensureError,
+        }).pipe(Effect.asVoid),
+      ]);
+    });
   }
 }

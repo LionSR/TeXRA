@@ -583,12 +583,14 @@ async function activateExtension(context: vscode.ExtensionContext) {
         runtime.runPromise(authSignIn),
       ),
       vscode.commands.registerCommand('texra.auth.chatgpt.signIn', () =>
-        signInWithSubscription(roots, 'welcomeView', 'chatgpt', runtime),
+        runtime.runPromise(
+          signInWithSubscription(roots, 'welcomeView', 'chatgpt', runtime),
+        ),
       ),
       // No settings view exists before a folder is open, so there is no
       // credential surface to refresh after the key write.
       vscode.commands.registerCommand(EXTENSION_COMMANDS.SET_API_KEY, () =>
-        apiSetApiKey(roots, secrets, async () => {}, runtime),
+        apiSetApiKey(roots, secrets, () => Effect.void, runtime),
       ),
     );
     registerWalkthroughWorkspaceAction(context, false);
