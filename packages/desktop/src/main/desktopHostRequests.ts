@@ -284,21 +284,26 @@ export function createDesktopHostRequests(
         runtime.runFork(
           run.runValidated(request).pipe(
             Effect.catchCause((cause) =>
-              Effect.suspend(() => {
-                const error = Cause.squash(cause);
-                logger.error('Desktop merge run failed', {
-                  data: toLogData(error),
-                });
-                const primaryError = primaryAgentError(error);
-                return presentAgentFailure(
-                  session.interactions,
-                  {
-                    kind: classifyAgentError(primaryError),
-                    message: `Merge failed: ${toErrorMessage(primaryError)}`,
-                  },
-                  { replayWhenAttached: true },
-                );
-              }),
+              // A window torn down mid-merge interrupts this fiber; that is
+              // not a merge failure, so it is re-raised for the fork's own
+              // interrupts-only silence rather than presented.
+              Cause.hasInterruptsOnly(cause)
+                ? Effect.failCause(cause)
+                : Effect.suspend(() => {
+                    const error = Cause.squash(cause);
+                    logger.error('Desktop merge run failed', {
+                      data: toLogData(error),
+                    });
+                    const primaryError = primaryAgentError(error);
+                    return presentAgentFailure(
+                      session.interactions,
+                      {
+                        kind: classifyAgentError(primaryError),
+                        message: `Merge failed: ${toErrorMessage(primaryError)}`,
+                      },
+                      { replayWhenAttached: true },
+                    );
+                  }),
             ),
           ),
         );
