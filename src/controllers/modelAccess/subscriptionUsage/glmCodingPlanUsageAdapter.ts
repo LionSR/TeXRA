@@ -1,3 +1,5 @@
+import { Effect } from 'effect';
+
 import type { SubscriptionUsageWindow } from '@shared/schemas';
 
 import {
@@ -159,14 +161,14 @@ export function parseGlmCodingPlanUsage(
   };
 }
 
-export async function fetchGlmCodingPlanUsage(
+export function fetchGlmCodingPlanUsage(
   http: SubscriptionUsageHttp,
   apiKey: string,
   signal: AbortSignal,
   usageUrl = GLM_CODING_PLAN_USAGE_URL,
-): Promise<ParsedSubscriptionUsage> {
-  return parseGlmCodingPlanUsage(
-    await fetchSubscriptionUsage(http, {
+): Effect.Effect<ParsedSubscriptionUsage, unknown> {
+  return Effect.map(
+    fetchSubscriptionUsage(http, {
       url: usageUrl,
       headers: {
         Accept: 'application/json',
@@ -176,5 +178,6 @@ export async function fetchGlmCodingPlanUsage(
       },
       signal,
     }),
+    parseGlmCodingPlanUsage,
   );
 }

@@ -1,3 +1,5 @@
+import { Effect } from 'effect';
+
 import type { SubscriptionUsageWindow } from '@shared/schemas';
 
 import {
@@ -121,11 +123,11 @@ export function parseChatGptUsage(
   };
 }
 
-export async function fetchChatGptUsage(
+export function fetchChatGptUsage(
   http: SubscriptionUsageHttp,
   credential: ChatGptUsageCredential,
   signal: AbortSignal,
-): Promise<ParsedSubscriptionUsage> {
+): Effect.Effect<ParsedSubscriptionUsage, unknown> {
   const headers: Record<string, string> = {
     Accept: 'application/json',
     Authorization: `Bearer ${credential.accessToken}`,
@@ -134,11 +136,8 @@ export async function fetchChatGptUsage(
   if (credential.accountId) {
     headers['ChatGPT-Account-Id'] = credential.accountId;
   }
-  return parseChatGptUsage(
-    await fetchSubscriptionUsage(http, {
-      url: CHATGPT_USAGE_URL,
-      headers,
-      signal,
-    }),
+  return Effect.map(
+    fetchSubscriptionUsage(http, { url: CHATGPT_USAGE_URL, headers, signal }),
+    (body) => parseChatGptUsage(body),
   );
 }

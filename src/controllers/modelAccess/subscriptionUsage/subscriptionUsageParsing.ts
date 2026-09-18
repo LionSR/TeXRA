@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import { z } from 'zod';
 
 import type { SubscriptionUsageWindow } from '@shared/schemas';
@@ -22,26 +23,41 @@ export class SubscriptionUsageHttpError extends Error {
 }
 
 /**
- * The one subscription-usage request every provider adapter makes. Only the
- * URL and headers differ per provider, so the GET, the abort wiring, and the
- * non-OK status assertion live here; the decoded body goes back to the
- * adapter's own `parseX`.
+ * The one subscription-usage request every provider adapter makes, and the
+ * stack's only foreign edge: the injected `SubscriptionUsageHttp` is the
+ * platform `fetch`, adapted here rather than by a caller. Only the URL and
+ * headers differ per provider, so the GET, the abort wiring, and the non-OK
+ * status assertion live here; the decoded body goes back to the adapter's own
+ * `parseX`. The failure channel stays `unknown` so the transport's own
+ * rejection travels unwrapped into the service's classification of it
+ * (`SyntaxError` -> malformed body, `SubscriptionUsageHttpError` -> refused).
  */
-export async function fetchSubscriptionUsage(
+export function fetchSubscriptionUsage(
   http: SubscriptionUsageHttp,
   request: {
     readonly url: string;
     readonly headers: Record<string, string>;
     readonly signal: AbortSignal;
   },
-): Promise<unknown> {
-  const response = await http(request.url, {
-    method: 'GET',
-    headers: request.headers,
-    signal: request.signal,
-  });
-  if (!response.ok) throw new SubscriptionUsageHttpError(response.status);
-  return response.json();
+): Effect.Effect<unknown, unknown> {
+  return Effect.tryPromise({
+    try: () =>
+      http(request.url, {
+        method: 'GET',
+        headers: request.headers,
+        signal: request.signal,
+      }),
+    catch: (cause) => cause,
+  }).pipe(
+    Effect.flatMap((response) =>
+      response.ok
+        ? Effect.tryPromise({
+            try: () => response.json(),
+            catch: (cause) => cause,
+          })
+        : Effect.fail(new SubscriptionUsageHttpError(response.status)),
+    ),
+  );
 }
 
 export function asObject(value: unknown): JsonObject | undefined {

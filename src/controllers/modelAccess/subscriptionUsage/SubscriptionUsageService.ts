@@ -203,13 +203,9 @@ export class SubscriptionUsageService {
   private createAdapters(): Readonly<
     Record<SubscriptionUsageProvider, SubscriptionUsageAdapter>
   > {
-    // The one Promise edge left in the service: `SubscriptionUsageHttp` is
-    // the platform `fetch`, so each transport call is adapted where it is
-    // made, and the provider's own rejection reaches the fold below unchanged.
-    const transport = (
-      call: () => Promise<ParsedSubscriptionUsage>,
-    ): Effect.Effect<ParsedSubscriptionUsage, unknown> =>
-      Effect.tryPromise({ try: call, catch: (cause) => cause });
+    // Each adapter fetch is already a program: `SubscriptionUsageHttp` is the
+    // platform `fetch` and is adapted inside the request that makes it, so the
+    // provider's own rejection reaches the fold below unchanged.
     const signal = (): AbortSignal =>
       AbortSignal.timeout(this.requestTimeoutMs);
     return Object.freeze({
@@ -217,9 +213,7 @@ export class SubscriptionUsageService {
         fetch: () =>
           Effect.flatMap(this.credentials.loadChatGpt(), (credential) =>
             credential
-              ? transport(() =>
-                  fetchChatGptUsage(this.http, credential, signal()),
-                )
+              ? fetchChatGptUsage(this.http, credential, signal())
               : Effect.succeed(null),
           ),
       },
@@ -227,7 +221,7 @@ export class SubscriptionUsageService {
         fetch: () =>
           Effect.flatMap(this.credentials.loadApiKey('kimiCode'), (apiKey) =>
             apiKey
-              ? transport(() => fetchKimiCodeUsage(this.http, apiKey, signal()))
+              ? fetchKimiCodeUsage(this.http, apiKey, signal())
               : Effect.succeed(null),
           ),
       },
@@ -237,15 +231,13 @@ export class SubscriptionUsageService {
         fetch: (useChina) =>
           Effect.flatMap(this.credentials.loadApiKey('glm'), (apiKey) =>
             apiKey
-              ? transport(() =>
-                  fetchGlmCodingPlanUsage(
-                    this.http,
-                    apiKey,
-                    signal(),
-                    (useChina ?? true)
-                      ? GLM_CODING_PLAN_USAGE_URL
-                      : GLM_CODING_PLAN_INTERNATIONAL_USAGE_URL,
-                  ),
+              ? fetchGlmCodingPlanUsage(
+                  this.http,
+                  apiKey,
+                  signal(),
+                  (useChina ?? true)
+                    ? GLM_CODING_PLAN_USAGE_URL
+                    : GLM_CODING_PLAN_INTERNATIONAL_USAGE_URL,
                 )
               : Effect.succeed(null),
           ),

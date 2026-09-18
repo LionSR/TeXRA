@@ -1,3 +1,5 @@
+import { Effect } from 'effect';
+
 import type { SubscriptionUsageWindow } from '@shared/schemas';
 
 import {
@@ -79,13 +81,13 @@ export function parseKimiCodeUsage(body: unknown): ParsedSubscriptionUsage {
   };
 }
 
-export async function fetchKimiCodeUsage(
+export function fetchKimiCodeUsage(
   http: SubscriptionUsageHttp,
   apiKey: string,
   signal: AbortSignal,
-): Promise<ParsedSubscriptionUsage> {
-  return parseKimiCodeUsage(
-    await fetchSubscriptionUsage(http, {
+): Effect.Effect<ParsedSubscriptionUsage, unknown> {
+  return Effect.map(
+    fetchSubscriptionUsage(http, {
       url: KIMI_CODE_USAGE_URL,
       headers: {
         Accept: 'application/json',
@@ -93,5 +95,6 @@ export async function fetchKimiCodeUsage(
       },
       signal,
     }),
+    parseKimiCodeUsage,
   );
 }
