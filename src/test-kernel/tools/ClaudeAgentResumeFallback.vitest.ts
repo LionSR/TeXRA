@@ -202,23 +202,22 @@ describe('claude_agent tool launch and resume fallback', () => {
         throw failure;
       });
 
-      yield* Effect.promise(() =>
-        expect(
-          runStreamedTurn({
-            prompt: 'start Claude',
-            logger: createFakeAgentCliChildRun(childRunId).logger,
-            signal,
-            model: 'claude-sonnet-4-6',
-            permissionMode: 'acceptEdits',
-            effort: 'high',
-            cwd: undefined,
-            additionalDirectories: undefined,
-            env: {},
-            resumeSessionId: undefined,
-            pathToClaudeCodeExecutable: undefined,
-          }),
-        ).rejects.toBe(failure),
+      const caught = yield* Effect.flip(
+        runStreamedTurn({
+          prompt: 'start Claude',
+          logger: createFakeAgentCliChildRun(childRunId).logger,
+          signal,
+          model: 'claude-sonnet-4-6',
+          permissionMode: 'acceptEdits',
+          effort: 'high',
+          cwd: undefined,
+          additionalDirectories: undefined,
+          env: {},
+          resumeSessionId: undefined,
+          pathToClaudeCodeExecutable: undefined,
+        }),
       );
+      expect(caught).toBe(failure);
 
       expect(removeEventListener).toHaveBeenCalledWith(
         'abort',

@@ -62,7 +62,7 @@ import {
   isNonEmptyString,
   previewLabel,
 } from '@utils/text/stringUtils';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
 import { defineTool } from './core/define';
@@ -102,12 +102,11 @@ import type {
   SDKUserMessage,
 } from '@anthropic-ai/claude-agent-sdk';
 
+/** Lazy accessor for claudeAgentConfig.ts exports (loaded once, cached). */
 let _configModule: typeof import('./claudeAgentConfig.js') | null = null;
-async function getClaudeAgentConfig(): Promise<
-  typeof import('./claudeAgentConfig.js')
-> {
-  return (_configModule ??= await import('./claudeAgentConfig.js'));
-}
+const getClaudeAgentConfig = Effect.promise(
+  async () => (_configModule ??= await import('./claudeAgentConfig.js')),
+);
 
 // ============================================================================
 // Schema
@@ -187,7 +186,7 @@ type ClaudeToolLogRef = ToolUseCardRef & {
 // TurnResult for follow-up delivery.
 // ============================================================================
 
-export async function runStreamedTurn(params: {
+export function runStreamedTurn(params: {
   prompt: string;
   logger: AgentTrace;
   signal: AbortSignal;
@@ -200,123 +199,132 @@ export async function runStreamedTurn(params: {
   resumeSessionId: string | undefined;
   forkSession?: boolean;
   pathToClaudeCodeExecutable: string | undefined;
-}): Promise<TurnResult> {
-  const { logger, prompt } = params;
-  logger.info(prompt, { messageType: MESSAGE_TYPES.USER_MESSAGE });
+}): Effect.Effect<TurnResult, Error> {
+  // Loading the SDK and draining `query()` is this module's foreign edge:
+  // the whole drain is wrapped here exactly once, and the abort link that
+  // follows the turn's signal lives inside it.
+  return Effect.tryPromise({
+    try: async (): Promise<TurnResult> => {
+      const { logger, prompt } = params;
+      logger.info(prompt, { messageType: MESSAGE_TYPES.USER_MESSAGE });
 
-  const query = await importClaudeAgentSdk();
+      const query = await importClaudeAgentSdk();
 
-  // The SDK takes a controller, not a signal: this one exists only at that
-  // boundary and follows the turn's signal until the stream is drained.
-  const abortController = new AbortController();
-  const detachAbort = linkAbortSignals([params.signal], abortController);
-  const sdkOptions: ClaudeAgentSdkOptions = {
-    abortController,
-    model: params.model,
-    permissionMode: params.permissionMode,
-    effort: params.effort,
-    env: params.env,
-    systemPrompt: { type: 'preset', preset: 'claude_code' },
-    settingSources: ['user', 'project', 'local'],
-  };
-  if (modelSupportsAdaptiveThinking(params.model)) {
-    sdkOptions.thinking = { type: 'adaptive' };
-  }
-  if (params.permissionMode === 'bypassPermissions') {
-    sdkOptions.allowDangerouslySkipPermissions = true;
-  }
-  if (params.cwd) sdkOptions.cwd = params.cwd;
-  if (params.additionalDirectories?.length) {
-    sdkOptions.additionalDirectories = params.additionalDirectories;
-  }
-  if (params.resumeSessionId) sdkOptions.resume = params.resumeSessionId;
-  if (params.forkSession) sdkOptions.forkSession = true;
-  if (params.pathToClaudeCodeExecutable) {
-    sdkOptions.pathToClaudeCodeExecutable = params.pathToClaudeCodeExecutable;
-  }
-
-  const responseParts: string[] = [];
-  const toolLogRefs = new Map<string, ClaudeToolLogRef>();
-  const backgroundTasks = new ClaudeBackgroundTaskTracker(logger);
-  let usage: TurnResult['usage'] = null;
-  let sessionId: string | undefined;
-  let totalCostUsd: number | undefined;
-  let isError = false;
-  let errorMessage: string | undefined;
-
-  try {
-    const stream = query({ prompt, options: sdkOptions });
-    for await (const raw of stream) {
-      if ('session_id' in raw && raw.session_id) sessionId = raw.session_id;
-
-      switch (raw.type) {
-        case 'assistant':
-          handleAssistantBlocks(
-            raw.message.content,
-            logger,
-            toolLogRefs,
-            responseParts,
-          );
-          break;
-        case 'user':
-          if (Array.isArray(raw.message.content)) {
-            handleToolResults(raw.message.content, logger, toolLogRefs);
-          }
-          break;
-        case 'result':
-          usage =
-            raw.modelUsage == null
-              ? (raw.usage ?? null)
-              : aggregateClaudeModelUsage(raw.modelUsage);
-          totalCostUsd = raw.total_cost_usd;
-          if (raw.subtype === 'success') {
-            if (isNonEmptyString(raw.result)) {
-              responseParts.push(raw.result);
-            }
-          } else {
-            isError = true;
-            errorMessage =
-              raw.errors?.join('\n') || raw.subtype || 'Claude Code error';
-          }
-          break;
-        case 'system':
-          switch (raw.subtype) {
-            case 'init':
-              logger.info(`Claude session ${raw.session_id} started`);
-              break;
-            case 'background_tasks_changed':
-              backgroundTasks.replace(raw.tasks);
-              break;
-          }
-          break;
+      // The SDK takes a controller, not a signal: this one exists only at that
+      // boundary and follows the turn's signal until the stream is drained.
+      const abortController = new AbortController();
+      const detachAbort = linkAbortSignals([params.signal], abortController);
+      const sdkOptions: ClaudeAgentSdkOptions = {
+        abortController,
+        model: params.model,
+        permissionMode: params.permissionMode,
+        effort: params.effort,
+        env: params.env,
+        systemPrompt: { type: 'preset', preset: 'claude_code' },
+        settingSources: ['user', 'project', 'local'],
+      };
+      if (modelSupportsAdaptiveThinking(params.model)) {
+        sdkOptions.thinking = { type: 'adaptive' };
       }
-    }
-  } finally {
-    detachAbort();
-    backgroundTasks.finish();
-  }
+      if (params.permissionMode === 'bypassPermissions') {
+        sdkOptions.allowDangerouslySkipPermissions = true;
+      }
+      if (params.cwd) sdkOptions.cwd = params.cwd;
+      if (params.additionalDirectories?.length) {
+        sdkOptions.additionalDirectories = params.additionalDirectories;
+      }
+      if (params.resumeSessionId) sdkOptions.resume = params.resumeSessionId;
+      if (params.forkSession) sdkOptions.forkSession = true;
+      if (params.pathToClaudeCodeExecutable) {
+        sdkOptions.pathToClaudeCodeExecutable =
+          params.pathToClaudeCodeExecutable;
+      }
 
-  if (
-    params.forkSession &&
-    (!sessionId || sessionId === params.resumeSessionId)
-  ) {
-    isError = true;
-    errorMessage = [
-      errorMessage,
-      'Claude Code fork did not create a distinct session',
-    ]
-      .filter(isNonEmptyString)
-      .join('\n');
-  }
+      const responseParts: string[] = [];
+      const toolLogRefs = new Map<string, ClaudeToolLogRef>();
+      const backgroundTasks = new ClaudeBackgroundTaskTracker(logger);
+      let usage: TurnResult['usage'] = null;
+      let sessionId: string | undefined;
+      let totalCostUsd: number | undefined;
+      let isError = false;
+      let errorMessage: string | undefined;
 
-  return {
-    finalResponse: responseParts.join('\n\n'),
-    usage,
-    sessionId,
-    totalCostUsd,
-    isError,
-    errorMessage,
-  };
+      try {
+        const stream = query({ prompt, options: sdkOptions });
+        for await (const raw of stream) {
+          if ('session_id' in raw && raw.session_id) sessionId = raw.session_id;
+
+          switch (raw.type) {
+            case 'assistant':
+              handleAssistantBlocks(
+                raw.message.content,
+                logger,
+                toolLogRefs,
+                responseParts,
+              );
+              break;
+            case 'user':
+              if (Array.isArray(raw.message.content)) {
+                handleToolResults(raw.message.content, logger, toolLogRefs);
+              }
+              break;
+            case 'result':
+              usage =
+                raw.modelUsage == null
+                  ? (raw.usage ?? null)
+                  : aggregateClaudeModelUsage(raw.modelUsage);
+              totalCostUsd = raw.total_cost_usd;
+              if (raw.subtype === 'success') {
+                if (isNonEmptyString(raw.result)) {
+                  responseParts.push(raw.result);
+                }
+              } else {
+                isError = true;
+                errorMessage =
+                  raw.errors?.join('\n') || raw.subtype || 'Claude Code error';
+              }
+              break;
+            case 'system':
+              switch (raw.subtype) {
+                case 'init':
+                  logger.info(`Claude session ${raw.session_id} started`);
+                  break;
+                case 'background_tasks_changed':
+                  backgroundTasks.replace(raw.tasks);
+                  break;
+              }
+              break;
+          }
+        }
+      } finally {
+        detachAbort();
+        backgroundTasks.finish();
+      }
+
+      if (
+        params.forkSession &&
+        (!sessionId || sessionId === params.resumeSessionId)
+      ) {
+        isError = true;
+        errorMessage = [
+          errorMessage,
+          'Claude Code fork did not create a distinct session',
+        ]
+          .filter(isNonEmptyString)
+          .join('\n');
+      }
+
+      return {
+        finalResponse: responseParts.join('\n\n'),
+        usage,
+        sessionId,
+        totalCostUsd,
+        isError,
+        errorMessage,
+      };
+    },
+    catch: ensureError,
+  });
 }
 
 function handleAssistantBlocks(
@@ -449,30 +457,34 @@ function startClaudeAgentLoop(params: {
     initialPrompt,
     store: claudeAgentSessionsFor,
     releaseFallbackClaim: params.releaseFallbackClaim,
-    runProviderTurn: async (prompt, _ports, signal) => {
-      const forkSession = isFirstTurn && params.forkSession;
-      const turn = await runStreamedTurn({
-        prompt,
-        logger,
-        signal,
-        model: params.model,
-        permissionMode: params.permissionMode,
-        effort: params.effort,
-        cwd: params.cwd,
-        additionalDirectories: params.additionalDirectories,
-        env: params.env,
-        resumeSessionId,
-        forkSession,
-        pathToClaudeCodeExecutable: params.pathToClaudeCodeExecutable,
-      });
-      isFirstTurn = false;
-      if (forkSession && turn.isError) {
-        resumeSessionId = undefined;
-      } else if (turn.sessionId) {
-        resumeSessionId = turn.sessionId;
-      }
-      return turn;
-    },
+    runProviderTurn: (prompt, _ports, signal) =>
+      Effect.suspend(() => {
+        const forkSession = isFirstTurn && params.forkSession;
+        return runStreamedTurn({
+          prompt,
+          logger,
+          signal,
+          model: params.model,
+          permissionMode: params.permissionMode,
+          effort: params.effort,
+          cwd: params.cwd,
+          additionalDirectories: params.additionalDirectories,
+          env: params.env,
+          resumeSessionId,
+          forkSession,
+          pathToClaudeCodeExecutable: params.pathToClaudeCodeExecutable,
+        }).pipe(
+          Effect.map((turn) => {
+            isFirstTurn = false;
+            if (forkSession && turn.isError) {
+              resumeSessionId = undefined;
+            } else if (turn.sessionId) {
+              resumeSessionId = turn.sessionId;
+            }
+            return turn;
+          }),
+        );
+      }),
     resolveSessionIds: (turn) => [fallbackSessionId, turn.sessionId],
     getUsage: (turn) => turn.usage,
     buildUsageStats: (turn) =>
@@ -567,7 +579,7 @@ export class ClaudeAgentTool extends defineTool({
     AgentCliToolFailure,
     Secrets | ToolCall | Runs | AgentResume
   > {
-    const config = yield* agentCliCall(getClaudeAgentConfig);
+    const config = yield* getClaudeAgentConfig;
     const { workspaceState } = toolCall.roots;
     const permissionMode =
       input.permission_mode ??
@@ -626,7 +638,7 @@ const launchClaudeAgentSession = Effect.fn(
   AgentCliToolFailure,
   Secrets | ToolCall | Runs | AgentResume
 > {
-  const config = yield* agentCliCall(getClaudeAgentConfig);
+  const config = yield* getClaudeAgentConfig;
   const { roots } = yield* ToolCall;
   const workingDir = parseWorkingDirectory(parentWorkingDirectory);
   // Mirrors codex behavior so subagents can see the project: when the call

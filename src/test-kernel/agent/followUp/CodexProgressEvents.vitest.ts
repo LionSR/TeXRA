@@ -1,4 +1,5 @@
 // Third-party imports
+import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
 
 // Local imports
@@ -85,7 +86,7 @@ describe('codex progress events', () => {
       turnCompleted(1, 1),
     ]);
 
-    await runStreamedTurn(thread, 'Do the thing', runId, logger);
+    await Effect.runPromise(runStreamedTurn(thread, 'Do the thing', logger));
 
     expect(traceEventsOfType(recorded.events, 'updateTodos')).toMatchObject([
       {
@@ -134,11 +135,8 @@ describe('codex progress events', () => {
       turnCompleted(12, 4),
     ]);
 
-    const result = await runStreamedTurn(
-      thread,
-      'Build the project',
-      runId,
-      logger,
+    const result = await Effect.runPromise(
+      runStreamedTurn(thread, 'Build the project', logger),
     );
 
     expect(result.finalResponse).toBe('Build succeeded.');
@@ -167,7 +165,9 @@ describe('codex progress events', () => {
       turnCompleted(5, 2),
     ]);
 
-    const result = await runStreamedTurn(thread, 'Do the thing', runId, logger);
+    const result = await Effect.runPromise(
+      runStreamedTurn(thread, 'Do the thing', logger),
+    );
 
     expect(result.finalResponse).toBe('Done.');
 
@@ -203,7 +203,7 @@ describe('codex progress events', () => {
     ]);
 
     await expect(
-      runStreamedTurn(thread, 'Do the thing', runId, logger),
+      Effect.runPromise(runStreamedTurn(thread, 'Do the thing', logger)),
     ).rejects.toThrow('boom');
 
     const turnEntry = findTurnEntry(store);
@@ -220,7 +220,7 @@ describe('codex progress events', () => {
     // No turn.completed / turn.failed — the loop exits with the card open.
     const thread = threadOf([{ type: 'turn.started' }]);
 
-    await runStreamedTurn(thread, 'Do the thing', runId, logger);
+    await Effect.runPromise(runStreamedTurn(thread, 'Do the thing', logger));
 
     const turnEntry = findTurnEntry(store);
     // Even without an error message the card is failed so the progress view

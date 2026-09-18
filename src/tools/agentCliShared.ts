@@ -512,12 +512,15 @@ interface AgentCliLoopParams<TTurn> {
    * loop starts, if any. Release it if the loop exits before promoting it.
    */
   releaseFallbackClaim: (() => void) | undefined;
-  /** Provider-specific single-turn run, given the joined follow-up prompt. */
+  /** Provider-specific single-turn run, given the joined follow-up prompt. The
+   * implementer wraps its own foreign edge (the provider SDK's streamed turn)
+   * once, so the loop composes the turn instead of lifting it. `signal` is the
+   * child run's interrupt controller, which each provider hands to its SDK. */
   runProviderTurn: (
     prompt: string,
     ports: ChildRunPorts,
     signal: AbortSignal,
-  ) => Promise<TTurn>;
+  ) => Effect.Effect<TTurn, Error>;
   /**
    * Session/thread ids to register as active after a successful turn. Falsy
    * entries (not-yet-known ids) are skipped.
@@ -601,12 +604,9 @@ export function startAgentCliLoop<TTurn>(
       ports: ChildRunPorts,
       signal: AbortSignal,
     ): Effect.Effect<TTurn, Error> =>
-      Effect.tryPromise({
-        try: () => {
-          lastPrompt = followUps.map((f) => f.text).join('\n\n');
-          return runProviderTurn(lastPrompt, ports, signal);
-        },
-        catch: ensureError,
+      Effect.suspend(() => {
+        lastPrompt = followUps.map((f) => f.text).join('\n\n');
+        return runProviderTurn(lastPrompt, ports, signal);
       });
 
     const strategy: ChildRunStrategy<TTurn> = {
