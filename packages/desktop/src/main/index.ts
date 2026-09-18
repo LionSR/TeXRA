@@ -669,7 +669,7 @@ function createWindow(options: {
       catch: (cause) =>
         new NotificationFailed({
           member: 'showErrorMessage',
-          message: toErrorMessage(cause),
+          message: `A desktop error dialog could not be shown: ${toErrorMessage(cause)}`,
           cause,
         }),
     }).pipe(
@@ -709,7 +709,7 @@ function createWindow(options: {
       catch: (cause) =>
         new NotificationFailed({
           member: 'showInfoMessage',
-          message: toErrorMessage(cause),
+          message: `The instruction dialog could not be shown: ${toErrorMessage(cause)}`,
           cause,
         }),
     }).pipe(

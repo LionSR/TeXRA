@@ -110,9 +110,12 @@ export function createDesktopAgentRun(
 
   /**
    * Each arm answers with the program that presents its notice; the session
-   * forks it and reports a failure, so nothing here settles a dialog on a
-   * fiber of its own. The desktop dialog await rejects when its window is
-   * torn down beneath it, which is that reported failure.
+   * forks it, so nothing here settles a dialog on a fiber of its own. Where
+   * the failure is reported depends on the arm: the two dialog members
+   * report their own (a dialog rejects when its window is torn down beneath
+   * it, and the host binds them through `awaitOrReport`), so the programs
+   * they hand back cannot fail; `openPath` fails in its own channel and the
+   * session's fork warn-logs it.
    */
   const presentationEventHandlers: PresentationEventHandlers<
     RuntimePresentationEventPayloads,
