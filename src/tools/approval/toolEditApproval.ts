@@ -1,10 +1,11 @@
 import * as nodePath from 'node:path';
 
-import { Effect, FileSystem } from 'effect';
+import { Cause, Effect, FileSystem } from 'effect';
 
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { ToolCall } from '@agent/runtime/ToolCall';
 import { isLatexFile } from '@common/files/fileTypeUtils';
+import { createLog } from '@logger/logUtils';
 import { WorkspaceFs } from '@platform/rootedFs';
 import {
   decideTexraApproval,
@@ -34,6 +35,8 @@ import {
   isNonEmptyString,
   normalizeLineEndings,
 } from '@utils/text/stringUtils';
+
+const logger = createLog('ToolEditApproval');
 
 /**
  * Tool-edit approval request / result shapes.
@@ -280,9 +283,22 @@ export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
             runId,
             { kind: 'toolEdit', data: permission },
             {
-              onNeverCommitted: Effect.promise(() =>
-                call.inScope(releaseStaged),
-              ),
+              // The host's own cleanup program, composed into the open:
+              // this call waits for it, and a host that fails to release
+              // says so here rather than through the refusal this tool
+              // reports, so cleanup never masks the caller's outcome.
+              onNeverCommitted: releaseStaged
+                ? releaseStaged.pipe(
+                    Effect.catchCause((cause) =>
+                      Effect.sync(() => {
+                        logger.warn(
+                          `Failed to release the tool-edit preview staged for request ${permission.requestId}`,
+                          { data: Cause.squash(cause) },
+                        );
+                      }),
+                    ),
+                  )
+                : Effect.void,
             },
           )
           .pipe(

@@ -350,9 +350,7 @@ export function createTuiHostInteractions(
     // `forgetSettledRequests` only drops a presentation whose request the
     // fold listed at least once, so a request whose `request.opened` never
     // committed is released by id here.
-    releaseToolEdit(requestId) {
-      dropPresentation(requestId);
-    },
+    releaseToolEdit: dropPresentation,
     dispose() {
       disposed = true;
       unsubscribe();

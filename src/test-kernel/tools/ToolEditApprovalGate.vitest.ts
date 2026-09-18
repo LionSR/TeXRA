@@ -77,9 +77,10 @@ async function installPlatform(
     presentToolEdit: (request) => {
       approvalRequests.push(request);
     },
-    releaseToolEdit: (requestId) => {
-      releasedPreviews.push(requestId);
-    },
+    releaseToolEdit: (requestId) =>
+      Effect.sync(() => {
+        releasedPreviews.push(requestId);
+      }),
   });
 }
 

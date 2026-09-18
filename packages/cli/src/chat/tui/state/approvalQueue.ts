@@ -348,15 +348,18 @@ export function stagePresentation(payload: ApprovalPayload): void {
  * Drop what one request staged, by id. {@link forgetSettledRequests} reads
  * the fold, so it never drops a presentation whose request the fold never
  * listed; a request whose `request.opened` did not commit is released
- * through here instead.
+ * through here instead. An `Effect`, because that release is the TUI half of
+ * the `releaseToolEdit` port: the session composes it and runs it itself.
  */
-export function dropPresentation(requestId: string): void {
-  const staged = stagedPresentations.get();
-  if (!staged.has(requestId)) return;
-  const remaining = new Map(staged);
-  remaining.delete(requestId);
-  stagedPresentations.set(remaining);
-  stagedSeenListed.delete(requestId);
+export function dropPresentation(requestId: string): Effect.Effect<void> {
+  return Effect.sync(() => {
+    const staged = stagedPresentations.get();
+    if (!staged.has(requestId)) return;
+    const remaining = new Map(staged);
+    remaining.delete(requestId);
+    stagedPresentations.set(remaining);
+    stagedSeenListed.delete(requestId);
+  });
 }
 
 /**

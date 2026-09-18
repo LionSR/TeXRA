@@ -211,12 +211,15 @@ export function createDesktopAgentRun(
       );
     },
     // An open that never committed leaves the staged preview with no
-    // decision to release it; this is that release, returned rather than
-    // dropped so the session waits for the diff view and the temp files
-    // behind it to go. This is the one run of a controller program the
-    // session itself waits on.
+    // decision to release it; this is that release, composed rather than
+    // run so the session's own fiber waits for the diff view and the temp
+    // files behind it to go. The controller's programs take this window's
+    // services from the runtime's context, which the session that composes
+    // them does not carry.
     releaseToolEdit: (requestId) =>
-      runtime.runPromise(toolEditApprovals.release(requestId)),
+      Effect.flatMap(runtime.contextEffect, (context) =>
+        Effect.provideContext(toolEditApprovals.release(requestId), context),
+      ),
   });
 
   /**

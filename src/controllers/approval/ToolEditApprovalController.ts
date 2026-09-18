@@ -328,28 +328,6 @@ export class ToolEditApprovalController {
     });
   }
 
-  /** Approve requests already awaiting the user on one run. */
-  approvePendingForRun(runId: RunId): Effect.Effect<void, never, PreviewFs> {
-    return Effect.suspend(() => {
-      const decisions: Array<Effect.Effect<void, never, PreviewFs>> = [];
-      for (const state of this.requests.values()) {
-        if (state.request.runId !== runId) continue;
-        decisions.push(
-          state.phase === 'initializing'
-            ? this.decideFromPayload(state, {
-                action: 'approve',
-                content: state.request.proposedContent,
-              })
-            : this.admit(state, () => this.approve(state)),
-        );
-      }
-      return Effect.forEach(decisions, (decision) => decision, {
-        concurrency: 'unbounded',
-        discard: true,
-      });
-    });
-  }
-
   /** Drop every staged preview. The requests stay pending in the fold: the
    *  runs that opened them close them with the fibers waiting on them. */
   dispose(): Effect.Effect<void, never, PreviewFs> {
