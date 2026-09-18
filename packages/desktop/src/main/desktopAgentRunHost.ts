@@ -1,5 +1,6 @@
 import type { MainViewRunLaunchHost } from '@controllers/mainView/backend/MainViewRunLaunchController';
 import type { TranscriptExportFormat } from '@controllers/progressView/exportTranscript';
+import type { TranscriptExportFailed } from '@controllers/progressView/transcriptExportFailure';
 import type { DiffViewHost, MessageHost } from '@hosts/uiHosts';
 import type { InstructionAction } from '@shared/schemas';
 import type { BuildDisplayFn } from '@tools/approval/latexPreview';
@@ -26,7 +27,12 @@ export interface DesktopAgentRunHost
    * native form of the link the extension's request-error callout renders.
    */
   showErrorDialog(message: string, docsCommand?: string): Promise<void>;
-  pickTranscriptExportFormat(): Promise<TranscriptExportFormat | undefined>;
+  /** The export's format dialog. The Electron dialog behind it is a
+   *  promise, lifted once there; a cancelled dialog answers `undefined`. */
+  pickTranscriptExportFormat(): Effect.Effect<
+    TranscriptExportFormat | undefined,
+    TranscriptExportFailed
+  >;
   /** `line` is carried for the hosts that can reveal one; the desktop hands
    *  the path to the OS. */
   openPath(

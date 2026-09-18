@@ -33,6 +33,7 @@ import {
   teamAvailabilityPrompt,
   type TeamAvailabilityPrompt,
 } from '@common/teams/TeamPlan';
+import { TranscriptExportFailed } from '@controllers/progressView/transcriptExportFailure';
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
 import { SubscriptionUsageService } from '@controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
 import {
@@ -883,22 +884,31 @@ function createWindow(options: {
         ),
       ),
     showInstructionDialog,
-    pickTranscriptExportFormat: async () => {
-      const { TRANSCRIPT_EXPORT_FORMAT_CHOICES } =
-        await import('@controllers/progressView/exportTranscript');
-      const { response } = await dialog.showMessageBox(window, {
-        type: 'question',
-        message: 'Export transcript',
-        detail: 'Choose a format',
-        buttons: [
-          ...TRANSCRIPT_EXPORT_FORMAT_CHOICES.map((choice) => choice.label),
-          'Cancel',
-        ],
-        defaultId: 0,
-        cancelId: TRANSCRIPT_EXPORT_FORMAT_CHOICES.length,
-      });
-      return TRANSCRIPT_EXPORT_FORMAT_CHOICES[response]?.format;
-    },
+    pickTranscriptExportFormat: () =>
+      Effect.tryPromise({
+        try: async () => {
+          const { TRANSCRIPT_EXPORT_FORMAT_CHOICES } =
+            await import('@controllers/progressView/exportTranscript');
+          const { response } = await dialog.showMessageBox(window, {
+            type: 'question',
+            message: 'Export transcript',
+            detail: 'Choose a format',
+            buttons: [
+              ...TRANSCRIPT_EXPORT_FORMAT_CHOICES.map((choice) => choice.label),
+              'Cancel',
+            ],
+            defaultId: 0,
+            cancelId: TRANSCRIPT_EXPORT_FORMAT_CHOICES.length,
+          });
+          return TRANSCRIPT_EXPORT_FORMAT_CHOICES[response]?.format;
+        },
+        catch: (cause) =>
+          new TranscriptExportFailed({
+            step: 'pickFormat',
+            message: toErrorMessage(cause),
+            cause,
+          }),
+      }),
   };
   const openFileDialog = async (dialogOptions: {
     title: string;
