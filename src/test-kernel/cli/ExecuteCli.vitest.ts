@@ -1040,9 +1040,8 @@ describe('executeCliRequest', () => {
         leaseOptions.onRunLeaseAcquired?.('exec-1' as RunId);
         leaseOptions.onRun?.();
         yield* settle;
-        yield* Effect.promise(async () =>
-          leaseOptions.openWorkflowOutput?.(COMPLETED_WORKFLOW_RUN, []),
-        );
+        yield* leaseOptions.openWorkflowOutput?.(COMPLETED_WORKFLOW_RUN, []) ??
+          Effect.void;
         mockCancelledOutcome();
         hangingRun.resolve(COMPLETED_WORKFLOW_RUN);
 
@@ -1090,9 +1089,8 @@ describe('executeCliRequest', () => {
         leaseOptions.onRunLeaseAcquired?.('exec-1' as RunId);
         leaseOptions.onRun?.();
         yield* settle;
-        yield* Effect.promise(async () =>
-          leaseOptions.openWorkflowOutput?.(COMPLETED_WORKFLOW_RUN, []),
-        );
+        yield* leaseOptions.openWorkflowOutput?.(COMPLETED_WORKFLOW_RUN, []) ??
+          Effect.void;
 
         const shutdown = platform.lifecycle.runShutdown();
         hangingRun.resolve(COMPLETED_WORKFLOW_RUN);
@@ -1137,7 +1135,10 @@ describe('executeCliRequest', () => {
             options.onRunLeaseAcquired?.('exec-1' as RunId);
             options.onRun?.();
             try {
-              await options.openWorkflowOutput?.(COMPLETED_WORKFLOW_RUN, []);
+              await effectRuntime().runPromise(
+                options.openWorkflowOutput?.(COMPLETED_WORKFLOW_RUN, []) ??
+                  Effect.void,
+              );
             } catch {
               outputResolutionFailed = true;
               Deferred.doneUnsafe(outputFailed, Effect.void);
