@@ -253,7 +253,7 @@ export interface ChildRunStrategy<TTurn, R = never> {
   ): Effect.Effect<string, Error, R>;
 
   /** Format the error delivery XML (turn is null when the call threw). */
-  formatError(turn: TTurn | null, err: unknown): string | Promise<string>;
+  formatError(turn: TTurn | null, err: unknown): string;
 
   /**
    * Structured result manifest for a turn's delivery, persisted alongside the
@@ -310,9 +310,11 @@ export interface ChildRunLoopParams<TTurn, R = never> {
   /**
    * Roll this child's final cost into the parent's usage totals. Omitted by
    * agent-CLI callers (no cost concept today); native delegation passes its
-   * captured `recordSubagentCost` closure.
+   * captured `recordSubagentCost` closure. Synchronous by contract: the loop
+   * runs it inside `Effect.try`, which folds a throw and would take a
+   * returned promise for the observer's result.
    */
-  readonly recordCost?: (totalCost: number | undefined) => void | Promise<void>;
+  readonly recordCost?: (totalCost: number | undefined) => void;
   /**
    * Gate every turn through the session's shared child-run budget
    * (`childRunBudgetFor`). Set by the detached native/workflow launch path;
@@ -673,8 +675,8 @@ const deliverTurn = Effect.fn('childRunLoop.deliverTurn')(function* <
   const delivered = turn != null && !isError;
   const msg = delivered
     ? yield* strategy.formatDelivery(turn, wallTimeMs)
-    : yield* Effect.tryPromise({
-        try: async () => strategy.formatError(turn, err),
+    : yield* Effect.try({
+        try: () => strategy.formatError(turn, err),
         catch: ensureError,
       });
   const resultMeta = strategy.buildResultMeta
@@ -1325,8 +1327,8 @@ export function startChildRunLoop<TTurn, R = never>(
           if (queueLease) runSession.followUps.release(queueLease, 'terminal');
           releaseSessionOwnershipOnce();
           yield* Effect.forkDetach(
-            Effect.tryPromise({
-              try: async () => params.recordCost?.(bestCostUsd),
+            Effect.try({
+              try: () => params.recordCost?.(bestCostUsd),
               catch: ensureError,
             }).pipe(
               Effect.catch((error) =>

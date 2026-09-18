@@ -214,17 +214,7 @@ const ownerLiveness = Layer.effectDiscard(
       );
       const dead: OwnerId[] = [];
       for (const owner of owners) {
-        // The one thing `proveOwnerLiveness` awaits is
-        // `nodeProcesses.identity`, declared `Promise<string | undefined>`
-        // with unreadable meaning undefined, and the `kill(pid, 0)` beside it
-        // catches its own throw. A rejection here would end this prober's
-        // stream for the life of the process, so that total contract is the
-        // thing to keep. Note `Database.ts` wraps the same call in
-        // `Effect.tryPromise` with a `writeFailed` catch: there the caller has
-        // an error channel to put a failure in, here it has none.
-        const liveness = yield* Effect.promise(() =>
-          proveOwnerLiveness(ownerIdentity(owner)),
-        );
+        const liveness = yield* proveOwnerLiveness(ownerIdentity(owner));
         if (liveness === 'dead') dead.push(owner);
       }
       const snapshot = yield* SubscriptionRef.get(local.ref);

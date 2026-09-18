@@ -393,7 +393,7 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
   function* (
     input: AgentLaunchInput & { session: SessionHandle },
     runId: RunId,
-    resources: Array<() => void | Promise<void>>,
+    resources: Array<() => void>,
   ): Effect.fn.Return<AgentLaunchContext, Error, Secrets | AppState> {
     yield* failIfLaunchStopped(input.stopped);
     const { config, setting, prompt, agentEntry, modelConfig } =
@@ -611,8 +611,10 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
     const { config } = input.definition;
 
     // The runtime takes these resources only after assembly succeeds. Failure
-    // unwinds them in reverse order while preserving the original cause.
-    const resources: Array<() => void | Promise<void>> = [];
+    // unwinds them in reverse order while preserving the original cause. A
+    // disposer is synchronous by contract: the unwind is `Effect.try`, which
+    // folds a throw and would take a returned promise for the result.
+    const resources: Array<() => void> = [];
     return yield* assembleAgentLaunchContext(input, runId, resources).pipe(
       Effect.onError((cause) =>
         Effect.gen(function* () {
@@ -635,12 +637,7 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
           const disposals = yield* Effect.forEach(
             resources.toReversed(),
             (dispose) =>
-              Effect.exit(
-                Effect.tryPromise({
-                  try: async () => dispose(),
-                  catch: ensureError,
-                }),
-              ),
+              Effect.exit(Effect.try({ try: dispose, catch: ensureError })),
           );
           const failures = disposals.flatMap((disposed) =>
             Exit.isFailure(disposed) ? [Cause.squash(disposed.cause)] : [],

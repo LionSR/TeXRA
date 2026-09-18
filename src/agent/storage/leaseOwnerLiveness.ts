@@ -1,4 +1,5 @@
 import * as os from 'node:os';
+import { Effect } from 'effect';
 
 import { createLog } from '@logger/logUtils';
 import { nodeProcesses } from '@platform/defaults/nodeProcesses';
@@ -26,14 +27,14 @@ interface ClaimOwnerRecord {
  * exists. Success, including EPERM, proves only that some process has the
  * pid; the start identity decides whether it is the recorded one.
  */
-function pidProvablyDead(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return false;
-  } catch (error) {
-    return error instanceof Error && 'code' in error && error.code === 'ESRCH';
-  }
-}
+const pidProvablyDead = (pid: number): Effect.Effect<boolean> =>
+  Effect.try({
+    try: () => process.kill(pid, 0),
+    catch: (error) =>
+      error instanceof Error && 'code' in error && error.code === 'ESRCH',
+  }).pipe(
+    Effect.match({ onSuccess: () => false, onFailure: (esrch) => esrch }),
+  );
 
 /**
  * The single source of liveness truth:
@@ -49,32 +50,40 @@ function pidProvablyDead(pid: number): boolean {
  * Hostnames compare case-insensitively on every platform TeXRA supports. A
  * cross-host owner is unprovable by construction: a local pid says nothing
  * about a process on another machine sharing the storage directory.
+ *
+ * The verdict is total: `nodeProcesses.identity` reports an unreadable
+ * identity as undefined rather than rejecting, and the `kill(pid, 0)` beside
+ * it folds its own throw, so this effect has no error channel and a prober
+ * that yields it cannot be ended by one.
  */
-export async function proveOwnerLiveness(
+export const proveOwnerLiveness = (
   owner: ClaimOwnerRecord,
-): Promise<OwnerLiveness> {
-  const localHostname = os.hostname();
-  if (owner.hostname.toLowerCase() !== localHostname.toLowerCase()) {
-    log.warn(
-      `Claim owner pid ${owner.pid} was recorded on host ${owner.hostname}; its liveness is unprovable from ${localHostname}`,
+): Effect.Effect<OwnerLiveness> =>
+  Effect.gen(function* () {
+    const localHostname = os.hostname();
+    if (owner.hostname.toLowerCase() !== localHostname.toLowerCase()) {
+      log.warn(
+        `Claim owner pid ${owner.pid} was recorded on host ${owner.hostname}; its liveness is unprovable from ${localHostname}`,
+      );
+      return 'unprovable';
+    }
+    if (yield* pidProvablyDead(owner.pid)) return 'dead';
+    const observed = yield* Effect.promise(() =>
+      nodeProcesses.identity(owner.pid),
     );
-    return 'unprovable';
-  }
-  if (pidProvablyDead(owner.pid)) return 'dead';
-  const observed = await nodeProcesses.identity(owner.pid);
-  if (observed === undefined) {
-    // The process may have exited between the two probes.
-    if (pidProvablyDead(owner.pid)) return 'dead';
-    log.warn(
-      `Claim owner pid ${owner.pid} exists but its start identity cannot be read; its liveness is unprovable`,
-    );
-    return 'unprovable';
-  }
-  if (owner.processStart === null) {
-    log.warn(
-      `Claim owner pid ${owner.pid} exists but its record carries no start identity; its liveness is unprovable`,
-    );
-    return 'unprovable';
-  }
-  return observed === owner.processStart ? 'alive' : 'dead';
-}
+    if (observed === undefined) {
+      // The process may have exited between the two probes.
+      if (yield* pidProvablyDead(owner.pid)) return 'dead';
+      log.warn(
+        `Claim owner pid ${owner.pid} exists but its start identity cannot be read; its liveness is unprovable`,
+      );
+      return 'unprovable';
+    }
+    if (owner.processStart === null) {
+      log.warn(
+        `Claim owner pid ${owner.pid} exists but its record carries no start identity; its liveness is unprovable`,
+      );
+      return 'unprovable';
+    }
+    return observed === owner.processStart ? 'alive' : 'dead';
+  });

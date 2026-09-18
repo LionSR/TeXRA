@@ -72,7 +72,8 @@ export class SubagentDurabilityError extends Error {
 
 interface InBandSubagentRunBaseOptions extends ChildRunLaunchOptions {
   readonly configPayload: AgentConfigPayload;
-  readonly onCost?: (costUsd: number | undefined) => void | Promise<void>;
+  /** Synchronous by contract; forwarded as the loop's `recordCost`. */
+  readonly onCost?: (costUsd: number | undefined) => void;
   /**
    * Live progress sink for the in-band child. An in-band parent is mid-cycle,
    * so follow-up delivery cannot reach it; each caller degrades deliberately:

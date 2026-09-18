@@ -1523,39 +1523,28 @@ describe('childRunLoop E2E fixtures', () => {
     }),
   );
 
-  it.effect.each([
-    {
-      failure: 'throws',
-      recordCost: () => {
+  it.effect('finalizes and wakes when the parent cost observer throws', () =>
+    Effect.gen(function* () {
+      const strategy = createTerminalStrategy(
+        'throwing cost observer',
+        (ports) =>
+          Effect.sync((): FakeTurn => {
+            ports.recordCost(0.4);
+            return { kind: 'terminal', value: 'done' };
+          }),
+        () => Effect.succeed('delivered'),
+      );
+      const recordCost = vi.fn(() => {
         throw new Error('observer failed');
-      },
-    },
-    {
-      failure: 'rejects',
-      recordCost: () => Promise.reject(new Error('observer failed')),
-    },
-  ])(
-    'finalizes and wakes when the parent cost observer $failure',
-    ({ failure, recordCost: observe }) =>
-      Effect.gen(function* () {
-        const strategy = createTerminalStrategy(
-          `${failure} cost observer`,
-          (ports) =>
-            Effect.sync((): FakeTurn => {
-              ports.recordCost(0.4);
-              return { kind: 'terminal', value: 'done' };
-            }),
-          () => Effect.succeed('delivered'),
-        );
-        const recordCost = vi.fn(observe);
+      });
 
-        const loop = yield* startLoop(loopRunId(), strategy, { recordCost });
+      const loop = yield* startLoop(loopRunId(), strategy, { recordCost });
 
-        // The cost observer is forked with `startImmediately` inside the
-        // terminal block, so its thunk has already run when the loop exits.
-        expect(yield* Fiber.join(loop)).toBeUndefined();
-        expect(recordCost).toHaveBeenCalledOnce();
-        expect(mocks.submitFollowUp).toHaveBeenCalledOnce();
-      }),
+      // The cost observer is forked with `startImmediately` inside the
+      // terminal block, so its thunk has already run when the loop exits.
+      expect(yield* Fiber.join(loop)).toBeUndefined();
+      expect(recordCost).toHaveBeenCalledOnce();
+      expect(mocks.submitFollowUp).toHaveBeenCalledOnce();
+    }),
   );
 });
