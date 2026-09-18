@@ -82,7 +82,10 @@ interface SessionBridgeOptions {
    *  it fails or dies with is a defect, logged here and answered
    *  `Internal`. The channel is `Error`, not `unknown`: each host lifts a
    *  Promise-faced capability once, under the member's name, so a bare
-   *  rejection value can no longer reach this fold. */
+   *  rejection value can no longer reach this fold. Every arm but one is
+   *  tagged; what still widens this to `Error` is the transcript export
+   *  (`ChatExportController`, `compileLatex2Pdf`, `loadChatExportInput`),
+   *  and closing that path closes this channel to a union of tags. */
   readonly handleHostRequest: (
     request: HostRequest,
     port: string,
