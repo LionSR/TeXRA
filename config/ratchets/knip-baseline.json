@@ -680,12 +680,6 @@
       "name": "getSecretStorageMode"
     },
     {
-      "file": "packages/desktop/src/main/platform/warningDialog.ts",
-      "category": "unused",
-      "kind": "exports",
-      "name": "getDesktopWarningParentWindow"
-    },
-    {
       "file": "packages/desktop/src/renderer/desktopCommandPalette.ts",
       "category": "production-dead",
       "kind": "exports",
@@ -708,12 +702,6 @@
       "category": "production-dead",
       "kind": "exports",
       "name": "parseDesktopLogEntries"
-    },
-    {
-      "file": "packages/desktop/src/shared/desktopCommandSurface.ts",
-      "category": "unused",
-      "kind": "exports",
-      "name": "DESKTOP_COMMAND_IDS"
     },
     {
       "file": "packages/extension/src/commands/extensionCommandHandlers.ts",
