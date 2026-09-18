@@ -80,7 +80,7 @@ const withAuth = <A>(
   Effect.provideService(program, SupabaseAuth, auth).pipe(
     // The sign-out path rebuilds the local agent catalog, which names the
     // process's global storage view; this suite's catalog read is mocked.
-    Effect.provide(unusedGlobalStorageFs),
+    Effect.provide(unusedGlobalStorageFs()),
   );
 
 describe('auth commands for unavailable stored sessions', () => {

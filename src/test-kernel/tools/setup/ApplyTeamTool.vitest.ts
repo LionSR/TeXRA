@@ -99,7 +99,7 @@ beforeAll(async () => {
     },
   );
   await Effect.runPromise(
-    Effect.provide(refresh({ includeRemote: false }), unusedGlobalStorageFs),
+    Effect.provide(refresh({ includeRemote: false }), unusedGlobalStorageFs()),
   );
 });
 

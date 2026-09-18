@@ -19,7 +19,7 @@ import { FakeStateStore } from '@test/support/FakePlatform';
 function onGlobalStorage<A, E>(
   program: Effect.Effect<A, E, GlobalStorageFs>,
 ): Effect.Effect<A, E> {
-  return Effect.provide(program, unusedGlobalStorageFs);
+  return Effect.provide(program, unusedGlobalStorageFs());
 }
 
 const mocks = vi.hoisted(() => ({

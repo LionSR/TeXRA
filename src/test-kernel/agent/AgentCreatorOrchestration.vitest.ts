@@ -85,7 +85,7 @@ const createAgent = (ui: AgentCreatorUI): Effect.Effect<void, unknown> =>
       Layer.mergeAll(
         nodePlatformLayer,
         testHttpClientLayer,
-        unusedGlobalStorageFs,
+        unusedGlobalStorageFs(),
         LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT),
       ),
     ),

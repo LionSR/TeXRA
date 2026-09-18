@@ -60,8 +60,9 @@ export function rootedFsLayer(roots: {
  * the service in its requirements, and this satisfies that type without
  * standing up a root nothing reads.
  */
-export const unusedGlobalStorageFs: Layer.Layer<GlobalStorageFs> =
-  Layer.succeed(GlobalStorageFs)({} as RootedFileSystem);
+export function unusedGlobalStorageFs(): Layer.Layer<GlobalStorageFs> {
+  return Layer.succeed(GlobalStorageFs)({} as RootedFileSystem);
+}
 
 /**
  * The process's cross-workspace storage view over `root` — what

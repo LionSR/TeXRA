@@ -346,7 +346,7 @@ describe('SupabaseAuthProvider expired-session refresh', () => {
       expect(yield* provider.clearStoredSession()).toBe(false);
 
       expect(clearSessionIfCurrent).not.toHaveBeenCalled();
-    }).pipe(Effect.provide(unusedGlobalStorageFs)),
+    }).pipe(Effect.provide(unusedGlobalStorageFs())),
   );
 });
 
@@ -367,7 +367,7 @@ describe('SupabaseAuthProvider model availability', () => {
 
       expect(coordinator.clearSession).toHaveBeenCalledOnce();
       expect(providerMocks.signOut).not.toHaveBeenCalled();
-    }).pipe(Effect.provide(unusedGlobalStorageFs)),
+    }).pipe(Effect.provide(unusedGlobalStorageFs())),
   );
 
   it.effect(
@@ -407,7 +407,7 @@ describe('SupabaseAuthProvider model availability', () => {
         expect(
           testDoubles.secrets.get(`${PENDING_STATE_PREFIX}${nonce}`),
         ).toBeUndefined();
-      }).pipe(Effect.provide(unusedGlobalStorageFs)),
+      }).pipe(Effect.provide(unusedGlobalStorageFs())),
   );
 });
 

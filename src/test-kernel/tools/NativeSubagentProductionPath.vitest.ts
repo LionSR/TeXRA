@@ -543,7 +543,10 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
 
   beforeEach(async () => {
     await Effect.runPromise(
-      Effect.provide(refresh({ includeRemote: false }), unusedGlobalStorageFs),
+      Effect.provide(
+        refresh({ includeRemote: false }),
+        unusedGlobalStorageFs(),
+      ),
     );
     // The process session over a persistent store: one session per root,
     // so the ephemeral default this file's setup installed gives way to it.

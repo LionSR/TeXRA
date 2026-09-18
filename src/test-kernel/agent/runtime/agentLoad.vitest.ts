@@ -38,7 +38,7 @@ import { AbsoluteFS } from '@utils/files/absoluteFS';
 function onGlobalStorage<A, E>(
   program: Effect.Effect<A, E, GlobalStorageFs>,
 ): Effect.Effect<A, E> {
-  return Effect.provide(program, unusedGlobalStorageFs);
+  return Effect.provide(program, unusedGlobalStorageFs());
 }
 
 vi.mock('@agent/index', async () => {

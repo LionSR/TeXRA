@@ -42,7 +42,7 @@ import type * as vscode from 'vscode';
 function onGlobalStorage<A, E>(
   program: Effect.Effect<A, E, GlobalStorageFs>,
 ): Effect.Effect<A, E> {
-  return Effect.provide(program, unusedGlobalStorageFs);
+  return Effect.provide(program, unusedGlobalStorageFs());
 }
 
 const { listRemoteAgents, ORCHESTRATOR_AGENT } = vi.hoisted(() => {
