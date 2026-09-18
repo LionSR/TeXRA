@@ -325,7 +325,7 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
   const [
     { initPlatform },
     { initProcessWorkspaceRoots },
-    { effectRuntime, initProcessRuntime },
+    { effectRuntime, initProcessRuntime, tryProcessRuntime },
     { installAuthProgramEdge },
     { Layer, ManagedRuntime },
     { testHttpClientLayer },
@@ -385,9 +385,7 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
   // a suite imports it (through `sessionTestUtils` or
   // `defaultSessionTestSetup`) after its own `vi.mock` registrations, which
   // this install, called from a setup file or a `beforeEach`, cannot promise.
-  try {
-    effectRuntime();
-  } catch {
+  if (tryProcessRuntime() == null) {
     initProcessRuntime(ManagedRuntime.make(processServices));
   }
   // The auth run edge, unconditionally: a suite that reset modules gets a

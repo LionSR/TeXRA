@@ -9,16 +9,10 @@ const providerMocks = vi.hoisted(() => ({
   getUser: vi.fn(),
   invalidateRemoteAgentsAfterSignOut: vi.fn(() => Effect.void),
   openExternal: vi.fn(async () => true),
-  withPkcePermit: vi.fn((operation: unknown) => {
-    const result = testDoubles.pkceTail.then(() =>
-      testDoubles.runEffect(operation),
-    );
-    testDoubles.pkceTail = result.then(
-      () => undefined,
-      () => undefined,
-    );
-    return testDoubles.effectFrom(result);
-  }),
+  // A spy over the real permit (installed in the mock factory below): the
+  // queueing under test is the production semaphore's, and a typed failure
+  // stays a typed failure.
+  withPkcePermit: vi.fn(),
   secretDelete: vi.fn((key: string) =>
     Effect.sync(() => {
       testDoubles.secrets.delete(key);
@@ -40,7 +34,6 @@ const providerMocks = vi.hoisted(() => ({
 const testDoubles = vi.hoisted(() => ({
   coordinator: null as Record<string, ReturnType<typeof vi.fn>> | null,
   emitters: [] as Array<{ fire: ReturnType<typeof vi.fn> }>,
-  pkceTail: Promise.resolve<unknown>(undefined),
   secrets: new Map<string, string>(),
   // The secrets port the host composition root now hands the provider at
   // construction, in place of the ambient `platform().secrets` it read.
@@ -55,11 +48,6 @@ const testDoubles = vi.hoisted(() => ({
     listStoredKeys: providerMocks.secretListStoredKeys,
     getEnv: (_name: string): string | undefined => undefined,
   },
-  // Assigned at module scope (after the `effect` import): the `withPkcePermit`
-  // double turns its program into a Promise chained on the shared tail, and
-  // wraps that chain back into an Effect for `runAuthProgram` to settle.
-  runEffect: null as unknown as (operation: unknown) => Promise<unknown>,
-  effectFrom: null as unknown as (promise: Promise<unknown>) => unknown,
 }));
 
 vi.mock('vscode', () => ({
@@ -103,9 +91,11 @@ vi.mock('vscode', () => ({
   },
 }));
 
-vi.mock('@auth/pkcePermit', () => ({
-  withPkcePermit: providerMocks.withPkcePermit,
-}));
+vi.mock('@auth/pkcePermit', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@auth/pkcePermit')>();
+  providerMocks.withPkcePermit.mockImplementation(actual.withPkcePermit);
+  return { withPkcePermit: providerMocks.withPkcePermit };
+});
 
 vi.mock('@agent/index', () => ({
   invalidateRemoteAgentsAfterSignOut:
@@ -125,10 +115,6 @@ const PENDING_STATE_PREFIX = 'texra.extension.pendingOAuthState.';
 const TEST_NONCE = '0123456789abcdef0123456789abcdef';
 const TEST_FLOW_ID = 'abcdef0123456789abcdef0123456789';
 
-testDoubles.runEffect = (operation) =>
-  Effect.runPromise(operation as Effect.Effect<unknown, unknown>);
-testDoubles.effectFrom = (promise) => Effect.promise(() => promise);
-
 function seedPendingOAuthAttempt(
   nonce = TEST_NONCE,
   createdAt = Date.now(),
@@ -142,7 +128,6 @@ function seedPendingOAuthAttempt(
 
 afterEach(() => {
   testDoubles.secrets.clear();
-  testDoubles.pkceTail = Promise.resolve(undefined);
   Object.assign(vscode.env, { uiKind: vscode.UIKind.Desktop });
 });
 

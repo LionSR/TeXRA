@@ -27,11 +27,6 @@
       "specifier": "@agent/storage"
     },
     {
-      "file": "src/test-kernel/cli/CliInitPlatform.vitest.ts",
-      "form": "mock",
-      "specifier": "@agent/index/platformAgentDirectories"
-    },
-    {
       "file": "src/test-kernel/cli/CliSupabaseAuth.vitest.ts",
       "form": "mock",
       "specifier": "@agent/index"
@@ -85,11 +80,6 @@
       "file": "src/test-kernel/support/agentCatalogMock.ts",
       "form": "mock",
       "specifier": "@agent/index"
-    },
-    {
-      "file": "src/test-kernel/support/agentStorageFinalizationMock.ts",
-      "form": "mock",
-      "specifier": "@agent/storage"
     }
   ]
 }

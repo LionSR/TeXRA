@@ -21,13 +21,11 @@ import {
  * rest of the file.
  */
 
-let installed = false;
-
 /**
- * Install the runtime and graph family for the current module graph, once:
- * a session built on it (the file's default session, a suite's) keeps its
- * readers for the file's whole life, so a second install must not dispose
- * the runtime they run on. A graph is released when its last session is
+ * The install runs once per module graph, as module evaluation does: a
+ * session built on this runtime (the file's default session, a suite's)
+ * keeps its readers for the file's whole life, so nothing may dispose the
+ * runtime they run on. A graph is released when its last session is
  * disposed, so suites that dispose their sessions get fresh graphs.
  *
  * The storage paths resolve at install to the worker's shared default rather
@@ -38,25 +36,20 @@ let installed = false;
  * process services read the fake host installed at call time, as the bare
  * runtime's do: this runtime outlives the per-test hosts.
  */
-export function installTestSessionGraphs(): void {
-  if (installed) return;
-  installed = true;
-  const { globalStorage } = createFakeWorkspaceRoots();
-  installProcessRuntime({
-    processStart: 'vitest',
-    globalStorage,
-    updateCheckStorage: globalStorage,
-    secrets: fakeHostSecrets,
-    appState: fakeHostAppState,
-    // Suites swap the account plane with their host; the default host's
-    // answers signed-out.
-    auth: fakeHostAuth,
-    languageModel: fakeHostLanguageModel,
-    agentResume: fakeHostAgentResume,
-    setup: fakeSetupPlatform,
-    // The Node hosts' layer: inert until a Lean tool is invoked.
-    lean: directLeanLanguageServices(),
-  });
-}
+const { globalStorage } = createFakeWorkspaceRoots();
 
-installTestSessionGraphs();
+installProcessRuntime({
+  processStart: 'vitest',
+  globalStorage,
+  updateCheckStorage: globalStorage,
+  secrets: fakeHostSecrets,
+  appState: fakeHostAppState,
+  // Suites swap the account plane with their host; the default host's
+  // answers signed-out.
+  auth: fakeHostAuth,
+  languageModel: fakeHostLanguageModel,
+  agentResume: fakeHostAgentResume,
+  setup: fakeSetupPlatform,
+  // The Node hosts' layer: inert until a Lean tool is invoked.
+  lean: directLeanLanguageServices(),
+});
