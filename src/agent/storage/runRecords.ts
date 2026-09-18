@@ -6,9 +6,7 @@
  * writes the run ledger.
  */
 
-import { Data, Effect } from 'effect';
-
-import { z } from 'zod';
+import { Effect } from 'effect';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
@@ -138,22 +136,6 @@ export const persistedParentRunId = Effect.fn('persistedParentRunId')(
   },
 );
 
-/**
- * A committed `run.record` row the current {@link RunRecordSchema} refuses.
- * The record read is a boundary over persisted data, so a row that no longer
- * parses is a failure of that read rather than a defect: the callers that
- * offer a run to relaunch already branch on an unreadable record, and this
- * tag lets them tell a corrupt row from a database that would not answer.
- */
-export class RunRecordCorrupt extends Data.TaggedError('RunRecordCorrupt')<{
-  readonly runId: RunId;
-  readonly issues: readonly z.ZodIssue[];
-}> {
-  override readonly message = `run record of ${this.runId} does not match the current format (${this.issues
-    .map((issue) => `${issue.path.join('.') || 'record'}: ${issue.message}`)
-    .join('; ')})`;
-}
-
 /** Native access to named run metadata, with no file-backed read arm. */
 export function getRunRecords(session: SessionHandle, runId: RunId) {
   const id = aggregateId('run', runId);
@@ -165,26 +147,19 @@ export function getRunRecords(session: SessionHandle, runId: RunId) {
     draft: SessionEventDraft,
   ): Effect.Effect<void, DatabaseNotOwner | DatabaseWriteFailed> =>
     session.commit([draft]).pipe(Effect.asVoid);
-  /** The latest `run.record` row; the database reads a closed run as absent. */
-  const readRecord = (): Effect.Effect<
-    RunRecord | null,
-    DatabaseReadFailed | RunRecordCorrupt
-  > =>
-    read((rows) =>
-      rows.findLast(
+  /**
+   * The latest `run.record` row; the database reads a closed run as absent.
+   * The row's record needs no parse of its own: `SessionEventSchema` carries
+   * this field as `RunRecordFieldsSchema`, so the database's own decode
+   * already refused a row that does not match it, as `DatabaseReadFailed`.
+   */
+  const readRecord = (): Effect.Effect<RunRecord | null, DatabaseReadFailed> =>
+    read((rows) => {
+      const event = rows.findLast(
         (row) => row.aggregateId === id && row.type === 'run.record',
-      ),
-    ).pipe(
-      Effect.flatMap((event) => {
-        if (event?.type !== 'run.record') return Effect.succeed(null);
-        const parsed = RunRecordSchema.safeParse(event.record);
-        return parsed.success
-          ? Effect.succeed(parsed.data)
-          : Effect.fail(
-              new RunRecordCorrupt({ runId, issues: parsed.error.issues }),
-            );
-      }),
-    );
+      );
+      return event?.type === 'run.record' ? event.record : null;
+    });
   return {
     /** The run has a `run.start` the database still lists: absent, or
      *  closed by its tombstone, reads false. */
@@ -225,10 +200,7 @@ export function getRunRecords(session: SessionHandle, runId: RunId) {
           ),
         ),
     readRunRecord: readRecord,
-    readConfig: (): Effect.Effect<
-      AgentConfig | null,
-      DatabaseReadFailed | RunRecordCorrupt
-    > =>
+    readConfig: (): Effect.Effect<AgentConfig | null, DatabaseReadFailed> =>
       readRecord().pipe(
         Effect.map((record) =>
           record && isAgentRunRecord(record) ? record : null,

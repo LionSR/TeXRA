@@ -8,7 +8,6 @@ import {
   aggregateId,
   AgentConfigFieldsSchema,
   type RunId,
-  type SessionEvent,
   type SessionEventDraft,
 } from '@shared/schemas';
 import { testRuntime } from '@test/support/testProcessRuntime';
@@ -116,25 +115,6 @@ describe('canonical run records', () => {
     await run(records.clearReport());
     expect(await run(records.readReport())).toBeNull();
     expect(await run(records.readWorkspaceFiles())).toEqual(['a.tex', 'b.tex']);
-  });
-
-  it('reports a malformed record as a corrupt-record failure, not a default', async () => {
-    const reader = Object.create(session) as typeof session;
-    reader.readRunRecords = () =>
-      Effect.succeed([
-        {
-          type: 'run.record',
-          aggregateId: aggregateId('run', runId),
-          record: 'not a record',
-        } as unknown as SessionEvent,
-      ]);
-    const result = await run(
-      getRunRecords(reader, runId).readRunRecord().pipe(Effect.result),
-    );
-    expect(result).toMatchObject({
-      _tag: 'Failure',
-      failure: { _tag: 'RunRecordCorrupt', runId },
-    });
   });
 
   it('joins child labels through the declared creation edge', async () => {

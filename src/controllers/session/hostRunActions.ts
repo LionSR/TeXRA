@@ -17,7 +17,7 @@ import {
 } from 'effect';
 
 import { presentFollowUpResult, submitFollowUp } from '@agent/followUp';
-import { getRunRecords, type RunRecordCorrupt } from '@agent/storage';
+import { getRunRecords } from '@agent/storage';
 import { resolveAgentKey } from '@agent/index/agentRegistry';
 import type { RunRequest } from '@agent/core/state/runRequests';
 import {
@@ -121,17 +121,17 @@ export class RunLaunchFailed extends Data.TaggedError('RunLaunchFailed')<{
 }> {}
 
 /**
- * The run's saved setup could not be read: either the database would not
- * answer or the committed `run.record` row no longer parses. The read is
- * named here and carries its own failure as `cause`, so the host that
- * classifies it reads the record read's typed error rather than this wrapper.
+ * The run's saved setup could not be read: the database would not answer, or
+ * it refused the committed `run.record` row. The read is named here and
+ * carries its own failure as `cause`, so the host that classifies it reads
+ * the record read's typed error rather than this wrapper.
  */
 export class RunConfigUnreadable extends Data.TaggedError(
   'RunConfigUnreadable',
 )<{
   readonly runId: RunId;
   readonly message: string;
-  readonly cause: DatabaseReadFailed | RunRecordCorrupt;
+  readonly cause: DatabaseReadFailed;
 }> {}
 
 export interface HostRunActionPorts {

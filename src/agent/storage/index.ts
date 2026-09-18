@@ -9,11 +9,7 @@
  * (#10011).
  */
 
-export {
-  type ChildRecord,
-  getRunRecords,
-  RunRecordCorrupt,
-} from './runRecords';
+export { type ChildRecord, getRunRecords } from './runRecords';
 export { unwrapResultMeta } from './resultMeta';
 export {
   listRunWorkspaceFiles,
