@@ -85,6 +85,7 @@ describe('chat TUI session exit controller', () => {
       disposables: new DisposableStore(),
       disposeTerminalRestoreOnExit: vi.fn(),
       awaitFollowUpsIdle: async () => undefined,
+      awaitRunSettled: async () => undefined,
       getApprovalPolicy: () => 'ask',
       flushArtifacts: vi.fn().mockRejectedValue(new Error('disk full')),
       repaintAfterTerminalResume: vi.fn(),

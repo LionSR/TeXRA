@@ -592,6 +592,10 @@ export async function runChat(
     disposables,
     disposeTerminalRestoreOnExit,
     awaitFollowUpsIdle: () => runtime.runPromise(followUpQueue.idle),
+    awaitRunSettled: () =>
+      session.runSettled
+        ? runtime.runPromise(session.runSettled)
+        : Promise.resolve(),
     getApprovalPolicy,
     flushArtifacts: () =>
       runtime.runPromise(runtimeSession.settlePublications()),
@@ -610,8 +614,8 @@ export async function runChat(
 
   // Interactive resume: kick off the continued tool-use run now that Ink is
   // mounted (so the rehydrated transcript + streamed continuation render) and
-  // the signal handlers are armed. Fire-and-forget, resumeAgentRun installs
-  // session.runPromise, and the normal first-input path stays available so the
+  // the signal handlers are armed. Fire-and-forget, the resume claims the
+  // root-run slot, and the normal first-input path stays available so the
   // user can keep chatting (follow-ups target session.runId as usual).
   if (initialResume) {
     void chatController.resume(initialResume.id);

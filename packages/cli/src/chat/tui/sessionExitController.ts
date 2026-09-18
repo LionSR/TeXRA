@@ -89,6 +89,9 @@ interface SessionExitControllerContext {
   /** Settles once the follow-up delivery queue has drained; a graceful exit
    *  waits on it before it returns. */
   readonly awaitFollowUpsIdle: () => Promise<void>;
+  /** Runs the claimed root run's settlement, read when the drain asks for it:
+   *  the slot holds a program, and this entry point is where it is run. */
+  readonly awaitRunSettled: () => Promise<void>;
   /** Reads the live approval policy for the resume hint. */
   readonly getApprovalPolicy: () => TexraApprovalPolicy;
   /** Materialize buffered trace chunks + drain debounced StreamLog writes. */
@@ -364,9 +367,9 @@ export function createSessionExitController(
     const resumableIdle = ctx.isResumableIdle();
     if (interrupted) {
       // Only await a run we actually interrupted/finished. A resumableIdle run
-      // is parked at the WAIT node and its runPromise NEVER resolves, so
-      // awaiting it would hang the process here.
-      await session.runPromise;
+      // is parked at the WAIT node and never settles, so awaiting it would
+      // hang the process here.
+      await ctx.awaitRunSettled();
     }
     await ctx.flushArtifacts();
     cleanupTerminalModes();
@@ -376,7 +379,7 @@ export function createSessionExitController(
     printResumeHintOnExit(resumeHint);
     resetCliState();
     if (resumableIdle) {
-      // The dangling runPromise keeps the event loop alive, so a normal return
+      // The run parked at the WAIT node keeps the event loop alive, so a normal return
       // would never let the process exit. Force-exit here, AFTER persistence is
       // flushed and the resume hint is printed, preserving the suspended flow
       // record on disk for `texra resume`. Run platform shutdown first so queued
