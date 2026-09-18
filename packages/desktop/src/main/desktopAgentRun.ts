@@ -25,13 +25,19 @@ import {
   ToolEditApprovalController,
   type ToolEditApprovalHost,
 } from '@controllers/approval/ToolEditApprovalController';
+import { RunLaunchFailed } from '@controllers/session/hostRunActions';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type {
   AgentCategory,
   RequestOpenFilePayload,
   RunId,
 } from '@shared/schemas';
-import { Rejected } from '@shared/session/requestErrors';
+import {
+  isRequestRefusal,
+  Rejected,
+  type RequestRefusal,
+} from '@shared/session/requestErrors';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
   DesktopToolEditApprovalHost,
@@ -72,12 +78,14 @@ export interface DesktopAgentRun {
   /**
    * Launch a request another host action built (a merge, a compile fix). The
    * Effect settles with the launched run itself, as the port contract in
-   * `HostRunActionPorts.runAgentRequest` states.
+   * `HostRunActionPorts.runAgentRequest` states, and fails in that port's
+   * channel: a refusal as itself, every other launch failure as
+   * `RunLaunchFailed` carrying the launch's own error.
    */
   runAgentRequest(
     request: RunRequest,
     options?: DesktopRunOptions,
-  ): Effect.Effect<void, Error>;
+  ): Effect.Effect<void, RequestRefusal | RunLaunchFailed>;
   runValidated(
     request: ValidatedRunRequest,
     options?: DesktopRunOptions,
@@ -258,7 +266,18 @@ export function createDesktopAgentRun(
         });
         return Effect.fail(new Rejected({ reason: validated.message }));
       }
-      return runValidatedEffect(validated.request, runOptions);
+      // The launch program still fails with a bare `Error`, so the port's
+      // one channel is named here, as the extension's binding names it.
+      return runValidatedEffect(validated.request, runOptions).pipe(
+        Effect.mapError((cause) =>
+          isRequestRefusal(cause)
+            ? cause
+            : new RunLaunchFailed({
+                message: toErrorMessage(cause),
+                cause,
+              }),
+        ),
+      );
     },
     runValidated,
     toolEditApprovals,

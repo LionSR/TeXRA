@@ -17,7 +17,7 @@ import {
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { MessageHost } from '@hosts/uiHosts';
+import type { MessageHost, NotificationFailed } from '@hosts/uiHosts';
 import { createLog } from '@logger/logUtils';
 import type { ApiProvider } from '@model/apiProviders';
 import {
@@ -26,9 +26,14 @@ import {
   hasUsableApiKey,
   isApiProvider,
 } from '@model/apiProviders';
+import type { ModelHostFactUnreadable } from '@model/computeModelOptions';
 import { getRuntimeModelDirectFallback } from '@model/runtimeModelRegistry';
-import { AgentResume, type AppState } from '@platform/interfaces';
-import { Secrets } from '@platform/secrets';
+import {
+  AgentResume,
+  type AgentResumeFailed,
+  type AppState,
+} from '@platform/interfaces';
+import { Secrets, type SecretsFailed } from '@platform/secrets';
 import {
   AgentCategory,
   cloneRoundIndexed,
@@ -39,7 +44,11 @@ import {
   type RunId,
 } from '@shared/schemas';
 import type { HostRequest } from '@shared/session/hostRequest';
-import { Rejected, Unavailable } from '@shared/session/requestErrors';
+import {
+  Rejected,
+  Unavailable,
+  type RequestRefusal,
+} from '@shared/session/requestErrors';
 import { LaunchSurfaceSchema } from '@shared/session/surface';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 import { unique } from '@utils/core';
@@ -56,6 +65,7 @@ import {
 } from '../progressView/ProgressApiKeyRetryController';
 import {
   ProgressFollowUpController,
+  type CompileFixerPlanFailed,
   type ProgressFollowUpModelOption,
   type ProgressFollowUpState,
 } from '../progressView/ProgressFollowUpController';
@@ -84,13 +94,34 @@ export interface WorkflowFileOperationRequest {
 }
 
 /**
- * The host's launcher refused a request. {@link HostRunActionPorts.runAgentRequest}
- * settles only when the launched run itself settles, so the copilot fallback
- * below races it against the launcher's own start callback rather than
- * awaiting it; a launch that faults before that callback reaches the waiter
- * as this failure.
+ * The host's launcher could not start the run. `runAgent` and the desktop's
+ * launch program still fail with a bare `Error`, so each host lifts that one
+ * channel into this tag where it binds the port, and a refusal the launcher
+ * already worded travels as the refusal it is. `cause` is exactly what the
+ * launch failed with, so a host that classifies a failure still reads the
+ * launch's own error rather than this wrapper.
+ *
+ * {@link HostRunActionPorts.runAgentRequest} settles only when the launched
+ * run itself settles, so the copilot fallback below races it against the
+ * launcher's own start callback rather than awaiting it; a launch that faults
+ * before that callback reaches the waiter as this failure.
  */
-class RunLaunchFailed extends Data.TaggedError('RunLaunchFailed')<{
+export class RunLaunchFailed extends Data.TaggedError('RunLaunchFailed')<{
+  readonly message: string;
+  readonly cause: unknown;
+}> {}
+
+/**
+ * The run's saved setup could not be read. `getRunRecords().readConfig()`
+ * squashes the database read's own `DatabaseReadFailed` and a corrupt
+ * record's `ZodError` into one bare `Error` (`@agent/storage/runRecords`), so
+ * the read is named here and carries that value as `cause` for the host that
+ * classifies it.
+ */
+export class RunConfigUnreadable extends Data.TaggedError(
+  'RunConfigUnreadable',
+)<{
+  readonly runId: RunId;
   readonly message: string;
   readonly cause: unknown;
 }> {}
@@ -101,7 +132,9 @@ export interface HostRunActionPorts {
    * Launch or resume a run; the host's own launcher reaches `runAgent`. The
    * Effect settles with the launched run itself — a caller that wants only
    * the launch acknowledged races it against the `onRun` gate instead of
-   * awaiting it.
+   * awaiting it. A request the launcher refuses before it starts travels as
+   * the refusal it was worded with; every other launch failure is
+   * {@link RunLaunchFailed}, which carries the launch's own error as `cause`.
    */
   runAgentRequest(
     request: RunRequest,
@@ -112,10 +145,10 @@ export interface HostRunActionPorts {
       ownApiKeyFallback?: boolean;
       onRun?: () => Effect.Effect<void>;
     },
-  ): Effect.Effect<void, Error>;
+  ): Effect.Effect<void, RequestRefusal | RunLaunchFailed>;
   loadModelOptions(): Effect.Effect<
     readonly ProgressFollowUpModelOption[],
-    Error
+    ModelHostFactUnreadable
   >;
   /**
    * Ask the user for a provider key; the controller re-reads the store. A
@@ -133,26 +166,63 @@ export interface HostRunActionPorts {
 }
 
 interface HostRunActions {
-  resume(runId: RunId): Effect.Effect<void, Error, AgentResume>;
-  runNew(runId: RunId): Effect.Effect<void, Error>;
-  runCompileFixer(runId: RunId): Effect.Effect<void, Error>;
-  readConfig(runId: RunId): Effect.Effect<AgentConfig | undefined, Error>;
+  resume(
+    runId: RunId,
+  ): Effect.Effect<
+    void,
+    AgentResumeFailed | RequestRefusal | RunConfigUnreadable | RunLaunchFailed,
+    AgentResume
+  >;
+  runNew(
+    runId: RunId,
+  ): Effect.Effect<
+    void,
+    RequestRefusal | RunConfigUnreadable | RunLaunchFailed
+  >;
+  runCompileFixer(
+    runId: RunId,
+  ): Effect.Effect<
+    void,
+    | CompileFixerPlanFailed
+    | ModelHostFactUnreadable
+    | NotificationFailed
+    | RequestRefusal
+    | RunConfigUnreadable
+    | RunLaunchFailed
+  >;
+  readConfig(
+    runId: RunId,
+  ): Effect.Effect<AgentConfig | undefined, RunConfigUnreadable>;
   /** The workflow toolbar's latexdiff and pack/clean requests, built from the
    *  run's saved config and its outputs as the view holds them. `undefined`
    *  when the run has no config or is not a workflow: the action is a no-op. */
   workflowDiffRequest(
     runId: RunId,
-  ): Effect.Effect<WorkflowDiffRequest | undefined, Error>;
+  ): Effect.Effect<WorkflowDiffRequest | undefined, RunConfigUnreadable>;
   workflowFileOperationRequest(
     runId: RunId,
-  ): Effect.Effect<WorkflowFileOperationRequest | undefined, Error>;
+  ): Effect.Effect<
+    WorkflowFileOperationRequest | undefined,
+    RunConfigUnreadable
+  >;
   /** The retry's switch onto the user's own key. The host arm that took the
    *  request runs it where it stands. */
   useOwnApiKey(
     request: Extract<HostRequest, { kind: 'useOwnApiKey' }>,
-  ): Effect.Effect<void, Error, AppState>;
+  ): Effect.Effect<
+    void,
+    | ApiKeyPromptFailed
+    | NotificationFailed
+    | RequestRefusal
+    | RunConfigUnreadable
+    | RunLaunchFailed
+    | SecretsFailed,
+    AppState
+  >;
   /** The launcher's form of a settled run's saved setup. */
-  restoreState(runId: RunId): Effect.Effect<AgentConfig, Error>;
+  restoreState(
+    runId: RunId,
+  ): Effect.Effect<AgentConfig, Rejected | RunConfigUnreadable | Unavailable>;
   /** The run's output facts as the view holds them, read by the workflow
    *  controllers. */
   readonly runOutputs: ProgressFollowUpState & {
@@ -195,7 +265,19 @@ export const createHostRunActions = (
     const readConfig = Effect.fn('HostRunActions.readConfig')(function* (
       runId: RunId,
     ) {
-      return (yield* getRunRecords(session, runId).readConfig()) ?? undefined;
+      const config = yield* getRunRecords(session, runId)
+        .readConfig()
+        .pipe(
+          Effect.mapError(
+            (cause) =>
+              new RunConfigUnreadable({
+                runId,
+                message: toErrorMessage(cause),
+                cause,
+              }),
+          ),
+        );
+      return config ?? undefined;
     });
 
     /** The saved config of a workflow run, or `undefined` when the toolbar
@@ -236,7 +318,7 @@ export const createHostRunActions = (
             }),
           );
         }
-        const config = yield* getRunRecords(session, runId).readConfig();
+        const config = yield* readConfig(runId);
         if (!config) {
           return yield* Effect.fail(
             new Rejected({
@@ -414,27 +496,16 @@ export const createHostRunActions = (
           return Effect.gen(function* () {
             const runStarted = yield* Deferred.make<void>();
             const requestFiber = yield* Effect.forkDetach(
-              ports
-                .runAgentRequest(
-                  { config: { ...config, model } },
-                  {
-                    ownApiKeyFallback: true,
-                    onRun: () =>
-                      Effect.sync(() => {
-                        Deferred.doneUnsafe(runStarted, Effect.void);
-                      }),
-                  },
-                )
-                .pipe(
-                  Effect.mapError(
-                    (cause) =>
-                      new RunLaunchFailed({
-                        message:
-                          'The replacement run on your own API key could not be started.',
-                        cause,
-                      }),
-                  ),
-                ),
+              ports.runAgentRequest(
+                { config: { ...config, model } },
+                {
+                  ownApiKeyFallback: true,
+                  onRun: () =>
+                    Effect.sync(() => {
+                      Deferred.doneUnsafe(runStarted, Effect.void);
+                    }),
+                },
+              ),
             );
             return yield* Effect.raceFirst(
               Deferred.await(runStarted).pipe(Effect.as(true)),

@@ -44,6 +44,7 @@ import {
   createHostRunActions,
   type HostRunActionPorts,
   launchPatchOf,
+  RunLaunchFailed,
 } from '@controllers/session/hostRunActions';
 import type { HostDraftRequests } from '@controllers/session/hostDraftRequests';
 import type { HostSnapshotSource } from '@controllers/session/hostSnapshotSource';
@@ -260,7 +261,21 @@ export function createExtensionHostRequests(
         onRun: runOptions.onRun,
         onRunResolved: presentLaunchedProgressRun,
       },
-    ).pipe(Effect.asVoid);
+    ).pipe(
+      Effect.asVoid,
+      // `runAgent` still fails with a bare `Error`, so the port's one channel
+      // is named here: a refusal the launch already worded travels as itself
+      // (the fold the bridge applies), and every other launch failure carries
+      // its own error as the tag's `cause`.
+      Effect.mapError((cause) =>
+        isRequestRefusal(cause)
+          ? cause
+          : new RunLaunchFailed({
+              message: toErrorMessage(cause),
+              cause,
+            }),
+      ),
+    );
     return Effect.flatMap(runtime.contextEffect, (context) =>
       Effect.provideContext(launch, context),
     );
