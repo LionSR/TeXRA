@@ -1,6 +1,7 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 
+import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -21,6 +22,10 @@ import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { runDirUnder } from '@utils/files/runStorageFs';
 
 type WorkflowResult = Parameters<typeof resolveWorkflowOutput>[2];
+
+/** `resolveWorkflowOutput`, run at this suite's one Effect boundary. */
+const resolveOutput = (...args: Parameters<typeof resolveWorkflowOutput>) =>
+  Effect.runPromise(resolveWorkflowOutput(...args));
 
 const tempDirs = useTempDirs();
 
@@ -81,7 +86,7 @@ describe('CLI workflow output resolution', () => {
     const runOutput = await writeRunFile(cwd, 'r1/a.tex', 'A');
 
     await expect(
-      resolveWorkflowOutput(
+      resolveOutput(
         undefined,
         'out',
         workflowResult([{ absolutePath: runOutput, relativePath: 'r1/a.tex' }]),
@@ -103,7 +108,7 @@ describe('CLI workflow output resolution', () => {
     await mkdir(dirname(outputDirectoryFile), { recursive: true });
     await writeFile(outputDirectoryFile, 'existing directory file');
 
-    const resultForFile = await resolveWorkflowOutput(
+    const resultForFile = await resolveOutput(
       outputFile,
       undefined,
       workflowResult(
@@ -113,7 +118,7 @@ describe('CLI workflow output resolution', () => {
       testContext(cwd),
       { storageRoot: join(cwd, 'storage') },
     );
-    const resultForDirectory = await resolveWorkflowOutput(
+    const resultForDirectory = await resolveOutput(
       undefined,
       join(cwd, 'out'),
       workflowResult(
@@ -151,7 +156,7 @@ describe('CLI workflow output resolution', () => {
     const runA2 = await writeRunFile(cwd, 'r2/a.tex', 'A2');
     const runB = await writeRunFile(cwd, 'r1/b.tex', 'B');
 
-    const result = await resolveWorkflowOutput(
+    const result = await resolveOutput(
       undefined,
       'out',
       workflowResult([
@@ -190,7 +195,7 @@ describe('CLI workflow output resolution', () => {
 
     expect(expectedOutputFiles).toEqual(['stdin.tex']);
 
-    const result = await resolveWorkflowOutput(
+    const result = await resolveOutput(
       undefined,
       'out',
       workflowResult([
@@ -226,7 +231,7 @@ describe('CLI workflow output resolution', () => {
     const runMain = await writeRunFile(cwd, 'r1/main.tex', 'main');
     const runSeries = await writeRunFile(cwd, 'r1/series.tex', 'series');
 
-    const result = await resolveWorkflowOutput(
+    const result = await resolveOutput(
       undefined,
       'out',
       workflowResult([
@@ -274,7 +279,7 @@ describe('CLI workflow output resolution', () => {
     const runRoot = await writeRunFile(cwd, 'root/main.tex', 'root');
     const runNested = await writeRunFile(cwd, 'nested/main.tex', 'nested');
 
-    const result = await resolveWorkflowOutput(
+    const result = await resolveOutput(
       undefined,
       'out',
       workflowResult([
@@ -322,7 +327,7 @@ describe('CLI workflow output resolution', () => {
     const runDerived = await writeRunFile(cwd, 'r1/derived.tex', 'derived');
 
     await expect(
-      resolveWorkflowOutput(
+      resolveOutput(
         undefined,
         'out',
         workflowResult([
@@ -360,7 +365,7 @@ describe('CLI workflow output resolution', () => {
     const runSeries = await writeRunFile(cwd, 'r1/series.tex', 'series');
 
     await expect(
-      resolveWorkflowOutput(
+      resolveOutput(
         undefined,
         'out',
         workflowResult([
@@ -390,7 +395,7 @@ describe('CLI workflow output resolution', () => {
     const runA1 = await writeRunFile(cwd, 'r1/a.tex', 'A1');
     const runA2 = await writeRunFile(cwd, 'r2/a.tex', 'A2');
 
-    await resolveWorkflowOutput(
+    await resolveOutput(
       undefined,
       'out',
       workflowResult([
@@ -414,7 +419,7 @@ describe('CLI workflow output resolution', () => {
     const runA1 = await writeRunFile(cwd, 'r1/a.tex', 'A1');
     const runA2 = await writeRunFile(cwd, 'r2/a.tex', 'A2');
 
-    const result = await resolveWorkflowOutput(
+    const result = await resolveOutput(
       'out/a.tex',
       undefined,
       workflowResult([
@@ -442,7 +447,7 @@ describe('CLI workflow output resolution', () => {
     const runAppendix = await writeRunFile(cwd, 'r2/appendix.tex', 'APPENDIX2');
     const runMain1 = await writeRunFile(cwd, 'r1/main.tex', 'MAIN1');
 
-    const result = await resolveWorkflowOutput(
+    const result = await resolveOutput(
       'out/paper.tex',
       undefined,
       workflowResult([

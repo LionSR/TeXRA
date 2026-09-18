@@ -1,6 +1,8 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
+import { Effect } from 'effect';
+
 import type { AgentConfigPayload, WorkflowFlowResult } from '@agent/runtime';
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
 import type {
@@ -14,6 +16,7 @@ import {
 } from '@shared/schemas';
 import { runOutcomeToCliRunStatus } from '@shared/runs/runStatus';
 import { parseWorkflowOutputRoundDir } from '@shared/constants/workflowOutput';
+import { ensureError } from '@utils/errors/errorMessage';
 import { getSafeDocumentRelativePath } from '@utils/files/outputFileUtils';
 import { runDirUnder } from '@utils/files/runStorageFs';
 // toPosixPath also trims and resolves `.`/`..` segments beyond a bare slash
@@ -77,69 +80,79 @@ function parentFileUsageError(
  * platform-specific ancestor traversal: it handles missing depth, Windows
  * ENOENT-through-file behavior, and symlink resolution natively.
  */
-async function probeOutputPath(
+function probeOutputPath(
   target: string,
   flagLabel: OutputFlag,
   dependencies: OutputPathProbeDependencies = outputPathProbeDefaults,
-): Promise<OutputPathStats | null> {
+): Effect.Effect<OutputPathStats | null, Error> {
   const { stat, mkdir, dirname } = dependencies;
-  try {
-    return await stat(target);
-  } catch (error: unknown) {
-    if (isNotADirectoryError(error)) {
-      throw parentFileUsageError(target, flagLabel);
-    }
-    if (!isFileNotFoundError(error)) throw error;
-  }
-
-  const requiredDirectory =
-    flagLabel === '--output-dir' ? target : dirname(target);
-  try {
-    await mkdir(requiredDirectory, { recursive: true });
-  } catch (error: unknown) {
-    if (isNotADirectoryError(error) || isAlreadyExistsError(error)) {
-      throw parentFileUsageError(target, flagLabel);
-    }
-    if (isFileNotFoundError(error)) {
-      throw new CliUsageError(
-        flagLabel === '--output-dir'
-          ? `--output-dir cannot be created: ${target}`
-          : `--output parent directory cannot be created: ${target}`,
-      );
-    }
-    throw error;
-  }
-  return null;
+  return Effect.tryPromise({
+    try: () => stat(target),
+    catch: ensureError,
+  }).pipe(
+    Effect.catch((error) => {
+      if (isNotADirectoryError(error)) {
+        return Effect.fail(parentFileUsageError(target, flagLabel));
+      }
+      if (!isFileNotFoundError(error)) return Effect.fail(error);
+      const requiredDirectory =
+        flagLabel === '--output-dir' ? target : dirname(target);
+      return Effect.tryPromise({
+        try: () => mkdir(requiredDirectory, { recursive: true }),
+        catch: (cause: unknown) => {
+          if (isNotADirectoryError(cause) || isAlreadyExistsError(cause)) {
+            return parentFileUsageError(target, flagLabel);
+          }
+          if (!isFileNotFoundError(cause)) return ensureError(cause);
+          return new CliUsageError(
+            flagLabel === '--output-dir'
+              ? `--output-dir cannot be created: ${target}`
+              : `--output parent directory cannot be created: ${target}`,
+          );
+        },
+      }).pipe(Effect.as(null));
+    }),
+  );
 }
 
 export { probeOutputPath as probeOutputPathForTests };
 
 /** `--output-dir <path>` must point at a directory (or not exist yet). */
-export async function assertOutputDirAvailable(
+export function assertOutputDirAvailable(
   outputDir: string | undefined,
   cwd: string,
-): Promise<void> {
-  if (!outputDir) return;
+): Effect.Effect<void, Error> {
+  if (!outputDir) return Effect.void;
   const target = joinCwdRelative(outputDir, cwd);
-  const stats = await probeOutputPath(target, '--output-dir');
-  if (stats && !stats.isDirectory()) {
-    throw new CliUsageError(`--output-dir is not a directory: ${target}`);
-  }
+  return probeOutputPath(target, '--output-dir').pipe(
+    Effect.flatMap((stats) =>
+      stats && !stats.isDirectory()
+        ? Effect.fail(
+            new CliUsageError(`--output-dir is not a directory: ${target}`),
+          )
+        : Effect.void,
+    ),
+  );
 }
 
 /** `--output <path>` must end at a writable file path (or not exist yet). */
-export async function assertOutputFileAvailable(
+export function assertOutputFileAvailable(
   outputFile: string | undefined,
   cwd: string,
-): Promise<void> {
-  if (!outputFile) return;
+): Effect.Effect<void, Error> {
+  if (!outputFile) return Effect.void;
   const target = joinCwdRelative(outputFile, cwd);
-  const stats = await probeOutputPath(target, '--output');
-  if (stats?.isDirectory()) {
-    throw new CliUsageError(
-      `--output is a directory; use --output-dir or pick a file path: ${target}`,
-    );
-  }
+  return probeOutputPath(target, '--output').pipe(
+    Effect.flatMap((stats) =>
+      stats?.isDirectory()
+        ? Effect.fail(
+            new CliUsageError(
+              `--output is a directory; use --output-dir or pick a file path: ${target}`,
+            ),
+          )
+        : Effect.void,
+    ),
+  );
 }
 
 export type CliWorkflowRunResult = CliRunResult & {
@@ -239,84 +252,106 @@ export function inputDerivedOutputFiles(
   });
 }
 
-export async function resolveWorkflowOutput(
+/** Copy one generated output to its destination, creating the parent path. */
+function copyOutputFile(
+  source: string,
+  targetPath: string,
+): Effect.Effect<void, Error> {
+  return Effect.tryPromise({
+    try: async () => {
+      await fs.mkdir(path.dirname(targetPath), { recursive: true });
+      await fs.copyFile(source, targetPath);
+    },
+    catch: ensureError,
+  });
+}
+
+export function resolveWorkflowOutput(
   outputFile: string | undefined,
   outputDir: string | undefined,
   result: WorkflowFlowResult,
   context: CliContext,
   options: WorkflowOutputResolutionOptions,
-): Promise<CliWorkflowRunResult> {
-  const runDirectory = runDirUnder(options.storageRoot, result.runId);
-  const baseResult = { ...result, workingDirectory: context.cwd, runDirectory };
-  // Only completed runs may publish to user-requested destinations. Partial or
-  // rejected artifacts remain inspectable in run storage through baseResult.
-  if (result.outcome !== RUN_OUTCOME.COMPLETED) return baseResult;
-  // Commit before validation as well as copying: once output finalization owns
-  // the verdict, its missing-output and filesystem failures must stay visible.
-  if ((outputFile || outputDir) && options.tryCommitPublication?.() === false) {
-    return baseResult;
-  }
-  const terminalStatus = runOutcomeToCliRunStatus(result.outcome);
-  if (result.output.outputs.length === 0 && (outputFile || outputDir)) {
+): Effect.Effect<CliWorkflowRunResult, Error> {
+  return Effect.gen(function* () {
+    const runDirectory = runDirUnder(options.storageRoot, result.runId);
+    const baseResult = {
+      ...result,
+      workingDirectory: context.cwd,
+      runDirectory,
+    };
+    // Only completed runs may publish to user-requested destinations. Partial or
+    // rejected artifacts remain inspectable in run storage through baseResult.
+    if (result.outcome !== RUN_OUTCOME.COMPLETED) return baseResult;
+    // Commit before validation as well as copying: once output finalization owns
+    // the verdict, its missing-output and filesystem failures must stay visible.
+    if (
+      (outputFile || outputDir) &&
+      options.tryCommitPublication?.() === false
+    ) {
+      return baseResult;
+    }
+    const terminalStatus = runOutcomeToCliRunStatus(result.outcome);
+    if (result.output.outputs.length === 0 && (outputFile || outputDir)) {
+      return yield* Effect.fail(
+        new Error(
+          outputDir
+            ? `Workflow ${terminalStatus} without generated outputs; nothing was copied to ${outputDir}.`
+            : `Workflow ${terminalStatus} without a generated output; ${outputFile} was not written.`,
+        ),
+      );
+    }
+
     if (outputDir) {
-      throw new Error(
-        `Workflow ${terminalStatus} without generated outputs; nothing was copied to ${outputDir}.`,
+      const targetRoot = joinCwdRelative(outputDir, context.cwd);
+      const expectedRelativePaths = (options.expectedOutputFiles ?? []).map(
+        (file) => getSafeDocumentRelativePath(file),
       );
-    }
-    throw new Error(
-      `Workflow ${terminalStatus} without a generated output; ${outputFile} was not written.`,
-    );
-  }
-
-  if (outputDir) {
-    const targetRoot = joinCwdRelative(outputDir, context.cwd);
-    const expectedRelativePaths = (options.expectedOutputFiles ?? []).map(
-      (file) => getSafeDocumentRelativePath(file),
-    );
-    const outputsByRelativePath = new Map<string, OutputFileSummary>();
-    for (const output of result.output.outputs) {
-      const relativePath = outputCopyRelativePathForExpectedOutput(
-        output,
-        expectedRelativePaths,
-      );
-      const existing = outputsByRelativePath.get(relativePath);
-      if (existing == null || output.round > existing.round) {
-        outputsByRelativePath.set(relativePath, output);
+      const outputsByRelativePath = new Map<string, OutputFileSummary>();
+      for (const output of result.output.outputs) {
+        const relativePath = outputCopyRelativePathForExpectedOutput(
+          output,
+          expectedRelativePaths,
+        );
+        const existing = outputsByRelativePath.get(relativePath);
+        if (existing == null || output.round > existing.round) {
+          outputsByRelativePath.set(relativePath, output);
+        }
       }
-    }
 
-    const copiedOutputs: string[] = [];
-    for (const [relativePath, output] of outputsByRelativePath) {
-      const targetPath = path.join(targetRoot, relativePath);
-      await fs.mkdir(path.dirname(targetPath), { recursive: true });
-      await fs.copyFile(output.absolutePath, targetPath);
-      copiedOutputs.push(targetPath);
-    }
+      const copiedOutputs: string[] = [];
+      for (const [relativePath, output] of outputsByRelativePath) {
+        const targetPath = path.join(targetRoot, relativePath);
+        yield* copyOutputFile(output.absolutePath, targetPath);
+        copiedOutputs.push(targetPath);
+      }
 
-    const missing = expectedRelativePaths.filter(
-      (expected) => !outputsByRelativePath.has(expected),
-    );
-    if (missing.length > 0) {
-      throw new Error(
-        `Workflow ${terminalStatus} without expected ${pluralize(missing.length, 'output')}: ${missing.join(', ')}; copied ${copiedOutputs.length} of ${formatResultCount(expectedRelativePaths.length, 'expected output')} to ${targetRoot}.`,
+      const missing = expectedRelativePaths.filter(
+        (expected) => !outputsByRelativePath.has(expected),
       );
+      if (missing.length > 0) {
+        return yield* Effect.fail(
+          new Error(
+            `Workflow ${terminalStatus} without expected ${pluralize(missing.length, 'output')}: ${missing.join(', ')}; copied ${copiedOutputs.length} of ${formatResultCount(expectedRelativePaths.length, 'expected output')} to ${targetRoot}.`,
+          ),
+        );
+      }
+
+      return { ...baseResult, copiedOutputs };
     }
 
-    return { ...baseResult, copiedOutputs };
-  }
+    const finalOutput = finalWorkflowOutput(result.output.outputs);
+    if (!outputFile || !finalOutput) {
+      return baseResult;
+    }
 
-  const finalOutput = finalWorkflowOutput(result.output.outputs);
-  if (!outputFile || !finalOutput) {
-    return baseResult;
-  }
+    const targetPath = joinCwdRelative(outputFile, context.cwd);
+    if (path.resolve(finalOutput.absolutePath) !== path.resolve(targetPath)) {
+      yield* copyOutputFile(finalOutput.absolutePath, targetPath);
+    }
 
-  const targetPath = joinCwdRelative(outputFile, context.cwd);
-  if (path.resolve(finalOutput.absolutePath) !== path.resolve(targetPath)) {
-    await fs.mkdir(path.dirname(targetPath), { recursive: true });
-    await fs.copyFile(finalOutput.absolutePath, targetPath);
-  }
-
-  return { ...baseResult, copiedOutput: targetPath };
+    return { ...baseResult, copiedOutput: targetPath };
+  });
 }
 
 export function formatWorkflowTextResult(result: CliWorkflowRunResult): string {

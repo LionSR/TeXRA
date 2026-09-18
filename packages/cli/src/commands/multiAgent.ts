@@ -85,13 +85,13 @@ function formatAttachedFileList(
   ].join('\n');
 }
 
-async function runMultiAgentList(context: CliContext): Promise<number> {
-  const services = await initLocalCliPlatform(context);
+const runMultiAgentList = Effect.fn('runMultiAgentList')(function* (
+  context: CliContext,
+  services: CliPlatformServices,
+) {
   const { plans, remoteCatalogRefreshAttempted } =
-    await services.runtime.runPromise(
-      loadCliMultiAgentPresetPlanSet(
-        readCliMultiAgentPresets(services.workspaceState),
-      ),
+    yield* loadCliMultiAgentPresetPlanSet(
+      readCliMultiAgentPresets(services.workspaceState),
     );
 
   emitCliResult(context, {
@@ -102,20 +102,17 @@ async function runMultiAgentList(context: CliContext): Promise<number> {
     }),
   });
   return CliExitCode.Success;
-}
+});
 
-async function runMultiAgentShow(
+const runMultiAgentShow = Effect.fn('runMultiAgentShow')(function* (
   context: CliContext,
   presetIdOrName: string,
-): Promise<number> {
-  const services = await initCliPlatform({ ...context, quietLogs: true });
-
+  services: CliPlatformServices,
+) {
   const { plan, remoteCatalogRefreshAttempted } =
-    await services.runtime.runPromise(
-      loadCliMultiAgentRunPlan(
-        { preset: presetIdOrName },
-        services.workspaceState,
-      ),
+    yield* loadCliMultiAgentRunPlan(
+      { preset: presetIdOrName },
+      services.workspaceState,
     );
 
   emitCliResult(context, {
@@ -126,16 +123,13 @@ async function runMultiAgentShow(
     }),
   });
   return CliExitCode.Success;
-}
+});
 
 export const runMultiAgentPreset = Effect.fn('runMultiAgentPreset')(function* (
   context: CliContext,
   init: MultiAgentRunInit,
 ): Effect.fn.Return<number, Error, CliRunServices> {
-  const instruction = yield* Effect.tryPromise({
-    try: () => resolveFileBackedInstruction(init, context.cwd),
-    catch: ensureError,
-  });
+  const instruction = yield* resolveFileBackedInstruction(init, context.cwd);
   const hasInstruction = instruction.trim().length > 0;
   if (init.inputFiles.length === 0 && !hasInstruction) {
     throw new CliUsageError(MULTI_AGENT_TASK_REQUIRED_MESSAGE);
@@ -277,7 +271,10 @@ const multiAgentListCommand = defineCliCommand({
   args: {
     ...GLOBAL_ARGS,
   },
-  run: runMultiAgentList,
+  run: async (context) => {
+    const services = await initLocalCliPlatform(context);
+    return services.runtime.runPromise(runMultiAgentList(context, services));
+  },
 });
 
 const multiAgentShowCommand = defineCliCommand({
@@ -293,7 +290,12 @@ const multiAgentShowCommand = defineCliCommand({
       description: 'Preset id or name from `texra multi-agent list`',
     },
   },
-  run: (context, ctx) => runMultiAgentShow(context, ctx.args.preset),
+  run: async (context, ctx) => {
+    const services = await initCliPlatform({ ...context, quietLogs: true });
+    return services.runtime.runPromise(
+      runMultiAgentShow(context, ctx.args.preset, services),
+    );
+  },
 });
 
 const multiAgentRunCommand = withUsageSections(

@@ -36,21 +36,23 @@ function loadFailureMessage(id: RunId, error: unknown): string {
   return `Could not load session ${id}: ${toErrorMessage(error)}`;
 }
 
-async function workflowRecoveryInputsAreDurable(
+function workflowRecoveryInputsAreDurable(
   config: Parameters<typeof executeCliWorkflowConfig>[0],
   fallbackCwd: string,
-): Promise<boolean> {
+): Effect.Effect<boolean> {
   const cwd = config.workingDirectory || fallbackCwd;
   const paths = [...(config.inputFiles ?? []), ...(config.contextFiles ?? [])];
-  const checks = await Promise.all(
-    paths.map((inputPath) =>
-      fs.access(path.resolve(cwd, inputPath)).then(
-        () => true,
-        () => false,
+  return Effect.forEach(
+    paths,
+    (inputPath) =>
+      Effect.promise(() =>
+        fs.access(path.resolve(cwd, inputPath)).then(
+          () => true,
+          () => false,
+        ),
       ),
-    ),
-  );
-  return checks.every(Boolean);
+    { concurrency: 'unbounded' },
+  ).pipe(Effect.map((checks) => checks.every(Boolean)));
 }
 
 /**
@@ -165,25 +167,26 @@ export async function runResumeCommand(
             Effect.gen(function* () {
               // Fast-fail on an unusable destination before the run restarts;
               // `executeCliWorkflowConfig` reads the same persisted `cli`
-              // block. The three preflight reads are Promise-native, so one
-              // lift carries all of them in the order they ran.
-              const recoveryInputIsDurable = yield* Effect.tryPromise({
-                try: async () => {
-                  await assertOutputFileAvailable(
-                    resumeWorkflowOutputFile(workflowConfig),
-                    context.cwd,
-                  );
-                  await assertOutputDirAvailable(
-                    resumeWorkflowOutputDirectory(workflowConfig),
-                    context.cwd,
-                  );
-                  return workflowRecoveryInputsAreDurable(
-                    workflowConfig,
-                    context.cwd,
-                  );
-                },
+              // block. The stored-destination readers throw on a bad persisted
+              // path, so `Effect.try` keeps that refusal on the typed channel
+              // alongside the probes' own failures.
+              const destinations = yield* Effect.try({
+                try: () => ({
+                  file: resumeWorkflowOutputFile(workflowConfig),
+                  directory: resumeWorkflowOutputDirectory(workflowConfig),
+                }),
                 catch: ensureError,
               });
+              yield* assertOutputFileAvailable(destinations.file, context.cwd);
+              yield* assertOutputDirAvailable(
+                destinations.directory,
+                context.cwd,
+              );
+              const recoveryInputIsDurable =
+                yield* workflowRecoveryInputsAreDurable(
+                  workflowConfig,
+                  context.cwd,
+                );
               exitCode = yield* executeCliWorkflowConfig(
                 workflowConfig,
                 buildHeadlessRunContext(context),

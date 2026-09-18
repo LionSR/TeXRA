@@ -193,8 +193,8 @@ describe('runResumeCommand', () => {
     );
     mocks.runChat.mockResolvedValue({ exitCode: 0 });
     mocks.executeCliWorkflowConfig.mockResolvedValue(0);
-    mocks.assertOutputDirAvailable.mockResolvedValue(undefined);
-    mocks.assertOutputFileAvailable.mockResolvedValue(undefined);
+    mocks.assertOutputDirAvailable.mockReturnValue(Effect.void);
+    mocks.assertOutputFileAvailable.mockReturnValue(Effect.void);
   });
 
   it('reopens the chat TUI with the persisted tool-use run record', async () => {
@@ -283,8 +283,8 @@ describe('runResumeCommand', () => {
       cli: { outputDirectory: path.join(workingDirectory, 'out') },
     });
     await stubWorkflowResume(workflowConfig);
-    mocks.assertOutputDirAvailable.mockRejectedValue(
-      new CliUsageError('--output-dir must refer to a directory.'),
+    mocks.assertOutputDirAvailable.mockReturnValue(
+      Effect.fail(new CliUsageError('--output-dir must refer to a directory.')),
     );
 
     await expect(run(cliContext())).resolves.toBe(CliExitCode.Usage);

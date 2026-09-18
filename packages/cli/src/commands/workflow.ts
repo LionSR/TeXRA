@@ -111,10 +111,7 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
   if (init.output && init.outputDir) {
     throw new CliUsageError('Use either --output or --output-dir, not both.');
   }
-  const instruction = yield* Effect.tryPromise({
-    try: () => resolveFileBackedInstruction(init, context.cwd),
-    catch: ensureError,
-  });
+  const instruction = yield* resolveFileBackedInstruction(init, context.cwd);
   // Neither category can run this: a workflow agent needs at least one input
   // file, a tool-use agent needs an instruction. Rejecting it before the
   // platform init keeps a plain usage error off the agent-catalog fetch a
@@ -144,17 +141,11 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
   }
   // Reject `--output-dir <path>` early when the path already points at a
   // non-directory (else we'd run the full workflow and EEXIST at the end).
-  yield* Effect.tryPromise({
-    try: () => assertOutputDirAvailable(init.outputDir, context.cwd),
-    catch: ensureError,
-  });
+  yield* assertOutputDirAvailable(init.outputDir, context.cwd);
   // Same fast-fail for `--output <path>`: existing directory or file-typed
   // parent component blows up at copy time (`EISDIR` / `EEXIST`) after the
   // full agent run otherwise.
-  yield* Effect.tryPromise({
-    try: () => assertOutputFileAvailable(init.output, context.cwd),
-    catch: ensureError,
-  });
+  yield* assertOutputFileAvailable(init.output, context.cwd);
   if (init.output && hasMixedStdinWorkflowInputSpecs(init.inputFiles)) {
     throw new CliUsageError(MULTI_INPUT_OUTPUT_MESSAGE);
   }
@@ -404,14 +395,10 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
             ? declaredOutputFiles
             : (config.cli?.expectedOutputFiles ?? undefined);
           const outputResult = yield* Effect.result(
-            Effect.tryPromise({
-              try: () =>
-                resolveWorkflowOutput(output, outputDir, result, runContext, {
-                  expectedOutputFiles,
-                  storageRoot: session.roots.storage,
-                  tryCommitPublication,
-                }),
-              catch: ensureError,
+            resolveWorkflowOutput(output, outputDir, result, runContext, {
+              expectedOutputFiles,
+              storageRoot: session.roots.storage,
+              tryCommitPublication,
             }),
           );
           let outcome = result.outcome;
