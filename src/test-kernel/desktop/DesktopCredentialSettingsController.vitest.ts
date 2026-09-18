@@ -111,7 +111,7 @@ async function createFixture({
   const infos: string[] = [];
   const warnings: string[] = [];
   const errors: string[] = [];
-  const signIn = vi.fn(async () => undefined);
+  const signIn = vi.fn(() => Effect.void);
   const signOut = vi.fn(async () => undefined);
   const onCredentialChanged = vi.fn(async () => {
     events.push('credential');

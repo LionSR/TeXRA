@@ -46,7 +46,9 @@ const AUTH_COMMIT_LANE = 'commit';
 const AUTH_CALLBACK_LANE = 'callback';
 
 interface DesktopSupabaseAuth {
-  signIn(provider?: OAuthProvider): Promise<void>;
+  /** Start the browser sign-in for one provider. The Effect fails with
+   *  whatever the attempt failed with; its caller words that failure. */
+  signIn(provider?: OAuthProvider): Effect.Effect<void, unknown>;
   signInAndWaitForSession(
     provider?: OAuthProvider,
     options?: { timeoutMs?: number },
@@ -446,10 +448,7 @@ export function createDesktopSupabaseAuth(
     });
 
   return {
-    async signIn(provider = DEFAULT_OAUTH_PROVIDER) {
-      const started = await runtime.runPromiseExit(startSignIn(provider));
-      if (Exit.isFailure(started)) throw Cause.squash(started.cause);
-    },
+    signIn: (provider = DEFAULT_OAUTH_PROVIDER) => startSignIn(provider),
 
     async signInAndWaitForSession(
       provider = DEFAULT_OAUTH_PROVIDER,

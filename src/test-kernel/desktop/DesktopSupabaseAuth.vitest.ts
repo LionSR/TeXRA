@@ -240,7 +240,7 @@ describe('desktop Supabase auth', () => {
     const openExternalUrl = vi.fn(() => Effect.void);
     const { oauthClient, auth } = createAuthSetup({ openExternalUrl });
 
-    await auth.signIn();
+    await testRuntime().runPromise(auth.signIn());
 
     expect(oauthClient.auth.signInWithOAuth).toHaveBeenCalledWith({
       provider: 'github',
@@ -291,7 +291,7 @@ describe('desktop Supabase auth', () => {
       openExternalUrl,
     });
 
-    await auth.signIn();
+    await testRuntime().runPromise(auth.signIn());
 
     expect(events).toEqual(['begin', 'oauth', 'open']);
   });
@@ -302,7 +302,7 @@ describe('desktop Supabase auth', () => {
       onSessionChanged,
     });
 
-    await auth.signIn();
+    await testRuntime().runPromise(auth.signIn());
     routeMatchingCallback(router, oauthClient);
 
     await vi.waitFor(() => {
@@ -437,7 +437,7 @@ describe('desktop Supabase auth', () => {
     const log = createLog();
     const { router, coordinator, oauthClient, auth } = createAuthSetup({ log });
 
-    await auth.signIn();
+    await testRuntime().runPromise(auth.signIn());
     // Attacker-delivered deeplink carrying a valid code for another account but
     // NOT the nonce this client minted in its redirect_to.
     router.routeUrl(
@@ -483,7 +483,7 @@ describe('desktop Supabase auth', () => {
       callbackState,
     });
 
-    await auth.signIn();
+    await testRuntime().runPromise(auth.signIn());
     auth.dispose();
     const persistedCallbackState = createDesktopAuthCallbackState(
       testRuntime(),
@@ -522,7 +522,7 @@ describe('desktop Supabase auth', () => {
         ),
       });
 
-      await auth.signIn();
+      await testRuntime().runPromise(auth.signIn());
       auth.dispose();
 
       vi.setSystemTime(Date.now() + 11 * 60 * 1000);
@@ -615,7 +615,7 @@ describe('desktop Supabase auth', () => {
       log,
     });
 
-    await auth.signIn();
+    await testRuntime().runPromise(auth.signIn());
     await auth.signOut();
     routeMatchingCallback(router, oauthClient);
 
@@ -632,7 +632,7 @@ describe('desktop Supabase auth', () => {
     const log = createLog();
     const { router, coordinator, oauthClient, auth } = createAuthSetup({ log });
 
-    await auth.signIn();
+    await testRuntime().runPromise(auth.signIn());
     routeMatchingCallback(router, oauthClient, 'first');
     router.routeUrl(authCallbackUrl({ code: 'second' }));
 
@@ -655,13 +655,13 @@ describe('desktop Supabase auth', () => {
     });
     const callbackProcessing = gateNextCallbackProcessing(coordinator);
 
-    await auth.signIn();
+    await testRuntime().runPromise(auth.signIn());
     routeMatchingCallback(router, oauthClient);
     await vi.waitFor(() => {
       expect(coordinator.createSessionFromCallback).toHaveBeenCalledOnce();
     });
 
-    await auth.signIn();
+    await testRuntime().runPromise(auth.signIn());
     callbackProcessing.resolve();
 
     await new Promise((resolve) => setImmediate(resolve));
@@ -678,7 +678,7 @@ describe('desktop Supabase auth', () => {
     });
     const sessionStorage = gateNextStoreSession(coordinator);
 
-    await auth.signIn();
+    await testRuntime().runPromise(auth.signIn());
     routeMatchingCallback(router, oauthClient, 'stale-code');
     await vi.waitFor(() => {
       expect(coordinator.storeSession).toHaveBeenCalledOnce();
@@ -707,13 +707,13 @@ describe('desktop Supabase auth', () => {
     });
     const sessionStorage = gateNextStoreSession(coordinator);
 
-    await auth.signIn();
+    await testRuntime().runPromise(auth.signIn());
     routeMatchingCallback(router, oauthClient, 'stale-code');
     await vi.waitFor(() => {
       expect(coordinator.storeSession).toHaveBeenCalledOnce();
     });
 
-    const newerSignIn = auth.signIn();
+    const newerSignIn = testRuntime().runPromise(auth.signIn());
     expect(oauthClient.auth.signInWithOAuth).toHaveBeenCalledOnce();
     sessionStorage.resolve();
     await newerSignIn;
@@ -748,13 +748,16 @@ describe('desktop Supabase auth', () => {
         onSessionChanged,
       });
 
-      await auth.signIn();
+      await testRuntime().runPromise(auth.signIn());
       routeMatchingCallback(router, oauthClient, 'stale-code');
       await vi.waitFor(() => {
         expect(onSessionChanged).toHaveBeenCalledOnce();
       });
 
-      const newerSignIn = action === 'signIn' ? auth.signIn() : undefined;
+      const newerSignIn =
+        action === 'signIn'
+          ? testRuntime().runPromise(auth.signIn())
+          : undefined;
       if (action === 'dispose') auth.dispose();
       sessionRefresh.resolve();
       await newerSignIn;
@@ -775,7 +778,7 @@ describe('desktop Supabase auth', () => {
       const { router, coordinator, oauthClient, auth } = createAuthSetup();
       const callbackProcessing = gateNextCallbackProcessing(coordinator);
 
-      await auth.signIn();
+      await testRuntime().runPromise(auth.signIn());
       routeMatchingCallback(router, oauthClient);
       await vi.waitFor(() => {
         expect(coordinator.createSessionFromCallback).toHaveBeenCalledOnce();
@@ -842,7 +845,7 @@ describe('desktop Supabase auth', () => {
       Effect.fail(new AuthPortError({ cause: new Error('network down') })),
     );
 
-    await auth.signIn();
+    await testRuntime().runPromise(auth.signIn());
     routeMatchingCallback(router, oauthClient);
 
     await vi.waitFor(() => {

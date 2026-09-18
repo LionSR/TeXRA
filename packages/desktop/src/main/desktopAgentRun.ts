@@ -86,10 +86,13 @@ export interface DesktopAgentRun {
     request: RunRequest,
     options?: DesktopRunOptions,
   ): Effect.Effect<void, RequestRefusal | RunLaunchFailed>;
+  /** The same launch for a request that is already validated. It still fails
+   *  with the launch's own bare `Error`; a caller that needs a named channel
+   *  names it, as `runAgentRequest` does. */
   runValidated(
     request: ValidatedRunRequest,
     options?: DesktopRunOptions,
-  ): Promise<void>;
+  ): Effect.Effect<void, Error>;
   /** The tool-edit approvals this window owns. A prompt's verbs act over its
    *  staged preview: the approval applies the proposed file as the user left
    *  it. The host arm calls `handleAction` directly, as the extension does. */
@@ -233,12 +236,12 @@ export function createDesktopAgentRun(
   );
 
   /**
-   * The launch as an Effect, settling with the run. `onRunCompleted` fires on
-   * every settlement, as the old `finally` did — after the awaited launch,
-   * including `setFirstRunDone`. Do not hook session.onResult: that fires
-   * from run.end inside finalizeTerminal, before the flag write.
+   * The launch, settling with the run. `onRunCompleted` fires on every
+   * settlement, as the old `finally` did — after the launch, including
+   * `setFirstRunDone`. Do not hook session.onResult: that fires from run.end
+   * inside finalizeTerminal, before the flag write.
    */
-  function runValidatedEffect(
+  function runValidated(
     request: ValidatedRunRequest,
     runOptions: DesktopRunOptions = {},
   ): Effect.Effect<void, Error> {
@@ -252,13 +255,6 @@ export function createDesktopAgentRun(
     ).pipe(Effect.ensuring(Effect.sync(() => options.onRunCompleted?.())));
   }
 
-  async function runValidated(
-    request: ValidatedRunRequest,
-    runOptions: DesktopRunOptions = {},
-  ): Promise<void> {
-    await runtime.runPromise(runValidatedEffect(request, runOptions));
-  }
-
   return {
     runAgentRequest(request, runOptions) {
       const validated = validateRunRequest(request);
@@ -270,7 +266,7 @@ export function createDesktopAgentRun(
       }
       // The launch program still fails with a bare `Error`, so the port's
       // one channel is named here, as the extension's binding names it.
-      return runValidatedEffect(validated.request, runOptions).pipe(
+      return runValidated(validated.request, runOptions).pipe(
         Effect.mapError((cause) =>
           isRequestRefusal(cause)
             ? cause

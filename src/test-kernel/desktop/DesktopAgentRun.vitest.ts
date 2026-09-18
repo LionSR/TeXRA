@@ -74,13 +74,15 @@ describe('desktop agent run completion hook', () => {
       await testRuntime().runPromise(session.dispose());
     });
 
-    const settled = run.runValidated({
-      config: ToolUseAgentConfigSchema.parse({
-        agent: 'proofreader',
-        model: 'deepseekproT',
-        agentCategory: AgentCategory.ToolUse,
+    const settled = testRuntime().runPromise(
+      run.runValidated({
+        config: ToolUseAgentConfigSchema.parse({
+          agent: 'proofreader',
+          model: 'deepseekproT',
+          agentCategory: AgentCategory.ToolUse,
+        }),
       }),
-    });
+    );
     const completedRun = publishTestRunStart(session, generateRunId());
     session.publish([completedRunEnd(completedRun)]);
     await testRuntime().runPromise(session.settlePublications());

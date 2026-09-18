@@ -155,7 +155,6 @@ describe('desktop preview host', () => {
       const files = createDesktopFileSelection({
         workspacePath: undefined,
         showOpenFileDialog: async () => undefined,
-        runtime: testRuntime(),
       });
       const handler = createDesktopHostRequests({
         runtime: testRuntime(),
@@ -177,7 +176,7 @@ describe('desktop preview host', () => {
           },
           secrets,
           stores: session.roots,
-          fileOptions: () => Effect.promise(() => files.fileOptions()),
+          fileOptions: () => files.fileOptions().pipe(Effect.orDie),
           readRecentCommits: () =>
             Effect.succeed({ commits: [], isGitRepo: false }),
           publish: () => {},
@@ -188,14 +187,14 @@ describe('desktop preview host', () => {
         resourcesPath: '/resources',
         postToRenderer: () => {},
         postSurfaceAction: () => {},
-        signIn: async () => {},
+        signIn: () => Effect.void,
         getCustomAgentDirectory: () => Effect.succeed('/agents'),
         showFirstRunWalkthrough: () => {},
         onboarding: {} as Parameters<
           typeof createDesktopHostRequests
         >[0]['onboarding'],
         openExternalUrl: preview.openExternal,
-        recheckTools: async () => {},
+        recheckTools: () => Effect.void,
         logger: { warn: () => {}, error: () => {} },
       });
       try {
