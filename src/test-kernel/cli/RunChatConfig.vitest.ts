@@ -51,7 +51,7 @@ describe('CLI chat run config', () => {
     });
     const context = {
       session: {
-        runPromise: undefined,
+        runSettled: undefined,
         runCompleted: false,
         stopRequested: false,
       },

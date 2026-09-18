@@ -3,11 +3,21 @@ import { RUN_PHASE, type RunPhase, type RunId } from '@shared/schemas';
 import { isActivePhase } from '@shared/runs/runStatus';
 
 import { claimedRunId, rootRunPending } from './cliState';
+import type { Effect } from 'effect';
+
+/**
+ * The claimed root run's settlement, as the slot holds it: the program that
+ * completes when that run finishes, fails or is interrupted. It is the
+ * `Deferred.await` of the deferred the claiming path settles, so the slot
+ * stores a value every reader runs on its own fiber instead of a promise the
+ * claim had to run a fiber to produce.
+ */
+export type RootRunSettled = Effect.Effect<void, unknown>;
 
 /**
  * Root-run state of one chat TUI session.
  *
- * The run-claim triple (`runId`, `runPromise`, `runCompleted`) is mirrored
+ * The run-claim triple (`runId`, `runSettled`, `runCompleted`) is mirrored
  * into the `rootRunPending` / `claimedRunId` signals that renders read, and
  * the mirror must never lag
  * the fields: an unpublished mutation leaves the Ctrl-C hint and the
@@ -22,7 +32,7 @@ import { claimedRunId, rootRunPending } from './cliState';
  */
 export class TuiSession {
   private _runId: RunId | undefined;
-  private _runPromise: Promise<void> | undefined;
+  private _runSettled: RootRunSettled | undefined;
   private _runCompleted = false;
 
   /** Root conversation that remains recoverable after an interrupted turn. */
@@ -39,8 +49,8 @@ export class TuiSession {
     this.publish();
   }
 
-  get runPromise(): Promise<void> | undefined {
-    return this._runPromise;
+  get runSettled(): RootRunSettled | undefined {
+    return this._runSettled;
   }
 
   get runCompleted(): boolean {
@@ -49,7 +59,7 @@ export class TuiSession {
 
   clearRunState(): void {
     this._runId = undefined;
-    this._runPromise = undefined;
+    this._runSettled = undefined;
     this._runCompleted = false;
     this.interruptedRunId = undefined;
     this.runExitCode = CliExitCode.Success;
@@ -57,9 +67,9 @@ export class TuiSession {
     this.publish();
   }
 
-  markRunPending(runPromise: Promise<void>): void {
+  markRunPending(runSettled: RootRunSettled): void {
     this._runId = undefined;
-    this._runPromise = runPromise;
+    this._runSettled = runSettled;
     this._runCompleted = false;
     this.runExitCode = CliExitCode.Success;
     this.stopRequested = false;
@@ -83,9 +93,9 @@ export class TuiSession {
    * instead — it never suspends before claiming, so it has no check-then-await
    * window for this primitive to close.
    */
-  tryClaimRootRunSlot(runPromise: Promise<void>): boolean {
+  tryClaimRootRunSlot(runSettled: RootRunSettled): boolean {
     if (!chatTuiCanStartRootRun(this)) return false;
-    this.markRunPending(runPromise);
+    this.markRunPending(runSettled);
     return true;
   }
 
@@ -101,18 +111,18 @@ export class TuiSession {
 
 type InterruptibleTuiSessionState = Pick<
   TuiSession,
-  'runId' | 'runPromise' | 'runCompleted'
+  'runId' | 'runSettled' | 'runCompleted'
 >;
 
 type PendingTuiRunSessionState = Pick<
   TuiSession,
-  'runPromise' | 'runCompleted'
+  'runSettled' | 'runCompleted'
 >;
 
 export function chatTuiCanInterruptActiveRun(
   session: InterruptibleTuiSessionState,
 ): boolean {
-  return Boolean(session.runId && session.runPromise && !session.runCompleted);
+  return Boolean(session.runId && session.runSettled && !session.runCompleted);
 }
 
 /**
@@ -143,9 +153,9 @@ export function chatTuiCanStopVisibleRun(facts: ChatTuiRunStopFacts): boolean {
 /** Whether the session still holds an unfinished root-run claim. Sole
  *  derivation of that fact: the availability predicate, the published
  *  `rootRunPending` signal, and every caller-side "a run is in flight" check
- *  read it here instead of re-deriving `runPromise && !runCompleted`. */
+ *  read it here instead of re-deriving `runSettled && !runCompleted`. */
 export function chatTuiRunPending(session: PendingTuiRunSessionState): boolean {
-  return Boolean(session.runPromise) && !session.runCompleted;
+  return Boolean(session.runSettled) && !session.runCompleted;
 }
 
 export function chatTuiCanStartRootRun(

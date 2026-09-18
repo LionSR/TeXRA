@@ -1,5 +1,6 @@
 import '@test/support/defaultSessionTestSetup';
 
+import { Effect } from 'effect';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import {
@@ -294,52 +295,52 @@ describe('CLI TUI row allocation', () => {
     {
       name: 'before the stream resolves',
       runCompleted: false,
-      runPromise: Promise.resolve(),
+      runSettled: Effect.void,
       runId: undefined,
       expected: false,
     },
     {
       name: 'while startup is pending',
       runCompleted: false,
-      runPromise: undefined,
+      runSettled: undefined,
       runId: root,
       expected: false,
     },
     {
       name: 'after the run completed',
       runCompleted: true,
-      runPromise: Promise.resolve(),
+      runSettled: Effect.void,
       runId: root,
       expected: false,
     },
     {
       name: 'with the stream resolved and the run in flight',
       runCompleted: false,
-      runPromise: Promise.resolve(),
+      runSettled: Effect.void,
       runId: root,
       expected: true,
     },
   ])(
     'only reports a chat run interruptible $name',
-    ({ runCompleted, runPromise, runId, expected }) => {
+    ({ runCompleted, runSettled, runId, expected }) => {
       expect(
-        chatTuiCanInterruptActiveRun({ runCompleted, runPromise, runId }),
+        chatTuiCanInterruptActiveRun({ runCompleted, runSettled, runId }),
       ).toBe(expected);
     },
   );
 
   it('marks a chat root run pending before async startup work resolves', () => {
-    const startupPromise = new Promise<void>(() => {});
+    const startupSettled = Effect.never;
     const session = new TuiSession();
     session.runId = root;
     session.runExitCode = CliExitCode.AgentError;
     session.markRunCompleted();
     session.stopRequested = true;
 
-    session.markRunPending(startupPromise);
+    session.markRunPending(startupSettled);
 
     expect(session.runId).toBeUndefined();
-    expect(session.runPromise).toBe(startupPromise);
+    expect(session.runSettled).toBe(startupSettled);
     expect(session.runExitCode).toBe(CliExitCode.Success);
     expect(session.runCompleted).toBe(false);
     expect(session.stopRequested).toBe(false);
@@ -350,7 +351,7 @@ describe('CLI TUI row allocation', () => {
 
   it('publishes the run-control run id from the session itself', () => {
     const session = new TuiSession();
-    session.markRunPending(new Promise<void>(() => {}));
+    session.markRunPending(Effect.never);
     expect(claimedRunId.get()).toBeUndefined();
 
     // No publish call accompanies this write: the session owns the mirror,
@@ -368,7 +369,7 @@ describe('CLI TUI row allocation', () => {
 
   it('clears stale resume ids when clearing chat session run state', () => {
     const session = new TuiSession();
-    session.markRunPending(Promise.resolve());
+    session.markRunPending(Effect.void);
     session.markRunCompleted();
     session.runId = root;
     session.interruptedRunId = root;
@@ -379,7 +380,7 @@ describe('CLI TUI row allocation', () => {
 
     expect(session.runId).toBeUndefined();
     expect(session.interruptedRunId).toBeUndefined();
-    expect(session.runPromise).toBeUndefined();
+    expect(session.runSettled).toBeUndefined();
     expect(session.runExitCode).toBe(CliExitCode.Success);
     expect(session.runCompleted).toBe(false);
     expect(session.stopRequested).toBe(false);

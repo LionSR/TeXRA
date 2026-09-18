@@ -8,6 +8,7 @@ import {
   Data,
   Deferred,
   Effect,
+  Exit,
   Option,
   Stream,
   SubscriptionRef,
@@ -51,7 +52,9 @@ import { hasErrorPresentationClaimed } from '@common/errors/sdkError/errorMetada
 import type { RunModelDecisionReason } from '@model/runModelDecision';
 import type { DisposableStore } from '@platform/disposable';
 import {
+  AgentResumeFailed,
   StateWriteFailed,
+  type AgentResumePort,
   type RecoveryContinuation,
   type StateStore,
 } from '@platform/interfaces';
@@ -90,6 +93,7 @@ import {
 } from './tui/state/cliState';
 import {
   chatTuiCanStartRootRun,
+  type RootRunSettled,
   type TuiSession,
 } from './tui/state/sessionRunState';
 import {
@@ -166,6 +170,23 @@ class ChatSessionCallFailed extends Data.TaggedError('ChatSessionCallFailed')<{
   readonly cause: unknown;
 }> {}
 
+/**
+ * Hand a run program's own exit to the deferred the root-run slot holds. The
+ * slot is claimed before the program that settles it exists, so every launch
+ * and resume path ends the same way: success, failure, defect and
+ * interruption reach the waiters unchanged, with no promise in between.
+ */
+const settleClaimOnExit =
+  <A, E>(claim: Deferred.Deferred<A, E>) =>
+  <R>(program: Effect.Effect<A, E, R>): Effect.Effect<A, E, R> =>
+    program.pipe(
+      Effect.onExit((exit) =>
+        Effect.sync(() => {
+          Deferred.doneUnsafe(claim, exit);
+        }),
+      ),
+    );
+
 const recoverRun = <A, E, R>(
   program: Effect.Effect<A, E, R>,
   recover: (error: unknown) => A,
@@ -215,10 +236,12 @@ export interface ChatSessionController {
   clearInterruptedRecovery(): void;
 
   /**
-   * Attempt to resume a queued follow-up target from the CLI platform port.
-   * Returns true only when this controller accepts the target resume.
+   * Attempt to resume a queued follow-up target. This is the CLI's
+   * agent-resume port while a chat is mounted, so it is the port's own
+   * program: it answers true only when this controller accepts the target
+   * resume, and it claims the root-run slot in its first synchronous step.
    */
-  tryResumeRun(runId: RunId, recovery?: RecoveryContinuation): Promise<boolean>;
+  readonly tryResumeRun: AgentResumePort['tryResumeRun'];
   /**
    * The composer's submit path (PRD 10.1): a slash command, the first
    * instruction of a fresh root run, a message into an interrupted root, or
@@ -427,13 +450,13 @@ export function createChatSessionController(
     }
   };
 
-  // A cancelled root can publish completion just before its run promise
-  // settles. During that narrow interval its teardown can still overwrite a
+  // A cancelled root can publish completion just before its run settles.
+  // During that narrow interval its teardown can still overwrite a
   // successor's root-slot state. Retain every unsettled interrupted generation
   // so a later interruption cannot discard an earlier blocker.
-  const recoveryBlockedByInterruptedRuns = new Set<Promise<void>>();
+  const recoveryBlockedByInterruptedRuns = new Set<RootRunSettled>();
   const blockRecoveryUntilInterruptedRunSettles = (): void => {
-    const interruptedRun = session.runPromise;
+    const interruptedRun = session.runSettled;
     if (
       !interruptedRun ||
       session.runCompleted ||
@@ -442,10 +465,14 @@ export function createChatSessionController(
       return;
     }
     recoveryBlockedByInterruptedRuns.add(interruptedRun);
-    const clearBlock = (): void => {
-      recoveryBlockedByInterruptedRuns.delete(interruptedRun);
-    };
-    void interruptedRun.then(clearBlock, clearBlock);
+    void runtime.runPromise(
+      interruptedRun.pipe(
+        Effect.exit,
+        Effect.map(() => {
+          recoveryBlockedByInterruptedRuns.delete(interruptedRun);
+        }),
+      ),
+    );
   };
 
   // Cancellation of an admitted automatic resume is monotone for that
@@ -591,74 +618,71 @@ export function createChatSessionController(
     const runId = generateRunId();
 
     // The slot has to be claimed before the chain that settles it exists, so
-    // the claim holds a `Deferred` the run chain completes and hands the slot
-    // the `Promise<void>` the exit drain awaits. Awaiting the deferred is a
-    // plain suspension, so a run parked at the WAIT node leaves the promise
-    // pending exactly as before.
+    // the claim holds the `await` of a `Deferred` the run chain completes.
+    // Awaiting the deferred is a plain suspension, so a run parked at the WAIT
+    // node leaves the slot pending exactly as before.
     const claimedRun = Deferred.makeUnsafe<void, unknown>();
     // Native launch may resolve its stream on this turn. Claim first so
     // marking the run pending cannot erase that run or a reentrant stop.
-    session.markRunPending(runtime.runPromise(Deferred.await(claimedRun)));
+    session.markRunPending(Deferred.await(claimedRun));
     session.runId = runId;
-    void runtime
-      .runPromise(
-        recoverRun(
-          Effect.try(() => AgentConfigSchema.parse(config)).pipe(
-            Effect.flatMap((registeredConfig) =>
-              runAgent(
-                { kind: 'fresh', config: registeredConfig, runId },
-                {
-                  session: runtimeSession,
-                  enforceCategory: true,
-                  approvalPromptsUnavailable: approvalsUnavailable,
-                  onApprovalPolicyDenial: () =>
-                    warnApprovalDenied(
-                      runtimeSession,
-                      sessionContext,
-                      'Tool or edit approval',
-                      runId,
-                    ),
-                  runtimeUnavailableTools:
-                    getDefaultUnavailableToolNames('cli'),
-                  onRunResolved: (resolvedRunId) => {
-                    // Each chat round mints a fresh root run id, so
-                    // bash/tool-edit/super-YOLO bypass, which is
-                    // keyed per stream, would otherwise reset every round even
-                    // though the user is continuing the same conversation. Link the
-                    // new round's stream to the previous one so bypass resolution
-                    // (see `registerRunParent`) falls through to whatever the
-                    // prior round had, unless this round sets its own explicit value.
-                    const previousRootRunId = rootRunId.get();
-                    if (
-                      previousRootRunId &&
-                      previousRootRunId !== resolvedRunId
-                    ) {
-                      runtimeSession.approvals.registerRunParent(
-                        resolvedRunId,
-                        previousRootRunId,
-                      );
-                    }
-                    rootRunId.set(resolvedRunId);
-                    moveLocalTranscriptToRun(resolvedRunId);
-                    focusRun(resolvedRunId);
-                    if (session.stopRequested) interruptActiveRun();
-                  },
+    void runtime.runPromise(
+      recoverRun(
+        Effect.try(() => AgentConfigSchema.parse(config)).pipe(
+          Effect.flatMap((registeredConfig) =>
+            runAgent(
+              { kind: 'fresh', config: registeredConfig, runId },
+              {
+                session: runtimeSession,
+                enforceCategory: true,
+                approvalPromptsUnavailable: approvalsUnavailable,
+                onApprovalPolicyDenial: () =>
+                  warnApprovalDenied(
+                    runtimeSession,
+                    sessionContext,
+                    'Tool or edit approval',
+                    runId,
+                  ),
+                runtimeUnavailableTools: getDefaultUnavailableToolNames('cli'),
+                onRunResolved: (resolvedRunId) => {
+                  // Each chat round mints a fresh root run id, so
+                  // bash/tool-edit/super-YOLO bypass, which is
+                  // keyed per stream, would otherwise reset every round even
+                  // though the user is continuing the same conversation. Link the
+                  // new round's stream to the previous one so bypass resolution
+                  // (see `registerRunParent`) falls through to whatever the
+                  // prior round had, unless this round sets its own explicit value.
+                  const previousRootRunId = rootRunId.get();
+                  if (
+                    previousRootRunId &&
+                    previousRootRunId !== resolvedRunId
+                  ) {
+                    runtimeSession.approvals.registerRunParent(
+                      resolvedRunId,
+                      previousRootRunId,
+                    );
+                  }
+                  rootRunId.set(resolvedRunId);
+                  moveLocalTranscriptToRun(resolvedRunId);
+                  focusRun(resolvedRunId);
+                  if (session.stopRequested) interruptActiveRun();
                 },
-              ),
+              },
             ),
-            Effect.map((result) => {
-              session.runExitCode = runOutcomeExitCode(result.outcome);
-              notify('agentFinished');
-            }),
           ),
-          reportRunFailure,
+          Effect.map((result) => {
+            session.runExitCode = runOutcomeExitCode(result.outcome);
+            notify('agentFinished');
+          }),
         ),
-      )
-      .finally(finalize)
-      .then(
-        () => Deferred.doneUnsafe(claimedRun, Effect.void),
-        (error: unknown) => Deferred.doneUnsafe(claimedRun, Effect.fail(error)),
-      );
+        reportRunFailure,
+      ).pipe(
+        Effect.ensuring(Effect.sync(finalize)),
+        // The claim settles with the run's own exit, so a waiter reads what
+        // the run did rather than what a promise adapter made of it.
+        settleClaimOnExit(claimedRun),
+      ),
+    );
   };
 
   // -----------------------------------------------------------------------
@@ -673,15 +697,9 @@ export function createChatSessionController(
     // suspended between "checked available" and "claimed", and race in to
     // claim the same slot out from under it.
     const claimedRun = Deferred.makeUnsafe<void, unknown>();
-    if (
-      !session.tryClaimRootRunSlot(
-        runtime.runPromise(Deferred.await(claimedRun)),
-      )
-    ) {
-      // The slot is taken, so nothing downstream will ever complete the
-      // deferred the claim attempt already forked an awaiting fiber on.
-      // Settle it here so that fiber ends with this call.
-      Deferred.doneUnsafe(claimedRun, Effect.void);
+    if (!session.tryClaimRootRunSlot(Deferred.await(claimedRun))) {
+      // The slot is taken, so the deferred this attempt made is dropped
+      // unsettled: nothing holds it, and no fiber is parked on it.
       appendLocalAssistantTranscript(
         'Finish the active chat before resuming a previous session.',
       );
@@ -769,51 +787,46 @@ export function createChatSessionController(
       // cleared the interrupted stream, so the follow-ups typed during the
       // interruption are lost unless both go back where they came from.
       let followUpQueueReady = false;
-      const runChain = runtime
-        .runPromise(
-          Effect.gen(function* () {
-            recoveryHandedOff = true;
-            const result = yield* resumeRun(id, {
-              ...toolUseResumeOptions(id, approvalsUnavailable),
-              recovery,
-              extraFollowUps: supersededRecovery?.followUps,
-              onResumeResolved: adoptResumedRun,
-              onFollowUpQueueReady: () => {
-                followUpQueueReady = true;
-              },
-              isCancellationRequested: () => session.stopRequested,
-            });
-            if ('started' in result) {
-              settleResumedTurn(result.outcome ?? RUN_OUTCOME.COMPLETED);
-            } else if (session.stopRequested) {
-              session.runExitCode = CliExitCode.Interrupted;
-            } else {
-              appendLocalErrorTranscript(
-                describeFollowUpFailure(result.failed),
-              );
-              session.runExitCode = CliExitCode.Usage;
-            }
-          }).pipe(
-            Effect.catch((error) => Effect.sync(() => reportRunFailure(error))),
-          ),
-        )
-        .finally(() => {
-          handBackUnusedRecovery(recovery, recoveryHandedOff);
-          if (!followUpQueueReady) {
-            restoreInterruptedRecovery(supersededRecovery);
+      void runtime.runPromise(
+        Effect.gen(function* () {
+          recoveryHandedOff = true;
+          const result = yield* resumeRun(id, {
+            ...toolUseResumeOptions(id, approvalsUnavailable),
+            recovery,
+            extraFollowUps: supersededRecovery?.followUps,
+            onResumeResolved: adoptResumedRun,
+            onFollowUpQueueReady: () => {
+              followUpQueueReady = true;
+            },
+            isCancellationRequested: () => session.stopRequested,
+          });
+          if ('started' in result) {
+            settleResumedTurn(result.outcome ?? RUN_OUTCOME.COMPLETED);
+          } else if (session.stopRequested) {
+            session.runExitCode = CliExitCode.Interrupted;
+          } else {
+            appendLocalErrorTranscript(describeFollowUpFailure(result.failed));
+            session.runExitCode = CliExitCode.Usage;
           }
-          finalize();
-        });
-      // `session.runPromise` was already claimed synchronously above with
-      // `claimedRunPromise`; forward its settlement to the real run chain so
-      // exit-drain's `await session.runPromise` blocks until the continued
-      // run actually finishes (or is interrupted), not just until
-      // rehydration completes. `resume()`'s own returned promise still
-      // settles here, before the run finishes, fire-and-forget per the
-      // interface contract.
-      runChain.then(
-        () => Deferred.doneUnsafe(claimedRun, Effect.void),
-        (error: unknown) => Deferred.doneUnsafe(claimedRun, Effect.fail(error)),
+        }).pipe(
+          Effect.catch((error) => Effect.sync(() => reportRunFailure(error))),
+          Effect.ensuring(
+            Effect.sync(() => {
+              handBackUnusedRecovery(recovery, recoveryHandedOff);
+              if (!followUpQueueReady) {
+                restoreInterruptedRecovery(supersededRecovery);
+              }
+              finalize();
+            }),
+          ),
+          // The slot was claimed synchronously above; it settles with this
+          // chain, so the exit drain blocks until the continued run actually
+          // finishes (or is interrupted), not just until rehydration
+          // completes. `resume()`'s own returned promise still settles here,
+          // before the run finishes, fire-and-forget per the interface
+          // contract.
+          settleClaimOnExit(claimedRun),
+        ),
       );
     });
     await runtime.runPromise(
@@ -840,34 +853,46 @@ export function createChatSessionController(
     }
   };
 
+  /**
+   * The controller's implementation of the CLI's agent-resume port.
+   *
+   * `Effect.suspend` is what keeps the claim handshake synchronous: its body
+   * is the program's first step, so the availability check and the claim are
+   * one uninterrupted synchronous callback that no other fiber can land
+   * between. The program then suspends on the deferred the detached run
+   * chain settles, so the caller's own fiber never carries the resumed turn
+   * and an interrupted caller cannot interrupt a started resume.
+   */
   const tryResumeRun = (
     runId: RunId,
     options: AutoResumeOptions = {},
-  ): Promise<boolean> => {
-    // Do not let a recovery wake claim the slot after the interrupted root
-    // publishes completion but before that root's teardown settles. The
-    // captured promise remains authoritative even if `/clear` resets the
-    // mutable session state in the meantime.
-    if (options.recovery && recoveryBlockedByInterruptedRuns.size > 0) {
-      return Promise.resolve(false);
-    }
-    const autoResumeRun = Deferred.makeUnsafe<boolean, unknown>();
-    const runPromise = runtime.runPromise(Deferred.await(autoResumeRun));
-    // Claim the root-run slot as the FIRST statement, synchronously, before
-    // any `await` below, see tryClaimRootRunSlot and the matching comment
-    // in resume().
-    if (!session.tryClaimRootRunSlot(runPromise.then(() => undefined))) {
-      // Same as in resume(): settle the deferred the forked awaiting fiber
-      // is parked on, since no resume path will complete it now.
-      Deferred.doneUnsafe(autoResumeRun, Effect.succeed(false));
-      return Promise.resolve(false);
-    }
-    const attemptCancellation = { cancellationRequested: false };
-    activeAutoResumeCancellation = attemptCancellation;
-    const isCancellationRequested = (): boolean =>
-      attemptCancellation.cancellationRequested || session.stopRequested;
+  ): Effect.Effect<boolean, AgentResumeFailed> =>
+    Effect.suspend(() => {
+      // Do not let a recovery wake claim the slot after the interrupted root
+      // publishes completion but before that root's teardown settles. The
+      // captured settlement remains authoritative even if `/clear` resets the
+      // mutable session state in the meantime.
+      if (options.recovery && recoveryBlockedByInterruptedRuns.size > 0) {
+        return Effect.succeed(false);
+      }
+      const autoResumeRun = Deferred.makeUnsafe<boolean, AgentResumeFailed>();
+      // Claim the root-run slot as the FIRST statement of this step, before
+      // the program suspends below, see tryClaimRootRunSlot and the matching
+      // comment in resume().
+      if (
+        !session.tryClaimRootRunSlot(
+          Effect.asVoid(Deferred.await(autoResumeRun)),
+        )
+      ) {
+        // Same as in resume(): the deferred this attempt made is dropped
+        // unsettled, since no resume path will complete it now.
+        return Effect.succeed(false);
+      }
+      const attemptCancellation = { cancellationRequested: false };
+      activeAutoResumeCancellation = attemptCancellation;
+      const isCancellationRequested = (): boolean =>
+        attemptCancellation.cancellationRequested || session.stopRequested;
 
-    const runResume = async (): Promise<boolean> => {
       let finalize = (): void => session.markRunCompleted();
       let recovery: FollowUpRecoveryLease | undefined;
       let recoveryHandedOff = false;
@@ -951,7 +976,9 @@ export function createChatSessionController(
         }
         return false;
       });
-      return runtime.runPromise(
+      // Detached on the process runtime, as the wake's own chain: the port's
+      // caller reads the answer off the deferred instead of hosting the run.
+      void runtime.runPromise(
         recoverRun(attempt, (error) => {
           reportRunFailure(error);
           return false;
@@ -965,18 +992,30 @@ export function createChatSessionController(
               }
             }),
           ),
+          // The one place a resume attempt is classified: an answer is the
+          // port's boolean, and anything else -- a defect, an interrupted
+          // chain -- is the port's fault, which is what the caller's retry
+          // decision reads.
+          Effect.onExit((exit) =>
+            Effect.sync(() => {
+              const answer: Effect.Effect<boolean, AgentResumeFailed> =
+                Exit.isSuccess(exit)
+                  ? Effect.succeed(exit.value)
+                  : Effect.fail(
+                      new AgentResumeFailed({
+                        runId,
+                        message: toErrorMessage(Cause.squash(exit.cause)),
+                        cause: Cause.squash(exit.cause),
+                      }),
+                    );
+              Deferred.doneUnsafe(autoResumeRun, answer);
+            }),
+          ),
         ),
       );
-    };
 
-    void runResume().then(
-      (started) => Deferred.doneUnsafe(autoResumeRun, Effect.succeed(started)),
-      (error: unknown) =>
-        Deferred.doneUnsafe(autoResumeRun, Effect.fail(error)),
-    );
-
-    return runPromise;
-  };
+      return Deferred.await(autoResumeRun);
+    });
 
   const admitInterruptedFollowUp = (
     followUp: InterruptedFollowUp,
@@ -1005,23 +1044,23 @@ export function createChatSessionController(
       // Best-effort settle-wait on the interrupted run: its outcome (including
       // any failure) is already reported by the run's own recovery.
       await runtime.runPromise(
-        Effect.ignoreCause(
-          Effect.tryPromise(() => session.runPromise ?? Promise.resolve()),
-        ),
+        Effect.ignoreCause(session.runSettled ?? Effect.void),
       );
       if (batch.superseded) return true;
       let followUpQueueReady = false;
       try {
-        const resumed = await tryResumeRun(batch.runId, {
-          extraFollowUps: batch.followUps,
-          onFollowUpQueueReady: () => {
-            followUpQueueReady = true;
-            session.interruptedRunId = undefined;
-            if (interruptedContinuation === batch) {
-              interruptedContinuation = undefined;
-            }
-          },
-        });
+        const resumed = await runtime.runPromise(
+          tryResumeRun(batch.runId, {
+            extraFollowUps: batch.followUps,
+            onFollowUpQueueReady: () => {
+              followUpQueueReady = true;
+              session.interruptedRunId = undefined;
+              if (interruptedContinuation === batch) {
+                interruptedContinuation = undefined;
+              }
+            },
+          }),
+        );
         if (!resumed && !batch.superseded && !followUpQueueReady) {
           session.interruptedRunId = batch.runId;
           pendingInterruptedFollowUps.push(...batch.followUps);
@@ -1065,7 +1104,12 @@ export function createChatSessionController(
   ): Promise<boolean> => {
     followUpQueue.clear();
     let started = false;
-    const pendingStart = runtime.runPromise(
+    // The slot is claimed before the program runs, the way every other launch
+    // path claims it: `startRootRun` below re-claims it for the run it mints,
+    // and a refusal on the way there settles this deferred instead.
+    const startSettled = Deferred.makeUnsafe<void, unknown>();
+    session.markRunPending(Deferred.await(startSettled));
+    await runtime.runPromise(
       recoverRun(
         Effect.gen(function* () {
           const meta = sessionMetaSignal.get();
@@ -1134,10 +1178,8 @@ export function createChatSessionController(
             : CliExitCode.AgentError;
           session.markRunCompleted();
         },
-      ),
+      ).pipe(settleClaimOnExit(startSettled)),
     );
-    session.markRunPending(pendingStart);
-    await pendingStart;
     return started;
   };
 
@@ -1214,8 +1256,7 @@ export function createChatSessionController(
     /**
      * The delivery is an Effect program so the queue's scope reaches it: an
      * interrupted delivery stops at its next step instead of mutating the
-     * transcript or the session after teardown began. The one Promise it
-     * waits on is the run claim `TuiSession` holds. The `followUp.send`
+     * transcript or the session after teardown began. The `followUp.send`
      * request and the state it settles (the sent notice, or the restored
      * draft and the stop) are one uninterruptible step: a request that
      * committed is always followed by its presentation, and a message is never
@@ -1225,17 +1266,14 @@ export function createChatSessionController(
       // The fold states when the pending run exists: the first view level
       // holding the run this controller minted, unless the run settles
       // first. Both are read when the delivery starts, not when it queued.
-      const runPromise = session.runPromise;
+      const runSettled = session.runSettled;
       const followUpTarget =
         childFollowUpTarget ??
         (yield* Effect.raceFirst(
           awaitRunFolded(session.runId),
-          runPromise === undefined
+          runSettled === undefined
             ? Effect.succeed(undefined)
-            : Effect.tryPromise({
-                try: () => runPromise,
-                catch: (error) => error,
-              }).pipe(Effect.as(undefined)),
+            : runSettled.pipe(Effect.as(undefined)),
         ));
       if (session.stopRequested) {
         requestDraftRestore(line, images);
