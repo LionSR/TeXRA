@@ -144,7 +144,7 @@ TeXRA handles file paths as follows:
 
 - **Display**: Files are displayed with paths relative to the workspace root
 - **Processing**: TeXRA resolves paths to their absolute form when needed
-- **Output**: Workflow outputs are saved in task storage. Use **Accept** or
+- **Output**: Workflow outputs are saved in run storage. Use **Accept** or
   **Pack** when you want to copy reviewed outputs back into the workspace.
 
 ### File discovery rules
@@ -154,7 +154,7 @@ context, edited files, and media. Read the [file discovery section of the config
 
 ## Output file naming
 
-TeXRA stores workflow outputs in the run's task storage folder. Within that
+TeXRA stores workflow outputs in the run folder under run storage. Within that
 folder, the revised document keeps your input filename in every round:
 
 ```
@@ -182,7 +182,7 @@ TeXRA provides several commands for managing generated files, available from the
 
 ### Pack
 
-The "Pack" button (<wa-icon library="texra" name="box-archive"></wa-icon>) snapshots the run's task storage folder into a structured history folder:
+The "Pack" button (<wa-icon library="texra" name="box-archive"></wa-icon>) snapshots the run folder into a structured history folder:
 
 1. Creates a timestamped directory in the "History" folder
 2. Copies all relevant output files, logs, and mirrored dependencies
@@ -194,11 +194,11 @@ Use this to keep a clean workspace while preserving previous outputs.
 
 The "Clean" button (<wa-icon library="texra" name="trash"></wa-icon>) removes output files for the selected run:
 
-1. Identifies the task storage folder for the current run
-2. Removes generated artifacts from task storage
+1. Identifies the run folder for the current run
+2. Removes generated artifacts from the run folder
 3. Leaves original input files untouched
 
-Use this to remove generated artifacts from task storage after reviewing the results.
+Use this to remove generated artifacts from run storage after reviewing the results.
 
 ### Opening generated files
 
@@ -208,15 +208,15 @@ viewer, so PDFs and images display correctly while `.tex` documents open in the
 editor.
 
 To browse the whole run folder, use the
-<wa-icon library="texra" name="folder-open"></wa-icon> **Open in task storage** toolbar
-button. This reveals the task storage folder with generated files, compile
+<wa-icon library="texra" name="folder-open"></wa-icon> **Open in run storage** toolbar
+button. This reveals the run folder with generated files, compile
 logs, mirrored LaTeX dependencies, and intermediate artifacts. (From a
 terminal, `texra history show <id>` lists the same stored artifacts; see the
 card below.)
 
-### Task run storage
+### Run storage
 
-Every workflow run gets an isolated task storage folder under TeXRA's
+Every workflow run gets an isolated run folder under TeXRA's
 workspace storage directory:
 
 ```text

@@ -1,5 +1,5 @@
 <script setup>
-// Frameless task-storage file tree for guide/first-run.md ("In the terminal").
+// Frameless run-storage file tree for guide/first-run.md ("In the terminal").
 // Polish writes one folder per round under executions/<run-id>/ in the
 // workspace store, and KEEPS the
 // input filename (draft.tex, not output.tex). r0 is the first revision, r1 the

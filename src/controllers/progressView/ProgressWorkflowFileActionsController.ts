@@ -81,9 +81,9 @@ export class ProgressWorkflowFileActionsController {
       }
       await this.deps.host.openDirectory(directoryToReveal);
     } catch (error) {
-      this.deps.host.logError?.('Failed to open task storage folder', error);
+      this.deps.host.logError?.('Failed to open run folder', error);
       await this.deps.host.showError(
-        `Failed to open task storage folder: ${toErrorMessage(error)}`,
+        `Failed to open run folder: ${toErrorMessage(error)}`,
       );
     }
   }

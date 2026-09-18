@@ -28,7 +28,7 @@ const actions = [
   {
     icon: 'eye',
     label: 'Review outputs',
-    hint: 'Inspect r0/output.tex from task storage',
+    hint: 'Inspect r0/output.tex from run storage',
   },
   {
     icon: 'diff-single',

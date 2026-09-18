@@ -1,5 +1,5 @@
 <script setup>
-// Frameless task-storage file tree for guide/agent-architecture.md
+// Frameless run-storage file tree for guide/agent-architecture.md
 // ("Processing (Key Stages)" / "Reflection Rounds"). Each round saves
 // r{round}/output.xml (the raw LLM response, dim) then the extracted
 // r{round}/<input-stem>.tex (link-coloured, e.g. paper.tex), plus an
@@ -52,7 +52,7 @@ const icon = (kind) =>
 <template>
   <MockCard
     class="rot"
-    title="task storage"
+    title="run storage"
     icon="folder-opened"
     sub="one folder per round"
   >

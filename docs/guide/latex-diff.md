@@ -11,7 +11,7 @@ When an agent revises a derivation, proof, or section of your manuscript, you ne
 
 <p class="hero-caption">Pick a base and an edited file (or a git commit), press latexdiff, and TeXRA compiles and opens the marked-up PDF: additions underlined in blue, deletions struck through in red.</p>
 
-TeXRA generates diff files after agent runs that modify `.tex` files (such as `correct` or `polish`), comparing the agent's task-storage output (for example `r0/intro.tex` or `r1/intro.tex` for an `intro.tex` input) against the original input or the previous round's output. You can see what the agent did as soon as the run finishes.
+TeXRA generates diff files after agent runs that modify `.tex` files (such as `correct` or `polish`), comparing the agent's run-storage output (for example `r0/intro.tex` or `r1/intro.tex` for an `intro.tex` input) against the original input or the previous round's output. You can see what the agent did as soon as the run finishes.
 
 This guide explains how to use TeXRA's LaTeXdiff features to compare arbitrary file versions and how to read the results.
 
@@ -113,7 +113,7 @@ TeXRA runs the same five-stage pipeline shown above. This route uses the `latexd
 
 After generating a Git-based diff with the **Diff** button beneath the Commit dropdown, you can manage the resulting files from the Commit section's **Pack** (<wa-icon library="texra" name="archive"></wa-icon>) and **Clean** (<wa-icon library="texra" name="trash"></wa-icon>) buttons. Pack archives the diff files; Clean removes them.
 
-Each diff route writes its own predictably named artifacts. `latexdiff` produces `_diff.tex` and `latexdiff-vc` appends the commit hash (`-diff<hash>.tex`), both alongside the base file. Agent runs write round (`_diff.tex`) and between-round (`_diffr<newer>r<older>.tex`) diffs into the run's task storage. Every `.tex` compiles to a matching `.pdf`. Pack and Clean act on the selected commit's diff files:
+Each diff route writes its own predictably named artifacts. `latexdiff` produces `_diff.tex` and `latexdiff-vc` appends the commit hash (`-diff<hash>.tex`), both alongside the base file. Agent runs write round (`_diff.tex`) and between-round (`_diffr<newer>r<older>.tex`) diffs into the run folder. Every `.tex` compiles to a matching `.pdf`. Pack and Clean act on the selected commit's diff files:
 
 <DiffArtifactsHero />
 

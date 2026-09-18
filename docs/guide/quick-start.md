@@ -146,10 +146,10 @@ Press **Execute** (<wa-icon library="texra" name="play"></wa-icon>). The Progres
 
 ### Review results
 
-1. Upon completion, VS Code opens the generated output file from the run's task storage directory (e.g., `r0/draft.tex`, preserving your input filename).
+1. Upon completion, VS Code opens the generated output file from the run folder (e.g., `r0/draft.tex`, preserving your input filename).
 2. Inspect the proposed edits carefully. While the agent automates tedious verification and editing steps, final scientific evaluation remains yours.
 3. Compare the original and modified versions with either of these:
-   - **ProgressBoard Diff**: Select the <wa-icon library="texra" name="diff-multiple"></wa-icon> Diff button on the completed stream to compare the original file against the generated task-storage output.
+   - **ProgressBoard Diff**: Select the <wa-icon library="texra" name="diff-multiple"></wa-icon> Diff button on the completed stream to compare the original file against the generated run-storage output.
 
      <CompareHero />
 
@@ -308,7 +308,7 @@ Some common tasks to try with TeXRA. Each is an agent, a model, and a one-line i
 
 ## Understanding the output
 
-A completed run writes everything into the run's task storage folder, one
+A completed run writes everything into the run folder under run storage, one
 folder per round. Each round holds three artifacts, and the document keeps your
 **input filename** (`draft.tex`, not `output.tex`):
 
