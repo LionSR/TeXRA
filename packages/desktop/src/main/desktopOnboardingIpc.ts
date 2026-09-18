@@ -1,13 +1,18 @@
 import { Data, Effect } from 'effect';
 import { OnboardingFunnelRefresher } from '@controllers/onboarding/onboardingFunnel';
 import type { ProcessRuntime } from '@platform/processRuntime';
-import type { StateStore } from '@platform/interfaces';
+import type { StateStore, StateWriteFailed } from '@platform/interfaces';
 import type { LanguageModel } from '@platform/languageModel';
 import type { OnboardingFunnelState } from '@shared/schemas';
+import {
+  isRequestRefusal,
+  type RequestRefusal,
+} from '@shared/session/requestErrors';
 import {
   setFirstRunDone,
   setOnboardingDeclined,
 } from '@shared/state/onboardingState';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   buildDesktopOnboardingSetStateMessage,
   DESKTOP_ONBOARDING_COMMANDS,
@@ -30,6 +35,28 @@ class OnboardingDismissFailed extends Data.TaggedError(
   readonly cause: unknown;
 }> {}
 
+/**
+ * A capability behind a card action that still answers with a promise
+ * rejected. `member` names which one; `cause` is the value the promise
+ * rejected with, which the request's dialog classifies and presents as it
+ * presented the bare rejection.
+ */
+export class OnboardingCallFailed extends Data.TaggedError(
+  'OnboardingCallFailed',
+)<{
+  readonly member: string;
+  readonly message: string;
+  readonly cause: unknown;
+}> {}
+
+/** How a card action fails: the funnel's flag write, plus whatever the
+ *  promise-faced sign-in rejected with. */
+type OnboardingAction<E = never> = Effect.Effect<
+  void,
+  StateWriteFailed | E,
+  LanguageModel
+>;
+
 interface DesktopOnboardingIpcOptions {
   /** The process global store, handed down by the composition root. */
   state: StateStore;
@@ -39,8 +66,9 @@ interface DesktopOnboardingIpcOptions {
    * the funnel refresh below yields it on the runtime it already holds.
    */
   hasCredential: () => Effect.Effect<boolean, never, LanguageModel>;
-  /** Launch the setup conversation when the user clicks "Run Setup". */
-  kickoffSetup: () => Promise<void>;
+  /** Launch the setup conversation when the user clicks "Run Setup". The
+   *  program is forked below, so its own failure is the host's to word. */
+  kickoffSetup: () => Effect.Effect<void, unknown>;
   /** Run ChatGPT sign-in flow from the welcome card. */
   signInWithChatGpt: () => Promise<void>;
   onAsyncError: (error: unknown) => void;
@@ -56,18 +84,18 @@ interface DesktopOnboardingIpcOptions {
  */
 export interface DesktopOnboardingIpc extends DesktopMessageHandler {
   /** Recompute the funnel from credentials + flags and publish it. */
-  refreshOnboardingFunnel(): Promise<void>;
+  refreshOnboardingFunnel(): OnboardingAction;
   /** The funnel as last derived; null before the first refresh. */
   funnelState(): OnboardingFunnelState | null;
   /** Fires after every refresh that changed the funnel. */
   onFunnelChange(listener: (state: OnboardingFunnelState) => void): () => void;
   /** The welcome card's skip: persists the declined flag and refreshes. */
-  skipOnboarding(): Promise<void>;
+  skipOnboarding(): OnboardingAction;
   /** The setup card's skip: marks the first run done and refreshes. */
-  skipSetup(): Promise<void>;
+  skipSetup(): OnboardingAction;
   /** The setup card's Run Setup: launches the setup conversation. */
-  runSetup(): Promise<void>;
-  signInWithChatGpt(): Promise<void>;
+  runSetup(): OnboardingAction;
+  signInWithChatGpt(): OnboardingAction<OnboardingCallFailed | RequestRefusal>;
 }
 
 export function createDesktopOnboardingIpc(
@@ -111,7 +139,7 @@ export function createDesktopOnboardingIpc(
     // otherwise a later "skip setup" / sign-out / credential-removal refresh
     // would queue behind the entire setup run, leaving the card stuck on 'setup'.
     options.runtime.runFork(
-      Effect.tryPromise(() => options.kickoffSetup()).pipe(
+      options.kickoffSetup().pipe(
         // Swallow — the kickoff handler already surfaced the error to the user.
         Effect.ignore,
         // Clear the guard once the run settles (success or failure), not only on
@@ -128,10 +156,6 @@ export function createDesktopOnboardingIpc(
     );
   }
 
-  function refreshOnboardingFunnel(): Promise<void> {
-    return options.runtime.runPromise(funnel.run());
-  }
-
   const dismiss = Effect.gen(function* () {
     yield* state
       .update(DESKTOP_ONBOARDING_DISMISSED_STATE_KEY, true)
@@ -143,27 +167,34 @@ export function createDesktopOnboardingIpc(
     });
   });
 
-  async function skipMainOnboarding(): Promise<void> {
-    await options.runtime.runPromise(setOnboardingDeclined(state, true));
-    await refreshOnboardingFunnel();
-  }
+  const skipMainOnboarding = (): OnboardingAction =>
+    setOnboardingDeclined(state, true).pipe(Effect.flatMap(() => funnel.run()));
 
-  async function skipSetup(): Promise<void> {
-    await options.runtime.runPromise(setFirstRunDone(state, true));
-    await refreshOnboardingFunnel();
-  }
+  const skipSetup = (): OnboardingAction =>
+    setFirstRunDone(state, true).pipe(Effect.flatMap(() => funnel.run()));
 
-  async function runSetup(): Promise<void> {
-    // Route through the shared guard so a double-click of "Run Setup" can't
-    // launch a second concurrent run.
-    startSetupKickoff();
-    await refreshOnboardingFunnel();
-  }
+  const runSetup = (): OnboardingAction =>
+    Effect.suspend(() => {
+      // Route through the shared guard so a double-click of "Run Setup" can't
+      // launch a second concurrent run.
+      startSetupKickoff();
+      return funnel.run();
+    });
 
-  async function signInWithChatGpt(): Promise<void> {
-    await options.signInWithChatGpt();
-    await refreshOnboardingFunnel();
-  }
+  const signInWithChatGpt = (): OnboardingAction<
+    OnboardingCallFailed | RequestRefusal
+  > =>
+    Effect.tryPromise({
+      try: () => options.signInWithChatGpt(),
+      catch: (cause) =>
+        isRequestRefusal(cause)
+          ? cause
+          : new OnboardingCallFailed({
+              member: 'onboarding.signInWithChatGpt',
+              message: toErrorMessage(cause),
+              cause,
+            }),
+    }).pipe(Effect.flatMap(() => funnel.run()));
 
   return {
     handleMessage(message: DesktopCommandMessage): boolean {
@@ -186,7 +217,7 @@ export function createDesktopOnboardingIpc(
           return false;
       }
     },
-    refreshOnboardingFunnel,
+    refreshOnboardingFunnel: () => funnel.run(),
     funnelState: () => funnel.state ?? null,
     onFunnelChange(listener) {
       funnelListeners.add(listener);

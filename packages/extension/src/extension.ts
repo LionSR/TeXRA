@@ -1006,9 +1006,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
       // recompute too: the State 0 card has no other signal when a key is
       // added outside the main view's own round-trip.
       await runtime.runPromise(
-        Effect.promise(() =>
-          progressViewProvider.refreshOnboardingFunnel(),
-        ).pipe(
+        progressViewProvider.refreshOnboardingFunnel().pipe(
           Effect.catchCause((cause) =>
             Effect.sync(() => {
               log.warn(

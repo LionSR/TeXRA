@@ -81,15 +81,16 @@ async function createOnboardingHarness({
   const state = new FakeStateStore({ ...seed });
   const update = vi.spyOn(state, 'update');
   const postToRenderer = vi.fn();
+  const runtime = options.runtime ?? testRuntime();
   const onboarding = createDesktopOnboardingIpc(
     { postToRenderer },
     {
       hasCredential: () => Effect.succeed(false),
-      kickoffSetup: async () => {},
+      kickoffSetup: () => Effect.void,
       signInWithChatGpt: async () => {},
       onAsyncError: vi.fn(),
-      runtime: testRuntime(),
       ...options,
+      runtime,
       state,
     },
   );
@@ -98,6 +99,7 @@ async function createOnboardingHarness({
     update,
     onboarding,
     postToRenderer,
+    runtime,
     dismissedStateKey: DESKTOP_ONBOARDING_DISMISSED_STATE_KEY,
   };
 }
@@ -123,10 +125,10 @@ describe('desktop IPC adapters', () => {
   });
 
   it('persists first-run walkthrough dismissal in the onboarding adapter', async () => {
-    const { dismissedStateKey, onboarding, postToRenderer, update } =
+    const { dismissedStateKey, onboarding, postToRenderer, runtime, update } =
       await createOnboardingHarness();
 
-    await onboarding.refreshOnboardingFunnel();
+    await runtime.runPromise(onboarding.refreshOnboardingFunnel());
     // The refresh is serialized through a promise chain (concurrency guard), so
     // drain microtasks before asserting the derived state.
     await flushAsync();
@@ -165,7 +167,7 @@ describe('desktop IPC adapters', () => {
     ).toBe(false);
 
     postToRenderer.mockClear();
-    await onboarding.skipOnboarding();
+    await runtime.runPromise(onboarding.skipOnboarding());
     // The skip persists the declined flag then refreshes through the serialized
     // chain, so drain microtasks before asserting.
     await flushAsync();
@@ -177,39 +179,39 @@ describe('desktop IPC adapters', () => {
   });
 
   it('derives State 1 (setup) when hasCredential is true on fresh install', async () => {
-    const { onboarding } = await createOnboardingHarness({
+    const { onboarding, runtime } = await createOnboardingHarness({
       hasCredential: () => Effect.succeed(true),
     });
 
-    await onboarding.refreshOnboardingFunnel();
+    await runtime.runPromise(onboarding.refreshOnboardingFunnel());
     await flushAsync();
     // Credential present, firstRunDone not set: State 1 (setup card).
     expectFunnelState(onboarding, 'setup');
   });
 
   it('derives State 2 (done) for veterans with firstRunDone set', async () => {
-    const { onboarding } = await createOnboardingHarness({
+    const { onboarding, runtime } = await createOnboardingHarness({
       seed: { [GlobalStateKey.ONBOARDING_FIRST_RUN_DONE]: true },
       hasCredential: () => Effect.succeed(true),
     });
 
-    await onboarding.refreshOnboardingFunnel();
+    await runtime.runPromise(onboarding.refreshOnboardingFunnel());
     await flushAsync();
     // Veteran with firstRunDone set: State 2 (done), no onboarding UI shown.
     expectFunnelState(onboarding, 'done');
   });
 
   it('handles skipSetup by setting firstRunDone and deriving done', async () => {
-    const { onboarding, update } = await createOnboardingHarness({
+    const { onboarding, runtime, update } = await createOnboardingHarness({
       hasCredential: () => Effect.succeed(true),
     });
 
-    await onboarding.refreshOnboardingFunnel();
+    await runtime.runPromise(onboarding.refreshOnboardingFunnel());
     await flushAsync();
     expectFunnelState(onboarding, 'setup');
     update.mockClear();
 
-    await onboarding.skipSetup();
+    await runtime.runPromise(onboarding.skipSetup());
     await flushAsync();
     expect(update).toHaveBeenCalledWith(
       GlobalStateKey.ONBOARDING_FIRST_RUN_DONE,
@@ -219,13 +221,13 @@ describe('desktop IPC adapters', () => {
   });
 
   it('runs the real kickoff path on runSetup and refreshes after', async () => {
-    const kickoffSetup = vi.fn(async () => {});
-    const { onboarding } = await createOnboardingHarness({
+    const kickoffSetup = vi.fn(() => Effect.void);
+    const { onboarding, runtime } = await createOnboardingHarness({
       hasCredential: () => Effect.succeed(true),
       kickoffSetup,
     });
 
-    await onboarding.runSetup();
+    await runtime.runPromise(onboarding.runSetup());
     await flushAsync();
 
     // Real run-setup path: `runSetup` kicks off the conversation, then
@@ -248,15 +250,17 @@ describe('desktop IPC adapters', () => {
           }),
       ),
     );
-    const { onboarding } = await createOnboardingHarness({ hasCredential });
+    const { onboarding, runtime } = await createOnboardingHarness({
+      hasCredential,
+    });
     const funnelStates: string[] = [];
     onboarding.onFunnelChange((state) => funnelStates.push(state));
 
     // Fire them overlapping (no await between); the credential lands before
     // either probe resolves.
-    const first = onboarding.refreshOnboardingFunnel();
+    const first = runtime.runPromise(onboarding.refreshOnboardingFunnel());
     credentialPresent = true;
-    const second = onboarding.refreshOnboardingFunnel();
+    const second = runtime.runPromise(onboarding.refreshOnboardingFunnel());
     await Promise.all([first, second]);
     await flushAsync();
 

@@ -21,7 +21,7 @@
 
 import { Effect, Semaphore } from 'effect';
 
-import type { StateStore } from '@platform/interfaces';
+import type { StateStore, StateWriteFailed } from '@platform/interfaces';
 import type { LanguageModel } from '@platform/languageModel';
 import type { OnboardingFunnelState } from '@shared/schemas';
 import {
@@ -165,8 +165,9 @@ export class OnboardingFunnelRefresher {
     },
   );
 
-  /** Ask for a refresh. A refresh that fails keeps the host's own error. */
-  run(): Effect.Effect<void, unknown, LanguageModel> {
+  /** Ask for a refresh. The only failure is the flag write that clears a
+   *  stale skip; the credential probe cannot fail and `apply` is synchronous. */
+  run(): Effect.Effect<void, StateWriteFailed, LanguageModel> {
     return Effect.suspend(() => {
       this.rerunRequested = true;
       return this.lane.withPermit(this.drain());

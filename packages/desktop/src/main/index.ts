@@ -54,7 +54,11 @@ import {
 import { createLog } from '@logger/logUtils';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import { DisposableStore } from '@platform/disposable';
-import type { AgentDirectoriesPort, StateStore } from '@platform/interfaces';
+import type {
+  AgentDirectoriesPort,
+  StateStore,
+  StateWriteFailed,
+} from '@platform/interfaces';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import {
@@ -462,11 +466,10 @@ function createWindow(options: {
     const refresh = onboardingIpcRef.current?.refreshOnboardingFunnel();
     if (!refresh) return;
     runtime.runFork(
-      Effect.tryPromise({
-        try: () => refresh,
-        catch: (error) => error,
-      }).pipe(
-        Effect.catch((error) => Effect.sync(() => reportAsyncError(error))),
+      refresh.pipe(
+        Effect.catch((error: StateWriteFailed) =>
+          Effect.sync(() => reportAsyncError(error)),
+        ),
       ),
     );
   };
@@ -695,7 +698,9 @@ function createWindow(options: {
     await settingsIpcRef.current?.refreshAuthDependentData({
       deferAgentCatalogRefresh: teamSignInPending,
     });
-    await onboardingIpcRef.current?.refreshOnboardingFunnel();
+    await runtime.runPromise(
+      onboardingIpcRef.current?.refreshOnboardingFunnel() ?? Effect.void,
+    );
   };
   const desktopAuthHost: DesktopSupabaseAuthHost = {
     openExternalUrl: (url) =>
@@ -1394,9 +1399,10 @@ function createWindow(options: {
           signOut: () => desktopAuth.signOut(),
         },
         subscriptionUsage,
-        onCredentialChanged: async () => {
-          await onboardingIpcRef.current?.refreshOnboardingFunnel();
-        },
+        onCredentialChanged: () =>
+          runtime.runPromise(
+            onboardingIpcRef.current?.refreshOnboardingFunnel() ?? Effect.void,
+          ),
         onModelOptionsChanged: refreshCatalogs,
         // Credential operations already show their specific failure dialog. Keep
         // the shared callback log-only so one failure never opens a second,
@@ -1498,10 +1504,10 @@ function createWindow(options: {
       // `setupKickoffStarted` dedup guard inside the onboarding IPC keeps this
       // one-shot; on a resolution failure it throws so that guard resets and a
       // later "Run Setup" click can retry.
-      kickoffSetup: async () => {
-        const setupSession = activeProject().session;
-        await runtime.runPromise(
-          Effect.tryPromise({
+      kickoffSetup: () =>
+        Effect.gen(function* () {
+          const setupSession = activeProject().session;
+          yield* Effect.tryPromise({
             try: async () => {
               // The project the user started setup in, taken before the first await:
               // the run and its presentation belong to it even when the window
@@ -1550,9 +1556,8 @@ function createWindow(options: {
                 return yield* Effect.fail(error);
               }),
             ),
-          ),
-        );
-      },
+          );
+        }),
       signInWithChatGpt: () => requireSettingsIpc().signInChatGpt(),
       onAsyncError: reportAsyncError,
       runtime,
@@ -1569,19 +1574,19 @@ function createWindow(options: {
     }),
   );
   runtime.runFork(
-    Effect.tryPromise({
-      try: () => onboardingIpc.refreshOnboardingFunnel(),
-      catch: (cause) =>
-        new OnboardingRefreshFailed({
-          message: `The onboarding state could not be refreshed: ${toErrorMessage(cause)}`,
-          cause,
-        }),
-    }).pipe(
+    onboardingIpc.refreshOnboardingFunnel().pipe(
       // The handler's parameter is the whole error type this expression can
       // carry, so a second failure added to this channel fails to compile
       // instead of being reported as a funnel refresh the host could not do.
-      Effect.catch((error: OnboardingRefreshFailed) =>
-        Effect.sync(() => reportAsyncError(error)),
+      Effect.catch((cause: StateWriteFailed) =>
+        Effect.sync(() =>
+          reportAsyncError(
+            new OnboardingRefreshFailed({
+              message: `The onboarding state could not be refreshed: ${toErrorMessage(cause)}`,
+              cause,
+            }),
+          ),
+        ),
       ),
     ),
   );
