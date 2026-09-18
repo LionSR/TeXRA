@@ -178,7 +178,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       SessionBridge.make({
         session,
         handleHostRequest: (request, port) =>
-          hostRequests.handle(request, port),
+          hostRequests.handleHostRequest(request, port),
         onPortClosed: (port) => hostRequests.closePort(port),
       }).pipe(Scope.provide(this.bridgeScope)),
     );

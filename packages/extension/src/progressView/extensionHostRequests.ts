@@ -10,7 +10,7 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import * as vscode from 'vscode';
-import { Cause, Data, Effect, Exit, FileSystem } from 'effect';
+import { Data, Effect, FileSystem } from 'effect';
 
 import {
   runAgent,
@@ -139,7 +139,10 @@ interface ExtensionHostRequestsOptions {
 }
 
 interface ExtensionHostRequests {
-  handle(request: HostRequest, port: string): Promise<HostOutcome>;
+  handleHostRequest(
+    request: HostRequest,
+    port: string,
+  ): Effect.Effect<HostOutcome, unknown, ProcessServices>;
   closePort(port: string): void;
   /** Stops a recording this host owns; the take is discarded. */
   dispose(): void;
@@ -761,8 +764,8 @@ export function createExtensionHostRequests(
    * One program per request. The arms are Effects; the capabilities that
    * still answer with a promise - the VS Code commands `runCommand` wraps,
    * the editor APIs, the Promise-faced controller ports - are lifted once
-   * through `fromHost`, so no arm re-enters the runtime between here and
-   * `handle`.
+   * through `fromHost`, so no arm re-enters the runtime between here and the
+   * bridge that runs this program.
    */
   function dispatch(
     request: HostRequest,
@@ -991,23 +994,11 @@ export function createExtensionHostRequests(
     });
   }
 
-  /**
-   * The request's Promise face, which `SessionBridgeOptions.handleHostRequest`
-   * still takes: the program runs once here and its failure is rethrown as
-   * the value it failed with, so the bridge's refusal-versus-defect fold sees
-   * exactly what the rejecting arm carried.
-   */
-  async function handle(
-    request: HostRequest,
-    port: string,
-  ): Promise<HostOutcome> {
-    const exit = await runtime.runPromiseExit(dispatch(request, port));
-    if (Exit.isSuccess(exit)) return exit.value;
-    throw Cause.squash(exit.cause);
-  }
-
   return {
-    handle,
+    // The bridge takes the dispatch program itself: it runs on the fiber the
+    // webview's message pump already owns, and its failure reaches the
+    // bridge's refusal-versus-defect fold as the value the arm carried.
+    handleHostRequest: dispatch,
     closePort: draftRequests.closePort,
     dispose: draftRequests.dispose,
   };

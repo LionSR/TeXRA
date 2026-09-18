@@ -195,7 +195,11 @@ describe('desktop preview host', () => {
         logger: { warn: () => {}, error: () => {} },
       });
       try {
-        await expect(handler.handle(request, 'window')).rejects.toBeDefined();
+        await expect(
+          effectRuntime().runPromise(
+            handler.handleHostRequest(request, 'window'),
+          ),
+        ).rejects.toBeDefined();
         expect(present).toHaveBeenCalledOnce();
         expect(present).toHaveBeenCalledWith('requestShowError', {
           message: expect.stringMatching(/\S/),
@@ -203,7 +207,12 @@ describe('desktop preview host', () => {
         expect(showErrorMessage).not.toHaveBeenCalled();
         present.mockClear();
         await expect(
-          handler.handle({ kind: 'pickFiles', fileType: 'input' }, 'window'),
+          effectRuntime().runPromise(
+            handler.handleHostRequest(
+              { kind: 'pickFiles', fileType: 'input' },
+              'window',
+            ),
+          ),
         ).rejects.toMatchObject({ _tag: 'Cancelled' });
         expect(present).not.toHaveBeenCalled();
       } finally {
