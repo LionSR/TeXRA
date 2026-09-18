@@ -3,10 +3,14 @@ import {
   forEachLiveSession,
   settleLiveSessionRuns,
 } from '@agent/runtime/SessionHandle';
-import { SHUTDOWN_PHASE, type LifecycleHost } from '@platform/interfaces';
+import {
+  SHUTDOWN_PHASE,
+  type LifecycleHost,
+  type ShutdownHandler,
+} from '@platform/interfaces';
 
 import { AgentCliSessionRegistry } from './agentCliSessionRegistry';
-import type { Effect } from 'effect';
+import { Effect } from 'effect';
 
 /**
  * Owns the two stores (`codexThreadsFor`, `claudeAgentSessionsFor`) that hold
@@ -53,24 +57,26 @@ export const claudeAgentSessionsFor = claudeAgentSessions.for;
  * wiring.
  */
 function registerAgentShutdownHandlers(lifecycle: LifecycleHost): void {
-  lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () => {
-    forEachLiveSession((session) => {
-      session.runs.killBackgroundProcesses();
-    });
-  });
-  lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () => {
-    forEachLiveSession((session) => {
-      codexThreads.registries.get(session.runs)?.interruptAll();
-      claudeAgentSessions.registries.get(session.runs)?.interruptAll();
-    });
-  });
+  lifecycle.onShutdown(
+    SHUTDOWN_PHASE.BEFORE,
+    Effect.sync(() => {
+      forEachLiveSession((session) => {
+        session.runs.killBackgroundProcesses();
+      });
+    }),
+  );
+  lifecycle.onShutdown(
+    SHUTDOWN_PHASE.BEFORE,
+    Effect.sync(() => {
+      forEachLiveSession((session) => {
+        codexThreads.registries.get(session.runs)?.interruptAll();
+        claudeAgentSessions.registries.get(session.runs)?.interruptAll();
+      });
+    }),
+  );
 }
 
-type ShutdownHandler = (signal: AbortSignal) => void | Promise<void>;
-
 export interface RuntimeShutdownHooks {
-  /** Execute settlement at the existing host or SDK runtime boundary. */
-  readonly runSettlement: (settlement: Effect.Effect<void>) => Promise<void>;
   /** BEFORE handlers that must run before agent processes are interrupted. */
   readonly beforeAgentShutdown?: readonly ShutdownHandler[];
   /** BEFORE handlers between agent interruption and artifact persistence. */
@@ -114,9 +120,7 @@ export function registerRuntimeShutdownHandlers(
   registerHandlers(lifecycle, SHUTDOWN_PHASE.BEFORE, hooks.afterAgentShutdown);
   lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, hooks.flushArtifacts);
   registerHandlers(lifecycle, SHUTDOWN_PHASE.BEFORE, hooks.afterFlushArtifacts);
-  lifecycle.onShutdown(SHUTDOWN_PHASE.ON, (signal) =>
-    hooks.runSettlement(settleLiveSessionRuns(signal)),
-  );
+  lifecycle.onShutdown(SHUTDOWN_PHASE.ON, settleLiveSessionRuns);
   registerHandlers(lifecycle, SHUTDOWN_PHASE.ON, hooks.afterRunSettlement);
 }
 

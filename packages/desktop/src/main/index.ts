@@ -1882,23 +1882,22 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
       // toast), then every project's session, most recently opened first.
       const processResources = new DisposableStore();
       registerRuntimeShutdownHandlers(lifecycle, {
-        runSettlement: (settlement) => runtime.runPromise(settlement),
-        beforeAgentShutdown: [() => processResumeOwner.disable()],
-        afterAgentShutdown: [() => runtime.runPromise(killActiveRecording())],
+        beforeAgentShutdown: [Effect.sync(() => processResumeOwner.disable())],
+        afterAgentShutdown: [killActiveRecording()],
         // Agent shutdown runs first so its final events enter the
         // process-owned stores. Flush in BEFORE so persistence cannot be
         // delayed by a later ON-phase language-service disposal.
-        flushArtifacts: () => projects.flushArtifacts(),
+        flushArtifacts: Effect.suspend(() => projects.flushArtifacts()),
         // The external-editor patch directories recorded by every window's
         // diff host are removed here, once, while the process is still alive.
-        afterFlushArtifacts: [() => removeExternalDiffPatchDirs()],
+        afterFlushArtifacts: [Effect.promise(removeExternalDiffPatchDirs)],
         afterRunSettlement: [
-          () => processResources.dispose(),
+          Effect.sync(() => processResources.dispose()),
           // The sessions after the process stores above them, settled before
           // the runtime they run on goes.
-          () => runtime.runPromise(projects.dispose()),
+          Effect.suspend(() => projects.dispose()),
           // Last: every project's session has released its graph above.
-          () => disposeProcessRuntime(runtime),
+          disposeProcessRuntime(runtime),
         ],
       });
 
@@ -2030,7 +2029,7 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
         }),
       );
       if (Exit.isFailure(startup)) {
-        await lifecycle.runShutdown();
+        await Effect.runPromise(lifecycle.runShutdown);
         throw Cause.squash(startup.cause);
       }
     })

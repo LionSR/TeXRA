@@ -1,3 +1,5 @@
+import { Effect } from 'effect';
+
 interface EventSource {
   on(
     event: string,
@@ -10,7 +12,7 @@ interface DisposableRendererResources {
 }
 
 interface ShutdownLifecycle {
-  runShutdown(): Promise<void>;
+  readonly runShutdown: Effect.Effect<void>;
 }
 
 interface MainWindow {
@@ -80,9 +82,17 @@ export function installDesktopBeforeQuitWiring(options: {
     }
     if (shutdownStarted) return;
     shutdownStarted = true;
-    void options.lifecycle.runShutdown().finally(() => {
-      quitting = true;
-      options.app.quit();
-    });
+    // Electron's before-quit is this host's R1 entry, so the drain is run
+    // here and the quit follows it however it ends.
+    void Effect.runPromise(
+      options.lifecycle.runShutdown.pipe(
+        Effect.ensuring(
+          Effect.sync(() => {
+            quitting = true;
+            options.app.quit();
+          }),
+        ),
+      ),
+    );
   });
 }

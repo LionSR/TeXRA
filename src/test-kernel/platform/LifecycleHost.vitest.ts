@@ -1,64 +1,71 @@
 // Third-party imports
-import { describe, expect, it, vi } from 'vitest';
+import { it } from '@effect/vitest';
+import { Effect, Fiber } from 'effect';
+import { TestClock } from 'effect/testing';
+import { describe, expect, vi } from 'vitest';
 
 // Local imports
 import { SHUTDOWN_PHASE } from '@platform/interfaces';
-import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
+import {
+  createLifecycleHost,
+  SHUTDOWN_PHASE_DEADLINE_MS,
+} from '@platform/defaults/lifecycleHost';
 
 describe('createLifecycleHost registrations', () => {
-  it.each([
+  it.effect.each([
     // Disposing one of two registrations must leave the other live.
     { phase: SHUTDOWN_PHASE.BEFORE, disposes: 1 },
     // A repeated dispose must not drop the surviving registration either.
     { phase: SHUTDOWN_PHASE.ON, disposes: 2 },
   ])(
-    'keeps duplicate registrations of one callback independent ($phase, disposed $disposes time(s))',
-    async ({ phase, disposes }) => {
-      const lifecycle = createLifecycleHost();
-      const callback = vi.fn();
+    'keeps duplicate registrations of one handler independent ($phase, disposed $disposes time(s))',
+    ({ phase, disposes }) =>
+      Effect.gen(function* () {
+        const lifecycle = createLifecycleHost();
+        const ran = vi.fn();
+        const handler = Effect.sync(ran);
 
-      const first = lifecycle.onShutdown(phase, callback);
-      lifecycle.onShutdown(phase, callback);
+        const first = lifecycle.onShutdown(phase, handler);
+        lifecycle.onShutdown(phase, handler);
 
-      for (let i = 0; i < disposes; i++) {
-        first.dispose();
-      }
-      await lifecycle.runShutdown();
+        for (let i = 0; i < disposes; i++) {
+          first.dispose();
+        }
+        yield* lifecycle.runShutdown;
 
-      expect(callback).toHaveBeenCalledOnce();
-    },
+        expect(ran).toHaveBeenCalledOnce();
+      }),
   );
 
   // Join-with-deadline (moved from ExecuteCli.vitest.ts's pre-checkpoint
-  // shutdown bound): a handler that never settles is aborted at the phase
+  // shutdown bound): a handler that never settles is interrupted at the phase
   // deadline, reported as a laggard, and the drain advances past it.
-  it('aborts and advances past a handler that misses the phase deadline', async () => {
-    const onError = vi.fn();
-    const lifecycle = createLifecycleHost({ onError });
-    let handlerSignal: AbortSignal | undefined;
-    lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, (signal) => {
-      handlerSignal = signal;
-      return new Promise<void>(() => {});
-    });
-    const onPhase = vi.fn();
-    lifecycle.onShutdown(SHUTDOWN_PHASE.ON, onPhase);
+  it.effect(
+    'interrupts and advances past a handler that misses the phase deadline',
+    () =>
+      Effect.gen(function* () {
+        const onError = vi.fn();
+        const lifecycle = createLifecycleHost({ onError });
+        const interrupted = vi.fn();
+        lifecycle.onShutdown(
+          SHUTDOWN_PHASE.BEFORE,
+          Effect.never.pipe(Effect.onInterrupt(() => Effect.sync(interrupted))),
+        );
+        const onPhase = vi.fn();
+        lifecycle.onShutdown(SHUTDOWN_PHASE.ON, Effect.sync(onPhase));
 
-    vi.useFakeTimers();
-    try {
-      const shutdown = lifecycle.runShutdown();
-      await vi.advanceTimersByTimeAsync(5_000);
-      // One more tick for the post-abort yield that precedes the advance.
-      await vi.advanceTimersByTimeAsync(1);
-      await shutdown;
-    } finally {
-      vi.useRealTimers();
-    }
+        const drain = yield* Effect.forkChild(lifecycle.runShutdown);
+        yield* TestClock.adjust(`${SHUTDOWN_PHASE_DEADLINE_MS} millis`);
+        yield* Fiber.join(drain);
 
-    expect(handlerSignal?.aborted).toBe(true);
-    expect(onError).toHaveBeenCalledExactlyOnceWith(
-      SHUTDOWN_PHASE.BEFORE,
-      expect.objectContaining({ message: expect.stringContaining('settle') }),
-    );
-    expect(onPhase).toHaveBeenCalledOnce();
-  });
+        expect(interrupted).toHaveBeenCalledOnce();
+        expect(onError).toHaveBeenCalledExactlyOnceWith(
+          SHUTDOWN_PHASE.BEFORE,
+          expect.objectContaining({
+            message: expect.stringContaining('settle'),
+          }),
+        );
+        expect(onPhase).toHaveBeenCalledOnce();
+      }),
+  );
 });

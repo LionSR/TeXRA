@@ -33,8 +33,9 @@ describe('CLI workflow input lifecycle', () => {
     Effect.gen(function* () {
       const fakePlatform = yield* Effect.promise(installFakePlatform);
       const runtime = ManagedRuntime.make(Layer.empty);
-      fakePlatform.lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () =>
-        runtime.dispose(),
+      fakePlatform.lifecycle.onShutdown(
+        SHUTDOWN_PHASE.ON,
+        runtime.disposeEffect,
       );
       const materialized = yield* Deferred.make<string>();
       const running = runtime.runFork(
@@ -57,7 +58,7 @@ describe('CLI workflow input lifecycle', () => {
       expect(yield* Effect.promise(() => fs.readFile(inputPath, 'utf8'))).toBe(
         'body from stdin',
       );
-      yield* Effect.promise(() => fakePlatform.lifecycle.runShutdown());
+      yield* fakePlatform.lifecycle.runShutdown;
       expect(yield* Fiber.await(running)).toMatchObject({ _tag: 'Failure' });
       yield* Effect.promise(async () => {
         await expect(fs.stat(inputPath)).rejects.toThrow();
@@ -71,8 +72,9 @@ describe('CLI workflow input lifecycle', () => {
       Effect.gen(function* () {
         const fakePlatform = yield* Effect.promise(installFakePlatform);
         const runtime = ManagedRuntime.make(Layer.empty);
-        fakePlatform.lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () =>
-          runtime.dispose(),
+        fakePlatform.lifecycle.onShutdown(
+          SHUTDOWN_PHASE.ON,
+          runtime.disposeEffect,
         );
         const reading = yield* Deferred.make<void>();
         const running = runtime.runFork(
@@ -90,11 +92,9 @@ describe('CLI workflow input lifecycle', () => {
           ),
         );
         yield* Deferred.await(reading);
-        const result = yield* Effect.promise(() =>
-          Promise.race([
-            fakePlatform.lifecycle.runShutdown().then(() => 'shutdown'),
-            sleep(100).then(() => 'timeout'),
-          ]),
+        const result = yield* Effect.raceFirst(
+          fakePlatform.lifecycle.runShutdown.pipe(Effect.as('shutdown')),
+          Effect.promise(() => sleep(100)).pipe(Effect.as('timeout')),
         );
         expect(result).toBe('shutdown');
         expect(yield* Fiber.await(running)).toMatchObject({ _tag: 'Failure' });

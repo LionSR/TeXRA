@@ -192,15 +192,13 @@ function agentServices(
   const sessions = hold.sessions;
   composition = { platform, sessions };
   registerRuntimeShutdownHandlers(platform.lifecycle, {
-    runSettlement: (settlement) => hold.processRuntime.runPromise(settlement),
-    flushArtifacts: async (signal) => {
-      await Effect.runPromise(sessions.close(platform.roots, signal));
-    },
+    // No signal: the phase's own deadline bounds this close by interrupting
+    // it, and the close's internal budget is the same phase deadline.
+    flushArtifacts: Effect.asVoid(sessions.close(platform.roots)),
     afterRunSettlement: [
-      async () => {
+      Effect.sync(() => {
         composition = undefined;
-        await Effect.runPromise(hold.release);
-      },
+      }).pipe(Effect.andThen(hold.release)),
     ],
   });
   return sessions;

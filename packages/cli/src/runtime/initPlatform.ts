@@ -27,7 +27,10 @@ import {
 } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
 import { DisposableStore } from '@platform/disposable';
-import type { ProcessRuntime } from '@platform/processRuntime';
+import {
+  withProcessServices,
+  type ProcessRuntime,
+} from '@platform/processRuntime';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { installLongRunningModelDispatcher } from '@platform/defaults/longRunningModelTransport';
 import {
@@ -181,7 +184,7 @@ const cliPlatformLog: SupabaseSessionLog = {
  * matched on.
  */
 class CliShutdownStepFailed extends Data.TaggedError('CliShutdownStepFailed')<{
-  readonly step: 'runShutdown' | 'flushTextStderr' | 'flushNdjsonStdout';
+  readonly step: 'flushTextStderr' | 'flushNdjsonStdout';
   readonly cause: unknown;
 }> {}
 
@@ -191,13 +194,7 @@ export async function runCliPlatformShutdownSequence(
   await Effect.runPromise(
     Effect.gen(function* () {
       // Signal shutdown is best effort; output still gets one final flush.
-      yield* Effect.ignoreCause(
-        Effect.tryPromise({
-          try: () => lifecycle?.runShutdown() ?? Promise.resolve(),
-          catch: (cause) =>
-            new CliShutdownStepFailed({ step: 'runShutdown', cause }),
-        }),
-      );
+      yield* Effect.ignoreCause(lifecycle?.runShutdown ?? Effect.void);
       // A closed stderr pipe must not prevent signal-based termination.
       yield* Effect.ignoreCause(
         Effect.tryPromise({
@@ -445,20 +442,19 @@ export async function initCliPlatform(
       // below so the kills (all synchronous) land first, matching the other
       // hosts' ordering.
       registerRuntimeShutdownHandlers(lifecycle, {
-        runSettlement: (settlement) => runtime.runPromise(settlement),
         // The session is opened lazily (`sessionOpen`); a process that never
         // asked for one has nothing to flush.
-        flushArtifacts: async () => {
+        flushArtifacts: Effect.suspend(() => {
           const session = tryDefaultSession();
-          if (session) await runtime.runPromise(session.settlePublications());
-        },
+          return session ? session.settlePublications() : Effect.void;
+        }),
         afterFlushArtifacts: [
-          () => runtime.runPromise(UsageLogService.dispose()),
+          withProcessServices(runtime, UsageLogService.dispose()),
         ],
         afterRunSettlement: [
-          () => runtime.runPromise(teardownDefaultSession()),
-          () => flushNdjsonStdout(),
-          () => disposeCliProcessRuntime(),
+          teardownDefaultSession(),
+          Effect.promise(() => flushNdjsonStdout()),
+          disposeCliProcessRuntime,
         ],
       });
 
@@ -489,7 +485,7 @@ export async function initCliPlatform(
   );
   if (Exit.isFailure(bootstrap)) {
     // The initialization fiber must exit before its owning runtime closes.
-    await disposeCliProcessRuntime();
+    await Effect.runPromise(disposeCliProcessRuntime);
     throw Cause.squash(bootstrap.cause);
   }
   const { globalState, platform: services } = bootstrap.value;
