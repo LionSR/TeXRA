@@ -1,3 +1,5 @@
+import { Effect } from 'effect';
+
 import { getAgentsByCategory, loadAgents, refresh } from '@agent/index';
 import { supabaseAuthenticated } from '@auth/SupabaseAuth';
 import {
@@ -9,8 +11,8 @@ import {
   type TeamPreset,
 } from '@common/teams/TeamPlan';
 import type { StateStore } from '@platform/interfaces';
-import type { ProcessRuntime } from '@platform/processRuntime';
 import { byCategory } from '@shared/schemas';
+import { ensureError } from '@utils/errors/errorMessage';
 
 import { missingMultiAgentPresetMessage } from './agents';
 import { CliUsageError } from './cliContext';
@@ -37,16 +39,9 @@ interface MultiAgentPresetPlansLoadResult {
 }
 
 function planCurrentMultiAgentRun(
+  preset: TeamPreset,
   init: MultiAgentRunPlanInit,
-  workspaceState: StateStore,
 ): CliMultiAgentPresetRunPlan {
-  const preset = findTeamPreset(
-    readCliMultiAgentPresets(workspaceState),
-    init.preset,
-  );
-  if (!preset) {
-    throw new CliUsageError(missingMultiAgentPresetMessage(init.preset));
-  }
   return planTeamRun(preset, {
     agents: byCategory((category) => getAgentsByCategory(category)),
     agentOverride: init.agent,
@@ -67,64 +62,72 @@ function planLoadedCliMultiAgentPresets(
  * are only visible after a remote load. Headless `multi-agent run` routes
  * through this runtime helper so command entrypoints cannot drift.
  */
-export async function loadCliMultiAgentRunPlan(
-  runtime: ProcessRuntime,
+export function loadCliMultiAgentRunPlan(
   init: MultiAgentRunPlanInit,
   workspaceState: StateStore,
   options: { readonly reloadRemoteAgents?: boolean } = {},
-): Promise<MultiAgentRunPlanLoadResult> {
-  await runtime.runPromise(loadAgents({ includeRemote: false }));
-  const localPlan = planCurrentMultiAgentRun(init, workspaceState);
-  if (options.reloadRemoteAgents === false) {
+) {
+  return Effect.gen(function* () {
+    yield* loadAgents({ includeRemote: false });
+    // Resolved once, before any replan: the remote reload below refreshes the
+    // agent catalog, never the workspace's team presets, so a preset that was
+    // found here cannot go missing under it.
+    const preset = findTeamPreset(
+      readCliMultiAgentPresets(workspaceState),
+      init.preset,
+    );
+    if (!preset) {
+      return yield* Effect.fail(
+        new CliUsageError(missingMultiAgentPresetMessage(init.preset)),
+      );
+    }
+    const localPlan = planCurrentMultiAgentRun(preset, init);
+    if (options.reloadRemoteAgents === false) {
+      return {
+        plan: localPlan,
+        remoteCatalogRefreshAttempted: false,
+      } satisfies MultiAgentRunPlanLoadResult;
+    }
+    const result = yield* reloadRemoteAgentsForGaps(
+      localPlan,
+      teamPlanHasGaps,
+      () => planCurrentMultiAgentRun(preset, init),
+    );
     return {
-      plan: localPlan,
-      remoteCatalogRefreshAttempted: false,
-    };
-  }
-  const result = await reloadRemoteAgentsForGaps(
-    runtime,
-    localPlan,
-    teamPlanHasGaps,
-    () => planCurrentMultiAgentRun(init, workspaceState),
-  );
-  return {
-    plan: result.value,
-    remoteCatalogRefreshAttempted: result.remoteCatalogRefreshAttempted,
-  };
+      plan: result.value,
+      remoteCatalogRefreshAttempted: result.remoteCatalogRefreshAttempted,
+    } satisfies MultiAgentRunPlanLoadResult;
+  });
 }
 
-export async function loadCliMultiAgentPresetPlanSet(
-  runtime: ProcessRuntime,
-  presets: readonly TeamPreset[],
-): Promise<MultiAgentPresetPlansLoadResult> {
-  await runtime.runPromise(loadAgents({ includeRemote: false }));
-  const result = await reloadRemoteAgentsForGaps(
-    runtime,
-    planLoadedCliMultiAgentPresets(presets),
-    (plans) => plans.some(teamPlanHasGaps),
-    () => planLoadedCliMultiAgentPresets(presets),
-  );
-  return {
-    plans: result.value,
-    remoteCatalogRefreshAttempted: result.remoteCatalogRefreshAttempted,
-  };
+export function loadCliMultiAgentPresetPlanSet(presets: readonly TeamPreset[]) {
+  return Effect.gen(function* () {
+    yield* loadAgents({ includeRemote: false });
+    const result = yield* reloadRemoteAgentsForGaps(
+      planLoadedCliMultiAgentPresets(presets),
+      (plans) => plans.some(teamPlanHasGaps),
+      () => planLoadedCliMultiAgentPresets(presets),
+    );
+    return {
+      plans: result.value,
+      remoteCatalogRefreshAttempted: result.remoteCatalogRefreshAttempted,
+    } satisfies MultiAgentPresetPlansLoadResult;
+  });
 }
 
 function reloadRemoteAgentsForGaps<T>(
-  runtime: ProcessRuntime,
   value: T,
   hasGaps: (value: T) => boolean,
   replan: () => T,
-): Promise<{
-  readonly value: T;
-  readonly remoteCatalogRefreshAttempted: boolean;
-}> {
-  return runtime.runPromise(
-    refreshRemoteCatalogForGaps(value, hasGaps, replan, {
-      canAccessRemoteCatalog: () => supabaseAuthenticated,
-      refreshRemote: () => refresh({ includeRemote: true }),
-    }),
-  );
+) {
+  // The gap-refresh port widens its refresh failure to `unknown`; the only
+  // thing this one raises is the catalog load's own `AgentCatalogLoadError`,
+  // so naming it `Error` here loses nothing and keeps the commands' failure
+  // channel the `Error` it has always been.
+  return refreshRemoteCatalogForGaps(value, hasGaps, replan, {
+    canAccessRemoteCatalog: () => supabaseAuthenticated,
+    refreshRemote: () => refresh({ includeRemote: true }),
+  }).pipe(Effect.mapError(ensureError));
 }
 
 export function writeMissingPresetAgents(

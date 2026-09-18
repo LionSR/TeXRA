@@ -391,10 +391,11 @@ describe('CLI multi-agent run command', () => {
     mocks.teamPlanHasGaps.mockReturnValueOnce(true);
     authProbes.push(true);
 
-    const result = await loadCliMultiAgentRunPlan(
-      testRuntime(),
-      { preset: 'mathematician' },
-      installedHost().roots.workspaceState,
+    const result = await testRuntime().runPromise(
+      loadCliMultiAgentRunPlan(
+        { preset: 'mathematician' },
+        installedHost().roots.workspaceState,
+      ),
     );
 
     expect(result.remoteCatalogRefreshAttempted).toBe(true);

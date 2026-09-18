@@ -88,9 +88,10 @@ function formatAttachedFileList(
 async function runMultiAgentList(context: CliContext): Promise<number> {
   const services = await initLocalCliPlatform(context);
   const { plans, remoteCatalogRefreshAttempted } =
-    await loadCliMultiAgentPresetPlanSet(
-      services.runtime,
-      readCliMultiAgentPresets(services.workspaceState),
+    await services.runtime.runPromise(
+      loadCliMultiAgentPresetPlanSet(
+        readCliMultiAgentPresets(services.workspaceState),
+      ),
     );
 
   emitCliResult(context, {
@@ -110,10 +111,11 @@ async function runMultiAgentShow(
   const services = await initCliPlatform({ ...context, quietLogs: true });
 
   const { plan, remoteCatalogRefreshAttempted } =
-    await loadCliMultiAgentRunPlan(
-      services.runtime,
-      { preset: presetIdOrName },
-      services.workspaceState,
+    await services.runtime.runPromise(
+      loadCliMultiAgentRunPlan(
+        { preset: presetIdOrName },
+        services.workspaceState,
+      ),
     );
 
   emitCliResult(context, {
@@ -145,16 +147,10 @@ export const runMultiAgentPreset = Effect.fn('runMultiAgentPreset')(function* (
 
   const rejectsHeadlessAsk =
     context.mode === 'headless' && context.approvalPolicy === 'ask';
-  const { plan, remoteCatalogRefreshAttempted } = yield* Effect.tryPromise({
-    try: () =>
-      loadCliMultiAgentRunPlan(
-        services.runtime,
-        init,
-        services.workspaceState,
-        { reloadRemoteAgents: !rejectsHeadlessAsk },
-      ),
-    catch: ensureError,
-  });
+  const { plan, remoteCatalogRefreshAttempted } =
+    yield* loadCliMultiAgentRunPlan(init, services.workspaceState, {
+      reloadRemoteAgents: !rejectsHeadlessAsk,
+    });
   if (rejectsHeadlessAsk) {
     writeTextStderr(
       `Cannot run multi-agent preset "${plan.preset.id}" with headless approval policy "ask": delegation prompts cannot be answered. Use an interactive run to answer prompts, pass --approval-policy never to deny approval-gated tools, or pass --approval-policy yolo only when you intentionally want to auto-approve privileged tools.`,
@@ -352,7 +348,7 @@ const multiAgentRunCommand = withUsageSections(
         agent: optString(ctx.args.agent),
         model: optString(ctx.args.model),
       };
-      const { runtime } = await installCliProcessRuntime(context.storageRoot);
+      const runtime = await installCliProcessRuntime(context.storageRoot);
       return runtime.runPromise(runMultiAgentPreset(context, init));
     },
   }),

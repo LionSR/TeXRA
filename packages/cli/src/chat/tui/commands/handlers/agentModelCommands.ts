@@ -1,6 +1,6 @@
 import type { AgentRosterStores } from '@agent/index';
 import {
-  assertCliAgentLaunch,
+  checkCliAgentLaunch,
   resolveCliAgentInCategory,
 } from '@cli/runtime/agents';
 import { CliUsageError } from '@cli/runtime/cliContext';
@@ -28,18 +28,13 @@ export function chatToolUseAgentUsageError(
   stores: AgentRosterStores,
   agentName: string,
 ): string | undefined {
-  try {
-    assertCliAgentLaunch(
-      stores,
-      agentName,
-      resolveCliAgentInCategory(stores, agentName, AgentCategory.ToolUse),
-      'chat',
-    );
-    return undefined;
-  } catch (error) {
-    if (error instanceof CliUsageError) return error.message;
-    throw error;
-  }
+  const launch = checkCliAgentLaunch(
+    stores,
+    agentName,
+    resolveCliAgentInCategory(stores, agentName, AgentCategory.ToolUse),
+    'chat',
+  );
+  return launch instanceof CliUsageError ? launch.message : undefined;
 }
 
 export function applyInitialCliAgentSelection(

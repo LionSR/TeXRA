@@ -37,9 +37,9 @@
  * over the one `CliSecrets` of this storage root, `AppState` over the global
  * state store opened here, before the install (omitted by clone, the one
  * secrets-only entry), and `SetupPlatform` over the CLI's sign-in. The
- * global store is handed back with the runtime, so `initCliPlatform` opens
- * only the workspace scope and no entry has to discover a store some other
- * entry opened.
+ * global store is served by the runtime as `AppState`, so `initCliPlatform`
+ * opens only the workspace scope and no entry has to discover a store some
+ * other entry opened.
  */
 import { Effect } from 'effect';
 
@@ -51,7 +51,6 @@ import {
   disposeProcessRuntime,
   installProcessRuntime,
 } from '@controllers/session/sessionLayer';
-import { AppState, type StateStore } from '@platform/interfaces';
 import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '@platform/languageModel';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import { nodeFileServices } from '@platform/defaults/jsonStore';
@@ -69,30 +68,18 @@ import { setCliLogRuntime } from './logSinks';
 import { cliAgentResume } from './cliAgentResume';
 import { ensureCliSupabaseAuth, signInCliSupabase } from './supabaseAuth';
 
-/** The process runtime and the global state store installed under it. */
-export interface CliProcessRuntimeInstall {
-  readonly runtime: ProcessRuntime;
-  readonly globalState: StateStore;
-}
-
-interface CliProcessRuntimeInstallState {
-  readonly runtime: ProcessRuntime;
-  readonly globalState: StateStore | undefined;
-}
-
-let pending: Promise<CliProcessRuntimeInstallState> | null = null;
+let pending: Promise<ProcessRuntime> | null = null;
 
 /**
- * Install the process runtime, or join the one already installed, and hand
- * it back with the global state store it serves: every entry that awaits
- * this holds both in locals and threads them on, so nothing below the entry
- * looks either up again.
+ * Install the process runtime, or join the one already installed: every entry
+ * that awaits this holds it in a local and threads it on, so nothing below
+ * the entry looks it up again.
  *
- * The store is read back off the joined runtime, not off a record beside it:
- * an already-installed runtime carries the store it serves as `AppState` in
- * its own context, so joining reads it from there rather than from a module
- * latch that a second root (the test kernel's) would have to remember to
- * fill.
+ * Only the runtime comes back. The global state store this install opens is
+ * the `AppState` the runtime itself serves, so an entry that needs the store
+ * reads it from context inside the program it is already running here —
+ * there is no second record beside the runtime for a joining caller (or a
+ * second root, like the test kernel's) to keep in sync.
  *
  * `appState: 'omit'` is `clone`'s: the one platform-less, secrets-only entry,
  * whose token can come from the environment and whose storage root may be
@@ -105,29 +92,17 @@ let pending: Promise<CliProcessRuntimeInstallState> | null = null;
  */
 export function installCliProcessRuntime(
   storageRoot?: string,
-): Promise<CliProcessRuntimeInstall>;
-export function installCliProcessRuntime(
-  storageRoot: string | undefined,
-  options: { readonly appState: 'omit' },
-): Promise<ProcessRuntime>;
-export function installCliProcessRuntime(
-  storageRoot?: string,
   options?: { readonly appState: 'omit' },
-): Promise<CliProcessRuntimeInstallState | ProcessRuntime> {
+): Promise<ProcessRuntime> {
   const omitAppState = options?.appState === 'omit';
   const current = installedProcessRuntime();
   if (current) {
     // The output plane runs on whichever runtime this process ended up with,
     // installed here or found installed.
     setCliLogRuntime(current);
-    if (omitAppState) return Promise.resolve(current);
-    return current
-      .runPromise(AppState)
-      .then((globalState) => ({ runtime: current, globalState }));
+    return Promise.resolve(current);
   }
-  if (pending) {
-    return omitAppState ? pending.then(({ runtime }) => runtime) : pending;
-  }
+  if (pending) return pending;
   const storage = createNodeStorageProvider({ storageRoot });
   pending = (async () => {
     const processStart = await nodeProcesses.selfIdentity();
@@ -195,11 +170,11 @@ export function installCliProcessRuntime(
     // The output plane runs its Effects on this runtime from here on; the
     // disposal below hands it back the no-runtime state.
     setCliLogRuntime(runtime);
-    return { runtime, globalState };
+    return runtime;
   })().finally(() => {
     pending = null;
   });
-  return omitAppState ? pending.then(({ runtime }) => runtime) : pending;
+  return pending;
 }
 
 /**

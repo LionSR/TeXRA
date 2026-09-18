@@ -20,6 +20,7 @@ import {
   type WorkspaceRoots,
 } from '@platform/workspaceRoots';
 import {
+  AppState,
   type LifecycleHost,
   type StateStore,
   type StateWriteFailed,
@@ -49,7 +50,7 @@ import {
   initProcessSettingHost,
   processSettingsStores,
 } from '@utils/config/platformSettings';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
 import {
@@ -346,30 +347,33 @@ export async function initCliPlatform(
   // update check, `clone` -- may already have installed it, and every later
   // init finds it installed; each then adopts that one rather than building a
   // second and leaving the first undisposed.
-  const { runtime, globalState } = await installCliProcessRuntime(
-    context.storageRoot,
-  );
+  const runtime = await installCliProcessRuntime(context.storageRoot);
 
+  // One program on that runtime for the whole bootstrap: the process's global
+  // state store comes from its own context, and on the first init everything
+  // below runs in the same fiber rather than as a chain of separate runs.
+  //
   // Double init is the normal path (every command calls one of these), so the
   // already-installed platform is the value returned on the second and later
   // calls; the first call keeps the one it builds below.
-  let services = tryPlatform();
-  if (!services) {
-    installLongRunningModelDispatcher();
-    // Everything below is the first init's own work on that runtime. A step
-    // that fails after the runtime exists (a store that will not open, a
-    // seed that will not write) must not leave the runtime installed with
-    // nothing registered to dispose it: the failure disposes it and is
-    // re-raised, so the caller reports the cause rather than a half-built
-    // platform. Keep the platform, roots, and lazy session private until the
-    // fallible setup has succeeded: their ports have no reset operation.
-    const install = async () => {
-      const stateStores = await runtime.runPromise(
-        openCliWorkspaceState({
-          storageRoot: context.storageRoot,
-          workspacePath: context.cwd,
-        }),
-      );
+  //
+  // A step that fails after the runtime exists (a store that will not open, a
+  // seed that will not write) must not leave the runtime installed with
+  // nothing registered to dispose it: the failure disposes it and is
+  // re-raised, so the caller reports the cause rather than a half-built
+  // platform. Keep the platform, roots, and lazy session private until the
+  // fallible setup has succeeded: their ports have no reset operation.
+  const bootstrap = await runtime.runPromiseExit(
+    Effect.gen(function* () {
+      const globalState = yield* AppState;
+      const installed = tryPlatform();
+      if (installed) return { globalState, platform: installed };
+
+      installLongRunningModelDispatcher();
+      const stateStores = yield* openCliWorkspaceState({
+        storageRoot: context.storageRoot,
+        workspacePath: context.cwd,
+      });
       // Same severity and wording as the extension/desktop hosts: a shutdown
       // handler failure is an error everywhere, not a warning in one host.
       const lifecycle = createLifecycleHost({
@@ -408,24 +412,22 @@ export async function initCliPlatform(
       // opens one. The latex text connector asks a helper model how to join
       // two strings; that model is resolved against the stores this root
       // opened.
-      const openSession = runtime.runSync(
-        Effect.cached(
-          initializeDefaultSession({
-            responseTextProcessing: createTexraResponseTextProcessing(
-              createAgentResponseTextConnector({
-                ...roots,
-                secrets: cliSecrets,
-              }),
-            ),
-          }).pipe(
-            Effect.tap((session) =>
-              Effect.sync(() => {
-                const cleared = session.storeCleared;
-                if (cleared) {
-                  writeTextStderr(sessionStoreClearedMessage(cleared));
-                }
-              }),
-            ),
+      const openSession = yield* Effect.cached(
+        initializeDefaultSession({
+          responseTextProcessing: createTexraResponseTextProcessing(
+            createAgentResponseTextConnector({
+              ...roots,
+              secrets: cliSecrets,
+            }),
+          ),
+        }).pipe(
+          Effect.tap((session) =>
+            Effect.sync(() => {
+              const cleared = session.storeCleared;
+              if (cleared) {
+                writeTextStderr(sessionStoreClearedMessage(cleared));
+              }
+            }),
           ),
         ),
       );
@@ -433,7 +435,7 @@ export async function initCliPlatform(
       // Seed first-install defaults (e.g. disabled tools). No-ops for anyone
       // whose DISABLED_TOOLS list already exists, so upgrading users keep the
       // tools they enabled.
-      await runtime.runPromise(seedDisabledToolDefaults(globalState));
+      yield* seedDisabledToolDefaults(globalState);
 
       // Kill agent-spawned OS children before the process dies, exactly as the
       // extension and desktop hosts do. Background `bash` runs are spawned
@@ -465,8 +467,11 @@ export async function initCliPlatform(
       // dispose() flushes any queued entries; it
       // runs on normal exit (bin/texra.ts finally) and on signals, both of
       // which call lifecycle.runShutdown().
-      await runtime.runPromise(
-        UsageLogService.initialize(runtime.scope, {}, context.version, 'cli'),
+      yield* UsageLogService.initialize(
+        runtime.scope,
+        {},
+        context.version,
+        'cli',
       );
       initPlatform(platform);
       initProcessWorkspaceRoots(roots);
@@ -479,18 +484,15 @@ export async function initCliPlatform(
       if (context.installSignalHandlers !== false) {
         installCliShutdownSignalHandlers(lifecycle);
       }
-      return platform;
-    };
-    const initialized = await runtime.runPromiseExit(
-      Effect.tryPromise({ try: install, catch: ensureError }),
-    );
-    if (Exit.isFailure(initialized)) {
-      // The initialization fiber must exit before its owning runtime closes.
-      await disposeCliProcessRuntime();
-      throw Cause.squash(initialized.cause);
-    }
-    services = initialized.value;
+      return { globalState, platform };
+    }),
+  );
+  if (Exit.isFailure(bootstrap)) {
+    // The initialization fiber must exit before its owning runtime closes.
+    await disposeCliProcessRuntime();
+    throw Cause.squash(bootstrap.cause);
   }
+  const { globalState, platform: services } = bootstrap.value;
 
   // The stores this root opened, handed back rather than read off a
   // process-wide singleton: the secret store is the same stateless view over
