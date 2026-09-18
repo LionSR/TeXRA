@@ -4,6 +4,7 @@ import path from 'node:path';
 import { Effect, Result } from 'effect';
 
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
+import { safeParseJson } from '@common/parsing/safeParseJson';
 import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
 import type { ConfigProvider } from '@platform/interfaces';
 import {
@@ -212,9 +213,8 @@ async function readCliPackageManifest(): Promise<
       () => undefined,
     );
     if (text === undefined) continue;
-    const pkg = Result.getOrUndefined(
-      Result.try(() => JSON.parse(text) as CliPackageManifest),
-    );
+    const pkg = Result.getOrUndefined(safeParseJson(text)) as
+      CliPackageManifest | undefined;
     // Source and bundled `dist/bin` layouts both reach the CLI manifest via
     // `../../`; keep the fallback for build layouts that place runtime files
     // one level below the package root.
