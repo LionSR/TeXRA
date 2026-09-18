@@ -1415,8 +1415,9 @@ describe('CLI run command, workflow agents', () => {
     'reports missing instruction files before starting platform or input work',
     () =>
       Effect.gen(function* () {
-        // `readInstructionFile` throws inside an async function the command wraps
-        // in `Effect.tryPromise`, so this one lands on the typed Error channel.
+        // `resolveFileBackedInstruction` reports a missing file as a typed
+        // `CliUsageError` on the Effect failure channel, unlike the command's
+        // own `throw`, which Effect surfaces as a defect.
         const error = yield* Effect.flip(
           workflowProgram({ instructionFile: 'missing-prompt.md' }),
         );

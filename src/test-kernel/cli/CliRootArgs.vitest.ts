@@ -900,21 +900,23 @@ describe('CLI root argument routing', () => {
 
   it('keeps a failed workflow with no output in run storage', async () => {
     await expect(
-      resolveWorkflowOutput(
-        'corrected.tex',
-        undefined,
-        {
-          outcome: RUN_OUTCOME.FAILED,
-          output: {
-            category: AgentCategory.Workflow,
-            outputs: [],
-            compileFailures: [],
-            diffs: [],
+      Effect.runPromise(
+        resolveWorkflowOutput(
+          'corrected.tex',
+          undefined,
+          {
+            outcome: RUN_OUTCOME.FAILED,
+            output: {
+              category: AgentCategory.Workflow,
+              outputs: [],
+              compileFailures: [],
+              diffs: [],
+            },
+            runId: 'run-without-output' as RunId,
           },
-          runId: 'run-without-output' as RunId,
-        },
-        createRunCommandCliContext(),
-        { storageRoot: '/tmp/storage' },
+          createRunCommandCliContext(),
+          { storageRoot: '/tmp/storage' },
+        ),
       ),
     ).resolves.toMatchObject({
       outcome: RUN_OUTCOME.FAILED,
@@ -1008,21 +1010,23 @@ describe('CLI root argument routing', () => {
 
   it('reports successful stopped workflows with missing requested outputs as failed copies', async () => {
     await expect(
-      resolveWorkflowOutput(
-        'corrected.tex',
-        undefined,
-        {
-          outcome: RUN_OUTCOME.COMPLETED,
-          output: {
-            category: AgentCategory.Workflow,
-            outputs: [],
-            compileFailures: [],
-            diffs: [],
+      Effect.runPromise(
+        resolveWorkflowOutput(
+          'corrected.tex',
+          undefined,
+          {
+            outcome: RUN_OUTCOME.COMPLETED,
+            output: {
+              category: AgentCategory.Workflow,
+              outputs: [],
+              compileFailures: [],
+              diffs: [],
+            },
+            runId: 'completed-without-output' as RunId,
           },
-          runId: 'completed-without-output' as RunId,
-        },
-        createRunCommandCliContext(),
-        { storageRoot: '/tmp/storage' },
+          createRunCommandCliContext(),
+          { storageRoot: '/tmp/storage' },
+        ),
       ),
     ).rejects.toThrow(
       'Workflow completed without a generated output; corrected.tex was not written.',
@@ -1030,21 +1034,23 @@ describe('CLI root argument routing', () => {
   });
 
   it('keeps stopped workflows with missing requested outputs interrupted', async () => {
-    const result = await resolveWorkflowOutput(
-      'corrected.tex',
-      undefined,
-      {
-        outcome: RUN_OUTCOME.CANCELLED,
-        output: {
-          category: AgentCategory.Workflow,
-          outputs: [],
-          compileFailures: [],
-          diffs: [],
+    const result = await Effect.runPromise(
+      resolveWorkflowOutput(
+        'corrected.tex',
+        undefined,
+        {
+          outcome: RUN_OUTCOME.CANCELLED,
+          output: {
+            category: AgentCategory.Workflow,
+            outputs: [],
+            compileFailures: [],
+            diffs: [],
+          },
+          runId: 'stopped-without-output' as RunId,
         },
-        runId: 'stopped-without-output' as RunId,
-      },
-      createRunCommandCliContext(),
-      { storageRoot: '/tmp/storage' },
+        createRunCommandCliContext(),
+        { storageRoot: '/tmp/storage' },
+      ),
     );
 
     expect(result).toMatchObject({

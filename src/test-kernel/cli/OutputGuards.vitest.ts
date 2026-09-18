@@ -2,6 +2,7 @@ import { mkdir, stat, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, win32 } from 'node:path';
 
+import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
 
 import { CliUsageError } from '@cli/runtime/cliContext';
@@ -51,13 +52,15 @@ describe('probeOutputPath', () => {
     async ({ target, outputParent, mkdirCode }) => {
       const mkdirVisited: string[] = [];
       await expect(
-        probeOutputPathForTests(
-          target,
-          '--output',
-          probeDeps(async (candidate) => {
-            mkdirVisited.push(candidate);
-            throw errnoError(mkdirCode);
-          }),
+        Effect.runPromise(
+          probeOutputPathForTests(
+            target,
+            '--output',
+            probeDeps(async (candidate) => {
+              mkdirVisited.push(candidate);
+              throw errnoError(mkdirCode);
+            }),
+          ),
         ),
       ).rejects.toThrow(
         `--output: a parent path component is a file: ${target}`,
@@ -70,13 +73,15 @@ describe('probeOutputPath', () => {
     const target = String.raw`C:\workspace\missing\output`;
     const mkdirVisited: string[] = [];
     await expect(
-      probeOutputPathForTests(
-        target,
-        '--output-dir',
-        probeDeps(async (candidate) => {
-          mkdirVisited.push(candidate);
-          return candidate;
-        }),
+      Effect.runPromise(
+        probeOutputPathForTests(
+          target,
+          '--output-dir',
+          probeDeps(async (candidate) => {
+            mkdirVisited.push(candidate);
+            return candidate;
+          }),
+        ),
       ),
     ).resolves.toBeNull();
     expect(mkdirVisited).toEqual([target]);
@@ -99,13 +104,15 @@ describe('probeOutputPath', () => {
     async ({ flagLabel, expectedDirectory, expectedMessage }) => {
       const mkdirVisited: string[] = [];
       await expect(
-        probeOutputPathForTests(
-          '/missing/output.tex',
-          flagLabel,
-          probeDeps(async (candidate) => {
-            mkdirVisited.push(candidate);
-            throw errnoError('ENOENT');
-          }),
+        Effect.runPromise(
+          probeOutputPathForTests(
+            '/missing/output.tex',
+            flagLabel,
+            probeDeps(async (candidate) => {
+              mkdirVisited.push(candidate);
+              throw errnoError('ENOENT');
+            }),
+          ),
         ),
       ).rejects.toThrow(expectedMessage);
       expect(mkdirVisited).toEqual([expectedDirectory]);
@@ -115,12 +122,14 @@ describe('probeOutputPath', () => {
   it('preserves unexpected mkdir failures', async () => {
     const denied = errnoError('EACCES', 'denied');
     await expect(
-      probeOutputPathForTests(
-        '/missing/output.tex',
-        '--output',
-        probeDeps(async () => {
-          throw denied;
-        }),
+      Effect.runPromise(
+        probeOutputPathForTests(
+          '/missing/output.tex',
+          '--output',
+          probeDeps(async () => {
+            throw denied;
+          }),
+        ),
       ),
     ).rejects.toBe(denied);
   });
@@ -153,10 +162,10 @@ describe('dangling output symlinks', () => {
     }
 
     await expect(
-      assertOutputFileAvailable(fileLink, root),
+      Effect.runPromise(assertOutputFileAvailable(fileLink, root)),
     ).resolves.toBeUndefined();
     await expect(
-      assertOutputDirAvailable(directoryLink, root),
+      Effect.runPromise(assertOutputDirAvailable(directoryLink, root)),
     ).rejects.toBeInstanceOf(CliUsageError);
     await expect(stat(directoryReferent)).rejects.toMatchObject({
       code: 'ENOENT',
@@ -170,7 +179,7 @@ describe('assertOutputDirAvailable', () => {
     const target = join(root, 'flagged');
     await mkdir(target);
     await expect(
-      assertOutputDirAvailable(target, root),
+      Effect.runPromise(assertOutputDirAvailable(target, root)),
     ).resolves.toBeUndefined();
   });
 
@@ -178,7 +187,7 @@ describe('assertOutputDirAvailable', () => {
     const root = await makeTempDir('texra-cli-outdir-', tempDirs);
     const target = join(root, 'no-such-yet');
     await expect(
-      assertOutputDirAvailable(target, root),
+      Effect.runPromise(assertOutputDirAvailable(target, root)),
     ).resolves.toBeUndefined();
     expect((await stat(target)).isDirectory()).toBe(true);
   });
@@ -190,11 +199,11 @@ describe('assertOutputDirAvailable', () => {
     const filePath = join(root, 'oops.txt');
     await writeFile(filePath, 'not a directory');
     await expect(
-      assertOutputDirAvailable(filePath, root),
+      Effect.runPromise(assertOutputDirAvailable(filePath, root)),
     ).rejects.toBeInstanceOf(CliUsageError);
-    await expect(assertOutputDirAvailable(filePath, root)).rejects.toThrow(
-      /--output-dir is not a directory/,
-    );
+    await expect(
+      Effect.runPromise(assertOutputDirAvailable(filePath, root)),
+    ).rejects.toThrow(/--output-dir is not a directory/);
   });
 
   it('rejects an --output-dir whose parent path component is a file (ENOTDIR)', async () => {
@@ -206,11 +215,11 @@ describe('assertOutputDirAvailable', () => {
     await writeFile(filePath, 'just a file');
     const through = join(filePath, 'subdir');
     await expect(
-      assertOutputDirAvailable(through, root),
+      Effect.runPromise(assertOutputDirAvailable(through, root)),
     ).rejects.toBeInstanceOf(CliUsageError);
-    await expect(assertOutputDirAvailable(through, root)).rejects.toThrow(
-      /is not a directory/,
-    );
+    await expect(
+      Effect.runPromise(assertOutputDirAvailable(through, root)),
+    ).rejects.toThrow(/is not a directory/);
   });
 });
 
@@ -218,7 +227,7 @@ describe('assertOutputFileAvailable', () => {
   it('accepts a path that does not exist yet (writer creates the file)', async () => {
     const root = await makeTempDir('texra-cli-outfile-', tempDirs);
     await expect(
-      assertOutputFileAvailable(join(root, 'out.tex'), root),
+      Effect.runPromise(assertOutputFileAvailable(join(root, 'out.tex'), root)),
     ).resolves.toBeUndefined();
   });
 
@@ -227,7 +236,7 @@ describe('assertOutputFileAvailable', () => {
     const target = join(root, 'existing.tex');
     await writeFile(target, 'old content');
     await expect(
-      assertOutputFileAvailable(target, root),
+      Effect.runPromise(assertOutputFileAvailable(target, root)),
     ).resolves.toBeUndefined();
   });
 
@@ -239,11 +248,11 @@ describe('assertOutputFileAvailable', () => {
     const dirPath = join(root, 'sub');
     await mkdir(dirPath);
     await expect(
-      assertOutputFileAvailable(dirPath, root),
+      Effect.runPromise(assertOutputFileAvailable(dirPath, root)),
     ).rejects.toBeInstanceOf(CliUsageError);
-    await expect(assertOutputFileAvailable(dirPath, root)).rejects.toThrow(
-      /--output is a directory.*use --output-dir/,
-    );
+    await expect(
+      Effect.runPromise(assertOutputFileAvailable(dirPath, root)),
+    ).rejects.toThrow(/--output is a directory.*use --output-dir/);
   });
 
   it('rejects --output whose parent path component is a file (ENOTDIR)', async () => {
@@ -254,19 +263,19 @@ describe('assertOutputFileAvailable', () => {
     await writeFile(filePath, 'just a file');
     const through = join(filePath, 'out.tex');
     await expect(
-      assertOutputFileAvailable(through, root),
+      Effect.runPromise(assertOutputFileAvailable(through, root)),
     ).rejects.toBeInstanceOf(CliUsageError);
-    await expect(assertOutputFileAvailable(through, root)).rejects.toThrow(
-      /parent path component is a file/,
-    );
+    await expect(
+      Effect.runPromise(assertOutputFileAvailable(through, root)),
+    ).rejects.toThrow(/parent path component is a file/);
   });
 
   it('resolves a relative --output against cwd before stat-ing', async () => {
     const root = await makeTempDir('texra-cli-outfile-', tempDirs);
     const dirPath = join(root, 'rel-dir');
     await mkdir(dirPath);
-    await expect(assertOutputFileAvailable('rel-dir', root)).rejects.toThrow(
-      /--output is a directory/,
-    );
+    await expect(
+      Effect.runPromise(assertOutputFileAvailable('rel-dir', root)),
+    ).rejects.toThrow(/--output is a directory/);
   });
 });

@@ -1,38 +1,38 @@
 import { readFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
+import { Effect } from 'effect';
+
 import { CliUsageError } from '@cli/runtime/cliContext';
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
+import { ensureError } from '@utils/errors/errorMessage';
 
-async function readInstructionFile(
-  instructionFile: string | undefined,
-  cwd: string,
-): Promise<string> {
-  const trimmed = instructionFile?.trim();
-  if (!trimmed) return '';
-  // path.resolve drops all prior segments once it hits an absolute one, so
-  // this covers both the absolute and cwd-relative spellings.
-  const absolutePath = path.resolve(cwd, trimmed);
-  try {
-    return await readFile(absolutePath, 'utf8');
-  } catch (error: unknown) {
-    if (isFileNotFoundError(error) || isNotADirectoryError(error)) {
-      throw new CliUsageError(`--instruction-file: file not found: ${trimmed}`);
-    }
-    throw error;
-  }
-}
-
-export async function resolveFileBackedInstruction(
+/**
+ * The instruction a run starts from: the `--instruction-file` contents ahead of
+ * the inline `--instruction`, with either half omitted when it is empty.
+ */
+export function resolveFileBackedInstruction(
   init: {
     readonly instruction: string;
     readonly instructionFile?: string;
   },
   cwd: string,
-): Promise<string> {
-  const fileInstruction = await readInstructionFile(init.instructionFile, cwd);
+): Effect.Effect<string, Error> {
   const inlineInstruction = init.instruction.trim();
-  return [fileInstruction.trim(), inlineInstruction]
-    .filter(Boolean)
-    .join('\n\n');
+  const trimmed = init.instructionFile?.trim();
+  if (!trimmed) return Effect.succeed(inlineInstruction);
+  // path.resolve drops all prior segments once it hits an absolute one, so
+  // this covers both the absolute and cwd-relative spellings.
+  const absolutePath = path.resolve(cwd, trimmed);
+  return Effect.tryPromise({
+    try: () => readFile(absolutePath, 'utf8'),
+    catch: (error: unknown) =>
+      isFileNotFoundError(error) || isNotADirectoryError(error)
+        ? new CliUsageError(`--instruction-file: file not found: ${trimmed}`)
+        : ensureError(error),
+  }).pipe(
+    Effect.map((fileInstruction) =>
+      [fileInstruction.trim(), inlineInstruction].filter(Boolean).join('\n\n'),
+    ),
+  );
 }
