@@ -77,6 +77,7 @@ export {
   PdfOpenFailed,
 } from './runtimePresentationEvents';
 export type {
+  HostPresentation,
   PresentationEventHandlers,
   RuntimePresentationEvent,
   RuntimePresentationEventPayloads,

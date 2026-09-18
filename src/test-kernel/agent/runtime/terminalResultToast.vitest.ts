@@ -33,7 +33,6 @@ async function toastsFor(
   const emitted: { event: string; payload: unknown }[] = [];
   const emit = vi.fn((name: string, payload: unknown) => {
     emitted.push({ event: name, payload });
-    return true;
   });
   const detachHost = Effect.runSync(session.interactions.use({ emit }));
   const detachToast = attachTerminalResultToast(session, session.interactions);

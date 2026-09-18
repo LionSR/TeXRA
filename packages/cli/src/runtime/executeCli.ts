@@ -295,7 +295,7 @@ export function executeCliRequest(
         beforePrompt: () => presentationHost.prepareInteractivePrompt?.(),
         emit: (event, payload) => {
           if (event === 'requestShowError') failurePresented = true;
-          return presentationHost.emit(event, payload);
+          presentationHost.emit(event, payload);
         },
       }),
     );

@@ -131,7 +131,7 @@ describe('desktop preview host', () => {
       const { createHostSnapshotSource } =
         await import('@controllers/session/hostSnapshotSource');
       const session = createTestSession();
-      const present = vi.fn<(...args: unknown[]) => boolean>(() => true);
+      const present = vi.fn<(...args: unknown[]) => void>(() => {});
       const detachPresentation = Effect.runSync(
         session.interactions.use({ emit: present }),
       );

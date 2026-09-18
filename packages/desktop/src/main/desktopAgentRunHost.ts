@@ -16,17 +16,20 @@ export interface DesktopAgentRunHost
    * dialog: each token in `actions` becomes a button — dispatched to the
    * matching main-process action (open Settings, open a doc) — plus a
    * defaulted "Dismiss", instead of degrading to inert trailing hint text.
+   * A program, as `openPath` is: the presentation plane forks it.
    */
   showInstructionDialog(
     message: string,
     actions: readonly InstructionAction[] | undefined,
-  ): Promise<void>;
+  ): Effect.Effect<void>;
   /**
    * Presents a failure dialog. A `docsCommand` (from a refusing request's
    * `Rejected`) adds a guide button opening the matching docs page — the
    * native form of the link the extension's request-error callout renders.
+   * A dialog that could not be shown is reported by the implementation, as
+   * `showErrorMessage` is: this program has no failure of its own.
    */
-  showErrorDialog(message: string, docsCommand?: string): Promise<void>;
+  showErrorDialog(message: string, docsCommand?: string): Effect.Effect<void>;
   /** The export's format dialog. The Electron dialog behind it is a
    *  promise, lifted once there; a cancelled dialog answers `undefined`. */
   pickTranscriptExportFormat(): Effect.Effect<

@@ -335,7 +335,11 @@ export function createTuiHostInteractions(
   const releaseCapability = useHostCapability(performHostCapability);
 
   return {
-    emit: (event, payload) => host.emit(event, payload),
+    // The CLI host renders the notice itself and says whether it rendered a
+    // user-visible record; there is no program for the session to fork.
+    emit: (event, payload) => {
+      host.emit(event, payload);
+    },
     /** The preview a tool edit's durable payload cannot carry. */
     presentToolEdit(request) {
       stagePresentation({
