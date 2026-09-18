@@ -46,9 +46,8 @@ const fromEditor = <A>(call: () => PromiseLike<A>): Effect.Effect<A, unknown> =>
 
 export class VscodeToolEditApprovalHost implements ToolEditApprovalHost {
   private readonly diffViewHost: DiffViewHost = new VscodeDiffViewHost();
-  readonly openBuildDisplay: BuildDisplayFn = async (location, options) => {
-    await openBuildDisplayIfTex(this.session, location, this.runtime, options);
-  };
+  readonly openBuildDisplay: BuildDisplayFn = (location, options) =>
+    Effect.asVoid(openBuildDisplayIfTex(this.session, location, options));
 
   constructor(
     private readonly storageDirectory: string,

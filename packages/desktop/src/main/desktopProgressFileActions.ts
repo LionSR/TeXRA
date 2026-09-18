@@ -315,6 +315,8 @@ export class DesktopProgressFileActions {
 
   /** Open a generated diff file via the desktop LaTeX build display. */
   private openDiffOutput(diffFilePath: string): Promise<void> {
-    return this.ui.openBuildDisplay(createExternalLocation(diffFilePath));
+    return this.host.runtime.runPromise(
+      this.ui.openBuildDisplay(createExternalLocation(diffFilePath)),
+    );
   }
 }

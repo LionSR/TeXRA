@@ -7,6 +7,7 @@ import {
   Effect,
   Fiber,
   type FileSystem,
+  type Path,
   Scope,
   Stream,
   SubscriptionRef,
@@ -47,7 +48,7 @@ const mocks = createModuleMocks();
  * runtime, and so does this suite.
  */
 const onRuntime = <A, E>(
-  program: Effect.Effect<A, E, FileSystem.FileSystem>,
+  program: Effect.Effect<A, E, FileSystem.FileSystem | Path.Path>,
 ): Effect.Effect<A, unknown> =>
   Effect.tryPromise({
     try: () => testRuntime().runPromise(program),
@@ -507,7 +508,7 @@ describe('desktop tool edit approval', () => {
           return { ...actual, runLatexdiff };
         });
 
-        const openBuildDisplay = vi.fn(async () => {});
+        const openBuildDisplay = vi.fn(() => Effect.void);
         const { requestApproval, controller, waitForPreviews } =
           yield* createApprovalFixture({
             ui: createStubDesktopAgentRunHost({ openBuildDisplay }),
@@ -578,12 +579,13 @@ describe('desktop tool edit approval', () => {
           yield* createApprovalFixture({
             workspacePath: workspaceRoot,
             ui: createStubDesktopAgentRunHost({
-              openBuildDisplay: async (location, options) => {
-                displayed.push({
-                  absolutePath: location.absolutePath,
-                  options,
-                });
-              },
+              openBuildDisplay: (location, options) =>
+                Effect.sync(() => {
+                  displayed.push({
+                    absolutePath: location.absolutePath,
+                    options,
+                  });
+                }),
               showErrorMessage: (message) =>
                 Effect.sync(() => {
                   messages.push(message);

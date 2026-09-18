@@ -1,7 +1,7 @@
 import { rm } from 'node:fs/promises';
 import path from 'node:path';
 
-import { Effect, type FileSystem } from 'effect';
+import { Effect, type FileSystem, type Path } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { SessionHandle } from '@agent/runtime';
@@ -113,7 +113,7 @@ function createDecideSpy() {
 /** The host wiring point's run: `ProgressViewProvider` gives the controller's
  *  verbs the window's process runtime, and so does this suite. */
 function onRuntime<A, E>(
-  program: Effect.Effect<A, E, FileSystem.FileSystem>,
+  program: Effect.Effect<A, E, FileSystem.FileSystem | Path.Path>,
 ): Promise<A> {
   return testRuntime().runPromise(program);
 }

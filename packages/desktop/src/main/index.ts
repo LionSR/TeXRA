@@ -548,7 +548,6 @@ function createWindow(options: {
   );
   const previewOptions = {
     shell,
-    runtime,
     // The in-app PDF overlay is preferred when the renderer is available.
     postToRenderer: postToRendererIfAlive,
   };

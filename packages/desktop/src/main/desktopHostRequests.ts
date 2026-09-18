@@ -175,25 +175,27 @@ export function createDesktopHostRequests(
    *  lifetime, so the layer is built once from it here, never from an
    *  ambient store. */
   const sessionFiles = sessionFsLayer(session.roots);
+  /** How a host call's failure is worded, whatever shape it arrived in: a
+   *  refusal the callee already worded travels as itself, and every other
+   *  value is tagged with the member it came from. `message` is the failure's
+   *  own text and `cause` the value it carried, so the fold below and the
+   *  bridge's log read exactly what the host handed over. */
+  const hostFailure = (
+    member: string,
+    cause: unknown,
+  ): HostCallFailed | RequestRefusal =>
+    isRequestRefusal(cause)
+      ? cause
+      : new HostCallFailed({ member, message: toErrorMessage(cause), cause });
   /** A host capability that still answers with a promise, lifted once and
-   *  named: a refusal the callee already worded travels as itself, and every
-   *  other rejection is tagged with the member it came from. `message` is the
-   *  rejection's own text and `cause` the value it was thrown with, so the
-   *  fold below and the bridge's log read exactly what `await` handed over. */
+   *  named through {@link hostFailure}. */
   const fromHost = <A>(
     member: string,
     call: () => Promise<A>,
   ): Effect.Effect<A, HostCallFailed | RequestRefusal> =>
     Effect.tryPromise({
       try: call,
-      catch: (cause) =>
-        isRequestRefusal(cause)
-          ? cause
-          : new HostCallFailed({
-              member,
-              message: toErrorMessage(cause),
-              cause,
-            }),
+      catch: (cause) => hostFailure(member, cause),
     });
   // Shared controllers propagate request failures to the dispatcher: the
   // notice IS the refusal the request answers with, and the request rethrows
@@ -588,9 +590,13 @@ export function createDesktopHostRequests(
         if (!result.success) {
           return yield* Effect.fail(new Rejected({ reason: result.message }));
         }
-        yield* fromHost('host.openBuildDisplay', () =>
-          host.openBuildDisplay(createExternalLocation(result.diffPath)),
-        );
+        yield* host
+          .openBuildDisplay(createExternalLocation(result.diffPath))
+          .pipe(
+            Effect.catch((cause) =>
+              Effect.fail(hostFailure('host.openBuildDisplay', cause)),
+            ),
+          );
         return;
       }
       const packed = yield* Effect.provide(

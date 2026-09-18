@@ -135,7 +135,7 @@ async function loadFileActions(options: {
   const { DesktopProgressFileActions } =
     await import('@desktop/main/desktopProgressFileActions');
 
-  const openBuildDisplay = vi.fn();
+  const openBuildDisplay = vi.fn(() => Effect.void);
   const actions = new DesktopProgressFileActions(
     {
       // The stub's error notice succeeds; this surface's binding refuses the

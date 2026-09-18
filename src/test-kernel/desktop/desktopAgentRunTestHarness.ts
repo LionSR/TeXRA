@@ -15,7 +15,7 @@ export function createStubDesktopAgentRunHost(
 ): DesktopAgentRunHost {
   return {
     openPath: () => Effect.void,
-    openBuildDisplay: async () => undefined,
+    openBuildDisplay: () => Effect.void,
     openDiff: async () => undefined,
     confirmAcceptFile: async () => true,
     chooseTeamAvailability: async () => 'cancel',
