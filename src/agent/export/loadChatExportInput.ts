@@ -19,7 +19,7 @@
  *
  */
 
-import { Effect } from 'effect';
+import { Data, Effect } from 'effect';
 
 import { getRunRecords } from '@agent/storage';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
@@ -32,6 +32,23 @@ import {
   hasCompletedRunConversationEvidence,
   readCompletedRunConversation,
 } from '@transcript';
+import { toErrorMessage } from '@utils/errors/errorMessage';
+
+/**
+ * A stored run's export input could not be read: the run record read or the
+ * completed-run conversation read failed. Both still answer with a bare
+ * `Error` squashed from the database read below them, so this is the one tag
+ * that names the fact for this module's callers; `cause` is that value
+ * unchanged, so a caller's dialog classifies and words what the read
+ * produced, exactly as it did when the bare error reached it.
+ */
+export class ChatExportInputUnreadable extends Data.TaggedError(
+  'ChatExportInputUnreadable',
+)<{
+  readonly part: 'config' | 'conversation';
+  readonly message: string;
+  readonly cause: unknown;
+}> {}
 
 /**
  * Facts read from the run store and the session's fold, plus the assembled
@@ -70,14 +87,29 @@ function hasConversationMessages(
   return Array.isArray(conversation) && conversation.length > 0;
 }
 
+function unreadable(
+  part: 'config' | 'conversation',
+  cause: unknown,
+): ChatExportInputUnreadable {
+  return new ChatExportInputUnreadable({
+    part,
+    message: toErrorMessage(cause),
+    cause,
+  });
+}
+
 export const loadChatExportInput = Effect.fn('loadChatExportInput')(function* (
   id: RunId,
   session: SessionHandle,
-): Effect.fn.Return<ChatExportLoadResult, Error> {
+): Effect.fn.Return<ChatExportLoadResult, ChatExportInputUnreadable> {
   const [config, conversationResult, view] = yield* Effect.all(
     [
-      getRunRecords(session, id).readConfig(),
-      readCompletedRunConversation(id, session),
+      getRunRecords(session, id)
+        .readConfig()
+        .pipe(Effect.mapError((cause) => unreadable('config', cause))),
+      readCompletedRunConversation(id, session).pipe(
+        Effect.mapError((cause) => unreadable('conversation', cause)),
+      ),
       session.readView([]),
     ],
     { concurrency: 3 },

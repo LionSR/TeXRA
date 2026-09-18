@@ -17,6 +17,7 @@ import {
 import { prepareSurfaceLaunch } from '@controllers/mainView/backend/MainViewRunLaunchController';
 import type { ChatExportController } from '@controllers/progressView/ChatExportController';
 import { exportRunTranscript } from '@controllers/progressView/exportTranscript';
+import { TranscriptExportFailed } from '@controllers/progressView/transcriptExportFailure';
 import { ApiKeyPromptFailed } from '@controllers/progressView/ProgressApiKeyRetryController';
 import { ProgressWorkflowFileActionsController } from '@controllers/progressView/ProgressWorkflowFileActionsController';
 import {
@@ -30,6 +31,7 @@ import {
 import type { HostDraftRequests } from '@controllers/session/hostDraftRequests';
 import type { HostSnapshotSource } from '@controllers/session/hostSnapshotSource';
 import { listWorkspaceFilesOfType } from '@controllers/session/workspaceFileOptions';
+import { ExternalOpenFailed } from '@hosts/uiHosts';
 import {
   latexdiffPackMessage,
   runPackLatexdiffvc,
@@ -59,6 +61,7 @@ import {
   isRequestRefusal,
   Rejected,
   Unavailable,
+  type HostRequestFailure,
   type RequestRefusal,
 } from '@shared/session/requestErrors';
 import type {
@@ -133,7 +136,7 @@ export interface DesktopHostRequests {
   handleHostRequest(
     request: HostRequest,
     port: string,
-  ): Effect.Effect<HostOutcome, Error, ProcessServices>;
+  ): Effect.Effect<HostOutcome, HostRequestFailure, ProcessServices>;
   closePort(port: string): void;
   /** Stops a recording this window owns; the take is discarded. */
   dispose(): void;
@@ -513,7 +516,20 @@ export function createDesktopHostRequests(
       yield* Effect.provide(
         exportRunTranscript(runId, {
           pickFormat: () => host.pickTranscriptExportFormat(),
-          openPath: (filePath) => host.openPath(filePath),
+          // The preview host has already shown its own notice; the port's
+          // tag carries that refusal and its wording out unchanged.
+          openPath: (filePath) =>
+            host.openPath(filePath).pipe(
+              Effect.mapError(
+                (cause) =>
+                  new ExternalOpenFailed({
+                    kind: 'path',
+                    target: filePath,
+                    message: toErrorMessage(cause),
+                    cause,
+                  }),
+              ),
+            ),
           showInfo: (message) => host.showInfoMessage(message),
           showWarning: (message) => host.showWarningMessage(message),
           showError: rejectRequestEffect,
@@ -700,7 +716,11 @@ export function createDesktopHostRequests(
   function dispatch(
     request: HostRequest,
     port: string,
-  ): Effect.Effect<HostOutcome, Error, ProcessServices | StorageFs> {
+  ): Effect.Effect<
+    HostOutcome,
+    HostRequestFailure,
+    ProcessServices | StorageFs
+  > {
     return Effect.gen(function* () {
       const done: HostOutcome = { kind: 'done' };
       switch (request.kind) {
@@ -895,7 +915,7 @@ export function createDesktopHostRequests(
   function handleHostRequest(
     request: HostRequest,
     port: string,
-  ): Effect.Effect<HostOutcome, Error, ProcessServices> {
+  ): Effect.Effect<HostOutcome, HostRequestFailure, ProcessServices> {
     // Over this paper's rooted filesystems: an arm that writes under the
     // session's storage takes the view the layer above built from its roots.
     return Effect.provide(dispatch(request, port), sessionFiles).pipe(
@@ -912,7 +932,8 @@ export function createDesktopHostRequests(
         const primaryError = primaryAgentError(
           error instanceof HostCallFailed ||
             error instanceof RunLaunchFailed ||
-            error instanceof RunConfigUnreadable
+            error instanceof RunConfigUnreadable ||
+            error instanceof TranscriptExportFailed
             ? error.cause
             : error,
         );
