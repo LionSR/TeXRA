@@ -257,7 +257,6 @@ describe('CLI doctor', () => {
       async () => ({ authenticated: true }),
       {
         ...context,
-        configFilePath: '/workspace/.texra/config.json',
         configWarnings: ['Ignoring invalid model.'],
       },
     );

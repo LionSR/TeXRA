@@ -187,7 +187,6 @@ describe('CLI config command', () => {
 
     expect(result.exitCode).toBe(0);
     expect(mocks.setWorkspaceCliChatAgent).toHaveBeenCalledWith(
-      process.cwd(),
       'builtInToolUse:assistant',
     );
   });

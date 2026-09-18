@@ -41,6 +41,7 @@ import {
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   ModelCompactionThresholdPercentSchema,
   ModelRetryMaxAttemptsSchema,
+  CliOutputFormatSchema,
   TELEMETRY_ENABLED_DEFAULT,
 } from '@shared/schemas/coreSettings';
 import {
@@ -367,6 +368,26 @@ const DEFAULT_TIKZ_TEMPLATE =
   '\\end{document}';
 
 /**
+ * The terminal client's own `.texra/config.json` rows: which agent and model a
+ * command starts with, and how it prints. Every host stores them in the same
+ * config tree, but only the CLI runtime reads them, so only `honoredBy.cli` is
+ * declared — the extension and desktop resolve an agent and a model from their
+ * own surfaces.
+ */
+const CLI_CONFIG_READER = 'packages/cli/src/runtime/cliConfig.ts';
+
+/** An agent key or name, as typed into `.texra/config.json`. */
+const CliAgentSchema = z.string().trim().min(1).optional();
+
+/** A model id, validated against the model registry where it is used. */
+const CliModelSchema = z.string().trim().min(1).optional();
+
+/** Per-command overrides of the top-level `agent`/`model` rows. */
+const CliCommandDefaultsSchema = z
+  .object({ agent: CliAgentSchema, model: CliModelSchema })
+  .optional();
+
+/**
  * Every config-file-backed setting, keyed by its dotted path under `texra.`.
  *
  * All three hosts read `.texra/config.json` and that storage is flat, so the
@@ -381,6 +402,41 @@ const CORE_SETTING_ROWS: Record<
   string,
   Omit<StateSettingEntry, 'key' | 'slots'>
 > = {
+  agent: {
+    schema: CliAgentSchema,
+    title: 'Default agent',
+    description:
+      'Agent `texra chat` and `texra run` start with when neither `--agent` nor a per-command default names one.',
+    honoredBy: { cli: { reader: CLI_CONFIG_READER } },
+  },
+  model: {
+    schema: CliModelSchema,
+    title: 'Default model',
+    description:
+      'Model every `texra` command starts with when neither `--model`, `TEXRA_MODEL`, nor a per-command default names one. A model this machine cannot run falls back to an available one with a notice.',
+    honoredBy: { cli: { reader: CLI_CONFIG_READER } },
+  },
+  chat: {
+    schema: CliCommandDefaultsSchema,
+    title: 'Chat defaults',
+    description:
+      'Agent and model `texra chat` starts with, overriding the top-level defaults.',
+    honoredBy: { cli: { reader: CLI_CONFIG_READER } },
+  },
+  run: {
+    schema: CliCommandDefaultsSchema,
+    title: 'Run defaults',
+    description:
+      'Agent and model `texra run` starts with, overriding the top-level defaults.',
+    honoredBy: { cli: { reader: CLI_CONFIG_READER } },
+  },
+  outputFormat: {
+    schema: CliOutputFormatSchema,
+    title: 'Output format',
+    description:
+      'How `texra` prints results: human text, one JSON object, or NDJSON records. `--output-format` and `TEXRA_OUTPUT_FORMAT` override it.',
+    honoredBy: { cli: { reader: CLI_CONFIG_READER } },
+  },
   'agentOutputs.autoOpenFinal': {
     schema: z.boolean().prefault(true),
     description:
@@ -779,9 +835,10 @@ const CORE_SETTINGS: readonly StateSettingEntry[] = [
   surfacedSetting({
     key: TEXRA_APPROVAL_POLICY_CONFIG_KEY,
     // Strict on purpose: `settingEnumOptions` derives the dropdown from a
-    // `ZodEnum` row, and the tolerant spelling is the approval-policy module's
-    // `TexraApprovalPolicyInputSchema`, which every reader of user-authored
-    // text parses through.
+    // `ZodEnum` row, and the tolerant spelling belongs to
+    // `parseTexraApprovalPolicy`, which every reader of typed-in text (the
+    // env var, `--approval-policy`, `/approval`, the dropdown) calls before
+    // a value ever reaches this row.
     schema: TexraApprovalPolicySchema.prefault(TEXRA_APPROVAL_POLICY_DEFAULT),
     title: 'Approval policy',
     description:

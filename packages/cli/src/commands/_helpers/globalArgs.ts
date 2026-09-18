@@ -1,8 +1,5 @@
-import {
-  CLI_OUTPUT_FORMATS,
-  type CliOutputFormat,
-} from '@cli/schemas/cliSettings';
 import { CliUsageError } from '@cli/runtime/cliContext';
+import { CLI_OUTPUT_FORMATS, type CliOutputFormat } from '@shared/schemas';
 import {
   TEXRA_APPROVAL_POLICIES,
   type TexraApprovalPolicy,

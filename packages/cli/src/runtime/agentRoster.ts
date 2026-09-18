@@ -8,7 +8,7 @@ import {
   type AgentRosterSelection,
   type ByCategory,
 } from '@shared/schemas';
-import { loadWorkspaceCliConfig, resolveConfiguredAgent } from './cliConfig';
+import { cliCommandDefaults } from './cliConfig';
 
 /** The roster controller's own snapshot shape — derived, never restated. */
 type AgentRosterSnapshot = ReturnType<
@@ -30,11 +30,9 @@ export const readCliAgentRoster = Effect.fn('readCliAgentRoster')(function* (
 ) {
   yield* loadAgents({ includeRemote: false });
   const roster = createWorkspaceAgentRosterController(roots);
-  const cwd = roots.workspace;
-  const config = cwd ? yield* loadWorkspaceCliConfig(cwd) : undefined;
   return {
     ...roster.snapshot(),
-    defaultChatAgent: resolveConfiguredAgent(config?.values, 'chat'),
+    defaultChatAgent: cliCommandDefaults('chat').agent,
     agentKeys: byCategory(
       (category) => roster.getEnabledAgentKeys(category) ?? 'all',
     ),

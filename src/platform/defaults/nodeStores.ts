@@ -116,11 +116,22 @@ export const openTexraWorkspaceConfigStore = Effect.fn(
   );
 });
 
-/** Open both stores backing a host's {@link JsonConfigProvider}. */
+/**
+ * Open both stores backing a host's {@link JsonConfigProvider}.
+ *
+ * `storage` is the two path getters and nothing else: a
+ * {@link WorkspaceStorageProvider} satisfies it, and a caller that must not
+ * create a directory under the storage root (the CLI's pre-platform startup
+ * read, whose `clone` entry may only be able to read it) passes the pure path
+ * calculators instead. Neither store creates anything on open.
+ */
 export const openTexraConfigStores = Effect.fn(
   'nodeStores.openTexraConfigStores',
 )(function* (
-  storage: WorkspaceStorageProvider,
+  storage: Pick<
+    WorkspaceStorageProvider,
+    'getStoragePath' | 'getGlobalStoragePath'
+  >,
   workspaceRoot: string | undefined,
   warn: (message: string) => void,
 ) {

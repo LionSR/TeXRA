@@ -14,10 +14,7 @@ import {
   TEXRA_APPROVAL_POLICY_OPTIONS,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
-import {
-  CLI_OUTPUT_FORMATS,
-  type CliOutputFormat,
-} from '../schemas/cliSettings';
+import { CLI_OUTPUT_FORMATS, type CliOutputFormat } from '@shared/schemas';
 import { pickDefaultToolUseAgent } from '../runtime/defaultAgents';
 import type { InitAnswers } from '../runtime/initConfig';
 import type { CliModelAccess } from '../runtime/modelAccess';

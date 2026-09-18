@@ -40,7 +40,6 @@ import {
   DEFAULT_NODE_STORAGE_ROOT,
 } from '@platform/defaults/nodeStorage';
 import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
-import { openTexraConfigStores } from '@platform/defaults/nodeStores';
 import { sessionStoreClearedMessage } from '@shared/copy/sessionStore';
 import type { SessionOpenError } from '@shared/session/database';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -80,7 +79,7 @@ let sessionOpen: Effect.Effect<SessionHandle, SessionOpenError> | undefined;
 
 type CliPlatformInitOptions = Pick<
   CliContext,
-  'cwd' | 'resourcesPath' | 'skillSourceOptions' | 'version'
+  'config' | 'cwd' | 'resourcesPath' | 'skillSourceOptions' | 'version'
 > & {
   readonly installSignalHandlers?: boolean;
   readonly storageRoot?: string;
@@ -132,12 +131,6 @@ function logAt(
 ): void {
   if (quietPlatformLogs) return;
   writeTextStderr(`[${level}] [${channel}] ${message}`);
-}
-
-// Malformed project config is actionable degradation, not routine progress
-// noise, so this deliberately bypasses quietLogs.
-function showPersistentConfigWarning(message: string): void {
-  writeTextStderr(`[warn] [cli.config] ${message}`);
 }
 
 // A shutdown-handler failure is actionable degradation by the same rule, so it
@@ -352,12 +345,6 @@ export async function initCliPlatform(
   let services = tryPlatform();
   if (!services) {
     installLongRunningModelDispatcher();
-    // The project `.texra/config.json` backs the workspace target and
-    // user-level config (`~/.texra/v1/global-storage/config.json`, the same file
-    // chatDefaults reads) backs the global target — the same pair of stores
-    // the extension and desktop hosts open, including the fallback to the
-    // internal workspace store when the project file cannot be read or its
-    // directory cannot be written.
     // Everything below is the first init's own work on that runtime. A step
     // that fails after the runtime exists (a store that will not open, a
     // seed that will not write) must not leave the runtime installed with
@@ -366,20 +353,10 @@ export async function initCliPlatform(
     // platform. Keep the platform, roots, and lazy session private until the
     // fallible setup has succeeded: their ports have no reset operation.
     const install = async () => {
-      const { stateStores, configStores } = await runtime.runPromise(
-        Effect.gen(function* () {
-          const stores = yield* openCliWorkspaceState({
-            storageRoot: context.storageRoot,
-            workspacePath: context.cwd,
-          });
-          return {
-            stateStores: stores,
-            configStores: yield* openTexraConfigStores(
-              stores.storage,
-              context.cwd,
-              showPersistentConfigWarning,
-            ),
-          };
+      const stateStores = await runtime.runPromise(
+        openCliWorkspaceState({
+          storageRoot: context.storageRoot,
+          workspacePath: context.cwd,
         }),
       );
       // Same severity and wording as the extension/desktop hosts: a shutdown
@@ -403,12 +380,17 @@ export async function initCliPlatform(
         lifecycle,
         agentDirectories,
       });
-      // One process, one project: the process roots are the `--cwd` workspace.
+      // One process, one project: the process roots are the `--cwd` workspace,
+      // over the config provider the startup read already opened — the project
+      // `.texra/config.json` (or the internal workspace store, when that file
+      // cannot be read or its directory written) layered over the user-level
+      // `~/.texra/v1/global-storage/config.json`. One provider per process is
+      // what keeps a value `texra config` writes readable at the next startup.
       const roots = createNodeWorkspaceRoots({
         workspacePath: context.cwd,
         storage: stateStores.storage.getStoragePath(),
         globalStorage: stateStores.storage.getGlobalStoragePath(),
-        config: configStores,
+        config: context.config,
         workspaceState: stateStores.workspaceState,
         globalState,
       });

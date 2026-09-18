@@ -14,7 +14,7 @@ import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
 import { TEXRA_STORAGE_DIR_NAME } from '@platform/defaults/nodeStorage';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 
-import type { CliOutputFormat } from '../schemas/cliSettings';
+import type { CliOutputFormat } from '@shared/schemas';
 
 export interface InitAnswers {
   readonly agent: string;

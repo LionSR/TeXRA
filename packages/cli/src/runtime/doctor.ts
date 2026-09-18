@@ -11,6 +11,7 @@ import {
   probeLatexToolchain,
   type LatexToolchainProbe,
 } from '@latex/latexToolchain';
+import { workspaceTexraConfigPath } from '@platform/defaults/nodeStorage';
 import { TELEMETRY_ENABLED_KEY } from '@shared/schemas';
 import { RESEARCHER_ACCESS } from '@shared/copy/onboarding';
 import type { UsageLoggingOptOut } from '@telemetry/UsageLogService';
@@ -300,36 +301,31 @@ async function checkConfig(
   context: CliContext,
   deps: ResolvedDoctorDependencies,
 ): Promise<DoctorCheck> {
-  if (!context.configFilePath) {
-    return skip(
-      'config',
-      'Config',
-      'No workspace CLI config file found.',
-      'Optional defaults may be placed in .texra/config.json.',
-    );
-  }
+  // The project file the config provider layers over the user file. Its
+  // readability is asked here rather than carried on the context: the provider
+  // answers with values, and this check is the one caller that needs the path.
+  const filePath = workspaceTexraConfigPath(context.cwd);
+  const readable = await deps
+    .pathAccess(filePath, fsConstants.R_OK)
+    .then(() => true)
+    .catch(() => false);
   if (context.configWarnings.length > 0) {
     return warn(
       'config',
       'Config',
-      `Workspace config has warnings: ${context.configFilePath}`,
+      `Workspace config has warnings: ${filePath}`,
       context.configWarnings.join(' '),
     );
   }
-  try {
-    await deps.pathAccess(context.configFilePath, fsConstants.R_OK);
-    return pass(
+  if (!readable) {
+    return skip(
       'config',
       'Config',
-      `Workspace config: ${context.configFilePath}`,
-    );
-  } catch {
-    return warn(
-      'config',
-      'Config',
-      `Configured path is no longer readable: ${context.configFilePath}`,
+      'No readable workspace CLI config file found.',
+      'Optional defaults may be placed in .texra/config.json.',
     );
   }
+  return pass('config', 'Config', `Workspace config: ${filePath}`);
 }
 
 /**

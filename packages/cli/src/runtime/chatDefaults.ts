@@ -1,24 +1,11 @@
-import * as path from 'node:path';
-
-import { Data, Effect, FileSystem, PlatformError, Result } from 'effect';
-import { safeParseJson } from '@common/parsing/safeParseJson';
 import {
   decideRunModel,
   type RunModelDecisionReason,
 } from '@model/runModelDecision';
-import { TEXRA_CONFIG_FILE_NAME } from '@platform/defaults/nodeStorage';
 import { isImplicitDefaultEligible } from '@shared/constants/agents';
-import { isObject } from '@utils/core';
-import {
-  CLI_BUILTIN_DEFAULT_MODEL,
-  commandConfigModel,
-  loadWorkspaceCliConfig,
-  parseCliConfigValues,
-  resolveConfiguredAgent,
-  type CliConfigValues,
-} from './cliConfig';
+
+import { CLI_CHEAP_START_MODEL, cliCommandDefaults } from './cliConfig';
 import { pickDefaultToolUseAgent } from './defaultAgents';
-import { writeTextStderr } from './logSinks';
 
 /**
  * A configured or environment agent value, trimmed and dropped if it can't be
@@ -47,160 +34,36 @@ type ChatDefaultValueSource = Extract<
   | 'builtin-default'
 >;
 
-interface PartialDefaults {
-  readonly agent?: string;
-  readonly model?: string;
-}
-
-function defaultsFromConfigValues(values: CliConfigValues): PartialDefaults {
-  return {
-    agent: usableConfiguredAgent(resolveConfiguredAgent(values, 'chat')),
-    model: commandConfigModel(values, 'chat'),
-  };
-}
-
-/** Labels `loadUserDefaults`' warnings distinctly from the workspace file's
- *  (both are literally named `config.json`, just in different directories),
- *  matching the wording the read-failure branch already used. */
-const USER_CONFIG_LABEL = `user config (${TEXRA_CONFIG_FILE_NAME})`;
-
-/** The user `config.json` is absent — the normal case, not a failure. */
-function isAbsentUserConfig(
-  error: PlatformError.PlatformError | UserConfigUnreadable,
-): boolean {
-  return error._tag === 'PlatformError' && error.reason._tag === 'NotFound';
-}
-
-/** The user `config.json` was read but is not JSON. */
-class UserConfigUnreadable extends Data.TaggedError('UserConfigUnreadable')<{
-  readonly message: string;
-}> {}
-
-const loadUserDefaults = Effect.fn(function* (
-  quiet: boolean,
-  globalStorageDir: string,
-): Effect.fn.Return<PartialDefaults, never, FileSystem.FileSystem> {
-  // A missing user config means no user defaults (parseCliConfigValues maps
-  // the undefined fallback to {}). A read failure — corrupt JSON, a
-  // permission error — a top-level shape that isn't an object, and an
-  // invalid individual field still drop the affected default(s), but now
-  // with a warning instead of silence, mirroring loadWorkspaceCliConfig's
-  // handling of the same failure classes for the workspace config. Unknown-
-  // key warnings are suppressed: this file is
-  // shared by all three hosts and holds rows the CLI does not honor (same
-  // reasoning as loadUserApprovalPolicy). `quiet` mirrors --quiet: every
-  // other config warning is gated by contextFromArgs on context.quietLogs
-  // before this function ever runs, so these warnings honor the same flag
-  // instead of always printing.
-  // One process resolves chat defaults once, so every warning here is
-  // printed on its only pass — a `--quiet` run keeps the same silence the
-  // flag gives every other config warning.
-  const warn = (message: string): void => {
-    if (quiet) return;
-    writeTextStderr(`WARN ${message}`);
-  };
-  const fs = yield* FileSystem.FileSystem;
-  let raw: unknown = yield* fs
-    .readFileString(path.join(globalStorageDir, TEXRA_CONFIG_FILE_NAME))
-    .pipe(
-      Effect.flatMap((text): Effect.Effect<unknown, UserConfigUnreadable> => {
-        const parsed = safeParseJson(text);
-        return Result.isFailure(parsed)
-          ? Effect.fail(
-              new UserConfigUnreadable({
-                message: `Failed to parse JSON from ${TEXRA_CONFIG_FILE_NAME}: ${parsed.failure.message}`,
-              }),
-            )
-          : Effect.succeed(parsed.success);
-      }),
-      Effect.catchIf(isAbsentUserConfig, () => Effect.succeed(undefined)),
-      Effect.catch((error) =>
-        Effect.sync(() => {
-          warn(`Could not read ${USER_CONFIG_LABEL}: ${error.message}`);
-          return undefined;
-        }),
-      ),
-    );
-  if (raw !== undefined && !isObject(raw)) {
-    warn(`Ignoring ${USER_CONFIG_LABEL}; expected a JSON object.`);
-    raw = undefined;
-  }
-  const { values, warnings } = parseCliConfigValues(raw, USER_CONFIG_LABEL, {
-    reportUnknownKeys: false,
-    // defaultsFromConfigValues only reads agent/model (top-level and
-    // chat.*) — scoping to just those fields avoids re-validating
-    // approvalPolicy (already warned about by loadUserApprovalPolicy) and
-    // outputFormat/run.* (unused here).
-    topLevelFields: new Set(['agent', 'model']),
-    sections: new Set(['chat']),
-  });
-  for (const warning of warnings) warn(warning);
-  return defaultsFromConfigValues(values);
-});
-
 interface ResolveChatDefaultsInit {
-  readonly cwd: string;
-  /** The process's cross-workspace storage root, holding the user
-   *  `config.json`. Passed as data by the entry that opened it, so this
-   *  reader never resolves a root of its own. */
-  readonly globalStorageDir: string;
   readonly agentOverride?: string;
   readonly modelOverride?: string;
   readonly envAgent?: string;
   readonly envModel?: string;
   readonly visibleToolUseAgents?: readonly { readonly name: string }[];
-  /** Suppresses the user-config warnings `loadUserDefaults` would otherwise
-   *  print directly — pass `context.quietLogs` so this tier's warnings
-   *  respect `--quiet` the same way `contextFromArgs` gates every other
-   *  config warning. */
-  readonly quiet?: boolean;
 }
 
 /**
- * Three-tier lookup: workspace `.texra/config.json` → user
- * `<global-storage>/config.json` → built-in. Per-field independence: a
- * workspace that only sets `agent` still falls through to the user config for
- * `model`.
+ * Four-tier lookup: `--agent`/`--model` → environment → the `texra.chat`
+ * section over the top-level rows of the config provider (project
+ * `.texra/config.json` over the user file, per field) → the built-in agent
+ * pick and the cheap-start model.
  */
-export const resolveChatDefaults = Effect.fn(function* (
+export function resolveChatDefaults(
   init: ResolveChatDefaultsInit,
-): Effect.fn.Return<ChatDefaults, Error, FileSystem.FileSystem> {
+): ChatDefaults {
   const overrideAgent = init.agentOverride?.trim();
   const overrideModel = init.modelOverride?.trim();
   const envAgent = usableConfiguredAgent(init.envAgent);
   const envModel = init.envModel?.trim();
-  let agent = overrideAgent || envAgent;
-  const directModel = overrideModel || envModel;
-  const skipDefaultTierIo = Boolean(agent && directModel);
-
-  let workspace: PartialDefaults = {};
-  let user: PartialDefaults = {};
-
-  if (!skipDefaultTierIo) {
-    // Tiers are independent I/O — fan out in parallel.
-    // Workspace defaults use the same .texra/config.json reader as the CLI
-    // context so startup does not depend on platform initialization.
-    [workspace, user] = yield* Effect.all(
-      [
-        loadWorkspaceCliConfig(init.cwd).pipe(
-          Effect.map((loaded) => defaultsFromConfigValues(loaded.values)),
-        ),
-        loadUserDefaults(init.quiet ?? false, init.globalStorageDir),
-      ],
-      { concurrency: 'unbounded' },
-    );
-    // The order below is the per-field fallthrough.
-    for (const defaults of [workspace, user]) {
-      if (!agent && defaults.agent) agent = defaults.agent;
-    }
-  }
+  const configured = cliCommandDefaults('chat');
+  const agent =
+    overrideAgent || envAgent || usableConfiguredAgent(configured.agent);
 
   const modelDecision = decideRunModel([
     { model: overrideModel, reason: 'explicit-override' },
     { model: envModel, reason: 'environment' },
-    { model: workspace.model, reason: 'workspace-config' },
-    { model: user.model, reason: 'user-config' },
-    { model: CLI_BUILTIN_DEFAULT_MODEL, reason: 'builtin-default' },
+    { model: configured.model, reason: configured.modelScope ?? 'user-config' },
+    { model: CLI_CHEAP_START_MODEL, reason: 'builtin-default' },
   ]);
 
   const model = modelDecision?.model;
@@ -209,7 +72,7 @@ export const resolveChatDefaults = Effect.fn(function* (
     ChatDefaultValueSource | undefined;
   return {
     agent: agent ?? pickDefaultToolUseAgent(init.visibleToolUseAgents),
-    model: model ?? CLI_BUILTIN_DEFAULT_MODEL,
+    model: model ?? CLI_CHEAP_START_MODEL,
     modelSource: modelSource ?? 'builtin-default',
   };
-});
+}

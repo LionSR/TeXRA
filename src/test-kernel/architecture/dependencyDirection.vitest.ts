@@ -116,13 +116,14 @@ const BARE_EFFECT_RUN_SITES: Readonly<Record<string, number>> = {
   // stderr/stdout flushes run, and a teardown path must not depend on the
   // runtime it is tearing down.
   'packages/cli/src/runtime/initPlatform.ts': 1,
-  // `loadCliStartupConfig`, the CLI config readers' pre-runtime edge, whose
-  // one caller is `buildCliContext`: it resolves `.texra/config.json` and the
-  // user approval policy BEFORE `initCliPlatform` (and with it
+  // `loadCliStartupConfig`, the CLI config provider's pre-runtime edge, whose
+  // one caller is `buildCliContext`: it opens the project and user
+  // `config.json` stores BEFORE `initCliPlatform` (and with it
   // `installCliProcessRuntime`), so no process runtime exists to borrow; the
-  // programs are service-free. The readers themselves are Effects, and their
-  // post-init callers (`resolveChatDefaults`, `readCliAgentRoster`) settle
-  // them on the process runtime instead of coming through here.
+  // program needs the filesystem and nothing else. `initCliPlatform` installs
+  // that same provider as the workspace roots' config, so every post-init
+  // reader resolves its rows through the roots rather than coming through
+  // here.
   'packages/cli/src/runtime/cliConfig.ts': 1,
   // The CLI's process-runtime install, which opens the global state store it
   // provides as `AppState` before it installs the runtime that serves it:

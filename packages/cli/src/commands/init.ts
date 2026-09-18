@@ -5,7 +5,7 @@ import { workspaceTexraConfigPath } from '@platform/defaults/nodeStorage';
 import { AgentCategory } from '@shared/schemas';
 import { implicitDefaultToolUseAgents } from '@shared/constants/agents';
 
-import { CLI_BUILTIN_DEFAULT_MODEL } from '../runtime/cliConfig';
+import { CLI_CHEAP_START_MODEL } from '../runtime/cliConfig';
 import { type CliContext } from '../runtime/cliContext';
 import { pickDefaultToolUseAgent } from '../runtime/defaultAgents';
 import { CliExitCode } from '../runtime/exitCodes';
@@ -56,7 +56,7 @@ export function defaultInitAnswers(
     agent: pickDefaultToolUseAgent(agents),
     model:
       models.find((model) => model.available)?.model.value ??
-      CLI_BUILTIN_DEFAULT_MODEL,
+      CLI_CHEAP_START_MODEL,
     // Match the runtime default (see buildCliContext). `ask` prompts in
     // interactive runs and safely denies in headless ones — unlike `never`,
     // which silently denies every privileged action.

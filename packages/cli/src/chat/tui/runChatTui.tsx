@@ -200,16 +200,13 @@ export async function runChat(
   // The visible agent list only exists once the registry has loaded, so the
   // load and the defaults resolution are one program rather than two runs.
   const defaults = await runtime.runPromise(
-    Effect.flatMap(loadAgents(), () =>
+    Effect.map(loadAgents(), () =>
       resolveChatDefaults({
-        cwd: context.cwd,
-        globalStorageDir: services.globalStorage,
         agentOverride: explicitAgent ?? setupAgentOverride,
         modelOverride: initialResume?.config.model ?? init.modelOverride,
         envAgent: context.envAgent,
         envModel: context.envModel,
         visibleToolUseAgents: getVisibleAgents(AgentCategory.ToolUse),
-        quiet: context.quietLogs,
       }),
     ),
   );
