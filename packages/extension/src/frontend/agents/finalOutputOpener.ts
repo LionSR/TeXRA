@@ -5,8 +5,8 @@ import {
   selectAutoOpenFinalOutput,
   type WorkflowFlowResult,
 } from '@agent/runtime';
-import type { ConfigProvider } from '@platform/interfaces';
 import { createLog } from '@logger/logUtils';
+import type { ConfigProvider } from '@platform/interfaces';
 
 const log = createLog('FinalOutputOpener');
 

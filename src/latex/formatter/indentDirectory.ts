@@ -9,8 +9,8 @@ import { readDirectoryTypedTolerant } from '@utils/files/fsDurability';
 import { entryExists } from '@utils/files/fsEntryExists';
 import { hasExtension } from '@utils/core/pathCore';
 
-import type { LatexFormatter } from './texFormatter';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '../latexLogging';
+import type { LatexFormatter } from './texFormatter';
 
 const log = createLog(CHANNEL);
 

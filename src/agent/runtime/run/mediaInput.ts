@@ -13,8 +13,8 @@
 import { Effect, FileSystem } from 'effect';
 
 import type { AgentTrace } from '@agent/trace';
-import type { ConfigProvider } from '@platform/interfaces';
 import type { MessageSchema } from '@llm/turn';
+import type { ConfigProvider } from '@platform/interfaces';
 import {
   fileLocationDisplayPath,
   type FileLocation,

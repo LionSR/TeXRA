@@ -11,6 +11,7 @@ import {
   type BuiltUserVars,
 } from '@agent/core/definition/AgentCycleOptions';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import type { ConfigProvider } from '@platform/interfaces';
 import type {
   AgentDelegationScope,
   AttachedMemoryMiss,
@@ -33,7 +34,6 @@ import { filterNotNull, unique } from '@utils/core';
 import { isNonEmptyString } from '@utils/text/stringUtils';
 import { getListOfFiles, getPromptFileName } from '@utils/prompt';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import type { ConfigProvider } from '@platform/interfaces';
 import { readConfig } from '@utils/config/configUtils';
 import {
   listExternalRoots,
