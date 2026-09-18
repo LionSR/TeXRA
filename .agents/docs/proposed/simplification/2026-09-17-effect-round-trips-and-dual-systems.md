@@ -13,15 +13,18 @@ re-mines them.
 Owner direction this note serves: 1.0 ships completely clean. Every tech debt
 is eliminated, not ledgered, and every dual system collapses to one mechanism.
 
-## Status (2026-09-18)
+## Status (2026-09-19)
 
-Written back one day after the ledger merged (#12681), against `origin/main`
-at `1847cce642`. Fifty of the fifty-six lanes are closed: landed, refuted at
-implementation, or declined by ruling. Each row below names the PR that
-carried the lane; "thin folds" are the single-file items section 3.1 said
-would ride whichever lane opened the file.
+Written back against `origin/main` at `b133beba3c`, two days after the ledger
+merged (#12681). The clean-up ran as four waves: this ledger's own R and D
+lanes, then three censuses of what they left. 108 PRs merged between #12693
+and #12818, three of them dependency bumps. Each row names the PR that carried
+the lane; "thin folds" are the single-file items section 3.1 said would ride
+whichever lane opened the file.
 
 ### Landed
+
+Waves 0 and 1 are the lanes this ledger itself named.
 
 | Lane | PR                                                                                                                                                                                                                                                                                    |
 | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -29,6 +32,7 @@ would ride whichever lane opened the file.
 | R2   | #12693                                                                                                                                                                                                                                                                                |
 | R3   | #12694                                                                                                                                                                                                                                                                                |
 | R4   | #12711                                                                                                                                                                                                                                                                                |
+| R5   | #12760                                                                                                                                                                                                                                                                                |
 | R6   | #12729                                                                                                                                                                                                                                                                                |
 | R7   | #12739                                                                                                                                                                                                                                                                                |
 | R8   | #12706                                                                                                                                                                                                                                                                                |
@@ -42,7 +46,7 @@ would ride whichever lane opened the file.
 | R16  | #12747 (folded into the D19 root threading, as planned)                                                                                                                                                                                                                               |
 | R17  | #12716                                                                                                                                                                                                                                                                                |
 | R18  | #12722                                                                                                                                                                                                                                                                                |
-| R19  | #12734 (`openExternal`, `openPath`; see open items for the third member)                                                                                                                                                                                                              |
+| R19  | #12734 (`openExternal`, `openPath`); the third member closed in #12786                                                                                                                                                                                                                |
 | D1   | #12705                                                                                                                                                                                                                                                                                |
 | D2   | #12696; the ratchet row retired for good in #12700                                                                                                                                                                                                                                    |
 | D3   | #12697                                                                                                                                                                                                                                                                                |
@@ -61,7 +65,10 @@ would ride whichever lane opened the file.
 | D17  | #12704                                                                                                                                                                                                                                                                                |
 | D18  | #12712                                                                                                                                                                                                                                                                                |
 | D19  | #12737 (memory, agent directory, pasted image; deletes `GlobalStorageFS`), #12742 (workspace root as data; deletes the `WorkspaceFS` static), #12744 (path location), #12747 (storage root through run storage; deletes the `StorageFS` statics)                                      |
-| D20  | #12749 for `src/latex`, `src/tools` and the settings-view controllers; the `src/utils` consumers are the open remainder below                                                                                                                                                         |
+| D20  | #12749, #12754, #12758: the `src/latex`, `src/tools`, settings-view, `src/agent` and `src/utils` `AbsoluteFS` consumers move onto the Effect `FileSystem`                                                                                                                             |
+| D21  | #12771: `BaseFS`, `AbsoluteFS`, `FileSystemProvider`, `nodeFilesystem` and `Platform.fs` deleted                                                                                                                                                                                      |
+| D22  | #12774: the workspace-roots `AsyncLocalStorage` carrier and `runInSession` deleted, with `RunContext.ts`; no `new AsyncLocalStorage` remains in production                                                                                                                            |
+| D23  | #12774: `AgentRun.inScope` and `ToolCall.inScope` deleted with the carrier                                                                                                                                                                                                            |
 | D24  | #12699, by deletion: the stage scope was never entered in production, so it went rather than moving onto `Context.Reference`                                                                                                                                                          |
 | D27  | #12738                                                                                                                                                                                                                                                                                |
 | D28  | #12714                                                                                                                                                                                                                                                                                |
@@ -76,8 +83,85 @@ would ride whichever lane opened the file.
 
 Thin folds that landed on their own: #12735 (three dead leftovers), #12746
 (`releaseToolEdit` as an Effect, dead `approvePendingForRun`), #12750 (the
-`HostInteractions` plane's `emit`, replay and dispose as Effects; the
-session's teardown list replaces the `DisposableStore`).
+`HostInteractions` plane's `emit`, replay and dispose as Effects; the session's
+teardown list replaces the `DisposableStore`), #12751 (the LaTeX-diff commands
+as one Effect program each), #12755 and #12756 (the `openRunStorage` rename and
+the "task storage" noun sweep), #12762 (workflow file actions; run storage off
+the Promise tier), #12763 (`texra doctor` as one Effect program). The settings
+and config funnel D22 needed landed as #12759, #12761, #12769, #12770 and
+#12772: explicit stores, `writeSettingTo`, and `workspaceRootPath` retired.
+
+#### Wave 2: the acceptance re-survey's lanes
+
+The first acceptance re-survey ran at `5a8b011f470d` and was not clean: 74
+confirmed round trips (down from 100), collapsing to about 55 run sites behind
+16 Promise faces and ports. It produced 16 lanes.
+
+- Lane 1, the settings read ports on both hosts: #12775.
+- Lane 2, `LifecycleHost` and `RuntimeShutdownHooks` as Effect across four
+  hosts and the SDK: #12799, which adds `withProcessServices` and deletes
+  `runSettlement`.
+- Lane 3, `BuildDisplayFn` as a program end to end, with `inFlightActions`
+  holding a `Deferred` and a `Fiber`: #12786. This also closes the third
+  member of the R19 fan-out.
+- Lanes 4 and 12, the CLI agent catalog and the platform bootstrap: #12788,
+  which closes the six runs inside the init.
+- Lane 5, the extension settings-view webview transport: #12790.
+- Lanes 6 and 13, the diff-view host and the desktop file actions: #12793.
+- Lane 7, the tool-probe layer: #12787, which deletes `fsCall` and the
+  `AbortSignal` parameters.
+- Lane 8, the four logged-notification helpers: #12810.
+- Lane 9, `HostInteractions.emit` takes Effect-returning handlers: #12795. The
+  port's `unknown` answer is gone; its `R` stays `never` and the extension
+  discharges its services at its own boundary.
+- Lane 10, the desktop composition root's host-request ports: #12797.
+- Lane 11, the onboarding funnel ports on both hosts: #12791.
+- Lane 14, the VS Code editor and diagnostics waits: #12785.
+- Lanes 15 and 16, the agent-core callbacks and owner liveness: #12782.
+- Transcript export as a typed channel end to end: #12784, where
+  `getController` becomes `Effect.cachedWithTTL`.
+- Run-record reads carry `DatabaseReadFailed` instead of squashing to `Error`:
+  #12792, which also deletes a redundant `RunRecordSchema` re-parse.
+- Small cuts: #12783 (the test-only workflow run-directory override; the review
+  checklist's four deleted config accessors) and #12789 (two dead desktop
+  exports, the warning-dialog parent lookup inlined).
+
+#### Wave 3: the host-neutral census
+
+Census at `5c33788d35`: 81 host-neutral files, 146 sites (100 convert, 28
+foreign-once, 6 host-entry, 7 browser, 5 type-only), nine lanes.
+
+- team-availability-choose: #12800.
+- prompt-vars-and-skills: #12798.
+- subscription-usage-fetch: #12794, which wraps the fetch inside its own
+  callee.
+- agent-config-and-lm-ports: #12801.
+- agent-cli-turn: #12796, which composes the provider turn as one Effect.
+- auth-when-ready, workflow-script-retry-fiber and workspace-info-and-dead-lift:
+  #12802, as three small seams in one PR.
+- Small cuts beside the wave: #12805, one shared in-flight pandoc probe through
+  `Effect.cached`, plus a dead desktop-auth test stub.
+- review-diff-simple-git was refuted at implementation; see below.
+
+#### Wave 4: the host-package census
+
+Census at `993e8d81ad`: 146 host files, 492 sites (316 convert, 124 host-entry,
+48 foreign-once), ten lanes.
+
+- cli-tui-submit-chain: #12816.
+- cli-store-reader-commands: #12806.
+- cli-prompt-commands: #12809.
+- cli-workflow-output: #12807.
+- cli-models-doctor-misc: #12808.
+- cli-context-and-prompts: #12811.
+- cli-tui-paste-and-approvals, with the `/config` writes and the retry key
+  checks: #12812. The `ProviderApiKeyForm` thunk stays; see Open.
+- desktop-controller-internals: #12813, with the startup re-probe forked on the
+  runtime in #12817.
+- extension-command-surface: #12818.
+- Two defects these lanes introduced and their reviewers caught: #12814 (the
+  resume preflight's reader and probe interleaving) and #12815 (an unparsable
+  `package.json` candidate no longer fails CLI startup).
 
 ### Refuted or declined at implementation
 
@@ -103,33 +187,133 @@ session's teardown list replaces the `DisposableStore`).
   a real `AbortSignal`; `ChildRunInterruptible` to fiber interruption is an
   interrupt-contract change across `RunHandle`, `RunRegistry` and the
   strategies, not a row edit; `abortableSlashCommand` needs a forked fiber
-  and `interruptUnsafe`, which #12675 rules out. The row stays at its floor.
+  and `interruptUnsafe`, which #12675 rules out. Two of the four rows have
+  since gone with their files; the other two stay at the floor.
 - **D35a** (inquiry metadata onto SQLite): already done before the ledger was
   written. Commit `090ce86bc4` (2026-09-09, "persist global inquiry records
   in SQLite") landed it; the ledger carried it forward from a stale plan row.
+- **review-diff-simple-git** (wave 3): built, measured and removed from
+  #12802. Wrapping `simple-git` once inside `reviewDiff.ts` deletes zero lifts,
+  adds two runs (`AgentReviewService.executeReview` and the review options
+  prompt) and costs +43 LoC against a predicted -6, because
+  `Effect.all(..., { concurrency: 'unbounded' })` is longer than `Promise.all`
+  at each of four fan-out sites. Retry only when `executeReview` is itself an
+  Effect program; today the collection sits before the `try`/`catch` that
+  restores the pre-run snapshot, so folding it in would move the collection
+  inside that catch.
+- **A corrupt-record tag on run-record reads** (#12792): refuted. `decodeEvent`
+  (`src/controllers/session/Database.ts`) already folds a Zod fault into
+  `DatabaseReadFailed`, so there is no second condition to name. The lane typed
+  the channel and deleted the redundant `RunRecordSchema` re-parse instead. A
+  per-row tag, if it is ever wanted, belongs in `decodeEvent` and is a change
+  over every read of the store.
+- **Cutting `src/auth/**` out of the SDK declaration graph** (#12789, #12805):
+  refuted twice, with measurements. Deleting
+  `packages/agent/src/effect/runtime.ts`'s `@auth/SupabaseAuth` import emits
+  the identical 38 `dist/types/src/auth/**.d.ts` files: the real edges are
+  `src/agent/runtime/modelRoutes.ts` (`@auth/codex`, `@auth/xai`) and
+  `src/tools/setup/platform.ts`, which are model routing. The six tagged-error
+  knip rows are load-bearing for that emit: un-exporting them fails the SDK
+  build with twelve TS4023 errors, because the `Data.TaggedError` base carries
+  a symbol TypeScript can only reference through the class's exported name.
+- **The knip `unused` category is exhausted** (#12789): after two rows closed,
+  the remaining ten are correct suppressions rather than debt. Six are the auth
+  tags above; four desktop exports are reached by
+  `src/test-kernel/desktop/loadSourceModule.ts`'s computed `file://` imports,
+  which knip cannot follow statically, and one of them
+  (`isAllowedExternalUrl`) is a security boundary whose only coverage is there.
+  Do not re-mine.
+- **`DesktopPtyHost.create` as an Effect** (#12813): built, measured, reverted.
+  The file would become a runtime `effect` importer, which the
+  `catch:effect-importer` row (frozen at two files) then requires to hold no
+  catch site. Two of its five are irreducibly synchronous (`handle.resize`
+  after process exit, `handle.dispose` over `child.kill()`), so they need
+  `Effect.runSync` in a module that holds no runtime, widening
+  `BARE_EFFECT_RUN_SITES`. Measured cost: +21 LoC for one lift removed. The
+  node-pty dynamic import is already a foreign edge wrapped exactly once.
+  Re-file once the host is handed a `ProcessRuntime`.
+- **A typed failure on the subscription-usage fetch** (#12794): refuted at the
+  call sites. `SubscriptionUsageHttpError | UnknownError` would reclassify a
+  malformed body and a 401 as `request_failed`
+  (`SubscriptionUsageService.ts`, and `authProgram.ts`'s `settleFailure`, which
+  unwraps `AuthPortError` only), and handing the fetch the fiber's
+  `AbortSignal` instead of the caller's `AbortSignal.timeout` would drop
+  `requestTimeoutMs` entirely.
+- **`initCliPlatform` and its two siblings** (#12788): declined. Of their ~25
+  call sites, 22 are R1 citty actions or the Ink entry and only three re-lifted
+  the promise. Retyping would ripple into ~20 command modules and ~12 suites
+  that stub it with `mockResolvedValue`, for one net lift removed; the lane
+  closed the six runs inside the init instead.
+- **`NdjsonStdoutSink.flush` and `writeRawAndWait`** (#12788, #12811):
+  declined. `flush` has two genuine Promise consumers plus the shutdown hook,
+  so converting adds two runs and changes the shared `LogSink` interface;
+  `writeRawAndWait` runs after the process runtime is disposed, so its Effect
+  form needed a bare `Effect.runSync` and was reverted. The raw write stays
+  quarantined in the effect-free `bestEffortStreamWrite.ts`.
+- **`readCliStdinText`** (#12811) and **`runResumeCommand`** (#12807): not
+  round trips. `materializeStdinWorkflowInput` already wraps the
+  `process.stdin` edge exactly once with no caller re-lifting it, and
+  `resume.ts`'s citty `run(ctx)` awaits the promise at an R1 entry.
+- **`models.ts` and `installGithubAction.ts` as one program each** (#12808):
+  declined. Both would need a run where no runtime exists yet, which is a new
+  `BARE_EFFECT_RUN_SITES` pin, so the init stays the Promise edge with one run
+  per command after it.
+- **`onApprovalPolicySelect` as an Effect** (#12816): declined.
+  `src/shared/settingsView/handlers/stateSettingWrite.ts` calls it and discards
+  the result, so an Effect there would silently never run and `/config`'s
+  approval row would stop reaching the live session.
 
 ### Open
 
-- **R5** (CLI model-access chain): `getCliModelAccessList` and
-  `selectCliRunModel` are still Promise-shaped over the Effect availability
-  read. R4 and D14 cleared its holds; nothing has taken it.
-- **D20 remainder and D21**: the `src/utils` `AbsoluteFS` consumers, then
-  the terminal slice that deletes `BaseFS`, the `FileSystemProvider` port and
-  `Platform.fs`. #12749 counted 26 consumers left and named itself not the
-  terminal slice.
-- **D22** (`workspaceRoots` carrier and the process-roots fallback): waits on
-  D21; `roots.globalState` still reads through `requireProcessRoots()`.
-- **D23** (`AgentRun.inScope`): waits on D22; the member is still declared
-  and threaded.
+- **`executeCommand`** (`src/utils/system/execUtils.ts`) is the one large
+  Promise edge left: 72 callers, a campaign rather than a lane.
+  `runToolWithCheck` wraps it once (`src/utils/system/toolUtils.ts`) and
+  derives the child's `AbortSignal` from fiber interruption there.
+  `checkToolInstalled` and the git-author `commandEnv` question ride with it.
+- **`desktopSettingsIpc.ts`'s roughly 40 handler arms** stay Promise-shaped.
+  They are the desktop's own R1 arms, and `postStartupData` keeps a Promise
+  face on all three settings controllers because the IPC calls them in one
+  `Promise.all`.
+- **The CLI config-forms remainder**: `ProviderApiKeyForm.onSave` and
+  `ApiKeySaveHandler` leave one `runtime.runPromise` in `registerBuiltins.tsx`,
+  and `ErrorHandler`'s `void | Promise<void>` ripples into `CliConfigForm`.
+- **Sign-in and dialog faces**: `signInCliSupabase` (owner-documented
+  sticky-interruption recovery at that edge), `signInForRemoteAgentCatalog`,
+  `signInAndWaitForSession` and `signOut` on the desktop, and the sibling
+  `confirmAcceptFile` / `showInstructionDialog` / `showErrorDialog` host ports.
+- **`window.showErrorMessage` is wrapped twice**: `VscodeMessageHost.notify`
+  for the action-less toast and `VscodePromptHost.showMessage` for the
+  answerable one, under different failure tags and return types. Collapsing
+  them means merging the two ports, which is a `src/hosts/uiHosts.ts` decision
+  with desktop and CLI implementations behind it.
+- **`runGuardedLatexCommand`'s `operation`** stays `(guard) => Promise<void>`,
+  lifted once, with eight `runtime.runPromise` calls inside the
+  `vscode.window.withProgress` bodies it serves.
+- **The process-roots holder**: `processWorkspaceRoots` and
+  `tryProcessWorkspaceRoots` (`src/platform/workspaceRoots.ts`), read at four
+  sites in three files (`sessionGraph.ts`, `configUtils.ts`'s
+  `getConfigBeforePlatformInit`, `platformSettings.ts`'s
+  `processSettingsStores`). It is the one named ambient singleton left after
+  #12774 deleted the carriers, and it retires when `SessionHandleInit.roots`
+  becomes required. Ruled and recorded in the architecture rulings ledger.
+- **The `working_directory` worktree gate**
+  (`src/tools/delegation/inputFields.ts`) is a static Zod `.transform` reading
+  the process slots. Moving it into `execute` turns a schema rejection into a
+  tool error, so it is a behavior decision rather than a threading change.
+- **The progress view's refresh funnel**:
+  `ProgressViewProvider.refreshAfterCredentialChange` still settles four
+  programs where one would do, and `runAfterAgentCatalogAuthRefresh` keeps a
+  `() => Promise<void>` queue fed by two view providers.
 - **D35b and D35c**: a durable owner for run-directory removal, and the
-  reflection recovery digest. Design, after D19; unstarted.
-- **`HostInteractions.emit` answers `unknown`** (#12750's left-out): hosts
-  return a boolean or a promise and the plane lifts it; narrowing the port to
-  `void` changes what each host logs, so it is a separate ruling.
-- **`openBuildDisplayIn`**: the third member of the R19 fan-out still answers
-  the core `BuildDisplayFn`, which is Promise-shaped because the approval
-  controller registers the raw build promise in a request's `inFlightActions`.
-  It converts with that controller, not with the preview host.
+  reflection recovery digest. Design, unstarted.
+- **`shellRun`'s quiet parse failure** (`packages/cli/src/commands/tools.ts`):
+  `Effect.orElseSucceed(() => null)` preserves the old `catch {}` exactly.
+  Making it loud is a behavior change and needs its own PR.
+- **`packages/cli/src/runtime/browser.ts`** (`tryOpenBrowser`) is deferred and
+  spans five callers across the CLI commands and the GitHub token form.
+- **A second acceptance re-survey has not been run.** The first, at
+  `5a8b011f470d`, is what produced waves 2 to 4; the finished tree has not been
+  measured again.
 
 ## 1. What the surveys measured
 
@@ -356,6 +540,29 @@ item, not a round trip.
 - The six plan documents either match `main` or are retired; no proposal
   carries a census more than one release stale.
 - Every ratchet baseline shrinks or is deleted; none widens.
+
+**Measured outcome (2026-09-19).** Lines were not the win; elements were.
+Across waves 2 to 4, `git diff --shortstat 9bd6f99dd4..origin/main -- src
+packages` reports 317 files changed, 10,512 insertions and 9,227 deletions, a
+net of +1,285 lines; over the whole campaign (`0bfb72448c..origin/main`) it is
+796 files, 28,960 insertions and 26,891 deletions, a net of +2,069. The pattern
+held per lane: roughly +10 to +90 lines for `Effect.fn` and `Effect.gen` bodies
+and for typed failure channels, against ports, wrappers and Promise faces that
+ceased to exist, so the surveys' LoC estimates were unreliable while their
+element claims held. What shrank is the element count and the ratchets.
+`config/ratchets/effect-migration-baseline.json` went from five rows to four:
+`import:async-mutex` was deleted with `src/utils/core/keyedMutex.ts`,
+`platform()` fell from 4 files / 13 sites to 3 / 3 (`agentRegistry.ts`,
+`PollingSourceBase.ts`, `toolUtils.ts`), `ambient:asyncLocalStorage` fell from
+18 files / 26 sites to the 3 files / 4 sites of the process-roots holder, and
+`new AbortController()` fell from the four named residents to two. Waves 2 to 4
+alone deleted the `new AbortController()` rows for
+`packages/cli/src/chat/tui/commands/handlers/slashContext.ts` and
+`src/platform/defaults/lifecycleHost.ts`; `src/agent/runtime/childRunLoop.ts`
+and `src/tools/claudeAgent.ts` remain, as D25 ruled. `catch:effect-importer` is
+unchanged at its two named permanent residents. `Platform` is down to
+`lifecycle`, `agentDirectories` and `toolMissingHandler`, and production holds
+no `new AsyncLocalStorage`.
 
 ## 7. Risks
 
