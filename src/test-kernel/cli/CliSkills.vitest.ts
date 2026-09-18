@@ -11,13 +11,18 @@ import {
 } from '@cli/runtime/skills';
 import { defaultSkillSources } from '@skills/skillSources';
 import {
+  readDisabledSkills,
   setRuntimeSkillSources,
   skillDisplayItem,
 } from '@skills/runtimeSkills';
+import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
 const tempRoots = useTempDirs();
+/** The listing's own setting slots, carried as data by the caller. */
+const settings = makeFakeSettingsStores().stores;
+const disabled = readDisabledSkills(settings);
 const commandMocks = vi.hoisted(() => ({ initCliPlatform: vi.fn() }));
 
 vi.mock('@cli/runtime/initPlatform', async (importOriginal) => ({
@@ -92,25 +97,26 @@ describe('CLI skills runtime', () => {
         cwd: resources,
         resourcesPath: resources,
       },
+      settings,
       {
         additionalPaths: [custom],
       },
     );
 
-    expect(result.skills.map((entry) => skillDisplayItem(entry))).toMatchObject(
-      [
-        {
-          name: 'custom-only',
-          description: 'The custom-only skill.',
-          scope: 'custom',
-        },
-        {
-          name: 'shared-skill',
-          description: 'The custom skill.',
-          scope: 'custom',
-        },
-      ],
-    );
+    expect(
+      result.skills.map((entry) => skillDisplayItem(entry, disabled)),
+    ).toMatchObject([
+      {
+        name: 'custom-only',
+        description: 'The custom-only skill.',
+        scope: 'custom',
+      },
+      {
+        name: 'shared-skill',
+        description: 'The custom skill.',
+        scope: 'custom',
+      },
+    ]);
     const formatted = formatCliSkillList(result.skills);
     expect(formatted).toContain('custom\tshared-skill\tThe custom skill.');
     expect(formatted).not.toContain(
@@ -130,6 +136,7 @@ describe('CLI skills runtime', () => {
         cwd: path.resolve(path.sep, 'tmp', 'project'),
         resourcesPath: path.resolve(path.sep, 'tmp', 'resources'),
       },
+      settings,
       {
         additionalPaths: ['missing-skills'],
       },
@@ -155,6 +162,7 @@ describe('CLI skills runtime', () => {
         cwd: root,
         resourcesPath: root,
       },
+      settings,
       {
         additionalPaths: [sourceFile],
       },
@@ -181,18 +189,18 @@ describe('CLI skills runtime', () => {
       },
     ]);
 
-    const result = await readCliRuntimeSkills(root);
+    const result = await readCliRuntimeSkills(root, settings);
 
-    expect(result.skills.map((entry) => skillDisplayItem(entry))).toMatchObject(
-      [
-        {
-          name: 'proof-audit',
-          description: 'Review mathematical proof steps.',
-          scope: 'project',
-          label: 'project',
-        },
-      ],
-    );
+    expect(
+      result.skills.map((entry) => skillDisplayItem(entry, disabled)),
+    ).toMatchObject([
+      {
+        name: 'proof-audit',
+        description: 'Review mathematical proof steps.',
+        scope: 'project',
+        label: 'project',
+      },
+    ]);
     expect(result.errors).toEqual([]);
   });
 });

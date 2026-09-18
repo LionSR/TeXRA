@@ -808,7 +808,10 @@ async function activateExtension(context: vscode.ExtensionContext) {
   // fire-and-forget async work through this program, which logs a failed
   // refresh instead of letting it become an unhandled rejection.
   const refreshToolAvailabilityLogged = (trigger: string) =>
-    refreshToolAvailability(runtimeSession.roots.workspace).pipe(
+    refreshToolAvailability({
+      workspaceRoot: runtimeSession.roots.workspace,
+      config: runtimeSession.roots.config,
+    }).pipe(
       Effect.catchCause((cause) =>
         Effect.sync(() => {
           log.error(

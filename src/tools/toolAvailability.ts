@@ -26,6 +26,7 @@ import type { RegisteredToolName } from '@tools/registry';
 import {
   EXTERNAL_TOOL_DEFS,
   type ExternalToolDef,
+  type ToolProbeInputs,
   type ToolProbeServices,
 } from '@tools/externalToolDefs';
 import { getDisabledToolIds } from '@utils/config/constants';
@@ -110,7 +111,7 @@ class ToolAvailabilityCache {
    * for the full coalescing contract this implements.
    */
   runChecks(
-    workspaceRoot: string | undefined,
+    inputs: ToolProbeInputs,
   ): Effect.Effect<ExternalToolCheckResult[], never, ToolProbeServices> {
     return Effect.suspend(() => {
       if (this.inflightProbe) {
@@ -122,7 +123,7 @@ class ToolAvailabilityCache {
       // find the slot taken and join it rather than start a second probe.
       const deferred = Deferred.makeUnsafe<ExternalToolCheckResult[]>();
       this.inflightProbe = deferred;
-      return this.probeUntilSettled(workspaceRoot).pipe(
+      return this.probeUntilSettled(inputs).pipe(
         Effect.onExit((exit) => {
           this.inflightProbe = null;
           return Deferred.done(deferred, exit);
@@ -135,14 +136,14 @@ class ToolAvailabilityCache {
    *  `pendingRerun` again before this settles, same as the `do...while` it
    *  replaces. */
   private probeUntilSettled(
-    workspaceRoot: string | undefined,
+    inputs: ToolProbeInputs,
   ): Effect.Effect<ExternalToolCheckResult[], never, ToolProbeServices> {
     this.pendingRerun = false;
-    return runProbes(workspaceRoot).pipe(
+    return runProbes(inputs).pipe(
       Effect.flatMap((results) => {
         this.lastResults = results;
         return this.pendingRerun
-          ? this.probeUntilSettled(workspaceRoot)
+          ? this.probeUntilSettled(inputs)
           : Effect.succeed(results);
       }),
     );
@@ -176,23 +177,21 @@ const toolAvailabilityCache = new ToolAvailabilityCache();
  *   human-readable `statusDetail`.
  */
 export function runExternalToolChecks(
-  workspaceRoot: string | undefined,
+  inputs: ToolProbeInputs,
 ): Effect.Effect<ExternalToolCheckResult[], never, ToolProbeServices> {
-  return toolAvailabilityCache.runChecks(workspaceRoot);
+  return toolAvailabilityCache.runChecks(inputs);
 }
 
 const runProbes = (
-  workspaceRoot: string | undefined,
+  inputs: ToolProbeInputs,
 ): Effect.Effect<ExternalToolCheckResult[], never, ToolProbeServices> =>
   Effect.suspend(() =>
     // Same fan-out as the Promise.all this replaces: every group probes at once
     // and no group's failure cancels a sibling, because each one resolves to a
     // result of its own below.
-    Effect.forEach(
-      EXTERNAL_TOOL_DEFS,
-      (def) => probeToolGroup(def, workspaceRoot),
-      { concurrency: 'unbounded' },
-    ),
+    Effect.forEach(EXTERNAL_TOOL_DEFS, (def) => probeToolGroup(def, inputs), {
+      concurrency: 'unbounded',
+    }),
   );
 
 const probeToolGroup = Effect.fn('probeToolGroup')(function* (
@@ -205,13 +204,13 @@ const probeToolGroup = Effect.fn('probeToolGroup')(function* (
     statusLabel: getStatusLabel,
     detailCheck,
   }: ExternalToolDef,
-  workspaceRoot: string | undefined,
+  inputs: ToolProbeInputs,
 ): Effect.fn.Return<ExternalToolCheckResult, never, ToolProbeServices> {
   // Run check/status/detail from one shared probe result. Some groups
   // (Codex, Zotero, GitHub PR) touch async local state, so running the
   // callbacks independently can duplicate the same probe work.
   const probed = yield* Effect.gen(function* () {
-    const probeResult = probe ? yield* probe(workspaceRoot) : undefined;
+    const probeResult = probe ? yield* probe(inputs) : undefined;
     const available = yield* check(probeResult);
     return { failure: undefined, probeResult, available };
   }).pipe(
@@ -304,8 +303,8 @@ export function getLastCheckResults(): ExternalToolCheckResult[] | null {
  * probe can't race.
  */
 export const refreshToolAvailability = Effect.fn('refreshToolAvailability')(
-  function* (workspaceRoot: string | undefined) {
-    yield* runExternalToolChecks(workspaceRoot);
+  function* (inputs: ToolProbeInputs) {
+    yield* runExternalToolChecks(inputs);
     appSignals.emit('toolAvailabilityChanged', undefined);
   },
 );

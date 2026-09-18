@@ -23,6 +23,7 @@ import { z } from 'zod';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { ToolCall } from '@agent/runtime/ToolCall';
 import { Secrets } from '@platform/secrets';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import { ToolError, type RunId, type ToolResult } from '@shared/schemas';
 import { parseWorkingDirectory } from '@tools/pathResolution';
 import { executed } from '@tools/core/result';
@@ -393,6 +394,7 @@ function execList(runId: RunId): ToolResult {
 const gitInDir = (
   args: string[],
   cwd: string,
+  settings: SettingsStores,
 ): Effect.Effect<string, ToolError> =>
   Effect.flatMap(
     // `executeCommand` never rejects — a failed `git` is a result with
@@ -401,6 +403,8 @@ const gitInDir = (
     Effect.promise((signal) =>
       executeCommand(['git', ...args], {
         cwd,
+        // The calling session's slots, carried from the tool call.
+        settings,
         timeout: 10_000,
         channel: 'github_subscription',
         signal,
@@ -445,8 +449,13 @@ export function parseOriginHeadDefaultBranch(ref: string): string | undefined {
 /** The local origin/HEAD hint: any lookup failure just means "no hint". */
 const getLocalDefaultBranchHint = (
   cwd: string,
+  settings: SettingsStores,
 ): Effect.Effect<string | undefined> =>
-  gitInDir(['symbolic-ref', '--short', 'refs/remotes/origin/HEAD'], cwd).pipe(
+  gitInDir(
+    ['symbolic-ref', '--short', 'refs/remotes/origin/HEAD'],
+    cwd,
+    settings,
+  ).pipe(
     Effect.map(parseOriginHeadDefaultBranch),
     Effect.catch(() => Effect.succeed(undefined)),
   );
@@ -477,6 +486,7 @@ const getFindCurrentFallbackInfo = (
   owner: string,
   repo: string,
   cwd: string,
+  settings: SettingsStores,
 ): Effect.Effect<
   { defaultBranch?: string; suggestions: string },
   never,
@@ -484,7 +494,7 @@ const getFindCurrentFallbackInfo = (
 > =>
   Effect.zip(
     getDefaultBranch(owner, repo).pipe(
-      Effect.catch(() => getLocalDefaultBranchHint(cwd)),
+      Effect.catch(() => getLocalDefaultBranchHint(cwd, settings)),
     ),
     listOpenPullSuggestions(owner, repo).pipe(
       Effect.catch(() => Effect.succeed('')),
@@ -498,7 +508,11 @@ const getFindCurrentFallbackInfo = (
   );
 
 const execFindCurrent = Effect.fn('GitHubSubscriptionTool.findCurrent')(
-  function* (input: FindCurrentInput, workingDirectory: string | undefined) {
+  function* (
+    input: FindCurrentInput,
+    workingDirectory: string | undefined,
+    settings: SettingsStores,
+  ) {
     yield* requireToken();
     const cwd =
       parseWorkingDirectory(input.working_directory) ?? workingDirectory;
@@ -510,8 +524,8 @@ const execFindCurrent = Effect.fn('GitHubSubscriptionTool.findCurrent')(
       );
     }
     const [remoteUrl, branch] = yield* Effect.zip(
-      gitInDir(['remote', 'get-url', 'origin'], cwd),
-      gitInDir(['rev-parse', '--abbrev-ref', 'HEAD'], cwd),
+      gitInDir(['remote', 'get-url', 'origin'], cwd, settings),
+      gitInDir(['rev-parse', '--abbrev-ref', 'HEAD'], cwd, settings),
     ).pipe(
       Effect.mapError(
         (err) =>
@@ -545,6 +559,7 @@ const execFindCurrent = Effect.fn('GitHubSubscriptionTool.findCurrent')(
         remote.owner,
         remote.repo,
         cwd,
+        settings,
       );
       if (branch === defaultBranch) {
         return yield* Effect.fail(
@@ -608,7 +623,11 @@ export const GitHubSubscriptionTool = defineTool({
         case 'list':
           return yield* Effect.sync(() => execList(run.runId));
         case 'find_current':
-          return yield* execFindCurrent(input, toolCall.workingDirectory);
+          return yield* execFindCurrent(
+            input,
+            toolCall.workingDirectory,
+            toolCall.roots,
+          );
       }
     }),
 });

@@ -13,7 +13,7 @@ import {
   type TeamPreset,
   type TeamRunPlan,
 } from '@common/teams/TeamPlan';
-import { workspaceRoots } from '@platform/workspaceRoots';
+import type { StateStore } from '@platform/interfaces';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
 import { RESEARCHER_ACCESS } from '@shared/copy/onboarding';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
@@ -47,8 +47,16 @@ const MULTI_AGENT_SHOW_HINT =
   'Hint: run `texra multi-agent show <team-id>` to see missing agents for degraded or unavailable presets.';
 const MULTI_AGENT_LOGIN_HINT = `Hint: ${RESEARCHER_ACCESS.label} sign-in may load additional remote team agents.`;
 
-export function readCliMultiAgentPresets(): TeamPreset[] {
-  const customRaw = workspaceRoots().workspaceState.get<unknown>(
+/**
+ * The team presets of the workspace whose state the caller holds: the built-in
+ * teams plus whatever that project persisted. The store arrives as data from
+ * the surface that opened it (a command's installed roots, the chat session's
+ * roots) rather than being read off the calling context.
+ */
+export function readCliMultiAgentPresets(
+  workspaceState: StateStore,
+): TeamPreset[] {
+  const customRaw = workspaceState.get<unknown>(
     WorkspaceStateKey.CUSTOM_AGENT_PRESETS,
   );
   return teamPresets(customRaw);
@@ -56,10 +64,12 @@ export function readCliMultiAgentPresets(): TeamPreset[] {
 
 /** Resolve the current display name for a persisted team identity. */
 export function readCliMultiAgentPresetName(
+  workspaceState: StateStore,
   presetId: string | undefined,
 ): string | undefined {
   if (!presetId) return undefined;
-  return findTeamPreset(readCliMultiAgentPresets(), presetId)?.name;
+  return findTeamPreset(readCliMultiAgentPresets(workspaceState), presetId)
+    ?.name;
 }
 
 function cliMultiAgentPresetAvailabilityParts(

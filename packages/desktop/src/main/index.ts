@@ -916,9 +916,11 @@ function createWindow(options: {
     });
     return result.canceled ? undefined : result.filePaths;
   };
-  const recentCommitsOf = async (workspacePath: string | undefined) => {
-    if (!workspacePath) return { commits: [] as string[], isGitRepo: false };
-    return readRecentCommits(workspacePath, DESKTOP_RECENT_COMMIT_LIMIT, {
+  const recentCommitsOf = async (project: DesktopProject) => {
+    if (!project.root) return { commits: [] as string[], isGitRepo: false };
+    return readRecentCommits(project.root, DESKTOP_RECENT_COMMIT_LIMIT, {
+      // This project's own slots: the read runs for the paper it belongs to.
+      settings: project.roots,
       onError: reportBackgroundError,
     });
   };
@@ -980,7 +982,7 @@ function createWindow(options: {
         }),
       readRecentCommits: () =>
         Effect.tryPromise({
-          try: () => recentCommitsOf(project.root),
+          try: () => recentCommitsOf(project),
           catch: (cause) =>
             new HostSnapshotReadFailed({
               member: 'readRecentCommits',
@@ -1047,7 +1049,10 @@ function createWindow(options: {
       openExternalUrl: requestPreviewHost.openExternal,
       recheckTools: async () => {
         await runtime.runPromise(
-          refreshToolAvailability(project.roots.workspace),
+          refreshToolAvailability({
+            workspaceRoot: project.roots.workspace,
+            config: project.roots.config,
+          }),
         );
       },
       logger: console,
@@ -1645,6 +1650,7 @@ function createWindow(options: {
         getEnvironmentSummary: async () =>
           project.root
             ? ((await readGitEnvironmentSummary(project.root, {
+                settings: project.roots,
                 onError: reportBackgroundError,
               })) ?? EMPTY_DESKTOP_ENVIRONMENT_SUMMARY)
             : EMPTY_DESKTOP_ENVIRONMENT_SUMMARY,

@@ -5,6 +5,7 @@ import { Effect, FileSystem } from 'effect';
 import type { AgentTrace } from '@agent/trace/AgentTrace';
 import type { AgentPrompt } from '@agent/core/definition/AgentDataclass';
 import type { TemplateVars } from '@agent/core/definition/AgentCycleOptions';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 
 // Local imports - utilities
 import { ensureArray } from '@utils/core';
@@ -207,6 +208,8 @@ export const buildInitialToolUsePrompts = Effect.fn('prompt.initialToolUse')(
     options: {
       /** The run's workspace root: its `.texrarules` and `<workspace_info>`. */
       workspace: string | undefined;
+      /** The same session's setting slots, for the `<workspace_info>` git reads. */
+      settings: SettingsStores;
       resolvedToolNames?: readonly string[];
       hasDelegationTools?: boolean;
       isChild?: boolean;
@@ -240,7 +243,7 @@ export const buildInitialToolUsePrompts = Effect.fn('prompt.initialToolUse')(
     }
     suffixParts.push(
       yield* Effect.tryPromise({
-        try: () => buildWorkspaceInfoBlock(options.workspace),
+        try: () => buildWorkspaceInfoBlock(options.workspace, options.settings),
         catch: ensureError,
       }),
     );

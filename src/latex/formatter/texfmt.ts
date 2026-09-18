@@ -3,6 +3,7 @@ import { Effect } from 'effect';
 
 // Local imports - log
 import { createLog } from '@logger/logUtils';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import { runToolWithCheck } from '@utils/system/toolUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '../latexLogging';
@@ -16,6 +17,7 @@ export const runTexFmt = Effect.fn('latex.runTexFmt')(
     filePath: string,
     workspaceRoot: string | undefined,
     texfmtConfig: string,
+    settings: SettingsStores,
   ) {
     const args = [
       ...(texfmtConfig ? ['--config', texfmtConfig] : ['--nowrap']),
@@ -27,6 +29,8 @@ export const runTexFmt = Effect.fn('latex.runTexFmt')(
         runToolWithCheck('tex-fmt', args, {
           channel: CHANNEL,
           cwd: workspaceRoot,
+          // The slots the caller resolved this formatter from.
+          settings,
           showError: true,
         }),
       catch: (cause) => cause,

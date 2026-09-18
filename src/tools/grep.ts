@@ -118,6 +118,8 @@ function buildArguments(input: GrepInput): string[] {
  */
 interface GrepPorts extends WorkspacePathPorts {
   readonly signal: AbortSignal | undefined;
+  /** Enter the host's workspace frame only while the `rg` subprocess spawns. */
+  readonly inScope: <A>(operation: () => A) => A;
 }
 
 const runGrep = Effect.fn('GrepTool.execute')(function* (
@@ -125,8 +127,11 @@ const runGrep = Effect.fn('GrepTool.execute')(function* (
   input: GrepInput,
 ): Effect.fn.Return<ToolResult, unknown, FileSystem.FileSystem> {
   const root = ports.toolRoot();
-  const { path, display } = ports.inScope(() =>
-    resolveAndFormat(ports.workspaceRoot, input.path ?? undefined, root),
+  const { path, display } = resolveAndFormat(
+    ports.settings,
+    ports.workspaceRoot,
+    input.path ?? undefined,
+    root,
   );
   const gitignore = yield* getGitignoreMatcher(ports.workspaceRoot);
   const args = buildArguments(input);
@@ -164,6 +169,8 @@ const runGrep = Effect.fn('GrepTool.execute')(function* (
         // No `working_directory` on the call means the search runs from the
         // session's own workspace root, which the call carries as data.
         cwd: root ?? ports.workspaceRoot,
+        // The call's own setting slots, carried by the same ports as the root.
+        settings: ports.settings,
         channel: CHANNEL,
         truncate: false,
         maxBuffer: GREP_MAX_BUFFER_CHARS,
@@ -236,6 +243,7 @@ export const GrepTool = defineTool({
     const ports: GrepPorts = {
       ...workspacePathPorts(call),
       signal: yield* Effect.abortSignal,
+      inScope: call.inScope,
     };
     return yield* runGrep(ports, input);
   }),

@@ -204,7 +204,9 @@ export async function codexBinarySupportsXhigh(
   const probe = (async (): Promise<boolean> => {
     const result = await executeCommand(
       [binaryPath, 'debug', 'models', '--bundled'],
-      { quiet: true, timeout: 5_000, cwd: process.cwd() },
+      // A capability probe of the binary itself: it runs no git command, and
+      // this module holds no workspace whose identity it could carry.
+      { quiet: true, timeout: 5_000, cwd: process.cwd(), settings: undefined },
     );
     if (result.timedOut || result.exitCode === 127) {
       log.warn('Codex xhigh capability probe failed; not caching the result', {

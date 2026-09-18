@@ -7,6 +7,8 @@ import {
   LanguageModel,
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
 } from '@platform/languageModel';
+import type { ModelOptionStores } from '@model/computeModelOptions';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { ModelOptionData, ToolDefinition } from '@shared/schemas';
 import { fakeProcessServices, hostStores } from '@test/support/setupPlatform';
 
@@ -92,6 +94,12 @@ const DELEGATE_AGENT_TOOL: ToolInput = {
   description: DELEGATE_AGENT_DESCRIPTION,
 };
 
+/**
+ * The slots the direct-annotation cases read their worktree opt-in from; the
+ * mocked reader answers off the value, so any stores value serves.
+ */
+const annotationSettings = hostStores();
+
 const RESEARCH_NUMERICS_AGENTS = [
   { name: 'research', description: 'Derive and verify.' },
   { name: 'numerics', description: 'Run simulations.', tools: ['bash'] },
@@ -113,7 +121,7 @@ function rewriteRoster(
   return annotateDelegationAvailability(
     tool,
     undefined,
-    readDelegationAnnotationState(),
+    readDelegationAnnotationState(annotationSettings),
   );
 }
 
@@ -138,7 +146,7 @@ function delegationRegistry(tools: readonly ToolInput[]) {
 
 function resolveToolList(
   tools: ToolInput[] = [DELEGATE_AGENT_TOOL],
-  inScope?: <T>(read: () => T) => T,
+  stores: ModelOptionStores = hostStores(),
 ) {
   return Effect.suspend(() => {
     return resolveAgentTools({
@@ -146,8 +154,7 @@ function resolveToolList(
       registry: delegationRegistry(tools),
       logger: { warn: () => {} },
       toolInjections: new ToolInjectionRegistry(),
-      stores: hostStores(),
-      inScope,
+      stores,
     });
   }).pipe(
     // The delegation-annotation availability read yields `LanguageModel`;
@@ -232,7 +239,7 @@ describe('delegation model availability', () => {
         description: 'Available models: loaded at runtime.',
       },
       null,
-      readDelegationAnnotationState(),
+      readDelegationAnnotationState(annotationSettings),
     );
 
     expect(rewritten.description).toContain(
@@ -325,7 +332,7 @@ describe('delegation worktree availability', () => {
     const rewritten = annotateDelegationAvailability(
       delegateTool(),
       undefined,
-      readDelegationAnnotationState(),
+      readDelegationAnnotationState(annotationSettings),
     );
 
     expect(rewritten.description).toContain('Git worktree support: ENABLED.');
@@ -380,35 +387,30 @@ describe('resolveAgentTools delegation annotation', () => {
   );
 
   it.effect(
-    'reads the annotation facts inside the caller frame, not on the fiber',
+    'reads the annotation facts from the slots the resolution was given',
     () =>
       Effect.gen(function* () {
-        // The annotation's worktree read resolves against the calling session's
-        // workspace, so it must happen inside the run's frame: outside it, a
-        // multi-session host reads the process's roots instead.
+        // The annotation's worktree read answers for the session whose slots
+        // were handed in: a multi-session host resolving another project's
+        // tools must not get this project's answer.
         mocks.getVisibleAgents.mockReturnValue([]);
         const worktreeTool: ToolInput = {
           name: 'delegate_agent',
           availabilityCategory: 'toolUse',
           description: DELEGATE_AGENT_WORKTREE_DESCRIPTION,
         };
-        let inFrame = false;
-        mocks.isWorktreeSupportEnabled.mockImplementation(() => inFrame);
+        const enabledStores: ModelOptionStores = { ...hostStores() };
+        mocks.isWorktreeSupportEnabled.mockImplementation(
+          (stores: SettingsStores) => stores === enabledStores,
+        );
 
-        const scoped = yield* resolveToolList([worktreeTool], (read) => {
-          inFrame = true;
-          try {
-            return read();
-          } finally {
-            inFrame = false;
-          }
-        });
-        const unscoped = yield* resolveToolList([worktreeTool]);
+        const enabled = yield* resolveToolList([worktreeTool], enabledStores);
+        const other = yield* resolveToolList([worktreeTool]);
 
-        expect(scoped[0]?.description).toContain(
+        expect(enabled[0]?.description).toContain(
           'Git worktree support: ENABLED.',
         );
-        expect(unscoped[0]?.description).toContain(
+        expect(other[0]?.description).toContain(
           'Git worktree support: DISABLED',
         );
       }),

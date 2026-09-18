@@ -45,6 +45,7 @@ import type {
   ModelOptionData,
   ToolDefinition,
 } from '@shared/schemas';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import { isModelOptionAvailable } from '@shared/schemas';
 import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
 import { unique } from '@utils/core';
@@ -170,16 +171,17 @@ export interface DelegationAnnotationState {
 
 /**
  * Read the annotation's run scope and workspace setting here and now. The
- * caller supplies the run scope explicitly and resolves the workspace setting
- * inside its session frame before handing both facts to
- * {@link annotateDelegationAvailability}.
+ * caller supplies the run scope and the setting slots explicitly, so both
+ * facts reach {@link annotateDelegationAvailability} answering for the session
+ * the resolution was given rather than for the calling fiber.
  */
 export function readDelegationAnnotationState(
+  stores: SettingsStores,
   delegationScope?: AgentDelegationScope,
 ): DelegationAnnotationState {
   return {
     delegationScope,
-    worktreeEnabled: isWorktreeSupportEnabled(),
+    worktreeEnabled: isWorktreeSupportEnabled(stores),
   };
 }
 

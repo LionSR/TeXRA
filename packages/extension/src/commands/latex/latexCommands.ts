@@ -131,6 +131,7 @@ export async function handleIndentCurrentTeX(
           relativePath,
           session.roots.workspace,
           formatter.configPath,
+          session.roots,
         ),
       );
 
@@ -194,6 +195,7 @@ export async function handleGetTeXCount(
             getTeXCount(session.roots.workspace, relativePath, {
               mode: countingMode.value,
               channel: CHANNEL,
+              settings: session.roots,
             }),
           );
 

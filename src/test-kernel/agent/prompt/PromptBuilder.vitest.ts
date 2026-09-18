@@ -7,6 +7,7 @@ import {
   PromptBuilder,
 } from '@agent/prompt/PromptBuilder';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
+import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 
 /** The system prompt reads `.texrarules` through `FileSystem`, so the
  *  standard library's own is what these renders run over. */
@@ -23,7 +24,11 @@ function buildMemoryPrompts(): ReturnType<typeof buildInitialToolUsePrompts> {
     } as AgentPrompt,
     {},
     undefined,
-    { workspace: undefined, resolvedToolNames: ['memory'] },
+    {
+      workspace: undefined,
+      settings: makeFakeSettingsStores().stores,
+      resolvedToolNames: ['memory'],
+    },
   );
 }
 

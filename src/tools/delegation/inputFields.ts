@@ -28,6 +28,7 @@ import { runStorageLocationUnder } from '@utils/files/runStorageFs';
 import { workspaceAbsolutePath } from '@utils/files/workspaceFS';
 import { entryExists } from '@utils/files/fsEntryExists';
 import { isWorktreeSupportEnabled } from '@utils/config/worktreeConfig';
+import { platformSettingsStores } from '@utils/config/platformSettings';
 import {
   ensureError,
   extractErrorMessage,
@@ -168,7 +169,12 @@ export const workingDirectoryField = z
     if (Result.isFailure(parsed)) return fail(toErrorMessage(parsed.failure));
     const trimmed = parsed.success;
     if (!trimmed) return trimmed;
-    if (!isWorktreeSupportEnabled()) {
+    // The one opt-in read with no caller to take slots from: this is a static
+    // Zod transform on the tool's input schema, parsed by `BaseTool.call`
+    // before any per-call value reaches it, so the stores can only come from
+    // the calling context. Moving the gate to `DelegateAgentTool.execute`,
+    // where `call.roots` is in hand, is what retires this read.
+    if (!isWorktreeSupportEnabled(platformSettingsStores())) {
       return fail(WORKTREE_DISABLED_MESSAGE);
     }
     const existing = Result.try(() => ensureWorkingDirectoryExists(trimmed));

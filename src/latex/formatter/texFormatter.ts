@@ -20,11 +20,19 @@ interface LatexFormatterDefinition {
     filePath: string,
     workspaceRoot: string | undefined,
     configPath: string,
+    settings: SettingsStores,
   ): Effect.Effect<boolean, never, FileSystem.FileSystem>;
 }
 
 export interface LatexFormatter extends LatexFormatterDefinition {
   readonly configPath: string;
+  /**
+   * The slots this formatter was resolved from, carried with it: the run it
+   * spawns names the same project's settings that chose the formatter, so a
+   * caller holding only the resolved formatter never reaches for an ambient
+   * one.
+   */
+  readonly settings: SettingsStores;
 }
 
 const LATEX_FORMATTERS: Record<string, LatexFormatterDefinition> = {
@@ -64,5 +72,6 @@ export function resolveLatexFormatter(
   return {
     ...selected,
     configPath: readConfig<string>(stores.config, selected.configKey, ''),
+    settings: stores,
   };
 }

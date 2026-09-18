@@ -485,6 +485,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
       const counted = yield* Effect.exit(
         getTeXCountStats(
           roots.workspace,
+          roots,
           files.map((f) => f.absolutePath),
         ),
       );

@@ -34,6 +34,8 @@ const log = createLog('DiagnosticsTool');
 interface DiagnosticsPorts extends WorkspacePathPorts {
   readonly readDiagnostics: HostInteractions['readDiagnostics'];
   readonly addCriticism: HostInteractions['addCriticism'];
+  /** Enter the host's workspace frame only while calling its criticism sink. */
+  readonly inScope: <A>(operation: () => A) => A;
 }
 
 /** Resolve an input path to an absolute path against the active working directory. */
@@ -42,6 +44,7 @@ function resolveAbsolutePath(
   ports: WorkspacePathPorts,
 ): string {
   return resolveWorkspaceRelativePath(
+    ports.settings,
     ports.workspaceRoot,
     filePath,
     ports.toolRoot(),
@@ -129,6 +132,7 @@ export class DiagnosticsTool extends defineTool({
       ...workspacePathPorts(call),
       readDiagnostics: interactions.readDiagnostics,
       addCriticism: interactions.addCriticism,
+      inScope: call.inScope,
     };
     return yield* input.command === 'add'
       ? this.addCriticism(ports, input)
@@ -142,9 +146,7 @@ export class DiagnosticsTool extends defineTool({
     input: Extract<DiagnosticsInput, { command: 'list' | 'count' }>,
   ): Effect.fn.Return<ToolResult, ToolError> {
     const { command, path } = input;
-    const diagnosticsPath = ports.inScope(() =>
-      resolveAbsolutePath(path, ports),
-    );
+    const diagnosticsPath = resolveAbsolutePath(path, ports);
     const linter = ports.readDiagnostics;
     if (!linter) {
       return yield* Effect.fail(

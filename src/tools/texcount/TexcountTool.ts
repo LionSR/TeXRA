@@ -43,6 +43,7 @@ const texcount = Effect.fn('TexcountTool.execute')(function* (
 
   const { output, errors } = yield* getTeXCount(call.roots.workspace, files, {
     mode: input.mode,
+    settings: call.roots,
   });
 
   if (!output) {

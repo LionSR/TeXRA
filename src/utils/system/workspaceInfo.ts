@@ -6,6 +6,7 @@ import * as path from 'node:path';
 import { escapeTextStrict } from '@shared/utils/xmlEscape';
 import { listExternalRoots } from '@utils/files/externalRoots';
 import { isoDateOnly } from '@utils/text/stringUtils';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import { executeCommand } from '@utils/system/execUtils';
 import { IS_WINDOWS } from './platformPaths';
 import { isWSL } from './wslDetect';
@@ -55,8 +56,15 @@ function getPlatformLabel(): string {
  * Gather git repository information for the workspace.
  * Returns null if the workspace is not a git repo or git is unavailable.
  */
-async function getGitInfo(workspacePath: string): Promise<GitInfo | null> {
-  const opts = { cwd: workspacePath, timeout: GIT_TIMEOUT_MS } as const;
+async function getGitInfo(
+  workspacePath: string,
+  settings: SettingsStores | undefined,
+): Promise<GitInfo | null> {
+  const opts = {
+    cwd: workspacePath,
+    settings,
+    timeout: GIT_TIMEOUT_MS,
+  } as const;
 
   // Deliberately not isGitRepository(): that also requires stdout === 'true',
   // which excludes bare repos and paths inside .git, where `git rev-parse`
@@ -97,14 +105,18 @@ async function getGitInfo(workspacePath: string): Promise<GitInfo | null> {
  * that help the LLM understand the user's workspace context.
  *
  * @param wsPath - The run's workspace root, or undefined when no folder is open.
+ * @param settings - The same session's setting slots, carried beside the root:
+ * the git reads below spawn with that project's configured identity instead of
+ * one resolved from ambient state. `undefined` where the caller has none.
  */
 export async function buildWorkspaceInfoBlock(
   wsPath: string | undefined,
+  settings: SettingsStores | undefined,
 ): Promise<string> {
   const platform = getPlatformLabel();
   const shell = detectShell();
   const date = isoDateOnly();
-  const git = wsPath ? await getGitInfo(wsPath) : null;
+  const git = wsPath ? await getGitInfo(wsPath, settings) : null;
 
   const lines: string[] = [];
 

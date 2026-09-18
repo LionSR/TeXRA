@@ -147,8 +147,10 @@ const resizeImageIfNeeded = Effect.fn('img.resizeImageIfNeeded')(function* (
               channel: CHANNEL,
               // Both operands are absolute paths, so the conversion is
               // independent of where it runs: the process cwd is the honest
-              // root rather than a workspace this module never receives.
+              // root rather than a workspace this module never receives, and
+              // there are no workspace settings to carry with it.
               cwd: process.cwd(),
+              settings: undefined,
               signal,
             }),
           catch: conversionFailure,
@@ -250,8 +252,10 @@ const singlePagePdf2Png = Effect.fn('img.singlePagePdf2Png')(function* (
     try: (signal) =>
       executeCommand(convertArgs, {
         channel: CHANNEL,
-        // Absolute input and output paths: see `resizeImageIfNeeded`.
+        // Absolute input and output paths, and no workspace of its own: see
+        // `resizeImageIfNeeded`.
         cwd: process.cwd(),
+        settings: undefined,
         signal,
         killProcessTree: true,
       }),

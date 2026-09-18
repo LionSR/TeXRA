@@ -494,6 +494,7 @@ export function registerBuiltinSlashCommands(options: {
         state={stores.globalState}
         runtime={runtime}
         workspaceRoot={options.runtimeSession.roots.workspace}
+        config={options.runtimeSession.roots.config}
         availableRows={props.availableRows}
         onClose={() => props.onDone(undefined)}
       />

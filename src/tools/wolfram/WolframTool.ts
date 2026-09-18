@@ -6,6 +6,7 @@ import { z } from 'zod';
 
 // Local imports
 import { ToolCall } from '@agent/runtime/ToolCall';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import { ToolError } from '@shared/schemas';
 import { defineTool } from '@tools/core/define';
 import {
@@ -66,6 +67,8 @@ interface WolframPorts {
    *  otherwise falls back to the ambient roots, which on the desktop are the
    *  process roots with no workspace. */
   readonly cwd: string | undefined;
+  /** The same session's setting slots, carried beside the root as data. */
+  readonly settings: SettingsStores;
 }
 
 const runWolfram = Effect.fn('WolframTool.execute')(function* (
@@ -86,6 +89,7 @@ const runWolfram = Effect.fn('WolframTool.execute')(function* (
   const result = yield* Effect.promise((signal) =>
     ports.runTool('wolframscript', ['-code', input.code], {
       cwd: ports.cwd,
+      settings: ports.settings,
       showError: false,
       truncate: false,
       timeout: effectiveTimeout,
@@ -129,6 +133,7 @@ export const WolframTool = defineTool({
       requestApproval: requestBashApproval,
       runTool: runToolWithCheck,
       cwd: call.roots.workspace,
+      settings: call.roots,
     };
     return yield* runWolfram(ports, input);
   }),

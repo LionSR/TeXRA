@@ -117,27 +117,27 @@ export const resolveWritableTarget = Effect.fn('resolveWritableTarget')(
     // stay a failure rather than becoming a defect.
     const call = yield* ToolCall;
     const { path, absolutePath, displayPath } = yield* Effect.try({
-      try: () =>
-        call.inScope(() => {
-          const { path: resolved, display } = resolveAndFormat(
-            call.roots.workspace,
-            inputPath,
-            call.workingDirectory,
-          );
-          assertWritable(resolved, display);
+      try: () => {
+        const { path: resolved, display } = resolveAndFormat(
+          call.roots,
+          call.roots.workspace,
+          inputPath,
+          call.workingDirectory,
+        );
+        assertWritable(resolved, display);
 
-          const fsPath = resolved.fsPath;
-          options.validate?.({ path: fsPath, displayPath: display });
-          return {
-            path: fsPath,
-            // The resolution ran inside the call's workspace frame, so its
-            // absolute form is the one the process filesystem reads —
-            // including a path under a registered external root, which the
-            // workspace facade reached the same way.
-            absolutePath: resolved.absolute,
-            displayPath: display,
-          };
-        }),
+        const fsPath = resolved.fsPath;
+        options.validate?.({ path: fsPath, displayPath: display });
+        return {
+          path: fsPath,
+          // The resolution answered for the call's own workspace, so its
+          // absolute form is the one the process filesystem reads —
+          // including a path under a registered external root, which the
+          // workspace facade reached the same way.
+          absolutePath: resolved.absolute,
+          displayPath: display,
+        };
+      },
       catch: (error) => error,
     });
 

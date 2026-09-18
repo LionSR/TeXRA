@@ -2,8 +2,13 @@ import { defineCommand } from 'citty';
 import { execa } from 'execa';
 import { parse as shellParse } from 'shell-quote';
 
+import type { ToolProbeInputs } from '@tools/externalToolDefs';
+
 import { CliExitCode } from '../runtime/exitCodes';
-import { initCliPlatform } from '../runtime/initPlatform';
+import {
+  initCliPlatform,
+  type CliPlatformServices,
+} from '../runtime/initPlatform';
 import { writeTextStderr } from '../runtime/logSinks';
 import {
   formatCliToolList,
@@ -47,13 +52,30 @@ interface CliToolGuideResult {
   readonly command?: string;
 }
 
+/**
+ * The workspace this command's init opened, as the probes read it. Its roots
+ * are absent only when another root installed the platform first, and then
+ * there is no workspace whose configuration the Zotero port could come from.
+ */
+function toolProbeInputs(services: CliPlatformServices): ToolProbeInputs {
+  if (!services.roots) {
+    throw new Error(
+      'texra tools needs the workspace roots its platform init installs.',
+    );
+  }
+  return {
+    workspaceRoot: services.roots.workspace,
+    config: services.roots.config,
+  };
+}
+
 async function listTools(context: CliContext): Promise<number> {
   // The init call hands back the process runtime it just wired, so the status
   // read and any follow-up toggle hit the same state store.
   const services = await initCliPlatform({ ...context, quietLogs: true });
   const items = await readCliToolStatuses(
     services.runtime,
-    services.roots?.workspace,
+    toolProbeInputs(services),
   );
 
   emitCliResult(context, {
@@ -68,7 +90,7 @@ async function showTool(context: CliContext, id: string): Promise<number> {
   const services = await initCliPlatform({ ...context, quietLogs: true });
   const item = await readCliToolStatus(
     services.runtime,
-    services.roots?.workspace,
+    toolProbeInputs(services),
     id,
   );
   if (!item) {

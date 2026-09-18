@@ -12,24 +12,34 @@ import {
 import {
   filterDiscoveredSkills,
   loadEnabledRuntimeSkills,
+  readDisabledSkills,
 } from '@skills/runtimeSkills';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 
 // Local imports - CLI runtime
 import type { CliContext } from './cliContext';
 
+/**
+ * `stores` are the setting slots of the workspace this listing is for — the
+ * roots the command's platform init installed — so the disabled-skill lists
+ * come from that project rather than from ambient state.
+ */
 export async function readCliSkills(
   context: Pick<CliContext, 'cwd' | 'resourcesPath'>,
+  stores: SettingsStores,
   options: SkillSourceOptions = {},
 ): Promise<DiscoverSkillSourcesResult> {
   return filterDiscoveredSkills(
     await discoverSkillSources(defaultSkillSources(context, options)),
+    readDisabledSkills(stores),
   );
 }
 
 export async function readCliRuntimeSkills(
   workspaceRoot: string | undefined,
+  stores: SettingsStores,
 ): Promise<DiscoverSkillSourcesResult> {
-  return loadEnabledRuntimeSkills(workspaceRoot);
+  return loadEnabledRuntimeSkills(workspaceRoot, stores);
 }
 
 export function formatCliSkillIssue(issue: SkillLoadIssue): string {

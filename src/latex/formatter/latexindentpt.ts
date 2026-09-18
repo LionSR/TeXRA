@@ -5,6 +5,7 @@ import { Effect, FileSystem } from 'effect';
 import { sync as globSync } from 'glob';
 
 import { createLog } from '@logger/logUtils';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import { runToolWithCheck } from '@utils/system/toolUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '../latexLogging';
@@ -82,6 +83,7 @@ export const runLatexIndent = Effect.fn('latex.runLatexIndent')(
     filePath: string,
     workspacePath: string | undefined,
     latexindentConfig: string,
+    settings: SettingsStores,
   ) {
     // Resolve workspace-relative paths to absolute so cleanup works correctly.
     // Some callers (latexCommands, housekeeping/indent) pass relative paths.
@@ -101,6 +103,8 @@ export const runLatexIndent = Effect.fn('latex.runLatexIndent')(
         runToolWithCheck('latexindent', args, {
           channel: CHANNEL,
           cwd: workspacePath,
+          // The slots the caller resolved this formatter from.
+          settings,
           showError: !missingLatexindentReported,
         }),
       catch: (cause) => cause,

@@ -324,6 +324,7 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
             state={stores.globalState}
             runtime={props.runtime}
             workspaceRoot={props.workspaceRoot}
+            config={stores.config}
             onClose={onBack}
           />
         ),

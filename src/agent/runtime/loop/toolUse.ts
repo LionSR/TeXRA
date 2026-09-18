@@ -343,6 +343,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       logger,
       {
         workspace: session.roots.workspace,
+        settings: session.roots,
         resolvedToolNames,
         hasDelegationTools: hasDelegationTool(resolvedToolNames),
         isChild,

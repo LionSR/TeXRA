@@ -1,9 +1,12 @@
 import { defineCommand } from 'citty';
 
-import { skillDisplayItem } from '@skills/runtimeSkills';
+import { readDisabledSkills, skillDisplayItem } from '@skills/runtimeSkills';
 
 import { CliExitCode } from '../runtime/exitCodes';
-import { initCliPlatform } from '../runtime/initPlatform';
+import {
+  initCliPlatform,
+  type CliPlatformServices,
+} from '../runtime/initPlatform';
 import { writeTextStderr } from '../runtime/logSinks';
 import {
   formatCliSkillIssue,
@@ -20,6 +23,22 @@ import {
 import { emitCliResult } from './_helpers/output';
 import type { CliContext } from '../runtime/cliContext';
 
+/**
+ * The process roots this command's init installed, which the skill lists are
+ * read for. Absent only when another root installed the platform first, and
+ * then there is no workspace here to name.
+ */
+function skillsRoots(
+  services: CliPlatformServices,
+): NonNullable<CliPlatformServices['roots']> {
+  if (!services.roots) {
+    throw new Error(
+      'texra skills needs the workspace roots its platform init installs.',
+    );
+  }
+  return services.roots;
+}
+
 async function listSkills(
   context: CliContext,
   options: {
@@ -27,8 +46,9 @@ async function listSkills(
     readonly additionalPaths: readonly string[];
   },
 ): Promise<number> {
-  await initCliPlatform({ ...context, quietLogs: true });
-  const result = await readCliSkills(context, options);
+  const services = await initCliPlatform({ ...context, quietLogs: true });
+  const roots = skillsRoots(services);
+  const result = await readCliSkills(context, roots, options);
   const exitCode = result.errors.some(
     (issue) =>
       issue.code === 'missing_source' ||
@@ -51,7 +71,8 @@ async function listSkills(
   // `<resource> list` command produces, via the shared emitCliResult helper.
   // The text list is suppressed on a usage error with no skills (nothing
   // useful to show); the helper skips the write for the resulting empty string.
-  const items = result.skills.map((entry) => skillDisplayItem(entry));
+  const disabled = readDisabledSkills(roots);
+  const items = result.skills.map((entry) => skillDisplayItem(entry, disabled));
   emitCliResult(context, {
     json: items,
     ndjson: [

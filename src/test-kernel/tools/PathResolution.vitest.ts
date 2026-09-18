@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import { ToolError } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import { installPlatform } from '@test/support/setupPlatform';
+import { installedHost, installPlatform } from '@test/support/setupPlatform';
 import {
   assertNoParentTraversal,
   assertWritable,
@@ -31,7 +31,12 @@ describe('resolveWorkspaceRelativePath path protection', () => {
     await installPlatform({ workspacePath });
 
     expect(() =>
-      resolveWorkspaceRelativePath(workspacePath, outsidePath, workspacePath),
+      resolveWorkspaceRelativePath(
+        installedHost().roots,
+        workspacePath,
+        outsidePath,
+        workspacePath,
+      ),
     ).toThrow('Path must stay within the working directory.');
   });
 
@@ -43,9 +48,15 @@ describe('resolveWorkspaceRelativePath path protection', () => {
       },
     });
 
+    const { roots } = installedHost();
     const logicalOutsidePath = outsidePath.replaceAll('\\', '/');
     expect(
-      resolveWorkspaceRelativePath(workspacePath, outsidePath, workspacePath),
+      resolveWorkspaceRelativePath(
+        roots,
+        workspacePath,
+        outsidePath,
+        workspacePath,
+      ),
     ).toEqual({
       relative: logicalOutsidePath,
       absolute: outsidePath,
@@ -53,6 +64,7 @@ describe('resolveWorkspaceRelativePath path protection', () => {
     });
     expect(
       resolveWorkspaceRelativePath(
+        roots,
         workspacePath,
         '../outside/file.tex',
         workspacePath,
@@ -82,7 +94,11 @@ describe('resolveWorkspaceRelativePath path protection', () => {
     });
 
     const targetPath = 'packages/extension/resources/agents/proof.yaml';
-    const resolved = resolveWorkspaceRelativePath(workspacePath, targetPath);
+    const resolved = resolveWorkspaceRelativePath(
+      installedHost().roots,
+      workspacePath,
+      targetPath,
+    );
 
     expect(resolved.external?.writable).toBe(false);
     expect(() => assertWritable(resolved, targetPath)).toThrowError(

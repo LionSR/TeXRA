@@ -195,12 +195,11 @@ const addThread = Effect.fn('InlineCommentTool.addThread')(function* (
   const { path, line, endLine, body } = input;
   const resolved = yield* Effect.try({
     try: () =>
-      call.inScope(() =>
-        resolveWorkspaceRelativePath(
-          call.roots.workspace,
-          path,
-          call.workingDirectory,
-        ),
+      resolveWorkspaceRelativePath(
+        call.roots,
+        call.roots.workspace,
+        path,
+        call.workingDirectory,
       ),
     catch: addCommentFailure,
   });
@@ -258,14 +257,12 @@ const listThreads = Effect.fn('InlineCommentTool.list')(function* (
   const absolutePath =
     input.path == null
       ? undefined
-      : call.inScope(
-          () =>
-            resolveWorkspaceRelativePath(
-              call.roots.workspace,
-              input.path ?? undefined,
-              call.workingDirectory,
-            ).absolute,
-        );
+      : resolveWorkspaceRelativePath(
+          call.roots,
+          call.roots.workspace,
+          input.path ?? undefined,
+          call.workingDirectory,
+        ).absolute;
   const threads = (yield* requireProvider()).list({ absolutePath });
   if (threads.length === 0) {
     return executed(

@@ -69,7 +69,12 @@ export const indentLatexFilesInDirectory = Effect.fn(
     log.debug('LaTeX formatter disabled; skipping indentation');
     return { status: 'disabled', directory, count: 0 };
   }
-  const { id, configPath: config, run: runFormatter } = formatter;
+  const {
+    id,
+    configPath: config,
+    run: runFormatter,
+    settings: formatterSettings,
+  } = formatter;
   log.debug(`Formatter: ${id}, Config: ${config}`);
 
   const fs = yield* FileSystem.FileSystem;
@@ -122,7 +127,9 @@ export const indentLatexFilesInDirectory = Effect.fn(
 
       // Both formatters report a failed run as `false`, so a per-file
       // recovery here would have nothing left to catch.
-      if (yield* runFormatter(fullPath, workspaceRoot, config)) {
+      if (
+        yield* runFormatter(fullPath, workspaceRoot, config, formatterSettings)
+      ) {
         log.info(`Successfully formatted: ${fullPath}`);
         indentedCount++;
       } else {

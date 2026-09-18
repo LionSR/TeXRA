@@ -53,7 +53,7 @@ function waitForProcessExit(pid: number): Promise<void> {
 
 type ExecuteCommandOptions = Omit<
   NonNullable<Parameters<typeof executeCommand>[1]>,
-  'cwd'
+  'cwd' | 'settings'
 >;
 
 // Backgrounds a long sleep, records its pid, then blocks on `wait` so the
@@ -83,6 +83,7 @@ describe('executeCommand', () => {
     const promise = executeCommand(command, {
       ...options,
       cwd: dir,
+      settings: undefined,
       env: { PID_FILE: pidFile },
     });
 
@@ -103,7 +104,7 @@ describe('executeCommand', () => {
         '-e',
         `process.stdout.write('failure details'); process.exit(7)`,
       ],
-      { cwd: WORKSPACE },
+      { cwd: WORKSPACE, settings: undefined },
     );
 
     assert.equal(result.success, false);
@@ -124,6 +125,7 @@ describe('executeCommand', () => {
       ],
       {
         cwd: WORKSPACE,
+        settings: undefined,
         buffer: false,
         onStdout: (chunk) => {
           streamed += chunk;
@@ -150,6 +152,7 @@ describe('executeCommand', () => {
       ],
       {
         cwd: WORKSPACE,
+        settings: undefined,
         buffer: false,
         onStdout: (chunk) => {
           streamedStdout += chunk;
@@ -176,6 +179,7 @@ describe('executeCommand', () => {
       ],
       {
         cwd: WORKSPACE,
+        settings: undefined,
         buffer: false,
         maxBuffer: 64,
         onStdout: (chunk) => {
@@ -193,7 +197,7 @@ describe('executeCommand', () => {
   it('reports maxBuffer overflow as an error instead of partial success', async () => {
     const result = await executeCommand(
       [process.execPath, '-e', `process.stdout.write('x'.repeat(10_000))`],
-      { cwd: WORKSPACE, maxBuffer: 64 },
+      { cwd: WORKSPACE, settings: undefined, maxBuffer: 64 },
     );
 
     assert.equal(result.success, false);
@@ -236,6 +240,7 @@ describe('executeCommand', () => {
         [process.execPath, '-e', 'setTimeout(() => {}, 60000)'],
         {
           cwd: WORKSPACE,
+          settings: undefined,
           signal: controller.signal,
           timeout: 60_000,
           onPid: (pid) => {

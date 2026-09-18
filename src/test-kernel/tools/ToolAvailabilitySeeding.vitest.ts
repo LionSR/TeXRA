@@ -115,7 +115,10 @@ describe('external tool availability probes', () => {
         );
         const zotero = findExternalToolDef('zotero');
         const fiber = yield* Effect.forkChild(
-          zotero!.check().pipe(Effect.provide(fakeProcessServices())),
+          // The port the group's own probe resolves out of the workspace
+          // configuration, handed to `check` the way the availability layer
+          // hands back a cached probe result.
+          zotero!.check(23119).pipe(Effect.provide(fakeProcessServices())),
         );
 
         yield* started;

@@ -146,9 +146,11 @@ async function resolveBinary(
   // Preferred over PATH because the npm-installed binary matches the SDK.
   {
     // `npm prefix -g` reports the global prefix, which does not depend on the
-    // directory it is asked from: the process cwd, not a workspace root.
+    // directory it is asked from: the process cwd, not a workspace root, and
+    // no workspace settings either.
     const prefixResult = executeCommandSync(['npm', 'prefix', '-g'], {
       cwd: process.cwd(),
+      settings: undefined,
       timeout: 5000,
     });
     const prefix = prefixResult.success ? prefixResult.stdout : undefined;

@@ -3,6 +3,7 @@ import { defineCommand } from 'citty';
 
 import type { AgentConfigPayload } from '@agent/runtime';
 import { canLaunchTeam, teamPlanHasGaps } from '@common/teams/TeamPlan';
+import type { StateStore } from '@platform/interfaces';
 import { byCategory, AgentCategory } from '@shared/schemas';
 import { filterNotNullish } from '@utils/core';
 import { ensureError } from '@utils/errors/errorMessage';
@@ -14,7 +15,11 @@ import {
   type CliContext,
 } from '../runtime/cliContext';
 import { CliExitCode } from '../runtime/exitCodes';
-import { initCliPlatform, initLocalCliPlatform } from '../runtime/initPlatform';
+import {
+  initCliPlatform,
+  initLocalCliPlatform,
+  type CliPlatformServices,
+} from '../runtime/initPlatform';
 import { installCliProcessRuntime } from '../runtime/cliProcessRuntime';
 import { writeTextStderr } from '../runtime/logSinks';
 import {
@@ -80,10 +85,27 @@ function formatAttachedFileList(
   ].join('\n');
 }
 
+/**
+ * The workspace state this command's init installed, which holds the project's
+ * custom team presets. Absent only when another root installed the platform
+ * first, and then there is no workspace whose presets to read.
+ */
+function multiAgentPresetState(services: CliPlatformServices): StateStore {
+  if (!services.roots) {
+    throw new Error(
+      'texra multi-agent needs the workspace roots its platform init installs.',
+    );
+  }
+  return services.roots.workspaceState;
+}
+
 async function runMultiAgentList(context: CliContext): Promise<number> {
-  const { runtime } = await initLocalCliPlatform(context);
+  const services = await initLocalCliPlatform(context);
   const { plans, remoteCatalogRefreshAttempted } =
-    await loadCliMultiAgentPresetPlanSet(runtime, readCliMultiAgentPresets());
+    await loadCliMultiAgentPresetPlanSet(
+      services.runtime,
+      readCliMultiAgentPresets(multiAgentPresetState(services)),
+    );
 
   emitCliResult(context, {
     json: plans.map(cliMultiAgentPresetListRecord),
@@ -99,12 +121,14 @@ async function runMultiAgentShow(
   context: CliContext,
   presetIdOrName: string,
 ): Promise<number> {
-  const { runtime } = await initCliPlatform({ ...context, quietLogs: true });
+  const services = await initCliPlatform({ ...context, quietLogs: true });
 
   const { plan, remoteCatalogRefreshAttempted } =
-    await loadCliMultiAgentRunPlan(runtime, {
-      preset: presetIdOrName,
-    });
+    await loadCliMultiAgentRunPlan(
+      services.runtime,
+      { preset: presetIdOrName },
+      multiAgentPresetState(services),
+    );
 
   emitCliResult(context, {
     json: plan,
@@ -137,9 +161,12 @@ export const runMultiAgentPreset = Effect.fn('runMultiAgentPreset')(function* (
     context.mode === 'headless' && context.approvalPolicy === 'ask';
   const { plan, remoteCatalogRefreshAttempted } = yield* Effect.tryPromise({
     try: () =>
-      loadCliMultiAgentRunPlan(services.runtime, init, {
-        reloadRemoteAgents: !rejectsHeadlessAsk,
-      }),
+      loadCliMultiAgentRunPlan(
+        services.runtime,
+        init,
+        multiAgentPresetState(services),
+        { reloadRemoteAgents: !rejectsHeadlessAsk },
+      ),
     catch: ensureError,
   });
   if (rejectsHeadlessAsk) {

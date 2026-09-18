@@ -399,7 +399,10 @@ export function createChatSessionController(
       agent: config.agent,
       model: config.model,
       ...(modelSource ? { modelSource } : {}),
-      teamName: readCliMultiAgentPresetName(cliMultiAgentPresetId),
+      teamName: readCliMultiAgentPresetName(
+        runtimeSession.roots.workspaceState,
+        cliMultiAgentPresetId,
+      ),
       cliMultiAgentPresetId,
       delegationAgentScope: config.delegationAgentScope ?? undefined,
     });

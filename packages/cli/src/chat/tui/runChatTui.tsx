@@ -281,7 +281,10 @@ export async function runChat(
     modelSource: defaults.modelSource,
     cwd: context.cwd,
     approvalPolicy: runtimeSession.approvalPolicy,
-    teamName: readCliMultiAgentPresetName(initialPresetId),
+    teamName: readCliMultiAgentPresetName(
+      runtimeSession.roots.workspaceState,
+      initialPresetId,
+    ),
     cliMultiAgentPresetId: initialPresetId,
     delegationAgentScope:
       initialResume?.config.delegationAgentScope ?? undefined,

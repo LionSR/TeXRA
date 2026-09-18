@@ -4,8 +4,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { platform } from '@platform/platform';
 import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latexConfig';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
-import { installPlatform } from '@test/support/setupPlatform';
-import { getConfig } from '@utils/config/configUtils';
+import { installedHost, installPlatform } from '@test/support/setupPlatform';
+import { readConfig } from '@utils/config/configUtils';
 import {
   getProviderEndpoint,
   getProviderKeyUrl,
@@ -24,17 +24,23 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe('getConfig', () => {
+describe('readConfig', () => {
   it('reads a cataloged key through the provider and falls back only off-catalog', async () => {
     // The catalog default is the provider's own resolution step
     // (`ConfigProvider.get`); `defaultValue` is for keys the catalog does not
     // own, which is the only thing this reader still contributes.
     await installPlatform({});
+    const { config } = installedHost().roots;
 
     expect(
-      getConfig<boolean>('texra.model.useGoogleInteractionsServerState'),
+      readConfig<boolean>(
+        config,
+        'texra.model.useGoogleInteractionsServerState',
+      ),
     ).toBe(true);
-    expect(getConfig('not.a.catalog.key', 'fallback')).toBe('fallback');
+    expect(readConfig(config, 'not.a.catalog.key', 'fallback')).toBe(
+      'fallback',
+    );
   });
 });
 

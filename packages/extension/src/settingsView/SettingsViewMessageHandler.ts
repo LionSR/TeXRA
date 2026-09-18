@@ -431,7 +431,10 @@ export class SettingsViewMessageHandler {
         this.latexHandlers.installExtension(message.extensionId),
       recheckToolStatus: () =>
         this.runtime.runPromise(
-          refreshToolAvailability(this.session.roots.workspace),
+          refreshToolAvailability({
+            workspaceRoot: this.session.roots.workspace,
+            config: this.session.roots.config,
+          }),
         ),
       toggleTool: async (message) => {
         await this.runtime.runPromise(
@@ -727,7 +730,10 @@ export class SettingsViewMessageHandler {
   }
 
   private async sendSkillsList(webview: vscode.Webview): Promise<void> {
-    const result = await loadRuntimeSkillDisplay(this.session.roots.workspace);
+    const result = await loadRuntimeSkillDisplay(
+      this.session.roots.workspace,
+      this.session.roots,
+    );
     await webview.postMessage({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_SKILLS_LIST,
       ...result,
@@ -1052,7 +1058,10 @@ export class SettingsViewMessageHandler {
     const items = await this.runtime.runPromise(
       buildToolDashboardItems(
         'extension',
-        this.session.roots.workspace,
+        {
+          workspaceRoot: this.session.roots.workspace,
+          config: this.session.roots.config,
+        },
         cachedResults,
       ),
     );

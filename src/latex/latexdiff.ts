@@ -341,6 +341,8 @@ export class LaTeXdiffService {
         executeCommand(['git', 'rev-parse', '--show-toplevel'], {
           channel: this.channel,
           cwd,
+          // The roots of the workspace being diffed, held by this service.
+          settings: this.roots,
           signal,
         }),
       catch: ensureError,

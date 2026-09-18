@@ -16,6 +16,7 @@
  * (`null` vs `{ commits: [], isGitRepo }` vs the wire-schema constant).
  */
 
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import { executeCommand } from '@utils/system/execUtils';
 import { isGitRepository } from '@utils/git/isGitRepository';
 import { splitOutputLines } from '@utils/text/stringUtils';
@@ -32,6 +33,12 @@ const MAX_BUFFER_BYTES = 8 * 1024 * 1024;
 const GIT_TIMEOUT_MS = 10_000;
 
 export interface GitReadOptions {
+  /**
+   * Setting slots of the workspace being read, held as data by the host that
+   * asked (its session roots): the spawned `git` carries that project's
+   * configured identity rather than one resolved from ambient state.
+   */
+  settings: SettingsStores | undefined;
   /**
    * Hook for surfacing unexpected git failures (logging, telemetry). Probe
    * failures are never reported — a non-git workspace or a branch with no
@@ -53,6 +60,7 @@ async function readGit(
 ): Promise<string | undefined> {
   const result = await executeCommand(['git', ...args], {
     cwd: workspace,
+    settings: options.settings,
     timeout: GIT_TIMEOUT_MS,
     maxBuffer: MAX_BUFFER_BYTES,
     quiet: !reportFailure,
@@ -86,7 +94,7 @@ export interface GitRecentCommits {
 export async function readRecentCommitLabels(
   workspacePath: string,
   limit: number,
-  options: GitReadOptions = {},
+  options: GitReadOptions,
 ): Promise<string[] | undefined> {
   const output = await readGit(
     workspacePath,
@@ -111,9 +119,9 @@ export async function readRecentCommitLabels(
 export async function readRecentCommits(
   workspacePath: string,
   limit: number,
-  options: GitReadOptions = {},
+  options: GitReadOptions,
 ): Promise<GitRecentCommits> {
-  if (!(await isGitRepository(workspacePath))) {
+  if (!(await isGitRepository(workspacePath, options.settings))) {
     return { commits: [], isGitRepo: false };
   }
   const commits = await readRecentCommitLabels(workspacePath, limit, options);
@@ -142,9 +150,9 @@ export interface GitEnvironmentSummary {
  */
 export async function readGitEnvironmentSummary(
   workspacePath: string,
-  options: GitReadOptions = {},
+  options: GitReadOptions,
 ): Promise<GitEnvironmentSummary | undefined> {
-  if (!(await isGitRepository(workspacePath))) {
+  if (!(await isGitRepository(workspacePath, options.settings))) {
     return undefined;
   }
 

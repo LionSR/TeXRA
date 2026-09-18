@@ -52,11 +52,11 @@ export function platformSettingsStores(): SettingsStores {
 
 /**
  * {@link readSettingFrom} over the calling context's roots, for the callers
- * that hold no workspace of their own: the git-author environment assembled
- * inside `executeCommand`, the worktree opt-in read inside a Zod transform,
- * and the provider-config readers. Code that holds its roots — a tool call, a
- * run, a session, a host command — reads through {@link readSettingFrom}
- * instead.
+ * that hold no workspace of their own: the worktree opt-in read inside a Zod
+ * transform, and the provider-config readers. Code that holds its roots — a
+ * tool call, a run, a session, a host command — reads through
+ * {@link readSettingFrom} instead. The git-author environment is no longer
+ * among them: `executeCommand` takes the slots on its options.
  *
  * Resolves the setting's default from the entry's schema `.prefault()` — the
  * single default source.

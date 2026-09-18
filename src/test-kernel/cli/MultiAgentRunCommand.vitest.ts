@@ -391,9 +391,11 @@ describe('CLI multi-agent run command', () => {
     mocks.teamPlanHasGaps.mockReturnValueOnce(true);
     authProbes.push(true);
 
-    const result = await loadCliMultiAgentRunPlan(testRuntime(), {
-      preset: 'mathematician',
-    });
+    const result = await loadCliMultiAgentRunPlan(
+      testRuntime(),
+      { preset: 'mathematician' },
+      installedHost().roots.workspaceState,
+    );
 
     expect(result.remoteCatalogRefreshAttempted).toBe(true);
     expect(result.plan.rootAgent?.name).toBe('orchestrator');

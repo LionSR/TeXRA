@@ -533,6 +533,7 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
           workspacePath: session.roots.workspace,
           storageRoot: session.roots.storage,
           config: session.roots.config,
+          settings: session.roots,
           delegationAgentScope: config.delegationAgentScope,
           stageId,
         },

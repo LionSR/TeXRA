@@ -20,22 +20,17 @@ import { z } from 'zod';
 // Local imports
 import { ToolError } from '@shared/schemas';
 import { withRequestTimeout, type RequestError } from '@tools/timeouts';
-import { getConfig } from '@utils/config/configUtils';
 
 const ZOTERO_BBT_TIMEOUT_MS = 10_000; // 10 s
 const ZOTERO_PING_TIMEOUT_MS = 2_000; // 2 s
 const ZOTERO_CONNECTOR_TIMEOUT_MS = 30_000; // 30 s
 
 /** The configured Zotero port: one port for both the Connector API and the
- *  Better BibTeX JSON-RPC (different paths). A tool reads it from its call's
- *  workspace config (`readConfig(call.roots.config, ZOTERO_PORT_KEY)`). */
+ *  Better BibTeX JSON-RPC (different paths). Every reader takes it from the
+ *  configuration it was handed — a tool from its call
+ *  (`readConfig(call.roots.config, ZOTERO_PORT_KEY)`), the dashboard's
+ *  availability group from its probe inputs. */
 export const ZOTERO_PORT_KEY = 'texra.bib.zoteroPort';
-
-/** The configured Zotero port for the process-level availability probe,
- *  which runs outside any call. */
-export function getZoteroPort(): number {
-  return getConfig<number>(ZOTERO_PORT_KEY);
-}
 
 function zoteroUrl(port: number, pathname: string): string {
   return `http://127.0.0.1:${port}${pathname}`;

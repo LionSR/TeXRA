@@ -3,6 +3,7 @@ import * as path from 'node:path';
 
 // Local imports
 import { relativeToRoot } from '@platform/defaults/nodeWorkspace';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import { ToolError } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { normalizeFilePath } from '@utils/core';
@@ -12,7 +13,7 @@ import {
   type MatchedExternalRoot,
 } from '@utils/files/externalRoots';
 import { locatePathInRoot } from '@utils/files/workspaceRoot';
-import { readPlatformSetting } from '@utils/config/platformSettings';
+import { readSettingFrom } from '@utils/config/platformSettings';
 import { getPathSegments, toPosixPath } from '@utils/core/pathCore';
 
 export interface WorkspacePathResolution {
@@ -47,9 +48,10 @@ export function parseWorkingDirectory(
 
 /**
  * The scoped path-resolution capability a native tool reads from its call: the
- * working-directory root and the host frame its filesystem access runs inside.
- * Tools that need more from their call (a host viewer, a read tracker) extend
- * this interface with those fields.
+ * working-directory root and the setting slots containment policy is read
+ * from. Tools that need more from their call (a host viewer, a read tracker,
+ * the host frame a legacy host API runs inside) extend this interface with
+ * those fields.
  */
 export interface WorkspacePathPorts {
   /** The workspace root of the call's session; `undefined` with no folder open. */
@@ -61,23 +63,27 @@ export interface WorkspacePathPorts {
    * theirs to own — never eagerly at assembly time.
    */
   readonly toolRoot: () => string | undefined;
-  /** Enter the host's workspace frame only while touching its filesystem. */
-  readonly inScope: <A>(operation: () => A) => A;
+  /**
+   * The setting slots of the call's session, carried as data from the tool's
+   * `ToolCall`: path containment answers for that project rather than for
+   * whichever roots the calling fiber happens to carry.
+   */
+  readonly settings: SettingsStores;
 }
 
 /**
  * Assemble the {@link WorkspacePathPorts} that every path-taking tool binds
  * identically from its `ToolCall`, so the working-directory convention lives in
- * one place. `call` is structural — a tool's `ToolCall` value satisfies it.
+ * one place. `call` is structural — a tool's `ToolCall` value satisfies it,
+ * and its `roots` carry the three setting slots.
  */
 export const workspacePathPorts = (call: {
-  readonly roots: { readonly workspace: string | undefined };
+  readonly roots: { readonly workspace: string | undefined } & SettingsStores;
   readonly workingDirectory?: string;
-  readonly inScope: <A>(operation: () => A) => A;
 }): WorkspacePathPorts => ({
   workspaceRoot: call.roots.workspace,
   toolRoot: () => parseWorkingDirectory(call.workingDirectory),
-  inScope: call.inScope,
+  settings: call.roots,
 });
 
 /** Throw when a raw tool path contains a parent-directory segment. */
@@ -98,10 +104,12 @@ export function assertNoParentTraversal(targetPath: string): void {
  * throws ToolError when the path escapes the root. Tools use this;
  * non-tool code calls locateInWorkspace() directly.
  *
- * `workspaceRoot` is the calling session's workspace folder, carried as data
- * from the tool's `ToolCall`; `undefined` when no folder is open.
+ * `settings` are the calling session's setting slots and `workspaceRoot` its
+ * workspace folder, both carried as data from the tool's `ToolCall`;
+ * `workspaceRoot` is `undefined` when no folder is open.
  */
 export function resolveWorkspaceRelativePath(
+  settings: SettingsStores,
   workspaceRoot: string | undefined,
   targetPath?: string,
   root?: string,
@@ -129,7 +137,8 @@ export function resolveWorkspaceRelativePath(
     // explicit at this enforcement boundary.
     if (
       !match &&
-      readPlatformSetting<boolean>(
+      readSettingFrom<boolean>(
+        settings,
         WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED,
       )
     ) {
@@ -270,6 +279,7 @@ export function assertWritable(
  * Returns `path` (resolution with relative/absolute) and `display` (formatted string).
  */
 export function resolveAndFormat(
+  settings: SettingsStores,
   workspaceRoot: string | undefined,
   targetPath?: string,
   root?: string,
@@ -278,6 +288,7 @@ export function resolveAndFormat(
   display: string;
 } {
   const path = resolveWorkspaceRelativePath(
+    settings,
     workspaceRoot,
     targetPath,
     parseWorkingDirectory(root),

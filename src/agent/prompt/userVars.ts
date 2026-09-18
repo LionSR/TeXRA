@@ -12,6 +12,7 @@ import {
 } from '@agent/core/definition/AgentCycleOptions';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { ConfigProvider } from '@platform/interfaces';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import type {
   AgentDelegationScope,
   AttachedMemoryMiss,
@@ -113,6 +114,12 @@ export interface BuildUserVarsOptions {
    * project, not for whichever roots the calling fiber carries.
    */
   config: ConfigProvider;
+  /**
+   * The three setting slots of the same session, held as data for the same
+   * reason: the run's disabled-skill lists answer for this project, not for
+   * whichever roots the calling fiber carries.
+   */
+  settings: SettingsStores;
   delegationAgentScope?: AgentDelegationScope | null;
   /** Explicit trace stage for diagnostics emitted while loading variables. */
   stageId?: string;
@@ -169,7 +176,7 @@ export async function buildUserVars(
     AgentSkillsEnabledSchema.parse(
       readConfig<unknown>(options.config, AGENT_SKILLS_CONFIG_KEY),
     )
-      ? loadRuntimeSkillCatalog(options.workspacePath)
+      ? loadRuntimeSkillCatalog(options.workspacePath, options.settings)
       : // A fresh object per call, not a shared constant: `skills` is handed
         // to the snapshot consumer, and a shared array would accumulate.
         Promise.resolve({ catalog: '', skills: [], issues: [] }),

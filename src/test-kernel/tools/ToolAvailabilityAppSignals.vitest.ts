@@ -3,13 +3,32 @@ import { it } from '@effect/vitest';
 import { Effect, Layer } from 'effect';
 import { afterEach, describe, expect, vi } from 'vitest';
 
+import type { ConfigProvider } from '@platform/interfaces';
 import { Secrets, type PlatformSecrets } from '@platform/secrets';
+import type { ToolProbeInputs } from '@tools/externalToolDefs';
 import { SetupPlatform } from '@tools/setup/platform';
 import { createFakeSetupPlatform } from './setup/fixtures';
 
 /** The mocked tool defs read no secrets, so any call here is a test error. */
 const unreadSecret = (): never => {
   throw new Error('The mocked external tool defs must not read secrets.');
+};
+
+/** Same for configuration: the mocked defs declare no config-reading probe. */
+const unreadConfig = (): never => {
+  throw new Error('The mocked external tool defs must not read configuration.');
+};
+
+/** The workspace the probes are handed. No mocked def reads it, so its stores
+ *  answer nothing. */
+const probeInputs: ToolProbeInputs = {
+  workspaceRoot: undefined,
+  config: {
+    get: unreadConfig,
+    update: unreadConfig,
+    inspect: unreadConfig,
+    isExplicitlySet: unreadConfig,
+  } satisfies ConfigProvider,
 };
 
 const secretsLayer = Secrets.layer({
@@ -58,7 +77,7 @@ describe('tool availability app signals', () => {
       });
 
       try {
-        yield* refreshToolAvailability(undefined);
+        yield* refreshToolAvailability(probeInputs);
 
         expect(events).toEqual([undefined]);
       } finally {
@@ -95,7 +114,7 @@ describe('tool availability app signals', () => {
 
         expect([...getUnavailableToolNamesCached()]).toEqual([]);
 
-        yield* runExternalToolChecks(undefined);
+        yield* runExternalToolChecks(probeInputs);
 
         // Toggling a tool on or off never changes this set — it reports missing
         // external dependencies only — so there is nothing to rebuild after a
@@ -137,7 +156,7 @@ describe('tool availability app signals', () => {
           () => import('@tools/toolAvailability'),
         );
 
-        expect(yield* runExternalToolChecks(undefined)).toEqual([
+        expect(yield* runExternalToolChecks(probeInputs)).toEqual([
           expect.objectContaining({
             id: 'broken-probe',
             status: 'unknown',

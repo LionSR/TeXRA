@@ -92,7 +92,10 @@ describe('runtime skills', () => {
       { scope: 'project', path: root, label: 'project' },
     ]);
 
-    const result = await loadRuntimeSkillCatalog(WORKSPACE_ROOT);
+    const result = await loadRuntimeSkillCatalog(
+      WORKSPACE_ROOT,
+      workspaceRoots(),
+    );
 
     expect(result.catalog).toContain(
       '- manuscript-review: Review mathematical manuscripts.',
@@ -123,7 +126,10 @@ describe('runtime skills', () => {
     );
     setRuntimeSkillSources([{ scope: 'project', path: root }]);
 
-    const result = await loadRuntimeSkillCatalog(WORKSPACE_ROOT);
+    const result = await loadRuntimeSkillCatalog(
+      WORKSPACE_ROOT,
+      workspaceRoots(),
+    );
 
     expect(result.skills).toStrictEqual([
       {
@@ -167,7 +173,10 @@ describe('runtime skills', () => {
       ]);
       await Effect.runPromise(workspaceRoots().config.update(key, value));
 
-      const result = await loadRuntimeSkillCatalog(WORKSPACE_ROOT);
+      const result = await loadRuntimeSkillCatalog(
+        WORKSPACE_ROOT,
+        workspaceRoots(),
+      );
 
       expect(result.skills.map((skill) => skill.name)).toStrictEqual(expected);
     },
@@ -189,7 +198,10 @@ describe('runtime skills', () => {
     );
     setRuntimeSkillSources([{ scope: 'project', path: root }]);
 
-    const result = await loadRuntimeSkillCatalog(WORKSPACE_ROOT);
+    const result = await loadRuntimeSkillCatalog(
+      WORKSPACE_ROOT,
+      workspaceRoots(),
+    );
     const catalogNames = catalogSkillNames(result.catalog);
     const snapshotNames = result.skills.map((skill) => skill.name);
 
