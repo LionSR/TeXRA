@@ -175,11 +175,11 @@ export function createDesktopHostRequests(
    *  lifetime, so the layer is built once from it here, never from an
    *  ambient store. */
   const sessionFiles = sessionFsLayer(session.roots);
-  /** A host capability that still answers with a promise, lifted once and
-   *  named: a refusal the callee already worded travels as itself, and every
-   *  other rejection is tagged with the member it came from. `message` is the
-   *  rejection's own text and `cause` the value it was thrown with, so the
-   *  fold below and the bridge's log read exactly what `await` handed over. */
+  /** How a host call's failure is worded, whatever shape it arrived in: a
+   *  refusal the callee already worded travels as itself, and every other
+   *  value is tagged with the member it came from. `message` is the failure's
+   *  own text and `cause` the value it carried, so the fold below and the
+   *  bridge's log read exactly what the host handed over. */
   const hostFailure = (
     member: string,
     cause: unknown,
@@ -187,6 +187,8 @@ export function createDesktopHostRequests(
     isRequestRefusal(cause)
       ? cause
       : new HostCallFailed({ member, message: toErrorMessage(cause), cause });
+  /** A host capability that still answers with a promise, lifted once and
+   *  named through {@link hostFailure}. */
   const fromHost = <A>(
     member: string,
     call: () => Promise<A>,
