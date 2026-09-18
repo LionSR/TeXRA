@@ -22,6 +22,8 @@ import { ProgressWorkflowFileActionsController } from '@controllers/progressView
 import {
   createHostRunActions,
   launchPatchOf,
+  RunConfigUnreadable,
+  RunLaunchFailed,
   type WorkflowDiffRequest,
   type WorkflowFileOperationRequest,
 } from '@controllers/session/hostRunActions';
@@ -903,8 +905,15 @@ export function createDesktopHostRequests(
         // a capability refusal, reaches this one dialog before the response.
         // A lifted member is presented as what it rejected with: the tag names
         // the member, the classification reads the cause it carried.
+        // A tag that named an untyped channel carries the value it named, so
+        // the dialog classifies and words the launcher's or the record read's
+        // own error, as it did when that value reached here bare.
         const primaryError = primaryAgentError(
-          error instanceof HostCallFailed ? error.cause : error,
+          error instanceof HostCallFailed ||
+            error instanceof RunLaunchFailed ||
+            error instanceof RunConfigUnreadable
+            ? error.cause
+            : error,
         );
         const refusal =
           primaryError instanceof Rejected ||

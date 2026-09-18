@@ -1,10 +1,11 @@
 // Third-party imports
-import { Effect } from 'effect';
+import { Data, Effect } from 'effect';
 
 // Local imports
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { RunRequest } from '@agent/core/state/runRequests';
 import { detectGeneratedLatexdiffArtifact } from '@latex/latexdiff/diffFileNameManager';
+import type { ModelHostFactUnreadable } from '@model/computeModelOptions';
 import { decideRunModel } from '@model/runModelDecision';
 import {
   AgentCategory,
@@ -17,7 +18,7 @@ import {
   type RunId,
 } from '@shared/schemas';
 import { formatRoundStageLabel } from '@shared/runs/runStatusDisplay';
-import { ensureError } from '@utils/errors/errorMessage';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { pluralize } from '@utils/text/stringUtils';
 import type { RunOutputsSource } from './runOutputs';
 
@@ -46,10 +47,23 @@ interface ProgressFollowUpWorkspace {
   exists(relativePath: string): Promise<boolean>;
 }
 
+/**
+ * The compile-fixer planner still reads the workspace through a
+ * Promise-faced port, so its one lift is named here rather than widened to
+ * `Error`; `cause` is what the planner rejected with.
+ */
+export class CompileFixerPlanFailed extends Data.TaggedError(
+  'CompileFixerPlanFailed',
+)<{
+  readonly runId: RunId;
+  readonly message: string;
+  readonly cause: unknown;
+}> {}
+
 interface ProgressFollowUpControllerDeps {
   loadModelOptions(): Effect.Effect<
     readonly ProgressFollowUpModelOption[],
-    Error
+    ModelHostFactUnreadable
   >;
   state: ProgressFollowUpState;
   workspace: ProgressFollowUpWorkspace;
@@ -90,7 +104,10 @@ export class ProgressFollowUpController {
   planCompileFixerForRun(
     runId: RunId,
     runConfig: AgentConfig | undefined,
-  ): Effect.Effect<ProgressFollowUpPlan, Error> {
+  ): Effect.Effect<
+    ProgressFollowUpPlan,
+    CompileFixerPlanFailed | ModelHostFactUnreadable
+  > {
     return this.deps.loadModelOptions().pipe(
       Effect.flatMap((modelOptions) => {
         const compileFailures = Object.values(
@@ -108,7 +125,12 @@ export class ProgressFollowUpController {
               runOutputs: this.deps.state.getOutputFiles(runId),
               modelOptions,
             }),
-          catch: ensureError,
+          catch: (cause) =>
+            new CompileFixerPlanFailed({
+              runId,
+              message: toErrorMessage(cause),
+              cause,
+            }),
         });
       }),
     );

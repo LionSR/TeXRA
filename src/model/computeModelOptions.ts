@@ -420,7 +420,7 @@ export const CALLING_SCOPE: ModelAvailabilityScope = (read) => read();
  * status was never read ({@link resolveModelAvailability}) — stays a defect:
  * it can only be a programming error here, and no caller should paper over it.
  */
-class ModelHostFactUnreadable extends Data.TaggedError(
+export class ModelHostFactUnreadable extends Data.TaggedError(
   'ModelHostFactUnreadable',
 )<{
   readonly fact: string;
@@ -485,7 +485,7 @@ function readProviderKeyStatuses(
 function buildAvailabilityContext(
   stores: ModelOptionStores,
   inScope: ModelAvailabilityScope,
-): Effect.Effect<ModelAvailabilityContext, Error | ModelHostFactUnreadable> {
+): Effect.Effect<ModelAvailabilityContext, ModelHostFactUnreadable> {
   return Effect.gen(function* () {
     const { secrets, globalState } = stores;
     // The switches and stored levels, read before anything is probed: the two
