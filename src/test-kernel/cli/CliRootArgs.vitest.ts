@@ -80,18 +80,12 @@ async function initNodeBackedPlatform(options: {
   storagePath: string;
   globalStoragePath: string;
 }): Promise<void> {
-  const [{ installPlatform }, { nodeFilesystem }] = await Promise.all([
-    import('@test/support/setupPlatform'),
-    import('@platform/defaults/nodeFilesystem'),
-  ]);
-  await installPlatform(
-    {
-      workspacePath: process.cwd(),
-      storagePath: options.storagePath,
-      globalStoragePath: options.globalStoragePath,
-    },
-    { fs: nodeFilesystem },
-  );
+  const { installPlatform } = await import('@test/support/setupPlatform');
+  await installPlatform({
+    workspacePath: process.cwd(),
+    storagePath: options.storagePath,
+    globalStoragePath: options.globalStoragePath,
+  });
   await Effect.runPromise(initializeDefaultSession({}));
 }
 

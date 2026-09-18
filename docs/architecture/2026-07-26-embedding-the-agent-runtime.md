@@ -290,10 +290,11 @@ disk_; that is the entire capability.
 - **Enumeration** uses the npm `glob` package with **no `fs` option**
   (`src/agent/index/agentYamlScanner.ts:53-57`, import at `:3`). `glob` without
   an injected `fs` reads the real Node filesystem directly.
-- **Reading** three lines later goes through the platform:
-  `AbsoluteFS.read` (`src/agent/index/agentYamlScanner.ts:112`) →
-  `BaseFS.read` → `platform().fs.readFile`
-  (`src/utils/files/baseFS.ts:71-77`).
+- **Reading** three lines later goes through the platform filesystem port
+  (`AbsoluteFS.read` → `BaseFS.read` → `platform().fs.readFile`). _(That port,
+  its facade and the fake provider below have since been deleted; the read now
+  goes through Effect's own `FileSystem`. The straddle this section is about is
+  unchanged by that: `glob` still enumerates the real disk.)_
 
 So one function straddles two filesystem planes. Replacing `platform().fs` with
 an in-memory provider changes only the _read_ half; `glob` still enumerates the

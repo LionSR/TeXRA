@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 import { Effect } from 'effect';
 
@@ -8,8 +8,6 @@ import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 import type { LatexRunDiscoveryPort } from '@latex/latexdiff/runDiscovery';
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import { setLogSink } from '@logger/logSink';
-import { platform } from '@platform/platform';
-import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import type { RunId } from '@shared/schemas';
 import { captureLogEntries } from '@test/support/logSinkCapture';
@@ -63,7 +61,7 @@ describe('discoverLatestRunOutputs', () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
-    await installPlatform({}, { fs: nodeFilesystem });
+    await installPlatform({});
     mocks.readRunOutputs.mockReturnValue(Effect.succeed({}));
   });
 
@@ -98,7 +96,6 @@ describe('discoverLatestRunOutputs', () => {
           workspaceRoots().workspace,
           MATCHING_QUERY,
           'test',
-          platform().fs,
         ).pipe(Effect.provide(nodePlatformLayer));
 
         expect(result?.runId).toBe('exec-headless');
@@ -130,7 +127,6 @@ describe('discoverLatestRunOutputs', () => {
           workspaceRoots().workspace,
           MATCHING_QUERY,
           'test',
-          platform().fs,
         ).pipe(Effect.provide(nodePlatformLayer));
 
         expect(mocks.readRunOutputs).toHaveBeenCalledWith('exec-registered');
@@ -156,7 +152,6 @@ describe('discoverLatestRunOutputs', () => {
           workspaceRoots().workspace,
           MATCHING_QUERY,
           'test',
-          platform().fs,
         ).pipe(Effect.provide(nodePlatformLayer));
 
         expect(result).toBeNull();
@@ -179,7 +174,6 @@ describe('discoverLatestRunOutputs', () => {
             workspaceRoots().workspace,
             MATCHING_QUERY,
             'test',
-            platform().fs,
           ).pipe(Effect.provide(nodePlatformLayer)),
         );
 
@@ -200,7 +194,6 @@ describe('outputDiscovery diagnostics', () => {
       'paper.tex',
       undefined,
       'test',
-      platform().fs,
     ).pipe(
       Effect.provide(effectDiagnosticsLayer),
       Effect.provide(nodePlatformLayer),
@@ -211,7 +204,7 @@ describe('outputDiscovery diagnostics', () => {
     // clearAllMocks keeps mockReturnValue implementations — reset so a
     // failure pinned by one test cannot leak into the next.
     mocks.findRunDirUnder.mockReset();
-    await installPlatform({}, { fs: nodeFilesystem });
+    await installPlatform({});
   });
 
   afterEach(async () => {
@@ -260,28 +253,16 @@ describe('outputDiscovery diagnostics', () => {
           );
           return { runDir: dir, unreadable: path.join(dir, 'r0') };
         });
-        // Hand-rolled because the fake host's filesystem cannot inject a per-path
-        // readDirectory failure — it seeds files, not fault rules.
-        yield* Effect.promise(() =>
-          installPlatform(
-            {},
-            {
-              fs: {
-                ...nodeFilesystem,
-                readDirectory: async (target: string) => {
-                  if (target === unreadable) {
-                    throw new Error('EACCES: permission denied');
-                  }
-                  return nodeFilesystem.readDirectory(target);
-                },
-              },
-            },
-          ),
-        );
+        // A real unreadable directory: the listing is `readdir` now, so the
+        // failure it must survive is the filesystem's own EACCES. The mode is
+        // restored either way so the temp-dir cleanup can still remove it.
+        yield* Effect.promise(() => chmod(unreadable, 0o000));
         mocks.findRunDirUnder.mockReturnValue(Effect.succeed(runDir));
         const logs = captureLogEntries();
 
-        const result = yield* runScan();
+        const result = yield* runScan().pipe(
+          Effect.ensuring(Effect.promise(() => chmod(unreadable, 0o700))),
+        );
 
         expect(Object.keys((result as object) ?? {}).map(Number)).toEqual([1]);
         expect(

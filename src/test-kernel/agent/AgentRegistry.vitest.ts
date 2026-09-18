@@ -24,7 +24,6 @@ import {
   AgentDirectoriesFailed,
   type AgentDirectoriesPort,
 } from '@platform/interfaces';
-import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import type { GlobalStorageFs } from '@platform/rootedFs';
 import { AgentCategory } from '@shared/schemas';
 import { testRuntime } from '@test/support/testProcessRuntime';
@@ -116,7 +115,7 @@ async function initPlatformWithState(
 ): Promise<void> {
   await installPlatform(
     { workspaceState },
-    { fs: nodeFilesystem, agentDirectories: mutableAgentDirectories },
+    { agentDirectories: mutableAgentDirectories },
   );
 }
 

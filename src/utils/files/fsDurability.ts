@@ -4,7 +4,8 @@
  * carrying each entry's own (unfollowed) type, and exclusive or
  * symlink-dereferencing copies.
  *
- * These are the Effect form of what `baseFS.ts` reached `platform().fs` for.
+ * These are the Effect form of what the retired `baseFS.ts` facade reached
+ * its Promise filesystem port for.
  * Nothing here re-implements an operation `FileSystem` already has — an
  * append, for instance, is `fs.writeFile(path, data, { flag: 'a' })` and gets
  * no wrapper. The Node calls `FileSystem` cannot express (`lstat`,
@@ -65,8 +66,8 @@ function systemErrorFrom(
 }
 
 /**
- * Crash-safe replace, delegated to `write-file-atomic` — the package the
- * `platform().fs` port uses — rather than re-derived: it stages under a name
+ * Crash-safe replace, delegated to `write-file-atomic` rather than
+ * re-derived: it stages under a name
  * unique across processes and threads, fsyncs, preserves an existing
  * target's mode and ownership, and resolves the target's real path so a
  * symlinked target is replaced where it points. For durable state a torn
@@ -146,6 +147,35 @@ export const entryTypeAt = Effect.fn('fsDurability.entryTypeAt')(function* (
   });
   return entryTypeOf(stats);
 });
+
+/**
+ * The entry type and size at `target`, `lstat` first and then `stat` when the
+ * entry is a link — the reading the retired `platform().fs.stat` gave: a link
+ * that resolves reports its target's type and size, and a dangling or
+ * circular one reports the link itself rather than failing. `FileSystem.stat`
+ * gives neither half: it follows the link and fails `NotFound` when the target
+ * is gone, so a caller sizing a recorded path would lose the row.
+ *
+ * Absence is not recovered here; the caller decides what a missing path means,
+ * as it did with the facade.
+ */
+export const entryMetadataAt = Effect.fn('fsDurability.entryMetadataAt')(
+  function* (target: string) {
+    const link = yield* Effect.tryPromise({
+      try: () => nodeFs.lstat(target),
+      catch: (cause) => systemErrorFrom('entryMetadataAt', target, cause),
+    });
+    const stats = link.isSymbolicLink()
+      ? // A dangling or circular link has no target to describe, so the link's
+        // own metadata stands in — the reading the facade's provider gave.
+        yield* Effect.tryPromise({
+          try: () => nodeFs.stat(target),
+          catch: (cause) => systemErrorFrom('entryMetadataAt', target, cause),
+        }).pipe(Effect.orElseSucceed(() => link))
+      : link;
+    return { type: entryTypeOf(stats), size: stats.size };
+  },
+);
 
 /**
  * The entries of `target` with the type of each, one `lstat` per entry: a

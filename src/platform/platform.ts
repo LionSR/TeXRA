@@ -10,7 +10,6 @@
  */
 import type {
   AgentDirectoriesPort,
-  FileSystemProvider,
   ToolMissingHandler,
   LifecycleHost,
 } from './interfaces';
@@ -18,6 +17,10 @@ import type {
 /**
  * The process-true platform services a host must provide.
  * Frozen after initialization — immutable for the lifetime of the process.
+ *
+ * The filesystem is not here: it is Effect's own `FileSystem` service, served
+ * by `@effect/platform-node` through `installProcessRuntime`, with the rooted
+ * `WorkspaceFs` / `StorageFs` views over it on the session.
  *
  * The secret store and the application state store are not here either: they
  * are the `Secrets` and `AppState` Effect services, provided once per process
@@ -38,7 +41,6 @@ import type {
  * carry a log backend.
  */
 export interface Platform {
-  readonly fs: FileSystemProvider;
   readonly lifecycle: LifecycleHost;
   readonly agentDirectories: AgentDirectoriesPort;
   /**

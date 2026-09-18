@@ -9,10 +9,7 @@ import { SecretsFailed, type PlatformSecrets } from '@platform/secrets';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
 import { MemoryStateStore } from '@platform/defaults/memoryState';
-import {
-  createNodePlatform,
-  createNodeWorkspaceRoots,
-} from '@platform/defaults/nodeHost';
+import { createNodeWorkspaceRoots } from '@platform/defaults/nodeHost';
 import {
   createNodeStorageProvider,
   DEFAULT_NODE_STORAGE_ROOT,
@@ -72,14 +69,12 @@ export function nodePlatform(options: NodePlatformOptions): AgentPlatform {
       tryResumeRun: () => Effect.succeed(false),
     },
     languageModel: UNAVAILABLE_LANGUAGE_MODEL_PORT,
-    ...createNodePlatform({
-      lifecycle: createLifecycleHost(),
-      agentDirectories: {
-        custom: () => Effect.succeed(options.agentsDir),
-        builtIn: () => Effect.succeed(''),
-        builtInToolUse: () => Effect.succeed(''),
-      },
-    }),
+    lifecycle: createLifecycleHost(),
+    agentDirectories: {
+      custom: () => Effect.succeed(options.agentsDir),
+      builtIn: () => Effect.succeed(''),
+      builtInToolUse: () => Effect.succeed(''),
+    },
     roots: createNodeWorkspaceRoots({
       workspacePath: workspaceDir,
       storage: storage.getStoragePath(),

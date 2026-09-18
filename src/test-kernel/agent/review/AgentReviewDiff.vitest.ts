@@ -12,7 +12,6 @@ import {
   listBaseBranchCandidates,
   type CollectReviewDiffOptions,
 } from '@agent/review/reviewDiff';
-import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { setupPlatform } from '@test/support/setupPlatform';
 import {
   makeTempDir,
@@ -21,7 +20,7 @@ import {
 } from '@test/support/tempDirPlatform';
 import { executeCommand } from '@utils/system/execUtils';
 
-setupPlatform({ workspacePath: process.cwd() }, { fs: nodeFilesystem });
+setupPlatform({ workspacePath: process.cwd() });
 
 describe('isPathInChangeSet', () => {
   it('matches exact files and paths under changed directories', () => {

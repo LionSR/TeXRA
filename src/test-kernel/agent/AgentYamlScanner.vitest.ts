@@ -9,7 +9,6 @@ import { beforeAll, describe, expect } from 'vitest';
 
 // Local imports
 import { scanDirectory } from '@agent/index/agentYamlScanner';
-import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { installPlatform } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
@@ -46,7 +45,7 @@ function toolUseAgent(name: string, systemPrompt: string): string[] {
 }
 
 describe('agent YAML scanner', () => {
-  beforeAll(() => installPlatform({}, { fs: nodeFilesystem }));
+  beforeAll(() => installPlatform({}));
 
   it.live(
     'derives workflow round counts from inherited settings and prompts',

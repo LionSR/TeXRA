@@ -1,4 +1,4 @@
-import { writeFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 import { it } from '@effect/vitest';
 import { Effect } from 'effect';
@@ -10,7 +10,6 @@ import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { ChatExportController } from '@controllers/progressView/ChatExportController';
 import { processWorkspaceRoots } from '@platform/workspaceRoots';
 import { MemoryStateStore } from '@platform/defaults/memoryState';
-import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import {
   aggregateId,
@@ -48,7 +47,6 @@ async function installStoragePlatform(): Promise<void> {
       globalStoragePath: storage.getGlobalStoragePath(),
     },
     {
-      fs: nodeFilesystem,
       globalState: new MemoryStateStore(),
       workspaceState: new MemoryStateStore(),
     },
@@ -141,10 +139,9 @@ describe('ChatExportController.exportAsHtml', () => {
           /^executions\/eec001\/texra-chat-.*\.html$/,
         );
 
-        const written = yield* Effect.promise(() =>
-          nodeFilesystem.readFile(outcome.result.absolutePath),
+        const html = yield* Effect.promise(() =>
+          readFile(outcome.result.absolutePath, 'utf-8'),
         );
-        const html = new TextDecoder().decode(written);
         expect(html).toContain('<script>window.__TEXRA_TRACE__');
         expect(html).toContain('"message":"hello"');
         expect(html).toContain(

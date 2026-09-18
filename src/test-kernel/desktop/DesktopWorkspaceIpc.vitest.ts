@@ -105,11 +105,8 @@ describe('desktop workspace IPC', () => {
       missingExternalPath,
       join(workspacePath, 'dangling-linked.tex'),
     );
-    const [{ installPlatform }, { nodeFilesystem }] = await Promise.all([
-      import('@test/support/setupPlatform'),
-      import('@platform/defaults/nodeFilesystem'),
-    ]);
-    await installPlatform({ workspacePath }, { fs: nodeFilesystem });
+    const { installPlatform } = await import('@test/support/setupPlatform');
+    await installPlatform({ workspacePath });
   });
 
   afterEach(() => {

@@ -1,3 +1,4 @@
+import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { Effect } from 'effect';
@@ -113,7 +114,6 @@ const { registerInlineCriticism, setInlineCriticismEnabled } =
   await import('@frontend/latex/inlineCriticism');
 const { registerFileDecorations } =
   await import('@frontend/ui/fileDecorations');
-const { AbsoluteFS } = await import('@utils/files/absoluteFS');
 const vscode = await import('vscode');
 
 const runId = 'f0a1b2c3d4e5' as RunId;
@@ -179,7 +179,7 @@ describe('output-file run fact frontend subscriptions', () => {
 
   afterEach(async () => {
     if (tempDir) {
-      await AbsoluteFS.delete(tempDir, { recursive: true });
+      await rm(tempDir, { recursive: true, force: true });
       tempDir = undefined;
     }
   });
@@ -221,8 +221,8 @@ describe('output-file run fact frontend subscriptions', () => {
   it('refreshes inline criticism only for live run facts while enabled', async () => {
     tempDir = `/tmp/texra-inline-criticism-${Date.now()}`;
     const outputPath = join(tempDir, 'out.tex');
-    await AbsoluteFS.createDir(tempDir);
-    await AbsoluteFS.write(
+    await mkdir(tempDir, { recursive: true });
+    await writeFile(
       outputPath,
       'before\n\\criticize{tighten this argument}{4}{5}\nafter\n',
     );

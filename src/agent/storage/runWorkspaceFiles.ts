@@ -1,12 +1,12 @@
 import * as path from 'node:path';
 
+import { Effect } from 'effect';
+
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
-import type { FileStat } from '@platform/interfaces';
 import { byStringProp, normalizeFilePath } from '@utils/core';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { isStrictlyWithin } from '@utils/core/pathCore';
-import { isDirectory } from '@utils/files/fsEntryType';
+import { entryMetadataAt } from '@utils/files/fsDurability';
+import { absentReason } from '@utils/files/fsEntryExists';
 
 interface RunWorkspaceFile {
   readonly path: string;
@@ -39,30 +39,32 @@ export function resolveRunWorkspaceFilePath(
   };
 }
 
-export async function listRunWorkspaceFiles(
-  config: Pick<AgentConfig, 'workingDirectory'> | null,
-  filePaths: readonly string[],
-): Promise<RunWorkspaceFile[]> {
-  const files = new Map<string, RunWorkspaceFile>();
-  for (const filePath of filePaths) {
-    const resolved = resolveRunWorkspaceFilePath(config, filePath);
-    if (!resolved || files.has(resolved.path)) continue;
+export const listRunWorkspaceFiles = Effect.fn('storage.listRunWorkspaceFiles')(
+  function* (
+    config: Pick<AgentConfig, 'workingDirectory'> | null,
+    filePaths: readonly string[],
+  ) {
+    const files = new Map<string, RunWorkspaceFile>();
+    for (const filePath of filePaths) {
+      const resolved = resolveRunWorkspaceFilePath(config, filePath);
+      if (!resolved || files.has(resolved.path)) continue;
 
-    let stat: FileStat;
-    try {
-      stat = await AbsoluteFS.stat(resolved.absolutePath);
-    } catch (error) {
-      if (isFileNotFoundError(error) || isNotADirectoryError(error)) continue;
-      throw error;
+      // A path recorded for the run that is no longer there — or whose parent
+      // is not a directory any more — is simply not listed; every other failure
+      // propagates, so an unreadable entry is never reported as a missing one.
+      const entry = yield* entryMetadataAt(resolved.absolutePath).pipe(
+        Effect.catchIf(absentReason, () => Effect.succeed(undefined)),
+      );
+      if (entry === undefined) continue;
+
+      files.set(resolved.path, {
+        path: resolved.path,
+        displayPath: `workspace/${resolved.path}`,
+        absolutePath: resolved.absolutePath,
+        size: entry.size,
+        isDirectory: entry.type === 'Directory',
+      });
     }
-
-    files.set(resolved.path, {
-      path: resolved.path,
-      displayPath: `workspace/${resolved.path}`,
-      absolutePath: resolved.absolutePath,
-      size: stat.size,
-      isDirectory: isDirectory(stat.type),
-    });
-  }
-  return [...files.values()].sort(byStringProp((f) => f.path));
-}
+    return [...files.values()].sort(byStringProp((f) => f.path));
+  },
+);

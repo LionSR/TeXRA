@@ -14,6 +14,7 @@ import { workspaceRoots } from '@platform/workspaceRoots';
 import {
   globalStorageFsTestLayer,
   nodePlatformLayer,
+  pathExists,
 } from '@test/support/fsTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 import {
@@ -21,7 +22,6 @@ import {
   makeTempDir,
   useTempDirs,
 } from '@test/support/tempDirPlatform';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
 
 const MISSING_CUSTOM_PATH = path.resolve('/texra-missing-parent', 'custom');
 
@@ -86,10 +86,7 @@ describe('AgentDirectoryService', () => {
       path.join(RESOURCES_PATH, 'tool_use_agents'),
     );
     // Packaged content is read in place: nothing is created under storage.
-    assert.equal(
-      await AbsoluteFS.exists(path.join(storageBase(), 'agents')),
-      false,
-    );
+    assert.equal(await pathExists(path.join(storageBase(), 'agents')), false);
   });
 
   it('uses the default custom directory when no custom path is configured', async () => {
@@ -100,7 +97,7 @@ describe('AgentDirectoryService', () => {
       path.join(storageBase(), 'custom_agents'),
     );
     assert.equal(
-      await AbsoluteFS.exists(path.join(storageBase(), 'custom_agents')),
+      await pathExists(path.join(storageBase(), 'custom_agents')),
       true,
     );
   });
@@ -111,9 +108,9 @@ describe('AgentDirectoryService', () => {
     const { service, reporter } = createService(customPath);
 
     assert.equal(await runDirectories(service.custom()), customPath);
-    assert.equal(await AbsoluteFS.exists(customPath), true);
+    assert.equal(await pathExists(customPath), true);
     assert.equal(
-      await AbsoluteFS.exists(path.join(storageBase(), 'custom_agents')),
+      await pathExists(path.join(storageBase(), 'custom_agents')),
       false,
     );
     assert.deepEqual(reporter.reports, []);
@@ -140,7 +137,7 @@ describe('AgentDirectoryService', () => {
         path.join(storageBase(), 'custom_agents'),
       );
       assert.equal(
-        await AbsoluteFS.exists(path.join(storageBase(), 'custom_agents')),
+        await pathExists(path.join(storageBase(), 'custom_agents')),
         true,
       );
       assert.deepEqual(reporter.reports, [

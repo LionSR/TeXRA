@@ -1037,8 +1037,8 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       [records.readRunRecord(), records.readWorkspaceFiles()],
       { concurrency: 2 },
     );
-    const entries = yield* executionsRead(context, () =>
-      listRunWorkspaceFiles(record, paths),
+    const entries = yield* listRunWorkspaceFiles(record, paths).pipe(
+      Effect.mapError((cause) => new ExecutionsReadFailed({ cause })),
     );
 
     if (entries.length === 0) {

@@ -23,7 +23,6 @@ import {
   AgentDirectoriesFailed,
   type AgentDirectoriesPort,
 } from '@platform/interfaces';
-import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import type { GlobalStorageFs } from '@platform/rootedFs';
 import { AgentCategory } from '@shared/schemas';
 import { installPlatform } from '@test/support/setupPlatform';
@@ -231,10 +230,7 @@ describe('agent registry load state', () => {
   async function installDirectories(
     directories: AgentDirectoriesPort,
   ): Promise<void> {
-    await installPlatform(
-      {},
-      { fs: nodeFilesystem, agentDirectories: directories },
-    );
+    await installPlatform({}, { agentDirectories: directories });
   }
 
   function countingDirectories(counter: {

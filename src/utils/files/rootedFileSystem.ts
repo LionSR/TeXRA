@@ -51,9 +51,9 @@ export interface RootedFileSystem extends FileSystem.FileSystem {
   /**
    * Crash-safe replace: stage, fsync, rename over the target. The target's
    * real path is resolved first, as `write-file-atomic` does, so a symlink
-   * inside the root that points outside it is written through — the same
-   * reach `platform().fs.writeFileAtomic` has always had, and the reason this
-   * operation is documented as storage-only, never for workspace files.
+   * inside the root that points outside it is written through — the reach
+   * this operation has always had, and the reason it is documented as
+   * storage-only, never for workspace files.
    */
   readonly writeFileAtomic: (
     target: string,

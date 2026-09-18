@@ -1,4 +1,5 @@
 /* eslint-disable import/order -- Vitest mocks must be declared before importing the module under test. */
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import * as nodePath from 'node:path';
 
 import { it } from '@effect/vitest';
@@ -35,7 +36,6 @@ import {
   DELEGATION_TOOLS,
 } from '@shared/constants/delegationTools';
 import { deriveRunId } from '@utils/core/idHash';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { convertToolSchema } from '@agent/runtime/run/toolSchema';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 
@@ -212,8 +212,8 @@ async function writeWorkspaceScript(
   path: string,
   content: string,
 ): Promise<void> {
-  await AbsoluteFS.ensureDir(inWorkspace('.texra/workflow-scripts'));
-  await AbsoluteFS.write(inWorkspace(path), content);
+  await mkdir(inWorkspace('.texra/workflow-scripts'), { recursive: true });
+  await writeFile(inWorkspace(path), content);
 }
 
 /** Point the run's persisted report and terminal fact at scripted values. */
@@ -317,10 +317,10 @@ beforeEach(async () => {
   await Effect.runPromise(session.settlePublications());
   vi.clearAllMocks();
   mocks.recordStores.clear();
-  await AbsoluteFS.ensureDir(WORKSPACE_ROOT);
-  await AbsoluteFS.write(inWorkspace('paper.tex'), '\\documentclass{article}');
-  await AbsoluteFS.write(inWorkspace('references.bib'), '@book{example}');
-  await AbsoluteFS.write(inWorkspace('figure.pdf'), 'pdf');
+  await mkdir(WORKSPACE_ROOT, { recursive: true });
+  await writeFile(inWorkspace('paper.tex'), '\\documentclass{article}');
+  await writeFile(inWorkspace('references.bib'), '@book{example}');
+  await writeFile(inWorkspace('figure.pdf'), 'pdf');
   mocks.registerRun.mockReturnValue(Effect.void);
   mocks.selectAvailableDelegationModel.mockReturnValue(
     Effect.succeed('parent-model'),
@@ -659,11 +659,13 @@ return null`;
       expect(savedPath).toBeTruthy();
       expect(savedPath).not.toBe(originalPath);
       expect(
-        yield* Effect.promise(() => AbsoluteFS.read(inWorkspace(originalPath))),
+        yield* Effect.promise(() =>
+          readFile(inWorkspace(originalPath), 'utf-8'),
+        ),
       ).toBe('// edited by the model');
       expect(
         yield* Effect.promise(() =>
-          AbsoluteFS.read(inWorkspace(savedPath ?? '')),
+          readFile(inWorkspace(savedPath ?? ''), 'utf-8'),
         ),
       ).toBe(script);
     }),
@@ -718,7 +720,7 @@ return null`;
         expect(draftPath).toBeTruthy();
         expect(
           yield* Effect.promise(() =>
-            AbsoluteFS.read(inWorkspace(draftPath ?? '')),
+            readFile(inWorkspace(draftPath ?? ''), 'utf-8'),
           ),
         ).toBe(invalidScript);
         expect(mocks.registerRun).not.toHaveBeenCalled();
@@ -999,7 +1001,7 @@ return null`;
   it.effect('rejects an oversized bibliography bound as workflow context', () =>
     Effect.gen(function* () {
       yield* Effect.promise(() =>
-        AbsoluteFS.write(inWorkspace('large.bib'), 'x'.repeat(100 * 1024 + 1)),
+        writeFile(inWorkspace('large.bib'), 'x'.repeat(100 * 1024 + 1)),
       );
 
       const result = yield* callTool({

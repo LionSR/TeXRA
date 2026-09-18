@@ -8,7 +8,6 @@ import * as vscode from 'vscode';
 import { createLog } from '@logger/logUtils';
 import { normalizeFilePath } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { isDirectory, isFile } from '@utils/files/fsEntryType';
 
 import { getGitAPI } from './gitExtensionTypes';
 
@@ -55,11 +54,14 @@ export async function resolveGitCommonRoot(
     // failures are classified in the function-level catch below.
     const stat = await vscode.workspace.fs.stat(gitEntryUri);
 
-    if (isDirectory(stat.type)) {
+    // Bitwise against `vscode.FileType`, not equality: a symlinked `.git`
+    // reports `SymbolicLink | Directory` or `SymbolicLink | File`, and a
+    // worktree's `.git` file is as much a git entry as a directory is.
+    if ((stat.type & vscode.FileType.Directory) === vscode.FileType.Directory) {
       return normalizeFilePath(repo.rootUri.fsPath);
     }
 
-    if (!isFile(stat.type)) {
+    if ((stat.type & vscode.FileType.File) !== vscode.FileType.File) {
       return undefined;
     }
 

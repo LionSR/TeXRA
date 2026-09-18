@@ -1,3 +1,4 @@
+import { mkdir, rm, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
 import { it } from '@effect/vitest';
@@ -19,7 +20,6 @@ import {
 import { setupPlatform } from '@test/support/setupPlatform';
 import { fakePath } from '@test/support/FakePlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
 
 const parentRunId = 'aaaaaa111111' as RunId;
 const childRunId = 'bbbbbb222222' as RunId;
@@ -96,11 +96,11 @@ const persistCompletedChild = (parentId: RunId = parentRunId) =>
       },
     ]);
     yield* Effect.promise(() =>
-      AbsoluteFS.ensureDir(
-        path.join(storageRoot, `executions/${childRunId}/r1`),
-      ),
+      mkdir(path.join(storageRoot, `executions/${childRunId}/r1`), {
+        recursive: true,
+      }),
     );
-    yield* Effect.promise(() => AbsoluteFS.write(absolutePath, 'draft'));
+    yield* Effect.promise(() => writeFile(absolutePath, 'draft'));
     return absolutePath;
   });
 
@@ -143,7 +143,7 @@ describe('resolveChildRunOutput', () => {
       Effect.gen(function* () {
         const absolutePath = yield* persistCompletedChild();
         const undeclaredPath = absolutePath.replace('draft.tex', 'notes.tex');
-        yield* Effect.promise(() => AbsoluteFS.write(undeclaredPath, 'notes'));
+        yield* Effect.promise(() => writeFile(undeclaredPath, 'notes'));
 
         const error = yield* Effect.flip(
           resolveChildRunOutput(parentRunId, undeclaredPath, session).pipe(
@@ -157,7 +157,7 @@ describe('resolveChildRunOutput', () => {
   it.effect('fails loudly when a declared output has disappeared', () =>
     Effect.gen(function* () {
       const absolutePath = yield* persistCompletedChild();
-      yield* Effect.promise(() => AbsoluteFS.delete(absolutePath));
+      yield* Effect.promise(() => rm(absolutePath));
 
       const error = yield* Effect.flip(
         resolveChildRunOutput(parentRunId, absolutePath, session).pipe(

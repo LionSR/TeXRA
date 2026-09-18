@@ -10,7 +10,6 @@ import { join } from 'node:path';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 
 // Local imports
-import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { waitForCondition } from '@test/support/asyncTestUtils';
 import { createFakeHost, setupPlatform } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';

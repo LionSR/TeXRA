@@ -16,7 +16,6 @@ import {
   resolveDelegationScopeAgents,
 } from '@agent/index/agentRegistry';
 import type { AgentEntry } from '@agent/index/agentEntry';
-import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { GlobalStorageFs } from '@platform/rootedFs';
 import { AgentCategory } from '@shared/schemas';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
@@ -72,7 +71,6 @@ describe('cross-category agent resolution', () => {
     await installPlatform(
       {},
       {
-        fs: nodeFilesystem,
         agentDirectories: {
           custom: () => Effect.sync(() => customDir),
           builtIn: () =>

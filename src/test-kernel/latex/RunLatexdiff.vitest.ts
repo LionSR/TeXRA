@@ -56,7 +56,6 @@ const runDiscovery: LatexRunDiscoveryPort = {
 };
 
 const baseRequest = {
-  filesystem: { readDirectory: vi.fn(), isSymlink: vi.fn() },
   agent: 'revise',
   model: 'claude-opus-4-8',
   inputFile: 'paper.tex',
@@ -111,7 +110,6 @@ describe('runLatexdiffForRun', () => {
           'paper.tex',
           undefined,
           'test',
-          baseRequest.filesystem,
         );
         expect(mocks.discoverLatestRunOutputs).not.toHaveBeenCalled();
         expect(mocks.runLatexdiffFromMetadata).toHaveBeenCalled();
@@ -172,7 +170,6 @@ describe('runLatexdiffForRun', () => {
           inputFile: 'paper.tex',
         },
         'test',
-        baseRequest.filesystem,
       );
       expect(mocks.runLatexdiffFromMetadata).toHaveBeenCalled();
     }).pipe(Effect.provide(nodePlatformLayer)),

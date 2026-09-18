@@ -9,7 +9,6 @@ import { afterEach, describe, expect, vi } from 'vitest';
 
 // Local imports
 import { publishCompiledPdfArtifact } from '@agent/implementations/flows/reflection/output/compiledPdfArtifacts';
-import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import type { RunId } from '@shared/schemas';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
@@ -86,7 +85,7 @@ function runStorageSource(
 describe('compiled PDF artifacts', () => {
   const tempDirs = useTempDirs();
 
-  setupPlatform({}, { fs: nodeFilesystem });
+  setupPlatform({});
 
   function makeTempDir(): Promise<string> {
     return makeSharedTempDir('texra-pdf-artifact-', tempDirs);

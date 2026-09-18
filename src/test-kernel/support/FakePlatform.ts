@@ -30,7 +30,6 @@ import type { Platform } from '@platform/platform';
 import type { PlatformSecrets, SecretsFailed } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
-import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { getCoreSettingDefault } from '@shared/schemas';
 import type { SetupPlatformShape } from '@tools/setup/platform';
 
@@ -510,7 +509,6 @@ export function createFakePlatform(
 ): Platform {
   seedFakeRoot(options.files ?? {});
   return {
-    fs: nodeFilesystem,
     lifecycle: createLifecycleHost(),
     agentDirectories: FAKE_AGENT_DIRECTORIES,
     toolMissingHandler: () => {},
