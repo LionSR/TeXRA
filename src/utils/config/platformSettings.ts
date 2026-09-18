@@ -51,8 +51,15 @@ export function platformSettingsStores(): SettingsStores {
 }
 
 /**
- * Read a catalog-modeled setting from the live platform, resolving its default
- * from the entry's schema `.prefault()` — the single default source.
+ * {@link readSettingFrom} over the calling context's roots, for the callers
+ * that hold no workspace of their own: the git-author environment assembled
+ * inside `executeCommand`, the worktree opt-in read inside a Zod transform,
+ * and the provider-config readers. Code that holds its roots — a tool call, a
+ * run, a session, a host command — reads through {@link readSettingFrom}
+ * instead.
+ *
+ * Resolves the setting's default from the entry's schema `.prefault()` — the
+ * single default source.
  *
  * Replaces the scattered per-store `get(key, handPassedDefault)` reads
  * whose second argument duplicated the catalog default: the value now comes from
@@ -68,10 +75,11 @@ export function readPlatformSetting<T>(key: string): T {
 }
 
 /**
- * {@link readPlatformSetting} over stores the caller already holds — a run's
- * session roots carry all three slots. Code that holds its roots as data (a
- * run's Effect program, which is not guaranteed to sit inside its session's
- * roots scope) reads through this instead of the calling context's scope.
+ * The one catalog reader: a setting read from the three slots the caller holds
+ * as data. A session's `WorkspaceRoots` carries all three, so a tool call's
+ * `call.roots`, a run's `session.roots` and a host command's `session.roots`
+ * are passed directly, and the value answers for that project rather than for
+ * whichever roots the calling fiber happens to carry.
  */
 export function readSettingFrom<T>(stores: SettingsStores, key: string): T {
   return readSetting(requireEntry(key), stores, processSettingHost) as T;

@@ -168,7 +168,9 @@ function createApprovalFixture(
        * run's existence fact comes first: a request row is only ever appended
        * to a run the ledger already knows.
        */
-      requestApproval(request: Omit<ToolEditApprovalRequest, 'permission'>) {
+      requestApproval(
+        request: Omit<ToolEditApprovalRequest, 'permission' | 'roots'>,
+      ) {
         const { runId } = request;
         return Effect.gen(function* () {
           if (!runId)

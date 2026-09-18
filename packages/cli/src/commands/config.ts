@@ -8,7 +8,6 @@ import {
 import { agentKeyOf, CLI_STATE_SETTINGS } from '@shared/schemas';
 import { readSetting } from '@shared/config/settingsAccess';
 import { unique } from '@utils/core';
-import { platformSettingsStores } from '@utils/config/platformSettings';
 
 import {
   CliUsageError,
@@ -80,7 +79,7 @@ async function showConfig(context: CliContext): Promise<number> {
   const agents = await runtime.runPromise(
     readCliAgentRoster(installedRoots(services)),
   );
-  const stores = platformSettingsStores();
+  const stores = installedRoots(services);
   const settings = Object.fromEntries(
     CLI_STATE_SETTINGS.map((entry) => [
       entry.key,
@@ -282,6 +281,7 @@ const configEditCommand = defineCliCommand({
     const services = await initLocalCliPlatform(context);
     const { runConfigTui } = await import('../config/runConfigTui');
     await runConfigTui({
+      stores: installedRoots(services),
       secrets: services.secrets,
       runtime: services.runtime,
       colorEnabled: context.stdoutColorEnabled,

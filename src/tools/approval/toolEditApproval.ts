@@ -6,6 +6,7 @@ import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { ToolCall } from '@agent/runtime/ToolCall';
 import { isLatexFile } from '@common/files/fileTypeUtils';
 import { createLog } from '@logger/logUtils';
+import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { WorkspaceFs } from '@platform/rootedFs';
 import {
   decideTexraApproval,
@@ -52,15 +53,15 @@ export interface ToolEditApprovalRequest {
   readonly sourceTool: string;
   readonly runId?: RunId | null;
   /**
-   * The session's workspace root, as data: the LaTeX preview of this request
-   * writes its temp files under it, and that preview program runs on the
-   * host's own runner rather than inside the tool call that raised the
-   * request, so the root has to travel with the request instead of being read
-   * from an ambient workspace scope. {@link requestToolEditApproval} — the one
-   * producer of a live request — fills it from the run's session, and it is
-   * absent only for a request a caller scripted by hand.
+   * The session's workspace roots, as data: the LaTeX preview of this request
+   * writes its temp files under the workspace and reads the diff's settings
+   * from these slots, and that preview program runs on the host's own runner
+   * rather than inside the tool call that raised the request, so the roots
+   * have to travel with the request instead of being read from an ambient
+   * workspace scope. {@link requestToolEditApproval} — the one producer of a
+   * request — fills them from the run's session.
    */
-  readonly workspacePath?: string | undefined;
+  readonly roots: WorkspaceRoots;
   /**
    * What the UI shows for this request, prepared once at the tool boundary
    * (`prepareToolEditApprovalPrompt`): the payload of the `request.opened`
@@ -104,7 +105,7 @@ export function prepareToolEditApprovalPrompt(
   session: SessionHandle,
   params: {
     requestId: string;
-    request: Omit<ToolEditApprovalRequest, 'permission'>;
+    request: Omit<ToolEditApprovalRequest, 'permission' | 'roots'>;
     relativePath: string;
   },
 ): ToolEditPermission {
@@ -202,7 +203,7 @@ export function firstChangedLine(
  */
 export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
   function* (
-    request: Omit<ToolEditApprovalRequest, 'permission'>,
+    request: Omit<ToolEditApprovalRequest, 'permission' | 'roots'>,
   ): Effect.fn.Return<ToolEditApprovalResult, Error, ToolCall> {
     const call = yield* ToolCall;
     const approvalsEnabled = readConfig<boolean>(
@@ -224,8 +225,8 @@ export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
     const preparedRequest: Omit<ToolEditApprovalRequest, 'permission'> = {
       ...withRunId,
       // Filled here, at the one boundary that has the run, so a caller cannot
-      // hand the preview a root that is not this session's.
-      workspacePath: session.roots.workspace,
+      // hand the preview roots that are not this session's.
+      roots: session.roots,
     };
 
     const runId = preparedRequest.runId ?? undefined;

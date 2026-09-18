@@ -20,7 +20,6 @@ import {
   GITHUB_TOKEN_STORAGE_KEY,
   resolveGitHubTokenSource,
 } from '@tools/github/githubAuth';
-import { platformSettingsStores } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { bumpCodexPreferenceVersion } from '../state/cliState';
@@ -42,7 +41,8 @@ import { SkillsSettingsForm } from './SkillsSettingsForm';
 
 export interface CliConfigFormProps {
   readonly availableRows?: number;
-  readonly stores?: SettingsStores;
+  /** The settings slots this form reads and writes: the surface's own roots. */
+  readonly stores: SettingsStores;
   /**
    * The secret store the API-key and GitHub-token rows read and write. Ink
    * components run no Effect, so the process store arrives as a prop from the
@@ -158,7 +158,7 @@ const buildGitHubTokenStatusView = (
  * it, so persistence and runtime side effects cannot diverge between them.
  */
 export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
-  const [stores] = useState(() => props.stores ?? platformSettingsStores());
+  const { stores } = props;
   const onError = useRef(props.onError);
   onError.current = props.onError;
   const { secrets } = props;

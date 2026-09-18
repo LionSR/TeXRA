@@ -81,7 +81,7 @@ describe('LaTeXdiffService shadow output', () => {
     const { LaTeXdiffService } = yield* Effect.promise(
       () => import('@latex/latexdiff'),
     );
-    return yield* new LaTeXdiffService('test').runDiff(
+    return yield* new LaTeXdiffService('test', workspaceRoots()).runDiff(
       createExternalLocation(path.join(sourceDir, 'base.tex')),
       createExternalLocation(path.join(sourceDir, 'revised.tex')),
       '_diff',
@@ -249,7 +249,7 @@ describe('LaTeXdiffService shadow output', () => {
         generateBetweenRoundDiffs: true,
         latexdiff: {
           channel: 'test',
-          service: new LaTeXdiffService('test'),
+          service: new LaTeXdiffService('test', workspaceRoots()),
         },
         progress: { report: vi.fn() },
       });
@@ -373,7 +373,7 @@ describe('LaTeXdiffService shadow output', () => {
           );
         });
 
-        yield* new DiffFileProcessor().processDiffFile(
+        yield* new DiffFileProcessor(workspaceRoots().config).processDiffFile(
           createExternalLocation(diffPath),
         );
 
@@ -444,6 +444,7 @@ describe('LaTeXdiffService logger channel', () => {
 
       const result = yield* new LaTeXdiffService(
         'pinnedLatexdiffChannel',
+        workspaceRoots(),
       ).runDiff(
         createExternalLocation('/missing/base.tex'),
         createExternalLocation('/missing/revised.tex'),

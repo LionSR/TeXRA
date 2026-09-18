@@ -81,7 +81,6 @@ import { clearGoal, setGoalSessionAutoApproval, startGoal } from '@tools/goal';
 import { prepareToolEditApprovalPrompt } from '@tools/approval/toolEditApproval';
 import { createRunTrace } from '@transcript';
 import { generateRunId } from '@utils/core';
-import { platformSettingsStores } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { App } from '../src/chat/tui/App';
@@ -1349,6 +1348,7 @@ if (SHOW_EDIT_APPROVAL) {
     // below, so the harness holds that program and never runs it.
     const releaseStagedPreview = session().interactions.presentToolEdit({
       ...request,
+      roots: session().roots,
       permission,
     });
     requestHarnessApproval(
@@ -1726,7 +1726,7 @@ registerBuiltinSlashCommands({
   onResumeSelect: (id) => {
     appendHarnessAssistantTranscript(`Harness resume selected: ${id}.`);
   },
-  getConfigStores: platformSettingsStores,
+  configStores: session().roots,
   onError: (error) => {
     appendHarnessAssistantTranscript(
       `Slash command failed: ${toErrorMessage(error)}`,

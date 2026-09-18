@@ -8,10 +8,7 @@ import type { ExecResult } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { ensureError } from '@utils/errors/errorMessage';
 import { executeCommand } from '@utils/system/execUtils';
-import {
-  platformSettingsStores,
-  readSettingFrom,
-} from '@utils/config/platformSettings';
+import { readSettingFrom } from '@utils/config/platformSettings';
 
 // Local file imports
 import { LATEX_CITATION_COMMANDS } from '../latexParsingUtils';
@@ -62,12 +59,13 @@ type CommandExecOptions = { channel: string; timeout: number; cwd?: string };
 export class DiffCommandExecutor {
   constructor(
     private readonly channel: string,
-    /** Session roots held as data; absent, settings read the calling context's. */
-    private readonly roots?: WorkspaceRoots,
+    /** The roots of the workspace this diff belongs to; its settings are read
+     *  from these slots, never from the calling context's. */
+    private readonly roots: WorkspaceRoots,
   ) {}
 
   private setting<T>(key: string): T {
-    return readSettingFrom<T>(this.roots ?? platformSettingsStores(), key);
+    return readSettingFrom<T>(this.roots, key);
   }
 
   executeDiff(

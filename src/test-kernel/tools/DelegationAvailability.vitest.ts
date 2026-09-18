@@ -8,7 +8,7 @@ import {
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
 } from '@platform/languageModel';
 import type { ModelOptionData, ToolDefinition } from '@shared/schemas';
-import { FakeConfigProvider } from '@test/support/FakePlatform';
+import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import { fakeProcessServices, hostStores } from '@test/support/setupPlatform';
 
 const mocks = vi.hoisted(() => ({
@@ -148,7 +148,7 @@ function resolveToolList(
       registry: delegationRegistry(tools),
       logger: { warn: () => {} },
       toolInjections: new ToolInjectionRegistry(),
-      config: new FakeConfigProvider(),
+      settings: makeFakeSettingsStores().stores,
       stores: { secrets, globalState },
       inScope,
     });

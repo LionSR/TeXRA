@@ -49,7 +49,6 @@ import { subscribeToSignalChanges } from '@shared/signals';
 import { descendantRuns } from '@shared/session/sessionView';
 import { getFirstRunDone } from '@shared/state/onboardingState';
 import { isActivePhase, isInFlightPhase } from '@shared/runs/runStatus';
-import { platformSettingsStores } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
@@ -501,7 +500,7 @@ export async function runChat(
       showCliMemoryPreview(runtime, runtimeSession.roots, storagePath),
     onSkillSelect: chatController.activateSkill,
     onResumeSelect: chatController.resume,
-    getConfigStores: platformSettingsStores,
+    configStores: runtimeSession.roots,
     onError: (error) => {
       appendLocalAssistantTranscript(toErrorMessage(error));
     },
@@ -530,7 +529,7 @@ export async function runChat(
       onSuspend={() => exitController.handleSigtstp()}
       onKillRun={(runId) => {
         const stop = runtimeSession.runs.kill(runId, {
-          detachActiveChildren: detachSubagentsOnStop(),
+          detachActiveChildren: detachSubagentsOnStop(runtimeSession.roots),
         });
         // A refused detach commit leaves the run alive: the parent's
         // interrupt runs only after the detach batch commits. Surface that

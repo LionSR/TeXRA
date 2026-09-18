@@ -6,7 +6,6 @@ import { LRUCache } from 'lru-cache';
 
 import { createLog } from '@logger/logUtils';
 import { assertNever } from '@utils/core';
-import { getConfig } from '@utils/config/configUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
@@ -54,9 +53,9 @@ import {
 const log = createLog('ReplacementEngine');
 
 /**
- * How a policy reads its replacement settings by key: the calling context's
- * configuration by default, or a reader over a configuration the caller holds
- * as data.
+ * How a policy reads its replacement settings by key: a reader over the
+ * configuration of the workspace whose text is being rewritten, which every
+ * caller holds as data.
  */
 export type ReplacementConfigRead = <T>(path: string) => T;
 
@@ -70,10 +69,7 @@ function applyNonRegexPolicy(
     : processed;
 }
 
-function applyAllPolicy(
-  text: string,
-  read: ReplacementConfigRead = getConfig,
-): string {
+function applyAllPolicy(text: string, read: ReplacementConfigRead): string {
   const replacements = getAllReplacements(read);
   const wrapCritique = shouldWrapCritiqueInAlign(read);
 
@@ -99,8 +95,8 @@ const replacementEngine = {
    * replacements run before and after regex replacements to fix artifacts they
    * may introduce. Config values are read once and reused across all passes, and
    * whole-document cleanup runs once at the end instead of after each pass.
-   * Pass `read` to read the rules from a workspace's configuration held as
-   * data instead of the calling context's.
+   * `read` reads the rules from the configuration of the workspace whose text
+   * this is.
    */
   applyAll: applyAllPolicy,
 
@@ -109,12 +105,12 @@ const replacementEngine = {
    * exact ordered profile they need instead of composing lower-level rules at
    * the call site. Both special-purpose profiles have production consumers:
    * `xml-content` backs XML output normalization and `tex-write` backs
-   * `.tex` file writes. Pass `read` as for {@link applyAll}.
+   * `.tex` file writes. `read` is as for {@link applyAll}.
    */
   applyFor(
     text: string,
     purpose: 'xml-content' | 'tex-write',
-    read: ReplacementConfigRead = getConfig,
+    read: ReplacementConfigRead,
   ): string {
     switch (purpose) {
       case 'xml-content':

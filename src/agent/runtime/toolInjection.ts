@@ -1,13 +1,13 @@
 import { Context, Layer } from 'effect';
 
-import type { ConfigProvider } from '@platform/interfaces';
 import type { ProcessServices } from '@platform/processRuntime';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { RegisteredToolName } from '@tools/registry';
 // Deliberately not the `@tools/goal` barrel: it also loads goalRows, whose
 // session graph must not sit behind tool resolution (see the barrel's note).
 import { isGoalEnabled } from '@tools/goal/goalFeatureFlag';
-import { readPlatformSetting } from '@utils/config/platformSettings';
+import { readSettingFrom } from '@utils/config/platformSettings';
 import type { Runs } from './runRegistry';
 
 /**
@@ -21,9 +21,9 @@ import type { Runs } from './runRegistry';
  */
 export interface ConditionalToolInjection {
   readonly toolName: RegisteredToolName;
-  /** Whether the run resolving its tools, in the workspace `config` is the
-   *  configuration of, gets this tool. */
-  shouldInject(config: ConfigProvider): boolean;
+  /** Whether the run resolving its tools, in the workspace whose settings
+   *  slots `settings` are, gets this tool. */
+  shouldInject(settings: SettingsStores): boolean;
 }
 
 /**
@@ -49,16 +49,16 @@ export class ToolInjectionRegistry {
 
 /**
  * The fixed injections every host ships. Each predicate reads its setting
- * when a run resolves its tools: the goal flag from the run's workspace
- * configuration it is handed, the memory setting through the catalog reader
- * (so `initPlatform()` and the process workspace roots must be initialized
- * by then).
+ * when a run resolves its tools, from the settings slots of the run's own
+ * workspace that it is handed: the goal flag from that workspace's
+ * configuration, the memory setting through the catalog reader over the same
+ * slots.
  */
 export const AGENT_TOOL_INJECTIONS: readonly ConditionalToolInjection[] = [
   {
     toolName: 'memory',
-    shouldInject: () =>
-      readPlatformSetting<boolean>(GlobalStateKey.MEMORY_ENABLED),
+    shouldInject: (settings) =>
+      readSettingFrom<boolean>(settings, GlobalStateKey.MEMORY_ENABLED),
   },
   // The unified `plan` tool owns both planning and goal lifecycle commands
   // (update / pause / complete), so it is auto-injected whenever goal is
@@ -70,7 +70,7 @@ export const AGENT_TOOL_INJECTIONS: readonly ConditionalToolInjection[] = [
   // is no idle-continuation registry — goal was its only consumer.
   {
     toolName: 'plan',
-    shouldInject: (config) => isGoalEnabled(config),
+    shouldInject: (settings) => isGoalEnabled(settings.config),
   },
 ];
 

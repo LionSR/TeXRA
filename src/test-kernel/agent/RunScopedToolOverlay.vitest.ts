@@ -26,7 +26,7 @@ import { AgentCategory } from '@shared/schemas';
 import { RunLedger } from '@shared/session/runLedger';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
-import { FakeConfigProvider } from '@test/support/FakePlatform';
+import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import { hostStores, setupPlatform } from '@test/support/setupPlatform';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
@@ -172,7 +172,7 @@ describe('run-scoped tool resolution', () => {
           runtimeUnavailableTools: ['inquiry'],
           // No conditional injections: this pins the declared-tool gates alone.
           toolInjections: new ToolInjectionRegistry(),
-          config: new FakeConfigProvider(),
+          settings: makeFakeSettingsStores().stores,
           stores: hostStores(),
         }).pipe(
           Effect.provide(LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT)),

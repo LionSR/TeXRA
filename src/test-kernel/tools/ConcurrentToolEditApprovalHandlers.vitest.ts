@@ -19,7 +19,7 @@ import {
   type ToolEditApprovalRequest,
 } from '@tools/approval/toolEditApproval';
 
-type PendingToolEdit = Omit<ToolEditApprovalRequest, 'permission'>;
+type PendingToolEdit = Omit<ToolEditApprovalRequest, 'permission' | 'roots'>;
 
 describe('Concurrent session tool edit approval handlers', () => {
   setupPlatform({ workspacePath: '/workspace', config: {}, files: {} });

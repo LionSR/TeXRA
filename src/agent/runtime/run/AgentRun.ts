@@ -208,7 +208,7 @@ export const agentRunLayer = (
         approvalPromptsUnavailable: ctx.toolPolicy.approvalPromptsUnavailable,
         runtimeUnavailableTools: ctx.toolPolicy.runtimeUnavailableTools,
         toolInjections: input.toolInjections,
-        config: session.roots.config,
+        settings: session.roots,
         stores: ctx.stores,
         delegationScope: ctx.delegationAgentScope ?? undefined,
         inScope: input.inScope,

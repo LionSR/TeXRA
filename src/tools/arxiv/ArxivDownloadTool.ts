@@ -79,9 +79,7 @@ const download = Effect.fn('ArxivDownloadTool.execute')(function* (
 
   const downloadResult = yield* ArxivProcessor.downloadSource(arxivId, {
     workspaceRoot,
-    formatter: input.autoIndent
-      ? call.inScope(() => resolveLatexFormatter(call.roots.config))
-      : null,
+    formatter: input.autoIndent ? resolveLatexFormatter(call.roots) : null,
     autoIndent: input.autoIndent,
     destination: input.destination,
   }).pipe(

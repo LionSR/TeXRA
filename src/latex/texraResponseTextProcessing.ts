@@ -1,4 +1,6 @@
+import type { ConfigProvider } from '@platform/interfaces';
 import replacementEngine from '@replacement/engine';
+import { readConfig } from '@utils/config/configUtils';
 import type { Effect } from 'effect';
 import type { HttpClient } from 'effect/unstable/http';
 
@@ -17,7 +19,15 @@ export type ResponseTextConnector = (
  */
 export interface ResponseTextProcessing {
   readonly normalizeResponseText: ResponseTextPostProcessor;
-  readonly postProcessResponse: ResponseTextPostProcessor;
+  /**
+   * Cleanup for one run's response text, over the configuration of the
+   * workspace that run belongs to: the replacement rules are that project's
+   * settings, not whichever roots the calling fiber carries.
+   */
+  readonly postProcessResponse: (
+    text: string,
+    config: ConfigProvider,
+  ) => string;
   readonly connectResponseText: ResponseTextConnector;
 }
 
@@ -27,7 +37,8 @@ export function createTexraResponseTextProcessing(
 ): ResponseTextProcessing {
   return Object.freeze<ResponseTextProcessing>({
     normalizeResponseText: (text) => text.trim(),
-    postProcessResponse: (text) => replacementEngine.applyAll(text),
+    postProcessResponse: (text, config) =>
+      replacementEngine.applyAll(text, (key) => readConfig(config, key)),
     connectResponseText,
   });
 }

@@ -30,7 +30,7 @@ import {
 } from '@shared/approvalPolicy';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
-import { readPlatformSetting } from '@utils/config/platformSettings';
+import { readSettingFrom } from '@utils/config/platformSettings';
 import type { DesktopProjectRecords } from './desktopProjectRecords.js';
 
 import type { DesktopProjectsMessage } from '../shared/desktopProjectMessages.js';
@@ -215,7 +215,8 @@ function openProjectSession(
       try: () =>
         runInSession(session, () => {
           session.setApprovalPolicy(
-            readPlatformSetting<TexraApprovalPolicy>(
+            readSettingFrom<TexraApprovalPolicy>(
+              roots,
               TEXRA_APPROVAL_POLICY_CONFIG_KEY,
             ),
           );

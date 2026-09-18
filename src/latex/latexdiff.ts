@@ -57,15 +57,15 @@ export class LaTeXdiffService {
   private readonly commandExecutor: DiffCommandExecutor;
 
   /**
-   * @param roots The session roots a run holds as data. Given, the diff's
-   * settings, replacement rules and output location read them; absent, they
-   * read the calling context's roots.
+   * @param roots The roots of the workspace being diffed, held as data: the
+   * diff's settings, replacement rules and output location all answer for that
+   * project rather than for whichever roots the calling fiber carries.
    */
   constructor(
     private readonly channel: string,
-    private readonly roots?: WorkspaceRoots,
+    private readonly roots: WorkspaceRoots,
   ) {
-    this.fileProcessor = new DiffFileProcessor(roots?.config);
+    this.fileProcessor = new DiffFileProcessor(roots.config);
     this.commandExecutor = new DiffCommandExecutor(channel, roots);
   }
 
@@ -168,10 +168,7 @@ export class LaTeXdiffService {
       }
 
       // Write and process output
-      const outputLocation = pathToLocationIn(
-        this.roots?.workspace,
-        outputPath,
-      );
+      const outputLocation = pathToLocationIn(this.roots.workspace, outputPath);
       const fs = yield* FileSystem.FileSystem;
       yield* fs.makeDirectory(outputDirectory, { recursive: true });
       yield* fs.writeFileString(outputLocation.absolutePath, result.stdout);
@@ -237,7 +234,7 @@ export class LaTeXdiffService {
       );
       const outputPath = path.join(cwd, diffFilePath);
       yield* this.fileProcessor.processDiffFile(
-        pathToLocationIn(this.roots?.workspace, outputPath),
+        pathToLocationIn(this.roots.workspace, outputPath),
         inputLocation,
       );
 

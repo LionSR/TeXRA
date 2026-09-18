@@ -672,6 +672,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     const finish = finishReasonOf(turn);
     let text = session.responseTextProcessing.postProcessResponse(
       turnText(turn),
+      session.roots.config,
     );
     // A provider stop sequence strips the tag it matched; restore it so
     // extraction sees the document it closed.

@@ -137,7 +137,7 @@ export class AgentReviewRunController {
     if (run.session.runs.getHandle(handle.runId) !== handle) return Effect.void;
     return run.session.runs
       .stopAgentRun(handle.runId, {
-        detachActiveChildren: detachSubagentsOnStop(),
+        detachActiveChildren: detachSubagentsOnStop(run.session.roots),
       })
       .pipe(
         Effect.catch((error) =>

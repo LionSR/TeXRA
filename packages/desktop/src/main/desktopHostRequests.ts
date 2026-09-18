@@ -576,10 +576,10 @@ export function createDesktopHostRequests(
       }
       const base = pathToLocationIn(session.roots.workspace, baseFile);
       if (action === 'latexdiffvc') {
-        const result = yield* new LaTeXdiffService(LATEXDIFF_CHANNEL).runDiffVc(
-          base,
-          commit,
-        );
+        const result = yield* new LaTeXdiffService(
+          LATEXDIFF_CHANNEL,
+          session.roots,
+        ).runDiffVc(base, commit);
         if (!result.success) {
           return yield* Effect.fail(new Rejected({ reason: result.message }));
         }

@@ -130,7 +130,7 @@ import { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import { setInlineCommentProvider } from '@tools/comment/InlineCommentTool';
 import {
   initProcessSettingHost,
-  readPlatformSetting,
+  readSettingFrom,
 } from '@utils/config/platformSettings';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
@@ -707,7 +707,10 @@ async function activateExtension(context: vscode.ExtensionContext) {
     afterRunSettlement: [() => disposeDiffRefresh()],
   });
   runtimeSession.setApprovalPolicy(
-    readPlatformSetting<TexraApprovalPolicy>(TEXRA_APPROVAL_POLICY_CONFIG_KEY),
+    readSettingFrom<TexraApprovalPolicy>(
+      runtimeSession.roots,
+      TEXRA_APPROVAL_POLICY_CONFIG_KEY,
+    ),
   );
   // The same Node-host skill wiring the CLI and desktop use, so
   // `AVAILABLE_SKILLS` is actually populated for tool-use agents in VS Code —

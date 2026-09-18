@@ -50,7 +50,7 @@ import {
   readCompletedRunTodos,
 } from '@transcript';
 import { assertNever, unique } from '@utils/core';
-import { readPlatformSetting } from '@utils/config/platformSettings';
+import { readSettingFrom } from '@utils/config/platformSettings';
 import { readNormalizedFile } from '@utils/files/fsDurability';
 import { findExistingRunStoragePathUnder } from '@utils/files/runStorageFs';
 import { getPathSegments } from '@utils/core/pathCore';
@@ -666,8 +666,9 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       // Only block kills when the toggle is disabled (the guard above has
       // already narrowed `target` to an owned RunHandle).
       if (
-        !context.inRunScope(() =>
-          readPlatformSetting<boolean>(GlobalStateKey.ALLOW_ORCHESTRATOR_KILL),
+        !readSettingFrom<boolean>(
+          context.session.roots,
+          GlobalStateKey.ALLOW_ORCHESTRATOR_KILL,
         )
       ) {
         return yield* Effect.fail(
@@ -679,9 +680,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
 
       const success = yield* Effect.suspend(() => {
         const stop = runs.kill(runId, {
-          detachActiveChildren: context.inRunScope(() =>
-            detachSubagentsOnStop(),
-          ),
+          detachActiveChildren: detachSubagentsOnStop(context.session.roots),
         });
         // Asked after the settlement: a detaching stop interrupts the run
         // only once its children have left it, so that is when it knows

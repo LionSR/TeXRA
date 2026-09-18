@@ -506,7 +506,7 @@ export function createChatSessionController(
     void request({
       kind: 'run.stop',
       runId,
-      detachActiveChildren: detachSubagentsOnStop(),
+      detachActiveChildren: detachSubagentsOnStop(runtimeSession.roots),
     });
   };
 
