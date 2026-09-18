@@ -1,5 +1,5 @@
 // Third-party imports
-import { Cause, Effect, Exit } from 'effect';
+import { Cause, Effect, Exit, FileSystem } from 'effect';
 
 // Local imports
 import { invalidateRemoteAgentsAfterSignOut } from '@agent/index';
@@ -256,7 +256,7 @@ export const signInCliSupabaseDeviceCode = Effect.fn(
 export function signOutCliSupabase(): Effect.Effect<
   void,
   Error,
-  GlobalStorageFs
+  GlobalStorageFs | FileSystem.FileSystem
 > {
   return Effect.gen(function* () {
     const authCoordinator = yield* Effect.try({

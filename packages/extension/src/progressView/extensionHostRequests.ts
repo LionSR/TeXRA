@@ -509,7 +509,11 @@ export function createExtensionHostRequests(
    *  launch preparation, then the one launch command. */
   function launch(
     request: Extract<HostRequest, { kind: 'launch' }>,
-  ): Effect.Effect<void, HostCallFailed | RequestRefusal, GlobalStorageFs> {
+  ): Effect.Effect<
+    void,
+    HostCallFailed | RequestRefusal,
+    GlobalStorageFs | FileSystem.FileSystem
+  > {
     return Effect.gen(function* () {
       const { launch: form } = request;
       const requestedWorkingDirectory = form.workingDirectory.trim();
@@ -760,7 +764,7 @@ export function createExtensionHostRequests(
   ): Effect.Effect<
     void,
     AgentDirectoriesFailed | HostCallFailed | RequestRefusal,
-    GlobalStorageFs
+    GlobalStorageFs | FileSystem.FileSystem
   > {
     return Effect.gen(function* () {
       switch (request.action) {

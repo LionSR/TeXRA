@@ -97,7 +97,7 @@ describe('runCompileCheck', () => {
   it.live('counts a per-file exception as a failure, never a silent skip', () =>
     Effect.gen(function* () {
       const runId = 'compile-exception' as RunId;
-      // No file is seeded at the tex path, so AbsoluteFS.read throws ENOENT
+      // No file is seeded at the tex path, so the output read fails NotFound
       // before compileLatex2Pdf is ever invoked.
       yield* Effect.promise(() => initLatexPlatform({}));
 

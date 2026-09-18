@@ -1,4 +1,4 @@
-import { type Cause, Data, Effect } from 'effect';
+import { type Cause, Data, Effect, FileSystem } from 'effect';
 import * as vscode from 'vscode';
 
 import { settleFailure } from '@auth/authProgram';
@@ -93,7 +93,7 @@ const showSignedInMessage = (
 export const signIn: Effect.Effect<
   boolean,
   never,
-  GlobalStorageFs | SupabaseAuth
+  GlobalStorageFs | SupabaseAuth | FileSystem.FileSystem
 > = Effect.gen(function* () {
   // Check if auth system is ready - if not, provide clear error with reason
   const auth = yield* SupabaseAuth;
@@ -191,7 +191,7 @@ export const signIn: Effect.Effect<
 export const signOut: Effect.Effect<
   void,
   never,
-  GlobalStorageFs | SupabaseAuth
+  GlobalStorageFs | SupabaseAuth | FileSystem.FileSystem
 > = Effect.gen(function* () {
   const auth = yield* SupabaseAuth;
   const storedSessionState = yield* auth.storedSessionState;

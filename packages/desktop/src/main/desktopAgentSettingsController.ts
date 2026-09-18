@@ -111,14 +111,14 @@ interface DefaultDesktopAgentSettingsControllerOptions extends SettingsStatePort
     readonly getCustomAgentDirectory: () => Effect.Effect<
       string,
       AgentDirectoriesFailed,
-      GlobalStorageFs
+      GlobalStorageFs | FileSystem.FileSystem
     >;
     readonly getSourceDirectory: (
       source: AgentSource,
     ) => Effect.Effect<
       string | undefined,
       AgentDirectoriesFailed,
-      GlobalStorageFs
+      GlobalStorageFs | FileSystem.FileSystem
     >;
     readonly selectCustomAgentDirectory: () => Promise<string | undefined>;
     readonly openPath: (

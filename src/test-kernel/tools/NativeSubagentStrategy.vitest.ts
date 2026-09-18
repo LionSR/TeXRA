@@ -601,8 +601,8 @@ describe('NativeSubagentStrategy', () => {
           },
         };
 
-        const msg = yield* Effect.promise(() =>
-          Promise.resolve(strategy.formatDelivery(waitingTurn, 1000)),
+        const msg = yield* runOnFakeHost(
+          strategy.formatDelivery(waitingTurn, 1000),
         );
         expect(msg).toContain('<response>');
         expect(msg).toContain('The proof holds.');
@@ -618,17 +618,18 @@ describe('NativeSubagentStrategy', () => {
         const strategy = createNativeSubagentStrategy(params);
         const turn = toolUseTurnResult('completed', params.runId) as never;
 
-        const built = yield* strategy.buildResultMeta!(turn, false, 1000);
+        const built = yield* runOnFakeHost(
+          strategy.buildResultMeta!(turn, false, 1000),
+        );
         mocks.throwDeliveryFormatting = true;
 
         const deliveryError = yield* Effect.flip(
-          Effect.tryPromise({
-            try: () => Promise.resolve(strategy.formatDelivery(turn, 1000)),
-            catch: ensureError,
-          }),
+          runOnFakeHost(strategy.formatDelivery(turn, 1000)),
         );
         expect(deliveryError.message).toContain('delivery formatting failed');
-        expect(yield* strategy.buildResultMeta!(turn, false, 1000)).toBe(built);
+        expect(
+          yield* runOnFakeHost(strategy.buildResultMeta!(turn, false, 1000)),
+        ).toBe(built);
       }),
   );
 
@@ -639,12 +640,12 @@ describe('NativeSubagentStrategy', () => {
       const turn = toolUseTurnResult('completed', params.runId) as never;
       mocks.throwDeliveryFormatting = true;
 
+      expect(yield* runOnFakeHost(strategy.formatDelivery(turn, 1000))).toBe(
+        '',
+      );
       expect(
-        yield* Effect.promise(() =>
-          Promise.resolve(strategy.formatDelivery(turn, 1000)),
-        ),
-      ).toBe('');
-      expect(yield* strategy.buildResultMeta!(turn, false, 1000)).toBeDefined();
+        yield* runOnFakeHost(strategy.buildResultMeta!(turn, false, 1000)),
+      ).toBeDefined();
     }),
   );
 
@@ -681,7 +682,9 @@ describe('NativeSubagentStrategy', () => {
       Effect.gen(function* () {
         const strategy = createNativeSubagentStrategy(baseParams());
 
-        expect(yield* strategy.buildResultMeta!(null, true, 10)).toMatchObject({
+        expect(
+          yield* runOnFakeHost(strategy.buildResultMeta!(null, true, 10)),
+        ).toMatchObject({
           producer: 'subagent',
           agentName: 'review',
           output: { category: 'toolUse', response: '', files: [] },
@@ -896,7 +899,9 @@ describe('NativeSubagentStrategy', () => {
         // terminal — `isWaitingFlowResult` requires `category === 'toolUse'`.
         expect(strategy.isTerminal(completedWorkflowTurn)).toBe(true);
 
-        expect(yield* strategy.buildResultMeta!(null, true, 10)).toMatchObject({
+        expect(
+          yield* runOnFakeHost(strategy.buildResultMeta!(null, true, 10)),
+        ).toMatchObject({
           producer: 'subagent',
           agentName: 'review',
           output: { category: 'workflow' },

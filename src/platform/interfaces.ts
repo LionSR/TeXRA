@@ -2,7 +2,7 @@
  * Platform port contracts — the host-neutral interfaces a host wires into
  * `initPlatform()`. Formerly one file per port under `interfaces/`.
  */
-import { Context, Data, Effect, Layer } from 'effect';
+import { Context, Data, Effect, FileSystem, Layer } from 'effect';
 import type { AgentSource, RunId } from '@shared/schemas';
 
 import type { GlobalStorageFs } from './rootedFs';
@@ -268,12 +268,18 @@ export class AgentDirectoriesFailed extends Data.TaggedError(
  * resolves — carries its failure into the catalog load that asked for it
  * instead of rejecting an await that cannot name it.
  *
- * `custom` takes the process's {@link GlobalStorageFs} from context: the
- * default custom-agents directory lives under the cross-workspace storage
- * root, and the view that names it is the one the process runtime provides.
+ * `custom` takes the process's {@link GlobalStorageFs} and the process
+ * `FileSystem` from context: the default custom-agents directory lives under
+ * the cross-workspace storage root, and a configured one is an absolute path
+ * outside every root, so the view that names each is the one the process
+ * runtime provides.
  */
 export interface AgentDirectoriesPort {
-  custom(): Effect.Effect<string, AgentDirectoriesFailed, GlobalStorageFs>;
+  custom(): Effect.Effect<
+    string,
+    AgentDirectoriesFailed,
+    GlobalStorageFs | FileSystem.FileSystem
+  >;
   builtIn(): Effect.Effect<string, AgentDirectoriesFailed>;
   builtInToolUse(): Effect.Effect<string, AgentDirectoriesFailed>;
 }

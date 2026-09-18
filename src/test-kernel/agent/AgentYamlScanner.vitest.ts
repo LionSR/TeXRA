@@ -10,6 +10,7 @@ import { beforeAll, describe, expect } from 'vitest';
 // Local imports
 import { scanDirectory } from '@agent/index/agentYamlScanner';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
+import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { installPlatform } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
@@ -29,6 +30,10 @@ async function createAgentDir(
 /** The temp directory as an Effect, so the scan reads real files on disk. */
 const agentDir = (files: Record<string, readonly string[]>) =>
   Effect.promise(() => createAgentDir(files));
+
+/** The scan on the process filesystem it now reads its YAML through. */
+const scanCustom = (dir: string) =>
+  scanDirectory(dir, 'custom').pipe(Effect.provide(nodePlatformLayer));
 
 function toolUseAgent(name: string, systemPrompt: string): string[] {
   return [
@@ -80,7 +85,7 @@ describe('agent YAML scanner', () => {
           ],
         });
 
-        const { entries } = yield* scanDirectory(dir, 'custom');
+        const { entries } = yield* scanCustom(dir);
 
         expect(entries.find((entry) => entry.name === 'child')?.rounds).toBe(4);
         expect(
@@ -98,7 +103,7 @@ describe('agent YAML scanner', () => {
         'Readable Helper.yaml': toolUseAgent('helper', 'help'),
       });
 
-      const { entries } = yield* scanDirectory(dir, 'custom');
+      const { entries } = yield* scanCustom(dir);
 
       expect(entries.map((entry) => entry.name)).toEqual(['helper']);
     }),
@@ -117,7 +122,7 @@ describe('agent YAML scanner', () => {
         ],
       });
 
-      const { entries } = yield* scanDirectory(dir, 'custom');
+      const { entries } = yield* scanCustom(dir);
 
       expect(entries).toEqual([]);
     }),
@@ -133,7 +138,7 @@ describe('agent YAML scanner', () => {
           'unique.yaml': toolUseAgent('unique', 'unique'),
         });
 
-        const { entries } = yield* scanDirectory(dir, 'custom');
+        const { entries } = yield* scanCustom(dir);
 
         expect(entries.map((entry) => entry.name)).toEqual(['unique']);
       }),
@@ -146,7 +151,7 @@ describe('agent YAML scanner', () => {
         'valid.yaml': toolUseAgent('valid', 'hi'),
       });
 
-      const { entries } = yield* scanDirectory(dir, 'custom');
+      const { entries } = yield* scanCustom(dir);
 
       expect(entries.map((entry) => entry.name)).toEqual(['valid']);
     }),
@@ -165,7 +170,7 @@ describe('agent YAML scanner', () => {
         'valid.yaml': toolUseAgent('valid', 'hi'),
       });
 
-      const { entries, issues } = yield* scanDirectory(dir, 'custom');
+      const { entries, issues } = yield* scanCustom(dir);
 
       expect(entries.map((entry) => entry.name)).toEqual(['valid']);
       expect(issues).toEqual([

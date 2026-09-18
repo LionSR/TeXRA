@@ -1,5 +1,5 @@
 // Local imports - run requests
-import { Effect } from 'effect';
+import { Effect, FileSystem } from 'effect';
 import {
   validateRunRequest,
   type ValidatedRunRequest,
@@ -130,7 +130,11 @@ export function prepareSurfaceLaunch(
    *  paths it names are joined onto it rather than resolved from an ambient
    *  read at this depth. */
   storageRoot: string,
-): Effect.Effect<ValidatedRunRequest, Rejected | Cancelled, GlobalStorageFs> {
+): Effect.Effect<
+  ValidatedRunRequest,
+  Rejected | Cancelled,
+  GlobalStorageFs | FileSystem.FileSystem
+> {
   return Effect.gen(function* () {
     let preparation: LaunchPreparation;
     let infoMessage: string | undefined;

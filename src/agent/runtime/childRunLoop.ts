@@ -244,10 +244,14 @@ export interface ChildRunStrategy<TTurn, R = never> {
 
   /**
    * Format the success delivery XML. A native workflow-category subagent
-   * computes this asynchronously (diff files are written to the run
-   * directory first).
+   * reads and writes on the way (diff files land in the run directory
+   * first), so this is an Effect over the same `R` the turns read; every
+   * other strategy formats from what it already holds.
    */
-  formatDelivery(turn: TTurn, wallTimeMs: number): string | Promise<string>;
+  formatDelivery(
+    turn: TTurn,
+    wallTimeMs: number,
+  ): Effect.Effect<string, Error, R>;
 
   /** Format the error delivery XML (turn is null when the call threw). */
   formatError(turn: TTurn | null, err: unknown): string | Promise<string>;
@@ -271,7 +275,7 @@ export interface ChildRunStrategy<TTurn, R = never> {
      * message even when no flow result exists to carry it.
      */
     error?: unknown,
-  ): Effect.Effect<ResultMeta | undefined, Error>;
+  ): Effect.Effect<ResultMeta | undefined, Error, R>;
 
   /**
    * Where a turn's delivery should be sent. Native strategies track their
@@ -654,7 +658,7 @@ const deliverTurn = Effect.fn('childRunLoop.deliverTurn')(function* <
   prepareParentDelivery?: () => boolean;
   resolveDefaultDeliveryTarget: () => RunId | undefined;
   onTurnSettled?: ChildRunLoopParams<TTurn>['onTurnSettled'];
-}): Effect.fn.Return<PendingChildDelivery | undefined, Error> {
+}): Effect.fn.Return<PendingChildDelivery | undefined, Error, R> {
   const {
     strategy,
     runId,
@@ -668,15 +672,13 @@ const deliverTurn = Effect.fn('childRunLoop.deliverTurn')(function* <
     resolveDefaultDeliveryTarget,
   } = params;
   const delivered = turn != null && !isError;
-  const msg = yield* Effect.tryPromise({
-    try: async () =>
-      runInSession(params.session, () =>
-        delivered
-          ? strategy.formatDelivery(turn, wallTimeMs)
-          : strategy.formatError(turn, err),
-      ),
-    catch: ensureError,
-  });
+  const msg = delivered
+    ? yield* strategy.formatDelivery(turn, wallTimeMs)
+    : yield* Effect.tryPromise({
+        try: async () =>
+          runInSession(params.session, () => strategy.formatError(turn, err)),
+        catch: ensureError,
+      });
   const resultMeta = strategy.buildResultMeta
     ? yield* strategy.buildResultMeta(
         turn,

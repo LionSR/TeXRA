@@ -20,7 +20,14 @@
  * skip; a barrier with an intent and no result is outcome-unknown and asks;
  * a parallel-safe call without a result re-runs.
  */
-import { Cause, Effect, Exit, Result, SynchronizedRef } from 'effect';
+import {
+  Cause,
+  Effect,
+  Exit,
+  FileSystem,
+  Result,
+  SynchronizedRef,
+} from 'effect';
 
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { normalizeToolCallError } from '@agent/core/tools/toolCallParsing';
@@ -51,8 +58,8 @@ import {
 import { generateShortId, getBasename, groupBy } from '@utils/core';
 import { isNonEmptyString } from '@utils/text/stringUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { pathToLocationIn } from '@utils/files/fileLocation';
+import { entryExists } from '@utils/files/fsEntryExists';
 
 import { AgentRun } from '../run/AgentRun';
 import { inlineMediaPart, type InputPart } from '../run/mediaInput';
@@ -127,7 +134,12 @@ const endsTurn = (settlement: Pick<Settlement, 'result'>): boolean =>
 const captureAttachments = Effect.fn('toolUse.captureAttachments')(function* (
   attachments: readonly ToolFileAttachment[],
   workspaceRoot: string | undefined,
-): Effect.fn.Return<readonly SettledAttachment[]> {
+): Effect.fn.Return<
+  readonly SettledAttachment[],
+  never,
+  FileSystem.FileSystem
+> {
+  const fs = yield* FileSystem.FileSystem;
   const captured: SettledAttachment[] = [];
   for (const attachment of attachments) {
     const base = {
@@ -155,19 +167,18 @@ const captureAttachments = Effect.fn('toolUse.captureAttachments')(function* (
       continue;
     }
     const read = yield* Effect.exit(
-      Effect.tryPromise({
-        try: () =>
-          AbsoluteFS.readBytes(
-            pathToLocationIn(workspaceRoot, attachment.path).absolutePath,
-          ),
-        catch: (cause) => cause,
-      }),
+      fs.readFile(
+        pathToLocationIn(workspaceRoot, attachment.path).absolutePath,
+      ),
     );
     captured.push(
       Exit.isSuccess(read)
         ? {
             ...base,
-            content: { kind: 'base64', data: read.value.toString('base64') },
+            content: {
+              kind: 'base64',
+              data: Buffer.from(read.value).toString('base64'),
+            },
           }
         : {
             ...base,
@@ -370,8 +381,9 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   ): Effect.fn.Return<
     void,
     InvokeError,
-    ProcessServices | Runs | WorkspaceFs | StorageFs
+    ProcessServices | Runs | WorkspaceFs | StorageFs | FileSystem.FileSystem
   > {
+    const fs = yield* FileSystem.FileSystem;
     const tool: ITool | undefined = run.tools.get(fact.toolName);
     const parsedInput = parseCallArguments(call, logger);
     const stageId = fact.stageId ?? undefined;
@@ -498,10 +510,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
           run.session.roots.workspace,
           attachment.path,
         );
-        const exists = yield* Effect.tryPromise({
-          try: () => AbsoluteFS.exists(location.absolutePath),
-          catch: (cause) => cause,
-        }).pipe(
+        const exists = yield* entryExists(fs, location.absolutePath).pipe(
           Effect.catch((cause) =>
             Effect.sync(() => {
               logger.debug(

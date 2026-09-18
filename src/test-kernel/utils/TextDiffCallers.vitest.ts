@@ -3,7 +3,7 @@ import path from 'node:path';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
+import { Effect, FileSystem } from 'effect';
 import { describe, expect } from 'vitest';
 
 // Local imports
@@ -14,7 +14,6 @@ import {
   ensureRoundData,
 } from '@agent/implementations/flows/reflection/output/outputState';
 import type { RoundFileMapping } from '@agent/implementations/flows/reflection/output/types';
-import { workspaceRoots } from '@platform/workspaceRoots';
 import {
   fileLocationDisplayPath,
   RUN_OUTCOME,
@@ -22,7 +21,9 @@ import {
 } from '@shared/schemas';
 import { installPlatform } from '@test/support/setupPlatform';
 import { fakePath } from '@test/support/FakePlatform';
+import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
+import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { buildSubagentResult } from '@tools/delegation/subagentResults';
 import {
   computeLineChangeSummary,
@@ -44,44 +45,49 @@ function installFakePlatform(
   });
 }
 
+const tempDirs = useTempDirs();
+
 describe('shared text-diff caller fixtures', () => {
+  // The writer reads and writes through the process filesystem, so this
+  // fixture works on real files under a temp root of its own.
   it.effect('preserves subagent line-mode diff files', () =>
     Effect.gen(function* () {
-      yield* Effect.tryPromise(() =>
-        installFakePlatform({
-          '/workspace/original.tex': 'one\ntwo\nthree\n',
-          '/workspace/out/section/paper.tex': 'one\nTWO\nthree\nfour\n',
-        }),
+      const fs = yield* FileSystem.FileSystem;
+      const root = yield* Effect.promise(() =>
+        makeTempDir('texra-subagent-diffs-', tempDirs),
       );
-      const runId = 'abcdef' as RunId;
-      const absolutePath = fakePath('workspace/out/section/paper.tex');
+      const storageRoot = path.join(root, 'storage');
+      const originalPath = path.join(root, 'original.tex');
+      const absolutePath = path.join(root, 'out', 'section', 'paper.tex');
+      yield* fs.makeDirectory(path.dirname(absolutePath), { recursive: true });
+      yield* fs.writeFileString(originalPath, 'one\ntwo\nthree\n');
+      yield* fs.writeFileString(absolutePath, 'one\nTWO\nthree\nfour\n');
 
-      const meta = yield* Effect.tryPromise(() =>
-        buildSubagentResult(
+      const runId = 'abcdef' as RunId;
+      const meta = yield* buildSubagentResult(
+        runId,
+        'workflow-subagent',
+        {
           runId,
-          'workflow-subagent',
-          {
-            runId,
-            outcome: RUN_OUTCOME.COMPLETED,
-            output: {
-              category: 'workflow',
-              outputs: [
-                {
-                  round: 0,
-                  relativePath: 'section/paper.tex',
-                  absolutePath,
-                  location: 'workspace',
-                  originalPath: fakePath('workspace/original.tex'),
-                  added: 2,
-                  removed: 1,
-                },
-              ],
-              compileFailures: [],
-              diffs: [],
-            },
+          outcome: RUN_OUTCOME.COMPLETED,
+          output: {
+            category: 'workflow',
+            outputs: [
+              {
+                round: 0,
+                relativePath: 'section/paper.tex',
+                absolutePath,
+                location: 'workspace',
+                originalPath,
+                added: 2,
+                removed: 1,
+              },
+            ],
+            compileFailures: [],
+            diffs: [],
           },
-          { startedAt: Date.now(), storageRoot: workspaceRoots().storage },
-        ),
+        },
+        { startedAt: Date.now(), storageRoot },
       );
 
       if (meta.output.category !== 'workflow') {
@@ -95,16 +101,14 @@ describe('shared text-diff caller fixtures', () => {
         },
       ]);
       expect(
-        yield* Effect.tryPromise(() =>
-          AbsoluteFS.read(
-            path.join(
-              runDirUnder(workspaceRoots().storage, runId),
-              'diffs/section_paper.tex.diff',
-            ),
+        yield* fs.readFileString(
+          path.join(
+            runDirUnder(storageRoot, runId),
+            'diffs/section_paper.tex.diff',
           ),
         ),
       ).toBe('@@ -1,3 +1,4 @@\n one\n-two\n+TWO\n three\n+four');
-    }),
+    }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
   it.effect(

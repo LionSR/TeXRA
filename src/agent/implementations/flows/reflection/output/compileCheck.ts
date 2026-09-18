@@ -3,7 +3,6 @@ import * as path from 'node:path';
 import { Cause, Effect, FileSystem } from 'effect';
 
 import type { AgentTrace } from '@agent/trace';
-import { isFileNotFoundError } from '@common/errors';
 import { compileLatex2Pdf, type CompileLatex2PdfResult } from '@latex/texTools';
 import { hasLatexCompiler } from '@latex/latexToolchain';
 import type { WorkspaceFs } from '@platform/rootedFs';
@@ -21,8 +20,8 @@ import {
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { LATEX_CONFIG_RANGES } from '@shared/constants/latexConfig';
 import { parseWorkflowOutputRoundDir } from '@shared/constants/workflowOutput';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { createRunStorageLocation } from '@utils/files/fileLocation';
+import { readNormalizedFile } from '@utils/files/fsDurability';
 import { runDirUnder } from '@utils/files/runStorageFs';
 import { type RunFileService } from '@utils/files/runStorage';
 import { locateInWorkspace } from '@utils/files/workspaceFS';
@@ -292,6 +291,7 @@ const compileOne = Effect.fn('reflection.compileOne')(function* (
   displayName: string,
   opts: PerFileOptions,
 ) {
+  const fs = yield* FileSystem.FileSystem;
   // Full relative path keeps two outputs sharing a basename distinct
   // (ch1/main.tex vs ch2/main.tex). Strip the leading r<N>/ segment because
   // it is already added explicitly as `r${currentRound}_` below — without
@@ -337,17 +337,16 @@ const compileOne = Effect.fn('reflection.compileOne')(function* (
   // A stale log from a previous attempt at this round is only ever cleared
   // once this file's outcome is known — clearing it up front would leave a
   // crash mid-check masquerading as success. A log that is not there is
-  // already clear, which is the only failure this passes over silently; any
-  // other one leaves last round's log in place, so it is named.
-  const clearStaleLogs = fsCall(() => AbsoluteFS.delete(logAbsolutePath)).pipe(
+  // already clear (`force`, as the provider behind the facade already was),
+  // which is the only failure this passes over silently; any other one leaves
+  // last round's log in place, so it is named.
+  const clearStaleLogs = fs.remove(logAbsolutePath, { force: true }).pipe(
     Effect.catch((error) =>
-      isFileNotFoundError(error)
-        ? Effect.void
-        : Effect.sync(() => {
-            ctx.logger.warn(
-              `Compile check: could not clear stale log ${logRelativePath}: ${toErrorMessage(error)}`,
-            );
-          }),
+      Effect.sync(() => {
+        ctx.logger.warn(
+          `Compile check: could not clear stale log ${logRelativePath}: ${toErrorMessage(error)}`,
+        );
+      }),
     ),
   );
 
@@ -355,8 +354,9 @@ const compileOne = Effect.fn('reflection.compileOne')(function* (
     Effect.Effect<unknown, Error, FileSystem.FileSystem | WorkspaceFs>,
     CompileAttempt
   > {
-    const content = yield* fsCall(() =>
-      AbsoluteFS.read(outputFile.location.absolutePath),
+    const content = yield* readNormalizedFile(
+      fs,
+      outputFile.location.absolutePath,
     );
     if (!/\\documentclass/.test(content)) {
       ctx.logger.debug(
@@ -470,9 +470,10 @@ const writeCompileFailure = Effect.fn('reflection.writeCompileFailure')(
     logRelativePath,
     failureLogExcerpt,
   }: WriteCompileFailureArgs) {
-    yield* fsCall(async () => {
-      await AbsoluteFS.ensureDir(opts.compileRoot);
-      await AbsoluteFS.write(logAbsolutePath, `${failureLogExcerpt}\n`);
+    const fs = yield* FileSystem.FileSystem;
+    yield* Effect.gen(function* () {
+      yield* fs.makeDirectory(opts.compileRoot, { recursive: true });
+      yield* fs.writeFileString(logAbsolutePath, `${failureLogExcerpt}\n`);
     }).pipe(
       Effect.catch((writeErr) =>
         Effect.sync(() => {

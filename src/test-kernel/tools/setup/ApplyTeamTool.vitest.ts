@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
+import { Effect, Layer } from 'effect';
 import { afterEach, beforeAll, beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports
@@ -19,7 +19,10 @@ import {
   installHostAuth,
   installPlatform,
 } from '@test/support/setupPlatform';
-import { unusedGlobalStorageFs } from '@test/support/fsTestUtils';
+import {
+  nodePlatformLayer,
+  unusedGlobalStorageFs,
+} from '@test/support/fsTestUtils';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { REPO_ROOT } from '@test/support/repoScan';
 import { ApplyTeamTool } from '@tools/setup/ApplyTeamTool';
@@ -99,7 +102,10 @@ beforeAll(async () => {
     },
   );
   await Effect.runPromise(
-    Effect.provide(refresh({ includeRemote: false }), unusedGlobalStorageFs()),
+    Effect.provide(
+      refresh({ includeRemote: false }),
+      Layer.merge(unusedGlobalStorageFs(), nodePlatformLayer),
+    ),
   );
 });
 

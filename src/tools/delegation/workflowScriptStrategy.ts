@@ -379,16 +379,20 @@ export function createWorkflowScriptStrategy(
     // follow-up carries the run's runId, like every other detached
     // delivery — the invoking model correlates and can resume by that id.
     formatDelivery: (turn) =>
-      formatChildRunDelivery(
-        {
-          tag: DELIVERY_TAG.workflowScriptResult,
-          runId: params.runId,
-        },
-        {
-          response: `${formatWorkflowResult(turn.result)}${runLog.format()}\n\n${formatWorkflowScriptReference(params.scriptPath)}`,
-          lines: [formatSummaryLine('completed')],
-        },
-      ),
+      Effect.try({
+        try: () =>
+          formatChildRunDelivery(
+            {
+              tag: DELIVERY_TAG.workflowScriptResult,
+              runId: params.runId,
+            },
+            {
+              response: `${formatWorkflowResult(turn.result)}${runLog.format()}\n\n${formatWorkflowScriptReference(params.scriptPath)}`,
+              lines: [formatSummaryLine('completed')],
+            },
+          ),
+        catch: ensureError,
+      }),
 
     formatError: (_turn, err) => {
       const errorCause = toErrorMessage(err);

@@ -117,7 +117,7 @@ export interface HostSnapshotSource {
   readonly refreshCatalogs: Effect.Effect<
     void,
     never,
-    GlobalStorageFs | LanguageModel
+    GlobalStorageFs | LanguageModel | FileSystem.FileSystem
   >;
   /** The project's files changed on disk, or the surface asked for a relist. */
   readonly refreshFiles: Effect.Effect<void, never, FileSystem.FileSystem>;
@@ -279,7 +279,9 @@ export function createHostSnapshotSource(
     refresh: guarded<
       GlobalStorageFs | LanguageModel | SupabaseAuth | FileSystem.FileSystem
     >(...catalogLoads, loadFiles, loadCommits, loadAuth, loadHostBanners),
-    refreshCatalogs: guarded<GlobalStorageFs | LanguageModel>(...catalogLoads),
+    refreshCatalogs: guarded<
+      GlobalStorageFs | LanguageModel | FileSystem.FileSystem
+    >(...catalogLoads),
     refreshFiles: guarded(loadFiles),
     refreshCommits: guarded(loadCommits),
     refreshAuth: guarded(loadAuth),

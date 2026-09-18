@@ -5,7 +5,7 @@ import * as path from 'node:path';
 import { glob } from 'glob';
 import { ZodError, type ZodIssue } from 'zod';
 
-import { Data, Effect, Result } from 'effect';
+import { Data, Effect, FileSystem, Result } from 'effect';
 import { mergeInheritedAgentObject } from '@agent/core/definition/agentDefinitionInheritance';
 import {
   AgentDefinitionSchema,
@@ -17,8 +17,8 @@ import { createLog } from '@logger/logUtils';
 import type { AgentScanIssue, AgentSource } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
 import { groupBy } from '@utils/core';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { readNormalizedFile } from '@utils/files/fsDurability';
 import type { AgentEntry } from './agentEntry';
 
 const log = createLog('agentRegistry');
@@ -64,7 +64,7 @@ export function extractToolNames(
 export function scanDirectory(
   dir: string,
   source: AgentSource,
-): Effect.Effect<AgentDirectoryScan> {
+): Effect.Effect<AgentDirectoryScan, never, FileSystem.FileSystem> {
   if (!dir) return Effect.succeed({ entries: [], issues: [] });
 
   return Effect.gen(function* () {
@@ -159,7 +159,7 @@ function entriesWithUniqueNames(
 function readYamlDefinition(
   yamlPath: string,
   dir: string,
-): Effect.Effect<ParsedAgentYaml, AgentScanError> {
+): Effect.Effect<ParsedAgentYaml, AgentScanError, FileSystem.FileSystem> {
   const displayPath = path.relative(dir, yamlPath);
   const scanError = (cause: unknown) =>
     new AgentScanError({
@@ -167,10 +167,10 @@ function readYamlDefinition(
       message: formatScanFailure(cause),
       cause,
     });
-  return Effect.tryPromise({
-    try: () => AbsoluteFS.read(yamlPath),
-    catch: scanError,
-  }).pipe(
+  return FileSystem.FileSystem.pipe(
+    Effect.flatMap((fs) => readNormalizedFile(fs, yamlPath)),
+    Effect.mapError(scanError),
+  ).pipe(
     Effect.flatMap((content) => {
       const parsed = parseYamlWith(content, AgentDefinitionSchema);
       if (Result.isFailure(parsed)) {

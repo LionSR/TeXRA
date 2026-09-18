@@ -1,6 +1,6 @@
 import * as path from 'node:path';
 
-import { Cause, Effect } from 'effect';
+import { Cause, Effect, FileSystem } from 'effect';
 import * as vscode from 'vscode';
 
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
@@ -33,9 +33,13 @@ const CUSTOM_AGENT_ROOT_OPTIONS = {
  */
 export function registerAgentDirectoryRoots(
   context: vscode.ExtensionContext,
-): Effect.Effect<void, never, GlobalStorageFs> {
+): Effect.Effect<void, never, GlobalStorageFs | FileSystem.FileSystem> {
   const registrations: Array<
-    Effect.Effect<void, AgentDirectoriesFailed, GlobalStorageFs>
+    Effect.Effect<
+      void,
+      AgentDirectoriesFailed,
+      GlobalStorageFs | FileSystem.FileSystem
+    >
   > = [
     Effect.flatMap(agentDirectories.builtIn(), (directory) =>
       Effect.sync(() =>
@@ -99,7 +103,7 @@ export function registerAgentDirectoryRoots(
 export function refreshCustomAgentRoot(): Effect.Effect<
   void,
   never,
-  GlobalStorageFs
+  GlobalStorageFs | FileSystem.FileSystem
 > {
   return agentDirectories.custom().pipe(
     Effect.andThen((custom) =>

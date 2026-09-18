@@ -1,6 +1,6 @@
 import * as path from 'node:path';
 
-import { Effect, Result } from 'effect';
+import { Effect, FileSystem, Result } from 'effect';
 import { getAgent } from '@agent/index';
 import type { AgentEntry } from '@agent/index/agentEntry';
 import {
@@ -16,8 +16,8 @@ import { mergeInheritedAgentObject } from '@agent/core/definition/agentDefinitio
 import { loadRemoteAgent } from '@agent/remote/RemoteAgentLoader';
 import { parseYamlWith, safeParseYaml } from '@common/parsing/safeParseYaml';
 import { agentKey, AgentCategory } from '@shared/schemas';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { ensureError } from '@utils/errors/errorMessage';
+import { readNormalizedFile } from '@utils/files/fsDurability';
 
 import { normalizeAgentSettingTools } from './agentSettingTools';
 
@@ -48,15 +48,15 @@ export function validateAgentYamlContent(content: string): void {
 /** Loads and parses a YAML file from an absolute path. */
 const loadYaml = Effect.fn('agentLoad.loadYaml')(function* (
   absolutePath: string,
-): Effect.fn.Return<object, Error> {
+): Effect.fn.Return<object, Error, FileSystem.FileSystem> {
   if (!path.isAbsolute(absolutePath)) {
     return yield* Effect.fail(new Error('loadYaml requires an absolute path'));
   }
 
-  const yamlContent = yield* Effect.tryPromise({
-    try: () => AbsoluteFS.read(absolutePath),
-    catch: ensureError,
-  });
+  const yamlContent = yield* readNormalizedFile(
+    yield* FileSystem.FileSystem,
+    absolutePath,
+  );
   const parsed = safeParseYaml(yamlContent);
   if (Result.isFailure(parsed)) {
     return yield* Effect.fail(
@@ -74,7 +74,7 @@ export const loadAgentSettingAndPrompts = Effect.fn(
 )(function* (
   entry: AgentEntry,
   seen: ReadonlySet<string> = new Set(),
-): Effect.fn.Return<[AgentSetting, AgentPrompt], Error> {
+): Effect.fn.Return<[AgentSetting, AgentPrompt], Error, FileSystem.FileSystem> {
   // Handle remote agents
   if (entry.source === 'remote') {
     const remoteConfig = yield* loadRemoteAgent(entry.name);

@@ -1,6 +1,6 @@
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
+import { Effect, FileSystem, Layer } from 'effect';
 import { afterEach, describe, expect, vi } from 'vitest';
 
 const authMocks = vi.hoisted(() => ({
@@ -70,17 +70,25 @@ import { SupabaseAuth, type SupabaseAuthShape } from '@auth/SupabaseAuth';
 import { signIn, signOut } from '@commands/auth/authCommands';
 import { GlobalStorageFs } from '@platform/rootedFs';
 import { fakeSupabaseAuth } from '@test/support/fakeSupabaseAuth';
-import { unusedGlobalStorageFs } from '@test/support/fsTestUtils';
+import {
+  nodePlatformLayer,
+  unusedGlobalStorageFs,
+} from '@test/support/fsTestUtils';
 
 /** Run the command against the fake account plane. */
 const withAuth = <A>(
   auth: SupabaseAuthShape,
-  program: Effect.Effect<A, never, GlobalStorageFs | SupabaseAuth>,
+  program: Effect.Effect<
+    A,
+    never,
+    GlobalStorageFs | SupabaseAuth | FileSystem.FileSystem
+  >,
 ): Effect.Effect<A> =>
   Effect.provideService(program, SupabaseAuth, auth).pipe(
     // The sign-out path rebuilds the local agent catalog, which names the
-    // process's global storage view; this suite's catalog read is mocked.
-    Effect.provide(unusedGlobalStorageFs()),
+    // process's global storage view and the filesystem its scan reads
+    // through; this suite's catalog read is mocked.
+    Effect.provide(Layer.merge(unusedGlobalStorageFs(), nodePlatformLayer)),
   );
 
 describe('auth commands for unavailable stored sessions', () => {

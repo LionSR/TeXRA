@@ -319,7 +319,8 @@ function createBackgroundBashStrategy(params: {
         `Background bash failed with exit code ${turn.exitCode}.`,
       ),
 
-    formatDelivery: (turn, wallTimeMs) => delivery(turn, wallTimeMs),
+    formatDelivery: (turn, wallTimeMs) =>
+      Effect.try({ try: () => delivery(turn, wallTimeMs), catch: ensureError }),
     // A failed exit still produced real output: deliver the full excerpt, not
     // the bare error form. `formatBashError` is only for a throw, where there
     // is no result to report.

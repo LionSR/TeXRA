@@ -293,7 +293,7 @@ export interface AgentCreatorUI {
   getCustomAgentDir(): Effect.Effect<
     string,
     AgentCreatorUiFailed,
-    GlobalStorageFs
+    GlobalStorageFs | FileSystem.FileSystem
   >;
   showCreatedInfo(filePath: string): void;
   promptAddToConfig(
@@ -360,7 +360,7 @@ const buildAgentBlueprint = Effect.fn('agentCreator.buildBlueprint')(function* (
 ): Effect.fn.Return<
   AgentBlueprint | undefined,
   AgentCreatorUiFailed,
-  GlobalStorageFs
+  GlobalStorageFs | FileSystem.FileSystem
 > {
   const base = { AGENT_NAME: agentName, DESCRIPTION: description };
 

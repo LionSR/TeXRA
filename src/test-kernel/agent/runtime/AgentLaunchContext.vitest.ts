@@ -1,5 +1,5 @@
 import { it } from '@effect/vitest';
-import { Cause, Effect, Exit } from 'effect';
+import { Cause, Effect, Exit, Layer } from 'effect';
 import { assert, describe, expect, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -47,6 +47,8 @@ import {
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
 import { fakeProcessServices } from '@test/support/setupPlatform';
+import { nodePlatformLayer } from '@test/support/fsTestUtils';
+
 import { createRecordingHost, recordSessionEvents } from '../progressTestUtils';
 
 const buildAgentLaunchContext = (
@@ -253,7 +255,10 @@ describe('AgentLaunchContext', () => {
             }),
           ).pipe(
             Effect.provide(
-              LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT),
+              Layer.merge(
+                LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT),
+                nodePlatformLayer,
+              ),
             ),
           );
           expect(error.message).toContain('is not registered');

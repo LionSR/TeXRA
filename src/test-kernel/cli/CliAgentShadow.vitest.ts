@@ -19,6 +19,7 @@ import {
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { GlobalStorageFs } from '@platform/rootedFs';
 import { AgentCategory } from '@shared/schemas';
+import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { REPO_ROOT } from '@test/support/repoScan';
 import { installPlatform } from '@test/support/setupPlatform';
@@ -75,10 +76,13 @@ describe('CLI agent validation with a shadowed name', () => {
     // The fake host answers `custom()` from a temp directory of its own, so
     // nothing in this load reaches the global storage view.
     await Effect.runPromise(
-      Effect.provideService(
-        refresh({ includeRemote: false }),
-        GlobalStorageFs,
-        {} as RootedFileSystem,
+      Effect.provide(
+        Effect.provideService(
+          refresh({ includeRemote: false }),
+          GlobalStorageFs,
+          {} as RootedFileSystem,
+        ),
+        nodePlatformLayer,
       ),
     );
   });
