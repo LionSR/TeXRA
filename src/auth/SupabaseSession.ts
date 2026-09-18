@@ -54,11 +54,11 @@ const NOOP_SUPABASE_SESSION_LOG: Required<SupabaseSessionLog> = {
  * OAuth callback conversion, and refresh. Host wrappers own UI and registration.
  *
  * The public surface is Effect-typed (PRD R1): each method is one of the
- * programs below, and the caller's edge runs it. Storage and GoTrue rejections
+ * programs below, and the caller runs it. Storage and GoTrue rejections
  * travel as {@link AuthPortError}; the `SupabaseAuth` plane wraps the probes
- * with their signed-out recoveries, and the hosts' Promise-facing sign-in
- * surfaces settle the rest through `runAuthProgram`, whose edge unwraps the
- * port's own error.
+ * with their signed-out recoveries, and a host's Promise-facing sign-in
+ * surface settles the rest on its own runtime, unwrapping the port's own
+ * error (`unwrapAuthPortCause`, `settleFailure`).
  */
 export class SupabaseSessionCoordinator implements AuthTokenProvider {
   private refreshInFlight: Deferred.Deferred<SupabaseSession | null> | null =
