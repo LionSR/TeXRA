@@ -19,7 +19,7 @@ import {
   type DesktopSupabaseAuthHost,
 } from '@desktop/main/desktopSupabaseAuth';
 import { NotificationFailed } from '@hosts/uiHosts';
-import { effectRuntime } from '@platform/processRuntime';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { FakeStateStore } from '@test/support/FakePlatform';
 import { fakeSupabaseAuth } from '@test/support/fakeSupabaseAuth';
@@ -80,10 +80,7 @@ function createTestAuth(options: DesktopAuthTestOptions) {
     router,
     coordinator,
     oauthClient,
-    callbackState = createDesktopAuthCallbackState(
-      effectRuntime(),
-      createLog(),
-    ),
+    callbackState = createDesktopAuthCallbackState(testRuntime(), createLog()),
     log = createLog(),
     openExternalUrl = vi.fn(() => Effect.void),
     showInfoMessage = vi.fn(() => Effect.void),
@@ -102,7 +99,7 @@ function createTestAuth(options: DesktopAuthTestOptions) {
       onSessionChanged,
     },
     log,
-    runtime: effectRuntime(),
+    runtime: testRuntime(),
   });
   testAuths.push(auth);
   return auth;
@@ -327,7 +324,7 @@ describe('desktop Supabase auth', () => {
     // The callback wrote to the coordinator double, not to the host's real
     // session store: the account plane still answers signed-out.
     expect(
-      await effectRuntime().runPromise(
+      await testRuntime().runPromise(
         Effect.flatMap(SupabaseAuth, (plane) => plane.authenticated),
       ),
     ).toBe(false);
@@ -478,7 +475,7 @@ describe('desktop Supabase auth', () => {
   it('preserves pending sign-in across desktop auth recreation', async () => {
     const stateStore = new FakeStateStore();
     const callbackState = createDesktopAuthCallbackState(
-      effectRuntime(),
+      testRuntime(),
       createLog(),
       stateStore,
     );
@@ -489,7 +486,7 @@ describe('desktop Supabase auth', () => {
     await auth.signIn();
     auth.dispose();
     const persistedCallbackState = createDesktopAuthCallbackState(
-      effectRuntime(),
+      testRuntime(),
       createLog(),
       stateStore,
     );
@@ -519,7 +516,7 @@ describe('desktop Supabase auth', () => {
       const stateStore = new FakeStateStore();
       const { router, coordinator, auth } = createAuthSetup({
         callbackState: createDesktopAuthCallbackState(
-          effectRuntime(),
+          testRuntime(),
           createLog(),
           stateStore,
         ),
@@ -530,7 +527,7 @@ describe('desktop Supabase auth', () => {
 
       vi.setSystemTime(Date.now() + 11 * 60 * 1000);
       const expiredCallbackState = createDesktopAuthCallbackState(
-        effectRuntime(),
+        testRuntime(),
         createLog(),
         stateStore,
       );
@@ -561,11 +558,11 @@ describe('desktop Supabase auth', () => {
       vi.setSystemTime(new Date('2026-05-06T00:00:00Z'));
       const stateStore = new FakeStateStore();
       const initialState = createDesktopAuthCallbackState(
-        effectRuntime(),
+        testRuntime(),
         createLog(),
         stateStore,
       );
-      await effectRuntime().runPromise(
+      await testRuntime().runPromise(
         initialState.beginAuthAttempt('11111111111111111111111111111111'),
       );
       vi.setSystemTime(Date.now() + 11 * 60 * 1000);
@@ -580,11 +577,11 @@ describe('desktop Supabase auth', () => {
       );
 
       const recreatedState = createDesktopAuthCallbackState(
-        effectRuntime(),
+        testRuntime(),
         createLog(),
         stateStore,
       );
-      const beginNewAttempt = effectRuntime().runPromise(
+      const beginNewAttempt = testRuntime().runPromise(
         recreatedState.beginAuthAttempt('22222222222222222222222222222222'),
       );
       await vi.waitFor(() => {
@@ -595,7 +592,7 @@ describe('desktop Supabase auth', () => {
       await beginNewAttempt;
 
       const persistedState = createDesktopAuthCallbackState(
-        effectRuntime(),
+        testRuntime(),
         createLog(),
         stateStore,
       );
@@ -609,7 +606,7 @@ describe('desktop Supabase auth', () => {
 
   it('cancels pending callback state on sign-out', async () => {
     const callbackState = createDesktopAuthCallbackState(
-      effectRuntime(),
+      testRuntime(),
       createLog(),
     );
     const log = createLog();
@@ -650,7 +647,7 @@ describe('desktop Supabase auth', () => {
 
   it('does not store a superseded callback or clear the newer sign-in', async () => {
     const callbackState = createDesktopAuthCallbackState(
-      effectRuntime(),
+      testRuntime(),
       createLog(),
     );
     const { router, coordinator, oauthClient, auth } = createAuthSetup({
@@ -700,7 +697,7 @@ describe('desktop Supabase auth', () => {
 
   it('removes a stored callback before starting a newer sign-in', async () => {
     const callbackState = createDesktopAuthCallbackState(
-      effectRuntime(),
+      testRuntime(),
       createLog(),
     );
     const onSessionChanged = vi.fn(async () => {});
@@ -884,7 +881,7 @@ describe('desktop Supabase auth', () => {
       stores: makeFakeSettingsStores().stores,
       loadProviderKeyStatuses: async () => ({}),
     });
-    const message = await effectRuntime().runPromise(
+    const message = await testRuntime().runPromise(
       controller.buildProfileMessage(),
     );
 

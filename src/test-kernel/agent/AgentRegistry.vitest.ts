@@ -25,7 +25,7 @@ import {
   type AgentDirectoriesPort,
 } from '@platform/interfaces';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
-import { effectRuntime } from '@platform/processRuntime';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import { AgentCategory } from '@shared/schemas';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { REPO_ROOT } from '@test/support/repoScan';
@@ -151,7 +151,7 @@ describe('agent registry', () => {
   });
 
   it('registers packaged roots and loads the local catalog in startup order', async () => {
-    agentDirectories.initialize(globalState, resourcesPath, effectRuntime());
+    agentDirectories.initialize(globalState, resourcesPath, testRuntime());
 
     await expect(
       Effect.runPromise(

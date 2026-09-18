@@ -24,7 +24,7 @@ import type {
   CliConfigExecuteResult,
 } from '@cli/runtime/executeCli';
 import { CliExitCode } from '@cli/runtime/exitCodes';
-import { effectRuntime } from '@platform/processRuntime';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import {
   RUN_OUTCOME,
@@ -389,7 +389,7 @@ describe('CLI run command, workflow agents', () => {
     const platform = {
       ...installedHost().platform,
       session: Effect.succeed(session),
-      runtime: effectRuntime(),
+      runtime: testRuntime(),
     };
     cliInitPlatformMock.initLocalCliPlatform.mockResolvedValue(platform);
     cliInitPlatformMock.initCliPlatform.mockResolvedValue(platform);
@@ -1292,7 +1292,7 @@ describe('CLI run command, workflow agents', () => {
       context,
       {
         session: Effect.succeed(session),
-        runtime: effectRuntime(),
+        runtime: testRuntime(),
         lifecycle: installedHost().platform.lifecycle,
       },
     ).finally(() => Effect.runPromise(session.dispose()));
@@ -1338,7 +1338,7 @@ describe('CLI run command, workflow agents', () => {
       context,
       {
         session: Effect.succeed(session),
-        runtime: effectRuntime(),
+        runtime: testRuntime(),
         lifecycle: installedHost().platform.lifecycle,
       },
     ).finally(() => Effect.runPromise(session.dispose()));

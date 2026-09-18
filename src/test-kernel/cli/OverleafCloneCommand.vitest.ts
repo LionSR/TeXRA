@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // Local imports
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
-import { effectRuntime } from '@platform/processRuntime';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { makeMachineGitEnv } from '@utils/system/gitEnv';
@@ -176,7 +176,7 @@ describe('CLI Overleaf clone command', () => {
 
   it('cancels the Git process when the host interrupts cloning', async () => {
     const controller = new AbortController();
-    const runtime = effectRuntime();
+    const runtime = testRuntime();
     const runPromise = runtime.runPromise.bind(runtime);
     const runSpy = vi
       .spyOn(runtime, 'runPromise')

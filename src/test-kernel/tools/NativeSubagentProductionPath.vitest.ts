@@ -55,7 +55,7 @@ import {
   type TurnEvent,
   type TurnResult,
 } from '@llm/turn';
-import { effectRuntime } from '@platform/processRuntime';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import {
   AgentResume,
   AgentResumeFailed,
@@ -278,7 +278,7 @@ function resumePersistedRun(
   return Effect.tryPromise({
     try: async () => {
       resumedRuns.push(runId);
-      const resumed = await effectRuntime().runPromise(
+      const resumed = await testRuntime().runPromise(
         resumeRun(runId, {
           session,
           recovery,
@@ -408,7 +408,7 @@ async function queueSecondAssertionFollowUp(
   runId: RunId,
   instruction = 'Now prove the second assertion.',
 ) {
-  const resumed = await effectRuntime().runPromise(
+  const resumed = await testRuntime().runPromise(
     new DelegateAgentTool()
       .call({
         agent: null,
@@ -480,7 +480,7 @@ async function launchWaitingChild(options: {
     }),
   );
   await expect(
-    effectRuntime().runPromise(
+    testRuntime().runPromise(
       prepareAgentDefinition({ config: parentConfig, session }).pipe(
         Effect.flatMap((definition) =>
           executeAgent(definition, PARENT_RUN_ID, {
@@ -515,7 +515,7 @@ async function launchWaitingChild(options: {
     },
     inScope: <A>(operation: () => A): A => operation(),
   };
-  const launch = await effectRuntime().runPromise(
+  const launch = await testRuntime().runPromise(
     executeSubagent(
       parentCall,
       {

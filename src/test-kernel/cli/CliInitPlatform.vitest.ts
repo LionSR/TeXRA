@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { initCliPlatform } from '@cli/runtime/initPlatform';
 import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
 import { StateWriteFailed } from '@platform/interfaces';
-import { effectRuntime } from '@platform/processRuntime';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { UsageLogService } from '@telemetry/UsageLogService';
 import { createTestSession } from '@test/support/sessionTestUtils';
@@ -359,13 +359,11 @@ describe('CLI platform init', () => {
 
     await initCliPlatform(cliContext());
 
-    const setup = await effectRuntime().runPromise(
-      Effect.service(SetupPlatform),
-    );
+    const setup = await testRuntime().runPromise(Effect.service(SetupPlatform));
     expect(setup.host).toBe('cli');
-    expect(await effectRuntime().runPromise(setup.signIn())).toBe(true);
+    expect(await testRuntime().runPromise(setup.signIn())).toBe(true);
     expect(mocks.signInCliSupabase).toHaveBeenCalledOnce();
-    expect(mocks.signInCliSupabase).toHaveBeenCalledWith(effectRuntime(), {
+    expect(mocks.signInCliSupabase).toHaveBeenCalledWith(testRuntime(), {
       openBrowser: true,
     });
   });

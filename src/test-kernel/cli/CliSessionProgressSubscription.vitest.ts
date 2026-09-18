@@ -8,7 +8,7 @@ import {
   type CliNdjsonProgressRecordWriter,
 } from '@cli/runtime/sessionProgressSubscription';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
-import { effectRuntime } from '@platform/processRuntime';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import {
   aggregateId as qualifyAggregateId,
   AgentCategory,
@@ -175,7 +175,7 @@ function rowFields(record: CliNdjsonRecord): {
 function projectionOver(session: SessionHandle) {
   const writeRecord = recordWriter();
   const detachProjection = attachCliSessionProgressProjection(
-    effectRuntime(),
+    testRuntime(),
     session,
     writeRecord,
   );

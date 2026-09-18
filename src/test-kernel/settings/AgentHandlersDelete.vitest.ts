@@ -4,7 +4,10 @@ import { Effect, Layer, ManagedRuntime } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { inquiryRecordsLayer } from '@controllers/session/inquiryRecords';
 
-import { effectRuntime, initProcessRuntime } from '@platform/processRuntime';
+import {
+  initTestProcessRuntime,
+  testRuntime,
+} from '@test/support/testProcessRuntime';
 import { processOwnerId } from '@platform/defaults/nodeProcesses';
 import { AgentHandlers } from '@settingsView/handlers/agentHandlers';
 import type { AgentSource } from '@shared/schemas';
@@ -126,7 +129,7 @@ function createHandlers(): AgentHandlers {
     },
     mocks.refreshAfterAgentMutation,
     installedHost().roots.globalState,
-    effectRuntime(),
+    testRuntime(),
   );
 }
 
@@ -159,7 +162,7 @@ describe('AgentHandlers custom-agent file actions', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     const { globalStorage } = createFakeWorkspaceRoots();
-    initProcessRuntime(
+    initTestProcessRuntime(
       ManagedRuntime.make(
         Layer.mergeAll(
           testHttpClientLayer,

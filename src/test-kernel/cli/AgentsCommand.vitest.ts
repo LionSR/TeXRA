@@ -11,7 +11,7 @@ import { cliOutputMock } from '@test/support/cliOutputMock';
 
 import { AgentCategory } from '@shared/schemas';
 import { createRunCommandCliContext } from '@test/cli/fixtures/cliContext';
-import { effectRuntime } from '@platform/processRuntime';
+import { testRuntime } from '@test/support/testProcessRuntime';
 
 const mocks = vi.hoisted(() => ({
   resolveCliAgent: vi.fn(),
@@ -98,7 +98,7 @@ describe('CLI agents command', () => {
     // The CLI init hands its caller the composition root's services; these
     // commands read the process runtime off what it returns.
     cliInitPlatformMock.initLocalCliPlatform.mockResolvedValue({
-      runtime: effectRuntime(),
+      runtime: testRuntime(),
     });
     agentCatalogMock.getAgentsByCategory.mockReturnValue([]);
     agentCatalogMock.getVisibleAgents.mockReturnValue([]);

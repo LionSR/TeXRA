@@ -8,7 +8,7 @@
 import '@test/support/sessionGraphTestSetup';
 import { SubscriptionRef } from 'effect';
 import { bindSessionView, sessionView } from '@cli/chat/tui/state/sessionView';
-import { effectRuntime } from '@platform/processRuntime';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import {
   AgentCategory,
   isPlainAgentIdentity,
@@ -33,10 +33,10 @@ let unbind: (() => void) | undefined;
 /** Bind an empty view for the file; idempotent. */
 export async function bindTestSessionView(): Promise<void> {
   if (unbind) return;
-  const ref = await effectRuntime().runPromise(
+  const ref = await testRuntime().runPromise(
     SubscriptionRef.make(emptySessionView('test')),
   );
-  unbind = bindSessionView(effectRuntime(), ref);
+  unbind = bindSessionView(testRuntime(), ref);
 }
 
 /** Replace the whole view the components read. */

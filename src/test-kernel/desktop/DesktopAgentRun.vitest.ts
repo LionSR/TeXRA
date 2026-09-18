@@ -9,7 +9,7 @@ import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import { ToolUseAgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import * as DesktopAgentLaunch from '@desktop/main/desktopAgentLaunch';
 import { createDesktopAgentRun } from '@desktop/main/desktopAgentRun';
-import { effectRuntime } from '@platform/processRuntime';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import {
   AgentCategory,
   aggregateId,
@@ -65,13 +65,13 @@ describe('desktop agent run completion hook', () => {
         closeDiff: async () => undefined,
       },
       session,
-      runtime: effectRuntime(),
+      runtime: testRuntime(),
       showAgentConfigBanner: () => undefined,
       onRunCompleted,
     });
     onTestFinished(async () => {
       run.dispose();
-      await effectRuntime().runPromise(session.dispose());
+      await testRuntime().runPromise(session.dispose());
     });
 
     const settled = run.runValidated({
@@ -83,7 +83,7 @@ describe('desktop agent run completion hook', () => {
     });
     const completedRun = publishTestRunStart(session, generateRunId());
     session.publish([completedRunEnd(completedRun)]);
-    await effectRuntime().runPromise(session.settlePublications());
+    await testRuntime().runPromise(session.settlePublications());
     expect(onRunCompleted).not.toHaveBeenCalled();
 
     resolveLaunch();

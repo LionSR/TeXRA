@@ -199,7 +199,7 @@ vi.mock('@transcript/StreamLogStore', () => ({
 }));
 
 // Local imports - package API under test
-import { effectRuntime } from '@platform/processRuntime';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import type { RunId } from '@shared/schemas';
 import type { SessionView as RuntimeSessionView } from '@shared/session/sessionView';
 import {
@@ -311,7 +311,7 @@ describe('agent package run lifecycle', () => {
     });
     mocks.installRuntime.mockImplementation(() => {
       mocks.ownerInstalled = true;
-      return effectRuntime();
+      return testRuntime();
     });
     mocks.disposeRuntime.mockImplementation(async () => {
       mocks.ownerInstalled = false;

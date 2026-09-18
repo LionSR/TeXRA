@@ -16,7 +16,7 @@ vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
 
 // Local imports
 import { appSignals } from '@eventBus/AppSignals';
-import { effectRuntime } from '@platform/processRuntime';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import type { RunId } from '@shared/schemas';
 
 // Test support imports
@@ -157,7 +157,7 @@ class RegistryTestSource {
    */
   async emit(input: string, text: string): Promise<void> {
     const listener = this.onEventByKey.get(input);
-    if (listener) await effectRuntime().runPromise(listener(text));
+    if (listener) await testRuntime().runPromise(listener(text));
   }
 
   private emitKeysChanged(): void {
@@ -181,7 +181,7 @@ describe('GitHub subscription app signals and follow-ups', () => {
     const registry = createTestRegistry(source);
 
     try {
-      await effectRuntime().runPromise(
+      await testRuntime().runPromise(
         registry.bind('stream-a' as RunId, 'owner/repo', session),
       );
       expect(signal.events).toEqual([
@@ -234,7 +234,7 @@ describe('GitHub subscription app signals and follow-ups', () => {
     const registry = createTestRegistry(source);
 
     try {
-      await effectRuntime().runPromise(
+      await testRuntime().runPromise(
         registry.bind(runId, 'owner/repo', session),
       );
 
@@ -260,10 +260,10 @@ describe('GitHub subscription app signals and follow-ups', () => {
     const registry = createTestRegistry(source);
 
     try {
-      await effectRuntime().runPromise(
+      await testRuntime().runPromise(
         registry.bind(runId, 'owner/repo', firstSession),
       );
-      await effectRuntime().runPromise(
+      await testRuntime().runPromise(
         registry.bind(runId, 'owner/repo', secondSession),
       );
 
@@ -296,7 +296,7 @@ describe('GitHub subscription app signals and follow-ups', () => {
 
     try {
       process.once('unhandledRejection', unhandledRejection);
-      await effectRuntime().runPromise(
+      await testRuntime().runPromise(
         registry.bind(runId, 'owner/repo', session),
       );
 

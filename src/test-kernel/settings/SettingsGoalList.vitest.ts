@@ -3,7 +3,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 
-import { effectRuntime } from '@platform/processRuntime';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import { SettingsViewMessageHandler } from '@settingsView/SettingsViewMessageHandler';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { RunId } from '@shared/schemas';
@@ -44,7 +44,7 @@ function createHandler(): SettingsViewMessageHandler {
     } as unknown as vscode.ExtensionContext,
     globalState,
     secrets,
-    effectRuntime(),
+    testRuntime(),
     testDefaultSession(),
   );
 }
@@ -78,7 +78,7 @@ describe('settings goal list', () => {
   it("posts the goal the run's row states", async () => {
     const session = testDefaultSession();
     publishTestRunStart(session, RUN_ID);
-    const goal = await effectRuntime().runPromise(
+    const goal = await testRuntime().runPromise(
       startGoal(session, RUN_ID, 'Finish the settings fix.'),
     );
     const webview = createWebview();

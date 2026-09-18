@@ -123,12 +123,7 @@ vi.mock('@cli/runtime/supabaseAuthDeviceCode', () => ({
 
 async function loadSupabaseAuth() {
   vi.resetModules();
-  // `vi.resetModules()` gives the module graph a fresh `@platform/processRuntime`
-  // whose runtime the shared fake-host install never reached; the module's own
-  // `initializeCliSupabaseAuth` installs the auth run edge from it.
-  const [{ initProcessRuntime }, { Layer, ManagedRuntime }] = await Promise.all(
-    [import('@platform/processRuntime'), import('effect')],
-  );
+  const { Layer, ManagedRuntime } = await import('effect');
   const [{ inquiryRecordsLayer }, { ProcessIdentity }, { processOwnerId }] =
     await Promise.all([
       import('@controllers/session/inquiryRecords'),
@@ -179,7 +174,6 @@ async function loadSupabaseAuth() {
       ToolInjections.layer([]),
     ),
   );
-  initProcessRuntime(runtime);
   const supabaseAuth = await import('@cli/runtime/supabaseAuth');
   // The root's init is what builds the coordinator and installs the auth run
   // edge; nothing below it builds one on demand.

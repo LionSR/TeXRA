@@ -8,7 +8,7 @@ import { Effect } from 'effect';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 // Local imports - test support
-import { effectRuntime } from '@platform/processRuntime';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
 type DesktopDiffHostModule = typeof import('@desktop/main/desktopDiffHost');
@@ -37,7 +37,7 @@ function createHost(overrides: Partial<DiffHostOptions> = {}) {
     }),
   );
   const host = createDesktopDiffHost({
-    runtime: effectRuntime(),
+    runtime: testRuntime(),
     openPath,
     recordPatchDir: (tempDir: string) => {
       recordedPatchDirs.push(tempDir);

@@ -7,7 +7,7 @@ import {
   getDesktopWindowTitle,
   installDesktopWindowTitle,
 } from '@desktop/main/desktopWindowTitle';
-import { effectRuntime } from '@platform/processRuntime';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import { formatSessionTitle, NATIVE_WINDOW_TITLE } from '@shared/sessionTitle';
 import {
   emptySessionView,
@@ -16,7 +16,7 @@ import {
 
 /** A session as the title reads it: the fold's level and nothing else. */
 function createSession(rollup: Partial<SessionView['rollup']> = {}) {
-  const view = effectRuntime().runSync(
+  const view = testRuntime().runSync(
     SubscriptionRef.make<SessionView>({
       ...emptySessionView('paper'),
       rollup: { running: 0, waiting: 0, interrupted: 0, ...rollup },
@@ -25,7 +25,7 @@ function createSession(rollup: Partial<SessionView['rollup']> = {}) {
   return {
     session: { view },
     setRollup(next: Partial<SessionView['rollup']>) {
-      effectRuntime().runSync(
+      testRuntime().runSync(
         SubscriptionRef.update(view, (current) => ({
           ...current,
           rollup: { ...current.rollup, ...next },
@@ -68,7 +68,7 @@ function installTitle(
     window as unknown as Parameters<typeof installDesktopWindowTitle>[0],
     session,
     workspacePath,
-    effectRuntime(),
+    testRuntime(),
   );
 }
 

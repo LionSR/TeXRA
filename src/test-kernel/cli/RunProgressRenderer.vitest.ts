@@ -18,7 +18,7 @@ import { createCliRuntimeHost } from '@cli/runtime/cliPresentationHost';
 import { attachCliSessionProgressProjection } from '@cli/runtime/sessionProgressSubscription';
 import { textDisplayWidth } from '@cli/runtime/terminalText';
 import type { CliContext } from '@cli/runtime/cliContext';
-import { effectRuntime } from '@platform/processRuntime';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import {
   aggregateId as qualifyAggregateId,
   RUN_PHASE,
@@ -373,7 +373,7 @@ function plainRenderer(
 ): TestRunProgressRenderer {
   return attached(
     createRunProgressRenderer(
-      effectRuntime(),
+      testRuntime(),
       context({ stderrColorEnabled: false }),
       {
         colorEnabled: false,
@@ -392,7 +392,7 @@ function ansiRenderer(
   init: Partial<RunProgressRendererInit> = {},
 ): TestRunProgressRenderer {
   return attached(
-    createRunProgressRenderer(effectRuntime(), context(), {
+    createRunProgressRenderer(testRuntime(), context(), {
       colorEnabled: true,
       write: output.write,
       nowMs: () => 0,
@@ -951,7 +951,7 @@ describe('CLI run progress renderer', () => {
     const output = await captureStreamWrites(process.stderr, async () => {
       const session = createTestSession();
       const host = createCliRuntimeHost(
-        effectRuntime(),
+        testRuntime(),
         context({
           quietLogs: true,
           renderRunProgress: true,
@@ -976,7 +976,7 @@ describe('CLI run progress renderer', () => {
     const output = await captureStreamWrites(process.stderr, async () => {
       const session = createTestSession();
       const host = createCliRuntimeHost(
-        effectRuntime(),
+        testRuntime(),
         context({
           stderrColorEnabled: false,
           quietLogs: true,
@@ -1011,7 +1011,7 @@ describe('CLI run progress renderer', () => {
     const output = await captureStreamWrites(process.stderr, async () => {
       const session = createTestSession();
       const host = createCliRuntimeHost(
-        effectRuntime(),
+        testRuntime(),
         context({
           approvalPolicy: 'ask',
           approvalPrompt: async () => 'n no review needed',
@@ -1035,7 +1035,7 @@ describe('CLI run progress renderer', () => {
       stderr = await captureStreamWrites(process.stderr, async () => {
         const session = createTestSession();
         const host = createCliRuntimeHost(
-          effectRuntime(),
+          testRuntime(),
           context({
             outputFormat: 'json',
             stderrColorEnabled: false,
@@ -1056,7 +1056,7 @@ describe('CLI run progress renderer', () => {
   it('prints requestShowInstruction text and a human-readable action hint to stderr in text mode', async () => {
     const output = await captureStreamWrites(process.stderr, async () => {
       const host = createCliRuntimeHost(
-        effectRuntime(),
+        testRuntime(),
         context({ outputFormat: 'text' }),
       );
 
@@ -1084,7 +1084,7 @@ describe('CLI run progress renderer', () => {
   it('falls back to the raw token for an unrecognized action in the instruction hint', async () => {
     const output = await captureStreamWrites(process.stderr, async () => {
       const host = createCliRuntimeHost(
-        effectRuntime(),
+        testRuntime(),
         context({ outputFormat: 'text' }),
       );
 
@@ -1104,7 +1104,7 @@ describe('CLI run progress renderer', () => {
   it('prints a visible agent-not-found error for showAgentConfigBanner in text mode', async () => {
     const output = await captureStreamWrites(process.stderr, async () => {
       const host = createCliRuntimeHost(
-        effectRuntime(),
+        testRuntime(),
         context({ outputFormat: 'text' }),
       );
 
@@ -1125,7 +1125,7 @@ describe('CLI run progress renderer', () => {
   it('does not gate requestShowInstruction behind quietLogs in text mode', async () => {
     const output = await captureStreamWrites(process.stderr, async () => {
       const host = createCliRuntimeHost(
-        effectRuntime(),
+        testRuntime(),
         context({ outputFormat: 'text', quietLogs: true }),
       );
 
@@ -1150,10 +1150,7 @@ describe('CLI run progress renderer', () => {
       await settle();
       // The roster is the fold's: the parent's `childIds` and the child's own
       // row, derived beside the line that folded them.
-      const detach = attachCliSessionProgressProjection(
-        effectRuntime(),
-        session,
-      );
+      const detach = attachCliSessionProgressProjection(testRuntime(), session);
       session.publish([
         {
           type: 'run.start',
@@ -1198,7 +1195,7 @@ describe('CLI run progress renderer', () => {
   it('applies an explicit ndjson policy to every runtime presentation request', async () => {
     const output = await captureStreamWrites(process.stdout, async () => {
       const host = createCliRuntimeHost(
-        effectRuntime(),
+        testRuntime(),
         context({ mode: 'headless', outputFormat: 'ndjson' }),
       );
 

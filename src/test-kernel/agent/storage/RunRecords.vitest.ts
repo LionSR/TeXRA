@@ -5,7 +5,7 @@ import { z } from 'zod';
 
 import { getRunRecords } from '@agent/storage';
 import { readRunChildren } from '@agent/storage/runLifecycle';
-import { effectRuntime } from '@platform/processRuntime';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import {
   aggregateId,
   AgentConfigFieldsSchema,
@@ -19,7 +19,7 @@ setupPlatform({ workspacePath: '/workspace' });
 const runId = 'abcdef' as RunId;
 let session: ReturnType<typeof createTestSession>;
 const run = <A, E>(effect: Effect.Effect<A, E>) =>
-  effectRuntime().runPromise(effect);
+  testRuntime().runPromise(effect);
 
 beforeEach(async () => {
   session = createTestSession();

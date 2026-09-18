@@ -33,7 +33,7 @@ import {
 } from '@cli/chat/tui/state/cliState';
 import { notices, noticesFor } from '@cli/chat/tui/state/transcript';
 import type { CliModelAccessSelection } from '@cli/runtime/modelAccessRoute';
-import { effectRuntime } from '@platform/processRuntime';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
@@ -85,7 +85,7 @@ function registerBuiltins(
   registerBuiltinSlashCommands({
     secrets: new FakeSecrets(),
     state: new FakeStateStore(),
-    runtime: effectRuntime(),
+    runtime: testRuntime(),
     runtimeSession: testDefaultSession(),
     ...options,
   });

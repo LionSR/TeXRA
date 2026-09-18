@@ -15,17 +15,14 @@ vi.mock('@model/setupCredentialAccess', () => ({
   hasUsableSetupCredential: mocks.hasUsableSetupCredential,
 }));
 
-vi.mock('@platform/processRuntime', () => ({
-  effectRuntime: () => ({ runPromise: Effect.runPromise }),
-}));
-
 import { firstRunSetupAgentOverride } from '@cli/onboarding/setupContinuation';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import {
   LanguageModel,
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
 } from '@platform/languageModel';
-import { effectRuntime, type ProcessRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import {
@@ -66,7 +63,7 @@ describe('maybeRunCliOnboarding gate', () => {
       ...createFakePlatform(),
       globalState: createFakeWorkspaceRoots().globalState,
       secrets: new FakeSecrets(),
-      runtime: effectRuntime(),
+      runtime: testRuntime(),
     };
     originalIsTty = process.stdout.isTTY;
     Object.defineProperty(process.stdout, 'isTTY', {

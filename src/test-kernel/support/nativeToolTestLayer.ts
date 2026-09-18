@@ -6,7 +6,7 @@ import { Runs } from '@agent/runtime/runRegistry';
 import { ToolCall, type ToolCallShape } from '@agent/runtime/ToolCall';
 import { sessionFsLayer } from '@platform/rootedFs';
 import { workspaceRoots } from '@platform/workspaceRoots';
-import { effectRuntime } from '@platform/processRuntime';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import { testRunRegistry } from '@test/support/runHandleFixtures';
 
 /** Each invocation owns its tracker; tests may supply a run and its workspace frame.
@@ -16,10 +16,10 @@ export function nativeToolTestLayer(options: Partial<ToolCallShape> = {}) {
   const readRoots = options.inScope ?? ((operation) => operation());
   const roots = options.roots ?? readRoots(() => workspaceRoots());
   return Layer.mergeAll(
-    Layer.effectContext(effectRuntime().contextEffect),
+    Layer.effectContext(testRuntime().contextEffect),
     // The call's rooted filesystems, from the same roots it is given.
     sessionFsLayer(roots).pipe(
-      Layer.provide(Layer.effectContext(effectRuntime().contextEffect)),
+      Layer.provide(Layer.effectContext(testRuntime().contextEffect)),
     ),
     Layer.sync(ToolCall, () => ({
       roots,

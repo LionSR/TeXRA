@@ -19,7 +19,7 @@ import { createDesktopWorkspaceIpc } from '@desktop/main/desktopWorkspaceIpc';
 import type { DesktopBrowserViews } from '@desktop/main/desktopBrowserViews';
 import type { DesktopPtyHost } from '@desktop/main/desktopPtyHost';
 import { appSignals } from '@eventBus/AppSignals';
-import { effectRuntime } from '@platform/processRuntime';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
 let fixtureRoot = '';
@@ -64,7 +64,7 @@ function createIpc(
     getWorkspacePath: () => workspacePath,
     getEnvironmentSummary: async () => EMPTY_DESKTOP_ENVIRONMENT_SUMMARY,
     onAsyncError: vi.fn(),
-    runtime: effectRuntime(),
+    runtime: testRuntime(),
     ...overrides,
   };
   const ipc = createDesktopWorkspaceIpc({ postToRenderer }, options);

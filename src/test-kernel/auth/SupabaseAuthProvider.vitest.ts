@@ -108,7 +108,7 @@ import type { SupabaseSession } from '@auth/SupabaseSession';
 import type { StoredSessionState } from '@auth/TokenProvider';
 import { SupabaseAuthProvider } from '@frontend/auth/SupabaseAuthProvider';
 import type { SupabaseUriHandler } from '@frontend/auth/UriHandler';
-import { effectRuntime } from '@platform/processRuntime';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import { fakeSupabaseAuth } from '@test/support/fakeSupabaseAuth';
 
 const PENDING_STATE_PREFIX = 'texra.extension.pendingOAuthState.';
@@ -176,7 +176,7 @@ function createProvider(options: {
       showSignInPrompt,
     },
     testDoubles.secretsPort,
-    effectRuntime(),
+    testRuntime(),
     fakeSupabaseAuth({
       client: {
         auth: {

@@ -4,7 +4,8 @@ import path from 'node:path';
 import { Effect, ManagedRuntime } from 'effect';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { effectRuntime, type ProcessRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import type { RunId } from '@shared/schemas';
 import type { HostRequest } from '@shared/session/hostRequest';
 import { createModuleMocks } from '@test/support/moduleMocks';
@@ -141,7 +142,7 @@ describe('desktop preview host', () => {
       shell.openExternal.mockRejectedValue(new Error('Browser unavailable'));
       const preview = createDesktopPreviewHost({
         shell,
-        runtime: effectRuntime(),
+        runtime: testRuntime(),
       });
       const draftRequests = new HostDraftRequests();
       vi.spyOn(draftRequests, 'handle').mockReturnValue(
@@ -150,10 +151,10 @@ describe('desktop preview host', () => {
       const files = createDesktopFileSelection({
         workspacePath: undefined,
         showOpenFileDialog: async () => undefined,
-        runtime: effectRuntime(),
+        runtime: testRuntime(),
       });
       const handler = createDesktopHostRequests({
-        runtime: effectRuntime(),
+        runtime: testRuntime(),
         session,
         host: createStubDesktopAgentRunHost({
           ...preview,
@@ -196,7 +197,7 @@ describe('desktop preview host', () => {
       });
       try {
         await expect(
-          effectRuntime().runPromise(
+          testRuntime().runPromise(
             handler.handleHostRequest(request, 'window'),
           ),
         ).rejects.toBeDefined();
@@ -207,7 +208,7 @@ describe('desktop preview host', () => {
         expect(showErrorMessage).not.toHaveBeenCalled();
         present.mockClear();
         await expect(
-          effectRuntime().runPromise(
+          testRuntime().runPromise(
             handler.handleHostRequest(
               { kind: 'pickFiles', fileType: 'input' },
               'window',

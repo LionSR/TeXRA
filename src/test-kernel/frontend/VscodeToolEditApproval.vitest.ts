@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SessionHandle } from '@agent/runtime';
 import { ToolEditApprovalController } from '@controllers/approval/ToolEditApprovalController';
 import { VscodeToolEditApprovalHost } from '@frontend/approval/VscodeToolEditApprovalHost';
-import { effectRuntime } from '@platform/processRuntime';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import type { RequestDecision, RunId } from '@shared/schemas';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { toolEditApprovalRequest } from '../agent/progressTestUtils';
@@ -132,7 +132,7 @@ function createApprovalHarness(): ApprovalHarness {
     host: new VscodeToolEditApprovalHost(
       storageRoot,
       decide,
-      effectRuntime(),
+      testRuntime(),
       // The session only backs `openBuildDisplay`, which this suite never
       // invokes; no shared fake exists that builds without a platform host.
       { roots: {} } as unknown as SessionHandle,

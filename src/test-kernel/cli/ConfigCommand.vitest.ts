@@ -2,7 +2,7 @@ import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { InvalidAgentTeamError } from '@agent/index';
-import { effectRuntime } from '@platform/processRuntime';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 
 const mocks = vi.hoisted(() => ({
@@ -67,7 +67,7 @@ describe('CLI config command', () => {
     // The roster controller and the roster read are mocked above, so the
     // roots only have to be present.
     mocks.initLocalCliPlatform.mockResolvedValue({
-      runtime: effectRuntime(),
+      runtime: testRuntime(),
       roots: {},
     });
     mocks.getVisibleAgents.mockReturnValue([

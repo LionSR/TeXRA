@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { effectRuntime } from '@platform/processRuntime';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 import { FakeStateStore } from '@test/support/FakePlatform';
 
@@ -51,7 +51,7 @@ describe('CLI tools command', () => {
     globalState = new FakeStateStore();
     mocks.initCliPlatform
       .mockReset()
-      .mockResolvedValue({ globalState, runtime: effectRuntime() });
+      .mockResolvedValue({ globalState, runtime: testRuntime() });
     mocks.readCliToolGuide.mockReset().mockReturnValue({
       text: 'Install help',
       command: 'echo install',

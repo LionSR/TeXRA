@@ -12,7 +12,7 @@ import {
   startLoopbackCallbackServer,
   type LoopbackCallbackServer,
 } from '@cli/runtime/supabaseAuthCallbackServer';
-import { effectRuntime } from '@platform/processRuntime';
+import { testRuntime } from '@test/support/testProcessRuntime';
 
 function stubCoordinator(
   overrides: {
@@ -43,12 +43,12 @@ const withServer = <A, E>(
 ) =>
   Effect.acquireUseRelease(
     Effect.promise(() =>
-      effectRuntime().runPromise(
-        startLoopbackCallbackServer(effectRuntime(), coordinator),
+      testRuntime().runPromise(
+        startLoopbackCallbackServer(testRuntime(), coordinator),
       ),
     ),
     use,
-    (server) => Effect.promise(() => effectRuntime().runPromise(server.close)),
+    (server) => Effect.promise(() => testRuntime().runPromise(server.close)),
   );
 
 async function fetchCallbackNonce(
