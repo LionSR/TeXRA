@@ -148,6 +148,32 @@ export const entryTypeAt = Effect.fn('fsDurability.entryTypeAt')(function* (
 });
 
 /**
+ * The entry type and size at `target`, `lstat` first and then `stat` when the
+ * entry is a link — the reading the retired `platform().fs.stat` gave: a link
+ * that resolves reports its target's type and size, and a dangling or
+ * circular one reports the link itself rather than failing. `FileSystem.stat`
+ * gives neither half: it follows the link and fails `NotFound` when the target
+ * is gone, so a caller sizing a recorded path would lose the row.
+ *
+ * Absence is not recovered here; the caller decides what a missing path means,
+ * as it did with the facade.
+ */
+export const entryMetadataAt = Effect.fn('fsDurability.entryMetadataAt')(
+  function* (target: string) {
+    const link = yield* Effect.tryPromise({
+      try: () => nodeFs.lstat(target),
+      catch: (cause) => systemErrorFrom('entryMetadataAt', target, cause),
+    });
+    const stats = link.isSymbolicLink()
+      ? // A dangling or circular link has no target to describe, so the link's
+        // own metadata stands in — the fallback the facade's provider made.
+        yield* Effect.promise(() => nodeFs.stat(target).catch(() => link))
+      : link;
+    return { type: entryTypeOf(stats), size: stats.size };
+  },
+);
+
+/**
  * The entries of `target` with the type of each, one `lstat` per entry: a
  * symlink reports as `SymbolicLink`, never as what it points at, so the
  * deletion and containment walkers that replace the old lstat-backed listing

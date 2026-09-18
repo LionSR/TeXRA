@@ -1,12 +1,31 @@
+import * as fs from 'node:fs/promises';
+
 import { createLog } from '@logger/logUtils';
 import { filterNotNull } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getPromptFileName } from '@utils/prompt';
+import { normalizeLineEndings } from '@utils/text/stringUtils';
 
-import { AbsoluteFS } from './absoluteFS';
 import { workspaceAbsolutePath } from './workspaceFS';
 
 const log = createLog('VarsUtils');
+
+/**
+ * The read prompt assembly makes: the file's bytes decoded as UTF-8 — a
+ * leading BOM kept, which a `TextDecoder` would strip — with line endings
+ * normalized, which is what the retired facade's read gave.
+ *
+ * `node:fs/promises` rather than the Effect `FileSystem`: prompt assembly runs
+ * on the Promise tier inside the launch's `runInSession` frame, and that frame
+ * is `AsyncLocalStorage`, which Effect's scheduler does not carry across a
+ * fiber yield. The roots-carrier tail of `buildUserVars` still reads it, so
+ * this chain stays where the frame holds. The paths reaching here are already
+ * absolute: the caller resolves a relative entry against the root it holds as
+ * data.
+ */
+export async function readPromptFile(target: string): Promise<string> {
+  return normalizeLineEndings((await fs.readFile(target)).toString('utf-8'));
+}
 
 /** A file successfully read for the `${varName}_FILE`/`${varName}_CONTENT` variable pair. */
 export interface FileVarValue {
@@ -31,7 +50,7 @@ export async function setVarFromFile(
   workspaceRoot: string | undefined,
 ): Promise<FileVarValue | null> {
   try {
-    const content = await AbsoluteFS.read(
+    const content = await readPromptFile(
       workspaceAbsolutePath(workspaceRoot, filePath),
     );
     return { file: filePath, content };
@@ -85,7 +104,7 @@ export async function getXmlFormatFromReadableFiles(
   const xmlContents = await Promise.all(
     files.map(async (file) => {
       try {
-        const content = await AbsoluteFS.read(
+        const content = await readPromptFile(
           workspaceAbsolutePath(workspaceRoot, file),
         );
         return {

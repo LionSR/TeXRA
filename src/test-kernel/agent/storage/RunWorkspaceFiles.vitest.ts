@@ -1,30 +1,28 @@
+import { mkdir, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { Effect } from 'effect';
+import { describe, expect, it } from 'vitest';
 
 import { listRunWorkspaceFiles } from '@agent/storage';
-import { platform } from '@platform/platform';
 import { fakePath } from '@test/support/FakePlatform';
 import { setupPlatform } from '@test/support/setupPlatform';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
 
 const WORKSPACE_PATH = fakePath('workspace');
 const CONFIG = { workingDirectory: WORKSPACE_PATH };
 
-function statError(code: string, message: string): Error {
-  return Object.assign(new Error(message), { code });
-}
+const list = (paths: string[]): Promise<unknown> =>
+  Effect.runPromise(listRunWorkspaceFiles(CONFIG, paths));
 
 describe('listRunWorkspaceFiles', () => {
   setupPlatform({ workspacePath: WORKSPACE_PATH });
-  afterEach(() => vi.restoreAllMocks());
 
   it('lists unique contained entries in path order and omits missing paths', async () => {
-    await AbsoluteFS.createDir(path.join(WORKSPACE_PATH, 'z-dir'));
-    await AbsoluteFS.write(path.join(WORKSPACE_PATH, 'a-file.tex'), 'content');
+    await mkdir(path.join(WORKSPACE_PATH, 'z-dir'), { recursive: true });
+    await writeFile(path.join(WORKSPACE_PATH, 'a-file.tex'), 'content');
 
     await expect(
-      listRunWorkspaceFiles(CONFIG, [
+      list([
         'z-dir',
         'missing.tex',
         'a-file.tex',
@@ -51,20 +49,15 @@ describe('listRunWorkspaceFiles', () => {
   });
 
   it('omits a path whose intermediate component is not a directory', async () => {
-    const error = statError('ENOTDIR', 'parent path is not a directory');
-    vi.spyOn(platform().fs, 'stat').mockRejectedValueOnce(error);
+    await mkdir(WORKSPACE_PATH, { recursive: true });
+    await writeFile(path.join(WORKSPACE_PATH, 'not-a-dir.tex'), 'content');
 
-    await expect(
-      listRunWorkspaceFiles(CONFIG, ['file/child.tex']),
-    ).resolves.toEqual([]);
+    await expect(list(['not-a-dir.tex/child.tex'])).resolves.toEqual([]);
   });
 
   it('propagates operational stat failures', async () => {
-    const error = statError('EACCES', 'workspace file is unreadable');
-    vi.spyOn(platform().fs, 'stat').mockRejectedValueOnce(error);
-
-    await expect(
-      listRunWorkspaceFiles(CONFIG, ['unreadable.tex']),
-    ).rejects.toBe(error);
+    // A component past the filesystem's name limit fails ENAMETOOLONG, which
+    // is neither absence nor a non-directory parent, so it must surface.
+    await expect(list([`${'x'.repeat(5000)}.tex`])).rejects.toThrow();
   });
 });

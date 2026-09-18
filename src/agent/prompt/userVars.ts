@@ -41,9 +41,9 @@ import {
 } from '@utils/files/externalRoots';
 import {
   getXmlFormatFromReadableFiles,
+  readPromptFile,
   setVarFromFile,
 } from '@utils/files/varsUtils';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
 
 /** Transient user-variable key carrying the run's live model id. */
 export const USER_VAR_MODEL = 'MODEL';
@@ -545,7 +545,7 @@ async function getAttachedMemories(
     memoryPaths.map(async (displayPath) => {
       try {
         const storagePath = displayToStoragePath(displayPath);
-        const raw = await AbsoluteFS.read(path.join(storageRoot, storagePath));
+        const raw = await readPromptFile(path.join(storageRoot, storagePath));
         // Strip frontmatter metadata — only inject the user-visible content
         const { content } = parseFrontmatter(raw);
         const trimmed = content.trim();

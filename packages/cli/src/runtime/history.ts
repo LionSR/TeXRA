@@ -188,23 +188,33 @@ export async function readCliHistoryDetails(
   id: RunId,
   options: { includeFullConversation?: boolean } = {},
 ): Promise<CliHistoryDetails | null> {
-  const [
+  const {
     run,
     config,
     resultMeta,
     runEnd,
     report,
     conversationResult,
-    persistedWorkspaceFilePaths,
     generatedFiles,
     checkpointPresent,
     currentModel,
     resumable,
-  ] = await runtime.runPromise(
+    workspaceFiles,
+  } = await runtime.runPromise(
     Effect.gen(function* () {
       const session = yield* sessionOpen;
       const store = getRunRecords(session, id);
-      const values = yield* Effect.all(
+      const [
+        run,
+        config,
+        resultMeta,
+        runEnd,
+        report,
+        conversationResult,
+        persistedWorkspaceFilePaths,
+        generatedFiles,
+        checkpointPresent,
+      ] = yield* Effect.all(
         [
           session.readView([]).pipe(Effect.map((view) => view.runs.get(id))),
           store.readConfig(),
@@ -218,8 +228,8 @@ export async function readCliHistoryDetails(
         ],
         { concurrency: 9 },
       );
-      const currentModel = values[1]
-        ? yield* readCliResumedModel(session, id, values[1])
+      const currentModel = config
+        ? yield* readCliResumedModel(session, id, config)
         : undefined;
       // The same rule the listing applies, from the same facts: `status` is a
       // frozen contract, so `history show` must not answer it differently from
@@ -228,20 +238,38 @@ export async function readCliHistoryDetails(
       // config for a host to adopt, so it is not offered, the listing never
       // reaches this rule for such a row, which lists as incomplete.
       const resumable =
-        values[1] !== null &&
+        config !== null &&
         (yield* isCliRunResumable(
           {
             id,
-            checkpointPresent: values[8],
-            agentCategory: values[1].agentCategory,
+            checkpointPresent,
+            agentCategory: config.agentCategory,
             outcome:
-              values[0] && isTerminalOutcomePhase(values[0].status)
-                ? values[0].status
+              run && isTerminalOutcomePhase(run.status)
+                ? run.status
                 : undefined,
           },
           session,
         ));
-      return [...values, currentModel, resumable] as const;
+      // Sized inside the program rather than after it: the listing reads the
+      // filesystem, so it belongs on the runtime the caller already holds.
+      const workspaceFiles = yield* listRunWorkspaceFiles(
+        config,
+        persistedWorkspaceFilePaths,
+      );
+      return {
+        run,
+        config,
+        resultMeta,
+        runEnd,
+        report,
+        conversationResult,
+        generatedFiles,
+        checkpointPresent,
+        currentModel,
+        resumable,
+        workspaceFiles,
+      } as const;
     }),
   );
   const conversation = conversationResult.conversation;
@@ -251,10 +279,6 @@ export async function readCliHistoryDetails(
   const fullConversation = options.includeFullConversation
     ? createConversationTranscript(conversation)
     : undefined;
-  const workspaceFiles = await listRunWorkspaceFiles(
-    config,
-    persistedWorkspaceFilePaths,
-  );
   const files = mergeHistoryFiles(
     generatedFiles,
     workspaceFiles.map((file) => ({
