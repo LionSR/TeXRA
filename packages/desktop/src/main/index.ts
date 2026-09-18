@@ -840,19 +840,23 @@ function createWindow(options: {
     );
   };
 
-  const openWorkspaceFolder = async () => {
-    const result = await dialog.showOpenDialog(window, {
-      title: 'Open Workspace Folder',
-      defaultPath: folderPickerDefaultPath(),
-      properties: ['openDirectory'],
-    });
-    const selectedPath = result.canceled ? undefined : result.filePaths[0];
-    if (!selectedPath) return;
-    const project = await runtime.runPromise(
-      options.projects.open(selectedPath),
-    );
-    if (project.root !== undefined) selectProject(project.key);
-  };
+  const openWorkspaceFolder = Effect.fn('desktop.openWorkspaceFolder')(
+    function* () {
+      const result = yield* Effect.tryPromise({
+        try: () =>
+          dialog.showOpenDialog(window, {
+            title: 'Open Workspace Folder',
+            defaultPath: folderPickerDefaultPath(),
+            properties: ['openDirectory'],
+          }),
+        catch: (cause) => cause,
+      });
+      const selectedPath = result.canceled ? undefined : result.filePaths[0];
+      if (!selectedPath) return;
+      const project = yield* options.projects.open(selectedPath);
+      if (project.root !== undefined) selectProject(project.key);
+    },
+  );
   attachRendererConsoleLog(window.webContents);
   const desktopDiffHost = createDesktopDiffHost({
     runtime,
