@@ -7,13 +7,13 @@ const mocks = vi.hoisted(() => ({
   selectChatModels: vi.fn(),
   canSendRequest: vi.fn(),
   sendRequest: vi.fn(),
-  safeExecuteCommand: vi.fn(async () => undefined),
+  safeExecuteCommand: vi.fn(() => Effect.succeed(undefined)),
   // The real writer hands back a program, not a promise.
   setCopilotRoutePreference: vi.fn(() => Effect.void),
   showLoggedErrorMessage: vi.fn<
-    (channel: string, message: string, error: unknown) => Promise<void>
-  >(async () => undefined),
-  showLoggedInfoMessage: vi.fn(async () => undefined),
+    (channel: string, message: string, error: unknown) => Effect.Effect<string>
+  >(() => Effect.succeed('')),
+  showLoggedInfoMessage: vi.fn(() => Effect.succeed('')),
 }));
 
 vi.mock('@model/copilotRouting', async (original) => ({

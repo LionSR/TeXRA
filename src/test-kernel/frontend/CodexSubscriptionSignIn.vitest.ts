@@ -4,9 +4,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   loginWithLoopback: vi.fn(),
   setPreferCodexSubscription: vi.fn(),
-  // Resolves like the real reporter (`Promise<string>`): the sign-in program
-  // runs it through `Effect.promise`, which needs a thenable.
-  showLoggedErrorMessage: vi.fn(async () => ''),
+  // Answers like the real reporter, which is an `Effect` the sign-in
+  // program yields.
+  showLoggedErrorMessage: vi.fn(() => Effect.succeed('')),
   showInformationMessage: vi.fn(),
   showWarningMessage: vi.fn(),
   openExternal: vi.fn(),

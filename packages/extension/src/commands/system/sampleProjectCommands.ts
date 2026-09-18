@@ -4,6 +4,7 @@ import { cp } from 'node:fs/promises';
 import * as path from 'node:path';
 
 // Third-party imports
+import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports - fs
@@ -18,6 +19,12 @@ import { withSessionFs, WorkspaceFs } from '@platform/rootedFs';
 
 const CHANNEL = 'SampleProjectCommands';
 
+/** Both entries report a failed creation the same way. */
+const reportFailure = (err: unknown) =>
+  showLoggedErrorMessage(CHANNEL, 'Failed to create sample project', err).pipe(
+    Effect.asVoid,
+  );
+
 /**
  * No-workspace variant for the welcome view: ask where to put the sample,
  * copy it there, and open the folder (which reloads the window into full
@@ -28,37 +35,36 @@ const CHANNEL = 'SampleProjectCommands';
 export async function createSampleProjectWithoutWorkspace(
   extensionPath: string,
 ): Promise<void> {
-  try {
-    const parentPath = await selectFolder({
-      openLabel: 'Create sample project here',
-      title: 'Choose where to create the TeXRA sample project',
-    });
-    if (!parentPath) {
-      return;
-    }
-
-    const dest = path.join(parentPath, 'texra-sample');
-    if (existsSync(dest)) {
-      void vscode.window.showInformationMessage(
-        'A texra-sample folder already exists there — opening it.',
-      );
-    } else {
-      await cp(path.join(extensionPath, 'resources', 'examples'), dest, {
-        recursive: true,
+  const create = Effect.tryPromise({
+    catch: (err: unknown) => err,
+    try: async () => {
+      const parentPath = await selectFolder({
+        openLabel: 'Create sample project here',
+        title: 'Choose where to create the TeXRA sample project',
       });
-    }
-    await vscode.commands.executeCommand(
-      'vscode.openFolder',
-      vscode.Uri.file(dest),
-      { forceNewWindow: false },
-    );
-  } catch (err) {
-    await showLoggedErrorMessage(
-      CHANNEL,
-      'Failed to create sample project',
-      err,
-    );
-  }
+      if (!parentPath) {
+        return;
+      }
+
+      const dest = path.join(parentPath, 'texra-sample');
+      if (existsSync(dest)) {
+        void vscode.window.showInformationMessage(
+          'A texra-sample folder already exists there — opening it.',
+        );
+      } else {
+        await cp(path.join(extensionPath, 'resources', 'examples'), dest, {
+          recursive: true,
+        });
+      }
+      await vscode.commands.executeCommand(
+        'vscode.openFolder',
+        vscode.Uri.file(dest),
+        { forceNewWindow: false },
+      );
+    },
+  });
+
+  await Effect.runPromise(create.pipe(Effect.catch(reportFailure)));
 }
 
 /**
@@ -73,52 +79,57 @@ export async function createSampleProject(
   runtime: ProcessRuntime,
   session: SessionHandle,
 ): Promise<void> {
-  try {
-    const workspaceFs = await runtime.runPromise(
-      withSessionFs(session.roots, WorkspaceFs),
-    );
-    if (!workspaceFs.root) {
-      void showLoggedMessage(
-        CHANNEL,
-        'Open a workspace to create the sample project.',
+  const create = Effect.tryPromise({
+    catch: (err: unknown) => err,
+    try: async () => {
+      const workspaceFs = await runtime.runPromise(
+        withSessionFs(session.roots, WorkspaceFs),
       );
-      return;
-    }
+      if (!workspaceFs.root) {
+        runtime.runFork(
+          showLoggedMessage(
+            CHANNEL,
+            'Open a workspace to create the sample project.',
+          ),
+        );
+        return;
+      }
 
-    const destFolder = 'texra-sample';
-    if (await runtime.runPromise(workspaceFs.exists(destFolder))) {
+      const destFolder = 'texra-sample';
+      if (await runtime.runPromise(workspaceFs.exists(destFolder))) {
+        void vscode.window.showInformationMessage(
+          'Sample project already exists in workspace.',
+        );
+        return;
+      }
+
+      const sourcePath = path.join(extensionPath, 'resources', 'examples');
+      const destPath = await runtime.runPromise(
+        workspaceFs.resolve(destFolder),
+      );
+
+      await runtime.runPromise(
+        workspaceFs.makeDirectory(destFolder, { recursive: true }),
+      );
+      await cp(sourcePath, destPath, {
+        recursive: true,
+        force: true,
+        errorOnExist: false,
+      });
+
       void vscode.window.showInformationMessage(
-        'Sample project already exists in workspace.',
+        'Created TeXRA sample project.',
       );
-      return;
-    }
 
-    const sourcePath = path.join(extensionPath, 'resources', 'examples');
-    const destPath = await runtime.runPromise(workspaceFs.resolve(destFolder));
+      const readmeRelativePath = path.join(destFolder, 'README.md');
+      if (await runtime.runPromise(workspaceFs.exists(readmeRelativePath))) {
+        const document = await vscode.workspace.openTextDocument(
+          vscode.Uri.file(path.join(destPath, 'README.md')),
+        );
+        await vscode.window.showTextDocument(document, { preview: false });
+      }
+    },
+  });
 
-    await runtime.runPromise(
-      workspaceFs.makeDirectory(destFolder, { recursive: true }),
-    );
-    await cp(sourcePath, destPath, {
-      recursive: true,
-      force: true,
-      errorOnExist: false,
-    });
-
-    void vscode.window.showInformationMessage('Created TeXRA sample project.');
-
-    const readmeRelativePath = path.join(destFolder, 'README.md');
-    if (await runtime.runPromise(workspaceFs.exists(readmeRelativePath))) {
-      const document = await vscode.workspace.openTextDocument(
-        vscode.Uri.file(path.join(destPath, 'README.md')),
-      );
-      await vscode.window.showTextDocument(document, { preview: false });
-    }
-  } catch (err) {
-    await showLoggedErrorMessage(
-      CHANNEL,
-      'Failed to create sample project',
-      err,
-    );
-  }
+  await runtime.runPromise(create.pipe(Effect.catch(reportFailure)));
 }

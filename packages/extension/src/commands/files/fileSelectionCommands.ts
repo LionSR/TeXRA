@@ -1,4 +1,5 @@
 // Third-party imports
+import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
@@ -19,27 +20,33 @@ interface PickerOptions {
 }
 
 /** Run a dialog, announce what was picked, and report failures once. */
-async function announceSelection(
+function announceSelection(
   select: () => Promise<string[] | null>,
 ): Promise<string[] | null> {
-  try {
-    const result = await select();
-    if (!result) {
-      return null;
-    }
+  return Effect.runPromise(
+    Effect.tryPromise({
+      try: async () => {
+        const result = await select();
+        if (!result) {
+          return null;
+        }
 
-    const message = `Selected files: ${result.join(', ')}`;
-    vscode.window.showInformationMessage(message);
-    log.info(message);
-    return result;
-  } catch (err) {
-    await showLoggedErrorMessage(
-      CHANNEL,
-      'File selection failed. See the TeXRA log for details.',
-      err,
-    );
-    return null;
-  }
+        const message = `Selected files: ${result.join(', ')}`;
+        vscode.window.showInformationMessage(message);
+        log.info(message);
+        return result;
+      },
+      catch: (err: unknown) => err,
+    }).pipe(
+      Effect.catch((err) =>
+        showLoggedErrorMessage(
+          CHANNEL,
+          'File selection failed. See the TeXRA log for details.',
+          err,
+        ).pipe(Effect.as(null)),
+      ),
+    ),
+  );
 }
 
 function createMultiPicker(

@@ -1,4 +1,5 @@
 // Third-party imports
+import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
@@ -27,17 +28,21 @@ export function registerMainViewCommands(
   registerCommandEntries(context, [
     {
       id: 'texra.refreshAllOptions',
-      handler: async (args?: RefreshAllOptionsArgs) => {
-        try {
-          await progressViewProvider.refreshCatalogs(args ?? {});
-        } catch (error) {
-          await showLoggedErrorMessage(
-            CHANNEL,
-            'Failed to refresh options',
-            error,
-          );
-        }
-      },
+      handler: (args?: RefreshAllOptionsArgs) =>
+        Effect.runPromise(
+          Effect.tryPromise({
+            try: () => progressViewProvider.refreshCatalogs(args ?? {}),
+            catch: (error: unknown) => error,
+          }).pipe(
+            Effect.catch((error) =>
+              showLoggedErrorMessage(
+                CHANNEL,
+                'Failed to refresh options',
+                error,
+              ).pipe(Effect.asVoid),
+            ),
+          ),
+        ),
     },
   ]);
 }

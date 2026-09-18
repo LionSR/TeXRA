@@ -54,7 +54,7 @@ import {
   EXTENSION_COMMAND_HANDLERS,
   type ExtensionCommandActions,
 } from './extensionCommandHandlers';
-import type { Effect } from 'effect';
+import { Effect } from 'effect';
 
 export function createExtensionCommandActions(
   context: vscode.ExtensionContext,

@@ -8,6 +8,7 @@
  */
 
 // Third-party imports
+import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
@@ -55,27 +56,40 @@ function handleDismissIssue(arg: unknown): void {
 
 async function handleOpenIssue(node: AgentReviewNode): Promise<void> {
   if (node.kind !== 'issue') return;
-  try {
-    const uri = vscode.Uri.file(AgentReviewService.issuePath(node.issue));
-    const document = await vscode.workspace.openTextDocument(uri);
-    const editor = await vscode.window.showTextDocument(document, {
-      preview: true,
-    });
-    const range = issueRange(node.issue);
-    editor.revealRange(range, vscode.TextEditorRevealType.InCenter);
-    editor.selection = new vscode.Selection(range.start, range.start);
-  } catch (err) {
-    await showLoggedErrorMessage(CHANNEL, 'Could not open review issue', err);
-  }
+  await Effect.runPromise(
+    Effect.tryPromise({
+      try: async () => {
+        const uri = vscode.Uri.file(AgentReviewService.issuePath(node.issue));
+        const document = await vscode.workspace.openTextDocument(uri);
+        const editor = await vscode.window.showTextDocument(document, {
+          preview: true,
+        });
+        const range = issueRange(node.issue);
+        editor.revealRange(range, vscode.TextEditorRevealType.InCenter);
+        editor.selection = new vscode.Selection(range.start, range.start);
+      },
+      catch: (err: unknown) => err,
+    }).pipe(
+      Effect.catch((err) =>
+        showLoggedErrorMessage(
+          CHANNEL,
+          'Could not open review issue',
+          err,
+        ).pipe(Effect.asVoid),
+      ),
+    ),
+  );
 }
 
 /** "Find Issues" split-button options: gather per-run choices, then run. */
 async function handleRunWithOptions(session: SessionHandle): Promise<void> {
   const cwd = session.roots.workspace;
   if (!cwd) {
-    void showLoggedMessage(
-      CHANNEL,
-      'Agent review needs an open workspace folder.',
+    Effect.runFork(
+      showLoggedMessage(
+        CHANNEL,
+        'Agent review needs an open workspace folder.',
+      ),
     );
     return;
   }

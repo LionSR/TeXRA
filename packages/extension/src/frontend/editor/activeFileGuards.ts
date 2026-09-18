@@ -1,4 +1,5 @@
 // Third-party imports
+import { Cause, Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports - utils
@@ -54,44 +55,52 @@ type ActiveFileGuardResult =
  * Retrieve the active text editor when it holds a `.tex` document, optionally
  * saving it first when dirty.
  */
-async function getActiveLatexEditor(
+const getActiveLatexEditor = (
   session: SessionHandle,
   saveDocument: boolean,
-): Promise<ActiveFileGuardResult> {
-  const editor = vscode.window.activeTextEditor;
-  if (!editor) {
-    await vscode.window.showWarningMessage(
-      GUARD_FAILURE_MESSAGES.noEditor.user,
-    );
-    return { status: 'noEditor' };
-  }
-
-  if (!editor.document.fileName.toLowerCase().endsWith('.tex')) {
-    await vscode.window.showWarningMessage(
-      GUARD_FAILURE_MESSAGES.unsupportedExtension.user,
-    );
-    return { status: 'unsupportedExtension' };
-  }
-
-  if (saveDocument && editor.document.isDirty) {
-    const saved = await editor.document.save();
-    if (!saved) {
-      await showLoggedMessage(CHANNEL, GUARD_FAILURE_MESSAGES.saveFailed.user);
-      return { status: 'saveFailed' };
+): Effect.Effect<ActiveFileGuardResult> =>
+  Effect.gen(function* () {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor) {
+      yield* Effect.promise(async () => {
+        await vscode.window.showWarningMessage(
+          GUARD_FAILURE_MESSAGES.noEditor.user,
+        );
+      });
+      return { status: 'noEditor' } satisfies ActiveFileGuardResult;
     }
-  }
 
-  const relativePath = workspaceRelativePath(
-    session.roots.workspace,
-    editor.document.fileName,
-  );
+    if (!editor.document.fileName.toLowerCase().endsWith('.tex')) {
+      yield* Effect.promise(async () => {
+        await vscode.window.showWarningMessage(
+          GUARD_FAILURE_MESSAGES.unsupportedExtension.user,
+        );
+      });
+      return { status: 'unsupportedExtension' } satisfies ActiveFileGuardResult;
+    }
 
-  return {
-    status: 'ok',
-    editor,
-    relativePath,
-  };
-}
+    if (saveDocument && editor.document.isDirty) {
+      const saved = yield* Effect.promise(async () => editor.document.save());
+      if (!saved) {
+        yield* showLoggedMessage(
+          CHANNEL,
+          GUARD_FAILURE_MESSAGES.saveFailed.user,
+        );
+        return { status: 'saveFailed' } satisfies ActiveFileGuardResult;
+      }
+    }
+
+    const relativePath = workspaceRelativePath(
+      session.roots.workspace,
+      editor.document.fileName,
+    );
+
+    return {
+      status: 'ok',
+      editor,
+      relativePath,
+    } satisfies ActiveFileGuardResult;
+  });
 
 interface GuardedLatexCommandOptions {
   /** The logging channel to use */
@@ -110,17 +119,17 @@ interface GuardedLatexCommandOptions {
  * the command's channel, and anything the operation throws is surfaced once
  * through that same channel.
  */
-export async function runGuardedLatexCommand(
+export function runGuardedLatexCommand(
   session: SessionHandle,
   options: GuardedLatexCommandOptions,
   operation: (guardResult: ActiveFileGuardSuccess) => Promise<void>,
-): Promise<void> {
+): Effect.Effect<void> {
   const { channel, action, saveDocument = false, errorMessage } = options;
 
   const log = createLog(channel);
 
-  try {
-    const guardResult = await getActiveLatexEditor(session, saveDocument);
+  return Effect.gen(function* () {
+    const guardResult = yield* getActiveLatexEditor(session, saveDocument);
 
     if (guardResult.status !== 'ok') {
       const failure = GUARD_FAILURE_MESSAGES[guardResult.status];
@@ -133,8 +142,15 @@ export async function runGuardedLatexCommand(
       return;
     }
 
-    await operation(guardResult);
-  } catch (err) {
-    await showLoggedErrorMessage(channel, errorMessage, err);
-  }
+    yield* Effect.promise(() => operation(guardResult));
+  }).pipe(
+    // The command's one terminal boundary, as the `try`/`catch` it replaces
+    // was: a rejected guard step and a rejected operation alike are squashed
+    // back to the value the `catch` clause bound.
+    Effect.catchCause((cause) =>
+      showLoggedErrorMessage(channel, errorMessage, Cause.squash(cause)).pipe(
+        Effect.asVoid,
+      ),
+    ),
+  );
 }

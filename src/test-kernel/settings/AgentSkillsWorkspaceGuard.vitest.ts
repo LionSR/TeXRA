@@ -3,9 +3,9 @@ import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  // Both report helpers are awaited, so the doubles answer with a promise.
-  showLoggedErrorMessage: vi.fn(async () => ''),
-  showLoggedInfoMessage: vi.fn(async () => ''),
+  // Both report helpers are Effects, so the doubles answer with one.
+  showLoggedErrorMessage: vi.fn(() => Effect.succeed('')),
+  showLoggedInfoMessage: vi.fn(() => Effect.succeed('')),
   // The module under test composes `writeSetting`'s Effect, so the standing
   // double is a succeeding one; a test that wants a failure swaps in
   // `Effect.fail` for that call.

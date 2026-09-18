@@ -142,6 +142,21 @@ class AgentReviewServiceImpl {
     context.subscriptions.push(this.collection, this.emitter);
   }
 
+  /**
+   * The process runtime `initialize` captured. Every review entry runs after
+   * extension activation, so an absent runtime is the same uninitialized-use
+   * mistake the review entries already report.
+   */
+  private get host(): ProcessRuntime {
+    const runtime = this.runtime;
+    if (!runtime) {
+      throw new Error(
+        'Agent review is not initialized. Call AgentReviewService.initialize() first.',
+      );
+    }
+    return runtime;
+  }
+
   getState(): AgentReviewStateSnapshot {
     return {
       running: this.reviewRuns.isActive,
@@ -193,9 +208,11 @@ class AgentReviewServiceImpl {
     const cwd = session.roots.workspace;
     if (!cwd) {
       if (trigger === 'manual') {
-        void showLoggedMessage(
-          CHANNEL,
-          'Agent review needs an open workspace folder.',
+        this.host.runFork(
+          showLoggedMessage(
+            CHANNEL,
+            'Agent review needs an open workspace folder.',
+          ),
         );
       }
       return;
@@ -239,12 +256,7 @@ class AgentReviewServiceImpl {
     options: AgentReviewRunOptions,
     run: AgentReviewRunToken,
   ): Promise<void> {
-    const runtime = this.runtime;
-    if (!runtime) {
-      throw new Error(
-        'Agent review is not initialized. Call AgentReviewService.initialize() first.',
-      );
-    }
+    const runtime = this.host;
     // `clear()` discards the run. Check before collecting so a clear that
     // landed during the initial context-key update cannot start stale work.
     if (!this.reviewRuns.isCurrent(run)) return;
@@ -265,10 +277,12 @@ class AgentReviewServiceImpl {
       // a transient failure; the summary marks them as previous results.
       this.summary = `Review failed: ${collected.reason}${this.issues.length > 0 ? ' · showing previous results' : ''}`;
       if (trigger === 'manual') {
-        void showLoggedErrorMessage(
-          CHANNEL,
-          'Agent review failed',
-          collected.reason,
+        runtime.runFork(
+          showLoggedErrorMessage(
+            CHANNEL,
+            'Agent review failed',
+            collected.reason,
+          ),
         );
       } else {
         log.warn(`Agent review failed: ${collected.reason}`);
@@ -527,10 +541,8 @@ class AgentReviewServiceImpl {
         ...(this.reviewRoot ? { workingDirectory: this.reviewRoot } : {}),
       });
     } catch (err) {
-      await showLoggedErrorMessage(
-        CHANNEL,
-        'Could not launch the fix agent',
-        err,
+      await this.host.runPromise(
+        showLoggedErrorMessage(CHANNEL, 'Could not launch the fix agent', err),
       );
       return;
     }
