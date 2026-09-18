@@ -57,6 +57,7 @@ import {
   withTempDir,
   withTempDirEffect,
 } from '@test/support/tempDirPlatform';
+import { runDirUnder } from '@utils/files/runStorageFs';
 
 type StoredResumeConfig = Parameters<typeof resumeWorkflowOutputFile>[0];
 
@@ -913,14 +914,11 @@ describe('CLI root argument routing', () => {
           runId: 'run-without-output' as RunId,
         },
         createRunCommandCliContext(),
-        {
-          storageRoot: '/tmp/storage',
-          runDirectory: '/tmp/runs/run-without-output',
-        },
+        { storageRoot: '/tmp/storage' },
       ),
     ).resolves.toMatchObject({
       outcome: RUN_OUTCOME.FAILED,
-      runDirectory: '/tmp/runs/run-without-output',
+      runDirectory: runDirUnder('/tmp/storage', 'run-without-output' as RunId),
       output: { outputs: [] },
     });
   });

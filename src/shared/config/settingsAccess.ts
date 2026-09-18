@@ -100,8 +100,8 @@ export function readConfigSetting(
 /**
  * A stored value against the row's schema. Absent resolves to the schema
  * default; a stored value that no longer validates resolves to it too — but
- * only after warning, matching `getValidatedConfig`'s #7470 fix: an invalid
- * *persisted* value must not vanish without a trace.
+ * only after warning, as #7470 established for the reader this replaced: an
+ * invalid *persisted* value must not vanish without a trace.
  */
 function validateStored(entry: StateSettingEntry, raw: unknown): unknown {
   if (raw === undefined) {

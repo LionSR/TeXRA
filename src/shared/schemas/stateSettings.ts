@@ -541,7 +541,7 @@ const CORE_SETTING_ROWS: Record<
     },
   }),
   // No `configTarget`: both runtime readers resolve the *merged* config value
-  // through `getValidatedConfig`, so the row must not narrow itself to the
+  // through `readSettingFrom`, so the row must not narrow itself to the
   // global scope — a workspace override the runtime honors would then be
   // invisible in (and unwritable from) the settings view.
   'model.compactionThresholdPercent': {
