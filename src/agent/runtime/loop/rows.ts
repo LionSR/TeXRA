@@ -57,7 +57,7 @@ export function rowAggregate(runId: RunId) {
   return qualifyAggregateId('run', runId);
 }
 
-type StepCoordinates = Pick<
+export type StepCoordinates = Pick<
   RunState,
   'family' | 'round' | 'turn' | 'continuationIndex'
 >;

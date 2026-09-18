@@ -47,10 +47,9 @@ import {
   type RunOutcome,
   type RunUsageTotals,
 } from '@shared/schemas';
-import { RunLedger, RunLedgerRefused } from '@shared/session/runLedger';
+import { RunLedger } from '@shared/session/runLedger';
 import { freshRunState, type RunState } from '@shared/session/runStateFold';
 import { goalOf, pauseGoal, setGoalSessionAutoApproval } from '@tools/goal';
-import { ensureError } from '@utils/errors/errorMessage';
 
 import { AgentRun } from '../run/AgentRun';
 import { compactIfNeeded } from '../run/compaction';
@@ -64,9 +63,9 @@ import { toolDefinitionsFor } from '../run/tools';
 import { FollowUps, type ConsumedFollowUps } from '../FollowUps';
 import { ModelInvoker } from '../ModelInvoker';
 import { Runs } from '../runRegistry';
+import { haltRun, runExitFailure } from './exitProtocol';
 import {
   appendRow,
-  haltedStepRow,
   NOT_RESUMABLE_MESSAGE,
   rowAggregate,
   snapshotRow,
@@ -898,21 +897,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         // stop interrupted stays at the phase its rows left, so resume
         // continues it.
         const halt = (outcome: RunOutcome) =>
-          state === null || state.phase === null
-            ? Effect.void
-            : ledger
-                .appendBatch(runId, state, [
-                  haltedStepRow(runId, state, outcome),
-                ])
-                .pipe(
-                  Effect.catch((error) =>
-                    Effect.sync(() =>
-                      logger.warn('Failed to record the run halt', {
-                        data: error,
-                      }),
-                    ),
-                  ),
-                );
+          haltRun(runId, ledger, logger, state, (s) => s, outcome);
         const release = (next: 'recoverable' | 'terminal') =>
           Effect.sync(() => {
             detach();
@@ -939,17 +924,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       }),
     );
 
-  /** The caller's error for a run that ended in a failure cause. */
-  const failure = (error: unknown): Error => {
-    if (error instanceof RunLedgerRefused) {
-      return new Error(
-        `The run ledger refused a write (${error.reason}): ${error.detail}`,
-        { cause: error },
-      );
-    }
-    return ensureError(error);
-  };
-
   return yield* program.pipe(
     Effect.onExit(finalize),
     Effect.map((loop) =>
@@ -959,7 +933,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     ),
     Effect.catchCause((cause) => {
       if (Cause.hasInterrupts(cause)) return Effect.failCause(cause);
-      const stopped = failure(Cause.squash(cause));
+      const stopped = runExitFailure(Cause.squash(cause));
       logger.warn(`Tool-use run ${runId} stopped: ${stopped.message}`);
       return Effect.fail(stopped);
     }),

@@ -106,7 +106,7 @@ import {
   type RunStorageFileLocation,
   type RunUsageTotals,
 } from '@shared/schemas';
-import { RunLedger, RunLedgerRefused } from '@shared/session/runLedger';
+import { RunLedger } from '@shared/session/runLedger';
 import { freshRunState, type RunState } from '@shared/session/runStateFold';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { readSettingFrom } from '@utils/config/platformSettings';
@@ -118,9 +118,9 @@ import { compactIfNeeded } from '../run/compaction';
 import { mediaInputParts, type InputPart } from '../run/mediaInput';
 import { turnText } from '../run/turnText';
 import { ModelInvoker } from '../ModelInvoker';
+import { haltRun, runExitFailure } from './exitProtocol';
 import {
   appendRow,
-  haltedStepRow,
   NOT_RESUMABLE_MESSAGE,
   reflectionFlowState,
   reflectionSnapshotRow,
@@ -1317,21 +1317,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
       Effect.gen(function* () {
         const state = yield* Ref.get(latest);
         const halt = (outcome: RunOutcome) =>
-          state === null || state.phase === null
-            ? Effect.void
-            : ledger
-                .appendBatch(runId, state, [
-                  haltedStepRow(runId, coordinates(state), outcome),
-                ])
-                .pipe(
-                  Effect.catch((error) =>
-                    Effect.sync(() =>
-                      logger.warn('Failed to record the run halt', {
-                        data: error,
-                      }),
-                    ),
-                  ),
-                );
+          haltRun(runId, ledger, logger, state, coordinates, outcome);
         if (Exit.isSuccess(exit)) return yield* halt(exit.value.outcome);
         if (Cause.hasInterrupts(exit.cause)) {
           return yield* halt(RUN_OUTCOME.CANCELLED);
@@ -1340,21 +1326,12 @@ export const runReflection = Effect.fn('reflection.run')(function* (
       }),
     );
 
-  /** The caller's error for a run that ended in a failure cause. */
-  const failure = (error: unknown): Error =>
-    error instanceof RunLedgerRefused
-      ? new Error(
-          `The run ledger refused a write (${error.reason}): ${error.detail}`,
-          { cause: error },
-        )
-      : ensureError(error);
-
   return yield* program.pipe(
     Effect.onExit(finalize),
     Effect.map((loop) => result(loop.outcome, loop.state)),
     Effect.catchCause((cause) => {
       if (Cause.hasInterrupts(cause)) return Effect.failCause(cause);
-      const stopped = failure(Cause.squash(cause));
+      const stopped = runExitFailure(Cause.squash(cause));
       logger.warn(`Reflection run ${runId} stopped: ${stopped.message}`);
       return Effect.fail(stopped);
     }),
