@@ -29,7 +29,7 @@ import {
   createRunStorageLocation,
   createWorkspaceLocation,
 } from '@utils/files/fileLocation';
-import { TaskRunFileService } from '@utils/files/taskRunStorage';
+import { RunFileService } from '@utils/files/runStorage';
 
 // Local file imports
 import {
@@ -80,7 +80,7 @@ function createDiffCompiler(runId: RunId, logger: AgentTrace) {
     () => ({}),
     logger,
     runId,
-    new TaskRunFileService(runId, processWorkspaceRoots()),
+    new RunFileService(runId, processWorkspaceRoots()),
     processWorkspaceRoots(),
   );
 

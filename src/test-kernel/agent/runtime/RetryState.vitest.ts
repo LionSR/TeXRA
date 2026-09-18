@@ -82,7 +82,7 @@ import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { hostStores, installPlatform } from '@test/support/setupPlatform';
 import { getDefaultToolRegistry } from '@tools/registry';
 import { isObject } from '@utils/core';
-import { TaskRunFileService } from '@utils/files/taskRunStorage';
+import { RunFileService } from '@utils/files/runStorage';
 
 // Local file imports
 import {
@@ -286,7 +286,7 @@ function agentRun(
     toolPolicy: {},
     userVarChannels: {},
     initialUserMessageForTranscript: undefined,
-    fileService: new TaskRunFileService(runId, session.roots),
+    fileService: new RunFileService(runId, session.roots),
     tools: getDefaultToolRegistry(),
     finalToolName: null,
     structured: { value: undefined },

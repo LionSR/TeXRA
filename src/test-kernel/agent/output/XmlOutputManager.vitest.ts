@@ -21,7 +21,7 @@ import { fakePath } from '@test/support/FakePlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { spiedTrace } from '@test/support/spiedTrace';
 import { createExternalLocation } from '@utils/files/fileLocation';
-import { TaskRunFileService } from '@utils/files/taskRunStorage';
+import { RunFileService } from '@utils/files/runStorage';
 
 import { recordTraceEvents, traceEventsOfType } from '../progressTestUtils';
 
@@ -72,7 +72,7 @@ function createXmlManager(
       outputFiles: options.outputFiles ?? [],
     } as unknown as AgentConfig,
     logger,
-    new TaskRunFileService(RUN_ID, workspaceRoots()),
+    new RunFileService(RUN_ID, workspaceRoots()),
     options.outputState ?? createOutputState(),
     workspaceRoots().config,
   );

@@ -21,7 +21,7 @@ import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { createWorkspaceLocation } from '@utils/files/fileLocation';
 import { getOriginalSnapshotPath, getRunDir } from '@utils/files/runStorageFs';
-import { TaskRunFileService } from '@utils/files/taskRunStorage';
+import { RunFileService } from '@utils/files/runStorage';
 
 const tempDirs = useTempDirs();
 
@@ -74,7 +74,7 @@ describe('round-dir ownership and editable .tex inheritance', () => {
     await writeFile(draftAbsolute, workspaceOriginal);
 
     const runId = RunIdSchema.parse('a1a1a1a1a1a1');
-    const fileService = new TaskRunFileService(runId, workspaceRoots());
+    const fileService = new RunFileService(runId, workspaceRoots());
 
     await fileService.mirrorWorkspaceFile(
       createWorkspaceLocation(draftAbsolute, 'Draft/Draft.tex'),
@@ -128,7 +128,7 @@ describe('round-dir ownership and editable .tex inheritance', () => {
     await writeFile(stylePath, '\\newcommand{\\RR}{\\mathbb{R}}\n');
 
     const runId = RunIdSchema.parse('b2b2b2b2b2b2');
-    const fileService = new TaskRunFileService(runId, workspaceRoots());
+    const fileService = new RunFileService(runId, workspaceRoots());
 
     await fileService.mirrorWorkspaceFile(
       createWorkspaceLocation(stylePath, 'macros.sty'),

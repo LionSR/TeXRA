@@ -12,7 +12,7 @@ import { fakePath } from '@test/support/FakePlatform';
 import { rootedFsLayer } from '@test/support/fsTestUtils';
 import { spiedTrace } from '@test/support/spiedTrace';
 import { createRunStorageLocation } from '@utils/files/fileLocation';
-import { TaskRunFileService } from '@utils/files/taskRunStorage';
+import { RunFileService } from '@utils/files/runStorage';
 
 export const storagePath = fakePath('storage');
 export const workspacePath = fakePath('workspace');
@@ -61,7 +61,7 @@ export function compileContext(
   return {
     // The installed fake host's roots: these suites seed and read one host.
     roots: processWorkspaceRoots(),
-    fileService: new TaskRunFileService(runId, processWorkspaceRoots()),
+    fileService: new RunFileService(runId, processWorkspaceRoots()),
     outputState,
     logger: spiedTrace(),
     runId,

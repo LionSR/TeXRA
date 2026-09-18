@@ -76,7 +76,7 @@ import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { hostStores, setupPlatform } from '@test/support/setupPlatform';
-import { TaskRunFileService } from '@utils/files/taskRunStorage';
+import { RunFileService } from '@utils/files/runStorage';
 
 import { recordSessionEvents } from './progressTestUtils';
 import { testModelInfo } from './runtime/launchContextTestUtils';
@@ -260,7 +260,7 @@ function agentRun(
     toolPolicy: {},
     userVarChannels: {},
     initialUserMessageForTranscript: undefined,
-    fileService: new TaskRunFileService(runId, session.roots),
+    fileService: new RunFileService(runId, session.roots),
     tools,
     finalToolName: null,
     structured: { value: undefined },

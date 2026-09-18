@@ -24,7 +24,7 @@ import {
 } from '@utils/files/fileLocation';
 import { getRunDir } from '@utils/files/runStorageFs';
 import { workspaceRootPath } from '@utils/files/workspaceFS';
-import { TaskRunFileService } from '@utils/files/taskRunStorage';
+import { RunFileService } from '@utils/files/runStorage';
 
 const mocks = vi.hoisted(() => ({
   executeCommand: vi.fn(),
@@ -402,7 +402,7 @@ describe('LaTeXdiffService shadow output', () => {
     await installNodeBackedPlatform(workspaceDir, storageRoot);
 
     const runId = 'run-1' as RunId;
-    const fileService = new TaskRunFileService(runId, workspaceRoots());
+    const fileService = new RunFileService(runId, workspaceRoots());
     await fileService.mirrorWorkspaceFile(
       createWorkspaceLocation(dependencyPath, 'refs/macros.sty'),
     );

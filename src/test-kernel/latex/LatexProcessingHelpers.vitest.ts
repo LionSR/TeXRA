@@ -26,7 +26,7 @@ import {
   createWorkspaceLocation,
 } from '@utils/files/fileLocation';
 import { getRunDir } from '@utils/files/runStorageFs';
-import { TaskRunFileService } from '@utils/files/taskRunStorage';
+import { RunFileService } from '@utils/files/runStorage';
 
 const mocks = vi.hoisted(() => ({
   compileLatex2Pdf: vi.fn(),
@@ -243,7 +243,7 @@ describe('LatexMediaManager figure baseDir resolution (issue #7228)', () => {
         const manager = new LatexMediaManager(
           logger,
           workspaceRoots().config,
-          new TaskRunFileService(runId, workspaceRoots()),
+          new RunFileService(runId, workspaceRoots()),
         ) as unknown as LatexMediaManagerFigureInternals;
         yield* manager.extractFiguresFromFiles(
           [createWorkspaceLocation(texPath, 'main.tex')],

@@ -1,7 +1,7 @@
 /**
  * Tool for accepting output files from a completed run into the workspace.
  *
- * After a workflow agent completes, its output files live in task-run storage
+ * After a workflow agent completes, its output files live in run storage
  * (executions/{runId}/). This tool copies those files into the workspace
  * — the programmatic equivalent of the "Accept" button in the progress view.
  *
@@ -187,7 +187,7 @@ export class AcceptRunFilesTool extends defineTool({
 Only workflow subagent results (category="workflow") have output files to
 accept; tool-use subagents return text and have nothing for this tool.
 
-Locates output files in task-run storage and writes them to the workspace.
+Locates output files in run storage and writes them to the workspace.
 Each file goes through an approval step before writing and may be rejected.
 
 Parameters map directly to subagent-result delivery attributes:
@@ -443,7 +443,7 @@ Parameters map directly to subagent-result delivery attributes:
 
   /**
    * Resolves a source file by checking run storage first, then workspace.
-   * In taskRunStorage mode, files live under StorageFS. In workspace mode,
+   * In run-storage mode, files live under StorageFS. In workspace mode,
    * files are written directly to the workspace.
    */
   private readonly resolveSourceFile = Effect.fn(

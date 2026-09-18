@@ -54,9 +54,9 @@ export function getFileDirectory(location: FileLocation): string {
 
 /**
  * Convert a string path to a FileLocation (standalone version).
- * Use this for utilities that don't have access to TaskRunFileService.
+ * Use this for utilities that don't have access to RunFileService.
  * This function is NOT run-storage aware - it can only create workspace or external locations.
- * For run-storage awareness, use TaskRunFileService.createLocation() instead.
+ * For run-storage awareness, use RunFileService.createLocation() instead.
  *
  * Path normalization is handled internally - you can pass paths with either
  * forward slashes or backslashes. It's safe to pass already-normalized paths

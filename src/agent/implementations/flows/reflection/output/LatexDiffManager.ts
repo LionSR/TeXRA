@@ -20,7 +20,7 @@ import {
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { createRunStorageLocation } from '@utils/files/fileLocation';
-import { TaskRunFileService } from '@utils/files/taskRunStorage';
+import { RunFileService } from '@utils/files/runStorage';
 import { checkToolInstalled } from '@utils/system/toolUtils';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -56,7 +56,7 @@ export class LatexDiffManager {
     private readonly getOutputFiles: () => RoundIndexed<OutputFileInfo>,
     private readonly logger: AgentTrace,
     private readonly runId: RunId,
-    private readonly fileService: TaskRunFileService,
+    private readonly fileService: RunFileService,
     /** The run's session roots: the workspace and setting stores it reads. */
     private readonly roots: WorkspaceRoots,
   ) {
