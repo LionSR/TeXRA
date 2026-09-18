@@ -12,7 +12,6 @@ import {
 import { createPlatformAgentDirectories } from '@agent/index';
 import type { SupabaseSessionLog } from '@auth/SupabaseSession';
 import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
-import { disposeProcessRuntime } from '@controllers/session/sessionLayer';
 import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { consoleLogSink, setLogSink } from '@logger/logSink';
 import { initPlatform, tryPlatform, type Platform } from '@platform/platform';
@@ -50,7 +49,10 @@ import { initProcessSettingHost } from '@utils/config/platformSettings';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
-import { installCliProcessRuntime } from './cliProcessRuntime';
+import {
+  disposeCliProcessRuntime,
+  installCliProcessRuntime,
+} from './cliProcessRuntime';
 import { getCliSecrets } from './cliSecrets';
 import {
   flushNdjsonStdout,
@@ -158,7 +160,7 @@ const cliPlatformLog: SupabaseSessionLog = {
  * definition means the two paths can't drift.
  *
  * Runs on the default runtime rather than the process runtime: the lifecycle
- * shutdown below disposes the process runtime (`disposeProcessRuntime`)
+ * shutdown below disposes the process runtime (`disposeCliProcessRuntime`)
  * before the flushes run, and a teardown path must not depend on the thing
  * it is tearing down.
  */
@@ -451,7 +453,7 @@ export async function initCliPlatform(
         afterRunSettlement: [
           () => runtime.runPromise(teardownDefaultSession()),
           () => flushNdjsonStdout(),
-          () => disposeProcessRuntime(),
+          () => disposeCliProcessRuntime(),
         ],
       });
 
@@ -481,7 +483,7 @@ export async function initCliPlatform(
     );
     if (Exit.isFailure(initialized)) {
       // The initialization fiber must exit before its owning runtime closes.
-      await disposeProcessRuntime();
+      await disposeCliProcessRuntime();
       throw Cause.squash(initialized.cause);
     }
     services = initialized.value;

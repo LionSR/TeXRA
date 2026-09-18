@@ -23,8 +23,8 @@ import { Context, Effect, Layer, type ManagedRuntime } from 'effect';
 
 import {
   closeSession as closeOwnedSession,
+  installedProcessRuntime,
   listSessions as listOwnedSessions,
-  sessionOwnerInstalled,
 } from '@agent/runtime';
 import { unavailableSupabaseAuth } from '@auth/SupabaseAuth';
 import { SignInFailed } from '@common/errors/signInFailed';
@@ -32,7 +32,6 @@ import {
   disposeProcessRuntime,
   installProcessRuntime,
 } from '@controllers/session/sessionLayer';
-import { tryProcessRuntime } from '@platform/processRuntime';
 import { initPlatform, tryPlatform, type Platform } from '@platform/platform';
 import type { AgentResumePort } from '@platform/interfaces';
 import type { LanguageModelPort } from '@platform/languageModel';
@@ -207,8 +206,11 @@ export function composeProcess(platform: AgentPlatform): ProcessHold {
     agentResume: platform.agentResume,
     setup: PACKAGE_SETUP,
   };
-  let processRuntime = tryProcessRuntime();
-  if (!sessionOwnerInstalled()) {
+  // The owner carries the runtime it runs on, so a composition beside a host
+  // that already installed one borrows exactly that runtime; an absent owner
+  // is what says this composition must install its own.
+  let processRuntime = installedProcessRuntime();
+  if (!processRuntime) {
     // The process-wide installations, once for the life of the process.
     if (!active) {
       initPlatform(platform);
@@ -228,9 +230,7 @@ export function composeProcess(platform: AgentPlatform): ProcessHold {
     });
     installedHere = true;
   }
-  if (!processRuntime) {
-    throw new Error('The installed session owner has no process runtime.');
-  }
+  const heldRuntime = processRuntime;
   const runtime: AgentRuntime = { platform, roots: platform.roots };
   const sessions = makeSessions(
     runtime,
@@ -253,8 +253,11 @@ export function composeProcess(platform: AgentPlatform): ProcessHold {
         // `ManagedRuntime.disposeEffect` is `Effect<void, never>` over
         // `Scope.close`, so the only way `disposeProcessRuntime` rejects is a
         // layer finalizer defecting, and re-raising that as a defect is what
-        // the release above says the embedder sees.
-        Effect.ensuring(Effect.promise(() => disposeProcessRuntime())),
+        // the release above says the embedder sees. The runtime is this
+        // composition's own local, not a read of what is installed now.
+        Effect.ensuring(
+          Effect.promise(() => disposeProcessRuntime(heldRuntime)),
+        ),
       );
     }),
   };

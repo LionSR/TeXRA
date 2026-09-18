@@ -7,7 +7,7 @@ import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { promptExtensionInstall } from '@frontend/ui/instruction';
 import { createLog } from '@logger/logUtils';
 import type { AgentDirectoriesFailed, StateStore } from '@platform/interfaces';
-import { tryProcessRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import { LATEX_WORKSHOP_EXT_ID } from '@shared/constants/latexToolchain';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { registerExternalRoot } from '@utils/files/externalRoots';
@@ -110,17 +110,12 @@ export function refreshCustomAgentRoot(): Effect.Effect<void> {
   );
 }
 
-/** Prepare the host environment and recommend LaTeX Workshop when useful. */
+/** Prepare the host environment and recommend LaTeX Workshop when useful.
+ *  Runs on the runtime `activate` holds, threaded in by its one caller. */
 export async function initializeLatexSupport(
   globalState: StateStore,
+  runtime: ProcessRuntime,
 ): Promise<void> {
-  const runtime = tryProcessRuntime();
-  if (runtime == null) {
-    log.warn(
-      'Skipped LaTeX support setup: the process runtime is not installed.',
-    );
-    return;
-  }
   // Extend process.env.PATH with common TeX installation directories so that
   // child processes spawned by other extensions (e.g., LaTeX Workshop) can
   // find latexmk, pdflatex, and other TeX binaries.  When VS Code is launched
@@ -145,18 +140,21 @@ export async function initializeLatexSupport(
   );
 
   await runtime.runPromise(
-    Effect.promise(async () => {
+    Effect.gen(function* () {
       const latexWorkshop = vscode.extensions.getExtension(
         LATEX_WORKSHOP_EXT_ID,
       );
 
-      if (!latexWorkshop && (await workspaceContainsLatexFiles())) {
+      if (
+        !latexWorkshop &&
+        (yield* Effect.promise(workspaceContainsLatexFiles))
+      ) {
         // Only nag if the workspace actually contains LaTeX files; a user
         // evaluating TeXRA or using it on a non-LaTeX project should not be
         // prompted to install a TeX extension they don't need. They'll still
         // discover it via the LaTeX settings tab or compile errors later.
         log.info('LaTeX Workshop extension not found, prompting installation');
-        await promptExtensionInstall(globalState, {
+        yield* promptExtensionInstall(globalState, {
           suppressKey: 'latex-workshop-install',
           message:
             'LaTeX Workshop extension is recommended for full TeXRA functionality (LaTeX compilation, PDF preview, and IntelliSense). Install now?',

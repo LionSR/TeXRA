@@ -1885,7 +1885,7 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
           // the runtime they run on goes.
           () => runtime.runPromise(projects.dispose()),
           // Last: every project's session has released its graph above.
-          () => disposeProcessRuntime(),
+          () => disposeProcessRuntime(runtime),
         ],
       });
 

@@ -83,7 +83,6 @@ import {
 import { installLongRunningModelDispatcher } from '@platform/defaults/longRunningModelTransport';
 import { initPlatform } from '@platform/platform';
 import type { ProcessRuntime } from '@platform/processRuntime';
-import { tryProcessRuntime } from '@platform/processRuntime';
 import {
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
   type LanguageModelPort,
@@ -173,6 +172,13 @@ let apiKeyStatusBarItem: vscode.StatusBarItem | undefined;
 // idempotency flag, so a stale module-level instance would silently swallow
 // handlers registered by a second activate() in the same process.
 let lifecycleHost: LifecycleHost | undefined;
+// This entry's hold on the process runtime it installed (rulings ledger,
+// #12720). VS Code calls `activate` and `deactivate` separately, so the
+// entry's local is module-scoped like `lifecycleHost` above; every surface
+// below `activate` is handed the runtime rather than reading it back, and
+// only `deactivate`'s shutdown, which runs outside any activation frame,
+// reads it here.
+let processRuntime: ProcessRuntime | undefined;
 let extensionShutdownPromise: Promise<void> | undefined;
 
 /**
@@ -296,6 +302,7 @@ async function initVscodePlatform(
     globalState,
   });
   initProcessWorkspaceRoots(roots);
+  processRuntime = runtime;
   return { secrets, runtime, auth, authReadiness, roots };
 }
 
@@ -310,9 +317,13 @@ function shutdownExtension(): Promise<void> {
       if (lifecycleHost === host) lifecycleHost = undefined;
       // No runtime, no session was ever opened: an activation that failed
       // before installing one has nothing to tear down here.
-      await tryProcessRuntime()?.runPromise(teardownDefaultSession());
-      // After the session: its graph releases on the runtime it runs on.
-      await disposeProcessRuntime();
+      const runtime = processRuntime;
+      if (runtime) {
+        await runtime.runPromise(teardownDefaultSession());
+        // After the session: its graph releases on the runtime it runs on.
+        await disposeProcessRuntime(runtime);
+        if (processRuntime === runtime) processRuntime = undefined;
+      }
     }
   })();
   extensionShutdownPromise = shutdownPromise;
@@ -794,7 +805,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
   // synchronous glob probes of TeX install directories, which would
   // otherwise block activation on slow disks. (Never rejects — the body is
   // fully wrapped in try/catch.)
-  setTimeout(() => void initializeLatexSupport(globalState), 0);
+  setTimeout(() => void initializeLatexSupport(globalState, runtime), 0);
   registerCommands(
     context,
     globalState,

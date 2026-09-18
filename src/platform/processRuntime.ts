@@ -4,7 +4,12 @@
  * `initPlatform()` and disposed on the existing shutdown path. `runPromise`,
  * `runFork`, and `runSync` appear at the entries and at the outermost
  * Promise-facing methods; inside, cancellation is fiber interruption.
- * Installed like the process roots: exactly once, by the entry.
+ *
+ * Held by the entry that made it, never by this module: each composition
+ * root keeps its `ManagedRuntime` in a local and threads it to the surfaces
+ * that run on it (rulings ledger, #12720). This module owns the types that
+ * describe it and the fork-failure reporting wrapper the roots build it
+ * with; there is no ambient slot to read it back from.
  */
 import {
   Cause,
@@ -54,47 +59,6 @@ export type ProcessRuntime = ManagedRuntime.ManagedRuntime<
   ProcessServices,
   never
 >;
-
-let processRuntime: ProcessRuntime | null = null;
-
-/** Install the process runtime. Called by a composition root exactly once at
- *  startup, right beside `initPlatform()`. */
-export function initProcessRuntime(instance: ProcessRuntime): void {
-  processRuntime = instance;
-}
-
-/**
- * The installed runtime, or `null` — the non-throwing read, like
- * `tryPlatform()` beside `platform()`. An entry that may or may not be the
- * first one, and a shutdown that may or may not be the first one, ask here
- * instead of keeping a latch of their own: a boolean beside the install
- * drifts from the fact the moment a dispose or a raced install lands between
- * the two.
- */
-export function tryProcessRuntime(): ProcessRuntime | null {
-  return processRuntime;
-}
-
-/**
- * Forget `instance`, but only while it is still the installed one. Called by
- * `disposeProcessRuntime` AFTER its disposal, never before: the layer
- * finalizers unwinding inside `dispose()` still publish through
- * `effectRuntime()`, and a runtime installed to replace this one while it was
- * unwinding must survive the clear that ends its predecessor.
- */
-export function clearProcessRuntime(instance: ProcessRuntime): void {
-  if (processRuntime === instance) processRuntime = null;
-}
-
-/** The process runtime, for the Promise-facing boundaries that run fibers. */
-export function effectRuntime(): ProcessRuntime {
-  if (!processRuntime) {
-    throw new Error(
-      'Process runtime not initialized: call initProcessRuntime() before running Effect code.',
-    );
-  }
-  return processRuntime;
-}
 
 /**
  * A runtime whose `runFork` reports a fiber's failure or defect on exit
