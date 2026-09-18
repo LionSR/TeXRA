@@ -484,6 +484,7 @@ export function registerBuiltinSlashCommands(options: {
       <ToolsListForm
         state={state}
         runtime={runtime}
+        workspaceRoot={options.runtimeSession.roots.workspace}
         availableRows={props.availableRows}
         onClose={() => props.onDone(undefined)}
       />
@@ -741,6 +742,7 @@ export function registerBuiltinSlashCommands(options: {
           stores={configStores}
           secrets={secrets}
           runtime={runtime}
+          workspaceRoot={options.runtimeSession.roots.workspace}
           availableRows={props.availableRows}
           // Same hook `/approval` drives, so the approval-policy row updates the
           // live session and the status bar from whichever surface set it —

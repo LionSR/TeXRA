@@ -120,8 +120,14 @@ export interface ExternalToolDef {
   readonly id: string;
   /** Tool names belonging to this group — must match registry keys. */
   readonly tools: readonly RegisteredToolName[];
-  /** Optional shared probe result passed to check/status/detail callbacks. */
-  readonly probe?: () => Effect.Effect<unknown, unknown, ToolProbeServices>;
+  /**
+   * Optional shared probe result passed to check/status/detail callbacks.
+   * Takes the caller's workspace root as data — the GitHub group's probe asks
+   * whether that folder is a git repository (#12421).
+   */
+  readonly probe?: (
+    workspaceRoot: string | undefined,
+  ) => Effect.Effect<unknown, unknown, ToolProbeServices>;
   /** Returns true if the external dependency is available. */
   readonly check: (
     probeResult?: unknown,
@@ -218,14 +224,14 @@ function probeZoteroBbt(port: number): Effect.Effect<boolean> {
 }
 
 const getGitHubPRPrerequisites = Effect.fn('getGitHubPRPrerequisites')(
-  function* () {
+  function* (workspaceRoot: string | undefined) {
     const secrets = yield* Secrets;
     const tokenPresent = (yield* getGitHubToken(secrets)) !== undefined;
     // The probe reports "not a repository" as `false` and never rejects; the
     // fiber's signal reaches its `git` spawn, so an interrupted dashboard
     // refresh kills the process instead of abandoning it.
     const inGitRepo = yield* Effect.promise((signal) =>
-      isGitRepository(undefined, signal),
+      isGitRepository(workspaceRoot, signal),
     );
     return { tokenPresent, inGitRepo };
   },
@@ -368,14 +374,26 @@ function probeSdkBinaryStatus(config: {
  * `resolve(probeResult)` cast.
  */
 function prerequisitesChecks<T>(config: {
-  probe: () => Effect.Effect<T, unknown, ToolProbeServices>;
-  /** Re-derives `T` on a cache miss. Defaults to `probe`. */
+  probe: (
+    workspaceRoot: string | undefined,
+  ) => Effect.Effect<T, unknown, ToolProbeServices>;
+  /**
+   * Re-derives `T` on a cache miss. Defaults to `probe`, which is why the
+   * miss path re-probes without a workspace root: the callbacks that reach it
+   * carry no call context of their own.
+   */
   fallback?: () => Effect.Effect<T, unknown, ToolProbeServices>;
   check: (prereqs: T) => boolean;
   statusLabel: (prereqs: T) => string | undefined;
   detailCheck: (prereqs: T) => string | undefined;
 }): Pick<ExternalToolDef, 'probe' | 'check' | 'statusLabel' | 'detailCheck'> {
-  const { probe, fallback = probe, check, statusLabel, detailCheck } = config;
+  const {
+    probe,
+    fallback = () => probe(undefined),
+    check,
+    statusLabel,
+    detailCheck,
+  } = config;
   const resolve = (
     probeResult: unknown,
   ): Effect.Effect<T, unknown, ToolProbeServices> =>

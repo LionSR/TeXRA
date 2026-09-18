@@ -420,7 +420,9 @@ export class SettingsViewMessageHandler {
       installToolExtension: (message) =>
         this.latexHandlers.installExtension(message.extensionId),
       recheckToolStatus: () =>
-        this.runtime.runPromise(refreshToolAvailability()),
+        this.runtime.runPromise(
+          refreshToolAvailability(this.session.roots.workspace),
+        ),
       toggleTool: async (message) => {
         await this.runtime.runPromise(
           setToolEnabled(message.toolId, message.enabled, this.globalState),
@@ -1038,7 +1040,11 @@ export class SettingsViewMessageHandler {
       ? (getLastCheckResults() ?? undefined)
       : undefined;
     const items = await this.runtime.runPromise(
-      buildToolDashboardItems('extension', cachedResults),
+      buildToolDashboardItems(
+        'extension',
+        this.session.roots.workspace,
+        cachedResults,
+      ),
     );
     await webview.postMessage({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD,

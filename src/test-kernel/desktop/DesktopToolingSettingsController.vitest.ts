@@ -129,6 +129,7 @@ function createFixture(overrides: Partial<ControllerOptions> = {}) {
     config: new FakeConfigProvider(),
     globalState,
     workspaceState,
+    workspaceRoot: undefined,
     renderer: {
       postToRenderer: (message) => posted.push(message),
     },

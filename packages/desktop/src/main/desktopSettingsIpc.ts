@@ -474,7 +474,7 @@ export function createDesktopSettingsIpc(
       options.ui.showInfoMessage(GITHUB_TOKEN_SAVED_MESSAGE),
     );
     await postGitHubTokenStatus();
-    await runtime.runPromise(refreshToolAvailability());
+    await runtime.runPromise(refreshToolAvailability(roots.workspace));
   }
 
   async function removeGitHubToken(): Promise<void> {
@@ -483,7 +483,7 @@ export function createDesktopSettingsIpc(
       options.ui.showInfoMessage(GITHUB_TOKEN_REMOVED_MESSAGE),
     );
     await postGitHubTokenStatus();
-    await runtime.runPromise(refreshToolAvailability());
+    await runtime.runPromise(refreshToolAvailability(roots.workspace));
   }
 
   async function postGitHubSubscriptions(): Promise<void> {

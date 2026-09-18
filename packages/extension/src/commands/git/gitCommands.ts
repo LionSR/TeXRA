@@ -46,7 +46,11 @@ export function registerGitCommands(
   // shared command registry in #3781 batch 3 (see
   // `extensionCommandSurface.ts`).
   registerCommandEntries(context, [
-    { id: 'texra.isGitRepository', handler: isGitRepository },
+    {
+      id: 'texra.isGitRepository',
+      handler: (rootPath?: string) =>
+        isGitRepository(rootPath ?? session.roots.workspace),
+    },
     {
       id: 'texra.getRecentCommits',
       handler: (rootPath?: string) => getRecentCommits(session, rootPath),

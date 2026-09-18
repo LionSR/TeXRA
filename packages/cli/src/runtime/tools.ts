@@ -25,20 +25,27 @@ export interface CliToolGuide {
  *
  * `runtime` is the process runtime the composition root installed, so the
  * disabled-tool read inside the builder (`AppState`) and the toggle that
- * follows it hit the same store.
+ * follows it hit the same store. `workspaceRoot` is the `--cwd` project the
+ * same init opened, carried as data for the probes that need one.
  */
 export async function readCliToolStatuses(
   runtime: ProcessRuntime,
+  workspaceRoot: string | undefined,
 ): Promise<ToolDashboardItem[]> {
-  const items = await runtime.runPromise(buildToolDashboardItems('cli'));
+  const items = await runtime.runPromise(
+    buildToolDashboardItems('cli', workspaceRoot),
+  );
   return items.filter((item) => item.requiresSetup);
 }
 
 export async function readCliToolStatus(
   runtime: ProcessRuntime,
+  workspaceRoot: string | undefined,
   id: string,
 ): Promise<ToolDashboardItem | undefined> {
-  return (await readCliToolStatuses(runtime)).find((item) => item.id === id);
+  return (await readCliToolStatuses(runtime, workspaceRoot)).find(
+    (item) => item.id === id,
+  );
 }
 
 function findCliToolDef(id: string): ExternalToolDef | undefined {

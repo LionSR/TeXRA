@@ -42,6 +42,8 @@ type DesktopLatexHandlers = Pick<
 
 interface DefaultDesktopToolingSettingsControllerOptions extends SettingsStatePorts {
   readonly config: ConfigProvider;
+  /** The active paper's workspace folder, for the probes that need one. */
+  readonly workspaceRoot: string | undefined;
   readonly runtime: ProcessRuntime;
   readonly onError: (error: unknown) => void;
   readonly renderer: {
@@ -137,14 +139,20 @@ export class DefaultDesktopToolingSettingsController implements DesktopToolingSe
   /** Re-probe external tools. The probe's own `toolAvailabilityChanged`
    *  signal is what repaints the dashboard, through the subscription above. */
   private refreshToolAvailability(): Promise<void> {
-    return this.options.runtime.runPromise(refreshToolAvailability());
+    return this.options.runtime.runPromise(
+      refreshToolAvailability(this.options.workspaceRoot),
+    );
   }
 
   private async postToolDashboardData(): Promise<void> {
     // A cold probe cache stays `undefined` so the build runs the probes;
     // coercing it to `[]` would render "zero external tools".
     const items = await this.options.runtime.runPromise(
-      buildToolDashboardItems('desktop', getLastCheckResults() ?? undefined),
+      buildToolDashboardItems(
+        'desktop',
+        this.options.workspaceRoot,
+        getLastCheckResults() ?? undefined,
+      ),
     );
     this.options.renderer.postToRenderer({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD,

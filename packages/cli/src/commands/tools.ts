@@ -51,7 +51,10 @@ async function listTools(context: CliContext): Promise<number> {
   // The init call hands back the process runtime it just wired, so the status
   // read and any follow-up toggle hit the same state store.
   const services = await initCliPlatform({ ...context, quietLogs: true });
-  const items = await readCliToolStatuses(services.runtime);
+  const items = await readCliToolStatuses(
+    services.runtime,
+    services.roots?.workspace,
+  );
 
   emitCliResult(context, {
     json: items,
@@ -63,7 +66,11 @@ async function listTools(context: CliContext): Promise<number> {
 
 async function showTool(context: CliContext, id: string): Promise<number> {
   const services = await initCliPlatform({ ...context, quietLogs: true });
-  const item = await readCliToolStatus(services.runtime, id);
+  const item = await readCliToolStatus(
+    services.runtime,
+    services.roots?.workspace,
+    id,
+  );
   if (!item) {
     writeTextStderr(formatCliToolNotFoundMessage(id));
     return CliExitCode.Usage;
