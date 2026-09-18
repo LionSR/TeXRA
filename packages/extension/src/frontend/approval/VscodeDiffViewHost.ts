@@ -24,10 +24,15 @@ export function tabInputFileUri(tab: vscode.Tab): vscode.Uri | null {
   return null;
 }
 
-/** An editor promise lifted where it is raised: the refusal reaches the caller
- *  as the value the editor threw, which is what the `await` this replaced
- *  handed over. */
-const fromEditor = <A>(call: () => PromiseLike<A>): Effect.Effect<A, unknown> =>
+/**
+ * An editor promise lifted where it is raised: the refusal reaches the caller
+ * as the value the editor threw, which is what the `await` this replaced
+ * handed over. Shared with the tool-edit approval host, which lifts the same
+ * `vscode.*` surface beside this one.
+ */
+export const fromEditor = <A>(
+  call: () => PromiseLike<A>,
+): Effect.Effect<A, unknown> =>
   Effect.tryPromise({ try: call, catch: (error) => error });
 
 export class VscodeDiffViewHost implements DiffViewHost {

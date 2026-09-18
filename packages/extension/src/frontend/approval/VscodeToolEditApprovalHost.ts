@@ -19,6 +19,7 @@ import type {
   ToolEditPreviewContext,
 } from '@controllers/approval/ToolEditApprovalController';
 import {
+  fromEditor,
   tabInputFileUri,
   VscodeDiffViewHost,
 } from '@frontend/approval/VscodeDiffViewHost';
@@ -37,12 +38,6 @@ import {
 import { pluralize } from '@utils/text/stringUtils';
 
 const CHANNEL = 'ToolEditApproval';
-
-/** An editor promise lifted as it is: the rejection reaches the controller's
- *  error report as the value it was thrown with, which is what the `await`
- *  this replaced handed over. */
-const fromEditor = <A>(call: () => PromiseLike<A>): Effect.Effect<A, unknown> =>
-  Effect.tryPromise({ try: call, catch: (error) => error });
 
 export class VscodeToolEditApprovalHost implements ToolEditApprovalHost {
   private readonly diffViewHost: DiffViewHost = new VscodeDiffViewHost();
