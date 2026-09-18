@@ -80,13 +80,9 @@ const withLatexdiffTool = <E, R>(
     yield* action;
   }).pipe(
     Effect.catchCause((cause) =>
-      Effect.promise(async () => {
-        await showLoggedErrorMessage(
-          CHANNEL,
-          errorMessage,
-          Cause.squash(cause),
-        );
-      }),
+      showLoggedErrorMessage(CHANNEL, errorMessage, Cause.squash(cause)).pipe(
+        Effect.asVoid,
+      ),
     ),
   );
 
@@ -151,11 +147,9 @@ const openLatexdiffResult = Effect.fnUntraced(function* (
   const fs = yield* FileSystem.FileSystem;
 
   if (!(yield* entryExists(fs, diffLocation.absolutePath))) {
-    yield* Effect.promise(() =>
-      showLoggedMessage(
-        CHANNEL,
-        `Diff file could not be found. Expected path: ${diffFilePath}`,
-      ),
+    yield* showLoggedMessage(
+      CHANNEL,
+      `Diff file could not be found. Expected path: ${diffFilePath}`,
     );
     return undefined;
   }
@@ -309,13 +303,11 @@ const resolveDiffBase = Effect.fnUntraced(function* (
 ) {
   const fileToUse = baseFile || inputFile;
   if (fileToUse) return fileToUse;
-  yield* Effect.promise(() =>
-    showLoggedMessageWithDocs(
-      CHANNEL,
-      'No base file specified for latexdiff',
-      'latex-diff',
-      'Latexdiff Docs',
-    ),
+  yield* showLoggedMessageWithDocs(
+    CHANNEL,
+    'No base file specified for latexdiff',
+    'latex-diff',
+    'Latexdiff Docs',
   );
   return undefined;
 });
@@ -329,13 +321,11 @@ const handleLatexdiff = Effect.fnUntraced(function* (
   const fileToUse = yield* resolveDiffBase(inputFile, baseFile);
   if (!fileToUse) return;
   if (!editedFile) {
-    yield* Effect.promise(() =>
-      showLoggedMessageWithDocs(
-        CHANNEL,
-        'No revised file specified for latexdiff',
-        'latex-diff',
-        'Latexdiff Docs',
-      ),
+    yield* showLoggedMessageWithDocs(
+      CHANNEL,
+      'No revised file specified for latexdiff',
+      'latex-diff',
+      'Latexdiff Docs',
     );
     return;
   }
@@ -399,7 +389,9 @@ const handlePackLatexdiffvc = Effect.fnUntraced(function* (
         runPackLatexdiffvc(fileToUse, commitHash, clean),
       );
       const message = latexdiffPackMessage(result);
-      if (message) void showLoggedInfoMessage(CHANNEL, message);
+      if (message) {
+        yield* Effect.forkDetach(showLoggedInfoMessage(CHANNEL, message));
+      }
     }),
   );
 });
@@ -418,11 +410,9 @@ const handleRunLatexdiff = Effect.fnUntraced(function* (
       const { agent, model, inputFile } = config;
 
       if (!agent || !model || !inputFile) {
-        yield* Effect.promise(() =>
-          showLoggedMessage(
-            CHANNEL,
-            'Missing required configuration parameters',
-          ),
+        yield* showLoggedMessage(
+          CHANNEL,
+          'Missing required configuration parameters',
         );
         return;
       }
@@ -487,8 +477,9 @@ const handleRunLatexdiff = Effect.fnUntraced(function* (
       const successCount = results.filter((r) => r.success).length;
 
       if (successCount === 0) {
-        yield* Effect.promise(() =>
-          showLoggedMessage(CHANNEL, latexdiffAllFailedMessage(mathMarkup)),
+        yield* showLoggedMessage(
+          CHANNEL,
+          latexdiffAllFailedMessage(mathMarkup),
         );
       } else if (successCount < results.length) {
         vscode.window.showWarningMessage(

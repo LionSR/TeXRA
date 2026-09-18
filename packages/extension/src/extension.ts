@@ -381,7 +381,10 @@ const WALKTHROUGH_COMMANDS_NEEDING_WORKSPACE = [
 /** Internal command URI used by workspace-bound walkthrough links. */
 const WALKTHROUGH_WORKSPACE_ACTION_COMMAND = 'texra.walkthroughWorkspaceAction';
 
-async function explainWorkspaceRequired(extensionPath: string): Promise<void> {
+async function explainWorkspaceRequired(
+  extensionPath: string,
+  runtime: ProcessRuntime,
+): Promise<void> {
   const openFolder = 'Open Folder';
   const createSample = 'Create Sample Project';
   const choice = await vscode.window.showInformationMessage(
@@ -392,13 +395,14 @@ async function explainWorkspaceRequired(extensionPath: string): Promise<void> {
   if (choice === openFolder) {
     await vscode.commands.executeCommand('workbench.action.files.openFolder');
   } else if (choice === createSample) {
-    await createSampleProjectWithoutWorkspace(extensionPath);
+    await createSampleProjectWithoutWorkspace(extensionPath, runtime);
   }
 }
 
 function registerWalkthroughWorkspaceAction(
   context: vscode.ExtensionContext,
   hasSingleWorkspace: boolean,
+  runtime: ProcessRuntime,
 ): void {
   context.subscriptions.push(
     vscode.commands.registerCommand(
@@ -410,7 +414,7 @@ function registerWalkthroughWorkspaceAction(
           await vscode.commands.executeCommand(command);
           return;
         }
-        await explainWorkspaceRequired(context.extensionPath);
+        await explainWorkspaceRequired(context.extensionPath, runtime);
       },
     ),
   );
@@ -586,7 +590,8 @@ async function activateExtension(context: vscode.ExtensionContext) {
     context.subscriptions.push(
       vscode.commands.registerCommand(
         EXTENSION_COMMANDS.CREATE_SAMPLE_PROJECT,
-        () => createSampleProjectWithoutWorkspace(context.extensionPath),
+        () =>
+          createSampleProjectWithoutWorkspace(context.extensionPath, runtime),
       ),
       vscode.commands.registerCommand(
         EXTENSION_COMMANDS.OPEN_GETTING_STARTED,
@@ -606,7 +611,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
         apiSetApiKey(roots, secrets, () => Effect.void, runtime),
       ),
     );
-    registerWalkthroughWorkspaceAction(context, false);
+    registerWalkthroughWorkspaceAction(context, false, runtime);
     return;
   }
   const rawWorkspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
@@ -817,7 +822,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
     runtime,
     runtimeSession,
   );
-  registerWalkthroughWorkspaceAction(context, true);
+  registerWalkthroughWorkspaceAction(context, true, runtime);
   registerFileDecorations(context, runtime, runtimeSession);
 
   // VS Code's event emitters don't await async listeners, so we funnel

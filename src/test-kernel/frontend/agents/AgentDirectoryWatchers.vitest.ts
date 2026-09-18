@@ -91,7 +91,7 @@ vi.mock('@agent/index/platformAgentDirectories', () => ({
 }));
 
 vi.mock('@frontend/ui/errorHandlingUtils', () => ({
-  showLoggedMessageWithDocs: vi.fn(),
+  showLoggedMessageWithDocs: vi.fn(() => Effect.void),
 }));
 
 vi.mock('@frontend/ui/dialogs', () => ({

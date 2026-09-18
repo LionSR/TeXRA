@@ -308,13 +308,11 @@ export function handleCreateAgentWithAI(
     });
   }).pipe(
     Effect.catchCause((cause) =>
-      Effect.promise(async () => {
-        await showLoggedErrorMessage(
-          CHANNEL,
-          'Failed to create agent',
-          Cause.squash(cause),
-        );
-      }),
+      showLoggedErrorMessage(
+        CHANNEL,
+        'Failed to create agent',
+        Cause.squash(cause),
+      ).pipe(Effect.asVoid),
     ),
   );
 }

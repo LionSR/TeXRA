@@ -8,7 +8,7 @@ const authMocks = vi.hoisted(() => ({
   getSession: vi.fn(),
   removeStoredSession: vi.fn(() => Effect.succeed(true)),
   showInformationMessage: vi.fn(),
-  showLoggedMessage: vi.fn(),
+  showLoggedMessage: vi.fn(() => Effect.succeed('')),
   showQuickPick: vi.fn(),
   showWarningMessage: vi.fn(),
 }));
@@ -57,7 +57,7 @@ vi.mock('@frontend/ui/dialogs', () => ({
 }));
 
 vi.mock('@frontend/ui/errorHandlingUtils', () => ({
-  showLoggedErrorMessage: vi.fn(),
+  showLoggedErrorMessage: vi.fn(() => Effect.succeed('')),
   showLoggedMessage: authMocks.showLoggedMessage,
 }));
 

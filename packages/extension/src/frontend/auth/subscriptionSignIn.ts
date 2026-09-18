@@ -148,21 +148,17 @@ export function signInWithSubscription(
     Effect.catchTag('SubscriptionSignInFailed', (failure) =>
       failure.cause instanceof SubscriptionSignInCancelled
         ? Effect.succeed(false)
-        : Effect.promise(() =>
-            showLoggedErrorMessage(
-              channel,
-              `${displayName} sign-in failed`,
-              failure.cause,
-            ),
+        : showLoggedErrorMessage(
+            channel,
+            `${displayName} sign-in failed`,
+            failure.cause,
           ).pipe(Effect.as(false)),
     ),
     Effect.catchTag('SubscriptionPreferenceUpdateFailed', (failure) =>
-      Effect.promise(() =>
-        showLoggedErrorMessage(
-          channel,
-          `${displayName} sign-in succeeded but subscription preference update failed`,
-          failure.cause,
-        ),
+      showLoggedErrorMessage(
+        channel,
+        `${displayName} sign-in succeeded but subscription preference update failed`,
+        failure.cause,
       ).pipe(Effect.as(false)),
     ),
   );

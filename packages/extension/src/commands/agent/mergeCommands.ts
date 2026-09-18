@@ -6,18 +6,20 @@ import { getHelperModelName } from '@agent/runtime';
 import { registerCommandEntries } from '@commands/_shared/registerCommands';
 import { showLoggedMessageWithDocs } from '@frontend/ui/errorHandlingUtils';
 import type { StateStore } from '@platform/interfaces';
+import type { ProcessRuntime } from '@platform/processRuntime';
 
 const CHANNEL = 'MergeCommands';
 
 export function registerMergeCommands(
   context: vscode.ExtensionContext,
   globalState: StateStore,
+  runtime: ProcessRuntime,
 ): void {
   registerCommandEntries(context, [
     {
       id: 'texra.merge',
       handler: (baseFile: string, editedFile: string) =>
-        handleMerge(globalState, baseFile, editedFile),
+        handleMerge(globalState, baseFile, editedFile, runtime),
     },
   ]);
 }
@@ -26,13 +28,16 @@ async function handleMerge(
   globalState: StateStore,
   baseFile: string,
   editedFile: string,
+  runtime: ProcessRuntime,
 ): Promise<void> {
   if (!baseFile || !editedFile) {
-    await showLoggedMessageWithDocs(
-      CHANNEL,
-      'Both base file and edited file must be specified for merge operation',
-      'intelligent-merge',
-      'View Merge Docs',
+    await runtime.runPromise(
+      showLoggedMessageWithDocs(
+        CHANNEL,
+        'Both base file and edited file must be specified for merge operation',
+        'intelligent-merge',
+        'View Merge Docs',
+      ),
     );
     return;
   }

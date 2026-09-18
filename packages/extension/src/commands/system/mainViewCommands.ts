@@ -1,10 +1,12 @@
 // Third-party imports
+import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
 import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
 import { registerCommandEntries } from '@commands/_shared/registerCommands';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 
 const CHANNEL = 'mainViewCommands';
@@ -23,21 +25,26 @@ interface RefreshAllOptionsArgs {
 export function registerMainViewCommands(
   context: vscode.ExtensionContext,
   progressViewProvider: ProgressViewProvider,
+  runtime: ProcessRuntime,
 ): void {
   registerCommandEntries(context, [
     {
       id: 'texra.refreshAllOptions',
-      handler: async (args?: RefreshAllOptionsArgs) => {
-        try {
-          await progressViewProvider.refreshCatalogs(args ?? {});
-        } catch (error) {
-          await showLoggedErrorMessage(
-            CHANNEL,
-            'Failed to refresh options',
-            error,
-          );
-        }
-      },
+      handler: (args?: RefreshAllOptionsArgs) =>
+        runtime.runPromise(
+          Effect.tryPromise({
+            try: () => progressViewProvider.refreshCatalogs(args ?? {}),
+            catch: (error: unknown) => error,
+          }).pipe(
+            Effect.catch((error) =>
+              showLoggedErrorMessage(
+                CHANNEL,
+                'Failed to refresh options',
+                error,
+              ).pipe(Effect.asVoid),
+            ),
+          ),
+        ),
     },
   ]);
 }

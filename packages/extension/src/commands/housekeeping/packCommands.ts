@@ -19,42 +19,45 @@ const CHANNEL = 'packCommands';
 
 /** `folderPath` is the packed folder's absolute path: resolved by the
  *  session's workspace view, or where it is for an external selection. */
-function showPackResult(
+const showPackResult = (
   result: FileOpResult,
   inputFile: string,
   folderPath: string | undefined,
-): void {
-  switch (result.status) {
-    case 'success': {
-      const folder = result.outputFolder;
-      if (!folder || !folderPath) return;
-      vscode.window
-        .showInformationMessage(`Files packed into ${folder}`, 'Open Folder')
-        .then((sel) => {
-          if (sel === 'Open Folder') {
-            void vscode.commands.executeCommand(
-              'revealFileInOS',
-              vscode.Uri.file(folderPath),
-            );
-          }
-        });
-      break;
+): Effect.Effect<void> =>
+  Effect.gen(function* () {
+    switch (result.status) {
+      case 'success': {
+        const folder = result.outputFolder;
+        if (!folder || !folderPath) return;
+        vscode.window
+          .showInformationMessage(`Files packed into ${folder}`, 'Open Folder')
+          .then((sel) => {
+            if (sel === 'Open Folder') {
+              void vscode.commands.executeCommand(
+                'revealFileInOS',
+                vscode.Uri.file(folderPath),
+              );
+            }
+          });
+        break;
+      }
+      case 'noFiles':
+        vscode.window.showInformationMessage(
+          `No files found to pack for ${inputFile}`,
+        );
+        break;
+      case 'missingParams':
+        yield* Effect.forkDetach(
+          showLoggedMessage(CHANNEL, 'Select an input file before packing.'),
+        );
+        break;
+      case 'error':
+        void vscode.window.showErrorMessage(
+          `Error during packing: ${result.error}`,
+        );
+        break;
     }
-    case 'noFiles':
-      vscode.window.showInformationMessage(
-        `No files found to pack for ${inputFile}`,
-      );
-      break;
-    case 'missingParams':
-      void showLoggedMessage(CHANNEL, 'Select an input file before packing.');
-      break;
-    case 'error':
-      void vscode.window.showErrorMessage(
-        `Error during packing: ${result.error}`,
-      );
-      break;
-  }
-}
+  });
 
 export const handlePack = Effect.fn('packCommands.handlePack')(function* (
   config: PackConfig,
@@ -79,5 +82,5 @@ export const handlePack = Effect.fn('packCommands.handlePack')(function* (
   const folderPath = folder
     ? (yield* filesystemFor(workspaceFs, folder)).absolutePath
     : undefined;
-  yield* Effect.sync(() => showPackResult(result, inputFile, folderPath));
+  yield* showPackResult(result, inputFile, folderPath);
 });

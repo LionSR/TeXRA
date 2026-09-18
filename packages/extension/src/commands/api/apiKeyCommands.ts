@@ -53,9 +53,7 @@ function createProfileKeyController(
     getProviderKeyUrl: (provider) => getProviderKeyUrl(stores, provider),
     refreshAfterKeyChange,
     reportFailure: (message, error) =>
-      Effect.promise(() =>
-        showLoggedErrorMessage(CHANNEL, message, error),
-      ).pipe(Effect.asVoid),
+      showLoggedErrorMessage(CHANNEL, message, error).pipe(Effect.asVoid),
   });
 }
 

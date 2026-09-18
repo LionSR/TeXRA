@@ -2,8 +2,8 @@ import { Effect } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  // Lifted once by the refresh tail, so the double answers with a promise.
-  safeExecuteCommand: vi.fn(async () => undefined),
+  // Composed by the refresh tail, so the double answers with an Effect.
+  safeExecuteCommand: vi.fn(() => Effect.succeed(undefined)),
 }));
 vi.mock('@frontend/system/commandUtils', () => ({
   safeExecuteCommand: mocks.safeExecuteCommand,

@@ -32,7 +32,7 @@ export function registerCommands(
   registerLatexdiffCommands(context, runtime, session);
   registerGitCommands(context, session);
   registerAgentReviewCommands(context, runtime, session);
-  registerMergeCommands(context, globalState);
+  registerMergeCommands(context, globalState, runtime);
   const settingsViewProvider = new SettingsViewProvider(
     context,
     globalState,
@@ -41,7 +41,7 @@ export function registerCommands(
     session,
   );
   registerOpenFileCommands(context, runtime, session);
-  registerMainViewCommands(context, progressViewProvider);
+  registerMainViewCommands(context, progressViewProvider, runtime);
 
   // The shared registry owns every command whose handler map lives in
   // `extensionCommandSurface.ts`, dispatched the same way as the desktop
@@ -59,6 +59,7 @@ export function registerCommands(
       runtime,
       session,
     ),
+    runtime,
   );
 
   context.subscriptions.push(

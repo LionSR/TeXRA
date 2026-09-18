@@ -36,7 +36,9 @@ const mocks = vi.hoisted(() => ({
   warn: vi.fn(),
   error: vi.fn(),
   info: vi.fn(),
-  showLoggedMessage: vi.fn(async (_channel: string, _message: string) => ''),
+  showLoggedMessage: vi.fn((_channel: string, _message: string) =>
+    Effect.succeed(''),
+  ),
 }));
 
 vi.mock('@common/files/fileTypeUtils', () => ({

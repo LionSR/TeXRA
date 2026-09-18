@@ -182,6 +182,7 @@ export function createExtensionCommandActions(
 export function registerExtensionCommandRegistry(
   context: vscode.ExtensionContext,
   actions: ExtensionCommandActions,
+  runtime: ProcessRuntime,
 ): void {
   for (const id of Object.keys(EXTENSION_COMMAND_HANDLERS) as ReadonlyArray<
     keyof typeof EXTENSION_COMMAND_HANDLERS
@@ -194,9 +195,11 @@ export function registerExtensionCommandRegistry(
           actions,
           (failure) => {
             if (failure.kind === 'invalidArguments') {
-              void showLoggedMessage(
-                'ExtensionCommandRegistry',
-                `Invalid arguments for command ${failure.id}: ${failure.error.message}`,
+              runtime.runFork(
+                showLoggedMessage(
+                  'ExtensionCommandRegistry',
+                  `Invalid arguments for command ${failure.id}: ${failure.error.message}`,
+                ),
               );
               return;
             }

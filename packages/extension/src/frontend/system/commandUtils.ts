@@ -1,4 +1,5 @@
 // Third-party imports
+import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
@@ -6,20 +7,23 @@ import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 
 const DEFAULT_CHANNEL = 'commandUtils';
 
-/** Execute a VS Code command and handle any errors. */
-export async function safeExecuteCommand<T>(
+/** Execute a VS Code command, reporting a rejection once and answering
+ *  `undefined` in its place. */
+export function safeExecuteCommand<T>(
   command: string,
   args: unknown[] = [],
   channel: string = DEFAULT_CHANNEL,
-): Promise<T | undefined> {
-  try {
-    return await vscode.commands.executeCommand<T>(command, ...args);
-  } catch (err) {
-    await showLoggedErrorMessage(
-      channel,
-      `Error executing command ${command}`,
-      err,
-    );
-    return undefined;
-  }
+): Effect.Effect<T | undefined> {
+  return Effect.tryPromise({
+    try: async () => vscode.commands.executeCommand<T>(command, ...args),
+    catch: (err: unknown) => err,
+  }).pipe(
+    Effect.catch((err) =>
+      showLoggedErrorMessage(
+        channel,
+        `Error executing command ${command}`,
+        err,
+      ).pipe(Effect.as(undefined)),
+    ),
+  );
 }

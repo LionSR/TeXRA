@@ -13,26 +13,34 @@ import { type CleanConfig } from './fileOpSchemas';
 const CHANNEL = 'cleanCommands';
 const log = createLog(CHANNEL);
 
-function showCleanResult(result: FileOpResult, inputFile: string): void {
-  switch (result.status) {
-    case 'success':
-      vscode.window.showInformationMessage(`Cleanup complete for ${inputFile}`);
-      break;
-    case 'noFiles':
-      vscode.window.showInformationMessage(
-        `No files found to clean for ${inputFile}`,
-      );
-      break;
-    case 'missingParams':
-      void showLoggedMessage(CHANNEL, 'Select an input file before cleaning.');
-      break;
-    case 'error':
-      void vscode.window.showErrorMessage(
-        `Error during cleanup: ${result.error}`,
-      );
-      break;
-  }
-}
+const showCleanResult = (
+  result: FileOpResult,
+  inputFile: string,
+): Effect.Effect<void> =>
+  Effect.gen(function* () {
+    switch (result.status) {
+      case 'success':
+        vscode.window.showInformationMessage(
+          `Cleanup complete for ${inputFile}`,
+        );
+        break;
+      case 'noFiles':
+        vscode.window.showInformationMessage(
+          `No files found to clean for ${inputFile}`,
+        );
+        break;
+      case 'missingParams':
+        yield* Effect.forkDetach(
+          showLoggedMessage(CHANNEL, 'Select an input file before cleaning.'),
+        );
+        break;
+      case 'error':
+        void vscode.window.showErrorMessage(
+          `Error during cleanup: ${result.error}`,
+        );
+        break;
+    }
+  });
 
 /** Clean removes a run's own storage; without a run there is nothing to clean. */
 export const handleClean = Effect.fn('cleanCommands.handleClean')(function* (
@@ -42,5 +50,5 @@ export const handleClean = Effect.fn('cleanCommands.handleClean')(function* (
   const result: FileOpResult = config.runId
     ? yield* runCleanRunDir(config.runId)
     : { status: 'noFiles' };
-  yield* Effect.sync(() => showCleanResult(result, config.inputFile));
+  yield* showCleanResult(result, config.inputFile);
 });

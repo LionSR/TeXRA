@@ -90,7 +90,9 @@ export class VscodeToolEditApprovalHost implements ToolEditApprovalHost {
   }
 
   reportError(message: string): void {
-    void showLoggedMessage(CHANNEL, message);
+    // Fire-and-forget, as the voided promise was: the report is logged and
+    // shown on its own fiber, and the caller does not wait for the toast.
+    this.runtime.runFork(showLoggedMessage(CHANNEL, message));
   }
 }
 

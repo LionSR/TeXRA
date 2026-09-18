@@ -125,11 +125,9 @@ export class GitHubSubscriptionHandlers {
     return Effect.gen({ self: this }, function* () {
       const result = yield* Effect.promise(() => revealProgressRun(data.runId));
       if (result === 'unavailable') {
-        yield* Effect.promise(() =>
-          showLoggedMessage(
-            this.ctx.channel,
-            'Progress View is not available. Please try again.',
-          ),
+        yield* showLoggedMessage(
+          this.ctx.channel,
+          'Progress View is not available. Please try again.',
         );
         return;
       }

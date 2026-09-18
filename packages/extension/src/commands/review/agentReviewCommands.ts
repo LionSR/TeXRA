@@ -8,6 +8,7 @@
  */
 
 // Third-party imports
+import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
@@ -53,29 +54,48 @@ function handleDismissIssue(arg: unknown): void {
   AgentReviewService.dismissIssue(id);
 }
 
-async function handleOpenIssue(node: AgentReviewNode): Promise<void> {
+async function handleOpenIssue(
+  node: AgentReviewNode,
+  runtime: ProcessRuntime,
+): Promise<void> {
   if (node.kind !== 'issue') return;
-  try {
-    const uri = vscode.Uri.file(AgentReviewService.issuePath(node.issue));
-    const document = await vscode.workspace.openTextDocument(uri);
-    const editor = await vscode.window.showTextDocument(document, {
-      preview: true,
-    });
-    const range = issueRange(node.issue);
-    editor.revealRange(range, vscode.TextEditorRevealType.InCenter);
-    editor.selection = new vscode.Selection(range.start, range.start);
-  } catch (err) {
-    await showLoggedErrorMessage(CHANNEL, 'Could not open review issue', err);
-  }
+  await runtime.runPromise(
+    Effect.tryPromise({
+      try: async () => {
+        const uri = vscode.Uri.file(AgentReviewService.issuePath(node.issue));
+        const document = await vscode.workspace.openTextDocument(uri);
+        const editor = await vscode.window.showTextDocument(document, {
+          preview: true,
+        });
+        const range = issueRange(node.issue);
+        editor.revealRange(range, vscode.TextEditorRevealType.InCenter);
+        editor.selection = new vscode.Selection(range.start, range.start);
+      },
+      catch: (err: unknown) => err,
+    }).pipe(
+      Effect.catch((err) =>
+        showLoggedErrorMessage(
+          CHANNEL,
+          'Could not open review issue',
+          err,
+        ).pipe(Effect.asVoid),
+      ),
+    ),
+  );
 }
 
 /** "Find Issues" split-button options: gather per-run choices, then run. */
-async function handleRunWithOptions(session: SessionHandle): Promise<void> {
+async function handleRunWithOptions(
+  session: SessionHandle,
+  runtime: ProcessRuntime,
+): Promise<void> {
   const cwd = session.roots.workspace;
   if (!cwd) {
-    void showLoggedMessage(
-      CHANNEL,
-      'Agent review needs an open workspace folder.',
+    runtime.runFork(
+      showLoggedMessage(
+        CHANNEL,
+        'Agent review needs an open workspace folder.',
+      ),
     );
     return;
   }
@@ -130,7 +150,7 @@ export function registerAgentReviewCommands(
     },
     {
       id: 'texra.agentReview.runWithOptions',
-      handler: () => void handleRunWithOptions(session),
+      handler: () => void handleRunWithOptions(session, runtime),
     },
     {
       id: 'texra.agentReview.stop',
@@ -142,7 +162,10 @@ export function registerAgentReviewCommands(
     },
     { id: 'texra.agentReview.fixIssue', handler: handleFixIssue },
     { id: 'texra.agentReview.dismissIssue', handler: handleDismissIssue },
-    { id: 'texra.agentReview.openIssue', handler: handleOpenIssue },
+    {
+      id: 'texra.agentReview.openIssue',
+      handler: (node: AgentReviewNode) => handleOpenIssue(node, runtime),
+    },
     {
       id: 'texra.agentReview.clear',
       handler: () => runtime.runPromise(AgentReviewService.clear()),

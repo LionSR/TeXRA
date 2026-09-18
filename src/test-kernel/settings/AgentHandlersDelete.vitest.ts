@@ -35,7 +35,7 @@ const mocks = vi.hoisted(() => ({
   ),
   logWarn: vi.fn(),
   refreshAfterAgentMutation: vi.fn(() => Effect.void),
-  showLoggedMessage: vi.fn(async () => ''),
+  showLoggedMessage: vi.fn(() => Effect.succeed('')),
   showInformationMessage: vi.fn(),
   showWarningMessage: vi.fn(),
 }));
@@ -95,7 +95,7 @@ vi.mock('@frontend/ui/dialogs', () => ({
   },
 }));
 vi.mock('@frontend/ui/errorHandlingUtils', () => ({
-  showLoggedErrorMessage: vi.fn(async () => ''),
+  showLoggedErrorMessage: vi.fn(() => Effect.succeed('')),
   showLoggedMessage: mocks.showLoggedMessage,
 }));
 vi.mock('@shared/settingsView/handlers/agentSelectionHandlers', () => ({
@@ -201,28 +201,6 @@ describe('AgentHandlers custom-agent file actions', () => {
 
   afterEach(async () => {
     await rm(root, { recursive: true, force: true });
-  });
-
-  it('logs notification failures after applying a team preset', async () => {
-    mocks.showLoggedMessage.mockRejectedValueOnce(
-      new Error('notification unavailable'),
-    );
-    mocks.applySettingsTeamRoster.mockImplementationOnce(
-      (_presetId, { presentation }) =>
-        Effect.gen(function* () {
-          yield* presentation.showErrorMessage('Unable to apply team');
-        }),
-    );
-
-    await testRuntime().runPromise(
-      createHandlers().handleApplyAgentModePreset(APPLY_AGENT_MODE_PRESET),
-    );
-
-    await vi.waitFor(() =>
-      expect(mocks.logWarn).toHaveBeenCalledWith(
-        'Error notification failed after handoff: notification unavailable',
-      ),
-    );
   });
 
   it('coalesces repeated requests while the host confirmation is pending', async () => {

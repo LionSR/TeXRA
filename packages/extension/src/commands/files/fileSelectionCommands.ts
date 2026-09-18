@@ -1,4 +1,5 @@
 // Third-party imports
+import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
@@ -7,6 +8,7 @@ import { getFilterExtensions } from '@common/files/fileTypeUtils';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { selectFiles } from '@frontend/ui/dialogs';
 import { createLog } from '@logger/logUtils';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type { MultipleDocumentFileType } from '@shared/schemas';
 import { workspaceRelativePath } from '@utils/files/workspaceFS';
 
@@ -19,42 +21,53 @@ interface PickerOptions {
 }
 
 /** Run a dialog, announce what was picked, and report failures once. */
-async function announceSelection(
+function announceSelection(
   select: () => Promise<string[] | null>,
+  runtime: ProcessRuntime,
 ): Promise<string[] | null> {
-  try {
-    const result = await select();
-    if (!result) {
-      return null;
-    }
+  return runtime.runPromise(
+    Effect.tryPromise({
+      try: async () => {
+        const result = await select();
+        if (!result) {
+          return null;
+        }
 
-    const message = `Selected files: ${result.join(', ')}`;
-    vscode.window.showInformationMessage(message);
-    log.info(message);
-    return result;
-  } catch (err) {
-    await showLoggedErrorMessage(
-      CHANNEL,
-      'File selection failed. See the TeXRA log for details.',
-      err,
-    );
-    return null;
-  }
+        const message = `Selected files: ${result.join(', ')}`;
+        vscode.window.showInformationMessage(message);
+        log.info(message);
+        return result;
+      },
+      catch: (err: unknown) => err,
+    }).pipe(
+      Effect.catch((err) =>
+        showLoggedErrorMessage(
+          CHANNEL,
+          'File selection failed. See the TeXRA log for details.',
+          err,
+        ).pipe(Effect.as(null)),
+      ),
+    ),
+  );
 }
 
 function createMultiPicker(
   session: SessionHandle,
+  runtime: ProcessRuntime,
   options: PickerOptions,
 ): (currentFile?: string) => Promise<string[] | null> {
   return (currentFile) =>
-    announceSelection(() =>
-      selectFiles({
-        currentFile,
-        workspacePath: session.roots.workspace,
-        openLabel: options.openLabel,
-        filters: options.filters(),
-        allowMany: true,
-      }),
+    announceSelection(
+      () =>
+        selectFiles({
+          currentFile,
+          workspacePath: session.roots.workspace,
+          openLabel: options.openLabel,
+          filters: options.filters(),
+          allowMany: true,
+          runtime,
+        }),
+      runtime,
     );
 }
 
@@ -64,30 +77,31 @@ function createMultiPicker(
  */
 export function createFileSelectionPickers(
   session: SessionHandle,
+  runtime: ProcessRuntime,
 ): Record<
   MultipleDocumentFileType,
   (currentFile?: string) => Promise<string[] | null>
 > {
   return {
-    input: createMultiPicker(session, {
+    input: createMultiPicker(session, runtime, {
       openLabel: 'Select Files',
       filters: () => ({
         'Text files': getFilterExtensions('input'),
       }),
     }),
-    context: createMultiPicker(session, {
+    context: createMultiPicker(session, runtime, {
       openLabel: 'Select Context Files',
       filters: () => ({
         'Text files': getFilterExtensions('context'),
       }),
     }),
-    media: createMultiPicker(session, {
+    media: createMultiPicker(session, runtime, {
       openLabel: 'Select Media',
       filters: () => ({
         'Image files': getFilterExtensions('media'),
       }),
     }),
-    output: createMultiPicker(session, {
+    output: createMultiPicker(session, runtime, {
       openLabel: 'Select Output Files',
       filters: () => ({ 'Text files': ['tex', 'txt', 'md'] }),
     }),

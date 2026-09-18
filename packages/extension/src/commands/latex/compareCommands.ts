@@ -119,9 +119,11 @@ const validateFilesExist = Effect.fnUntraced(function* (
   ];
   for (const [label, location] of required) {
     if (!(yield* fs.exists(location.absolutePath))) {
-      void showLoggedMessage(
-        CHANNEL,
-        `${label} file not found: ${location.absolutePath}`,
+      yield* Effect.forkDetach(
+        showLoggedMessage(
+          CHANNEL,
+          `${label} file not found: ${location.absolutePath}`,
+        ),
       );
       return false;
     }
@@ -176,13 +178,11 @@ export const handleCompare = Effect.fn('compareCommands.handleCompare')(
     );
   },
   Effect.catchCause((cause) =>
-    Effect.promise(async () => {
-      await showLoggedErrorMessage(
-        CHANNEL,
-        'Error comparing files',
-        Cause.squash(cause),
-      );
-    }),
+    showLoggedErrorMessage(
+      CHANNEL,
+      'Error comparing files',
+      Cause.squash(cause),
+    ).pipe(Effect.asVoid),
   ),
 );
 
@@ -316,13 +316,10 @@ export const handleAcceptEdited = Effect.fn(
     return true;
   },
   Effect.catchCause((cause) =>
-    Effect.promise(async () => {
-      await showLoggedErrorMessage(
-        CHANNEL,
-        'Error accepting changes',
-        Cause.squash(cause),
-      );
-      return false;
-    }),
+    showLoggedErrorMessage(
+      CHANNEL,
+      'Error accepting changes',
+      Cause.squash(cause),
+    ).pipe(Effect.as(false)),
   ),
 );
