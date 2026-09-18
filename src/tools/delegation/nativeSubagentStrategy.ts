@@ -41,7 +41,6 @@ import {
 import type { ResumeToolUseFromResumeDataOptions } from '@agent/runtime/executeAgent';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { AgentRunServices } from '@agent/runtime/toolInjection';
-import { runInSession } from '@agent/runtime/RunContext';
 import type { AgentRunHandle } from '@agent/runtime/RunHandle';
 import type {
   ChildRunPorts,
@@ -233,12 +232,12 @@ export function createNativeSubagentStrategy(
     );
   });
 
-  const buildResult = async (
+  const buildResult = Effect.fn('nativeSubagent.buildResult')(function* (
     turn: AgentRuntimeFlowResult,
-  ): Promise<SubagentResultMeta> => {
+  ) {
     if (!cachedBuilt) {
       const result = toDeliveryResult(turn, params.runId);
-      cachedBuilt = await buildSubagentResult(
+      cachedBuilt = yield* buildSubagentResult(
         params.runId,
         params.agentName,
         result,
@@ -249,7 +248,7 @@ export function createNativeSubagentStrategy(
       );
     }
     return cachedBuilt;
-  };
+  });
 
   return {
     // Not used as a trace stage for native delegation (the loop gates
@@ -370,24 +369,33 @@ export function createNativeSubagentStrategy(
 
     resolveDeliveryTarget,
 
-    formatDelivery: async (turn) => {
+    formatDelivery: Effect.fn('nativeSubagent.formatDelivery')(function* (
+      turn: AgentRuntimeFlowResult,
+    ) {
       if (cachedDelivery === undefined) {
-        const built = await buildResult(turn);
+        const built = yield* buildResult(turn);
         if (params.resultOnly) return '';
         const delivered = toDeliveryResult(turn, params.runId);
-        cachedDelivery = formatSubagentDelivery(
-          params.agentName,
-          { outcome: delivered.outcome, output: built.output },
-          {
-            runId: params.runId,
-            memoryMisses: delivered.memoryMisses,
-            wallTimeMs: built.wallTimeMs,
-            workingDirectory: params.workingDirectory,
-          },
-        );
+        // The formatter is the one fallible step left here, and its throw is
+        // this turn's failure — not a defect — exactly as it was when the
+        // loop adopted this method's rejected promise.
+        cachedDelivery = yield* Effect.try({
+          try: () =>
+            formatSubagentDelivery(
+              params.agentName,
+              { outcome: delivered.outcome, output: built.output },
+              {
+                runId: params.runId,
+                memoryMisses: delivered.memoryMisses,
+                wallTimeMs: built.wallTimeMs,
+                workingDirectory: params.workingDirectory,
+              },
+            ),
+          catch: ensureError,
+        });
       }
       return cachedDelivery;
-    },
+    }),
 
     formatError: (turn, err) => {
       if (params.resultOnly) return '';
@@ -421,10 +429,7 @@ export function createNativeSubagentStrategy(
             Date.now() - params.startedAt,
           );
         }
-        return yield* Effect.tryPromise({
-          try: () => runInSession(params.session, () => buildResult(turn)),
-          catch: ensureError,
-        });
+        return yield* buildResult(turn);
       }),
   };
 }

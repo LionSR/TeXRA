@@ -10,6 +10,8 @@
 
 import path from 'node:path';
 
+import { Effect, FileSystem } from 'effect';
+
 import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
 import { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
 import { createLog } from '@logger/logUtils';
@@ -27,8 +29,8 @@ import { DELIVERY_TAG } from '@shared/deliveryTags';
 import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
 import { unique } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
-import { runDirUnder, ensureRunDirUnder } from '@utils/files/runStorageFs';
+import { readNormalizedFile } from '@utils/files/fsDurability';
+import { runDirUnder } from '@utils/files/runStorageFs';
 import { sanitizePathSegment } from '@utils/text/sanitizePathSegment';
 import { countLines, formatDuration } from '@utils/text/stringUtils';
 import { unifiedDiffText } from '@utils/text/unifiedDiff';
@@ -334,23 +336,26 @@ interface DiffFileInfo {
  *
  * Files without an original (new files) or where reading fails are omitted.
  */
-async function computeAndWriteWorkflowDiffs(
-  storageRoot: string,
-  runId: RunId,
-  outputs: OutputFileSummary[],
-): Promise<Map<string, DiffFileInfo>> {
+const computeAndWriteWorkflowDiffs = Effect.fn(
+  'subagentResults.computeAndWriteWorkflowDiffs',
+)(function* (storageRoot: string, runId: RunId, outputs: OutputFileSummary[]) {
+  const fs = yield* FileSystem.FileSystem;
   const results = new Map<string, DiffFileInfo>();
   const diffsToWrite: { diffRelPath: string; content: string }[] = [];
 
   // First pass: compute diffs and decide which to write.
-  await Promise.all(
-    outputs.map(async (o) => {
-      if (!o.originalPath) return;
-      try {
-        const [original, modified] = await Promise.all([
-          AbsoluteFS.read(o.originalPath),
-          AbsoluteFS.read(o.absolutePath),
-        ]);
+  yield* Effect.forEach(
+    outputs,
+    (o) =>
+      Effect.gen(function* () {
+        if (!o.originalPath) return;
+        const [original, modified] = yield* Effect.all(
+          [
+            readNormalizedFile(fs, o.originalPath),
+            readNormalizedFile(fs, o.absolutePath),
+          ],
+          { concurrency: 2 },
+        );
 
         // Flag large changes so the orchestrator knows to also read the
         // full output file — the diff alone may not capture everything.
@@ -375,35 +380,40 @@ async function computeAndWriteWorkflowDiffs(
           results.set(o.absolutePath, { diffRelPath, largeChange });
           diffsToWrite.push({ diffRelPath, content: truncated });
         }
-      } catch (error) {
+      }).pipe(
         // File read failure is non-fatal — skip diff for this file — but
         // surface the skip so a missing diff is not indistinguishable from an
         // unchanged file (matching the loud diff-unavailable note the caller
         // boundary logs).
-        log.warn(
-          `Skipping diff for ${o.absolutePath}: ${toErrorMessage(error)}`,
-        );
-      }
-    }),
+        Effect.catch((error) =>
+          Effect.sync(() => {
+            log.warn(
+              `Skipping diff for ${o.absolutePath}: ${toErrorMessage(error)}`,
+            );
+          }),
+        ),
+      ),
+    { concurrency: 'unbounded' },
   );
 
   // Second pass: write diff files to disk.
   if (diffsToWrite.length > 0) {
     const runDir = runDirUnder(storageRoot, runId);
-    await ensureRunDirUnder(storageRoot, runId);
+    // One recursive create reaches the run directory and the runs root above
+    // it, which is all the run-dir ensure ahead of this ever did.
     const diffsDir = path.join(runDir, 'diffs');
-    await AbsoluteFS.ensureDir(diffsDir);
+    yield* fs.makeDirectory(diffsDir, { recursive: true });
 
-    await Promise.all(
-      diffsToWrite.map(async ({ diffRelPath, content }) => {
-        const fullPath = path.join(runDir, diffRelPath);
-        await AbsoluteFS.write(fullPath, content);
-      }),
+    yield* Effect.forEach(
+      diffsToWrite,
+      ({ diffRelPath, content }) =>
+        fs.writeFileString(path.join(runDir, diffRelPath), content),
+      { concurrency: 'unbounded', discard: true },
     );
   }
 
   return results;
-}
+});
 
 // ============================================================================
 // Built terminal results
@@ -415,7 +425,9 @@ async function computeAndWriteWorkflowDiffs(
  * record and the delivery reference diff file paths so the orchestrator can
  * read them on demand via /executions/{id}/files/.
  */
-export async function buildSubagentResult(
+export const buildSubagentResult = Effect.fn(
+  'subagentResults.buildSubagentResult',
+)(function* (
   runId: RunId,
   agentName: string,
   result: AgentFlowResult,
@@ -424,27 +436,30 @@ export async function buildSubagentResult(
     /** Storage root of the launching session: where this run's diffs land. */
     readonly storageRoot: string;
   },
-): Promise<SubagentResultMeta> {
+): Effect.fn.Return<SubagentResultMeta, never, FileSystem.FileSystem> {
   let diffInfos: Map<string, DiffFileInfo> | undefined;
   let diffsUnavailable: string | undefined;
   if (
     result.output.category === 'workflow' &&
     result.output.outputs.length > 0
   ) {
-    try {
-      diffInfos = await computeAndWriteWorkflowDiffs(
-        options.storageRoot,
-        runId,
-        result.output.outputs,
-      );
-    } catch (err) {
-      // Diff computation failure is non-fatal: deliver without diffs, but tell
-      // the orchestrator to read the output files directly.
-      diffsUnavailable = toErrorMessage(err);
-      deliveryLog.warn(
-        `Diff computation failed for ${runId}: ${diffsUnavailable}`,
-      );
-    }
+    // Diff computation failure is non-fatal: deliver without diffs, but tell
+    // the orchestrator to read the output files directly.
+    diffInfos = yield* computeAndWriteWorkflowDiffs(
+      options.storageRoot,
+      runId,
+      result.output.outputs,
+    ).pipe(
+      Effect.catch((err) =>
+        Effect.sync(() => {
+          diffsUnavailable = toErrorMessage(err);
+          deliveryLog.warn(
+            `Diff computation failed for ${runId}: ${diffsUnavailable}`,
+          );
+          return undefined;
+        }),
+      ),
+    );
   }
 
   const wallTimeMs = Date.now() - options.startedAt;
@@ -464,4 +479,4 @@ export async function buildSubagentResult(
         }
       : result.output;
   return buildSubagentResultMeta(agentName, output, wallTimeMs);
-}
+});

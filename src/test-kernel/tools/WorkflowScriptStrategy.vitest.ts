@@ -4,6 +4,8 @@ import { Deferred, Effect, Fiber } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 import { TraceEmitter } from '@agent/trace';
+import type { AgentRunServices } from '@agent/runtime/toolInjection';
+import { Runs } from '@agent/runtime/runRegistry';
 import { deriveWorkflowScriptCheckpointId } from '@agent/workflowScript/checkpoint';
 import { runPersistedWorkflowScript } from '@agent/workflowScript/checkpoint';
 import type { WorkflowAgentInvocation } from '@agent/workflowScript/types';
@@ -23,7 +25,10 @@ import {
 import { DatabaseWriteFailed } from '@shared/session/database';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
-import { setupPlatform } from '@test/support/setupPlatform';
+import {
+  fakeProcessServices,
+  setupPlatform,
+} from '@test/support/setupPlatform';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { fingerprintWorkflowAgentDependencies } from '@tools/delegation/inputFields';
 import {
@@ -115,6 +120,14 @@ function strategyParams(
   };
 }
 
+/** A strategy formatter on the fake host's process services. */
+function onFakeHost<A, E>(program: Effect.Effect<A, E, AgentRunServices>) {
+  return program.pipe(
+    Effect.provide(fakeProcessServices()),
+    Effect.provideService(Runs, testDefaultSession().runs),
+  );
+}
+
 function launchStrategy(
   strategy: ReturnType<typeof createWorkflowScriptStrategy>,
   ports = fakePorts(),
@@ -164,9 +177,7 @@ describe('createWorkflowScriptStrategy', () => {
         // The live-attempt candidate and final journal agree on the total.
         expect(ports.recordCost.mock.calls).toEqual([[0.42], [0.42]]);
 
-        const delivery = yield* Effect.promise(() =>
-          Promise.resolve(strategy.formatDelivery(turn, 0)),
-        );
+        const delivery = yield* onFakeHost(strategy.formatDelivery(turn, 0));
         expect(delivery).toContain('"category": "workflow"');
         // The run log rides along so the invoking model sees what executed.
         expect(delivery).toContain('=== Run log ===');
@@ -258,9 +269,7 @@ return await agent('Solve.', {
 
       expect(ports.recordCost).toHaveBeenCalledOnce();
       expect(ports.recordCost).toHaveBeenCalledWith(0);
-      const delivery = yield* Effect.promise(() =>
-        Promise.resolve(strategy.formatDelivery(turn, 0)),
-      );
+      const delivery = yield* onFakeHost(strategy.formatDelivery(turn, 0));
       expect(delivery).toContain('Saved result');
       expect(delivery).not.toContain('Using saved result');
       expect(delivery).toContain(
@@ -288,9 +297,7 @@ return args`,
         );
 
         const turn = yield* launchStrategy(strategy, ports);
-        const delivery = yield* Effect.promise(() =>
-          Promise.resolve(strategy.formatDelivery(turn, 0)),
-        );
+        const delivery = yield* onFakeHost(strategy.formatDelivery(turn, 0));
         expect(delivery).toContain('"question": "What is conserved?"');
         expect(ports.recordCost).toHaveBeenCalledWith(0);
       }),
@@ -321,9 +328,7 @@ return args`;
       );
 
       const turn = yield* launchStrategy(strategy);
-      const delivery = yield* Effect.promise(() =>
-        Promise.resolve(strategy.formatDelivery(turn, 0)),
-      );
+      const delivery = yield* onFakeHost(strategy.formatDelivery(turn, 0));
       expect(delivery).toContain('"topic": "geometry"');
     }),
   );
@@ -345,9 +350,7 @@ return 'done'`,
       );
 
       const turn = yield* launchStrategy(strategy);
-      const delivery = yield* Effect.promise(() =>
-        Promise.resolve(strategy.formatDelivery(turn, 0)),
-      );
+      const delivery = yield* onFakeHost(strategy.formatDelivery(turn, 0));
       expect(delivery).toContain(
         '=== Run log (last 80 lines; 21 earlier lines omitted) ===',
       );

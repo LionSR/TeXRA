@@ -642,7 +642,10 @@ export function startAgentCliLoop<TTurn>(
         );
       },
       formatDelivery: (turn, wallTimeMs) =>
-        formatDelivery(turn, wallTimeMs, lastPrompt),
+        Effect.try({
+          try: () => formatDelivery(turn, wallTimeMs, lastPrompt),
+          catch: ensureError,
+        }),
       formatError: (turn, err) => formatError(turn, err, lastPrompt),
       releaseSessionOwnership: () => {
         releaseFallbackClaim?.();

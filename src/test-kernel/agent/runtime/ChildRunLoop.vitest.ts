@@ -220,7 +220,7 @@ function createFakeStrategy(): FakeStrategyHandle {
     runTurn: () => runTurn,
     isTerminal: (turn) => turn.kind === 'terminal',
     isTurnError: (turn) => turn.kind === 'error-turn',
-    formatDelivery: (turn) => `delivered:${turn.value}`,
+    formatDelivery: (turn) => Effect.succeed(`delivered:${turn.value}`),
     formatError: (turn, err) => {
       errors.push(err);
       return `error:${turn?.value ?? 'thrown'}`;
@@ -264,7 +264,7 @@ function createTerminalStrategy(
   ) => Effect.Effect<FakeTurn, Error> = () =>
     Effect.succeed({ kind: 'terminal', value: 'done' }),
   formatDelivery: ChildRunStrategy<FakeTurn>['formatDelivery'] = (turn) =>
-    `delivered:${turn.value}`,
+    Effect.succeed(`delivered:${turn.value}`),
 ): ChildRunStrategy<FakeTurn> {
   return {
     stageLabel,
@@ -503,7 +503,7 @@ describe('childRunLoop E2E fixtures', () => {
               });
             }),
           isTerminal: () => false,
-          formatDelivery: () => 'unexpected delivery',
+          formatDelivery: () => Effect.succeed('unexpected delivery'),
           formatError: () => 'unexpected error',
           onLoopStart: (runSession) => {
             events.push('registered');
@@ -585,13 +585,10 @@ describe('childRunLoop E2E fixtures', () => {
         const turn = yield* Deferred.make<FakeTurn, Error>();
         const launchStarted = yield* Deferred.make<void>();
         const formatStarted = yield* Deferred.make<void>();
-        // `formatDelivery` is a synchronous production callback returning a
-        // Promise, so this gate stays a captured-resolve Promise and the
-        // "formatting has started" signal is completed unsafely from inside it.
-        let resolveFormattedDelivery!: (value: string) => void;
-        const formattedDelivery = new Promise<string>((resolve) => {
-          resolveFormattedDelivery = resolve;
-        });
+        // `formatDelivery` is an Effect, so both gates are Deferreds: the
+        // formatter signals that it started and then waits for the delivery
+        // text this test releases.
+        const formattedDelivery = yield* Deferred.make<string>();
         let notifyProgress: ChildRunPorts['notify'] = () => {};
         const strategy = createTerminalStrategy(
           'Follow-up ownership',
@@ -601,10 +598,11 @@ describe('childRunLoop E2E fixtures', () => {
               yield* Deferred.succeed(launchStarted, undefined);
               return yield* Deferred.await(turn);
             }),
-          () => {
-            Deferred.doneUnsafe(formatStarted, Effect.void);
-            return formattedDelivery;
-          },
+          () =>
+            Effect.gen(function* () {
+              yield* Deferred.succeed(formatStarted, undefined);
+              return yield* Deferred.await(formattedDelivery);
+            }),
         );
         publishTestRunStart(session, runId);
         const childRun = yield* createChildRun(session, runId, PARENT_RUN_ID, {
@@ -687,7 +685,7 @@ describe('childRunLoop E2E fixtures', () => {
           yield* Deferred.await(formatStarted);
           yield* session.runs.detachActiveChildren(PARENT_RUN_ID);
           notifyProgress({ kind: 'started' });
-          resolveFormattedDelivery('delivered:done');
+          yield* Deferred.succeed(formattedDelivery, 'delivered:done');
           yield* Fiber.join(loop);
 
           expect(yield* queuedTexts(PARENT_RUN_ID)).toEqual(progressQueue);
@@ -699,7 +697,7 @@ describe('childRunLoop E2E fixtures', () => {
             kind: 'terminal',
             value: 'done',
           });
-          resolveFormattedDelivery('delivered:done');
+          yield* Deferred.succeed(formattedDelivery, 'delivered:done');
           yield* Fiber.join(loop);
         }
       }),
@@ -1443,7 +1441,7 @@ describe('childRunLoop E2E fixtures', () => {
               return turn;
             }),
           isTerminal: (turn) => turn.kind === 'terminal',
-          formatDelivery: (turn) => `delivered:${turn.value}`,
+          formatDelivery: (turn) => Effect.succeed(`delivered:${turn.value}`),
           formatError: (turn) => `error:${turn?.value ?? 'thrown'}`,
         };
 
@@ -1512,7 +1510,7 @@ describe('childRunLoop E2E fixtures', () => {
             ports.recordCost(tracker.total([historical, completed, recovered]));
             return { kind: 'terminal', value: 'done' };
           }),
-        () => 'delivered',
+        () => Effect.succeed('delivered'),
       );
 
       const loop = yield* startLoop(loopRunId(), strategy, {
@@ -1547,7 +1545,7 @@ describe('childRunLoop E2E fixtures', () => {
               ports.recordCost(0.4);
               return { kind: 'terminal', value: 'done' };
             }),
-          () => 'delivered',
+          () => Effect.succeed('delivered'),
         );
         const recordCost = vi.fn(observe);
 
