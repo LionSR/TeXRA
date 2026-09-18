@@ -7,7 +7,6 @@ import { describe, expect, vi } from 'vitest';
 import type { ToolServices } from '@agent/runtime/ToolServices';
 
 import { workspaceRoots } from '@platform/workspaceRoots';
-import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { installPlatform } from '@test/support/setupPlatform';
@@ -49,9 +48,7 @@ function withGlobWorkspace(
   return Effect.gen(function* () {
     yield* withTempDirEffect('texra-glob-tool-', (workspacePath) =>
       Effect.gen(function* () {
-        yield* Effect.promise(() =>
-          installPlatform({ workspacePath }, { fs: nodeFilesystem }),
-        );
+        yield* Effect.promise(() => installPlatform({ workspacePath }));
         try {
           yield* Effect.promise(() =>
             Promise.all(

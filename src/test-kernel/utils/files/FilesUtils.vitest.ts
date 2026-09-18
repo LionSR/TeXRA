@@ -1,62 +1,19 @@
-// Suites for src/utils/files (baseFS predicates, workspaceFS, mime,
-// absoluteFS, pasted images, rooted filesystem confinement).
+// Suites for src/utils/files (workspaceFS, mime, entry probes, pasted images,
+// rooted filesystem confinement).
 
 import * as assert from 'node:assert';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { it as effectIt } from '@effect/vitest';
 import { Cause, Effect, Exit, FileSystem, Path } from 'effect';
 import { isTexFile } from '@common/files/fileTypeUtils';
-import { platform } from '@platform/platform';
-import { workspaceRoots } from '@platform/workspaceRoots';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { getMimeType } from '@utils/files/mimeUtils';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { pathToLocationIn } from '@utils/files/fileLocation';
 import { workspaceAbsolutePath } from '@utils/files/workspaceFS';
 import { pastedImageFileName } from '@utils/files/pastedImageUtils';
 import { entryExists } from '@utils/files/fsEntryExists';
 import { rootedFileSystem } from '@utils/files/rootedFileSystem';
-
-// ---------------------------------------------------------------------------
-// BaseFS stat predicates
-// ---------------------------------------------------------------------------
-
-describe('BaseFS stat predicates', () => {
-  setupPlatform();
-
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
-  const statPredicates = [
-    ['exists', (path: string) => AbsoluteFS.exists(path)],
-  ] as const;
-
-  it.each(statPredicates)(
-    'returns false for ENOTDIR from %s',
-    async (_name, run) => {
-      const error = Object.assign(new Error('parent path is not a directory'), {
-        code: 'ENOTDIR',
-      });
-      vi.spyOn(platform().fs, 'stat').mockRejectedValueOnce(error);
-
-      await expect(run('/file/child')).resolves.toBe(false);
-    },
-  );
-
-  it.each(statPredicates)(
-    'propagates operational stat failures from %s',
-    async (_name, run) => {
-      const error = Object.assign(new Error('path is unreadable'), {
-        code: 'EACCES',
-      });
-      vi.spyOn(platform().fs, 'stat').mockRejectedValueOnce(error);
-
-      await expect(run('/unreadable')).rejects.toBe(error);
-    },
-  );
-});
 
 // ---------------------------------------------------------------------------
 // mimeUtils
@@ -72,46 +29,6 @@ describe('getMimeType', () => {
 // ---------------------------------------------------------------------------
 // fileTypeUtils and workspace path resolution
 // ---------------------------------------------------------------------------
-
-// ---------------------------------------------------------------------------
-// AbsoluteFS.write
-// ---------------------------------------------------------------------------
-
-describe('AbsoluteFS.write', () => {
-  setupPlatform();
-
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
-  it('propagates ELOOP without deleting the path or retrying', async () => {
-    const workspaceRoot = workspaceRoots().workspace;
-    const location = pathToLocationIn(workspaceRoot, 'file.tex');
-    const expectedPath = workspaceAbsolutePath(workspaceRoot, 'file.tex');
-    const cause = new Error('native cause');
-    const loopError = new Error('loop detected', {
-      cause,
-    }) as NodeJS.ErrnoException;
-    loopError.code = 'ELOOP';
-    loopError.path = expectedPath;
-
-    // Mock the platform fs layer underneath AbsoluteFS.write, not
-    // AbsoluteFS.write itself, so this exercises the real BaseFS.write/delete
-    // code path rather than asserting on a stub of the method under test.
-    const writeFile = vi
-      .spyOn(platform().fs, 'writeFile')
-      .mockRejectedValue(loopError);
-    const deletePath = vi.spyOn(AbsoluteFS, 'delete').mockResolvedValue();
-
-    await assert.rejects(
-      () => AbsoluteFS.write(location.absolutePath, 'content'),
-      (error: unknown) => error === loopError,
-    );
-
-    expect(writeFile).toHaveBeenCalledOnce();
-    expect(deletePath).not.toHaveBeenCalled();
-  });
-});
 
 // ---------------------------------------------------------------------------
 // PastedImageUtils

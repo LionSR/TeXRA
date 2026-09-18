@@ -31,7 +31,6 @@ import {
   processOwnerId,
 } from '@platform/defaults/nodeProcesses';
 import {
-  createNodePlatform,
   createNodeWorkspaceRoots,
   initializeNodeRuntimeSkills,
 } from '@platform/defaults/nodeHost';
@@ -219,12 +218,7 @@ export async function initializeElectronPlatform(
       get: () => globalStateStore.get<string>(GlobalStateKey.CUSTOM_AGENT_DIR),
     },
   });
-  initPlatform(
-    createNodePlatform({
-      lifecycle,
-      agentDirectories,
-    }),
-  );
+  initPlatform({ lifecycle, agentDirectories });
   const processRoots = createNodeWorkspaceRoots({
     workspacePath: undefined,
     storage: storage.getStoragePath(),

@@ -16,7 +16,6 @@ import {
   resolveCliAgentInCategory,
   resolveCliRunAgent,
 } from '@cli/runtime/agents';
-import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { GlobalStorageFs } from '@platform/rootedFs';
 import { AgentCategory } from '@shared/schemas';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
@@ -55,7 +54,6 @@ describe('CLI agent validation with a shadowed name', () => {
     await installPlatform(
       {},
       {
-        fs: nodeFilesystem,
         agentDirectories: {
           custom: () => Effect.sync(() => customDir),
           builtIn: () =>

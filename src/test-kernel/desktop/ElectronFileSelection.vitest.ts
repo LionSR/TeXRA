@@ -10,11 +10,8 @@ type DesktopFileSelectionModule =
 
 async function loadDesktopFileSelection(): Promise<DesktopFileSelectionModule> {
   vi.resetModules();
-  const [{ installPlatform }, { nodeFilesystem }] = await Promise.all([
-    import('@test/support/setupPlatform'),
-    import('@platform/defaults/nodeFilesystem'),
-  ]);
-  await installPlatform({}, { fs: nodeFilesystem });
+  const { installPlatform } = await import('@test/support/setupPlatform');
+  await installPlatform({});
   return import('@desktop/main/desktopFileSelection');
 }
 

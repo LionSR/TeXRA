@@ -14,7 +14,6 @@ import {
 import { DiffFileProcessor } from '@latex/latexdiff/diffFileProcessor';
 import { sessionFsLayer } from '@platform/rootedFs';
 import { workspaceRoots } from '@platform/workspaceRoots';
-import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import type { FileLocation, RunId, ToolConfig } from '@shared/schemas';
 import { installPlatform } from '@test/support/setupPlatform';
@@ -118,7 +117,7 @@ describe('LatexMediaManager PDF compilation', () => {
       const { inputPaths, compiledPdfPath } = yield* Effect.promise(
         async () => {
           const dir = await makeTempDir('texra-latex-media-', tempDirs);
-          await installPlatform({ workspacePath: dir }, { fs: nodeFilesystem });
+          await installPlatform({ workspacePath: dir });
           const paths = [
             path.join(dir, 'compiled.tex'),
             path.join(dir, 'missing-result.tex'),
@@ -208,14 +207,11 @@ describe('LatexMediaManager figure baseDir resolution (issue #7228)', () => {
     await writeFile(figurePath, 'fake-png-bytes');
 
     const storage = new WorkspaceStorageProvider(storageRoot, workspaceDir);
-    await installPlatform(
-      {
-        workspacePath: workspaceDir,
-        storagePath: storage.getStoragePath(),
-        globalStoragePath: storage.getGlobalStoragePath(),
-      },
-      { fs: nodeFilesystem },
-    );
+    await installPlatform({
+      workspacePath: workspaceDir,
+      storagePath: storage.getStoragePath(),
+      globalStoragePath: storage.getGlobalStoragePath(),
+    });
     return { texPath, figurePath };
   }
 

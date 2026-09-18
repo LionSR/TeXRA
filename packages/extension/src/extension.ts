@@ -80,7 +80,7 @@ import {
   type LifecycleHost,
 } from '@platform/interfaces';
 import { installLongRunningModelDispatcher } from '@platform/defaults/longRunningModelTransport';
-import { initPlatform } from '@platform/platform';
+import { initPlatform, type Platform } from '@platform/platform';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import {
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
@@ -92,10 +92,8 @@ import {
   type WorkspaceRoots,
 } from '@platform/workspaceRoots';
 import {
-  createNodePlatform,
   createNodeWorkspaceRoots,
   initializeNodeRuntimeSkills,
-  type NodePlatformServices,
   type NodeWorkspaceRootsInit,
 } from '@platform/defaults/nodeHost';
 import { nodeProcesses } from '@platform/defaults/nodeProcesses';
@@ -199,7 +197,7 @@ async function initVscodePlatform(
    *  platform must exist before `initializeDefaultSession` can run, so the
    *  session cannot be a value here. */
   getSession: () => SessionHandle,
-  extras: Pick<NodePlatformServices, 'toolMissingHandler'> & {
+  extras: Pick<Platform, 'toolMissingHandler'> & {
     /** The editor's LM bridge, served as `LanguageModel` below. */
     readonly languageModel?: LanguageModelPort;
   } = {},
@@ -277,13 +275,11 @@ async function initVscodePlatform(
       ),
     ),
   );
-  initPlatform(
-    createNodePlatform({
-      lifecycle,
-      agentDirectories,
-      toolMissingHandler: extras.toolMissingHandler,
-    }),
-  );
+  initPlatform({
+    lifecycle,
+    agentDirectories,
+    toolMissingHandler: extras.toolMissingHandler,
+  });
   const roots = createNodeWorkspaceRoots({
     workspacePath: workspaceRoot,
     storage: storage.getStoragePath(),

@@ -1,4 +1,5 @@
 // Node imports
+import { readFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
 // Third-party imports
@@ -18,7 +19,6 @@ import {
 import type { CompileLatex2PdfResult } from '@latex/texTools';
 import type { RunId, FileLocation } from '@shared/schemas';
 import { fakePath } from '@test/support/FakePlatform';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
 
 // Local file imports
 import {
@@ -120,7 +120,7 @@ describe('runCompileCheck', () => {
       // The synthetic excerpt is persisted like a real failure so it stays
       // discoverable on disk, not just in-memory.
       const persisted = yield* Effect.promise(() =>
-        AbsoluteFS.read(failures[0].log.absolutePath),
+        readFile(failures[0].log.absolutePath, 'utf-8'),
       );
       expect(persisted).toContain('Compile check errored for main.tex');
     }).pipe(Effect.provide(compileFsLayer)),
@@ -240,7 +240,7 @@ describe('runCompileCheck', () => {
         const logLocation = compileFailuresOf(firstResult.compileResult)[0].log;
         expect(
           yield* Effect.promise(() =>
-            AbsoluteFS.read(logLocation.absolutePath),
+            readFile(logLocation.absolutePath, 'utf-8'),
           ),
         ).toContain('Compile check failed for main.tex');
 
@@ -256,7 +256,7 @@ describe('runCompileCheck', () => {
         // otherwise "no compile/*.log = success" would still find leftover
         // failure evidence.
         const reread = yield* Effect.exit(
-          Effect.tryPromise(() => AbsoluteFS.read(logLocation.absolutePath)),
+          Effect.tryPromise(() => readFile(logLocation.absolutePath, 'utf-8')),
         );
         expect(reread._tag).toBe('Failure');
       }).pipe(Effect.provide(compileFsLayer)),
@@ -309,10 +309,10 @@ describe('runCompileCheck', () => {
         expect(failureA.log.absolutePath).not.toBe(failureB.log.absolutePath);
 
         const persistedA = yield* Effect.promise(() =>
-          AbsoluteFS.read(failureA.log.absolutePath),
+          readFile(failureA.log.absolutePath, 'utf-8'),
         );
         const persistedB = yield* Effect.promise(() =>
-          AbsoluteFS.read(failureB.log.absolutePath),
+          readFile(failureB.log.absolutePath, 'utf-8'),
         );
         expect(persistedA).toContain(`LOG MARKER FOR ${texPathA}`);
         expect(persistedA).not.toContain(texPathB);

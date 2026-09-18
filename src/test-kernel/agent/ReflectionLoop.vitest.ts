@@ -10,6 +10,7 @@ import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
 import { randomUUID } from 'node:crypto';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { it } from '@effect/vitest';
 import { Deferred, Effect, Fiber, Layer, SynchronizedRef } from 'effect';
@@ -72,7 +73,6 @@ import {
 } from '@test/support/setupPlatform';
 import { fakePath } from '@test/support/FakePlatform';
 import { generateRunId, isObject } from '@utils/core';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { createRunStorageLocation } from '@utils/files/fileLocation';
 import { RunFileService } from '@utils/files/runStorage';
 
@@ -1087,7 +1087,7 @@ describe('a token-limited reflection response', () => {
         ['left', 'right'],
       ]);
       expect(
-        yield* Effect.promise(() => AbsoluteFS.read(location.absolutePath)),
+        yield* Effect.promise(() => readFile(location.absolutePath, 'utf-8')),
       ).toBe('left\nright');
     }),
   );
@@ -1231,13 +1231,13 @@ describe('an interrupted reflection run', () => {
         if (path === undefined) throw new Error('The round has no output.');
         yield* Effect.promise(async () => {
           if (seed === null) return;
-          await AbsoluteFS.ensureDir(dirname(path));
-          await AbsoluteFS.write(path, seed);
+          await mkdir(dirname(path), { recursive: true });
+          await writeFile(path, seed);
         });
 
         yield* runLoop({ runId, session, rounds: 1, resume: true });
 
-        const content = yield* Effect.promise(() => AbsoluteFS.read(path));
+        const content = yield* Effect.promise(() => readFile(path, 'utf-8'));
         expect(content).toBe(expected);
       }),
   );

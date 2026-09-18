@@ -4,7 +4,7 @@
  * `vitest.config.mjs` installs a default `createFakePlatform()` (and its
  * workspace roots) before every test file (see `setupFakePlatform.ts`), so
  * most suites need nothing else. Suites that need custom options/overrides (a
- * seeded workspace, a real `nodeFilesystem`, stubbed secrets, etc.) should
+ * seeded workspace, stubbed secrets, etc.) should
  * call `setupPlatform(...)` once, at module scope or inside a `describe`,
  * instead of hand-wiring `initPlatform(...)` in a `beforeAll`/`beforeEach`.
  * It installs the requested platform before each test in the current suite
@@ -409,7 +409,7 @@ export async function installPlatform(
  *
  * Pass `FakePlatformOptions`/`FakeHostOverrides` for the common case: a
  * fresh fake host is built for every test. Pass a builder function instead
- * when the host must be computed per test (a real `nodeFilesystem`, a
+ * when the host must be computed per test (a
  * per-test temp dir, captured state from an earlier step, etc.).
  */
 export function setupPlatform(

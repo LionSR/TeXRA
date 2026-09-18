@@ -9,7 +9,6 @@ import { afterEach, beforeAll, beforeEach, describe, expect, vi } from 'vitest';
 // Local imports
 import { refresh } from '@agent/index/agentRegistry';
 import { workspaceRoots } from '@platform/workspaceRoots';
-import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import type { AgentRosterSelection } from '@shared/schemas';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { getDefaultTeamId } from '@shared/state/onboardingState';
@@ -86,7 +85,6 @@ beforeAll(async () => {
   await installPlatform(
     {},
     {
-      fs: nodeFilesystem,
       setup: createFakeSetupPlatform({ signIn }),
       agentDirectories: {
         custom: () => Effect.sync(() => ''),

@@ -24,7 +24,6 @@ import {
 } from '@latex/arxivProcessor';
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import { setLogSink } from '@logger/logSink';
-import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { captureLogEntries } from '@test/support/logSinkCapture';
 import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
@@ -168,7 +167,7 @@ describe('arXiv processor logger channel', () => {
 });
 
 describe('arXiv source download filenames', () => {
-  setupPlatform({}, { fs: nodeFilesystem });
+  setupPlatform({});
 
   it.live(
     'uses the supplied project root when checking downloaded sources',

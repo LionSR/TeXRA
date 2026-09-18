@@ -2,10 +2,10 @@
  * Node host composition helpers.
  *
  * All three composition roots (the `texra` CLI runtime, the Electron desktop
- * main process, and the VS Code extension host) wire the same platform
- * skeleton from the same ingredients. This module owns them so the hosts
- * cannot drift; each host still performs the actual `initPlatform(...)` call
- * in its own composition root.
+ * main process, and the VS Code extension host) open a workspace's roots and
+ * register their runtime skill sources the same way. This module owns those
+ * two steps so the hosts cannot drift; each host still performs the actual
+ * `initPlatform(...)` call in its own composition root.
  *
  * This file is a composition helper, not a core platform abstraction: it
  * deliberately reaches "up" into `@agent` and `@skills` for the registration
@@ -13,7 +13,8 @@
  * Nothing in `@agent` / `@skills` imports it back, so there is no cycle. The
  * direct Lean LSP adapter is not here: each Node root hands its layer to
  * `installProcessRuntime`, so the adapter stays out of hosts that only need
- * the composition helpers.
+ * the composition helpers. The platform literal itself is not here either:
+ * every field of it is host-specific, so each root writes its own.
  */
 
 // Local imports
@@ -25,31 +26,10 @@ import {
 
 // Local file imports
 import { JsonConfigProvider } from './jsonConfigProvider';
-import { nodeFilesystem } from './nodeFilesystem';
 import { canonicalizeWorkspacePath } from './nodeWorkspace';
 import type { WorkspaceRoots } from '../workspaceRoots';
 import type { JsonConfigProviderOptions } from './jsonConfigProvider';
-import type {
-  AgentDirectoriesPort,
-  ConfigProvider,
-  LifecycleHost,
-  StateStore,
-  ToolMissingHandler,
-} from '../interfaces';
-import type { Platform } from '../platform';
-
-/**
- * Host-specific services a Node host supplies to {@link createNodePlatform}. The
- * shared Node default (the filesystem) is filled in by the helper. The
- * per-workspace services are not here: hosts build them with
- * {@link createNodeWorkspaceRoots}.
- */
-export interface NodePlatformServices {
-  readonly lifecycle: LifecycleHost;
-  readonly agentDirectories: AgentDirectoriesPort;
-  /** Optional process-host capability; absent means no-op (see `Platform`). */
-  readonly toolMissingHandler?: ToolMissingHandler;
-}
+import type { ConfigProvider, StateStore } from '../interfaces';
 
 /** The per-workspace services a Node host opens for one workspace folder. */
 export interface NodeWorkspaceRootsInit {
@@ -100,23 +80,9 @@ export interface NodeRuntimeSkillOptions {
   readonly skillSourceOptions?: SkillSourceOptions;
 }
 
-/**
- * Assemble the platform services for a Node-family host (CLI, desktop,
- * extension) or an SDK embedder.
- *
- * Centralizes the default building blocks every host would otherwise restate
- * in its own `initPlatform` literal (`nodeFilesystem`) while preserving the
- * rule that only composition roots call `initPlatform(...)`.
- */
-export function createNodePlatform(services: NodePlatformServices): Platform {
-  return {
-    fs: nodeFilesystem,
-    lifecycle: services.lifecycle,
-    agentDirectories: services.agentDirectories,
-    // Missing-tool reporting remains an optional process-host capability;
-    // omitting it is the no-op, which is what both Node hosts want.
-    toolMissingHandler: services.toolMissingHandler,
-  };
+export interface NodeRuntimeSkillOptions {
+  readonly resourcesPath: string;
+  readonly skillSourceOptions?: SkillSourceOptions;
 }
 
 /**

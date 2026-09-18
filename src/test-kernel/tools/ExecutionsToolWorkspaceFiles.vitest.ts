@@ -18,7 +18,6 @@ import {
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
 import { closeSession } from '@agent/runtime/sessionGraph';
-import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { resolveRunStoragePath } from '@platform/defaults/workspaceStorage';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import { RUN_PHASE, DEFAULT_TOOL_CONFIG, aggregateId } from '@shared/schemas';
@@ -45,7 +44,6 @@ import { withTempDirEffect } from '@test/support/tempDirPlatform';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
 import { ensureError } from '@utils/errors/errorMessage';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
 
 /**
  * Move a run's phase the way its loop does: a `flow.step` row, which is the
@@ -178,13 +176,10 @@ function withTempStorage(
     yield* withTempDirEffect('texra-exec-storage-', (root) =>
       Effect.gen(function* () {
         yield* Effect.promise(() =>
-          installPlatform(
-            {
-              workspacePath: path.join(root, 'workspace'),
-              storagePath: path.join(root, 'storage'),
-            },
-            { fs: nodeFilesystem },
-          ),
+          installPlatform({
+            workspacePath: path.join(root, 'workspace'),
+            storagePath: path.join(root, 'storage'),
+          }),
         );
         const session = yield* createProcessSession();
         yield* run().pipe(
@@ -682,7 +677,7 @@ describe('ExecutionsTool', () => {
             workspaceRoots().storage,
             resolveRunStoragePath(runId),
           );
-          yield* Effect.promise(() => AbsoluteFS.ensureDir(runDir));
+          yield* Effect.promise(() => mkdir(runDir, { recursive: true }));
           const listedFiles = [
             'conversation.json',
             'todos.json',
@@ -697,11 +692,11 @@ describe('ExecutionsTool', () => {
           ];
           for (const name of listedFiles) {
             yield* Effect.promise(() =>
-              AbsoluteFS.write(path.join(runDir, name), '{}'),
+              writeFile(path.join(runDir, name), '{}'),
             );
           }
           yield* Effect.promise(() =>
-            AbsoluteFS.write(path.join(runDir, 'output.tex'), 'generated'),
+            writeFile(path.join(runDir, 'output.tex'), 'generated'),
           );
 
           const result = yield* new ExecutionsTool().call({

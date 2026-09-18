@@ -1,4 +1,5 @@
 // Node imports
+import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
 // Third-party imports
@@ -30,7 +31,6 @@ import {
   firstChangedLine,
   writeApprovedContent,
 } from '@tools/approval/toolEditApproval';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { createExternalLocation } from '@utils/files/fileLocation';
 import { runDirUnder } from '@utils/files/runStorageFs';
 import { unifiedDiffText } from '@utils/text/unifiedDiff';
@@ -153,7 +153,7 @@ describe('shared text-diff caller fixtures', () => {
         });
         expect(
           yield* Effect.tryPromise(() =>
-            AbsoluteFS.read(fakePath('workspace/paper.tex')),
+            readFile(fakePath('workspace/paper.tex'), 'utf-8'),
           ),
         ).toBe('alpha\nBETA\nomega\nlocal\n');
       }),

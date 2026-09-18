@@ -30,7 +30,6 @@ import type { ProcessRuntime } from '@platform/processRuntime';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { installLongRunningModelDispatcher } from '@platform/defaults/longRunningModelTransport';
 import {
-  createNodePlatform,
   createNodeWorkspaceRoots,
   initializeNodeRuntimeSkills,
 } from '@platform/defaults/nodeHost';
@@ -378,10 +377,7 @@ export async function initCliPlatform(
         customDirectoryStore: { get: () => undefined },
       });
       const cliSecrets = getCliSecrets(context.storageRoot);
-      const platform = createNodePlatform({
-        lifecycle,
-        agentDirectories,
-      });
+      const platform: Platform = { lifecycle, agentDirectories };
       // One process, one project: the process roots are the `--cwd` workspace,
       // over the config provider the startup read already opened — the project
       // `.texra/config.json` (or the internal workspace store, when that file

@@ -9,7 +9,6 @@ import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import { setLogSink } from '@logger/logSink';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import { MemoryStateStore } from '@platform/defaults/memoryState';
-import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import type { RunId, OutputFileInfo } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
@@ -48,7 +47,6 @@ describe('LaTeXdiffService shadow output', () => {
         globalStoragePath: storage.getGlobalStoragePath(),
       },
       {
-        fs: nodeFilesystem,
         globalState: new MemoryStateStore(),
         workspaceState: new MemoryStateStore(),
       },

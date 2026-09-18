@@ -23,7 +23,6 @@ import {
 } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import {
   aggregateId,
   AgentCategory,
@@ -272,13 +271,10 @@ describe('CLI history runtime', () => {
       'texra-history-storage-',
       tempDirs,
     );
-    return createFakeHost(
-      {
-        storagePath: historyStoragePath,
-        globalStoragePath: historyStoragePath,
-      },
-      { fs: nodeFilesystem },
-    );
+    return createFakeHost({
+      storagePath: historyStoragePath,
+      globalStoragePath: historyStoragePath,
+    });
   });
 
   beforeEach(async () => {

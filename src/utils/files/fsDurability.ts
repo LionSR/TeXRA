@@ -166,8 +166,11 @@ export const entryMetadataAt = Effect.fn('fsDurability.entryMetadataAt')(
     });
     const stats = link.isSymbolicLink()
       ? // A dangling or circular link has no target to describe, so the link's
-        // own metadata stands in — the fallback the facade's provider made.
-        yield* Effect.promise(() => nodeFs.stat(target).catch(() => link))
+        // own metadata stands in — the reading the facade's provider gave.
+        yield* Effect.tryPromise({
+          try: () => nodeFs.stat(target),
+          catch: (cause) => systemErrorFrom('entryMetadataAt', target, cause),
+        }).pipe(Effect.orElseSucceed(() => link))
       : link;
     return { type: entryTypeOf(stats), size: stats.size };
   },

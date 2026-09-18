@@ -1,3 +1,4 @@
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
 import { it } from '@effect/vitest';
@@ -9,7 +10,6 @@ import { runInSession } from '@agent/runtime/RunContext';
 import { settleLiveSessionRuns } from '@agent/runtime/SessionHandle';
 import { runFlowWithLifecycle } from '@agent/runtime/AgentRunLifecycle';
 import { Runs } from '@agent/runtime/runRegistry';
-import { platform } from '@platform/platform';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import {
   AgentCategory,
@@ -31,7 +31,6 @@ import {
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
 import { generateRunId } from '@utils/core';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { createTestLaunchContext } from './launchContextTestUtils';
 
 const storageMocks = vi.hoisted(() => ({
@@ -79,11 +78,8 @@ describe('session isolation', () => {
         session: typeof sessionA,
         note: string,
       ): Promise<void> => {
-        await AbsoluteFS.ensureDir(session.roots.storage);
-        await AbsoluteFS.write(
-          path.join(session.roots.storage, 'note.txt'),
-          note,
-        );
+        await mkdir(session.roots.storage, { recursive: true });
+        await writeFile(path.join(session.roots.storage, 'note.txt'), note);
       };
       await runInSession(sessionA, async () => {
         expect(workspaceRoots().workspace).toBe(fakePath('papers/a'));
@@ -93,8 +89,7 @@ describe('session isolation', () => {
         expect(workspaceRoots().workspace).toBe(fakePath('papers/b'));
         await writeNote(sessionB, 'from b');
       });
-      const read = async (file: string) =>
-        Buffer.from(await platform().fs.readFile(file)).toString('utf8');
+      const read = (file: string): Promise<string> => readFile(file, 'utf8');
       expect(await read(fakePath('storage/a/note.txt'))).toBe('from a');
       expect(await read(fakePath('storage/b/note.txt'))).toBe('from b');
       // Outside both scopes the process roots answer, not either paper.

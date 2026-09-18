@@ -155,8 +155,6 @@ vi.mock('@platform/defaults/lifecycleHost', () => ({
   }),
 }));
 
-vi.mock('@platform/defaults/nodeFilesystem', () => ({ nodeFilesystem: {} }));
-
 vi.mock('@platform/defaults/nodeWorkspace', () => ({
   canonicalizeWorkspacePath: vi.fn((workspacePath: string) => workspacePath),
 }));

@@ -14,13 +14,11 @@ import { describe, expect, it } from 'vitest';
 import { workspaceRoots } from '@platform/workspaceRoots';
 
 import { MemoryStateStore } from '@platform/defaults/memoryState';
-import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import { RunIdSchema } from '@shared/schemas';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { createWorkspaceLocation } from '@utils/files/fileLocation';
 import {
   originalSnapshotPathUnder,
@@ -56,7 +54,6 @@ async function installTempWorkspace(prefix: string): Promise<string> {
       globalStoragePath: storage.getGlobalStoragePath(),
     },
     {
-      fs: nodeFilesystem,
       globalState: new MemoryStateStore(),
       workspaceState: new MemoryStateStore(),
     },
@@ -121,7 +118,7 @@ describe('round-dir ownership and editable .tex inheritance', () => {
       '\\documentclass{article}\\begin{document}round 1\\end{document}\n';
     const pre = await lstat(roundFilePath);
     if (pre.isSymbolicLink()) await unlink(roundFilePath);
-    await AbsoluteFS.write(roundFilePath, roundOneContent);
+    await writeFile(roundFilePath, roundOneContent);
 
     const post = await lstat(roundFilePath);
     expect(post.isSymbolicLink()).toBe(false);
