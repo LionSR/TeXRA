@@ -257,7 +257,8 @@ export function createExtensionHostRequests(
         : { kind: 'resume', config, runId },
       {
         session,
-        openWorkflowOutput: openFinalOutputIfAvailable,
+        openWorkflowOutput: (result) =>
+          openFinalOutputIfAvailable(session.roots.config, result),
         preferHelperModel: runOptions.preferHelperModel ?? false,
         ownApiKeyFallback: runOptions.ownApiKeyFallback,
         onRun: runOptions.onRun,

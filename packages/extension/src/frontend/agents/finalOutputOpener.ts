@@ -5,6 +5,7 @@ import {
   selectAutoOpenFinalOutput,
   type WorkflowFlowResult,
 } from '@agent/runtime';
+import type { ConfigProvider } from '@platform/interfaces';
 import { createLog } from '@logger/logUtils';
 
 const log = createLog('FinalOutputOpener');
@@ -19,10 +20,11 @@ const log = createLog('FinalOutputOpener');
  * supplies the VS Code open verb and status-bar hint.
  */
 export const openFinalOutputIfAvailable = (
+  config: ConfigProvider,
   result: WorkflowFlowResult,
 ): Effect.Effect<void> =>
   Effect.gen(function* () {
-    const primary = selectAutoOpenFinalOutput(result);
+    const primary = selectAutoOpenFinalOutput(config, result);
     if (!primary) return;
 
     const previewed = yield* Effect.result(

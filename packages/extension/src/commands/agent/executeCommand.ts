@@ -83,7 +83,8 @@ export const runExecuteCommand = Effect.fn('runExecuteCommand')(function* (
   // so they travel the failure channel without a second (mislabeled) log entry.
   yield* runAgent(request, {
     session,
-    openWorkflowOutput: openFinalOutputIfAvailable,
+    openWorkflowOutput: (result) =>
+      openFinalOutputIfAvailable(session.roots.config, result),
     // Set only by the "fix LaTeX" actions (see handleFixCompilation and the
     // progress-view compile fixer); a direct main-view launch omits it and
     // keeps the user's selected model.

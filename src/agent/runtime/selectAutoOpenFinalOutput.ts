@@ -1,10 +1,11 @@
 import type { WorkflowFlowResult } from '@agent/runtime/AgentFlowResult';
+import type { ConfigProvider } from '@platform/interfaces';
 import {
   finalWorkflowOutput,
   RUN_OUTCOME,
   type OutputFileSummary,
 } from '@shared/schemas';
-import { getConfig } from '@utils/config/configUtils';
+import { readConfig } from '@utils/config/configUtils';
 
 /**
  * Decide whether a finished workflow should auto-open a final output, and which
@@ -19,11 +20,16 @@ import { getConfig } from '@utils/config/configUtils';
  *
  * Returns `undefined` when nothing should open; the host supplies only its own
  * open verb (the extension's text-document preview, the desktop's `openPath`).
+ *
+ * `config` is the configuration of the session the run belongs to, held as
+ * data: the gate answers for that project, not for whichever roots the
+ * calling context carries.
  */
 export function selectAutoOpenFinalOutput(
+  config: ConfigProvider,
   result: WorkflowFlowResult,
 ): OutputFileSummary | undefined {
-  if (!getConfig<boolean>('texra.agentOutputs.autoOpenFinal')) {
+  if (!readConfig<boolean>(config, 'texra.agentOutputs.autoOpenFinal')) {
     return undefined;
   }
   if (result.outcome !== RUN_OUTCOME.COMPLETED) return undefined;

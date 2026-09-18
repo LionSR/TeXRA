@@ -60,7 +60,10 @@ export function launchDesktopAgent(
       suppressErrorNotification: true,
       openWorkflowOutput: (result) =>
         Effect.suspend(() => {
-          const output = selectAutoOpenFinalOutput(result);
+          const output = selectAutoOpenFinalOutput(
+            context.session.roots.config,
+            result,
+          );
           if (!output) return Effect.void;
           let location: RequestOpenFilePayload['location'];
           if (output.location === 'workspace') {
