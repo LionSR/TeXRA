@@ -6,13 +6,19 @@ import * as vscode from 'vscode';
 import { NotificationFailed, type MessageHost } from '@hosts/uiHosts';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
+/**
+ * Each member calls through `vscode.window` at call time rather than holding
+ * the function it read at import: the notification keeps its receiver, and a
+ * host that swaps the window surface (a test double, a reloaded API) is the
+ * one that answers the call.
+ */
 const SHOW_OF_MEMBER: Record<
   NotificationFailed['member'],
   (message: string) => Thenable<unknown>
 > = {
-  showInfoMessage: vscode.window.showInformationMessage,
-  showWarningMessage: vscode.window.showWarningMessage,
-  showErrorMessage: vscode.window.showErrorMessage,
+  showInfoMessage: (message) => vscode.window.showInformationMessage(message),
+  showWarningMessage: (message) => vscode.window.showWarningMessage(message),
+  showErrorMessage: (message) => vscode.window.showErrorMessage(message),
 };
 
 /**
