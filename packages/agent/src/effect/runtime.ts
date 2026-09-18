@@ -17,7 +17,7 @@
  * process once per scope and provides both this service and `Sessions`,
  * with the scope as the lifetime of its hold. A Promise embedder's hold is
  * the one `packages/agent/src/index.ts` takes, released by
- * `lifecycle.runShutdown()`.
+ * `lifecycle.runShutdown`.
  */
 import { Context, Effect, Layer, type ManagedRuntime } from 'effect';
 

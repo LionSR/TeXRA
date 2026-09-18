@@ -213,7 +213,7 @@ function agentServices(
  * live when the budget ran out, and the session stays open, refusing new
  * runs, until they end. A root with no open session reports `settled`, as
  * does a process no run has initialized. The embedder's shutdown path
- * (`lifecycle.runShutdown()`) closes the platform's session this way, under
+ * (`lifecycle.runShutdown`) closes the platform's session this way, under
  * its phase budget; call it directly to close a root before that, or to
  * close one of several roots one platform opened.
  */

@@ -462,7 +462,7 @@ export async function initCliPlatform(
       // writes to, tagged with editorType 'cli' and the CLI version.
       // dispose() flushes any queued entries; it
       // runs on normal exit (bin/texra.ts finally) and on signals, both of
-      // which call lifecycle.runShutdown().
+      // which run lifecycle.runShutdown.
       yield* UsageLogService.initialize(
         runtime.scope,
         {},

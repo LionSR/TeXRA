@@ -168,7 +168,7 @@ class WorkspaceEnvFileUnreadable extends Data.TaggedError(
 
 let statusBarItem: vscode.StatusBarItem | undefined;
 let apiKeyStatusBarItem: vscode.StatusBarItem | undefined;
-// Re-instantiated on every activate(): runShutdown() trips an internal
+// Re-instantiated on every activate(): the drain trips an internal
 // idempotency flag, so a stale module-level instance would silently swallow
 // handlers registered by a second activate() in the same process.
 let lifecycleHost: LifecycleHost | undefined;

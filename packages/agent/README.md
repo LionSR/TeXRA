@@ -119,7 +119,8 @@ a budget of your own), flushes its artifacts, and releases the session,
 returning `{ settled, abandoned }`. `settled` is true when every run ended in
 time; otherwise `abandoned` names the runs still live, and the session stays
 open, refusing new runs, until they end. The platform's shutdown path
-(`lifecycle.runShutdown()`), which an embedder runs before it exits, closes
+(`lifecycle.runShutdown`, the drain program an embedder runs with
+`Effect.runPromise` before it exits), closes
 the platform's session this way after the runs it owns have settled, and then
 disposes the runtime the session owner ran on.
 
