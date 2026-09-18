@@ -4,11 +4,54 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## [0.40.11] - 2026-09-18
+
 ### Bug Fixes
 
+- **Windows: installing git no longer requires restarting TeXRA.** Windows
+  cannot push a changed `PATH` into an already-running process, so git
+  installed on the advice of our own "Git not found in PATH" message stayed
+  invisible until the window was reloaded — and nothing said so. TeXRA now
+  searches Git for Windows' own install directories and no longer memoizes a
+  directory as missing for the rest of the session, so a freshly installed git
+  is picked up on the next command instead.
+- **Windows: three adjacent PATH defects.** The environment handed to a spawned
+  command assigned `PATH` onto a copy of `process.env`, which on Windows spells
+  it `Path`, so the child received both spellings of one variable with no
+  defined rule for which wins. The "Use Git from Git Bash only" installer
+  option, which deliberately keeps git off the system `PATH`, left git
+  undiscoverable. And a relative `SCOOP` or `MSYS2_HOME` threw out of the PATH
+  builder, failing every command with `Path must be absolute`.
+- **The ChatGPT-subscription input budget is now set in thousands of tokens** —
+  the setting is `texra.chatgptCodex.contextWindowK` and takes `272` where it
+  used to take `272000` (up to `872`). Any value set under the old key is not
+  carried over; the default 272K applies until the new one is set. Every budget
+  in play is a round thousand, and the old unit made an off-by-1000 typo land
+  inside the valid range: `872` entered for 872,000 was a legal 872-token
+  budget that put every request over the limit and failed it with
+  `Token estimate (...) exceeds route input limit (872)`.
+- A model call covered by a subscription no longer reports itself as "free" —
+  the run footer and session summary say it was included in the subscription
+  that covered it, because "free" reads as "nothing paid for this" when the
+  user is paying for a plan.
+- The default helper model moved from `deepseek` to `deepseek41`, which the
+  model registry no longer marks deprecated.
 - Generated agent definitions, session titles and helper answers no longer inherit document text-replacement rules.
 - VS Code language-model requests reduce their output allowance when necessary to fit the model context window.
 - API key lookups keep credentials isolated between independently configured stores.
+
+### Dependencies
+
+- Provider SDKs and the model registry move up to the versions the development
+  line carries: `@anthropic-ai/sdk`, `@anthropic-ai/claude-agent-sdk`,
+  `@openai/codex-sdk`, `@google/genai`, `@openrouter/sdk`,
+  `@supabase/supabase-js`, `llm-zoo`, plus `@cantoo/pdf-lib`, `ignore`,
+  `katex`, `markdown-it`, `pretty-bytes` and `yaml`.
+- `openai` deliberately stays on 7.4.0. Its 7.10+ stream accumulator throws on
+  the `response.metadata` event the ChatGPT-subscription backend sends, and the
+  pinned `patches/openai@7.4.0.patch` that teaches it to ignore that event does
+  not apply to a newer release. `undici` (major) and `effect` (prerelease) are
+  held for the same reason a patch release holds them.
 
 ## [0.40.10] - 2026-09-06
 

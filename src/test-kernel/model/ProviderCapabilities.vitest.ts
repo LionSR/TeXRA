@@ -121,7 +121,7 @@ describe('provider capabilities', () => {
 
     it('raises the subscription input and displayed context windows', async () => {
       await installPlatform({
-        config: { 'texra.chatgptCodex.contextWindow': 872_000 },
+        config: { 'texra.chatgptCodex.contextWindowK': 872 },
       });
 
       expect(
@@ -137,7 +137,7 @@ describe('provider capabilities', () => {
 
     it('falls back when the configured context window is out of range', async () => {
       await installPlatform({
-        config: { 'texra.chatgptCodex.contextWindow': 900_000 },
+        config: { 'texra.chatgptCodex.contextWindowK': 900 },
       });
 
       expect(

@@ -392,7 +392,7 @@ describe('formatResumeUsage', () => {
       }),
     ).toBe(
       'Token usage: total=120 input=100 output=20\n' +
-        'Session cost: Free via ChatGPT',
+        'Session cost: Included in ChatGPT subscription',
     );
   });
 

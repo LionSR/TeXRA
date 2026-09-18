@@ -27,7 +27,7 @@ import {
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
-import { IS_WINDOWS, extendEnvPath } from './platformPaths';
+import { IS_WINDOWS, extendEnvPath, withExtendedPath } from './platformPaths';
 import { BinaryResolver } from './binaryResolver';
 import {
   executeCommand,
@@ -279,8 +279,8 @@ export async function checkToolInstalled(
   try {
     let isInstalled = false;
 
+    const execEnv = withExtendedPath(process.env);
     const extendedPath = extendEnvPath();
-    const execEnv = { ...process.env, PATH: extendedPath };
 
     // Log PATH info once (not per-command)
     log.debug(

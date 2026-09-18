@@ -41,13 +41,16 @@ function usageAriaLabel(element: UsagePanel): string {
 }
 
 describe('usage-panel route badges', () => {
-  it('shows subscription-backed usage as Free · ChatGPT', async () => {
+  it('names the subscription that covers a zero-cost call', async () => {
     const element = await mountUsagePanel(
       usage({ cost: 0, usageRoute: 'chatgpt-subscription' }),
     );
 
-    expect(panelText(element)).toContain('Free · ChatGPT');
-    expect(usageAriaLabel(element)).toContain('Free via ChatGPT');
+    expect(panelText(element)).toContain('ChatGPT');
+    expect(panelText(element)).not.toContain('Free');
+    expect(usageAriaLabel(element)).toContain(
+      'Included in ChatGPT subscription',
+    );
   });
 
   it('shows Kimi Code subscription usage as free', async () => {
@@ -58,8 +61,8 @@ describe('usage-panel route badges', () => {
       }),
     );
 
-    expect(panelText(element)).toContain('Free · Kimi Code');
-    expect(usageAriaLabel(element)).toContain('Free via Kimi Code');
+    expect(panelText(element)).toContain('Kimi Code');
+    expect(usageAriaLabel(element)).toContain('Included in Kimi Code');
   });
 
   it.each([

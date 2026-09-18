@@ -15,7 +15,7 @@ import {
   BinaryResolver,
   type ResolvedBinaryCommand,
 } from '@utils/system/binaryResolver';
-import { extendEnvPath } from '@utils/system/platformPaths';
+import { withExtendedPath } from '@utils/system/platformPaths';
 
 const log = createLog('AudioUtils');
 
@@ -95,7 +95,7 @@ export async function startRecording(): Promise<{
       soxCommand.command,
       [...soxCommand.args, ...soxArgs],
       {
-        env: { ...process.env, PATH: extendEnvPath() },
+        env: withExtendedPath(process.env),
         reject: false,
       },
     );

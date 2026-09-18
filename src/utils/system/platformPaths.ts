@@ -63,6 +63,25 @@ function pushHomeBinDirs(dirs: string[]): void {
 }
 
 /**
+ * An absolute root read from the environment, or null.
+ *
+ * `AbsoluteFS.existsSync` throws on a relative path on purpose, so a mistyped
+ * root is never silently dropped. But these roots come from user environment
+ * variables and this runs inside `getExtraDirs()`, on the path of *every*
+ * subprocess TeXRA spawns. A throw there is not a loud failure for one
+ * directory — it is every command in the session failing with
+ * `Path must be absolute`, which reads to the user as the tool being missing.
+ * So a relative value is skipped and reported, never thrown.
+ */
+function absoluteEnvRoot(value: string, variable: string): string | null {
+  if (path.isAbsolute(value)) return value;
+  log.warn(
+    `Ignoring ${variable}=${value}: it must be an absolute path to be searched for tools.`,
+  );
+  return null;
+}
+
+/**
  * Return common tool directories based on the current platform.
  * Results are cached for the session to improve performance.
  * Internal helper used by extendEnvPath and findToolInCommonPaths.
@@ -94,6 +113,15 @@ function getExtraDirs(): string[] {
       'C:\\Program Files (x86)\\MiKTeX 2.9\\miktex\\bin',
       // Strawberry Perl (recommended Perl distribution for Windows)
       'C:\\Strawberry\\perl\\bin',
+      // Git for Windows. Its installer offers "Use Git from Git Bash only",
+      // which installs git and deliberately leaves it off the system PATH —
+      // indistinguishable from "git is not installed" to anything that only
+      // consults PATH. `cmd` holds the wrappers meant for callers outside
+      // bash; `bin` is the older layout's location.
+      'C:\\Program Files\\Git\\cmd',
+      'C:\\Program Files\\Git\\bin',
+      'C:\\Program Files (x86)\\Git\\cmd',
+      'C:\\Program Files (x86)\\Git\\bin',
     );
 
     // Ghostscript installs under a version-stamped directory. This was six
@@ -128,23 +156,36 @@ function getExtraDirs(): string[] {
         // MiKTeX installed directly under LOCALAPPDATA (without Programs)
         path.join(localAppData, 'MiKTeX', 'miktex', 'bin', 'x64'),
         path.join(localAppData, 'MiKTeX', 'miktex', 'bin'),
+        // Git for Windows installed per-user (the default when the installer
+        // runs without admin rights).
+        path.join(localAppData, 'Programs', 'Git', 'cmd'),
+        path.join(localAppData, 'Programs', 'Git', 'bin'),
       );
     }
 
-    const scoopDir =
-      process.env.SCOOP ||
-      process.env.SCOOP_HOME ||
-      (process.env.USERPROFILE
-        ? path.join(process.env.USERPROFILE, 'scoop')
-        : null);
+    const scoopEnv = process.env.SCOOP || process.env.SCOOP_HOME;
+    const scoopFallback = process.env.USERPROFILE
+      ? path.join(process.env.USERPROFILE, 'scoop')
+      : null;
+    const scoopDir = scoopEnv
+      ? absoluteEnvRoot(scoopEnv, 'SCOOP')
+      : scoopFallback;
     if (scoopDir && AbsoluteFS.existsSync(scoopDir)) {
       dirs.push(path.join(scoopDir, 'shims'));
-      dirs.push(...globDescending(path.join(scoopDir, 'apps', '*', 'current')));
+      // Forward slashes: `glob` reads a backslash as an escape unless
+      // `windowsPathsNoEscape` is set, so a path.join'd pattern matches
+      // nothing here. Every other Windows pattern in this file does the same.
+      dirs.push(
+        ...globDescending(`${normalizeFilePath(scoopDir)}/apps/*/current`),
+      );
     }
 
     const msysRoots = new Set<string>(DEFAULT_MSYS_ROOTS);
-    if (process.env.MSYS2_HOME) {
-      msysRoots.add(process.env.MSYS2_HOME);
+    const msysHome = process.env.MSYS2_HOME
+      ? absoluteEnvRoot(process.env.MSYS2_HOME, 'MSYS2_HOME')
+      : null;
+    if (msysHome) {
+      msysRoots.add(msysHome);
     }
 
     for (const root of msysRoots) {
@@ -235,28 +276,63 @@ function getExtraDirs(): string[] {
 // Cache for extended PATH strings. Bounded so a process that mutates PATH many
 // times over its lifetime can't grow this unbounded; in practice only a handful
 // of distinct base paths are ever seen.
-const cachedExtendedPaths = new LRUCache<string, string>({ max: 16 });
+interface ExtendedPathEntry {
+  /** The extended PATH as it stood when every `absent` directory was absent. */
+  readonly result: string;
+  /** Candidate directories that did not exist when `result` was computed. */
+  readonly absent: readonly string[];
+}
+
+const cachedExtendedPaths = new LRUCache<string, ExtendedPathEntry>({
+  max: 16,
+});
 
 /**
  * Extend PATH with common directories if they are missing.
- * Results are cached based on the input PATH to improve performance.
+ *
+ * The result is cached per input PATH, but a cached answer that *skipped* a
+ * directory is only reused while that directory is still absent. A miss must
+ * not be memoized for the process lifetime: the user installs git on the
+ * advice of our own "Git not found in PATH" message, and on Windows the new
+ * machine PATH never reaches this already-running process — so the install is
+ * invisible unless this recomputes. Re-checking only the previously absent
+ * candidates keeps the steady state to a handful of `stat`s.
  */
 export function extendEnvPath(
   basePath: string = process.env.PATH || '',
 ): string {
   const cached = cachedExtendedPaths.get(basePath);
-  if (cached !== undefined) {
-    return cached;
+  if (cached && !cached.absent.some((dir) => AbsoluteFS.existsSync(dir))) {
+    return cached.result;
   }
   const segments = basePath.split(path.delimiter).filter(Boolean);
+  const absent: string[] = [];
   for (const dir of getExtraDirs()) {
-    if (!segments.includes(dir) && AbsoluteFS.existsSync(dir)) {
-      segments.push(dir);
-    }
+    if (segments.includes(dir)) continue;
+    if (AbsoluteFS.existsSync(dir)) segments.push(dir);
+    else absent.push(dir);
   }
   const result = segments.join(path.delimiter);
-  cachedExtendedPaths.set(basePath, result);
+  cachedExtendedPaths.set(basePath, { result, absent });
   return result;
+}
+
+/**
+ * Return a copy of `env` whose PATH is {@link extendEnvPath}'s, written under
+ * the key the environment already uses.
+ *
+ * Windows spells the variable `Path`, and a plain object copied out of
+ * `process.env` keeps that spelling: `process.env` itself is case-insensitive
+ * there, but an ordinary object is not. Assigning `.PATH` on the copy
+ * therefore leaves the original `Path` beside it and hands the child both
+ * spellings of one variable, with no defined rule for which survives — so on
+ * Windows the extension silently applied or did not, per spawn. Writing the
+ * key that is already present is the whole fix.
+ */
+export function withExtendedPath(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const key =
+    Object.keys(env).find((name) => name.toLowerCase() === 'path') ?? 'PATH';
+  return { ...env, [key]: extendEnvPath(env[key]) };
 }
 
 /**
@@ -325,7 +401,7 @@ function findToolInCommonPathsUncached(tool: string): string | null {
   for (const name of candidates) {
     try {
       const result = execaSync('kpsewhich', [name], {
-        env: { ...process.env, PATH: pathEnv },
+        env: withExtendedPath(process.env),
         reject: false,
       });
       const found = result.stdout.trim();
