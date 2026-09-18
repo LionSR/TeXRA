@@ -1012,13 +1012,11 @@ Delegated subagent and workflow results are delivered automatically as follow-up
   ) {
     const displayPath = `/executions/${runId}/files/${filePath}`;
     assertNoParentTraversal(filePath);
-    const fullPath = yield* executionsRead(context, () =>
-      findExistingRunStoragePathUnder(
-        context.session.roots.storage,
-        runId,
-        filePath,
-      ),
-    );
+    const fullPath = yield* findExistingRunStoragePathUnder(
+      context.session.roots.storage,
+      runId,
+      filePath,
+    ).pipe(Effect.mapError((cause) => new ExecutionsReadFailed({ cause })));
     if (!fullPath) {
       return yield* Effect.fail(
         new ToolError(`File not found: ${displayPath}`),

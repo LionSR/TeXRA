@@ -566,10 +566,7 @@ export function executeAgent(
               // fresh launch it is the caller's own parent.
               const parentRunId = handle.deliveryTarget;
               // Pre-run UI setup (RUNNING is set by runFlowWithLifecycle)
-              yield* Effect.tryPromise({
-                try: () => ensureRunDirUnder(runSession.roots.storage, runId),
-                catch: ensureError,
-              });
+              yield* ensureRunDirUnder(runSession.roots.storage, runId);
               logger.info(`Starting run (runId: ${runId})`);
               logger.info(`Input file: ${config.inputFiles[0] ?? '(none)'}`);
               logger.debug('Run details', {

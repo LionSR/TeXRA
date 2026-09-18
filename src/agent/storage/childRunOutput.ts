@@ -70,15 +70,11 @@ export const resolveChildRunOutput = Effect.fn('resolveChildRunOutput')(
       );
     }
 
-    const entry = yield* Effect.tryPromise({
-      try: () =>
-        inspectRunStorageEntryUnder(
-          storageRoot,
-          reference.runId,
-          reference.relativePath,
-        ),
-      catch: ensureError,
-    });
+    const entry = yield* inspectRunStorageEntryUnder(
+      storageRoot,
+      reference.runId,
+      reference.relativePath,
+    );
     switch (entry.kind) {
       case 'file':
         return entry.location;

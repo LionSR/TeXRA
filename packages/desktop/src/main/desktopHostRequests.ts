@@ -361,25 +361,29 @@ export function createDesktopHostRequests(
         fileActions.acceptEditedFile(baseFile, editedFile),
       mergeFile: (baseFile, editedFile) =>
         fileActions.runMergeFile(baseFile, editedFile),
+      // The round-aware diff still answers with a promise (its fallback folds
+      // an `Exit` behind that face), so it keeps the one lift a foreign edge
+      // gets.
       latexdiffFile: (baseFile, editedFile) =>
-        runLatexdiffFile(baseFile, editedFile),
-      // The file-actions host port is still Promise-shaped, so the shell's
-      // open program settles here.
-      openDirectory: (directory) =>
-        runtime.runPromise(host.openPath(directory)),
-      openLabel: (label) => fileActions.findAndOpenLabel(label),
-      readFile: (file) => readFile(file, 'utf8'),
-      showInfo: (message) => runtime.runPromise(host.showInfoMessage(message)),
-      // The refusal is the notice: the controller's promise face rejects with
-      // the `Rejected` the request answers with.
-      showError: async (reason) => {
-        throw new Rejected({ reason });
-      },
+        fromHost('fileActions.runLatexdiffFile', () =>
+          runLatexdiffFile(baseFile, editedFile),
+        ),
+      openDirectory: (directory) => host.openPath(directory),
+      // An accepted-edit backup names an absolute path the controller already
+      // resolved, so this reads through the process filesystem rather than a
+      // rooted view that would refuse a path outside the workspace.
+      readFile: (file) =>
+        Effect.flatMap(Effect.service(FileSystem.FileSystem), (fs) =>
+          fs.readFileString(file),
+        ),
+      showInfo: (message) => host.showInfoMessage(message),
+      // The refusal is the notice: the member fails with the `Rejected` the
+      // request answers with.
+      showError: (reason) => Effect.fail(new Rejected({ reason })),
       logError: (message, error) =>
         logger.error(message, { data: toLogData(error) }),
     },
-    sendFollowUp: (runId, text) =>
-      runtime.runPromise(runActions.sendFollowUp(runId, text)),
+    sendFollowUp: (runId, text) => runActions.sendFollowUp(runId, text),
   });
 
   const runWorkflowDiff = (request: WorkflowDiffRequest) =>
@@ -619,19 +623,13 @@ export function createDesktopHostRequests(
       }
       switch (action) {
         case 'compare':
-          yield* fromHost('workflowFileActions.compareOriginal', () =>
-            workflowFileActions.compareOriginal(editedFile, baseFile),
-          );
+          yield* workflowFileActions.compareOriginal(editedFile, baseFile);
           return;
         case 'accept':
-          yield* fromHost('workflowFileActions.acceptFile', () =>
-            workflowFileActions.acceptFile(editedFile, baseFile),
-          );
+          yield* workflowFileActions.acceptFile(editedFile, baseFile);
           return;
         case 'merge':
-          yield* fromHost('fileActions.runMergeFile', () =>
-            fileActions.runMergeFile(baseFile, editedFile),
-          );
+          yield* fileActions.runMergeFile(baseFile, editedFile);
           return;
         case 'latexdiff':
           yield* fromHost('fileActions.runLatexdiffFile', () =>
@@ -743,9 +741,7 @@ export function createDesktopHostRequests(
         }
         case 'openRunStorage': {
           const { runId } = request;
-          yield* fromHost('workflowFileActions.openRunStorage', () =>
-            workflowFileActions.openRunStorage(runId),
-          );
+          yield* workflowFileActions.openRunStorage(runId);
           return done;
         }
         case 'exportTranscript':
@@ -854,9 +850,7 @@ export function createDesktopHostRequests(
         case 'fileAction': {
           const fileAction = request;
           const config = yield* runActions.readConfig(fileAction.runId);
-          yield* fromHost('workflowFileActions.handle', () =>
-            workflowFileActions.handle(fileAction, config),
-          );
+          yield* workflowFileActions.handle(fileAction, config);
           return done;
         }
         case 'restoreProposalConfig':
