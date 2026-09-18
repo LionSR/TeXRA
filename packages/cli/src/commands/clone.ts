@@ -78,10 +78,10 @@ function buildOverleafClonePorts(
     isGitAvailable: () =>
       Effect.sync(
         () =>
-          // Directory-independent probe, and it runs before the workspace
-          // roots exist: the process cwd is the only honest root here.
+          // Directory-independent probe that runs before the workspace roots
+          // exist, so it names the CLI's own resolved cwd.
           executeCommandSync(['git', '--version'], {
-            cwd: process.cwd(),
+            cwd: context.cwd,
             quiet: true,
           }).success,
       ),
