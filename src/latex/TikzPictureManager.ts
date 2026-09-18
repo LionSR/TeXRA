@@ -6,11 +6,11 @@ import { Effect, FileSystem } from 'effect';
 
 // Local imports - log
 import { createLog } from '@logger/logUtils';
-import type { ConfigProvider } from '@platform/interfaces';
+import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { FileLocation } from '@shared/schemas';
 import { renderPrompt } from '@utils/prompt';
 import { readConfig } from '@utils/config/configUtils';
-import { pathToLocation } from '@utils/files/fileLocation';
+import { pathToLocationIn } from '@utils/files/fileLocation';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 
 // Local imports - latex utils
@@ -25,6 +25,7 @@ const log = createLog(CHANNEL);
  * @param tikzpictures TikZ picture content
  * @param label Label for the figure
  * @param buildDir Absolute build directory path
+ * @param workspaceRoot The session's workspace root the file is located in
  * @param suffix Optional suffix for multiple pictures with same label
  * @returns FileLocation of created LaTeX file
  */
@@ -34,6 +35,7 @@ const createStandalone = Effect.fn('TikzPictureManager.createStandalone')(
     tikzpictures: string,
     label: string,
     buildDir: string,
+    workspaceRoot: string | undefined,
     suffix?: string,
   ) {
     const fs = yield* FileSystem.FileSystem;
@@ -42,7 +44,10 @@ const createStandalone = Effect.fn('TikzPictureManager.createStandalone')(
     });
 
     const filename = suffix ? `${label}_${suffix}.tex` : `${label}.tex`;
-    const texLocation = pathToLocation(path.join(buildDir, filename));
+    const texLocation = pathToLocationIn(
+      workspaceRoot,
+      path.join(buildDir, filename),
+    );
 
     yield* fs.writeFileString(texLocation.absolutePath, standaloneContent);
     log.debug(`Created standalone LaTeX file: ${texLocation.absolutePath}`);
@@ -97,13 +102,14 @@ const extract = Effect.fn('TikzPictureManager.extract')(function* (
 /**
  * Extract and compile TikZ pictures from a LaTeX file
  * @param latexFile Location of the LaTeX file
- * @param config The session's configuration: the TikZ template and the
- *   compile's LaTeX settings
+ * @param roots The session's roots: the TikZ template and the compile's LaTeX
+ *   settings come from its configuration, and the products are located in its
+ *   workspace
  * @returns Array of FileLocations for compiled PDF files
  */
 const compile = Effect.fn('TikzPictureManager.compile')(function* (
   latexFile: FileLocation,
-  config: ConfigProvider,
+  roots: WorkspaceRoots,
 ) {
   const fs = yield* FileSystem.FileSystem;
   const inputName = path.parse(latexFile.absolutePath).name;
@@ -119,7 +125,7 @@ const compile = Effect.fn('TikzPictureManager.compile')(function* (
   const labeledTikzPictures = yield* extract(latexFile);
   log.debug(`Found ${labeledTikzPictures.length} labeled TikZ pictures`);
 
-  const template = readConfig<string>(config, 'texra.latex.tikzTemplate');
+  const template = readConfig<string>(roots.config, 'texra.latex.tikzTemplate');
   const compiledFiles: FileLocation[] = [];
 
   for (const [label, tikzPictures] of labeledTikzPictures) {
@@ -134,9 +140,10 @@ const compile = Effect.fn('TikzPictureManager.compile')(function* (
         tikzpictures,
         label,
         buildDir,
+        roots.workspace,
         suffix,
       );
-      const compiled = yield* compileLatex2Pdf(texLocation, config, {
+      const compiled = yield* compileLatex2Pdf(texLocation, roots.config, {
         channel: CHANNEL,
         compiler: 'pdflatex',
       });
@@ -153,7 +160,8 @@ const compile = Effect.fn('TikzPictureManager.compile')(function* (
       }
 
       // Derive PDF location from tex location
-      const pdfLocation = pathToLocation(
+      const pdfLocation = pathToLocationIn(
+        roots.workspace,
         texLocation.absolutePath.replace(/\.tex$/, '.pdf'),
       );
 

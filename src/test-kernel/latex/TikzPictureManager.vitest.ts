@@ -6,7 +6,7 @@ import { TikzPictureManager } from '@latex/TikzPictureManager';
 import { installPlatform } from '@test/support/setupPlatform';
 import { fakePath } from '@test/support/FakePlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
-import { pathToLocation } from '@utils/files/fileLocation';
+import { pathToLocationIn } from '@utils/files/fileLocation';
 
 function extractFromPaper(content: string) {
   return Effect.promise(() =>
@@ -16,7 +16,9 @@ function extractFromPaper(content: string) {
     }),
   ).pipe(
     Effect.andThen(() =>
-      TikzPictureManager.extract(pathToLocation('paper.tex')),
+      TikzPictureManager.extract(
+        pathToLocationIn(fakePath('workspace'), 'paper.tex'),
+      ),
     ),
     Effect.provide(nodePlatformLayer),
   );

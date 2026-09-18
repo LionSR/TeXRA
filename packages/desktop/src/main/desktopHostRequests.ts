@@ -67,7 +67,7 @@ import type {
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   createExternalLocation,
-  pathToLocation,
+  pathToLocationIn,
 } from '@utils/files/fileLocation';
 
 import {
@@ -551,7 +551,7 @@ export function createDesktopHostRequests(
           new Rejected({ reason: 'Choose a base file first.' }),
         );
       }
-      const base = pathToLocation(baseFile);
+      const base = pathToLocationIn(session.roots.workspace, baseFile);
       if (action === 'latexdiffvc') {
         const result = yield* new LaTeXdiffService(LATEXDIFF_CHANNEL).runDiffVc(
           base,

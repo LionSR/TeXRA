@@ -11,7 +11,7 @@ import { setupPlatform } from '@test/support/setupPlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { getMimeType } from '@utils/files/mimeUtils';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
-import { pathToLocation } from '@utils/files/fileLocation';
+import { pathToLocationIn } from '@utils/files/fileLocation';
 import {
   workspaceAbsolutePath,
   workspaceRootPath,
@@ -87,7 +87,7 @@ describe('AbsoluteFS.write', () => {
   });
 
   it('propagates ELOOP without deleting the path or retrying', async () => {
-    const location = pathToLocation('file.tex');
+    const location = pathToLocationIn(workspaceRootPath(), 'file.tex');
     const expectedPath = workspaceAbsolutePath(workspaceRootPath(), 'file.tex');
     const cause = new Error('native cause');
     const loopError = new Error('loop detected', {

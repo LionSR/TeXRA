@@ -177,7 +177,7 @@ export async function handleGetTeXCount(
           progress.report({ message: 'Running texcount...' });
 
           const { output, errors } = await runtime.runPromise(
-            getTeXCount(relativePath, {
+            getTeXCount(session.roots.workspace, relativePath, {
               mode: countingMode.value,
               channel: CHANNEL,
             }),

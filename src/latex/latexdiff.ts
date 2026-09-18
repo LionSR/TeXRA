@@ -8,7 +8,7 @@ import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { FileLocation } from '@shared/schemas';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { ensureError } from '@utils/errors/errorMessage';
-import { pathToLocation, pathToLocationIn } from '@utils/files/fileLocation';
+import { pathToLocationIn } from '@utils/files/fileLocation';
 import { executeCommand } from '@utils/system/execUtils';
 import {
   buildBetweenRoundDiffSuffix,
@@ -160,9 +160,10 @@ export class LaTeXdiffService {
       }
 
       // Write and process output
-      const outputLocation = this.roots
-        ? pathToLocationIn(this.roots.workspace, outputPath)
-        : pathToLocation(outputPath);
+      const outputLocation = pathToLocationIn(
+        this.roots?.workspace,
+        outputPath,
+      );
       yield* Effect.tryPromise({
         try: async () => {
           await AbsoluteFS.ensureDir(outputDirectory);
@@ -232,7 +233,7 @@ export class LaTeXdiffService {
       );
       const outputPath = path.join(cwd, diffFilePath);
       yield* this.fileProcessor.processDiffFile(
-        pathToLocation(outputPath),
+        pathToLocationIn(this.roots?.workspace, outputPath),
         inputLocation,
       );
 

@@ -3,6 +3,7 @@ import { Effect, FileSystem } from 'effect';
 import { z } from 'zod';
 
 // Local imports - latex utilities
+import { ToolCall } from '@agent/runtime/ToolCall';
 import { getTeXCount } from '@latex/texcount';
 import { ToolError, type ToolResult } from '@shared/schemas';
 import { defineTool } from '@tools/core/define';
@@ -29,7 +30,8 @@ type TexcountInput = z.infer<typeof TexcountInputSchema>;
 
 const texcount = Effect.fn('TexcountTool.execute')(function* (
   input: TexcountInput,
-): Effect.fn.Return<ToolResult, ToolError, FileSystem.FileSystem> {
+): Effect.fn.Return<ToolResult, ToolError, FileSystem.FileSystem | ToolCall> {
+  const call = yield* ToolCall;
   const files = ensureArray(input.files)
     .map((file) => file.trim())
     .filter((file) => file.length > 0);
@@ -39,7 +41,9 @@ const texcount = Effect.fn('TexcountTool.execute')(function* (
     );
   }
 
-  const { output, errors } = yield* getTeXCount(files, { mode: input.mode });
+  const { output, errors } = yield* getTeXCount(call.roots.workspace, files, {
+    mode: input.mode,
+  });
 
   if (!output) {
     return yield* Effect.fail(

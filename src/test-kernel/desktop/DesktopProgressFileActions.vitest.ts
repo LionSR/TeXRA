@@ -125,7 +125,7 @@ async function loadFileActions(options: {
         kind: 'external',
         absolutePath,
       }),
-      pathToLocation: (absolutePath: string) => ({
+      pathToLocationIn: (_root: string | undefined, absolutePath: string) => ({
         kind: 'external',
         absolutePath,
       }),

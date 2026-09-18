@@ -40,7 +40,7 @@ import {
   type AssembleTraceResult,
 } from '@transcript';
 import { ensureError } from '@utils/errors/errorMessage';
-import { pathToLocation } from '@utils/files/fileLocation';
+import { pathToLocationIn } from '@utils/files/fileLocation';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 
 /** Outcome of loading run data for export. */
@@ -157,7 +157,7 @@ export class ChatExportController {
       );
 
       const compiled = yield* compileLatex2Pdf(
-        pathToLocation(absolutePath),
+        pathToLocationIn(this.deps.session.roots.workspace, absolutePath),
         this.deps.session.roots.config,
       );
 

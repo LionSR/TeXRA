@@ -9,7 +9,7 @@ import {
   type RunStorageFileLocation,
   type WorkspaceFileLocation,
 } from '@shared/schemas';
-import { locateInWorkspace, workspaceRootPath } from './workspaceFS';
+import { locateInWorkspace } from './workspaceFS';
 
 export function createWorkspaceLocation(
   absolutePath: string,
@@ -53,25 +53,20 @@ export function getFileDirectory(location: FileLocation): string {
 }
 
 /**
- * Convert a string path to a FileLocation (standalone version).
- * Use this for utilities that don't have access to RunFileService.
- * This function is NOT run-storage aware - it can only create workspace or external locations.
+ * Convert a string path to a FileLocation against the workspace root its
+ * caller holds as data: `undefined` with no folder open, which resolves every
+ * path as external.
+ *
+ * NOT run-storage aware — it can only create workspace or external locations.
  * For run-storage awareness, use RunFileService.createLocation() instead.
  *
  * Path normalization is handled internally - you can pass paths with either
  * forward slashes or backslashes. It's safe to pass already-normalized paths
  * (path.normalize() is idempotent).
  *
+ * @param workspaceRoot - The session's workspace root
  * @param target - Absolute or workspace-relative path
  * @returns FileLocation (workspace or external, never runStorage)
- */
-export function pathToLocation(target: string): FileLocation {
-  return pathToLocationIn(workspaceRootPath(), target);
-}
-
-/**
- * {@link pathToLocation} against an explicit workspace root, for code that
- * holds a session's roots as data.
  */
 export function pathToLocationIn(
   workspaceRoot: string | undefined,

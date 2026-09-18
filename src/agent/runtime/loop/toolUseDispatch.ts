@@ -52,7 +52,7 @@ import { generateShortId, getBasename, groupBy } from '@utils/core';
 import { isNonEmptyString } from '@utils/text/stringUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
-import { pathToLocation } from '@utils/files/fileLocation';
+import { pathToLocationIn } from '@utils/files/fileLocation';
 
 import { AgentRun } from '../run/AgentRun';
 import { inlineMediaPart, type InputPart } from '../run/mediaInput';
@@ -126,7 +126,7 @@ const endsTurn = (settlement: Pick<Settlement, 'result'>): boolean =>
  */
 const captureAttachments = Effect.fn('toolUse.captureAttachments')(function* (
   attachments: readonly ToolFileAttachment[],
-  inScope: <A>(operation: () => A) => A,
+  workspaceRoot: string | undefined,
 ): Effect.fn.Return<readonly SettledAttachment[]> {
   const captured: SettledAttachment[] = [];
   for (const attachment of attachments) {
@@ -158,7 +158,7 @@ const captureAttachments = Effect.fn('toolUse.captureAttachments')(function* (
       Effect.tryPromise({
         try: () =>
           AbsoluteFS.readBytes(
-            inScope(() => pathToLocation(attachment.path)).absolutePath,
+            pathToLocationIn(workspaceRoot, attachment.path).absolutePath,
           ),
         catch: (cause) => cause,
       }),
@@ -494,7 +494,10 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
       const validLocations: FileLocation[] = [];
       for (const attachment of result.files) {
         if (!isNonEmptyString(attachment.path)) continue;
-        const location = run.inScope(() => pathToLocation(attachment.path));
+        const location = pathToLocationIn(
+          run.session.roots.workspace,
+          attachment.path,
+        );
         const exists = yield* Effect.tryPromise({
           try: () => AbsoluteFS.exists(location.absolutePath),
           catch: (cause) => cause,
@@ -517,7 +520,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     }
     const attachments = yield* captureAttachments(
       extracted.attachments,
-      run.inScope,
+      run.session.roots.workspace,
     );
     const { status: _status, ...logOutputBase } = extracted.sanitizedResult;
     const logOutput = {
