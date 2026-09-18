@@ -16,11 +16,11 @@ import { TEMP_EXTENSIONS } from '@housekeeping/constants';
 import { LaTeXdiffService } from '@latex/latexdiff';
 import { generateDiffFileName } from '@latex/latexdiff/diffFileNameManager';
 import { debug, warn } from '@logger/logUtils';
+import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
   LATEXDIFF_TEMP_FILE_LOCATIONS,
   type FileLocation,
 } from '@shared/schemas';
-import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { generateShortId } from '@utils/core';
 import {

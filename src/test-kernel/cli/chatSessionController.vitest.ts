@@ -153,6 +153,7 @@ import {
 } from '@cli/chat/tui/state/sessionRunState';
 import { DisposableStore } from '@platform/disposable';
 import type { RecoveryContinuation } from '@platform/interfaces';
+import { workspaceRoots } from '@platform/workspaceRoots';
 import {
   aggregateId,
   RUN_OUTCOME,
@@ -170,7 +171,6 @@ import {
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
-import { workspaceRoots } from '@platform/workspaceRoots';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { ensureError } from '@utils/errors/errorMessage';
 import {
