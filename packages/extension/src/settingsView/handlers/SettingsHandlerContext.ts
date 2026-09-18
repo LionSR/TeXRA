@@ -11,11 +11,10 @@ import type { ExtensionContext, Webview } from 'vscode';
  * accessors inbound command slices and handler delegates share.
  *
  * Both are programs, not promises. `vscode.Webview.postMessage` is the one
- * foreign edge behind them and it is wrapped exactly once, in
- * `SettingsViewMessageHandler`; everything above it — the `send*` builders,
- * the refresh fan-outs, the delegates' handlers — composes as `Effect` and is
- * settled once per inbound message arm at the dispatcher, which is this
- * host's entry.
+ * foreign edge behind them and it is wrapped by {@link postToWebview} below;
+ * everything above it — the `send*` builders, the refresh fan-outs, the
+ * delegates' handlers — composes as `Effect` and is settled once per inbound
+ * message arm at the dispatcher, which is this host's entry.
  *
  * Ordering is unchanged: a post still completes before a mutation follow-up
  * runs (a settings refresh after a write; hide-banner then credential
@@ -37,9 +36,10 @@ export interface SettingsHandlerContext {
 
 /**
  * The one foreign edge under this view's transport: VS Code's own
- * `postMessage`, lifted here and nowhere else. A panel disposed mid-post
- * rejects it, and that reaches the program as a failure instead of an
- * unhandled rejection.
+ * `postMessage`, lifted once for every outbound settings message. A panel
+ * disposed mid-post rejects it, and that reaches the program as a failure
+ * instead of an unhandled rejection. Only the goal list lifts `postMessage`
+ * itself, because it reads the delivered flag this discards.
  */
 export function postToWebview(
   webview: Webview,
