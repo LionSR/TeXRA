@@ -251,7 +251,7 @@ export class ReadFileTool extends defineTool({
     input: ReadInput,
     kind: AttachmentKind,
     resolved: WorkspacePathResolution,
-  ): Effect.fn.Return<ToolResult, unknown, ToolCall> {
+  ): Effect.fn.Return<ToolResult, unknown, ToolCall | FileSystem.FileSystem> {
     const copy = ATTACHMENT_COPY[kind];
     const attachment = yield* buildFileAttachment({
       filePath: resolved.fsPath,

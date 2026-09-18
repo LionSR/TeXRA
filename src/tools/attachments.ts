@@ -1,5 +1,5 @@
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, FileSystem } from 'effect';
 import { imageSize } from 'image-size';
 import { ToolCall } from '@agent/runtime/ToolCall';
 
@@ -11,7 +11,7 @@ import {
 } from '@tools/pathResolution';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getMimeType, isImageMimeType } from '@utils/files/mimeUtils';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
+import { entryExists } from '@utils/files/fsEntryExists';
 import { toPosixPath } from '@utils/core/pathCore';
 import { formatBytes, isNonEmptyString } from '@utils/text/stringUtils';
 
@@ -120,7 +120,7 @@ export const buildFileAttachment = Effect.fn('buildFileAttachment')(function* ({
 }: BuildFileAttachmentOptions): Effect.fn.Return<
   ToolFileAttachment,
   ToolError,
-  ToolCall
+  ToolCall | FileSystem.FileSystem
 > {
   const call = yield* ToolCall;
   if (!isNonEmptyString(filePath)) {
@@ -144,22 +144,27 @@ export const buildFileAttachment = Effect.fn('buildFileAttachment')(function* ({
           ),
         catch: attachmentFailure(`Failed to resolve attachment ${filePath}`),
       });
-  const present = yield* Effect.tryPromise({
-    try: () => AbsoluteFS.exists(path.absolute),
-    catch: attachmentFailure(`Failed to inspect attachment ${display}`),
-  });
+  const fs = yield* FileSystem.FileSystem;
+  const present = yield* entryExists(fs, path.absolute).pipe(
+    Effect.mapError(
+      attachmentFailure(`Failed to inspect attachment ${display}`),
+    ),
+  );
   if (!present) {
     return yield* Effect.fail(
       new ToolError(`Attachment not found: ${display}`),
     );
   }
 
-  const stats = yield* Effect.tryPromise({
-    try: () => AbsoluteFS.stat(path.absolute),
-    catch: attachmentFailure(`Failed to inspect attachment ${display}`),
-  });
+  const stats = yield* fs
+    .stat(path.absolute)
+    .pipe(
+      Effect.mapError(
+        attachmentFailure(`Failed to inspect attachment ${display}`),
+      ),
+    );
 
-  if (stats.size > ATTACHMENT_MAX_BYTES) {
+  if (stats.size > BigInt(ATTACHMENT_MAX_BYTES)) {
     return yield* Effect.fail(
       new ToolError(
         `Attachment ${display} exceeds maximum size of ${formatBytes(ATTACHMENT_MAX_BYTES)}.`,
@@ -167,10 +172,13 @@ export const buildFileAttachment = Effect.fn('buildFileAttachment')(function* ({
     );
   }
 
-  const buffer = yield* Effect.tryPromise({
-    try: () => AbsoluteFS.readBytes(path.absolute),
-    catch: attachmentFailure(`Failed to read attachment ${display}`),
-  });
+  const buffer = yield* fs
+    .readFile(path.absolute)
+    .pipe(
+      Effect.mapError(
+        attachmentFailure(`Failed to read attachment ${display}`),
+      ),
+    );
 
   const inferredMime =
     mimeType ?? getMimeType(path.fsPath) ?? 'application/octet-stream';
