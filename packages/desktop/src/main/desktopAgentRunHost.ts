@@ -1,10 +1,9 @@
-import type { Effect } from 'effect';
-
 import type { MainViewRunLaunchHost } from '@controllers/mainView/backend/MainViewRunLaunchController';
 import type { TranscriptExportFormat } from '@controllers/progressView/exportTranscript';
 import type { DiffViewHost, MessageHost } from '@hosts/uiHosts';
 import type { InstructionAction } from '@shared/schemas';
 import type { BuildDisplayFn } from '@tools/approval/latexPreview';
+import type { Effect } from 'effect';
 
 import type { PreviewUnavailable } from './desktopPreviewHost.js';
 
