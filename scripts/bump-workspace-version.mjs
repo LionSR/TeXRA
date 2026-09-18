@@ -19,6 +19,13 @@ const MANIFEST_PATHS = [
 // commit, so either tag resolves to the same next version.
 const RELEASE_TAG_PREFIX = /^(?:cli-v|v)/;
 
+// The only prerelease form the release channel accepts: `X.Y.Z-preview.N`
+// (see `.claude/skills/releasing/SKILL.md`, "Preview releases"). The
+// identifier is fixed so that every workflow can tell a preview from a stable
+// version with one regex, and so nothing else (`-beta`, `-rc`) can slip onto
+// the preview npm dist-tag or the Marketplace pre-release channel by accident.
+const PRERELEASE_ID = 'preview';
+
 // Release trains use patch values 0 through 10; after .10, development moves
 // to the next minor train.
 const MAX_PATCH_VERSION = 10;
@@ -39,7 +46,9 @@ function printUsage() {
       'Examples:',
       '  node scripts/bump-workspace-version.mjs --from v0.37.10',
       '  node scripts/bump-workspace-version.mjs --from cli-v0.37.10',
+      '  node scripts/bump-workspace-version.mjs --from v1.0.0-preview.1',
       '  node scripts/bump-workspace-version.mjs --version 0.38.0 --check',
+      '  node scripts/bump-workspace-version.mjs --version 1.0.0-preview.2',
     ].join('\n'),
   );
 }
@@ -89,28 +98,52 @@ function parseArgs(argv) {
 function parseVersion(rawVersion, label) {
   const stripped = rawVersion.replace(RELEASE_TAG_PREFIX, '');
   const parsed = semver.parse(stripped);
-  // Reject anything beyond a bare MAJOR.MINOR.PATCH — manifests never carry
-  // prerelease or build metadata, and semver.parse would otherwise accept
-  // (and silently drop) suffixes like "-beta" or "+build".
-  const isBareVersion =
+  // Accept a bare MAJOR.MINOR.PATCH or the one prerelease form the release
+  // channel knows, `MAJOR.MINOR.PATCH-preview.N`. Reject everything else:
+  // semver.parse would otherwise accept (and the manifests would then carry)
+  // suffixes like "-beta" or "+build" that no publish job routes anywhere.
+  const preview =
     parsed != null &&
-    parsed.prerelease.length === 0 &&
-    parsed.build.length === 0;
-  if (!isBareVersion) {
+    parsed.prerelease.length === 2 &&
+    parsed.prerelease[0] === PRERELEASE_ID &&
+    Number.isInteger(parsed.prerelease[1]) &&
+    parsed.prerelease[1] >= 1
+      ? parsed.prerelease[1]
+      : undefined;
+  const isAccepted =
+    parsed != null &&
+    parsed.build.length === 0 &&
+    (parsed.prerelease.length === 0 || preview != null);
+  if (!isAccepted) {
     fail(
-      `${label} must be MAJOR.MINOR.PATCH, with an optional leading v or cli-v prefix.`,
+      `${label} must be MAJOR.MINOR.PATCH or MAJOR.MINOR.PATCH-${PRERELEASE_ID}.N, with an optional leading v or cli-v prefix.`,
     );
   }
 
-  return { major: parsed.major, minor: parsed.minor, patch: parsed.patch };
+  return {
+    major: parsed.major,
+    minor: parsed.minor,
+    patch: parsed.patch,
+    preview,
+  };
 }
 
 function formatVersion(version) {
-  return `${version.major}.${version.minor}.${version.patch}`;
+  const base = `${version.major}.${version.minor}.${version.patch}`;
+  return version.preview == null
+    ? base
+    : `${base}-${PRERELEASE_ID}.${version.preview}`;
 }
 
 function nextWorkspaceVersion(rawVersion) {
   const version = parseVersion(rawVersion, 'Release tag');
+
+  // A preview's successor is the next preview of the same version. The
+  // version-bump workflow never fires on a preview release, so this branch
+  // only serves the maintainer setting up the next preview by hand.
+  if (version.preview != null) {
+    return formatVersion({ ...version, preview: version.preview + 1 });
+  }
 
   if (version.patch >= MAX_PATCH_VERSION) {
     return formatVersion({

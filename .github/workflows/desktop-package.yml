@@ -23,6 +23,11 @@ on:
         required: false
         default: false
         type: boolean
+      release_tag:
+        description: 'Release tag the installers belong to (vX.Y.Z, or vX.Y.Z-preview.N for a preview); required to publish. Must match packages/desktop/package.json on the dispatched ref.'
+        required: false
+        default: ''
+        type: string
 
 concurrency:
   group: desktop-package-${{ github.ref }}
@@ -269,11 +274,39 @@ jobs:
         run: node scripts/verify-desktop-installer-artifacts.mjs
 
       - name: Publish desktop artifacts to public release repository
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        # Installers land in the public releases repo under the same tag the
+        # extension/CLI shipped with. A preview (`vX.Y.Z-preview.N`) is
+        # created there as a pre-release, and an existing release under that
+        # tag must already be a pre-release, so a preview installer can never
+        # be attached to a stable release, nor a stable installer to a
+        # preview. Missing token, missing tag, or a tag that does not match
+        # the packaged version all fail the job instead of publishing.
         run: |
           set -euo pipefail
 
           if [ -z "${GH_TOKEN:-}" ]; then
             echo '::error::publish_desktop_release_artifacts was requested but DESKTOP_RELEASES_TOKEN is not configured.'
+            exit 1
+          fi
+
+          version="$(node -p "require('./packages/desktop/package.json').version")"
+          tag="v${version}"
+          if [ -z "$RELEASE_TAG" ]; then
+            echo "::error::release_tag is required to publish; pass '$tag' to attach these installers to that release."
+            exit 1
+          fi
+          if [ "$RELEASE_TAG" != "$tag" ]; then
+            echo "::error::release_tag '$RELEASE_TAG' does not match packages/desktop/package.json version '$version' (expected '$tag'). Dispatch the workflow on the tagged commit."
+            exit 1
+          fi
+          if [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            prerelease=false
+          elif [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+-preview\.[1-9][0-9]*$ ]]; then
+            prerelease=true
+          else
+            echo "::error::Version '$version' is neither X.Y.Z nor X.Y.Z-preview.N; nothing publishes it."
             exit 1
           fi
 
@@ -290,8 +323,6 @@ jobs:
             exit 1
           fi
 
-          version="$(node -p "require('./packages/desktop/package.json').version")"
-          tag="v${version}"
           notes_file="$(mktemp)"
           printf 'TeXRA desktop %s installers.\n\nSource run: %s/%s/actions/runs/%s\nSource commit: %s\n' \
             "$version" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" "$GITHUB_SHA" \
@@ -304,11 +335,20 @@ jobs:
             exit 1
           fi
 
-          if gh release view "$tag" --repo "$DESKTOP_RELEASE_REPO" >/dev/null 2>&1; then
+          if existing="$(gh release view "$tag" --repo "$DESKTOP_RELEASE_REPO" --json isPrerelease --jq .isPrerelease 2>/dev/null)"; then
+            if [ "$existing" != "$prerelease" ]; then
+              echo "::error::Release '$tag' in $DESKTOP_RELEASE_REPO has isPrerelease=$existing but version '$version' requires isPrerelease=$prerelease; refusing to attach installers to the wrong channel."
+              exit 1
+            fi
             gh release upload "$tag" "${assets[@]}" --repo "$DESKTOP_RELEASE_REPO" --clobber
           else
+            prerelease_flag=''
+            if [ "$prerelease" = true ]; then
+              prerelease_flag=--prerelease
+            fi
             gh release create "$tag" "${assets[@]}" \
               --repo "$DESKTOP_RELEASE_REPO" \
               --title "TeXRA Desktop ${version}" \
-              --notes-file "$notes_file"
+              --notes-file "$notes_file" \
+              ${prerelease_flag:+"$prerelease_flag"}
           fi

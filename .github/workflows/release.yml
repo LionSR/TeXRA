@@ -5,6 +5,25 @@ name: Release
 # tag/release itself stays a manual step (gh release create) so a human still
 # curates the changelog body and decides when to go public; this workflow only
 # handles the build + publish that follows.
+#
+# Two channels, decided per release by the package version and the GitHub
+# pre-release flag, which must agree or the job fails before publishing:
+#
+#   stable   `X.Y.Z`            release NOT marked pre-release
+#            -> Marketplace / Open VSX release channel, npm dist-tag `latest`
+#   preview  `X.Y.Z-preview.N`  release marked pre-release (`--prerelease`)
+#            -> Marketplace / Open VSX pre-release channel, npm dist-tag
+#               `preview`
+#
+# The VS Code Marketplace refuses semver prerelease suffixes outright (vsce
+# throws on `1.0.0-preview.3`) and identifies pre-releases by version order:
+# users who opted in receive the highest version across both channels, and are
+# moved back to stable once a stable version exceeds it. Its documented scheme
+# is `major.EVEN.patch` for stable and `major.ODD.patch` for pre-release, so a
+# preview `X.Y.0-preview.N` is packaged as the bare `X.(Y+1).N`; from 1.0 on,
+# stable extension trains therefore use even minor numbers. npm and
+# electron-builder take the suffix as-is, so only the VSIX is renumbered.
+# Procedure: `.claude/skills/releasing/SKILL.md`.
 
 on:
   release:
@@ -20,22 +39,78 @@ concurrency:
 jobs:
   publish-extension:
     name: Publish VS Code extension (Marketplace + Open VSX)
-    if: ${{ !github.event.release.prerelease && startsWith(github.event.release.tag_name, 'v') && !contains(github.event.release.tag_name, '-') }}
+    if: ${{ startsWith(github.event.release.tag_name, 'v') }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      - name: Verify release tag matches extension package version
+      - name: Resolve release channel from tag, package version and pre-release flag
+        id: channel
         env:
           RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_IS_PRERELEASE: ${{ github.event.release.prerelease }}
         run: |
           version=$(node -p "require('./packages/extension/package.json').version")
           if [ "$RELEASE_TAG" != "v$version" ]; then
             echo "::error::Release tag '$RELEASE_TAG' does not match packages/extension/package.json version '$version' (expected 'v$version')"
             exit 1
           fi
+
+          if [[ "$version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            channel=stable
+          elif [[ "$version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)-preview\.([1-9][0-9]*)$ ]]; then
+            channel=preview
+          else
+            echo "::error::Version '$version' is neither X.Y.Z nor X.Y.Z-preview.N; nothing publishes it."
+            exit 1
+          fi
+          major=${BASH_REMATCH[1]}
+          minor=${BASH_REMATCH[2]}
+          patch=${BASH_REMATCH[3]}
+
+          # The GitHub pre-release flag and the version form must agree: a
+          # preview released without --prerelease, or a stable version marked
+          # pre-release, publishes to the wrong channel, so fail closed here.
+          if [ "$channel" = preview ] && [ "$RELEASE_IS_PRERELEASE" != true ]; then
+            echo "::error::'$RELEASE_TAG' is a preview version but the GitHub release is not marked pre-release. Recreate it with 'gh release create --prerelease'."
+            exit 1
+          fi
+          if [ "$channel" = stable ] && [ "$RELEASE_IS_PRERELEASE" = true ]; then
+            echo "::error::'$RELEASE_TAG' is a stable version but the GitHub release is marked pre-release. Previews are 'vX.Y.Z-preview.N'."
+            exit 1
+          fi
+
+          if [ "$channel" = stable ]; then
+            if [ "$major" -ge 1 ] && [ $((minor % 2)) -eq 1 ]; then
+              echo "::error::Stable extension trains from 1.0 on use even minor numbers (odd minors are the Marketplace pre-release numbers of the previous train); '$version' cannot publish."
+              exit 1
+            fi
+            echo "pre_release=false" >> "$GITHUB_OUTPUT"
+            echo "vsce_flags=" >> "$GITHUB_OUTPUT"
+            echo "Channel: stable ($version)"
+            exit 0
+          fi
+
+          # Preview: package the VSIX under the Marketplace pre-release number
+          # X.(Y+1).N. Only the extension manifest is renumbered, only in this
+          # job's checkout, and only after the tag/version check above passed.
+          if [ "$patch" != 0 ] || [ $((minor % 2)) -eq 1 ]; then
+            echo "::error::Previews are cut for the .0 of an even-minor train (X.Y.0-preview.N with Y even) so their Marketplace number X.(Y+1).N never collides with a stable version; '$version' cannot publish."
+            exit 1
+          fi
+          marketplace_version="$major.$((minor + 1)).${BASH_REMATCH[4]}"
+          node -e '
+            const fs = require("node:fs");
+            const manifestPath = "packages/extension/package.json";
+            const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+            manifest.version = process.argv[1];
+            fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+          ' "$marketplace_version"
+          echo "pre_release=true" >> "$GITHUB_OUTPUT"
+          echo "vsce_flags=--pre-release" >> "$GITHUB_OUTPUT"
+          echo "Channel: preview ($version -> Marketplace pre-release $marketplace_version)"
 
       - name: Setup workspace
         uses: ./.github/actions/setup-workspace
@@ -54,6 +129,10 @@ jobs:
         run: pnpm run check:package-contributes
 
       - name: Build extension VSIX
+        env:
+          # `--pre-release` on a preview: vsce stamps the VSIX manifest, and
+          # `vsce publish --pre-release` refuses a package without the stamp.
+          VSCE_PACKAGE_FLAGS: ${{ steps.channel.outputs.vsce_flags }}
         run: pnpm --filter texra build:fast
 
       - name: Check VSIX contents
@@ -79,6 +158,7 @@ jobs:
           pat: ${{ secrets.VSCE_PAT }}
           registryUrl: https://marketplace.visualstudio.com
           extensionFile: ${{ steps.vsix.outputs.path }}
+          preRelease: ${{ steps.channel.outputs.pre_release }}
           skipDuplicate: true
 
       - name: Publish to Open VSX
@@ -93,11 +173,12 @@ jobs:
           pat: ${{ secrets.OVSX_PAT }}
           registryUrl: https://open-vsx.org
           extensionFile: ${{ steps.vsix.outputs.path }}
+          preRelease: ${{ steps.channel.outputs.pre_release }}
           skipDuplicate: true
 
   publish-cli:
     name: Publish CLI to npm (Trusted Publishing)
-    if: ${{ !github.event.release.prerelease && startsWith(github.event.release.tag_name, 'cli-v') }}
+    if: ${{ startsWith(github.event.release.tag_name, 'cli-v') }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -107,15 +188,40 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      - name: Verify release tag matches CLI package version
+      - name: Resolve npm dist-tag from tag, package version and pre-release flag
+        id: channel
         env:
           RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_IS_PRERELEASE: ${{ github.event.release.prerelease }}
         run: |
           version=$(node -p "require('./packages/cli/package.json').version")
           if [ "$RELEASE_TAG" != "cli-v$version" ]; then
             echo "::error::Release tag '$RELEASE_TAG' does not match packages/cli/package.json version '$version' (expected 'cli-v$version')"
             exit 1
           fi
+
+          if [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            npm_tag=latest
+          elif [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+-preview\.[1-9][0-9]*$ ]]; then
+            npm_tag=preview
+          else
+            echo "::error::Version '$version' is neither X.Y.Z nor X.Y.Z-preview.N; nothing publishes it."
+            exit 1
+          fi
+
+          # The GitHub pre-release flag and the version form must agree, so a
+          # preview can never be published under `latest` and a stable version
+          # never under `preview`.
+          if [ "$npm_tag" = preview ] && [ "$RELEASE_IS_PRERELEASE" != true ]; then
+            echo "::error::'$RELEASE_TAG' is a preview version but the GitHub release is not marked pre-release. Recreate it with 'gh release create --prerelease'."
+            exit 1
+          fi
+          if [ "$npm_tag" = latest ] && [ "$RELEASE_IS_PRERELEASE" = true ]; then
+            echo "::error::'$RELEASE_TAG' is a stable version but the GitHub release is marked pre-release. Previews are 'cli-vX.Y.Z-preview.N'."
+            exit 1
+          fi
+          echo "npm_tag=$npm_tag" >> "$GITHUB_OUTPUT"
+          echo "Channel: npm dist-tag $npm_tag ($version)"
 
       - name: Setup workspace
         uses: ./.github/actions/setup-workspace
@@ -127,4 +233,8 @@ jobs:
 
       - name: Publish @texra-ai/cli
         working-directory: packages/cli
-        run: npm publish
+        env:
+          NPM_TAG: ${{ steps.channel.outputs.npm_tag }}
+        # The dist-tag is always explicit: `npm publish` defaults to `latest`,
+        # which is exactly where a preview must never land.
+        run: npm publish --tag "$NPM_TAG"
