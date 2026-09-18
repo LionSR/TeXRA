@@ -152,16 +152,16 @@ const BARE_EFFECT_RUN_SITES: Readonly<Record<string, number>> = {
   // program reads no service.
   'packages/cli/src/runtime/supabaseAuth.ts': 1,
   // `texra doctor`, the one command whose whole job is to report on a process
-  // whose platform may not have initialized. Both runs are that report's, and
-  // neither can borrow a process runtime: the first folds `initCliPlatform`'s
-  // outcome into data, and an init that fails disposes the runtime it
-  // installed before it re-raises (see `initPlatform.ts` above), so the second
-  // renders the degraded report — node, workspace, resources, LaTeX, config
-  // and the platform-failure row — with no runtime left to run it on. That
-  // program reads no service and nothing in it logs through Effect. The
-  // healthy path never reaches the second run: it settles the full report on
-  // the runtime the init hands back.
-  'packages/cli/src/commands/doctor.ts': 2,
+  // whose platform may not have initialized. Its one program folds
+  // `initCliPlatform`'s outcome into data and renders the report from it, and
+  // it can borrow a process runtime at neither end: none exists when the fold
+  // begins, and an init that fails disposes the runtime it installed before it
+  // re-raises (see `initPlatform.ts` above), leaving the degraded report —
+  // node, workspace, resources, LaTeX, config and the platform-failure row —
+  // nothing to run on. That report reads no service and nothing in it logs
+  // through Effect; the healthy one settles on the context the init hands
+  // back.
+  'packages/cli/src/commands/doctor.ts': 1,
   // Electron's `before-quit`, the desktop host's shutdown entry: it holds the
   // lifecycle host and no runtime — the drain it runs is what disposes the
   // process runtime — so the quit follows the drain on the default runner.

@@ -1,4 +1,5 @@
 import { defineCommand } from 'citty';
+import { Effect } from 'effect';
 
 import { createLog } from '@logger/logUtils';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
@@ -49,22 +50,33 @@ export async function runSetup(context: CliContext): Promise<number> {
   // State 0 first (.agents/docs/archived/feature/2026-06-11-agent-native-onboarding.md): a credential is the
   // one step no agent can do for the user. With a credential already in place
   // the picker is skipped — credentials-only (re)configuration is
-  // `texra login`'s job under the new vocabulary.
-  const hasCredential = await services.runtime.runPromise(
-    hasUsableSetupCredential(services, services.secrets, credentialLog.warn),
+  // `texra login`'s job under the new vocabulary. The read and the picker it
+  // may open are one program on the root's runtime.
+  const credentialed = await services.runtime.runPromise(
+    Effect.gen(function* () {
+      if (
+        yield* hasUsableSetupCredential(
+          services,
+          services.secrets,
+          credentialLog.warn,
+        )
+      ) {
+        return true;
+      }
+      const { runCliOnboarding } = yield* Effect.promise(
+        () => import('../onboarding/runOnboarding'),
+      );
+      return (yield* runCliOnboarding(services, context.stdoutColorEnabled))
+        .configured;
+    }),
   );
-  if (!hasCredential) {
-    const { runCliOnboarding } = await import('../onboarding/runOnboarding');
-    const result = await services.runtime.runPromise(
-      runCliOnboarding(services, context.stdoutColorEnabled),
-    );
-    // Skipped or abandoned the picker: exit cleanly (the skip summary already
-    // printed) — there is no credential for the setup agent to run on.
-    if (!result.configured) return CliExitCode.Success;
-  }
+  // Skipped or abandoned the picker: exit cleanly (the skip summary already
+  // printed) — there is no credential for the setup agent to run on.
+  if (!credentialed) return CliExitCode.Success;
   // Credential present (pre-existing or just configured): the setup agent owns
   // the session — environment checks, agent roster, first task. Same chat
-  // startup path as `texra chat`, with the agent pinned.
+  // startup path as `texra chat`, with the agent pinned. The TUI mounts at
+  // this Promise edge rather than inside a fiber of the runtime it outlives.
   const { runChat } = await import('../chat/tui/runChatTui');
   const result = await runChat(context, { agentOverride: SETUP_AGENT_NAME });
   return result.exitCode;

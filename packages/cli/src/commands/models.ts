@@ -23,7 +23,6 @@ import {
   loadCliModelAccessEntry,
   type CliModelAccess,
   type CliModelListOptions,
-  type CliModelStores,
 } from '../runtime/modelAccess';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
@@ -35,18 +34,15 @@ import { GLOBAL_ARGS } from './_helpers/globalArgs';
 import { emitCliResult } from './_helpers/output';
 import type { CliContext } from '../runtime/cliContext';
 
-async function loadModelAccessList(
+async function listModels(
   context: CliContext,
-  options: CliModelListOptions = {},
-): Promise<
-  { models: CliModelAccess[]; stores: CliModelStores } | { error: string }
-> {
+  options: CliModelListOptions,
+): Promise<number> {
+  let models: readonly CliModelAccess[];
   try {
-    return await suppressCliFetchStackLogs(async () => {
-      // The init call hands back the stores it just wired, so the follow-up
-      // `show` lookup reads the same pair the list was computed from.
+    models = await suppressCliFetchStackLogs(async () => {
       const services = await initCliPlatform({ ...context, quietLogs: true });
-      const models = await services.runtime.runPromise(
+      return services.runtime.runPromise(
         getCliModelAccessList({
           stores: services,
           models:
@@ -55,24 +51,13 @@ async function loadModelAccessList(
               : undefined,
         }),
       );
-      return { models, stores: services };
     });
   } catch (error) {
-    return { error: formatCliModelListError(error) };
-  }
-}
-
-async function listModels(
-  context: CliContext,
-  options: CliModelListOptions,
-): Promise<number> {
-  const result = await loadModelAccessList(context, options);
-  if ('error' in result) {
-    writeTextStderr(result.error);
+    writeTextStderr(formatCliModelListError(error));
     return CliExitCode.ModelOrNetworkError;
   }
 
-  const listedModels = listableModelAccessEntries(result.models, options);
+  const listedModels = listableModelAccessEntries(models, options);
   if (context.outputFormat === 'text' && listedModels.length === 0) {
     writeTextStderr(formatNoListableModelsMessage(options));
   }
@@ -92,22 +77,17 @@ async function listModels(
 }
 
 async function showModel(context: CliContext, id: string): Promise<number> {
-  const result = await loadModelAccessList(context);
-  if ('error' in result) {
-    writeTextStderr(result.error);
-    return CliExitCode.ModelOrNetworkError;
-  }
-
   let entry: CliModelAccess | undefined;
   try {
-    entry = await suppressCliFetchStackLogs(() =>
-      result.stores.runtime.runPromise(
-        loadCliModelAccessEntry(id, {
-          stores: result.stores,
-          accessList: result.models,
-        }),
-      ),
-    );
+    // One program on the stores the init just wired: the entry lookup loads
+    // the access list itself, so `show` no longer settles a list into a
+    // Promise only to hand it straight back to a second run.
+    entry = await suppressCliFetchStackLogs(async () => {
+      const services = await initCliPlatform({ ...context, quietLogs: true });
+      return services.runtime.runPromise(
+        loadCliModelAccessEntry(id, { stores: services }),
+      );
+    });
   } catch (error) {
     writeTextStderr(formatCliModelListError(error));
     return CliExitCode.ModelOrNetworkError;
