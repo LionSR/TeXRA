@@ -145,6 +145,17 @@ const BARE_EFFECT_RUN_SITES: Readonly<Record<string, number>> = {
   // is given, so there is no runtime to borrow yet, and the construction
   // program reads no service.
   'packages/cli/src/runtime/supabaseAuth.ts': 1,
+  // `texra doctor`, the one command whose whole job is to report on a process
+  // whose platform may not have initialized. Both runs are that report's, and
+  // neither can borrow a process runtime: the first folds `initCliPlatform`'s
+  // outcome into data, and an init that fails disposes the runtime it
+  // installed before it re-raises (see `initPlatform.ts` above), so the second
+  // renders the degraded report — node, workspace, resources, LaTeX, config
+  // and the platform-failure row — with no runtime left to run it on. That
+  // program reads no service and nothing in it logs through Effect. The
+  // healthy path never reaches the second run: it settles the full report on
+  // the runtime the init hands back.
+  'packages/cli/src/commands/doctor.ts': 2,
   // The desktop composition root, for the same reason: its four stores —
   // global and workspace state, the config pair, and the secrets file — open
   // before `installProcessRuntime`, because two of them are the values that
