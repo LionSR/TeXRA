@@ -1,7 +1,7 @@
 import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 
-import { Effect } from 'effect';
+import { Effect, Result } from 'effect';
 
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
 import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
@@ -202,11 +202,18 @@ async function readCliPackageManifest(): Promise<
     new URL('../package.json', import.meta.url),
   ];
   for (const candidate of candidates) {
-    const pkg = await readFile(candidate, 'utf8').then(
-      (text) => JSON.parse(text) as CliPackageManifest,
-      // A candidate that is absent or unreadable is the expected answer for
-      // the layout this build is not: try the next one.
+    // A candidate that is absent, unreadable or unparsable is the expected
+    // answer for the layout this build is not: try the next one. The read's
+    // rejection and the parse's throw are recovered separately because a
+    // `then` rejection handler does not see a throw from its own fulfillment
+    // handler.
+    const text = await readFile(candidate, 'utf8').then(
+      (value) => value,
       () => undefined,
+    );
+    if (text === undefined) continue;
+    const pkg = Result.getOrUndefined(
+      Result.try(() => JSON.parse(text) as CliPackageManifest),
     );
     // Source and bundled `dist/bin` layouts both reach the CLI manifest via
     // `../../`; keep the fallback for build layouts that place runtime files
