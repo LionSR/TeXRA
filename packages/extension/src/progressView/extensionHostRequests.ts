@@ -485,7 +485,7 @@ export function createExtensionHostRequests(
    *  launch preparation, then the one launch command. */
   function launch(
     request: Extract<HostRequest, { kind: 'launch' }>,
-  ): Effect.Effect<void, unknown, GlobalStorageFs> {
+  ): Effect.Effect<void, Error, GlobalStorageFs> {
     return Effect.gen(function* () {
       const { launch: form } = request;
       const requestedWorkingDirectory = form.workingDirectory.trim();
@@ -733,7 +733,7 @@ export function createExtensionHostRequests(
 
   function agentConfigBanner(
     request: Extract<HostRequest, { kind: 'agentConfigBanner' }>,
-  ): Effect.Effect<void, unknown, GlobalStorageFs> {
+  ): Effect.Effect<void, Error, GlobalStorageFs> {
     return Effect.gen(function* () {
       switch (request.action) {
         case 'edit':
