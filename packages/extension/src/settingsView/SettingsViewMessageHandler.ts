@@ -222,7 +222,7 @@ export class SettingsViewMessageHandler {
         ),
       session.roots,
     );
-    this.latexHandlers = new LatexSettingsHandlers(ctx, this.runtime);
+    this.latexHandlers = new LatexSettingsHandlers(ctx);
     this.memoryHandlers = new MemoryHandlers(
       ctx,
       this.memoryController,
