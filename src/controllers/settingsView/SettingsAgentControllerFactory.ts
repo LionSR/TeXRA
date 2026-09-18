@@ -25,13 +25,21 @@ import {
 } from '@shared/schemas';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 
+import type { AgentDirectoriesFailed } from '@platform/interfaces';
 import type { SettingsStatePorts } from '@shared/settingsView/types';
+import type { Effect } from 'effect';
 
 interface AgentControllerFactoryOptions extends SettingsStatePorts {
-  readonly getCustomAgentDirectory: () => Promise<string>;
+  /** The host's agent directories as `AgentDirectoriesPort` declares them:
+   *  Effects, so a directory that cannot be resolved reaches the caller that
+   *  asked for it instead of an untyped rejection. */
+  readonly getCustomAgentDirectory: () => Effect.Effect<
+    string,
+    AgentDirectoriesFailed
+  >;
   readonly getSourceDirectory: (
     source: AgentSource,
-  ) => Promise<string | undefined>;
+  ) => Effect.Effect<string | undefined, AgentDirectoriesFailed>;
   readonly getAgents?: (category: AgentCategory) => AgentEntry[];
   readonly getVisibleAgents?: (category: AgentCategory) => AgentEntry[];
 }

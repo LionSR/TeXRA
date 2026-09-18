@@ -17,6 +17,7 @@ import { Cause, Data, Effect, Exit, SubscriptionRef } from 'effect';
 import { z } from 'zod';
 import { presentAgentFailure, runInSession } from '@agent/runtime';
 import {
+  agentSourceDirectory,
   getAgentsByCategory,
   getVisibleAgents,
   loadAgents,
@@ -1218,19 +1219,8 @@ function createWindow(options: {
       },
       directory: {
         getCustomAgentDirectory: () => options.agentDirectories.custom(),
-        getSourceDirectory: (source: AgentSource) => {
-          switch (source) {
-            case 'custom':
-              return options.agentDirectories.custom();
-            case 'builtInWorkflow':
-              return options.agentDirectories.builtIn();
-            case 'builtInToolUse':
-              return options.agentDirectories.builtInToolUse();
-            // No local directory: remote agents live in Supabase.
-            case 'remote':
-              return Effect.succeed(undefined);
-          }
-        },
+        getSourceDirectory: (source: AgentSource) =>
+          agentSourceDirectory(options.agentDirectories, source),
         selectCustomAgentDirectory: async () => {
           const result = await dialog.showOpenDialog(window, {
             title: 'Select Custom Agents Folder',

@@ -212,10 +212,8 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
     const controllers = createSettingsAgentControllers({
       workspaceState,
       globalState,
-      getCustomAgentDirectory: () =>
-        this.runtime.runPromise(directory.getCustomAgentDirectory()),
-      getSourceDirectory: (source) =>
-        this.runtime.runPromise(directory.getSourceDirectory(source)),
+      getCustomAgentDirectory: directory.getCustomAgentDirectory,
+      getSourceDirectory: directory.getSourceDirectory,
       getAgents: registry.getAgents,
       getVisibleAgents: registry.getVisibleAgents,
     });
@@ -368,9 +366,12 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
 
   private async postCustomAgentDir(): Promise<void> {
     this.renderer.postToRenderer(
-      await buildCustomAgentDirMessage({
-        getCustomDirStatus: () => this.directoryController.getCustomDirStatus(),
-      }),
+      await this.runtime.runPromise(
+        buildCustomAgentDirMessage({
+          getCustomDirStatus: () =>
+            this.directoryController.getCustomDirStatus(),
+        }),
+      ),
     );
   }
 
@@ -434,7 +435,9 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
   }
 
   private async openAgentFolder(): Promise<void> {
-    const result = await this.directoryController.planOpenAgentFolder('custom');
+    const result = await this.runtime.runPromise(
+      this.directoryController.planOpenAgentFolder('custom'),
+    );
     if (!result.ok) {
       await this.runtime.runPromise(
         this.notifications.showErrorMessage(

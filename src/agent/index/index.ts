@@ -13,6 +13,7 @@ export type { AgentSource } from '@shared/schemas';
 
 export {
   AgentDirectoryService,
+  agentSourceDirectory,
   type AgentDirectoryEntry,
 } from './AgentDirectoryService';
 
