@@ -15,12 +15,7 @@ import { RunLedger, RunLedgerRefused } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
 import { ensureError } from '@utils/errors/errorMessage';
 
-import { haltedStepRow } from './rows';
-
-type StepCoordinates = Pick<
-  RunState,
-  'family' | 'round' | 'turn' | 'continuationIndex'
->;
+import { haltedStepRow, type StepCoordinates } from './rows';
 
 /**
  * Records a run's `halted` step. A write failure only logs: the loop is
