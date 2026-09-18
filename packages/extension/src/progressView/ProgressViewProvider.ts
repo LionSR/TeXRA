@@ -467,40 +467,28 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     );
     onTexraAuthSessionsChanged(this.context, () => {
       if (isAgentCatalogAuthRefreshDeferred()) {
-        runAfterAgentCatalogAuthRefresh(() =>
-          this.runtime.runPromise(
-            Effect.all(
-              [
-                this.snapshot.refreshCatalogs,
-                this.snapshot.refreshAuth,
-                this.refreshOnboardingFunnel(),
-              ],
-              { concurrency: 'unbounded', discard: true },
-            ),
-          ),
-        );
+        runAfterAgentCatalogAuthRefresh(async () => {
+          await Promise.all([
+            this.runtime.runPromise(this.snapshot.refreshCatalogs),
+            this.runtime.runPromise(this.snapshot.refreshAuth),
+            this.runtime.runPromise(this.refreshOnboardingFunnel()),
+          ]);
+        });
         return;
       }
-      void this.runtime.runPromise(this.refreshAfterCredentialChange());
+      void this.refreshAfterCredentialChange();
     });
   }
 
-  /** Every credential-dependent surface: catalogs, sign-in, the funnel —
-   *  the last three refreshed together as the three promises were. */
-  private refreshAfterCredentialChange() {
-    return refresh().pipe(
-      Effect.andThen(
-        Effect.all(
-          [
-            this.snapshot.refreshCatalogs,
-            this.snapshot.refreshAuth,
-            this.snapshot.refreshHostBanners,
-            this.refreshOnboardingFunnel(),
-          ],
-          { concurrency: 'unbounded', discard: true },
-        ),
-      ),
-    );
+  /** Every credential-dependent surface: catalogs, sign-in, the funnel. */
+  private async refreshAfterCredentialChange(): Promise<void> {
+    await this.runtime.runPromise(refresh());
+    await Promise.all([
+      this.runtime.runPromise(this.snapshot.refreshCatalogs),
+      this.runtime.runPromise(this.snapshot.refreshAuth),
+      this.runtime.runPromise(this.snapshot.refreshHostBanners),
+      this.runtime.runPromise(this.refreshOnboardingFunnel()),
+    ]);
   }
 
   /** The agent, team, and model catalogs (`texra.refreshAllOptions`). */
