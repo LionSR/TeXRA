@@ -38,7 +38,7 @@ interface ControllerFixtureOptions {
   }) => Effect.Effect<void>;
   readonly promptText?: () => Promise<string | undefined>;
   readonly confirm?: () => Promise<boolean>;
-  readonly chooseTeamAvailability?: () => Promise<
+  readonly chooseTeamAvailability?: () => Effect.Effect<
     'cancel' | 'continue' | 'sign-in'
   >;
   readonly canAccessRemoteCatalog?: Effect.Effect<boolean>;
@@ -107,7 +107,7 @@ function createControllerFixture(options: ControllerFixtureOptions = {}) {
         return (await options.confirm?.()) ?? true;
       },
       chooseTeamAvailability:
-        options.chooseTeamAvailability ?? (async () => 'cancel'),
+        options.chooseTeamAvailability ?? (() => Effect.succeed('cancel')),
     },
     remoteCatalog: {
       canAccess: () => options.canAccessRemoteCatalog ?? Effect.succeed(false),
@@ -230,7 +230,7 @@ describe('DefaultDesktopAgentSettingsController', () => {
     const { catalogChanges, controller, infoMessages, posted, workspaceState } =
       createControllerFixture({
         catalog: physicistCatalog(),
-        chooseTeamAvailability: async () => 'continue',
+        chooseTeamAvailability: () => Effect.succeed('continue'),
       });
 
     await applyAgentPreset(controller, 'physicist');
@@ -272,7 +272,7 @@ describe('DefaultDesktopAgentSettingsController', () => {
       workspaceState,
       catalog,
       canAccessRemoteCatalog: Effect.succeed(false),
-      chooseTeamAvailability: async () => 'sign-in',
+      chooseTeamAvailability: () => Effect.succeed('sign-in'),
       signInForRemoteCatalog: () =>
         Effect.sync(() => {
           order.push('sign-in');
@@ -303,7 +303,7 @@ describe('DefaultDesktopAgentSettingsController', () => {
     const refreshAgents = vi.fn(() => Effect.void);
     const { controller } = createControllerFixture({
       workspaceState,
-      chooseTeamAvailability: async () => 'cancel',
+      chooseTeamAvailability: () => Effect.succeed('cancel'),
       refreshAgents,
     });
     update.mockClear();

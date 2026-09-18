@@ -29,6 +29,7 @@ import {
   primaryAgentError,
 } from '@common/errors/agentErrorClassification';
 import { SignInFailed } from '@common/errors/signInFailed';
+import { TeamCatalogPortFailed } from '@common/teams/TeamAvailabilityPreflight';
 import {
   teamAvailabilityPrompt,
   type TeamAvailabilityPrompt,
@@ -505,20 +506,31 @@ function createWindow(options: {
   /**
    * Sole owner of the native unavailable-member prompt. Both the main-view
    * launch path and settings path route here so wording and button labels
-   * cannot drift.
+   * cannot drift. The Electron dialog is the team-availability `choose`
+   * port's own foreign edge, so it is wrapped here once and raises the
+   * port's `TeamCatalogPortFailed`.
    */
-  const presentTeamAvailabilityPrompt = async (
+  const presentTeamAvailabilityPrompt = (
     prompt: TeamAvailabilityPrompt,
-  ): Promise<'sign-in' | 'continue' | 'cancel'> => {
-    const { response } = await dialog.showMessageBox(window, {
-      type: prompt.severity,
-      message: prompt.message,
-      buttons: prompt.actions.map((action) => action.label),
-      defaultId: 0,
-      cancelId: 2,
+  ): Effect.Effect<'sign-in' | 'continue' | 'cancel', TeamCatalogPortFailed> =>
+    Effect.tryPromise({
+      try: async () => {
+        const { response } = await dialog.showMessageBox(window, {
+          type: prompt.severity,
+          message: prompt.message,
+          buttons: prompt.actions.map((action) => action.label),
+          defaultId: 0,
+          cancelId: 2,
+        });
+        return prompt.actions[response]?.choice ?? 'cancel';
+      },
+      catch: (cause) =>
+        new TeamCatalogPortFailed({
+          member: 'choose',
+          message: `The host could not ask about the unavailable members: ${toErrorMessage(cause)}`,
+          cause,
+        }),
     });
-    return prompt.actions[response]?.choice ?? 'cancel';
-  };
   // Lightweight update check: at most once/day, notifies at most once per
   // release via a native dialog linking to the GitHub release page. Not a full
   // updater: no download, no install, no feed files. Disable with

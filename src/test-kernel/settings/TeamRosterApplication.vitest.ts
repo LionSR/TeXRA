@@ -51,7 +51,7 @@ function makeDeps(
     },
     loadLocalCatalog: () => Effect.void,
     canAccessRemoteCatalog: () => Effect.succeed(false),
-    choose: async () => 'cancel',
+    choose: () => Effect.succeed('cancel' as const),
     signIn: () => Effect.succeed(false),
     forceRefreshRemoteCatalog: () => Effect.void,
     ...rest,
@@ -84,10 +84,11 @@ describe('team roster application', () => {
             Effect.sync(() => {
               calls.push('local-load');
             }),
-          choose: async () => {
-            calls.push('choose');
-            return 'sign-in';
-          },
+          choose: () =>
+            Effect.sync(() => {
+              calls.push('choose');
+              return 'sign-in' as const;
+            }),
           signIn: () =>
             Effect.sync(() => {
               calls.push('sign-in');
@@ -164,7 +165,7 @@ describe('team roster application', () => {
           signIn: () => Effect.succeed(false),
           forceRefreshRemoteCatalog: () => Effect.void,
           presentation: {
-            chooseTeamAvailability: async () => 'cancel',
+            chooseTeamAvailability: () => Effect.succeed('cancel' as const),
             showErrorMessage: () => Effect.void,
             showInfoMessage: (message) =>
               Effect.sync(() => {
@@ -205,10 +206,11 @@ describe('team roster application', () => {
         signIn: () => Effect.succeed(true),
         forceRefreshRemoteCatalog: () => Effect.void,
         presentation: {
-          chooseTeamAvailability: async (prompt) => {
-            prompts.push(prompt);
-            return 'sign-in';
-          },
+          chooseTeamAvailability: (prompt) =>
+            Effect.sync(() => {
+              prompts.push(prompt);
+              return 'sign-in' as const;
+            }),
           showErrorMessage: (message) =>
             Effect.sync(() => {
               errors.push(message);

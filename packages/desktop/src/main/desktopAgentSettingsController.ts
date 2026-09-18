@@ -10,7 +10,10 @@ import {
   type loadAgents,
   type refresh,
 } from '@agent/index';
-import type { TeamAvailabilityChoice } from '@common/teams/TeamAvailabilityPreflight';
+import type {
+  TeamAvailabilityChoice,
+  TeamCatalogPortFailed,
+} from '@common/teams/TeamAvailabilityPreflight';
 import { type TeamAvailabilityPrompt } from '@common/teams/TeamPlan';
 import type { SignInFailed } from '@common/errors/signInFailed';
 import {
@@ -156,7 +159,10 @@ interface DefaultDesktopAgentSettingsControllerOptions extends SettingsStatePort
     }) => Promise<boolean>;
     readonly chooseTeamAvailability: (
       prompt: TeamAvailabilityPrompt,
-    ) => Promise<TeamAvailabilityChoice | undefined>;
+    ) => Effect.Effect<
+      TeamAvailabilityChoice | undefined,
+      TeamCatalogPortFailed
+    >;
   };
   /**
    * Root of the packaged resources tree, used to read the bundled agent

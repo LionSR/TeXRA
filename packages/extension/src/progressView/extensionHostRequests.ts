@@ -555,16 +555,13 @@ export function createExtensionHostRequests(
         request,
         {
           showInfoMessage: (message) => messages.showInfoMessage(message),
-          // The team-availability dialog is still a Promise port shared with
-          // the settings view, so it is lifted where it is passed.
-          chooseTeamAvailability: async (unavailableNames) => {
-            const prompt = teamAvailabilityPrompt(unavailableNames);
-            return (
-              (await chooseTeamAvailabilityViaDialog(prompt, {
-                modal: false,
-              })) ?? 'cancel'
-            );
-          },
+          // A dismissed launch notification is a cancellation here; the
+          // settings view keeps `undefined` as "ask again".
+          chooseTeamAvailability: (unavailableNames) =>
+            chooseTeamAvailabilityViaDialog(
+              teamAvailabilityPrompt(unavailableNames),
+              { modal: false },
+            ).pipe(Effect.map((choice) => choice ?? 'cancel')),
           signInForRemoteAgentCatalog: runSignInCommand,
         },
         session.roots.workspaceState,

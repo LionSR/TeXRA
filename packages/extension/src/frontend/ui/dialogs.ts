@@ -2,11 +2,14 @@
 import * as path from 'node:path';
 
 // Third-party imports
+import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports - utilities
+import { TeamCatalogPortFailed } from '@common/teams/TeamAvailabilityPreflight';
 import type { TeamAvailabilityPrompt } from '@common/teams/TeamPlan';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { workspaceRelativePath } from '@utils/files/workspaceFS';
 
 type TeamAvailabilityChoice =
@@ -93,30 +96,42 @@ export async function selectFiles(
  * Show a `TeamAvailabilityPrompt` as a native VS Code warning and map the
  * clicked label back to its `choice`. `modal: true` (the settings flow) shows
  * one dialog button per action; `modal: false` (the launch flow) shows a
- * lighter non-modal notification with the same button labels.
+ * lighter non-modal notification with the same button labels. The VS Code
+ * dialog is the team-availability `choose` port's own foreign edge, so it is
+ * wrapped here once and raises the port's `TeamCatalogPortFailed`.
  */
-export async function chooseTeamAvailabilityViaDialog(
+export function chooseTeamAvailabilityViaDialog(
   prompt: TeamAvailabilityPrompt,
   options: { readonly modal: boolean },
-): Promise<TeamAvailabilityChoice | undefined> {
-  if (options.modal) {
-    const items = prompt.actions.map((action) => ({
-      title: action.label,
-      isCloseAffordance: action.choice === 'cancel',
-    }));
-    const choice = await vscode.window.showWarningMessage(
-      prompt.message,
-      { modal: true },
-      ...items,
-    );
-    return prompt.actions.find((action) => action.label === choice?.title)
-      ?.choice;
-  }
-  const choice = await vscode.window.showWarningMessage(
-    prompt.message,
-    ...prompt.actions.map((action) => action.label),
-  );
-  return prompt.actions.find((action) => action.label === choice)?.choice;
+): Effect.Effect<TeamAvailabilityChoice | undefined, TeamCatalogPortFailed> {
+  return Effect.tryPromise({
+    try: async () => {
+      if (options.modal) {
+        const items = prompt.actions.map((action) => ({
+          title: action.label,
+          isCloseAffordance: action.choice === 'cancel',
+        }));
+        const choice = await vscode.window.showWarningMessage(
+          prompt.message,
+          { modal: true },
+          ...items,
+        );
+        return prompt.actions.find((action) => action.label === choice?.title)
+          ?.choice;
+      }
+      const choice = await vscode.window.showWarningMessage(
+        prompt.message,
+        ...prompt.actions.map((action) => action.label),
+      );
+      return prompt.actions.find((action) => action.label === choice)?.choice;
+    },
+    catch: (cause) =>
+      new TeamCatalogPortFailed({
+        member: 'choose',
+        message: `The host could not ask about the unavailable members: ${toErrorMessage(cause)}`,
+        cause,
+      }),
+  });
 }
 
 interface FolderDialogOptions {
