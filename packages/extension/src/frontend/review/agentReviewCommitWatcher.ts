@@ -19,7 +19,7 @@ import type { ProcessRuntime } from '@platform/processRuntime';
 import { createFlushableDebounce } from '@utils/core';
 import { isPathWithin } from '@utils/core/pathCore';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { getConfig } from '@utils/config/configUtils';
+import { readConfig } from '@utils/config/configUtils';
 
 import { AgentReviewService } from './AgentReviewService';
 
@@ -45,6 +45,11 @@ function watchRepository(
   if (watchedRoots.has(repoRoot)) return;
   watchedRoots.add(repoRoot);
 
+  // Read from the watched session's own configuration, not the roots the
+  // calling context carries: the watcher outlives the call that registered it.
+  const runOnCommit = () =>
+    readConfig<boolean>(session.roots.config, 'agentReview.runOnCommit', false);
+
   let lastName = repository.state.HEAD?.name;
   let lastCommit = repository.state.HEAD?.commit;
   /** Oldest un-reviewed base while commits coalesce in the debounce window. */
@@ -63,7 +68,7 @@ function watchRepository(
     if (!baseRef) return;
     // Re-check at fire time: the user may have disabled run-on-commit
     // during the debounce window, and a review costs a model session.
-    if (!getConfig<boolean>('agentReview.runOnCommit', false)) return;
+    if (!runOnCommit()) return;
     log.info(`Commit detected on ${name ?? 'HEAD'}; starting agent review`);
     void AgentReviewService.runReview('commit', {
       baseRef,
@@ -103,7 +108,7 @@ function watchRepository(
     const previousCommit = lastCommit;
     lastCommit = commit;
     if (previousCommit === undefined) return;
-    if (!getConfig<boolean>('agentReview.runOnCommit', false)) return;
+    if (!runOnCommit()) return;
 
     // Rapid commits (amend, rebase replays) coalesce into one review; keep
     // the OLDEST pending base so the combined run still covers every commit

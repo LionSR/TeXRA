@@ -1,8 +1,9 @@
 // Third-party imports
 
 // Local imports - formatter implementations
+import type { ConfigProvider } from '@platform/interfaces';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import { getConfig } from '@utils/config/configUtils';
+import { readConfig } from '@utils/config/configUtils';
 import { readPlatformSetting } from '@utils/config/platformSettings';
 
 // Local file imports
@@ -18,7 +19,7 @@ interface LatexFormatterDefinition {
   run(
     filePath: string,
     workspaceRoot: string | undefined,
-    configPath?: string,
+    configPath: string,
   ): Effect.Effect<boolean, never, FileSystem.FileSystem>;
 }
 
@@ -43,8 +44,14 @@ const LATEX_FORMATTERS: Record<string, LatexFormatterDefinition> = {
  * Resolve the configured LaTeX formatter, or null when formatting is
  * disabled. Unrecognized settings fall back to latexindent. Sole owner of the
  * formatter → runner + config-key mapping.
+ *
+ * `config` is the configuration of the workspace the caller is formatting,
+ * held as data, so the formatter's config-file path comes from that project
+ * rather than from whichever roots the calling context happens to carry.
  */
-export function resolveLatexFormatter(): LatexFormatter | null {
+export function resolveLatexFormatter(
+  config: ConfigProvider,
+): LatexFormatter | null {
   const formatter = readPlatformSetting<string>(
     WorkspaceStateKey.LATEX_FORMATTER,
   );
@@ -52,5 +59,8 @@ export function resolveLatexFormatter(): LatexFormatter | null {
     return null;
   }
   const selected = LATEX_FORMATTERS[formatter] ?? LATEX_FORMATTERS.latexindent;
-  return { ...selected, configPath: getConfig<string>(selected.configKey, '') };
+  return {
+    ...selected,
+    configPath: readConfig<string>(config, selected.configKey, ''),
+  };
 }

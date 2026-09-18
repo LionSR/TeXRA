@@ -7,7 +7,6 @@ import { sync as globSync } from 'glob';
 import { createLog } from '@logger/logUtils';
 import { runToolWithCheck } from '@utils/system/toolUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { getConfig } from '@utils/config/configUtils';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '../latexLogging';
 
 const log = createLog(CHANNEL);
@@ -74,16 +73,15 @@ const cleanupBackupFiles = Effect.fn('latex.cleanupBackupFiles')(function* (
 
 /**
  * `workspacePath` is the root a relative `filePath` resolves against and the
- * cwd latexindent runs in — the caller's own session root, held as data, not
+ * cwd latexindent runs in, and `latexindentConfig` the configured config-file
+ * path — the caller's own session root and configuration, held as data, not
  * the roots the calling fiber happens to carry.
  */
 export const runLatexIndent = Effect.fn('latex.runLatexIndent')(
   function* (
     filePath: string,
     workspacePath: string | undefined,
-    latexindentConfig: string | undefined = getConfig<string>(
-      LATEXINDENT_CONFIG_KEY,
-    ),
+    latexindentConfig: string,
   ) {
     // Resolve workspace-relative paths to absolute so cleanup works correctly.
     // Some callers (latexCommands, housekeeping/indent) pass relative paths.

@@ -132,6 +132,7 @@ describe('buildUserVars runtime skill diagnostics', () => {
       {
         workspacePath: fakePath('workspace'),
         storageRoot: workspaceRoots().storage,
+        config: workspaceRoots().config,
       },
     );
 
@@ -156,6 +157,7 @@ describe('buildUserVars runtime skill diagnostics', () => {
       {
         workspacePath: fakePath('workspace'),
         storageRoot: workspaceRoots().storage,
+        config: workspaceRoots().config,
       },
     );
 
@@ -193,6 +195,7 @@ describe('buildUserVars runtime skill diagnostics', () => {
       {
         workspacePath: fakePath('workspace'),
         storageRoot: workspaceRoots().storage,
+        config: workspaceRoots().config,
       },
     );
 
@@ -221,6 +224,7 @@ describe('buildUserVars runtime skill diagnostics', () => {
       {
         workspacePath: fakePath('workspace'),
         storageRoot: workspaceRoots().storage,
+        config: workspaceRoots().config,
       },
     );
 
@@ -300,6 +304,7 @@ function buildVars(
     {
       workspacePath: fakePath('workspace'),
       storageRoot: workspaceRoots().storage,
+      config: workspaceRoots().config,
     },
   );
 }

@@ -532,6 +532,7 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
           // folder rather than whatever roots the calling fiber carries.
           workspacePath: session.roots.workspace,
           storageRoot: session.roots.storage,
+          config: session.roots.config,
           delegationAgentScope: config.delegationAgentScope,
           stageId,
         },

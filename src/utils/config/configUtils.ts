@@ -3,7 +3,13 @@ import type { ConfigProvider } from '@platform/interfaces';
 import { tryWorkspaceRoots, workspaceRoots } from '@platform/workspaceRoots';
 
 /**
- * Gets a value from the host's native TeXRA configuration.
+ * {@link readConfig} over the calling context's roots, for the callers that
+ * hold no workspace of their own: the replacement engine's policy default
+ * (reached from a `LaTeXdiffService` constructed without roots) and the
+ * process-level Zotero availability probe. Every caller that holds its
+ * workspace — a tool call's `roots`, a run's session, a host command's
+ * session — reads through {@link readConfig} instead, so this ambient read
+ * shrinks as those two get an owner rather than growing new callers.
  *
  * Path conventions:
  * - Use dot notation with or without the canonical `texra.` prefix.
@@ -41,8 +47,9 @@ export function readConfig<T>(
 
 /**
  * Read configuration for an explicitly pre-initialization caller. Keep this
- * exception narrow: ordinary product paths must use {@link getConfig} so an
- * initialization-order defect remains observable.
+ * exception narrow: ordinary product paths must read through
+ * {@link readConfig} (or {@link getConfig}) so an initialization-order defect
+ * remains observable.
  */
 export function getConfigBeforePlatformInit<T>(
   path: string,
