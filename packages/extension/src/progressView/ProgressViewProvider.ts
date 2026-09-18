@@ -70,7 +70,8 @@ import { getLinterMessages } from '@frontend/latex/linter';
 import { AgentReviewService } from '@frontend/review/AgentReviewService';
 import { createLog, isDebugModeEnabled } from '@logger/logUtils';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
-import type { StateStore } from '@platform/interfaces';
+import type { StateStore, StateWriteFailed } from '@platform/interfaces';
+import type { LanguageModel } from '@platform/languageModel';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import {
@@ -436,7 +437,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
 
   public async initialize(): Promise<void> {
     await this.runtime.runPromise(this.snapshot.refresh);
-    await this.refreshOnboardingFunnel();
+    await this.runtime.runPromise(this.refreshOnboardingFunnel());
     this.logger.debug('ProgressViewProvider initialized');
   }
 
@@ -477,7 +478,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
           await Promise.all([
             this.runtime.runPromise(this.snapshot.refreshCatalogs),
             this.runtime.runPromise(this.snapshot.refreshAuth),
-            this.refreshOnboardingFunnel(),
+            this.runtime.runPromise(this.refreshOnboardingFunnel()),
           ]);
         });
         return;
@@ -493,7 +494,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       this.runtime.runPromise(this.snapshot.refreshCatalogs),
       this.runtime.runPromise(this.snapshot.refreshAuth),
       this.runtime.runPromise(this.snapshot.refreshHostBanners),
-      this.refreshOnboardingFunnel(),
+      this.runtime.runPromise(this.refreshOnboardingFunnel()),
     ]);
   }
 
@@ -525,8 +526,12 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   }
 
   /** Recompute the user-scoped funnel; the shared refresher owns the loop. */
-  public refreshOnboardingFunnel(): Promise<void> {
-    return this.runtime.runPromise(this.onboardingFunnel.run());
+  public refreshOnboardingFunnel(): Effect.Effect<
+    void,
+    StateWriteFailed,
+    LanguageModel
+  > {
+    return this.onboardingFunnel.run();
   }
 
   // --- Ports ---

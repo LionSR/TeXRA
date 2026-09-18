@@ -86,7 +86,10 @@ import {
   type DesktopLatexdiffRunContext,
   type DesktopLatexdiffWorkspaceScan,
 } from './desktopProgressFileActions.js';
-import type { DesktopOnboardingIpc } from './desktopOnboardingIpc.js';
+import {
+  OnboardingCallFailed,
+  type DesktopOnboardingIpc,
+} from './desktopOnboardingIpc.js';
 import type { PreviewUnavailable } from './desktopPreviewHost.js';
 import type { DesktopAgentRun } from './desktopAgentRun.js';
 import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
@@ -677,27 +680,19 @@ export function createDesktopHostRequests(
     Effect.gen(function* () {
       switch (action) {
         case 'signInChatGpt':
-          yield* fromHost('onboarding.signInWithChatGpt', () =>
-            options.onboarding.signInWithChatGpt(),
-          );
+          yield* options.onboarding.signInWithChatGpt();
           return;
         case 'setApiKey':
           postDesktopSettingsView(options.postToRenderer, 'models');
           return;
         case 'skip':
-          yield* fromHost('onboarding.skipOnboarding', () =>
-            options.onboarding.skipOnboarding(),
-          );
+          yield* options.onboarding.skipOnboarding();
           return;
         case 'runSetup':
-          yield* fromHost('onboarding.runSetup', () =>
-            options.onboarding.runSetup(),
-          );
+          yield* options.onboarding.runSetup();
           return;
         case 'skipSetup':
-          yield* fromHost('onboarding.skipSetup', () =>
-            options.onboarding.skipSetup(),
-          );
+          yield* options.onboarding.skipSetup();
           return;
         case 'openGettingStarted':
           yield* options.openExternalUrl(DESKTOP_DOCS_URL);
@@ -930,6 +925,7 @@ export function createDesktopHostRequests(
         // own error, as it did when that value reached here bare.
         const primaryError = primaryAgentError(
           error instanceof HostCallFailed ||
+            error instanceof OnboardingCallFailed ||
             error instanceof RunLaunchFailed ||
             error instanceof RunConfigUnreadable ||
             error instanceof TranscriptExportFailed

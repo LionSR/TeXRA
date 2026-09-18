@@ -63,7 +63,12 @@ import {
   modelOptionsFrom,
   readModelAvailabilityInputs,
 } from '@model/computeModelOptions';
-import type { AgentDirectoriesFailed, StateStore } from '@platform/interfaces';
+import type {
+  AgentDirectoriesFailed,
+  StateStore,
+  StateWriteFailed,
+} from '@platform/interfaces';
+import type { LanguageModel } from '@platform/languageModel';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import {
   withSessionFs,
@@ -162,7 +167,11 @@ interface ExtensionHostRequestsOptions {
   showInSidebar(): Promise<void>;
   /** The onboarding funnel recomputes after an action that changes its
    *  inputs (a key stored, a sign-in, the setup assistant run). */
-  refreshOnboardingFunnel(): Promise<void>;
+  refreshOnboardingFunnel(): Effect.Effect<
+    void,
+    StateWriteFailed,
+    LanguageModel
+  >;
 }
 
 interface ExtensionHostRequests {
@@ -815,7 +824,7 @@ export function createExtensionHostRequests(
 
   /** The onboarding funnel recomputed after an action that changed its
    *  inputs. */
-  const refreshOnboardingFunnel = fromHost('refreshOnboardingFunnel', () =>
+  const refreshOnboardingFunnel = Effect.suspend(() =>
     options.refreshOnboardingFunnel(),
   );
 
