@@ -34,6 +34,7 @@ import {
   isInlineCriticismEnabled,
   setInlineCriticismEnabled,
 } from '@frontend/latex/inlineCriticism';
+import { VscodeMessageHost } from '@frontend/hosts/VscodeMessageHost';
 import { VscodePromptHost } from '@frontend/hosts/VscodePromptHost';
 import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { acquireVscodeLanguageModel } from '@frontend/lm/acquireVscodeLanguageModel';
@@ -59,9 +60,10 @@ import {
   refreshRuntimeModelRegistry,
 } from '@model/runtimeModelRegistry';
 import { setCopilotRoutePreference } from '@model/copilotRouting';
+import { NotificationFailed } from '@hosts/uiHosts';
 import type { StateStore } from '@platform/interfaces';
 import type { LanguageModel } from '@platform/languageModel';
-import type { ProcessRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import { revealProgressRun } from '@progressView/progressNavigation';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
@@ -101,13 +103,18 @@ import {
 } from '@tools/toolAvailability';
 import { goalList } from '@tools/goal';
 import { getProviderKeyUrl } from '@utils/config/providerConfig';
+import { ensureError } from '@utils/errors/errorMessage';
 import { setToolEnabled } from '@utils/config/constants';
 import { AgentHandlers } from './handlers/agentHandlers';
 import { LatexSettingsHandlers } from './handlers/latexSettingsHandlers';
 import { MemoryHandlers } from './handlers/memoryHandlers';
 import { GitHubSubscriptionHandlers } from './handlers/githubSubscriptionHandlers';
 import { SubscriptionHandlers } from './handlers/subscriptionHandlers';
-import type { SettingsHandlerContext } from './handlers/SettingsHandlerContext';
+import {
+  allSettledVoid,
+  postToWebview,
+  type SettingsHandlerContext,
+} from './handlers/SettingsHandlerContext';
 
 /** The webview shapes SettingsView dispatches for. */
 type SettingsWebview = vscode.WebviewView | vscode.WebviewPanel;
@@ -144,7 +151,9 @@ export class SettingsViewMessageHandler {
   private readonly memoryController: SettingsMemoryController;
   private readonly modelSelectionController: SettingsModelSelectionController<LanguageModel>;
   private readonly profileController: SettingsProfileController;
-  private readonly profileKeyController: SettingsProfileKeyController;
+  private readonly profileKeyController: SettingsProfileKeyController<ProcessServices>;
+  /** The typed notification surface this view's dispatcher reports on. */
+  private readonly messages = new VscodeMessageHost();
   private readonly subscriptionUsage: SubscriptionUsageService;
 
   constructor(
@@ -191,13 +200,16 @@ export class SettingsViewMessageHandler {
         getProviderKeyUrl(session.roots, provider),
       refreshAfterKeyChange: (provider) =>
         this.refreshAfterProviderKeyChange(provider),
-      reportFailure: async (message, error) => {
-        await showLoggedErrorMessage(this.channel, message, error);
-        // On error, still refresh settings view to reflect current key state.
-        await this.withActiveWebview((w) =>
-          this.sendProfileAndModelSelectionData(w),
-        );
-      },
+      reportFailure: (message, error) =>
+        Effect.gen({ self: this }, function* () {
+          yield* Effect.promise(() =>
+            showLoggedErrorMessage(this.channel, message, error),
+          );
+          // On error, still refresh settings view to reflect current key state.
+          yield* this.withActiveWebview((w) =>
+            this.sendProfileAndModelSelectionData(w),
+          );
+        }).pipe(Effect.orDie),
     });
     this.agentHandlers = new AgentHandlers(
       ctx,
@@ -207,29 +219,21 @@ export class SettingsViewMessageHandler {
           agentCatalogAlreadyFresh,
         ),
       session.roots,
-      this.runtime,
     );
     this.latexHandlers = new LatexSettingsHandlers(ctx, this.runtime);
     this.memoryHandlers = new MemoryHandlers(
       ctx,
       this.memoryController,
       this.viewName,
-      this.runtime,
       session,
     );
-    this.githubHandlers = new GitHubSubscriptionHandlers(
-      ctx,
-      secrets,
-      this.runtime,
-    );
+    this.githubHandlers = new GitHubSubscriptionHandlers(ctx, secrets);
     this.chatgptHandlers = new SubscriptionHandlers(
       'chatgpt',
-      async () => ({
+      Effect.map(getChatGptAuthStatus(session.roots, secrets), (status) => ({
         command: SETTINGS_VIEW_COMMANDS.UPDATE_CHATGPT_AUTH_STATUS,
-        status: await this.runtime.runPromise(
-          getChatGptAuthStatus(session.roots, secrets),
-        ),
-      }),
+        status,
+      })),
       ctx,
       secrets,
       () => this.refreshAfterSubscriptionAuthChange('chatgpt'),
@@ -238,12 +242,10 @@ export class SettingsViewMessageHandler {
     );
     this.grokHandlers = new SubscriptionHandlers(
       'grok',
-      async () => ({
+      Effect.map(getGrokAuthStatus(session.roots, secrets), (status) => ({
         command: SETTINGS_VIEW_COMMANDS.UPDATE_GROK_AUTH_STATUS,
-        status: await this.runtime.runPromise(
-          getGrokAuthStatus(session.roots, secrets),
-        ),
-      }),
+        status,
+      })),
       ctx,
       secrets,
       () => this.refreshAfterSubscriptionAuthChange(),
@@ -255,15 +257,19 @@ export class SettingsViewMessageHandler {
     context.subscriptions.push(
       {
         dispose: appSignals.on('githubSubscriptionsChanged', () => {
-          void this.withActiveWebview((w) =>
-            this.githubHandlers.sendPRSubscriptions(w),
+          this.runtime.runFork(
+            this.withActiveWebview((w) =>
+              this.githubHandlers.sendPRSubscriptions(w),
+            ),
           );
         }),
       },
       {
         dispose: appSignals.on('toolAvailabilityChanged', () => {
-          void this.withActiveWebview((w) =>
-            this.sendToolDashboardData(w, { skipChecks: true }),
+          this.runtime.runFork(
+            this.withActiveWebview((w) =>
+              this.sendToolDashboardData(w, { skipChecks: true }),
+            ),
           );
         }),
       },
@@ -275,13 +281,15 @@ export class SettingsViewMessageHandler {
         // listener would rescan the YAML and re-fetch the remote catalog on
         // every roster write.
         dispose: appSignals.on('agentRosterChanged', () => {
-          void this.refreshAfterAgentMutation(undefined, true);
+          this.runtime.runFork(this.refreshAfterAgentMutation(undefined, true));
         }),
       },
       {
         dispose: appSignals.on('languageModelsChanged', () => {
-          void this.withActiveWebview((webview) =>
-            this.sendModelSelectionData(webview),
+          this.runtime.runFork(
+            this.withActiveWebview((webview) =>
+              this.sendModelSelectionData(webview),
+            ),
           );
         }),
       },
@@ -289,7 +297,9 @@ export class SettingsViewMessageHandler {
     const unsubscribeGoals = subscribeGoalStateChanges(
       session,
       () => {
-        void this.withActiveWebview((w) => this.sendGoalList(w));
+        this.runtime.runFork(
+          this.withActiveWebview((w) => this.sendGoalList(w)),
+        );
       },
       this.runtime,
     );
@@ -304,185 +314,223 @@ export class SettingsViewMessageHandler {
    */
   public signInSubscription(providerId: SubscriptionProviderId): Promise<void> {
     const handlers = { chatgpt: this.chatgptHandlers, grok: this.grokHandlers };
-    return handlers[providerId].handleSignIn();
+    return this.runtime.runPromise(handlers[providerId].handleSignIn());
   }
 
+  /**
+   * The inbound registry: one settled program per message arm. Every handler
+   * below hands back an `Effect`, and `runPromise` here is the R1 boundary —
+   * the dispatcher's own `MessageHandler` contract is promise-shaped, so this
+   * is the single place a settings message is run.
+   */
   private createHandlerRegistry(
     context: vscode.ExtensionContext,
   ): SettingsViewInboundHandlerRegistry {
+    const run = <A, E>(
+      program: Effect.Effect<A, E, ProcessServices>,
+    ): Promise<A> => this.runtime.runPromise(program);
     return {
-      webviewReady: () => this.withActiveWebview((w) => this.sendAllData(w)),
+      webviewReady: () =>
+        run(this.withActiveWebview((w) => this.sendAllData(w))),
       getMemoryData: () =>
-        this.withActiveWebview((w) => this.memoryHandlers.sendMemoryData(w)),
+        run(
+          this.withActiveWebview((w) => this.memoryHandlers.sendMemoryData(w)),
+        ),
       getMemoryPreview: (message) =>
-        this.memoryHandlers.handleGetMemoryPreview(message),
+        run(this.memoryHandlers.handleGetMemoryPreview(message)),
       openMemoryFile: (message) =>
-        this.memoryHandlers.handleOpenMemoryFile(message),
-      openMemoryFolder: () => this.memoryHandlers.handleOpenMemoryFolder(),
+        run(this.memoryHandlers.handleOpenMemoryFile(message)),
+      openMemoryFolder: () => run(this.memoryHandlers.handleOpenMemoryFolder()),
       deleteMemory: (message) =>
-        this.memoryHandlers.handleDeleteMemory(message),
+        run(this.memoryHandlers.handleDeleteMemory(message)),
       pinMemory: (message) =>
-        this.memoryHandlers.setMemoryPinned(message.storagePath, true),
+        run(this.memoryHandlers.setMemoryPinned(message.storagePath, true)),
       unpinMemory: (message) =>
-        this.memoryHandlers.setMemoryPinned(message.storagePath, false),
+        run(this.memoryHandlers.setMemoryPinned(message.storagePath, false)),
       signIn: () =>
         safeExecuteCommand(AUTH_COMMANDS.SIGN_IN, [], this.viewName),
       signOut: () =>
         safeExecuteCommand(AUTH_COMMANDS.SIGN_OUT, [], this.viewName),
       setProviderKey: (message) =>
-        this.runtime.runPromise(
-          this.profileKeyController.setProviderKey(message.provider),
-        ),
+        run(this.profileKeyController.setProviderKey(message.provider)),
       removeProviderKey: (message) =>
-        this.runtime.runPromise(
-          this.profileKeyController.removeProviderKey(message.provider),
-        ),
+        run(this.profileKeyController.removeProviderKey(message.provider)),
       openProviderKeyUrl: (message) =>
-        this.runtime.runPromise(
-          this.profileKeyController.openProviderKeyUrl(message.provider),
-        ),
-      openExternalUrl: (message) => this.openExternalUrl(message.url),
+        run(this.profileKeyController.openProviderKeyUrl(message.provider)),
+      openExternalUrl: (message) => run(this.openExternalUrl(message.url)),
       setModelEnabled: (message) =>
-        this.setModelEnabled(message.modelName, message.enabled),
-      setModelReasoningLevel: async (message) => {
-        await this.runtime.runPromise(
-          this.modelSelectionController.setReasoningLevel({
-            modelName: message.modelName,
-            level: message.level,
+        run(this.setModelEnabled(message.modelName, message.enabled)),
+      setModelReasoningLevel: (message) =>
+        run(
+          Effect.gen({ self: this }, function* () {
+            yield* this.modelSelectionController.setReasoningLevel({
+              modelName: message.modelName,
+              level: message.level,
+            });
+            yield* this.postModelSelectionData();
           }),
-        );
-        await this.postModelSelectionData();
-      },
+        ),
       requestModelAccess: (message) =>
         this.handleRequestModelAccess(message.modelName, context),
       clearCopilotRoute: (message) =>
-        this.handleClearCopilotRoute(message.modelName),
+        run(this.handleClearCopilotRoute(message.modelName)),
       setAgentEnabled: (message) =>
-        this.agentHandlers.handleSetAgentEnabled(message),
+        run(this.agentHandlers.handleSetAgentEnabled(message)),
       setAllAgentsEnabled: (message) =>
-        this.agentHandlers.handleSetAllAgentsEnabled(message),
+        run(this.agentHandlers.handleSetAllAgentsEnabled(message)),
       openAgentYaml: (message) =>
-        this.agentHandlers.runAgentFileAction(
-          'openAgentYaml',
-          this.agentHandlers.agentActions.openAgentYaml(message),
+        run(
+          this.agentHandlers.runAgentFileAction(
+            'openAgentYaml',
+            this.agentHandlers.agentActions.openAgentYaml(message),
+          ),
         ),
       openAgentFolder: (message) =>
-        this.agentHandlers.handleOpenAgentFolder(message),
-      createAgent: (message) => this.agentHandlers.handleCreateAgent(message),
+        run(this.agentHandlers.handleOpenAgentFolder(message)),
+      createAgent: (message) =>
+        run(this.agentHandlers.handleCreateAgent(message)),
       customizeAgent: (message) =>
-        this.agentHandlers.runAgentFileAction(
-          'customizeAgent',
-          this.agentHandlers.agentActions.customizeAgent(message),
+        run(
+          this.agentHandlers.runAgentFileAction(
+            'customizeAgent',
+            this.agentHandlers.agentActions.customizeAgent(message),
+          ),
         ),
       deleteCustomAgent: (message) =>
-        this.agentHandlers.handleDeleteCustomAgent(message),
+        run(this.agentHandlers.handleDeleteCustomAgent(message)),
       revealAgentFile: (message) =>
-        this.agentHandlers.runAgentFileAction(
-          'revealAgentFile',
-          this.agentHandlers.agentActions.revealAgentFile(message),
+        run(
+          this.agentHandlers.runAgentFileAction(
+            'revealAgentFile',
+            this.agentHandlers.agentActions.revealAgentFile(message),
+          ),
         ),
       viewRemoteAgentPrompt: (message) =>
-        this.agentHandlers.handleViewRemoteAgentPrompt(message),
-      setCustomAgentDir: () => this.agentHandlers.handleSetCustomAgentDir(),
-      resetCustomAgentDir: () => this.agentHandlers.handleResetCustomAgentDir(),
+        run(this.agentHandlers.handleViewRemoteAgentPrompt(message)),
+      setCustomAgentDir: () =>
+        run(this.agentHandlers.handleSetCustomAgentDir()),
+      resetCustomAgentDir: () =>
+        run(this.agentHandlers.handleResetCustomAgentDir()),
       applyAgentModePreset: (message) =>
-        this.agentHandlers.handleApplyAgentModePreset(message),
-      saveAgentModePreset: () => this.agentHandlers.handleSaveAgentModePreset(),
+        run(this.agentHandlers.handleApplyAgentModePreset(message)),
+      saveAgentModePreset: () =>
+        run(this.agentHandlers.handleSaveAgentModePreset()),
       deleteAgentModePreset: (message) =>
-        this.agentHandlers.handleDeleteAgentModePreset(message),
+        run(this.agentHandlers.handleDeleteAgentModePreset(message)),
       getGitHubTokenStatus: () =>
-        this.withActiveWebview((w) =>
-          this.githubHandlers.sendGitHubTokenStatus(w),
+        run(
+          this.withActiveWebview((w) =>
+            this.githubHandlers.sendGitHubTokenStatus(w),
+          ),
         ),
-      setGitHubToken: () => this.githubHandlers.handleSetGitHubToken(),
-      removeGitHubToken: () => this.githubHandlers.handleRemoveGitHubToken(),
-      openGitHubTokenUrl: () => this.githubHandlers.openGitHubTokenUrl(),
+      setGitHubToken: () => run(this.githubHandlers.handleSetGitHubToken()),
+      removeGitHubToken: () =>
+        run(this.githubHandlers.handleRemoveGitHubToken()),
+      openGitHubTokenUrl: () => run(this.githubHandlers.openGitHubTokenUrl()),
       getPRSubscriptions: () =>
-        this.withActiveWebview((w) =>
-          this.githubHandlers.sendPRSubscriptions(w),
+        run(
+          this.withActiveWebview((w) =>
+            this.githubHandlers.sendPRSubscriptions(w),
+          ),
         ),
       unsubscribePR: (message) =>
         this.githubHandlers.handleUnsubscribePR(message),
       openPRSubscriptionStream: (message) =>
-        this.githubHandlers.handleOpenPRSubscriptionStream(message),
-      signInChatGpt: () => this.chatgptHandlers.handleSignIn(),
-      signOutChatGpt: () => this.chatgptHandlers.handleSignOut(),
+        run(this.githubHandlers.handleOpenPRSubscriptionStream(message)),
+      signInChatGpt: () => run(this.chatgptHandlers.handleSignIn()),
+      signOutChatGpt: () => run(this.chatgptHandlers.handleSignOut()),
       setChatGptPreferSubscription: (message) =>
-        this.chatgptHandlers.handleSetPreferSubscription(message.enabled),
-      signInGrok: () => this.grokHandlers.handleSignIn(),
-      signOutGrok: () => this.grokHandlers.handleSignOut(),
+        run(this.chatgptHandlers.handleSetPreferSubscription(message.enabled)),
+      signInGrok: () => run(this.grokHandlers.handleSignIn()),
+      signOutGrok: () => run(this.grokHandlers.handleSignOut()),
       setGrokPreferSubscription: (message) =>
-        this.grokHandlers.handleSetPreferSubscription(message.enabled),
+        run(this.grokHandlers.handleSetPreferSubscription(message.enabled)),
       getSubscriptionUsage: (message) =>
-        this.withActiveWebview((webview) =>
-          this.sendSubscriptionUsage(webview, message.forceRefresh ?? false),
+        run(
+          this.withActiveWebview((webview) =>
+            this.sendSubscriptionUsage(webview, message.forceRefresh ?? false),
+          ),
         ),
       updateStateSetting: (message) =>
-        this.updateStateSetting(message.key, message.value),
-      openToolInstallUrl: (message) => this.openExternalUrl(message.url),
+        run(this.updateStateSetting(message.key, message.value)),
+      openToolInstallUrl: (message) => run(this.openExternalUrl(message.url)),
       installToolExtension: (message) =>
-        this.latexHandlers.installExtension(message.extensionId),
+        run(this.latexHandlers.installExtension(message.extensionId)),
       recheckToolStatus: () =>
-        this.runtime.runPromise(
+        run(
           refreshToolAvailability({
             workspaceRoot: this.session.roots.workspace,
             config: this.session.roots.config,
           }),
         ),
-      toggleTool: async (message) => {
-        await this.runtime.runPromise(
-          setToolEnabled(message.toolId, message.enabled, this.globalState),
-        );
-        await this.withActiveWebview((w) =>
-          this.sendToolDashboardData(w, { skipChecks: true }),
-        );
-      },
+      toggleTool: (message) =>
+        run(
+          Effect.gen({ self: this }, function* () {
+            yield* setToolEnabled(
+              message.toolId,
+              message.enabled,
+              this.globalState,
+            );
+            yield* this.withActiveWebview((w) =>
+              this.sendToolDashboardData(w, { skipChecks: true }),
+            );
+          }),
+        ),
       runToolCommand: (message) => this.handleRunToolCommand(message),
       applyLatexSettings: (message) =>
-        this.latexHandlers.handleApplyLatexSettings(message),
+        run(this.latexHandlers.handleApplyLatexSettings(message)),
       installLatexWorkshop: () =>
-        this.latexHandlers.handleInstallLatexWorkshop(),
+        run(this.latexHandlers.handleInstallLatexWorkshop()),
       runInstallCommand: (message) =>
-        this.latexHandlers.handleRunInstallCommand(message),
+        run(this.latexHandlers.handleRunInstallCommand(message)),
       getInlineCriticismEnabled: () =>
-        this.withActiveWebview((w) => this.sendInlineCriticismEnabled(w)),
+        run(this.withActiveWebview((w) => this.sendInlineCriticismEnabled(w))),
       setInlineCriticismEnabled: (message) =>
-        this.handleSetInlineCriticismEnabled(message.enabled),
-      getGoalList: () => this.withActiveWebview((w) => this.sendGoalList(w)),
+        run(this.handleSetInlineCriticismEnabled(message.enabled)),
+      getGoalList: () =>
+        run(this.withActiveWebview((w) => this.sendGoalList(w))),
       revealGoalRun: async (message) => {
         await revealProgressRun(message.runId);
       },
     };
   }
 
-  public async sendGoalList(webview: vscode.Webview): Promise<void> {
-    const result = await this.runtime.runPromiseExit(
-      Effect.tryPromise({
-        try: () =>
-          webview.postMessage({
-            command: SETTINGS_VIEW_COMMANDS.UPDATE_GOAL_LIST,
-            items: goalList(this.session),
-          }),
-        catch: (error) => error,
-      }).pipe(
-        Effect.flatMap((delivered) =>
-          delivered
-            ? Effect.void
-            : Effect.fail(new Error('settings webview is no longer available')),
+  public sendGoalList(webview: vscode.Webview): Effect.Effect<void> {
+    return Effect.gen({ self: this }, function* () {
+      const result = yield* Effect.exit(
+        Effect.tryPromise({
+          try: () =>
+            webview.postMessage({
+              command: SETTINGS_VIEW_COMMANDS.UPDATE_GOAL_LIST,
+              items: goalList(this.session),
+            }),
+          catch: (error) => error,
+        }).pipe(
+          Effect.flatMap((delivered) =>
+            delivered
+              ? Effect.void
+              : Effect.fail(
+                  new Error('settings webview is no longer available'),
+                ),
+          ),
         ),
-      ),
-    );
-    if (Exit.isFailure(result)) {
-      const reason =
-        result.cause.reasons.length === 1 ? result.cause.reasons[0] : undefined;
-      await showLoggedErrorMessage(
-        this.channel,
-        'Failed to load goals',
-        reason && Cause.isFailReason(reason)
-          ? reason.error
-          : new Error(Cause.pretty(result.cause), { cause: result.cause }),
       );
-    }
+      if (Exit.isFailure(result)) {
+        const reason =
+          result.cause.reasons.length === 1
+            ? result.cause.reasons[0]
+            : undefined;
+        yield* Effect.promise(() =>
+          showLoggedErrorMessage(
+            this.channel,
+            'Failed to load goals',
+            reason && Cause.isFailReason(reason)
+              ? reason.error
+              : new Error(Cause.pretty(result.cause), { cause: result.cause }),
+          ),
+        );
+      }
+    });
   }
 
   private handleRunToolCommand(
@@ -528,35 +576,53 @@ export class SettingsViewMessageHandler {
     };
   }
 
-  /** Run a callback with the active view's webview, if available. */
-  private async withActiveWebview(
-    fn: (webview: vscode.Webview) => Promise<void> | void,
-  ): Promise<void> {
-    const view = this.activeView;
-    if (view) await fn(view.webview);
+  /**
+   * Run a program with the active view's webview, if available. The active
+   * view is read when the program runs, not when it is built: a panel
+   * disposed between a mutation and its refresh leaves nothing to post to.
+   */
+  private withActiveWebview<E, R>(
+    fn: (webview: vscode.Webview) => Effect.Effect<void, E, R>,
+  ): Effect.Effect<void, E, R> {
+    return Effect.suspend(() => {
+      const view = this.activeView;
+      return view ? fn(view.webview) : Effect.void;
+    });
   }
 
   /**
-   * Post a message to the active view's webview, awaiting delivery. A `null`
-   * or `undefined` message posts nothing, so callers can forward an optional
-   * response payload without a guard of their own. This resolves only after
+   * Post a message to the active view's webview. A `null` or `undefined`
+   * message posts nothing, so callers can forward an optional response
+   * payload without a guard of their own. The program completes only after
    * the post settles — mutation paths that run a follow-up step depend on
    * that ordering.
    */
-  private async postMessageToActiveWebview(message: unknown): Promise<void> {
-    if (message == null) return;
-    await this.withActiveWebview(async (webview) => {
-      await webview.postMessage(message);
-    });
+  private postMessageToActiveWebview(
+    message: unknown,
+  ): Effect.Effect<void, Error> {
+    return message == null
+      ? Effect.void
+      : this.withActiveWebview((webview) => postToWebview(webview, message));
   }
 
-  /** Keep a failed notification from becoming an unhandled host rejection. */
-  private reportNotificationFailure(notification: PromiseLike<unknown>): void {
-    void notification.then(undefined, (error: unknown) => {
-      this.log.error('Failed to display message notification', {
-        data: error,
-      });
-    });
+  /**
+   * Show one dispatcher-level notice on a detached fiber. The notice is the
+   * host's typed notification program, so a VS Code message surface that
+   * refuses it arrives as `NotificationFailed` and is logged, rather than
+   * leaving a rejected thenable nobody awaited.
+   */
+  private forkNotice(notice: Effect.Effect<void, NotificationFailed>): void {
+    this.runtime.runFork(
+      notice.pipe(
+        Effect.catchTag('NotificationFailed', (failure) =>
+          Effect.sync(() => {
+            this.log.error('Failed to display message notification', {
+              data: failure.cause,
+            });
+          }),
+        ),
+      ),
+    );
   }
 
   /**
@@ -584,15 +650,13 @@ export class SettingsViewMessageHandler {
         // feedback (toast), not a silent drop or an error-level log.
         unsupported = true;
         this.log.debug(error.message);
-        this.reportNotificationFailure(
-          vscode.window.showInformationMessage(error.reason),
-        );
+        this.forkNotice(this.messages.showInfoMessage(error.reason));
       } else {
         this.log.error('Error handling message', {
           data: error,
         });
-        this.reportNotificationFailure(
-          vscode.window.showErrorMessage(
+        this.forkNotice(
+          this.messages.showErrorMessage(
             `TeXRA could not handle a ${this.viewName} message. See the TeXRA output for details.`,
           ),
         );
@@ -620,88 +684,89 @@ export class SettingsViewMessageHandler {
   // Full refresh — SettingsViewProvider's entry point
   // ============================================================
 
-  public async sendAllData(webview: vscode.Webview): Promise<void> {
-    // Tool dashboard involves network I/O (Zotero probe, etc.) — fire async
-    // so it doesn't block the initial render. The frontend shows a loading
-    // spinner until data arrives.
-    void this.sendToolDashboardData(webview);
+  public sendAllData(
+    webview: vscode.Webview,
+  ): Effect.Effect<void, Error, ProcessServices> {
+    return Effect.gen({ self: this }, function* () {
+      // Tool dashboard involves network I/O (Zotero probe, etc.) — fire on a
+      // detached fiber so it doesn't block the initial render. The frontend
+      // shows a loading spinner until data arrives.
+      yield* Effect.forkDetach(this.sendToolDashboardData(webview), {
+        startImmediately: true,
+      });
 
-    await webview.postMessage({
-      command: SETTINGS_VIEW_COMMANDS.SET_UNSUPPORTED_COMMANDS,
-      commands: unsupportedCommands(this.handlerRegistry),
+      yield* postToWebview(webview, {
+        command: SETTINGS_VIEW_COMMANDS.SET_UNSUPPORTED_COMMANDS,
+        commands: unsupportedCommands(this.handlerRegistry),
+      });
+
+      yield* this.sendProfileAndModelSelectionData(webview);
+
+      yield* allSettledVoid([
+        this.memoryHandlers.sendMemoryData(webview),
+        this.sendSettingsSnapshot(webview, 'memory'),
+        this.agentHandlers.sendAgentSelectionData(webview),
+        this.agentHandlers.sendCustomAgentDir(webview),
+        this.sendSettingsSnapshot(webview, 'multi-agent'),
+        this.agentHandlers.sendAgentModePresets(webview),
+        this.sendSettingsSnapshot(webview, 'git-author'),
+        this.githubHandlers.sendGitHubTokenStatus(webview),
+        this.chatgptHandlers.sendAuthStatus(webview),
+        this.grokHandlers.sendAuthStatus(webview),
+        this.githubHandlers.sendPRSubscriptions(webview),
+        this.sendSettingsSnapshot(webview, 'approval'),
+        this.sendSettingsSnapshot(webview, 'skills'),
+        this.sendSkillsList(webview),
+        this.sendSettingsSnapshot(webview, 'telemetry'),
+        this.latexHandlers.sendLatexSettingsStatus(webview),
+        this.sendSettingsSnapshot(webview, 'latex'),
+        this.sendInlineCriticismEnabled(webview),
+        this.sendGoalList(webview),
+      ]);
     });
-
-    await this.sendProfileAndModelSelectionData(webview);
-
-    await Promise.all([
-      this.memoryHandlers.sendMemoryData(webview),
-      this.sendSettingsSnapshot(webview, 'memory'),
-      this.agentHandlers.sendAgentSelectionData(webview),
-      this.agentHandlers.sendCustomAgentDir(webview),
-      this.sendSettingsSnapshot(webview, 'multi-agent'),
-      this.agentHandlers.sendAgentModePresets(webview),
-      this.sendSettingsSnapshot(webview, 'git-author'),
-      this.githubHandlers.sendGitHubTokenStatus(webview),
-      this.chatgptHandlers.sendAuthStatus(webview),
-      this.grokHandlers.sendAuthStatus(webview),
-      this.githubHandlers.sendPRSubscriptions(webview),
-      this.sendSettingsSnapshot(webview, 'approval'),
-      this.sendSettingsSnapshot(webview, 'skills'),
-      this.sendSkillsList(webview),
-      this.sendSettingsSnapshot(webview, 'telemetry'),
-      this.latexHandlers.sendLatexSettingsStatus(webview),
-      this.sendSettingsSnapshot(webview, 'latex'),
-      this.sendInlineCriticismEnabled(webview),
-      this.sendGoalList(webview),
-    ]);
   }
 
-  private async sendInlineCriticismEnabled(
-    webview: vscode.Webview,
-  ): Promise<void> {
-    await webview.postMessage({
+  private sendInlineCriticismEnabled(webview: vscode.Webview) {
+    return postToWebview(webview, {
       command: SETTINGS_VIEW_COMMANDS.UPDATE_INLINE_CRITICISM_ENABLED,
       enabled: isInlineCriticismEnabled(),
     });
   }
 
-  private async handleSetInlineCriticismEnabled(
-    enabled: boolean,
-  ): Promise<void> {
-    await setInlineCriticismEnabled(enabled);
-    await this.withActiveWebview((w) => this.sendInlineCriticismEnabled(w));
+  private handleSetInlineCriticismEnabled(enabled: boolean) {
+    return Effect.gen({ self: this }, function* () {
+      yield* Effect.tryPromise({
+        try: () => setInlineCriticismEnabled(enabled),
+        catch: ensureError,
+      });
+      yield* this.withActiveWebview((w) => this.sendInlineCriticismEnabled(w));
+    });
   }
 
-  private async sendProfileData(webview: vscode.Webview): Promise<void> {
-    await webview.postMessage(
-      await this.runtime.runPromise(
-        this.profileController.buildProfileMessage(),
-      ),
+  private sendProfileData(webview: vscode.Webview) {
+    return Effect.flatMap(
+      this.profileController.buildProfileMessage(),
+      (message) => postToWebview(webview, message),
     );
   }
 
-  private async sendModelSelectionData(webview: vscode.Webview): Promise<void> {
-    await webview.postMessage(
-      await this.runtime.runPromise(
-        this.modelSelectionController.buildModelSelectionMessage(),
-      ),
+  private sendModelSelectionData(webview: vscode.Webview) {
+    return Effect.flatMap(
+      this.modelSelectionController.buildModelSelectionMessage(),
+      (message) => postToWebview(webview, message),
     );
   }
 
   /** Post the model-selection payload to whichever webview is active. */
-  private async postModelSelectionData(): Promise<void> {
-    await this.postMessageToActiveWebview(
-      await this.runtime.runPromise(
-        this.modelSelectionController.buildModelSelectionMessage(),
-      ),
-    );
+  private postModelSelectionData() {
+    return this.withActiveWebview((w) => this.sendModelSelectionData(w));
   }
 
-  private async sendProfileAndModelSelectionData(
-    webview: vscode.Webview,
-  ): Promise<void> {
-    await this.sendProfileData(webview);
-    await this.sendModelSelectionData(webview);
+  private sendProfileAndModelSelectionData(webview: vscode.Webview) {
+    return Effect.gen({ self: this }, function* () {
+      yield* this.sendProfileData(webview);
+      yield* this.sendModelSelectionData(webview);
+    });
   }
 
   // ============================================================
@@ -709,40 +774,45 @@ export class SettingsViewMessageHandler {
   // ============================================================
 
   /** Post one catalog-derived snapshot. Every field comes from the catalog. */
-  private async sendSettingsSnapshot(
+  private sendSettingsSnapshot(
     webview: vscode.Webview,
     snapshot: DerivedSettingsSnapshot,
-  ): Promise<void> {
-    await webview.postMessage(
+  ) {
+    return postToWebview(
+      webview,
       buildSettingsSnapshotMessage(snapshot, this.session.roots, 'vscode'),
     );
   }
 
-  private rebroadcastSnapshot(
-    snapshot: DerivedSettingsSnapshot,
-  ): Promise<void> {
+  private rebroadcastSnapshot(snapshot: DerivedSettingsSnapshot) {
     return this.withActiveWebview((w) =>
       this.sendSettingsSnapshot(w, snapshot),
     );
   }
 
-  private async sendSkillsList(webview: vscode.Webview): Promise<void> {
-    const result = await loadRuntimeSkillDisplay(
-      this.session.roots.workspace,
-      this.session.roots,
-    );
-    await webview.postMessage({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_SKILLS_LIST,
-      ...result,
+  private sendSkillsList(webview: vscode.Webview) {
+    return Effect.gen({ self: this }, function* () {
+      const result = yield* Effect.tryPromise({
+        try: () =>
+          loadRuntimeSkillDisplay(
+            this.session.roots.workspace,
+            this.session.roots,
+          ),
+        catch: ensureError,
+      });
+      yield* postToWebview(webview, {
+        command: SETTINGS_VIEW_COMMANDS.UPDATE_SKILLS_LIST,
+        ...result,
+      });
     });
   }
 
   /**
    * Generic write path for catalog-backed settings-view rows.
    */
-  private async updateStateSetting(key: string, value: unknown): Promise<void> {
-    const result = await this.runtime.runPromise(
-      applyStateSettingUpdate(key, value, {
+  private updateStateSetting(key: string, value: unknown) {
+    return Effect.gen({ self: this }, function* () {
+      const result = yield* applyStateSettingUpdate(key, value, {
         host: 'vscode',
         stores: this.session.roots,
         // The shared function already gates this hook on
@@ -752,58 +822,61 @@ export class SettingsViewMessageHandler {
           this.session.setApprovalPolicy(policy);
           appSignals.emit('approvalPolicyChanged', undefined);
         },
-      }),
-    );
-    if (result.kind === 'ignored') return;
-    const label = result.entry.title ?? result.entry.key;
-    if (result.kind === 'rejected') {
-      await showLoggedErrorMessage(
-        this.channel,
-        `Invalid value for “${label}”`,
-        result.error,
-      );
-    } else if (result.kind === 'workspace-required') {
-      void showLoggedInfoMessage(
-        this.channel,
-        `Open a workspace folder before changing the “${label}” setting.`,
-      );
-    } else if (result.kind === 'failed') {
-      await showLoggedErrorMessage(
-        this.channel,
-        `Failed to update “${label}”`,
-        result.error,
-      );
-    }
-    await this.postStateSettingSnapshot(result.entry.surfaces.settingsView);
-    if (result.kind !== 'applied') return;
-    if (result.entry.onWrite?.invalidatesModelOptions) {
-      await this.withActiveWebview((w) => this.sendModelSelectionData(w));
-      await safeExecuteCommand('texra.refreshAllOptions', [], this.viewName);
-    }
-    if (codingPlanForUsageSetting(key) !== undefined) {
-      await this.withActiveWebview((w) => this.sendSubscriptionUsage(w));
-    }
-  }
-
-  /** Fetch and post one sanitized snapshot for every subscription provider.
-   *  The usage read is an Effect; this is the boundary that holds a runtime to
-   *  settle it on. */
-  private async sendSubscriptionUsage(
-    webview: vscode.Webview,
-    forceRefresh = false,
-  ): Promise<void> {
-    await webview.postMessage({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_SUBSCRIPTION_USAGE,
-      snapshots: await this.runtime.runPromise(
-        this.subscriptionUsage.getAllUsage({ forceRefresh }),
-      ),
+      });
+      if (result.kind === 'ignored') return;
+      const label = result.entry.title ?? result.entry.key;
+      if (result.kind === 'rejected') {
+        yield* Effect.promise(() =>
+          showLoggedErrorMessage(
+            this.channel,
+            `Invalid value for “${label}”`,
+            result.error,
+          ),
+        );
+      } else if (result.kind === 'workspace-required') {
+        void showLoggedInfoMessage(
+          this.channel,
+          `Open a workspace folder before changing the “${label}” setting.`,
+        );
+      } else if (result.kind === 'failed') {
+        yield* Effect.promise(() =>
+          showLoggedErrorMessage(
+            this.channel,
+            `Failed to update “${label}”`,
+            result.error,
+          ),
+        );
+      }
+      yield* this.postStateSettingSnapshot(result.entry.surfaces.settingsView);
+      if (result.kind !== 'applied') return;
+      if (result.entry.onWrite?.invalidatesModelOptions) {
+        yield* this.withActiveWebview((w) => this.sendModelSelectionData(w));
+        yield* Effect.promise(() =>
+          safeExecuteCommand('texra.refreshAllOptions', [], this.viewName),
+        );
+      }
+      if (codingPlanForUsageSetting(key) !== undefined) {
+        yield* this.withActiveWebview((w) => this.sendSubscriptionUsage(w));
+      }
     });
   }
 
-  private async postStateSettingSnapshot(
-    snapshot: SettingsViewSnapshot,
-  ): Promise<void> {
-    const posters: SettingsSnapshotPosters = {
+  /** Fetch and post one sanitized snapshot for every subscription provider. */
+  private sendSubscriptionUsage(webview: vscode.Webview, forceRefresh = false) {
+    return Effect.flatMap(
+      this.subscriptionUsage.getAllUsage({ forceRefresh }),
+      (snapshots) =>
+        postToWebview(webview, {
+          command: SETTINGS_VIEW_COMMANDS.UPDATE_SUBSCRIPTION_USAGE,
+          snapshots,
+        }),
+    );
+  }
+
+  private postStateSettingSnapshot(snapshot: SettingsViewSnapshot) {
+    const posters: SettingsSnapshotPosters<
+      Effect.Effect<void, Error, ProcessServices>
+    > = {
       approval: () => this.rebroadcastSnapshot('approval'),
       'git-author': () => this.rebroadcastSnapshot('git-author'),
       latex: () => this.rebroadcastSnapshot('latex'),
@@ -812,13 +885,14 @@ export class SettingsViewMessageHandler {
         this.withActiveWebview((w) => this.sendModelSelectionData(w)),
       'multi-agent': () => this.rebroadcastSnapshot('multi-agent'),
       profile: () => this.withActiveWebview((w) => this.sendProfileData(w)),
-      skills: async () => {
-        await this.rebroadcastSnapshot('skills');
-        await this.withActiveWebview((w) => this.sendSkillsList(w));
-      },
+      skills: () =>
+        Effect.gen({ self: this }, function* () {
+          yield* this.rebroadcastSnapshot('skills');
+          yield* this.withActiveWebview((w) => this.sendSkillsList(w));
+        }),
       telemetry: () => this.rebroadcastSnapshot('telemetry'),
     };
-    await posters[snapshot]();
+    return posters[snapshot]();
   }
 
   // ============================================================
@@ -834,21 +908,29 @@ export class SettingsViewMessageHandler {
    * profile surface to push (profile+model for key changes, model-only for
    * subscription changes).
    */
-  private async refreshCredentialDependentSurfaces(options: {
+  private refreshCredentialDependentSurfaces(options: {
     usageProvider?: SubscriptionUsageProvider;
-    refreshProfileData: (webview: vscode.Webview) => Promise<void>;
-  }): Promise<void> {
-    if (options.usageProvider) {
-      this.subscriptionUsage.invalidate(options.usageProvider);
-    }
-    await safeExecuteCommand('texra.refreshApiKeyStatus', [], this.viewName);
-    await Promise.all([
-      safeExecuteCommand('texra.refreshAllOptions', [], this.viewName),
-      this.withActiveWebview((w) => options.refreshProfileData(w)),
-      ...(options.usageProvider
-        ? [this.withActiveWebview((w) => this.sendSubscriptionUsage(w))]
-        : []),
-    ]);
+    refreshProfileData: (
+      webview: vscode.Webview,
+    ) => Effect.Effect<void, Error, ProcessServices>;
+  }) {
+    return Effect.gen({ self: this }, function* () {
+      if (options.usageProvider) {
+        this.subscriptionUsage.invalidate(options.usageProvider);
+      }
+      yield* Effect.promise(() =>
+        safeExecuteCommand('texra.refreshApiKeyStatus', [], this.viewName),
+      );
+      yield* allSettledVoid([
+        Effect.promise(() =>
+          safeExecuteCommand('texra.refreshAllOptions', [], this.viewName),
+        ).pipe(Effect.asVoid),
+        this.withActiveWebview((w) => options.refreshProfileData(w)),
+        ...(options.usageProvider
+          ? [this.withActiveWebview((w) => this.sendSubscriptionUsage(w))]
+          : []),
+      ]);
+    });
   }
 
   /**
@@ -856,25 +938,27 @@ export class SettingsViewMessageHandler {
    * data after key changes. Model selection availability depends on provider
    * key state, so keep it paired with the profile refresh.
    */
-  public async refreshAfterProviderKeyChange(provider: string): Promise<void> {
-    invalidateApiKeyCache();
-    const usageProvider = codingPlanForApiProvider(provider)?.usageProvider;
-    // The launcher's API-key banner reads the same credential probe from
-    // the host snapshot.
-    const banners = ProgressViewProvider.getInstance()?.snapshot;
-    if (banners) await this.runtime.runPromise(banners.refreshHostBanners);
-    await this.refreshCredentialDependentSurfaces({
-      usageProvider,
-      refreshProfileData: (webview) =>
-        this.sendProfileAndModelSelectionData(webview),
+  public refreshAfterProviderKeyChange(
+    provider: string,
+  ): Effect.Effect<void, Error, ProcessServices> {
+    return Effect.gen({ self: this }, function* () {
+      invalidateApiKeyCache();
+      const usageProvider = codingPlanForApiProvider(provider)?.usageProvider;
+      // The launcher's API-key banner reads the same credential probe from
+      // the host snapshot.
+      const banners = ProgressViewProvider.getInstance()?.snapshot;
+      if (banners) yield* banners.refreshHostBanners;
+      yield* this.refreshCredentialDependentSurfaces({
+        usageProvider,
+        refreshProfileData: (webview) =>
+          this.sendProfileAndModelSelectionData(webview),
+      });
     });
   }
 
   /** Subscription auth is a setup credential: same host refresh as API-key changes. */
-  private async refreshAfterSubscriptionAuthChange(
-    usageProvider?: 'chatgpt',
-  ): Promise<void> {
-    await this.refreshCredentialDependentSurfaces({
+  private refreshAfterSubscriptionAuthChange(usageProvider?: 'chatgpt') {
+    return this.refreshCredentialDependentSurfaces({
       usageProvider,
       refreshProfileData: (webview) => this.sendModelSelectionData(webview),
     });
@@ -994,10 +1078,15 @@ export class SettingsViewMessageHandler {
       }
     } finally {
       invalidateRuntimeModelRegistry();
+      // This arm keeps its own runs: the consent request carries a host
+      // deadline as an `AbortSignal`, so it is settled at the boundary above
+      // rather than composed into the dispatcher's single run.
       await Promise.all([
         safeExecuteCommand('texra.refreshAllOptions', [], this.viewName),
-        this.withActiveWebview((webview) =>
-          this.sendModelSelectionData(webview),
+        this.runtime.runPromise(
+          this.withActiveWebview((webview) =>
+            this.sendModelSelectionData(webview),
+          ),
         ),
       ]);
     }
@@ -1005,16 +1094,18 @@ export class SettingsViewMessageHandler {
 
   /** Clear the per-model Copilot route preference (#9659), returning the
    * canonical model to direct-provider routing. */
-  private async handleClearCopilotRoute(modelName: string): Promise<void> {
-    // The write is a program, not a promise: the boundary runs it, and a
-    // refused write reaches the caller as this method's rejection.
-    await this.runtime.runPromise(
-      setCopilotRoutePreference(modelName, false, this.globalState),
-    );
-    await Promise.all([
-      safeExecuteCommand('texra.refreshAllOptions', [], this.viewName),
-      this.withActiveWebview((webview) => this.sendModelSelectionData(webview)),
-    ]);
+  private handleClearCopilotRoute(modelName: string) {
+    return Effect.gen({ self: this }, function* () {
+      yield* setCopilotRoutePreference(modelName, false, this.globalState);
+      yield* allSettledVoid([
+        Effect.promise(() =>
+          safeExecuteCommand('texra.refreshAllOptions', [], this.viewName),
+        ).pipe(Effect.asVoid),
+        this.withActiveWebview((webview) =>
+          this.sendModelSelectionData(webview),
+        ),
+      ]);
+    });
   }
 
   /**
@@ -1023,22 +1114,24 @@ export class SettingsViewMessageHandler {
    * move the effective team: enabling one agent rewrites the selection as
    * `custom`, which retires whatever team was applied.
    */
-  private async refreshAfterAgentMutation(
+  private refreshAfterAgentMutation(
     selectedToolUseAgent?: string,
     agentCatalogAlreadyFresh = false,
-  ): Promise<void> {
-    await Promise.all([
+  ): Effect.Effect<void, Error, ProcessServices> {
+    return allSettledVoid([
       this.withActiveWebview((w) =>
         this.agentHandlers.sendAgentSelectionData(w),
       ),
       this.withActiveWebview((w) => this.agentHandlers.sendAgentModePresets(w)),
-      safeExecuteCommand(
-        'texra.refreshAllOptions',
-        selectedToolUseAgent || agentCatalogAlreadyFresh
-          ? [{ selectedToolUseAgent, agentCatalogAlreadyFresh }]
-          : [],
-        this.viewName,
-      ),
+      Effect.promise(() =>
+        safeExecuteCommand(
+          'texra.refreshAllOptions',
+          selectedToolUseAgent || agentCatalogAlreadyFresh
+            ? [{ selectedToolUseAgent, agentCatalogAlreadyFresh }]
+            : [],
+          this.viewName,
+        ),
+      ).pipe(Effect.asVoid),
     ]);
   }
 
@@ -1046,42 +1139,47 @@ export class SettingsViewMessageHandler {
   // Tool dashboard handler implementations
   // ============================================================
 
-  private async sendToolDashboardData(
+  private sendToolDashboardData(
     webview: vscode.Webview,
     options?: { skipChecks?: boolean },
-  ): Promise<void> {
-    const cachedResults = options?.skipChecks
-      ? (getLastCheckResults() ?? undefined)
-      : undefined;
-    const items = await this.runtime.runPromise(
-      buildToolDashboardItems(
+  ) {
+    return Effect.gen({ self: this }, function* () {
+      const cachedResults = options?.skipChecks
+        ? (getLastCheckResults() ?? undefined)
+        : undefined;
+      const items = yield* buildToolDashboardItems(
         'extension',
         {
           workspaceRoot: this.session.roots.workspace,
           config: this.session.roots.config,
         },
         cachedResults,
-      ),
-    );
-    await webview.postMessage({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD,
-      items,
+      );
+      yield* postToWebview(webview, {
+        command: SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD,
+        items,
+      });
     });
   }
 
-  private async openExternalUrl(url: string): Promise<void> {
-    await vscode.env.openExternal(vscode.Uri.parse(url));
+  private openExternalUrl(url: string) {
+    return Effect.tryPromise({
+      try: () => vscode.env.openExternal(vscode.Uri.parse(url)),
+      catch: ensureError,
+    }).pipe(Effect.asVoid);
   }
 
-  private async setModelEnabled(
-    modelName: string,
-    enabled: boolean,
-  ): Promise<void> {
-    await this.runtime.runPromise(
-      this.modelSelectionController.setModelEnabled({ modelName, enabled }),
-    );
-    await this.postModelSelectionData();
-    // The options cache is invalidated by the writer itself.
-    await safeExecuteCommand('texra.refreshAllOptions', [], this.viewName);
+  private setModelEnabled(modelName: string, enabled: boolean) {
+    return Effect.gen({ self: this }, function* () {
+      yield* this.modelSelectionController.setModelEnabled({
+        modelName,
+        enabled,
+      });
+      yield* this.postModelSelectionData();
+      // The options cache is invalidated by the writer itself.
+      yield* Effect.promise(() =>
+        safeExecuteCommand('texra.refreshAllOptions', [], this.viewName),
+      );
+    });
   }
 }

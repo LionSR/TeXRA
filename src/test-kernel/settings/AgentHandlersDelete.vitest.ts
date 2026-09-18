@@ -34,7 +34,7 @@ const mocks = vi.hoisted(() => ({
     async (_source: AgentSource) => undefined as string | undefined,
   ),
   logWarn: vi.fn(),
-  refreshAfterAgentMutation: vi.fn(async () => undefined),
+  refreshAfterAgentMutation: vi.fn(() => Effect.void),
   showLoggedMessage: vi.fn(async () => ''),
   showInformationMessage: vi.fn(),
   showWarningMessage: vi.fn(),
@@ -73,8 +73,7 @@ vi.mock('@controllers/settingsView/SettingsTeamRosterController', () => ({
   applySettingsTeamRoster: mocks.applySettingsTeamRoster,
 }));
 vi.mock('@frontend/auth/agentCatalogRefreshScope', () => ({
-  withAgentCatalogAuthRefreshDeferred: async (action: () => Promise<void>) =>
-    action(),
+  withAgentCatalogAuthRefreshDeferred: (work: Effect.Effect<unknown>) => work,
 }));
 vi.mock('@frontend/agents/AgentDirectoryManager', () => ({
   // The readers as the manager declares them: `AgentHandlers` runs them on
@@ -115,21 +114,22 @@ function createHandlers(): AgentHandlers {
         info: vi.fn(),
         warn: mocks.logWarn,
       },
-      withActiveWebview: vi.fn(),
-      postMessageToActiveWebview: vi.fn(),
+      withActiveWebview: vi.fn(() => Effect.void),
+      postMessageToActiveWebview: vi.fn(() => Effect.void),
     },
     mocks.refreshAfterAgentMutation,
     installedHost().roots,
-    testRuntime(),
   );
 }
 
 /** The handlers hand back a program; the registry runs it on this host's
  *  runtime, as the settings message dispatch does. */
 function customizeAgent(handlers: AgentHandlers): Promise<void> {
-  return handlers.runAgentFileAction(
-    'customizeAgent',
-    handlers.agentActions.customizeAgent(CUSTOMIZE_MY_AGENT),
+  return testRuntime().runPromise(
+    handlers.runAgentFileAction(
+      'customizeAgent',
+      handlers.agentActions.customizeAgent(CUSTOMIZE_MY_AGENT),
+    ),
   );
 }
 
@@ -214,7 +214,9 @@ describe('AgentHandlers custom-agent file actions', () => {
         }),
     );
 
-    await createHandlers().handleApplyAgentModePreset(APPLY_AGENT_MODE_PRESET);
+    await testRuntime().runPromise(
+      createHandlers().handleApplyAgentModePreset(APPLY_AGENT_MODE_PRESET),
+    );
 
     await vi.waitFor(() =>
       expect(mocks.logWarn).toHaveBeenCalledWith(
@@ -231,19 +233,25 @@ describe('AgentHandlers custom-agent file actions', () => {
     mocks.showWarningMessage.mockReturnValueOnce(pendingConfirmation);
     const handlers = createHandlers();
 
-    const first = handlers.handleDeleteCustomAgent(DELETE_MY_AGENT);
+    const first = testRuntime().runPromise(
+      handlers.handleDeleteCustomAgent(DELETE_MY_AGENT),
+    );
     await vi.waitFor(() =>
       expect(mocks.showWarningMessage).toHaveBeenCalledTimes(1),
     );
 
-    await handlers.handleDeleteCustomAgent(DELETE_MY_AGENT);
+    await testRuntime().runPromise(
+      handlers.handleDeleteCustomAgent(DELETE_MY_AGENT),
+    );
     expect(mocks.showWarningMessage).toHaveBeenCalledTimes(1);
 
     resolveConfirmation(undefined);
     await first;
 
     mocks.showWarningMessage.mockResolvedValueOnce(undefined);
-    await handlers.handleDeleteCustomAgent(DELETE_MY_AGENT);
+    await testRuntime().runPromise(
+      handlers.handleDeleteCustomAgent(DELETE_MY_AGENT),
+    );
     expect(mocks.showWarningMessage).toHaveBeenCalledTimes(2);
   });
 
@@ -252,7 +260,9 @@ describe('AgentHandlers custom-agent file actions', () => {
     await writeFile(outside, AGENT_YAML);
     mocks.getAgent.mockReturnValueOnce({ path: outside });
 
-    await createHandlers().handleDeleteCustomAgent(DELETE_MY_AGENT);
+    await testRuntime().runPromise(
+      createHandlers().handleDeleteCustomAgent(DELETE_MY_AGENT),
+    );
 
     expect(mocks.showLoggedMessage).toHaveBeenCalledWith(
       'test',

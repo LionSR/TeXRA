@@ -15,8 +15,10 @@ import { testRuntime } from '@test/support/testProcessRuntime';
 import type * as vscode from 'vscode';
 
 interface Harness {
-  refreshAfterProviderKeyChange(provider: string): Promise<void>;
-  refreshAfterSubscriptionAuthChange(provider?: 'chatgpt'): Promise<void>;
+  refreshAfterProviderKeyChange(provider: string): Effect.Effect<void, Error>;
+  refreshAfterSubscriptionAuthChange(
+    provider?: 'chatgpt',
+  ): Effect.Effect<void, Error>;
 }
 
 function createHarness(activeView = true) {
@@ -45,24 +47,36 @@ function createHarness(activeView = true) {
   ) as Harness;
   Reflect.set(handler, 'viewName', 'SettingsView');
   Reflect.set(handler, 'subscriptionUsage', usage);
-  // The usage read is a program; the handler settles it on its runtime.
   Reflect.set(handler, 'runtime', testRuntime());
-  Reflect.set(handler, 'sendProfileData', vi.fn());
-  Reflect.set(handler, 'sendProfileAndModelSelectionData', vi.fn());
-  Reflect.set(handler, 'sendModelSelectionData', vi.fn());
-  Reflect.set(handler, 'sendReliabilityAndOrchestrationSettings', vi.fn());
+  // Every `send*` the refresh tail composes is a program, so a double is one
+  // too: a bare `vi.fn()` would be yielded as an `Effect` and fail.
+  Reflect.set(
+    handler,
+    'sendProfileData',
+    vi.fn(() => Effect.void),
+  );
+  Reflect.set(
+    handler,
+    'sendProfileAndModelSelectionData',
+    vi.fn(() => Effect.void),
+  );
+  Reflect.set(
+    handler,
+    'sendModelSelectionData',
+    vi.fn(() => Effect.void),
+  );
   Reflect.set(
     handler,
     'withActiveWebview',
-    async (callback: (webview: vscode.Webview) => Promise<void>) => {
-      if (!activeView) return;
-      await callback({
-        postMessage: async (message: unknown) => {
-          posted.push(message);
-          return true;
-        },
-      } as unknown as vscode.Webview);
-    },
+    (callback: (webview: vscode.Webview) => Effect.Effect<void, Error>) =>
+      activeView
+        ? callback({
+            postMessage: async (message: unknown) => {
+              posted.push(message);
+              return true;
+            },
+          } as unknown as vscode.Webview)
+        : Effect.void,
   );
   return { handler, posted, usage };
 }
@@ -71,7 +85,9 @@ describe('extension subscription usage credential lifecycle', () => {
   it('invalidates only coding-plan providers and replaces visible usage after key changes', async () => {
     const { handler, posted, usage } = createHarness();
 
-    await handler.refreshAfterProviderKeyChange('glm');
+    await testRuntime().runPromise(
+      handler.refreshAfterProviderKeyChange('glm'),
+    );
 
     expect(usage.invalidate).toHaveBeenCalledExactlyOnceWith('glmCodingPlan');
     expect(usage.getAllUsage).toHaveBeenCalledOnce();
@@ -83,7 +99,9 @@ describe('extension subscription usage credential lifecycle', () => {
 
     usage.invalidate.mockClear();
     usage.getAllUsage.mockClear();
-    await handler.refreshAfterProviderKeyChange('openai');
+    await testRuntime().runPromise(
+      handler.refreshAfterProviderKeyChange('openai'),
+    );
     expect(usage.invalidate).not.toHaveBeenCalled();
     expect(usage.getAllUsage).not.toHaveBeenCalled();
   });
@@ -91,8 +109,12 @@ describe('extension subscription usage credential lifecycle', () => {
   it('invalidates coding-plan usage when no Settings view is active', async () => {
     const { handler, posted, usage } = createHarness(false);
 
-    await handler.refreshAfterProviderKeyChange('kimiCode');
-    await handler.refreshAfterProviderKeyChange('glm');
+    await testRuntime().runPromise(
+      handler.refreshAfterProviderKeyChange('kimiCode'),
+    );
+    await testRuntime().runPromise(
+      handler.refreshAfterProviderKeyChange('glm'),
+    );
 
     expect(usage.invalidate.mock.calls).toStrictEqual([
       ['kimiCode'],
@@ -105,7 +127,9 @@ describe('extension subscription usage credential lifecycle', () => {
   it('invalidates ChatGPT usage after account auth changes', async () => {
     const { handler, posted, usage } = createHarness();
 
-    await handler.refreshAfterSubscriptionAuthChange('chatgpt');
+    await testRuntime().runPromise(
+      handler.refreshAfterSubscriptionAuthChange('chatgpt'),
+    );
 
     expect(usage.invalidate).toHaveBeenCalledExactlyOnceWith('chatgpt');
     expect(posted).toContainEqual(

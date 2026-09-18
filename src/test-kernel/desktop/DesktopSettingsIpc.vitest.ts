@@ -270,7 +270,7 @@ describe('desktop settings IPC', () => {
   }, 15_000);
 
   it('loads usage only for the subscription command and rejects malformed refresh payloads', async () => {
-    const postSubscriptionUsage = vi.fn(async () => undefined);
+    const postSubscriptionUsage = vi.fn(() => Effect.void);
     const onError = vi.fn();
     const credentialSettingsController =
       createStubDesktopCredentialSettingsController(newStatePorts(), {
@@ -308,11 +308,14 @@ describe('desktop settings IPC', () => {
 
   it('routes a close-during-usage-fetch failure without an unhandled rejection', async () => {
     let rejectFetch: ((error: Error) => void) | undefined;
-    const postSubscriptionUsage = vi.fn(
-      () =>
-        new Promise<void>((_resolve, reject) => {
-          rejectFetch = reject;
-        }),
+    const postSubscriptionUsage = vi.fn(() =>
+      Effect.tryPromise({
+        try: () =>
+          new Promise<void>((_resolve, reject) => {
+            rejectFetch = reject;
+          }),
+        catch: (cause) => cause as Error,
+      }),
     );
     const onError = vi.fn();
     const credentialSettingsController =
@@ -599,7 +602,7 @@ describe('desktop settings IPC', () => {
     });
 
     const errors: unknown[] = [];
-    const refreshModelOptions = vi.fn(async () => undefined);
+    const refreshModelOptions = vi.fn(() => Effect.void);
     const credentialSettingsController =
       createStubDesktopCredentialSettingsController(
         { globalState, workspaceState },
@@ -836,9 +839,11 @@ describe('desktop settings IPC', () => {
   it('refreshes credentials before conditionally refreshing the agent catalog', async () => {
     const state = newStatePorts();
     const events: string[] = [];
-    const refreshAuthDependentData = vi.fn(async () => {
-      events.push('credentials');
-    });
+    const refreshAuthDependentData = vi.fn(() =>
+      Effect.sync(() => {
+        events.push('credentials');
+      }),
+    );
     const credentialSettingsController =
       createStubDesktopCredentialSettingsController(state, {
         refreshAuthDependentData,

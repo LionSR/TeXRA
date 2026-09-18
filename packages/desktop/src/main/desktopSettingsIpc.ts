@@ -333,7 +333,9 @@ export function createDesktopSettingsIpc(
       modelSelectionDataPosted,
       postGitHubTokenStatus(),
       postGitHubSubscriptions(),
-      options.credentialSettingsController.postStartupData(),
+      runtime.runPromise(
+        options.credentialSettingsController.postStartupData(),
+      ),
       options.toolingSettingsController.postStartupData(),
       options.agentSettingsController.postStartupData(),
     ]);
@@ -346,13 +348,17 @@ export function createDesktopSettingsIpc(
     await runtime.runPromise(modelSelectionController.setModelEnabled(input));
     await postModelSelectionData();
     // The options cache is invalidated by the writer itself.
-    await options.credentialSettingsController.refreshModelOptions();
+    await runtime.runPromise(
+      options.credentialSettingsController.refreshModelOptions(),
+    );
   }
 
   async function refreshAuthDependentData(
     refreshOptions: { deferAgentCatalogRefresh?: boolean } = {},
   ): Promise<void> {
-    await options.credentialSettingsController.refreshAuthDependentData();
+    await runtime.runPromise(
+      options.credentialSettingsController.refreshAuthDependentData(),
+    );
     if (refreshOptions.deferAgentCatalogRefresh) return;
     await runtime.runPromise(
       options.agentSettingsController.refreshCatalogData(),
@@ -366,7 +372,10 @@ export function createDesktopSettingsIpc(
     memory: () => postSettingsSnapshot('memory'),
     models: () => postModelSelectionData(),
     'multi-agent': () => postSettingsSnapshot('multi-agent'),
-    profile: () => options.credentialSettingsController.postProfileData(),
+    profile: () =>
+      runtime.runPromise(
+        options.credentialSettingsController.postProfileData(),
+      ),
     skills: async () => {
       postSettingsSnapshot('skills');
       await postSkillsList();
@@ -406,11 +415,15 @@ export function createDesktopSettingsIpc(
     const invalidatesModelOptions =
       result.entry.onWrite?.invalidatesModelOptions === true;
     if (invalidatesModelOptions) {
-      await options.credentialSettingsController.refreshAfterProviderSettingChange(
-        key,
+      await runtime.runPromise(
+        options.credentialSettingsController.refreshAfterProviderSettingChange(
+          key,
+        ),
       );
     } else if (codingPlanForUsageSetting(key) !== undefined) {
-      await options.credentialSettingsController.postSubscriptionUsage();
+      await runtime.runPromise(
+        options.credentialSettingsController.postSubscriptionUsage(),
+      );
     }
   }
 
@@ -612,8 +625,10 @@ export function createDesktopSettingsIpc(
     ...options.credentialSettingsController.chatGptHandlers,
     ...options.credentialSettingsController.grokHandlers,
     getSubscriptionUsage: (message) =>
-      options.credentialSettingsController.postSubscriptionUsage(
-        message.forceRefresh ?? false,
+      runtime.runPromise(
+        options.credentialSettingsController.postSubscriptionUsage(
+          message.forceRefresh ?? false,
+        ),
       ),
     updateStateSetting: (message) =>
       updateStateSetting(message.key, message.value),

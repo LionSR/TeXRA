@@ -1,4 +1,5 @@
 // Third-party imports
+import type { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
@@ -14,7 +15,7 @@ import {
   runAfterAgentCatalogAuthRefresh,
 } from '@frontend/auth/agentCatalogRefreshScope';
 import { DisposableStore } from '@platform/disposable';
-import type { ProcessRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import type { StateStore } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
@@ -34,7 +35,7 @@ export class SettingsViewProvider {
     private readonly context: vscode.ExtensionContext,
     globalState: StateStore,
     secrets: PlatformSecrets,
-    runtime: ProcessRuntime,
+    private readonly runtime: ProcessRuntime,
     session: SessionHandle,
   ) {
     this.contentProvider = new BundledViewContentProvider(
@@ -56,11 +57,11 @@ export class SettingsViewProvider {
       if (this._view) {
         if (isAgentCatalogAuthRefreshDeferred()) {
           runAfterAgentCatalogAuthRefresh(() =>
-            this.messageHandler.sendAllData(this._view!.webview),
+            this.postAllData(this._view!.webview),
           );
           return;
         }
-        void this.messageHandler.sendAllData(this._view.webview);
+        void this.postAllData(this._view.webview);
       }
     });
   }
@@ -70,9 +71,20 @@ export class SettingsViewProvider {
     return this.messageHandler.signInSubscription(providerId);
   }
 
-  /** Refresh every credential-dependent surface after any API-key mutation. */
-  public refreshAfterProviderKeyChange(provider: string): Promise<void> {
+  /**
+   * Refresh every credential-dependent surface after any API-key mutation.
+   * The program, not its settlement: the caller that owns the key write runs
+   * it as part of that write's own action.
+   */
+  public refreshAfterProviderKeyChange(
+    provider: string,
+  ): Effect.Effect<void, Error, ProcessServices> {
     return this.messageHandler.refreshAfterProviderKeyChange(provider);
+  }
+
+  /** Settle a full repaint of `webview` on this view's process runtime. */
+  private postAllData(webview: vscode.Webview): Promise<void> {
+    return this.runtime.runPromise(this.messageHandler.sendAllData(webview));
   }
 
   /**
@@ -87,7 +99,7 @@ export class SettingsViewProvider {
     if (this._view) {
       const panel = this._view;
       panel.reveal(vscode.ViewColumn.One);
-      await this.messageHandler.sendAllData(panel.webview);
+      await this.postAllData(panel.webview);
     } else {
       const panel = vscode.window.createWebviewPanel(
         SettingsViewProvider.viewType,

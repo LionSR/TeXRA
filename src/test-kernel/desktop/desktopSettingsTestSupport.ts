@@ -18,6 +18,10 @@ import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 
 const noOp = async (): Promise<void> => undefined;
 
+/** The credential controller's posts and refreshes are programs, not
+ *  promises: a stub answers with one that does nothing. */
+const noOpEffect = (): Effect.Effect<void> => Effect.void;
+
 /** Reads the `command` discriminant off a message posted to the renderer. */
 export function commandOf(message: unknown): string | undefined {
   return (message as { command?: string }).command;
@@ -98,12 +102,12 @@ export function createStubDesktopCredentialSettingsController(
         ),
       copilotRoutes: discoveredCopilotRoutes(),
     }),
-    refreshModelOptions: noOp,
-    postProfileData: noOp,
-    postStartupData: noOp,
-    postSubscriptionUsage: noOp,
-    refreshAfterProviderSettingChange: noOp,
-    refreshAuthDependentData: noOp,
+    refreshModelOptions: noOpEffect,
+    postProfileData: noOpEffect,
+    postStartupData: noOpEffect,
+    postSubscriptionUsage: noOpEffect,
+    refreshAfterProviderSettingChange: noOpEffect,
+    refreshAuthDependentData: noOpEffect,
     signInChatGpt: noOp,
     ...overrides,
   };

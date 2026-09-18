@@ -1,4 +1,5 @@
 // Third-party imports
+import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
@@ -12,7 +13,7 @@ import {
   loadApiKeyStatusMap,
   type ApiProvider,
 } from '@model/apiProviders';
-import type { ProcessRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
@@ -35,8 +36,10 @@ interface ApiProviderQuickPickItem extends vscode.QuickPickItem {
 function createProfileKeyController(
   stores: SettingsStores,
   secrets: PlatformSecrets,
-  refreshAfterKeyChange: (provider: string) => Promise<void>,
-): SettingsProfileKeyController {
+  refreshAfterKeyChange: (
+    provider: string,
+  ) => Effect.Effect<void, Error, ProcessServices>,
+): SettingsProfileKeyController<ProcessServices> {
   return new SettingsProfileKeyController({
     secrets,
     prompt: new VscodePromptHost(),
@@ -49,9 +52,10 @@ function createProfileKeyController(
       ),
     getProviderKeyUrl: (provider) => getProviderKeyUrl(stores, provider),
     refreshAfterKeyChange,
-    reportFailure: async (message, error) => {
-      await showLoggedErrorMessage(CHANNEL, message, error);
-    },
+    reportFailure: (message, error) =>
+      Effect.promise(() =>
+        showLoggedErrorMessage(CHANNEL, message, error),
+      ).pipe(Effect.asVoid),
   });
 }
 
@@ -120,7 +124,9 @@ async function pickApiProvider(
 export async function setApiKey(
   stores: SettingsStores,
   secrets: PlatformSecrets,
-  refreshAfterKeyChange: (provider: string) => Promise<void>,
+  refreshAfterKeyChange: (
+    provider: string,
+  ) => Effect.Effect<void, Error, ProcessServices>,
   runtime: ProcessRuntime,
   provider?: ApiProvider,
 ): Promise<void> {
@@ -154,7 +160,9 @@ export async function setApiKey(
 export async function removeApiKey(
   stores: SettingsStores,
   secrets: PlatformSecrets,
-  refreshAfterKeyChange: (provider: string) => Promise<void>,
+  refreshAfterKeyChange: (
+    provider: string,
+  ) => Effect.Effect<void, Error, ProcessServices>,
   runtime: ProcessRuntime,
 ): Promise<void> {
   const provider = await pickApiProvider(

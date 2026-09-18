@@ -33,7 +33,7 @@ import {
 import { discoveredCopilotRoutes } from '@model/runtimeModelRegistry';
 import type { ConfigProvider } from '@platform/interfaces';
 import type { LanguageModel } from '@platform/languageModel';
-import type { ProcessRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
@@ -50,7 +50,7 @@ import { ACCOUNT_OUTCOME } from '@shared/copy/accountAuth';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { SettingsStatePorts } from '@shared/settingsView/types';
 import { getProviderKeyUrl } from '@utils/config/providerConfig';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 /**
  * A sign-in presenter (the device-code dialog, the browser-opened notice)
@@ -203,14 +203,23 @@ export interface DesktopCredentialSettingsController {
   readonly chatGptHandlers: DesktopChatGptHandlers;
   readonly grokHandlers: DesktopGrokHandlers;
   readonly modelSelectionController: SettingsModelSelectionController<LanguageModel>;
+  /**
+   * The posts and refreshes below are programs: the window's IPC settles one
+   * per inbound message, so a key write and the repaint it triggers are a
+   * single run rather than a chain of them.
+   */
   /** The enabled-model set or a credential changed the model catalog. */
-  refreshModelOptions(): Promise<void>;
+  refreshModelOptions(): Effect.Effect<void, Error, ProcessServices>;
   /** Re-posts the profile snapshot after a catalog-routed credential write. */
-  postProfileData(): Promise<void>;
-  postStartupData(): Promise<void>;
-  postSubscriptionUsage(forceRefresh?: boolean): Promise<void>;
-  refreshAfterProviderSettingChange(key: string): Promise<void>;
-  refreshAuthDependentData(): Promise<void>;
+  postProfileData(): Effect.Effect<void, Error, ProcessServices>;
+  postStartupData(): Effect.Effect<void, Error, ProcessServices>;
+  postSubscriptionUsage(
+    forceRefresh?: boolean,
+  ): Effect.Effect<void, Error, ProcessServices>;
+  refreshAfterProviderSettingChange(
+    key: string,
+  ): Effect.Effect<void, Error, ProcessServices>;
+  refreshAuthDependentData(): Effect.Effect<void, Error, ProcessServices>;
   signInChatGpt(): Promise<void>;
 }
 
@@ -222,7 +231,7 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
   readonly modelSelectionController: SettingsModelSelectionController<LanguageModel>;
 
   private readonly profileController: SettingsProfileController;
-  private readonly profileKeyController: SettingsProfileKeyController;
+  private readonly profileKeyController: SettingsProfileKeyController<ProcessServices>;
   private readonly subscriptionUsage: Pick<
     SubscriptionUsageService,
     'getAllUsage' | 'invalidate'
@@ -272,15 +281,14 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
         getProviderKeyUrl(options.stores, provider),
       refreshAfterKeyChange: (provider) =>
         this.refreshAfterProviderKeyChange(provider),
-      reportFailure: async (message, error) => {
-        await options.runtime.runPromise(
-          options.notifications.showErrorMessage(
+      reportFailure: (message, error) =>
+        Effect.gen({ self: this }, function* () {
+          yield* options.notifications.showErrorMessage(
             `${message}: ${toErrorMessage(error)}`,
-          ),
-        );
-        options.onError(error);
-        await this.postProfileData();
-      },
+          );
+          options.onError(error);
+          yield* this.postProfileData();
+        }).pipe(Effect.orDie),
     });
     this.profileHandlers = {
       signIn: () => options.auth.signIn(),
@@ -316,33 +324,54 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
     };
   }
 
-  async postStartupData(): Promise<void> {
-    await Promise.all([
-      this.postProfileData(),
-      this.postAuthStatus('chatgpt'),
-      this.postAuthStatus('grok'),
-    ]);
+  postStartupData() {
+    return Effect.all(
+      [
+        this.postProfileData(),
+        this.postAuthStatus('chatgpt'),
+        this.postAuthStatus('grok'),
+      ],
+      { concurrency: 'unbounded', discard: true },
+    );
   }
 
-  /** The usage read is an Effect; this is the boundary that holds a runtime to
-   *  settle it on. */
-  async postSubscriptionUsage(forceRefresh = false): Promise<void> {
-    this.options.renderer.postToRenderer({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_SUBSCRIPTION_USAGE,
-      snapshots: await this.options.runtime.runPromise(
-        this.subscriptionUsage.getAllUsage({ forceRefresh }),
-      ),
+  postSubscriptionUsage(forceRefresh = false) {
+    return Effect.map(
+      this.subscriptionUsage.getAllUsage({ forceRefresh }),
+      (snapshots) => {
+        this.options.renderer.postToRenderer({
+          command: SETTINGS_VIEW_COMMANDS.UPDATE_SUBSCRIPTION_USAGE,
+          snapshots,
+        });
+      },
+    );
+  }
+
+  /**
+   * Every open paper reloads the model catalog. Still the window's own
+   * promise-shaped fan-out, lifted once here.
+   */
+  refreshModelOptions() {
+    return Effect.tryPromise({
+      try: () => this.options.onModelOptionsChanged(),
+      catch: ensureError,
     });
   }
 
-  refreshModelOptions(): Promise<void> {
-    return this.options.onModelOptionsChanged();
+  /** The window's credential fan-out, lifted once, as above. */
+  private credentialChanged() {
+    return Effect.tryPromise({
+      try: () => this.options.onCredentialChanged(),
+      catch: ensureError,
+    });
   }
 
-  async refreshAuthDependentData(): Promise<void> {
-    await this.postModelSelectionData();
-    await this.refreshModelOptions();
-    await this.postProfileData();
+  refreshAuthDependentData() {
+    return Effect.gen({ self: this }, function* () {
+      yield* this.postModelSelectionData();
+      yield* this.refreshModelOptions();
+      yield* this.postProfileData();
+    });
   }
 
   /**
@@ -452,15 +481,15 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
       provider: ReturnType<typeof subscriptionProvider>,
       error: unknown,
     ) => string,
-    work: (provider: ReturnType<typeof subscriptionProvider>) => Promise<void>,
+    work: (
+      provider: ReturnType<typeof subscriptionProvider>,
+    ) => Effect.Effect<void, unknown, ProcessServices>,
   ): Promise<void> {
     const provider = subscriptionProvider(providerId);
     const options = this.options;
-    const refresh = () => this.refreshAfterSubscriptionAuthChange(providerId);
-    const attempt = Effect.tryPromise({
-      try: () => work(provider),
-      catch: (cause) => new SubscriptionActionFailed({ cause }),
-    }).pipe(
+    const refresh = this.refreshAfterSubscriptionAuthChange(providerId);
+    const attempt = work(provider).pipe(
+      Effect.mapError((cause) => new SubscriptionActionFailed({ cause })),
       Effect.catchTag('SubscriptionActionFailed', (failure) =>
         options.notifications
           .showErrorMessage(buildErrorMessage(provider, failure.cause))
@@ -483,10 +512,7 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
         // The refresh is the old `finally`: it runs on every path, and its own
         // failure replaces whatever the attempt left behind.
         const attempted = yield* Effect.exit(attempt);
-        yield* Effect.tryPromise({
-          try: refresh,
-          catch: (cause) => cause,
-        });
+        yield* refresh;
         return yield* attempted;
       }),
     );
@@ -499,22 +525,17 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
       providerId,
       (provider, error) =>
         `${provider.displayName} sign-in failed: ${toErrorMessage(error)}`,
-      async (provider) => {
-        const account = await this.options.runtime.runPromise(
-          provider.signIn({
+      (provider) =>
+        Effect.gen({ self: this }, function* () {
+          const account = yield* provider.signIn({
             transport: 'auto',
             present: this.signInPresenter(provider.displayName),
-          }),
-        );
-        await this.options.runtime.runPromise(
-          provider.setPreferSubscription(this.options.stores, true),
-        );
-        await this.options.runtime.runPromise(
-          this.options.notifications.showInfoMessage(
+          });
+          yield* provider.setPreferSubscription(this.options.stores, true);
+          yield* this.options.notifications.showInfoMessage(
             ACCOUNT_OUTCOME.signedInAs(provider.displayName, account.label),
-          ),
-        );
-      },
+          );
+        }),
     );
   }
 
@@ -529,39 +550,48 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
    * validation and the row's `onWrite` exclusions; this is the desktop's half
    * of the refresh.
    */
-  async refreshAfterProviderSettingChange(key: string): Promise<void> {
-    await this.postProfileData();
-    if (codingPlanForUsageSetting(key)) {
-      await this.postSubscriptionUsage();
-    }
-    await this.postModelSelectionData();
-    await this.refreshModelOptions();
-    await this.options.onCredentialChanged();
+  refreshAfterProviderSettingChange(key: string) {
+    return Effect.gen({ self: this }, function* () {
+      yield* this.postProfileData();
+      if (codingPlanForUsageSetting(key)) {
+        yield* this.postSubscriptionUsage();
+      }
+      yield* this.postModelSelectionData();
+      yield* this.refreshModelOptions();
+      yield* this.credentialChanged();
+    });
   }
 
-  private async refreshAfterProviderKeyChange(provider: string): Promise<void> {
-    invalidateApiKeyCache();
-    const usageProvider = codingPlanForApiProvider(provider)?.usageProvider;
-    if (usageProvider) this.subscriptionUsage.invalidate(usageProvider);
-    await this.postProfileData();
-    await this.postModelSelectionData();
-    await this.refreshModelOptions();
-    if (usageProvider) await this.postSubscriptionUsage();
-    await this.options.onCredentialChanged();
+  private refreshAfterProviderKeyChange(provider: string) {
+    return Effect.gen({ self: this }, function* () {
+      invalidateApiKeyCache();
+      const usageProvider = codingPlanForApiProvider(provider)?.usageProvider;
+      if (usageProvider) this.subscriptionUsage.invalidate(usageProvider);
+      yield* this.postProfileData();
+      yield* this.postModelSelectionData();
+      yield* this.refreshModelOptions();
+      if (usageProvider) yield* this.postSubscriptionUsage();
+      yield* this.credentialChanged();
+    });
   }
 
-  private async refreshAfterSubscriptionAuthChange(
+  private refreshAfterSubscriptionAuthChange(
     providerId: SubscriptionProviderId,
-  ): Promise<void> {
-    const { usageProvider } = SUBSCRIPTION_STATUS_ROWS[providerId];
-    if (usageProvider) this.subscriptionUsage.invalidate(usageProvider);
-    await Promise.all([
-      this.postAuthStatus(providerId),
-      this.postModelSelectionData(),
-      this.refreshModelOptions(),
-      ...(usageProvider ? [this.postSubscriptionUsage()] : []),
-    ]);
-    await this.options.onCredentialChanged();
+  ) {
+    return Effect.gen({ self: this }, function* () {
+      const { usageProvider } = SUBSCRIPTION_STATUS_ROWS[providerId];
+      if (usageProvider) this.subscriptionUsage.invalidate(usageProvider);
+      yield* Effect.all(
+        [
+          this.postAuthStatus(providerId),
+          this.postModelSelectionData(),
+          this.refreshModelOptions(),
+          ...(usageProvider ? [this.postSubscriptionUsage()] : []),
+        ],
+        { concurrency: 'unbounded', discard: true },
+      );
+      yield* this.credentialChanged();
+    });
   }
 
   private signOutSubscription(
@@ -574,16 +604,13 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
           provider.displayName,
           toErrorMessage(error),
         ),
-      async (provider) => {
-        await this.options.runtime.runPromise(
-          provider.signOut(this.options.secrets),
-        );
-        await this.options.runtime.runPromise(
-          this.options.notifications.showInfoMessage(
+      (provider) =>
+        Effect.gen({ self: this }, function* () {
+          yield* provider.signOut(this.options.secrets);
+          yield* this.options.notifications.showInfoMessage(
             ACCOUNT_OUTCOME.signedOut(provider.displayName),
-          ),
-        );
-      },
+          );
+        }),
     );
   }
 
@@ -595,47 +622,48 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
       providerId,
       (provider, error) =>
         `${provider.displayName} subscription preference update failed: ${toErrorMessage(error)}`,
-      async (provider) => {
-        const update = await this.options.runtime.runPromise(
-          provider.setPreferSubscription(this.options.stores, enabled),
-        );
-        if (update.effective !== enabled) {
-          await this.options.runtime.runPromise(
-            this.options.notifications.showWarningMessage(
-              `A more specific setting still keeps ${provider.displayName} subscription ${update.effective ? 'enabled' : 'disabled'}.`,
-            ),
+      (provider) =>
+        Effect.gen({ self: this }, function* () {
+          const update = yield* provider.setPreferSubscription(
+            this.options.stores,
+            enabled,
           );
-        }
+          if (update.effective !== enabled) {
+            yield* this.options.notifications.showWarningMessage(
+              `A more specific setting still keeps ${provider.displayName} subscription ${update.effective ? 'enabled' : 'disabled'}.`,
+            );
+          }
+        }),
+    );
+  }
+
+  postProfileData() {
+    return Effect.map(
+      this.profileController.buildProfileMessage(),
+      (message) => {
+        this.options.renderer.postToRenderer(message);
       },
     );
   }
 
-  async postProfileData(): Promise<void> {
-    this.options.renderer.postToRenderer(
-      await this.options.runtime.runPromise(
-        this.profileController.buildProfileMessage(),
+  private postAuthStatus(providerId: SubscriptionProviderId) {
+    return Effect.map(
+      SUBSCRIPTION_STATUS_ROWS[providerId].buildStatusMessage(
+        this.options.stores,
+        this.options.secrets,
       ),
+      (message) => {
+        this.options.renderer.postToRenderer(message);
+      },
     );
   }
 
-  private async postAuthStatus(
-    providerId: SubscriptionProviderId,
-  ): Promise<void> {
-    this.options.renderer.postToRenderer(
-      await this.options.runtime.runPromise(
-        SUBSCRIPTION_STATUS_ROWS[providerId].buildStatusMessage(
-          this.options.stores,
-          this.options.secrets,
-        ),
-      ),
-    );
-  }
-
-  private async postModelSelectionData(): Promise<void> {
-    this.options.renderer.postToRenderer(
-      await this.options.runtime.runPromise(
-        this.modelSelectionController.buildModelSelectionMessage(),
-      ),
+  private postModelSelectionData() {
+    return Effect.map(
+      this.modelSelectionController.buildModelSelectionMessage(),
+      (message) => {
+        this.options.renderer.postToRenderer(message);
+      },
     );
   }
 }

@@ -14,7 +14,6 @@ async function createController(options?: {
   urls?: Record<string, string | undefined>;
   setError?: Error;
   deleteError?: Error;
-  refreshError?: Error;
 }): Promise<{
   controller: SettingsProfileKeyController;
   hosts: ReturnType<typeof createFakeUIHosts>;
@@ -55,13 +54,14 @@ async function createController(options?: {
       getProviderDisplayName: (provider) =>
         provider === 'openai' ? 'OpenAI' : provider,
       getProviderKeyUrl: (provider) => options?.urls?.[provider],
-      refreshAfterKeyChange: async () => {
-        refreshCount += 1;
-        if (options?.refreshError) throw options.refreshError;
-      },
-      reportFailure: async (message, error) => {
-        failures.push(`${message}: ${String(error)}`);
-      },
+      refreshAfterKeyChange: () =>
+        Effect.sync(() => {
+          refreshCount += 1;
+        }),
+      reportFailure: (message, error) =>
+        Effect.sync(() => {
+          failures.push(`${message}: ${String(error)}`);
+        }),
     }),
     hosts,
     secrets,

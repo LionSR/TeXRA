@@ -160,9 +160,7 @@ const ensureCredentialOrPrompt = Effect.fn('ensureCredentialOrPrompt')(
     // credential; only the walkthrough leaves setup un-launched.
     switch (picked.id) {
       case 'chatgpt':
-        yield* Effect.promise(() =>
-          signInWithSubscription(stores, CHANNEL, 'chatgpt', runtime),
-        );
+        yield* signInWithSubscription(stores, CHANNEL, 'chatgpt', runtime);
         break;
       case 'apiKey':
         yield* Effect.promise(() =>

@@ -4,17 +4,17 @@
  * Handles LaTeX tool detection, recommended VS Code settings,
  * LaTeX Workshop installation, and install commands.
  */
+import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
-import type { ProcessRuntime } from '@platform/processRuntime';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { SETTINGS_VIEW_CMD, type SettingsMessageFor } from '@shared/schemas';
 import {
   LATEX_WORKSHOP_EXT_ID,
   normalizePlatform,
 } from '@shared/constants/latexToolchain';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import {
   checkToolInstalled,
   detectPackageManager,
@@ -22,6 +22,7 @@ import {
 import { BinaryResolver } from '@utils/system/binaryResolver';
 
 import {
+  postToWebview,
   withHandlerErrorHandling,
   type SettingsHandlerContext,
 } from './SettingsHandlerContext';
@@ -146,29 +147,24 @@ export class LatexSettingsHandlers {
     },
   });
 
-  constructor(
-    private readonly ctx: SettingsHandlerContext,
-    private readonly runtime: ProcessRuntime,
-  ) {}
+  constructor(private readonly ctx: SettingsHandlerContext) {}
 
-  async sendLatexSettingsStatus(webview: vscode.Webview): Promise<void> {
-    // The settings webview answers with a promise, so this message arm is
-    // where the detection program runs.
-    await webview.postMessage({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_SETTINGS_STATUS,
-      settings: await this.runtime.runPromise(
-        this.toolingController.detectStatus(),
-      ),
-    });
+  sendLatexSettingsStatus(webview: vscode.Webview) {
+    return Effect.flatMap(this.toolingController.detectStatus(), (settings) =>
+      postToWebview(webview, {
+        command: SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_SETTINGS_STATUS,
+        settings,
+      }),
+    );
   }
 
-  async handleApplyLatexSettings(
+  handleApplyLatexSettings(
     data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.APPLY_LATEX_SETTINGS>,
-  ): Promise<void> {
-    await withHandlerErrorHandling(
+  ) {
+    return withHandlerErrorHandling(
       this.ctx,
       'Failed to update LaTeX settings',
-      async () => {
+      Effect.gen({ self: this }, function* () {
         const reset = data.reset ?? false;
         const targets = data.field
           ? LATEX_RECOMMENDED_SETTINGS.filter(
@@ -176,16 +172,20 @@ export class LatexSettingsHandlers {
             )
           : LATEX_RECOMMENDED_SETTINGS;
         for (const setting of targets) {
-          await vscode.workspace
-            .getConfiguration()
-            .update(
-              setting.key,
-              resolveUpdateValue(setting, reset),
-              vscode.ConfigurationTarget.Global,
-            );
+          yield* Effect.tryPromise({
+            try: () =>
+              vscode.workspace
+                .getConfiguration()
+                .update(
+                  setting.key,
+                  resolveUpdateValue(setting, reset),
+                  vscode.ConfigurationTarget.Global,
+                ),
+            catch: ensureError,
+          });
         }
 
-        await this.ctx.withActiveWebview((w) =>
+        yield* this.ctx.withActiveWebview((w) =>
           this.sendLatexSettingsStatus(w),
         );
         const verb = reset ? 'reset' : 'applied';
@@ -194,54 +194,62 @@ export class LatexSettingsHandlers {
             ? `LaTeX setting ${verb}`
             : `All recommended LaTeX settings ${verb}`,
         );
-      },
+      }),
     );
   }
 
-  async handleInstallLatexWorkshop(): Promise<void> {
-    await this.installExtension(LATEX_WORKSHOP_EXT_ID, (w) =>
+  handleInstallLatexWorkshop() {
+    return this.installExtension(LATEX_WORKSHOP_EXT_ID, (w) =>
       this.sendLatexSettingsStatus(w),
     );
   }
 
-  async handleRunInstallCommand(
+  handleRunInstallCommand(
     data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.RUN_INSTALL_COMMAND>,
-  ): Promise<void> {
-    if (!this.toolingController.isAllowedInstallCommand(data.installCommand)) {
-      this.ctx.log.warn(
-        `Rejected unknown install command: ${data.installCommand}`,
-      );
-      return;
-    }
+  ) {
+    return Effect.sync(() => {
+      if (
+        !this.toolingController.isAllowedInstallCommand(data.installCommand)
+      ) {
+        this.ctx.log.warn(
+          `Rejected unknown install command: ${data.installCommand}`,
+        );
+        return;
+      }
 
-    const terminal = vscode.window.createTerminal({
-      name: 'TeXRA Install',
-      hideFromUser: false,
+      const terminal = vscode.window.createTerminal({
+        name: 'TeXRA Install',
+        hideFromUser: false,
+      });
+      terminal.show();
+      terminal.sendText(data.installCommand);
     });
-    terminal.show();
-    terminal.sendText(data.installCommand);
   }
 
   /** Install a VS Code extension and optionally refresh the given view data. */
-  async installExtension(
+  installExtension(
     extensionId: string,
-    refresh?: (w: vscode.Webview) => Promise<void>,
-  ): Promise<void> {
-    await withHandlerErrorHandling(
+    refresh?: (w: vscode.Webview) => Effect.Effect<void, Error>,
+  ) {
+    return withHandlerErrorHandling(
       this.ctx,
       `Failed to install extension "${extensionId}"`,
-      async () => {
-        await vscode.commands.executeCommand(
-          'workbench.extensions.installExtension',
-          extensionId,
-        );
+      Effect.gen({ self: this }, function* () {
+        yield* Effect.tryPromise({
+          try: () =>
+            vscode.commands.executeCommand(
+              'workbench.extensions.installExtension',
+              extensionId,
+            ),
+          catch: ensureError,
+        });
         void vscode.window.showInformationMessage(
           `Extension "${extensionId}" installed`,
         );
         if (refresh) {
-          await this.ctx.withActiveWebview(refresh);
+          yield* this.ctx.withActiveWebview(refresh);
         }
-      },
+      }),
     );
   }
 }

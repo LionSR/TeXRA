@@ -6,8 +6,9 @@
  * preference write, and a status round-trip back to the settings webview after
  * each. Everything provider-specific except the outbound wire message comes
  * from the shared `SUBSCRIPTION_PROVIDERS` catalog, so this file configures a
- * provider by id plus its status-message builder.
+ * provider by id plus its status-message program.
  */
+import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 import {
@@ -16,7 +17,7 @@ import {
   type SubscriptionProviderId,
 } from '@controllers/modelAccess/subscriptionProviders';
 import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
-import type { ProcessRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import type {
   UpdateChatGptAuthStatusMessage,
@@ -27,6 +28,8 @@ import { ACCOUNT_OUTCOME } from '@shared/copy/accountAuth';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 
 import {
+  allSettledVoid,
+  postToWebview,
   withHandlerErrorHandling,
   type SettingsHandlerContext,
 } from './SettingsHandlerContext';
@@ -41,11 +44,26 @@ export class SubscriptionHandlers {
 
   constructor(
     private readonly providerId: SubscriptionProviderId,
-    /** Current sign-in status, already wrapped as its outbound wire message. */
-    private readonly buildStatusMessage: () => Promise<SubscriptionAuthStatusMessage>,
+    /**
+     * Current sign-in status, already wrapped as its outbound wire message:
+     * the read as the program it is, re-run on every post.
+     */
+    private readonly statusMessage: Effect.Effect<
+      SubscriptionAuthStatusMessage,
+      never,
+      ProcessServices
+    >,
     private readonly ctx: SettingsHandlerContext,
     private readonly secrets: PlatformSecrets,
-    private readonly refreshModelAccess: () => Promise<void>,
+    private readonly refreshModelAccess: () => Effect.Effect<
+      void,
+      Error,
+      ProcessServices
+    >,
+    /**
+     * Settles the sign-in flow's progress notification, which VS Code hands a
+     * promise.
+     */
     private readonly runtime: ProcessRuntime,
     /** The view's session setting slots: where the preference is read and written. */
     private readonly stores: SettingsStores,
@@ -53,39 +71,42 @@ export class SubscriptionHandlers {
     this.provider = subscriptionProvider(providerId);
   }
 
-  async sendAuthStatus(webview: vscode.Webview): Promise<void> {
-    await webview.postMessage(await this.buildStatusMessage());
+  sendAuthStatus(webview: vscode.Webview) {
+    return Effect.flatMap(this.statusMessage, (message) =>
+      postToWebview(webview, message),
+    );
   }
 
-  private async refreshState(): Promise<void> {
-    await Promise.all([
+  private refreshState() {
+    return allSettledVoid([
       this.ctx.withActiveWebview((w) => this.sendAuthStatus(w)),
       this.refreshModelAccess(),
     ]);
   }
 
-  readonly handleSignIn = async (): Promise<void> => {
-    await signInWithSubscription(
-      this.stores,
-      this.ctx.channel,
-      this.providerId,
-      this.runtime,
-    );
-    await this.refreshState();
-  };
+  readonly handleSignIn = () =>
+    Effect.gen({ self: this }, function* () {
+      yield* signInWithSubscription(
+        this.stores,
+        this.ctx.channel,
+        this.providerId,
+        this.runtime,
+      );
+      yield* this.refreshState();
+    });
 
-  async handleSignOut(): Promise<void> {
+  handleSignOut() {
     const { displayName } = this.provider;
-    await withHandlerErrorHandling(
+    return withHandlerErrorHandling(
       this.ctx,
       ACCOUNT_OUTCOME.signOutFailed(displayName),
-      async () => {
-        await this.runtime.runPromise(this.provider.signOut(this.secrets));
+      Effect.gen({ self: this }, function* () {
+        yield* this.provider.signOut(this.secrets);
         void vscode.window.showInformationMessage(
           ACCOUNT_OUTCOME.signedOut(displayName),
         );
-        await this.refreshState();
-      },
+        yield* this.refreshState();
+      }),
     );
   }
 
@@ -94,22 +115,25 @@ export class SubscriptionHandlers {
    * overrides the requested value, log failures, and always refresh the
    * settings view.
    */
-  async handleSetPreferSubscription(enabled: boolean): Promise<void> {
+  handleSetPreferSubscription(enabled: boolean) {
     const { displayName } = this.provider;
-    await withHandlerErrorHandling(
-      this.ctx,
-      `Could not update the ${displayName} subscription preference`,
-      async () => {
-        const update = await this.runtime.runPromise(
-          this.provider.setPreferSubscription(this.stores, enabled),
-        );
-        if (update.effective !== enabled) {
-          void vscode.window.showWarningMessage(
-            `A more specific setting still keeps ${displayName} subscription ${update.effective ? 'enabled' : 'disabled'}.`,
+    return Effect.gen({ self: this }, function* () {
+      yield* withHandlerErrorHandling(
+        this.ctx,
+        `Could not update the ${displayName} subscription preference`,
+        Effect.gen({ self: this }, function* () {
+          const update = yield* this.provider.setPreferSubscription(
+            this.stores,
+            enabled,
           );
-        }
-      },
-    );
-    await this.refreshState();
+          if (update.effective !== enabled) {
+            void vscode.window.showWarningMessage(
+              `A more specific setting still keeps ${displayName} subscription ${update.effective ? 'enabled' : 'disabled'}.`,
+            );
+          }
+        }),
+      );
+      yield* this.refreshState();
+    });
   }
 }
