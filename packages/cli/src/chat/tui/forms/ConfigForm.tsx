@@ -8,6 +8,7 @@
 // catalog drives the extension settings view and this panel without drift.
 
 import { Box, Text, useInput } from 'ink';
+import { Cause, Effect } from 'effect';
 import { useState } from 'react';
 
 import { isCtrlInput, type ReturnKeyInput } from '@cli/tui/inputKeys';
@@ -16,6 +17,7 @@ import { KeyHints } from '@cli/tui/ui/KeyHints';
 import { Select, type SelectItem } from '@cli/tui/ui/Select';
 import { COLOR_ERROR } from '@cli/tui/ui/colors';
 import { CROSS, POINTER } from '@cli/tui/ui/glyphs';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import {
   settingEnumOptions,
   settingIsBoolean,
@@ -151,12 +153,19 @@ function buildEnumItems(
 interface ConfigFormProps {
   readonly entries: readonly SurfacedSettingEntry[];
   readonly readValue: (entry: SurfacedSettingEntry) => unknown;
+  /** The write as a program: this form owns the one run, so a rejected write
+   *  rolls its optimistic value back on the same runtime the surface holds. */
   readonly writeValue: (
     entry: SurfacedSettingEntry,
     value: unknown,
-  ) => void | Promise<void>;
+  ) => Effect.Effect<void, unknown>;
   /** Reset a setting to its default (delete the key). */
-  readonly resetValue: (entry: SurfacedSettingEntry) => void | Promise<void>;
+  readonly resetValue: (
+    entry: SurfacedSettingEntry,
+  ) => Effect.Effect<void, unknown>;
+  /** The runtime the writes above settle on, from the surface that mounted
+   *  this form — Ink components run no Effect of their own. */
+  readonly runtime: ProcessRuntime;
   readonly formLinks?: readonly {
     readonly name: string;
     readonly label: string;
@@ -259,23 +268,27 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
       ? overrides[entry.key]
       : props.readValue(entry);
 
-  // Optimistically show `optimisticValue`, run the async `action`, and roll the
-  // override back to the prior value if it rejects. Starting from a resolved
-  // promise routes both a synchronous throw (e.g. a schema-rejected value) and
-  // an async rejection through the single `.catch`.
+  // Optimistically show `optimisticValue`, run `action`, and roll the override
+  // back to the prior value if it fails. `Effect.suspend` builds the program
+  // inside the fiber, so a synchronous throw (e.g. a schema-rejected value)
+  // and a failed write both land in the single `catchCause`.
   const runWrite = (
     entry: SurfacedSettingEntry,
     optimisticValue: unknown,
-    action: () => void | Promise<void>,
+    action: () => Effect.Effect<void, unknown>,
   ): void => {
     const previous = effective(entry);
     setOverrides((current) => ({ ...current, [entry.key]: optimisticValue }));
-    void Promise.resolve()
-      .then(action)
-      .catch((error: unknown) => {
-        setOverrides((current) => ({ ...current, [entry.key]: previous }));
-        props.onError?.(error);
-      });
+    void props.runtime.runPromise(
+      Effect.catchCause(Effect.suspend(action), (cause) =>
+        Effect.sync(() => {
+          setOverrides((current) => ({ ...current, [entry.key]: previous }));
+          // The squashed cause is the value the runtime would have rejected
+          // this write with, so the surface's error hook sees what failed.
+          props.onError?.(Cause.squash(cause));
+        }),
+      ),
+    );
   };
 
   const commit = (entry: SurfacedSettingEntry, value: unknown): void =>

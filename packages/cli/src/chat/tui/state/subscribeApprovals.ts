@@ -12,6 +12,7 @@
 // The attached host answers nothing: it stages a tool edit's preview,
 // mirrors bypass state onto its wire, and presents events.
 
+import { Effect } from 'effect';
 import { computed } from '@lit-labs/signals';
 
 import type { HostInteractions, SessionHandle } from '@agent/runtime';
@@ -35,7 +36,7 @@ import {
   isApiProvider,
 } from '@model/apiProviders';
 import type { ProcessRuntime } from '@platform/processRuntime';
-import type { PlatformSecrets } from '@platform/secrets';
+import type { PlatformSecrets, SecretsFailed } from '@platform/secrets';
 import type { RequestDecision, RetryPermission } from '@shared/schemas';
 import { isCodingPlanQuotaRoute } from '@shared/quotaFallbackRoutes';
 import type { HostRequest } from '@shared/session/hostRequest';
@@ -122,36 +123,44 @@ export function createTuiHostInteractions(
       );
       return;
     }
-    void (async () => {
-      let decision: RequestDecision;
-      try {
-        await ensurePersonalApiKey(permission, stores);
-        decision = { action: 'retry', credentials: 'personal' };
-      } catch (error) {
-        decision = { action: 'deny', reason: toErrorMessage(error) };
-      }
-      // Success and failure have the same lifetime: a lookup that finishes
-      // after this attachment leaves must not answer for its next owner.
-      if (disposed || pendingRetry(requestId) === undefined) return;
-      if (decision.action === 'deny') {
-        logWarning(
-          'cli.tui',
-          `The retry could not switch to your own API key: ${decision.reason}`,
+    stores.runtime.runFork(
+      Effect.gen(function* () {
+        const decision = yield* Effect.match(
+          ensurePersonalApiKey(permission, stores),
+          {
+            onSuccess: (): RequestDecision => ({
+              action: 'retry',
+              credentials: 'personal',
+            }),
+            onFailure: (error): RequestDecision => ({
+              action: 'deny',
+              reason: toErrorMessage(error),
+            }),
+          },
         );
-      } else if (automaticSwitches.has(requestId)) {
-        notify('credentialSwitched');
-      }
-      // This capability already selected the credential route; decomposing
-      // the decision again would call the capability recursively.
-      landRequestDecision(
-        stores.session,
-        stores.runtime,
-        permission.runId,
-        requestId,
-        decision,
-        actAgainOnRefusal(requestId),
-      );
-    })();
+        // Success and failure have the same lifetime: a lookup that finishes
+        // after this attachment leaves must not answer for its next owner.
+        if (disposed || pendingRetry(requestId) === undefined) return;
+        if (decision.action === 'deny') {
+          logWarning(
+            'cli.tui',
+            `The retry could not switch to your own API key: ${decision.reason}`,
+          );
+        } else if (automaticSwitches.has(requestId)) {
+          notify('credentialSwitched');
+        }
+        // This capability already selected the credential route; decomposing
+        // the decision again would call the capability recursively.
+        landRequestDecision(
+          stores.session,
+          stores.runtime,
+          permission.runId,
+          requestId,
+          decision,
+          actAgainOnRefusal(requestId),
+        );
+      }),
+    );
   };
 
   const performHostCapability = (arm: HostRequest): void => {
@@ -184,65 +193,58 @@ export function createTuiHostInteractions(
       stagePresentation({ kind: 'retry', data: permission, tui: {} });
       return;
     }
-    void (async () => {
-      let personalApiKeyAvailable = false;
-      let missingPersonalApiKeyMessage: string | undefined;
-      // Every step of the preparation, the copy lookup included, stays inside
-      // the try: preparation only adorns the card, so a failure here must
-      // still stage it. A request whose modal never appears waits on nobody.
-      try {
-        const requestedProvider = permission.errorDetails?.provider;
-        const provider =
-          requestedProvider && isApiProvider(requestedProvider)
-            ? requestedProvider
-            : undefined;
-        missingPersonalApiKeyMessage = missingApiKeyRetryMessage(provider);
-        if (provider) {
-          try {
-            personalApiKeyAvailable = await stores.runtime.runPromise(
-              hasUsableApiKey(stores.secrets, provider),
-            );
-          } catch (error) {
-            // A keychain failure must not permit a credential switch nobody asked for.
-            logWarning(
-              'cli.tui',
-              `Keychain lookup for ${provider} failed: ${toErrorMessage(error)}`,
-            );
-            personalApiKeyAvailable = false;
-            missingPersonalApiKeyMessage = missingApiKeyRetryMessage(
-              provider,
-              'unavailable',
-            );
-          }
+    const requestedProvider = permission.errorDetails?.provider;
+    const provider =
+      requestedProvider && isApiProvider(requestedProvider)
+        ? requestedProvider
+        : undefined;
+    stores.runtime.runFork(
+      Effect.gen(function* () {
+        // Preparation only adorns the card, so no lookup outcome may stop it
+        // from being staged: a request whose modal never appears waits on
+        // nobody. The keychain read folds to the card copy either way.
+        const tui = provider
+          ? yield* Effect.match(hasUsableApiKey(stores.secrets, provider), {
+              onSuccess: (personalApiKeyAvailable) => ({
+                personalApiKeyAvailable,
+                missingPersonalApiKeyMessage:
+                  missingApiKeyRetryMessage(provider),
+              }),
+              onFailure: (error) => {
+                // A keychain failure must not permit a credential switch nobody asked for.
+                logWarning(
+                  'cli.tui',
+                  `Keychain lookup for ${provider} failed: ${toErrorMessage(error)}`,
+                );
+                return {
+                  personalApiKeyAvailable: false,
+                  missingPersonalApiKeyMessage: missingApiKeyRetryMessage(
+                    provider,
+                    'unavailable',
+                  ),
+                };
+              },
+            })
+          : {
+              personalApiKeyAvailable: false,
+              missingPersonalApiKeyMessage: missingApiKeyRetryMessage(provider),
+            };
+        // Preparation has the same attachment lifetime as the decision: an
+        // old lookup cannot replace the next host's card or switch its retry.
+        if (disposed || pendingRetry(requestId) === undefined) return;
+        const route = cliRetryQuotaRoute(permission);
+        if (
+          tui.personalApiKeyAvailable &&
+          route &&
+          isCodingPlanQuotaRoute(route.id)
+        ) {
+          automaticSwitches.add(requestId);
+          useOwnApiKey(requestId);
+          return;
         }
-      } catch (error) {
-        // The card shows on the payload alone: no own-key offer, since
-        // nothing here proved a stored key exists.
-        personalApiKeyAvailable = false;
-        logWarning(
-          'cli.tui',
-          `The retry card for request ${requestId} could not be prepared: ${toErrorMessage(error)}`,
-        );
-      }
-      // Preparation has the same attachment lifetime as the decision: an
-      // old lookup cannot replace the next host's card or switch its retry.
-      if (disposed || pendingRetry(requestId) === undefined) return;
-      const route = cliRetryQuotaRoute(permission);
-      if (
-        personalApiKeyAvailable &&
-        route &&
-        isCodingPlanQuotaRoute(route.id)
-      ) {
-        automaticSwitches.add(requestId);
-        useOwnApiKey(requestId);
-        return;
-      }
-      stagePresentation({
-        kind: 'retry',
-        data: permission,
-        tui: { personalApiKeyAvailable, missingPersonalApiKeyMessage },
-      });
-    })();
+        stagePresentation({ kind: 'retry', data: permission, tui });
+      }),
+    );
   };
 
   /**
@@ -393,23 +395,30 @@ export function announceForegroundApprovals(): () => void {
  * route for itself when it reads the decision, and the user's access
  * settings stay theirs.
  */
-async function ensurePersonalApiKey(
+function ensurePersonalApiKey(
   permission: RetryPermission,
   stores: TuiApprovalStores,
-): Promise<void> {
-  const requestedProvider = permission.errorDetails?.provider;
-  if (!requestedProvider || !isApiProvider(requestedProvider)) {
-    throw new Error(
-      'The failed API provider could not be identified, so TeXRA did not switch this retry to your own key.',
+): Effect.Effect<void, Error | SecretsFailed> {
+  return Effect.gen(function* () {
+    const requestedProvider = permission.errorDetails?.provider;
+    if (!requestedProvider || !isApiProvider(requestedProvider)) {
+      return yield* Effect.fail(
+        new Error(
+          'The failed API provider could not be identified, so TeXRA did not switch this retry to your own key.',
+        ),
+      );
+    }
+    const keyExists = yield* apiKeyExistsUncached(
+      stores.secrets,
+      requestedProvider,
     );
-  }
-  const keyExists = await stores.runtime.runPromise(
-    apiKeyExistsUncached(stores.secrets, requestedProvider),
-  );
-  if (!keyExists) {
-    throw new Error(missingApiKeyRetryMessage(requestedProvider));
-  }
-  // The presentation check is deliberately cached. Drop that cache after the
-  // uncached check so the next binding reads the current key.
-  invalidateApiKeyCache();
+    if (!keyExists) {
+      return yield* Effect.fail(
+        new Error(missingApiKeyRetryMessage(requestedProvider)),
+      );
+    }
+    // The presentation check is deliberately cached. Drop that cache after the
+    // uncached check so the next binding reads the current key.
+    invalidateApiKeyCache();
+  });
 }

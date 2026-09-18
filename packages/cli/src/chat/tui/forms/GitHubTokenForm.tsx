@@ -1,9 +1,11 @@
 import { Text } from 'ink';
+import { Cause, Effect } from 'effect';
 import { useState } from 'react';
 
 import { tryOpenBrowser } from '@cli/runtime/browser';
 import { COLOR_ERROR } from '@cli/tui/ui/colors';
 import { CROSS } from '@cli/tui/ui/glyphs';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import { GITHUB_TOKEN_CREATE_URL } from '@tools/github/githubAuth';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -75,8 +77,12 @@ function statusHint(status: GitHubTokenStatus | undefined): string {
 interface GitHubTokenFormProps {
   readonly availableRows?: number;
   readonly statusView?: GitHubTokenStatusView;
-  readonly onSave: (token: string) => Promise<void>;
-  readonly onRemove: () => Promise<void>;
+  /** The credential writes as programs; this form owns their one run. */
+  readonly onSave: (token: string) => Effect.Effect<void, unknown>;
+  readonly onRemove: () => Effect.Effect<void, unknown>;
+  /** The runtime those programs settle on, from the surface that mounted this
+   *  form — Ink components run no Effect of their own. */
+  readonly runtime: ProcessRuntime;
   readonly onDone: () => void;
   readonly onCancel: () => void;
 }
@@ -89,14 +95,17 @@ export function GitHubTokenForm(
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string>();
 
-  const runAction = (action: () => Promise<void>): void => {
+  const runAction = (action: () => Effect.Effect<void, unknown>): void => {
     setSaving(true);
-    void action()
-      .then(() => props.onDone())
-      .catch((actionError: unknown) => {
-        setSaving(false);
-        setError(toErrorMessage(actionError));
-      });
+    void props.runtime.runPromise(
+      Effect.matchCause(Effect.suspend(action), {
+        onSuccess: () => props.onDone(),
+        onFailure: (cause) => {
+          setSaving(false);
+          setError(toErrorMessage(Cause.squash(cause)));
+        },
+      }),
+    );
   };
 
   if (entering) {

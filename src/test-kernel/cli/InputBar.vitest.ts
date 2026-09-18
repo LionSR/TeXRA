@@ -348,18 +348,22 @@ describe('InputBar draft discard', () => {
 
   it('restores queued drafts with the image entries captured by each submission', async () => {
     clipboardMock.attachClipboardImage
-      .mockResolvedValueOnce({
-        ok: true,
-        path: '/tmp/first.png',
-        mediaType: 'image/png',
-        displayName: 'first.png',
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        path: '/tmp/second.png',
-        mediaType: 'image/png',
-        displayName: 'second.png',
-      });
+      .mockReturnValueOnce(
+        Effect.succeed({
+          ok: true,
+          path: '/tmp/first.png',
+          mediaType: 'image/png',
+          displayName: 'first.png',
+        }),
+      )
+      .mockReturnValueOnce(
+        Effect.succeed({
+          ok: true,
+          path: '/tmp/second.png',
+          mediaType: 'image/png',
+          displayName: 'second.png',
+        }),
+      );
     const submitted: Array<{
       readonly text: string;
       readonly mediaFiles: readonly string[] | undefined;
@@ -461,13 +465,15 @@ describe('InputBar draft discard', () => {
       readonly displayName: string;
     }>();
     clipboardMock.attachClipboardImage
-      .mockReturnValueOnce(firstPaste.promise)
-      .mockResolvedValueOnce({
-        ok: true,
-        path: '/tmp/current.png',
-        mediaType: 'image/png',
-        displayName: 'current.png',
-      });
+      .mockReturnValueOnce(Effect.tryPromise(() => firstPaste.promise))
+      .mockReturnValueOnce(
+        Effect.succeed({
+          ok: true,
+          path: '/tmp/current.png',
+          mediaType: 'image/png',
+          displayName: 'current.png',
+        }),
+      );
     const submitted: Array<readonly [string, readonly string[] | undefined]> =
       [];
     const controlRef = React.createRef() as {
