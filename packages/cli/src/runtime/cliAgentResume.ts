@@ -9,32 +9,21 @@
  */
 import { Effect } from 'effect';
 
-import {
-  AgentResumeFailed,
-  type AgentResumePort,
-  type RecoveryContinuation,
-} from '@platform/interfaces';
-import type { RunId } from '@shared/schemas';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import type { AgentResumePort } from '@platform/interfaces';
 
 /**
  * The chat TUI's stream resume, installed while a chat session is mounted.
- * The platform port below forwards to it; outside a chat there is no host
- * that can resume, so the port answers `false`.
+ * The port below forwards to it; outside a chat there is no host that can
+ * resume, so the port answers `false`.
  *
- * Promise-typed on purpose: the TUI's controller claims its root-run slot in
- * a synchronous promise handshake, so the port adopts the attempt where it
- * stands rather than the controller answering in a shape it cannot.
+ * It is the port's own member, not a shape of its own: the chat controller
+ * answers the resume in exactly what the port declares, so this registration
+ * carries the program rather than adapting one.
  */
-type CliResumeHandler = (
-  runId: RunId,
-  recovery?: RecoveryContinuation,
-) => Promise<boolean>;
-
-let cliResumeHandler: CliResumeHandler | undefined;
+let cliResumeHandler: AgentResumePort['tryResumeRun'] | undefined;
 
 export function setCliAgentResumeHandler(
-  handler: CliResumeHandler,
+  handler: AgentResumePort['tryResumeRun'],
 ): () => void {
   cliResumeHandler = handler;
   return () => {
@@ -45,14 +34,10 @@ export function setCliAgentResumeHandler(
 /** The CLI's one resume port: the platform's and the `AgentResume`
  *  service's value alike. */
 export const cliAgentResume: AgentResumePort = {
+  // Suspended so the installed handler is read when the resume runs, not when
+  // the program is built: a chat that unmounts in between answers `false`.
   tryResumeRun: (runId, recovery) =>
-    Effect.tryPromise({
-      try: async () => (await cliResumeHandler?.(runId, recovery)) ?? false,
-      catch: (cause) =>
-        new AgentResumeFailed({
-          runId,
-          message: toErrorMessage(cause),
-          cause,
-        }),
-    }),
+    Effect.suspend(
+      () => cliResumeHandler?.(runId, recovery) ?? Effect.succeed(false),
+    ),
 };

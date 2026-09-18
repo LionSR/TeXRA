@@ -1,10 +1,9 @@
-import type { Effect } from 'effect';
-
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { RUN_PHASE, type RunPhase, type RunId } from '@shared/schemas';
 import { isActivePhase } from '@shared/runs/runStatus';
 
 import { claimedRunId, rootRunPending } from './cliState';
+import type { Effect } from 'effect';
 
 /**
  * The claimed root run's settlement, as the slot holds it: the program that

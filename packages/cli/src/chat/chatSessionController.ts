@@ -8,6 +8,7 @@ import {
   Data,
   Deferred,
   Effect,
+  Exit,
   Option,
   Stream,
   SubscriptionRef,
@@ -51,7 +52,9 @@ import { hasErrorPresentationClaimed } from '@common/errors/sdkError/errorMetada
 import type { RunModelDecisionReason } from '@model/runModelDecision';
 import type { DisposableStore } from '@platform/disposable';
 import {
+  AgentResumeFailed,
   StateWriteFailed,
+  type AgentResumePort,
   type RecoveryContinuation,
   type StateStore,
 } from '@platform/interfaces';
@@ -233,10 +236,12 @@ export interface ChatSessionController {
   clearInterruptedRecovery(): void;
 
   /**
-   * Attempt to resume a queued follow-up target from the CLI platform port.
-   * Returns true only when this controller accepts the target resume.
+   * Attempt to resume a queued follow-up target. This is the CLI's
+   * agent-resume port while a chat is mounted, so it is the port's own
+   * program: it answers true only when this controller accepts the target
+   * resume, and it claims the root-run slot in its first synchronous step.
    */
-  tryResumeRun(runId: RunId, recovery?: RecoveryContinuation): Promise<boolean>;
+  readonly tryResumeRun: AgentResumePort['tryResumeRun'];
   /**
    * The composer's submit path (PRD 10.1): a slash command, the first
    * instruction of a fresh root run, a message into an interrupted root, or
@@ -848,35 +853,46 @@ export function createChatSessionController(
     }
   };
 
+  /**
+   * The controller's implementation of the CLI's agent-resume port.
+   *
+   * `Effect.suspend` is what keeps the claim handshake synchronous: its body
+   * is the program's first step, so the availability check and the claim are
+   * one uninterrupted synchronous callback that no other fiber can land
+   * between. The program then suspends on the deferred the detached run
+   * chain settles, so the caller's own fiber never carries the resumed turn
+   * and an interrupted caller cannot interrupt a started resume.
+   */
   const tryResumeRun = (
     runId: RunId,
     options: AutoResumeOptions = {},
-  ): Promise<boolean> => {
-    // Do not let a recovery wake claim the slot after the interrupted root
-    // publishes completion but before that root's teardown settles. The
-    // captured promise remains authoritative even if `/clear` resets the
-    // mutable session state in the meantime.
-    if (options.recovery && recoveryBlockedByInterruptedRuns.size > 0) {
-      return Promise.resolve(false);
-    }
-    const autoResumeRun = Deferred.makeUnsafe<boolean, unknown>();
-    // Claim the root-run slot as the FIRST statement, synchronously, before
-    // any `await` below, see tryClaimRootRunSlot and the matching comment
-    // in resume().
-    if (
-      !session.tryClaimRootRunSlot(Effect.asVoid(Deferred.await(autoResumeRun)))
-    ) {
-      // Same as in resume(): the deferred this attempt made is dropped
-      // unsettled, since no resume path will complete it now.
-      return Promise.resolve(false);
-    }
-    const runPromise = runtime.runPromise(Deferred.await(autoResumeRun));
-    const attemptCancellation = { cancellationRequested: false };
-    activeAutoResumeCancellation = attemptCancellation;
-    const isCancellationRequested = (): boolean =>
-      attemptCancellation.cancellationRequested || session.stopRequested;
+  ): Effect.Effect<boolean, AgentResumeFailed> =>
+    Effect.suspend(() => {
+      // Do not let a recovery wake claim the slot after the interrupted root
+      // publishes completion but before that root's teardown settles. The
+      // captured settlement remains authoritative even if `/clear` resets the
+      // mutable session state in the meantime.
+      if (options.recovery && recoveryBlockedByInterruptedRuns.size > 0) {
+        return Effect.succeed(false);
+      }
+      const autoResumeRun = Deferred.makeUnsafe<boolean, AgentResumeFailed>();
+      // Claim the root-run slot as the FIRST statement of this step, before
+      // the program suspends below, see tryClaimRootRunSlot and the matching
+      // comment in resume().
+      if (
+        !session.tryClaimRootRunSlot(
+          Effect.asVoid(Deferred.await(autoResumeRun)),
+        )
+      ) {
+        // Same as in resume(): the deferred this attempt made is dropped
+        // unsettled, since no resume path will complete it now.
+        return Effect.succeed(false);
+      }
+      const attemptCancellation = { cancellationRequested: false };
+      activeAutoResumeCancellation = attemptCancellation;
+      const isCancellationRequested = (): boolean =>
+        attemptCancellation.cancellationRequested || session.stopRequested;
 
-    const runResume = async (): Promise<boolean> => {
       let finalize = (): void => session.markRunCompleted();
       let recovery: FollowUpRecoveryLease | undefined;
       let recoveryHandedOff = false;
@@ -960,7 +976,9 @@ export function createChatSessionController(
         }
         return false;
       });
-      return runtime.runPromise(
+      // Detached on the process runtime, as the wake's own chain: the port's
+      // caller reads the answer off the deferred instead of hosting the run.
+      void runtime.runPromise(
         recoverRun(attempt, (error) => {
           reportRunFailure(error);
           return false;
@@ -974,18 +992,30 @@ export function createChatSessionController(
               }
             }),
           ),
+          // The one place a resume attempt is classified: an answer is the
+          // port's boolean, and anything else -- a defect, an interrupted
+          // chain -- is the port's fault, which is what the caller's retry
+          // decision reads.
+          Effect.onExit((exit) =>
+            Effect.sync(() => {
+              const answer: Effect.Effect<boolean, AgentResumeFailed> =
+                Exit.isSuccess(exit)
+                  ? Effect.succeed(exit.value)
+                  : Effect.fail(
+                      new AgentResumeFailed({
+                        runId,
+                        message: toErrorMessage(Cause.squash(exit.cause)),
+                        cause: Cause.squash(exit.cause),
+                      }),
+                    );
+              Deferred.doneUnsafe(autoResumeRun, answer);
+            }),
+          ),
         ),
       );
-    };
 
-    void runResume().then(
-      (started) => Deferred.doneUnsafe(autoResumeRun, Effect.succeed(started)),
-      (error: unknown) =>
-        Deferred.doneUnsafe(autoResumeRun, Effect.fail(error)),
-    );
-
-    return runPromise;
-  };
+      return Deferred.await(autoResumeRun);
+    });
 
   const admitInterruptedFollowUp = (
     followUp: InterruptedFollowUp,
@@ -1019,16 +1049,18 @@ export function createChatSessionController(
       if (batch.superseded) return true;
       let followUpQueueReady = false;
       try {
-        const resumed = await tryResumeRun(batch.runId, {
-          extraFollowUps: batch.followUps,
-          onFollowUpQueueReady: () => {
-            followUpQueueReady = true;
-            session.interruptedRunId = undefined;
-            if (interruptedContinuation === batch) {
-              interruptedContinuation = undefined;
-            }
-          },
-        });
+        const resumed = await runtime.runPromise(
+          tryResumeRun(batch.runId, {
+            extraFollowUps: batch.followUps,
+            onFollowUpQueueReady: () => {
+              followUpQueueReady = true;
+              session.interruptedRunId = undefined;
+              if (interruptedContinuation === batch) {
+                interruptedContinuation = undefined;
+              }
+            },
+          }),
+        );
         if (!resumed && !batch.superseded && !followUpQueueReady) {
           session.interruptedRunId = batch.runId;
           pendingInterruptedFollowUps.push(...batch.followUps);

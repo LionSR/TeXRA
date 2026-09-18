@@ -339,7 +339,7 @@ describe('runChat signal ownership wiring', () => {
       startRootRun: mocks.startRootRun,
       stop: vi.fn(),
       stopRun: vi.fn(),
-      tryResumeRun: vi.fn(async () => false),
+      tryResumeRun: vi.fn(() => Effect.succeed(false)),
       submit: mocks.submit,
       activateSkill: vi.fn(),
       clearPendingSkills: vi.fn(),
