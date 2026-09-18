@@ -1,6 +1,6 @@
 // Test composition imports
 
-import { Effect } from 'effect';
+import { Effect, Fiber } from 'effect';
 
 // Slash command run dispatch.
 
@@ -220,7 +220,7 @@ function createContext(
     },
     canSelectModel: () => true,
     resetSession: vi.fn(),
-    resumeRun: (_id: RunId) => Promise.resolve(),
+    resumeRun: (_id: RunId) => Effect.void,
     ...overrides,
   };
 }
@@ -250,8 +250,16 @@ async function expectFormOpens(
   commandName: string,
   context: SlashCommandContext = createContext(),
 ): Promise<void> {
-  expect(await handleTuiSlashCommand(line, context)).toBe(true);
+  expect(await dispatchSlash(line, context)).toBe(true);
   expect(activeForm.get()?.commandName).toBe(commandName);
+}
+
+/** The dispatcher as the composer runs it: one program, one run edge. */
+function dispatchSlash(
+  line: string,
+  context: SlashCommandContext = createContext(),
+): Promise<boolean> {
+  return services.runtime.runPromise(handleTuiSlashCommand(line, context));
 }
 
 function silentOutput(): SlashCommandOutput {
@@ -310,16 +318,16 @@ describe('handleTuiSlashCommand', () => {
     registerBuiltinSlashCommands({ ...services });
     const context = createContext();
 
-    await handleTuiSlashCommand('/tools', context);
+    await dispatchSlash('/tools', context);
     expect(localEntries()).toEqual([]);
 
-    await handleTuiSlashCommand('/help', context);
+    await dispatchSlash('/help', context);
     expect(infoPane.get()).toMatchObject({ title: '/help' });
     expect(infoPane.get()?.lines.join('\n')).toContain('**Keyboard**');
     expect(localEntries()).toEqual([]);
 
     closeInfoPane();
-    await handleTuiSlashCommand('/goal', context);
+    await dispatchSlash('/goal', context);
     expect(activeForm.get()).toMatchObject({ commandName: 'goal' });
     expect(localEntries()).toEqual([]);
   });
@@ -328,13 +336,13 @@ describe('handleTuiSlashCommand', () => {
     registerBuiltinSlashCommands({ ...services });
     const context = createContext();
 
-    await handleTuiSlashCommand('/plan', context);
+    await dispatchSlash('/plan', context);
     expect(transientNotice.get()?.text).toBe('No focused session.');
 
     const runId = 'plan-reader' as RunId;
     ensureRun(runId);
     activeRunId.set(runId);
-    await handleTuiSlashCommand('/plan', context);
+    await dispatchSlash('/plan', context);
     expect(transientNotice.get()?.text).toBe(
       'The focused session has no work plan.',
     );
@@ -346,7 +354,7 @@ describe('handleTuiSlashCommand', () => {
         status: 'in_progress',
       },
     ]);
-    await handleTuiSlashCommand('/plan', context);
+    await dispatchSlash('/plan', context);
     expect(foregroundReader.get()).toEqual({ kind: 'workPlan', runId });
 
     activeRunId.set('another-stream' as RunId);
@@ -372,13 +380,15 @@ describe('handleTuiSlashCommand', () => {
       storage: 'storage',
       globalStorage: 'globalStorage',
     };
-    await showCliMemoryList(testRuntime(), memoryRoots);
+    await services.runtime.runPromise(showCliMemoryList(memoryRoots));
     expect(infoPane.get()).toEqual({
       title: '/memory list',
       lines: ['No memory files found.'],
     });
 
-    await showCliMemoryPreview(testRuntime(), memoryRoots, 'note.md');
+    await services.runtime.runPromise(
+      showCliMemoryPreview(memoryRoots, 'note.md'),
+    );
     expect(infoPane.get()?.title).toBe('/memory list');
     closeInfoPane();
     expect(infoPane.get()).toMatchObject({ title: '/memory preview' });
@@ -393,7 +403,7 @@ describe('handleTuiSlashCommand', () => {
       echo: 'never',
     });
 
-    await handleTuiSlashCommand('/unavailable', createContext());
+    await dispatchSlash('/unavailable', createContext());
 
     expect(localEntryPairs()).toEqual([
       { kind: 'user', text: '/unavailable' },
@@ -412,7 +422,7 @@ describe('handleTuiSlashCommand', () => {
       formComponent: () => null,
     });
 
-    await handleTuiSlashCommand('/custom-form', createContext());
+    await dispatchSlash('/custom-form', createContext());
     const form = activeForm.get()?.render(() => undefined, 20) as {
       props?: { onPersist?: () => void };
     };
@@ -499,20 +509,16 @@ describe('handleTuiSlashCommand', () => {
   it('leaves path-like equals input for the agent', async () => {
     registerBuiltinSlashCommands({ ...services });
 
-    expect(await handleTuiSlashCommand('/tmp=backup', createContext())).toBe(
-      false,
-    );
-    expect(await handleTuiSlashCommand('/keynote.tex', createContext())).toBe(
-      false,
-    );
+    expect(await dispatchSlash('/tmp=backup', createContext())).toBe(false);
+    expect(await dispatchSlash('/keynote.tex', createContext())).toBe(false);
   });
 
   it('does not mistake ordinary key-prefixed commands for credential input', async () => {
     registerBuiltinSlashCommands({ ...services });
 
-    expect(
-      await handleTuiSlashCommand('/keyboard shortcuts', createContext()),
-    ).toBe(true);
+    expect(await dispatchSlash('/keyboard shortcuts', createContext())).toBe(
+      true,
+    );
     expect(activeForm.get()).toBeUndefined();
     expect(transientNotice.get()?.text).toContain(
       'Unknown command with protected input',
@@ -523,9 +529,7 @@ describe('handleTuiSlashCommand', () => {
     registerBuiltinSlashCommands({ ...services });
     const secret = 'keyArbitraryCredentialValue';
 
-    expect(await handleTuiSlashCommand(`/${secret}`, createContext())).toBe(
-      true,
-    );
+    expect(await dispatchSlash(`/${secret}`, createContext())).toBe(true);
     expect(activeForm.get()).toBeUndefined();
     expect(transcriptJson()).not.toContain(secret);
   });
@@ -552,10 +556,7 @@ describe('handleTuiSlashCommand', () => {
       Effect.succeed({ effective: true, target: 'global' }),
     );
 
-    const handled = await handleTuiSlashCommand(
-      '/login chatgpt',
-      createContext(),
-    );
+    const handled = await dispatchSlash('/login chatgpt', createContext());
 
     expect(handled).toBe(true);
     expect(subscriptionLogin.signInCliSubscription).toHaveBeenCalledWith(
@@ -565,23 +566,23 @@ describe('handleTuiSlashCommand', () => {
     );
   });
 
-  it('exposes cancellation for an interactive sign-in', async () => {
+  it('cancels an interactive sign-in when its fiber is interrupted', async () => {
     const signIn = interruptibleProgram();
     vi.spyOn(subscriptionLogin, 'signInCliSubscription').mockReturnValue(
       signIn.program,
     );
 
-    const completion = loginFromChat(
-      'chatgpt --no-browser',
-      services.stores,
-      testRuntime(),
-      createCliContext(),
-      silentOutput(),
+    const fiber = services.runtime.runFork(
+      loginFromChat(
+        'chatgpt --no-browser',
+        services.stores,
+        testRuntime(),
+        createCliContext(),
+        silentOutput(),
+      ),
     );
-    const rejection = expect(completion).rejects.toThrow(/interrupted/);
-    completion.abort();
+    await services.runtime.runPromise(Fiber.interrupt(fiber));
 
-    await rejection;
     expect(signIn.interrupted()).toBe(true);
   });
 
@@ -599,11 +600,11 @@ describe('handleTuiSlashCommand', () => {
       );
     const context = createContext();
 
-    await handleTuiSlashCommand('/auth', context);
+    await dispatchSlash('/auth', context);
     const authStatusText = lastEntryText();
     expectAccessStatusText(authStatusText);
 
-    await handleTuiSlashCommand('/api status', context);
+    await dispatchSlash('/api status', context);
     const apiStatusText = lastEntryText();
     expectAccessStatusText(apiStatusText);
     expect(apiStatusText).toBe(authStatusText);
@@ -625,27 +626,25 @@ describe('handleTuiSlashCommand', () => {
     );
   });
 
-  it('exposes cancellation while model access is signing in to ChatGPT', async () => {
+  it('cancels a model-access sign-in when its fiber is interrupted', async () => {
     const update = interruptibleProgram();
     vi.spyOn(modelAccessSelection, 'updateCliModelAccess').mockReturnValue(
       update.program,
     );
-    const completion = applyCliModelAccessSelection(
-      services.stores,
-      testRuntime(),
-      {
-        kind: 'subscription-preference',
-        provider: 'chatgpt',
-        state: 'on',
-      },
-      createContext(),
-      silentOutput(),
+    const fiber = services.runtime.runFork(
+      applyCliModelAccessSelection(
+        services.stores,
+        {
+          kind: 'subscription-preference',
+          provider: 'chatgpt',
+          state: 'on',
+        },
+        createContext(),
+        silentOutput(),
+      ),
     );
-    const rejection = expect(completion).rejects.toThrow(/interrupted/);
+    await services.runtime.runPromise(Fiber.interrupt(fiber));
 
-    completion.abort();
-
-    await rejection;
     expect(update.interrupted()).toBe(true);
   });
 
@@ -653,7 +652,7 @@ describe('handleTuiSlashCommand', () => {
     registerBuiltinSlashCommands({ ...services });
     const { signOutSupabase, signOutChatGpt } = mockSignOuts();
 
-    const handled = await handleTuiSlashCommand('/logout all', createContext());
+    const handled = await dispatchSlash('/logout all', createContext());
 
     expect(handled).toBe(true);
     expect(signOutSupabase).toHaveBeenCalledOnce();
@@ -680,11 +679,11 @@ describe('handleTuiSlashCommand', () => {
     registerBuiltinSlashCommands({ ...services });
     const { signOutSupabase, signOutChatGpt } = mockSignOuts();
 
-    await handleTuiSlashCommand('/logout texra', createContext());
+    await dispatchSlash('/logout texra', createContext());
     expect(signOutSupabase).toHaveBeenCalledOnce();
     expect(signOutChatGpt).not.toHaveBeenCalled();
 
-    await handleTuiSlashCommand('/logout chatgpt', createContext());
+    await dispatchSlash('/logout chatgpt', createContext());
     expect(signOutSupabase).toHaveBeenCalledOnce();
     expect(signOutChatGpt).toHaveBeenCalledOnce();
   });
@@ -697,7 +696,7 @@ describe('handleTuiSlashCommand', () => {
     );
     mockModelAccessOverview();
 
-    const handled = await handleTuiSlashCommand('/logout all', createContext());
+    const handled = await dispatchSlash('/logout all', createContext());
 
     expect(handled).toBe(true);
     const entry = lastEntryText();
@@ -713,7 +712,7 @@ describe('handleTuiSlashCommand', () => {
     );
     mockModelAccessOverview();
 
-    const handled = await handleTuiSlashCommand('/logout all', createContext());
+    const handled = await dispatchSlash('/logout all', createContext());
 
     expect(handled).toBe(true);
     const entry = lastEntryText();
@@ -730,7 +729,7 @@ describe('handleTuiSlashCommand', () => {
     const session = createSession();
     const requestInputExit = vi.fn();
 
-    const handled = await handleTuiSlashCommand(
+    const handled = await dispatchSlash(
       '/quit',
       createContext(session, { requestInputExit }),
     );
@@ -753,7 +752,7 @@ describe('handleTuiSlashCommand', () => {
     activeRunId.set(runId);
     ensureRun(runId, { status: RUN_PHASE.WAITING });
 
-    const handled = await handleTuiSlashCommand(
+    const handled = await dispatchSlash(
       '/status',
       createContext(session, { processCwd: '/tmp/workspace' }),
     );
@@ -781,7 +780,7 @@ describe('handleTuiSlashCommand', () => {
       },
     ]);
 
-    await handleTuiSlashCommand('/status', createContext(session));
+    await dispatchSlash('/status', createContext(session));
 
     const statusText = lastEntryText(rootRunId);
     expect(statusText).toContain('status: Idle');
@@ -824,7 +823,7 @@ describe('handleTuiSlashCommand', () => {
       rosterRow(waitingChildId, 4, RUN_PHASE.WAITING),
     ]);
 
-    await handleTuiSlashCommand('/status', createContext(session));
+    await dispatchSlash('/status', createContext(session));
 
     const statusText = lastEntryText(rootRunId);
     expect(statusText).toContain('active background tasks: 1');
@@ -854,7 +853,7 @@ describe('handleTuiSlashCommand', () => {
       })),
     );
 
-    await handleTuiSlashCommand('/status', createContext(session));
+    await dispatchSlash('/status', createContext(session));
 
     expect(lastEntryText(rootRunId)).not.toContain('active background tasks:');
   });
@@ -880,7 +879,7 @@ describe('handleTuiSlashCommand', () => {
       })),
     );
 
-    await handleTuiSlashCommand('/status', createContext(session));
+    await dispatchSlash('/status', createContext(session));
 
     const statusText = lastEntryText(rootRunId);
     expect(statusText).toContain('status: Running');
@@ -905,7 +904,7 @@ describe('handleTuiSlashCommand', () => {
       },
     });
 
-    await handleTuiSlashCommand('/status', createContext(session));
+    await dispatchSlash('/status', createContext(session));
 
     const statusText = lastEntryText(runId);
     expect(statusText).toContain('model access: Your own API keys');
@@ -916,7 +915,7 @@ describe('handleTuiSlashCommand', () => {
   it('surfaces status lookup failures without rejecting', async () => {
     registerBuiltinSlashCommands({ ...services });
 
-    const handled = await handleTuiSlashCommand(
+    const handled = await dispatchSlash(
       '/status',
       createContext(createSession(), {
         getApprovalPolicy: () => {

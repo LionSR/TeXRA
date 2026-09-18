@@ -1,5 +1,7 @@
 // Registers the slash commands the input palette surfaces.
 
+import { Cause, Effect, Fiber } from 'effect';
+
 import type { SessionHandle } from '@agent/runtime';
 import type { GetModelSwitchDisabledReason } from '@cli/runtime/modelAccess';
 import { parseCliHistoryId } from '@cli/runtime/history';
@@ -9,7 +11,6 @@ import {
   type LoginFormValue,
   parseChatLoginSlashArgs,
 } from '@cli/runtime/loginOptions';
-import { createLog } from '@logger/logUtils';
 import type { ApiProvider } from '@model/apiProviders';
 import type { StateStore } from '@platform/interfaces';
 import type { ProcessRuntime } from '@platform/processRuntime';
@@ -67,6 +68,7 @@ import {
   logoutFromChat,
 } from './handlers/loginCommands';
 import {
+  type SlashCommandEffect,
   type SlashCommandOutput,
   transcriptSlashCommandOutput,
 } from './handlers/slashContext';
@@ -84,16 +86,12 @@ import {
 import { registerSlashCommand, type SlashFormProps } from './slashRegistry';
 import { openCliSlashCommandForm } from './slashForms';
 
-const log = createLog('cli.tui');
-
-type SelectHandler<T> = (value: T) => void | Promise<void>;
-type FormActionResult =
-  void | (Promise<void> & { readonly abort?: () => void });
+type SelectHandler<T> = (value: T) => SlashCommandEffect;
 /** Selection handler that reports progress while the form shows a busy frame. */
 type FormActionHandler<T> = (
   value: T,
   output: SlashCommandOutput,
-) => FormActionResult;
+) => SlashCommandEffect;
 type ApiKeySaveHandler = (
   provider: ApiProvider,
   key: string,
@@ -103,6 +101,7 @@ type SelectionCompletion = 'afterAction' | 'beforeAction' | 'busy';
 
 /** Build a form selection handler with consistent completion and errors. */
 function formSelectionHandler<T>({
+  runtime,
   action,
   onDone,
   onError,
@@ -110,24 +109,28 @@ function formSelectionHandler<T>({
   echoOnPersist = false,
   completion = 'afterAction',
   busyTitle,
-  abandonNotice,
 }: {
-  readonly action: (value: T, output: SlashCommandOutput) => FormActionResult;
+  readonly runtime: ProcessRuntime;
+  readonly action: (value: T, output: SlashCommandOutput) => SlashCommandEffect;
   readonly onDone: (value: T) => void;
   readonly onError?: ErrorHandler;
   readonly onPersist?: () => void;
   readonly echoOnPersist?: boolean;
   readonly completion?: SelectionCompletion;
   readonly busyTitle?: (value: T) => string;
-  readonly abandonNotice?: (value: T) => string;
 }): (value: T) => void {
+  // The host's error hook is still a Promise-facing callback the forms share,
+  // so it is awaited here, once, rather than re-typed across the form tree.
+  const reportError = (error: unknown): Effect.Effect<void> =>
+    Effect.promise(async () => {
+      await onError?.(error);
+    });
   return (value) => {
     if (completion === 'busy') {
       // The submission token is the single owner of "is this submission still
       // live": resetCliState clears `formProgress`, so a stale token can never
       // match the current progress.
       const token = Symbol('form submission');
-      const actionController: { abort?: () => void } = {};
       const currentProgress = () => {
         const current = formProgress.get();
         return current?.token === token ? current : undefined;
@@ -137,22 +140,13 @@ function formSelectionHandler<T>({
         formProgress.set(undefined);
         onDone(value);
       };
+      // The running submission IS the forked fiber below, so Escape
+      // interrupts it instead of detaching from a promise that keeps running.
       const cancel = (): void => {
         if (!currentProgress()) return;
-        const canAbort = actionController.abort !== undefined;
-        try {
-          actionController.abort?.();
-        } catch (error) {
-          // Detaching must still restore the form boundary if abort fails.
-          log.warn(
-            `Aborting the running form action failed: ${toErrorMessage(error)}`,
-          );
-        }
+        runtime.runFork(Fiber.interrupt(actionFiber));
         formProgress.set(undefined);
         onDone(value);
-        if (!canAbort && abandonNotice !== undefined) {
-          setTransientNotice(abandonNotice(value));
-        }
       };
       const title = busyTitle?.(value) ?? 'Working';
       const archiveCopyable = (): void => {
@@ -201,50 +195,51 @@ function formSelectionHandler<T>({
         },
       };
 
-      let actionResult: FormActionResult;
-      try {
-        actionResult = action(value, output);
-      } catch (error: unknown) {
-        actionResult = Promise.reject(error);
-      }
-      if (actionResult?.abort) actionController.abort = actionResult.abort;
-
-      void Promise.resolve(actionResult)
-        .then(() => {
-          const current = currentProgress();
-          if (!current) return;
-          if (current.copyableMessage) {
-            formProgress.set({ ...current, status: 'succeeded' });
-          } else {
-            close();
-          }
-        })
-        .catch(async (error: unknown) => {
-          let current = currentProgress();
-          if (!current) return;
-          if (echoOnPersist) onPersist?.();
-          const errorMessage = toErrorMessage(error);
-          const copyableMessage = current.copyableMessage;
-          const persistedError = copyableMessage
-            ? new Error(
-                `${collapseWhitespace(errorMessage)} · ${collapseWhitespace(
-                  copyableMessage,
-                )}`,
-              )
-            : error;
-          await onError?.(persistedError);
-          current = currentProgress();
-          if (!current) return;
-          if (current.copyableMessage) {
-            formProgress.set({
-              ...current,
-              status: 'failed',
-              message: errorMessage,
-            });
-          } else {
-            close();
-          }
-        });
+      const actionFiber = runtime.runFork(
+        Effect.suspend(() => action(value, output)).pipe(
+          Effect.matchCauseEffect({
+            onSuccess: () =>
+              Effect.sync(() => {
+                const current = currentProgress();
+                if (!current) return;
+                if (current.copyableMessage) {
+                  formProgress.set({ ...current, status: 'succeeded' });
+                } else {
+                  close();
+                }
+              }),
+            onFailure: (cause) =>
+              Effect.gen(function* () {
+                let current = currentProgress();
+                if (!current) return;
+                if (echoOnPersist) onPersist?.();
+                const error = Cause.squash(cause);
+                const errorMessage = toErrorMessage(error);
+                const copyableMessage = current.copyableMessage;
+                yield* reportError(
+                  copyableMessage
+                    ? new Error(
+                        `${collapseWhitespace(errorMessage)} · ${collapseWhitespace(
+                          copyableMessage,
+                        )}`,
+                      )
+                    : error,
+                );
+                current = currentProgress();
+                if (!current) return;
+                if (current.copyableMessage) {
+                  formProgress.set({
+                    ...current,
+                    status: 'failed',
+                    message: errorMessage,
+                  });
+                } else {
+                  close();
+                }
+              }),
+          }),
+        ),
+      );
       return;
     }
 
@@ -253,20 +248,23 @@ function formSelectionHandler<T>({
       onDone(value);
     }
 
-    const runAction = async (): Promise<void> => {
-      await action(value, transcriptSlashCommandOutput);
-    };
-
-    void runAction()
-      .catch((error: unknown) => {
-        if (!echoOnPersist) onPersist?.();
-        return onError?.(error);
-      })
-      .finally(() => {
-        if (completion === 'afterAction') {
-          onDone(value);
-        }
-      });
+    runtime.runFork(
+      Effect.suspend(() => action(value, transcriptSlashCommandOutput)).pipe(
+        Effect.catchCause((cause) =>
+          Effect.suspend(() => {
+            if (!echoOnPersist) onPersist?.();
+            return reportError(Cause.squash(cause));
+          }),
+        ),
+        Effect.ensuring(
+          Effect.sync(() => {
+            if (completion === 'afterAction') {
+              onDone(value);
+            }
+          }),
+        ),
+      ),
+    );
   };
 }
 
@@ -287,7 +285,9 @@ export function registerBuiltinSlashCommands(options: {
   onAgentSelect?: SelectHandler<string>;
   canSelectAgent?: () => boolean;
   getApprovalPolicy?: () => TexraApprovalPolicy;
-  onApprovalPolicySelect?: SelectHandler<TexraApprovalPolicy>;
+  /** Stays a plain callback: `/config`'s shared write path takes the same
+   *  hook as a void-returning port, so an Effect here would never run. */
+  onApprovalPolicySelect?: (policy: TexraApprovalPolicy) => void;
   onModelSelect?: SelectHandler<string>;
   canSelectModel?: () => boolean;
   getModelSwitchDisabledReason?: GetModelSwitchDisabledReason;
@@ -304,19 +304,15 @@ export function registerBuiltinSlashCommands(options: {
   const { secrets, stores, runtime } = options;
   const modelStores = { ...stores, secrets, runtime };
   const onAgentSelect: SelectHandler<string> =
-    options.onAgentSelect ?? ((agent) => patchSessionMeta({ agent }));
+    options.onAgentSelect ??
+    ((agent) => Effect.sync(() => patchSessionMeta({ agent })));
   const onModelSelect: SelectHandler<string> =
-    options.onModelSelect ?? setCliSessionModelOverride;
+    options.onModelSelect ??
+    ((model) => Effect.sync(() => setCliSessionModelOverride(model)));
   const onModelAccessSelect: FormActionHandler<CliModelAccessSelection> =
     options.onModelAccessSelect ??
     ((selection, output) =>
-      applyCliModelAccessSelection(
-        stores,
-        runtime,
-        selection,
-        undefined,
-        output,
-      ));
+      applyCliModelAccessSelection(stores, selection, undefined, output));
   const onApiKeySave: ApiKeySaveHandler =
     options.onApiKeySave ??
     ((provider, key) =>
@@ -327,8 +323,7 @@ export function registerBuiltinSlashCommands(options: {
       loginFromChat(value, stores, runtime, undefined, output));
   const onLogoutSelect: FormActionHandler<CliLogoutTarget> =
     options.onLogoutSelect ??
-    ((value, output) =>
-      logoutFromChat(value, stores, runtime, secrets, output));
+    ((value, output) => logoutFromChat(value, stores, secrets, output));
   const canSelectAgent = options.canSelectAgent ?? (() => true);
   const canSelectModel = options.canSelectModel ?? (() => true);
 
@@ -343,6 +338,7 @@ export function registerBuiltinSlashCommands(options: {
         availableRows={props.availableRows}
         selectable={selectable}
         onSelect={formSelectionHandler<string>({
+          runtime,
           action: onAgentSelect,
           // Picking the root agent and the root model is a single up-front
           // choice before the first message, so chain straight into the model
@@ -371,6 +367,7 @@ export function registerBuiltinSlashCommands(options: {
         runtime={runtime}
         availableRows={props.availableRows}
         onSelect={formSelectionHandler<AccountAccessFormValue>({
+          runtime,
           action: (value, output) => {
             switch (value.kind) {
               case 'access':
@@ -398,16 +395,6 @@ export function registerBuiltinSlashCommands(options: {
                 return 'Signing out';
             }
           },
-          abandonNotice: (value) => {
-            switch (value.kind) {
-              case 'access':
-                return 'Model access update abandoned; it may still complete.';
-              case 'login':
-                return 'Sign-in abandoned; the browser flow may still complete.';
-              case 'logout':
-                return 'Sign-out abandoned; it may still complete.';
-            }
-          },
         })}
         onCancel={() => props.onDone(undefined)}
       />
@@ -421,7 +408,9 @@ export function registerBuiltinSlashCommands(options: {
         availableRows={props.availableRows}
         currentPolicy={current}
         onSelect={formSelectionHandler<TexraApprovalPolicy>({
-          action: (value) => options.onApprovalPolicySelect?.(value),
+          runtime,
+          action: (value) =>
+            Effect.sync(() => options.onApprovalPolicySelect?.(value)),
           onDone: props.onDone,
           onError: options.onError,
           completion: 'beforeAction',
@@ -478,6 +467,7 @@ export function registerBuiltinSlashCommands(options: {
         selectable={selectable}
         getModelSwitchDisabledReason={options.getModelSwitchDisabledReason}
         onSelect={formSelectionHandler<string>({
+          runtime,
           action: onModelSelect,
           onDone: props.onDone,
           onError: options.onError,
@@ -511,12 +501,13 @@ export function registerBuiltinSlashCommands(options: {
       readonly onSelect: (value: T) => void;
       readonly onClose: () => void;
     }>,
-    action: (value: T) => FormActionResult,
+    action: (value: T) => SlashCommandEffect,
   ): React.ComponentType<SlashFormProps> {
     return (props) => (
       <Form
         availableRows={props.availableRows}
         onSelect={formSelectionHandler<T>({
+          runtime,
           action,
           onDone: props.onDone,
           onError: options.onError,
@@ -537,7 +528,7 @@ export function registerBuiltinSlashCommands(options: {
         {...formProps}
       />
     ),
-    (value: string) => options.onMemorySelect?.(value),
+    (value: string) => options.onMemorySelect?.(value) ?? Effect.void,
   );
   // `/resume` reads history from the process session; bind it here so the
   // command still uses the one plain-picker adapter.
@@ -549,7 +540,7 @@ export function registerBuiltinSlashCommands(options: {
         {...formProps}
       />
     ),
-    (id: RunId) => options.onResumeSelect?.(id),
+    (id: RunId) => options.onResumeSelect?.(id) ?? Effect.void,
   );
   const SkillsListFormAdapter = makeSelectFormAdapter(
     (formProps) => (
@@ -560,7 +551,7 @@ export function registerBuiltinSlashCommands(options: {
         {...formProps}
       />
     ),
-    (value: SkillActivation) => options.onSkillSelect?.(value),
+    (value: SkillActivation) => options.onSkillSelect?.(value) ?? Effect.void,
   );
 
   registerSlashCommand({
@@ -568,14 +559,14 @@ export function registerBuiltinSlashCommands(options: {
     description: 'Show available slash commands',
     category: 'session',
     echo: 'never',
-    handler: showCliSlashCommandHelp,
+    handler: () => Effect.sync(showCliSlashCommandHelp),
   });
   registerSlashCommand({
     name: 'clear',
     description: 'Start a fresh chat session',
     category: 'session',
     echo: 'ifPersists',
-    handler: (_remainder, context) => context.resetSession(),
+    handler: (_remainder, context) => Effect.sync(() => context.resetSession()),
   });
   registerSlashCommand({
     name: 'agent',
@@ -583,7 +574,8 @@ export function registerBuiltinSlashCommands(options: {
     aliases: ['agents'],
     category: 'configuration',
     echo: 'ifPersists',
-    handler: applyInitialCliAgentSelection,
+    handler: (remainder, context) =>
+      Effect.sync(() => applyInitialCliAgentSelection(remainder, context)),
     formComponent: AgentListFormAdapter,
   });
   registerSlashCommand({
@@ -617,7 +609,7 @@ export function registerBuiltinSlashCommands(options: {
     category: 'account',
     echo: 'ifPersists',
     handler: (remainder, context) =>
-      applyCliModelAccessInput(stores, runtime, remainder, context),
+      applyCliModelAccessInput(stores, remainder, context),
     formComponent: AccountAccessFormAdapter,
   });
   registerSlashCommand({
@@ -628,14 +620,15 @@ export function registerBuiltinSlashCommands(options: {
     echo: 'never',
     // A remainder never reaches the form: it could be the key itself, so it is
     // refused and dropped rather than pre-filled.
-    handler: (remainder) => {
-      if (remainder) {
-        setTransientNotice(
-          'For safety, `/key` does not accept a key as an argument. Enter it in the masked form.',
-        );
-      }
-      openCliSlashCommandForm('key', '');
-    },
+    handler: (remainder) =>
+      Effect.sync(() => {
+        if (remainder) {
+          setTransientNotice(
+            'For safety, `/key` does not accept a key as an argument. Enter it in the masked form.',
+          );
+        }
+        openCliSlashCommandForm('key', '');
+      }),
     formComponent: ProviderApiKeyFormAdapter,
     formEscapeAction: 'close',
     redactInput: true,
@@ -645,7 +638,7 @@ export function registerBuiltinSlashCommands(options: {
     description: 'Show signed-in accounts and active model access',
     category: 'account',
     echo: 'ifPersists',
-    handler: () => showCliAuthStatus(stores, runtime, secrets),
+    handler: () => showCliAuthStatus(stores, secrets),
   });
   registerSlashCommand({
     name: 'login',
@@ -666,7 +659,7 @@ export function registerBuiltinSlashCommands(options: {
     // Same merged-form mismatch as /login: the typed command does not
     // describe what the form actually did.
     echo: 'never',
-    handler: (remainder) => logoutFromChat(remainder, stores, runtime, secrets),
+    handler: (remainder) => logoutFromChat(remainder, stores, secrets),
     formComponent: AccountAccessFormAdapter,
   });
   registerSlashCommand({
@@ -674,7 +667,8 @@ export function registerBuiltinSlashCommands(options: {
     description: 'Switch approval policy',
     category: 'configuration',
     echo: 'ifPersists',
-    handler: applyCliApprovalPolicySelection,
+    handler: (remainder, context) =>
+      Effect.sync(() => applyCliApprovalPolicySelection(remainder, context)),
     formRemainders: ['status'],
     formComponent: ApprovalPolicyFormAdapter,
     formEscapeAction: 'cancel',
@@ -685,7 +679,13 @@ export function registerBuiltinSlashCommands(options: {
     category: 'configuration',
     echo: 'ifPersists',
     handler: (remainder, context) =>
-      applyCliApprovalPolicySelection(remainder || 'yolo', context, YOLO_USAGE),
+      Effect.sync(() =>
+        applyCliApprovalPolicySelection(
+          remainder || 'yolo',
+          context,
+          YOLO_USAGE,
+        ),
+      ),
   });
   registerSlashCommand({
     name: 'status',
@@ -699,7 +699,7 @@ export function registerBuiltinSlashCommands(options: {
     description: 'Read the focused session work plan',
     category: 'session',
     echo: 'never',
-    handler: () => showCliWorkPlan(options.runtimeSession),
+    handler: () => Effect.sync(() => showCliWorkPlan(options.runtimeSession)),
   });
   registerSlashCommand({
     name: 'goal',
@@ -707,7 +707,7 @@ export function registerBuiltinSlashCommands(options: {
     aliases: ['goals'],
     category: 'session',
     echo: 'never',
-    handler: showCliGoalModeHelp,
+    handler: () => Effect.sync(showCliGoalModeHelp),
     formComponent: GoalModeFormAdapter,
   });
   registerSlashCommand({
@@ -715,11 +715,13 @@ export function registerBuiltinSlashCommands(options: {
     description: 'Resume a previous session',
     category: 'session',
     echo: 'ifPersists',
-    handler: async (remainder, context) => {
-      const id = parseCliHistoryId(remainder);
-      if (!id) throw new Error(`Invalid run id: ${remainder}`);
-      await context.resumeRun(id);
-    },
+    handler: (remainder, context) =>
+      Effect.gen(function* () {
+        const id = parseCliHistoryId(remainder);
+        if (!id)
+          return yield* Effect.fail(new Error(`Invalid run id: ${remainder}`));
+        yield* context.resumeRun(id);
+      }),
     formComponent: ResumeListFormAdapter,
   });
   registerSlashCommand({
@@ -727,12 +729,13 @@ export function registerBuiltinSlashCommands(options: {
     description: 'List stored memories',
     category: 'configuration',
     echo: 'never',
-    handler: async (remainder) => {
-      const roots = options.runtimeSession.roots;
-      if (remainder.toLowerCase() === 'list')
-        await showCliMemoryList(runtime, roots);
-      else await showCliMemoryPreview(runtime, roots, remainder);
-    },
+    handler: (remainder) =>
+      Effect.suspend(() => {
+        const roots = options.runtimeSession.roots;
+        return remainder.toLowerCase() === 'list'
+          ? showCliMemoryList(roots)
+          : showCliMemoryPreview(roots, remainder);
+      }),
     formComponent: MemoryListFormAdapter,
   });
   registerSlashCommand({
@@ -791,7 +794,7 @@ export function registerBuiltinSlashCommands(options: {
     description: 'Request context compaction',
     category: 'session',
     echo: 'ifPersists',
-    handler: () => requestCliSessionCompaction(options.runtimeSession, runtime),
+    handler: () => requestCliSessionCompaction(options.runtimeSession),
   });
   registerSlashCommand({
     name: 'exit',
@@ -799,17 +802,18 @@ export function registerBuiltinSlashCommands(options: {
     aliases: ['quit'],
     category: 'session',
     echo: 'never',
-    handler: (_remainder, context) => {
-      // Deliberately does NOT interrupt: the graceful teardown owns that
-      // policy and skips the interrupt for a resumable-idle root, so `/exit`
-      // agrees with Ctrl-C by construction instead of pre-empting it.
-      //
-      // `stopRequested` stays and is the sole writer on this path. The
-      // teardown awaits the follow-up queue's `idle` BEFORE setting the flag
-      // itself, and the queued task polls this flag — dropping it would hang
-      // `/exit` forever with a follow-up queued and no stream id yet.
-      context.session.stopRequested = true;
-      context.requestInputExit();
-    },
+    handler: (_remainder, context) =>
+      Effect.sync(() => {
+        // Deliberately does NOT interrupt: the graceful teardown owns that
+        // policy and skips the interrupt for a resumable-idle root, so `/exit`
+        // agrees with Ctrl-C by construction instead of pre-empting it.
+        //
+        // `stopRequested` stays and is the sole writer on this path. The
+        // teardown awaits the follow-up queue's `idle` BEFORE setting the flag
+        // itself, and the queued task polls this flag — dropping it would hang
+        // `/exit` forever with a follow-up queued and no stream id yet.
+        context.session.stopRequested = true;
+        context.requestInputExit();
+      }),
   });
 }

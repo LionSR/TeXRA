@@ -1,11 +1,12 @@
+import { Effect, type FileSystem, type Path } from 'effect';
+
 import {
   formatCliMemoryList,
   formatCliMemoryPreview,
   loadCliMemoryDetail,
-  runCliMemory,
 } from '@cli/runtime/memory';
 import { openInfoPane } from '@cli/chat/tui/state/cliState';
-import type { ProcessRuntime } from '@platform/processRuntime';
+import { withSessionFs } from '@platform/rootedFs';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { loadMemoryItems } from '@tools/memory/memoryFileSystem';
 
@@ -15,29 +16,21 @@ type MemoryRoots = Pick<
   'workspace' | 'storage' | 'globalStorage'
 >;
 
-export async function showCliMemoryList(
-  runtime: ProcessRuntime,
+export const showCliMemoryList = (
   roots: MemoryRoots,
-): Promise<void> {
-  openInfoPane(
-    '/memory list',
-    formatCliMemoryList(
-      await runtime.runPromise(runCliMemory(roots, loadMemoryItems())),
-    ),
+): Effect.Effect<void, never, FileSystem.FileSystem | Path.Path> =>
+  withSessionFs(roots, Effect.orDie(loadMemoryItems())).pipe(
+    Effect.map((items) => {
+      openInfoPane('/memory list', formatCliMemoryList(items));
+    }),
   );
-}
 
-export async function showCliMemoryPreview(
-  runtime: ProcessRuntime,
+export const showCliMemoryPreview = (
   roots: MemoryRoots,
   inputPath: string,
-): Promise<void> {
-  openInfoPane(
-    '/memory preview',
-    formatCliMemoryPreview(
-      await runtime.runPromise(
-        runCliMemory(roots, loadCliMemoryDetail(inputPath)),
-      ),
-    ),
+): Effect.Effect<void, never, FileSystem.FileSystem | Path.Path> =>
+  withSessionFs(roots, Effect.orDie(loadCliMemoryDetail(inputPath))).pipe(
+    Effect.map((detail) => {
+      openInfoPane('/memory preview', formatCliMemoryPreview(detail));
+    }),
   );
-}

@@ -27,7 +27,6 @@ import {
   appendLocalRequestRefusal,
 } from '@cli/chat/tui/state/transcript';
 import { activeSubscriptionUsageRoute } from '@model/codingPlanSubscriptions';
-import type { ProcessRuntime } from '@platform/processRuntime';
 import { AgentCategory, MESSAGE_TYPES, type RunId } from '@shared/schemas';
 
 import { formatSlashCommandHelp, GOAL_MODE_HELP } from '../helpText';
@@ -81,75 +80,72 @@ function activeSkillNamesFor(
   return latest?.data.skills.map((skill) => skill.name) ?? [];
 }
 
-export async function showCliSessionStatus(
-  context: SlashCommandContext,
-): Promise<void> {
-  const meta = sessionMeta.get();
-  const view = currentView();
-  const activeRunId = activeRunIdSignal.get();
-  const run = runViewOf(view, activeRunId);
-  // The children a status line counts: the active run's, else its
-  // parent's (a focused leaf reports its siblings' activity).
-  const countedParent =
-    run && run.childIds.length === 0 && run.parentId
-      ? runViewOf(view, run.parentId)
-      : run;
-  const activeChildSessions = runningChildCount(view, countedParent);
-  const model = run?.model ?? (meta.model || context.initialModel);
-  const prospectiveRoute = await context.runtime.runPromise(
-    activeSubscriptionUsageRoute(
+export const showCliSessionStatus = Effect.fn('showCliSessionStatus')(
+  function* (context: SlashCommandContext) {
+    const meta = sessionMeta.get();
+    const view = currentView();
+    const activeRunId = activeRunIdSignal.get();
+    const run = runViewOf(view, activeRunId);
+    // The children a status line counts: the active run's, else its
+    // parent's (a focused leaf reports its siblings' activity).
+    const countedParent =
+      run && run.childIds.length === 0 && run.parentId
+        ? runViewOf(view, run.parentId)
+        : run;
+    const activeChildSessions = runningChildCount(view, countedParent);
+    const model = run?.model ?? (meta.model || context.initialModel);
+    const prospectiveRoute = yield* activeSubscriptionUsageRoute(
       { ...context.stores, secrets: context.secrets },
       model,
-    ),
-  );
-  appendLocalAssistantTranscript(
-    formatCliSessionStatus({
-      agent: meta.agent || context.initialAgent,
-      model,
-      teamName: meta.teamName,
-      modelAccess: resolveCliModelAccessRoute({
-        usageRoute: run?.usage.usageRoute,
-        prospectiveRoute,
+    );
+    appendLocalAssistantTranscript(
+      formatCliSessionStatus({
+        agent: meta.agent || context.initialAgent,
+        model,
+        teamName: meta.teamName,
+        modelAccess: resolveCliModelAccessRoute({
+          usageRoute: run?.usage.usageRoute,
+          prospectiveRoute,
+        }),
+        approvalBypasses:
+          activeRunId === undefined
+            ? undefined
+            : view.policy.get(activeRunId)?.bypasses,
+        statusLabel: run?.statusLabel,
+        activeChildSessions,
+        goal:
+          run?.category === AgentCategory.ToolUse && run.goal.active
+            ? run.goal
+            : undefined,
+        activeSkills: activeSkillNamesFor(context.runtimeSession, activeRunId),
+        sessionId: run ? context.session.runId : undefined,
+        commandName: context.cliContext.commandName,
+        cwd: context.cliContext.cwd,
+        processCwd: context.processCwd,
+        approvalPolicy: context.getApprovalPolicy(),
+        queuedFollowUpMessages: (activeRunId === undefined
+          ? []
+          : (view.queuedFollowUps.get(activeRunId) ?? [])
+        ).map((followUp) => followUp.text),
       }),
-      approvalBypasses:
-        activeRunId === undefined
-          ? undefined
-          : view.policy.get(activeRunId)?.bypasses,
-      statusLabel: run?.statusLabel,
-      activeChildSessions,
-      goal:
-        run?.category === AgentCategory.ToolUse && run.goal.active
-          ? run.goal
-          : undefined,
-      activeSkills: activeSkillNamesFor(context.runtimeSession, activeRunId),
-      sessionId: run ? context.session.runId : undefined,
-      commandName: context.cliContext.commandName,
-      cwd: context.cliContext.cwd,
-      processCwd: context.processCwd,
-      approvalPolicy: context.getApprovalPolicy(),
-      queuedFollowUpMessages: (activeRunId === undefined
-        ? []
-        : (view.queuedFollowUps.get(activeRunId) ?? [])
-      ).map((followUp) => followUp.text),
-    }),
-  );
-}
+    );
+  },
+);
 
-/** `/compact`: one runtime request on the runtime the command registry holds;
- *  the outcome or refusal becomes a notice. */
+/** `/compact`: one runtime request on the chat's session; the outcome or
+ *  refusal becomes a notice. */
 export function requestCliSessionCompaction(
   session: SessionHandle,
-  runtime: ProcessRuntime,
-): void {
-  const runId = activeRunIdSignal.get();
-  if (runId === undefined) {
-    appendLocalAssistantTranscript(
-      'No active tool-use session found for context compaction.',
-    );
-    return;
-  }
-  void runtime.runPromise(
-    session.requests.request({ kind: 'run.compact', runId }).pipe(
+): Effect.Effect<void> {
+  return Effect.suspend(() => {
+    const runId = activeRunIdSignal.get();
+    if (runId === undefined) {
+      appendLocalAssistantTranscript(
+        'No active tool-use session found for context compaction.',
+      );
+      return Effect.void;
+    }
+    return session.requests.request({ kind: 'run.compact', runId }).pipe(
       Effect.match({
         onFailure: (error) => appendLocalRequestRefusal(error, runId),
         onSuccess: () => {
@@ -160,6 +156,6 @@ export function requestCliSessionCompaction(
           );
         },
       }),
-    ),
-  );
+    );
+  });
 }

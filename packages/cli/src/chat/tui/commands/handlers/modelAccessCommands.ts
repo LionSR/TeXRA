@@ -10,13 +10,11 @@ import {
 import { updateCliModelAccess } from '@cli/runtime/modelAccessSelection';
 
 import type { ApiProvider } from '@model/apiProviders';
-import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { codingPlanForApiProvider } from '@shared/codingPlanSubscriptions';
 import { collapseWhitespace } from '@utils/text/stringUtils';
 import {
-  abortableSlashCommand,
   type SlashCommandOutput,
   type SlashCommandContext,
   transcriptSlashCommandOutput,
@@ -46,57 +44,45 @@ export const applyCliProviderApiKey = Effect.fn('applyCliProviderApiKey')(
   },
 );
 
-async function applyCliModelAccessSelectionWithSignal(
+/**
+ * Apply one model-access choice. Cancellation is the caller interrupting this
+ * program: the sign-in it drives stops where it stands, so there is no
+ * separate abort channel.
+ */
+export const applyCliModelAccessSelection = Effect.fn(
+  'applyCliModelAccessSelection',
+)(function* (
   stores: SettingsStores,
-  runtime: ProcessRuntime,
   selection: CliModelAccessSelection,
   context: SlashCommandContext | undefined,
-  output: SlashCommandOutput,
-  signal: AbortSignal,
-): Promise<void> {
-  const access = await runtime.runPromise(
-    updateCliModelAccess(stores, context?.cliContext, selection, {
+  output: SlashCommandOutput = transcriptSlashCommandOutput,
+) {
+  const access = yield* updateCliModelAccess(
+    stores,
+    context?.cliContext,
+    selection,
+    {
       writeProgress: (message) =>
         output.writeProgress(message, { copyable: true }),
-    }),
-    { signal },
+    },
   );
   bumpCodexPreferenceVersion();
   output.appendOutcome(collapseWhitespace(access.message));
-}
+});
 
-export function applyCliModelAccessSelection(
-  stores: SettingsStores,
-  runtime: ProcessRuntime,
-  selection: CliModelAccessSelection,
-  context: SlashCommandContext | undefined,
-  output: SlashCommandOutput = transcriptSlashCommandOutput,
-): Promise<void> & { readonly abort: () => void } {
-  return abortableSlashCommand((signal) =>
-    applyCliModelAccessSelectionWithSignal(
-      stores,
-      runtime,
-      selection,
-      context,
-      output,
-      signal,
-    ),
-  );
-}
-
-export function applyCliModelAccessInput(
-  stores: SettingsStores,
-  runtime: ProcessRuntime,
-  routeInput: string,
-  context: SlashCommandContext,
-  output: SlashCommandOutput = transcriptSlashCommandOutput,
-): Promise<void> & { readonly abort: () => void } {
-  return abortableSlashCommand(async (signal) => {
+export const applyCliModelAccessInput = Effect.fn('applyCliModelAccessInput')(
+  function* (
+    stores: SettingsStores,
+    routeInput: string,
+    context: SlashCommandContext,
+    output: SlashCommandOutput = transcriptSlashCommandOutput,
+  ) {
     const normalized = routeInput.trim().toLowerCase();
 
     if (!normalized || normalized === 'status') {
-      const lines = await runtime.runPromise(
-        loadCliDetailedAccountStatusLines(context.stores, context.secrets),
+      const lines = yield* loadCliDetailedAccountStatusLines(
+        context.stores,
+        context.secrets,
       );
       output.appendOutcome(lines.join('\n'));
       return;
@@ -108,24 +94,14 @@ export function applyCliModelAccessInput(
       return;
     }
 
-    await applyCliModelAccessSelectionWithSignal(
-      stores,
-      runtime,
-      selection,
-      context,
-      output,
-      signal,
-    );
-  });
-}
+    yield* applyCliModelAccessSelection(stores, selection, context, output);
+  },
+);
 
-export async function showCliAuthStatus(
+export const showCliAuthStatus = Effect.fn('showCliAuthStatus')(function* (
   stores: SettingsStores,
-  runtime: ProcessRuntime,
   secrets: PlatformSecrets,
-): Promise<void> {
-  const lines = await runtime.runPromise(
-    loadCliDetailedAccountStatusLines(stores, secrets),
-  );
+) {
+  const lines = yield* loadCliDetailedAccountStatusLines(stores, secrets);
   transcriptSlashCommandOutput.appendOutcome(lines.join('\n'));
-}
+});
