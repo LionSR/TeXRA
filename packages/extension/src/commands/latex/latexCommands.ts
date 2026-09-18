@@ -1,6 +1,3 @@
-// Standard library imports
-import { setTimeout as sleep } from 'node:timers/promises';
-
 // Third-party imports
 import { Cause, Effect } from 'effect';
 import * as vscode from 'vscode';
@@ -23,16 +20,15 @@ import { resolveLatexFormatter } from '@latex/formatter/texFormatter';
 import { indentLatexFilesInDirectory } from '@latex/formatter/indentDirectory';
 import { buildLatexdiffAwareFixInstruction } from '@latex/latexdiff/diffFileNameManager';
 import { createLog } from '@logger/logUtils';
-import type { ProcessRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import { AgentCategory } from '@shared/schemas';
 
 const log = createLog(CHANNEL);
 
-export async function handleIndentTeX(
+export function handleIndentTeX(
   session: SessionHandle,
-  runtime: ProcessRuntime,
-): Promise<void> {
-  const indent = Effect.gen(function* () {
+): Effect.Effect<void, never, ProcessServices> {
+  return Effect.gen(function* () {
     const result = yield* indentLatexFilesInDirectory(
       session.roots.workspace,
       resolveLatexFormatter(session.roots),
@@ -55,75 +51,71 @@ export async function handleIndentTeX(
       case 'formatted':
         break;
     }
-  });
-
-  await runtime.runPromise(
-    indent.pipe(
-      Effect.catchCause((cause) =>
-        showLoggedErrorMessage(
-          CHANNEL,
-          'Error in indentTeX command',
-          Cause.squash(cause),
-        ).pipe(Effect.asVoid),
-      ),
+  }).pipe(
+    Effect.catchCause((cause) =>
+      showLoggedErrorMessage(
+        CHANNEL,
+        'Error in indentTeX command',
+        Cause.squash(cause),
+      ).pipe(Effect.asVoid),
     ),
   );
 }
 
-export async function handleFixCompilation(
+export function handleFixCompilation(
   session: SessionHandle,
-  runtime: ProcessRuntime,
-): Promise<void> {
-  await runtime.runPromise(
-    runGuardedLatexCommand(
-      session,
-      {
-        channel: CHANNEL,
-        action: 'fix compilation',
-        saveDocument: true,
-        errorMessage: 'Error launching LaTeX compilation fixer',
-      },
-      async ({ editor, relativePath }) => {
+): Effect.Effect<void, never, ProcessServices> {
+  return runGuardedLatexCommand(
+    session,
+    {
+      channel: CHANNEL,
+      action: 'fix compilation',
+      saveDocument: true,
+      errorMessage: 'Error launching LaTeX compilation fixer',
+    },
+    ({ editor, relativePath }) =>
+      Effect.gen(function* () {
         log.info(
           `Launching tool-use agent to fix compilation for: ${relativePath}`,
         );
 
-        await vscode.commands.executeCommand('texra.execute', {
-          config: {
-            agent: 'latexFixer',
-            // latexFixer is a tool-use agent; without this the config category
-            // prefaults to workflow and resolveAgentForLaunch can't find it.
-            agentCategory: AgentCategory.ToolUse,
-            instruction: await runtime.runPromise(
-              buildLatexdiffAwareFixInstruction(
-                `Fix the LaTeX compilation errors in ${relativePath}.`,
-                editor.document.fileName,
-                session.roots.workspace,
-              ),
-            ),
-          },
-          // This is a "run latexFixer" command, so prefer the helper model.
-          preferHelperModel: true,
-        });
-      },
-    ),
+        const instruction = yield* buildLatexdiffAwareFixInstruction(
+          `Fix the LaTeX compilation errors in ${relativePath}.`,
+          editor.document.fileName,
+          session.roots.workspace,
+        );
+
+        yield* Effect.promise(() =>
+          vscode.commands.executeCommand('texra.execute', {
+            config: {
+              agent: 'latexFixer',
+              // latexFixer is a tool-use agent; without this the config
+              // category prefaults to workflow and resolveAgentForLaunch
+              // can't find it.
+              agentCategory: AgentCategory.ToolUse,
+              instruction,
+            },
+            // This is a "run latexFixer" command, so prefer the helper model.
+            preferHelperModel: true,
+          }),
+        );
+      }),
   );
 }
 
-export async function handleIndentCurrentTeX(
+export function handleIndentCurrentTeX(
   session: SessionHandle,
-  runtime: ProcessRuntime,
-): Promise<void> {
-  await runtime.runPromise(
-    runGuardedLatexCommand(
-      session,
-      {
-        channel: CHANNEL,
-        action: 'indent LaTeX document',
-        saveDocument: true,
-        errorMessage: 'Error in indentTeX command',
-      },
-      async ({ relativePath }) => {
+): Effect.Effect<void, never, ProcessServices> {
+  return runGuardedLatexCommand(
+    session,
+    {
+      channel: CHANNEL,
+      action: 'indent LaTeX document',
+      saveDocument: true,
+      errorMessage: 'Error in indentTeX command',
+    },
+    ({ relativePath }) =>
+      Effect.gen(function* () {
         log.debug(`Indenting LaTeX file: ${relativePath}`);
 
         // The directory indent command treats a disabled formatter as a silent
@@ -131,108 +123,108 @@ export async function handleIndentCurrentTeX(
         // explicit user action, so it notifies instead of succeeding quietly.
         const formatter = resolveLatexFormatter(session.roots);
         if (!formatter) {
-          await runtime.runPromise(
-            showLoggedInfoMessage(
-              CHANNEL,
-              'LaTeX formatter is disabled; no file was indented',
-            ),
+          yield* showLoggedInfoMessage(
+            CHANNEL,
+            'LaTeX formatter is disabled; no file was indented',
           );
           return;
         }
 
-        const success = await runtime.runPromise(
-          formatter.run(
-            relativePath,
-            session.roots.workspace,
-            formatter.configPath,
-            session.roots,
-          ),
+        const success = yield* formatter.run(
+          relativePath,
+          session.roots.workspace,
+          formatter.configPath,
+          session.roots,
         );
 
         if (success) {
-          await sleep(100);
-          await runtime.runPromise(
-            showLoggedInfoMessage(CHANNEL, 'LaTeX file indented successfully'),
+          yield* Effect.sleep(100);
+          yield* showLoggedInfoMessage(
+            CHANNEL,
+            'LaTeX file indented successfully',
           );
         } else {
-          await runtime.runPromise(
-            showLoggedMessage(CHANNEL, 'Failed to indent LaTeX file'),
-          );
+          yield* showLoggedMessage(CHANNEL, 'Failed to indent LaTeX file');
         }
-      },
-    ),
+      }),
   );
 }
 
-export async function handleGetTeXCount(
+export function handleGetTeXCount(
   session: SessionHandle,
   runtime: ProcessRuntime,
-): Promise<void> {
-  await runtime.runPromise(
-    runGuardedLatexCommand(
-      session,
-      {
-        channel: CHANNEL,
-        action: 'get TeX count',
-        errorMessage: 'Error getting tex count',
-      },
-      async ({ relativePath }) => {
+): Effect.Effect<void, never, ProcessServices> {
+  return runGuardedLatexCommand(
+    session,
+    {
+      channel: CHANNEL,
+      action: 'get TeX count',
+      errorMessage: 'Error getting tex count',
+    },
+    ({ relativePath }) =>
+      Effect.gen(function* () {
         log.debug(`Getting tex count for: ${relativePath}`);
 
-        const countingMode = await vscode.window.showQuickPick<
-          vscode.QuickPickItem & { value: TexcountMode }
-        >(
-          [
-            { label: 'Count main file only', value: 'separate' as const },
+        const countingMode = yield* Effect.promise(() =>
+          vscode.window.showQuickPick<
+            vscode.QuickPickItem & { value: TexcountMode }
+          >(
+            [
+              { label: 'Count main file only', value: 'separate' as const },
+              {
+                label: 'Follow \\input/\\include and combine',
+                value: 'include' as const,
+              },
+            ],
             {
-              label: 'Follow \\input/\\include and combine',
-              value: 'include' as const,
+              placeHolder: 'Count options',
+              canPickMany: false,
             },
-          ],
-          {
-            placeHolder: 'Count options',
-            canPickMany: false,
-          },
+          ),
         );
 
         if (!countingMode) {
           return;
         }
 
-        await vscode.window.withProgress(
-          {
-            location: vscode.ProgressLocation.Notification,
-            title: 'Counting LaTeX Document',
-            cancellable: false,
-          },
-          async (progress) => {
-            progress.report({ message: 'Running texcount...' });
+        // `withProgress` owns the notification for exactly as long as the
+        // callback it is handed: the count settles on the process runtime
+        // inside it, the one structural Promise edge this command keeps.
+        yield* Effect.promise(() =>
+          vscode.window.withProgress(
+            {
+              location: vscode.ProgressLocation.Notification,
+              title: 'Counting LaTeX Document',
+              cancellable: false,
+            },
+            async (progress) => {
+              progress.report({ message: 'Running texcount...' });
 
-            const { output, errors } = await runtime.runPromise(
-              getTeXCount(session.roots.workspace, relativePath, {
-                mode: countingMode.value,
-                channel: CHANNEL,
-                settings: session.roots,
-              }),
-            );
+              const { output, errors } = await runtime.runPromise(
+                getTeXCount(session.roots.workspace, relativePath, {
+                  mode: countingMode.value,
+                  channel: CHANNEL,
+                  settings: session.roots,
+                }),
+              );
 
-            if (!output) {
-              const message =
-                errors[0] ??
-                'Failed to get tex count. Please verify the file path.';
-              await runtime.runPromise(showLoggedMessage(CHANNEL, message));
-              return;
-            }
+              if (!output) {
+                const message =
+                  errors[0] ??
+                  'Failed to get tex count. Please verify the file path.';
+                await runtime.runPromise(showLoggedMessage(CHANNEL, message));
+                return;
+              }
 
-            const stats = parseTeXCountStats(output);
+              const stats = parseTeXCountStats(output);
 
-            await vscode.window.showQuickPick(stats, {
-              placeHolder: 'TeXCount Results (press Esc to dismiss)',
-              canPickMany: false,
-            });
-          },
+              await vscode.window.showQuickPick(stats, {
+                placeHolder: 'TeXCount Results (press Esc to dismiss)',
+                canPickMany: false,
+              });
+            },
+          ),
         );
-      },
-    ),
+      }),
   );
 }

@@ -48,8 +48,8 @@ async function openFile(
 function openLabel(session: SessionHandle, label: string) {
   return Effect.gen(function* () {
     const lister = getFileLister();
-    const inputs = yield* Effect.promise(() => lister.list('input'));
-    const contexts = yield* Effect.promise(() => lister.list('context'));
+    const inputs = yield* lister.list('input');
+    const contexts = yield* lister.list('context');
     const candidates = new Set([...inputs, ...contexts]);
     const { roots } = session;
     // The candidates are workspace-relative listings, read through the

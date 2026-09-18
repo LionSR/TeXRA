@@ -1,4 +1,5 @@
 // Third-party imports
+import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
@@ -18,34 +19,30 @@ export function registerMergeCommands(
   registerCommandEntries(context, [
     {
       id: 'texra.merge',
+      // The registered command is the host entry, so it owns the one run.
       handler: (baseFile: string, editedFile: string) =>
-        handleMerge(globalState, baseFile, editedFile, runtime),
+        runtime.runPromise(
+          Effect.gen(function* () {
+            if (!baseFile || !editedFile) {
+              yield* showLoggedMessageWithDocs(
+                CHANNEL,
+                'Both base file and edited file must be specified for merge operation',
+                'intelligent-merge',
+                'View Merge Docs',
+              );
+              return;
+            }
+
+            yield* Effect.promise(() =>
+              vscode.commands.executeCommand('texra.execute', {
+                agent: 'merge',
+                model: getHelperModelName(globalState),
+                inputFiles: [baseFile],
+                editedFile,
+              }),
+            );
+          }),
+        ),
     },
   ]);
-}
-
-async function handleMerge(
-  globalState: StateStore,
-  baseFile: string,
-  editedFile: string,
-  runtime: ProcessRuntime,
-): Promise<void> {
-  if (!baseFile || !editedFile) {
-    await runtime.runPromise(
-      showLoggedMessageWithDocs(
-        CHANNEL,
-        'Both base file and edited file must be specified for merge operation',
-        'intelligent-merge',
-        'View Merge Docs',
-      ),
-    );
-    return;
-  }
-
-  await vscode.commands.executeCommand('texra.execute', {
-    agent: 'merge',
-    model: getHelperModelName(globalState),
-    inputFiles: [baseFile],
-    editedFile,
-  });
 }

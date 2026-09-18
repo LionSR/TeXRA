@@ -119,11 +119,13 @@ interface GuardedLatexCommandOptions {
  * the command's channel, and anything the operation throws is surfaced once
  * through that same channel.
  */
-export function runGuardedLatexCommand(
+export function runGuardedLatexCommand<R = never>(
   session: SessionHandle,
   options: GuardedLatexCommandOptions,
-  operation: (guardResult: ActiveFileGuardSuccess) => Promise<void>,
-): Effect.Effect<void> {
+  operation: (
+    guardResult: ActiveFileGuardSuccess,
+  ) => Effect.Effect<void, unknown, R>,
+): Effect.Effect<void, never, R> {
   const { channel, action, saveDocument = false, errorMessage } = options;
 
   const log = createLog(channel);
@@ -142,10 +144,10 @@ export function runGuardedLatexCommand(
       return;
     }
 
-    yield* Effect.promise(() => operation(guardResult));
+    yield* operation(guardResult);
   }).pipe(
     // The command's one terminal boundary, as the `try`/`catch` it replaces
-    // was: a rejected guard step and a rejected operation alike are squashed
+    // was: a failed guard step and a failed operation alike are squashed
     // back to the value the `catch` clause bound.
     Effect.catchCause((cause) =>
       showLoggedErrorMessage(channel, errorMessage, Cause.squash(cause)).pipe(

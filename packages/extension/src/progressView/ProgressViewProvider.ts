@@ -137,7 +137,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
    */
   private readonly onboardingFunnel: OnboardingFunnelRefresher;
   private readonly debouncedRefreshCatalogs = debounce(
-    () => void this.refreshCatalogs(),
+    () => void this.runtime.runPromise(this.refreshCatalogs()),
     DEBOUNCE_OPTIONS_MS,
   );
 
@@ -467,47 +467,64 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     );
     onTexraAuthSessionsChanged(this.context, () => {
       if (isAgentCatalogAuthRefreshDeferred()) {
-        runAfterAgentCatalogAuthRefresh(async () => {
-          await Promise.all([
-            this.runtime.runPromise(this.snapshot.refreshCatalogs),
-            this.runtime.runPromise(this.snapshot.refreshAuth),
-            this.runtime.runPromise(this.refreshOnboardingFunnel()),
-          ]);
-        });
+        runAfterAgentCatalogAuthRefresh(() =>
+          this.runtime.runPromise(
+            Effect.all(
+              [
+                this.snapshot.refreshCatalogs,
+                this.snapshot.refreshAuth,
+                this.refreshOnboardingFunnel(),
+              ],
+              { concurrency: 'unbounded', discard: true },
+            ),
+          ),
+        );
         return;
       }
-      void this.refreshAfterCredentialChange();
+      void this.runtime.runPromise(this.refreshAfterCredentialChange());
     });
   }
 
-  /** Every credential-dependent surface: catalogs, sign-in, the funnel. */
-  private async refreshAfterCredentialChange(): Promise<void> {
-    await this.runtime.runPromise(refresh());
-    await Promise.all([
-      this.runtime.runPromise(this.snapshot.refreshCatalogs),
-      this.runtime.runPromise(this.snapshot.refreshAuth),
-      this.runtime.runPromise(this.snapshot.refreshHostBanners),
-      this.runtime.runPromise(this.refreshOnboardingFunnel()),
-    ]);
+  /** Every credential-dependent surface: catalogs, sign-in, the funnel —
+   *  the last three refreshed together as the three promises were. */
+  private refreshAfterCredentialChange() {
+    return refresh().pipe(
+      Effect.andThen(
+        Effect.all(
+          [
+            this.snapshot.refreshCatalogs,
+            this.snapshot.refreshAuth,
+            this.snapshot.refreshHostBanners,
+            this.refreshOnboardingFunnel(),
+          ],
+          { concurrency: 'unbounded', discard: true },
+        ),
+      ),
+    );
   }
 
   /** The agent, team, and model catalogs (`texra.refreshAllOptions`). */
-  public async refreshCatalogs(
+  public refreshCatalogs(
     options: {
       agentCatalogAlreadyFresh?: boolean;
       selectedToolUseAgent?: string;
     } = {},
-  ): Promise<void> {
-    if (!options.agentCatalogAlreadyFresh) {
-      await this.runtime.runPromise(refresh());
-    }
-    await this.runtime.runPromise(this.snapshot.refreshCatalogs);
-    if (options.selectedToolUseAgent) {
-      this.surfaceAction({
-        kind: 'launch',
-        patch: { agent: { toolUse: options.selectedToolUseAgent } },
-      });
-    }
+  ) {
+    return Effect.suspend(() =>
+      options.agentCatalogAlreadyFresh ? Effect.void : refresh(),
+    ).pipe(
+      Effect.andThen(this.snapshot.refreshCatalogs),
+      Effect.andThen(
+        Effect.sync(() => {
+          if (options.selectedToolUseAgent) {
+            this.surfaceAction({
+              kind: 'launch',
+              patch: { agent: { toolUse: options.selectedToolUseAgent } },
+            });
+          }
+        }),
+      ),
+    );
   }
 
   /** A run loaded an agent from the custom directory. */

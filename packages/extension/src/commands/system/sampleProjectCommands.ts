@@ -4,7 +4,7 @@ import { cp } from 'node:fs/promises';
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect } from 'effect';
+import { Cause, Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports - fs
@@ -14,7 +14,7 @@ import {
   showLoggedMessage,
 } from '@frontend/ui/errorHandlingUtils';
 import { selectFolder } from '@frontend/ui/dialogs';
-import type { ProcessRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import { withSessionFs, WorkspaceFs } from '@platform/rootedFs';
 
 const CHANNEL = 'SampleProjectCommands';
@@ -75,19 +75,16 @@ export async function createSampleProjectWithoutWorkspace(
  * session root, so the tree copy runs at the two absolute paths, with the
  * options the replaced facade used.
  */
-export async function createSampleProject(
+export function createSampleProject(
   extensionPath: string,
-  runtime: ProcessRuntime,
   session: SessionHandle,
-): Promise<void> {
-  const create = Effect.tryPromise({
-    catch: (err: unknown) => err,
-    try: async () => {
-      const workspaceFs = await runtime.runPromise(
-        withSessionFs(session.roots, WorkspaceFs),
-      );
+): Effect.Effect<void, never, ProcessServices> {
+  return withSessionFs(
+    session.roots,
+    Effect.gen(function* () {
+      const workspaceFs = yield* WorkspaceFs;
       if (!workspaceFs.root) {
-        runtime.runFork(
+        yield* Effect.forkDetach(
           showLoggedMessage(
             CHANNEL,
             'Open a workspace to create the sample project.',
@@ -97,7 +94,7 @@ export async function createSampleProject(
       }
 
       const destFolder = 'texra-sample';
-      if (await runtime.runPromise(workspaceFs.exists(destFolder))) {
+      if (yield* workspaceFs.exists(destFolder)) {
         void vscode.window.showInformationMessage(
           'Sample project already exists in workspace.',
         );
@@ -105,32 +102,35 @@ export async function createSampleProject(
       }
 
       const sourcePath = path.join(extensionPath, 'resources', 'examples');
-      const destPath = await runtime.runPromise(
-        workspaceFs.resolve(destFolder),
-      );
+      const destPath = yield* workspaceFs.resolve(destFolder);
 
-      await runtime.runPromise(
-        workspaceFs.makeDirectory(destFolder, { recursive: true }),
+      yield* workspaceFs.makeDirectory(destFolder, { recursive: true });
+      yield* Effect.promise(() =>
+        cp(sourcePath, destPath, {
+          recursive: true,
+          force: true,
+          errorOnExist: false,
+        }),
       );
-      await cp(sourcePath, destPath, {
-        recursive: true,
-        force: true,
-        errorOnExist: false,
-      });
 
       void vscode.window.showInformationMessage(
         'Created TeXRA sample project.',
       );
 
       const readmeRelativePath = path.join(destFolder, 'README.md');
-      if (await runtime.runPromise(workspaceFs.exists(readmeRelativePath))) {
-        const document = await vscode.workspace.openTextDocument(
-          vscode.Uri.file(path.join(destPath, 'README.md')),
+      if (yield* workspaceFs.exists(readmeRelativePath)) {
+        const document = yield* Effect.promise(() =>
+          vscode.workspace.openTextDocument(
+            vscode.Uri.file(path.join(destPath, 'README.md')),
+          ),
         );
-        await vscode.window.showTextDocument(document, { preview: false });
+        yield* Effect.promise(() =>
+          vscode.window.showTextDocument(document, { preview: false }),
+        );
       }
-    },
-  });
-
-  await runtime.runPromise(create.pipe(Effect.catch(reportFailure)));
+    }),
+    // One terminal boundary for the whole creation, as the single
+    // `Effect.catch` over the async body it replaces was: a failed workspace
+    // read, a failed tree copy and a failed editor open are reported alike.
+  ).pipe(Effect.catchCause((cause) => reportFailure(Cause.squash(cause))));
 }

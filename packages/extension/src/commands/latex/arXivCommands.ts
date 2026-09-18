@@ -18,11 +18,16 @@ import type { ProcessRuntime } from '@platform/processRuntime';
 const CHANNEL = 'arXivCommands';
 const log = createLog(CHANNEL);
 
-export async function downloadArXivSource(
+/**
+ * The prompts and the download notification are one foreign edge: the
+ * `withProgress` callback owns the notification for exactly as long as it
+ * runs, so the download settles on the process runtime inside it.
+ */
+export function downloadArXivSource(
   session: SessionHandle,
   runtime: ProcessRuntime,
-): Promise<void> {
-  const download = Effect.tryPromise({
+): Effect.Effect<void> {
+  return Effect.tryPromise({
     catch: (error: unknown) => error,
     try: async () => {
       const arxivId = await vscode.window.showInputBox({
@@ -110,17 +115,13 @@ export async function downloadArXivSource(
         );
       }
     },
-  });
-
-  await runtime.runPromise(
-    download.pipe(
-      Effect.catch((error) =>
-        showLoggedErrorMessage(
-          CHANNEL,
-          'Failed to download arXiv source',
-          error,
-        ).pipe(Effect.asVoid),
-      ),
+  }).pipe(
+    Effect.catch((error) =>
+      showLoggedErrorMessage(
+        CHANNEL,
+        'Failed to download arXiv source',
+        error,
+      ).pipe(Effect.asVoid),
     ),
   );
 }

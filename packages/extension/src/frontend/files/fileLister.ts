@@ -1,9 +1,9 @@
+import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 import type { SessionHandle } from '@agent/runtime';
 import {
   getFileListConfig,
-  type FileFilterConfig,
   type ListableFileType,
 } from '@common/files/fileListingRules';
 import { createLog } from '@logger/logUtils';
@@ -35,16 +35,16 @@ export class FileLister {
     this.workspacePath = this.session.roots.workspace;
   }
 
-  public list(fileType: ListableFileType): Promise<string[]> {
-    return this.listFiles(getFileListConfig(fileType));
-  }
-
-  private async listFiles(config: FileFilterConfig): Promise<string[]> {
-    if (!this.workspacePath) {
+  /** The workspace listing, with VS Code's file search wrapped once. */
+  public list(fileType: ListableFileType): Effect.Effect<string[]> {
+    const root = this.workspacePath;
+    if (!root) {
       log.warn('No workspace folder found');
-      return [];
+      return Effect.succeed([]);
     }
-    return getFilesRecursively(this.workspacePath, config);
+    return Effect.promise(() =>
+      getFilesRecursively(root, getFileListConfig(fileType)),
+    );
   }
 }
 

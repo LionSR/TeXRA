@@ -90,36 +90,39 @@ async function promptForApiKey(
   });
 }
 
-async function pickApiProvider(
+function pickApiProvider(
   secrets: PlatformSecrets,
-  runtime: ProcessRuntime,
   placeHolder: string,
   prompt: string,
-): Promise<ApiProvider | undefined> {
-  // One batched read of the key statuses, settled on the runtime this command
-  // already holds: the pick shows each provider's stored/environment state.
-  const statuses = await runtime.runPromise(
-    loadApiKeyStatusMap(secrets, API_PROVIDERS),
-  );
-  const providerItems = API_PROVIDERS.map((provider) => ({
-    label: provider,
-    description: statuses[provider] === 'not-set' ? 'not set' : 'key set',
-    provider,
-  }));
-  const providerPick =
-    await vscode.window.showQuickPick<ApiProviderQuickPickItem>(providerItems, {
-      placeHolder,
-      prompt,
-    });
-  return providerPick?.provider;
+) {
+  return Effect.gen(function* () {
+    // One batched read of the key statuses: the pick shows each provider's
+    // stored/environment state.
+    const statuses = yield* loadApiKeyStatusMap(secrets, API_PROVIDERS);
+    const providerItems = API_PROVIDERS.map((provider) => ({
+      label: provider,
+      description: statuses[provider] === 'not-set' ? 'not set' : 'key set',
+      provider,
+    }));
+    const providerPick = yield* Effect.promise(() =>
+      vscode.window.showQuickPick<ApiProviderQuickPickItem>(providerItems, {
+        placeHolder,
+        prompt,
+      }),
+    );
+    return providerPick?.provider;
+  });
 }
 
 /**
  * Set an API key. Migrated to the shared command registry in
  * #3781 batch 4. The registry forwards a single typed argument so the
  * optional `provider` is parsed at the dispatch boundary.
+ *
+ * Keeps a Promise face: `extension.ts` registers it directly on the
+ * no-folder welcome path, outside the command surface's runtime arm.
  */
-export async function setApiKey(
+export function setApiKey(
   stores: SettingsStores,
   secrets: PlatformSecrets,
   refreshAfterKeyChange: (
@@ -128,26 +131,29 @@ export async function setApiKey(
   runtime: ProcessRuntime,
   provider?: ApiProvider,
 ): Promise<void> {
-  const target =
-    provider ??
-    (await pickApiProvider(
-      secrets,
-      runtime,
-      'Select API provider',
-      "Keys are stored in VS Code's encrypted secret store, never on disk.",
-    ));
+  return runtime.runPromise(
+    Effect.gen(function* () {
+      const target =
+        provider ??
+        (yield* pickApiProvider(
+          secrets,
+          'Select API provider',
+          "Keys are stored in VS Code's encrypted secret store, never on disk.",
+        ));
 
-  if (!target) return;
+      if (!target) return;
 
-  const apiKey = await promptForApiKey(stores, target);
-  if (!apiKey) return;
+      const apiKey = yield* Effect.promise(() =>
+        promptForApiKey(stores, target),
+      );
+      if (!apiKey) return;
 
-  await runtime.runPromise(
-    createProfileKeyController(
-      stores,
-      secrets,
-      refreshAfterKeyChange,
-    ).commitProviderKey(target, apiKey),
+      yield* createProfileKeyController(
+        stores,
+        secrets,
+        refreshAfterKeyChange,
+      ).commitProviderKey(target, apiKey);
+    }),
   );
 }
 
@@ -155,30 +161,28 @@ export async function setApiKey(
  * Remove an API key after a confirmation prompt. Migrated to the shared
  * command registry in #3781 batch 4.
  */
-export async function removeApiKey(
+export function removeApiKey(
   stores: SettingsStores,
   secrets: PlatformSecrets,
   refreshAfterKeyChange: (
     provider: string,
   ) => Effect.Effect<void, Error, ProcessServices>,
-  runtime: ProcessRuntime,
-): Promise<void> {
-  const provider = await pickApiProvider(
-    secrets,
-    runtime,
-    'Select API provider to remove key',
-    'Only removes the key from TeXRA — does not delete it from the provider.',
-  );
+) {
+  return Effect.gen(function* () {
+    const provider = yield* pickApiProvider(
+      secrets,
+      'Select API provider to remove key',
+      'Only removes the key from TeXRA — does not delete it from the provider.',
+    );
 
-  if (!provider) {
-    return;
-  }
+    if (!provider) {
+      return;
+    }
 
-  await runtime.runPromise(
-    createProfileKeyController(
+    yield* createProfileKeyController(
       stores,
       secrets,
       refreshAfterKeyChange,
-    ).removeProviderKey(provider),
-  );
+    ).removeProviderKey(provider);
+  });
 }
