@@ -75,7 +75,7 @@ const RESTORE_STATE_BUTTON = Object.freeze({
 const OPEN_RUN_STORAGE_BUTTON = Object.freeze({
   id: ELEMENT_IDS.OPEN_RUN_STORAGE_BTN,
   icon: 'folder-open',
-  title: 'Open in task storage: reveal this run folder and generated files',
+  title: 'Open in run storage: reveal this run folder and generated files',
   className: 'storage-button',
 });
 

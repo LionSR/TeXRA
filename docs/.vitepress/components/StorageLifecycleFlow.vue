@@ -1,13 +1,13 @@
 <script setup>
-// The output lifecycle for guide/file-management.md → "Task Run Storage".
-// Workflow outputs are written FIRST into an isolated task-run storage folder
+// The output lifecycle for guide/file-management.md → "Run storage".
+// Workflow outputs are written FIRST into an isolated run folder under run storage
 // (executions/<id>/, r{round}/output.ext) — never directly over the workspace.
 // From there three commands move the artifacts to three different places:
 //   Accept → copies reviewed outputs back into the workspace
 //   Pack   → archives the whole run into the History folder
 //   Clean  → deletes the run folder
 // The prose scatters these across three sections (Pack / Clean / Task Run
-// Storage); this single flow puts the task-storage box at the center with one
+// Storage); this single flow puts the run-storage box at the center with one
 // labeled branch per command so the three-location mental model is visible.
 //
 // Root carries `.mockup`, so the shared `--mk-*` tokens and the
@@ -21,9 +21,9 @@ import StatusPill from './StatusPill.vue';
   <div
     class="mockup store-flow"
     role="group"
-    aria-label="task-run storage lifecycle: Accept, Pack, Clean"
+    aria-label="run storage lifecycle: Accept, Pack, Clean"
   >
-    <!-- The center of gravity: the isolated task-run storage folder -->
+    <!-- The center of gravity: the isolated run folder -->
     <article class="sf-store">
       <header class="sf-store-head">
         <wa-icon
@@ -31,7 +31,7 @@ import StatusPill from './StatusPill.vue';
           library="texra"
           name="folder-open"
         ></wa-icon>
-        <span class="sf-store-title">Task-run storage</span>
+        <span class="sf-store-title">Run storage</span>
         <StatusPill variant="info" shape="chip">isolated</StatusPill>
       </header>
       <div class="surface sf-code">
@@ -109,7 +109,7 @@ import StatusPill from './StatusPill.vue';
   font-family: var(--vp-font-family-base);
 }
 
-/* Central task-storage box. */
+/* Central run-storage box. */
 .sf-store {
   display: flex;
   flex-direction: column;

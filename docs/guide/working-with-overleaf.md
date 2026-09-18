@@ -91,7 +91,7 @@ accepted by the same command.
     - Select files, agent, model.
     - Write instructions.
     - Execute (<wa-icon library="texra" name="play"></wa-icon>).
-    - Review outputs (`r0/<input filename>.tex`, for example `r0/main.tex`; each round keeps the input filename) from task storage.
+    - Review outputs (`r0/<input filename>.tex`, for example `r0/main.tex`; each round keeps the input filename) from run storage.
     - Use `latexdiff` (<wa-icon library="texra" name="diff-single"></wa-icon>) or merge (<wa-icon library="texra" name="merge"></wa-icon>).
     - Use features like auto-extract (<wa-icon library="texra" name="wand"></wa-icon>) and tool options (<wa-icon library="texra" name="tools"></wa-icon>).
     - Optionally use LaTeX Workshop for local previews ([LaTeX compilation setup](./latex-compilation.md)).

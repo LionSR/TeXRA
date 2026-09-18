@@ -73,7 +73,7 @@ sequenceDiagram
 1.  **Initialization:** TeXRA loads the agent definition and reads the files you selected.
 2.  **Prompt construction:** TeXRA combines the agent's `systemPrompt`, `userPrefix` (filled with your files and instruction), and `userRequest` templates into a full prompt for the LLM.
 3.  **LLM interaction (Round 0):** TeXRA sends the prompt to the selected LLM API. The LLM generates a response, typically including reasoning (`<scratchpad>`) and the final answer wrapped in the fixed `<documents><document name="...">...</document></documents>` container.
-4.  **Processing:** TeXRA saves the raw LLM response (often as an `.xml` file, for example `r{round}/output.xml`). It then parses this file and extracts the content of each `<document name="...">` entry into its own file under the round directory in task storage, named after that entry's `name` (a polish run on `paper.tex` produces `r0/paper.tex` for Round 0 and `r1/paper.tex` for the first reflection; a `<document name="chapters/main.tex">` entry lands as `r{round}/chapters/main.tex`; only the raw response uses the fixed `output.xml` stem, and a document literally named `output.tex` is renamed `output_extracted.tex` so it cannot clobber it). You can follow this in the [ProgressBoard](./progress-board.md). For LaTeX files, TeXRA can also generate a `latexdiff` file comparing each output to its input. Read the [LaTeX Diff guide](./latex-diff.md) for details.
+4.  **Processing:** TeXRA saves the raw LLM response (often as an `.xml` file, for example `r{round}/output.xml`). It then parses this file and extracts the content of each `<document name="...">` entry into its own file under the round directory in run storage, named after that entry's `name` (a polish run on `paper.tex` produces `r0/paper.tex` for Round 0 and `r1/paper.tex` for the first reflection; a `<document name="chapters/main.tex">` entry lands as `r{round}/chapters/main.tex`; only the raw response uses the fixed `output.xml` stem, and a document literally named `output.tex` is renamed `output_extracted.tex` so it cannot clobber it). You can follow this in the [ProgressBoard](./progress-board.md). For LaTeX files, TeXRA can also generate a `latexdiff` file comparing each output to its input. Read the [LaTeX Diff guide](./latex-diff.md) for details.
 
 Selecting **Run agent** is not the only way in. The same
 load-definition → prompt → rounds → save-to-run-storage pipeline runs
@@ -89,7 +89,7 @@ headlessly from the terminal:
   note="Same agent definition, same rounds, same run storage: no UI attached."
 />
 
-Each round lands in its own folder under task storage:
+Each round lands in its own folder under run storage:
 
 <RoundOutputTree />
 <p class="hero-caption">Every round saves the raw <code>output.xml</code>, one extracted file per <code>&lt;document name&gt;</code> (named after the input file, for example <code>paper.tex</code>), and an optional <code>latexdiff</code> PDF. <code>r0/</code> is the draft; <code>r1/</code> and later are reflection passes.</p>

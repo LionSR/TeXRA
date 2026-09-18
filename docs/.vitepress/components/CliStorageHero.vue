@@ -1,5 +1,5 @@
 <script setup>
-// Terminal card for guide/file-management.md "Task Run Storage" —
+// Terminal card for guide/file-management.md "Run storage" —
 // StorageLifecycleFlow's terminal twin. Three beats showing the same
 // storage-first lifecycle from the CLI: (1) a bare run prints its run-storage
 // path (outputs land in storage first, never over workspace files), (2)

@@ -45,7 +45,7 @@ TeXRA then invokes the specialized `merge` agent:
 
 - The agent receives the base file, the edited file, and the configured helper model.
 - It analyzes both versions to identify meaningful differences.
-- It generates a new merge output (`r0/<base filename>` inside the run's task storage folder) containing the content of the base file updated with the accepted changes from the edited file.
+- It generates a new merge output (`r0/<base filename>` inside the run folder) containing the content of the base file updated with the accepted changes from the edited file.
 - You can monitor the process and results in the [ProgressBoard](./progress-board.md).
 
 ## What happens behind the scenes
@@ -56,7 +56,7 @@ TeXRA then invokes the specialized `merge` agent:
 
 ## The output: a complete, merged file
 
-The merge process generates a new file in task storage, named after the base file:
+The merge process generates a new file in run storage, named after the base file:
 
 `r0/<base filename>.tex`
 

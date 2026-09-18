@@ -1,7 +1,7 @@
 <script setup>
-// Frameless task-storage file tree for guide/quick-start.md
+// Frameless run-storage file tree for guide/quick-start.md
 // ("Understanding the Output"). A completed run writes one folder per round
-// under task storage; each round holds the three artifact types the section
+// under run storage; each round holds the three artifact types the section
 // enumerates — the Output file, the Log, and the Diff PDF — and crucially the
 // document keeps its INPUT filename (draft.tex, not output.tex). r0/ is shown
 // expanded with its trio; a collapsed sibling r1/ implies the per-round scheme.
@@ -35,7 +35,7 @@ const icon = (kind) =>
 <template>
   <MockCard
     class="oat"
-    title="task storage"
+    title="run storage"
     icon="folder-opened"
     sub="r{round}/<input-filename>"
   >

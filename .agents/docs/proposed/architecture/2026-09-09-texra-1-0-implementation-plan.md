@@ -129,6 +129,8 @@ caveats are why three of the rows above are not simply "deleted":
   deliberately editable memory files require a separate file-format decision.
   Atomic replacement is not inherently obsolete, nor is it appropriate for
   every research file: replacing a symlink changes its meaning.
+  _Struck 2026-09-18: inquiry metadata has been SQLite rows since
+  `090ce86bc4` (2026-09-09), so this caveat now covers memory files only._
 - `JsonStore` also serves explicit configuration and credentials. Preserve a
   deliberate configuration format where useful. Preserve credential protection
   and host secret providers; the storage change must not silently replace
@@ -205,6 +207,9 @@ continue to use that branch's existing runtime and test conventions.
 Move remaining host state, input history, inquiry metadata, and mutable
 registries into the final database model. Keep configuration, credentials,
 research files, and exports explicit in the ownership model.
+
+_Struck 2026-09-18: inquiry metadata landed on SQLite in `090ce86bc4`
+(2026-09-09); it is no longer a remaining item of this step._
 
 Run directories currently contain generated TeX/PDF outputs, original
 snapshots, and workspace links as well as obsolete state. Therefore moving

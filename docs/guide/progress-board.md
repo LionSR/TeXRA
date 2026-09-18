@@ -67,7 +67,7 @@ The header provides a summary and actions for the selected stream:
 <p class="hero-caption">The status dot: green while running, blue while waiting for input, gray once finished, red on error.</p>
 
 - **Token and cost summary**: Displays the combined input and output token counts from all completed rounds (e.g., `r0`, `r1`, `r2`, …) along with the estimated cost.
-- **Stream header actions**: A toolbar of icon buttons acting on the selected stream. Workflow streams get Stop, Run New, Resume, Restore, Open in task storage, Export, Copy run context, Diff, Clean, and Pack; tool-use streams get Stop, AUTO-EDIT, AUTO-BASH, AUTO-TASK, Compact, Restore, Open in task storage, and Export. Export saves the conversation as Markdown, HTML, or PDF.
+- **Stream header actions**: A toolbar of icon buttons acting on the selected stream. Workflow streams get Stop, Run New, Resume, Restore, Open in run storage, Export, Copy run context, Diff, Clean, and Pack; tool-use streams get Stop, AUTO-EDIT, AUTO-BASH, AUTO-TASK, Compact, Restore, Open in run storage, and Export. Export saves the conversation as Markdown, HTML, or PDF.
 
 <StreamHeaderActions />
 
@@ -80,8 +80,8 @@ Each action in detail:
 - <wa-icon library="texra" name="forward-step"></wa-icon> **Resume**: Continues the run from its saved outputs, picking up where it left off instead of starting over.
 - <wa-icon library="texra" name="reply"></wa-icon> **Restore**: Loads the configuration (agent, model, files, instruction) from this stream back into the main TeXRA view, so you can modify and re-run a previous task.
 - <wa-icon library="texra" name="code-compare"></wa-icon> **Diff**: Runs `latexdiff` to compare the original input file(s) with the generated output `.tex` file(s) from this stream. If no base file was selected, TeXRA uses the original file. Requires `latexdiff` to be installed. Read the [LaTeX Diff guide](./latex-diff.md).
-- <wa-icon library="texra" name="folder-open"></wa-icon> **Open in task storage**:
-  Reveals the run folder under task storage so you can browse generated
+- <wa-icon library="texra" name="folder-open"></wa-icon> **Open in run storage**:
+  Reveals the run folder under run storage so you can browse generated
   files, compile logs, mirrored dependencies, and intermediate artifacts
   yourself.
 - <wa-icon library="texra" name="copy"></wa-icon> **Copy run context**: Copies the
@@ -89,7 +89,7 @@ Each action in detail:
   text, so you can paste them into a new tool-use chat. The button is disabled
   when the run has neither outputs nor compile failures.
 - <wa-icon library="texra" name="box-archive"></wa-icon> **Pack**: Archives the output files and log for this stream into the `History` folder. Read the [file management guide](./file-management.md).
-- <wa-icon library="texra" name="trash"></wa-icon> **Clean**: Deletes the task storage folder associated with this stream.
+- <wa-icon library="texra" name="trash"></wa-icon> **Clean**: Deletes the run folder associated with this stream.
 
 Reviewed outputs are accepted per file: each row under **Generated Files** has
 an **Accept** action that copies the edited version into your workspace.

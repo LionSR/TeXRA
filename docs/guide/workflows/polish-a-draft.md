@@ -49,7 +49,7 @@ texra run polish \
 
 <p class="hero-caption">Rounds stream as progress, then the path to the final revision prints on stdout. That printed path is the success signal.</p>
 
-Each round writes its output into the run's task storage, an
+Each round writes its output into the run folder, an
 `executions/<run-id>/` folder under TeXRA's workspace storage directory,
 using the **input filename** as the document name:
 

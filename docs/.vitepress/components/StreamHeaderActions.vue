@@ -15,10 +15,10 @@ const actions = [
   { icon: 'play', label: 'Run New', desc: 'Fresh run, same config' },
   { icon: 'forward-step', label: 'Resume', desc: 'Continue saved outputs' },
   { icon: 'reply', label: 'Restore', desc: 'Load config into Launcher' },
-  { icon: 'folder-open', label: 'Open', desc: 'Reveal task storage' },
+  { icon: 'folder-open', label: 'Open', desc: 'Reveal run storage' },
   { icon: 'copy', label: 'Copy', desc: 'Run context to clipboard' },
   { icon: 'code-compare', label: 'Diff', desc: 'latexdiff vs. base' },
-  { icon: 'trash', label: 'Clean', desc: 'Delete task storage' },
+  { icon: 'trash', label: 'Clean', desc: 'Delete run folder' },
   { icon: 'box-archive', label: 'Pack', desc: 'Archive to History' },
 ];
 </script>

@@ -1,5 +1,5 @@
 <script setup>
-// Frameless task-storage tree for the polish run. The page's "Run it from the
+// Frameless run-storage tree for the polish run. The page's "Run it from the
 // CLI" section enumerates the round layout as a code-fenced path list, where
 // BOTH rounds reuse the input filename (intro.tex) under r0/ and r1/ — the
 // single most confusing structural fact on the page. This card draws that
@@ -29,7 +29,7 @@ const rounds = [
   <div
     class="mockup mk-card prt"
     role="group"
-    aria-label="polish run task storage layout"
+    aria-label="polish run storage layout"
   >
     <div class="mk-card-head prt-head">
       <wa-icon class="mk-card-head-ic" library="texra" name="folder"></wa-icon>

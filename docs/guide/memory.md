@@ -94,7 +94,7 @@ Within a single run, the orchestrator and every subagent it spawns see the **sam
 
 - **Throwaway intermediate work**: that belongs in the agent's todo list or scratch reasoning, not in a saved note.
 - **Sensitive credentials**: memory files are plain Markdown on disk; treat them like any other workspace file.
-- **Auto-generated logs**: runs already have task storage for artifacts; don't duplicate them as memories.
+- **Auto-generated logs**: runs already have run storage for artifacts; don't duplicate them as memories.
 
 If you end up with a long list of stale, never-pinned notes, delete them. The agent never reads what isn't there, so a small, curated memory is usually more useful than a sprawling one.
 

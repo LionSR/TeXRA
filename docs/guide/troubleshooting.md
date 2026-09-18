@@ -345,7 +345,7 @@ Opening VS Code from a configured terminal provides the most reliable environmen
 
 1. **Check file paths**:
    - Open the generated file from the ProgressBoard file list
-   - Use **Open in task storage** from the ProgressBoard toolbar to browse the run folder
+   - Use **Open in run storage** from the ProgressBoard toolbar to browse the run folder
    - Check the ProgressBoard log for file paths
 
 2. **Permission issues**:
@@ -354,7 +354,7 @@ Opening VS Code from a configured terminal provides the most reliable environmen
 
 3. **Naming conflicts**:
    - Check whether output files exist under unexpected names
-   - Open the run's task storage folder from the ProgressBoard and look for `r0/output.extension`
+   - Open the run folder from the ProgressBoard and look for `r0/output.extension`
 
 4. **Process interruption**:
    - The AI process might have been interrupted before completion
