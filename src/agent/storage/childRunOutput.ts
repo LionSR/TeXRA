@@ -1,4 +1,4 @@
-import { Effect } from 'effect';
+import { Effect, type FileSystem } from 'effect';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
@@ -24,7 +24,11 @@ export const resolveChildRunOutput = Effect.fn('resolveChildRunOutput')(
     parentRunId: RunId,
     absolutePath: string,
     session: SessionHandle,
-  ): Effect.fn.Return<RunStorageFileLocation | undefined, Error> {
+  ): Effect.fn.Return<
+    RunStorageFileLocation | undefined,
+    Error,
+    FileSystem.FileSystem
+  > {
     const storageRoot = session.roots.storage;
     const reference = runStorageLocationUnder(storageRoot, absolutePath);
     if (!reference) {
@@ -70,15 +74,11 @@ export const resolveChildRunOutput = Effect.fn('resolveChildRunOutput')(
       );
     }
 
-    const entry = yield* Effect.tryPromise({
-      try: () =>
-        inspectRunStorageEntryUnder(
-          storageRoot,
-          reference.runId,
-          reference.relativePath,
-        ),
-      catch: ensureError,
-    });
+    const entry = yield* inspectRunStorageEntryUnder(
+      storageRoot,
+      reference.runId,
+      reference.relativePath,
+    );
     switch (entry.kind) {
       case 'file':
         return entry.location;

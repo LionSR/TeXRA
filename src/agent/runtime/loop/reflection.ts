@@ -525,19 +525,17 @@ export const runReflection = Effect.fn('reflection.run')(function* (
               config.toolConfig,
               config.mediaFiles.map((p) => fileService.createLocation(p)),
             )
-          : Effect.tryPromise({
-              try: () =>
-                run.inScope(() => fileService.ensureMirroredInRoundDir(round)),
-              catch: ensureError,
-            }).pipe(
-              Effect.andThen(
-                latexMediaManager.processOutputFiles(
-                  files,
-                  workspace,
-                  config.toolConfig,
+          : fileService
+              .ensureMirroredInRoundDir(round)
+              .pipe(
+                Effect.andThen(
+                  latexMediaManager.processOutputFiles(
+                    files,
+                    workspace,
+                    config.toolConfig,
+                  ),
                 ),
               ),
-            ),
       );
       if (Exit.isFailure(extracted)) {
         if (Cause.hasInterrupts(extracted.cause))
@@ -1195,24 +1193,20 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     // Run-workspace preparation, before the first round: extraction reads
     // the prepared snapshot, and a failure is a transcript warning, never an
     // unhandled rejection.
-    yield* Effect.tryPromise({
-      try: () =>
-        run.inScope(() =>
-          fileService.prepareRunWorkspace(baseFiles, {
-            linkFiles: collectRunSupportFiles(roots.workspace, config),
+    yield* fileService
+      .prepareRunWorkspace(baseFiles, {
+        linkFiles: collectRunSupportFiles(roots.workspace, config),
+      })
+      .pipe(
+        Effect.catch((error) =>
+          Effect.sync(() => {
+            logger.warn(
+              `Failed to prepare run workspace; in-place diffs may be empty: ${toErrorMessage(error)}`,
+              { data: error, messageType: MESSAGE_TYPES.INTERNAL },
+            );
           }),
         ),
-      catch: ensureError,
-    }).pipe(
-      Effect.catch((error) =>
-        Effect.sync(() => {
-          logger.warn(
-            `Failed to prepare run workspace; in-place diffs may be empty: ${toErrorMessage(error)}`,
-            { data: error, messageType: MESSAGE_TYPES.INTERNAL },
-          );
-        }),
-      ),
-    );
+      );
     normalizeCompileRejectionPolicy();
 
     /**

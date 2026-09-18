@@ -1,6 +1,6 @@
 /** Read output metadata from the root's event fold for a matching run. */
 import * as path from 'node:path';
-import { Effect } from 'effect';
+import { Effect, type FileSystem } from 'effect';
 
 import type {
   RunId,
@@ -37,7 +37,8 @@ export const discoverLatestRunOutputs = Effect.fn('discoverLatestRunOutputs')(
       runId: RunId;
       rounds: ReadonlyRoundIndexed<OutputFileInfo>;
     } | null,
-    Error
+    Error,
+    FileSystem.FileSystem
   > {
     const runs = yield* discovery.listAgentRuns();
     // Normalize both sides so trivial path-format differences (duplicate

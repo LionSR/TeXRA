@@ -208,14 +208,10 @@ Parameters map directly to subagent-result delivery attributes:
         );
       }
       const session = call.run.session;
-      const directory = yield* Effect.tryPromise({
-        try: () =>
-          findExistingRunStoragePathUnder(
-            call.roots.storage,
-            input.execution_id,
-          ),
-        catch: ensureError,
-      });
+      const directory = yield* findExistingRunStoragePathUnder(
+        call.roots.storage,
+        input.execution_id,
+      );
       if (
         directory === undefined &&
         !(yield* getRunRecords(session, input.execution_id).exists())
@@ -463,11 +459,11 @@ Parameters map directly to subagent-result delivery attributes:
     Error,
     FileSystem.FileSystem | WorkspaceFs
   > {
-    const entry = yield* Effect.tryPromise({
-      try: () =>
-        inspectRunStorageEntryUnder(call.roots.storage, runId, runPath),
-      catch: ensureError,
-    });
+    const entry = yield* inspectRunStorageEntryUnder(
+      call.roots.storage,
+      runId,
+      runPath,
+    );
     switch (entry.kind) {
       case 'file':
         return entry.location;

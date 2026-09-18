@@ -7,7 +7,7 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, type FileSystem } from 'effect';
 
 // Local imports
 import { isFileNotFoundError } from '@common/errors';
@@ -108,12 +108,13 @@ export const scanRunDirForOutputs = Effect.fn('latexdiff.scanRunDir')(
     extraBaseFiles: string[] | undefined,
     channel: string,
     fs: RunOutputFilesystem,
-  ): Effect.fn.Return<RoundIndexed<OutputFileInfo> | null, never> {
+  ): Effect.fn.Return<
+    RoundIndexed<OutputFileInfo> | null,
+    never,
+    FileSystem.FileSystem
+  > {
     const scan = Effect.gen(function* () {
-      const runDirAbsolute = yield* Effect.tryPromise({
-        try: () => findRunDirUnder(storageRoot, runId),
-        catch: ensureError,
-      });
+      const runDirAbsolute = yield* findRunDirUnder(storageRoot, runId);
       if (!runDirAbsolute) return null;
 
       const dirEntries = yield* Effect.tryPromise({

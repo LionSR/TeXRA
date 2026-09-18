@@ -320,53 +320,54 @@ export function createExtensionHostRequests(
     state: runOutputs,
     storageRoot: session.roots.storage,
     host: {
+      // Each VS Code command is a foreign edge: one lift, named, so the
+      // port's failure channel carries a tag and never a bare rejection.
       compareFiles: (baseFile, editedFile) =>
-        runCommand(
-          'texra.compare',
-          pathToLocationIn(session.roots.workspace, baseFile),
-          pathToLocationIn(session.roots.workspace, editedFile),
+        fromHost('texra.compare', () =>
+          runCommand(
+            'texra.compare',
+            pathToLocationIn(session.roots.workspace, baseFile),
+            pathToLocationIn(session.roots.workspace, editedFile),
+          ),
         ),
       acceptEditedFile: (baseFile, editedFile, copyMeta) =>
-        runCommand<boolean>(
-          'texra.acceptEdited',
-          pathToLocationIn(session.roots.workspace, baseFile),
-          pathToLocationIn(session.roots.workspace, editedFile),
-          copyMeta,
+        fromHost('texra.acceptEdited', () =>
+          runCommand<boolean>(
+            'texra.acceptEdited',
+            pathToLocationIn(session.roots.workspace, baseFile),
+            pathToLocationIn(session.roots.workspace, editedFile),
+            copyMeta,
+          ),
         ),
       mergeFile: (baseFile, editedFile) =>
-        runCommand('texra.merge', baseFile, editedFile),
+        fromHost('texra.merge', () =>
+          runCommand('texra.merge', baseFile, editedFile),
+        ),
       latexdiffFile: (baseFile, editedFile) =>
-        runCommand('texra.latexdiff', undefined, baseFile, editedFile),
+        fromHost('texra.latexdiff', () =>
+          runCommand('texra.latexdiff', undefined, baseFile, editedFile),
+        ),
       openDirectory: (directory) =>
-        runCommand('revealFileInOS', vscode.Uri.file(directory)),
-      openLabel: (label) =>
-        runCommand<boolean>('texra.openLabel', label, {
-          notifyNotFound: false,
-        }).then((result) => result ?? false),
+        fromHost('revealFileInOS', () =>
+          runCommand('revealFileInOS', vscode.Uri.file(directory)),
+        ),
       // An accepted-edit backup names an absolute workspace path the
       // controller already resolved, so this reads through the process
       // filesystem rather than a rooted view that would refuse a path the
       // user picked outside the workspace.
       readFile: (file) =>
-        runtime.runPromise(
-          Effect.flatMap(Effect.service(FileSystem.FileSystem), (fs) =>
-            Effect.map(fs.readFileString(file), normalizeLineEndings),
-          ),
+        Effect.flatMap(Effect.service(FileSystem.FileSystem), (fs) =>
+          Effect.map(fs.readFileString(file), normalizeLineEndings),
         ),
-      // The file-actions host port is still Promise-shaped, so the message
-      // host is demoted here only.
-      showInfo: (message) =>
-        runtime.runPromise(messages.showInfoMessage(message)),
-      showError: (message) =>
-        runtime.runPromise(messages.showErrorMessage(message)),
+      showInfo: (message) => messages.showInfoMessage(message),
+      showError: (message) => messages.showErrorMessage(message),
       logError: (message, error) => {
         log.error(message, {
           data: error instanceof Error ? error : undefined,
         });
       },
     },
-    sendFollowUp: (runId, text) =>
-      runtime.runPromise(runActions.sendFollowUp(runId, text)),
+    sendFollowUp: (runId, text) => runActions.sendFollowUp(runId, text),
   });
 
   let chatExportController: ChatExportController | undefined;
@@ -483,14 +484,10 @@ export function createExtensionHostRequests(
       }
       switch (request.action) {
         case 'compare':
-          yield* fromHost('workflowFileActions.compareOriginal', () =>
-            workflowFileActions.compareOriginal(editedFile, baseFile),
-          );
+          yield* workflowFileActions.compareOriginal(editedFile, baseFile);
           return;
         case 'accept':
-          yield* fromHost('workflowFileActions.acceptFile', () =>
-            workflowFileActions.acceptFile(editedFile, baseFile),
-          );
+          yield* workflowFileActions.acceptFile(editedFile, baseFile);
           return;
         case 'merge':
           yield* fromHost('texra.merge', () =>
@@ -908,9 +905,7 @@ export function createExtensionHostRequests(
           return done;
         }
         case 'openRunStorage':
-          yield* fromHost('workflowFileActions.openRunStorage', () =>
-            workflowFileActions.openRunStorage(request.runId),
-          );
+          yield* workflowFileActions.openRunStorage(request.runId);
           return done;
         case 'exportTranscript':
           yield* exportTranscript(request.runId);
@@ -1040,9 +1035,7 @@ export function createExtensionHostRequests(
           return done;
         case 'fileAction': {
           const config = yield* runActions.readConfig(request.runId);
-          yield* fromHost('workflowFileActions.handle', () =>
-            workflowFileActions.handle(request, config),
-          );
+          yield* workflowFileActions.handle(request, config);
           return done;
         }
         case 'restoreProposalConfig':

@@ -1,11 +1,17 @@
 // Node imports
 import path from 'node:path';
+
+// Third-party imports
+import { Effect, FileSystem } from 'effect';
+
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 
 // Local imports
 import { createLog } from '@logger/logUtils';
+import { AgentResume } from '@platform/interfaces';
 import type { AcceptCopyMeta, RunId } from '@shared/schemas';
 import type { HostRequest } from '@shared/session/hostRequest';
+import type { HostRequestFailure } from '@shared/session/requestErrors';
 import {
   ensureRunDirUnder,
   findRunDirUnder,
@@ -18,20 +24,35 @@ const log = createLog('ProgressWorkflowFileActions');
 
 type ProgressWorkflowFileActionsState = RunOutputsSource;
 
+/**
+ * What a file action runs on: the process `FileSystem` its run-storage reads
+ * take, and the resume port the accepted-edit follow-up is delivered through.
+ * Both hosts' request dispatchers already carry them, so an action is
+ * `yield*`ed there rather than settled here.
+ */
+type FileActionServices = FileSystem.FileSystem | AgentResume;
+
+/**
+ * One file action. Its failure channel is the host's own vocabulary: every
+ * host answers a request with a tag ({@link HostRequestFailure}), so a
+ * refusal a host already worded — the desktop error notice is one — travels
+ * as itself and no arm re-enters a runtime to settle this.
+ */
+type FileAction<A> = Effect.Effect<A, HostRequestFailure, FileActionServices>;
+
 interface ProgressWorkflowFileActionsHost {
-  compareFiles(baseFile: string, editedFile: string): Promise<void>;
+  compareFiles(baseFile: string, editedFile: string): FileAction<void>;
   acceptEditedFile(
     baseFile: string,
     editedFile: string,
     copyMeta?: AcceptCopyMeta,
-  ): Promise<boolean | void>;
-  mergeFile(baseFile: string, editedFile: string): Promise<void>;
-  latexdiffFile(baseFile: string, editedFile: string): Promise<void>;
-  openDirectory(directory: string): Promise<void>;
-  openLabel(label: string): Promise<boolean>;
-  readFile(file: string): Promise<string>;
-  showInfo(message: string): Promise<void>;
-  showError(message: string): Promise<void>;
+  ): FileAction<boolean | void>;
+  mergeFile(baseFile: string, editedFile: string): FileAction<void>;
+  latexdiffFile(baseFile: string, editedFile: string): FileAction<void>;
+  openDirectory(directory: string): FileAction<void>;
+  readFile(file: string): FileAction<string>;
+  showInfo(message: string): FileAction<void>;
+  showError(message: string): FileAction<void>;
   logError?(message: string, error: unknown): void;
 }
 
@@ -40,7 +61,10 @@ interface ProgressWorkflowFileActionsControllerDeps {
   host: ProgressWorkflowFileActionsHost;
   /** Storage root of the session whose runs this controller acts on. */
   storageRoot: string;
-  sendFollowUp(stream: RunId, text: string): Promise<void>;
+  sendFollowUp(
+    stream: RunId,
+    text: string,
+  ): Effect.Effect<void, never, AgentResume>;
 }
 
 export class ProgressWorkflowFileActionsController {
@@ -52,10 +76,10 @@ export class ProgressWorkflowFileActionsController {
   ) {}
 
   /** Apply an output-file request from either GUI host. */
-  async handle(
+  handle(
     request: Extract<HostRequest, { kind: 'fileAction' }>,
     config: AgentConfig | undefined,
-  ): Promise<void> {
+  ): FileAction<void> {
     const base = request.base ?? undefined;
     switch (request.action) {
       case 'compareOriginal':
@@ -71,169 +95,176 @@ export class ProgressWorkflowFileActionsController {
     }
   }
 
-  async openRunStorage(runId: RunId): Promise<void> {
-    try {
+  openRunStorage(runId: RunId): FileAction<void> {
+    return Effect.gen({ self: this }, function* () {
       const storageRoot = this.deps.storageRoot;
-      let directoryToReveal = await findRunDirUnder(storageRoot, runId);
+      let directoryToReveal = yield* findRunDirUnder(storageRoot, runId);
       if (!directoryToReveal) {
-        await ensureRunDirUnder(storageRoot, runId);
+        yield* ensureRunDirUnder(storageRoot, runId);
         directoryToReveal = runDirUnder(storageRoot, runId);
       }
-      await this.deps.host.openDirectory(directoryToReveal);
-    } catch (error) {
-      this.deps.host.logError?.('Failed to open run folder', error);
-      await this.deps.host.showError(
-        `Failed to open run folder: ${toErrorMessage(error)}`,
-      );
-    }
+      yield* this.deps.host.openDirectory(directoryToReveal);
+    }).pipe(
+      Effect.catch((error) =>
+        Effect.gen({ self: this }, function* () {
+          this.deps.host.logError?.('Failed to open run folder', error);
+          yield* this.deps.host.showError(
+            `Failed to open run folder: ${toErrorMessage(error)}`,
+          );
+        }),
+      ),
+    );
   }
 
   /** `stream` is the run the file belongs to: it keys the compare-time
    *  backup that a later Accept reads. */
-  async compareOriginal(
+  compareOriginal(
     file: string,
     base?: string,
     stream?: RunId,
-  ): Promise<void> {
-    await this.executeWithBaseFile(
+  ): FileAction<void> {
+    return this.executeWithBaseFile(
       file,
       base,
       'Compare original',
-      async (targetFile, baseFile) => {
-        if (stream !== undefined) await this.backupModelOutput(stream, file);
-        await this.deps.host.compareFiles(baseFile, targetFile);
-      },
-    );
+      (targetFile, baseFile) =>
+        Effect.gen({ self: this }, function* () {
+          if (stream !== undefined) yield* this.backupModelOutput(stream, file);
+          yield* this.deps.host.compareFiles(baseFile, targetFile);
+        }),
+    ).pipe(Effect.asVoid);
   }
 
-  async comparePrevious(
+  comparePrevious(
     file: string,
     base?: string,
     previous?: string,
-  ): Promise<void> {
+  ): FileAction<void> {
     const previousFile = previous ?? base;
     if (!previousFile) {
-      await this.deps.host.showInfo('Compare previous needs a base file.');
-      return;
+      return this.deps.host.showInfo('Compare previous needs a base file.');
     }
 
-    await this.deps.host.compareFiles(previousFile, file);
+    return this.deps.host.compareFiles(previousFile, file);
   }
 
-  async acceptFile(
+  acceptFile(
     file: string,
     base?: string,
     activeRun?: RunId,
     config?: AgentConfig,
-  ): Promise<void> {
-    const backup =
-      file && activeRun
-        ? this.modelOutputBackups.get(activeRun)?.get(file)
-        : undefined;
-    let currentContent: string | undefined;
+  ): FileAction<void> {
+    return Effect.gen({ self: this }, function* () {
+      const backup =
+        file && activeRun
+          ? this.modelOutputBackups.get(activeRun)?.get(file)
+          : undefined;
+      let currentContent: string | undefined;
 
-    if (backup !== undefined) {
-      try {
-        currentContent = await this.deps.host.readFile(file);
-      } catch (error) {
-        log.debug(`Could not read current content of ${file} before accept`, {
-          data: error,
-        });
+      if (backup !== undefined) {
+        currentContent = yield* this.deps.host.readFile(file).pipe(
+          Effect.catch((error) =>
+            Effect.sync(() => {
+              log.debug(
+                `Could not read current content of ${file} before accept`,
+                { data: error },
+              );
+              return undefined;
+            }),
+          ),
+        );
       }
-    }
 
-    let copyMeta: AcceptCopyMeta | undefined;
-    if (activeRun && file) {
-      copyMeta = this.buildCopyMeta(activeRun, file, config);
-    }
+      let copyMeta: AcceptCopyMeta | undefined;
+      if (activeRun && file) {
+        copyMeta = this.buildCopyMeta(activeRun, file, config);
+      }
 
-    const accepted = await this.executeWithBaseFile(
-      file,
-      base,
-      'Accept',
-      async (targetFile, baseFile) => {
-        return this.deps.host.acceptEditedFile(baseFile, targetFile, copyMeta);
-      },
-    );
-    if (!accepted) return;
-
-    if (
-      activeRun !== undefined &&
-      backup !== undefined &&
-      currentContent !== undefined &&
-      currentContent !== backup
-    ) {
-      const fileName = path.basename(file);
-      await this.deps.sendFollowUp(
-        activeRun,
-        `[System: User modified the model's suggested output for "${fileName}" before accepting. The accepted version differs from the original model output.]`,
+      const accepted = yield* this.executeWithBaseFile(
+        file,
+        base,
+        'Accept',
+        (targetFile, baseFile) =>
+          this.deps.host.acceptEditedFile(baseFile, targetFile, copyMeta),
       );
-    }
+      if (!accepted) return;
 
-    if (backup !== undefined && activeRun) {
-      const runBackups = this.modelOutputBackups.get(activeRun);
-      runBackups?.delete(file);
-      if (runBackups?.size === 0) {
-        this.modelOutputBackups.delete(activeRun);
+      if (
+        activeRun !== undefined &&
+        backup !== undefined &&
+        currentContent !== undefined &&
+        currentContent !== backup
+      ) {
+        const fileName = path.basename(file);
+        yield* this.deps.sendFollowUp(
+          activeRun,
+          `[System: User modified the model's suggested output for "${fileName}" before accepting. The accepted version differs from the original model output.]`,
+        );
       }
-    }
+
+      if (backup !== undefined && activeRun) {
+        const runBackups = this.modelOutputBackups.get(activeRun);
+        runBackups?.delete(file);
+        if (runBackups?.size === 0) {
+          this.modelOutputBackups.delete(activeRun);
+        }
+      }
+    });
   }
 
-  async mergeFile(file: string, base?: string): Promise<void> {
-    await this.executeWithBaseFile(
+  mergeFile(file: string, base?: string): FileAction<void> {
+    return this.executeWithBaseFile(
       file,
       base,
       'Merge',
-      async (targetFile, baseFile) => {
-        await this.deps.host.mergeFile(baseFile, targetFile);
-      },
-    );
+      (targetFile, baseFile) => this.deps.host.mergeFile(baseFile, targetFile),
+    ).pipe(Effect.asVoid);
   }
 
-  async latexdiffFile(file: string, base?: string): Promise<void> {
-    await this.executeWithBaseFile(
+  latexdiffFile(file: string, base?: string): FileAction<void> {
+    return this.executeWithBaseFile(
       file,
       base,
       'Latexdiff',
-      async (targetFile, baseFile) => {
-        await this.deps.host.latexdiffFile(baseFile, targetFile);
-      },
-    );
+      (targetFile, baseFile) =>
+        this.deps.host.latexdiffFile(baseFile, targetFile),
+    ).pipe(Effect.asVoid);
   }
 
-  async openLabel(label: string): Promise<void> {
-    const opened = await this.deps.host.openLabel(label);
-    if (!opened) {
-      await this.deps.host.showInfo(`Label "${label}" not found.`);
-    }
-  }
-
-  private async executeWithBaseFile(
+  private executeWithBaseFile(
     file: string,
     base: string | undefined,
     actionName: string,
-    execute: (file: string, base: string) => Promise<boolean | void>,
-  ): Promise<boolean> {
+    execute: (file: string, base: string) => FileAction<boolean | void>,
+  ): FileAction<boolean> {
     if (!base) {
-      await this.deps.host.showInfo(`${actionName} needs a base file.`);
-      return false;
+      return this.deps.host
+        .showInfo(`${actionName} needs a base file.`)
+        .pipe(Effect.as(false));
     }
-    return (await execute(file, base)) !== false;
+    return execute(file, base).pipe(Effect.map((result) => result !== false));
   }
 
-  private async backupModelOutput(runId: RunId, file: string): Promise<void> {
-    if (!file) return;
+  private backupModelOutput(runId: RunId, file: string): FileAction<void> {
+    if (!file) return Effect.void;
 
-    try {
-      const content = await this.deps.host.readFile(file);
-      const runBackups = this.modelOutputBackups.get(runId) ?? new Map();
+    return Effect.gen({ self: this }, function* () {
+      const content = yield* this.deps.host.readFile(file);
+      const runBackups =
+        this.modelOutputBackups.get(runId) ?? new Map<string, string>();
       runBackups.set(file, content);
       this.modelOutputBackups.set(runId, runBackups);
-    } catch (error) {
-      // Best-effort: backup only informs the accepted-edit follow-up, but a
-      // later Accept then has no compare-time content to offer.
-      log.debug(`Could not back up model output for ${file}`, { data: error });
-    }
+    }).pipe(
+      Effect.catch((error) =>
+        Effect.sync(() => {
+          // Best-effort: backup only informs the accepted-edit follow-up, but a
+          // later Accept then has no compare-time content to offer.
+          log.debug(`Could not back up model output for ${file}`, {
+            data: error,
+          });
+        }),
+      ),
+    );
   }
 
   /** Resolve the agent/model/round for an output file so "Accept" can offer

@@ -777,7 +777,7 @@ describe('the reflection round loop', () => {
         const warn = vi.spyOn(logger, 'warn');
         const prepare = vi
           .spyOn(RunFileService.prototype, 'prepareRunWorkspace')
-          .mockRejectedValueOnce(new Error('workspace unavailable'));
+          .mockReturnValueOnce(Effect.fail(new Error('workspace unavailable')));
 
         try {
           const { result } = yield* runLoop({

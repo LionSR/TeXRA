@@ -149,10 +149,8 @@ export class LatexMediaManager {
         (absolutePath) => absolutePath,
         'Unable to mirror figure dependency',
         (absolutePath) =>
-          fsCall(() =>
-            fileService.mirrorWorkspaceFile(
-              pathToLocationIn(this.roots.workspace, absolutePath),
-            ),
+          fileService.mirrorWorkspaceFile(
+            pathToLocationIn(this.roots.workspace, absolutePath),
           ),
       );
     });
@@ -335,11 +333,9 @@ export class LatexMediaManager {
             Effect.gen(function* () {
               const depLocation = pathToLocationIn(workspaceRoot, absolutePath);
               const isTex = hasExtension(absolutePath, '.tex');
-              yield* fsCall(() =>
-                fileService.mirrorWorkspaceFile(depLocation, {
-                  snapshot: isTex,
-                }),
-              );
+              yield* fileService.mirrorWorkspaceFile(depLocation, {
+                snapshot: isTex,
+              });
               if (isTex) {
                 worklist.push(depLocation);
               }
@@ -454,10 +450,8 @@ export class LatexMediaManager {
           Effect.gen(function* () {
             const stats = yield* fs.stat(absolutePath);
             if (stats.type !== 'File') return;
-            yield* fsCall(() =>
-              fileService.mirrorWorkspaceFile(
-                pathToLocationIn(workspaceRoot, absolutePath),
-              ),
+            yield* fileService.mirrorWorkspaceFile(
+              pathToLocationIn(workspaceRoot, absolutePath),
             );
           }),
       );
