@@ -28,6 +28,7 @@ import {
   pathToLocationIn,
 } from '@utils/files/fileLocation';
 import { findRunDirUnder } from '@utils/files/runStorageFs';
+import { normalizeFilePath } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { hasExtension } from '@utils/core/pathCore';
 import { isDirectory, isFile } from '@utils/files/fsEntryType';
@@ -128,7 +129,7 @@ export const scanRunDirForOutputs = Effect.fn('latexdiff.scanRunDir')(
       // Normalize to a forward-slash, extension-less relative key so base files
       // and recovered round outputs can be matched regardless of path format.
       const toRelKey = (p: string): string =>
-        p.replaceAll('\\', '/').replace(/\.tex$/i, '');
+        normalizeFilePath(p).replace(/\.tex$/i, '');
 
       // Build a relative-path (no extension) → workspace location map so
       // multi-output runs with duplicate basenames (e.g. chapters/main.tex and

@@ -17,6 +17,7 @@ import {
   type RunStorageFileLocation,
 } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { normalizeFilePath } from '@utils/core';
 import { getPathSegments } from '@utils/core/pathCore';
 
 // Local file imports
@@ -98,7 +99,7 @@ export const inspectRunStorageEntryUnder = Effect.fn(
   FileSystem.FileSystem
 > {
   const fs = yield* FileSystem.FileSystem;
-  const posixPath = relativePath.replaceAll('\\', '/');
+  const posixPath = normalizeFilePath(relativePath);
   const pathSegments = getPathSegments(posixPath);
   if (
     pathSegments.length === 0 ||

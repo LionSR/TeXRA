@@ -1,7 +1,7 @@
 import { getReasonPhrase, StatusCodes } from 'http-status-codes';
 import { Result } from 'effect';
 import { safeParseJson } from '@common/parsing/safeParseJson';
-import { isObject } from '@utils/core';
+import { isObject, normalizeFilePath } from '@utils/core';
 import { isNonEmptyString, isString } from '@utils/text/stringUtils';
 
 import { pickStatus } from './sdkErrorKinds';
@@ -249,7 +249,7 @@ function detectProviderFromHeaders(
 }
 
 function detectProviderFromText(text: string): string | undefined {
-  const lowered = text.toLowerCase().replaceAll('\\', '/');
+  const lowered = normalizeFilePath(text.toLowerCase());
   if (lowered.includes(`@anthropic-${'ai'}/sdk`)) return 'anthropic';
   if (lowered.includes('node_modules/openai')) return 'openai';
   // Keep the Google package marker split so the desktop startup bundle

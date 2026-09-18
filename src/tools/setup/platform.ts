@@ -21,6 +21,7 @@ import { isCodexSubscriptionActive } from '@model/providerCapabilities';
 import { CHATGPT_SETUP_MODEL } from '@model/setupModelDefaults';
 import type { LanguageModel } from '@platform/languageModel';
 import { Secrets } from '@platform/secrets';
+import { ToolError } from '@shared/schemas';
 
 /**
  * Why a host command invocation never ran to completion, read off what the
@@ -109,6 +110,25 @@ export class SetupPlatform extends Context.Service<
   static layer(setup: SetupPlatformShape): Layer.Layer<SetupPlatform> {
     return Layer.succeed(SetupPlatform)(setup);
   }
+}
+
+/**
+ * Fail with a uniform, sorted-allowlist error when `id` is not a member of
+ * `allowed`. Shared by the setup tools so a disallowed extension ID and a
+ * disallowed command ID reject with the same wording, not two hand-rolled
+ * copies of it.
+ */
+export function assertInSetupAllowlist(
+  kind: string,
+  id: string,
+  allowed: ReadonlySet<string>,
+): Effect.Effect<void, ToolError> {
+  if (allowed.has(id)) return Effect.void;
+  return Effect.fail(
+    new ToolError(
+      `${kind} "${id}" is not in the setup allowlist. Allowed: ${[...allowed].sort().join(', ')}.`,
+    ),
+  );
 }
 
 /** TeXRA account status shared by every host. */
