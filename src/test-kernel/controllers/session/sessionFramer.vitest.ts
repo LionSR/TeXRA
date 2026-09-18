@@ -46,6 +46,7 @@ import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import type { EventsFrame, Subscribe } from '@shared/session/sessionFrames';
 import type { SessionView } from '@shared/session/sessionView';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
+import { fakeProcessServices } from '@test/support/setupPlatform';
 import { createTestSession } from '@test/support/sessionTestUtils';
 
 function textTail(
@@ -221,9 +222,8 @@ describe('session framer', () => {
       const bridge = yield* SessionBridge.make({
         session,
         onPortClosed: () => {},
-        handleHostRequest: async () => {
-          throw new Error('No host request is expected.');
-        },
+        handleHostRequest: () =>
+          Effect.die(new Error('No host request is expected.')),
       });
       const keys = [
         qualifyAggregateId('run', RUN),
@@ -243,7 +243,7 @@ describe('session framer', () => {
           );
         }),
       );
-    }),
+    }).pipe(Effect.provide(fakeProcessServices())),
   );
   it.live('closes a superseded port before registering its replacement', () =>
     Effect.gen(function* () {
@@ -254,9 +254,8 @@ describe('session framer', () => {
       const bridge = yield* SessionBridge.make({
         session,
         onPortClosed,
-        handleHostRequest: async () => {
-          throw new Error('No host request is expected.');
-        },
+        handleHostRequest: () =>
+          Effect.die(new Error('No host request is expected.')),
       });
       const aggregates = [{ id: qualifyAggregateId('run', RUN), fromSeq: 0 }];
       const first = yield* bridge.attach({ id: PORT, send: () => {} });
@@ -295,7 +294,7 @@ describe('session framer', () => {
           );
         }),
       );
-    }),
+    }).pipe(Effect.provide(fakeProcessServices())),
   );
   it.effect(
     'answers a Subscribe with the replay, then frames the tail every 16 ms with one chunk per row',

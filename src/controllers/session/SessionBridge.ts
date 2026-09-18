@@ -44,6 +44,7 @@ import {
   type FramerSource,
 } from '@controllers/session/SessionFramer';
 import { createLog } from '@logger/logUtils';
+import type { ProcessServices } from '@platform/processRuntime';
 import type { HostRequest } from '@shared/session/hostRequest';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import {
@@ -76,14 +77,16 @@ const RequestEnvelopeSchema = z.object({
 interface SessionBridgeOptions {
   readonly session: SessionHandle;
   readonly onPortClosed: (port: string) => void;
-  /** The host's capabilities (8.3), performed on the surface's behalf. A
-   *  handler cancels with `Cancelled` or refuses with `Unavailable` or
-   *  `Rejected`; anything else it
-   *  throws is a defect, logged here and answered `Internal`. */
+  /** The host's capabilities (8.3), performed on the surface's behalf, as
+   *  one program per request that takes the process services from the fiber
+   *  the host's transport runs `receive` on. A handler cancels with
+   *  `Cancelled` or refuses with `Unavailable` or `Rejected`; anything else
+   *  it fails or dies with is a defect, logged here and answered
+   *  `Internal`. */
   readonly handleHostRequest: (
     request: HostRequest,
     port: string,
-  ) => Promise<HostOutcome>;
+  ) => Effect.Effect<HostOutcome, unknown, ProcessServices>;
 }
 
 /** One attached transport port: the host posts `send`'s messages to it. */
@@ -95,7 +98,9 @@ interface SessionPort {
 /** What the backend gives a host per attached port. */
 export interface AttachedPort {
   /** One message from the port, unparsed. */
-  readonly receive: (message: unknown) => Effect.Effect<void>;
+  readonly receive: (
+    message: unknown,
+  ) => Effect.Effect<void, never, ProcessServices>;
   /** The port went away: its transcript set leaves the union, the host
    *  hears it, and its replay is interrupted. A second close is a no-op. */
   readonly close: Effect.Effect<void>;
@@ -286,7 +291,10 @@ export class SessionBridge {
     });
   }
 
-  private receive(entry: PortEntry, message: unknown): Effect.Effect<void> {
+  private receive(
+    entry: PortEntry,
+    message: unknown,
+  ): Effect.Effect<void, never, ProcessServices> {
     return Effect.suspend(() => {
       const { port } = entry;
       if (this.ports.get(port.id) !== entry) return Effect.void;
@@ -336,10 +344,7 @@ export class SessionBridge {
           return this.answer(
             entry,
             up.requestId,
-            Effect.tryPromise({
-              try: () => this.options.handleHostRequest(up.request, port.id),
-              catch: (error) => error,
-            }).pipe(
+            this.options.handleHostRequest(up.request, port.id).pipe(
               Effect.matchEffect({
                 onFailure: (error): Effect.Effect<Response['result']> =>
                   isRefusal(error)
@@ -362,8 +367,8 @@ export class SessionBridge {
   private answer(
     entry: PortEntry,
     requestId: string,
-    result: Effect.Effect<Response['result']>,
-  ): Effect.Effect<void> {
+    result: Effect.Effect<Response['result'], never, ProcessServices>,
+  ): Effect.Effect<void, never, ProcessServices> {
     return Effect.forkIn(
       result.pipe(
         Effect.catchCause((cause) =>

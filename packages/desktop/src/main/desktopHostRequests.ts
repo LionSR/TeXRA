@@ -117,7 +117,10 @@ interface DesktopHostRequestsOptions {
 }
 
 export interface DesktopHostRequests {
-  handle(request: HostRequest, port: string): Promise<HostOutcome>;
+  handleHostRequest(
+    request: HostRequest,
+    port: string,
+  ): Effect.Effect<HostOutcome, unknown, ProcessServices>;
   closePort(port: string): void;
   /** Stops a recording this window owns; the take is discarded. */
   dispose(): void;
@@ -639,8 +642,9 @@ export function createDesktopHostRequests(
    * One program per request. The arms are Effects; the capabilities that
    * still answer with a promise are lifted once through `fromHost`, so the
    * failure channel is the value the arm failed or rejected with and no
-   * dispatch arm re-enters the runtime between here and `handle` (a lifted
-   * capability may still run its own program behind its promise face).
+   * dispatch arm re-enters the runtime between here and the bridge that runs
+   * this program (a lifted capability may still run its own program behind
+   * its promise face).
    */
   function dispatch(
     request: HostRequest,
@@ -827,34 +831,51 @@ export function createDesktopHostRequests(
     });
   }
 
-  return {
-    async handle(request, port) {
-      const exit = await runtime.runPromiseExit(dispatch(request, port));
-      if (Exit.isSuccess(exit)) return exit.value;
+  /**
+   * The bridge's host-request port: the dispatch program plus the one dialog
+   * a failed request presents before it is answered. The cause is squashed
+   * and re-failed as the value the arm carried, so the bridge's
+   * refusal-versus-defect fold sees exactly what the failing arm produced.
+   */
+  function handleHostRequest(
+    request: HostRequest,
+    port: string,
+  ): Effect.Effect<HostOutcome, unknown, ProcessServices> {
+    return dispatch(request, port).pipe(
+      Effect.catchCause((cause) => {
+        const error = Cause.squash(cause);
+        if (error instanceof Cancelled) return Effect.fail(error);
+        // Request-scoped operations do not present. Every rejection, including
+        // a capability refusal, reaches this one dialog before the response.
+        const primaryError = primaryAgentError(error);
+        const refusal =
+          primaryError instanceof Rejected ||
+          primaryError instanceof Unavailable
+            ? primaryError
+            : undefined;
+        return Effect.promise(() =>
+          Promise.resolve(
+            presentAgentFailure(
+              session.interactions,
+              {
+                kind: classifyAgentError(primaryError),
+                message: refusal?.reason ?? toErrorMessage(primaryError),
+                // A refused request's guide link (e.g. the launch's
+                // file-management page) must survive into the host-owned
+                // dialog (#11959).
+                ...(refusal instanceof Rejected &&
+                  refusal.docsCommand && { docsCommand: refusal.docsCommand }),
+              },
+              { replayWhenAttached: true },
+            ),
+          ),
+        ).pipe(Effect.andThen(Effect.fail(error)));
+      }),
+    );
+  }
 
-      const error = Cause.squash(exit.cause);
-      if (error instanceof Cancelled) throw error;
-      // Request-scoped operations do not present. Every rejection, including
-      // a capability refusal, reaches this one dialog before the response.
-      const primaryError = primaryAgentError(error);
-      const refusal =
-        primaryError instanceof Rejected || primaryError instanceof Unavailable
-          ? primaryError
-          : undefined;
-      await presentAgentFailure(
-        session.interactions,
-        {
-          kind: classifyAgentError(primaryError),
-          message: refusal?.reason ?? toErrorMessage(primaryError),
-          // A refused request's guide link (e.g. the launch's file-management
-          // page) must survive into the host-owned dialog (#11959).
-          ...(refusal instanceof Rejected &&
-            refusal.docsCommand && { docsCommand: refusal.docsCommand }),
-        },
-        { replayWhenAttached: true },
-      );
-      throw error;
-    },
+  return {
+    handleHostRequest,
     closePort: draftRequests.closePort,
     dispose: draftRequests.dispose,
   };

@@ -954,7 +954,7 @@ function createWindow(options: {
       SessionBridge.make({
         session: project.session,
         handleHostRequest: (request, portId) =>
-          hostRequests.handle(request, portId),
+          hostRequests.handleHostRequest(request, portId),
         onPortClosed: (portId) => hostRequests.closePort(portId),
       }).pipe(Scope.provide(bridgeScope)),
     );
