@@ -141,12 +141,10 @@ export class AgentReviewRunController {
       })
       .pipe(
         Effect.catch((error) =>
-          Effect.promise(() =>
-            showLoggedErrorMessage(
-              CHANNEL,
-              'The agent review run could not be stopped',
-              error,
-            ),
+          showLoggedErrorMessage(
+            CHANNEL,
+            'The agent review run could not be stopped',
+            error,
           ),
         ),
         Effect.asVoid,

@@ -139,15 +139,7 @@ export class AgentHandlers {
       showInfoMessage: (message) =>
         this.forkInfoNotice(message, 'Agent settings'),
       showErrorMessage: (message) =>
-        Effect.tryPromise({
-          try: () => showLoggedMessage(this.ctx.channel, message),
-          catch: (cause) =>
-            new NotificationFailed({
-              member: 'showErrorMessage',
-              message: toErrorMessage(cause),
-              cause,
-            }),
-        }),
+        showLoggedMessage(this.ctx.channel, message).pipe(Effect.asVoid),
       refreshAfterMutation: () => this.refreshAfterAgentMutation(),
     });
   }
@@ -230,11 +222,9 @@ export class AgentHandlers {
           data.folderType,
         );
         if (!result.ok) {
-          yield* Effect.promise(() =>
-            showLoggedMessage(
-              this.ctx.channel,
-              `No local directory for agent source: ${data.folderType}`,
-            ),
+          yield* showLoggedMessage(
+            this.ctx.channel,
+            `No local directory for agent source: ${data.folderType}`,
           );
           return;
         }
@@ -259,11 +249,9 @@ export class AgentHandlers {
       Effect.gen({ self: this }, function* () {
         const config = yield* fetchRemoteAgentPromptYaml(data.agentName);
         if (config == null) {
-          yield* Effect.promise(() =>
-            showLoggedMessage(
-              this.ctx.channel,
-              'Authentication required. Sign in using "TeXRA: Sign In".',
-            ),
+          yield* showLoggedMessage(
+            this.ctx.channel,
+            'Authentication required. Sign in using "TeXRA: Sign In".',
           );
           return;
         }
@@ -398,23 +386,7 @@ export class AgentHandlers {
             showInfoMessage: (message) => this.forkInfoNotice(message, 'Team'),
             showErrorMessage: (message) =>
               Effect.forkDetach(
-                Effect.tryPromise({
-                  try: () => showLoggedMessage(this.ctx.channel, message),
-                  catch: (cause) =>
-                    new NotificationFailed({
-                      member: 'showErrorMessage',
-                      message: toErrorMessage(cause),
-                      cause,
-                    }),
-                }).pipe(
-                  Effect.catchTag('NotificationFailed', (failure) =>
-                    Effect.sync(() => {
-                      this.ctx.log.warn(
-                        `Error notification failed after handoff: ${failure.message}`,
-                      );
-                    }),
-                  ),
-                ),
+                showLoggedMessage(this.ctx.channel, message),
               ).pipe(Effect.asVoid),
           },
           refreshAfterApply: (selectedToolUseAgent) =>

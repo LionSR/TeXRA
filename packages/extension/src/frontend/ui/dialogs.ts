@@ -71,7 +71,7 @@ export async function selectFiles(
 ): Promise<string[] | null> {
   const defaultUri = computeDefaultUri(options);
   if (!defaultUri) {
-    void showLoggedMessage(CHANNEL, 'No workspace folder open');
+    Effect.runFork(showLoggedMessage(CHANNEL, 'No workspace folder open'));
     return null;
   }
 

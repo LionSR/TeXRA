@@ -69,12 +69,10 @@ export function withHandlerErrorHandling<E, R>(
     const outcome = yield* Effect.exit(program);
     if (Exit.isSuccess(outcome)) return;
     if (Cause.hasInterrupts(outcome.cause)) return yield* Effect.interrupt;
-    yield* Effect.promise(() =>
-      showLoggedErrorMessage(
-        ctx.channel,
-        errorMessage,
-        Cause.squash(outcome.cause),
-      ),
+    yield* showLoggedErrorMessage(
+      ctx.channel,
+      errorMessage,
+      Cause.squash(outcome.cause),
     );
   });
 }

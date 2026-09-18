@@ -101,18 +101,19 @@ export const signIn: Effect.Effect<
   if (!authReady) {
     const reason =
       auth.getInitError()?.message ?? 'Authentication service not initialized';
-    void showLoggedMessage(
-      CHANNEL,
-      `Sign in failed: ${reason}. Try reloading VS Code (Ctrl+Shift+P → "Reload Window"). If the problem continues, open Help → Toggle Developer Tools → Console for details.`,
+    yield* Effect.forkDetach(
+      showLoggedMessage(
+        CHANNEL,
+        `Sign in failed: ${reason}. Try reloading VS Code (Ctrl+Shift+P → "Reload Window"). If the problem continues, open Help → Toggle Developer Tools → Console for details.`,
+      ),
     );
     return false;
   }
 
-  const showAuthServiceUnavailable = () =>
-    showLoggedMessage(
-      CHANNEL,
-      'The authentication service is temporarily unavailable. Your stored session has not been removed; try again later.',
-    );
+  const showAuthServiceUnavailable = showLoggedMessage(
+    CHANNEL,
+    'The authentication service is temporarily unavailable. Your stored session has not been removed; try again later.',
+  );
 
   let storedSessionState = yield* auth.storedSessionState;
   if (storedSessionState === 'invalid') {
@@ -123,7 +124,7 @@ export const signIn: Effect.Effect<
     storedSessionState = cleared ? 'none' : yield* auth.storedSessionState;
   }
   if (storedSessionState === 'transient') {
-    void showAuthServiceUnavailable();
+    yield* Effect.forkDetach(showAuthServiceUnavailable);
     return false;
   }
 
@@ -143,7 +144,7 @@ export const signIn: Effect.Effect<
       yield* showSignedInMessage('Already signed in as');
       return true;
     }
-    void showAuthServiceUnavailable();
+    yield* Effect.forkDetach(showAuthServiceUnavailable);
     return false;
   }
 
@@ -180,10 +181,9 @@ export const signIn: Effect.Effect<
   return false;
 }).pipe(
   Effect.catchTag('AuthCommandFailed', (failure) =>
-    Effect.sync(() => {
-      void showLoggedErrorMessage(CHANNEL, 'Sign in failed', failure.cause);
-      return false;
-    }),
+    Effect.forkDetach(
+      showLoggedErrorMessage(CHANNEL, 'Sign in failed', failure.cause),
+    ).pipe(Effect.as(false)),
   ),
 );
 
@@ -208,9 +208,11 @@ export const signOut: Effect.Effect<
 
   const authProvider = SupabaseAuthProvider.getInstance();
   if (!authProvider) {
-    void showLoggedMessage(
-      CHANNEL,
-      'Sign-out is unavailable right now. Reload the window, then try again.',
+    yield* Effect.forkDetach(
+      showLoggedMessage(
+        CHANNEL,
+        'Sign-out is unavailable right now. Reload the window, then try again.',
+      ),
     );
     return;
   }
@@ -220,8 +222,8 @@ export const signOut: Effect.Effect<
   yield* showInfo(removed ? 'Signed out' : 'You were already signed out');
 }).pipe(
   Effect.catchTag('AuthCommandFailed', (failure) =>
-    Effect.sync(() => {
-      void showLoggedErrorMessage(CHANNEL, 'Sign out failed', failure.cause);
-    }),
+    Effect.forkDetach(
+      showLoggedErrorMessage(CHANNEL, 'Sign out failed', failure.cause),
+    ).pipe(Effect.asVoid),
   ),
 );

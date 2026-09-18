@@ -201,9 +201,7 @@ export class SettingsViewMessageHandler {
       refreshAfterKeyChange: (provider) =>
         this.refreshAfterProviderKeyChange(provider),
       reportFailure: (message, error) =>
-        Effect.promise(() =>
-          showLoggedErrorMessage(this.channel, message, error),
-        ).pipe(
+        showLoggedErrorMessage(this.channel, message, error).pipe(
           // On error, still refresh settings view to reflect current key state.
           Effect.andThen(
             this.withActiveWebview((w) =>
@@ -349,9 +347,9 @@ export class SettingsViewMessageHandler {
       unpinMemory: (message) =>
         run(this.memoryHandlers.setMemoryPinned(message.storagePath, false)),
       signIn: () =>
-        safeExecuteCommand(AUTH_COMMANDS.SIGN_IN, [], this.viewName),
+        run(safeExecuteCommand(AUTH_COMMANDS.SIGN_IN, [], this.viewName)),
       signOut: () =>
-        safeExecuteCommand(AUTH_COMMANDS.SIGN_OUT, [], this.viewName),
+        run(safeExecuteCommand(AUTH_COMMANDS.SIGN_OUT, [], this.viewName)),
       setProviderKey: (message) =>
         run(this.profileKeyController.setProviderKey(message.provider)),
       removeProviderKey: (message) =>
@@ -521,14 +519,12 @@ export class SettingsViewMessageHandler {
           result.cause.reasons.length === 1
             ? result.cause.reasons[0]
             : undefined;
-        yield* Effect.promise(() =>
-          showLoggedErrorMessage(
-            this.channel,
-            'Failed to load goals',
-            reason && Cause.isFailReason(reason)
-              ? reason.error
-              : new Error(Cause.pretty(result.cause), { cause: result.cause }),
-          ),
+        yield* showLoggedErrorMessage(
+          this.channel,
+          'Failed to load goals',
+          reason && Cause.isFailReason(reason)
+            ? reason.error
+            : new Error(Cause.pretty(result.cause), { cause: result.cause }),
         );
       }
     });
@@ -819,34 +815,30 @@ export class SettingsViewMessageHandler {
       if (result.kind === 'ignored') return;
       const label = result.entry.title ?? result.entry.key;
       if (result.kind === 'rejected') {
-        yield* Effect.promise(() =>
-          showLoggedErrorMessage(
-            this.channel,
-            `Invalid value for “${label}”`,
-            result.error,
-          ),
+        yield* showLoggedErrorMessage(
+          this.channel,
+          `Invalid value for “${label}”`,
+          result.error,
         );
       } else if (result.kind === 'workspace-required') {
-        void showLoggedInfoMessage(
-          this.channel,
-          `Open a workspace folder before changing the “${label}” setting.`,
+        yield* Effect.forkDetach(
+          showLoggedInfoMessage(
+            this.channel,
+            `Open a workspace folder before changing the “${label}” setting.`,
+          ),
         );
       } else if (result.kind === 'failed') {
-        yield* Effect.promise(() =>
-          showLoggedErrorMessage(
-            this.channel,
-            `Failed to update “${label}”`,
-            result.error,
-          ),
+        yield* showLoggedErrorMessage(
+          this.channel,
+          `Failed to update “${label}”`,
+          result.error,
         );
       }
       yield* this.postStateSettingSnapshot(result.entry.surfaces.settingsView);
       if (result.kind !== 'applied') return;
       if (result.entry.onWrite?.invalidatesModelOptions) {
         yield* this.withActiveWebview((w) => this.sendModelSelectionData(w));
-        yield* Effect.promise(() =>
-          safeExecuteCommand('texra.refreshAllOptions', [], this.viewName),
-        );
+        yield* safeExecuteCommand('texra.refreshAllOptions', [], this.viewName);
       }
       if (codingPlanForUsageSetting(key) !== undefined) {
         yield* this.withActiveWebview((w) => this.sendSubscriptionUsage(w));
@@ -911,13 +903,11 @@ export class SettingsViewMessageHandler {
       if (options.usageProvider) {
         this.subscriptionUsage.invalidate(options.usageProvider);
       }
-      yield* Effect.promise(() =>
-        safeExecuteCommand('texra.refreshApiKeyStatus', [], this.viewName),
-      );
+      yield* safeExecuteCommand('texra.refreshApiKeyStatus', [], this.viewName);
       yield* allSettledVoid([
-        Effect.promise(() =>
-          safeExecuteCommand('texra.refreshAllOptions', [], this.viewName),
-        ).pipe(Effect.asVoid),
+        safeExecuteCommand('texra.refreshAllOptions', [], this.viewName).pipe(
+          Effect.asVoid,
+        ),
         this.withActiveWebview((w) => options.refreshProfileData(w)),
         ...(options.usageProvider
           ? [this.withActiveWebview((w) => this.sendSubscriptionUsage(w))]
@@ -1029,14 +1019,10 @@ export class SettingsViewMessageHandler {
         // is a state write. The boundary composes whichever it chose.
         const settle: Effect.Effect<unknown, unknown> =
           !route || route.access === 'unavailable'
-            ? Effect.tryPromise({
-                try: () =>
-                  showLoggedInfoMessage(
-                    this.channel,
-                    'This Copilot model is no longer available in VS Code. Refresh the model list and choose another model.',
-                  ),
-                catch: (error) => error,
-              })
+            ? showLoggedInfoMessage(
+                this.channel,
+                'This Copilot model is no longer available in VS Code. Refresh the model list and choose another model.',
+              )
             : setCopilotRoutePreference(modelName, true, this.globalState);
         result = await this.runtime.runPromiseExit(settle);
       }
@@ -1052,19 +1038,23 @@ export class SettingsViewMessageHandler {
           error.providerEvidence?.kind === 'vscode-lm' &&
           error.providerEvidence.code === 'NoPermissions'
         ) {
-          await showLoggedInfoMessage(
-            this.channel,
-            'Copilot access was not granted. TeXRA will leave these models disabled.',
+          await this.runtime.runPromise(
+            showLoggedInfoMessage(
+              this.channel,
+              'Copilot access was not granted. TeXRA will leave these models disabled.',
+            ),
           );
         } else {
-          await showLoggedErrorMessage(
-            this.channel,
-            'Could not request Copilot model access',
-            new Error(
-              Cause.hasInterruptsOnly(result.cause)
-                ? 'The Copilot access request was cancelled.'
-                : Cause.pretty(result.cause),
-              { cause: result.cause },
+          await this.runtime.runPromise(
+            showLoggedErrorMessage(
+              this.channel,
+              'Could not request Copilot model access',
+              new Error(
+                Cause.hasInterruptsOnly(result.cause)
+                  ? 'The Copilot access request was cancelled.'
+                  : Cause.pretty(result.cause),
+                { cause: result.cause },
+              ),
             ),
           );
         }
@@ -1075,7 +1065,9 @@ export class SettingsViewMessageHandler {
       // deadline as an `AbortSignal`, so it is settled at the boundary above
       // rather than composed into the dispatcher's single run.
       await Promise.all([
-        safeExecuteCommand('texra.refreshAllOptions', [], this.viewName),
+        this.runtime.runPromise(
+          safeExecuteCommand('texra.refreshAllOptions', [], this.viewName),
+        ),
         this.runtime.runPromise(
           this.withActiveWebview((webview) =>
             this.sendModelSelectionData(webview),
@@ -1091,9 +1083,9 @@ export class SettingsViewMessageHandler {
     return setCopilotRoutePreference(modelName, false, this.globalState).pipe(
       Effect.andThen(
         allSettledVoid([
-          Effect.promise(() =>
-            safeExecuteCommand('texra.refreshAllOptions', [], this.viewName),
-          ).pipe(Effect.asVoid),
+          safeExecuteCommand('texra.refreshAllOptions', [], this.viewName).pipe(
+            Effect.asVoid,
+          ),
           this.withActiveWebview((webview) =>
             this.sendModelSelectionData(webview),
           ),
@@ -1117,14 +1109,12 @@ export class SettingsViewMessageHandler {
         this.agentHandlers.sendAgentSelectionData(w),
       ),
       this.withActiveWebview((w) => this.agentHandlers.sendAgentModePresets(w)),
-      Effect.promise(() =>
-        safeExecuteCommand(
-          'texra.refreshAllOptions',
-          selectedToolUseAgent || agentCatalogAlreadyFresh
-            ? [{ selectedToolUseAgent, agentCatalogAlreadyFresh }]
-            : [],
-          this.viewName,
-        ),
+      safeExecuteCommand(
+        'texra.refreshAllOptions',
+        selectedToolUseAgent || agentCatalogAlreadyFresh
+          ? [{ selectedToolUseAgent, agentCatalogAlreadyFresh }]
+          : [],
+        this.viewName,
       ).pipe(Effect.asVoid),
     ]);
   }
@@ -1170,9 +1160,7 @@ export class SettingsViewMessageHandler {
         Effect.andThen(this.postModelSelectionData()),
         // The options cache is invalidated by the writer itself.
         Effect.andThen(
-          Effect.promise(() =>
-            safeExecuteCommand('texra.refreshAllOptions', [], this.viewName),
-          ),
+          safeExecuteCommand('texra.refreshAllOptions', [], this.viewName),
         ),
         Effect.asVoid,
       );

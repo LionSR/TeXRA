@@ -761,8 +761,10 @@ export function createExtensionHostRequests(
       // the text it carried. The notice itself is the window's, so a window
       // that cannot show it is a defect here, as it was before.
       Effect.catchTag('FilePickerFailed', (error) =>
-        Effect.promise(() =>
-          showLoggedErrorMessage(CHANNEL, `Error selecting ${fileType}`, error),
+        showLoggedErrorMessage(
+          CHANNEL,
+          `Error selecting ${fileType}`,
+          error,
         ).pipe(
           Effect.andThen(Effect.fail(new Rejected({ reason: error.message }))),
         ),

@@ -2,6 +2,7 @@
 import * as path from 'node:path';
 
 // Third-party imports
+import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
@@ -54,12 +55,16 @@ export async function handleExtractTikzFigures(
         if (selected) {
           const label = selected.label.split(' (')[0];
           await vscode.env.clipboard.writeText(label);
-          await showLoggedInfoMessage(CHANNEL, `Copied figure label: ${label}`);
+          await Effect.runPromise(
+            showLoggedInfoMessage(CHANNEL, `Copied figure label: ${label}`),
+          );
         }
       } else {
-        await showLoggedInfoMessage(
-          CHANNEL,
-          'No TikZ figures found in the current file',
+        await Effect.runPromise(
+          showLoggedInfoMessage(
+            CHANNEL,
+            'No TikZ figures found in the current file',
+          ),
         );
       }
     },
@@ -123,14 +128,18 @@ export async function handleCompileTikzFigures(
               );
             }
 
-            await showLoggedInfoMessage(
-              CHANNEL,
-              `Successfully compiled ${compiledFiles.length} TikZ ${pluralize(compiledFiles.length, 'figure')}`,
+            await Effect.runPromise(
+              showLoggedInfoMessage(
+                CHANNEL,
+                `Successfully compiled ${compiledFiles.length} TikZ ${pluralize(compiledFiles.length, 'figure')}`,
+              ),
             );
           } else {
-            await showLoggedInfoMessage(
-              CHANNEL,
-              'No TikZ figures found to compile',
+            await Effect.runPromise(
+              showLoggedInfoMessage(
+                CHANNEL,
+                'No TikZ figures found to compile',
+              ),
             );
           }
         },

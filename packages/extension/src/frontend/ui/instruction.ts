@@ -94,11 +94,16 @@ export function promptExtensionInstall(
   return showInstructionWithSuppress(store, opts.suppressKey, opts.message, [
     {
       title: 'Install',
+      // One run: the action callback is promise-shaped for the listener that
+      // builds the other instruction actions, which cannot import `effect`
+      // until its own raw catches move (catch:effect-importer ratchet).
       callback: () =>
-        safeExecuteCommand(
-          'workbench.extensions.installExtension',
-          [opts.extensionId],
-          opts.channel,
+        Effect.runPromise(
+          safeExecuteCommand(
+            'workbench.extensions.installExtension',
+            [opts.extensionId],
+            opts.channel,
+          ).pipe(Effect.asVoid),
         ),
     },
   ]);

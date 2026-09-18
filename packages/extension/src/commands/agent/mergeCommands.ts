@@ -1,4 +1,5 @@
 // Third-party imports
+import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
@@ -28,11 +29,13 @@ async function handleMerge(
   editedFile: string,
 ): Promise<void> {
   if (!baseFile || !editedFile) {
-    await showLoggedMessageWithDocs(
-      CHANNEL,
-      'Both base file and edited file must be specified for merge operation',
-      'intelligent-merge',
-      'View Merge Docs',
+    await Effect.runPromise(
+      showLoggedMessageWithDocs(
+        CHANNEL,
+        'Both base file and edited file must be specified for merge operation',
+        'intelligent-merge',
+        'View Merge Docs',
+      ),
     );
     return;
   }

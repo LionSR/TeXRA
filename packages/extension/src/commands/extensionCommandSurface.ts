@@ -194,9 +194,11 @@ export function registerExtensionCommandRegistry(
           actions,
           (failure) => {
             if (failure.kind === 'invalidArguments') {
-              void showLoggedMessage(
-                'ExtensionCommandRegistry',
-                `Invalid arguments for command ${failure.id}: ${failure.error.message}`,
+              Effect.runFork(
+                showLoggedMessage(
+                  'ExtensionCommandRegistry',
+                  `Invalid arguments for command ${failure.id}: ${failure.error.message}`,
+                ),
               );
               return;
             }

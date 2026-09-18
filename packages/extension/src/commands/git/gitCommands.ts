@@ -269,9 +269,9 @@ function buildOverleafClonePorts(
         void vscode.window.showErrorMessage('Cannot read workspace folder.');
       }),
     showWorkspaceNotEmpty: () =>
-      Effect.sync(() => {
-        void showLoggedMessage(CHANNEL, 'Workspace folder must be empty.');
-      }),
+      Effect.forkDetach(
+        showLoggedMessage(CHANNEL, 'Workspace folder must be empty.'),
+      ).pipe(Effect.asVoid),
 
     runClone: (remoteUrl, workspacePath) =>
       Effect.tryPromise({
@@ -351,7 +351,7 @@ export async function cloneOverleafProject(
 
   const remote = parseLatexGitUrl(input);
   if (!remote) {
-    void showLoggedMessage(CHANNEL, 'Invalid project URL or ID.');
+    runtime.runFork(showLoggedMessage(CHANNEL, 'Invalid project URL or ID.'));
     return;
   }
 
@@ -364,9 +364,8 @@ export async function cloneOverleafProject(
         const workspaceFs = yield* WorkspaceFs;
         const workspacePath = workspaceFs.root;
         if (!workspacePath) {
-          yield* Effect.sync(
-            () =>
-              void showLoggedMessage(CHANNEL, 'Open a workspace folder first.'),
+          yield* Effect.forkDetach(
+            showLoggedMessage(CHANNEL, 'Open a workspace folder first.'),
           );
           return;
         }

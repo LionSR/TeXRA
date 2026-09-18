@@ -81,12 +81,10 @@ export class MemoryHandlers {
           ),
         );
         if (Exit.isSuccess(delivered)) return;
-        yield* Effect.promise(() =>
-          showLoggedErrorMessage(
-            this.ctx.channel,
-            'Failed to load memory preview',
-            Cause.squash(delivered.cause),
-          ),
+        yield* showLoggedErrorMessage(
+          this.ctx.channel,
+          'Failed to load memory preview',
+          Cause.squash(delivered.cause),
         );
         yield* postToWebview(
           webview,
@@ -113,12 +111,10 @@ export class MemoryHandlers {
 
         // Open markdown files in preview mode (read-only rendered view)
         if (hasExtension(absolutePath, '.md')) {
-          yield* Effect.promise(() =>
-            safeExecuteCommand(
-              'markdown.showPreview',
-              [fileUri],
-              this.viewName,
-            ),
+          yield* safeExecuteCommand(
+            'markdown.showPreview',
+            [fileUri],
+            this.viewName,
           );
           return;
         }
@@ -150,12 +146,10 @@ export class MemoryHandlers {
           ),
         ),
         (absolutePath) =>
-          Effect.promise(() =>
-            safeExecuteCommand(
-              'revealFileInOS',
-              [vscode.Uri.file(absolutePath)],
-              this.viewName,
-            ),
+          safeExecuteCommand(
+            'revealFileInOS',
+            [vscode.Uri.file(absolutePath)],
+            this.viewName,
           ),
       ),
     );
@@ -183,12 +177,10 @@ export class MemoryHandlers {
         ),
       );
       if (Exit.isSuccess(posted)) return;
-      yield* Effect.promise(() =>
-        showLoggedErrorMessage(
-          this.ctx.channel,
-          'Failed to delete memory',
-          Cause.squash(posted.cause),
-        ),
+      yield* showLoggedErrorMessage(
+        this.ctx.channel,
+        'Failed to delete memory',
+        Cause.squash(posted.cause),
       );
       yield* this.ctx.withActiveWebview((w) => this.sendMemoryData(w));
     });

@@ -1,62 +1,112 @@
+// Third-party imports
+import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
+// Local imports
 import { formatError } from '@common/errors';
-import { createLog } from '@logger/logUtils';
+import { VscodeMessageHost } from '@frontend/hosts/VscodeMessageHost';
+import { VscodePromptHost } from '@frontend/hosts/VscodePromptHost';
+import { createLog, type Log } from '@logger/logUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /** Valid documentation identifiers for error messages. */
 type DocId = 'intelligent-merge' | 'custom-agents' | 'latex-diff';
 
+const messages = new VscodeMessageHost();
+const prompts = new VscodePromptHost();
+
+/**
+ * Present a notice and keep these helpers' own failure channel empty.
+ *
+ * Their contract is "log this line and tell the user"; VS Code's message
+ * machinery refusing the toast is a fault worth its own log line, not a
+ * reason for every call site to grow an error arm for something it could
+ * only log anyway.
+ */
+function announce<A>(
+  log: Log,
+  notice: Effect.Effect<A, { readonly message: string }>,
+  whenRefused: A,
+): Effect.Effect<A> {
+  return notice.pipe(
+    Effect.catch((failure) =>
+      Effect.sync(() => {
+        log.error(`Could not show the notification: ${failure.message}`);
+        return whenRefused;
+      }),
+    ),
+  );
+}
+
 /** Log a formatted error message and display it to the user. */
-export async function showLoggedErrorMessage(
+export function showLoggedErrorMessage(
   channel: string,
   prefix: string,
   err: unknown,
-): Promise<string> {
-  const log = createLog(channel);
-  const message = formatError(prefix, err);
-  log.error(message);
-  await vscode.window.showErrorMessage(message);
-  return message;
+): Effect.Effect<string> {
+  return Effect.gen(function* () {
+    const log = createLog(channel);
+    const message = formatError(prefix, err);
+    log.error(message);
+    yield* announce(log, messages.showErrorMessage(message), undefined);
+    return message;
+  });
 }
 
 /** Log a pre-formatted message and display it to the user as an error. */
-export async function showLoggedMessage(
+export function showLoggedMessage(
   channel: string,
   message: string,
-): Promise<string> {
-  const log = createLog(channel);
-  log.error(message);
-  await vscode.window.showErrorMessage(message);
-  return message;
+): Effect.Effect<string> {
+  return Effect.gen(function* () {
+    const log = createLog(channel);
+    log.error(message);
+    yield* announce(log, messages.showErrorMessage(message), undefined);
+    return message;
+  });
 }
 
 /** Log a message and display it to the user as an information notification. */
-export async function showLoggedInfoMessage(
+export function showLoggedInfoMessage(
   channel: string,
   message: string,
-): Promise<string> {
-  const log = createLog(channel);
-  log.info(message);
-  await vscode.window.showInformationMessage(message);
-  return message;
+): Effect.Effect<string> {
+  return Effect.gen(function* () {
+    const log = createLog(channel);
+    log.info(message);
+    yield* announce(log, messages.showInfoMessage(message), undefined);
+    return message;
+  });
 }
 
 /** Log an error message, display it with a docs action, and open the docs if selected. */
-export async function showLoggedMessageWithDocs(
+export function showLoggedMessageWithDocs(
   channel: string,
   message: string,
   docId: DocId,
   actionLabel = 'View Docs',
-): Promise<void> {
-  const log = createLog(channel);
-  log.error(message);
-  const selection = await vscode.window.showErrorMessage(message, actionLabel);
-  if (selection !== actionLabel) return;
+): Effect.Effect<void> {
+  return Effect.gen(function* () {
+    const log = createLog(channel);
+    log.error(message);
+    const selection = yield* announce(
+      log,
+      prompts.error(message, { items: [actionLabel] }),
+      undefined,
+    );
+    if (selection !== actionLabel) return;
 
-  try {
-    await vscode.commands.executeCommand('texra.openDoc', docId);
-  } catch (err) {
-    log.error(`Failed to open documentation: ${toErrorMessage(err)}`);
-  }
+    yield* Effect.tryPromise({
+      try: async () => {
+        await vscode.commands.executeCommand('texra.openDoc', docId);
+      },
+      catch: (err: unknown) => err,
+    }).pipe(
+      Effect.catch((err) =>
+        Effect.sync(() => {
+          log.error(`Failed to open documentation: ${toErrorMessage(err)}`);
+        }),
+      ),
+    );
+  });
 }
