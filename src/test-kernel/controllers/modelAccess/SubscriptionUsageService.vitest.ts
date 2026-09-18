@@ -1,5 +1,4 @@
 import { Effect } from 'effect';
-import type { HttpClient } from 'effect/unstable/http';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import * as codexAuth from '@auth/codex';
@@ -22,6 +21,7 @@ import {
   type SubscriptionUsageSnapshot,
 } from '@shared/schemas';
 import { FakeSecrets } from '@test/support/FakePlatform';
+import type { HttpClient } from 'effect/unstable/http';
 
 /**
  * The credential port is file-local; derive it from the service constructor,
@@ -643,7 +643,10 @@ describe('SubscriptionUsageService', () => {
   });
 
   it.each([
-    ['chatgpt' as const, credentials({ loadChatGpt: () => Effect.succeed(null) })],
+    [
+      'chatgpt' as const,
+      credentials({ loadChatGpt: () => Effect.succeed(null) }),
+    ],
     [
       'kimiCode' as const,
       credentials({
@@ -702,7 +705,8 @@ describe('SubscriptionUsageService', () => {
   ])('maps ChatGPT %s auth failures to %s', async (kind, reason) => {
     const http = vi.fn<SubscriptionUsageHttp>();
     const source = credentials({
-      loadChatGpt: () => Effect.fail(new CodexAuthError('refresh failed', kind)),
+      loadChatGpt: () =>
+        Effect.fail(new CodexAuthError('refresh failed', kind)),
     });
 
     await expect(
@@ -767,9 +771,7 @@ describe('SubscriptionUsageService', () => {
       requestTimeoutMs: 1,
     });
 
-    await expect(
-      runUsage(service.getUsage('chatgpt')),
-    ).resolves.toMatchObject({
+    await expect(runUsage(service.getUsage('chatgpt'))).resolves.toMatchObject({
       state: 'unavailable',
       reason: 'request_failed',
     });
@@ -818,18 +820,18 @@ describe('SubscriptionUsageService', () => {
     );
     const service = serviceWith(http);
 
-    await expect(
-      runUsage(service.getUsage('kimiCode')),
-    ).resolves.toMatchObject({
-      windows: [expect.objectContaining({ percentUsed: 50 })],
-    });
+    await expect(runUsage(service.getUsage('kimiCode'))).resolves.toMatchObject(
+      {
+        windows: [expect.objectContaining({ percentUsed: 50 })],
+      },
+    );
     remaining = 25;
     service.invalidate('kimiCode');
-    await expect(
-      runUsage(service.getUsage('kimiCode')),
-    ).resolves.toMatchObject({
-      windows: [expect.objectContaining({ percentUsed: 75 })],
-    });
+    await expect(runUsage(service.getUsage('kimiCode'))).resolves.toMatchObject(
+      {
+        windows: [expect.objectContaining({ percentUsed: 75 })],
+      },
+    );
     expect(http).toHaveBeenCalledTimes(2);
   });
 

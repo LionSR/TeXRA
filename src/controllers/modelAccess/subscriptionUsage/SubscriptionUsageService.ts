@@ -1,5 +1,4 @@
 import { Deferred, Effect, Exit } from 'effect';
-import type { HttpClient } from 'effect/unstable/http';
 import { LRUCache } from 'lru-cache';
 
 import { settleFailure } from '@auth/authProgram';
@@ -32,6 +31,7 @@ import {
   type ParsedSubscriptionUsage,
   type SubscriptionUsageHttp,
 } from './subscriptionUsageParsing';
+import type { HttpClient } from 'effect/unstable/http';
 
 const log = createLog('SubscriptionUsage');
 
