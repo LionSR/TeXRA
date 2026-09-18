@@ -92,8 +92,8 @@ const rejectionReason = Effect.fn('texcount.rejectionReason')(function* (
 
 /**
  * Invoke `texcount`. The subprocess is cancelled by the fiber's own
- * interruption: `Effect.tryPromise` hands the thunk an `AbortSignal` that
- * aborts when the fiber is interrupted, so no caller threads a signal in.
+ * interruption, which `runToolWithCheck` carries into the spawn, so no caller
+ * threads a signal in.
  *
  * `channel` is still a parameter because `runToolWithCheck` logs the command
  * itself through the Promise-shaped writers; this function's own entries take
@@ -106,19 +106,14 @@ const runTexcount = Effect.fn('texcount.runTexcount')(function* (
   channel: string,
   context: string,
 ): Effect.fn.Return<{ stdout: string | null; error?: string }, Error> {
-  const result = yield* Effect.tryPromise({
-    try: (signal) =>
-      runToolWithCheck('texcount', args, {
-        channel,
-        // The file arguments are workspace-relative, so the root the caller
-        // counted for is also the directory texcount resolves them against.
-        cwd: workspaceRoot,
-        settings,
-        truncate: false,
-        showError: true,
-        signal,
-      }),
-    catch: ensureError,
+  const result = yield* runToolWithCheck('texcount', args, {
+    channel,
+    // The file arguments are workspace-relative, so the root the caller
+    // counted for is also the directory texcount resolves them against.
+    cwd: workspaceRoot,
+    settings,
+    truncate: false,
+    showError: true,
   });
 
   if (!result) {

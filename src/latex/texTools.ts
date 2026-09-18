@@ -243,24 +243,20 @@ export const compileLatex2Pdf = Effect.fn('compileLatex2Pdf')(function* (
 
     const latexmkArgs = ['-pdf', '-f', ...pdflatexArgs];
 
-    // Interrupting the compile aborts `signal`, which stops the engine.
+    // Interrupting the compile stops the engine: the fiber's interruption is
+    // what aborts the spawn, so nothing threads a signal through.
     const runTool = (tool: string, args: string[], showError: boolean) =>
-      Effect.tryPromise({
-        try: (signal) =>
-          runToolWithCheck(tool, args, {
-            channel,
-            cwd: workspacePath,
-            // A compile holds this session's `ConfigProvider` alone, not the
-            // three setting slots, and a TeX engine spawns no git command that
-            // an identity could mark.
-            settings: undefined,
-            env,
-            timeout,
-            signal,
-            showError,
-          }),
-        catch: (cause) => new LatexCompilerNotRun({ cause }),
-      });
+      runToolWithCheck(tool, args, {
+        channel,
+        cwd: workspacePath,
+        // A compile holds this session's `ConfigProvider` alone, not the
+        // three setting slots, and a TeX engine spawns no git command that
+        // an identity could mark.
+        settings: undefined,
+        env,
+        timeout,
+        showError,
+      }).pipe(Effect.mapError((cause) => new LatexCompilerNotRun({ cause })));
 
     let result: ExecResult | false;
     if (compiler === 'latexmk') {

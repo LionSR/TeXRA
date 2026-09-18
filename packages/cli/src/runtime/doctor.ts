@@ -450,11 +450,6 @@ const accessPath = (
 ): Effect.Effect<void, DoctorProbeFailed> =>
   Effect.tryPromise({ try: () => access(filePath, mode), catch: probeFailure });
 
-const latexToolchainProbe: Effect.Effect<
-  LatexToolchainProbe,
-  DoctorProbeFailed
-> = Effect.tryPromise({ try: probeLatexToolchain, catch: probeFailure });
-
 /**
  * Stand-in for the one probe this module cannot build for itself. Unreachable:
  * the caller omits `modelAccessList` only when platform init failed, and that
@@ -495,7 +490,7 @@ export function buildDoctorReport(
     nodeVersion: deps.nodeVersion ?? process.versions.node,
     authProfile: deps.authProfile ?? missingAuthProfileProbe,
     modelAccessList: deps.modelAccessList ?? missingModelAccessProbe,
-    latexToolchain: deps.latexToolchain ?? latexToolchainProbe,
+    latexToolchain: deps.latexToolchain ?? probeLatexToolchain(),
     pathStat: deps.pathStat ?? statPath,
     pathAccess: deps.pathAccess ?? accessPath,
     usageLoggingOptOut: deps.usageLoggingOptOut ?? missingUsageLoggingOptOut,

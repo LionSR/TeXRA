@@ -198,7 +198,7 @@ export function createDesktopPreviewHost(
       const { hasLatexCompiler } = yield* Effect.promise(
         () => import('@latex/latexToolchain'),
       );
-      if (!(yield* Effect.promise(() => hasLatexCompiler()))) {
+      if (!(yield* hasLatexCompiler())) {
         yield* fail(
           `No LaTeX compiler found for ${sourcePath}. Install latexmk or pdflatex to compile and preview this file.`,
         );

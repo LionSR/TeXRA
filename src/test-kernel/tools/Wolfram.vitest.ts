@@ -85,15 +85,15 @@ describe('WolframTool approval', () => {
   it.live('requests bash-style approval before executing wolframscript', () =>
     Effect.gen(function* () {
       const runId = 'a99f00000001' as RunId;
-      const execute = vi
-        .spyOn(toolUtils, 'runToolWithCheck')
-        .mockResolvedValue({
+      const execute = vi.spyOn(toolUtils, 'runToolWithCheck').mockReturnValue(
+        Effect.succeed({
           success: true,
           stdout: '2',
           stderr: '',
           timedOut: false,
           exitCode: 0,
-        });
+        }),
+      );
 
       const { result, permission, decide } = yield* dispatchWolfram(
         runId,

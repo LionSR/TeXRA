@@ -26,7 +26,6 @@ import { runDirUnder } from '@utils/files/runStorageFs';
 import { type RunFileService } from '@utils/files/runStorage';
 import { locateInWorkspace } from '@utils/files/workspaceFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { fsCall } from '@utils/errors/fsCall';
 import { truncatedHexId } from '@utils/core/idHash';
 import { hasExtension } from '@utils/core/pathCore';
 import { readSettingFrom } from '@utils/config/platformSettings';
@@ -145,7 +144,7 @@ export const runCompileCheck = Effect.fn('reflection.runCompileCheck')(
     // Skip gracefully when no LaTeX toolchain is installed so the run doesn't
     // leave stray `compile/<name>.log` artifacts that the orchestrator would
     // misread as real compile failures.
-    if (!(yield* fsCall(() => hasLatexCompiler()))) {
+    if (!(yield* hasLatexCompiler())) {
       ctx.logger.debug(
         'Compile check skipped: neither latexmk nor pdflatex is installed',
       );

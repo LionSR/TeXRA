@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
 
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
@@ -43,7 +44,7 @@ function createController(
   };
   const paths = options?.paths ?? {};
   const deps: LatexToolingControllerDeps = {
-    checkToolInstalled: async (tool) => installedTools[tool],
+    checkToolInstalled: (tool) => Effect.succeed(installedTools[tool]),
     findPath: (tool) => paths[tool] ?? null,
     detectPackageManager: () => options?.packageManager ?? null,
     getPlatform: () => options?.platform ?? 'linux',
@@ -59,13 +60,15 @@ function createController(
 
 describe('LatexToolingController', () => {
   it('keeps compound dependency flags false until every required tool is present', async () => {
-    const status = await createController({
-      installedTools: {
-        pdflatex: true,
-        latexindent: true,
-        gs: true,
-      },
-    }).detectStatus();
+    const status = await Effect.runPromise(
+      createController({
+        installedTools: {
+          pdflatex: true,
+          latexindent: true,
+          gs: true,
+        },
+      }).detectStatus(),
+    );
 
     expect(status.texDistributionInstalled).toBe(true);
     expect(status.latexindentInstalled).toBe(false);
@@ -75,9 +78,10 @@ describe('LatexToolingController', () => {
   it('falls back to defaults when detection fails', async () => {
     const errors: unknown[] = [];
     const controller = new LatexToolingController({
-      checkToolInstalled: async () => {
-        throw new Error('probe failed');
-      },
+      checkToolInstalled: () =>
+        Effect.sync(() => {
+          throw new Error('probe failed');
+        }),
       findPath: () => null,
       detectPackageManager: () => 'apt',
       getPlatform: () => 'win32',
@@ -86,7 +90,7 @@ describe('LatexToolingController', () => {
       onDetectionError: (error) => errors.push(error),
     });
 
-    expect(await controller.detectStatus()).toStrictEqual({
+    expect(await Effect.runPromise(controller.detectStatus())).toStrictEqual({
       ...DEFAULT_LATEX_SETTINGS_STATUS,
       platform: 'win32',
     });

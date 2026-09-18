@@ -14,7 +14,6 @@ import { Effect } from 'effect';
 import { createLog } from '@logger/logUtils';
 import { OUTPUT_DOCUMENT_TAG } from '@shared/schemas';
 import { ensureArray, isObject } from '@utils/core';
-import { ensureError } from '@utils/errors/errorMessage';
 
 // Local imports
 import { removeCDATA } from './xmlCdata';
@@ -148,14 +147,12 @@ export function extractContentFromXMLbyTagMultiple(
 export const extractScratchpad = Effect.fn('xml.extractScratchpad')(function* (
   outputContent: string,
   thinkingTag: string = 'scratchpad',
-): Effect.fn.Return<string | null, Error> {
+): Effect.fn.Return<string | null> {
   const extractedContent = extractTextFromTag(outputContent, thinkingTag);
   if (!extractedContent) return null;
-  // Pandoc/Turndown formatting is the one foreign edge this extraction has.
-  return yield* Effect.tryPromise({
-    try: () => formatContent(extractedContent),
-    catch: ensureError,
-  });
+  // Pandoc/Turndown formatting owns its own foreign edge and answers `null`
+  // rather than failing, so this extraction carries no error channel.
+  return yield* formatContent(extractedContent);
 });
 
 export interface MultipleExtractionResult {

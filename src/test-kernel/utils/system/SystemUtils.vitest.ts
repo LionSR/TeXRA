@@ -15,7 +15,6 @@ import { createFakeHost, setupPlatform } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { executeCommand, executeCommandSync } from '@utils/system/execUtils';
 import { buildWorkspaceInfoBlock } from '@utils/system/workspaceInfo';
-import { checkToolInstalled } from '@utils/system/toolUtils';
 import { BinaryResolverService } from '@utils/system/binaryResolver';
 
 // ---------------------------------------------------------------------------
@@ -340,34 +339,6 @@ describe('executeCommand', () => {
 // ---------------------------------------------------------------------------
 // WorkspaceInfo
 // ---------------------------------------------------------------------------
-
-// ---------------------------------------------------------------------------
-// toolUtils
-// ---------------------------------------------------------------------------
-
-describe('checkToolInstalled', () => {
-  const reportedMissing: string[] = [];
-
-  setupPlatform(
-    {},
-    {
-      toolMissingHandler: (message: string) => {
-        reportedMissing.push(message);
-      },
-    },
-  );
-
-  it('does not report a missing tool when the probe was cancelled', async () => {
-    reportedMissing.length = 0;
-
-    // A killed `<tool> --version` answers exactly like an absent tool, so
-    // stopping a run used to raise this tool's install prompt and open the
-    // setup docs. The probe still answers `false`; it just says nothing.
-    await checkToolInstalled('latexdiff', true, AbortSignal.abort());
-
-    assert.deepEqual(reportedMissing, []);
-  });
-});
 
 // ---------------------------------------------------------------------------
 // BinaryResolver

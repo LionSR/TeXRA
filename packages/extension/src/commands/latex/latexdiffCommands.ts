@@ -72,10 +72,7 @@ const withLatexdiffTool = <E, R>(
   action: Effect.Effect<void, E, R>,
 ): Effect.Effect<void, never, R> =>
   Effect.gen(function* () {
-    const installed = yield* Effect.tryPromise({
-      try: () => checkToolInstalled(tool),
-      catch: ensureError,
-    });
+    const installed = yield* checkToolInstalled(tool);
     if (!installed) {
       log.warn(`${tool} is not installed; command will not run.`);
       return;

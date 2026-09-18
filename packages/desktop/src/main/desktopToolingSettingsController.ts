@@ -171,7 +171,9 @@ export class DefaultDesktopToolingSettingsController implements DesktopToolingSe
   }
 
   private async postLatexSettingsStatus(): Promise<void> {
-    const settings = await this.options.latexToolingController.detectStatus();
+    const settings = await this.options.runtime.runPromise(
+      this.options.latexToolingController.detectStatus(),
+    );
     this.options.renderer.postToRenderer({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_SETTINGS_STATUS,
       settings,

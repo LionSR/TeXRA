@@ -24,16 +24,12 @@ export const runTexFmt = Effect.fn('latex.runTexFmt')(
       filePath,
     ];
 
-    const result = yield* Effect.tryPromise({
-      try: () =>
-        runToolWithCheck('tex-fmt', args, {
-          channel: CHANNEL,
-          cwd: workspaceRoot,
-          // The slots the caller resolved this formatter from.
-          settings,
-          showError: true,
-        }),
-      catch: (cause) => cause,
+    const result = yield* runToolWithCheck('tex-fmt', args, {
+      channel: CHANNEL,
+      cwd: workspaceRoot,
+      // The slots the caller resolved this formatter from.
+      settings,
+      showError: true,
     });
     if (!result || !result.success) {
       return false;

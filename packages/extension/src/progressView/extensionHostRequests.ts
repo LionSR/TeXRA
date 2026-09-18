@@ -1077,9 +1077,7 @@ export function createExtensionHostRequests(
           yield* agentConfigBanner(request);
           return done;
         case 'recheckDependencies':
-          yield* fromHost('checkCoreDependencies', () =>
-            checkCoreDependencies(true),
-          );
+          yield* checkCoreDependencies(true);
           yield* snapshot.refreshHostBanners;
           return done;
         case 'openInstallGuide': {

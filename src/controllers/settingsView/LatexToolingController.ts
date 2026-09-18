@@ -1,3 +1,5 @@
+import { Cause, Effect } from 'effect';
+
 // Local imports - shared constants
 import { createLog } from '@logger/logUtils';
 import {
@@ -32,7 +34,7 @@ type LatexRecommendedStatus = Pick<
 >;
 
 interface LatexToolingControllerDeps {
-  checkToolInstalled(tool: LatexProbeTool): Promise<boolean>;
+  checkToolInstalled(tool: LatexProbeTool): Effect.Effect<boolean>;
   findPath(tool: LatexPathTool): string | null;
   detectPackageManager(): LatexSettingsStatus['packageManager'];
   getPlatform(): OSPlatform;
@@ -57,9 +59,9 @@ export class LatexToolingController {
     return ALLOWED_INSTALL_COMMANDS.has(command);
   }
 
-  async detectStatus(): Promise<LatexSettingsStatus> {
-    try {
-      const installed = await this.checkTools();
+  detectStatus(): Effect.Effect<LatexSettingsStatus> {
+    return Effect.gen({ self: this }, function* () {
+      const installed = yield* this.checkTools();
       return {
         ...this.deps.getRecommendedStatus(),
         texDistributionInstalled: SUPPORTED_LATEX_COMPILERS.some(
@@ -81,28 +83,48 @@ export class LatexToolingController {
         graphicsmagickPath:
           this.deps.findPath('gm') ?? this.deps.findPath('magick'),
         packageManager: this.deps.detectPackageManager(),
-      };
-    } catch (error) {
-      // Every tool then reports as not installed, so the probe failure must
-      // not be indistinguishable from a machine with no TeX.
-      log.warn(`LaTeX tooling detection failed: ${toErrorMessage(error)}`, {
-        data: error,
-      });
-      this.deps.onDetectionError?.(error);
-      return {
-        ...DEFAULT_LATEX_SETTINGS_STATUS,
-        platform: this.deps.getPlatform(),
-      };
-    }
-  }
-
-  private async checkTools(): Promise<Record<LatexProbeTool, boolean>> {
-    const entries = await Promise.all(
-      LATEX_PROBE_TOOLS.map(
-        async (tool) =>
-          [tool, await this.deps.checkToolInstalled(tool)] as const,
+      } satisfies LatexSettingsStatus;
+    }).pipe(
+      // `catchCause` answers a defect the same way the `try`/`catch` it
+      // replaces answered a throw: every tool then reports as not installed,
+      // so the failure must not be indistinguishable from a machine with no
+      // TeX. An interrupted detection is not a detection failure, so it
+      // propagates instead of painting the view with an all-missing status.
+      Effect.catchCause((cause) =>
+        Cause.hasInterrupts(cause)
+          ? Effect.failCause(cause)
+          : Effect.sync(() => {
+              const error = Cause.squash(cause);
+              log.warn(
+                `LaTeX tooling detection failed: ${toErrorMessage(error)}`,
+                {
+                  data: error,
+                },
+              );
+              this.deps.onDetectionError?.(error);
+              return {
+                ...DEFAULT_LATEX_SETTINGS_STATUS,
+                platform: this.deps.getPlatform(),
+              } satisfies LatexSettingsStatus;
+            }),
       ),
     );
-    return Object.fromEntries(entries) as Record<LatexProbeTool, boolean>;
+  }
+
+  private checkTools(): Effect.Effect<Record<LatexProbeTool, boolean>> {
+    return Effect.all(
+      LATEX_PROBE_TOOLS.map((tool) =>
+        Effect.map(
+          this.deps.checkToolInstalled(tool),
+          (installed) => [tool, installed] as const,
+        ),
+      ),
+      { concurrency: 'unbounded' },
+    ).pipe(
+      Effect.map(
+        (entries) =>
+          Object.fromEntries(entries) as Record<LatexProbeTool, boolean>,
+      ),
+    );
   }
 }

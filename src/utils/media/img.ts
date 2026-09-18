@@ -119,7 +119,7 @@ const resizeImageIfNeeded = Effect.fn('img.resizeImageIfNeeded')(function* (
 
   // Resizing (unlike measuring) still needs an external tool — only
   // required once we know the image actually exceeds the limit.
-  const tool = yield* conversionStep(detectImageTool);
+  const tool = yield* detectImageTool();
   if (!tool) {
     return yield* new MediaConversionFailed({
       message: 'Neither ImageMagick nor GraphicsMagick is installed',
@@ -300,7 +300,7 @@ export const processPdf2Png = Effect.fn('img.processPdf2Png')(
       return null;
     }
 
-    const tool = yield* conversionStep(detectImageTool);
+    const tool = yield* detectImageTool();
     if (!tool) {
       return yield* new MediaConversionFailed({
         message: 'GraphicsMagick/ImageMagick is not installed.',

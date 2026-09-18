@@ -4,12 +4,13 @@
  */
 
 // Third-party imports
+import { Effect } from 'effect';
 import { execa } from 'execa';
 
 // Local imports - common
 import { createLog } from '@logger/logUtils';
 import { createHtmlToMarkdown } from '@utils/text/htmlToMarkdown';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local imports - utils
 import { checkToolInstalled } from '@utils/system/toolUtils';
@@ -41,21 +42,20 @@ function detectInputFormat(text: string): OutputFormat {
 const log = createLog('xmlConversion');
 
 /**
- * Cached pandoc availability check.
- * Caches positive results permanently, but clears on failure to allow retry
- * (e.g., if user installs pandoc mid-session).
+ * Cached pandoc availability.
+ *
+ * A positive answer is cached permanently; a negative one is not, so a user
+ * who installs pandoc mid-session is picked up on the next conversion. Two
+ * conversions racing a miss each spawn `pandoc --version`, which is the same
+ * cost the retry-on-miss rule already paid for every sequential miss.
  */
-let pandocCheckPromise: Promise<boolean> | null = null;
+let pandocAvailable = false;
 
-async function isPandocAvailable(): Promise<boolean> {
-  return (pandocCheckPromise ??= checkToolInstalled('pandoc', false).then(
-    (result) => {
-      // Clear cache on negative result to allow retry next time
-      if (!result) pandocCheckPromise = null;
-      return result;
-    },
-  ));
-}
+const isPandocAvailable: Effect.Effect<boolean> = Effect.gen(function* () {
+  if (pandocAvailable) return true;
+  pandocAvailable = yield* checkToolInstalled('pandoc', false);
+  return pandocAvailable;
+});
 
 const LATEX_REPLACEMENTS: Array<[RegExp, string]> = [
   // Drop list-environment markers; the inner \item lines become bullets below.
@@ -125,8 +125,10 @@ function normalizePandocReferences(text: string): string {
  * Internal helper for formatContent.
  * @returns Converted content, or null if Pandoc is unavailable or conversion fails
  */
-async function convertWithPandoc(text: string): Promise<string | null> {
-  if (!(await isPandocAvailable())) {
+const convertWithPandoc = Effect.fn('xml.convertWithPandoc')(function* (
+  text: string,
+): Effect.fn.Return<string | null> {
+  if (!(yield* isPandocAvailable)) {
     return null;
   }
   const format = detectInputFormat(text);
@@ -136,18 +138,24 @@ async function convertWithPandoc(text: string): Promise<string | null> {
     return text;
   }
 
-  try {
-    const { stdout } = await execa('pandoc', ['-f', format, '-t', 'markdown'], {
-      input: text,
-      stripFinalNewline: false,
-      env: { ...process.env, PATH: extendEnvPath() },
-    });
-    return normalizePandocReferences(stdout);
-  } catch (err) {
-    log.error(`Pandoc conversion failed: ${toErrorMessage(err)}`);
-    return null;
-  }
-}
+  return yield* Effect.tryPromise({
+    try: () =>
+      execa('pandoc', ['-f', format, '-t', 'markdown'], {
+        input: text,
+        stripFinalNewline: false,
+        env: { ...process.env, PATH: extendEnvPath() },
+      }),
+    catch: ensureError,
+  }).pipe(
+    Effect.map(({ stdout }) => normalizePandocReferences(stdout)),
+    Effect.catch((err) =>
+      Effect.sync(() => {
+        log.error(`Pandoc conversion failed: ${toErrorMessage(err)}`);
+        return null;
+      }),
+    ),
+  );
+});
 
 /**
  * Formats special content (scratchpad or thinking) with standardized formatting.
@@ -155,11 +163,13 @@ async function convertWithPandoc(text: string): Promise<string | null> {
  *
  * @param content The raw content to format
  */
-export async function formatContent(content: string): Promise<string> {
+export const formatContent = Effect.fn('xml.formatContent')(function* (
+  content: string,
+): Effect.fn.Return<string> {
   if (!content) return '';
 
   const trimmed = content.trim();
-  const pandocResult = await convertWithPandoc(trimmed);
+  const pandocResult = yield* convertWithPandoc(trimmed);
   if (pandocResult !== null) return pandocResult;
 
   let result = trimmed;
@@ -168,4 +178,4 @@ export async function formatContent(content: string): Promise<string> {
   }
   if (LATEX_PATTERN.test(result)) result = convertLatexToMarkdown(result);
   return result;
-}
+});

@@ -2,6 +2,7 @@
 import * as path from 'node:path';
 
 // Third-party imports
+import { Effect } from 'effect';
 import { execa } from 'execa';
 import { parse as shellParse } from 'shell-quote';
 
@@ -24,7 +25,7 @@ import {
   PANDOC_INSTALL_GUIDE,
   getInstallGuide,
 } from '@shared/constants/latexToolchain';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
 import { IS_WINDOWS, extendEnvPath } from './platformPaths';
@@ -43,15 +44,27 @@ interface ToolConfig {
   openDocsCommand?: string; // Optional command to open documentation
 }
 
-async function reportMissingTool(
+/**
+ * Hand the missing-tool message to the host, whose handler is the one foreign
+ * edge here. A handler that rejects is reported rather than dropped: the probe
+ * itself succeeded, so the caller still gets its answer.
+ */
+function reportMissingTool(
   message: string,
   openDocsCommand?: string,
-): Promise<void> {
-  try {
-    await platform().toolMissingHandler?.(message, openDocsCommand);
-  } catch (err) {
-    log.error(`Failed to report missing tool: ${toErrorMessage(err)}`);
-  }
+): Effect.Effect<void> {
+  return Effect.tryPromise({
+    try: async () => {
+      await platform().toolMissingHandler?.(message, openDocsCommand);
+    },
+    catch: ensureError,
+  }).pipe(
+    Effect.catch((err) =>
+      Effect.sync(() => {
+        log.error(`Failed to report missing tool: ${toErrorMessage(err)}`);
+      }),
+    ),
+  );
 }
 
 // Platform-specific install instructions resolved at module load.
@@ -161,197 +174,217 @@ function parseCommand(cmd: string): { cmdName: string; args: string[] } | null {
 }
 
 /**
+ * Spawn one `<tool> --version` probe. This is the module's execa edge, lifted
+ * exactly once: `Effect.tryPromise` hands the thunk an `AbortSignal` that
+ * aborts when the fiber is interrupted, and it is execa's `cancelSignal`, so
+ * an interrupted probe kills the spawned process instead of leaving it to run
+ * out its five-second timeout. No caller threads a signal in.
+ */
+const spawnProbe = (cmd: string, args: string[], execEnv: NodeJS.ProcessEnv) =>
+  Effect.tryPromise({
+    try: (signal) =>
+      execa(cmd, args, {
+        env: execEnv,
+        reject: false,
+        timeout: 5000,
+        cancelSignal: signal,
+      }),
+    catch: ensureError,
+  });
+
+/**
  * Probe one command, falling back to a BinaryResolver-resolved path when the
  * direct spawn neither exits 0 nor prints version-like output.
- *
- * `signal` is execa's `cancelSignal`, so an aborted probe kills the spawned
- * process instead of leaving it to run out its five-second timeout.
  */
-async function executeWithFallback(
-  cmd: string,
-  args: string[],
-  execEnv: NodeJS.ProcessEnv,
-  signal?: AbortSignal,
-): Promise<boolean> {
-  log.debug(`Checking tool '${cmd}' with args [${args.join(', ')}]`);
+const executeWithFallback = Effect.fn('toolUtils.executeWithFallback')(
+  function* (
+    cmd: string,
+    args: string[],
+    execEnv: NodeJS.ProcessEnv,
+  ): Effect.fn.Return<boolean, Error> {
+    log.debug(`Checking tool '${cmd}' with args [${args.join(', ')}]`);
 
-  let result = await execa(cmd, args, {
-    env: execEnv,
-    reject: false,
-    timeout: 5000,
-    cancelSignal: signal,
-  });
-  log.debug(
-    `Initial check for '${cmd}': exitCode=${result.exitCode}, ` +
-      `stdout=${result.stdout?.slice(0, 100) || '(empty)'}, ` +
-      `stderr=${result.stderr?.slice(0, 100) || '(empty)'}`,
-  );
-
-  // Accept if exit code is 0, OR if we got version-like output
-  // (some tools return non-zero for --version but still output version info)
-  if (result.exitCode === 0 || hasVersionOutput(result)) {
-    log.debug(`Tool '${cmd}' detected successfully`);
-    return true;
-  }
-
-  const fallback = BinaryResolver.resolveOptionalCommand(cmd, args);
-  log.debug(
-    `Fallback search for '${cmd}': ${fallback?.resolvedPath ?? 'not found'}`,
-  );
-
-  if (fallback) {
+    let result = yield* spawnProbe(cmd, args, execEnv);
     log.debug(
-      `Running fallback '${fallback.command}' with args [${fallback.args.join(', ')}]`,
-    );
-    result = await execa(fallback.command, fallback.args, {
-      env: execEnv,
-      reject: false,
-      timeout: 5000,
-      cancelSignal: signal,
-    });
-    log.debug(
-      `Fallback result: exitCode=${result.exitCode}, ` +
+      `Initial check for '${cmd}': exitCode=${result.exitCode}, ` +
         `stdout=${result.stdout?.slice(0, 100) || '(empty)'}, ` +
         `stderr=${result.stderr?.slice(0, 100) || '(empty)'}`,
     );
 
+    // Accept if exit code is 0, OR if we got version-like output
+    // (some tools return non-zero for --version but still output version info)
     if (result.exitCode === 0 || hasVersionOutput(result)) {
+      log.debug(`Tool '${cmd}' detected successfully`);
       return true;
     }
-  }
 
-  // Log at info level so it shows in output channel by default
-  log.info(
-    `Tool '${cmd}' not detected. Last result: exitCode=${result.exitCode}, ` +
-      `stdout=${result.stdout?.slice(0, 200) || '(empty)'}, ` +
-      `stderr=${result.stderr?.slice(0, 200) || '(empty)'}`,
-  );
-  return false;
-}
-
-/**
- * Generic function to check if a tool is installed
- * @param toolName Tool name (looked up in TOOL_CONFIGS)
- * @param showError Whether to show an error message if the tool is not installed
- * @param signal Abort signal for the spawned `<tool> --version` probes.
- *   Callers inside an Effect pass the fiber's signal so an interrupted probe
- *   kills the processes instead of leaving several of them running out their
- *   five-second timeout; Promise-shaped callers pass nothing and behave as
- *   before. An aborted probe answers `false` without reporting a missing
- *   tool: the killed `<tool> --version` looks exactly like an absent tool,
- *   and stopping a run must not raise an install prompt or open the setup
- *   docs. The caller's own interruption decides what that `false` means.
- * @returns Promise<boolean> True if the tool is installed
- */
-export async function checkToolInstalled(
-  toolName: string,
-  showError: boolean = true,
-  signal?: AbortSignal,
-): Promise<boolean> {
-  const config = TOOL_CONFIGS[toolName];
-
-  if (!config) {
-    if (showError) {
-      await reportMissingTool(`Unknown tool: ${toolName}`);
-    }
-    return false;
-  }
-
-  // Generate default command if not specified
-  const command = config.command || `${toolName} --version`;
-
-  try {
-    let isInstalled = false;
-
-    const extendedPath = extendEnvPath();
-    const execEnv = { ...process.env, PATH: extendedPath };
-
-    // Log PATH info once (not per-command)
+    const fallback = BinaryResolver.resolveOptionalCommand(cmd, args);
     log.debug(
-      `PATH contains ${extendedPath.split(path.delimiter).length} entries, ` +
-        `includes /usr/bin: ${extendedPath.includes('/usr/bin')}`,
+      `Fallback search for '${cmd}': ${fallback?.resolvedPath ?? 'not found'}`,
     );
 
-    if (Array.isArray(command)) {
-      // Try each command in the array until one succeeds
-      for (const cmd of command) {
-        const parsed = parseCommand(cmd);
-        if (!parsed) continue;
-        if (
-          await executeWithFallback(
-            parsed.cmdName,
-            parsed.args,
-            execEnv,
-            signal,
-          )
-        ) {
-          isInstalled = true;
-          break;
-        }
+    if (fallback) {
+      log.debug(
+        `Running fallback '${fallback.command}' with args [${fallback.args.join(', ')}]`,
+      );
+      result = yield* spawnProbe(fallback.command, fallback.args, execEnv);
+      log.debug(
+        `Fallback result: exitCode=${result.exitCode}, ` +
+          `stdout=${result.stdout?.slice(0, 100) || '(empty)'}, ` +
+          `stderr=${result.stderr?.slice(0, 100) || '(empty)'}`,
+      );
+
+      if (result.exitCode === 0 || hasVersionOutput(result)) {
+        return true;
       }
-    } else {
+    }
+
+    // Log at info level so it shows in output channel by default
+    log.info(
+      `Tool '${cmd}' not detected. Last result: exitCode=${result.exitCode}, ` +
+        `stdout=${result.stdout?.slice(0, 200) || '(empty)'}, ` +
+        `stderr=${result.stderr?.slice(0, 200) || '(empty)'}`,
+    );
+    return false;
+  },
+);
+
+/**
+ * Whether a tool is installed.
+ *
+ * @param toolName Tool name (looked up in TOOL_CONFIGS)
+ * @param showError Whether to report a missing tool through the host handler
+ *
+ * The spawned `<tool> --version` probes are cancelled by the fiber's own
+ * interruption, so no caller threads an `AbortSignal` in. An interrupted probe
+ * never reaches the report below either: interruption unwinds the fiber, which
+ * is what the old `signal.aborted` guard hand-rolled — stopping a run must not
+ * raise an install prompt or open the setup docs.
+ *
+ * The probe's own failure is answered, not raised: the user-facing message is
+ * the tool's install guidance either way, so the cause is logged and the tool
+ * reports as absent. That leaves no error channel for callers to handle.
+ */
+export const checkToolInstalled = Effect.fn('toolUtils.checkToolInstalled')(
+  function* (
+    toolName: string,
+    showError: boolean = true,
+  ): Effect.fn.Return<boolean> {
+    const config = TOOL_CONFIGS[toolName];
+
+    if (!config) {
+      if (showError) {
+        yield* reportMissingTool(`Unknown tool: ${toolName}`);
+      }
+      return false;
+    }
+
+    // Generate default command if not specified
+    const command = config.command || `${toolName} --version`;
+
+    const probe = Effect.gen(function* () {
+      const extendedPath = extendEnvPath();
+      const execEnv = { ...process.env, PATH: extendedPath };
+
+      // Log PATH info once (not per-command)
+      log.debug(
+        `PATH contains ${extendedPath.split(path.delimiter).length} entries, ` +
+          `includes /usr/bin: ${extendedPath.includes('/usr/bin')}`,
+      );
+
+      if (Array.isArray(command)) {
+        // Try each command in the array until one succeeds
+        for (const cmd of command) {
+          const parsed = parseCommand(cmd);
+          if (!parsed) continue;
+          if (
+            yield* executeWithFallback(parsed.cmdName, parsed.args, execEnv)
+          ) {
+            return true;
+          }
+        }
+        return false;
+      }
+
       // Single command: validate first, then execute
       const parsed = parseCommand(command);
       if (!parsed) {
-        throw new Error('Invalid command: no executable found');
+        return yield* Effect.fail(
+          new Error('Invalid command: no executable found'),
+        );
       }
-      isInstalled = await executeWithFallback(
-        parsed.cmdName,
-        parsed.args,
-        execEnv,
-        signal,
+      return yield* executeWithFallback(parsed.cmdName, parsed.args, execEnv);
+    });
+
+    // A probe failure and an absent tool differ only in what the report links
+    // to: the failing path has no install-docs command, exactly as before.
+    const answerAsAbsent = (err: unknown) =>
+      Effect.sync(() => {
+        log.warn(`Tool check for '${toolName}' failed: ${toErrorMessage(err)}`);
+        return { installed: false, probeFailed: true };
+      });
+
+    // Both arms, because the `try`/`catch` this replaces answered a rejected
+    // spawn and a synchronous throw alike — `BinaryResolver` and the PATH
+    // build sit inside the probe and are ordinary code that can throw, and a
+    // throw there means "not detected", not a crashed run. Interruption is
+    // neither a failure nor a defect, so it still unwinds the fiber instead of
+    // reporting a missing tool.
+    const outcome = yield* probe.pipe(
+      Effect.map((installed) => ({ installed, probeFailed: false })),
+      Effect.catch(answerAsAbsent),
+      Effect.catchDefect(answerAsAbsent),
+    );
+
+    if (!outcome.installed && showError) {
+      yield* reportMissingTool(
+        config.errorMessage,
+        outcome.probeFailed ? undefined : config.openDocsCommand,
       );
     }
 
-    // `signal.aborted` is read here, after the probes, not captured earlier:
-    // the abort arrives while they run. A cancelled probe is not a missing
-    // tool, whichever way execa surfaced the kill.
-    if (!isInstalled && showError && !signal?.aborted) {
-      await reportMissingTool(config.errorMessage, config.openDocsCommand);
-    }
-
-    return isInstalled;
-  } catch (err) {
-    // The user-facing message is always the tool's own install guidance, so
-    // log the underlying cause instead of dropping it.
-    log.warn(`Tool check for '${toolName}' failed: ${toErrorMessage(err)}`);
-    if (showError && !signal?.aborted) {
-      await reportMissingTool(config.errorMessage);
-    }
-    return false;
-  }
-}
+    return outcome.installed;
+  },
+);
 
 /**
- * Options for runToolWithCheck function (internal to this module)
+ * Options for runToolWithCheck function (internal to this module).
+ *
+ * `signal` is not among them: both the preflight probe and the run itself are
+ * cancelled by the fiber's interruption, so there is nothing for a caller to
+ * thread through.
  */
 type RunToolOptions = {
   /** Whether to show error messages for missing tools */
   showError?: boolean;
-} & ExecuteCommandBaseOptions;
+} & Omit<ExecuteCommandBaseOptions, 'signal'>;
 
 /**
- * Run a tool after verifying it is installed.
- * @param toolName Name of the tool to execute
- * @param args Arguments to pass to the tool (without the tool name)
- * @param options Execution options and installation check settings
- * @returns Promise<ExecResult | false> if the tool ran, or false if the tool is missing
+ * Run a tool after verifying it is installed, answering `false` when the tool
+ * is missing.
  *
- * The preflight probe runs under the run's own `signal`, so interrupting the
- * tool kills the `<tool> --version` spawns as well instead of leaving them to
- * run out their five-second timeout.
+ * This is the module's `executeCommand` edge, lifted exactly once: the
+ * `AbortSignal` `Effect.tryPromise` supplies aborts on interruption, so
+ * stopping the fiber tears down the spawned process the same way the threaded
+ * signal used to.
  */
-export async function runToolWithCheck(
-  toolName: string,
-  args: string[],
-  options: RunToolOptions,
-): Promise<ExecResult | false> {
-  const { showError = true, ...execOptions } = options;
-  if (!(await checkToolInstalled(toolName, showError, execOptions.signal))) {
-    return false;
-  }
-  return executeCommand([toolName, ...args], execOptions);
-}
+export const runToolWithCheck = Effect.fn('toolUtils.runToolWithCheck')(
+  function* (
+    toolName: string,
+    args: string[],
+    options: RunToolOptions,
+  ): Effect.fn.Return<ExecResult | false, Error> {
+    const { showError = true, ...execOptions } = options;
+    if (!(yield* checkToolInstalled(toolName, showError))) {
+      return false;
+    }
+    return yield* Effect.tryPromise({
+      try: (signal) =>
+        executeCommand([toolName, ...args], { ...execOptions, signal }),
+      catch: ensureError,
+    });
+  },
+);
 
 /**
  * Which of the two interchangeable image processors is installed, preferring
@@ -359,14 +392,17 @@ export async function runToolWithCheck(
  * "magick or gm" alternation that PDF rasterization, image resizing, and the
  * core-dependency check all decide on.
  */
-export async function detectImageTool(): Promise<'magick' | 'gm' | null> {
-  const [hasMagick, hasGm] = await Promise.all(
-    ['magick', 'gm'].map((tool) => checkToolInstalled(tool, false)),
-  );
-  if (hasMagick) return 'magick';
-  if (hasGm) return 'gm';
-  return null;
-}
+export const detectImageTool = Effect.fn('toolUtils.detectImageTool')(
+  function* (): Effect.fn.Return<'magick' | 'gm' | null> {
+    const [hasMagick, hasGm] = yield* Effect.all(
+      ['magick', 'gm'].map((tool) => checkToolInstalled(tool, false)),
+      { concurrency: 'unbounded' },
+    );
+    if (hasMagick) return 'magick';
+    if (hasGm) return 'gm';
+    return null;
+  },
+);
 
 /**
  * Get the documentation command for a given tool.
@@ -381,45 +417,42 @@ export function getToolDocsCommand(tool: string): string | undefined {
  * Check core dependencies required by TeXRA features
  * (latexindent, Perl, Ghostscript, GraphicsMagick/ImageMagick).
  * @param showError Whether to show error messages for missing tools
- * @returns Promise<string[]> Array of missing tool names
+ * @returns The missing tool names.
+ *
+ * Every probe below answers `false` rather than failing, and the host report
+ * logs its own rejection, so this has no failure of its own to mask — the
+ * "assume everything is missing" rescue it used to carry could only ever have
+ * fired on a defect.
  */
-export async function checkCoreDependencies(
-  showError: boolean = true,
-): Promise<string[]> {
-  try {
-    // Check basic tools
-    const basicTools = ['latexindent', 'perl', 'gs'];
-    const basicResults = await Promise.all(
-      basicTools.map((tool) => checkToolInstalled(tool, showError)),
-    );
-    const missingBasicTools = basicTools.filter((_, i) => !basicResults[i]);
+export const checkCoreDependencies = Effect.fn(
+  'toolUtils.checkCoreDependencies',
+)(function* (showError: boolean = true): Effect.fn.Return<string[]> {
+  // Check basic tools
+  const basicTools = ['latexindent', 'perl', 'gs'];
+  const basicResults = yield* Effect.all(
+    basicTools.map((tool) => checkToolInstalled(tool, showError)),
+    { concurrency: 'unbounded' },
+  );
+  const missingBasicTools = basicTools.filter((_, i) => !basicResults[i]);
 
-    // Check for either GraphicsMagick or ImageMagick, and add the image tool
-    // to the missing list only if neither is installed.
-    if (!(await detectImageTool())) {
-      missingBasicTools.push('gm/magick');
-      if (showError) {
-        const errorMsg =
-          'Neither GraphicsMagick nor ImageMagick is installed. Please install either tool for image processing.\n' +
-          'GraphicsMagick:\n' +
-          GM_INSTRUCTIONS +
-          '\n\nOR\n\nImageMagick:\n' +
-          MAGICK_INSTRUCTIONS;
-        // Report through the host handler like every other missing tool: a
-        // throw here would be caught below and turn three installed tools into
-        // a false "missing" list while dropping this message entirely.
-        await reportMissingTool(errorMsg, INSTALL_DOCS);
-      }
+  // Check for either GraphicsMagick or ImageMagick, and add the image tool
+  // to the missing list only if neither is installed.
+  if (!(yield* detectImageTool())) {
+    missingBasicTools.push('gm/magick');
+    if (showError) {
+      const errorMsg =
+        'Neither GraphicsMagick nor ImageMagick is installed. Please install either tool for image processing.\n' +
+        'GraphicsMagick:\n' +
+        GM_INSTRUCTIONS +
+        '\n\nOR\n\nImageMagick:\n' +
+        MAGICK_INSTRUCTIONS;
+      // Report through the host handler like every other missing tool.
+      yield* reportMissingTool(errorMsg, INSTALL_DOCS);
     }
-
-    return missingBasicTools;
-  } catch (error) {
-    // If checking fails, assume all tools are missing to prompt user to check
-    // This is safer than silently ignoring the error
-    log.error(`Failed to check core dependencies: ${toErrorMessage(error)}`);
-    return ['latexindent', 'perl', 'gs', 'gm/magick'];
   }
-}
+
+  return missingBasicTools;
+});
 
 /** Package managers TeXRA knows how to install dependencies with. */
 export const SYSTEM_PACKAGE_MANAGERS = ['brew', 'apt', 'scoop'] as const;

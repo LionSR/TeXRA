@@ -98,16 +98,12 @@ export const runLatexIndent = Effect.fn('latex.runLatexIndent')(
     }
     args.push(absolutePath);
 
-    const result = yield* Effect.tryPromise({
-      try: () =>
-        runToolWithCheck('latexindent', args, {
-          channel: CHANNEL,
-          cwd: workspacePath,
-          // The slots the caller resolved this formatter from.
-          settings,
-          showError: !missingLatexindentReported,
-        }),
-      catch: (cause) => cause,
+    const result = yield* runToolWithCheck('latexindent', args, {
+      channel: CHANNEL,
+      cwd: workspacePath,
+      // The slots the caller resolved this formatter from.
+      settings,
+      showError: !missingLatexindentReported,
     });
     if (result === false) missingLatexindentReported = true;
     const success = Boolean(result && result.success);

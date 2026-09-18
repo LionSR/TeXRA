@@ -48,7 +48,7 @@ const mocks = vi.hoisted(() => ({
     (): Effect.Effect<{ ok: boolean; logTail?: string }> =>
       Effect.succeed({ ok: true }),
   ),
-  hasLatexCompiler: vi.fn(async () => true),
+  hasLatexCompiler: vi.fn((): Effect.Effect<boolean> => Effect.succeed(true)),
   publishCompiledPdfArtifact: vi.fn((): Effect.Effect<null, Error> =>
     Effect.succeed(null),
   ),

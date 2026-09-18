@@ -7,6 +7,7 @@
 import * as vscode from 'vscode';
 
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { SETTINGS_VIEW_CMD, type SettingsMessageFor } from '@shared/schemas';
 import {
@@ -145,12 +146,19 @@ export class LatexSettingsHandlers {
     },
   });
 
-  constructor(private readonly ctx: SettingsHandlerContext) {}
+  constructor(
+    private readonly ctx: SettingsHandlerContext,
+    private readonly runtime: ProcessRuntime,
+  ) {}
 
   async sendLatexSettingsStatus(webview: vscode.Webview): Promise<void> {
+    // The settings webview answers with a promise, so this message arm is
+    // where the detection program runs.
     await webview.postMessage({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_SETTINGS_STATUS,
-      settings: await this.toolingController.detectStatus(),
+      settings: await this.runtime.runPromise(
+        this.toolingController.detectStatus(),
+      ),
     });
   }
 
