@@ -352,13 +352,12 @@ export class RunFileService {
               fs,
               destinationAbsolute,
             ).pipe(
-              Effect.map((type) =>
-                type === undefined
-                  ? 'absent'
-                  : type === 'SymbolicLink'
-                    ? 'staleLink'
-                    : 'realFile',
-              ),
+              Effect.map((type) => {
+                if (type === undefined) return 'absent' as const;
+                return type === 'SymbolicLink'
+                  ? ('staleLink' as const)
+                  : ('realFile' as const);
+              }),
               Effect.catch((error) =>
                 Effect.sync(() => {
                   log.warn(
