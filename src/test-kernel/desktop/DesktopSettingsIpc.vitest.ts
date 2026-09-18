@@ -844,9 +844,11 @@ describe('desktop settings IPC', () => {
         refreshAuthDependentData,
       });
     const agentSettingsController = createStubDesktopAgentSettingsController();
-    agentSettingsController.refreshCatalogData = vi.fn(async () => {
-      events.push('agents');
-    });
+    agentSettingsController.refreshCatalogData = vi.fn(() =>
+      Effect.sync(() => {
+        events.push('agents');
+      }),
+    );
     const { settings } = createSettingsFixture({
       ...state,
       agentSettingsController,

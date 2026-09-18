@@ -879,7 +879,7 @@ describe('desktop Supabase auth', () => {
     const controller = new SettingsProfileController({
       host: 'desktop',
       stores: makeFakeSettingsStores().stores,
-      loadProviderKeyStatuses: async () => ({}),
+      loadProviderKeyStatuses: Effect.succeed({}),
     });
     const message = await testRuntime().runPromise(
       controller.buildProfileMessage(),

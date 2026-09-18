@@ -37,7 +37,9 @@ interface SettingsTeamRosterOptions<R> extends Omit<
 > {
   readonly catalog: SettingsTeamRosterCatalog;
   readonly presentation: SettingsTeamRosterPresentation;
-  readonly refreshAfterApply: (selectedToolUseAgent?: string) => Promise<void>;
+  readonly refreshAfterApply: (
+    selectedToolUseAgent?: string,
+  ) => Effect.Effect<void, unknown, R>;
 }
 
 /**
@@ -88,14 +90,15 @@ export function applySettingsTeamRoster<R = never>(
           result.preset.agents.toolUse,
           result.preset.id,
         );
-        yield* Effect.tryPromise({
-          try: () => options.refreshAfterApply(selectedToolUseAgent),
-          catch: (cause) =>
-            new TeamRosterRefreshFailed({
-              message: `The team was applied, but the settings view could not be refreshed: ${toErrorMessage(cause)}`,
-              cause,
-            }),
-        });
+        yield* options.refreshAfterApply(selectedToolUseAgent).pipe(
+          Effect.mapError(
+            (cause) =>
+              new TeamRosterRefreshFailed({
+                message: `The team was applied, but the settings view could not be refreshed: ${toErrorMessage(cause)}`,
+                cause,
+              }),
+          ),
+        );
 
         const unresolvedCount = result.resolution.unresolvedNames.length;
         yield* options.presentation.showInfoMessage(

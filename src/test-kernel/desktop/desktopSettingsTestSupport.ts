@@ -13,7 +13,6 @@ import {
 import { discoveredCopilotRoutes } from '@model/runtimeModelRegistry';
 import { unsupported } from '@shared/utils/dispatcher';
 import type { SettingsStatePorts } from '@shared/settingsView/types';
-import { testRuntime } from '@test/support/testProcessRuntime';
 import { FakeSecrets } from '@test/support/FakePlatform';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 
@@ -60,7 +59,7 @@ export function createStubDesktopAgentSettingsController(): DesktopAgentSettings
       deleteAgentModePreset: noOp,
     },
     postStartupData: noOp,
-    refreshCatalogData: noOp,
+    refreshCatalogData: () => Effect.void,
   };
 }
 
@@ -87,19 +86,17 @@ export function createStubDesktopCredentialSettingsController(
       signOutGrok: noOp,
       setGrokPreferSubscription: noOp,
     },
+    // The same wiring the desktop root does: the reads are the programs the
+    // window settles at its own message boundary.
     modelSelectionController: new SettingsModelSelectionController({
       stores: { ...makeFakeSettingsStores().stores, ...state },
       secrets: new FakeSecrets(),
-      // The same wiring the desktop root does: the read is an Effect, run on
-      // the runtime this process holds.
-      resolveModelOptions: async (stores, models) =>
-        modelOptionsFrom(
-          await testRuntime().runPromise(
-            readModelAvailabilityInputs(stores, models),
-          ),
+      resolveModelOptions: (stores, models) =>
+        Effect.map(
+          readModelAvailabilityInputs(stores, models),
+          modelOptionsFrom,
         ),
-      getCopilotRoutes: () =>
-        testRuntime().runPromise(discoveredCopilotRoutes()),
+      copilotRoutes: discoveredCopilotRoutes(),
     }),
     refreshModelOptions: noOp,
     postProfileData: noOp,

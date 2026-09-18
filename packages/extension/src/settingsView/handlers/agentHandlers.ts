@@ -403,8 +403,15 @@ export class AgentHandlers {
                     ),
                   ).pipe(Effect.asVoid),
               },
+              // The extension's refresh fan-out is still the settings view's
+              // promise-shaped webview transport, so it is lifted here rather
+              // than in the shared controller.
               refreshAfterApply: (selectedToolUseAgent) =>
-                this.refreshAfterAgentMutation(selectedToolUseAgent, true),
+                Effect.tryPromise({
+                  try: () =>
+                    this.refreshAfterAgentMutation(selectedToolUseAgent, true),
+                  catch: (cause) => cause,
+                }),
             }),
           ),
         );

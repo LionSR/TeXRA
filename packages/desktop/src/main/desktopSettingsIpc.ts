@@ -191,7 +191,9 @@ export function createDesktopSettingsIpc(
 
   async function postModelSelectionData(): Promise<void> {
     options.postToRenderer(
-      await modelSelectionController.buildModelSelectionMessage(),
+      await runtime.runPromise(
+        modelSelectionController.buildModelSelectionMessage(),
+      ),
     );
   }
 
@@ -352,7 +354,9 @@ export function createDesktopSettingsIpc(
   ): Promise<void> {
     await options.credentialSettingsController.refreshAuthDependentData();
     if (refreshOptions.deferAgentCatalogRefresh) return;
-    await options.agentSettingsController.refreshCatalogData();
+    await runtime.runPromise(
+      options.agentSettingsController.refreshCatalogData(),
+    );
   }
 
   const stateSettingSnapshotPosters: SettingsSnapshotPosters = {
@@ -519,7 +523,9 @@ export function createDesktopSettingsIpc(
     // rebuilt from this paper's presets, not the emitter's.
     appSignals.on('agentRosterChanged', () =>
       runAsyncInPaper(() =>
-        options.agentSettingsController.refreshCatalogData(),
+        runtime.runPromise(
+          options.agentSettingsController.refreshCatalogData(),
+        ),
       ),
     ),
     // Outside VS Code a rejected token left the pollers failing in silence.

@@ -516,11 +516,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     }
   }
 
-  /** The API-key banner after a key changed in Settings. */
-  public refreshHostBanners(): Promise<void> {
-    return this.runtime.runPromise(this.snapshot.refreshHostBanners);
-  }
-
   /** A run loaded an agent from the custom directory. */
   public showAgentConfigBanner(
     agentName: string,

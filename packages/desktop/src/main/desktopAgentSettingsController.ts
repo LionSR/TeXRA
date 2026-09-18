@@ -176,7 +176,7 @@ interface DefaultDesktopAgentSettingsControllerOptions extends SettingsStatePort
 export interface DesktopAgentSettingsController {
   readonly handlers: DesktopAgentHandlers;
   postStartupData(): Promise<void>;
-  refreshCatalogData(): Promise<void>;
+  refreshCatalogData(): Effect.Effect<void, Error, ProcessServices>;
 }
 
 /** Owns the desktop settings agent catalog, directory, and roster behavior. */
@@ -274,11 +274,7 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
         }),
       showInfoMessage: notifications.showInfoMessage,
       showErrorMessage: notifications.showErrorMessage,
-      refreshAfterMutation: () =>
-        Effect.tryPromise({
-          try: () => this.refreshAfterAgentMutation(),
-          catch: ensureError,
-        }),
+      refreshAfterMutation: () => this.refreshAfterAgentMutation(),
     });
     this.handlers = {
       setAgentEnabled: (message) => this.updateAgentEnabled(message),
@@ -341,40 +337,67 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
     );
   }
 
-  async postStartupData(): Promise<void> {
+  postStartupData(): Promise<void> {
     this.postAgentModePresets();
-    await Promise.all([
-      this.postAgentSelectionData(),
-      this.postCustomAgentDir(),
-    ]);
-  }
-
-  async refreshCatalogData(): Promise<void> {
-    // Presets ride along because every roster mutation can move the effective
-    // team: enabling one agent rewrites the selection as `custom`, which
-    // retires whatever team was applied.
-    this.postAgentModePresets();
-    await Promise.all([this.postAgentSelectionData(), this.onCatalogChanged()]);
-  }
-
-  private async postAgentSelectionData(): Promise<void> {
-    await this.runtime.runPromise(this.registry.loadAgents());
-    this.renderer.postToRenderer(
-      buildAgentSelectionMessage({
-        buildSelectionItems: () => this.catalogController.buildSelectionItems(),
-        getCustomAgentScanIssues,
-      }),
+    return this.runtime.runPromise(
+      Effect.all([this.postAgentSelectionData(), this.postCustomAgentDir()], {
+        concurrency: 'unbounded',
+      }).pipe(Effect.asVoid),
     );
   }
 
-  private async postCustomAgentDir(): Promise<void> {
-    this.renderer.postToRenderer(
-      await this.runtime.runPromise(
-        buildCustomAgentDirMessage({
-          getCustomDirStatus: () =>
-            this.directoryController.getCustomDirStatus(),
+  refreshCatalogData(): Effect.Effect<void, Error, ProcessServices> {
+    return Effect.gen({ self: this }, function* () {
+      // Presets ride along because every roster mutation can move the
+      // effective team: enabling one agent rewrites the selection as
+      // `custom`, which retires whatever team was applied.
+      this.postAgentModePresets();
+      yield* Effect.all(
+        [this.postAgentSelectionData(), this.catalogChanged()],
+        { concurrency: 'unbounded' },
+      );
+    });
+  }
+
+  /**
+   * The window's composition root owns what a catalog change means for the
+   * open papers, and answers with a promise; this is the one place that
+   * crosses back into it.
+   */
+  private catalogChanged(
+    selectedToolUseAgent?: string,
+  ): Effect.Effect<void, Error> {
+    return Effect.tryPromise({
+      try: () => this.onCatalogChanged(selectedToolUseAgent),
+      catch: ensureError,
+    });
+  }
+
+  private postAgentSelectionData(): Effect.Effect<
+    void,
+    Error,
+    ProcessServices
+  > {
+    return Effect.gen({ self: this }, function* () {
+      yield* this.registry.loadAgents();
+      this.renderer.postToRenderer(
+        buildAgentSelectionMessage({
+          buildSelectionItems: () =>
+            this.catalogController.buildSelectionItems(),
+          getCustomAgentScanIssues,
         }),
-      ),
+      );
+    });
+  }
+
+  private postCustomAgentDir(): Effect.Effect<void, Error, ProcessServices> {
+    return Effect.map(
+      buildCustomAgentDirMessage({
+        getCustomDirStatus: () => this.directoryController.getCustomDirStatus(),
+      }),
+      (message) => {
+        this.renderer.postToRenderer(message);
+      },
     );
   }
 
@@ -389,27 +412,29 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
     );
   }
 
-  private async updateAgentEnabled(
+  private updateAgentEnabled(
     message: AgentMessage<typeof SETTINGS_VIEW_COMMANDS.SET_AGENT_ENABLED>,
   ): Promise<void> {
-    await this.runtime.runPromise(
-      this.roster.setAgentEnabled({
-        category: message.category,
-        source: message.agentSource,
-        name: message.agentName,
-        enabled: message.enabled,
-      }),
+    return this.runtime.runPromise(
+      this.roster
+        .setAgentEnabled({
+          category: message.category,
+          source: message.agentSource,
+          name: message.agentName,
+          enabled: message.enabled,
+        })
+        .pipe(Effect.andThen(this.refreshCatalogData())),
     );
-    await this.refreshCatalogData();
   }
 
-  private async updateAllAgentsEnabled(
+  private updateAllAgentsEnabled(
     message: AgentMessage<typeof SETTINGS_VIEW_COMMANDS.SET_ALL_AGENTS_ENABLED>,
   ): Promise<void> {
-    await this.runtime.runPromise(
-      this.catalogController.setAllAgentsEnabled(message),
+    return this.runtime.runPromise(
+      this.catalogController
+        .setAllAgentsEnabled(message)
+        .pipe(Effect.andThen(this.refreshCatalogData())),
     );
-    await this.refreshCatalogData();
   }
 
   private async setCustomAgentDir(): Promise<void> {
@@ -417,9 +442,14 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
     if (!selectedPath) return;
 
     await this.runtime.runPromise(
-      this.directoryController.setCustomDir(selectedPath),
+      this.directoryController.setCustomDir(selectedPath).pipe(
+        Effect.andThen(
+          Effect.all([this.postCustomAgentDir(), this.refreshCatalogData()], {
+            concurrency: 'unbounded',
+          }),
+        ),
+      ),
     );
-    await Promise.all([this.postCustomAgentDir(), this.refreshCatalogData()]);
   }
 
   /**
@@ -427,14 +457,27 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
    * it. Creating, copying, or deleting a custom agent changes the YAML files the
    * registry was built from, so a plain re-post would serve a stale catalog.
    */
-  private async refreshAfterAgentMutation(): Promise<void> {
-    await this.runtime.runPromise(this.registry.refreshAgents());
-    await this.refreshCatalogData();
+  private refreshAfterAgentMutation(): Effect.Effect<
+    void,
+    Error,
+    ProcessServices
+  > {
+    return this.registry
+      .refreshAgents()
+      .pipe(Effect.andThen(this.refreshCatalogData()));
   }
 
-  private async resetCustomAgentDir(): Promise<void> {
-    await this.runtime.runPromise(this.directoryController.resetCustomDir());
-    await Promise.all([this.postCustomAgentDir(), this.refreshCatalogData()]);
+  private resetCustomAgentDir(): Promise<void> {
+    return this.runtime.runPromise(
+      this.directoryController.resetCustomDir().pipe(
+        Effect.andThen(
+          Effect.all([this.postCustomAgentDir(), this.refreshCatalogData()], {
+            concurrency: 'unbounded',
+          }),
+        ),
+        Effect.asVoid,
+      ),
+    );
   }
 
   private async openAgentFolder(): Promise<void> {
@@ -531,15 +574,16 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
         yield* this.notifications.showInfoMessage(
           `Created custom agent: ${plan.fileName}`,
         );
-        yield* Effect.tryPromise({
-          try: () => this.refreshAfterAgentMutation(),
-          catch: (cause) =>
-            new AgentSettingsActionFailed({
-              member: 'refreshAfterMutation',
-              message: `The agent catalog could not be reloaded: ${toErrorMessage(cause)}`,
-              cause,
-            }),
-        });
+        yield* this.refreshAfterAgentMutation().pipe(
+          Effect.mapError(
+            (cause) =>
+              new AgentSettingsActionFailed({
+                member: 'refreshAfterMutation',
+                message: `The agent catalog could not be reloaded: ${toErrorMessage(cause)}`,
+                cause,
+              }),
+          ),
+        );
       }),
     );
   }
@@ -620,13 +664,17 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
           showInfoMessage: this.notifications.showInfoMessage,
           showErrorMessage: this.notifications.showErrorMessage,
         },
-        refreshAfterApply: async (selectedToolUseAgent) => {
-          this.postAgentModePresets();
-          await Promise.all([
-            this.postAgentSelectionData(),
-            this.onCatalogChanged(selectedToolUseAgent),
-          ]);
-        },
+        refreshAfterApply: (selectedToolUseAgent) =>
+          Effect.gen({ self: this }, function* () {
+            this.postAgentModePresets();
+            yield* Effect.all(
+              [
+                this.postAgentSelectionData(),
+                this.catalogChanged(selectedToolUseAgent),
+              ],
+              { concurrency: 'unbounded' },
+            );
+          }),
       }),
     );
   }

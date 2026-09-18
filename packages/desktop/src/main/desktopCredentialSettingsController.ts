@@ -32,6 +32,7 @@ import {
 } from '@model/computeModelOptions';
 import { discoveredCopilotRoutes } from '@model/runtimeModelRegistry';
 import type { ConfigProvider } from '@platform/interfaces';
+import type { LanguageModel } from '@platform/languageModel';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
@@ -201,7 +202,7 @@ export interface DesktopCredentialSettingsController {
   readonly profileHandlers: DesktopProfileHandlers;
   readonly chatGptHandlers: DesktopChatGptHandlers;
   readonly grokHandlers: DesktopGrokHandlers;
-  readonly modelSelectionController: SettingsModelSelectionController;
+  readonly modelSelectionController: SettingsModelSelectionController<LanguageModel>;
   /** The enabled-model set or a credential changed the model catalog. */
   refreshModelOptions(): Promise<void>;
   /** Re-posts the profile snapshot after a catalog-routed credential write. */
@@ -218,7 +219,7 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
   readonly profileHandlers: DesktopProfileHandlers;
   readonly chatGptHandlers: DesktopChatGptHandlers;
   readonly grokHandlers: DesktopGrokHandlers;
-  readonly modelSelectionController: SettingsModelSelectionController;
+  readonly modelSelectionController: SettingsModelSelectionController<LanguageModel>;
 
   private readonly profileController: SettingsProfileController;
   private readonly profileKeyController: SettingsProfileKeyController;
@@ -239,17 +240,12 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
     this.modelSelectionController = new SettingsModelSelectionController({
       stores: options.stores,
       secrets: options.secrets,
-      // The availability read is an Effect; this is the boundary that holds a
-      // runtime to run it on, so the controller takes its rows as data.
-      resolveModelOptions: async (stores, models) =>
-        modelOptionsFrom(
-          await options.runtime.runPromise(
-            readModelAvailabilityInputs(stores, models),
-          ),
+      resolveModelOptions: (stores, models) =>
+        Effect.map(
+          readModelAvailabilityInputs(stores, models),
+          modelOptionsFrom,
         ),
-      // The route catalogue read is an Effect for the same reason.
-      getCopilotRoutes: () =>
-        options.runtime.runPromise(discoveredCopilotRoutes()),
+      copilotRoutes: discoveredCopilotRoutes(),
     });
     this.profileController = new SettingsProfileController({
       host: 'desktop',
@@ -261,12 +257,10 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
         workspaceState: options.workspaceState,
         globalState: options.globalState,
       },
-      // The key-status read is an Effect; this controller holds the runtime
-      // that settles it, as it does for the availability read above.
-      loadProviderKeyStatuses: () =>
-        options.runtime.runPromise(
-          loadApiKeyStatusMap(options.secrets, API_PROVIDERS),
-        ),
+      loadProviderKeyStatuses: loadApiKeyStatusMap(
+        options.secrets,
+        API_PROVIDERS,
+      ),
     });
     this.profileKeyController = new SettingsProfileKeyController({
       secrets: options.secrets,
@@ -639,7 +633,9 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
 
   private async postModelSelectionData(): Promise<void> {
     this.options.renderer.postToRenderer(
-      await this.modelSelectionController.buildModelSelectionMessage(),
+      await this.options.runtime.runPromise(
+        this.modelSelectionController.buildModelSelectionMessage(),
+      ),
     );
   }
 }

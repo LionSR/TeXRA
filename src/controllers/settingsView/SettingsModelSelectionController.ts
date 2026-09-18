@@ -38,7 +38,7 @@ import {
 } from '@shared/constants/providers';
 import { byName } from '@utils/core';
 
-interface SettingsModelSelectionControllerDeps {
+interface SettingsModelSelectionControllerDeps<R> {
   /**
    * The three setting slots this tab answers for. `globalState` holds the
    * persisted picker state (enabled models, helper model, reasoning levels);
@@ -49,23 +49,25 @@ interface SettingsModelSelectionControllerDeps {
   /** Provider credentials behind the availability decoration on each option. */
   secrets: PlatformSecrets;
   /**
-   * The discovered Copilot routes. A port because the read behind it is an
-   * Effect and this controller is in a zone that may not run one: each host
-   * wires it on the runtime it already holds.
+   * The discovered Copilot routes: the host's own read, as the program it
+   * already was. This controller composes it and hands the result back as one
+   * program the host settles at its message boundary.
    */
-  getCopilotRoutes: () => Promise<ReadonlyMap<string, CopilotModelRoute>>;
+  copilotRoutes: Effect.Effect<
+    ReadonlyMap<string, CopilotModelRoute>,
+    never,
+    R
+  >;
   getPreferredCopilotRouteModels?: () => readonly string[];
   /**
-   * Resolve availability-decorated options for the given models. A port
-   * because the read behind it is an Effect and this controller is in a zone
-   * that may not run one: each host wires it on the runtime it already holds,
-   * reading the shared availability inputs and finishing them with
-   * `modelOptionsFrom` — the same source the CLI picker uses.
+   * Resolve availability-decorated options for the given models, reading the
+   * shared availability inputs and finishing them with `modelOptionsFrom` —
+   * the same source the CLI picker uses.
    */
   resolveModelOptions: (
     stores: ModelOptionStores,
     models: readonly string[],
-  ) => Promise<ModelOptionData[]>;
+  ) => Effect.Effect<ModelOptionData[], Error, R>;
 }
 
 interface SettingsModelSelectionData {
@@ -78,38 +80,45 @@ interface SettingsModelSelectionData {
 /** Membership form of the order the Models tab groups by. */
 const MODEL_SELECTION_SOURCES = new Set<string>(MODEL_SOURCE_ORDER);
 
-export class SettingsModelSelectionController {
-  constructor(private readonly deps: SettingsModelSelectionControllerDeps) {}
+export class SettingsModelSelectionController<R = never> {
+  constructor(private readonly deps: SettingsModelSelectionControllerDeps<R>) {}
 
-  async buildSelectionData(): Promise<SettingsModelSelectionData> {
-    const visibleModels = getEnabledModels(this.deps.stores.globalState);
-    const routes = await this.deps.getCopilotRoutes();
-    const preferredModels = new Set(
-      this.deps.getPreferredCopilotRouteModels?.() ??
-        preferredCopilotRouteModels(this.deps.stores.globalState),
-    );
-    return {
-      models: await this.buildSelectionItems(routes, preferredModels),
-      helperModel: resolveEffectiveHelperModel(
-        this.deps.stores.globalState.get<string | undefined>(
-          GlobalStateKey.HELPER_MODEL,
+  buildSelectionData(): Effect.Effect<SettingsModelSelectionData, Error, R> {
+    return Effect.gen({ self: this }, function* () {
+      const visibleModels = getEnabledModels(this.deps.stores.globalState);
+      const routes = yield* this.deps.copilotRoutes;
+      const preferredModels = new Set(
+        this.deps.getPreferredCopilotRouteModels?.() ??
+          preferredCopilotRouteModels(this.deps.stores.globalState),
+      );
+      const models = yield* this.buildSelectionItems(routes, preferredModels);
+      return {
+        models,
+        helperModel: resolveEffectiveHelperModel(
+          this.deps.stores.globalState.get<string | undefined>(
+            GlobalStateKey.HELPER_MODEL,
+          ),
+          visibleModels,
         ),
-        visibleModels,
-      ),
-      preferShortModelNames: this.deps.stores.globalState.get<boolean>(
-        GlobalStateKey.PREFER_SHORT_MODEL_NAMES,
-        false,
-      ),
-      copilotModels: this.buildCopilotRouteInfos(routes, preferredModels),
-    };
+        preferShortModelNames: this.deps.stores.globalState.get<boolean>(
+          GlobalStateKey.PREFER_SHORT_MODEL_NAMES,
+          false,
+        ),
+        copilotModels: this.buildCopilotRouteInfos(routes, preferredModels),
+      };
+    });
   }
 
   /** Outbound message carrying the full selection payload to the webview. */
-  async buildModelSelectionMessage(): Promise<UpdateModelSelectionMessage> {
-    return {
+  buildModelSelectionMessage(): Effect.Effect<
+    UpdateModelSelectionMessage,
+    Error,
+    R
+  > {
+    return Effect.map(this.buildSelectionData(), (data) => ({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
-      ...(await this.buildSelectionData()),
-    };
+      ...data,
+    }));
   }
 
   /**
@@ -167,74 +176,80 @@ export class SettingsModelSelectionController {
     );
   }
 
-  private async buildSelectionItems(
+  private buildSelectionItems(
     copilotRoutes: ReadonlyMap<string, CopilotModelRoute>,
     preferredCopilotModels: ReadonlySet<string>,
-  ): Promise<ModelSelectionItem[]> {
-    const enabledSet = new Set(getEnabledModels(this.deps.stores.globalState));
-    const reasoningOverrides = reasoningEffortOverrides(
-      this.deps.stores.globalState,
-    );
-
-    // Resolve availability (personal-key, subscription) once for the
-    // models this host shows, via the same shared computation the CLI picker
-    // uses. Passing an explicit list keeps the picker's view authoritative and
-    // avoids re-deriving availability at render time. Copilot routes are not
-    // candidates: they are transports for the canonical base models (#9635).
-    const configs = new Map<string, ModelConfig>(Object.entries(MODEL_CONFIGS));
-    const candidates = [...configs.values()]
-      .filter((config) => config.provider !== ModelProvider.COPILOT)
-      // The Models tab groups rows by `MODEL_SOURCE_ORDER`, so a config whose
-      // resolved source is outside that order can never render as a row.
-      // Admitting it anyway would leak it into the serialized `models` payload
-      // and — once enabled — into the helper-model dropdown, which does not
-      // group. Registry-derived, so a new provider needs no edit here.
-      .filter((config) =>
-        MODEL_SELECTION_SOURCES.has(
-          resolveModelSource(config) ?? config.provider,
-        ),
-      )
-      .map((config) => config.name);
-    const optionsData = await this.deps.resolveModelOptions(
-      { ...this.deps.stores, secrets: this.deps.secrets },
-      candidates,
-    );
-
-    const items: ModelSelectionItem[] = [];
-    for (const option of optionsData) {
-      const name = option.value;
-      const config = configs.get(name);
-      if (!config) continue;
-
-      const item: ModelSelectionItem = {
-        name,
-        label: option.label,
-        // Catalogue placement is a stable registry fact. `option.provider`
-        // describes the effective request route and may change with credentials.
-        provider: resolveModelSource(config) ?? config.provider,
-        routeLabel: option.routeLabel,
-        enabled: enabledSet.has(name),
-        deprecated: config.deprecated ?? false,
-        contextWindow: option.context,
-        cost: option.cost,
-        isFast: isFastFirstResponseModel(config.inputPrice),
-        availability: option.availability,
-      };
-
-      const copilotRoute = copilotRoutes.get(name);
-      const effectiveConfig =
-        preferredCopilotModels.has(name) && copilotRoute?.access === 'allowed'
-          ? copilotRoute.effectiveConfig
-          : config;
-      this.addReasoningLevelData(
-        item,
-        effectiveConfig,
-        reasoningOverrides[name],
+  ): Effect.Effect<ModelSelectionItem[], Error, R> {
+    return Effect.gen({ self: this }, function* () {
+      const enabledSet = new Set(
+        getEnabledModels(this.deps.stores.globalState),
       );
-      items.push(item);
-    }
+      const reasoningOverrides = reasoningEffortOverrides(
+        this.deps.stores.globalState,
+      );
 
-    return items.sort(byName);
+      // Resolve availability (personal-key, subscription) once for the
+      // models this host shows, via the same shared computation the CLI picker
+      // uses. Passing an explicit list keeps the picker's view authoritative and
+      // avoids re-deriving availability at render time. Copilot routes are not
+      // candidates: they are transports for the canonical base models (#9635).
+      const configs = new Map<string, ModelConfig>(
+        Object.entries(MODEL_CONFIGS),
+      );
+      const candidates = [...configs.values()]
+        .filter((config) => config.provider !== ModelProvider.COPILOT)
+        // The Models tab groups rows by `MODEL_SOURCE_ORDER`, so a config whose
+        // resolved source is outside that order can never render as a row.
+        // Admitting it anyway would leak it into the serialized `models` payload
+        // and — once enabled — into the helper-model dropdown, which does not
+        // group. Registry-derived, so a new provider needs no edit here.
+        .filter((config) =>
+          MODEL_SELECTION_SOURCES.has(
+            resolveModelSource(config) ?? config.provider,
+          ),
+        )
+        .map((config) => config.name);
+      const optionsData = yield* this.deps.resolveModelOptions(
+        { ...this.deps.stores, secrets: this.deps.secrets },
+        candidates,
+      );
+
+      const items: ModelSelectionItem[] = [];
+      for (const option of optionsData) {
+        const name = option.value;
+        const config = configs.get(name);
+        if (!config) continue;
+
+        const item: ModelSelectionItem = {
+          name,
+          label: option.label,
+          // Catalogue placement is a stable registry fact. `option.provider`
+          // describes the effective request route and may change with credentials.
+          provider: resolveModelSource(config) ?? config.provider,
+          routeLabel: option.routeLabel,
+          enabled: enabledSet.has(name),
+          deprecated: config.deprecated ?? false,
+          contextWindow: option.context,
+          cost: option.cost,
+          isFast: isFastFirstResponseModel(config.inputPrice),
+          availability: option.availability,
+        };
+
+        const copilotRoute = copilotRoutes.get(name);
+        const effectiveConfig =
+          preferredCopilotModels.has(name) && copilotRoute?.access === 'allowed'
+            ? copilotRoute.effectiveConfig
+            : config;
+        this.addReasoningLevelData(
+          item,
+          effectiveConfig,
+          reasoningOverrides[name],
+        );
+        items.push(item);
+      }
+
+      return items.sort(byName);
+    });
   }
 
   private addReasoningLevelData(
