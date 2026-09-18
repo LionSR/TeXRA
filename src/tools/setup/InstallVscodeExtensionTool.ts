@@ -10,7 +10,7 @@ import { executed } from '@tools/core/result';
 
 // Local file imports
 import { defineTool } from '../core/define';
-import { SetupPlatform } from './platform';
+import { assertInSetupAllowlist, SetupPlatform } from './platform';
 
 /**
  * Allowlist of VS Code extensions the setup agent may install.
@@ -42,13 +42,7 @@ const installExtension = Effect.fn('InstallVscodeExtensionTool.execute')(
     const platform = yield* SetupPlatform;
     const id = input.extensionId.trim();
 
-    if (!ALLOWED_EXTENSIONS.has(id)) {
-      return yield* Effect.fail(
-        new ToolError(
-          `Extension "${id}" is not in the setup allowlist. Allowed: ${[...ALLOWED_EXTENSIONS].sort().join(', ')}.`,
-        ),
-      );
-    }
+    yield* assertInSetupAllowlist('Extension', id, ALLOWED_EXTENSIONS);
 
     const extensions = platform.extensions;
     if (!extensions) {

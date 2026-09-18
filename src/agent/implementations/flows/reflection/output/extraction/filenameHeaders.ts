@@ -218,7 +218,7 @@ function makeUniquePercentHeaderName(
   let suffix = 2;
 
   const finalPathKey = (name: string) =>
-    getExtractedDocOutputFileName(name, roundDir).replaceAll('\\', '/');
+    normalizeFilePath(getExtractedDocOutputFileName(name, roundDir));
 
   while (reservedFinalPaths.has(finalPathKey(candidate))) {
     candidate = path.posix.join(
@@ -347,7 +347,7 @@ export function extractFilenameHeaderDocuments(
       existing.content = `${existing.content.trim()}\n\n${content}`;
     } else {
       reservedFinalPaths.add(
-        getExtractedDocOutputFileName(name, roundDir).replaceAll('\\', '/'),
+        normalizeFilePath(getExtractedDocOutputFileName(name, roundDir)),
       );
       documents.push({ name, content });
     }

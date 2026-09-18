@@ -17,6 +17,7 @@ import {
   type RunStorageFileLocation,
 } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { normalizeFilePath } from '@utils/core';
 import { getPathSegments } from '@utils/core/pathCore';
 
 // Local file imports
@@ -103,7 +104,7 @@ export async function inspectRunStorageEntryUnder(
   runId: RunId,
   relativePath: string,
 ): Promise<RunStorageEntryInspection> {
-  const posixPath = relativePath.replaceAll('\\', '/');
+  const posixPath = normalizeFilePath(relativePath);
   const pathSegments = getPathSegments(posixPath);
   if (
     pathSegments.length === 0 ||

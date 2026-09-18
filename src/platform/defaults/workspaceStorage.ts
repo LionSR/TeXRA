@@ -3,6 +3,7 @@ import { mkdirSync } from 'node:fs';
 import { basename, join, posix, relative } from 'node:path';
 
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
+import { normalizeFilePath } from '@utils/core';
 import { truncatedHexId } from '@utils/core/idHash';
 import { isPathWithin } from '@utils/core/pathCore';
 import { sanitizePathSegment } from '@utils/text/sanitizePathSegment';
@@ -53,7 +54,7 @@ export function resolveWorkspaceStoragePath(
 export function resolveMemoryStoragePath(
   storagePath: string = MEMORY_STORAGE_DIR,
 ): string {
-  const normalized = posix.normalize(storagePath.replaceAll('\\', '/'));
+  const normalized = posix.normalize(normalizeFilePath(storagePath));
   if (
     normalized !== MEMORY_STORAGE_DIR &&
     !normalized.startsWith(`${MEMORY_STORAGE_DIR}/`)
@@ -83,9 +84,7 @@ export function resolveRunStorageRelativePath(
   runDirectory: string,
 ): string | undefined {
   if (!isPathWithin(runDirectory, absolutePath)) return undefined;
-  return (
-    relative(runDirectory, absolutePath).replaceAll('\\', '/') || undefined
-  );
+  return normalizeFilePath(relative(runDirectory, absolutePath)) || undefined;
 }
 
 export class WorkspaceStorageProvider {
