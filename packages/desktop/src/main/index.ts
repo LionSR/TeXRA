@@ -1966,7 +1966,6 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
                 ...platformInit.processRoots,
                 secrets: platformInit.secrets,
               },
-              runtime,
             }),
           );
           // Reopen every folder left open last time and show the one shown
