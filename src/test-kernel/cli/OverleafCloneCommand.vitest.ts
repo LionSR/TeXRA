@@ -31,9 +31,10 @@ vi.mock('execa', () => ({ execa: mocks.execa }));
 // the only entry these tests reach, so the omit shape is the only one.
 vi.mock('@cli/runtime/cliProcessRuntime', async () => {
   const { testRuntime } = await import('@test/support/testProcessRuntime');
+  const { Effect: EffectModule } = await import('effect');
   return {
     installCliProcessRuntime: () => Promise.resolve(testRuntime()),
-    disposeCliProcessRuntime: () => Promise.resolve(),
+    disposeCliProcessRuntime: EffectModule.void,
   };
 });
 

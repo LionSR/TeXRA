@@ -140,20 +140,30 @@ export const SHUTDOWN_PHASE = {
 export type ShutdownPhase =
   (typeof SHUTDOWN_PHASE)[keyof typeof SHUTDOWN_PHASE];
 
+/**
+ * One registered shutdown handler: the program the drain runs at its phase,
+ * not a callback it calls. A failure is reported to the drain's `onError`,
+ * which is why the channel is open here: the drain is the boundary that
+ * reports it, and no caller of `runShutdown` adopts it.
+ */
+export type ShutdownHandler = Effect.Effect<void, unknown>;
+
 export interface LifecycleHost {
   /**
-   * Register a shutdown handler. `signal` fires at the phase's
-   * join-with-deadline: a handler that can be safely cut short should race it
-   * and settle; the drain aborts-then-advances past any handler that has not
-   * settled shortly after the deadline.
+   * Register a shutdown handler. The phase's join-with-deadline is fiber
+   * interruption: a handler still running at the deadline is interrupted and
+   * the drain advances past it, so a handler that can be safely cut short
+   * needs nothing of its own, and one whose work must outlast the deadline
+   * says so with `Effect.uninterruptible`.
    */
-  onShutdown(
-    phase: ShutdownPhase,
-    callback: (signal: AbortSignal) => void | Promise<void>,
-  ): Disposable;
-  runShutdown(): Promise<void>;
+  onShutdown(phase: ShutdownPhase, handler: ShutdownHandler): Disposable;
   /**
-   * True from the moment `runShutdown()` is first called. Each phase drains
+   * Drain both phases, once: concurrent callers join the drain in flight
+   * rather than starting a second one.
+   */
+  readonly runShutdown: Effect.Effect<void>;
+  /**
+   * True from the moment `runShutdown` is first run. Each phase drains
    * exactly once and the drain is cached, so a handler registered from here
    * on is never run: a caller whose cleanup depends on this path must read
    * this before taking a resource it would register here.

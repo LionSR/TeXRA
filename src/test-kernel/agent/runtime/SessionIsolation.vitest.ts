@@ -147,7 +147,7 @@ describe('session isolation', () => {
         // Each session claims runs in its own root: paper B never holds
         // paper A's run.
         expect(yield* sessionB.ownsRun('a0da01' as RunId)).toBe(false);
-        yield* settleLiveSessionRuns(new AbortController().signal);
+        yield* settleLiveSessionRuns;
         for (const [index, [, runId]] of live.entries()) {
           expect(closures[index]).toHaveBeenCalledWith(runId, {
             type: 'stage.end',

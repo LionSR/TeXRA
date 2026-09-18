@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { LifecycleHost } from '@platform/interfaces';
@@ -30,10 +31,10 @@ function fakeLifecycle(runShutdown: () => Promise<void>): LifecycleHost {
   let shutdownRan = false;
   return {
     onShutdown: vi.fn(() => ({ dispose: vi.fn() })),
-    runShutdown: () => {
+    runShutdown: Effect.suspend(() => {
       shutdownRan = true;
-      return runShutdown();
-    },
+      return Effect.promise(runShutdown);
+    }),
     get shutdownRan() {
       return shutdownRan;
     },

@@ -42,7 +42,7 @@ const mocks = vi.hoisted(() => ({
     abandoned: [] as string[],
   })),
   detachEvents: vi.fn(),
-  disposeRuntime: vi.fn(async () => {}),
+  disposeRuntime: vi.fn(() => Effect.void),
   runId: 'ae0001',
   /** Fails the package session's fold, as a fold defect ends its view. */
   foldDeath: undefined as Deferred.Deferred<never, Error> | undefined,
@@ -66,8 +66,8 @@ const mocks = vi.hoisted(() => ({
   /** What the package registered on the embedder's shutdown path. */
   shutdownHooks: undefined as
     | {
-        readonly flushArtifacts: () => void | Promise<void>;
-        readonly afterRunSettlement?: readonly (() => unknown)[];
+        readonly flushArtifacts: Effect.Effect<void, unknown>;
+        readonly afterRunSettlement?: readonly Effect.Effect<void, unknown>[];
       }
     | undefined,
   subscribe: vi.fn((listener: (event: unknown) => void) => {
@@ -171,10 +171,15 @@ vi.mock('@agent/runtime', async () => {
   };
 });
 
-vi.mock('@controllers/session/sessionLayer', () => ({
-  disposeProcessRuntime: mocks.disposeRuntime,
-  installProcessRuntime: mocks.installRuntime,
-}));
+vi.mock('@controllers/session/sessionLayer', async () => {
+  const { Effect: effect } = await import('effect');
+  return {
+    // The double records when the disposal runs, not when the composition
+    // builds it: `disposeProcessRuntime` answers a program now.
+    disposeProcessRuntime: () => effect.suspend(() => mocks.disposeRuntime()),
+    installProcessRuntime: mocks.installRuntime,
+  };
+});
 
 vi.mock('@tools/agentCliSessionStores', () => ({
   registerRuntimeShutdownHandlers: (
@@ -295,9 +300,11 @@ describe('agent package run lifecycle', () => {
   beforeEach(async () => {
     // The package's session and runtime go on the embedder's shutdown path,
     // as the package registered it: each test starts with neither.
-    await mocks.shutdownHooks?.flushArtifacts();
-    for (const handler of mocks.shutdownHooks?.afterRunSettlement ?? []) {
-      await handler();
+    if (mocks.shutdownHooks) {
+      await Effect.runPromise(mocks.shutdownHooks.flushArtifacts);
+      for (const handler of mocks.shutdownHooks.afterRunSettlement ?? []) {
+        await Effect.runPromise(handler);
+      }
     }
     mocks.shutdownHooks = undefined;
     LIFECYCLE.shutdownRan = false;
@@ -314,9 +321,11 @@ describe('agent package run lifecycle', () => {
       mocks.ownerRuntime = testRuntime();
       return mocks.ownerRuntime;
     });
-    mocks.disposeRuntime.mockImplementation(async () => {
-      mocks.ownerRuntime = undefined;
-    });
+    mocks.disposeRuntime.mockImplementation(() =>
+      Effect.sync(() => {
+        mocks.ownerRuntime = undefined;
+      }),
+    );
     mocks.foldDeath = Effect.runSync(Deferred.make<never, Error>());
     mocks.loadAgents.mockReturnValue(Effect.void);
     mocks.getRunHandle.mockReturnValue(undefined);
@@ -443,12 +452,12 @@ describe('agent package run lifecycle', () => {
 
     const hooks = mocks.shutdownHooks;
     expect(hooks).toBeDefined();
-    await hooks?.flushArtifacts();
+    if (hooks) await Effect.runPromise(hooks.flushArtifacts);
     expect(mocks.closeSession).toHaveBeenCalledExactlyOnceWith(
       PLATFORM.roots.storage,
     );
     for (const handler of hooks?.afterRunSettlement ?? []) {
-      await handler();
+      await Effect.runPromise(handler);
     }
     expect(mocks.disposeRuntime).toHaveBeenCalledOnce();
     const [closeOrder] = mocks.closeSession.mock.invocationCallOrder;

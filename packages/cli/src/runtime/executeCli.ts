@@ -19,7 +19,10 @@ import { AgentError } from '@common/errors';
 import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
 import { hasErrorPresentationClaimed } from '@common/errors/sdkError/errorMetadata';
 import { SHUTDOWN_PHASE, type LifecycleHost } from '@platform/interfaces';
-import type { ProcessRuntime } from '@platform/processRuntime';
+import {
+  withProcessServices,
+  type ProcessRuntime,
+} from '@platform/processRuntime';
 import {
   RUN_OUTCOME,
   type RunEndOutput,
@@ -31,7 +34,7 @@ import {
   type SessionOpenError,
 } from '@shared/session/database';
 import { getDefaultUnavailableToolNames } from '@tools/registry';
-import { aggregateError, generateRunId, onAbort } from '@utils/core';
+import { aggregateError, generateRunId } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 import { warnApprovalDenied } from './approval/approvalPrompts';
@@ -433,7 +436,7 @@ export function executeCliRequest(
     );
     const disposeShutdownStatus = options.lifecycle.onShutdown(
       SHUTDOWN_PHASE.BEFORE,
-      async (shutdownDeadline) => {
+      Effect.gen(function* () {
         shutdownRequested = true;
         // Paired with tryCommitWorkflowOutputPublication: keep this read of
         // launchVerdict and the assignment below in one synchronous turn.
@@ -457,9 +460,10 @@ export function executeCliRequest(
         }
         const interruptedRunId =
           launchVerdict.kind === 'interrupted' ? ownedRunId : undefined;
-        // Everything the handler still has to wait for is one program on the
-        // process runtime; only the verdict turn above is synchronous.
-        await options.runtime.runPromise(
+        // Everything the handler still has to wait for is one program over
+        // the process services; only the verdict turn above is synchronous.
+        yield* withProcessServices(
+          options.runtime,
           Effect.gen(function* () {
             if (stop) yield* stop.settlement;
             let resumableCheckpoint:
@@ -483,29 +487,26 @@ export function executeCliRequest(
             // lease release. A provider or filesystem operation outside our
             // abortable boundaries must not prevent termination indefinitely
             // before recovery is known to be possible: the lifecycle host's
-            // phase deadline (`shutdownDeadline`) bounds this wait. Once
+            // phase deadline bounds this wait by interrupting it. Once
             // durable resumability and lease availability have been
             // established, however, keep shutdown alive until the promised
-            // recovery notice has been flushed.
+            // recovery notice has been flushed — that wait is uninterruptible
+            // precisely because it outranks the deadline.
             if (
               resumableCheckpoint &&
               (options.canAdvertiseInterruptedRun?.(resumableCheckpoint) ??
                 true) &&
               options.onInterruptedRunFinalized
             ) {
-              yield* Deferred.await(shutdownFinalizationDone);
+              yield* Effect.uninterruptible(
+                Deferred.await(shutdownFinalizationDone),
+              );
               return;
             }
             const first = yield* Effect.raceAll([
               Deferred.await(shutdownFinalizationDone).pipe(
                 Effect.as('finalized' as const),
               ),
-              Effect.callback<'deadline'>((resume) => {
-                const detach = onAbort(shutdownDeadline, () =>
-                  resume(Effect.succeed('deadline' as const)),
-                );
-                return Effect.sync(detach);
-              }),
               ...(options.onInterruptedRunFinalized
                 ? [
                     Deferred.await(recoveryNoticeStarted).pipe(
@@ -515,11 +516,13 @@ export function executeCliRequest(
                 : []),
             ]);
             if (first === 'recovery-started') {
-              yield* Deferred.await(shutdownFinalizationDone);
+              yield* Effect.uninterruptible(
+                Deferred.await(shutdownFinalizationDone),
+              );
             }
           }),
         );
-      },
+      }),
     );
     const openWorkflowOutput = options.openWorkflowOutput;
     const invoke = (): ReturnType<typeof runAgent> =>

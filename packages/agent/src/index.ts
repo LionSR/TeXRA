@@ -48,11 +48,9 @@ import type { Sessions, SessionView } from './effect/sessions.js';
  * below runs on Effect's own runtime rather than borrowing the process
  * runtime the composition installs. That is what lets `closeSession`
  * answer for a process no run has initialized, and for one whose shutdown
- * has already disposed that runtime, exactly as its contract says. The one
- * exception is the shutdown settlement, which is the session owner's own
- * program: it runs on the runtime this entry's composition handed back
- * (`ProcessHold.processRuntime`), which is the runtime those sessions were
- * built on.
+ * has already disposed that runtime, exactly as its contract says. The
+ * shutdown handlers this entry registers are programs, not runs, so they
+ * settle on whichever fiber drains the embedder's lifecycle.
  */
 
 export type { AgentEvent } from '@agent/trace';
@@ -192,15 +190,13 @@ function agentServices(
   const sessions = hold.sessions;
   composition = { platform, sessions };
   registerRuntimeShutdownHandlers(platform.lifecycle, {
-    runSettlement: (settlement) => hold.processRuntime.runPromise(settlement),
-    flushArtifacts: async (signal) => {
-      await Effect.runPromise(sessions.close(platform.roots, signal));
-    },
+    // No signal: the phase's own deadline bounds this close by interrupting
+    // it, and the close's internal budget is the same phase deadline.
+    flushArtifacts: Effect.asVoid(sessions.close(platform.roots)),
     afterRunSettlement: [
-      async () => {
+      Effect.sync(() => {
         composition = undefined;
-        await Effect.runPromise(hold.release);
-      },
+      }).pipe(Effect.andThen(hold.release)),
     ],
   });
   return sessions;
@@ -215,7 +211,7 @@ function agentServices(
  * live when the budget ran out, and the session stays open, refusing new
  * runs, until they end. A root with no open session reports `settled`, as
  * does a process no run has initialized. The embedder's shutdown path
- * (`lifecycle.runShutdown()`) closes the platform's session this way, under
+ * (`lifecycle.runShutdown`) closes the platform's session this way, under
  * its phase budget; call it directly to close a root before that, or to
  * close one of several roots one platform opened.
  */

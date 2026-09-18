@@ -1193,19 +1193,28 @@ export function installProcessRuntime({
  * (`SessionHandle.settlePublications`), on the releasing fiber.
  *
  * Idempotent and safe to race: a second call joins the disposal already in
- * flight rather than starting another. The extension's shutdown path calls
- * it from a `finally` and permits a later shutdown, so both happen.
+ * flight rather than starting another. The extension's shutdown path runs it
+ * as a finalizer (`Effect.ensuring`) and permits a later shutdown, so both
+ * happen.
  */
-let disposal: Promise<void> | null = null;
+let disposal: Effect.Effect<void> | undefined;
 
-export function disposeProcessRuntime(runtime: ProcessRuntime): Promise<void> {
-  if (disposal) return disposal;
-  initSessionOwner(undefined);
-  disposal = runtime
-    .dispose()
-    .finally(() => {
-      disposal = null;
-    })
-    .then(() => undefined);
-  return disposal;
+export function disposeProcessRuntime(
+  runtime: ProcessRuntime,
+): Effect.Effect<void> {
+  return Effect.suspend(() => {
+    if (disposal) return disposal;
+    initSessionOwner(undefined);
+    // What a racing caller joins: the disposal in flight, not a second one.
+    const joined = Deferred.makeUnsafe<void>();
+    disposal = Deferred.await(joined);
+    return runtime.disposeEffect.pipe(
+      Effect.onExit((exit) =>
+        Effect.sync(() => {
+          disposal = undefined;
+          Deferred.doneUnsafe(joined, exit);
+        }),
+      ),
+    );
+  });
 }

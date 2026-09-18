@@ -9,7 +9,10 @@ import { openAppStateStore } from '@controllers/session/appStateStore';
 import { installProcessRuntime } from '@controllers/session/sessionLayer';
 import { NotificationFailed } from '@hosts/uiHosts';
 import { initPlatform } from '@platform/platform';
-import type { ProcessRuntime } from '@platform/processRuntime';
+import {
+  withProcessServices,
+  type ProcessRuntime,
+} from '@platform/processRuntime';
 import {
   initProcessWorkspaceRoots,
   type WorkspaceRoots,
@@ -242,8 +245,9 @@ export async function initializeElectronPlatform(
   await runtime.runPromise(
     UsageLogService.initialize(runtime.scope, {}, app.getVersion(), 'desktop'),
   );
-  lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () =>
-    runtime.runPromise(UsageLogService.dispose()),
+  lifecycle.onShutdown(
+    SHUTDOWN_PHASE.BEFORE,
+    withProcessServices(runtime, UsageLogService.dispose()),
   );
 
   // Seed first-install defaults (e.g. disabled tools). No-ops once

@@ -98,7 +98,7 @@ export interface DesktopProjectRegistry {
   summary(): Omit<DesktopProjectsMessage, 'command'>;
   /** Fires after a project opens or closes, or the active project changes. */
   onChange(listener: () => void): () => void;
-  flushArtifacts(): Promise<void>;
+  flushArtifacts(): Effect.Effect<void, Error>;
   /** Dispose every session, the most recently opened first, then the
    *  no-workspace session. */
   dispose(): Effect.Effect<void>;
@@ -363,11 +363,11 @@ export function openDesktopProjectRegistry(
           listeners.delete(listener);
         };
       },
-      async flushArtifacts() {
-        const failures: string[] = [];
-        for (const project of [fallback, ...projects.values()]) {
-          await options.runtime.runPromise(
-            project.session.settlePublications().pipe(
+      flushArtifacts: () =>
+        Effect.gen(function* () {
+          const failures: string[] = [];
+          for (const project of [fallback, ...projects.values()]) {
+            yield* project.session.settlePublications().pipe(
               Effect.catch((error) =>
                 Effect.sync(() => {
                   failures.push(
@@ -375,14 +375,15 @@ export function openDesktopProjectRegistry(
                   );
                 }),
               ),
-            ),
-          );
-        }
-        if (failures.length > 0)
-          throw new Error(
-            `Failed to flush desktop session artifacts: ${failures.join('; ')}`,
-          );
-      },
+            );
+          }
+          if (failures.length > 0)
+            return yield* Effect.fail(
+              new Error(
+                `Failed to flush desktop session artifacts: ${failures.join('; ')}`,
+              ),
+            );
+        }),
       dispose: () =>
         [...projects.values()]
           .toReversed()

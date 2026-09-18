@@ -41,12 +41,14 @@ describe('agent shutdown', () => {
     try {
       const lifecycle = createLifecycleHost();
       registerRuntimeShutdownHandlers(lifecycle, {
-        runSettlement: (settlement) => Effect.runPromise(settlement),
-        flushArtifacts: () => {},
+        flushArtifacts: Effect.void,
       });
 
-      await Promise.all([lifecycle.runShutdown(), lifecycle.runShutdown()]);
-      await lifecycle.runShutdown();
+      await Promise.all([
+        Effect.runPromise(lifecycle.runShutdown),
+        Effect.runPromise(lifecycle.runShutdown),
+      ]);
+      await Effect.runPromise(lifecycle.runShutdown);
 
       expect(firstDrain).toHaveBeenCalledOnce();
       expect(secondDrain).toHaveBeenCalledOnce();
@@ -69,15 +71,32 @@ describe('agent shutdown', () => {
     try {
       const lifecycle = createLifecycleHost();
       registerRuntimeShutdownHandlers(lifecycle, {
-        runSettlement: (settlement) => Effect.runPromise(settlement),
-        beforeAgentShutdown: [() => void order.push('before-agent')],
-        afterAgentShutdown: [() => void order.push('after-agent')],
-        flushArtifacts: () => void order.push('flush'),
-        afterFlushArtifacts: [() => void order.push('after-flush')],
-        afterRunSettlement: [() => void order.push('after-settle')],
+        beforeAgentShutdown: [
+          Effect.sync(() => {
+            order.push('before-agent');
+          }),
+        ],
+        afterAgentShutdown: [
+          Effect.sync(() => {
+            order.push('after-agent');
+          }),
+        ],
+        flushArtifacts: Effect.sync(() => {
+          order.push('flush');
+        }),
+        afterFlushArtifacts: [
+          Effect.sync(() => {
+            order.push('after-flush');
+          }),
+        ],
+        afterRunSettlement: [
+          Effect.sync(() => {
+            order.push('after-settle');
+          }),
+        ],
       });
 
-      await lifecycle.runShutdown();
+      await Effect.runPromise(lifecycle.runShutdown);
 
       expect(order).toEqual([
         'before-agent',

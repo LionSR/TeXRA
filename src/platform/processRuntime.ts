@@ -65,6 +65,25 @@ export type ProcessRuntime = ManagedRuntime.ManagedRuntime<
 >;
 
 /**
+ * `effect` over this runtime's services, as a program rather than a run: a
+ * composition root hands the process services to a program it must give away
+ * — a shutdown handler, a host callback typed as an Effect — without
+ * stepping through a Promise to get them. The services are the runtime's own
+ * context, built once and cached there, so this is the same provision
+ * `runPromise` would have made, minus the boundary.
+ */
+export function withProcessServices<A, E>(
+  // Not named `runtime`: the migration ratchet pins this file's one approved
+  // `runtime` binding to `withForkFailureReporting`'s parameter.
+  processRuntime: ProcessRuntime,
+  effect: Effect.Effect<A, E, ProcessServices>,
+): Effect.Effect<A, E> {
+  return Effect.flatMap(processRuntime.contextEffect, (context) =>
+    Effect.provide(effect, context),
+  );
+}
+
+/**
  * A runtime whose `runFork` reports a fiber's failure or defect on exit
  * (#12613). `Fiber.addObserver` fires on every exit, including fibers a
  * caller later `Fiber.join`s, so a joined failure is logged here and still

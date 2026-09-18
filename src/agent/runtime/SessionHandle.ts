@@ -1307,21 +1307,16 @@ export function forEachLiveSession(
  * A driver that writes a different outcome after this settlement remains a
  * separate lifecycle race; keepExistingOutcome only protects earlier writes.
  *
- * The caller's phase deadline bounds the drain. An expired deadline is logged
- * for each skipped run and checked again after its outcome write.
+ * The caller's phase deadline bounds the drain by interrupting it: the run
+ * whose settlement was cut short is named on the way out, and the runs behind
+ * it never start.
  */
-export const settleLiveSessionRuns = Effect.fn('settleLiveSessionRuns')(
-  function* (signal: AbortSignal) {
+export const settleLiveSessionRuns: Effect.Effect<void> = Effect.gen(
+  function* () {
     const pending = heldSessions().flatMap((session) =>
       session.runs.getActiveIds().map((runId) => ({ session, runId })),
     );
     for (const { session, runId } of pending) {
-      if (signal.aborted) {
-        logger.warn(
-          `Host exit deadline passed before run ${runId} could settle`,
-        );
-        continue;
-      }
       const settlement = Effect.gen(function* () {
         if (!(yield* session.ownsRun(runId))) return;
         const tracked = session.runs.getHandle(runId) !== undefined;
@@ -1343,12 +1338,6 @@ export const settleLiveSessionRuns = Effect.fn('settleLiveSessionRuns')(
           outcome: RunOutcome,
         ): Effect.Effect<Error | undefined> =>
           Effect.gen(function* () {
-            if (signal.aborted) {
-              logger.warn(
-                `Host exit deadline passed before run ${runId}'s transcript groups could be closed; they stay open`,
-              );
-              return undefined;
-            }
             if (!tracked) {
               logger.warn(
                 `Run ${runId} was untracked while the host exit settled it; any transcript groups it left open stay open`,
@@ -1438,18 +1427,30 @@ export const settleLiveSessionRuns = Effect.fn('settleLiveSessionRuns')(
       });
       yield* settlement.pipe(
         Effect.scoped,
-        Effect.catchCause((cause) =>
+        // The caller's deadline arrives as an interrupt. Name the run it cut
+        // short, then let it through: the runs behind this one are abandoned
+        // by the same deadline rather than walked past as if each had failed.
+        Effect.onInterrupt(() =>
           Effect.sync(() => {
             logger.warn(
-              `Failed to settle run ${runId} at host exit; a later launch classifies it from its checkpoint`,
-              { data: Cause.squash(cause) },
+              `Host exit deadline passed before run ${runId} could settle`,
             );
           }),
+        ),
+        Effect.catchCause((cause) =>
+          Cause.hasInterrupts(cause)
+            ? Effect.interrupt
+            : Effect.sync(() => {
+                logger.warn(
+                  `Failed to settle run ${runId} at host exit; a later launch classifies it from its checkpoint`,
+                  { data: Cause.squash(cause) },
+                );
+              }),
         ),
       );
     }
   },
-);
+).pipe(Effect.withSpan('settleLiveSessionRuns'));
 
 /**
  * Open the process-default session, the session of the process roots, after

@@ -576,8 +576,9 @@ export abstract class PollingSourceBase<
     const lifecycle = platform().lifecycle;
     if (this.shutdownLifecycle === lifecycle) return;
     this.clearShutdownRegistration();
-    this.shutdownRegistration = lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () =>
-      this.disposeAll(),
+    this.shutdownRegistration = lifecycle.onShutdown(
+      SHUTDOWN_PHASE.ON,
+      Effect.sync(() => this.disposeAll()),
     );
     this.shutdownLifecycle = lifecycle;
   }

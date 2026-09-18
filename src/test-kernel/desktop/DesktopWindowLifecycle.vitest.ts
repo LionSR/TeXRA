@@ -1,5 +1,6 @@
 import { EventEmitter } from 'node:events';
 
+import { Effect } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
@@ -76,9 +77,10 @@ describe('desktop window lifecycle', () => {
       isDestroyed: () => false,
     };
     const sequence: string[] = [];
-    const runShutdown = vi.fn(async () => {
+    const ranShutdown = vi.fn(() => {
       sequence.push('shutdown');
     });
+    const runShutdown = Effect.sync(ranShutdown);
     let continueQuit: (() => void) | undefined;
     const continueAfterWindowClose = vi.fn((continuation: () => void) => {
       continueQuit = continuation;
@@ -94,19 +96,19 @@ describe('desktop window lifecycle', () => {
     expect(first.preventDefault).toHaveBeenCalledOnce();
     expect(close).toHaveBeenCalledOnce();
     expect(continueAfterWindowClose).toHaveBeenCalledOnce();
-    expect(runShutdown).not.toHaveBeenCalled();
+    expect(ranShutdown).not.toHaveBeenCalled();
 
     window = null;
     continueQuit?.();
     const second = { preventDefault: vi.fn() };
     listener?.(second);
-    await vi.waitFor(() => expect(runShutdown).toHaveBeenCalledOnce());
+    await vi.waitFor(() => expect(ranShutdown).toHaveBeenCalledOnce());
     expect(second.preventDefault).toHaveBeenCalledOnce();
     expect(app.quit).toHaveBeenCalledTimes(2);
     expect(sequence).toEqual(['shutdown']);
 
     listener?.({ preventDefault: vi.fn() });
-    expect(runShutdown).toHaveBeenCalledOnce();
+    expect(ranShutdown).toHaveBeenCalledOnce();
     expect(app.quit).toHaveBeenCalledTimes(2);
   });
 });

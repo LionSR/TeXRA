@@ -746,8 +746,8 @@ describe('executeCliRequest', () => {
   );
 
   // it.live for the shutdown choreography below: the run is forked in-fiber,
-  // but runShutdown drives the lifecycle host's raw-setTimeout deadline and its
-  // handler settles on the process runtime.
+  // but runShutdown drives the lifecycle host's real-clock phase deadline and
+  // its handler settles on the process runtime.
   it.live.each([
     { label: 'fresh', kind: 'fresh' },
     { label: 'resumed', kind: 'resume' },
@@ -786,7 +786,7 @@ describe('executeCliRequest', () => {
         // rest of the stub (the tracked launch handle) run first.
         yield* settle;
         expect(leaseOptions.onRunLeaseAcquired).toBeDefined();
-        const shutdown = platform.lifecycle.runShutdown();
+        const shutdown = Effect.runPromise(platform.lifecycle.runShutdown);
         yield* settle;
         expect(mocks.finalizeRun).not.toHaveBeenCalled();
         leaseOptions.onRunLeaseAcquired?.('exec-1' as RunId);
@@ -866,7 +866,7 @@ describe('executeCliRequest', () => {
         const leaseOptions = yield* Deferred.await(published);
         yield* settle;
         expect(leaseOptions.onRunLeaseAcquired).toBeDefined();
-        const shutdown = platform.lifecycle.runShutdown();
+        const shutdown = Effect.runPromise(platform.lifecycle.runShutdown);
         leaseOptions.onRunLeaseAcquired?.('exec-1' as RunId);
         mockCancelledOutcome();
         hangingRun.resolve(COMPLETED_RUN);
@@ -902,7 +902,7 @@ describe('executeCliRequest', () => {
       yield* settle;
       expect(leaseOptions).toBeDefined();
       leaseOptions.onRunLeaseAcquired?.('exec-1' as RunId);
-      const shutdown = platform.lifecycle.runShutdown();
+      const shutdown = Effect.runPromise(platform.lifecycle.runShutdown);
 
       expect(
         yield* Effect.flip(leaseOptions.beforeLeaseRelease?.() ?? Effect.void),
@@ -957,7 +957,7 @@ describe('executeCliRequest', () => {
         const launchHandle = yield* Deferred.await(launch);
         yield* settle;
 
-        yield* Effect.promise(() => platform.lifecycle.runShutdown());
+        yield* platform.lifecycle.runShutdown;
         expect(yield* Fiber.join(run)).toEqual({
           ok: false,
           exitCode: CliExitCode.Interrupted,
@@ -988,7 +988,7 @@ describe('executeCliRequest', () => {
         expect(leaseOptions).toBeDefined();
         leaseOptions.onRunLeaseAcquired?.('exec-1' as RunId);
 
-        const shutdown = platform.lifecycle.runShutdown();
+        const shutdown = Effect.runPromise(platform.lifecycle.runShutdown);
         hangingRun.resolve(COMPLETED_RUN);
         yield* Effect.promise(() => shutdown);
         yield* Fiber.join(run);
@@ -1024,7 +1024,7 @@ describe('executeCliRequest', () => {
         yield* settle;
         expect(leaseOptions).toBeDefined();
 
-        const shutdown = platform.lifecycle.runShutdown();
+        const shutdown = Effect.runPromise(platform.lifecycle.runShutdown);
         leaseOptions.onRunLeaseAcquired?.('exec-1' as RunId);
         yield* settle;
         yield* leaseOptions.openWorkflowOutput?.(COMPLETED_WORKFLOW_RUN, []) ??
@@ -1078,7 +1078,7 @@ describe('executeCliRequest', () => {
         yield* leaseOptions.openWorkflowOutput?.(COMPLETED_WORKFLOW_RUN, []) ??
           Effect.void;
 
-        const shutdown = platform.lifecycle.runShutdown();
+        const shutdown = Effect.runPromise(platform.lifecycle.runShutdown);
         hangingRun.resolve(COMPLETED_WORKFLOW_RUN);
 
         yield* Effect.promise(() => shutdown);
@@ -1155,7 +1155,7 @@ describe('executeCliRequest', () => {
         yield* Deferred.await(outputFailed);
         yield* settle;
         expect(outputResolutionFailed).toBe(true);
-        const shutdown = platform.lifecycle.runShutdown();
+        const shutdown = Effect.runPromise(platform.lifecycle.runShutdown);
         yield* settle;
         expect(killSpy).not.toHaveBeenCalled();
 
@@ -1205,7 +1205,7 @@ describe('executeCliRequest', () => {
         yield* settle;
         expect(leaseOptions).toBeDefined();
         leaseOptions.onRunLeaseAcquired?.('exec-1' as RunId);
-        const shutdown = platform.lifecycle.runShutdown();
+        const shutdown = Effect.runPromise(platform.lifecycle.runShutdown);
 
         expect(yield* leaseOptions.beforeLeaseRelease?.() ?? Effect.void).toBe(
           false,
@@ -1244,7 +1244,7 @@ describe('executeCliRequest', () => {
       yield* settle;
       expect(mocks.runAgent).toHaveBeenCalledOnce();
       leaseOptions.onRunLeaseAcquired?.('exec-1' as RunId);
-      const shutdown = platform.lifecycle.runShutdown();
+      const shutdown = Effect.runPromise(platform.lifecycle.runShutdown);
       yield* settle;
       expect(mocks.emit).not.toHaveBeenCalled();
       mockCancelledOutcome();
@@ -1280,7 +1280,7 @@ describe('executeCliRequest', () => {
 
       yield* executeCliRequest(request, cliContext(), {});
       mocks.finalizeRun.mockClear();
-      yield* Effect.promise(() => platform.lifecycle.runShutdown());
+      yield* platform.lifecycle.runShutdown;
 
       expect(mocks.finalizeRun).not.toHaveBeenCalled();
     }),
@@ -1319,7 +1319,7 @@ describe('executeCliConfig', () => {
     });
 
   // it.live for the two shutdown tests below: the run is forked in-fiber, but
-  // runShutdown drives the lifecycle host's raw-setTimeout deadline and its
+  // runShutdown drives the lifecycle host's real-clock phase deadline and its
   // handler settles on the process runtime.
   it.live(
     'prints a complete resume command after interrupted tool-use recovery is available',
@@ -1358,7 +1358,7 @@ describe('executeCliConfig', () => {
         const leaseOptions = yield* Deferred.await(published);
         yield* settle;
         expect(leaseOptions.onRunLeaseAcquired).toBeDefined();
-        const shutdown = platform.lifecycle.runShutdown();
+        const shutdown = Effect.runPromise(platform.lifecycle.runShutdown);
         leaseOptions.onRunLeaseAcquired?.('exec-1' as RunId);
         mockCancelledOutcome();
         hangingRun.resolve(COMPLETED_RUN);
@@ -1404,7 +1404,7 @@ describe('executeCliConfig', () => {
         const leaseOptions = yield* Deferred.await(published);
         yield* settle;
         expect(leaseOptions.onRunLeaseAcquired).toBeDefined();
-        const shutdown = platform.lifecycle.runShutdown();
+        const shutdown = Effect.runPromise(platform.lifecycle.runShutdown);
         leaseOptions.onRunLeaseAcquired?.('exec-1' as RunId);
         mockCancelledOutcome();
         hangingRun.resolve(COMPLETED_RUN);

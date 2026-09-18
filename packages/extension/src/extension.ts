@@ -81,7 +81,10 @@ import {
 } from '@platform/interfaces';
 import { installLongRunningModelDispatcher } from '@platform/defaults/longRunningModelTransport';
 import { initPlatform, type Platform } from '@platform/platform';
-import type { ProcessRuntime } from '@platform/processRuntime';
+import {
+  withProcessServices,
+  type ProcessRuntime,
+} from '@platform/processRuntime';
 import {
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
   type LanguageModelPort,
@@ -165,7 +168,7 @@ class WorkspaceEnvFileUnreadable extends Data.TaggedError(
 
 let statusBarItem: vscode.StatusBarItem | undefined;
 let apiKeyStatusBarItem: vscode.StatusBarItem | undefined;
-// Re-instantiated on every activate(): runShutdown() trips an internal
+// Re-instantiated on every activate(): the drain trips an internal
 // idempotency flag, so a stale module-level instance would silently swallow
 // handlers registered by a second activate() in the same process.
 let lifecycleHost: LifecycleHost | undefined;
@@ -297,22 +300,31 @@ function shutdownExtension(): Promise<void> {
   if (extensionShutdownPromise) return extensionShutdownPromise;
 
   const host = lifecycleHost;
-  const shutdownPromise = (async () => {
-    try {
-      await host?.runShutdown();
-    } finally {
-      if (lifecycleHost === host) lifecycleHost = undefined;
-      // No runtime, no session was ever opened: an activation that failed
-      // before installing one has nothing to tear down here.
-      const runtime = processRuntime;
-      if (runtime) {
-        await runtime.runPromise(teardownDefaultSession());
-        // After the session: its graph releases on the runtime it runs on.
-        await disposeProcessRuntime(runtime);
-        if (processRuntime === runtime) processRuntime = undefined;
-      }
-    }
-  })();
+  // `deactivate` is this host's R1 entry: one run for the drain and the
+  // teardown that follows it however it ends. Not on the process runtime —
+  // this is the path that disposes it.
+  const shutdownPromise = Effect.runPromise(
+    (host?.runShutdown ?? Effect.void).pipe(
+      Effect.ensuring(
+        Effect.suspend(() => {
+          if (lifecycleHost === host) lifecycleHost = undefined;
+          // No runtime, no session was ever opened: an activation that failed
+          // before installing one has nothing to tear down here.
+          const runtime = processRuntime;
+          if (!runtime) return Effect.void;
+          return teardownDefaultSession().pipe(
+            // After the session: its graph releases on the runtime it ran on.
+            Effect.andThen(disposeProcessRuntime(runtime)),
+            Effect.andThen(
+              Effect.sync(() => {
+                if (processRuntime === runtime) processRuntime = undefined;
+              }),
+            ),
+          );
+        }),
+      ),
+    ),
+  );
   extensionShutdownPromise = shutdownPromise;
   const clearShutdownPromise = () => {
     if (extensionShutdownPromise === shutdownPromise) {
@@ -629,7 +641,10 @@ async function activateExtension(context: vscode.ExtensionContext) {
   const workspaceState = gitRepoRoot
     ? new WorktreeStateStore(workspaceMemento, globalState, gitRepoRoot)
     : workspaceMemento;
-  lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () => clearVscodeLeanServerEntries());
+  lifecycle.onShutdown(
+    SHUTDOWN_PHASE.ON,
+    Effect.sync(() => clearVscodeLeanServerEntries()),
+  );
   const languageModel = createLanguageModelPort(context);
   // Shared `~/.texra` storage root (one history across CLI/desktop/extension,
   // #8622).
@@ -692,14 +707,12 @@ async function activateExtension(context: vscode.ExtensionContext) {
   // `context.subscriptions` (see the push near the end of `activate`), matching
   // `apiKeyStatusBarItem`. Registering them here too would double-dispose.
   registerRuntimeShutdownHandlers(lifecycle, {
-    runSettlement: (settlement) => runtime.runPromise(settlement),
     afterAgentShutdown: [
-      () => runtime.runPromise(killActiveRecording()),
-      () => runtime.runPromise(UsageLogService.dispose()),
+      killActiveRecording(),
+      withProcessServices(runtime, UsageLogService.dispose()),
     ],
-    flushArtifacts: () =>
-      runtime.runPromise(runtimeSession.settlePublications()),
-    afterRunSettlement: [() => disposeDiffRefresh()],
+    flushArtifacts: runtimeSession.settlePublications(),
+    afterRunSettlement: [Effect.sync(() => disposeDiffRefresh())],
   });
   runtimeSession.setApprovalPolicy(
     readSettingFrom<TexraApprovalPolicy>(

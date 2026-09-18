@@ -17,9 +17,9 @@
  * process once per scope and provides both this service and `Sessions`,
  * with the scope as the lifetime of its hold. A Promise embedder's hold is
  * the one `packages/agent/src/index.ts` takes, released by
- * `lifecycle.runShutdown()`.
+ * `lifecycle.runShutdown`.
  */
-import { Context, Effect, Layer, type ManagedRuntime } from 'effect';
+import { Context, Effect, Layer } from 'effect';
 
 import {
   closeSession as closeOwnedSession,
@@ -121,17 +121,6 @@ const PACKAGE_SETUP: SetupPlatformShape = {
  *  end of its claim on what it found or installed. */
 export interface ProcessHold {
   readonly runtime: AgentRuntime;
-  /**
-   * The Effect runtime this composition installed, or the one it found a
-   * host had already installed. The package's Promise entry runs the
-   * shutdown settlement on it: that program is the session owner's, so it
-   * belongs on the owner's runtime rather than on a fresh default one, and
-   * the entry takes it from here instead of reading the process global.
-   *
-   * Typed by what is run on it -- programs that carry their own context --
-   * so the process service set stays out of this package's declarations.
-   */
-  readonly processRuntime: ManagedRuntime.ManagedRuntime<never, never>;
   readonly sessions: Context.Service.Shape<typeof Sessions>;
   /**
    * End this hold (R6). The last hold to end closes every session the owner
@@ -240,7 +229,6 @@ export function composeProcess(platform: AgentPlatform): ProcessHold {
   let held = true;
   return {
     runtime,
-    processRuntime,
     sessions,
     release: Effect.suspend(() => {
       if (!held) return Effect.void;
@@ -249,15 +237,9 @@ export function composeProcess(platform: AgentPlatform): ProcessHold {
       if (holds > 0 || !installedHere) return Effect.void;
       installedHere = false;
       return closeOwnedSessions().pipe(
-        // A faithful round trip, not a swallowed rejection:
-        // `ManagedRuntime.disposeEffect` is `Effect<void, never>` over
-        // `Scope.close`, so the only way `disposeProcessRuntime` rejects is a
-        // layer finalizer defecting, and re-raising that as a defect is what
-        // the release above says the embedder sees. The runtime is this
-        // composition's own local, not a read of what is installed now.
-        Effect.ensuring(
-          Effect.promise(() => disposeProcessRuntime(heldRuntime)),
-        ),
+        // The runtime is this composition's own local, not a read of what is
+        // installed now.
+        Effect.ensuring(disposeProcessRuntime(heldRuntime)),
       );
     }),
   };

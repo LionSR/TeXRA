@@ -71,9 +71,12 @@ const mocks = vi.hoisted(() => ({
   cliGlobalState: { get: vi.fn(), update: vi.fn() },
   tryPlatform: vi.fn(),
   publishPlatform: vi.fn(),
-  // Collects callbacks registered via the (mocked) lifecycle host's onShutdown
-  // so a test can run them and assert the usage-log dispose was wired.
-  shutdownHandlers: [] as Array<() => unknown>,
+  // Collects the programs registered via the (mocked) lifecycle host's
+  // onShutdown so a test can run them and assert the usage-log dispose was
+  // wired.
+  shutdownHandlers: [] as Array<Effect.Effect<void, unknown>>,
+  /** Records the usage-log dispose when its program runs. */
+  disposeUsageLog: vi.fn(),
 }));
 
 vi.mock('@cli/runtime/supabaseAuth', async () => {
@@ -131,13 +134,14 @@ vi.mock('@platform/defaults/nodeHost', () => ({
 }));
 
 // The two lifecycle arms are Effects the host runs, so the doubles answer
-// with one rather than `undefined`.
+// with one rather than `undefined`. `dispose` records when its program runs,
+// not when the host builds it: the shutdown registration holds the program.
 vi.mock('@telemetry/UsageLogService', async () => {
   const { Effect: effect } = await import('effect');
   return {
     UsageLogService: {
       initialize: vi.fn(() => effect.void),
-      dispose: vi.fn(() => effect.void),
+      dispose: () => effect.sync(mocks.disposeUsageLog),
     },
   };
 });
@@ -145,15 +149,18 @@ vi.mock('@telemetry/UsageLogService', async () => {
 // First-init dependencies: only exercised when tryPlatform() returns undefined.
 // Most cases keep tryPlatform truthy and skip this block, so these stubs are
 // inert there and only drive the "first init" tests below.
-vi.mock('@platform/defaults/lifecycleHost', () => ({
-  createLifecycleHost: () => ({
-    onShutdown: (_phase: unknown, callback: () => unknown) => {
-      mocks.shutdownHandlers.push(callback);
-      return { dispose: vi.fn() };
-    },
-    runShutdown: vi.fn(),
-  }),
-}));
+vi.mock('@platform/defaults/lifecycleHost', async () => {
+  const { Effect: effect } = await import('effect');
+  return {
+    createLifecycleHost: () => ({
+      onShutdown: (_phase: unknown, handler: Effect.Effect<void, unknown>) => {
+        mocks.shutdownHandlers.push(handler);
+        return { dispose: vi.fn() };
+      },
+      runShutdown: effect.void,
+    }),
+  };
+});
 
 vi.mock('@platform/defaults/nodeWorkspace', () => ({
   canonicalizeWorkspacePath: vi.fn((workspacePath: string) => workspacePath),
@@ -264,9 +271,10 @@ describe('CLI platform init', () => {
     );
 
     // The dispose handler must be registered on shutdown so queued entries flush.
-    expect(vi.mocked(UsageLogService.dispose)).not.toHaveBeenCalled();
-    for (const handler of mocks.shutdownHandlers) await handler();
-    expect(vi.mocked(UsageLogService.dispose)).toHaveBeenCalled();
+    expect(mocks.disposeUsageLog).not.toHaveBeenCalled();
+    for (const handler of mocks.shutdownHandlers)
+      await Effect.runPromise(handler);
+    expect(mocks.disposeUsageLog).toHaveBeenCalled();
   });
 
   it('retries after seed failure without publishing platform, session, or signals', async () => {
@@ -341,7 +349,8 @@ describe('CLI platform init', () => {
       // the CLI lifecycle host every exit path runs (bin/texra.ts's finally,
       // the signal handlers, the TUI's exitNow).
       expect(interruptCodex).not.toHaveBeenCalled();
-      for (const handler of mocks.shutdownHandlers) await handler();
+      for (const handler of mocks.shutdownHandlers)
+        await Effect.runPromise(handler);
       expect(interruptCodex).toHaveBeenCalledOnce();
       expect(interruptClaude).toHaveBeenCalledOnce();
     } finally {

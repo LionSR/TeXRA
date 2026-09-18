@@ -1,31 +1,31 @@
+import { Cause, Clock, Deferred, Effect, Option } from 'effect';
 import { createLog } from '@logger/logUtils';
-import { onAbort } from '@utils/core';
 import {
   SHUTDOWN_PHASE,
   type LifecycleHost,
+  type ShutdownHandler,
   type ShutdownPhase,
 } from '../interfaces';
 
 const log = createLog('LifecycleHost');
 
-type Callback = (signal: AbortSignal) => void | Promise<void>;
-
 /** One `onShutdown` call. Registrations are compared by entry identity, not by
- *  callback identity, so registering the same function twice yields two
+ *  handler identity, so registering the same program twice yields two
  *  independent entries and a Disposable can only remove its own. */
 interface Registration {
-  readonly callback: Callback;
+  readonly handler: ShutdownHandler;
 }
 
 /**
  * Join-with-deadline bound for one shutdown phase. A hung handler must not
  * wedge desktop quit, eat the extension's ~5s deactivate budget, or stall a
- * CLI SIGTERM indefinitely: at the deadline every handler's abort signal
- * fires, and the drain advances past a handler only after aborting it
- * (abort-then-advance), so a late BEFORE handler cannot race the ON phase's
- * disposals without having been told to stop first. The same budget bounds
- * an explicit session close (`Sessions.close`): one settlement deadline for
- * the process, not one per caller.
+ * CLI SIGTERM indefinitely: the phase's remaining budget bounds each handler,
+ * and a handler still running when it runs out is interrupted before the
+ * drain advances past it, so a late BEFORE handler cannot race the ON phase's
+ * disposals without having been told to stop first. A handler whose work must
+ * outlast the budget says so with `Effect.uninterruptible`. The same budget
+ * bounds an explicit session close (`Sessions.close`): one settlement
+ * deadline for the process, not one per caller.
  */
 export const SHUTDOWN_PHASE_DEADLINE_MS = 5_000;
 
@@ -40,7 +40,7 @@ export function createLifecycleHost(
     [SHUTDOWN_PHASE.BEFORE]: [],
     [SHUTDOWN_PHASE.ON]: [],
   };
-  let shutdownPromise: Promise<void> | undefined;
+  let drain: Effect.Effect<void> | undefined;
 
   const onError =
     options.onError ??
@@ -48,71 +48,49 @@ export function createLifecycleHost(
       log.error(`[lifecycle] ${phase} handler failed`, { data: error });
     });
 
-  // Abort-then-advance: wait for settlement, or for the deadline signal plus
-  // one macrotask for the handler to observe its abort and unwind; then report
-  // the laggard and advance without waiting further. The laggard keeps running
-  // detached; a late rejection still lands in `onError` via `tracked`.
-  async function joinWithDeadline(
-    phase: ShutdownPhase,
-    pending: Promise<void>,
-    signal: AbortSignal,
-  ): Promise<void> {
-    let settled = false;
-    const tracked = pending.then(
-      () => {
-        settled = true;
-      },
-      (error: unknown) => {
-        settled = true;
-        onError(phase, error);
-      },
-    );
-    await Promise.race([
-      tracked,
-      new Promise<void>((resolve) =>
-        onAbort(signal, () => setTimeout(resolve, 0)),
-      ),
-    ]);
-    if (!settled) {
-      onError(
-        phase,
-        new Error(
-          `Shutdown handler did not settle within ${SHUTDOWN_PHASE_DEADLINE_MS}ms; advancing without it`,
-        ),
-      );
-    }
-  }
-
   // Sequential — handlers within a phase run in registration order. Parallel
   // disposal can race (e.g. flushState writing to UsageLogService while it is
   // disposing); the old hand-rolled deactivate() relied on this ordering.
-  async function runPhase(phase: ShutdownPhase): Promise<void> {
-    const registrations = handlers[phase].splice(0);
-    if (registrations.length === 0) return;
-    const deadline = new AbortController();
-    // Deliberately not unref'd: this timer is what keeps the process alive to
-    // perform the orderly abort when a handler hangs on non-I/O work.
-    const timer = setTimeout(
-      () => deadline.abort(),
-      SHUTDOWN_PHASE_DEADLINE_MS,
-    );
-    try {
+  // One budget for the whole phase, spent down handler by handler: the
+  // timeout interrupts the handler in flight and reports it as a laggard,
+  // then the drain advances. A handler that starts with the budget already
+  // gone still gets the scheduler tick `Effect.sleep(0)` yields, which is
+  // what lets a synchronous disposal run on the way out.
+  const runPhase = (phase: ShutdownPhase): Effect.Effect<void> =>
+    Effect.gen(function* () {
+      const registrations = handlers[phase].splice(0);
+      if (registrations.length === 0) return;
+      const started = yield* Clock.currentTimeMillis;
       for (const registration of registrations) {
-        try {
-          const pending = registration.callback(deadline.signal);
-          if (pending) await joinWithDeadline(phase, pending, deadline.signal);
-        } catch (error) {
-          onError(phase, error);
+        const elapsed = (yield* Clock.currentTimeMillis) - started;
+        const settled = yield* Effect.timeoutOption(
+          registration.handler,
+          Math.max(SHUTDOWN_PHASE_DEADLINE_MS - elapsed, 0),
+        ).pipe(
+          // Outside the timeout: what reaches here is the handler's own
+          // failure or defect, never the interruption the timeout raises to
+          // cut it short.
+          Effect.catchCause((cause) =>
+            Effect.sync(() => {
+              onError(phase, Cause.squash(cause));
+              return Option.some<void>(undefined);
+            }),
+          ),
+        );
+        if (Option.isNone(settled)) {
+          onError(
+            phase,
+            new Error(
+              `Shutdown handler did not settle within ${SHUTDOWN_PHASE_DEADLINE_MS}ms; advancing without it`,
+            ),
+          );
         }
       }
-    } finally {
-      clearTimeout(timer);
-    }
-  }
+    });
 
   return {
-    onShutdown(phase, callback) {
-      const registration: Registration = { callback };
+    onShutdown(phase, handler) {
+      const registration: Registration = { handler };
       handlers[phase].push(registration);
       return {
         // Idempotent: once this entry is gone (disposed already, or drained by
@@ -123,20 +101,26 @@ export function createLifecycleHost(
         },
       };
     },
-    runShutdown() {
-      // Cache the in-flight promise so concurrent callers (e.g. a second
-      // before-quit firing during the first shutdown) await the same drain
-      // instead of getting an immediately-resolved noop.
-      shutdownPromise ??= (async () => {
-        await runPhase(SHUTDOWN_PHASE.BEFORE);
-        await runPhase(SHUTDOWN_PHASE.ON);
-      })();
-      return shutdownPromise;
-    },
+    // Cache the drain in flight so concurrent callers (e.g. a second
+    // before-quit firing during the first shutdown) join the same drain
+    // instead of getting an immediately-succeeding noop.
+    runShutdown: Effect.suspend(() => {
+      if (drain) return drain;
+      const joined = Deferred.makeUnsafe<void>();
+      drain = Deferred.await(joined);
+      return runPhase(SHUTDOWN_PHASE.BEFORE).pipe(
+        Effect.andThen(runPhase(SHUTDOWN_PHASE.ON)),
+        Effect.onExit((exit) =>
+          Effect.sync(() => {
+            Deferred.doneUnsafe(joined, exit);
+          }),
+        ),
+      );
+    }),
     // The cache above is also the answer: once a drain exists, the phases
     // have been spliced and a later registration has no drain of its own.
     get shutdownRan() {
-      return shutdownPromise !== undefined;
+      return drain !== undefined;
     },
   };
 }

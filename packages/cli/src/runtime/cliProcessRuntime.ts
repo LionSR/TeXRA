@@ -188,10 +188,16 @@ export function installCliProcessRuntime(
  * directly by the same root when a failed init must not leave the runtime
  * installed with nothing to dispose it.
  */
-export function disposeCliProcessRuntime(): Promise<void> {
-  const runtime = installedProcessRuntime();
-  if (!runtime) return Promise.resolve();
-  return disposeProcessRuntime(runtime).finally(() => {
-    setCliLogRuntime(null);
-  });
-}
+export const disposeCliProcessRuntime: Effect.Effect<void> = Effect.suspend(
+  () => {
+    const runtime = installedProcessRuntime();
+    if (!runtime) return Effect.void;
+    return disposeProcessRuntime(runtime).pipe(
+      Effect.ensuring(
+        Effect.sync(() => {
+          setCliLogRuntime(null);
+        }),
+      ),
+    );
+  },
+);
