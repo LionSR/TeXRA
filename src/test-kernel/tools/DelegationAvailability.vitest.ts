@@ -146,7 +146,6 @@ function resolveToolList(
       registry: delegationRegistry(tools),
       logger: { warn: () => {} },
       toolInjections: new ToolInjectionRegistry(),
-      settings: hostStores(),
       stores: hostStores(),
       inScope,
     });

@@ -35,7 +35,6 @@ import {
   type ModelOptionStores,
 } from '@model/computeModelOptions';
 import type { LanguageModel } from '@platform/languageModel';
-import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { AgentDelegationScope, ToolDefinition } from '@shared/schemas';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
 import { getDefaultToolRegistry } from '@tools/registry';
@@ -67,12 +66,10 @@ interface ResolveAgentToolsInput {
    * service, or a caller-owned list for a flow that injects its own.
    */
   toolInjections: ToolInjections['Service'];
-  /** The run's workspace settings slots, which the injections' predicates read. */
-  settings: SettingsStores;
   /**
-   * The process secret store and global state (`Secrets` / `AppState`): the
-   * user's disabled-tool set, and the provider keys behind the delegation
-   * roster's model availability.
+   * The run's stores: the session's three setting slots, which the injections'
+   * predicates and the user's disabled-tool set read, and the secret store
+   * behind the delegation roster's model availability.
    */
   stores: ModelOptionStores;
   /** The run's pinned delegation roster scope, when this is a delegated run. */
@@ -140,7 +137,6 @@ export const resolveAgentTools = Effect.fn('resolveAgentTools')(function* ({
   approvalPromptsUnavailable,
   runtimeUnavailableTools,
   toolInjections,
-  settings,
   stores,
   inScope,
   delegationScope,
@@ -184,7 +180,7 @@ export const resolveAgentTools = Effect.fn('resolveAgentTools')(function* ({
     resolvedNames.add(name);
   }
   for (const injection of toolInjections.list()) {
-    if (!injection.shouldInject(settings)) continue;
+    if (!injection.shouldInject(stores)) continue;
     if (resolvedNames.has(injection.toolName)) continue;
     if (!passesRuntimeGates(injection.toolName)) continue;
     const tool = effectiveRegistry.get(injection.toolName);
