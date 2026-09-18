@@ -15,7 +15,13 @@ jobs:
     # and `cli-vX.Y.Z` for the CLI. Bump only once, off the canonical extension
     # tag — otherwise the `cli-` tag fires a second, redundant run and races the
     # first on the same PR branch.
-    if: ${{ startsWith(github.event.release.tag_name, 'v') && !contains(github.event.release.tag_name, '-') }}
+    #
+    # Previews (`vX.Y.Z-preview.N`, released with `--prerelease`) never bump:
+    # the next development version after a preview is the next preview, which
+    # the maintainer sets by hand (releasing skill, "Preview releases"). Both
+    # the GitHub pre-release flag and the tag form are checked so a preview
+    # that is mislabelled on either side still cannot open a bump PR.
+    if: ${{ github.event.release.prerelease == false && startsWith(github.event.release.tag_name, 'v') && !contains(github.event.release.tag_name, '-') }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v6

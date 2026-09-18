@@ -11,6 +11,13 @@ All notable changes to this project will be documented in this file.
   documents and research files are unchanged. History a different build
   wrote is cleared the first time this build opens that workspace, and
   TeXRA says so when it happens.
+- **1.0 preview builds start from a clean slate** — a preview does not carry
+  over session history or other application state from TeXRA 0.40 or earlier,
+  and going back to 0.40 does not bring what the preview created. Previews
+  ship on their own channel, so nothing changes unless you opt in: enable
+  pre-release versions of the extension in VS Code, install the CLI with
+  `npm install -g @texra-ai/cli@preview`, or pick a desktop installer marked
+  pre-release. Project documents and research files are unchanged either way.
 - **One streaming toggle instead of one per provider** — the per-provider
   Streaming switches in the Models tab are gone. The global **Enable
   streaming** setting now governs every provider.
