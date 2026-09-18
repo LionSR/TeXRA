@@ -173,10 +173,12 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
           throw new CliUsageError(MULTI_INPUT_OUTPUT_MESSAGE);
         }
 
-        const model = yield* Effect.tryPromise({
-          try: () => selectCliRunModel(context, init.model, 'run', services),
-          catch: ensureError,
-        });
+        const model = yield* selectCliRunModel(
+          context,
+          init.model,
+          'run',
+          services,
+        );
         const runContext = buildHeadlessRunContext(context);
         // Only the input-derived names are knowable here: the agent's declared
         // defaults live in a definition the launch below loads, and loading it
@@ -251,10 +253,7 @@ const runToolUseAgent = Effect.fn('runToolUseAgent')(function* (
     throw new CliUsageError('Provide --instruction or --instruction-file.');
   }
 
-  const model = yield* Effect.tryPromise({
-    try: () => selectCliRunModel(context, init.model, 'chat', services),
-    catch: ensureError,
-  });
+  const model = yield* selectCliRunModel(context, init.model, 'chat', services);
   const runContext = buildHeadlessRunContext(context);
 
   return yield* withExpandedRunInputs(

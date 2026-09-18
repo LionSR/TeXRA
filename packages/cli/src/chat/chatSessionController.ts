@@ -1116,27 +1116,25 @@ export function createChatSessionController(
           const meta = sessionMetaSignal.get();
           const currentAgent = meta.agent || initialAgent;
           const currentModel = meta.model || initialModel;
-          const selection = yield* Effect.tryPromise({
-            try: () =>
-              selectCliRunnableModel(currentModel, {
-                stores: { secrets, globalState: state, runtime },
-                fallbackReason: meta.model
-                  ? meta.modelSource
-                  : initialModelSource,
-                noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
-                  CHAT_API_MODE_MODEL_RECOVERY,
-                ),
-              }),
-            catch: (cause) =>
-              // The selection's own rejection is the user-facing text: it
-              // names the model, its availability status and the `/key`
-              // recovery. The tag carries that message verbatim, because the
-              // transcript renders `toErrorMessage` of this failure.
-              new ChatSessionCallFailed({
-                message: toErrorMessage(cause),
-                cause,
-              }),
-          });
+          const selection = yield* selectCliRunnableModel(currentModel, {
+            stores: { secrets, globalState: state, runtime },
+            fallbackReason: meta.model ? meta.modelSource : initialModelSource,
+            noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
+              CHAT_API_MODE_MODEL_RECOVERY,
+            ),
+          }).pipe(
+            Effect.mapError(
+              (cause) =>
+                // The selection's own failure is the user-facing text: it
+                // names the model, its availability status and the `/key`
+                // recovery. The tag carries that message verbatim, because the
+                // transcript renders `toErrorMessage` of this failure.
+                new ChatSessionCallFailed({
+                  message: toErrorMessage(cause),
+                  cause,
+                }),
+            ),
+          );
           yield* setCliHelperModel(state, selection.model).pipe(
             Effect.mapError(
               (cause) =>

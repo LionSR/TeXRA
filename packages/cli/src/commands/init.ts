@@ -44,7 +44,9 @@ async function gatherOptions(
   const agents = implicitDefaultToolUseAgents(
     getVisibleAgents(AgentCategory.ToolUse),
   );
-  const models = await getCliModelAccessList({ stores });
+  const models = await stores.runtime.runPromise(
+    getCliModelAccessList({ stores }),
+  );
   return { agents, models };
 }
 

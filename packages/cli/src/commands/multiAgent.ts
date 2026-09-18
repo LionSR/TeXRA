@@ -181,10 +181,7 @@ export const runMultiAgentPreset = Effect.fn('runMultiAgentPreset')(function* (
   // A team run drives a tool-use orchestrator, so it follows the `chat`
   // (tool-use) model config rather than `run` (workflow agents). Resolve the
   // model after agent validation so usage errors stay focused on bad agents.
-  const model = yield* Effect.tryPromise({
-    try: () => selectCliRunModel(context, init.model, 'chat', services),
-    catch: ensureError,
-  });
+  const model = yield* selectCliRunModel(context, init.model, 'chat', services);
   const runContext = buildHeadlessRunContext(context);
   return yield* withExpandedRunInputs(
     init.inputFiles,

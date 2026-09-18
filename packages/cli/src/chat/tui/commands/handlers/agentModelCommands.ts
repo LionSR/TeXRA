@@ -71,17 +71,19 @@ export async function applyCliModelSelection(
 ): Promise<void> {
   const nextModel = model.trim();
   if (chatTuiCanStartRootRun(context.session)) {
-    const selection = await selectCliRunnableModel(nextModel, {
-      stores: {
-        secrets: context.secrets,
-        globalState: context.state,
-        runtime: context.runtime,
-      },
-      fallbackReason: 'explicit-override',
-      noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
-        CHAT_API_MODE_MODEL_RECOVERY,
-      ),
-    });
+    const selection = await context.runtime.runPromise(
+      selectCliRunnableModel(nextModel, {
+        stores: {
+          secrets: context.secrets,
+          globalState: context.state,
+          runtime: context.runtime,
+        },
+        fallbackReason: 'explicit-override',
+        noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
+          CHAT_API_MODE_MODEL_RECOVERY,
+        ),
+      }),
+    );
     await context.runtime.runPromise(
       setCliHelperModel(context.state, selection.model),
     );
