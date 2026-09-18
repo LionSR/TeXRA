@@ -14,7 +14,6 @@
     "new AbortController()": {
       "packages/cli/src/chat/tui/commands/handlers/slashContext.ts": 1,
       "src/agent/runtime/childRunLoop.ts": 1,
-      "src/platform/defaults/lifecycleHost.ts": 1,
       "src/tools/claudeAgent.ts": 1
     },
     "catch:effect-importer": {

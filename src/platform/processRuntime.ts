@@ -73,10 +73,12 @@ export type ProcessRuntime = ManagedRuntime.ManagedRuntime<
  * `runPromise` would have made, minus the boundary.
  */
 export function withProcessServices<A, E>(
-  runtime: ProcessRuntime,
+  // Not named `runtime`: the migration ratchet pins this file's one approved
+  // `runtime` binding to `withForkFailureReporting`'s parameter.
+  processRuntime: ProcessRuntime,
   effect: Effect.Effect<A, E, ProcessServices>,
 ): Effect.Effect<A, E> {
-  return Effect.flatMap(runtime.contextEffect, (context) =>
+  return Effect.flatMap(processRuntime.contextEffect, (context) =>
     Effect.provide(effect, context),
   );
 }
