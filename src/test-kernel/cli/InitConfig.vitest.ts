@@ -80,7 +80,12 @@ describe('setWorkspaceCliChatAgent', () => {
     const chatSection = () =>
       readSettingFrom(platformSettingsStores(), 'texra.chat');
 
-    await Effect.runPromise(setWorkspaceCliChatAgent('builtInToolUse:review'));
+    await Effect.runPromise(
+      setWorkspaceCliChatAgent(
+        platformSettingsStores(),
+        'builtInToolUse:review',
+      ),
+    );
     expect(chatSection()).toEqual({
       agent: 'builtInToolUse:review',
       model: 'deepseekT',
@@ -89,7 +94,9 @@ describe('setWorkspaceCliChatAgent', () => {
       'deepseekT',
     );
 
-    await Effect.runPromise(setWorkspaceCliChatAgent(undefined));
+    await Effect.runPromise(
+      setWorkspaceCliChatAgent(platformSettingsStores(), undefined),
+    );
     expect(chatSection()).toEqual({ model: 'deepseekT' });
   });
 
@@ -97,7 +104,9 @@ describe('setWorkspaceCliChatAgent', () => {
     await installPlatform({}, { config: new FakeConfigProvider() });
 
     await expect(
-      Effect.runPromise(setWorkspaceCliChatAgent('   ')),
+      Effect.runPromise(
+        setWorkspaceCliChatAgent(platformSettingsStores(), '   '),
+      ),
     ).rejects.toThrow('must not be empty');
   });
 });

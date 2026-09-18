@@ -10,8 +10,8 @@ import { CliUsageError, type CliContext } from '@cli/runtime/cliContext';
 import { selectCliRunnableModel } from '@cli/runtime/modelAccess';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
-import { FakeConfigProvider, fakeStores } from '@test/support/FakePlatform';
-import { installPlatform } from '@test/support/setupPlatform';
+import { FakeConfigProvider } from '@test/support/FakePlatform';
+import { hostStores, installPlatform } from '@test/support/setupPlatform';
 
 const mocks = vi.hoisted(() => ({
   selectCliRunnableModel: vi.fn(),
@@ -52,13 +52,19 @@ function withRunModel(model: string): Promise<void> {
   );
 }
 
-/** The stores each command hands to `selectCliRunModel`; model access is mocked. */
-const STORES = { ...fakeStores(), runtime: testRuntime() };
+/**
+ * The stores each command hands to `selectCliRunModel`: the installed host's,
+ * so the `texra.run` row `withRunModel` seeded is the one the command-config
+ * tier reads. Built after the install, so each test names its own host.
+ */
+const storesOf = (): ReturnType<typeof hostStores> & {
+  readonly runtime: ReturnType<typeof testRuntime>;
+} => ({ ...hostStores(), runtime: testRuntime() });
 
 /** `selectCliRunModel` is an Effect now; the suite is its run boundary. */
 const runSelect = (
   ...args: Parameters<typeof selectCliRunModel>
-): Promise<string> => STORES.runtime.runPromise(selectCliRunModel(...args));
+): Promise<string> => testRuntime().runPromise(selectCliRunModel(...args));
 
 describe('selectCliRunModel precedence', () => {
   beforeEach(() => {
@@ -75,9 +81,10 @@ describe('selectCliRunModel precedence', () => {
 
   it('passes the full run-model candidate list to model access', async () => {
     await withRunModel('deepseekR');
+    const stores = storesOf();
     const context = makeContext({ envModel: OTHER_MODEL });
 
-    await runSelect(context, KNOWN_MODEL, 'run', STORES);
+    await runSelect(context, KNOWN_MODEL, 'run', stores);
 
     expect(selectCliRunnableModelMock).toHaveBeenCalledWith(
       [
@@ -86,12 +93,13 @@ describe('selectCliRunModel precedence', () => {
         { model: 'deepseekR', reason: 'command-config' },
         { model: CLI_CHEAP_START_MODEL, reason: 'builtin-default' },
       ],
-      { stores: STORES },
+      { stores },
     );
   });
 
   it('checks model access before returning the model', async () => {
     await withRunModel('staleConfiguredModel');
+    const stores = storesOf();
     const context = makeContext();
     selectCliRunnableModelMock.mockReturnValueOnce(
       Effect.succeed({
@@ -100,14 +108,14 @@ describe('selectCliRunModel precedence', () => {
       }),
     );
 
-    await expect(runSelect(context, undefined, 'run', STORES)).resolves.toBe(
+    await expect(runSelect(context, undefined, 'run', stores)).resolves.toBe(
       'deepseekT',
     );
     expect(selectCliRunnableModelMock).toHaveBeenCalledWith(
       expect.arrayContaining([
         { model: 'staleConfiguredModel', reason: 'command-config' },
       ]),
-      { stores: STORES },
+      { stores },
     );
     expect(mocks.writeTextStderr).toHaveBeenCalledWith(
       'Using deepseekT instead.',
@@ -116,6 +124,7 @@ describe('selectCliRunModel precedence', () => {
 
   it('does not fall back from an explicit unavailable model', async () => {
     await withRunModel('deepseekT');
+    const stores = storesOf();
     const context = makeContext();
     selectCliRunnableModelMock.mockReturnValueOnce(
       Effect.fail(
@@ -125,14 +134,14 @@ describe('selectCliRunModel precedence', () => {
       ),
     );
 
-    await expect(runSelect(context, 'opus48T', 'run', STORES)).rejects.toThrow(
+    await expect(runSelect(context, 'opus48T', 'run', stores)).rejects.toThrow(
       CliUsageError,
     );
     expect(selectCliRunnableModelMock).toHaveBeenCalledWith(
       expect.arrayContaining([
         { model: 'opus48T', reason: 'explicit-override' },
       ]),
-      { stores: STORES },
+      { stores },
     );
   });
 });

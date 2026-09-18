@@ -190,10 +190,12 @@ async function configureAgentRoster(
         `Default chat agent "${input.defaultAgent}" is not in the effective workspace roster. Available agents: ${names || '(none)'}.`,
       );
     }
-    await runtime.runPromise(setWorkspaceCliChatAgent(agentKeyOf(selected)));
+    await runtime.runPromise(
+      setWorkspaceCliChatAgent(roots, agentKeyOf(selected)),
+    );
   }
   if (input.clearDefaultAgent) {
-    await runtime.runPromise(setWorkspaceCliChatAgent(undefined));
+    await runtime.runPromise(setWorkspaceCliChatAgent(roots, undefined));
   }
 
   const record = await runtime.runPromise(readCliAgentRoster(roots));

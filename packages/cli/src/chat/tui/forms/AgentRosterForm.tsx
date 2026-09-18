@@ -295,7 +295,7 @@ export function AgentRosterForm(
         write(
           () =>
             cwd
-              ? setWorkspaceCliChatAgent(value || undefined)
+              ? setWorkspaceCliChatAgent(roots, value || undefined)
               : Effect.fail(
                   new Error(
                     'Default chat-agent selection requires a workspace.',

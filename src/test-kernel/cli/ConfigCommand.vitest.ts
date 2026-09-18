@@ -186,7 +186,10 @@ describe('CLI config command', () => {
     ]);
 
     expect(result.exitCode).toBe(0);
+    // The write also carries the command's setting stores; the assertion pins
+    // the canonicalized agent key.
     expect(mocks.setWorkspaceCliChatAgent).toHaveBeenCalledWith(
+      expect.anything(),
       'builtInToolUse:assistant',
     );
   });

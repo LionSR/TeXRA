@@ -19,13 +19,13 @@ import type { ConfigProvider } from '@platform/interfaces';
 // Local imports - shared
 import { canonicalConfigKey } from '@shared/config/configKeys';
 import { readConfigSetting } from '@shared/config/settingsAccess';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import { CLI_CONFIG_SLOT_KEYS, settingByKey } from '@shared/schemas';
 
 // Local imports - utilities
 import {
-  platformSettingsStores,
   readSettingFrom,
-  writePlatformSetting,
+  writeSettingTo,
 } from '@utils/config/platformSettings';
 import { isObject } from '@utils/core';
 
@@ -135,12 +135,13 @@ export function readCliConfigSetting<T>(
 /**
  * Agent and model for one command: its own `texra.chat` / `texra.run` section
  * over the top-level `texra.agent` / `texra.model` rows, both resolved through
- * the process's config provider (workspace file over user file).
- *
- * Runs after `initCliPlatform`, which installs the roots holding that provider.
+ * the setting slots the caller holds — the ones `initCliPlatform` handed back,
+ * so the value read here is the value `texra config` writes.
  */
-export function cliCommandDefaults(role: CliCommandRole): CliCommandDefaults {
-  const stores = platformSettingsStores();
+export function cliCommandDefaults(
+  stores: SettingsStores,
+  role: CliCommandRole,
+): CliCommandDefaults {
   const sectionKey = canonicalConfigKey(role);
   const section =
     readSettingFrom<CliCommandDefaults | undefined>(stores, sectionKey) ?? {};
@@ -171,7 +172,7 @@ export function cliCommandDefaults(role: CliCommandRole): CliCommandDefaults {
  */
 export const setWorkspaceCliChatAgent = Effect.fn(
   'cliConfig.setWorkspaceCliChatAgent',
-)(function* (agent: string | undefined) {
+)(function* (stores: SettingsStores, agent: string | undefined) {
   const trimmed = agent?.trim();
   if (agent !== undefined && !trimmed) {
     return yield* Effect.fail(
@@ -180,14 +181,12 @@ export const setWorkspaceCliChatAgent = Effect.fn(
   }
   const sectionKey = canonicalConfigKey('chat');
   const existing =
-    readSettingFrom<CliCommandDefaults | undefined>(
-      platformSettingsStores(),
-      sectionKey,
-    ) ?? {};
+    readSettingFrom<CliCommandDefaults | undefined>(stores, sectionKey) ?? {};
   const next: { agent?: string; model?: string } = { ...existing };
   if (trimmed) next.agent = trimmed;
   else delete next.agent;
-  yield* writePlatformSetting(
+  yield* writeSettingTo(
+    stores,
     sectionKey,
     Object.keys(next).length > 0 ? next : undefined,
   );

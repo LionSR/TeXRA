@@ -201,6 +201,7 @@ export async function runChat(
   const defaults = await runtime.runPromise(
     Effect.map(loadAgents(), () =>
       resolveChatDefaults({
+        stores: services,
         agentOverride: explicitAgent ?? setupAgentOverride,
         modelOverride: initialResume?.config.model ?? init.modelOverride,
         envAgent: context.envAgent,
