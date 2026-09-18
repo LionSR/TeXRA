@@ -586,7 +586,7 @@ describe('createChatSessionController', () => {
     );
     // The helper-model write is an Effect now, so the stubs are too.
     mocks.setCliHelperModel.mockReturnValue(Effect.void);
-    mocks.presentationHostClose.mockResolvedValue(undefined);
+    mocks.presentationHostClose.mockReturnValue(Effect.void);
     mocks.createCliRuntimeHost.mockReturnValue({
       close: mocks.presentationHostClose,
       emit: vi.fn(),

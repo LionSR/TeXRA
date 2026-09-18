@@ -1933,7 +1933,7 @@ async function exitHarness(exitCode: number): Promise<void> {
   }
   ink.unmount();
   try {
-    await harnessRuntimeHost.close();
+    await Effect.runPromise(harnessRuntimeHost.close());
     await Effect.runPromise(platform().lifecycle.runShutdown);
   } finally {
     process.exit(exitCode);

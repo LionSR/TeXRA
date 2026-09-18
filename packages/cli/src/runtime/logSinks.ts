@@ -37,7 +37,7 @@ interface LogRecord {
 
 export interface LogSink {
   write(record: LogRecord): void;
-  flush?(): Promise<void>;
+  flush?(): Effect.Effect<void>;
 }
 
 export interface Logger {
@@ -210,9 +210,11 @@ export function writeTextStderrAndWait(text: string): Promise<void> {
   return writeRawAndWait('stderr', `${text}\n`);
 }
 
-/** Wait until every stderr write queued before this call has completed. */
-export function flushTextStderr(): Promise<void> {
-  return writeRawAndWait('stderr', '');
+/** Wait until every stderr write queued before this call has completed. The
+ *  stream write callback is the foreign edge and is wrapped exactly once
+ *  here, so the shutdown sequence yields this instead of lifting it. */
+export function flushTextStderr(): Effect.Effect<void> {
+  return Effect.promise(() => writeRawAndWait('stderr', ''));
 }
 
 /**
@@ -337,18 +339,19 @@ export class NdjsonStdoutSink implements LogSink {
     runtime.runFork(withPerKeyLane(sinkLanes, this)(this.writeLine(record)));
   }
 
-  /** Resolves once every record queued before this call has landed: the FIFO
+  /** Settles once every record queued before this call has landed: the FIFO
    *  lane runs this no-op only after them. */
-  flush(): Promise<void> {
-    const runtime = logRuntime;
-    if (!runtime) {
-      // Before `installCliProcessRuntime` every write took the direct path
-      // and already landed; after its disposal the runtime's
-      // scope close has interrupted any lane fiber still waiting on a drain.
-      // Either way nothing remains to wait for.
-      return Promise.resolve();
-    }
-    return runtime.runPromise(withPerKeyLane(sinkLanes, this)(Effect.void));
+  flush(): Effect.Effect<void> {
+    return Effect.suspend(() => {
+      if (!logRuntime) {
+        // Before `installCliProcessRuntime` every write took the direct path
+        // and already landed; after its disposal the runtime's
+        // scope close has interrupted any lane fiber still waiting on a drain.
+        // Either way nothing remains to wait for.
+        return Effect.void;
+      }
+      return withPerKeyLane(sinkLanes, this)(Effect.void);
+    });
   }
 
   /**
@@ -426,7 +429,7 @@ export function writeNdjsonStdout(record: CliNdjsonRecord): void {
 }
 
 /** Wait until all queued public NDJSON and structured log records are written. */
-export function flushNdjsonStdout(): Promise<void> {
+export function flushNdjsonStdout(): Effect.Effect<void> {
   return ndjsonStdoutSink.flush();
 }
 

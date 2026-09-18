@@ -60,7 +60,7 @@ describe('NdjsonStdoutSink', () => {
 
     sink.writeRecord(records[0]);
     sink.writeRecord(records[1]);
-    await sink.flush();
+    await Effect.runPromise(sink.flush());
 
     // The sink stamps the contract version last, so `kind` stays the first key.
     expect(lines.map((line) => JSON.parse(line))).toEqual(
@@ -84,7 +84,7 @@ describe('NdjsonStdoutSink', () => {
       payload: { aggregateId: '["run","run-1"]', phase: 'running' },
     });
     emit('drain');
-    await sink.flush();
+    await Effect.runPromise(sink.flush());
 
     expect(lines.map((line) => JSON.parse(line).kind)).toEqual([
       'log',
@@ -99,7 +99,7 @@ describe('NdjsonStdoutSink', () => {
     sink.writeRecord({ kind: 'version', version: '1.0.0' });
     sink.writeRecord({ kind: 'doctor-summary', ok: true });
     emit('drain');
-    await sink.flush();
+    await Effect.runPromise(sink.flush());
 
     expect(lines.map((line) => JSON.parse(line).kind)).toEqual([
       'version',
@@ -117,7 +117,7 @@ describe('NdjsonStdoutSink', () => {
       sink.writeRecord({ kind: 'doctor-summary', ok: true });
       emit(event);
       sink.writeRecord({ kind: 'auth-status', authenticated: false });
-      await sink.flush();
+      await Effect.runPromise(sink.flush());
 
       expect(lines.map((line) => JSON.parse(line).kind)).toEqual(['version']);
     },
@@ -129,7 +129,7 @@ describe('NdjsonStdoutSink', () => {
     const sink = new NdjsonStdoutSink(stdout);
 
     sink.writeRecord({ kind: 'version', version: '1.0.0' });
-    await sink.flush();
+    await Effect.runPromise(sink.flush());
 
     expect(lines).toEqual([]);
     expect(stdout.write).not.toHaveBeenCalled();
@@ -147,7 +147,7 @@ describe('NdjsonStdoutSink', () => {
     const sink = new NdjsonStdoutSink(stdout);
 
     sink.writeRecord({ kind: 'version', version: '1.0.0' });
-    await expect(sink.flush()).resolves.toBeUndefined();
+    await expect(Effect.runPromise(sink.flush())).resolves.toBeUndefined();
     expect(stdout.once).not.toHaveBeenCalled();
   });
 });

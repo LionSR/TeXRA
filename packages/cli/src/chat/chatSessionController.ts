@@ -546,7 +546,9 @@ export function createChatSessionController(
   // approval path after its root finalizes, with no per-turn generation.
   const sessionContext = getSessionContext();
   const presentationHost = createCliRuntimeHost(runtime, sessionContext);
-  disposables.add(() => void presentationHost.close());
+  disposables.add(() => {
+    runtime.runFork(presentationHost.close());
+  });
   disposables.add(
     runtime.runSync(
       runtimeSession.interactions.use(

@@ -111,7 +111,7 @@ let detachHost = (): void => {};
 function host(): CliRuntimeHost {
   return {
     emit: vi.fn(),
-    close: vi.fn(async () => undefined),
+    close: vi.fn(() => Effect.void),
   } as unknown as CliRuntimeHost;
 }
 

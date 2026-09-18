@@ -1,3 +1,6 @@
+// Third-party imports
+import { Effect } from 'effect';
+
 // Local imports - runtime
 import {
   type PresentationEventHandlers,
@@ -31,7 +34,7 @@ export interface CliRuntimeHost {
     options?: { readonly runId?: RunId },
   ): () => void;
   prepareInteractivePrompt?: () => void;
-  close(): Promise<void>;
+  close(): Effect.Effect<void>;
 }
 
 /** `runtime` is the process runtime the caller holds: the progress renderer
@@ -126,13 +129,15 @@ export function createCliRuntimeHost(
       if (closed) return false;
       return handlers[event](payload) === true;
     },
-    async close() {
-      closed = true;
-      runProgress?.clear();
-      await sink?.flush?.();
-      // Other writers put records on the module-level NDJSON queue, which the
-      // lazily created `sink` may never cover.
-      if (ndjson) await flushNdjsonStdout();
+    close() {
+      return Effect.gen(function* () {
+        closed = true;
+        runProgress?.clear();
+        yield* sink?.flush?.() ?? Effect.void;
+        // Other writers put records on the module-level NDJSON queue, which
+        // the lazily created `sink` may never cover.
+        if (ndjson) yield* flushNdjsonStdout();
+      });
     },
   };
 }

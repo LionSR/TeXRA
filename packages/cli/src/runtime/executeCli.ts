@@ -580,10 +580,7 @@ export function executeCliRequest(
       yield* detachSessionProgressProjection();
       detachWorkflowPlainOutput();
       detachHostInteractions();
-      yield* Effect.tryPromise({
-        try: () => presentationHost.close(),
-        catch: (error: unknown) => error,
-      });
+      yield* presentationHost.close();
     });
     const invocation = yield* Effect.result(
       Effect.suspend(invoke).pipe(
