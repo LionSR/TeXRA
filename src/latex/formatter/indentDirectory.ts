@@ -9,7 +9,7 @@ import { readDirectoryTypedTolerant } from '@utils/files/fsDurability';
 import { entryExists } from '@utils/files/fsEntryExists';
 import { hasExtension } from '@utils/core/pathCore';
 
-import { resolveLatexFormatter, type LatexFormatter } from './texFormatter';
+import type { LatexFormatter } from './texFormatter';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '../latexLogging';
 
 const log = createLog(CHANNEL);
@@ -43,6 +43,10 @@ export type IndentLatexResult =
  * @param workspaceRoot Root a relative `directory` resolves against and the cwd
  * the formatter runs in, held by the caller as data. When `undefined`, a
  * relative `directory` resolves against the process cwd.
+ * @param formatter The resolved formatter, or null when formatting is disabled.
+ * The caller resolves it from its own workspace configuration
+ * (`resolveLatexFormatter(roots.config)`), so this never reads the roots the
+ * calling fiber happens to carry.
  * @param directory The directory to process (relative to workspace). If not provided, uses the root.
  * @param progressCallback Optional callback for progress updates
  * @returns The formatting outcome
@@ -51,9 +55,9 @@ export const indentLatexFilesInDirectory = Effect.fn(
   'latex.indentLatexFilesInDirectory',
 )(function* (
   workspaceRoot: string | undefined,
+  formatter: LatexFormatter | null,
   directory: string = '.',
   progressCallback?: (message: string, increment?: number) => void,
-  formatter: LatexFormatter | null = resolveLatexFormatter(),
 ): Effect.fn.Return<
   IndentLatexResult,
   PlatformError.PlatformError,

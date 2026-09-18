@@ -5,7 +5,6 @@ import { Effect } from 'effect';
 import { createLog } from '@logger/logUtils';
 import { runToolWithCheck } from '@utils/system/toolUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { getConfig } from '@utils/config/configUtils';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '../latexLogging';
 
 const log = createLog(CHANNEL);
@@ -16,7 +15,7 @@ export const runTexFmt = Effect.fn('latex.runTexFmt')(
   function* (
     filePath: string,
     workspaceRoot: string | undefined,
-    texfmtConfig: string | undefined = getConfig<string>(TEXFMT_CONFIG_KEY),
+    texfmtConfig: string,
   ) {
     const args = [
       ...(texfmtConfig ? ['--config', texfmtConfig] : ['--nowrap']),
