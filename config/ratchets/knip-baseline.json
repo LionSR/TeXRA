@@ -428,18 +428,6 @@
       "name": "ConfigApp"
     },
     {
-      "file": "packages/cli/src/init/runInitWizard.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "initWizardDefaultAgentIndex"
-    },
-    {
-      "file": "packages/cli/src/init/runInitWizard.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "initWizardModelSelectItems"
-    },
-    {
       "file": "packages/cli/src/runtime/apiStatus.ts",
       "category": "production-dead",
       "kind": "exports",
