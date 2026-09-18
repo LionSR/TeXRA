@@ -16,7 +16,7 @@ function handleInstructionChoice(
   store: StateStore,
   stateKey: string,
   showSuppress: boolean,
-  actions: { title: string; callback: () => Thenable<void> | void }[],
+  actions: { title: string; callback: () => Effect.Effect<void> }[],
   choice: string | undefined,
 ): Effect.Effect<void, StateWriteFailed> {
   if (!choice) return Effect.void;
@@ -27,11 +27,7 @@ function handleInstructionChoice(
     return store.update(stateKey, true);
   }
   const action = actions.find((a) => a.title === choice);
-  return action === undefined
-    ? Effect.void
-    : Effect.promise(async () => {
-        await action.callback();
-      });
+  return action === undefined ? Effect.void : action.callback();
 }
 
 /** Show an instruction message that can be permanently dismissed. */
@@ -39,7 +35,7 @@ export function showInstructionWithSuppress(
   store: StateStore,
   key: string,
   message: string,
-  actions: { title: string; callback: () => Thenable<void> | void }[] = [],
+  actions: { title: string; callback: () => Effect.Effect<void> }[] = [],
   showSuppress = true,
   options: { deferDismissal?: boolean } = {},
 ): Effect.Effect<void, StateWriteFailed> {
@@ -91,24 +87,15 @@ export function promptExtensionInstall(
     channel: string;
   },
 ): Effect.Effect<void, StateWriteFailed> {
-  return Effect.gen(function* () {
-    let install = false;
-    yield* showInstructionWithSuppress(store, opts.suppressKey, opts.message, [
-      {
-        title: 'Install',
-        // The action records the answer; the install itself is a step of this
-        // program, so it composes instead of being run from the callback.
-        callback: () => {
-          install = true;
-        },
-      },
-    ]);
-    if (install) {
-      yield* safeExecuteCommand(
-        'workbench.extensions.installExtension',
-        [opts.extensionId],
-        opts.channel,
-      );
-    }
-  });
+  return showInstructionWithSuppress(store, opts.suppressKey, opts.message, [
+    {
+      title: 'Install',
+      callback: () =>
+        safeExecuteCommand(
+          'workbench.extensions.installExtension',
+          [opts.extensionId],
+          opts.channel,
+        ).pipe(Effect.asVoid),
+    },
+  ]);
 }

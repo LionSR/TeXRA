@@ -110,7 +110,12 @@ function handleRequestShowInstruction(
     return {
       title: view.title,
       callback: () =>
-        void vscode.commands.executeCommand(view.command, ...(view.args ?? [])),
+        Effect.sync(() => {
+          void vscode.commands.executeCommand(
+            view.command,
+            ...(view.args ?? []),
+          );
+        }),
     };
   });
 
