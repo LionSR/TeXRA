@@ -2,15 +2,11 @@
 // rooted filesystem confinement).
 
 import * as assert from 'node:assert';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { it as effectIt } from '@effect/vitest';
 import { Cause, Effect, Exit, FileSystem, Path } from 'effect';
-import { isTexFile } from '@common/files/fileTypeUtils';
-import { setupPlatform } from '@test/support/setupPlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { getMimeType } from '@utils/files/mimeUtils';
-import { pathToLocationIn } from '@utils/files/fileLocation';
-import { workspaceAbsolutePath } from '@utils/files/workspaceFS';
 import { pastedImageFileName } from '@utils/files/pastedImageUtils';
 import { entryExists } from '@utils/files/fsEntryExists';
 import { rootedFileSystem } from '@utils/files/rootedFileSystem';
@@ -25,10 +21,6 @@ describe('getMimeType', () => {
     assert.strictEqual(getMimeType('C:\\tmp\\clip.l16'), 'audio/l16');
   });
 });
-
-// ---------------------------------------------------------------------------
-// fileTypeUtils and workspace path resolution
-// ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
 // PastedImageUtils
