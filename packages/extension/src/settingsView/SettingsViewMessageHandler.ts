@@ -775,14 +775,18 @@ export class SettingsViewMessageHandler {
     }
   }
 
-  /** Fetch and post one sanitized snapshot for every subscription provider. */
+  /** Fetch and post one sanitized snapshot for every subscription provider.
+   *  The usage read is an Effect; this is the boundary that holds a runtime to
+   *  settle it on. */
   private async sendSubscriptionUsage(
     webview: vscode.Webview,
     forceRefresh = false,
   ): Promise<void> {
     await webview.postMessage({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_SUBSCRIPTION_USAGE,
-      snapshots: await this.subscriptionUsage.getAllUsage({ forceRefresh }),
+      snapshots: await this.runtime.runPromise(
+        this.subscriptionUsage.getAllUsage({ forceRefresh }),
+      ),
     });
   }
 

@@ -1,6 +1,7 @@
 import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { effectRuntime } from '@platform/processRuntime';
 import { FakeSecrets } from '@test/support/FakePlatform';
 
 const mocks = vi.hoisted(() => ({
@@ -84,7 +85,10 @@ function codingPlans(
 }
 
 function accountStatusLines(): Promise<string[]> {
-  return Effect.runPromise(loadCliDetailedAccountStatusLines(secrets));
+  // The status program reads subscription usage, whose credential reads take
+  // the process HTTP client from context — so it settles on the kernel's
+  // runtime, not a bare one.
+  return effectRuntime().runPromise(loadCliDetailedAccountStatusLines(secrets));
 }
 
 function renderPreferenceRoute(
@@ -134,15 +138,17 @@ describe('CLI model-access status lines', () => {
       .mockReturnValue(Effect.succeed('none'));
     mocks.getSubscriptionUsage
       .mockReset()
-      .mockImplementation(async (provider: string) => ({
-        state: 'unavailable',
-        provider,
-        providerName: provider,
-        planName: provider,
-        fetchedAt: 0,
-        windows: [],
-        reason: 'missing_credentials',
-      }));
+      .mockImplementation((provider: string) =>
+        Effect.succeed({
+          state: 'unavailable',
+          provider,
+          providerName: provider,
+          planName: provider,
+          fetchedAt: 0,
+          windows: [],
+          reason: 'missing_credentials',
+        }),
+      );
   });
 
   it('renders preferred Kimi and ChatGPT routes with their owned credentials', async () => {
@@ -196,42 +202,43 @@ describe('CLI model-access status lines', () => {
         grokSignedIn: false,
       }),
     );
-    mocks.getSubscriptionUsage.mockImplementation(async (provider: string) => {
-      if (provider === 'glmCodingPlan') {
-        return {
-          state: 'unavailable',
-          provider,
-          providerName: 'GLM',
-          planName: 'GLM Coding Plan',
-          fetchedAt: 1_800_000_000_000,
-          windows: [],
-          reason: 'request_failed',
-        };
-      }
-      return {
-        state: 'available',
-        provider,
-        providerName: 'Kimi Code',
-        planName: 'Kimi Code',
-        fetchedAt: 1_800_000_000_000,
-        windows: [
-          {
-            name: 'five_hour',
-            percentUsed: 0,
-            percentRemaining: 100,
-            resetAt: 1_800_007_200_000,
-          },
-          {
-            name: 'seven_day',
-            percentUsed: 100,
-            percentRemaining: 0,
-            resetAt: 1_800_162_000_000,
-          },
-        ],
-      };
-    });
+    mocks.getSubscriptionUsage.mockImplementation((provider: string) =>
+      Effect.succeed(
+        provider === 'glmCodingPlan'
+          ? {
+              state: 'unavailable',
+              provider,
+              providerName: 'GLM',
+              planName: 'GLM Coding Plan',
+              fetchedAt: 1_800_000_000_000,
+              windows: [],
+              reason: 'request_failed',
+            }
+          : {
+              state: 'available',
+              provider,
+              providerName: 'Kimi Code',
+              planName: 'Kimi Code',
+              fetchedAt: 1_800_000_000_000,
+              windows: [
+                {
+                  name: 'five_hour',
+                  percentUsed: 0,
+                  percentRemaining: 100,
+                  resetAt: 1_800_007_200_000,
+                },
+                {
+                  name: 'seven_day',
+                  percentUsed: 100,
+                  percentRemaining: 0,
+                  resetAt: 1_800_162_000_000,
+                },
+              ],
+            },
+      ),
+    );
 
-    const lines = await Effect.runPromise(
+    const lines = await effectRuntime().runPromise(
       loadCliDetailedAccountStatusLines(secrets, {
         now: 1_800_000_000_000,
       }),

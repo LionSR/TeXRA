@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -7,6 +8,7 @@ vi.mock('@frontend/system/commandUtils', () => ({
   safeExecuteCommand: mocks.safeExecuteCommand,
 }));
 
+import { effectRuntime } from '@platform/processRuntime';
 import { SettingsViewMessageHandler } from '@settingsView/SettingsViewMessageHandler';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { SubscriptionUsageProvider } from '@shared/schemas';
@@ -30,17 +32,21 @@ function createHarness(activeView = true) {
   });
   const usage = {
     invalidate: vi.fn(),
-    getAllUsage: vi.fn(async () => ({
-      chatgpt: unavailable('chatgpt'),
-      kimiCode: unavailable('kimiCode'),
-      glmCodingPlan: unavailable('glmCodingPlan'),
-    })),
+    getAllUsage: vi.fn(() =>
+      Effect.succeed({
+        chatgpt: unavailable('chatgpt'),
+        kimiCode: unavailable('kimiCode'),
+        glmCodingPlan: unavailable('glmCodingPlan'),
+      }),
+    ),
   };
   const handler = Object.create(
     SettingsViewMessageHandler.prototype,
   ) as Harness;
   Reflect.set(handler, 'viewName', 'SettingsView');
   Reflect.set(handler, 'subscriptionUsage', usage);
+  // The usage read is a program; the handler settles it on its runtime.
+  Reflect.set(handler, 'runtime', effectRuntime());
   Reflect.set(handler, 'sendProfileData', vi.fn());
   Reflect.set(handler, 'sendProfileAndModelSelectionData', vi.fn());
   Reflect.set(handler, 'sendModelSelectionData', vi.fn());

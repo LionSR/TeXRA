@@ -237,16 +237,20 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
         return;
       }
       const provider = subscriptionUsageProvider;
-      // `getUsage` always resolves to a snapshot rather than rejecting (see its
+      // `getUsage` is a program that always succeeds with a snapshot (see its
       // class doc), and an `unavailable` snapshot is the designed carrier of a
-      // transport failure — so there is no rejection arm to write here.
-      void subscriptionUsage.getUsage(provider).then((snapshot) => {
-        if (desiredUsageProviderRef.current !== provider) return;
-        setSubscriptionQuotaRead({
-          provider,
-          snapshot,
+      // transport failure — so there is no rejection arm to write here. It
+      // settles on the runtime this view was opened with, like the route probe
+      // above.
+      void props.runtime
+        .runPromise(subscriptionUsage.getUsage(provider))
+        .then((snapshot) => {
+          if (desiredUsageProviderRef.current !== provider) return;
+          setSubscriptionQuotaRead({
+            provider,
+            snapshot,
+          });
         });
-      });
     },
     SUBSCRIPTION_QUOTA_REFRESH_MS,
     subscriptionUsageProvider,

@@ -144,10 +144,7 @@ export const loadCliDetailedAccountStatusLines = Effect.fn(
   const [chatGptUsage, codingPlanUsageEntries] = yield* Effect.all(
     [
       access.chatGptSignedIn
-        ? Effect.tryPromise({
-            try: () => usageReader.getUsage('chatgpt', { forceRefresh: true }),
-            catch: ensureError,
-          })
+        ? usageReader.getUsage('chatgpt', { forceRefresh: true })
         : Effect.succeed(undefined),
       Effect.forEach(
         CODING_PLAN_SUBSCRIPTIONS,
@@ -155,12 +152,8 @@ export const loadCliDetailedAccountStatusLines = Effect.fn(
           const status = cliCodingPlanStatus(access, plan);
           return Effect.map(
             status.keySet
-              ? Effect.tryPromise({
-                  try: () =>
-                    usageReader.getUsage(plan.usageProvider, {
-                      forceRefresh: true,
-                    }),
-                  catch: ensureError,
+              ? usageReader.getUsage(plan.usageProvider, {
+                  forceRefresh: true,
                 })
               : Effect.succeed(undefined),
             (usage) => [plan.id, usage] as const,

@@ -15,8 +15,13 @@ import {
 } from '@controllers/modelAccess/subscriptionUsage/glmCodingPlanUsageAdapter';
 import { parseKimiCodeUsage } from '@controllers/modelAccess/subscriptionUsage/kimiCodeUsageAdapter';
 import { SubscriptionUsageService } from '@controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
-import { SubscriptionUsageSnapshotSchema } from '@shared/schemas';
+import { effectRuntime } from '@platform/processRuntime';
+import {
+  SubscriptionUsageSnapshotSchema,
+  type SubscriptionUsageSnapshot,
+} from '@shared/schemas';
 import { FakeSecrets } from '@test/support/FakePlatform';
+import type { HttpClient } from 'effect/unstable/http';
 
 /**
  * The credential port is file-local; derive it from the service constructor,
@@ -38,13 +43,28 @@ function credentials(
   overrides: Partial<SubscriptionUsageCredentials> = {},
 ): SubscriptionUsageCredentials {
   return {
-    loadChatGpt: async () => ({
-      accessToken: 'chatgpt-secret',
-      accountId: 'account-123',
-    }),
-    loadApiKey: async (provider) => `${provider}-secret`,
+    loadChatGpt: () =>
+      Effect.succeed({
+        accessToken: 'chatgpt-secret',
+        accountId: 'account-123',
+      }),
+    loadApiKey: (provider) => Effect.succeed(`${provider}-secret`),
     ...overrides,
   };
+}
+
+/**
+ * The suite's one run edge: `getUsage` is a program, and the kernel's fake
+ * host installs the process runtime (and its HTTP client) it settles on.
+ */
+function runUsage(
+  program: Effect.Effect<
+    SubscriptionUsageSnapshot,
+    never,
+    HttpClient.HttpClient
+  >,
+): Promise<SubscriptionUsageSnapshot> {
+  return effectRuntime().runPromise(program);
 }
 
 function serviceWith(
@@ -409,10 +429,12 @@ describe('SubscriptionUsageService', () => {
     } as never);
     const http = vi.fn<SubscriptionUsageHttp>();
 
-    const snapshot = await new SubscriptionUsageService({
-      http,
-      secrets: new FakeSecrets(),
-    }).getUsage('chatgpt');
+    const snapshot = await runUsage(
+      new SubscriptionUsageService({
+        http,
+        secrets: new FakeSecrets(),
+      }).getUsage('chatgpt'),
+    );
 
     expect(snapshot).toMatchObject({
       state: 'unavailable',
@@ -461,7 +483,7 @@ describe('SubscriptionUsageService', () => {
       const http = vi.fn<SubscriptionUsageHttp>(async () =>
         jsonResponse(response),
       );
-      const snapshot = await serviceWith(http).getUsage(provider);
+      const snapshot = await runUsage(serviceWith(http).getUsage(provider));
 
       expect(snapshot.state).toBe('available');
       expect(SubscriptionUsageSnapshotSchema.parse(snapshot)).toStrictEqual(
@@ -497,13 +519,13 @@ describe('SubscriptionUsageService', () => {
     );
     const service = serviceWith(
       http,
-      credentials({ useGlmChina: () => useChina }),
+      credentials({ useGlmChina: () => Effect.sync(() => useChina) }),
       { cacheTtlMs: 60_000 },
     );
 
-    const china = await service.getUsage('glmCodingPlan');
+    const china = await runUsage(service.getUsage('glmCodingPlan'));
     useChina = false;
-    const international = await service.getUsage('glmCodingPlan');
+    const international = await runUsage(service.getUsage('glmCodingPlan'));
 
     expect(http.mock.calls.map(([url]) => url)).toStrictEqual([
       GLM_CODING_PLAN_USAGE_URL,
@@ -531,13 +553,13 @@ describe('SubscriptionUsageService', () => {
       );
       const service = serviceWith(
         http,
-        credentials({ useGlmChina: () => useChina }),
+        credentials({ useGlmChina: () => Effect.sync(() => useChina) }),
       );
 
-      const olderRequest = service.getUsage('glmCodingPlan');
+      const olderRequest = runUsage(service.getUsage('glmCodingPlan'));
       await vi.waitFor(() => expect(http).toHaveBeenCalledTimes(1));
       useChina = !initialUseChina;
-      const newerRequest = service.getUsage('glmCodingPlan');
+      const newerRequest = runUsage(service.getUsage('glmCodingPlan'));
       await vi.waitFor(() => expect(http).toHaveBeenCalledTimes(2));
 
       responses.get(newerUrl)?.(
@@ -575,10 +597,7 @@ describe('SubscriptionUsageService', () => {
         throw new Error('secret sync failure');
       },
     ],
-    [
-      'a rejected promise',
-      () => Promise.reject(new Error('secret async failure')),
-    ],
+    ['a failed program', () => Effect.fail(new Error('secret async failure'))],
   ])(
     'sanitizes %s while resolving the GLM region',
     async (_label, resolveRegion) => {
@@ -586,8 +605,10 @@ describe('SubscriptionUsageService', () => {
       const useGlmChina = vi.fn(resolveRegion);
 
       await expect(
-        serviceWith(http, credentials({ useGlmChina })).getUsage(
-          'glmCodingPlan',
+        runUsage(
+          serviceWith(http, credentials({ useGlmChina })).getUsage(
+            'glmCodingPlan',
+          ),
         ),
       ).resolves.toMatchObject({
         state: 'unavailable',
@@ -604,10 +625,12 @@ describe('SubscriptionUsageService', () => {
     const http = vi.fn<SubscriptionUsageHttp>(async () =>
       jsonResponse({ message: 'unavailable' }, 500),
     );
-    const snapshot = await serviceWith(
-      http,
-      credentials({ useGlmChina: () => false }),
-    ).getUsage('glmCodingPlan');
+    const snapshot = await runUsage(
+      serviceWith(
+        http,
+        credentials({ useGlmChina: () => Effect.succeed(false) }),
+      ).getUsage('glmCodingPlan'),
+    );
 
     expect(http).toHaveBeenCalledExactlyOnceWith(
       GLM_CODING_PLAN_INTERNATIONAL_USAGE_URL,
@@ -620,19 +643,22 @@ describe('SubscriptionUsageService', () => {
   });
 
   it.each([
-    ['chatgpt' as const, credentials({ loadChatGpt: async () => null })],
+    [
+      'chatgpt' as const,
+      credentials({ loadChatGpt: () => Effect.succeed(null) }),
+    ],
     [
       'kimiCode' as const,
       credentials({
-        loadApiKey: async (provider) =>
-          provider === 'kimiCode' ? undefined : 'glm-secret',
+        loadApiKey: (provider) =>
+          Effect.succeed(provider === 'kimiCode' ? undefined : 'glm-secret'),
       }),
     ],
     [
       'glmCodingPlan' as const,
       credentials({
-        loadApiKey: async (provider) =>
-          provider === 'glm' ? undefined : 'kimi-secret',
+        loadApiKey: (provider) =>
+          Effect.succeed(provider === 'glm' ? undefined : 'kimi-secret'),
       }),
     ],
   ])(
@@ -641,7 +667,7 @@ describe('SubscriptionUsageService', () => {
       const http = vi.fn<SubscriptionUsageHttp>();
 
       await expect(
-        serviceWith(http, source).getUsage(provider),
+        runUsage(serviceWith(http, source).getUsage(provider)),
       ).resolves.toMatchObject({
         state: 'unavailable',
         provider,
@@ -663,7 +689,7 @@ describe('SubscriptionUsageService', () => {
         jsonResponse({ secret: 'must not escape' }, status),
       );
 
-      const snapshot = await serviceWith(http).getUsage(provider);
+      const snapshot = await runUsage(serviceWith(http).getUsage(provider));
       expect(snapshot).toMatchObject({
         state: 'unavailable',
         reason: 'invalid_credentials',
@@ -679,13 +705,12 @@ describe('SubscriptionUsageService', () => {
   ])('maps ChatGPT %s auth failures to %s', async (kind, reason) => {
     const http = vi.fn<SubscriptionUsageHttp>();
     const source = credentials({
-      loadChatGpt: async () => {
-        throw new CodexAuthError('refresh failed', kind);
-      },
+      loadChatGpt: () =>
+        Effect.fail(new CodexAuthError('refresh failed', kind)),
     });
 
     await expect(
-      serviceWith(http, source).getUsage('chatgpt'),
+      runUsage(serviceWith(http, source).getUsage('chatgpt')),
     ).resolves.toMatchObject({
       state: 'unavailable',
       reason,
@@ -698,7 +723,7 @@ describe('SubscriptionUsageService', () => {
       jsonResponse({ rate_limit: { primary_window: { used_percent: 'bad' } } }),
     );
     await expect(
-      serviceWith(malformed).getUsage('chatgpt'),
+      runUsage(serviceWith(malformed).getUsage('chatgpt')),
     ).resolves.toMatchObject({
       state: 'unavailable',
       reason: 'malformed_response',
@@ -708,7 +733,7 @@ describe('SubscriptionUsageService', () => {
       async () => new Response('{', { status: 200 }),
     );
     await expect(
-      serviceWith(invalidJson).getUsage('kimiCode'),
+      runUsage(serviceWith(invalidJson).getUsage('kimiCode')),
     ).resolves.toMatchObject({
       state: 'unavailable',
       reason: 'malformed_response',
@@ -717,7 +742,9 @@ describe('SubscriptionUsageService', () => {
     const failed = vi.fn<SubscriptionUsageHttp>(async () =>
       jsonResponse({ secret: 'must not escape' }, 500),
     );
-    const snapshot = await serviceWith(failed).getUsage('glmCodingPlan');
+    const snapshot = await runUsage(
+      serviceWith(failed).getUsage('glmCodingPlan'),
+    );
     expect(snapshot).toMatchObject({
       state: 'unavailable',
       reason: 'request_failed',
@@ -744,7 +771,7 @@ describe('SubscriptionUsageService', () => {
       requestTimeoutMs: 1,
     });
 
-    await expect(service.getUsage('chatgpt')).resolves.toMatchObject({
+    await expect(runUsage(service.getUsage('chatgpt'))).resolves.toMatchObject({
       state: 'unavailable',
       reason: 'request_failed',
     });
@@ -760,15 +787,15 @@ describe('SubscriptionUsageService', () => {
       cacheTtlMs: 100,
     });
 
-    const first = await service.getUsage('kimiCode');
-    expect(await service.getUsage('kimiCode')).toBe(first);
+    const first = await runUsage(service.getUsage('kimiCode'));
+    expect(await runUsage(service.getUsage('kimiCode'))).toBe(first);
     expect(http).toHaveBeenCalledTimes(1);
 
-    await service.getUsage('kimiCode', { forceRefresh: true });
+    await runUsage(service.getUsage('kimiCode', { forceRefresh: true }));
     expect(http).toHaveBeenCalledTimes(2);
 
     now += 101;
-    await service.getUsage('kimiCode');
+    await runUsage(service.getUsage('kimiCode'));
     expect(http).toHaveBeenCalledTimes(3);
   });
 
@@ -780,8 +807,8 @@ describe('SubscriptionUsageService', () => {
     );
     const service = serviceWith(http, credentials(), { cacheTtlMs: 0 });
 
-    await service.getUsage('kimiCode');
-    await service.getUsage('kimiCode');
+    await runUsage(service.getUsage('kimiCode'));
+    await runUsage(service.getUsage('kimiCode'));
 
     expect(http).toHaveBeenCalledTimes(2);
   });
@@ -793,14 +820,18 @@ describe('SubscriptionUsageService', () => {
     );
     const service = serviceWith(http);
 
-    await expect(service.getUsage('kimiCode')).resolves.toMatchObject({
-      windows: [expect.objectContaining({ percentUsed: 50 })],
-    });
+    await expect(runUsage(service.getUsage('kimiCode'))).resolves.toMatchObject(
+      {
+        windows: [expect.objectContaining({ percentUsed: 50 })],
+      },
+    );
     remaining = 25;
     service.invalidate('kimiCode');
-    await expect(service.getUsage('kimiCode')).resolves.toMatchObject({
-      windows: [expect.objectContaining({ percentUsed: 75 })],
-    });
+    await expect(runUsage(service.getUsage('kimiCode'))).resolves.toMatchObject(
+      {
+        windows: [expect.objectContaining({ percentUsed: 75 })],
+      },
+    );
     expect(http).toHaveBeenCalledTimes(2);
   });
 
@@ -817,10 +848,10 @@ describe('SubscriptionUsageService', () => {
     );
     const service = serviceWith(http);
 
-    const oldAccountRequest = service.getUsage('kimiCode');
+    const oldAccountRequest = runUsage(service.getUsage('kimiCode'));
     await vi.waitFor(() => expect(responses).toHaveLength(1));
     service.invalidate('kimiCode');
-    const newAccountRequest = service.getUsage('kimiCode');
+    const newAccountRequest = runUsage(service.getUsage('kimiCode'));
     await vi.waitFor(() => expect(responses).toHaveLength(2));
 
     responses[0]?.(jsonResponse({ usage: { limit: 100, remaining: 90 } }));
@@ -836,7 +867,9 @@ describe('SubscriptionUsageService', () => {
     expect(newCallerSnapshot).toMatchObject({
       windows: [expect.objectContaining({ percentUsed: 80 })],
     });
-    expect(await service.getUsage('kimiCode')).toBe(newCallerSnapshot);
+    expect(await runUsage(service.getUsage('kimiCode'))).toBe(
+      newCallerSnapshot,
+    );
     expect(http).toHaveBeenCalledTimes(2);
   });
 
@@ -848,8 +881,8 @@ describe('SubscriptionUsageService', () => {
     const http = vi.fn<SubscriptionUsageHttp>(() => response);
     const service = serviceWith(http);
 
-    const first = service.getUsage('chatgpt');
-    const second = service.getUsage('chatgpt');
+    const first = runUsage(service.getUsage('chatgpt'));
+    const second = runUsage(service.getUsage('chatgpt'));
     await vi.waitFor(() => expect(http).toHaveBeenCalledTimes(1));
     resolveResponse?.(
       jsonResponse({
