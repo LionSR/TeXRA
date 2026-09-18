@@ -16,22 +16,15 @@
  * host-agnostic, so the two host wiring points that own a controller
  * (`desktopAgentRun.ts`, `ProgressViewProvider.ts`) supply the fiber.
  *
- * Two shapes recur and are worth naming once:
- *
- *   - **Admission is synchronous, the work is an Effect.**
- *     {@link ToolEditApprovalController.handleAction},
- *     {@link ToolEditApprovalController.release} and
- *     {@link ToolEditApprovalController.dispose} each do their bookkeeping —
- *     the map write, the `Deferred` a later caller joins — in the same
- *     synchronous step they look the entry up in, and hand back the program
- *     left to run. Nothing another fiber could interleave with sits between
- *     finding an entry and accounting for what is about to happen to it.
- *   - **Work nobody waits for runs detached.** What used to be a voided
- *     promise is {@link ToolEditApprovalController.detach}: a fiber of the
- *     global scope, so staging and admitted actions run to completion
- *     whether or not the caller that started them is still there, exactly as
- *     a promise did. A release joins them through the entry, never through
- *     the fork.
+ * Two shapes recur. **Admission is synchronous, the work is an Effect**: the
+ * bookkeeping — the map write, the `Deferred` a later caller joins — happens
+ * in the same step its caller looked the entry up in, so nothing another
+ * fiber could interleave with sits between finding an entry and accounting
+ * for what is about to happen to it. **Work nobody waits for runs detached**
+ * ({@link ToolEditApprovalController.detach}): a fiber of the global scope,
+ * so staging and admitted actions finish whether or not the caller that
+ * started them is still there, exactly as a voided promise did, and a release
+ * joins them through the entry rather than through the fork.
  */
 
 // Third-party imports
@@ -609,53 +602,46 @@ export class ToolEditApprovalController {
     requestId: string,
     entry: ToolEditApprovalState,
   ): Effect.Effect<void, never, PreviewFs> {
-    return Deferred.await(entry.inFlight).pipe(
-      Effect.tap((exit) =>
-        Effect.sync(() => {
-          if (Exit.isFailure(exit)) {
-            log.warn(
-              `The tool-edit preview for request ${requestId} failed while its release waited for it`,
-              { data: Cause.squash(exit.cause) },
-            );
-          }
-        }),
-      ),
-      Effect.andThen(
-        Effect.suspend(() => {
-          if (entry.phase !== 'pending') return Effect.void;
-          // An action, or a build one of them started, may still be running:
-          // settling above stopped the preview program, not the host's build,
-          // which has no cancellation signal. Joining them here is what keeps
-          // this release from deleting the diff files under a build still
-          // reading them. Nothing is admitted after the entry delete above,
-          // so this snapshot is complete.
-          return Effect.forEach([...entry.inFlightActions], (join) => join, {
-            concurrency: 'unbounded',
-            discard: true,
-          }).pipe(
-            Effect.andThen(Effect.suspend(() => entry.preview.dispose())),
-            Effect.andThen(
-              Effect.suspend(() =>
-                Effect.forEach(
-                  entry.workspaceTempCleanup,
-                  (removeTemp) => removeTemp,
-                  { concurrency: 'unbounded', discard: true },
-                ),
-              ),
+    const { host } = this.options;
+    return Effect.gen(function* () {
+      const staging = yield* Deferred.await(entry.inFlight);
+      if (Exit.isFailure(staging)) {
+        log.warn(
+          `The tool-edit preview for request ${requestId} failed while its release waited for it`,
+          { data: Cause.squash(staging.cause) },
+        );
+      }
+      if (entry.phase !== 'pending') return;
+
+      // An action, or a build one of them started, may still be running:
+      // settling above stopped the preview program, not the host's build,
+      // which has no cancellation signal. Joining them here is what keeps this
+      // release from deleting the diff files under a build still reading them.
+      // Nothing is admitted after the entry delete above, so this snapshot is
+      // complete.
+      yield* Effect.forEach([...entry.inFlightActions], (join) => join, {
+        concurrency: 'unbounded',
+        discard: true,
+      });
+      yield* entry.preview.dispose().pipe(
+        Effect.andThen(
+          Effect.suspend(() =>
+            Effect.forEach(
+              entry.workspaceTempCleanup,
+              (removeTemp) => removeTemp,
+              { concurrency: 'unbounded', discard: true },
             ),
-            Effect.catchCause((cause) =>
-              Cause.hasInterruptsOnly(cause)
-                ? Effect.interrupt
-                : Effect.sync(() => {
-                    this.options.host.reportError(
-                      toErrorMessage(Cause.squash(cause)),
-                    );
-                  }),
-            ),
-          );
-        }),
-      ),
-    );
+          ),
+        ),
+        Effect.catchCause((cause) =>
+          Cause.hasInterruptsOnly(cause)
+            ? Effect.interrupt
+            : Effect.sync(() => {
+                host.reportError(toErrorMessage(Cause.squash(cause)));
+              }),
+        ),
+      );
+    });
   }
 
   /**
