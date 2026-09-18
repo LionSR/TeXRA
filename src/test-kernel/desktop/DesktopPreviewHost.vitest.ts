@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { effectRuntime, type ProcessRuntime } from '@platform/processRuntime';
 import type { RunId } from '@shared/schemas';
 import type { HostRequest } from '@shared/session/hostRequest';
+import { Rejected } from '@shared/session/requestErrors';
 import { createModuleMocks } from '@test/support/moduleMocks';
 import {
   createFakeWorkspaceRoots,
@@ -145,7 +146,7 @@ describe('desktop preview host', () => {
       });
       const draftRequests = new HostDraftRequests();
       vi.spyOn(draftRequests, 'handle').mockReturnValue(
-        Effect.fail(new Error('Text service unavailable')),
+        Effect.fail(new Rejected({ reason: 'Text service unavailable' })),
       );
       const files = createDesktopFileSelection({
         workspacePath: undefined,
@@ -185,7 +186,7 @@ describe('desktop preview host', () => {
         postToRenderer: () => {},
         postSurfaceAction: () => {},
         signIn: async () => {},
-        getCustomAgentDirectory: async () => '/agents',
+        getCustomAgentDirectory: () => Effect.succeed('/agents'),
         showFirstRunWalkthrough: () => {},
         onboarding: {} as Parameters<
           typeof createDesktopHostRequests

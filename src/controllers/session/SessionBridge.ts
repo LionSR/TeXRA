@@ -48,10 +48,8 @@ import type { ProcessServices } from '@platform/processRuntime';
 import type { HostRequest } from '@shared/session/hostRequest';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import {
-  Cancelled,
   Internal,
-  Rejected,
-  Unavailable,
+  isRequestRefusal,
   type RequestError,
 } from '@shared/session/requestErrors';
 import {
@@ -82,11 +80,13 @@ interface SessionBridgeOptions {
    *  the host's transport runs `receive` on. A handler cancels with
    *  `Cancelled` or refuses with `Unavailable` or `Rejected`; anything else
    *  it fails or dies with is a defect, logged here and answered
-   *  `Internal`. */
+   *  `Internal`. The channel is `Error`, not `unknown`: each host lifts a
+   *  Promise-faced capability once, under the member's name, so a bare
+   *  rejection value can no longer reach this fold. */
   readonly handleHostRequest: (
     request: HostRequest,
     port: string,
-  ) => Effect.Effect<HostOutcome, unknown, ProcessServices>;
+  ) => Effect.Effect<HostOutcome, Error, ProcessServices>;
 }
 
 /** One attached transport port: the host posts `send`'s messages to it. */
@@ -135,17 +135,6 @@ function wireError(error: RequestError): RequestErrorWire {
     case 'Internal':
       return { _tag: 'Internal', ref: error.ref };
   }
-}
-
-/** A host handler's refusal, as opposed to its defect. */
-function isRefusal(
-  error: unknown,
-): error is Cancelled | Unavailable | Rejected {
-  return (
-    error instanceof Cancelled ||
-    error instanceof Unavailable ||
-    error instanceof Rejected
-  );
 }
 
 /** One attached port: its transport, its scopes, and the framer in flight. */
@@ -347,7 +336,7 @@ export class SessionBridge {
             this.options.handleHostRequest(up.request, port.id).pipe(
               Effect.matchEffect({
                 onFailure: (error): Effect.Effect<Response['result']> =>
-                  isRefusal(error)
+                  isRequestRefusal(error)
                     ? Effect.succeed({ ok: false, error: wireError(error) })
                     : Effect.die(error),
                 onSuccess: (outcome): Effect.Effect<Response['result']> =>

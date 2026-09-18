@@ -4,6 +4,7 @@ import { MODEL_CONFIGS } from 'llm-zoo';
 // Local imports
 import type { ApiProvider } from '@model/apiProviders';
 import { resolveDirectModelApiKeyProvider } from '@model/openRouterRouting';
+import type { SecretsFailed } from '@platform/secrets';
 import type { ExhaustionReason, RunId } from '@shared/schemas';
 import {
   isKimiCodeExclusiveModel,
@@ -40,16 +41,13 @@ interface ProgressApiKeyRetryControllerDeps {
   providers: readonly ApiProvider[];
   readKey(
     provider: ApiProvider,
-  ): Effect.Effect<Redacted.Redacted<string> | undefined, unknown>;
-  hasUsableKey(provider: ApiProvider): Effect.Effect<boolean, unknown>;
+  ): Effect.Effect<Redacted.Redacted<string> | undefined, SecretsFailed>;
+  hasUsableKey(provider: ApiProvider): Effect.Effect<boolean, SecretsFailed>;
   promptForApiKey(
     provider?: ApiProvider,
   ): Effect.Effect<void, ApiKeyPromptFailed>;
   isRetryPending(stream: RunId, requestId: string): boolean;
-  triggerRetry(
-    stream: RunId,
-    requestId: string,
-  ): Effect.Effect<boolean, unknown>;
+  triggerRetry(stream: RunId, requestId: string): Effect.Effect<boolean>;
 }
 
 /**
@@ -157,7 +155,7 @@ export class ProgressApiKeyRetryController {
 
   private hasAnyUsableKey(
     providers: readonly ApiProvider[],
-  ): Effect.Effect<boolean, unknown> {
+  ): Effect.Effect<boolean, SecretsFailed> {
     return Effect.map(
       Effect.forEach(
         providers,
@@ -171,7 +169,7 @@ export class ProgressApiKeyRetryController {
   private hasChangedUsableKey(
     providers: readonly ApiProvider[],
     keysBefore: ReadonlyMap<ApiProvider, Redacted.Redacted<string> | undefined>,
-  ): Effect.Effect<boolean, unknown> {
+  ): Effect.Effect<boolean, SecretsFailed> {
     return Effect.map(this.readKeys(providers), (keysAfter) =>
       providers.some((provider) => {
         const next = keysAfter.get(provider);
@@ -188,7 +186,7 @@ export class ProgressApiKeyRetryController {
     providers: readonly ApiProvider[],
   ): Effect.Effect<
     Map<ApiProvider, Redacted.Redacted<string> | undefined>,
-    unknown
+    SecretsFailed
   > {
     return Effect.map(
       Effect.forEach(

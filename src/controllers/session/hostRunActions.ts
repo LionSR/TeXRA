@@ -146,7 +146,7 @@ interface HostRunActions {
    *  request runs it where it stands. */
   useOwnApiKey(
     request: Extract<HostRequest, { kind: 'useOwnApiKey' }>,
-  ): Effect.Effect<void, unknown, AppState>;
+  ): Effect.Effect<void, Error, AppState>;
   /** The launcher's form of a settled run's saved setup. */
   restoreState(runId: RunId): Effect.Effect<AgentConfig, Error>;
   /** The run's output facts as the view holds them, read by the workflow

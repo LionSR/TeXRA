@@ -60,7 +60,9 @@ export async function savePastedImageBuffer(
 
 /** Why a pasted image could not be persisted, worded as the host shows it so
  *  the caller yields this failure instead of re-minting one of its own. */
-class PastedImageSaveFailed extends Data.TaggedError('PastedImageSaveFailed')<{
+export class PastedImageSaveFailed extends Data.TaggedError(
+  'PastedImageSaveFailed',
+)<{
   readonly message: string;
   readonly cause: unknown;
 }> {}

@@ -45,13 +45,14 @@ interface DesktopPreviewHost {
   /**
    * `reportFailure` (default `true`) decides whether the window shows its own
    * "could not open" dialog before the failure reaches the caller. With it
-   * off, the caller reads the shell's own rejection — which is why this
-   * channel is `unknown` rather than {@link PreviewUnavailable}.
+   * off, the caller reads the shell's refusal as
+   * {@link ExternalUrlRejected}, which carries that rejection's own text and
+   * the value it was thrown with.
    */
   openExternal(
     url: string,
     options?: { readonly reportFailure?: boolean },
-  ): Effect.Effect<void, unknown>;
+  ): Effect.Effect<void, PreviewUnavailable | ExternalUrlRejected>;
   /** Open a workspace file in the OS default application. */
   openPath(filePath: string): Effect.Effect<void, PreviewUnavailable>;
   /**
@@ -76,6 +77,20 @@ interface DesktopPreviewHostOptions extends DesktopOverlayPostOptions {
  */
 export class PreviewUnavailable extends Data.TaggedError('PreviewUnavailable')<{
   readonly message: string;
+}> {}
+
+/**
+ * The shell refused a URL and the caller asked to keep that refusal rather
+ * than the window's dialog (`reportFailure: false`). `message` is the
+ * rejection's own text, so a caller that words its own report reads exactly
+ * what the bare rejection gave it.
+ */
+export class ExternalUrlRejected extends Data.TaggedError(
+  'ExternalUrlRejected',
+)<{
+  readonly url: string;
+  readonly message: string;
+  readonly cause: unknown;
 }> {}
 
 export function createDesktopPreviewHost(
@@ -133,18 +148,26 @@ export function createDesktopPreviewHost(
   function openExternalProgram(
     url: string,
     reportFailure: boolean,
-  ): Effect.Effect<void, unknown> {
+  ): Effect.Effect<void, PreviewUnavailable | ExternalUrlRejected> {
     return Effect.tryPromise({
       try: () => options.shell.openExternal(url),
-      catch: (error) => error,
+      catch: (cause) =>
+        new ExternalUrlRejected({
+          url,
+          message: toErrorMessage(cause),
+          cause,
+        }),
     }).pipe(
-      Effect.catch((error) =>
-        reportFailure
-          ? fail(`Failed to open URL ${url}: ${toErrorMessage(error)}`)
-          : // The caller asked to keep the original rejection: an OAuth flow
-            // decides for itself whether a missing browser handler is worth a
-            // dialog.
-            Effect.fail(error),
+      Effect.catch(
+        (
+          error,
+        ): Effect.Effect<never, PreviewUnavailable | ExternalUrlRejected> =>
+          reportFailure
+            ? fail(`Failed to open URL ${url}: ${error.message}`)
+            : // The caller asked to keep the original rejection: an OAuth flow
+              // decides for itself whether a missing browser handler is worth
+              // a dialog.
+              Effect.fail(error),
       ),
     );
   }

@@ -8,7 +8,7 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import { Cause, Effect, Exit, SubscriptionRef } from 'effect';
+import { Cause, Data, Effect, Exit, SubscriptionRef } from 'effect';
 import { presentAgentFailure, type SessionHandle } from '@agent/runtime';
 import {
   classifyAgentError,
@@ -38,7 +38,7 @@ import {
   modelOptionsFrom,
   readModelAvailabilityInputs,
 } from '@model/computeModelOptions';
-import type { StateStore } from '@platform/interfaces';
+import type { AgentDirectoriesFailed, StateStore } from '@platform/interfaces';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import { sessionFsLayer } from '@platform/rootedFs';
 import type { PlatformSecrets } from '@platform/secrets';
@@ -50,8 +50,10 @@ import {
 import type { HostRequest } from '@shared/session/hostRequest';
 import {
   Cancelled,
+  isRequestRefusal,
   Rejected,
   Unavailable,
+  type RequestRefusal,
 } from '@shared/session/requestErrors';
 import type {
   HostOutcome,
@@ -76,6 +78,10 @@ import {
   type DesktopLatexdiffWorkspaceScan,
 } from './desktopProgressFileActions.js';
 import type { DesktopOnboardingIpc } from './desktopOnboardingIpc.js';
+import type {
+  ExternalUrlRejected,
+  PreviewUnavailable,
+} from './desktopPreviewHost.js';
 import type { DesktopAgentRun } from './desktopAgentRun.js';
 import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
 import type { DesktopFileSelection } from './desktopFileSelection.js';
@@ -98,13 +104,15 @@ interface DesktopHostRequestsOptions {
   /** A host-initiated change to the surface (PRD 8.5). */
   postSurfaceAction(action: SurfaceActionMessage['action']): void;
   signIn(): Promise<void>;
-  getCustomAgentDirectory(): Promise<string>;
+  getCustomAgentDirectory(): Effect.Effect<string, AgentDirectoriesFailed>;
   showFirstRunWalkthrough(): void;
   onboarding: Pick<
     DesktopOnboardingIpc,
     'skipOnboarding' | 'skipSetup' | 'runSetup' | 'signInWithChatGpt'
   >;
-  openExternalUrl(url: string): Effect.Effect<void, unknown>;
+  openExternalUrl(
+    url: string,
+  ): Effect.Effect<void, PreviewUnavailable | ExternalUrlRejected>;
   /** Re-probe the LaTeX toolchain. */
   recheckTools(): Promise<void>;
   /** The process runtime this window was handed; every request arm below runs
@@ -120,13 +128,24 @@ export interface DesktopHostRequests {
   handleHostRequest(
     request: HostRequest,
     port: string,
-  ): Effect.Effect<HostOutcome, unknown, ProcessServices>;
+  ): Effect.Effect<HostOutcome, Error, ProcessServices>;
   closePort(port: string): void;
   /** Stops a recording this window owns; the take is discarded. */
   dispose(): void;
 }
 
 const LATEXDIFF_CHANNEL = 'DesktopHostRequests';
+
+/**
+ * A desktop capability that still answers with a promise rejected. `member`
+ * names which one; `cause` is the value the promise rejected with, which the
+ * request's dialog classifies and presents as it presented the bare rejection.
+ */
+class HostCallFailed extends Data.TaggedError('HostCallFailed')<{
+  readonly member: string;
+  readonly message: string;
+  readonly cause: unknown;
+}> {}
 
 type WorkflowFileOperation = 'pack' | 'clean';
 
@@ -148,11 +167,26 @@ export function createDesktopHostRequests(
    *  lifetime, so the layer is built once from it here, never from an
    *  ambient store. */
   const sessionFiles = sessionFsLayer(session.roots);
-  /** A host capability that still answers with a promise, lifted verbatim:
-   *  the rejection reaches the dispatcher's fold as the value it was thrown
-   *  with, exactly as `await` handed it over. */
-  const fromHost = <A>(call: () => Promise<A>): Effect.Effect<A, unknown> =>
-    Effect.tryPromise({ try: call, catch: (error) => error });
+  /** A host capability that still answers with a promise, lifted once and
+   *  named: a refusal the callee already worded travels as itself, and every
+   *  other rejection is tagged with the member it came from. `message` is the
+   *  rejection's own text and `cause` the value it was thrown with, so the
+   *  fold below and the bridge's log read exactly what `await` handed over. */
+  const fromHost = <A>(
+    member: string,
+    call: () => Promise<A>,
+  ): Effect.Effect<A, HostCallFailed | RequestRefusal> =>
+    Effect.tryPromise({
+      try: call,
+      catch: (cause) =>
+        isRequestRefusal(cause)
+          ? cause
+          : new HostCallFailed({
+              member,
+              message: toErrorMessage(cause),
+              cause,
+            }),
+    });
   // Shared controllers propagate request failures to the dispatcher: the
   // notice IS the refusal the request answers with, and the request rethrows
   // it unchanged.
@@ -349,7 +383,7 @@ export function createDesktopHostRequests(
           }),
         );
       }
-      yield* fromHost(() =>
+      yield* fromHost('fileActions.diffStreamToolbarAction', () =>
         fileActions.diffStreamToolbarAction({
           outputsByRound: request.outputsByRound ?? {},
           runId: request.runId,
@@ -523,7 +557,7 @@ export function createDesktopHostRequests(
         if (!result.success) {
           return yield* Effect.fail(new Rejected({ reason: result.message }));
         }
-        yield* fromHost(() =>
+        yield* fromHost('host.openBuildDisplay', () =>
           host.openBuildDisplay(createExternalLocation(result.diffPath)),
         );
         return;
@@ -563,20 +597,24 @@ export function createDesktopHostRequests(
       }
       switch (action) {
         case 'compare':
-          yield* fromHost(() =>
+          yield* fromHost('workflowFileActions.compareOriginal', () =>
             workflowFileActions.compareOriginal(editedFile, baseFile),
           );
           return;
         case 'accept':
-          yield* fromHost(() =>
+          yield* fromHost('workflowFileActions.acceptFile', () =>
             workflowFileActions.acceptFile(editedFile, baseFile),
           );
           return;
         case 'merge':
-          yield* fromHost(() => fileActions.runMergeFile(baseFile, editedFile));
+          yield* fromHost('fileActions.runMergeFile', () =>
+            fileActions.runMergeFile(baseFile, editedFile),
+          );
           return;
         case 'latexdiff':
-          yield* fromHost(() => runLatexdiffFile(baseFile, editedFile));
+          yield* fromHost('fileActions.runLatexdiffFile', () =>
+            runLatexdiffFile(baseFile, editedFile),
+          );
           return;
       }
     });
@@ -598,9 +636,7 @@ export function createDesktopHostRequests(
             postDesktopSettingsView(options.postToRenderer, 'agents');
             return;
           }
-          const directory = yield* fromHost(() =>
-            options.getCustomAgentDirectory(),
-          );
+          const directory = yield* options.getCustomAgentDirectory();
           yield* host.openPath(directory);
           return;
         }
@@ -616,19 +652,27 @@ export function createDesktopHostRequests(
     Effect.gen(function* () {
       switch (action) {
         case 'signInChatGpt':
-          yield* fromHost(() => options.onboarding.signInWithChatGpt());
+          yield* fromHost('onboarding.signInWithChatGpt', () =>
+            options.onboarding.signInWithChatGpt(),
+          );
           return;
         case 'setApiKey':
           postDesktopSettingsView(options.postToRenderer, 'models');
           return;
         case 'skip':
-          yield* fromHost(() => options.onboarding.skipOnboarding());
+          yield* fromHost('onboarding.skipOnboarding', () =>
+            options.onboarding.skipOnboarding(),
+          );
           return;
         case 'runSetup':
-          yield* fromHost(() => options.onboarding.runSetup());
+          yield* fromHost('onboarding.runSetup', () =>
+            options.onboarding.runSetup(),
+          );
           return;
         case 'skipSetup':
-          yield* fromHost(() => options.onboarding.skipSetup());
+          yield* fromHost('onboarding.skipSetup', () =>
+            options.onboarding.skipSetup(),
+          );
           return;
         case 'openGettingStarted':
           yield* options.openExternalUrl(DESKTOP_DOCS_URL);
@@ -650,7 +694,7 @@ export function createDesktopHostRequests(
   function dispatch(
     request: HostRequest,
     port: string,
-  ): Effect.Effect<HostOutcome, unknown, ProcessServices> {
+  ): Effect.Effect<HostOutcome, Error, ProcessServices> {
     return Effect.gen(function* () {
       const done: HostOutcome = { kind: 'done' };
       switch (request.kind) {
@@ -661,7 +705,7 @@ export function createDesktopHostRequests(
         }
         case 'openLabel': {
           const { label } = request;
-          const opened = yield* fromHost(() =>
+          const opened = yield* fromHost('fileActions.findAndOpenLabel', () =>
             fileActions.findAndOpenLabel(label),
           );
           if (!opened) {
@@ -673,7 +717,9 @@ export function createDesktopHostRequests(
         }
         case 'openTaskStorage': {
           const { runId } = request;
-          yield* fromHost(() => workflowFileActions.openTaskStorage(runId));
+          yield* fromHost('workflowFileActions.openTaskStorage', () =>
+            workflowFileActions.openTaskStorage(runId),
+          );
           return done;
         }
         case 'exportTranscript':
@@ -742,7 +788,7 @@ export function createDesktopHostRequests(
               notOnDesktop(`A picker for ${fileType} files`),
             );
           }
-          const paths = yield* fromHost(() =>
+          const paths = yield* fromHost('files.pickFiles', () =>
             options.files.pickFiles(fileType),
           );
           if (paths === null) return yield* Effect.fail(new Cancelled());
@@ -755,7 +801,7 @@ export function createDesktopHostRequests(
           const { paths: dropped, category } = request;
           return {
             kind: 'files',
-            paths: yield* fromHost(() =>
+            paths: yield* fromHost('files.attachDroppedFiles', () =>
               options.files.attachDroppedFiles(dropped, category),
             ),
           };
@@ -766,7 +812,7 @@ export function createDesktopHostRequests(
             host,
             session.roots.workspaceState,
           );
-          yield* fromHost(() => run.runValidated(launch));
+          yield* fromHost('run.runValidated', () => run.runValidated(launch));
           return done;
         }
         case 'extractFigures':
@@ -781,7 +827,9 @@ export function createDesktopHostRequests(
         case 'fileAction': {
           const fileAction = request;
           const config = yield* runActions.readConfig(fileAction.runId);
-          yield* fromHost(() => workflowFileActions.handle(fileAction, config));
+          yield* fromHost('workflowFileActions.handle', () =>
+            workflowFileActions.handle(fileAction, config),
+          );
           return done;
         }
         case 'restoreProposalConfig':
@@ -800,13 +848,13 @@ export function createDesktopHostRequests(
           yield* agentConfigBanner(request);
           return done;
         case 'recheckDependencies':
-          yield* fromHost(() => options.recheckTools());
+          yield* fromHost('recheckTools', () => options.recheckTools());
           return done;
         case 'openInstallGuide':
           postDesktopSettingsView(options.postToRenderer, 'tools');
           return done;
         case 'signIn':
-          yield* fromHost(() => options.signIn());
+          yield* fromHost('signIn', () => options.signIn());
           return done;
         case 'dismissBanner':
           yield* options.snapshot.dismissBanner(request.banner);
@@ -832,21 +880,26 @@ export function createDesktopHostRequests(
 
   /**
    * The bridge's host-request port: the dispatch program plus the one dialog
-   * a failed request presents before it is answered. The cause is squashed
-   * and re-failed as the value the arm carried, so the bridge's
-   * refusal-versus-defect fold sees exactly what the failing arm produced.
+   * a failed request presents before it is answered. The cause is squashed to
+   * word the dialog and then re-raised unchanged, so the bridge's
+   * refusal-versus-defect fold sees exactly what the failing arm produced —
+   * a refusal as a refusal, a defect still a defect.
    */
   function handleHostRequest(
     request: HostRequest,
     port: string,
-  ): Effect.Effect<HostOutcome, unknown, ProcessServices> {
+  ): Effect.Effect<HostOutcome, Error, ProcessServices> {
     return dispatch(request, port).pipe(
       Effect.catchCause((cause) => {
         const error = Cause.squash(cause);
-        if (error instanceof Cancelled) return Effect.fail(error);
+        if (error instanceof Cancelled) return Effect.failCause(cause);
         // Request-scoped operations do not present. Every rejection, including
         // a capability refusal, reaches this one dialog before the response.
-        const primaryError = primaryAgentError(error);
+        // A lifted member is presented as what it rejected with: the tag names
+        // the member, the classification reads the cause it carried.
+        const primaryError = primaryAgentError(
+          error instanceof HostCallFailed ? error.cause : error,
+        );
         const refusal =
           primaryError instanceof Rejected ||
           primaryError instanceof Unavailable
@@ -868,7 +921,7 @@ export function createDesktopHostRequests(
               { replayWhenAttached: true },
             ),
           ),
-        ).pipe(Effect.andThen(Effect.fail(error)));
+        ).pipe(Effect.andThen(Effect.failCause(cause)));
       }),
     );
   }

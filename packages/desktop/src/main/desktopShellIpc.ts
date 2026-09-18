@@ -1,6 +1,7 @@
 import { Data, Effect } from 'effect';
 
 import { type MessageHost, NotificationFailed } from '@hosts/uiHosts';
+import type { AgentDirectoriesFailed } from '@platform/interfaces';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { AgentCategory, SettingsTabPanelName } from '@shared/schemas';
 import {
@@ -21,6 +22,10 @@ import type {
   DesktopMessageHandler,
   DesktopRenderer,
 } from './desktopIpcTypes.js';
+import type {
+  ExternalUrlRejected,
+  PreviewUnavailable,
+} from './desktopPreviewHost.js';
 
 /** A shell action's host call rejected. The window reports it and stays up. */
 class ShellActionFailed extends Data.TaggedError('ShellActionFailed')<{
@@ -54,10 +59,12 @@ interface DesktopShellActionFactoryOptions extends Pick<
   MessageHost,
   'showInfoMessage'
 > {
-  getCustomAgentDirectory(): Promise<string>;
-  openExternalUrl(url: string): Effect.Effect<void, unknown>;
-  openLogFolder(): Effect.Effect<void, unknown>;
-  openPath(filePath: string): Effect.Effect<void, unknown>;
+  getCustomAgentDirectory(): Effect.Effect<string, AgentDirectoriesFailed>;
+  openExternalUrl(
+    url: string,
+  ): Effect.Effect<void, PreviewUnavailable | ExternalUrlRejected>;
+  openLogFolder(): Effect.Effect<void, PreviewUnavailable>;
+  openPath(filePath: string): Effect.Effect<void, PreviewUnavailable>;
   openWorkspaceFolder(): Promise<void>;
   signIn(): Promise<void>;
   onAsyncError: (error: unknown) => void;
@@ -119,10 +126,11 @@ export function createDesktopShellActions(
     );
   }
 
-  const openCustomAgentDirectory = Effect.gen(function* () {
-    const customDir = yield* hostCall(() => options.getCustomAgentDirectory());
-    yield* onShellFailure(options.openPath(customDir));
-  });
+  const openCustomAgentDirectory = onShellFailure(
+    Effect.flatMap(options.getCustomAgentDirectory(), (customDir) =>
+      options.openPath(customDir),
+    ),
+  );
 
   function openAgentDirectory(customDirSet?: boolean) {
     if (customDirSet !== true) {

@@ -559,10 +559,10 @@ function createWindow(options: {
   // Session requests present errors at their dispatcher. Menu, navigation,
   // and runtime preview callers retain the reporting host above.
   const requestPreviewHost = createDesktopPreviewHost(previewOptions);
-  /** The custom agents directory for the two shell surfaces that await it;
-   *  the settings controller takes the port's Effect unchanged. */
-  const getCustomAgentDirectory = () =>
-    options.runtime.runPromise(options.agentDirectories.custom());
+  /** The custom agents directory the two shell surfaces open: the port's own
+   *  program, so its `AgentDirectoriesFailed` travels with the caller that
+   *  asked for it instead of being lifted back out of a settled promise. */
+  const getCustomAgentDirectory = () => options.agentDirectories.custom();
   // Button labels for the instruction dialog below. Desktop has one settings
   // home (Settings tab), so SET_API_KEY opens it directly rather than the
   // extension's separate "enter a key" quick pick.

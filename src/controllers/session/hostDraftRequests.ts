@@ -25,7 +25,10 @@ import {
 } from '@tools/media/audio';
 import { THREE_DAYS_MS } from '@utils/config/constants';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { savePastedImageBase64 } from '@utils/files/pastedImageUtils';
+import {
+  savePastedImageBase64,
+  type PastedImageSaveFailed,
+} from '@utils/files/pastedImageUtils';
 import type { HttpClient } from 'effect/unstable/http';
 
 const log = createLog('HostDraftRequests');
@@ -93,7 +96,7 @@ interface Take {
   readonly port: string;
   readonly descriptor: Recording;
   /** Start's answer: the transcription, or why the take ended without one. */
-  readonly result: Deferred.Deferred<HostOutcome, unknown>;
+  readonly result: Deferred.Deferred<HostOutcome, Rejected | Cancelled>;
   /** Settled by the first Stop or Cancel. The take fiber waits on it once
    *  the microphone is up, then reads `cancelled` to decide what to do. */
   readonly settled: Deferred.Deferred<void>;
@@ -139,7 +142,7 @@ export class HostDraftRequests {
     port: string,
   ): Effect.fn.Return<
     HostOutcome,
-    unknown,
+    Rejected | Cancelled | PastedImageSaveFailed,
     | AppState
     | Secrets
     | FileSystem.FileSystem
@@ -210,7 +213,7 @@ export class HostDraftRequests {
       session,
       port,
       descriptor: { session: session.roots.storage, target },
-      result: yield* Deferred.make<HostOutcome, unknown>(),
+      result: yield* Deferred.make<HostOutcome, Rejected | Cancelled>(),
       settled: yield* Deferred.make<void>(),
       stopping: false,
       cancelled: false,
@@ -233,7 +236,7 @@ export class HostDraftRequests {
   ) {
     const takeProgram: Effect.Effect<
       HostOutcome,
-      unknown,
+      Rejected,
       Secrets | FileSystem.FileSystem
     > = Effect.gen(function* () {
       // Transcription binds its OpenAI credential against the process
