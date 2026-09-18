@@ -31,6 +31,7 @@ import {
 import { formatCliDeviceAuthMessage } from '@cli/runtime/supabaseAuthDeviceCode';
 import type { SubscriptionProviderId } from '@controllers/modelAccess/subscriptionProviders';
 import type { ProcessRuntime } from '@platform/processRuntime';
+import type { GlobalStorageFs } from '@platform/rootedFs';
 import type { Secrets, PlatformSecrets } from '@platform/secrets';
 import {
   ACCOUNT_OUTCOME,
@@ -216,7 +217,7 @@ export function loginFromChat(
 const logoutLines = (
   target: CliLogoutTarget,
   secrets: PlatformSecrets,
-): Effect.Effect<readonly string[], never, Secrets> =>
+): Effect.Effect<readonly string[], never, Secrets | GlobalStorageFs> =>
   Effect.gen(function* () {
     const lines: string[] = [];
 

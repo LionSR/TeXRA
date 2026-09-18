@@ -19,6 +19,7 @@ import {
 import type { StoredSessionState } from '@auth/TokenProvider';
 import { completeDeviceSession } from '@auth/oauth/deviceAuthorization';
 import type { ProcessRuntime } from '@platform/processRuntime';
+import type { GlobalStorageFs } from '@platform/rootedFs';
 import type { PlatformSecrets } from '@platform/secrets';
 import { ensureError } from '@utils/errors/errorMessage';
 
@@ -252,7 +253,11 @@ export const signInCliSupabaseDeviceCode = Effect.fn(
  * local agent catalog. A plane the composition root never built, and a
  * storage rejection, both fail as the error the caller reports.
  */
-export function signOutCliSupabase(): Effect.Effect<void, Error> {
+export function signOutCliSupabase(): Effect.Effect<
+  void,
+  Error,
+  GlobalStorageFs
+> {
   return Effect.gen(function* () {
     const authCoordinator = yield* Effect.try({
       try: () => cliSupabaseAuth().coordinator,

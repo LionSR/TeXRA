@@ -437,9 +437,9 @@ describe('CLI Supabase auth', () => {
   });
 
   it('removes cached remote agents after sign-out', async () => {
-    const { signOutCliSupabase } = await loadSupabaseAuth();
+    const { runtime, signOutCliSupabase } = await loadSupabaseAuth();
 
-    await Effect.runPromise(signOutCliSupabase());
+    await runtime.runPromise(signOutCliSupabase());
 
     expect(mocks.authCoordinator.clearSession).toHaveBeenCalledOnce();
     expect(mocks.invalidateRemoteAgentsAfterSignOut).toHaveBeenCalledOnce();
@@ -471,7 +471,7 @@ describe('CLI Supabase auth', () => {
       Effect.fail(new Error('local rebuild failed')),
     );
     const warn = vi.fn();
-    const { initializeCliSupabaseAuth, signOutCliSupabase } =
+    const { initializeCliSupabaseAuth, runtime, signOutCliSupabase } =
       await loadSupabaseAuth();
     initializeCliSupabaseAuth(cliSecrets, {
       debug: vi.fn(),
@@ -481,7 +481,7 @@ describe('CLI Supabase auth', () => {
     });
 
     await expect(
-      Effect.runPromise(signOutCliSupabase()),
+      runtime.runPromise(signOutCliSupabase()),
     ).resolves.toBeUndefined();
 
     expect(mocks.authCoordinator.clearSession).toHaveBeenCalledOnce();
