@@ -99,8 +99,7 @@ describe('provider-key onboarding flow', () => {
         );
         const platform = {
           ...createFakePlatform(),
-          globalStorage: createFakeWorkspaceRoots().globalStorage,
-          globalState: createFakeWorkspaceRoots().globalState,
+          ...createFakeWorkspaceRoots(),
           secrets: new FakeSecrets(),
           runtime: testRuntime(),
         };

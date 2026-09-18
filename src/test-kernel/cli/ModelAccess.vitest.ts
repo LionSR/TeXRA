@@ -19,7 +19,7 @@ import type { ModelOptionData } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { FakeStateStore, fakeStores } from '@test/support/FakePlatform';
-import { setupPlatform } from '@test/support/setupPlatform';
+import { hostStores, setupPlatform } from '@test/support/setupPlatform';
 
 const readModelAvailabilityInputsMock = vi.hoisted(() => vi.fn());
 
@@ -354,12 +354,12 @@ describe('CLI model access resolution', () => {
       useOpenRouter,
     }) => {
       await seedGlmRouting({ codingPlan, providerEndpoint, useOpenRouter });
-      expect(formatModelStatusForCli(entry)).toBe(expected);
+      expect(formatModelStatusForCli(hostStores(), entry)).toBe(expected);
     },
   );
 
   it('builds model picker rows from the access-list source of truth', () => {
-    const rows = modelSelectItemsForCli([
+    const rows = modelSelectItemsForCli(hostStores(), [
       model('deepseekT', {
         model: modelOption('deepseekT', {
           label: 'DeepSeek',
@@ -398,6 +398,7 @@ describe('CLI model access resolution', () => {
   it('marks runnable model picker rows disabled when a live chat cannot switch formats', () => {
     expect(
       modelSelectItemsForCli(
+        hostStores(),
         [
           model('sonnet46T', {
             model: modelOption('sonnet46T', {
@@ -439,7 +440,7 @@ describe('CLI model access resolution', () => {
 
   it('treats filtered-empty model picker rows as non-actionable', () => {
     expect(
-      modelSelectItemsForCli([
+      modelSelectItemsForCli(hostStores(), [
         model('deepseekT', {
           available: false,
           model: modelOption('deepseekT', {

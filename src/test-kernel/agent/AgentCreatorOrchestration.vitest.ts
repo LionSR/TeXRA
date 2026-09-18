@@ -27,7 +27,6 @@ import {
   nodePlatformLayer,
   unusedGlobalStorageFs,
 } from '@test/support/fsTestUtils';
-import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 
 const mocks = vi.hoisted(() => ({
   helperModel: vi.fn(),
@@ -52,7 +51,6 @@ vi.mock('@agent/runtime/agentLoad', async (importActual) => ({
  * orchestration.
  */
 const STORES = fakeStores();
-const ROOTS = makeFakeSettingsStores().stores;
 
 const CONFIG: CreatorConfig = {
   workflow: {
@@ -80,7 +78,7 @@ const agentPath = (): string => join(agentDir, 'editor.yaml');
 
 /** The creator program with the `FileSystem` its YAML write requires. */
 const createAgent = (ui: AgentCreatorUI): Effect.Effect<void, unknown> =>
-  runAgentCreator(CONFIG, 'workflow', ui, STORES, ROOTS).pipe(
+  runAgentCreator(CONFIG, 'workflow', ui, STORES).pipe(
     Effect.provide(
       Layer.mergeAll(
         nodePlatformLayer,

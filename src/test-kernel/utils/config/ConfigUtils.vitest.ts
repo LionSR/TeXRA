@@ -11,7 +11,10 @@ import {
   getProviderKeyUrl,
   getUseOpenRouter,
 } from '@utils/config/providerConfig';
-import { readPlatformSetting } from '@utils/config/platformSettings';
+import {
+  platformSettingsStores,
+  readPlatformSetting,
+} from '@utils/config/platformSettings';
 
 // ---------------------------------------------------------------------------
 // ConfigUtils
@@ -79,7 +82,9 @@ describe('getProviderEndpoint', () => {
         [GlobalStateKey.ENDPOINT_OPENAI]: 'https://example.test/v1',
       },
     });
-    expect(getProviderEndpoint('openai')).toBe('https://example.test/v1');
+    expect(getProviderEndpoint(platformSettingsStores(), 'openai')).toBe(
+      'https://example.test/v1',
+    );
   });
 
   it('snaps an invalid stored value back to the catalog default instead of leaking it through', async () => {
@@ -90,6 +95,6 @@ describe('getProviderEndpoint', () => {
     await installPlatform({
       globalState: { [GlobalStateKey.ENDPOINT_OPENAI]: 42 },
     });
-    expect(getProviderEndpoint('openai')).toBe('');
+    expect(getProviderEndpoint(platformSettingsStores(), 'openai')).toBe('');
   });
 });

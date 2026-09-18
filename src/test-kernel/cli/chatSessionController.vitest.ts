@@ -165,6 +165,7 @@ import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
+import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 import {
   createTestSession,
@@ -303,7 +304,7 @@ function makeInit(
       throw new Error('slash commands are not exercised here');
     },
     secrets: new FakeSecrets(),
-    state: new FakeStateStore(),
+    stores: makeFakeSettingsStores().stores,
     runtime: testRuntime(),
     ...overrides,
   };

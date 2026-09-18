@@ -203,7 +203,7 @@ async function openConfigFormProps(
 ): Promise<ConfigFormProps> {
   registerBuiltinSlashCommands({
     secrets: new FakeSecrets(),
-    state: stores.globalState,
+    stores,
     runtime: testRuntime(),
     runtimeSession: testDefaultSession(),
     configStores: stores,
@@ -473,7 +473,7 @@ describe('CliConfigForm API-key status lifecycle', () => {
     const { stores } = makeFakeSettingsStores();
     registerBuiltinSlashCommands({
       secrets: new FakeSecrets(),
-      state: stores.globalState,
+      stores,
       runtime: testRuntime(),
       runtimeSession: testDefaultSession(),
       configStores: stores,
@@ -506,7 +506,7 @@ describe('/config slash command wiring', () => {
 
     registerBuiltinSlashCommands({
       secrets: new FakeSecrets(),
-      state: stores.globalState,
+      stores,
       runtime: testRuntime(),
       runtimeSession: testDefaultSession(),
       configStores: stores,
@@ -531,7 +531,7 @@ describe('/config slash command wiring', () => {
     const applied: TexraApprovalPolicy[] = [];
     registerBuiltinSlashCommands({
       secrets: new FakeSecrets(),
-      state: stores.globalState,
+      stores,
       runtime: testRuntime(),
       runtimeSession: testDefaultSession(),
       configStores: stores,
@@ -566,7 +566,7 @@ describe('/config slash command wiring', () => {
     const events: string[] = [];
     registerBuiltinSlashCommands({
       secrets: new FakeSecrets(),
-      state: stores.globalState,
+      stores,
       runtime: testRuntime(),
       runtimeSession: testDefaultSession(),
       configStores: stores,

@@ -21,6 +21,7 @@ import {
 } from '@shared/schemas';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { FakeSecrets } from '@test/support/FakePlatform';
+import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import type { HttpClient } from 'effect/unstable/http';
 
 /**
@@ -433,6 +434,7 @@ describe('SubscriptionUsageService', () => {
       new SubscriptionUsageService({
         http,
         secrets: new FakeSecrets(),
+        stores: makeFakeSettingsStores().stores,
       }).getUsage('chatgpt'),
     );
 

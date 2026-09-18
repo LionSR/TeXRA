@@ -54,6 +54,7 @@ import { workflowRunModel } from '@shared/runs/workflowRunModel';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { FakeSecrets } from '@test/support/FakePlatform';
+import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import { textRowFixture } from '@test/support/transcriptRowFixtures';
 import {
   loadInk,
@@ -272,8 +273,9 @@ function finishNestedHierarchyAndFocusRoot(): void {
 function appProps(onInterruptRun: (runId: RunId) => void): AppProps {
   return {
     // The status bar's subscription probe never runs in these key-routing
-    // suites; the App only requires the store to be present.
+    // suites; the App only requires the stores to be present.
     secrets: new FakeSecrets(),
+    stores: makeFakeSettingsStores().stores,
     runtime: testRuntime(),
     session: testDefaultSession(),
     onSubmit: vi.fn(),

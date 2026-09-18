@@ -8,7 +8,6 @@ import {
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
 } from '@platform/languageModel';
 import type { ModelOptionData, ToolDefinition } from '@shared/schemas';
-import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import { fakeProcessServices, hostStores } from '@test/support/setupPlatform';
 
 const mocks = vi.hoisted(() => ({
@@ -142,14 +141,13 @@ function resolveToolList(
   inScope?: <T>(read: () => T) => T,
 ) {
   return Effect.suspend(() => {
-    const { secrets, globalState } = hostStores();
     return resolveAgentTools({
       tools,
       registry: delegationRegistry(tools),
       logger: { warn: () => {} },
       toolInjections: new ToolInjectionRegistry(),
-      settings: makeFakeSettingsStores().stores,
-      stores: { secrets, globalState },
+      settings: hostStores(),
+      stores: hostStores(),
       inScope,
     });
   }).pipe(
@@ -256,6 +254,7 @@ describe('delegation model availability', () => {
           selectAvailableDelegationModel({
             requestedModel: 'opus48T',
             parentModel: 'sonnet46T',
+            settings: hostStores(),
           }),
         );
 
@@ -272,11 +271,17 @@ describe('delegation model availability', () => {
       );
 
       expect(
-        yield* selectAvailableDelegationModel({ parentModel: 'sonnet46T' }),
+        yield* selectAvailableDelegationModel({
+          parentModel: 'sonnet46T',
+          settings: hostStores(),
+        }),
       ).toBe('sonnet46T');
 
       expect(
-        yield* selectAvailableDelegationModel({ parentModel: 'opus48T' }),
+        yield* selectAvailableDelegationModel({
+          parentModel: 'opus48T',
+          settings: hostStores(),
+        }),
       ).toBe('deepseekT');
     }).pipe(Effect.provide(fakeProcessServices())),
   );
@@ -286,7 +291,10 @@ describe('delegation model availability', () => {
       mocks.readModelAvailabilityInputs.mockReturnValue(Effect.succeed([]));
 
       const failure = yield* Effect.flip(
-        selectAvailableDelegationModel({ parentModel: 'opus48T' }),
+        selectAvailableDelegationModel({
+          parentModel: 'opus48T',
+          settings: hostStores(),
+        }),
       );
 
       expect(failure.message).toContain(

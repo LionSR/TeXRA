@@ -37,7 +37,11 @@ describe('shared setup capabilities', () => {
   it.effect('keeps API-key-only setup usable without reporting sign-in', () =>
     Effect.gen(function* () {
       expect(
-        yield* hasUsableSetupCredential(hostStores().secrets, () => {}),
+        yield* hasUsableSetupCredential(
+          hostStores(),
+          hostStores().secrets,
+          () => {},
+        ),
       ).toBe(true);
       expect(yield* getSetupAuthStatus()).toEqual({
         authenticated: false,
@@ -57,7 +61,7 @@ describe('shared setup capabilities', () => {
           }),
         );
 
-        const status = yield* getChatGptSubscriptionStatus();
+        const status = yield* getChatGptSubscriptionStatus(hostStores());
 
         expect(status.signedIn).toBe(true);
         expect(status).not.toHaveProperty('account');
@@ -81,7 +85,7 @@ describe('shared setup capabilities', () => {
           'isCodexSubscriptionActive',
         ).mockReturnValue(Effect.succeed(false));
 
-        expect(yield* getChatGptSubscriptionStatus()).toEqual({
+        expect(yield* getChatGptSubscriptionStatus(hostStores())).toEqual({
           signedIn: true,
           enabled: false,
         });

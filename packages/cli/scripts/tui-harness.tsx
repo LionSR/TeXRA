@@ -1678,7 +1678,7 @@ function handleHarnessSlashCommand(line: string): boolean {
 
 registerBuiltinSlashCommands({
   secrets: HARNESS_PLATFORM_SERVICES.secrets,
-  state: HARNESS_PLATFORM_SERVICES.globalState,
+  stores: HARNESS_PLATFORM_SERVICES,
   runtime: HARNESS_PLATFORM_SERVICES.runtime,
   runtimeSession: harnessRuntimeSession,
   // Mirror `texra chat`: agent selection is open exactly while no root run
@@ -1701,9 +1701,14 @@ registerBuiltinSlashCommands({
     if (selection.provider === 'kimi-code' && selection.state === 'on') {
       return harnessRuntime
         .runPromise(
-          updateCliModelAccess(HARNESS_CLI_CONTEXT, selection, {
-            writeProgress: appendHarnessAssistantTranscript,
-          }),
+          updateCliModelAccess(
+            HARNESS_PLATFORM_SERVICES,
+            HARNESS_CLI_CONTEXT,
+            selection,
+            {
+              writeProgress: appendHarnessAssistantTranscript,
+            },
+          ),
         )
         .then((access) => {
           appendHarnessAssistantTranscript(access.message);
@@ -1754,6 +1759,7 @@ function renderHarnessApp(): React.JSX.Element {
   return (
     <App
       secrets={HARNESS_PLATFORM_SERVICES.secrets}
+      stores={HARNESS_PLATFORM_SERVICES}
       runtime={harnessRuntime}
       session={session()}
       onSubmit={handleHarnessSubmit}

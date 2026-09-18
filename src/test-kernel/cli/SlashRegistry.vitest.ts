@@ -37,6 +37,7 @@ import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
+import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import { loadInk, renderInteractive } from '@test/support/inkTestHarness.ts';
 import {
   createDeferred,
@@ -79,12 +80,12 @@ const CHATGPT_PREFERENCE_FORM_VALUE: AccountAccessFormValue = {
 function registerBuiltins(
   options: Omit<
     Parameters<typeof registerBuiltinSlashCommands>[0],
-    'secrets' | 'state' | 'runtime' | 'runtimeSession'
+    'secrets' | 'stores' | 'runtime' | 'runtimeSession'
   > = {},
 ): void {
   registerBuiltinSlashCommands({
     secrets: new FakeSecrets(),
-    state: new FakeStateStore(),
+    stores: makeFakeSettingsStores().stores,
     runtime: testRuntime(),
     runtimeSession: testDefaultSession(),
     ...options,

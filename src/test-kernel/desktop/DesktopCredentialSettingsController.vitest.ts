@@ -146,7 +146,7 @@ async function createFixture({
 
   const controller = new DefaultDesktopCredentialSettingsController({
     runtime: testRuntime(),
-    inScope: (read) => read(),
+    stores: { config: new FakeConfigProvider(), workspaceState, globalState },
     workspaceState,
     globalState,
     config: new FakeConfigProvider(),

@@ -121,10 +121,7 @@ describe('desktop composition root and launch environment', () => {
             globalConfigStore: config,
             records,
             runtime: testRuntime(),
-            stores: {
-              secrets: host.secrets,
-              globalState: host.roots.globalState,
-            },
+            stores: { ...host.roots, secrets: host.secrets },
             warn: vi.fn(),
           });
           yield* Effect.addFinalizer(() => registry.dispose());
@@ -196,10 +193,7 @@ describe('desktop composition root and launch environment', () => {
           globalConfigStore: config,
           records,
           runtime: testRuntime(),
-          stores: {
-            secrets: host.secrets,
-            globalState: host.roots.globalState,
-          },
+          stores: { ...host.roots, secrets: host.secrets },
           warn: vi.fn(),
         });
         yield* Effect.addFinalizer(() =>

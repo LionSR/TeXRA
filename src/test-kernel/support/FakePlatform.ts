@@ -427,7 +427,12 @@ export class FakeSecrets implements PlatformSecrets {
  * and only pass the bag through.
  */
 export function fakeStores(): ModelOptionStores {
-  return { secrets: new FakeSecrets(), globalState: new FakeStateStore() };
+  return {
+    secrets: new FakeSecrets(),
+    config: new FakeConfigProvider(),
+    workspaceState: new FakeStateStore(),
+    globalState: new FakeStateStore(),
+  };
 }
 
 export interface FakePlatformOptions {
