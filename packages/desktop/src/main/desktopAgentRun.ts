@@ -86,12 +86,9 @@ export interface DesktopAgentRun {
     request: RunRequest,
     options?: DesktopRunOptions,
   ): Effect.Effect<void, RequestRefusal | RunLaunchFailed>;
-  /**
-   * Launch a request that is already validated (a surface's launch, a merge
-   * the file actions scheduled, the setup kickoff). The Effect settles with
-   * the run and still fails with the launch's own bare `Error`; a caller that
-   * needs a named channel names it, as `runAgentRequest` does.
-   */
+  /** The same launch for a request that is already validated. It still fails
+   *  with the launch's own bare `Error`; a caller that needs a named channel
+   *  names it, as `runAgentRequest` does. */
   runValidated(
     request: ValidatedRunRequest,
     options?: DesktopRunOptions,

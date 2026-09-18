@@ -37,9 +37,7 @@ interface DesktopFileSelectionOptions {
  */
 export interface DesktopFileSelection {
   /** The launcher's single-slot catalogs: base candidates, edited
-   *  candidates, and the commit list's fixed head. The listing takes the
-   *  process `FileSystem` from context, as the snapshot port it answers
-   *  declares. */
+   *  candidates, and the commit list's fixed head. */
   fileOptions(): Effect.Effect<
     FileOptions,
     PlatformError.PlatformError,
