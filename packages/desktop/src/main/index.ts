@@ -652,26 +652,33 @@ function createWindow(options: {
    * so the desktop dialog keeps the link the extension's request-error
    * callout renders. The URL path is host-originated, never network data.
    */
-  const showErrorDialog = async (
+  const showErrorDialog = (
     message: string,
     docsCommand?: string,
-  ): Promise<void> => {
-    // The member is an Effect; settle it on the runtime so the dialog shows
-    // and its rejection still propagates to the awaiting caller.
-    if (!docsCommand) {
-      await runtime.runPromise(showErrorMessage(message));
-      return;
-    }
-    const { response } = await dialog.showMessageBox(window, {
-      type: 'error',
-      message,
-      buttons: ['Read the guide', 'OK'],
-      defaultId: 1,
-      cancelId: 1,
-    });
-    if (response === 0) {
-      openExternalInBackground(`https://texra.ai/guide/${docsCommand}`);
-    }
+  ): Effect.Effect<void, NotificationFailed> => {
+    if (!docsCommand) return showErrorMessage(message);
+    return Effect.tryPromise({
+      try: () =>
+        dialog.showMessageBox(window, {
+          type: 'error',
+          message,
+          buttons: ['Read the guide', 'OK'],
+          defaultId: 1,
+          cancelId: 1,
+        }),
+      catch: (cause) =>
+        new NotificationFailed({
+          member: 'showErrorMessage',
+          message: `A desktop error dialog could not be shown: ${toErrorMessage(cause)}`,
+          cause,
+        }),
+    }).pipe(
+      Effect.map(({ response }) => {
+        if (response === 0) {
+          openExternalInBackground(`https://texra.ai/guide/${docsCommand}`);
+        }
+      }),
+    );
   };
   /**
    * Instructions (e.g. a missing API key) are actionable guidance, not
@@ -680,25 +687,37 @@ function createWindow(options: {
    * nothing to click. `showSuppress` still has no affordance to attach to: a
    * native dialog has no persistent "never remind again" control.
    */
-  const showInstructionDialog = async (
+  const showInstructionDialog = (
     message: string,
     actions: readonly InstructionAction[] | undefined,
-  ): Promise<void> => {
+  ): Effect.Effect<void, NotificationFailed> => {
     const tokens = actions ?? [];
     const buttons = [
       ...tokens.map((token) => INSTRUCTION_ACTION_BUTTON_LABELS[token]),
       'Dismiss',
     ];
     const dismissId = buttons.length - 1;
-    const { response } = await dialog.showMessageBox(window, {
-      type: 'info',
-      message,
-      buttons,
-      defaultId: dismissId,
-      cancelId: dismissId,
-    });
-    const action = tokens[response];
-    if (action) dispatchInstructionAction(action);
+    return Effect.tryPromise({
+      try: () =>
+        dialog.showMessageBox(window, {
+          type: 'info',
+          message,
+          buttons,
+          defaultId: dismissId,
+          cancelId: dismissId,
+        }),
+      catch: (cause) =>
+        new NotificationFailed({
+          member: 'showInfoMessage',
+          message: `The instruction dialog could not be shown: ${toErrorMessage(cause)}`,
+          cause,
+        }),
+    }).pipe(
+      Effect.map(({ response }) => {
+        const action = tokens[response];
+        if (action) dispatchInstructionAction(action);
+      }),
+    );
   };
   let teamSignInPending = false;
   const refreshDesktopAuthSurfaces = async () => {
@@ -890,20 +909,9 @@ function createWindow(options: {
     showWarningMessage,
     showErrorMessage: (message) => awaitOrReport(showErrorMessage(message)),
     showErrorDialog: (message, docsCommand) =>
-      runtime.runPromise(
-        awaitOrReport(
-          Effect.tryPromise({
-            try: () => showErrorDialog(message, docsCommand),
-            catch: (cause) =>
-              new NotificationFailed({
-                member: 'showErrorMessage',
-                message: `A desktop dialog could not be shown: ${toErrorMessage(cause)}`,
-                cause,
-              }),
-          }),
-        ),
-      ),
-    showInstructionDialog,
+      awaitOrReport(showErrorDialog(message, docsCommand)),
+    showInstructionDialog: (message, actions) =>
+      awaitOrReport(showInstructionDialog(message, actions)),
     pickTranscriptExportFormat: () =>
       Effect.tryPromise({
         try: async () => {

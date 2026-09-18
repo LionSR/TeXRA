@@ -23,8 +23,8 @@ export function createStubDesktopAgentRunHost(
     showErrorMessage: () => Effect.void,
     showWarningMessage: () => Effect.void,
     showInfoMessage: () => Effect.void,
-    showInstructionDialog: async () => undefined,
-    showErrorDialog: async () => undefined,
+    showInstructionDialog: () => Effect.void,
+    showErrorDialog: () => Effect.void,
     pickTranscriptExportFormat: () => Effect.succeed(undefined),
     ...overrides,
   };

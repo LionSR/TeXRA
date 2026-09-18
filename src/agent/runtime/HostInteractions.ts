@@ -9,6 +9,7 @@ import { HostPresentationFailed } from './runtimePresentationEvents';
 import type {
   AgentRuntimeEmitOptions,
   DiagnosticsReadFailed,
+  HostPresentation,
   PdfOpenFailed,
   RuntimePresentationEvent,
   RuntimePresentationEventPayloads,
@@ -90,14 +91,14 @@ export interface HostInteractions {
   /**
    * Present a runtime event through the active host attachment. Presentation
    * is fire-and-forget: a host that cannot render an event logs the cause. A
-   * host may answer with a promise that settles once the event is on screen;
-   * nothing waits on it, and a rejection is reported rather than left
-   * unhandled (see `presentOn`).
+   * host may answer with the program that puts the event on screen; nothing
+   * waits on it, and its failure is reported rather than dropped (see
+   * `presentOn`).
    */
   emit?<K extends RuntimePresentationEvent>(
     event: K,
     payload: RuntimePresentationEventPayloads[K],
-  ): unknown;
+  ): HostPresentation;
   /** Read diagnostics from the active host integration. */
   readonly readDiagnostics?: DiagnosticsReader;
   /** Add one manual criticism to the active host diagnostics surface. */
@@ -147,14 +148,13 @@ type PresentationProgram = (
 ) => Effect.Effect<void, HostPresentationFailed>;
 
 /**
- * The one lift of what a host's `emit` answers with. Presentation is
- * fire-and-forget, so this never waits on a host that answers with a promise
- * (a desktop dialog settles when the person dismisses it, and the run, the
- * fold-gated result listeners and the replay loop all raise notices from
- * fibers that must not block on that). The promise is watched on a detached
- * fiber instead, so a rejection is reported rather than left unhandled, while
- * a host that throws synchronously reaches the caller as
- * {@link HostPresentationFailed} rather than as a defect.
+ * Ask a host to present one notice. Presentation is fire-and-forget, so this
+ * never waits on the program the host answers with (a desktop dialog settles
+ * when the person dismisses it, and the run, the fold-gated result listeners
+ * and the replay loop all raise notices from fibers that must not block on
+ * that). It runs on a detached fiber instead, so its failure is reported
+ * rather than dropped, while a host that throws synchronously reaches the
+ * caller as {@link HostPresentationFailed} rather than as a defect.
  */
 function presentOn<K extends RuntimePresentationEvent>(
   interactions: HostInteractions,
@@ -162,24 +162,14 @@ function presentOn<K extends RuntimePresentationEvent>(
   payload: RuntimePresentationEventPayloads[K],
 ): Effect.Effect<void, HostPresentationFailed> {
   return Effect.suspend(() => {
-    const settled: unknown = interactions.emit?.(event, payload);
-    const thenable =
-      typeof settled === 'object' &&
-      settled !== null &&
-      'then' in settled &&
-      typeof settled.then === 'function'
-        ? (settled as PromiseLike<unknown>)
-        : undefined;
-    if (!thenable) return Effect.void;
+    const presented = interactions.emit?.(event, payload);
+    if (presented === undefined) return Effect.void;
     return Effect.forkDetach(
-      Effect.tryPromise({
-        try: async () => await thenable,
-        catch: (cause) => new HostPresentationFailed({ event, cause }),
-      }).pipe(
-        Effect.catch((failure) =>
+      presented.pipe(
+        Effect.catchCause((cause) =>
           Effect.sync(() => {
-            logger.warn('A host presentation notice never settled', {
-              data: failure.cause,
+            logger.warn('A host presentation notice failed', {
+              data: { event, cause: Cause.squash(cause) },
             });
           }),
         ),

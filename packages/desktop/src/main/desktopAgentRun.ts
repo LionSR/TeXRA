@@ -8,12 +8,13 @@
 // here: a surface answers an approval with `runtime.request`, and the
 // session settles the pending request itself.
 
-import { Cause, Effect, Exit, Fiber, Stream } from 'effect';
+import { Cause, Effect, Fiber, Stream } from 'effect';
 
 import type { AgentTrace } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
 import {
   validateRunRequest,
+  type HostPresentation,
   type PresentationEventHandlers,
   type RunRequest,
   type RuntimePresentationEvent,
@@ -108,65 +109,39 @@ export function createDesktopAgentRun(
   let disposed = false;
 
   /**
-   * Settle a host dialog promise, logging a rejection. The desktop dialog
-   * await rejects when its window is torn down beneath it; voiding the
-   * promise would leave that rejection unhandled.
+   * Each arm answers with the program that presents its notice; the session
+   * forks it, so nothing here settles a dialog on a fiber of its own. Where
+   * the failure is reported depends on the arm: the two dialog members
+   * report their own (a dialog rejects when its window is torn down beneath
+   * it, and the host binds them through `awaitOrReport`), so the programs
+   * they hand back cannot fail; `openPath` fails in its own channel and the
+   * session's fork warn-logs it.
    */
-  async function settleHostProgram(
-    program: Effect.Effect<unknown, unknown>,
-    logMessage: string,
-  ): Promise<void> {
-    const presented = await runtime.runPromiseExit(program);
-    if (Exit.isFailure(presented)) {
-      logger.warn(logMessage, {
-        data: toLogData(Cause.squash(presented.cause)),
-      });
-    }
-  }
-
-  /** The same, for a host member that still answers with a promise. */
-  function settleHostDialog(
-    dialog: Promise<unknown> | void,
-    logMessage: string,
-  ): Promise<void> {
-    return settleHostProgram(
-      Effect.tryPromise({ try: async () => dialog, catch: (error) => error }),
-      logMessage,
-    );
-  }
-
-  const presentationEventHandlers: PresentationEventHandlers<RuntimePresentationEventPayloads> =
-    {
-      // The desktop shell keeps the conversation canvas permanently on
-      // screen, so there is no separate progress surface to reveal.
-      requestEnsureProgressView: () => undefined,
-      requestShowError: ({ message, docsCommand }) =>
-        settleHostDialog(
-          host.showErrorDialog(message, docsCommand),
-          'Failed to present the error dialog',
-        ),
-      requestShowInstruction: (instruction) =>
-        // An instruction is actionable guidance, not a failure, so it uses
-        // the info-style dialog with each action token as a real button.
-        settleHostDialog(
-          host.showInstructionDialog(instruction.message, instruction.actions),
-          'Failed to present the instruction dialog',
-        ),
-      showAgentConfigBanner: ({ agentName, category }) =>
-        options.showAgentConfigBanner({ agentName, category }),
-      requestOpenFile: (data: RequestOpenFilePayload) =>
-        // Desktop has no editor integration to preview through, so the
-        // resolved path goes to the preview-with-fallback host directly.
-        settleHostProgram(
-          host.openPath(data.location.absolutePath),
-          'Failed to open requested file on desktop',
-        ),
-    };
+  const presentationEventHandlers: PresentationEventHandlers<
+    RuntimePresentationEventPayloads,
+    HostPresentation
+  > = {
+    // The desktop shell keeps the conversation canvas permanently on
+    // screen, so there is no separate progress surface to reveal.
+    requestEnsureProgressView: () => undefined,
+    requestShowError: ({ message, docsCommand }) =>
+      host.showErrorDialog(message, docsCommand),
+    // An instruction is actionable guidance, not a failure, so it uses
+    // the info-style dialog with each action token as a real button.
+    requestShowInstruction: (instruction) =>
+      host.showInstructionDialog(instruction.message, instruction.actions),
+    showAgentConfigBanner: ({ agentName, category }) =>
+      options.showAgentConfigBanner({ agentName, category }),
+    // Desktop has no editor integration to preview through, so the
+    // resolved path goes to the preview-with-fallback host directly.
+    requestOpenFile: (data: RequestOpenFilePayload) =>
+      host.openPath(data.location.absolutePath),
+  };
 
   function handlePresentationEvent<K extends RuntimePresentationEvent>(
     event: K,
     payload: RuntimePresentationEventPayloads[K],
-  ): unknown {
+  ): HostPresentation {
     if (disposed) return undefined;
     return presentationEventHandlers[event](payload);
   }

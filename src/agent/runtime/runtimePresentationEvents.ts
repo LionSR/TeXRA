@@ -1,4 +1,4 @@
-import { Data } from 'effect';
+import { Data, type Effect } from 'effect';
 
 import type {
   RequestEnsureProgressViewPayload,
@@ -39,17 +39,29 @@ export interface AgentRuntimeEmitOptions {
 }
 
 /**
+ * What a host answers an `emit` with: the program that presents the notice,
+ * or nothing when the host already presented it. Presentation is
+ * fire-and-forget, so the runtime forks that program and reports its
+ * failure — which is why a host hands it over rather than running a fiber
+ * of its own.
+ */
+export type HostPresentation = Effect.Effect<void, unknown> | void;
+
+/**
  * One handler per {@link RuntimePresentationEventPayloads} key, each typed to
  * that event's own payload. A host builds this as an object literal and
  * dispatches with `handlers[event](payload)` from a generic
  * `emit<K extends RuntimePresentationEvent>`: the mapped type correlates the
  * handler to the key, so no per-event `payload as Payloads['x']` cast is
  * needed, and omitting a key is a compile error rather than a dropped event.
+ * `Result` is what the host's own dispatch answers with — {@link
+ * HostPresentation} for a host behind `HostInteractions.emit`.
  */
 export type PresentationEventHandlers<
   Payloads = RuntimePresentationEventPayloads,
+  Result = unknown,
 > = {
-  [K in keyof Payloads]: (payload: Payloads[K]) => unknown;
+  [K in keyof Payloads]: (payload: Payloads[K]) => Result;
 };
 
 /**
@@ -70,10 +82,12 @@ export class DiagnosticsReadFailed extends Data.TaggedError(
 }> {}
 
 /**
- * A host could not present one runtime notice: its `emit` threw, or the
- * promise it answered with rejected. The presentation plane's one failure, so
- * the fallback notice and the warn logs that consume it report the same cause
- * the raw `catch` they replaced reported.
+ * A host could not present one runtime notice: its `emit` threw. The
+ * presentation plane's one failure, so the fallback notice and the warn logs
+ * that consume it report the same cause the raw `catch` they replaced
+ * reported. A failure of the program `emit` answers with is not this one:
+ * nothing waits on a presentation, so `presentOn` warn-logs it on the
+ * detached fiber that runs it and no `fallbackMessage` follows.
  */
 export class HostPresentationFailed extends Data.TaggedError(
   'HostPresentationFailed',
