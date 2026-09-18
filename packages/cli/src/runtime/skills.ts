@@ -1,3 +1,6 @@
+// Third-party imports
+import { Effect } from 'effect';
+
 // Local imports - skills
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import {
@@ -12,7 +15,6 @@ import {
 } from '@skills/skillSources';
 import {
   filterDiscoveredSkills,
-  loadEnabledRuntimeSkills,
   readDisabledSkills,
 } from '@skills/runtimeSkills';
 
@@ -24,22 +26,15 @@ import type { CliContext } from './cliContext';
  * roots the command's platform init installed — so the disabled-skill lists
  * come from that project rather than from ambient state.
  */
-export async function readCliSkills(
+export function readCliSkills(
   context: Pick<CliContext, 'cwd' | 'resourcesPath'>,
   stores: SettingsStores,
   options: SkillSourceOptions = {},
-): Promise<DiscoverSkillSourcesResult> {
-  return filterDiscoveredSkills(
-    await discoverSkillSources(defaultSkillSources(context, options)),
-    readDisabledSkills(stores),
+): Effect.Effect<DiscoverSkillSourcesResult> {
+  return Effect.map(
+    discoverSkillSources(defaultSkillSources(context, options)),
+    (result) => filterDiscoveredSkills(result, readDisabledSkills(stores)),
   );
-}
-
-export async function readCliRuntimeSkills(
-  workspaceRoot: string | undefined,
-  stores: SettingsStores,
-): Promise<DiscoverSkillSourcesResult> {
-  return loadEnabledRuntimeSkills(workspaceRoot, stores);
 }
 
 export function formatCliSkillIssue(issue: SkillLoadIssue): string {

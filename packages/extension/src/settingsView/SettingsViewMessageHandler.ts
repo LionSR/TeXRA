@@ -791,14 +791,7 @@ export class SettingsViewMessageHandler {
 
   private sendSkillsList(webview: vscode.Webview) {
     return Effect.flatMap(
-      Effect.tryPromise({
-        try: () =>
-          loadRuntimeSkillDisplay(
-            this.session.roots.workspace,
-            this.session.roots,
-          ),
-        catch: ensureError,
-      }),
+      loadRuntimeSkillDisplay(this.session.roots.workspace, this.session.roots),
       (result) =>
         postToWebview(webview, {
           command: SETTINGS_VIEW_COMMANDS.UPDATE_SKILLS_LIST,

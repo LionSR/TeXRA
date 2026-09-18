@@ -48,7 +48,9 @@ async function listSkills(
 ): Promise<number> {
   const services = await initCliPlatform({ ...context, quietLogs: true });
   const roots = skillsRoots(services);
-  const result = await readCliSkills(context, roots, options);
+  const result = await services.runtime.runPromise(
+    readCliSkills(context, roots, options),
+  );
   const exitCode = result.errors.some(
     (issue) =>
       issue.code === 'missing_source' ||

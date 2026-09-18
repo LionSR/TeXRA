@@ -497,7 +497,7 @@ describe('completedRunArchive facade', () => {
         launchMocks.loadAgent.mockReturnValue(
           Effect.succeed([{ agentCategory: AgentCategory.ToolUse }, {}]),
         );
-        launchMocks.buildVars.mockRejectedValueOnce(launchFailure);
+        launchMocks.buildVars.mockReturnValueOnce(Effect.fail(launchFailure));
 
         // The one fact a resume reads: the run aggregate's latest
         // `flow.snapshot`, committed here as this run's opening row.

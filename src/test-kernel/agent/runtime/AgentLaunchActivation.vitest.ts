@@ -123,7 +123,7 @@ const captureStartedLaunch = Effect.fn(function* (
           trace,
           dispose: vi.fn(),
         });
-        mocks.buildVars.mockRejectedValueOnce(LAUNCH_FAILURE);
+        mocks.buildVars.mockReturnValueOnce(Effect.fail(LAUNCH_FAILURE));
 
         if (!options.resumedRunId) {
           yield* registerRun(session, FRESH_RUN_ID, config, 'chat', {

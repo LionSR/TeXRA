@@ -50,6 +50,7 @@ function requireSetting(key: string) {
 async function loadSkillsSettings(
   stores: SettingsStores,
   workspaceRoot: string | undefined,
+  runtime: ProcessRuntime,
 ): Promise<SkillsSettingsData> {
   const disabledNames = readSetting(
     requireSetting(WorkspaceStateKey.DISABLED_SKILLS),
@@ -61,7 +62,9 @@ async function loadSkillsSettings(
     stores,
     'cli',
   ) as ActiveSkillSourceScope[];
-  const result = await loadRuntimeSkillDisplay(workspaceRoot, stores);
+  const result = await runtime.runPromise(
+    loadRuntimeSkillDisplay(workspaceRoot, stores),
+  );
   return {
     skills: result.skills,
     disabledNames,
@@ -87,7 +90,9 @@ export function SkillsSettingsForm(
     <AsyncListForm<SkillsSettingsData, SkillToggle>
       title="/config · Skills"
       loadingLabel="Loading skills..."
-      load={() => loadSkillsSettings(props.stores, props.workspaceRoot)}
+      load={() =>
+        loadSkillsSettings(props.stores, props.workspaceRoot, props.runtime)
+      }
       items={(data) => [
         ...ActiveSkillSourceScopeSchema.options.map((scope) => ({
           value: { kind: 'source' as const, scope },

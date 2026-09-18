@@ -554,6 +554,7 @@ export function registerBuiltinSlashCommands(options: {
   const SkillsListFormAdapter = makeSelectFormAdapter(
     (formProps) => (
       <SkillsListForm
+        runtime={runtime}
         workspaceRoot={options.runtimeSession.roots.workspace}
         stores={options.runtimeSession.roots}
         {...formProps}

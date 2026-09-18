@@ -2,13 +2,18 @@ import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
+import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
 
-import { discoverSkillSources } from '@skills/loadSkills';
+import { discoverSkillSources as discoverSkillSourcesEffect } from '@skills/loadSkills';
 import { writeSkill } from '@test/support/skillFixtures';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
 const tempRoots = useTempDirs();
+
+const discoverSkillSources = (
+  sources: Parameters<typeof discoverSkillSourcesEffect>[0],
+) => Effect.runPromise(discoverSkillSourcesEffect(sources));
 
 async function createTempRoot(): Promise<string> {
   return makeTempDir('texra-skills-', tempRoots);

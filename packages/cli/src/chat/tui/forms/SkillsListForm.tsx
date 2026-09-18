@@ -4,12 +4,13 @@
 
 import { Text } from 'ink';
 
-import { readCliRuntimeSkills } from '@cli/runtime/skills';
 import type { SelectItem } from '@cli/tui/ui/Select';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { escapeText } from '@shared/utils/xmlEscape';
 import {
   formatRuntimeSkillActivation,
+  loadEnabledRuntimeSkills,
   readDisabledSkills,
   skillDisplayItem,
 } from '@skills/runtimeSkills';
@@ -27,6 +28,11 @@ interface SkillsListFormProps {
   readonly workspaceRoot: string | undefined;
   /** The session's setting slots, which the disabled-skill set is read from. */
   readonly stores: SettingsStores;
+  /**
+   * The process runtime the discovery program settles on. Ink components run
+   * no Effect of their own, so it arrives as a prop from `/skills`.
+   */
+  readonly runtime: ProcessRuntime;
   readonly onSelect: (value: SkillActivation) => void;
   readonly onClose: () => void;
 }
@@ -84,7 +90,11 @@ export function SkillsListForm(props: SkillsListFormProps): React.JSX.Element {
     <AsyncListForm<DiscoverSkillSourcesResult, SkillActivation>
       title="/skills"
       loadingLabel="Loading skills..."
-      load={() => readCliRuntimeSkills(props.workspaceRoot, props.stores)}
+      load={() =>
+        props.runtime.runPromise(
+          loadEnabledRuntimeSkills(props.workspaceRoot, props.stores),
+        )
+      }
       items={(result) => skillSelectItemsForTui(result.skills, props.stores)}
       isEmpty={(result) => result.skills.length === 0}
       availableRows={props.availableRows}
