@@ -1193,8 +1193,9 @@ export function installProcessRuntime({
  * (`SessionHandle.settlePublications`), on the releasing fiber.
  *
  * Idempotent and safe to race: a second call joins the disposal already in
- * flight rather than starting another. The extension's shutdown path calls
- * it from a `finally` and permits a later shutdown, so both happen.
+ * flight rather than starting another. The extension's shutdown path runs it
+ * as a finalizer (`Effect.ensuring`) and permits a later shutdown, so both
+ * happen.
  */
 let disposal: Effect.Effect<void> | undefined;
 
