@@ -28,8 +28,10 @@ const MISSING_CUSTOM_PATH = path.resolve('/texra-missing-parent', 'custom');
 class RecordingIssueReporter implements AgentDirectoryIssueReporter {
   readonly reports: Array<{ message: string; docsId: string }> = [];
 
-  async report(message: string, docsId: string): Promise<void> {
-    this.reports.push({ message, docsId });
+  report(message: string, docsId: string): Effect.Effect<void> {
+    return Effect.sync(() => {
+      this.reports.push({ message, docsId });
+    });
   }
 }
 

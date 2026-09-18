@@ -1,3 +1,5 @@
+import { Effect } from 'effect';
+
 import { createLog } from '@logger/logUtils';
 
 import {
@@ -24,8 +26,8 @@ export function createPlatformAgentDirectories(
     resourcesPath: options.resourcesPath,
     customDirectoryStore: options.customDirectoryStore,
     issueReporter: options.issueReporter ?? {
-      report: async (message, docsId) =>
-        log.warn(`${message}. See documentation: ${docsId}`),
+      report: (message, docsId) =>
+        Effect.sync(() => log.warn(`${message}. See documentation: ${docsId}`)),
     },
   });
 }
