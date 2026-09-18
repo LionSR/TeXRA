@@ -120,6 +120,7 @@ export const resolveWritableTarget = Effect.fn('resolveWritableTarget')(
       try: () =>
         call.inScope(() => {
           const { path: resolved, display } = resolveAndFormat(
+            call.roots.workspace,
             inputPath,
             call.workingDirectory,
           );

@@ -63,7 +63,9 @@ export const resolveLatexFile = Effect.fn('tools.resolveLatexFile')(function* (
   const fs = yield* FileSystem.FileSystem;
   const { path, display } = yield* Effect.try({
     try: () =>
-      call.inScope(() => resolveAndFormat(texPath, call.workingDirectory)),
+      call.inScope(() =>
+        resolveAndFormat(call.roots.workspace, texPath, call.workingDirectory),
+      ),
     catch: ensureError,
   });
   const exists = yield* entryExists(fs, path.absolute);

@@ -159,11 +159,16 @@ const fileSystemAt = (
 const persistWorkflowScript = Effect.fn('persistWorkflowScript')(function* (
   script: string,
   submissionId: string,
+  workspaceRoot: string | undefined,
   workingDirectory: string | undefined,
   inScope: <A>(operation: () => A) => A,
 ) {
   const directory = inScope(() =>
-    resolveWorkspaceRelativePath(WORKFLOW_SCRIPT_DIRECTORY, workingDirectory),
+    resolveWorkspaceRelativePath(
+      workspaceRoot,
+      WORKFLOW_SCRIPT_DIRECTORY,
+      workingDirectory,
+    ),
   );
   assertWritable(directory, WORKFLOW_SCRIPT_DIRECTORY);
   const directoryFs = yield* fileSystemAt(directory.fsPath);
@@ -175,6 +180,7 @@ const persistWorkflowScript = Effect.fn('persistWorkflowScript')(function* (
     const filename = suffix === 0 ? `${stem}.mjs` : `${stem}-${suffix + 1}.mjs`;
     const resolved = inScope(() =>
       resolveWorkspaceRelativePath(
+        workspaceRoot,
         `${WORKFLOW_SCRIPT_DIRECTORY}/${filename}`,
         workingDirectory,
       ),
@@ -302,7 +308,11 @@ Durability: the journal is keyed by meta.name and the agent field within this se
       let script: string;
       if (input.scriptPath != null) {
         const resolved = parent.inScope(() =>
-          resolveWorkspaceRelativePath(input.scriptPath!, workingDirectory),
+          resolveWorkspaceRelativePath(
+            parent.roots.workspace,
+            input.scriptPath!,
+            workingDirectory,
+          ),
         );
         scriptPath = resolved.relative;
         const scriptFs = yield* fileSystemAt(resolved.fsPath);
@@ -327,6 +337,7 @@ Durability: the journal is keyed by meta.name and the agent field within this se
         scriptPath = yield* persistWorkflowScript(
           script,
           submissionId,
+          parent.roots.workspace,
           workingDirectory,
           parent.inScope,
         );

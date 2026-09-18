@@ -42,9 +42,12 @@ type ExtractBibliographyInput = z.infer<typeof ExtractBibliographyInputSchema>;
 
 const DEFAULT_MAX_ENTRIES = 25;
 
-function formatPathList(filePaths: string[]): string {
+function formatPathList(
+  workspaceRoot: string | undefined,
+  filePaths: string[],
+): string {
   return filePaths
-    .map((filePath) => resolveAndFormat(filePath).display)
+    .map((filePath) => resolveAndFormat(workspaceRoot, filePath).display)
     .join(', ');
 }
 
@@ -71,7 +74,11 @@ const extractBibliography = Effect.fn('ExtractBibliographyTool.execute')(
 
     if (effectiveBibPath) {
       const { path: resolved } = call.inScope(() =>
-        resolveAndFormat(effectiveBibPath, call.workingDirectory),
+        resolveAndFormat(
+          call.roots.workspace,
+          effectiveBibPath,
+          call.workingDirectory,
+        ),
       );
       // `fsPath` records where the bibliography landed: workspace-relative
       // inside the session's folder, absolute for a path the caller chose
@@ -98,7 +105,9 @@ const extractBibliography = Effect.fn('ExtractBibliographyTool.execute')(
 
     const missingBibliographyNote =
       missingBibliographyFiles.length > 0
-        ? `Missing bibliography files: ${call.inScope(() => formatPathList(missingBibliographyFiles))}.`
+        ? `Missing bibliography files: ${call.inScope(() =>
+            formatPathList(call.roots.workspace, missingBibliographyFiles),
+          )}.`
         : undefined;
 
     if (
