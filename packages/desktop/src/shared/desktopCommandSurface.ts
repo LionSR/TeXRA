@@ -114,7 +114,7 @@ type DesktopHelpCommandId = (typeof DESKTOP_HELP_COMMANDS)[number];
 export type DesktopCommandId =
   DesktopFileCommandId | DesktopMenuCommandId | DesktopHelpCommandId;
 
-export const DESKTOP_COMMAND_IDS: readonly DesktopCommandId[] = [
+const DESKTOP_COMMAND_IDS: readonly DesktopCommandId[] = [
   ...DESKTOP_FILE_COMMANDS,
   ...DESKTOP_MENU_GROUPS.flat(),
   ...DESKTOP_HELP_COMMANDS,
