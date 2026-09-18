@@ -7,7 +7,10 @@ import { Effect } from 'effect';
 // Local imports
 import { CUSTOM_AGENTS_STORAGE_DIR } from '@common/storage/storageLayout';
 import { createLog } from '@logger/logUtils';
-import { AgentDirectoriesFailed } from '@platform/interfaces';
+import {
+  AgentDirectoriesFailed,
+  type AgentDirectoriesPort,
+} from '@platform/interfaces';
 import type { AgentSource } from '@shared/schemas';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { GlobalStorageFS } from '@utils/files/storageFS';
@@ -71,22 +74,6 @@ export class AgentDirectoryService {
       if (resolvedPath != null) return resolvedPath;
       return yield* this.ensureDefaultCustomDir();
     });
-  }
-
-  getDirectory(
-    source: AgentSource,
-  ): Effect.Effect<string | undefined, AgentDirectoriesFailed> {
-    switch (source) {
-      case 'custom':
-        return this.custom();
-      case 'builtInWorkflow':
-        return this.builtIn();
-      case 'builtInToolUse':
-        return this.builtInToolUse();
-      // No local directory: a remote agent lives in Supabase.
-      case 'remote':
-        return Effect.succeed(undefined);
-    }
   }
 
   getAllLocal(): Effect.Effect<AgentDirectoryEntry[], AgentDirectoriesFailed> {
@@ -219,5 +206,28 @@ export class AgentDirectoryService {
       catch: (cause) =>
         new AgentDirectoriesFailed({ source: 'custom', message, cause }),
     });
+  }
+}
+
+/**
+ * The one `AgentSource` to local-directory mapping. It reads the port, not the
+ * service, so every holder of an `AgentDirectoriesPort` answers a source
+ * through the same three readers and gives `remote` the same verdict, instead
+ * of repeating the switch at its own composition root.
+ */
+export function agentSourceDirectory(
+  directories: AgentDirectoriesPort,
+  source: AgentSource,
+): Effect.Effect<string | undefined, AgentDirectoriesFailed> {
+  switch (source) {
+    case 'custom':
+      return directories.custom();
+    case 'builtInWorkflow':
+      return directories.builtIn();
+    case 'builtInToolUse':
+      return directories.builtInToolUse();
+    // No local directory: a remote agent lives in Supabase.
+    case 'remote':
+      return Effect.succeed(undefined);
   }
 }

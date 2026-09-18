@@ -86,10 +86,8 @@ export class AgentHandlers {
     const controllers = createSettingsAgentControllers({
       workspaceState: workspaceRoots().workspaceState,
       globalState,
-      getCustomAgentDirectory: () =>
-        this.runtime.runPromise(agentDirectories.custom()),
-      getSourceDirectory: (source) =>
-        this.runtime.runPromise(agentDirectories.getDirectory(source)),
+      getCustomAgentDirectory: () => agentDirectories.custom(),
+      getSourceDirectory: (source) => agentDirectories.getDirectory(source),
     });
     this.catalogController = controllers.catalog;
     this.directoryController = controllers.directory;
@@ -233,8 +231,8 @@ export class AgentHandlers {
       this.ctx,
       'Failed to open agent folder',
       async () => {
-        const result = await this.directoryController.planOpenAgentFolder(
-          data.folderType,
+        const result = await this.runtime.runPromise(
+          this.directoryController.planOpenAgentFolder(data.folderType),
         );
         if (!result.ok) {
           await showLoggedMessage(
@@ -313,9 +311,12 @@ export class AgentHandlers {
 
   async sendCustomAgentDir(webview: vscode.Webview): Promise<void> {
     await webview.postMessage(
-      await buildCustomAgentDirMessage({
-        getCustomDirStatus: () => this.directoryController.getCustomDirStatus(),
-      }),
+      await this.runtime.runPromise(
+        buildCustomAgentDirMessage({
+          getCustomDirStatus: () =>
+            this.directoryController.getCustomDirStatus(),
+        }),
+      ),
     );
   }
 

@@ -2,13 +2,16 @@
 import * as path from 'node:path';
 
 // Third-party imports
+import { Effect } from 'effect';
 
 // Local imports - platform
-import type { StateWriteFailed } from '@platform/interfaces';
+import type {
+  AgentDirectoriesFailed,
+  StateWriteFailed,
+} from '@platform/interfaces';
 
 // Local imports - shared
 import type { AgentCategory, AgentSource } from '@shared/schemas';
-import type { Effect } from 'effect';
 
 import type { TemplateAgentFilePlan } from './backend/templateAgentCreation';
 
@@ -19,8 +22,10 @@ interface SettingsAgentDirectoryEntry {
 interface SettingsAgentDirectoryState {
   getConfiguredCustomDir(): string | undefined;
   setConfiguredCustomDir(path: string): Effect.Effect<void, StateWriteFailed>;
-  getCustomDir(): Promise<string>;
-  getSourceDir(source: AgentSource): Promise<string | undefined>;
+  getCustomDir(): Effect.Effect<string, AgentDirectoriesFailed>;
+  getSourceDir(
+    source: AgentSource,
+  ): Effect.Effect<string | undefined, AgentDirectoriesFailed>;
   getAgent(
     source: AgentSource,
     name: string,
@@ -49,13 +54,18 @@ type SettingsOpenAgentFolderResult =
 export class SettingsAgentDirectoryController {
   constructor(private readonly deps: SettingsAgentDirectoryControllerDeps) {}
 
-  async getCustomDirStatus(): Promise<SettingsCustomAgentDirStatus> {
-    const configuredPath =
-      this.deps.state.getConfiguredCustomDir()?.trim() ?? '';
-    return {
-      path: await this.deps.state.getCustomDir(),
-      isDefault: configuredPath === '',
-    };
+  getCustomDirStatus(): Effect.Effect<
+    SettingsCustomAgentDirStatus,
+    AgentDirectoriesFailed
+  > {
+    return Effect.gen({ self: this }, function* () {
+      const configuredPath =
+        this.deps.state.getConfiguredCustomDir()?.trim() ?? '';
+      return {
+        path: yield* this.deps.state.getCustomDir(),
+        isDefault: configuredPath === '',
+      };
+    });
   }
 
   resetCustomDir(): Effect.Effect<void, StateWriteFailed> {
@@ -88,13 +98,14 @@ export class SettingsAgentDirectoryController {
     return { ok: true, path: entry.path };
   }
 
-  async planOpenAgentFolder(
+  planOpenAgentFolder(
     source: AgentSource,
-  ): Promise<SettingsOpenAgentFolderResult> {
-    const sourceDir = await this.deps.state.getSourceDir(source);
-    if (!sourceDir) return { ok: false, reason: 'missingLocalDirectory' };
-
-    return { ok: true, path: sourceDir };
+  ): Effect.Effect<SettingsOpenAgentFolderResult, AgentDirectoriesFailed> {
+    return Effect.map(this.deps.state.getSourceDir(source), (sourceDir) =>
+      sourceDir
+        ? { ok: true, path: sourceDir }
+        : { ok: false, reason: 'missingLocalDirectory' },
+    );
   }
 
   /** Rejection reason for a proposed custom-agent file name, or null. */

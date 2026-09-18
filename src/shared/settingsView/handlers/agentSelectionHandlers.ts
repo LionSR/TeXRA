@@ -8,6 +8,8 @@
  * the controller classes themselves) so this file stays free of `@controllers/*`
  * imports, per `SharedSettingsViewBoundary.vitest.ts`.
  */
+import { Effect } from 'effect';
+
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type {
   AgentModePreset,
@@ -34,18 +36,19 @@ export function buildAgentSelectionMessage(
   };
 }
 
-export interface CustomAgentDirPorts {
-  getCustomDirStatus(): Promise<{ path: string; isDefault: boolean }>;
+/** The status reader is the directory controller's Effect; its failure stays
+ *  the caller's to report, which is why `E` is left open here. */
+export interface CustomAgentDirPorts<E> {
+  getCustomDirStatus(): Effect.Effect<{ path: string; isDefault: boolean }, E>;
 }
 
-export async function buildCustomAgentDirMessage(
-  ports: CustomAgentDirPorts,
-): Promise<UpdateCustomAgentDirMessage> {
-  const status = await ports.getCustomDirStatus();
-  return {
+export function buildCustomAgentDirMessage<E>(
+  ports: CustomAgentDirPorts<E>,
+): Effect.Effect<UpdateCustomAgentDirMessage, E> {
+  return Effect.map(ports.getCustomDirStatus(), (status) => ({
     command: SETTINGS_VIEW_COMMANDS.UPDATE_CUSTOM_AGENT_DIR,
     ...status,
-  };
+  }));
 }
 
 export interface AgentModePresetsPorts {
