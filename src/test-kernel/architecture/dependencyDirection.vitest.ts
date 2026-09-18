@@ -117,13 +117,19 @@ const BARE_EFFECT_RUN_SITES: Readonly<Record<string, number>> = {
   // exist until this entry's own composition installs it, and `closeSession`
   // has to answer for a process no run initialized and for one whose
   // shutdown already disposed that runtime.
-  'packages/agent/src/index.ts': 6,
+  'packages/agent/src/index.ts': 4,
   // The CLI platform shutdown sequence, which cannot run on the process
-  // runtime for the same reason the SDK entry cannot:
-  // `lifecycle.runShutdown()` disposes it (`disposeCliProcessRuntime`) before the
-  // stderr/stdout flushes run, and a teardown path must not depend on the
-  // runtime it is tearing down.
-  'packages/cli/src/runtime/initPlatform.ts': 1,
+  // runtime for the same reason the SDK entry cannot: `lifecycle.runShutdown`
+  // disposes it (`disposeCliProcessRuntime`) before the stderr/stdout flushes
+  // run, and a teardown path must not depend on the runtime it is tearing
+  // down. The second is the same disposal on the failed-init path, where the
+  // runtime the init installed must go before the failure is re-raised.
+  'packages/cli/src/runtime/initPlatform.ts': 2,
+  // The CLI process entry: one run for the command and its two finalizers,
+  // the platform's shutdown drain and the final NDJSON flush. It is the
+  // outermost boundary of the process, so there is nothing above it to run on
+  // and no runtime left once the drain has disposed the process one.
+  'packages/cli/src/bin/texra.ts': 1,
   // `loadCliStartupConfig`, the CLI config provider's pre-runtime edge, whose
   // one caller is `buildCliContext`: it opens the project and user
   // `config.json` stores BEFORE `initCliPlatform` (and with it
@@ -156,6 +162,14 @@ const BARE_EFFECT_RUN_SITES: Readonly<Record<string, number>> = {
   // healthy path never reaches the second run: it settles the full report on
   // the runtime the init hands back.
   'packages/cli/src/commands/doctor.ts': 2,
+  // Electron's `before-quit`, the desktop host's shutdown entry: it holds the
+  // lifecycle host and no runtime — the drain it runs is what disposes the
+  // process runtime — so the quit follows the drain on the default runner.
+  'packages/desktop/src/main/desktopWindowLifecycle.ts': 1,
+  // The desktop entry's startup-failure path: a `whenReady` program that died
+  // before the window was wired runs the same shutdown an ordinary quit does,
+  // and that drain disposes the runtime it would otherwise borrow.
+  'packages/desktop/src/main/index.ts': 1,
   // The desktop composition root, for the same reason: its four stores —
   // global and workspace state, the config pair, and the secrets file — open
   // before `installProcessRuntime`, because two of them are the values that
@@ -169,9 +183,11 @@ const BARE_EFFECT_RUN_SITES: Readonly<Record<string, number>> = {
   // before `initVscodePlatform` installs a runtime at all, and the
   // account-plane build degrades a missing-credentials throw to the
   // unavailable shape BEFORE the runtime that will serve it exists. All three
-  // programs are service-free. Every other Effect in this file settles on the
-  // local `ProcessRuntime` the entry holds.
-  'packages/extension/src/extension.ts': 3,
+  // programs are service-free. The fourth is `deactivate`'s shutdown: the
+  // drain and the teardown that follows it dispose the process runtime, so
+  // that one program cannot settle on it either. Every other Effect in this
+  // file settles on the local `ProcessRuntime` the entry holds.
+  'packages/extension/src/extension.ts': 4,
 };
 
 function sourceFilesUnder(
