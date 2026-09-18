@@ -176,8 +176,7 @@ vi.mock('@controllers/session/sessionLayer', async () => {
   return {
     // The double records when the disposal runs, not when the composition
     // builds it: `disposeProcessRuntime` answers a program now.
-    disposeProcessRuntime: (runtime: unknown) =>
-      effect.suspend(() => mocks.disposeRuntime(runtime)),
+    disposeProcessRuntime: () => effect.suspend(() => mocks.disposeRuntime()),
     installProcessRuntime: mocks.installRuntime,
   };
 });
