@@ -23,6 +23,10 @@ import { runDirUnder } from '@utils/files/runStorageFs';
 
 type WorkflowResult = Parameters<typeof resolveWorkflowOutput>[2];
 
+/** `resolveWorkflowOutput`, run at this suite's one Effect boundary. */
+const resolveOutput = (...args: Parameters<typeof resolveWorkflowOutput>) =>
+  Effect.runPromise(resolveWorkflowOutput(...args));
+
 const tempDirs = useTempDirs();
 
 const TEST_RUN_ID = 'workflow-output-test' as RunId;
@@ -82,19 +86,15 @@ describe('CLI workflow output resolution', () => {
     const runOutput = await writeRunFile(cwd, 'r1/a.tex', 'A');
 
     await expect(
-      Effect.runPromise(
-        resolveWorkflowOutput(
-          undefined,
-          'out',
-          workflowResult([
-            { absolutePath: runOutput, relativePath: 'r1/a.tex' },
-          ]),
-          testContext(cwd),
-          {
-            expectedOutputFiles: ['a.tex', 'b.tex'],
-            storageRoot: join(cwd, 'storage'),
-          },
-        ),
+      resolveOutput(
+        undefined,
+        'out',
+        workflowResult([{ absolutePath: runOutput, relativePath: 'r1/a.tex' }]),
+        testContext(cwd),
+        {
+          expectedOutputFiles: ['a.tex', 'b.tex'],
+          storageRoot: join(cwd, 'storage'),
+        },
       ),
     ).rejects.toThrow(/b\.tex/);
   });
@@ -108,32 +108,28 @@ describe('CLI workflow output resolution', () => {
     await mkdir(dirname(outputDirectoryFile), { recursive: true });
     await writeFile(outputDirectoryFile, 'existing directory file');
 
-    const resultForFile = await Effect.runPromise(
-      resolveWorkflowOutput(
-        outputFile,
-        undefined,
-        workflowResult(
-          [{ absolutePath: runOutput, relativePath: 'r0/paper.tex', round: 0 }],
-          RUN_OUTCOME.CANCELLED,
-        ),
-        testContext(cwd),
-        { storageRoot: join(cwd, 'storage') },
+    const resultForFile = await resolveOutput(
+      outputFile,
+      undefined,
+      workflowResult(
+        [{ absolutePath: runOutput, relativePath: 'r0/paper.tex', round: 0 }],
+        RUN_OUTCOME.CANCELLED,
       ),
+      testContext(cwd),
+      { storageRoot: join(cwd, 'storage') },
     );
-    const resultForDirectory = await Effect.runPromise(
-      resolveWorkflowOutput(
-        undefined,
-        join(cwd, 'out'),
-        workflowResult(
-          [{ absolutePath: runOutput, relativePath: 'r0/paper.tex', round: 0 }],
-          RUN_OUTCOME.CANCELLED,
-        ),
-        testContext(cwd),
-        {
-          expectedOutputFiles: ['paper.tex'],
-          storageRoot: join(cwd, 'storage'),
-        },
+    const resultForDirectory = await resolveOutput(
+      undefined,
+      join(cwd, 'out'),
+      workflowResult(
+        [{ absolutePath: runOutput, relativePath: 'r0/paper.tex', round: 0 }],
+        RUN_OUTCOME.CANCELLED,
       ),
+      testContext(cwd),
+      {
+        expectedOutputFiles: ['paper.tex'],
+        storageRoot: join(cwd, 'storage'),
+      },
     );
 
     for (const result of [resultForFile, resultForDirectory]) {
@@ -160,21 +156,19 @@ describe('CLI workflow output resolution', () => {
     const runA2 = await writeRunFile(cwd, 'r2/a.tex', 'A2');
     const runB = await writeRunFile(cwd, 'r1/b.tex', 'B');
 
-    const result = await Effect.runPromise(
-      resolveWorkflowOutput(
-        undefined,
-        'out',
-        workflowResult([
-          { absolutePath: runA1, relativePath: 'r1/a.tex', round: 1 },
-          { absolutePath: runB, relativePath: 'r1/b.tex' },
-          { absolutePath: runA2, relativePath: 'r2/a.tex', round: 2 },
-        ]),
-        testContext(cwd),
-        {
-          expectedOutputFiles: ['a.tex', 'b.tex'],
-          storageRoot: join(cwd, 'storage'),
-        },
-      ),
+    const result = await resolveOutput(
+      undefined,
+      'out',
+      workflowResult([
+        { absolutePath: runA1, relativePath: 'r1/a.tex', round: 1 },
+        { absolutePath: runB, relativePath: 'r1/b.tex' },
+        { absolutePath: runA2, relativePath: 'r2/a.tex', round: 2 },
+      ]),
+      testContext(cwd),
+      {
+        expectedOutputFiles: ['a.tex', 'b.tex'],
+        storageRoot: join(cwd, 'storage'),
+      },
     );
 
     expect(result).toMatchObject({
@@ -201,29 +195,27 @@ describe('CLI workflow output resolution', () => {
 
     expect(expectedOutputFiles).toEqual(['stdin.tex']);
 
-    const result = await Effect.runPromise(
-      resolveWorkflowOutput(
-        undefined,
-        'out',
-        workflowResult([
-          {
-            absolutePath: runOutput,
-            relativePath: 'r1/stdin.tex',
-            originalPath: join(
-              cwd,
-              'run',
-              'original',
-              'texra-stdin-123-abc123',
-              'stdin.tex',
-            ),
-          },
-        ]),
-        testContext(cwd),
+    const result = await resolveOutput(
+      undefined,
+      'out',
+      workflowResult([
         {
-          expectedOutputFiles,
-          storageRoot: join(cwd, 'storage'),
+          absolutePath: runOutput,
+          relativePath: 'r1/stdin.tex',
+          originalPath: join(
+            cwd,
+            'run',
+            'original',
+            'texra-stdin-123-abc123',
+            'stdin.tex',
+          ),
         },
-      ),
+      ]),
+      testContext(cwd),
+      {
+        expectedOutputFiles,
+        storageRoot: join(cwd, 'storage'),
+      },
     );
 
     expect(result).toMatchObject({
@@ -239,35 +231,33 @@ describe('CLI workflow output resolution', () => {
     const runMain = await writeRunFile(cwd, 'r1/main.tex', 'main');
     const runSeries = await writeRunFile(cwd, 'r1/series.tex', 'series');
 
-    const result = await Effect.runPromise(
-      resolveWorkflowOutput(
-        undefined,
-        'out',
-        workflowResult([
-          {
-            absolutePath: runMain,
-            relativePath: 'r1/main.tex',
-            originalPath: join(cwd, 'run', 'original', 'paper', 'main.tex'),
-          },
-          {
-            absolutePath: runSeries,
-            relativePath: 'r1/series.tex',
-            originalPath: join(
-              cwd,
-              'run',
-              'original',
-              'paper',
-              'chapters',
-              'series.tex',
-            ),
-          },
-        ]),
-        testContext(cwd),
+    const result = await resolveOutput(
+      undefined,
+      'out',
+      workflowResult([
         {
-          expectedOutputFiles: ['paper/main.tex', 'paper/chapters/series.tex'],
-          storageRoot: join(cwd, 'storage'),
+          absolutePath: runMain,
+          relativePath: 'r1/main.tex',
+          originalPath: join(cwd, 'run', 'original', 'paper', 'main.tex'),
         },
-      ),
+        {
+          absolutePath: runSeries,
+          relativePath: 'r1/series.tex',
+          originalPath: join(
+            cwd,
+            'run',
+            'original',
+            'paper',
+            'chapters',
+            'series.tex',
+          ),
+        },
+      ]),
+      testContext(cwd),
+      {
+        expectedOutputFiles: ['paper/main.tex', 'paper/chapters/series.tex'],
+        storageRoot: join(cwd, 'storage'),
+      },
     );
 
     expect(result).toMatchObject({
@@ -289,35 +279,33 @@ describe('CLI workflow output resolution', () => {
     const runRoot = await writeRunFile(cwd, 'root/main.tex', 'root');
     const runNested = await writeRunFile(cwd, 'nested/main.tex', 'nested');
 
-    const result = await Effect.runPromise(
-      resolveWorkflowOutput(
-        undefined,
-        'out',
-        workflowResult([
-          {
-            absolutePath: runRoot,
-            relativePath: 'r1/main.tex',
-            originalPath: join(cwd, 'run', 'original', 'paper', 'main.tex'),
-          },
-          {
-            absolutePath: runNested,
-            relativePath: 'r1/main.tex',
-            originalPath: join(
-              cwd,
-              'run',
-              'original',
-              'paper',
-              'chapters',
-              'main.tex',
-            ),
-          },
-        ]),
-        testContext(cwd),
+    const result = await resolveOutput(
+      undefined,
+      'out',
+      workflowResult([
         {
-          expectedOutputFiles: ['paper/main.tex', 'paper/chapters/main.tex'],
-          storageRoot: join(cwd, 'storage'),
+          absolutePath: runRoot,
+          relativePath: 'r1/main.tex',
+          originalPath: join(cwd, 'run', 'original', 'paper', 'main.tex'),
         },
-      ),
+        {
+          absolutePath: runNested,
+          relativePath: 'r1/main.tex',
+          originalPath: join(
+            cwd,
+            'run',
+            'original',
+            'paper',
+            'chapters',
+            'main.tex',
+          ),
+        },
+      ]),
+      testContext(cwd),
+      {
+        expectedOutputFiles: ['paper/main.tex', 'paper/chapters/main.tex'],
+        storageRoot: join(cwd, 'storage'),
+      },
     );
 
     expect(result).toMatchObject({
@@ -339,23 +327,21 @@ describe('CLI workflow output resolution', () => {
     const runDerived = await writeRunFile(cwd, 'r1/derived.tex', 'derived');
 
     await expect(
-      Effect.runPromise(
-        resolveWorkflowOutput(
-          undefined,
-          'out',
-          workflowResult([
-            {
-              absolutePath: runDerived,
-              relativePath: 'r1/derived.tex',
-              originalPath: join(cwd, 'run', 'original', 'paper', 'input.tex'),
-            },
-          ]),
-          testContext(cwd),
+      resolveOutput(
+        undefined,
+        'out',
+        workflowResult([
           {
-            expectedOutputFiles: ['paper/input.tex'],
-            storageRoot: join(cwd, 'storage'),
+            absolutePath: runDerived,
+            relativePath: 'r1/derived.tex',
+            originalPath: join(cwd, 'run', 'original', 'paper', 'input.tex'),
           },
-        ),
+        ]),
+        testContext(cwd),
+        {
+          expectedOutputFiles: ['paper/input.tex'],
+          storageRoot: join(cwd, 'storage'),
+        },
       ),
     ).rejects.toThrow(/paper[/\\]input\.tex/);
   });
@@ -379,29 +365,27 @@ describe('CLI workflow output resolution', () => {
     const runSeries = await writeRunFile(cwd, 'r1/series.tex', 'series');
 
     await expect(
-      Effect.runPromise(
-        resolveWorkflowOutput(
-          undefined,
-          'out',
-          workflowResult([
-            {
-              absolutePath: runSeries,
-              relativePath: 'r1/series.tex',
-              originalPath: join(
-                cwd,
-                'run',
-                'original',
-                'mychapters',
-                'series.tex',
-              ),
-            },
-          ]),
-          testContext(cwd),
+      resolveOutput(
+        undefined,
+        'out',
+        workflowResult([
           {
-            expectedOutputFiles: ['chapters/series.tex'],
-            storageRoot: join(cwd, 'storage'),
+            absolutePath: runSeries,
+            relativePath: 'r1/series.tex',
+            originalPath: join(
+              cwd,
+              'run',
+              'original',
+              'mychapters',
+              'series.tex',
+            ),
           },
-        ),
+        ]),
+        testContext(cwd),
+        {
+          expectedOutputFiles: ['chapters/series.tex'],
+          storageRoot: join(cwd, 'storage'),
+        },
       ),
     ).rejects.toThrow(/chapters[/\\]series\.tex/);
   });
@@ -411,20 +395,18 @@ describe('CLI workflow output resolution', () => {
     const runA1 = await writeRunFile(cwd, 'r1/a.tex', 'A1');
     const runA2 = await writeRunFile(cwd, 'r2/a.tex', 'A2');
 
-    await Effect.runPromise(
-      resolveWorkflowOutput(
-        undefined,
-        'out',
-        workflowResult([
-          { absolutePath: runA2, relativePath: 'r2/a.tex', round: 2 },
-          { absolutePath: runA1, relativePath: 'r1/a.tex', round: 1 },
-        ]),
-        testContext(cwd),
-        {
-          expectedOutputFiles: ['a.tex'],
-          storageRoot: join(cwd, 'storage'),
-        },
-      ),
+    await resolveOutput(
+      undefined,
+      'out',
+      workflowResult([
+        { absolutePath: runA2, relativePath: 'r2/a.tex', round: 2 },
+        { absolutePath: runA1, relativePath: 'r1/a.tex', round: 1 },
+      ]),
+      testContext(cwd),
+      {
+        expectedOutputFiles: ['a.tex'],
+        storageRoot: join(cwd, 'storage'),
+      },
     );
 
     await expect(readFile(join(cwd, 'out', 'a.tex'), 'utf8')).resolves.toBe(
@@ -437,19 +419,17 @@ describe('CLI workflow output resolution', () => {
     const runA1 = await writeRunFile(cwd, 'r1/a.tex', 'A1');
     const runA2 = await writeRunFile(cwd, 'r2/a.tex', 'A2');
 
-    const result = await Effect.runPromise(
-      resolveWorkflowOutput(
-        'out/a.tex',
-        undefined,
-        workflowResult([
-          { absolutePath: runA2, relativePath: 'r2/a.tex', round: 2 },
-          { absolutePath: runA1, relativePath: 'r1/a.tex', round: 1 },
-        ]),
-        testContext(cwd),
-        {
-          storageRoot: join(cwd, 'storage'),
-        },
-      ),
+    const result = await resolveOutput(
+      'out/a.tex',
+      undefined,
+      workflowResult([
+        { absolutePath: runA2, relativePath: 'r2/a.tex', round: 2 },
+        { absolutePath: runA1, relativePath: 'r1/a.tex', round: 1 },
+      ]),
+      testContext(cwd),
+      {
+        storageRoot: join(cwd, 'storage'),
+      },
     );
 
     expect(result).toMatchObject({
@@ -467,24 +447,22 @@ describe('CLI workflow output resolution', () => {
     const runAppendix = await writeRunFile(cwd, 'r2/appendix.tex', 'APPENDIX2');
     const runMain1 = await writeRunFile(cwd, 'r1/main.tex', 'MAIN1');
 
-    const result = await Effect.runPromise(
-      resolveWorkflowOutput(
-        'out/paper.tex',
-        undefined,
-        workflowResult([
-          { absolutePath: runMain1, relativePath: 'r1/main.tex', round: 1 },
-          { absolutePath: runMain, relativePath: 'r2/main.tex', round: 2 },
-          {
-            absolutePath: runAppendix,
-            relativePath: 'r2/appendix.tex',
-            round: 2,
-          },
-        ]),
-        testContext(cwd),
+    const result = await resolveOutput(
+      'out/paper.tex',
+      undefined,
+      workflowResult([
+        { absolutePath: runMain1, relativePath: 'r1/main.tex', round: 1 },
+        { absolutePath: runMain, relativePath: 'r2/main.tex', round: 2 },
         {
-          storageRoot: join(cwd, 'storage'),
+          absolutePath: runAppendix,
+          relativePath: 'r2/appendix.tex',
+          round: 2,
         },
-      ),
+      ]),
+      testContext(cwd),
+      {
+        storageRoot: join(cwd, 'storage'),
+      },
     );
 
     expect(result).toMatchObject({

@@ -74,25 +74,6 @@ function parentFileUsageError(
   );
 }
 
-/** The usage error a blocked `mkdir` reports, or the raw failure it isn't. */
-function mkdirFailure(
-  target: string,
-  flagLabel: OutputFlag,
-  error: Error,
-): Error {
-  if (isNotADirectoryError(error) || isAlreadyExistsError(error)) {
-    return parentFileUsageError(target, flagLabel);
-  }
-  if (isFileNotFoundError(error)) {
-    return new CliUsageError(
-      flagLabel === '--output-dir'
-        ? `--output-dir cannot be created: ${target}`
-        : `--output parent directory cannot be created: ${target}`,
-    );
-  }
-  return error;
-}
-
 /**
  * Probe `target` and materialize the directory that the eventual output write
  * requires. Using the same recursive mkdir operation as the writer avoids
@@ -118,7 +99,17 @@ function probeOutputPath(
         flagLabel === '--output-dir' ? target : dirname(target);
       return Effect.tryPromise({
         try: () => mkdir(requiredDirectory, { recursive: true }),
-        catch: (cause) => mkdirFailure(target, flagLabel, ensureError(cause)),
+        catch: (cause: unknown) => {
+          if (isNotADirectoryError(cause) || isAlreadyExistsError(cause)) {
+            return parentFileUsageError(target, flagLabel);
+          }
+          if (!isFileNotFoundError(cause)) return ensureError(cause);
+          return new CliUsageError(
+            flagLabel === '--output-dir'
+              ? `--output-dir cannot be created: ${target}`
+              : `--output parent directory cannot be created: ${target}`,
+          );
+        },
       }).pipe(Effect.as(null));
     }),
   );
