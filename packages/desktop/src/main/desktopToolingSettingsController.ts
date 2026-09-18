@@ -139,17 +139,24 @@ export class DefaultDesktopToolingSettingsController implements DesktopToolingSe
   }
 
   postStartupData(): Promise<void> {
-    // The re-probe is not awaited and outlives this run: the cached data is
-    // already posted, and its own `toolAvailabilityChanged` signal repaints
-    // the dashboard through the subscription above when it lands.
-    const reprobe = this.reportingFailure(
-      refreshToolAvailability(this.probeInputs),
-    );
     return this.options.runtime.runPromise(
       Effect.all(
         [this.postToolDashboardData(), this.postLatexSettingsStatus()],
         { concurrency: 'unbounded' },
-      ).pipe(Effect.andThen(Effect.forkDetach(reprobe)), Effect.asVoid),
+      ).pipe(
+        // The re-probe is not awaited and outlives this run: the cached data
+        // is already posted, and its own `toolAvailabilityChanged` signal
+        // repaints the dashboard through the subscription above when it
+        // lands. Forked on the runtime rather than in this fiber, like that
+        // subscription, so a defect still reaches the fork-failure reporter.
+        Effect.andThen(
+          Effect.sync(() => {
+            this.options.runtime.runFork(
+              this.reportingFailure(refreshToolAvailability(this.probeInputs)),
+            );
+          }),
+        ),
+      ),
     );
   }
 
