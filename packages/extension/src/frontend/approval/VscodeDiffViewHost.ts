@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
 
+import { Effect, Option } from 'effect';
 import * as vscode from 'vscode';
 
 import {
@@ -9,7 +10,7 @@ import {
 } from '@hosts/uiHosts';
 import { REVEAL_TIMEOUT_MS } from '@tools/approval/toolEditApproval';
 
-import { raceWithTimeout } from '../vscode/raceWithTimeout';
+import { firstEventOrTimeout } from '../vscode/vscodeEventWait';
 
 /**
  * The file URI a tab input surfaces, or null when the tab shows no single
@@ -23,89 +24,122 @@ export function tabInputFileUri(tab: vscode.Tab): vscode.Uri | null {
   return null;
 }
 
+/**
+ * An editor promise lifted where it is raised: the refusal reaches the caller
+ * as the value the editor threw, which is what the `await` this replaced
+ * handed over. Shared with the tool-edit approval host, which lifts the same
+ * `vscode.*` surface beside this one.
+ */
+export const fromEditor = <A>(
+  call: () => PromiseLike<A>,
+): Effect.Effect<A, unknown> =>
+  Effect.tryPromise({ try: call, catch: (error) => error });
+
 export class VscodeDiffViewHost implements DiffViewHost {
-  async openDiff(
+  openDiff(
     original: DiffSource,
     proposed: DiffSource,
     title: string,
-  ): Promise<void> {
-    await vscode.commands.executeCommand(
-      'vscode.diff',
-      this.toUri(original),
-      this.toUri(proposed),
-      title,
-      { preserveFocus: true } satisfies vscode.TextDocumentShowOptions,
-    );
+  ): Effect.Effect<void, unknown> {
+    return fromEditor(() =>
+      vscode.commands.executeCommand(
+        'vscode.diff',
+        this.toUri(original),
+        this.toUri(proposed),
+        title,
+        { preserveFocus: true } satisfies vscode.TextDocumentShowOptions,
+      ),
+    ).pipe(Effect.asVoid);
   }
 
-  async closeDiff(session: DiffSession): Promise<void> {
-    const originalUri = this.toUri(session.original).toString();
-    const proposedUri = this.toUri(session.proposed).toString();
+  closeDiff(session: DiffSession): Effect.Effect<void, unknown> {
+    return Effect.suspend(() => {
+      const originalUri = this.toUri(session.original).toString();
+      const proposedUri = this.toUri(session.proposed).toString();
 
-    const tabsToClose = vscode.window.tabGroups.all
-      .flatMap((group) => group.tabs)
-      .filter((tab) => {
-        const input = tab.input;
-        if (input instanceof vscode.TabInputTextDiff) {
-          // Require an exact pair match so we never close an unrelated diff
-          // that merely shares one side, nor a tab whose sides are swapped.
-          return (
-            input.original.toString() === originalUri &&
-            input.modified.toString() === proposedUri
-          );
-        }
-        const uriString = tabInputFileUri(tab)?.toString();
-        return uriString === originalUri || uriString === proposedUri;
-      });
+      const tabsToClose = vscode.window.tabGroups.all
+        .flatMap((group) => group.tabs)
+        .filter((tab) => {
+          const input = tab.input;
+          if (input instanceof vscode.TabInputTextDiff) {
+            // Require an exact pair match so we never close an unrelated diff
+            // that merely shares one side, nor a tab whose sides are swapped.
+            return (
+              input.original.toString() === originalUri &&
+              input.modified.toString() === proposedUri
+            );
+          }
+          const uriString = tabInputFileUri(tab)?.toString();
+          return uriString === originalUri || uriString === proposedUri;
+        });
 
-    if (tabsToClose.length > 0) {
-      await vscode.window.tabGroups.close(tabsToClose);
-    }
-  }
-
-  async revealFirstChange(session: DiffSession, line: number): Promise<void> {
-    const targetUri = this.toUri(session.proposed).toString();
-    const position = new vscode.Position(line, 0);
-
-    const tryReveal = () => {
-      const editor = vscode.window.visibleTextEditors.find(
-        (candidate) => candidate.document.uri.toString() === targetUri,
+      if (tabsToClose.length === 0) return Effect.void;
+      return fromEditor(() => vscode.window.tabGroups.close(tabsToClose)).pipe(
+        Effect.asVoid,
       );
+    });
+  }
 
-      if (!editor) {
-        return false;
+  revealFirstChange(
+    session: DiffSession,
+    line: number,
+  ): Effect.Effect<void, unknown> {
+    return Effect.suspend(() => {
+      const targetUri = this.toUri(session.proposed).toString();
+      const position = new vscode.Position(line, 0);
+
+      const tryReveal = () => {
+        const editor = vscode.window.visibleTextEditors.find(
+          (candidate) => candidate.document.uri.toString() === targetUri,
+        );
+
+        if (!editor) {
+          return false;
+        }
+
+        editor.selections = [new vscode.Selection(position, position)];
+        editor.revealRange(
+          new vscode.Range(position, position),
+          vscode.TextEditorRevealType.InCenter,
+        );
+        return true;
+      };
+
+      if (tryReveal()) {
+        return Effect.void;
       }
 
-      editor.selections = [new vscode.Selection(position, position)];
-      editor.revealRange(
-        new vscode.Range(position, position),
-        vscode.TextEditorRevealType.InCenter,
+      // The proposed side may not be visible yet: wait for the visibility
+      // change that lets the reveal land, and try once more if the wait times
+      // out — the same last attempt the raced promise made.
+      return firstEventOrTimeout<void>(
+        (report) =>
+          vscode.window.onDidChangeVisibleTextEditors(() => {
+            if (tryReveal()) report(undefined);
+          }),
+        REVEAL_TIMEOUT_MS,
+      ).pipe(
+        Effect.flatMap((revealed) =>
+          Option.isNone(revealed)
+            ? Effect.sync(() => {
+                tryReveal();
+              })
+            : Effect.void,
+        ),
       );
-      return true;
-    };
-
-    if (tryReveal()) {
-      return;
-    }
-
-    const raced = await raceWithTimeout<void>(
-      (resolve) =>
-        vscode.window.onDidChangeVisibleTextEditors(() => {
-          if (tryReveal()) resolve();
-        }),
-      REVEAL_TIMEOUT_MS,
-    );
-    if (raced.timedOut) tryReveal();
+    });
   }
 
-  async readProposedContent(session: DiffSession): Promise<string> {
-    const proposedUri = this.toUri(session.proposed);
-    const openDocument = vscode.workspace.textDocuments.find(
-      (doc) => doc.uri.toString() === proposedUri.toString(),
-    );
-    return openDocument
-      ? openDocument.getText()
-      : await readFile(proposedUri.fsPath, 'utf8');
+  readProposedContent(session: DiffSession): Effect.Effect<string, unknown> {
+    return Effect.suspend(() => {
+      const proposedUri = this.toUri(session.proposed);
+      const openDocument = vscode.workspace.textDocuments.find(
+        (doc) => doc.uri.toString() === proposedUri.toString(),
+      );
+      return openDocument
+        ? Effect.succeed(openDocument.getText())
+        : fromEditor(() => readFile(proposedUri.fsPath, 'utf8'));
+    });
   }
 
   private toUri(source: DiffSource): vscode.Uri {

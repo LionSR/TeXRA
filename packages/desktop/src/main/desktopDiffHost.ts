@@ -1,6 +1,6 @@
 import path from 'node:path';
 
-import { Cause, Effect, Exit, FileSystem } from 'effect';
+import { Cause, Effect, FileSystem } from 'effect';
 import { nanoid } from 'nanoid';
 
 import {
@@ -40,8 +40,9 @@ interface DesktopDiffHostOptions extends DesktopOverlayPostOptions {
    * removes the recorded directories once during quit.
    */
   recordPatchDir(tempDir: string): void;
-  /** The process runtime the window was handed; every file read and write
-   *  below settles on it. */
+  /** The process runtime the window was handed. The members below are
+   *  programs the caller runs, so this only supplies the filesystem they
+   *  read and write through — nothing settles here. */
   runtime: ProcessRuntime;
 }
 
@@ -60,7 +61,7 @@ interface ProjectDiffHost extends Pick<DiffViewHost, 'openDiff'> {
     proposed: DiffSource,
     title: string,
     previewId?: string,
-  ): Promise<void>;
+  ): Effect.Effect<void, unknown>;
   /**
    * Close the diff `previewId` names: the renderer's `desktop:closeDiff`,
    * the counterpart of the `desktop:showDiff` that opened it. The Review
@@ -68,7 +69,7 @@ interface ProjectDiffHost extends Pick<DiffViewHost, 'openDiff'> {
    * opened and leaves the rest standing; the workbench tab goes only once
    * the pane is empty.
    */
-  closeDiff(previewId: string): Promise<void>;
+  closeDiff(previewId: string): Effect.Effect<void>;
 }
 
 /** The window's diff host: one per Review surface, bound per open project. */
@@ -90,98 +91,111 @@ interface DesktopDiffHost {
 export function createDesktopDiffHost(
   options: DesktopDiffHostOptions,
 ): DesktopDiffHost {
-  async function openDiff(
+  /** The window's services, handed to a program the caller runs on a runtime
+   *  of its own: `DiffViewHost` takes no requirements, so the filesystem the
+   *  reads and writes below need is provided here. */
+  const withProcessServices = <A, E>(
+    program: Effect.Effect<A, E, FileSystem.FileSystem>,
+  ): Effect.Effect<A, E> =>
+    Effect.flatMap(options.runtime.contextEffect, (context) =>
+      Effect.provideContext(program, context),
+    );
+
+  function openDiff(
     reviewSession: string,
     original: DiffSource,
     proposed: DiffSource,
     title: string,
     previewId: string = nanoid(),
-  ): Promise<void> {
-    // Both sides of a diff are absolute paths their caller chose — a run's
-    // output, an accepted file, a temp copy — so they are read through the
-    // process filesystem rather than through either rooted view.
-    const [originalContent, proposedContent] = await options.runtime.runPromise(
+  ): Effect.Effect<void, unknown> {
+    return withProcessServices(
       Effect.gen(function* () {
         const fs = yield* FileSystem.FileSystem;
-        return yield* Effect.all(
+        // Both sides of a diff are absolute paths their caller chose — a run's
+        // output, an accepted file, a temp copy — so they are read through the
+        // process filesystem rather than through either rooted view.
+        const [originalContent, proposedContent] = yield* Effect.all(
           [
             fs.readFileString(original.filePath),
             fs.readFileString(proposed.filePath),
           ],
           { concurrency: 2 },
         );
-      }),
-    );
-    const lineChanges = computeLineChangeSummary(
-      originalContent,
-      proposedContent,
-    );
+        const lineChanges = computeLineChangeSummary(
+          originalContent,
+          proposedContent,
+        );
 
-    // Prefer the in-app Review workbench when wired. A `false` return value
-    // or a thrown error opts into the external-editor fallback (covers the
-    // startup IPC race and a destroyed BrowserWindow).
-    const shownInRenderer = tryShowInRenderer(
-      { ...options, source: 'desktopDiffHost', fallback: 'external editor' },
-      {
-        command: DESKTOP_DIFF_COMMANDS.SHOW_DIFF,
-        session: reviewSession,
-        previewId,
-        title,
-        displayPath: title.replace(/^Tool edit:\s*/, ''),
-        originalText: originalContent,
-        proposedText: proposedContent,
-        additions: lineChanges.added,
-        deletions: lineChanges.removed,
-        language: monacoLanguageForPath(proposed.filePath ?? ''),
-      } satisfies DesktopShowDiffMessage,
-    );
-    if (shownInRenderer) return;
+        // Prefer the in-app Review workbench when wired. A `false` return value
+        // or a thrown error opts into the external-editor fallback (covers the
+        // startup IPC race and a destroyed BrowserWindow).
+        const shownInRenderer = tryShowInRenderer(
+          {
+            ...options,
+            source: 'desktopDiffHost',
+            fallback: 'external editor',
+          },
+          {
+            command: DESKTOP_DIFF_COMMANDS.SHOW_DIFF,
+            session: reviewSession,
+            previewId,
+            title,
+            displayPath: title.replace(/^Tool edit:\s*/, ''),
+            originalText: originalContent,
+            proposedText: proposedContent,
+            additions: lineChanges.added,
+            deletions: lineChanges.removed,
+            language: monacoLanguageForPath(proposed.filePath ?? ''),
+          } satisfies DesktopShowDiffMessage,
+        );
+        if (shownInRenderer) return;
 
-    // External-editor fallback: write a unified patch file and open it.
-    const diffBody = unifiedDiffText(originalContent, proposedContent);
-    const patch = diffBody
-      ? `--- ${original.filePath}\n+++ ${proposed.filePath}\n${diffBody}\n`
-      : `No textual changes for ${path.basename(proposed.filePath)}.\n`;
-    const tempDir = await createTexraTempDir('texra-desktop-diff-');
-    options.recordPatchDir(tempDir);
-    const diffPath = path.join(tempDir, `${nanoid()}.diff`);
+        // External-editor fallback: write a unified patch file and open it.
+        const diffBody = unifiedDiffText(originalContent, proposedContent);
+        const patch = diffBody
+          ? `--- ${original.filePath}\n+++ ${proposed.filePath}\n${diffBody}\n`
+          : `No textual changes for ${path.basename(proposed.filePath)}.\n`;
+        const tempDir = yield* Effect.promise(() =>
+          createTexraTempDir('texra-desktop-diff-'),
+        );
+        options.recordPatchDir(tempDir);
+        const diffPath = path.join(tempDir, `${nanoid()}.diff`);
 
-    const opened = await options.runtime.runPromiseExit(
-      Effect.gen(function* () {
-        const fs = yield* FileSystem.FileSystem;
-        yield* fs.writeFileString(diffPath, patch);
-        yield* options.openPath(diffPath).pipe(
-          Effect.mapError(
-            (cause) =>
-              new ExternalOpenFailed({
-                kind: 'path',
-                target: diffPath,
-                message: 'The patch file could not be opened.',
-                cause,
-              }),
+        yield* Effect.gen(function* () {
+          yield* fs.writeFileString(diffPath, patch);
+          yield* options.openPath(diffPath).pipe(
+            Effect.mapError(
+              (cause) =>
+                new ExternalOpenFailed({
+                  kind: 'path',
+                  target: diffPath,
+                  message: 'The patch file could not be opened.',
+                  cause,
+                }),
+            ),
+          );
+        }).pipe(
+          // The patch never reached an editor: remove it now instead of
+          // leaving it until quit, and let the original failure travel on to
+          // the caller. The directory stays recorded, so a failed removal is
+          // retried by the process-level removal, and it is logged instead of
+          // swallowed.
+          Effect.onError(() =>
+            fs.remove(tempDir, { recursive: true, force: true }).pipe(
+              Effect.catchCause((cause) =>
+                Effect.sync(() => {
+                  console.warn(
+                    `Failed to remove the temporary diff directory; the process-level removal at quit retries it: ${toErrorMessage(
+                      Cause.squash(cause),
+                    )}`,
+                  );
+                }),
+              ),
+            ),
           ),
         );
       }),
     );
-    if (Exit.isFailure(opened)) {
-      // The patch never reached an editor: remove it now instead of leaving it
-      // until quit, and preserve the original failure for the caller. The
-      // directory stays recorded, so a failed removal is retried by the
-      // process-level removal, and the failure is logged instead of swallowed.
-      const removed = await options.runtime.runPromiseExit(
-        FileSystem.FileSystem.use((fs) =>
-          fs.remove(tempDir, { recursive: true, force: true }),
-        ),
-      );
-      if (Exit.isFailure(removed)) {
-        console.warn(
-          `Failed to remove the temporary diff directory; the process-level removal at quit retries it: ${toErrorMessage(
-            Cause.squash(removed.cause),
-          )}`,
-        );
-      }
-      throw Cause.squash(opened.cause);
-    }
   }
 
   /**
@@ -190,22 +204,24 @@ export function createDesktopDiffHost(
    * editor is not a view this host can close, and the directory holding it
    * is removed at quit.
    */
-  async function closeDiff(
+  function closeDiff(
     reviewSession: string,
     previewId: string,
-  ): Promise<void> {
-    tryShowInRenderer(
-      {
-        ...options,
-        source: 'desktopDiffHost',
-        fallback: 'no in-app review tab to close',
-      },
-      {
-        command: DESKTOP_DIFF_COMMANDS.CLOSE_DIFF,
-        session: reviewSession,
-        previewId,
-      } satisfies DesktopCloseDiffMessage,
-    );
+  ): Effect.Effect<void> {
+    return Effect.sync(() => {
+      tryShowInRenderer(
+        {
+          ...options,
+          source: 'desktopDiffHost',
+          fallback: 'no in-app review tab to close',
+        },
+        {
+          command: DESKTOP_DIFF_COMMANDS.CLOSE_DIFF,
+          session: reviewSession,
+          previewId,
+        } satisfies DesktopCloseDiffMessage,
+      );
+    });
   }
 
   return {

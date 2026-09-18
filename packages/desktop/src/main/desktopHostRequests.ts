@@ -252,17 +252,22 @@ export function createDesktopHostRequests(
   );
   const { runOutputs } = runActions;
 
-  const listWorkspaceCandidateFiles = async (): Promise<string[]> => {
-    const workspacePath = options.workspacePath;
-    if (!workspacePath) return [];
-    const files = await runtime.runPromise(
-      Effect.all([
+  /** The label scan's candidates, as the program that lists them: the
+   *  file-actions port takes the window's services from the runtime it holds,
+   *  so nothing settles here. */
+  const listWorkspaceCandidateFiles = () =>
+    Effect.suspend(() => {
+      const workspacePath = options.workspacePath;
+      if (!workspacePath) return Effect.succeed([]);
+      return Effect.all([
         listWorkspaceFilesOfType('input', workspacePath),
         listWorkspaceFilesOfType('context', workspacePath),
-      ]),
-    );
-    return files.flat().map((file) => path.resolve(workspacePath, file));
-  };
+      ]).pipe(
+        Effect.map((files) =>
+          files.flat().map((file) => path.resolve(workspacePath, file)),
+        ),
+      );
+    });
 
   const fileActions = new DesktopProgressFileActions(
     {
@@ -306,21 +311,26 @@ export function createDesktopHostRequests(
     },
   );
 
-  async function runLatexdiffFile(
+  const runLatexdiffFile = (
     baseFile: string,
     editedFile: string,
     runId?: RunId,
-  ): Promise<void> {
-    const context =
-      runId === undefined
-        ? undefined
-        : await getLatexdiffRunContext(runId, editedFile);
-    if (!context) {
-      await fileActions.runLatexdiffFile(baseFile, editedFile);
-      return;
-    }
-    await fileActions.diffAcceptedFilePair(baseFile, editedFile, context);
-  }
+  ): Effect.Effect<void, HostCallFailed | RequestRefusal> =>
+    Effect.gen(function* () {
+      const context =
+        runId === undefined
+          ? undefined
+          : yield* getLatexdiffRunContext(runId, editedFile);
+      if (!context) {
+        yield* fileActions.runLatexdiffFile(baseFile, editedFile);
+        return;
+      }
+      yield* fileActions.diffAcceptedFilePair(baseFile, editedFile, context);
+    }).pipe(
+      Effect.mapError((cause) =>
+        hostFailure('fileActions.runLatexdiffFile', cause),
+      ),
+    );
 
   /**
    * The run context a diff of an accepted file pair reads its per-round
@@ -328,32 +338,33 @@ export function createDesktopHostRequests(
    * later: `getOutputFiles` reads the view's current level (#11402), and
    * this context crosses several awaits before anything enumerates it.
    */
-  async function getLatexdiffRunContext(
-    runId: RunId,
-    editedFile: string,
-  ): Promise<DesktopLatexdiffRunContext | undefined> {
-    const config = await runtime.runPromise(runActions.readConfig(runId));
-    const outputsByRound = cloneRoundIndexed(runOutputs.getOutputFiles(runId));
-    const workspaceScan: DesktopLatexdiffWorkspaceScan | undefined = config
-      ? {
-          agent: config.agent,
-          model: config.model,
-          inputFile: config.inputFiles.at(0) ?? editedFile,
-          // The run's output files, so multi-document runs resolved via the
-          // run-dir or workspace scan diff every output.
-          ...(config.outputFiles?.length
-            ? { outputFiles: config.outputFiles }
-            : {}),
-        }
-      : undefined;
-    if (Object.keys(outputsByRound).length === 0 && !workspaceScan) {
-      return undefined;
-    }
-    return {
-      outputsByRound,
-      runId,
-      ...(workspaceScan && { workspaceScan }),
-    };
+  function getLatexdiffRunContext(runId: RunId, editedFile: string) {
+    return Effect.gen(function* () {
+      const config = yield* runActions.readConfig(runId);
+      const outputsByRound = cloneRoundIndexed(
+        runOutputs.getOutputFiles(runId),
+      );
+      const workspaceScan: DesktopLatexdiffWorkspaceScan | undefined = config
+        ? {
+            agent: config.agent,
+            model: config.model,
+            inputFile: config.inputFiles.at(0) ?? editedFile,
+            // The run's output files, so multi-document runs resolved via the
+            // run-dir or workspace scan diff every output.
+            ...(config.outputFiles?.length
+              ? { outputFiles: config.outputFiles }
+              : {}),
+          }
+        : undefined;
+      if (Object.keys(outputsByRound).length === 0 && !workspaceScan) {
+        return undefined;
+      }
+      return {
+        outputsByRound,
+        runId,
+        ...(workspaceScan && { workspaceScan }),
+      };
+    });
   }
 
   const workflowFileActions = new ProgressWorkflowFileActionsController({
@@ -366,13 +377,8 @@ export function createDesktopHostRequests(
         fileActions.acceptEditedFile(baseFile, editedFile),
       mergeFile: (baseFile, editedFile) =>
         fileActions.runMergeFile(baseFile, editedFile),
-      // The round-aware diff still answers with a promise (its fallback folds
-      // an `Exit` behind that face), so it keeps the one lift a foreign edge
-      // gets.
       latexdiffFile: (baseFile, editedFile) =>
-        fromHost('fileActions.runLatexdiffFile', () =>
-          runLatexdiffFile(baseFile, editedFile),
-        ),
+        runLatexdiffFile(baseFile, editedFile),
       openDirectory: (directory) => host.openPath(directory),
       // An accepted-edit backup names an absolute path the controller already
       // resolved, so this reads through the process filesystem rather than a
@@ -401,8 +407,8 @@ export function createDesktopHostRequests(
           }),
         );
       }
-      yield* fromHost('fileActions.diffStreamToolbarAction', () =>
-        fileActions.diffStreamToolbarAction({
+      yield* fileActions
+        .diffStreamToolbarAction({
           outputsByRound: request.outputsByRound ?? {},
           runId: request.runId,
           workspaceScan: {
@@ -411,8 +417,12 @@ export function createDesktopHostRequests(
             inputFile,
             outputFiles: request.outputFiles,
           },
-        }),
-      );
+        })
+        .pipe(
+          Effect.mapError((cause) =>
+            hostFailure('fileActions.diffStreamToolbarAction', cause),
+          ),
+        );
     });
 
   const reportFileOperationResult = (
@@ -646,9 +656,7 @@ export function createDesktopHostRequests(
           yield* fileActions.runMergeFile(baseFile, editedFile);
           return;
         case 'latexdiff':
-          yield* fromHost('fileActions.runLatexdiffFile', () =>
-            runLatexdiffFile(baseFile, editedFile),
-          );
+          yield* runLatexdiffFile(baseFile, editedFile);
           return;
       }
     });
@@ -735,9 +743,13 @@ export function createDesktopHostRequests(
         }
         case 'openLabel': {
           const { label } = request;
-          const opened = yield* fromHost('fileActions.findAndOpenLabel', () =>
-            fileActions.findAndOpenLabel(label),
-          );
+          const opened = yield* fileActions
+            .findAndOpenLabel(label)
+            .pipe(
+              Effect.mapError((cause) =>
+                hostFailure('fileActions.findAndOpenLabel', cause),
+              ),
+            );
           if (!opened) {
             return yield* Effect.fail(
               new Rejected({ reason: `No file defines the label ${label}.` }),

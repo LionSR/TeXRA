@@ -85,6 +85,7 @@ async function prepareDiffPair(
   return [{ filePath: originalPath }, { filePath: proposedPath }];
 }
 
+/** The window's run: `openDiff` is the program the caller settles. */
 async function openDiffPair(
   host: DiffHost,
   title: string,
@@ -92,7 +93,7 @@ async function openDiffPair(
   texts: [string, string] = ['a\n', 'b\n'],
 ): Promise<void> {
   const [original, proposed] = await prepareDiffPair(names, texts);
-  await host.openDiff(original, proposed, title);
+  await testRuntime().runPromise(host.openDiff(original, proposed, title));
 }
 
 describe('createDesktopDiffHost', () => {

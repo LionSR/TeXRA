@@ -62,7 +62,7 @@ describe('desktop agent run completion hook', () => {
         openPath: host.openPath,
         openBuildDisplay: host.openBuildDisplay,
         openDiff: host.openDiff,
-        closeDiff: async () => undefined,
+        closeDiff: () => Effect.void,
       },
       session,
       runtime: testRuntime(),

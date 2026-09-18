@@ -19,6 +19,7 @@ import type {
   ToolEditPreviewContext,
 } from '@controllers/approval/ToolEditApprovalController';
 import {
+  fromEditor,
   tabInputFileUri,
   VscodeDiffViewHost,
 } from '@frontend/approval/VscodeDiffViewHost';
@@ -37,12 +38,6 @@ import {
 import { pluralize } from '@utils/text/stringUtils';
 
 const CHANNEL = 'ToolEditApproval';
-
-/** An editor promise lifted as it is: the rejection reaches the controller's
- *  error report as the value it was thrown with, which is what the `await`
- *  this replaced handed over. */
-const fromEditor = <A>(call: () => PromiseLike<A>): Effect.Effect<A, unknown> =>
-  Effect.tryPromise({ try: call, catch: (error) => error });
 
 export class VscodeToolEditApprovalHost implements ToolEditApprovalHost {
   private readonly diffViewHost: DiffViewHost = new VscodeDiffViewHost();
@@ -146,7 +141,7 @@ class VscodeToolEditPreview implements ToolEditPreview {
       Effect.andThen(
         Effect.suspend(() =>
           this.context.isSettled()
-            ? fromEditor(() => this.diffViewHost.closeDiff(this.diffSession))
+            ? this.diffViewHost.closeDiff(this.diffSession)
             : this.revealFirstChange(),
         ),
       ),
@@ -163,9 +158,7 @@ class VscodeToolEditPreview implements ToolEditPreview {
   }
 
   readProposedContent(): Effect.Effect<string, unknown> {
-    return fromEditor(() =>
-      this.diffViewHost.readProposedContent(this.diffSession),
-    );
+    return this.diffViewHost.readProposedContent(this.diffSession);
   }
 
   dispose(): Effect.Effect<void, unknown> {
@@ -173,20 +166,16 @@ class VscodeToolEditPreview implements ToolEditPreview {
       // Stop listening for tab closes before closing the diff ourselves.
       this.tabCloseListener?.dispose();
     }).pipe(
-      Effect.andThen(
-        fromEditor(() => this.diffViewHost.closeDiff(this.diffSession)),
-      ),
+      Effect.andThen(this.diffViewHost.closeDiff(this.diffSession)),
       Effect.andThen(this.staged.cleanup),
     );
   }
 
   private openDiff(): Effect.Effect<void, unknown> {
-    return fromEditor(() =>
-      this.diffViewHost.openDiff(
-        this.diffSession.original,
-        this.diffSession.proposed,
-        this.diffSession.title,
-      ),
+    return this.diffViewHost.openDiff(
+      this.diffSession.original,
+      this.diffSession.proposed,
+      this.diffSession.title,
     );
   }
 
@@ -198,9 +187,7 @@ class VscodeToolEditPreview implements ToolEditPreview {
       );
       if (line === null) return Effect.void;
 
-      return fromEditor(() =>
-        this.diffViewHost.revealFirstChange(this.diffSession, line),
-      );
+      return this.diffViewHost.revealFirstChange(this.diffSession, line);
     });
   }
 

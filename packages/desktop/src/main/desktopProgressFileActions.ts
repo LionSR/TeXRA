@@ -1,6 +1,6 @@
 import path from 'node:path';
 
-import { Cause, Data, Effect, Exit, FileSystem } from 'effect';
+import { Data, Effect, FileSystem } from 'effect';
 
 import {
   getHelperModelName,
@@ -24,7 +24,7 @@ import type {
   DiffRunOutcome,
 } from '@latex/latexdiff/types';
 import type { StateStore } from '@platform/interfaces';
-import type { ProcessRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import type { OutputFileInfo, ReadonlyRoundIndexed } from '@shared/schemas';
 import type { Rejected } from '@shared/session/requestErrors';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -37,10 +37,10 @@ import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
 const DESKTOP_LATEXDIFF_CHANNEL = 'DesktopProgressFileActions';
 
 /**
- * The diff window would not open. Electron's diff surface answers with a
- * promise and has no failure channel of its own, so this is the one tag the
- * compare action's lift raises — the file-actions port takes tags, never a
- * bare rejection.
+ * The diff window would not open. The desktop's diff surface fails with what
+ * it hit — a side that would not read, a patch the OS editor refused — and the
+ * file-actions port takes tags, never a bare value, so the compare action
+ * words that failure as this one.
  */
 class DiffViewUnavailable extends Data.TaggedError('DiffViewUnavailable')<{
   readonly message: string;
@@ -76,10 +76,15 @@ interface DesktopProgressFileActionHost {
    *  helper model from it. */
   readonly globalState: StateStore;
   /** The process runtime the window root holds; the latexdiff programs and
-   *  the file reads and writes below settle on it. */
+   *  the file reads and writes below take their services from it. Nothing
+   *  settles here: every member of this class is a program its caller runs. */
   readonly runtime: ProcessRuntime;
   startRun(request: ValidatedRunRequest): void;
-  listWorkspaceCandidateFiles(): Promise<string[]>;
+  listWorkspaceCandidateFiles(): Effect.Effect<
+    readonly string[],
+    unknown,
+    ProcessServices
+  >;
 }
 
 export interface DesktopLatexdiffWorkspaceScan {
@@ -106,16 +111,18 @@ export class DesktopProgressFileActions {
     baseFile: string,
     editedFile: string,
   ): Effect.Effect<void, DiffViewUnavailable> {
-    return Effect.tryPromise({
-      try: () =>
-        this.ui.openDiff(
-          { filePath: baseFile },
-          { filePath: editedFile },
-          `Compare: ${path.basename(editedFile)} <-> ${path.basename(baseFile)}`,
+    return this.ui
+      .openDiff(
+        { filePath: baseFile },
+        { filePath: editedFile },
+        `Compare: ${path.basename(editedFile)} <-> ${path.basename(baseFile)}`,
+      )
+      .pipe(
+        Effect.mapError(
+          (cause) =>
+            new DiffViewUnavailable({ message: toErrorMessage(cause), cause }),
         ),
-      catch: (cause) =>
-        new DiffViewUnavailable({ message: toErrorMessage(cause), cause }),
-    });
+      );
   }
 
   runMergeFile(
@@ -160,18 +167,34 @@ export class DesktopProgressFileActions {
     );
   }
 
-  async diffAcceptedFilePair(
+  /**
+   * The window's services, handed to programs whose callers take none: the
+   * latexdiff core, the build display and the file reads below all read the
+   * process filesystem, and the ports this class satisfies declare no
+   * requirements. Nothing settles here — the caller still runs the program.
+   */
+  private withProcessServices<A, E>(
+    program: Effect.Effect<A, E, ProcessServices>,
+  ): Effect.Effect<A, E> {
+    return Effect.flatMap(this.host.runtime.contextEffect, (context) =>
+      Effect.provideContext(program, context),
+    );
+  }
+
+  diffAcceptedFilePair(
     baseFile: string,
     editedFile: string,
     runContext: DesktopLatexdiffRunContext,
-  ): Promise<void> {
-    const outcome = await this.runSharedLatexdiff(runContext);
-    if (outcome && (await this.openSharedLatexdiffResults(outcome))) return;
+  ): Effect.Effect<void, unknown> {
+    return Effect.gen({ self: this }, function* () {
+      const outcome = yield* this.runSharedLatexdiff(runContext);
+      if (outcome && (yield* this.openSharedLatexdiffResults(outcome))) return;
 
-    // No round-aware diff was produced (no rounds resolved, the shared core
-    // threw, or every operation failed) — fall back to a single-file diff so
-    // the user still gets a comparison.
-    await this.runLatexdiffFile(baseFile, editedFile);
+      // No round-aware diff was produced (no rounds resolved, the shared core
+      // failed, or every operation failed) — fall back to a single-file diff
+      // so the user still gets a comparison.
+      yield* this.runLatexdiffFile(baseFile, editedFile);
+    });
   }
 
   /**
@@ -186,76 +209,82 @@ export class DesktopProgressFileActions {
    * latexdiff surface it uses `DEFAULT_MATH_MARKUP`, since this host has no
    * quick-pick to choose a markup mode with.
    */
-  async diffStreamToolbarAction(
+  diffStreamToolbarAction(
     runContext: DesktopLatexdiffRunContext,
-  ): Promise<void> {
-    const outcome = await this.runSharedLatexdiff(runContext);
-    if (!outcome?.results.length) {
-      await this.host.runtime.runPromise(
-        this.ui.showInfoMessage(NO_LATEXDIFF_OPERATIONS_MESSAGE),
+  ): Effect.Effect<void, unknown> {
+    return Effect.gen({ self: this }, function* () {
+      const outcome = yield* this.runSharedLatexdiff(runContext);
+      if (!outcome?.results.length) {
+        yield* this.ui.showInfoMessage(NO_LATEXDIFF_OPERATIONS_MESSAGE);
+        return;
+      }
+
+      if (yield* this.openSharedLatexdiffResults(outcome)) return;
+
+      yield* this.ui.showErrorMessage(
+        latexdiffAllFailedMessage(DEFAULT_MATH_MARKUP),
       );
-      return;
-    }
-
-    if (await this.openSharedLatexdiffResults(outcome)) return;
-
-    await this.host.runtime.runPromise(
-      this.ui.showErrorMessage(latexdiffAllFailedMessage(DEFAULT_MATH_MARKUP)),
-    );
+    });
   }
 
-  async runLatexdiffFile(baseFile: string, editedFile: string): Promise<void> {
-    const service = new LaTeXdiffService(
-      DESKTOP_LATEXDIFF_CHANNEL,
-      this.host.session.roots,
-    );
-    const result = await this.host.runtime.runPromise(
-      service.runDiff(
+  runLatexdiffFile(
+    baseFile: string,
+    editedFile: string,
+  ): Effect.Effect<void, unknown> {
+    return Effect.gen({ self: this }, function* () {
+      const service = new LaTeXdiffService(
+        DESKTOP_LATEXDIFF_CHANNEL,
+        this.host.session.roots,
+      );
+      const result = yield* service.runDiff(
         pathToLocationIn(this.host.session.roots.workspace, baseFile),
         pathToLocationIn(this.host.session.roots.workspace, editedFile),
         '_diff',
         DEFAULT_MATH_MARKUP,
         { cwd: this.host.session.roots.workspace },
-      ),
-    );
-
-    if (!result.success) {
-      await this.host.runtime.runPromise(
-        this.ui.showErrorMessage(result.message),
       );
-      return;
-    }
 
-    await this.openDiffOutput(result.diffPath);
+      if (!result.success) {
+        yield* this.ui.showErrorMessage(result.message);
+        return;
+      }
+
+      yield* this.openDiffOutput(result.diffPath);
+    }).pipe((program) => this.withProcessServices(program));
   }
 
-  async findAndOpenLabel(label: string): Promise<boolean> {
-    const { runtime } = this.host;
-    const candidates = new Set(await this.host.listWorkspaceCandidateFiles());
-    const fs = await runtime.runPromise(Effect.service(FileSystem.FileSystem));
-    return openFirstLabelMatch(
-      label,
-      candidates,
-      (file) => runtime.runPromise(fs.readFileString(file)),
-      (file) => runtime.runPromise(this.ui.openPath(file)),
+  findAndOpenLabel(label: string): Effect.Effect<boolean, unknown> {
+    return this.withProcessServices(
+      Effect.gen({ self: this }, function* () {
+        const candidates = new Set(
+          yield* this.host.listWorkspaceCandidateFiles(),
+        );
+        const fs = yield* FileSystem.FileSystem;
+        return yield* openFirstLabelMatch(
+          label,
+          candidates,
+          (file) => fs.readFileString(file),
+          (file) => this.ui.openPath(file),
+        );
+      }),
     );
   }
 
-  private async runSharedLatexdiff(
+  private runSharedLatexdiff(
     runContext: DesktopLatexdiffRunContext,
-  ): Promise<DiffRunOutcome | undefined> {
-    const scan = runContext.workspaceScan;
-    const hasOutputs = Object.keys(runContext.outputsByRound).length > 0;
-    // Nothing to diff without either pre-resolved rounds or a scan identity.
-    if (!hasOutputs && !scan) return undefined;
+  ): Effect.Effect<DiffRunOutcome | undefined> {
+    return Effect.suspend(() => {
+      const scan = runContext.workspaceScan;
+      const hasOutputs = Object.keys(runContext.outputsByRound).length > 0;
+      // Nothing to diff without either pre-resolved rounds or a scan identity.
+      if (!hasOutputs && !scan) return Effect.succeed(undefined);
 
-    // Delegate the resolve + dispatch policy (caller metadata → run-id scan →
-    // auto-discovery) to the single host-neutral core shared
-    // with the VS Code command and the CLI, instead of re-implementing it here.
-    // Desktop has no per-operation progress UI.
-    const progress: DiffProgressReporter = { report: () => undefined };
-    const settled = await this.host.runtime.runPromiseExit(
-      runLatexdiffForRun({
+      // Delegate the resolve + dispatch policy (caller metadata → run-id scan →
+      // auto-discovery) to the single host-neutral core shared
+      // with the VS Code command and the CLI, instead of re-implementing it here.
+      // Desktop has no per-operation progress UI.
+      const progress: DiffProgressReporter = { report: () => undefined };
+      return runLatexdiffForRun({
         agent: scan?.agent ?? '',
         model: scan?.model ?? '',
         inputFile: scan?.inputFile ?? '',
@@ -275,47 +304,52 @@ export class DesktopProgressFileActions {
           ),
         },
         progress,
-      }),
-    );
-    if (Exit.isSuccess(settled)) return settled.value.outcome;
-    // An interrupt (the runtime disposing at shutdown) is not a diff failure
-    // to fall back from: rethrow it so the request settles as interrupted
-    // instead of scheduling more diff work on a closing window.
-    if (Cause.hasInterruptsOnly(settled.cause)) {
-      throw Cause.squash(settled.cause);
-    }
-    // The core can fail (e.g. no workspace path). Don't abort the whole
-    // action — return undefined so the caller falls back to single-file —
-    // but log the cause so a systematic round-aware failure isn't silently
-    // downgraded to single-file diffs with no trace.
-    console.error(
-      `Round-aware LaTeX diff failed; falling back to single-file diff: ${toErrorMessage(
-        Cause.squash(settled.cause),
-      )}`,
-    );
-    return undefined;
+      }).pipe(
+        Effect.map((executed) => executed.outcome),
+        // The core can fail (e.g. no workspace path). Don't abort the whole
+        // action — answer undefined so the caller falls back to single-file —
+        // but log the cause so a systematic round-aware failure isn't silently
+        // downgraded to single-file diffs with no trace. An interrupt (the
+        // runtime disposing at shutdown) is not a diff failure to fall back
+        // from: it is not a failure of this channel, so it travels on and the
+        // request settles as interrupted instead of scheduling more diff work
+        // on a closing window.
+        Effect.catch((error) =>
+          Effect.sync(() => {
+            console.error(
+              `Round-aware LaTeX diff failed; falling back to single-file diff: ${toErrorMessage(
+                error,
+              )}`,
+            );
+            return undefined;
+          }),
+        ),
+      );
+    }).pipe((program) => this.withProcessServices(program));
   }
 
   /**
    * Open every successful diff (between-round runs produce many), mirroring the
-   * VS Code command. Returns whether at least one diff was opened, so the
+   * VS Code command. Answers whether at least one diff was opened, so the
    * caller can fall back to a single-file diff when none were.
    */
-  private async openSharedLatexdiffResults(
+  private openSharedLatexdiffResults(
     outcome: DiffRunOutcome,
-  ): Promise<boolean> {
-    const successes = outcome.results.filter((entry) => entry.success);
+  ): Effect.Effect<boolean, unknown> {
+    return Effect.gen({ self: this }, function* () {
+      const successes = outcome.results.filter((entry) => entry.success);
 
-    for (const result of successes) {
-      await this.openDiffOutput(result.diffPath);
-    }
+      for (const result of successes) {
+        yield* this.openDiffOutput(result.diffPath);
+      }
 
-    return successes.length > 0;
+      return successes.length > 0;
+    });
   }
 
   /** Open a generated diff file via the desktop LaTeX build display. */
-  private openDiffOutput(diffFilePath: string): Promise<void> {
-    return this.host.runtime.runPromise(
+  private openDiffOutput(diffFilePath: string): Effect.Effect<void, unknown> {
+    return this.withProcessServices(
       this.ui.openBuildDisplay(createExternalLocation(diffFilePath)),
     );
   }
