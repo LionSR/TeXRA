@@ -114,7 +114,7 @@ function createApprovalFixture(
       runtime: testRuntime(),
       ui: {
         ...createStubDesktopAgentRunHost(),
-        closeDiff: async () => undefined,
+        closeDiff: () => Effect.void,
         ...options.ui,
       },
       // The desktop surface's decision: the session's one `request.decide`.
@@ -299,15 +299,15 @@ describe('desktop tool edit approval', () => {
       Effect.gen(function* () {
         const openPath = vi.fn((_filePath: string) => Effect.void);
         const openDiff = vi.fn(
-          async (
+          (
             _original: DiffSource,
             _proposed: DiffSource,
             _title: string,
             _previewId: string,
-          ): Promise<void> => undefined,
+          ): Effect.Effect<void> => Effect.void,
         );
         const closeDiff = vi.fn(
-          async (_previewId: string): Promise<void> => undefined,
+          (_previewId: string): Effect.Effect<void> => Effect.void,
         );
         const { requestApproval, controller, waitForPreviews } =
           yield* createApprovalFixture({

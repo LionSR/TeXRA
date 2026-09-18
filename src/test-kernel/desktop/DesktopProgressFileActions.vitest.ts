@@ -7,10 +7,10 @@ import type { SessionHandle } from '@agent/runtime';
 
 import type { LaTeXdiffResult } from '@latex/latexdiff';
 import type { DiffRunOutcome, DiffRunResult } from '@latex/latexdiff/types';
-import type { ProcessRuntime } from '@platform/processRuntime';
 import type { OutputFileInfo } from '@shared/schemas';
 import { Rejected } from '@shared/session/requestErrors';
 import { FakeStateStore } from '@test/support/FakePlatform';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import { createModuleMocks } from '@test/support/moduleMocks';
 
 import { createStubDesktopAgentRunHost } from './desktopAgentRunTestHarness.ts';
@@ -146,18 +146,15 @@ async function loadFileActions(options: {
     },
     {
       startRun: vi.fn(),
-      listWorkspaceCandidateFiles: vi.fn(async () => []),
+      listWorkspaceCandidateFiles: vi.fn(() => Effect.succeed([])),
       session: {
         snapshots: { read: vi.fn() },
         roots: { workspace: absolutePath('workspace') },
       } as unknown as SessionHandle,
       globalState: new FakeStateStore(),
-      // Every latexdiff program this suite reaches is mocked, so the runtime
-      // only has to settle them.
-      runtime: {
-        runPromise: Effect.runPromise,
-        runPromiseExit: Effect.runPromiseExit,
-      } as unknown as ProcessRuntime,
+      // Every latexdiff program this suite reaches is mocked; the runtime is
+      // only where the actions read the window's services from.
+      runtime: testRuntime(),
     },
   );
 
@@ -167,6 +164,12 @@ async function loadFileActions(options: {
     runLatexdiffForRun,
     runDiff,
   };
+}
+
+/** The window's run: the actions are programs, and the bridge that calls them
+ *  settles them on the window's runtime. */
+function run<A, E>(program: Effect.Effect<A, E>): Promise<A> {
+  return testRuntime().runPromise(program);
 }
 
 describe('DesktopProgressFileActions latexdiff', () => {
@@ -184,13 +187,15 @@ describe('DesktopProgressFileActions latexdiff', () => {
       1: [outputInfo(absolutePath('run', 'r1', 'main.tex'))],
     };
 
-    await actions.diffAcceptedFilePair(
-      absolutePath('workspace', 'main.tex'),
-      absolutePath('run', 'r1', 'main.tex'),
-      {
-        outputsByRound,
-        runId: 'exec-1',
-      },
+    await run(
+      actions.diffAcceptedFilePair(
+        absolutePath('workspace', 'main.tex'),
+        absolutePath('run', 'r1', 'main.tex'),
+        {
+          outputsByRound,
+          runId: 'exec-1',
+        },
+      ),
     );
 
     expect(runLatexdiffForRun).toHaveBeenCalledWith(
@@ -215,17 +220,19 @@ describe('DesktopProgressFileActions latexdiff', () => {
     const { actions, openBuildDisplay, runLatexdiffForRun, runDiff } =
       await loadFileActions({ outcome });
 
-    await actions.diffAcceptedFilePair(
-      absolutePath('workspace', 'main.tex'),
-      absolutePath('workspace', 'main_orchestrator_r1_gpt.tex'),
-      {
-        outputsByRound: {},
-        workspaceScan: {
-          agent: 'orchestrator',
-          model: 'gpt-5',
-          inputFile: 'main.tex',
+    await run(
+      actions.diffAcceptedFilePair(
+        absolutePath('workspace', 'main.tex'),
+        absolutePath('workspace', 'main_orchestrator_r1_gpt.tex'),
+        {
+          outputsByRound: {},
+          workspaceScan: {
+            agent: 'orchestrator',
+            model: 'gpt-5',
+            inputFile: 'main.tex',
+          },
         },
-      },
+      ),
     );
 
     expect(runLatexdiffForRun).toHaveBeenCalledWith(
@@ -256,14 +263,16 @@ describe('DesktopProgressFileActions latexdiff', () => {
         },
       });
 
-    await actions.diffAcceptedFilePair(
-      absolutePath('workspace', 'base.tex'),
-      absolutePath('run', 'r1', 'main.tex'),
-      {
-        outputsByRound: {
-          1: [outputInfo(absolutePath('run', 'r1', 'main.tex'))],
+    await run(
+      actions.diffAcceptedFilePair(
+        absolutePath('workspace', 'base.tex'),
+        absolutePath('run', 'r1', 'main.tex'),
+        {
+          outputsByRound: {
+            1: [outputInfo(absolutePath('run', 'r1', 'main.tex'))],
+          },
         },
-      },
+      ),
     );
 
     expect(runLatexdiffForRun).toHaveBeenCalledOnce();
@@ -286,14 +295,16 @@ describe('DesktopProgressFileActions latexdiff', () => {
       outcome,
     });
 
-    await actions.diffAcceptedFilePair(
-      absolutePath('workspace', 'main.tex'),
-      absolutePath('run', 'r2', 'main.tex'),
-      {
-        outputsByRound: {
-          1: [outputInfo(absolutePath('run', 'r1', 'main.tex'))],
+    await run(
+      actions.diffAcceptedFilePair(
+        absolutePath('workspace', 'main.tex'),
+        absolutePath('run', 'r2', 'main.tex'),
+        {
+          outputsByRound: {
+            1: [outputInfo(absolutePath('run', 'r1', 'main.tex'))],
+          },
         },
-      },
+      ),
     );
 
     expectOpenedDiff(
@@ -318,13 +329,15 @@ describe('DesktopProgressFileActions latexdiff', () => {
       },
     });
 
-    await actions.diffAcceptedFilePair(
-      absolutePath('workspace', 'base.tex'),
-      absolutePath('run', 'r1', 'main.tex'),
-      {
-        outputsByRound: {},
-        workspaceScan: { agent: 'a', model: 'm', inputFile: 'main.tex' },
-      },
+    await run(
+      actions.diffAcceptedFilePair(
+        absolutePath('workspace', 'base.tex'),
+        absolutePath('run', 'r1', 'main.tex'),
+        {
+          outputsByRound: {},
+          workspaceScan: { agent: 'a', model: 'm', inputFile: 'main.tex' },
+        },
+      ),
     );
 
     expect(runDiff).toHaveBeenCalledOnce();
@@ -340,13 +353,15 @@ describe('DesktopProgressFileActions latexdiff', () => {
     });
 
     await expect(
-      actions.diffAcceptedFilePair(
-        absolutePath('workspace', 'base.tex'),
-        absolutePath('run', 'r1', 'main.tex'),
-        {
-          outputsByRound: {},
-          workspaceScan: { agent: 'a', model: 'm', inputFile: 'main.tex' },
-        },
+      run(
+        actions.diffAcceptedFilePair(
+          absolutePath('workspace', 'base.tex'),
+          absolutePath('run', 'r1', 'main.tex'),
+          {
+            outputsByRound: {},
+            workspaceScan: { agent: 'a', model: 'm', inputFile: 'main.tex' },
+          },
+        ),
       ),
     ).rejects.toThrow('All fibers interrupted without error');
 

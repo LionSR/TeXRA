@@ -1,10 +1,4 @@
-/**
- * Effect-shaped waits on a one-shot VS Code event.
- *
- * The promise-shaped twin, `raceWithTimeout`, remains for the one caller that
- * has to hand a promise back (`VscodeDiffViewHost.revealFirstChange`, whose
- * `DiffViewHost` port is still Promise-typed).
- */
+/** Effect-shaped waits on a one-shot VS Code event. */
 
 import { Effect, Option } from 'effect';
 import * as vscode from 'vscode';

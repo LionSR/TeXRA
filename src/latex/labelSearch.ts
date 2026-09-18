@@ -1,3 +1,6 @@
+// Third-party imports
+import { Effect } from 'effect';
+
 // Local imports - utilities
 import escapeRegExp from 'escape-string-regexp';
 
@@ -6,35 +9,36 @@ import escapeRegExp from 'escape-string-regexp';
  * `onMatch(file, index)`, where `index` is the character offset of the match
  * (so editors can reveal the label position).
  *
- * Reading a candidate and handling its match both run inside the scan: if
- * `read` or `onMatch` throws, the failure is swallowed and scanning continues
- * to the next candidate. This lets a transient read/open failure on one match
- * fall through to another file that contains the same label. Returns `true`
- * once a match has been handled, `false` if no candidate matched (or every
- * matching candidate failed to handle).
+ * Reading a candidate and handling its match are both part of the scan: a
+ * `read` or `onMatch` that fails skips that candidate and scanning continues,
+ * so a transient read/open failure on one match falls through to another file
+ * that contains the same label. Answers `true` once a match has been handled,
+ * `false` if no candidate matched (or every matching candidate failed to
+ * handle) — the caller owns the "no file defines this label" report.
  *
  * Host-neutral: callers supply their own file lister, reader, and open
  * handler, so the VS Code command and the desktop bridge share one scan.
  */
-export async function openFirstLabelMatch(
+export function openFirstLabelMatch(
   label: string,
   files: Iterable<string>,
-  read: (file: string) => Promise<string>,
-  onMatch: (file: string, index: number) => Promise<void>,
-): Promise<boolean> {
+  read: (file: string) => Effect.Effect<string, unknown>,
+  onMatch: (file: string, index: number) => Effect.Effect<unknown, unknown>,
+): Effect.Effect<boolean> {
   // A regex matching `\label{<label>}` for a literal label string.
   const pattern = new RegExp(`\\\\label\\{${escapeRegExp(label)}\\}`, 'm');
-  for (const file of files) {
-    try {
-      const content = await read(file);
-      const match = content.match(pattern);
-      if (match && match.index !== undefined) {
-        await onMatch(file, match.index);
-        return true;
-      }
-    } catch {
-      // Skip unreadable candidates / failed opens and keep scanning.
+  return Effect.gen(function* () {
+    for (const file of files) {
+      const handled = yield* read(file).pipe(
+        Effect.flatMap((content) => {
+          const match = content.match(pattern);
+          if (!match || match.index === undefined) return Effect.succeed(false);
+          return Effect.as(onMatch(file, match.index), true);
+        }),
+        Effect.catch(() => Effect.succeed(false)),
+      );
+      if (handled) return true;
     }
-  }
-  return false;
+    return false;
+  });
 }

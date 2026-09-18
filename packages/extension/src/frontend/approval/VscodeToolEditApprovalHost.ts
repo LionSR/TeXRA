@@ -146,7 +146,7 @@ class VscodeToolEditPreview implements ToolEditPreview {
       Effect.andThen(
         Effect.suspend(() =>
           this.context.isSettled()
-            ? fromEditor(() => this.diffViewHost.closeDiff(this.diffSession))
+            ? this.diffViewHost.closeDiff(this.diffSession)
             : this.revealFirstChange(),
         ),
       ),
@@ -163,9 +163,7 @@ class VscodeToolEditPreview implements ToolEditPreview {
   }
 
   readProposedContent(): Effect.Effect<string, unknown> {
-    return fromEditor(() =>
-      this.diffViewHost.readProposedContent(this.diffSession),
-    );
+    return this.diffViewHost.readProposedContent(this.diffSession);
   }
 
   dispose(): Effect.Effect<void, unknown> {
@@ -173,20 +171,16 @@ class VscodeToolEditPreview implements ToolEditPreview {
       // Stop listening for tab closes before closing the diff ourselves.
       this.tabCloseListener?.dispose();
     }).pipe(
-      Effect.andThen(
-        fromEditor(() => this.diffViewHost.closeDiff(this.diffSession)),
-      ),
+      Effect.andThen(this.diffViewHost.closeDiff(this.diffSession)),
       Effect.andThen(this.staged.cleanup),
     );
   }
 
   private openDiff(): Effect.Effect<void, unknown> {
-    return fromEditor(() =>
-      this.diffViewHost.openDiff(
-        this.diffSession.original,
-        this.diffSession.proposed,
-        this.diffSession.title,
-      ),
+    return this.diffViewHost.openDiff(
+      this.diffSession.original,
+      this.diffSession.proposed,
+      this.diffSession.title,
     );
   }
 
@@ -198,9 +192,7 @@ class VscodeToolEditPreview implements ToolEditPreview {
       );
       if (line === null) return Effect.void;
 
-      return fromEditor(() =>
-        this.diffViewHost.revealFirstChange(this.diffSession, line),
-      );
+      return this.diffViewHost.revealFirstChange(this.diffSession, line);
     });
   }
 

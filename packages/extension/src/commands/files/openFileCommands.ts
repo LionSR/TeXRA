@@ -45,27 +45,24 @@ async function openFile(
  * caller (`ProgressWorkflowFileActionsController.openLabel`), which owns it
  * for every host.
  */
-async function openLabel(
-  session: SessionHandle,
-  label: string,
-  runtime: ProcessRuntime,
-): Promise<boolean> {
-  const candidates = new Set([
-    ...(await getFileLister().list('input')),
-    ...(await getFileLister().list('context')),
-  ]);
-  const { roots } = session;
-  // The candidates are workspace-relative listings, read through the
-  // session's workspace view.
-  const workspaceFs = await runtime.runPromise(
-    withSessionFs(roots, Effect.service(WorkspaceFs)),
-  );
+function openLabel(session: SessionHandle, label: string) {
+  return Effect.gen(function* () {
+    const lister = getFileLister();
+    const inputs = yield* Effect.promise(() => lister.list('input'));
+    const contexts = yield* Effect.promise(() => lister.list('context'));
+    const candidates = new Set([...inputs, ...contexts]);
+    const { roots } = session;
+    // The candidates are workspace-relative listings, read through the
+    // session's workspace view.
+    const workspaceFs = yield* withSessionFs(
+      roots,
+      Effect.service(WorkspaceFs),
+    );
 
-  return openFirstLabelMatch(
-    label,
-    candidates,
-    (file) =>
-      runtime.runPromise(
+    return yield* openFirstLabelMatch(
+      label,
+      candidates,
+      (file) =>
         workspaceFs.readFileString(file).pipe(
           Effect.map(normalizeLineEndings),
           Effect.tapError((error) =>
@@ -74,17 +71,21 @@ async function openLabel(
             }),
           ),
         ),
-      ),
-    async (file, index) => {
-      const doc = await vscode.workspace.openTextDocument(
-        workspaceAbsolutePath(roots.workspace, file),
-      );
-      const editor = await vscode.window.showTextDocument(doc, {
-        preview: true,
-      });
-      revealPosition(editor, doc.positionAt(index));
-    },
-  );
+      (file, index) =>
+        Effect.tryPromise({
+          try: async () => {
+            const doc = await vscode.workspace.openTextDocument(
+              workspaceAbsolutePath(roots.workspace, file),
+            );
+            const editor = await vscode.window.showTextDocument(doc, {
+              preview: true,
+            });
+            revealPosition(editor, doc.positionAt(index));
+          },
+          catch: (error) => error,
+        }),
+    );
+  });
 }
 
 export function registerOpenFileCommands(
@@ -99,7 +100,7 @@ export function registerOpenFileCommands(
     },
     {
       id: 'texra.openLabel',
-      handler: (label: string) => openLabel(session, label, runtime),
+      handler: (label: string) => runtime.runPromise(openLabel(session, label)),
     },
   ]);
 }

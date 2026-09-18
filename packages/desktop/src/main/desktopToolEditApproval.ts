@@ -40,13 +40,13 @@ export type DesktopToolEditApprovalUi = Pick<
     proposed: DiffSource,
     title: string,
     previewId: string,
-  ): Promise<void>;
+  ): Effect.Effect<void, unknown>;
   /**
    * Take this request's staged diff off the Review workbench and nothing
    * else: settling here must not dismiss another request's pending preview
    * or an unrelated review, whichever of them the user is looking at.
    */
-  closeDiff(previewId: string): Promise<void>;
+  closeDiff(previewId: string): Effect.Effect<void, unknown>;
 };
 
 interface DesktopToolEditApprovalHostOptions {
@@ -153,13 +153,11 @@ class DesktopToolEditPreview implements ToolEditPreview {
   }
 
   showDiff(): Effect.Effect<void, unknown> {
-    return fromHost(() =>
-      this.ui.openDiff(
-        { filePath: this.staged.originalPath },
-        { filePath: this.staged.proposedPath },
-        `Tool edit: ${this.context.relativePath}`,
-        this.context.requestId,
-      ),
+    return this.ui.openDiff(
+      { filePath: this.staged.originalPath },
+      { filePath: this.staged.proposedPath },
+      `Tool edit: ${this.context.relativePath}`,
+      this.context.requestId,
     );
   }
 
@@ -180,12 +178,14 @@ class DesktopToolEditPreview implements ToolEditPreview {
    * another diff takes only its own off the Review workbench.
    */
   dispose(): Effect.Effect<void, unknown> {
-    return fromHost(() => this.ui.closeDiff(this.context.requestId)).pipe(
-      Effect.andThen(
-        fromHost(() =>
-          rm(this.staged.tempDir, { recursive: true, force: true }),
+    return this.ui
+      .closeDiff(this.context.requestId)
+      .pipe(
+        Effect.andThen(
+          fromHost(() =>
+            rm(this.staged.tempDir, { recursive: true, force: true }),
+          ),
         ),
-      ),
-    );
+      );
   }
 }

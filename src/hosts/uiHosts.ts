@@ -11,16 +11,31 @@ export interface DiffSession {
   title: string;
 }
 
+/**
+ * The host's diff surface.
+ *
+ * Every member is an `Effect`, so the host's own refusal — VS Code declining
+ * `vscode.diff`, the desktop failing to read a side or to hand a patch file to
+ * the OS editor — reaches the caller through the failure channel instead of as
+ * a rejection a lift had to re-tag, and interrupting the fiber that opened a
+ * diff abandons the wait instead of detaching from it. The error stays
+ * `unknown`: each implementation fails with what its surface raised (a VS Code
+ * command rejection, an `ExternalOpenFailed`, a filesystem error), and the
+ * callers that need a tag map it into their own.
+ */
 export interface DiffViewHost {
   /** Show the diff. The caller already holds the session it described. */
   openDiff(
     original: DiffSource,
     proposed: DiffSource,
     title: string,
-  ): Promise<void>;
-  closeDiff(session: DiffSession): Promise<void>;
-  revealFirstChange(session: DiffSession, line: number): Promise<void>;
-  readProposedContent(session: DiffSession): Promise<string>;
+  ): Effect.Effect<void, unknown>;
+  closeDiff(session: DiffSession): Effect.Effect<void, unknown>;
+  revealFirstChange(
+    session: DiffSession,
+    line: number,
+  ): Effect.Effect<void, unknown>;
+  readProposedContent(session: DiffSession): Effect.Effect<string, unknown>;
 }
 
 /**
