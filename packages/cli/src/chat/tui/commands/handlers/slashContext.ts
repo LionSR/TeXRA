@@ -4,11 +4,20 @@ import { type CliNoAvailableModelsRecoveryOptions } from '@cli/runtime/modelAcce
 import { setTransientNotice } from '@cli/chat/tui/state/cliState';
 import { type TuiSession } from '@cli/chat/tui/state/sessionRunState';
 import { appendLocalAssistantTranscript } from '@cli/chat/tui/state/transcript';
-import type { ProcessRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import { type RunId } from '@shared/schemas';
+import type { Effect } from 'effect';
+
+/**
+ * What a slash command does, as a program the dispatcher runs: the chat's
+ * Ink handlers fork these on the process runtime, so a handler takes the
+ * session's services from context instead of running its own edge, and its
+ * failure is the dispatcher's to report.
+ */
+export type SlashCommandEffect = Effect.Effect<void, unknown, ProcessServices>;
 
 /** Shared context every slash-command handler receives from the chat TUI. */
 export interface SlashCommandContext {
@@ -38,7 +47,7 @@ export interface SlashCommandContext {
   readonly setApprovalPolicy: (policy: TexraApprovalPolicy) => void;
   readonly canSelectModel: () => boolean;
   readonly resetSession: () => void;
-  readonly resumeRun: (id: RunId) => Promise<void>;
+  readonly resumeRun: (id: RunId) => Effect.Effect<void, unknown>;
 }
 
 /** Output boundary shared by direct slash dispatch and busy form submission. */
@@ -61,13 +70,3 @@ export const transcriptSlashCommandOutput: SlashCommandOutput = {
 export const CHAT_API_MODE_MODEL_RECOVERY = {
   configureKeyAction: 'add a provider API key with `/key`',
 } satisfies CliNoAvailableModelsRecoveryOptions;
-
-/** Start an abortable slash-command action and expose `abort` on its promise. */
-export function abortableSlashCommand(
-  run: (signal: AbortSignal) => Promise<void>,
-): Promise<void> & { readonly abort: () => void } {
-  const controller = new AbortController();
-  return Object.assign(run(controller.signal), {
-    abort: () => controller.abort(),
-  });
-}

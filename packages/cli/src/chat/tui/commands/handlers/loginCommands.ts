@@ -1,6 +1,5 @@
-import { Cause, Effect, Exit, FileSystem } from 'effect';
+import { Effect, FileSystem } from 'effect';
 
-import type { SupabaseSession } from '@auth/SupabaseSession';
 import { bumpCodexPreferenceVersion } from '@cli/chat/tui/state/cliState';
 import { setCliSubscriptionPreference } from '@cli/chat/tui/state/subscriptionPreference';
 import {
@@ -44,7 +43,6 @@ import { collapseWhitespace } from '@utils/text/stringUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
-  abortableSlashCommand,
   type SlashCommandOutput,
   transcriptSlashCommandOutput,
 } from './slashContext';
@@ -92,131 +90,107 @@ const SUBSCRIPTION_AUTH_COPY: Record<
  * below: sign in with a copyable progress writer, flip the subscription
  * preference, then report the outcome in this surface's copy.
  */
-async function loginToSubscription(
+const loginToSubscription = Effect.fn('loginToSubscription')(function* (
   stores: SettingsStores,
-  runtime: ProcessRuntime,
   providerId: SubscriptionProviderId,
   args: CliSubscriptionLoginTransportInit,
   output: SlashCommandOutput,
-  signal: AbortSignal,
-): Promise<void> {
-  const account = await runtime.runPromise(
-    signInCliSubscription(providerId, args, {
-      writeProgress: (message) =>
-        output.writeProgress(message, { copyable: true }),
-    }),
-    { signal },
-  );
-  const update = await runtime.runPromise(
-    setCliSubscriptionPreference(stores, providerId, true),
-  );
+) {
+  const account = yield* signInCliSubscription(providerId, args, {
+    writeProgress: (message) =>
+      output.writeProgress(message, { copyable: true }),
+  });
+  const update = yield* setCliSubscriptionPreference(stores, providerId, true);
   const auth = SUBSCRIPTION_AUTH_COPY[providerId];
   output.appendOutcome(
     update.effective
       ? auth.signedInEnabled(account.label)
       : auth.signedInOverrideDisabled(account.label, update.target),
   );
-}
+});
 
-async function loginToTexraAccount(
+const loginToTexraAccount = Effect.fn('loginToTexraAccount')(function* (
   runtime: ProcessRuntime,
   args: CliTexraLoginSlashArgs,
   output: SlashCommandOutput,
-  signal: AbortSignal,
-): Promise<void> {
+) {
   const accountWarning = githubSelectAccountWarning(args);
   if (accountWarning) output.writeProgress(accountWarning);
 
-  let session: SupabaseSession;
-  if (args.device) {
-    // The slash command's abort is the program's interruption, surfaced as
-    // the abort reason the browser transport rejects with so the caller
-    // treats both alike.
-    const exit = await runtime.runPromiseExit(
-      signInCliSupabaseDeviceCode({
+  // The device flow is already a program; the browser flow is still the
+  // Promise edge `signInCliSupabase` owns, wrapped exactly once here so the
+  // caller's interruption reaches it as the abort signal it already takes.
+  const session = args.device
+    ? yield* signInCliSupabaseDeviceCode({
         onDeviceCode: (authorization) => {
           output.writeProgress(formatCliDeviceAuthMessage(authorization), {
             copyable: true,
           });
         },
-      }),
-      { signal },
-    );
-    if (Exit.isFailure(exit)) {
-      throw signal.aborted ? signal.reason : Cause.squash(exit.cause);
-    }
-    session = exit.value;
-  } else {
-    session = await signInCliSupabase(runtime, {
-      provider: args.provider,
-      openBrowser: !args.noBrowser,
-      selectAccount: args.selectAccount,
-      loginHint: args.loginHint,
-      manualBrowserHint: '/login --no-browser',
-      onAuthUrl: (url) => {
-        if (args.noBrowser) {
-          output.writeProgress(formatCliManualAuthUrlMessage(url), {
-            copyable: true,
-          });
-        }
-      },
-      signal,
-    });
-  }
+      })
+    : yield* Effect.tryPromise({
+        try: (signal) =>
+          signInCliSupabase(runtime, {
+            provider: args.provider,
+            openBrowser: !args.noBrowser,
+            selectAccount: args.selectAccount,
+            loginHint: args.loginHint,
+            manualBrowserHint: '/login --no-browser',
+            onAuthUrl: (url) => {
+              if (args.noBrowser) {
+                output.writeProgress(formatCliManualAuthUrlMessage(url), {
+                  copyable: true,
+                });
+              }
+            },
+            signal,
+          }),
+        catch: (cause) => cause,
+      });
   output.appendOutcome(RESEARCHER_ACCESS_AUTH.signedIn(session.account.label));
-}
+});
 
-export function loginFromChat(
+export const loginFromChat = Effect.fn('loginFromChat')(function* (
   input: string,
   stores: SettingsStores,
   runtime: ProcessRuntime,
   context?: CliContext,
   output: SlashCommandOutput = transcriptSlashCommandOutput,
-): Promise<void> & { readonly abort: () => void } {
-  return abortableSlashCommand(async (signal) => {
-    const args = parseChatLoginSlashArgs(input);
-    if (!args) {
-      output.setNotice(CHAT_LOGIN_USAGE);
-      return;
-    }
+) {
+  const args = parseChatLoginSlashArgs(input);
+  if (!args) {
+    output.setNotice(CHAT_LOGIN_USAGE);
+    return;
+  }
 
-    // Match the CLI `login` guard: reject `--device` + `--no-browser` from the
-    // user's parsed flags before subscription paths can auto-resolve `device`.
-    if (hasLoginTransportConflict(args)) {
-      output.setNotice(LOGIN_TRANSPORT_CONFLICT_MESSAGE);
-      return;
-    }
+  // Match the CLI `login` guard: reject `--device` + `--no-browser` from the
+  // user's parsed flags before subscription paths can auto-resolve `device`.
+  if (hasLoginTransportConflict(args)) {
+    output.setNotice(LOGIN_TRANSPORT_CONFLICT_MESSAGE);
+    return;
+  }
 
-    let loginArgs = args;
-    if (context && (args.target === 'chatgpt' || args.target === 'grok')) {
-      loginArgs = {
-        ...args,
-        device: shouldUseSubscriptionDeviceCode(context, args),
-      };
-    }
-    output.writeProgress(loginStartMessage(loginArgs));
+  let loginArgs = args;
+  if (context && (args.target === 'chatgpt' || args.target === 'grok')) {
+    loginArgs = {
+      ...args,
+      device: shouldUseSubscriptionDeviceCode(context, args),
+    };
+  }
+  output.writeProgress(loginStartMessage(loginArgs));
 
-    if (loginArgs.target === 'chatgpt' || loginArgs.target === 'grok') {
-      await loginToSubscription(
-        stores,
-        runtime,
-        loginArgs.target,
-        loginArgs,
-        output,
-        signal,
-      );
-      return;
-    }
-    await loginToTexraAccount(runtime, loginArgs, output, signal);
-  });
-}
+  if (loginArgs.target === 'chatgpt' || loginArgs.target === 'grok') {
+    yield* loginToSubscription(stores, loginArgs.target, loginArgs, output);
+    return;
+  }
+  yield* loginToTexraAccount(runtime, loginArgs, output);
+});
 
 /**
  * The sign-out lines for one `/logout` target. Every leg reports its failure
  * as a line instead of throwing, so one failed provider never hides the
  * others' outcomes — the fold happens where each call settles, on the typed
- * channel (`signOutCliSupabase` and the access overview are still
- * Promise-facing, wrapped once at that foreign edge).
+ * channel.
  */
 const logoutLines = (
   target: CliLogoutTarget,
@@ -289,19 +263,18 @@ const logoutLines = (
     return lines;
   });
 
-export async function logoutFromChat(
+export const logoutFromChat = Effect.fn('logoutFromChat')(function* (
   input: string,
   stores: SettingsStores,
-  runtime: ProcessRuntime,
   secrets: PlatformSecrets,
   output: SlashCommandOutput = transcriptSlashCommandOutput,
-): Promise<void> {
+) {
   const target = parseCliLogoutTarget(input);
   if (!target) {
     output.setNotice(CHAT_LOGOUT_USAGE);
     return;
   }
 
-  const lines = await runtime.runPromise(logoutLines(target, stores, secrets));
+  const lines = yield* logoutLines(target, stores, secrets);
   output.appendOutcome(collapseWhitespace(lines.join(' · ')));
-}
+});

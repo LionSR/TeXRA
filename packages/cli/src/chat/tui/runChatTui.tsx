@@ -476,7 +476,9 @@ export async function runChat(
     runtimeSession,
     canSelectAgent: () => chatTuiCanStartRootRun(session),
     onAgentSelect: (nextAgent) =>
-      applyInitialCliAgentSelection(nextAgent, slashCommandContext()),
+      Effect.sync(() =>
+        applyInitialCliAgentSelection(nextAgent, slashCommandContext()),
+      ),
     getApprovalPolicy,
     onApprovalPolicySelect: (policy) => {
       setApprovalPolicy(policy);
@@ -491,7 +493,6 @@ export async function runChat(
     onModelAccessSelect: (route, output) =>
       applyCliModelAccessSelection(
         services,
-        runtime,
         route,
         slashCommandContext(),
         output,
@@ -502,8 +503,9 @@ export async function runChat(
     onLoginSelect: (value, output) =>
       loginFromChat(value, services, runtime, context, output),
     onMemorySelect: (storagePath) =>
-      showCliMemoryPreview(runtime, runtimeSession.roots, storagePath),
-    onSkillSelect: chatController.activateSkill,
+      showCliMemoryPreview(runtimeSession.roots, storagePath),
+    onSkillSelect: (selection) =>
+      Effect.sync(() => chatController.activateSkill(selection)),
     onResumeSelect: chatController.resume,
     configStores: runtimeSession.roots,
     onError: (error) => {
@@ -520,9 +522,9 @@ export async function runChat(
       stores={services}
       runtime={runtime}
       session={runtimeSession}
-      onSubmit={(line, mediaFiles, images) =>
-        void chatController.submit(line, mediaFiles, images)
-      }
+      onSubmit={(line, mediaFiles, images) => {
+        runtime.runFork(chatController.submit(line, mediaFiles, images));
+      }}
       canInterruptRun={(runId) =>
         (runId === session.runId && canInterruptActiveRun()) ||
         isInFlightPhase(runtimeSession.runView(runId)?.status)
@@ -617,7 +619,7 @@ export async function runChat(
   // root-run slot, and the normal first-input path stays available so the
   // user can keep chatting (follow-ups target session.runId as usual).
   if (initialResume) {
-    void chatController.resume(initialResume.id);
+    runtime.runFork(chatController.resume(initialResume.id));
   }
 
   // Auto-prompt when the active stream goes WAITING so the UI clearly

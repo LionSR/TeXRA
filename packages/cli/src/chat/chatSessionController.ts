@@ -58,7 +58,7 @@ import {
   type RecoveryContinuation,
   type StateStore,
 } from '@platform/interfaces';
-import type { ProcessRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -127,13 +127,15 @@ type InterruptedFollowUpAdmission =
   | {
       readonly kind: 'accepted';
       readonly runId: RunId;
-      readonly completion: Promise<boolean>;
+      readonly completion: Deferred.Deferred<boolean, AgentResumeFailed>;
     };
 
 interface InterruptedContinuationBatch {
   readonly runId: RunId;
   readonly followUps: InterruptedFollowUp[];
-  completion: Promise<boolean>;
+  /** Settled with the continuation's own exit, so a waiter reads what the
+   *  resume did rather than what a promise adapter made of it. */
+  readonly completion: Deferred.Deferred<boolean, AgentResumeFailed>;
   superseded: boolean;
 }
 
@@ -211,11 +213,11 @@ export interface ChatSessionController {
   /**
    * Resume a suspended tool-use session by run id.
    *
-   * Fire-and-forget from the Ink perspective, the returned promise settles
+   * Fire-and-forget from the Ink perspective, the returned program completes
    * when the resume resolution and rehydration are complete, but the
    * continued run itself stays pending until the agent finishes or suspends.
    */
-  resume(id: RunId): Promise<void>;
+  resume(id: RunId): Effect.Effect<void, unknown>;
 
   /** Request stop of the root run using the configured child policy. */
   stop(): void;
@@ -251,7 +253,7 @@ export interface ChatSessionController {
     line: string,
     mediaFiles?: readonly string[],
     images?: readonly PastedImageEntry[],
-  ): Promise<void>;
+  ): Effect.Effect<void, unknown, ProcessServices>;
   /** Reserve a skill activation for the next submitted message. */
   activateSkill(selection: SkillActivation): void;
   /** Drop every reserved skill activation. */
@@ -376,14 +378,12 @@ export function createChatSessionController(
 
   /** Issue one request to the session's runtime and read its Effect result
    *  as the response (PRD 7.6): the refusal text, or undefined on success. */
-  const request = (req: RuntimeRequest): Promise<string | undefined> =>
-    runtime.runPromise(
-      runtimeSession.requests.request(req).pipe(
-        Effect.match({
-          onFailure: describeRequestError,
-          onSuccess: () => undefined,
-        }),
-      ),
+  const request = (req: RuntimeRequest): Effect.Effect<string | undefined> =>
+    runtimeSession.requests.request(req).pipe(
+      Effect.match({
+        onFailure: describeRequestError,
+        onSuccess: () => undefined,
+      }),
     );
 
   /** Publish the configuration of the conversation the TUI adopts. */
@@ -468,7 +468,7 @@ export function createChatSessionController(
       return;
     }
     recoveryBlockedByInterruptedRuns.add(interruptedRun);
-    void runtime.runPromise(
+    runtime.runFork(
       interruptedRun.pipe(
         Effect.exit,
         Effect.map(() => {
@@ -507,11 +507,13 @@ export function createChatSessionController(
     // the detach-on-stop toggle decides whether active subagents survive it.
     // `stopRun` below is the other gesture and answers deliberately
     // differently.
-    void request({
-      kind: 'run.stop',
-      runId,
-      detachActiveChildren: detachSubagentsOnStop(runtimeSession.roots),
-    });
+    runtime.runFork(
+      request({
+        kind: 'run.stop',
+        runId,
+        detachActiveChildren: detachSubagentsOnStop(runtimeSession.roots),
+      }),
+    );
   };
 
   // Shared tail of the run/resume failure recovery: surface the error to
@@ -631,7 +633,7 @@ export function createChatSessionController(
     // marking the run pending cannot erase that run or a reentrant stop.
     session.markRunPending(Deferred.await(claimedRun));
     session.runId = runId;
-    void runtime.runPromise(
+    runtime.runFork(
       recoverRun(
         Effect.try(() => AgentConfigSchema.parse(config)).pipe(
           Effect.flatMap((registeredConfig) =>
@@ -694,156 +696,156 @@ export function createChatSessionController(
   // resume
   // -----------------------------------------------------------------------
 
-  const resume = async (id: RunId): Promise<void> => {
-    // Claim the root-run slot as the FIRST statement, synchronously, before
-    // any `await` below, see tryClaimRootRunSlot. This fuses the
-    // availability check and the claim into one atomic step so a concurrent
-    // tryResumeRun() (or another resume()) can never observe this call
-    // suspended between "checked available" and "claimed", and race in to
-    // claim the same slot out from under it.
-    const claimedRun = Deferred.makeUnsafe<void, unknown>();
-    if (!session.tryClaimRootRunSlot(Deferred.await(claimedRun))) {
-      // The slot is taken, so the deferred this attempt made is dropped
-      // unsettled: nothing holds it, and no fiber is parked on it.
-      appendLocalAssistantTranscript(
-        'Finish the active chat before resuming a previous session.',
-      );
-      return;
-    }
-
-    const supersededRecovery = supersedeInterruptedRecovery();
-    let recovery: FollowUpRecoveryLease | undefined;
-    let recoveryHandedOff = false;
-    const attemptResume = Effect.gen(function* () {
-      // The durable record carries the config the TUI adopts before the run.
-      // Workflow runs resume headless through `texra resume`, not inside a
-      // chat.
-      const store = getRunRecords(runtimeSession, id);
-      const [config, exists] = yield* Effect.all([
-        store.readConfig(),
-        store.exists(),
-      ]);
-      // Refusal tail every early exit below shares: put back what the
-      // synchronous prologue superseded, surface the reason, settle the slot.
-      const refuseResume = (reason: string): void => {
-        restoreInterruptedRecovery(supersededRecovery);
-        appendLocalErrorTranscript(reason);
-        session.markRunCompleted();
-        Deferred.doneUnsafe(claimedRun, Effect.void);
-      };
-      if (!config || !exists) {
-        refuseResume(`Run not found: ${id}`);
-        return;
-      }
-      if (config.agentCategory !== AgentCategory.ToolUse) {
-        refuseResume(
-          `Run ${id} is a workflow; resume it with \`texra resume ${id}\`.`,
+  const resume = (id: RunId): Effect.Effect<void, unknown> =>
+    // `Effect.suspend` is what keeps the claim handshake synchronous: its
+    // body is this program's first step, so the availability check and the
+    // claim are one uninterrupted synchronous callback (see
+    // tryClaimRootRunSlot) that no other fiber can land between, and a
+    // concurrent tryResumeRun() (or another resume()) can never observe this
+    // call suspended between "checked available" and "claimed".
+    Effect.suspend(() => {
+      const claimedRun = Deferred.makeUnsafe<void, unknown>();
+      if (!session.tryClaimRootRunSlot(Deferred.await(claimedRun))) {
+        // The slot is taken, so the deferred this attempt made is dropped
+        // unsettled: nothing holds it, and no fiber is parked on it.
+        appendLocalAssistantTranscript(
+          'Finish the active chat before resuming a previous session.',
         );
-        return;
+        return Effect.void;
       }
 
-      recovery = runtimeSession.followUps.claimRecovery(id, true);
-      if (!recovery) {
-        refuseResume(describeFollowUpFailure('not_resumable'));
-        return;
-      }
+      const supersededRecovery = supersedeInterruptedRecovery();
+      let recovery: FollowUpRecoveryLease | undefined;
+      let recoveryHandedOff = false;
+      const attemptResume = Effect.gen(function* () {
+        // The durable record carries the config the TUI adopts before the run.
+        // Workflow runs resume headless through `texra resume`, not inside a
+        // chat.
+        const store = getRunRecords(runtimeSession, id);
+        const [config, exists] = yield* Effect.all([
+          store.readConfig(),
+          store.exists(),
+        ]);
+        // Refusal tail every early exit below shares: put back what the
+        // synchronous prologue superseded, surface the reason, settle the slot.
+        const refuseResume = (reason: string): void => {
+          restoreInterruptedRecovery(supersededRecovery);
+          appendLocalErrorTranscript(reason);
+          session.markRunCompleted();
+          Deferred.doneUnsafe(claimedRun, Effect.void);
+        };
+        if (!config || !exists) {
+          refuseResume(`Run not found: ${id}`);
+          return;
+        }
+        if (config.agentCategory !== AgentCategory.ToolUse) {
+          refuseResume(
+            `Run ${id} is a workflow; resume it with \`texra resume ${id}\`.`,
+          );
+          return;
+        }
 
-      const { approvalsUnavailable, finalize } = setupRunHost();
+        recovery = runtimeSession.followUps.claimRecovery(id, true);
+        if (!recovery) {
+          refuseResume(describeFollowUpFailure('not_resumable'));
+          return;
+        }
 
-      // Adopting the resumed stream is the mutation a refusal must not cost.
-      // A history row is advertised from its checkpoint file alone (one
-      // `stat`, no parse), so a run whose saved state cannot be loaded is
-      // offered and refused; `resumeRun` calls this only once that state
-      // loaded, so the refusal reaches the chat the user is looking at
-      // instead of a cleared transcript switched onto a dead stream. A Ctrl-C
-      // during the steps below lands as `session.stopRequested` and is
-      // honored by `isCancellationRequested`, which `resumeRun` re-reads once
-      // this returns, rather than starting an agent the user cancelled.
-      const adoptResumedRun = Effect.fn('adoptResumedRun')(function* () {
-        yield* setCliHelperModel(stores.globalState, config.model);
-        adoptRunConfig(config, 'history');
-        clearLocalTranscript();
-        followUpQueue.clear();
-        session.runId = id;
-        rootRunId.set(id);
-        // The session held no stream until the line above: `markRunPending`,
-        // inside the synchronous slot claim at the top of `resume`, dropped
-        // the pre-resume one, so a Ctrl-C in the window before adoption could
-        // not fabricate an interrupted marker on a stream this resume is
-        // leaving behind. It also found nothing to interrupt, so re-read the
-        // request here, the way `startRootRun`'s `onRunResolved` does -
-        // and let it land on the run the user asked to continue. `resumeRun`
-        // re-reads `isCancellationRequested` once this hook returns, so the
-        // stop still refuses the launch; this only decides which stream it
-        // marks recoverable.
-        if (session.stopRequested) interruptActiveRun();
+        const { approvalsUnavailable, finalize } = setupRunHost();
 
-        yield* runtimeSession.transcripts.ensureLoaded(id);
-        // The transcript and the work plan are the fold's: the TUI
-        // subscribes the run's aggregate and renders `transcript.rows`, and
-        // an open `/plan` reader reads the same `RunView`.
-        focusRun(id);
-      });
+        // Adopting the resumed stream is the mutation a refusal must not cost.
+        // A history row is advertised from its checkpoint file alone (one
+        // `stat`, no parse), so a run whose saved state cannot be loaded is
+        // offered and refused; `resumeRun` calls this only once that state
+        // loaded, so the refusal reaches the chat the user is looking at
+        // instead of a cleared transcript switched onto a dead stream. A Ctrl-C
+        // during the steps below lands as `session.stopRequested` and is
+        // honored by `isCancellationRequested`, which `resumeRun` re-reads once
+        // this returns, rather than starting an agent the user cancelled.
+        const adoptResumedRun = Effect.fn('adoptResumedRun')(function* () {
+          yield* setCliHelperModel(stores.globalState, config.model);
+          adoptRunConfig(config, 'history');
+          clearLocalTranscript();
+          followUpQueue.clear();
+          session.runId = id;
+          rootRunId.set(id);
+          // The session held no stream until the line above: `markRunPending`,
+          // inside the synchronous slot claim at the top of `resume`, dropped
+          // the pre-resume one, so a Ctrl-C in the window before adoption could
+          // not fabricate an interrupted marker on a stream this resume is
+          // leaving behind. It also found nothing to interrupt, so re-read the
+          // request here, the way `startRootRun`'s `onRunResolved` does -
+          // and let it land on the run the user asked to continue. `resumeRun`
+          // re-reads `isCancellationRequested` once this hook returns, so the
+          // stop still refuses the launch; this only decides which stream it
+          // marks recoverable.
+          if (session.stopRequested) interruptActiveRun();
 
-      // The seeded batch stays this call's until the stream queue takes it
-      // over. Every refusal before that point (the stream already active
-      // here, a lost recovery claim, no resumable state, a storage error)
-      // hands it back, and `supersedeInterruptedRecovery()` above already
-      // cleared the interrupted stream, so the follow-ups typed during the
-      // interruption are lost unless both go back where they came from.
-      let followUpQueueReady = false;
-      void runtime.runPromise(
-        Effect.gen(function* () {
-          recoveryHandedOff = true;
-          const result = yield* resumeRun(id, {
-            ...toolUseResumeOptions(id, approvalsUnavailable),
-            recovery,
-            extraFollowUps: supersededRecovery?.followUps,
-            onResumeResolved: adoptResumedRun,
-            onFollowUpQueueReady: () => {
-              followUpQueueReady = true;
-            },
-            isCancellationRequested: () => session.stopRequested,
-          });
-          if ('started' in result) {
-            settleResumedTurn(result.outcome ?? RUN_OUTCOME.COMPLETED);
-          } else if (session.stopRequested) {
-            session.runExitCode = CliExitCode.Interrupted;
-          } else {
-            appendLocalErrorTranscript(describeFollowUpFailure(result.failed));
-            session.runExitCode = CliExitCode.Usage;
-          }
-        }).pipe(
-          Effect.catch((error) => Effect.sync(() => reportRunFailure(error))),
-          Effect.ensuring(
-            Effect.sync(() => {
-              handBackUnusedRecovery(recovery, recoveryHandedOff);
-              if (!followUpQueueReady) {
-                restoreInterruptedRecovery(supersededRecovery);
-              }
-              finalize();
-            }),
+          yield* runtimeSession.transcripts.ensureLoaded(id);
+          // The transcript and the work plan are the fold's: the TUI
+          // subscribes the run's aggregate and renders `transcript.rows`, and
+          // an open `/plan` reader reads the same `RunView`.
+          focusRun(id);
+        });
+
+        // The seeded batch stays this call's until the stream queue takes it
+        // over. Every refusal before that point (the stream already active
+        // here, a lost recovery claim, no resumable state, a storage error)
+        // hands it back, and `supersedeInterruptedRecovery()` above already
+        // cleared the interrupted stream, so the follow-ups typed during the
+        // interruption are lost unless both go back where they came from.
+        let followUpQueueReady = false;
+        runtime.runFork(
+          Effect.gen(function* () {
+            recoveryHandedOff = true;
+            const result = yield* resumeRun(id, {
+              ...toolUseResumeOptions(id, approvalsUnavailable),
+              recovery,
+              extraFollowUps: supersededRecovery?.followUps,
+              onResumeResolved: adoptResumedRun,
+              onFollowUpQueueReady: () => {
+                followUpQueueReady = true;
+              },
+              isCancellationRequested: () => session.stopRequested,
+            });
+            if ('started' in result) {
+              settleResumedTurn(result.outcome ?? RUN_OUTCOME.COMPLETED);
+            } else if (session.stopRequested) {
+              session.runExitCode = CliExitCode.Interrupted;
+            } else {
+              appendLocalErrorTranscript(
+                describeFollowUpFailure(result.failed),
+              );
+              session.runExitCode = CliExitCode.Usage;
+            }
+          }).pipe(
+            Effect.catch((error) => Effect.sync(() => reportRunFailure(error))),
+            Effect.ensuring(
+              Effect.sync(() => {
+                handBackUnusedRecovery(recovery, recoveryHandedOff);
+                if (!followUpQueueReady) {
+                  restoreInterruptedRecovery(supersededRecovery);
+                }
+                finalize();
+              }),
+            ),
+            // The slot was claimed synchronously above; it settles with this
+            // chain, so the exit drain blocks until the continued run actually
+            // finishes (or is interrupted), not just until rehydration
+            // completes. `resume()`'s own program still completes here, before
+            // the run finishes, fire-and-forget per the interface contract.
+            settleClaimOnExit(claimedRun),
           ),
-          // The slot was claimed synchronously above; it settles with this
-          // chain, so the exit drain blocks until the continued run actually
-          // finishes (or is interrupted), not just until rehydration
-          // completes. `resume()`'s own returned promise still settles here,
-          // before the run finishes, fire-and-forget per the interface
-          // contract.
-          settleClaimOnExit(claimedRun),
-        ),
-      );
-    });
-    await runtime.runPromise(
-      recoverRun(attemptResume, (error) => {
+        );
+      });
+      return recoverRun(attemptResume, (error) => {
         handBackUnusedRecovery(recovery, recoveryHandedOff);
         restoreInterruptedRecovery(supersededRecovery);
         reportRunFailure(error);
         session.markRunCompleted();
         Deferred.doneUnsafe(claimedRun, Effect.void);
-      }),
-    );
-  };
+      });
+    });
 
   /**
    * One settlement site for a successfully resumed turn: finalize the
@@ -983,7 +985,7 @@ export function createChatSessionController(
       });
       // Detached on the process runtime, as the wake's own chain: the port's
       // caller reads the answer off the deferred instead of hosting the run.
-      void runtime.runPromise(
+      runtime.runFork(
         recoverRun(attempt, (error) => {
           reportRunFailure(error);
           return false;
@@ -1041,42 +1043,44 @@ export function createChatSessionController(
     const batch: InterruptedContinuationBatch = {
       runId: session.interruptedRunId,
       followUps: [...pendingInterruptedFollowUps, followUp],
-      completion: Promise.resolve(false),
+      completion: Deferred.makeUnsafe<boolean, AgentResumeFailed>(),
       superseded: false,
     };
     pendingInterruptedFollowUps = [];
-    batch.completion = (async () => {
-      // Best-effort settle-wait on the interrupted run: its outcome (including
-      // any failure) is already reported by the run's own recovery.
-      await runtime.runPromise(
-        Effect.ignoreCause(session.runSettled ?? Effect.void),
-      );
-      if (batch.superseded) return true;
-      let followUpQueueReady = false;
-      try {
-        const resumed = await runtime.runPromise(
-          tryResumeRun(batch.runId, {
-            extraFollowUps: batch.followUps,
-            onFollowUpQueueReady: () => {
-              followUpQueueReady = true;
-              session.interruptedRunId = undefined;
-              if (interruptedContinuation === batch) {
-                interruptedContinuation = undefined;
-              }
-            },
-          }),
-        );
+    runtime.runFork(
+      Effect.gen(function* () {
+        // Best-effort settle-wait on the interrupted run: its outcome
+        // (including any failure) is already reported by the run's own
+        // recovery.
+        yield* Effect.ignoreCause(session.runSettled ?? Effect.void);
+        if (batch.superseded) return true;
+        let followUpQueueReady = false;
+        const resumed = yield* tryResumeRun(batch.runId, {
+          extraFollowUps: batch.followUps,
+          onFollowUpQueueReady: () => {
+            followUpQueueReady = true;
+            session.interruptedRunId = undefined;
+            if (interruptedContinuation === batch) {
+              interruptedContinuation = undefined;
+            }
+          },
+        });
         if (!resumed && !batch.superseded && !followUpQueueReady) {
           session.interruptedRunId = batch.runId;
           pendingInterruptedFollowUps.push(...batch.followUps);
         }
         return resumed;
-      } finally {
-        if (interruptedContinuation === batch) {
-          interruptedContinuation = undefined;
-        }
-      }
-    })();
+      }).pipe(
+        Effect.ensuring(
+          Effect.sync(() => {
+            if (interruptedContinuation === batch) {
+              interruptedContinuation = undefined;
+            }
+          }),
+        ),
+        settleClaimOnExit(batch.completion),
+      ),
+    );
     interruptedContinuation = batch;
     return {
       kind: 'accepted',
@@ -1099,23 +1103,25 @@ export function createChatSessionController(
       requestStop();
       session.interruptedRunId = runId;
     }
-    void request({ kind: 'run.stop', runId, detachActiveChildren: true });
+    runtime.runFork(
+      request({ kind: 'run.stop', runId, detachActiveChildren: true }),
+    );
   };
 
-  const startSession = async (
+  const startSession = (
     instruction: string,
     mediaFiles?: readonly string[],
     displayInstruction?: string,
-  ): Promise<boolean> => {
-    followUpQueue.clear();
-    let started = false;
-    // The slot is claimed before the program runs, the way every other launch
-    // path claims it: `startRootRun` below re-claims it for the run it mints,
-    // and a refusal on the way there settles this deferred instead.
-    const startSettled = Deferred.makeUnsafe<void, unknown>();
-    session.markRunPending(Deferred.await(startSettled));
-    await runtime.runPromise(
-      recoverRun(
+  ): Effect.Effect<boolean, unknown, ProcessServices> =>
+    Effect.suspend(() => {
+      followUpQueue.clear();
+      let started = false;
+      // The slot is claimed before the program runs, the way every other launch
+      // path claims it: `startRootRun` below re-claims it for the run it mints,
+      // and a refusal on the way there settles this deferred instead.
+      const startSettled = Deferred.makeUnsafe<void, unknown>();
+      session.markRunPending(Deferred.await(startSettled));
+      return recoverRun(
         Effect.gen(function* () {
           const meta = sessionMetaSignal.get();
           const currentAgent = meta.agent || initialAgent;
@@ -1180,10 +1186,11 @@ export function createChatSessionController(
             : CliExitCode.AgentError;
           session.markRunCompleted();
         },
-      ).pipe(settleClaimOnExit(startSettled)),
-    );
-    return started;
-  };
+      ).pipe(
+        settleClaimOnExit(startSettled),
+        Effect.map(() => started),
+      );
+    });
 
   /** The focused child, when the composer addresses one: the fold says
    *  whether it takes follow-ups; a rejecting child is announced. */
@@ -1202,11 +1209,11 @@ export function createChatSessionController(
     };
   };
 
-  const submitChatMessage = async (
+  const submitChatMessage = Effect.fn('submitChatMessage')(function* (
     line: string,
     mediaFiles?: readonly string[],
     images?: readonly PastedImageEntry[],
-  ): Promise<void> => {
+  ) {
     const focusedChild = focusedChildTarget();
     if (focusedChild.kind === 'reject') {
       appendLocalAssistantTranscript(
@@ -1235,7 +1242,7 @@ export function createChatSessionController(
         displayText: prepared.displayInstruction,
       });
       if (interruptedAdmission.kind === 'accepted') {
-        const resumed = await interruptedAdmission.completion;
+        const resumed = yield* Deferred.await(interruptedAdmission.completion);
         if (resumed) return;
         restoreReservedSkillActivations();
         appendLocalAssistantTranscript(
@@ -1246,7 +1253,7 @@ export function createChatSessionController(
       }
     }
     if (!childFollowUpTarget && chatTuiCanStartRootRun(session)) {
-      const started = await startSession(
+      const started = yield* startSession(
         prepared.instruction,
         mediaFiles,
         prepared.displayInstruction,
@@ -1379,16 +1386,16 @@ export function createChatSessionController(
         ),
       ),
     );
-  };
+  });
 
-  const submit = async (
+  const submit = Effect.fn('chatSubmit')(function* (
     line: string,
     mediaFiles?: readonly string[],
     images?: readonly PastedImageEntry[],
-  ): Promise<void> => {
-    if (await handleTuiSlashCommand(line, getSlashCommandContext())) return;
-    await submitChatMessage(line, mediaFiles, images);
-  };
+  ) {
+    if (yield* handleTuiSlashCommand(line, getSlashCommandContext())) return;
+    yield* submitChatMessage(line, mediaFiles, images);
+  });
 
   const activateSkill = (selection: SkillActivation): void => {
     const wasPending = pendingSkillActivations.has(selection.name);

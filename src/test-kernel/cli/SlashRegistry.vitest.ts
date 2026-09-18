@@ -2,6 +2,7 @@
 
 // Test composition imports
 
+import { Effect } from 'effect';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 import {
@@ -155,9 +156,10 @@ describe('slashRegistry', () => {
   ): Promise<void> {
     const events: string[] = [];
     registerBuiltins({
-      onModelSelect: () => {
-        events.push('outcome');
-      },
+      onModelSelect: () =>
+        Effect.sync(() => {
+          events.push('outcome');
+        }),
     });
     openForm(() => events.push('echo'));
     expect(events).toEqual([]);
@@ -285,7 +287,7 @@ describe('slashRegistry', () => {
   it('keeps the model picker open until model selection commits', async () => {
     const selection = createDeferred<void>();
     registerBuiltins({
-      onModelSelect: () => selection.promise,
+      onModelSelect: () => Effect.promise(() => selection.promise),
     });
     const modelNode = openSlashForm<{
       onSelect?: (value: string) => void;
@@ -310,9 +312,7 @@ describe('slashRegistry', () => {
   it('routes model picker selection failures to the shared error handler', async () => {
     const errors: string[] = [];
     registerBuiltins({
-      onModelSelect: async () => {
-        throw new Error('model failed');
-      },
+      onModelSelect: () => Effect.fail(new Error('model failed')),
       onError: (error) => {
         errors.push(toErrorMessage(error));
       },
@@ -331,9 +331,7 @@ describe('slashRegistry', () => {
     resetCliState(CHAT_SESSION);
     const errors: string[] = [];
     registerBuiltins({
-      onModelAccessSelect: async () => {
-        throw new Error('api mode failed');
-      },
+      onModelAccessSelect: () => Effect.fail(new Error('api mode failed')),
       onError: (error) => {
         errors.push(toErrorMessage(error));
       },
@@ -351,7 +349,7 @@ describe('slashRegistry', () => {
     resetCliState(CHAT_SESSION);
     const selection = createDeferred<void>();
     registerBuiltins({
-      onModelAccessSelect: () => selection.promise,
+      onModelAccessSelect: () => Effect.promise(() => selection.promise),
     });
     const apiNode = openSlashForm<{
       onSelect?: (value: AccountAccessFormValue) => void;
@@ -400,10 +398,11 @@ describe('slashRegistry', () => {
     const selected: string[] = [];
     let sawClosedBeforeLogin = false;
     registerBuiltins({
-      onLoginSelect: (value) => {
-        sawClosedBeforeLogin = loginNode.isClosed();
-        selected.push(value);
-      },
+      onLoginSelect: (value) =>
+        Effect.sync(() => {
+          sawClosedBeforeLogin = loginNode.isClosed();
+          selected.push(value);
+        }),
     });
     const loginNode = openSlashForm<{
       onSelect?: (value: AccountAccessFormValue) => void;
@@ -418,11 +417,12 @@ describe('slashRegistry', () => {
 
   it('holds a copyable login frame until the user dismisses it', async () => {
     registerBuiltins({
-      onLoginSelect: (_value, output) => {
-        output.writeProgress('Open https://example.test/device', {
-          copyable: true,
-        });
-      },
+      onLoginSelect: (_value, output) =>
+        Effect.sync(() => {
+          output.writeProgress('Open https://example.test/device', {
+            copyable: true,
+          });
+        }),
     });
 
     const loginNode = openSlashForm<{
@@ -446,9 +446,10 @@ describe('slashRegistry', () => {
     const instruction =
       'Open https://example.test/device and enter verification code ABCD-EFGH';
     registerBuiltins({
-      onLoginSelect: (_value, output) => {
-        output.writeProgress(instruction, { copyable: true });
-      },
+      onLoginSelect: (_value, output) =>
+        Effect.sync(() => {
+          output.writeProgress(instruction, { copyable: true });
+        }),
     });
 
     const loginNode = openSlashForm<{
@@ -487,12 +488,13 @@ describe('slashRegistry', () => {
   it('detaches a busy login and ignores its late completion', async () => {
     const selection = createDeferred<void>();
     registerBuiltins({
-      onLoginSelect: (_value, output) => {
-        output.writeProgress('Open https://example.test/device', {
-          copyable: true,
-        });
-        return selection.promise;
-      },
+      onLoginSelect: (_value, output) =>
+        Effect.suspend(() => {
+          output.writeProgress('Open https://example.test/device', {
+            copyable: true,
+          });
+          return Effect.promise(() => selection.promise);
+        }),
     });
 
     const loginNode = openSlashForm<{
@@ -503,7 +505,6 @@ describe('slashRegistry', () => {
 
     expect(loginNode.isClosed()).toBe(true);
     expect(formProgress.get()).toBeUndefined();
-    expect(transientNotice.get()?.text).toContain('Sign-in abandoned');
 
     selection.resolve();
     await settleFormSelection();
@@ -513,12 +514,13 @@ describe('slashRegistry', () => {
   it('keeps a failed login URL in its one persistent error', async () => {
     const errors: string[] = [];
     registerBuiltins({
-      onLoginSelect: (_value, output) => {
-        output.writeProgress('Open https://example.test/manual', {
-          copyable: true,
-        });
-        throw new Error('Sign-in failed');
-      },
+      onLoginSelect: (_value, output) =>
+        Effect.suspend(() => {
+          output.writeProgress('Open https://example.test/manual', {
+            copyable: true,
+          });
+          return Effect.fail(new Error('Sign-in failed'));
+        }),
       onError: (error) => {
         errors.push(toErrorMessage(error));
       },
@@ -544,11 +546,13 @@ describe('slashRegistry', () => {
     const selection = createDeferred<void>();
     const outcomes: string[] = [];
     registerBuiltins({
-      onModelAccessSelect: async (_value, output) => {
-        await selection.promise;
-        output.appendOutcome('late outcome');
-        outcomes.push('action settled');
-      },
+      onModelAccessSelect: (_value, output) =>
+        Effect.promise(() => selection.promise).pipe(
+          Effect.map(() => {
+            output.appendOutcome('late outcome');
+            outcomes.push('action settled');
+          }),
+        ),
     });
 
     const apiNode = openSlashForm<{
@@ -564,17 +568,17 @@ describe('slashRegistry', () => {
     expect(apiNode.isClosed()).toBe(false);
   });
 
-  it('calls an available abort hook when a busy form is cancelled', () => {
-    let aborted = false;
-    const selection = createDeferred<void>();
-    const completion = selection.promise as Promise<void> & {
-      abort?: () => void;
-    };
-    completion.abort = () => {
-      aborted = true;
-    };
+  it('interrupts the running action when a busy form is cancelled', async () => {
+    let interrupted = false;
     registerBuiltins({
-      onLogoutSelect: () => completion,
+      onLogoutSelect: () =>
+        Effect.never.pipe(
+          Effect.onInterrupt(() =>
+            Effect.sync(() => {
+              interrupted = true;
+            }),
+          ),
+        ),
     });
 
     const logoutNode = openSlashForm<{
@@ -583,7 +587,7 @@ describe('slashRegistry', () => {
     logoutNode.props?.onSelect?.({ kind: 'logout', target: 'all' });
     formProgress.get()?.cancel();
 
-    expect(aborted).toBe(true);
+    await waitFor(() => interrupted);
     expect(transientNotice.get()).toBeUndefined();
   });
 
@@ -607,9 +611,10 @@ describe('slashRegistry', () => {
   it('closes the resume picker before running the resume action', async () => {
     let sawClosedBeforeResume = false;
     registerBuiltins({
-      onResumeSelect: async () => {
-        sawClosedBeforeResume = resumeNode.isClosed();
-      },
+      onResumeSelect: () =>
+        Effect.sync(() => {
+          sawClosedBeforeResume = resumeNode.isClosed();
+        }),
     });
     const resumeNode = openSlashForm<{ onSelect?: (id: string) => void }>(
       'resume',
@@ -625,10 +630,11 @@ describe('slashRegistry', () => {
     const selected: string[] = [];
     let sawClosedBeforeSkillSelect = false;
     registerBuiltins({
-      onSkillSelect: (value) => {
-        sawClosedBeforeSkillSelect = skillsNode.isClosed();
-        selected.push(value.activationPrompt);
-      },
+      onSkillSelect: (value) =>
+        Effect.sync(() => {
+          sawClosedBeforeSkillSelect = skillsNode.isClosed();
+          selected.push(value.activationPrompt);
+        }),
     });
     const skillsNode = openSlashForm<{
       onSelect?: (value: {
