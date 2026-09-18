@@ -772,7 +772,7 @@ export function createDesktopHostRequests(
         case 'extractFigures':
           return yield* Effect.fail(notOnDesktop('Figure extraction'));
         case 'toolEdit':
-          run.toolEditApprovals.handleAction({
+          yield* run.toolEditApprovals.handleAction({
             requestId: request.requestId,
             action: request.action,
             ...(request.feedback == null ? {} : { feedback: request.feedback }),

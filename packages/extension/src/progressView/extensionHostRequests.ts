@@ -917,7 +917,7 @@ export function createExtensionHostRequests(
           yield* fromHost(() => runCommand('texra.extractTikzFigures'));
           return done;
         case 'toolEdit':
-          toolEditApprovals.handleAction({
+          yield* toolEditApprovals.handleAction({
             requestId: request.requestId,
             action: request.action,
             ...(request.feedback == null ? {} : { feedback: request.feedback }),

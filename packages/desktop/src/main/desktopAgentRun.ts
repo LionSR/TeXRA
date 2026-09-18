@@ -170,11 +170,9 @@ export function createDesktopAgentRun(
     requestId,
     decision,
   ) =>
-    runtime.runPromise(
-      session.requests
-        .request({ kind: 'request.decide', runId, requestId, decision })
-        .pipe(Effect.asVoid),
-    );
+    session.requests
+      .request({ kind: 'request.decide', runId, requestId, decision })
+      .pipe(Effect.asVoid);
   const toolEditApprovals = new ToolEditApprovalController({
     host: new DesktopToolEditApprovalHost({
       ui: {
@@ -187,7 +185,7 @@ export function createDesktopAgentRun(
   });
   const sessionEvents = runtime.runFork(
     Stream.runForEach(session.events.all(session.now()), (event) =>
-      Effect.sync(() => toolEditApprovals.handleSessionEvent(event)),
+      toolEditApprovals.handleSessionEvent(event),
     ),
   );
   // Attached for the window's life, before the first run of this window
@@ -196,17 +194,29 @@ export function createDesktopAgentRun(
   // fold and answered by a surface's `request.decide`.
   const detachHostInteractions = session.interactions.use({
     emit: handlePresentationEvent,
+    // Staging runs on a fiber of this window's runtime: the session hands
+    // the request over and does not wait, and a staging failure is logged
+    // here rather than left to a fiber nobody reads.
     presentToolEdit: (request) => {
-      void settleHostDialog(
-        toolEditApprovals.present(request),
-        'Failed to stage the tool-edit preview',
+      runtime.runFork(
+        toolEditApprovals.present(request).pipe(
+          Effect.catchCause((cause) =>
+            Effect.sync(() => {
+              logger.warn('Failed to stage the tool-edit preview', {
+                data: toLogData(Cause.squash(cause)),
+              });
+            }),
+          ),
+        ),
       );
     },
     // An open that never committed leaves the staged preview with no
     // decision to release it; this is that release, returned rather than
     // dropped so the session waits for the diff view and the temp files
-    // behind it to go.
-    releaseToolEdit: (requestId) => toolEditApprovals.release(requestId),
+    // behind it to go. This is the one run of a controller program the
+    // session itself waits on.
+    releaseToolEdit: (requestId) =>
+      runtime.runPromise(toolEditApprovals.release(requestId)),
   });
 
   /**
@@ -254,7 +264,7 @@ export function createDesktopAgentRun(
       disposed = true;
       detachHostInteractions();
       runtime.runFork(Fiber.interrupt(sessionEvents));
-      toolEditApprovals.dispose();
+      runtime.runFork(toolEditApprovals.dispose());
     },
   };
 }

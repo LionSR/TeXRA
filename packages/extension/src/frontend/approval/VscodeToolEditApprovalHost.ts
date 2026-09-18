@@ -9,6 +9,7 @@
 
 import { mkdir } from 'node:fs/promises';
 
+import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 import type { SessionHandle } from '@agent/runtime';
@@ -34,9 +35,14 @@ import {
   type ToolEditApprovalRequest,
 } from '@tools/approval/toolEditApproval';
 import { pluralize } from '@utils/text/stringUtils';
-import type { Effect, FileSystem } from 'effect';
 
 const CHANNEL = 'ToolEditApproval';
+
+/** An editor promise lifted as it is: the rejection reaches the controller's
+ *  error report as the value it was thrown with, which is what the `await`
+ *  this replaced handed over. */
+const fromEditor = <A>(call: () => PromiseLike<A>): Effect.Effect<A, unknown> =>
+  Effect.tryPromise({ try: call, catch: (error) => error });
 
 export class VscodeToolEditApprovalHost implements ToolEditApprovalHost {
   private readonly diffViewHost: DiffViewHost = new VscodeDiffViewHost();
@@ -52,39 +58,41 @@ export class VscodeToolEditApprovalHost implements ToolEditApprovalHost {
     private readonly session: SessionHandle,
   ) {}
 
-  async stagePreview(
+  stagePreview(
     request: ToolEditApprovalRequest,
     context: ToolEditPreviewContext,
-  ): Promise<ToolEditPreview> {
-    await mkdir(this.storageDirectory, { recursive: true });
-    const staged = await this.runtime.runPromise(
-      writeApprovalTempFiles({
-        directory: this.storageDirectory,
-        targetPath: request.path,
-        originalContent: request.originalContent,
-        proposedContent: request.proposedContent,
-      }),
-    );
-    return new VscodeToolEditPreview(
-      this.diffViewHost,
-      request,
-      context,
-      staged,
-      this.runtime,
+  ): Effect.Effect<ToolEditPreview, unknown> {
+    return fromEditor(() =>
+      mkdir(this.storageDirectory, { recursive: true }),
+    ).pipe(
+      Effect.andThen(
+        writeApprovalTempFiles({
+          directory: this.storageDirectory,
+          targetPath: request.path,
+          originalContent: request.originalContent,
+          proposedContent: request.proposedContent,
+        }),
+      ),
+      Effect.map(
+        (staged) =>
+          new VscodeToolEditPreview(
+            this.diffViewHost,
+            request,
+            context,
+            staged,
+            this.runtime,
+          ),
+      ),
     );
   }
 
-  async revealApprovalSurface(): Promise<void> {
-    // A rejection here reaches the controller's action wrapper, which reports
+  revealApprovalSurface(): Effect.Effect<void, unknown> {
+    // A failure here reaches the controller's action wrapper, which reports
     // it through `reportError`. Swallowing it left the diff tab open with no
     // approve/reject surface and no visible cause.
-    await vscode.commands.executeCommand('texra.showProgressView');
-  }
-
-  runPreview(
-    program: Effect.Effect<void, unknown, FileSystem.FileSystem>,
-  ): Promise<void> {
-    return this.runtime.runPromise(program);
+    return fromEditor(() =>
+      vscode.commands.executeCommand('texra.showProgressView'),
+    ).pipe(Effect.asVoid);
   }
 
   reportError(message: string): void {
@@ -118,66 +126,92 @@ class VscodeToolEditPreview implements ToolEditPreview {
     return this.staged.proposedPath;
   }
 
-  async present(): Promise<void> {
-    await this.openDiff();
-    this.watchForTabClose();
-    try {
-      await this.revealFirstChange();
-    } catch (error) {
-      if (!this.context.isSettled()) throw error;
-    }
-  }
-
-  async showDiff(): Promise<void> {
-    await this.openDiff();
-    if (this.context.isSettled()) {
-      await this.diffViewHost.closeDiff(this.diffSession);
-      return;
-    }
-    await this.revealFirstChange();
-  }
-
-  async openProposed(): Promise<void> {
-    await vscode.window.showTextDocument(
-      vscode.Uri.file(this.staged.proposedPath),
-      { preview: true, preserveFocus: true },
+  present(): Effect.Effect<void, unknown> {
+    return this.openDiff().pipe(
+      Effect.andThen(Effect.sync(() => this.watchForTabClose())),
+      Effect.andThen(
+        // A reveal that failed under a request that settled meanwhile is not
+        // a presentation failure: the diff opened, and nobody is left to look
+        // at the caret.
+        this.revealFirstChange().pipe(
+          Effect.catch((error) =>
+            this.context.isSettled() ? Effect.void : Effect.fail(error),
+          ),
+        ),
+      ),
     );
   }
 
-  readProposedContent(): Promise<string> {
-    return this.diffViewHost.readProposedContent(this.diffSession);
-  }
-
-  async dispose(): Promise<void> {
-    // Stop listening for tab closes before closing the diff ourselves.
-    this.tabCloseListener?.dispose();
-    await this.diffViewHost.closeDiff(this.diffSession);
-    await this.runtime.runPromise(this.staged.cleanup);
-  }
-
-  private openDiff(): Promise<void> {
-    return this.diffViewHost.openDiff(
-      this.diffSession.original,
-      this.diffSession.proposed,
-      this.diffSession.title,
+  showDiff(): Effect.Effect<void, unknown> {
+    return this.openDiff().pipe(
+      Effect.andThen(
+        Effect.suspend(() =>
+          this.context.isSettled()
+            ? fromEditor(() => this.diffViewHost.closeDiff(this.diffSession))
+            : this.revealFirstChange(),
+        ),
+      ),
     );
   }
 
-  private async revealFirstChange(): Promise<void> {
-    const line = firstChangedLine(
-      this.request.originalContent,
-      this.request.proposedContent,
-    );
-    if (line === null) return;
+  openProposed(): Effect.Effect<void, unknown> {
+    return fromEditor(() =>
+      vscode.window.showTextDocument(
+        vscode.Uri.file(this.staged.proposedPath),
+        { preview: true, preserveFocus: true },
+      ),
+    ).pipe(Effect.asVoid);
+  }
 
-    await this.diffViewHost.revealFirstChange(this.diffSession, line);
+  readProposedContent(): Effect.Effect<string, unknown> {
+    return fromEditor(() =>
+      this.diffViewHost.readProposedContent(this.diffSession),
+    );
+  }
+
+  dispose(): Effect.Effect<void, unknown> {
+    return Effect.sync(() => {
+      // Stop listening for tab closes before closing the diff ourselves.
+      this.tabCloseListener?.dispose();
+    }).pipe(
+      Effect.andThen(
+        fromEditor(() => this.diffViewHost.closeDiff(this.diffSession)),
+      ),
+      Effect.andThen(this.staged.cleanup),
+    );
+  }
+
+  private openDiff(): Effect.Effect<void, unknown> {
+    return fromEditor(() =>
+      this.diffViewHost.openDiff(
+        this.diffSession.original,
+        this.diffSession.proposed,
+        this.diffSession.title,
+      ),
+    );
+  }
+
+  private revealFirstChange(): Effect.Effect<void, unknown> {
+    return Effect.suspend(() => {
+      const line = firstChangedLine(
+        this.request.originalContent,
+        this.request.proposedContent,
+      );
+      if (line === null) return Effect.void;
+
+      return fromEditor(() =>
+        this.diffViewHost.revealFirstChange(this.diffSession, line),
+      );
+    });
   }
 
   /**
    * Closing the proposed diff tab (Ctrl+W) rejects the approval. Without this
    * the approval never settles and the agent hangs. The listener is
    * self-cleaning: it disposes once the approval settles, including the
-   * programmatic close in {@link dispose}.
+   * programmatic close in {@link dispose}. VS Code hands the close over as a
+   * plain callback, so the rejection it raises starts on a fiber of this
+   * host's own.
    */
   private watchForTabClose(): void {
     const proposedUri = vscode.Uri.file(this.staged.proposedPath).toString();
@@ -191,7 +225,7 @@ class VscodeToolEditPreview implements ToolEditPreview {
       });
       if (wasClosed) {
         this.tabCloseListener?.dispose();
-        this.context.discard();
+        this.runtime.runFork(this.context.discard());
       }
     });
   }
