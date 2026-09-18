@@ -48,11 +48,9 @@ import type { Sessions, SessionView } from './effect/sessions.js';
  * below runs on Effect's own runtime rather than borrowing the process
  * runtime the composition installs. That is what lets `closeSession`
  * answer for a process no run has initialized, and for one whose shutdown
- * has already disposed that runtime, exactly as its contract says. The one
- * exception is the shutdown settlement, which is the session owner's own
- * program: it runs on the runtime this entry's composition handed back
- * (`ProcessHold.processRuntime`), which is the runtime those sessions were
- * built on.
+ * has already disposed that runtime, exactly as its contract says. The
+ * shutdown handlers this entry registers are programs, not runs, so they
+ * settle on whichever fiber drains the embedder's lifecycle.
  */
 
 export type { AgentEvent } from '@agent/trace';
