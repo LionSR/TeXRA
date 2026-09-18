@@ -10,6 +10,8 @@ import * as vscode from 'vscode';
 
 import { createLog } from '@logger/logUtils';
 
+import { firstEventOrTimeout } from './vscodeEventWait';
+
 const log = createLog('VscodeDiagnostics');
 
 /**
@@ -17,9 +19,8 @@ const log = createLog('VscodeDiagnostics');
  * `timeoutMs`.
  *
  * Nothing subscribes until this effect runs, so a caller that must not miss
- * an update triggered by its own action forks it with `startImmediately`
- * before taking that action and joins the fiber afterwards. Interrupting the
- * wait disposes the subscription.
+ * an update its own next action triggers forks it with `startImmediately`
+ * before taking that action and joins the fiber afterwards.
  */
 export function waitForDiagnosticsChange(
   uri: vscode.Uri,
@@ -31,29 +32,16 @@ export function waitForDiagnosticsChange(
 
   const targetKey = uri.toString().toLowerCase();
 
-  return Effect.callback<void>((resume) => {
-    // One disposal path for every exit: Effect runs the returned effect only
-    // when the wait is interrupted (the timeout below, or the whole program
-    // being interrupted), so the event that resumes normally unsubscribes
-    // itself. `dispose` drops the subscription it disposed, so both paths
-    // can run.
-    let subscription: vscode.Disposable | undefined;
-    const dispose = () => {
-      subscription?.dispose();
-      subscription = undefined;
-    };
-    subscription = vscode.languages.onDidChangeDiagnostics((event) => {
-      const hasMatch = event.uris.some(
-        (eventUri) => eventUri.toString().toLowerCase() === targetKey,
-      );
-      if (hasMatch) {
-        dispose();
-        resume(Effect.void);
-      }
-    });
-    return Effect.sync(dispose);
-  }).pipe(
-    Effect.timeoutOption(timeoutMs),
+  return firstEventOrTimeout<void>(
+    (report) =>
+      vscode.languages.onDidChangeDiagnostics((event) => {
+        const hasMatch = event.uris.some(
+          (eventUri) => eventUri.toString().toLowerCase() === targetKey,
+        );
+        if (hasMatch) report();
+      }),
+    timeoutMs,
+  ).pipe(
     Effect.tap((observed) =>
       Option.isNone(observed)
         ? Effect.sync(() =>

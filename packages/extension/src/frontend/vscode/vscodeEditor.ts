@@ -141,23 +141,12 @@ export function openFileInEditor(
         : yield* showDocument(uri, existingEditor, preserveFocus);
 
     if (line !== undefined) {
-      yield* Effect.try({
-        try: () => {
-          const position = new vscode.Position(toZeroBasedLine(line), 0);
-          editor.selection = new vscode.Selection(position, position);
-          editor.revealRange(
-            new vscode.Range(position, position),
-            vscode.TextEditorRevealType.InCenterIfOutsideViewport,
-          );
-        },
-        catch: (cause) =>
-          new EditorOpenFailed({
-            reason: 'editor-unavailable',
-            message: `Could not move the cursor in ${uri.fsPath}: ${toErrorMessage(cause)}`,
-            absolutePath: uri.fsPath,
-            cause,
-          }),
-      });
+      const position = new vscode.Position(toZeroBasedLine(line), 0);
+      editor.selection = new vscode.Selection(position, position);
+      editor.revealRange(
+        new vscode.Range(position, position),
+        vscode.TextEditorRevealType.InCenterIfOutsideViewport,
+      );
     }
 
     if (save && editor.document.isDirty) {

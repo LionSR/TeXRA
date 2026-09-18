@@ -29,6 +29,8 @@ import {
   type TerminalRunResult,
 } from '@hosts/uiHosts';
 
+import { firstEventOrTimeout } from './vscode/vscodeEventWait';
+
 const SHELL_INTEGRATION_WAIT_MS = 2_000;
 const READER_DRAIN_MS = 250;
 
@@ -101,25 +103,13 @@ function waitForShellIntegration(
     if (terminal.shellIntegration) {
       return Effect.succeed(terminal.shellIntegration);
     }
-    return Effect.callback<vscode.TerminalShellIntegration>((resume) => {
-      // One disposal path for every exit, as with the exit-code wait below:
-      // the event that resumes normally unsubscribes itself, because Effect
-      // runs the returned effect only on interruption.
-      let subscription: vscode.Disposable | undefined;
-      const dispose = () => {
-        subscription?.dispose();
-        subscription = undefined;
-      };
-      subscription = vscode.window.onDidChangeTerminalShellIntegration(
-        (event) => {
-          if (event.terminal === terminal) {
-            dispose();
-            resume(Effect.succeed(event.shellIntegration));
-          }
-        },
-      );
-      return Effect.sync(dispose);
-    }).pipe(Effect.timeoutOption(timeoutMs), Effect.map(Option.getOrUndefined));
+    return firstEventOrTimeout<vscode.TerminalShellIntegration>(
+      (report) =>
+        vscode.window.onDidChangeTerminalShellIntegration((event) => {
+          if (event.terminal === terminal) report(event.shellIntegration);
+        }),
+      timeoutMs,
+    ).pipe(Effect.map(Option.getOrUndefined));
   });
 }
 
@@ -147,27 +137,13 @@ const captureExecution = Effect.fn('setupTerminalRunner.capture')(function* (
   // interrupted run disposes the subscription and cancels the deadline
   // instead of holding both until the timeout elapses.
   const exitCode = yield* Effect.forkChild(
-    Effect.callback<number | undefined>((resume) => {
-      // One disposal path for every exit. Effect runs the returned effect only
-      // when the wait is interrupted — the timeout below, or the whole run
-      // being interrupted — so the end event that resumes normally has to
-      // unsubscribe itself; without that, every successful command leaves its
-      // listener and this execution closure registered for the window's
-      // lifetime. `dispose` drops the subscription it disposes, so the two
-      // paths can both run.
-      let subscription: vscode.Disposable | undefined;
-      const dispose = () => {
-        subscription?.dispose();
-        subscription = undefined;
-      };
-      subscription = vscode.window.onDidEndTerminalShellExecution((event) => {
-        if (event.execution === execution) {
-          dispose();
-          resume(Effect.succeed(event.exitCode));
-        }
-      });
-      return Effect.sync(dispose);
-    }).pipe(Effect.timeoutOption(args.timeoutMs)),
+    firstEventOrTimeout<number | undefined>(
+      (report) =>
+        vscode.window.onDidEndTerminalShellExecution((event) => {
+          if (event.execution === execution) report(event.exitCode);
+        }),
+      args.timeoutMs,
+    ),
     { startImmediately: true },
   );
 
