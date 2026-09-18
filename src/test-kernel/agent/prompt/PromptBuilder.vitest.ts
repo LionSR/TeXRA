@@ -1,4 +1,4 @@
-import { Effect } from 'effect';
+import { Effect, type FileSystem } from 'effect';
 import { describe, expect, it } from 'vitest';
 
 import type { AgentPrompt } from '@agent/core/definition/AgentDataclass';
@@ -6,6 +6,13 @@ import {
   buildInitialToolUsePrompts,
   PromptBuilder,
 } from '@agent/prompt/PromptBuilder';
+import { nodePlatformLayer } from '@test/support/fsTestUtils';
+
+/** The system prompt reads `.texrarules` through `FileSystem`, so the
+ *  standard library's own is what these renders run over. */
+const runPrompt = <A, E>(
+  program: Effect.Effect<A, E, FileSystem.FileSystem>,
+): Promise<A> => Effect.runPromise(Effect.provide(program, nodePlatformLayer));
 
 function buildMemoryPrompts(): ReturnType<typeof buildInitialToolUsePrompts> {
   return buildInitialToolUsePrompts(
@@ -29,7 +36,7 @@ describe('PromptBuilder', () => {
     } as AgentPrompt;
 
     const builder = new PromptBuilder(prompt, { value: 'test' }, undefined);
-    const initial = await Effect.runPromise(builder.buildInitialPrompts());
+    const initial = await runPrompt(builder.buildInitialPrompts());
     expect(initial.userRequest).toBe('initial test');
 
     const reflect = await Effect.runPromise(builder.buildUserRequest(1));
@@ -47,7 +54,7 @@ describe('PromptBuilder', () => {
     } as AgentPrompt;
 
     const builder = new PromptBuilder(prompt, {}, undefined);
-    const initial = await Effect.runPromise(builder.buildInitialPrompts());
+    const initial = await runPrompt(builder.buildInitialPrompts());
     expect(initial.userRequest).toBe('initial only');
 
     // Single-template agents reuse the template for subsequent rounds
@@ -59,7 +66,7 @@ describe('PromptBuilder', () => {
     // Regression test for #7957: relevance gating (added in #7855) must not
     // silently drop pinned memories, which are documented as loading every
     // session (docs/guide/memory.md, MemoryTool's description).
-    const prompts = await Effect.runPromise(buildMemoryPrompts());
+    const prompts = await runPrompt(buildMemoryPrompts());
 
     // Behavioral contract, not exact prose (review note on #7959): pinned
     // files must be individually viewed at session start — a directory

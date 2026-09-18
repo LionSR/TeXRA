@@ -6,7 +6,15 @@
  * catalog lookups, its key prompt, and its notifications, and both the VS
  * Code extension and the desktop answer the same arms through one body.
  */
-import { Data, Deferred, Effect, Exit, Fiber, SubscriptionRef } from 'effect';
+import {
+  Data,
+  Deferred,
+  Effect,
+  Exit,
+  Fiber,
+  FileSystem,
+  SubscriptionRef,
+} from 'effect';
 
 import { presentFollowUpResult, submitFollowUp } from '@agent/followUp';
 import { getRunRecords } from '@agent/storage';
@@ -52,7 +60,7 @@ import {
 import { LaunchSurfaceSchema } from '@shared/session/surface';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 import { unique } from '@utils/core';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
+import { entryExists } from '@utils/files/fsEntryExists';
 import {
   locateInWorkspace,
   workspaceAbsolutePath,
@@ -237,9 +245,13 @@ interface HostRunActions {
 
 export const createHostRunActions = (
   ports: HostRunActionPorts,
-): Effect.Effect<HostRunActions, never, Secrets> =>
+): Effect.Effect<HostRunActions, never, FileSystem.FileSystem | Secrets> =>
   Effect.gen(function* () {
     const secrets = yield* Secrets;
+    // Resolved once here and carried: the planner's workspace probes below
+    // read through this filesystem rather than taking one from whatever
+    // context each of its callers happens to run on.
+    const fs = yield* FileSystem.FileSystem;
     const { session } = ports;
     const view = () => SubscriptionRef.getUnsafe(session.view);
 
@@ -398,7 +410,8 @@ export const createHostRunActions = (
         locatePath: (target) =>
           locateInWorkspace(session.roots.workspace, target),
         exists: (relativePath) =>
-          AbsoluteFS.exists(
+          entryExists(
+            fs,
             workspaceAbsolutePath(session.roots.workspace, relativePath),
           ),
       },
