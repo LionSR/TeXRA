@@ -316,10 +316,14 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
     ]);
   }
 
+  /** The usage read is an Effect; this is the boundary that holds a runtime to
+   *  settle it on. */
   async postSubscriptionUsage(forceRefresh = false): Promise<void> {
     this.options.renderer.postToRenderer({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_SUBSCRIPTION_USAGE,
-      snapshots: await this.subscriptionUsage.getAllUsage({ forceRefresh }),
+      snapshots: await this.options.runtime.runPromise(
+        this.subscriptionUsage.getAllUsage({ forceRefresh }),
+      ),
     });
   }
 
