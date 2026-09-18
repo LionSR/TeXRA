@@ -2,7 +2,7 @@
 import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, type FileSystem } from 'effect';
 import pDefer, { type DeferredPromise } from 'p-defer';
 import { describe, expect, it, onTestFinished, vi } from 'vitest';
 
@@ -12,6 +12,7 @@ import {
   type ToolEditPreview,
   type ToolEditPreviewContext,
 } from '@controllers/approval/ToolEditApprovalController';
+import { effectRuntime } from '@platform/processRuntime';
 import {
   aggregateId as qualifyAggregateId,
   RunIdSchema,
@@ -25,6 +26,13 @@ import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import { toolEditApprovalRequest } from '../agent/progressTestUtils';
 
 const RUN = RunIdSchema.parse('ab12cd');
+
+/** The controller's verbs are Effects; this is the host wiring point's run. */
+function run<A, E>(
+  program: Effect.Effect<A, E, FileSystem.FileSystem>,
+): Promise<A> {
+  return effectRuntime().runPromise(program);
+}
 
 /**
  * The preview program the controller runs for a LaTeX proposal, replaced so a
@@ -80,13 +88,11 @@ function createTestHost() {
   const preview = {
     originalPath: '/tmp/original.tex',
     proposedPath: '/tmp/proposed.tex',
-    present: vi.fn(async () => {
-      await presentation.promise;
-    }),
-    showDiff: vi.fn(async () => {}),
-    openProposed: vi.fn(async () => {}),
-    readProposedContent: vi.fn(async () => 'edited by the user'),
-    dispose: vi.fn(async () => {}),
+    present: vi.fn(() => Effect.promise(() => presentation.promise)),
+    showDiff: vi.fn(() => Effect.void),
+    openProposed: vi.fn(() => Effect.void),
+    readProposedContent: vi.fn(() => Effect.succeed('edited by the user')),
+    dispose: vi.fn(() => Effect.void),
   } satisfies ToolEditPreview;
   let context: ToolEditPreviewContext | undefined;
   return {
@@ -98,30 +104,24 @@ function createTestHost() {
       return context;
     },
     host: {
-      stagePreview: async (
+      stagePreview: (
         _request: ToolEditApprovalRequest,
         previewContext: ToolEditPreviewContext,
       ) => {
         context = previewContext;
-        await staging.promise;
-        return preview;
+        return Effect.promise(() => staging.promise).pipe(Effect.as(preview));
       },
-      revealApprovalSurface: async () => {},
+      revealApprovalSurface: () => Effect.void,
       openBuildDisplay: async () => {},
-      runPreview: async (program: Effect.Effect<void>) => {
-        await Effect.runPromise(program);
-      },
       reportError: vi.fn(),
-      decide: vi.fn(async () => {}),
+      decide: vi.fn(() => Effect.void),
     },
   };
 }
 
 function createController(host: ReturnType<typeof createTestHost>['host']) {
   const controller = new ToolEditApprovalController({ host });
-  onTestFinished(() => {
-    controller.dispose();
-  });
+  onTestFinished(() => run(controller.dispose()));
   return controller;
 }
 
@@ -130,10 +130,10 @@ describe('tool edit approval controller', () => {
     const testHost = createTestHost();
     const controller = createController(testHost.host);
 
-    const presented = controller.present(approvalRequest());
+    const presented = run(controller.present(approvalRequest()));
     await vi.waitFor(() => testHost.contextForRequest());
     const requestId = testHost.contextForRequest().requestId;
-    testHost.contextForRequest().discard();
+    await run(testHost.contextForRequest().discard());
     expect(testHost.contextForRequest().isSettled()).toBe(true);
     testHost.staging.resolve();
     await presented;
@@ -149,10 +149,10 @@ describe('tool edit approval controller', () => {
     const testHost = createTestHost();
     const controller = createController(testHost.host);
 
-    const presented = controller.present(approvalRequest());
+    const presented = run(controller.present(approvalRequest()));
     await vi.waitFor(() => testHost.contextForRequest());
     const requestId = testHost.contextForRequest().requestId;
-    await controller.approvePendingForRun(RUN);
+    await run(controller.approvePendingForRun(RUN));
     testHost.staging.resolve();
     await presented;
 
@@ -167,16 +167,16 @@ describe('tool edit approval controller', () => {
     const testHost = createTestHost();
     const controller = createController(testHost.host);
 
-    const presented = controller.present(approvalRequest());
+    const presented = run(controller.present(approvalRequest()));
     await vi.waitFor(() => testHost.contextForRequest());
     const requestId = testHost.contextForRequest().requestId;
 
     // The `request.opened` commit was refused while the host was still
     // staging, so the release runs with a preview in flight: it may not
-    // return before that preview is disposed, or the caller it answers
+    // settle before that preview is disposed, or the caller it answers
     // would report the refusal with temp files still being written.
     let released = false;
-    const release = controller.release(requestId).then(() => {
+    const release = run(controller.release(requestId)).then(() => {
       released = true;
     });
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -196,12 +196,12 @@ describe('tool edit approval controller', () => {
     const testHost = createTestHost();
     const controller = createController(testHost.host);
 
-    const presented = controller.present(approvalRequest());
+    const presented = run(controller.present(approvalRequest()));
     await vi.waitFor(() => testHost.contextForRequest());
     const requestId = testHost.contextForRequest().requestId;
 
     // Staging finished, so the request is staged and the host is opening its
-    // view on the staged files. A release now may not return before that view
+    // view on the staged files. A release now may not settle before that view
     // is open and closed again: closing it is what the release is for.
     testHost.staging.resolve();
     await vi.waitFor(() => {
@@ -209,7 +209,7 @@ describe('tool edit approval controller', () => {
     });
 
     let released = false;
-    const release = controller.release(requestId).then(() => {
+    const release = run(controller.release(requestId)).then(() => {
       released = true;
     });
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -221,7 +221,7 @@ describe('tool edit approval controller', () => {
     expect(released).toBe(true);
     expect(testHost.preview.dispose).toHaveBeenCalledOnce();
 
-    // Nothing opens a view after the release resolved.
+    // Nothing opens a view after the release settled.
     await presented;
     expect(testHost.preview.present).toHaveBeenCalledOnce();
     expect(testHost.preview.showDiff).not.toHaveBeenCalled();
@@ -231,20 +231,22 @@ describe('tool edit approval controller', () => {
     const testHost = createTestHost();
     const controller = createController(testHost.host);
     const disposal = pDefer<void>();
-    testHost.preview.dispose.mockImplementation(() => disposal.promise);
+    testHost.preview.dispose.mockImplementation(() =>
+      Effect.promise(() => disposal.promise),
+    );
 
     testHost.staging.resolve();
     testHost.presentation.resolve();
-    await controller.present(approvalRequest());
+    await run(controller.present(approvalRequest()));
     const requestId = testHost.contextForRequest().requestId;
 
-    // `dispose` starts a release for every staged request without awaiting
-    // it, and the host's release for a refused `request.opened` lands right
-    // behind it: the second one finds the entry already dropped, so it has
-    // only the cleanup in flight to wait for.
-    controller.dispose();
+    // `dispose` admits a release for every staged request without waiting
+    // for it, and the host's release for a refused `request.opened` lands
+    // right behind it: the second one finds the entry already dropped, so it
+    // has only the cleanup in flight to wait for.
+    await run(controller.dispose());
     let released = false;
-    const release = controller.release(requestId).then(() => {
+    const release = run(controller.release(requestId)).then(() => {
       released = true;
     });
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -262,11 +264,11 @@ describe('tool edit approval controller', () => {
 
     testHost.staging.resolve();
     testHost.presentation.resolve();
-    await controller.present(approvalRequest());
+    await run(controller.present(approvalRequest()));
     const requestId = testHost.contextForRequest().requestId;
     expect(testHost.preview.present).toHaveBeenCalled();
 
-    controller.handleAction({ requestId, action: 'approve' });
+    await run(controller.handleAction({ requestId, action: 'approve' }));
     await vi.waitFor(() => {
       expect(testHost.host.decide).toHaveBeenCalledWith(RUN, requestId, {
         action: 'approve',
@@ -275,13 +277,13 @@ describe('tool edit approval controller', () => {
     });
 
     // The fold's answer releases the preview; nothing acts on it afterwards.
-    controller.handleSessionEvent(decided(requestId));
+    await run(controller.handleSessionEvent(decided(requestId)));
     await vi.waitFor(() => {
       expect(testHost.preview.dispose).toHaveBeenCalledOnce();
     });
 
-    controller.handleAction({ requestId, action: 'openDiff' });
-    controller.handleAction({ requestId, action: 'reject' });
+    await run(controller.handleAction({ requestId, action: 'openDiff' }));
+    await run(controller.handleAction({ requestId, action: 'reject' }));
     await Promise.resolve();
 
     expect(testHost.preview.showDiff).not.toHaveBeenCalled();
@@ -299,9 +301,11 @@ describe('tool edit approval controller', () => {
       return build.promise;
     });
     testHost.host.openBuildDisplay = openBuildDisplay;
-    testHost.preview.dispose.mockImplementation(async () => {
-      events.push('dispose');
-    });
+    testHost.preview.dispose.mockImplementation(() =>
+      Effect.sync(() => {
+        events.push('dispose');
+      }),
+    );
     const diffLocation = {
       kind: 'external',
       absolutePath: '/tmp/diff.pdf',
@@ -329,18 +333,20 @@ describe('tool edit approval controller', () => {
 
     testHost.staging.resolve();
     testHost.presentation.resolve();
-    await controller.present(approvalRequest());
+    await run(controller.present(approvalRequest()));
     const requestId = testHost.contextForRequest().requestId;
 
-    controller.handleAction({ requestId, action: 'previewProposed' });
+    await run(
+      controller.handleAction({ requestId, action: 'previewProposed' }),
+    );
     await vi.waitFor(() => {
       expect(openBuildDisplay).toHaveBeenCalledOnce();
     });
 
-    // The build is still running, so a release may not return yet: the
+    // The build is still running, so a release may not settle yet: the
     // release deletes the temp files the build is reading.
     let released = false;
-    const release = controller.release(requestId).then(() => {
+    const release = run(controller.release(requestId)).then(() => {
       released = true;
     });
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -362,17 +368,19 @@ describe('tool edit approval controller', () => {
     // A build that fails settles too, so a release joins that one as well
     // rather than hanging, and the failure stays on the program's own error
     // path instead of escaping the display callback.
-    await controller.present(approvalRequest());
+    await run(controller.present(approvalRequest()));
     const secondRequestId = testHost.contextForRequest().requestId;
-    controller.handleAction({
-      requestId: secondRequestId,
-      action: 'previewProposed',
-    });
+    await run(
+      controller.handleAction({
+        requestId: secondRequestId,
+        action: 'previewProposed',
+      }),
+    );
     await vi.waitFor(() => {
       expect(openBuildDisplay).toHaveBeenCalledTimes(2);
     });
 
-    const secondRelease = controller.release(secondRequestId);
+    const secondRelease = run(controller.release(secondRequestId));
     builds[1].reject(new Error('the build failed'));
     await secondRelease;
     expect(events).toEqual([

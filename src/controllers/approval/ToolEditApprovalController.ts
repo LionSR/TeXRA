@@ -303,11 +303,10 @@ export class ToolEditApprovalController {
 
       switch (payload.action) {
         case 'approve':
-          return this.detach(this.admit(entry, this.approve(entry)));
+          return this.detach(this.admit(entry, () => this.approve(entry)));
         case 'reject':
           return this.detach(
-            this.admit(
-              entry,
+            this.admit(entry, () =>
               this.send(entry.request, {
                 action: 'reject',
                 feedback: payload.feedback?.trim() || null,
@@ -315,14 +314,15 @@ export class ToolEditApprovalController {
             ),
           );
         case 'openDiff':
-          return this.detach(this.admit(entry, entry.preview.showDiff()));
+          return this.detach(this.admit(entry, () => entry.preview.showDiff()));
         case 'previewProposed':
-          return this.detach(this.admit(entry, this.previewProposed(entry)));
+          return this.detach(
+            this.admit(entry, () => this.previewProposed(entry)),
+          );
         case 'showLatexdiff':
           // ONLYCHANGEDPAGE keeps a tool-edit diff focused on the changes.
           return this.detach(
-            this.admit(
-              entry,
+            this.admit(entry, () =>
               runLatexdiff(entry, {
                 subtype: 'ONLYCHANGEDPAGE',
                 openBuildDisplay: this.buildDisplayFor(entry),
@@ -347,7 +347,7 @@ export class ToolEditApprovalController {
                 action: 'approve',
                 content: state.request.proposedContent,
               })
-            : this.admit(state, this.approve(state)),
+            : this.admit(state, () => this.approve(state)),
         );
       }
       return Effect.forEach(decisions, (decision) => decision, {
@@ -454,16 +454,14 @@ export class ToolEditApprovalController {
                 staged.isSettled()
                   ? Effect.void
                   : this.detach(
+                      // Admitted whether or not this host reveals
+                      // anything, so a release landing in that window joins
+                      // it either way.
                       this.admit(
                         staged,
-                        // Admitted whether or not this host reveals anything,
-                        // so a release landing in that window joins it either
-                        // way.
-                        Effect.suspend(
-                          () =>
-                            this.options.host.revealApprovalSurface?.() ??
-                            Effect.void,
-                        ),
+                        () =>
+                          this.options.host.revealApprovalSurface?.() ??
+                          Effect.void,
                       ),
                     ),
               ),
@@ -484,8 +482,7 @@ export class ToolEditApprovalController {
         return this.decideFromPayload(state, { action: 'reject' });
       }
       if (state?.phase === 'pending') {
-        return this.admit(
-          state,
+        return this.admit(state, () =>
           this.send(state.request, { action: 'reject' }),
         );
       }
@@ -636,7 +633,7 @@ export class ToolEditApprovalController {
             concurrency: 'unbounded',
             discard: true,
           }).pipe(
-            Effect.andThen(entry.preview.dispose()),
+            Effect.andThen(Effect.suspend(() => entry.preview.dispose())),
             Effect.andThen(
               Effect.suspend(() =>
                 Effect.forEach(
@@ -664,18 +661,19 @@ export class ToolEditApprovalController {
   /**
    * Admit one action on an entry: the join a release waits on is registered
    * here, synchronously, in the step its caller found the entry in, and
-   * withdrawn once the action settles. A failure is reported only while the
-   * request is unsettled: an action that fails after the entry is gone has no
-   * user left to tell.
+   * withdrawn once the action settles. The action itself is a thunk, so a
+   * host method behind it is invoked when the action runs rather than when it
+   * is admitted. A failure is reported only while the request is unsettled:
+   * an action that fails after the entry is gone has no user left to tell.
    */
   private admit(
     entry: PendingToolEditApproval,
-    action: Effect.Effect<void, unknown, PreviewFs>,
+    action: () => Effect.Effect<void, unknown, PreviewFs>,
   ): Effect.Effect<void, never, PreviewFs> {
     const settled = Deferred.makeUnsafe<void>();
     const join = Deferred.await(settled);
     entry.inFlightActions.add(join);
-    return action.pipe(
+    return Effect.suspend(action).pipe(
       Effect.catchCause((cause) =>
         Cause.hasInterruptsOnly(cause)
           ? Effect.interrupt
