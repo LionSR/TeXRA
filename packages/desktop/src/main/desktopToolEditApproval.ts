@@ -9,7 +9,7 @@
 import { readFile, rm } from 'node:fs/promises';
 
 // Third-party imports
-import { Effect, type FileSystem } from 'effect';
+import { Effect } from 'effect';
 
 // Local imports - types
 import type {
@@ -57,6 +57,12 @@ interface DesktopToolEditApprovalHostOptions {
   runtime: ProcessRuntime;
 }
 
+/** An Electron-side promise lifted as it is: the rejection reaches the
+ *  controller's error report as the value it was thrown with, which is what
+ *  the voided `await` handed over. */
+const fromHost = <A>(call: () => Promise<A>): Effect.Effect<A, unknown> =>
+  Effect.tryPromise({ try: call, catch: (error) => error });
+
 export class DesktopToolEditApprovalHost implements ToolEditApprovalHost {
   constructor(private readonly options: DesktopToolEditApprovalHostOptions) {}
 
@@ -68,36 +74,34 @@ export class DesktopToolEditApprovalHost implements ToolEditApprovalHost {
     return this.options.decide;
   }
 
-  async stagePreview(
+  stagePreview(
     request: ToolEditApprovalRequest,
     context: ToolEditPreviewContext,
-  ): Promise<ToolEditPreview> {
-    const tempDir = await createTexraTempDir('texra-tool-edit-');
-    const { originalPath, proposedPath } =
-      await this.options.runtime.runPromise(
+  ): Effect.Effect<ToolEditPreview, unknown> {
+    const { ui } = this.options;
+    return fromHost(() => createTexraTempDir('texra-tool-edit-')).pipe(
+      Effect.flatMap((tempDir) =>
         writeApprovalTempFiles({
           directory: tempDir,
           targetPath: request.path,
           originalContent: request.originalContent,
           proposedContent: request.proposedContent,
-        }),
-      );
-    return new DesktopToolEditPreview(
-      this.options.ui,
-      context,
-      { tempDir, originalPath, proposedPath },
-      this.options.runtime,
+        }).pipe(
+          Effect.map(
+            ({ originalPath, proposedPath }) =>
+              new DesktopToolEditPreview(ui, context, {
+                tempDir,
+                originalPath,
+                proposedPath,
+              }),
+          ),
+        ),
+      ),
     );
   }
 
   // No `revealApprovalSurface`: active-stream selection surfaces the prompt
   // in whichever view is open, so nothing has to open ahead of it.
-
-  runPreview(
-    program: Effect.Effect<void, unknown, FileSystem.FileSystem>,
-  ): Promise<void> {
-    return this.options.runtime.runPromise(program);
-  }
 
   reportError(message: string): void {
     // Fire-and-forget, as the voided promise was; a dialog that cannot show
@@ -127,9 +131,6 @@ class DesktopToolEditPreview implements ToolEditPreview {
     private readonly ui: DesktopToolEditApprovalUi,
     private readonly context: ToolEditPreviewContext,
     private readonly staged: DesktopStagedFiles,
-    /** The window's runtime: `ToolEditPreview` is a Promise-shaped core port,
-     *  so the shell-facing open program settles here. */
-    private readonly runtime: ProcessRuntime,
   ) {}
 
   get originalPath(): string {
@@ -142,30 +143,35 @@ class DesktopToolEditPreview implements ToolEditPreview {
 
   /**
    * The prompt carries the request on its own, but the diff beside it is
-   * part of the presentation the controller tracks: returning before it is
-   * open would let a release resolve, and the temp directory below go, while
+   * part of the presentation the controller tracks: settling before it is
+   * open would let a release settle, and the temp directory below go, while
    * the Review tab was still reading the staged files. A failure here
-   * propagates to the `present` call the host awaits, which reports it.
+   * reaches the `present` call the host runs, which reports it.
    */
-  async present(): Promise<void> {
-    await this.showDiff();
+  present(): Effect.Effect<void, unknown> {
+    return this.showDiff();
   }
 
-  async showDiff(): Promise<void> {
-    await this.ui.openDiff(
-      { filePath: this.staged.originalPath },
-      { filePath: this.staged.proposedPath },
-      `Tool edit: ${this.context.relativePath}`,
-      this.context.requestId,
+  showDiff(): Effect.Effect<void, unknown> {
+    return fromHost(() =>
+      this.ui.openDiff(
+        { filePath: this.staged.originalPath },
+        { filePath: this.staged.proposedPath },
+        `Tool edit: ${this.context.relativePath}`,
+        this.context.requestId,
+      ),
     );
   }
 
-  async openProposed(): Promise<void> {
-    await this.runtime.runPromise(this.ui.openPath(this.staged.proposedPath));
+  openProposed(): Effect.Effect<void, unknown> {
+    // #12734's Effect-typed `openPath` reaches the controller as the program
+    // it is: `ToolEditPreview` is no longer a Promise-shaped core port, so
+    // the run this settled on is gone with the face that needed it.
+    return this.ui.openPath(this.staged.proposedPath);
   }
 
-  async readProposedContent(): Promise<string> {
-    return readFile(this.staged.proposedPath, 'utf8');
+  readProposedContent(): Effect.Effect<string, unknown> {
+    return fromHost(() => readFile(this.staged.proposedPath, 'utf8'));
   }
 
   /**
@@ -173,8 +179,13 @@ class DesktopToolEditPreview implements ToolEditPreview {
    * names this request's preview, so a request settling while the user reads
    * another diff takes only its own off the Review workbench.
    */
-  async dispose(): Promise<void> {
-    await this.ui.closeDiff(this.context.requestId);
-    await rm(this.staged.tempDir, { recursive: true, force: true });
+  dispose(): Effect.Effect<void, unknown> {
+    return fromHost(() => this.ui.closeDiff(this.context.requestId)).pipe(
+      Effect.andThen(
+        fromHost(() =>
+          rm(this.staged.tempDir, { recursive: true, force: true }),
+        ),
+      ),
+    );
   }
 }

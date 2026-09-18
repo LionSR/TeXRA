@@ -3,9 +3,17 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import { it } from '@effect/vitest';
-import { Effect, Fiber, Scope, Stream, SubscriptionRef } from 'effect';
+import {
+  Effect,
+  Fiber,
+  type FileSystem,
+  Scope,
+  Stream,
+  SubscriptionRef,
+} from 'effect';
 import { afterEach, describe, expect, onTestFinished, vi } from 'vitest';
 
+import type { ToolEditPreview } from '@controllers/approval/ToolEditApprovalController';
 import type { DesktopToolEditApprovalUi } from '@desktop/main/desktopToolEditApproval';
 import type { DiffSource } from '@hosts/uiHosts';
 import type { RunId } from '@shared/schemas';
@@ -32,6 +40,19 @@ const approvalTest = (
 };
 
 const mocks = createModuleMocks();
+
+/**
+ * The host wiring point's run. The controller's verbs are Effects and it
+ * holds no runtime of its own; a desktop window hands them its process
+ * runtime, and so does this suite.
+ */
+const onRuntime = <A, E>(
+  program: Effect.Effect<A, E, FileSystem.FileSystem>,
+): Effect.Effect<A, unknown> =>
+  Effect.tryPromise({
+    try: () => effectRuntime().runPromise(program),
+    catch: (error) => error,
+  });
 
 async function createTempRoot(prefix = 'texra-approval-'): Promise<string> {
   const dir = await mkdtemp(path.join(tmpdir(), prefix));
@@ -144,26 +165,38 @@ function createApprovalFixture(
       },
       // The desktop surface's decision: the session's one `request.decide`.
       decide: (runId, requestId, decision) =>
-        Effect.runPromise(
-          session.requests
-            .request({ kind: 'request.decide', runId, requestId, decision })
-            .pipe(Effect.asVoid),
-        ),
+        session.requests
+          .request({ kind: 'request.decide', runId, requestId, decision })
+          .pipe(Effect.asVoid),
     });
-    const stagePreview = vi.spyOn(host, 'stagePreview');
+    // The previews the host actually staged. `stagePreview` hands back a
+    // program now, not a promise, so the spy's recorded results are
+    // descriptions: running one again would stage a second set of temp files.
+    // What each program produces is collected as it produces it instead.
+    const staged: ToolEditPreview[] = [];
+    const stageOnHost = host.stagePreview.bind(host);
+    const stagePreview = vi
+      .spyOn(host, 'stagePreview')
+      .mockImplementation((request, context) =>
+        stageOnHost(request, context).pipe(
+          Effect.tap((preview) => Effect.sync(() => staged.push(preview))),
+        ),
+      );
     const controller = new modules.controllerModule.ToolEditApprovalController({
       host,
     });
-    yield* Effect.addFinalizer(() => Effect.sync(() => controller.dispose()));
+    yield* Effect.addFinalizer(() =>
+      Effect.promise(() => effectRuntime().runPromise(controller.dispose())),
+    );
     yield* Effect.forkScoped(
       Stream.runForEach(session.events.all(session.now()), (event) =>
-        Effect.sync(() => controller.handleSessionEvent(event)),
+        onRuntime(controller.handleSessionEvent(event)),
       ),
     );
     // The attached host stages the preview the durable payload cannot carry.
     const detach = session.interactions.use({
       presentToolEdit: (request) => {
-        void controller.present(request);
+        effectRuntime().runFork(controller.present(request));
       },
     });
     yield* Effect.addFinalizer(() => Effect.sync(detach));
@@ -210,10 +243,8 @@ function createApprovalFixture(
       waitForStagedCleanup() {
         return Effect.tryPromise(() =>
           vi.waitFor(async () => {
-            const previews = await Promise.all(
-              stagePreview.mock.results.map(({ value }) => value),
-            );
-            for (const preview of previews)
+            expect(staged).toHaveLength(stagePreview.mock.calls.length);
+            for (const preview of staged)
               await expect(
                 pathExists(path.dirname(preview.proposedPath)),
               ).resolves.toBe(false);
@@ -228,13 +259,11 @@ function createApprovalFixture(
         return Effect.tryPromise(async () => {
           await vi.waitFor(() => {
             expect(stagePreview).toHaveBeenCalledTimes(count);
+            expect(staged).toHaveLength(count);
             expect(
               SubscriptionRef.getUnsafe(session.view).requests,
             ).toHaveLength(count);
           });
-          await Promise.all(
-            stagePreview.mock.results.map(({ value }) => value),
-          );
           return stagePreview.mock.calls.map(([request]) => request.permission);
         });
       },
@@ -272,9 +301,7 @@ describe('desktop tool edit approval', () => {
       );
       const requests = yield* waitForPreviews(2);
 
-      yield* Effect.tryPromise(() =>
-        controller.approvePendingForRun('a0b0c0' as RunId),
-      );
+      yield* onRuntime(controller.approvePendingForRun('a0b0c0' as RunId));
       expect(yield* Fiber.join(target)).toMatchObject({
         action: 'apply',
         appliedContent: 'new target\n',
@@ -284,10 +311,12 @@ describe('desktop tool edit approval', () => {
         (request) => request.runId === 'd0e0f0',
       );
       expect(otherRequest).toBeDefined();
-      controller.handleAction({
-        requestId: otherRequest!.requestId,
-        action: 'reject',
-      });
+      yield* onRuntime(
+        controller.handleAction({
+          requestId: otherRequest!.requestId,
+          action: 'reject',
+        }),
+      );
       expect(yield* Fiber.join(other)).toMatchObject({ action: 'reject' });
     }),
   );
@@ -318,10 +347,12 @@ describe('desktop tool edit approval', () => {
         );
         const [request] = yield* waitForPreviews();
 
-        controller.handleAction({
-          requestId: request.requestId,
-          action: 'previewProposed',
-        });
+        yield* onRuntime(
+          controller.handleAction({
+            requestId: request.requestId,
+            action: 'previewProposed',
+          }),
+        );
         yield* Effect.tryPromise(() =>
           vi.waitFor(() => expect(opened).toHaveLength(1)),
         );
@@ -330,11 +361,13 @@ describe('desktop tool edit approval', () => {
           true,
         );
 
-        controller.handleAction({
-          requestId: request.requestId,
-          action: 'reject',
-          feedback: 'not yet',
-        });
+        yield* onRuntime(
+          controller.handleAction({
+            requestId: request.requestId,
+            action: 'reject',
+            feedback: 'not yet',
+          }),
+        );
         expect(yield* Fiber.join(result)).toMatchObject({
           action: 'reject',
           feedback: 'not yet',
@@ -386,10 +419,12 @@ describe('desktop tool edit approval', () => {
           vi.waitFor(() => expect(openDiff).toHaveBeenCalledOnce()),
         );
 
-        controller.handleAction({
-          requestId: request.requestId,
-          action: 'openDiff',
-        });
+        yield* onRuntime(
+          controller.handleAction({
+            requestId: request.requestId,
+            action: 'openDiff',
+          }),
+        );
 
         yield* Effect.tryPromise(() =>
           vi.waitFor(() => expect(openDiff).toHaveBeenCalledTimes(2)),
@@ -407,10 +442,12 @@ describe('desktop tool edit approval', () => {
           yield* Effect.tryPromise(() => pathExists(proposed.filePath)),
         ).toBe(true);
 
-        controller.handleAction({
-          requestId: request.requestId,
-          action: 'reject',
-        });
+        yield* onRuntime(
+          controller.handleAction({
+            requestId: request.requestId,
+            action: 'reject',
+          }),
+        );
         expect(yield* Fiber.join(result)).toMatchObject({ action: 'reject' });
 
         // The decision releases the preview: the view the diff opened in is
@@ -450,10 +487,12 @@ describe('desktop tool edit approval', () => {
       );
       const [request] = yield* waitForPreviews();
 
-      controller.handleAction({
-        requestId: request.requestId,
-        action: 'previewProposed',
-      });
+      yield* onRuntime(
+        controller.handleAction({
+          requestId: request.requestId,
+          action: 'previewProposed',
+        }),
+      );
       yield* Effect.tryPromise(() =>
         vi.waitFor(() => expect(opened).toHaveLength(1)),
       );
@@ -461,10 +500,12 @@ describe('desktop tool edit approval', () => {
         writeFile(opened[0], 'beta\nwith user edits\nand more\n', 'utf8'),
       );
 
-      controller.handleAction({
-        requestId: request.requestId,
-        action: 'approve',
-      });
+      yield* onRuntime(
+        controller.handleAction({
+          requestId: request.requestId,
+          action: 'approve',
+        }),
+      );
 
       expect(yield* Fiber.join(result)).toMatchObject({
         action: 'apply',
@@ -511,13 +552,17 @@ describe('desktop tool edit approval', () => {
         const [request] = yield* waitForPreviews();
         const { requestId } = request;
 
-        controller.handleAction({ requestId, action: 'previewProposed' });
+        yield* onRuntime(
+          controller.handleAction({ requestId, action: 'previewProposed' }),
+        );
         yield* Effect.tryPromise(() =>
           vi.waitFor(() => expect(opened).toHaveLength(1)),
         );
         yield* Effect.tryPromise(() => rm(opened[0]));
 
-        controller.handleAction({ requestId, action: 'approve' });
+        yield* onRuntime(
+          controller.handleAction({ requestId, action: 'approve' }),
+        );
 
         yield* Effect.tryPromise(() =>
           vi.waitFor(() => expect(messages).toHaveLength(1)),
@@ -527,7 +572,9 @@ describe('desktop tool edit approval', () => {
         yield* Effect.tryPromise(() =>
           writeFile(opened[0], 'beta after retry\r\n', 'utf8'),
         );
-        controller.handleAction({ requestId, action: 'approve' });
+        yield* onRuntime(
+          controller.handleAction({ requestId, action: 'approve' }),
+        );
 
         expect(yield* Fiber.join(result)).toMatchObject({
           action: 'apply',
@@ -565,10 +612,12 @@ describe('desktop tool edit approval', () => {
         );
         const [request] = yield* waitForPreviews();
 
-        controller.handleAction({
-          requestId: request.requestId,
-          action: 'showLatexdiff',
-        });
+        yield* onRuntime(
+          controller.handleAction({
+            requestId: request.requestId,
+            action: 'showLatexdiff',
+          }),
+        );
 
         yield* Effect.tryPromise(() =>
           vi.waitFor(() => expect(runLatexdiff).toHaveBeenCalledOnce()),
@@ -591,10 +640,12 @@ describe('desktop tool edit approval', () => {
         );
         expect(result.pollUnsafe()).toBeUndefined();
 
-        controller.handleAction({
-          requestId: request.requestId,
-          action: 'reject',
-        });
+        yield* onRuntime(
+          controller.handleAction({
+            requestId: request.requestId,
+            action: 'reject',
+          }),
+        );
         expect(yield* Fiber.join(result)).toMatchObject({ action: 'reject' });
       }),
   );
@@ -641,10 +692,12 @@ describe('desktop tool edit approval', () => {
         );
         const [request] = yield* waitForPreviews();
 
-        controller.handleAction({
-          requestId: request.requestId,
-          action: 'previewProposed',
-        });
+        yield* onRuntime(
+          controller.handleAction({
+            requestId: request.requestId,
+            action: 'previewProposed',
+          }),
+        );
 
         yield* Effect.tryPromise(() =>
           vi.waitFor(() => {
@@ -662,10 +715,12 @@ describe('desktop tool edit approval', () => {
 
         // The request's own decision releases the preview and everything the
         // LaTeX inspection staged beside it.
-        controller.handleAction({
-          requestId: request.requestId,
-          action: 'reject',
-        });
+        yield* onRuntime(
+          controller.handleAction({
+            requestId: request.requestId,
+            action: 'reject',
+          }),
+        );
         expect(yield* Fiber.join(result)).toMatchObject({ action: 'reject' });
         yield* Effect.tryPromise(() =>
           vi.waitFor(async () => {
@@ -699,7 +754,7 @@ describe('desktop tool edit approval', () => {
         );
         yield* waitForPreviews();
 
-        controller.dispose();
+        yield* onRuntime(controller.dispose());
 
         yield* waitForStagedCleanup();
       }),

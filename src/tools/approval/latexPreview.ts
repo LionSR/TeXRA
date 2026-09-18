@@ -2,14 +2,14 @@
  * LaTeX preview and diff operations for tool edit approval.
  * Handles creating temp files, running latexdiff, and building PDFs.
  *
- * Both previews are Effect programs the approval controller runs through its
- * host's runner, so the process runtime is the host's and nothing here runs a
- * fiber.
+ * Both previews are Effect programs the approval controller composes into its
+ * own; the fiber they run on is the one a host gave that controller, and
+ * nothing here runs one.
  */
 
 import path from 'node:path';
 
-import { Cause, Effect, FileSystem } from 'effect';
+import { Cause, Deferred, Effect, FileSystem } from 'effect';
 import { sync as globSync } from 'glob';
 
 import { TEMP_EXTENSIONS } from '@housekeeping/constants';
@@ -42,9 +42,9 @@ interface LatexPreviewDisplayOptions {
 export interface LatexPreviewEntry {
   /**
    * The request this preview belongs to. `workspacePath` is the session root
-   * the temp files are placed under; these programs run on the host's own
-   * runner, outside the tool call, so it rides the request rather than being
-   * read from an ambient workspace scope.
+   * the temp files are placed under; these programs run outside the tool
+   * call, so it rides the request rather than being read from an ambient
+   * workspace scope.
    */
   request: { path: string; workspacePath?: string | undefined };
   originalUri: { fsPath: string };
@@ -53,10 +53,10 @@ export interface LatexPreviewEntry {
   proposedContent: string;
   isSettled: () => boolean;
   /**
-   * Resolves when the request settles. A preview still running then is
+   * Filled when the request settles. A preview still running then is
    * interrupted, which stops its latexdiff subprocess.
    */
-  settled: Promise<void>;
+  settled: Deferred.Deferred<void>;
   /** Removals of the temp files the previews wrote, run when the request settles. */
   workspaceTempCleanup: Array<
     Effect.Effect<void, never, FileSystem.FileSystem>
@@ -146,7 +146,7 @@ const withLatexOperation = (
     if (entry.latexOperationInProgress) return Effect.void;
     entry.latexOperationInProgress = true;
     return operation.pipe(
-      Effect.raceFirst(Effect.promise(() => entry.settled)),
+      Effect.raceFirst(Deferred.await(entry.settled)),
       Effect.catchCause((cause) =>
         Cause.hasInterruptsOnly(cause)
           ? Effect.interrupt

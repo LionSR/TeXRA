@@ -10,7 +10,15 @@
 import * as path from 'node:path';
 
 import * as vscode from 'vscode';
-import { Effect, Exit, Fiber, Scope, Stream, SubscriptionRef } from 'effect';
+import {
+  Cause,
+  Effect,
+  Exit,
+  Fiber,
+  Scope,
+  Stream,
+  SubscriptionRef,
+} from 'effect';
 
 import { getAgent, refresh } from '@agent/index';
 import type { AgentTrace } from '@agent/trace';
@@ -277,11 +285,9 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       requestId,
       decision,
     ) =>
-      this.runtime.runPromise(
-        session.requests
-          .request({ kind: 'request.decide', runId, requestId, decision })
-          .pipe(Effect.asVoid),
-      );
+      session.requests
+        .request({ kind: 'request.decide', runId, requestId, decision })
+        .pipe(Effect.asVoid);
     this.toolEditApprovals = new ToolEditApprovalController({
       host: new VscodeToolEditApprovalHost(
         path.join(storageRoot.fsPath, 'tool-edit-previews'),
@@ -295,16 +301,19 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     // would replay. A failed run does not chime.
     const sessionEvents = this.runtime.runFork(
       Stream.runForEach(session.events.all(session.now()), (event) =>
-        Effect.sync(() => {
-          this.toolEditApprovals.handleSessionEvent(event);
-          if (
-            event.type === 'run.end' &&
-            event.output.category === 'workflow' &&
-            event.outcome !== 'failed'
-          ) {
-            this.chime();
-          }
-        }),
+        this.toolEditApprovals.handleSessionEvent(event).pipe(
+          Effect.andThen(
+            Effect.sync(() => {
+              if (
+                event.type === 'run.end' &&
+                event.output.category === 'workflow' &&
+                event.outcome !== 'failed'
+              ) {
+                this.chime();
+              }
+            }),
+          ),
+        ),
       ),
     );
     this.disposables.push({
@@ -365,15 +374,12 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       // Staging is the host's half of a `request.opened`; the fold lists the
       // request either way, so a staging failure is reported, never swallowed.
       presentToolEdit: (request) => {
-        const staged = Effect.tryPromise(() =>
-          this.toolEditApprovals.present(request),
-        );
         this.runtime.runFork(
-          staged.pipe(
-            Effect.catch((error) =>
+          this.toolEditApprovals.present(request).pipe(
+            Effect.catchCause((cause) =>
               Effect.sync(() => {
                 this.logger.error('Tool edit preview staging failed', {
-                  data: error.cause,
+                  data: Cause.squash(cause),
                 });
               }),
             ),
@@ -384,7 +390,11 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       // decision to release it; this is that release, and the promise it
       // returns is what the session waits on: closing the diff view and
       // deleting the temp files behind it is asynchronous.
-      releaseToolEdit: (requestId) => this.toolEditApprovals.release(requestId),
+      // The one run of a controller program the session itself waits on:
+      // closing the diff view and deleting the temp files behind it is
+      // asynchronous, and the refusal is not reported until it is done.
+      releaseToolEdit: (requestId) =>
+        this.runtime.runPromise(this.toolEditApprovals.release(requestId)),
     });
     // Terminal-error toasts come from the run's `result` event: this
     // re-emits `requestShow*` through the session's interactions, reaching
@@ -397,7 +407,11 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     this.disposables.push(
       { dispose: detachHostInteractions },
       { dispose: detachTerminalResultToast },
-      { dispose: () => this.toolEditApprovals.dispose() },
+      {
+        dispose: () => {
+          this.runtime.runFork(this.toolEditApprovals.dispose());
+        },
+      },
     );
 
     this.watchWorkspace();

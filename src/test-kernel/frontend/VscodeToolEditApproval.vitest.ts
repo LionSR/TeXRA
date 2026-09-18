@@ -1,6 +1,7 @@
 import { rm } from 'node:fs/promises';
 import path from 'node:path';
 
+import { Effect, type FileSystem } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { SessionHandle } from '@agent/runtime';
@@ -101,12 +102,20 @@ type DecideSpy = ReturnType<typeof createDecideSpy>;
 
 function createDecideSpy() {
   return vi.fn(
-    async (
+    (
       _runId: RunId,
       _requestId: string,
       _decision: RequestDecision,
-    ): Promise<void> => undefined,
+    ): Effect.Effect<void> => Effect.void,
   );
+}
+
+/** The host wiring point's run: `ProgressViewProvider` gives the controller's
+ *  verbs the window's process runtime, and so does this suite. */
+function onRuntime<A, E>(
+  program: Effect.Effect<A, E, FileSystem.FileSystem>,
+): Promise<A> {
+  return effectRuntime().runPromise(program);
 }
 
 interface ApprovalHarness {
@@ -155,7 +164,7 @@ function requestApproval(
     sourceTool: 'write_file',
     runId,
   });
-  const presented = controller.present(request);
+  const presented = onRuntime(controller.present(request));
   presentations.push(presented);
   return { presented, requestId: request.permission.requestId };
 }
@@ -206,7 +215,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   for (const { controller } of harnesses.splice(0)) {
-    controller.dispose();
+    await onRuntime(controller.dispose());
   }
   await Promise.allSettled(presentations.splice(0));
 });
@@ -221,7 +230,7 @@ describe('VS Code tool edit approval', () => {
     );
 
     await expect(
-      controller.approvePendingForRun('run-initializing' as RunId),
+      onRuntime(controller.approvePendingForRun('run-initializing' as RunId)),
     ).resolves.toBeUndefined();
     await presented;
 
@@ -238,7 +247,7 @@ describe('VS Code tool edit approval', () => {
     const { controller, decide, requestId } = await startApproval();
 
     await expect(
-      controller.approvePendingForRun('run-approval' as RunId),
+      onRuntime(controller.approvePendingForRun('run-approval' as RunId)),
     ).resolves.toBeUndefined();
 
     expect(decide).toHaveBeenCalledWith('run-approval', requestId, {
@@ -273,7 +282,9 @@ describe('VS Code tool edit approval', () => {
       ).toHaveLength(3),
     );
 
-    await target.controller.approvePendingForRun('run-target' as RunId);
+    await onRuntime(
+      target.controller.approvePendingForRun('run-target' as RunId),
+    );
 
     // One request decided: this controller's own, on that run. The other
     // run's request and the other session's request for the same run are
@@ -291,7 +302,7 @@ describe('VS Code tool edit approval', () => {
     const proposedUri = currentProposedUri();
     await rm(proposedUri.fsPath);
 
-    controller.handleAction({ requestId, action: 'approve' });
+    await onRuntime(controller.handleAction({ requestId, action: 'approve' }));
 
     await vi.waitFor(() =>
       expect(vscodeMocks.showErrorMessage).toHaveBeenCalledOnce(),
@@ -303,7 +314,7 @@ describe('VS Code tool edit approval', () => {
 
     const getText = vi.fn(() => 'beta after retry\r\n');
     vscodeMocks.textDocuments.push({ uri: proposedUri, getText });
-    controller.handleAction({ requestId, action: 'approve' });
+    await onRuntime(controller.handleAction({ requestId, action: 'approve' }));
 
     await vi.waitFor(() =>
       expect(decide).toHaveBeenCalledWith('run-approval', requestId, {
@@ -322,7 +333,7 @@ describe('VS Code tool edit approval', () => {
       getText,
     });
 
-    controller.handleAction({ requestId, action: 'approve' });
+    await onRuntime(controller.handleAction({ requestId, action: 'approve' }));
 
     await vi.waitFor(() =>
       expect(decide).toHaveBeenCalledWith('run-approval', requestId, {
@@ -338,7 +349,9 @@ describe('VS Code tool edit approval', () => {
     const { controller, decide, requestId } = await startApproval();
     const proposedUri = currentProposedUri();
 
-    controller.handleAction({ requestId, action: 'previewProposed' });
+    await onRuntime(
+      controller.handleAction({ requestId, action: 'previewProposed' }),
+    );
 
     await vi.waitFor(() =>
       expect(vscodeMocks.showTextDocument).toHaveBeenCalledWith(
@@ -349,7 +362,7 @@ describe('VS Code tool edit approval', () => {
     expect(vscodeMocks.showErrorMessage).not.toHaveBeenCalled();
     expect(decide).not.toHaveBeenCalled();
 
-    controller.handleAction({ requestId, action: 'reject' });
+    await onRuntime(controller.handleAction({ requestId, action: 'reject' }));
     await vi.waitFor(() =>
       expect(decide).toHaveBeenCalledWith('run-approval', requestId, {
         action: 'reject',
