@@ -43,7 +43,7 @@ export const ELEMENT_IDS = {
   DIFF_STREAM_BTN: 'diffStreamBtn',
   CLEAN_STREAM_BTN: 'cleanStreamBtn',
   PACK_STREAM_BTN: 'packStreamBtn',
-  OPEN_TASK_STORAGE_BTN: 'openTaskStorageBtn',
+  OPEN_RUN_STORAGE_BTN: 'openRunStorageBtn',
   COPY_RUN_CONTEXT_BTN: 'copyRunContextBtn',
   COMPACT_RESPONSE_BTN: 'compactResponseBtn',
   TOOL_EDIT_TOGGLE_BTN: 'toolEditToggleBtn',
@@ -72,8 +72,8 @@ const RESTORE_STATE_BUTTON = Object.freeze({
   className: 'restore-button',
 });
 
-const OPEN_TASK_STORAGE_BUTTON = Object.freeze({
-  id: ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
+const OPEN_RUN_STORAGE_BUTTON = Object.freeze({
+  id: ELEMENT_IDS.OPEN_RUN_STORAGE_BTN,
   icon: 'folder-open',
   title: 'Open in task storage: reveal this run folder and generated files',
   className: 'storage-button',
@@ -110,7 +110,7 @@ const WORKFLOW_TOOLBAR: readonly ProgressToolbarButton[] = [
     className: 'run-button resume-button',
   },
   RESTORE_STATE_BUTTON,
-  OPEN_TASK_STORAGE_BUTTON,
+  OPEN_RUN_STORAGE_BUTTON,
   EXPORT_TRANSCRIPT_BUTTON,
   COPY_RUN_CONTEXT_BUTTON,
   {
@@ -181,7 +181,7 @@ const TOOL_USE_TOOLBAR: readonly ProgressToolbarButton[] = [
   AUTO_TASK_TOGGLE_BUTTON,
   COMPACT_RESPONSE_BUTTON,
   RESTORE_STATE_BUTTON,
-  OPEN_TASK_STORAGE_BUTTON,
+  OPEN_RUN_STORAGE_BUTTON,
   EXPORT_TRANSCRIPT_BUTTON,
 ];
 
@@ -197,6 +197,6 @@ export const TOOLBAR_BUTTONS = {
  */
 export const NEUTRAL_TOOLBAR: readonly ProgressToolbarButton[] = [
   STOP_STREAM_BUTTON,
-  OPEN_TASK_STORAGE_BUTTON,
+  OPEN_RUN_STORAGE_BUTTON,
   EXPORT_TRANSCRIPT_BUTTON,
 ];

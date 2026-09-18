@@ -570,9 +570,9 @@ export function executeAgent(
                 try: () => ensureRunDirUnder(runSession.roots.storage, runId),
                 catch: ensureError,
               });
-              logger.info(`Starting task run (runId: ${runId})`);
+              logger.info(`Starting run (runId: ${runId})`);
               logger.info(`Input file: ${config.inputFiles[0] ?? '(none)'}`);
-              logger.debug('Task run details', {
+              logger.debug('Run details', {
                 data: {
                   runId,
                   agent: config.agent,

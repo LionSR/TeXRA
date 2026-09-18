@@ -71,7 +71,7 @@ export class ProgressWorkflowFileActionsController {
     }
   }
 
-  async openTaskStorage(runId: RunId): Promise<void> {
+  async openRunStorage(runId: RunId): Promise<void> {
     try {
       const storageRoot = this.deps.storageRoot;
       let directoryToReveal = await findRunDirUnder(storageRoot, runId);

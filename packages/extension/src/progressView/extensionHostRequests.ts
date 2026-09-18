@@ -902,9 +902,9 @@ export function createExtensionHostRequests(
           }
           return done;
         }
-        case 'openTaskStorage':
-          yield* fromHost('workflowFileActions.openTaskStorage', () =>
-            workflowFileActions.openTaskStorage(request.runId),
+        case 'openRunStorage':
+          yield* fromHost('workflowFileActions.openRunStorage', () =>
+            workflowFileActions.openRunStorage(request.runId),
           );
           return done;
         case 'exportTranscript':

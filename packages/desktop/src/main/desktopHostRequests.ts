@@ -741,10 +741,10 @@ export function createDesktopHostRequests(
           }
           return done;
         }
-        case 'openTaskStorage': {
+        case 'openRunStorage': {
           const { runId } = request;
-          yield* fromHost('workflowFileActions.openTaskStorage', () =>
-            workflowFileActions.openTaskStorage(runId),
+          yield* fromHost('workflowFileActions.openRunStorage', () =>
+            workflowFileActions.openRunStorage(runId),
           );
           return done;
         }
