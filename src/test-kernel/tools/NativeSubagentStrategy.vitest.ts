@@ -178,7 +178,7 @@ function mockLaunchPublishing(
   afterRun?: () => void,
 ): void {
   mocks.executeAgent.mockImplementationOnce(async (_config, _id, options) => {
-    options.onRun?.(handle);
+    Effect.runSync(options.onRun?.(handle) ?? Effect.void);
     afterRun?.();
     return toolUseTurnResult(outcome, CHILD_RUN_ID);
   });
@@ -223,10 +223,12 @@ function launchWaitingTurn(params: BaseParams, strategy: Strategy) {
     yield* runOnFakeHost(
       strategy.launch(fakePorts(), new AbortController().signal),
     );
-    mocks.executeAgent.mock.calls.at(-1)?.[2].onRun?.({
-      runId: CHILD_RUN_ID,
-      deliveryTarget: params.parentRunId,
-    });
+    Effect.runSync(
+      mocks.executeAgent.mock.calls.at(-1)?.[2].onRun?.({
+        runId: CHILD_RUN_ID,
+        deliveryTarget: params.parentRunId,
+      }) ?? Effect.void,
+    );
   });
 }
 
@@ -274,10 +276,12 @@ describe('NativeSubagentStrategy', () => {
 
         mocks.executeAgent.mockImplementationOnce(
           async (_config, _id, options) => {
-            options.onRun?.({
-              runId: CHILD_RUN_ID,
-              deliveryTarget: params.parentRunId,
-            });
+            Effect.runSync(
+              options.onRun?.({
+                runId: CHILD_RUN_ID,
+                deliveryTarget: params.parentRunId,
+              }) ?? Effect.void,
+            );
             return toolUseTurnResult(RUN_PHASE.WAITING, params.runId);
           },
         );
@@ -301,7 +305,7 @@ describe('NativeSubagentStrategy', () => {
         };
         mocks.executeAgent.mockImplementationOnce(
           async (_config, _id, options) => {
-            options.onRun?.(liveHandle);
+            Effect.runSync(options.onRun?.(liveHandle) ?? Effect.void);
             return toolUseTurnResult(RUN_PHASE.WAITING, params.runId);
           },
         );
@@ -519,7 +523,9 @@ describe('NativeSubagentStrategy', () => {
         };
         mocks.executeAgent.mockImplementationOnce(
           async (_config, _id, options) => {
-            options.onRun?.(initialHandle as never);
+            Effect.runSync(
+              options.onRun?.(initialHandle as never) ?? Effect.void,
+            );
             return toolUseTurnResult(RUN_PHASE.WAITING, params.runId);
           },
         );
@@ -542,11 +548,13 @@ describe('NativeSubagentStrategy', () => {
         });
         mocks.resumeToolUseTurn.mockImplementationOnce(
           async (_resume, options) => {
-            options.onRun?.({
-              runId: CHILD_RUN_ID,
-              deliveryTarget: params.parentRunId,
-              interrupt: replacementInterrupt,
-            } as never);
+            Effect.runSync(
+              options.onRun?.({
+                runId: CHILD_RUN_ID,
+                deliveryTarget: params.parentRunId,
+                interrupt: replacementInterrupt,
+              } as never) ?? Effect.void,
+            );
             replacementReady();
             await new Promise<void>((resolve) =>
               turn.signal.addEventListener('abort', () => resolve(), {
@@ -747,7 +755,7 @@ describe('NativeSubagentStrategy', () => {
             publishFlowStep(session, childRunId, 'turn.begin');
             session.runs.track(handle);
             options.onRunResolved?.(childRunId);
-            options.onRun?.(handle);
+            Effect.runSync(options.onRun?.(handle) ?? Effect.void);
             publishFlowStep(session, childRunId, 'waiting');
             return waitingTurn('initial response');
           },
@@ -780,7 +788,7 @@ describe('NativeSubagentStrategy', () => {
                 ? []
                 : batch.followUps.map((followUp) => followUp.content),
             );
-            options.onRun?.(handle);
+            Effect.runSync(options.onRun?.(handle) ?? Effect.void);
             publishFlowStep(session, childRunId, 'waiting');
             return waitingTurn(
               `follow-up response ${mocks.resumeToolUseTurn.mock.calls.length}`,

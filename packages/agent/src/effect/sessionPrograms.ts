@@ -298,9 +298,10 @@ function start(
             { kind: 'fresh', config, runId },
             {
               approvalPromptsUnavailable: true,
-              onRun: (live) => {
-                handle = live;
-              },
+              onRun: (live) =>
+                Effect.sync(() => {
+                  handle = live;
+                }),
               onRunResolved: (_, runTrace) => {
                 detach = runTrace.subscribe((event) => {
                   if (!reading && (buffered += 1) > TRACE_HANDOVER_EVENTS) {

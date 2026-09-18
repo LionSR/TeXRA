@@ -394,7 +394,7 @@ export interface SubagentRunOptions {
     result: AgentFlowResult,
   ) => void | Promise<void>;
   /** Fires once with the live per-run handle right after it is tracked (F-2). */
-  onRun?: (handle: AgentRunHandle) => void | Promise<void>;
+  onRun?: (handle: AgentRunHandle) => Effect.Effect<void, Error>;
 }
 
 /** Options for executeAgent. */

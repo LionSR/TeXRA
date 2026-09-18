@@ -375,7 +375,7 @@ describe('runFlowWithLifecycle', () => {
       const { runId, ctx } = lifecycleFixture();
 
       // A live handle's kill settles to nothing, so the settlement is driven
-      // here rather than inside the promise-shaped `onRun` seam.
+      // here rather than inside the `onRun` seam.
       let stop: ReturnType<SessionHandle['runs']['kill']> | undefined;
       const result = yield* runFlow(
         ctx,
@@ -386,10 +386,11 @@ describe('runFlowWithLifecycle', () => {
             return toolUseResult(runId, RUN_OUTCOME.CANCELLED);
           }),
         {
-          onRun: async () => {
-            stop = testDefaultSession().runs.kill(runId);
-            expect(stop.accepted()).toBe(true);
-          },
+          onRun: () =>
+            Effect.sync(() => {
+              stop = testDefaultSession().runs.kill(runId);
+              expect(stop.accepted()).toBe(true);
+            }),
         },
       );
       if (!stop) throw new Error('onRun never ran');
@@ -412,16 +413,17 @@ describe('runFlowWithLifecycle', () => {
         });
 
         // A live handle's kill settles to nothing, so the settlement is driven
-        // here rather than inside the promise-shaped `onRun` seam.
+        // here rather than inside the `onRun` seam.
         let stop: ReturnType<SessionHandle['runs']['kill']> | undefined;
         const result = yield* runFlow(
           ctx,
           () => Effect.fail(new DOMException('Request aborted', 'AbortError')),
           {
-            onRun: async () => {
-              stop = testDefaultSession().runs.kill(runId);
-              expect(stop.accepted()).toBe(true);
-            },
+            onRun: () =>
+              Effect.sync(() => {
+                stop = testDefaultSession().runs.kill(runId);
+                expect(stop.accepted()).toBe(true);
+              }),
           },
         );
         if (!stop) throw new Error('onRun never ran');

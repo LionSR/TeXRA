@@ -94,7 +94,7 @@ export const runExecuteCommand = Effect.fn('runExecuteCommand')(function* (
     preferHelperModel: wrapped?.preferHelperModel ?? false,
     modelCompatibilityKey: wrapped?.modelCompatibilityKey,
     ownApiKeyFallback: wrapped?.ownApiKeyFallback,
-    onRun,
+    onRun: onRun && (() => Effect.sync(onRun)),
     onRunResolved: presentLaunchedProgressRun,
   });
 });

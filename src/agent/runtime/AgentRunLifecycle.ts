@@ -54,9 +54,11 @@ export interface RunFlowLifecycleOptions {
   /**
    * Fires once with the live per-run handle, right after it is tracked (F-2) —
    * the additive exposure of the control handle (`.trace`, `.result`, interrupt
-   * via `executions`). Throwing here must not abort the run, so it is guarded.
+   * via `executions`). Neither a failure of this program nor a throw while
+   * building it may abort the run, so the run forks it detached and logs
+   * whatever it ends on.
    */
-  onRun?: (handle: AgentRunHandle) => void | Promise<void>;
+  onRun?: (handle: AgentRunHandle) => Effect.Effect<void, Error>;
   /**
    * Run-end side effect supplied by the composition layer. The lifecycle owns
    * *when* it fires (terminal completion/failure, and the parked-handle
@@ -412,14 +414,11 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
       // Start observation at the same time as invocation. The callback may
       // run as long as the run does, so its observer must not hold up the
       // flow.
-      yield* Effect.tryPromise({
-        try: async () => onRun(handle),
-        catch: ensureError,
-      }).pipe(
-        Effect.catch((error) =>
+      yield* Effect.suspend(() => onRun(handle)).pipe(
+        Effect.catchCause((cause) =>
           Effect.sync(() => {
             logger.warn('onRun callback failed', {
-              data: { agentIdentifier, error },
+              data: { agentIdentifier, error: Cause.squash(cause) },
             });
           }),
         ),

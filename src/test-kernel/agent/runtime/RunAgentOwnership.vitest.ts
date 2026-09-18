@@ -541,7 +541,7 @@ describe('runAgent run ownership', () => {
       const launchError = new Error('flow failed');
       mocks.executeAgent.mockImplementationOnce(
         async (_config, _id, options) => {
-          options.onRun?.();
+          Effect.runSync(options.onRun?.() ?? Effect.void);
           throw launchError;
         },
       );
@@ -683,7 +683,8 @@ describe('runAgent run ownership', () => {
         }
         mocks.executeAgent.mockImplementationOnce(
           async (_config, _id, options) => {
-            if (lifecycleStarted) await options.onRun?.();
+            if (lifecycleStarted)
+              await Effect.runPromise(options.onRun?.() ?? Effect.void);
             throw runError;
           },
         );

@@ -346,8 +346,7 @@ class AgentReviewServiceImpl {
             openWorkflowOutput: openFinalOutputIfAvailable,
             stopAfterCycle: true,
             session: run.session,
-            onRun: (handle) =>
-              runtime.runPromise(this.reviewRuns.bind(run, handle)),
+            onRun: (handle) => this.reviewRuns.bind(run, handle),
             onRunResolved: presentLaunchedProgressRun,
           },
         ),

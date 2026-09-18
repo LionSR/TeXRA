@@ -279,10 +279,11 @@ export const runAgent = Effect.fn('runAgent')(function* (
               launchStopped,
               session: runSession,
               resumed: !shouldRegister,
-              onRun: async (handle) => {
-                lifecycleStarted = true;
-                await callerOnRun?.(handle);
-              },
+              onRun: (handle) =>
+                Effect.suspend(() => {
+                  lifecycleStarted = true;
+                  return callerOnRun?.(handle) ?? Effect.void;
+                }),
             });
           }),
         );
