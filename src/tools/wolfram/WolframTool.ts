@@ -81,20 +81,16 @@ const runWolfram = Effect.fn('WolframTool.execute')(function* (
 
   const effectiveTimeout = input.timeout ?? WOLFRAM_CODE_TIMEOUT_MS;
   // `runToolWithCheck` answers `false` for a missing `wolframscript` and
-  // reports a failed run in its `ExecResult`; neither path rejects, so the
-  // spawn carries no error channel. The fiber's signal reaches
-  // `executeCommand`, so interrupting the tool kills the process.
-  const result = yield* Effect.promise((signal) =>
-    ports.runTool('wolframscript', ['-code', input.code], {
-      cwd: ports.cwd,
-      settings: ports.settings,
-      showError: false,
-      truncate: false,
-      timeout: effectiveTimeout,
-      channel: 'WolframTool',
-      signal,
-    }),
-  );
+  // reports a failed run in its `ExecResult`. Interrupting the tool kills the
+  // process: the interruption is what aborts the spawn.
+  const result = yield* ports.runTool('wolframscript', ['-code', input.code], {
+    cwd: ports.cwd,
+    settings: ports.settings,
+    showError: false,
+    truncate: false,
+    timeout: effectiveTimeout,
+    channel: 'WolframTool',
+  });
   if (!result) {
     return yield* Effect.fail(new ToolError(WOLFRAM_NOT_INSTALLED_ERROR));
   }

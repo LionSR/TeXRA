@@ -46,7 +46,7 @@ const mocks = vi.hoisted(() => ({
     ): Effect.Effect<CompileLatex2PdfResult> =>
       Effect.succeed({ ok: true, pdfPath: COMPILED_PDF }),
   ),
-  hasLatexCompiler: vi.fn(async () => true),
+  hasLatexCompiler: vi.fn((): Effect.Effect<boolean> => Effect.succeed(true)),
 }));
 
 vi.mock('@latex/texTools', () => ({
@@ -91,7 +91,7 @@ describe('runCompileCheck', () => {
     mocks.compileLatex2Pdf
       .mockReset()
       .mockReturnValue(Effect.succeed({ ok: true, pdfPath: COMPILED_PDF }));
-    mocks.hasLatexCompiler.mockReset().mockResolvedValue(true);
+    mocks.hasLatexCompiler.mockReset().mockReturnValue(Effect.succeed(true));
   });
 
   it.live('counts a per-file exception as a failure, never a silent skip', () =>

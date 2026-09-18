@@ -484,10 +484,9 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
     installUrl: 'https://app.uio.no/ifi/texcount/',
     configNotes: 'Part of most TeX Live distributions.',
     hideFromDashboard: true, // Shown in LaTeX settings tab instead
-    // The fiber's signal reaches the spawned `texcount --version`, so an
-    // interrupted dashboard refresh kills the probe instead of abandoning it.
-    check: () =>
-      Effect.promise((signal) => checkToolInstalled('texcount', false, signal)),
+    // Interruption reaches the spawned `texcount --version`, so an interrupted
+    // dashboard refresh kills the probe instead of abandoning it.
+    check: () => checkToolInstalled('texcount', false),
   },
   {
     id: 'wolfram',
@@ -507,10 +506,7 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
       'it automatically. Free licenses are available for development use.',
     installUrl: 'https://www.wolfram.com/engine/',
     configNotes: 'Requires the free Wolfram Engine (provides wolframscript).',
-    check: () =>
-      Effect.promise((signal) =>
-        checkToolInstalled('wolframscript', false, signal),
-      ),
+    check: () => checkToolInstalled('wolframscript', false),
   },
   {
     id: 'zotero',

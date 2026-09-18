@@ -13,7 +13,6 @@ import { filterNotNullish, unique } from '@utils/core';
 import { pathToLocationIn } from '@utils/files/fileLocation';
 import { RunFileService } from '@utils/files/runStorage';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { fsCall } from '@utils/errors/fsCall';
 import { getExtensionLowercase, hasExtension } from '@utils/core/pathCore';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 

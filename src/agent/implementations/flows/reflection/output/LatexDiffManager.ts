@@ -24,7 +24,6 @@ import { RunFileService } from '@utils/files/runStorage';
 import { checkToolInstalled } from '@utils/system/toolUtils';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { fsCall } from '@utils/errors/fsCall';
 
 import {
   publishCompiledPdfArtifact,
@@ -145,7 +144,7 @@ export class LatexDiffManager {
     FileSystem.FileSystem | WorkspaceFs
   > {
     const execute = Effect.gen({ self: this }, function* () {
-      if (!(yield* fsCall(() => checkToolInstalled('latexdiff')))) {
+      if (!(yield* checkToolInstalled('latexdiff'))) {
         this.logger.warn(
           'Skipping latexdiff operations - latexdiff not installed',
         );

@@ -250,22 +250,15 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
               }),
           ),
         ),
+      // Already an Effect program, and one that answers a failed probe as a
+      // missing tool rather than failing, so the banner reads it directly.
       dependencyBanner: () =>
-        Effect.tryPromise({
-          try: async () => {
-            const missingTools = await checkCoreDependencies(false);
-            return {
-              visible: missingTools.length > 0,
-              missingTools: [...missingTools],
-            };
-          },
-          catch: (cause) =>
-            new HostSnapshotReadFailed({
-              member: 'dependencyBanner',
-              message: 'The external tool dependencies could not be probed.',
-              cause,
-            }),
-        }),
+        checkCoreDependencies(false).pipe(
+          Effect.map((missingTools) => ({
+            visible: missingTools.length > 0,
+            missingTools: [...missingTools],
+          })),
+        ),
       onError: (error) => {
         this.logger.error('Host snapshot refresh failed', { data: error });
       },

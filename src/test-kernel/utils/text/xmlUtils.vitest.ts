@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 import { addCdataToTagsMultiple, removeCDATA } from '@utils/text/xmlCdata';
 import { formatContent } from '@utils/text/xmlConversion';
@@ -7,7 +8,7 @@ import { formatContent } from '@utils/text/xmlConversion';
 // different output depending on whether `pandoc` happens to be installed.
 vi.mock('@utils/system/toolUtils', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@utils/system/toolUtils')>()),
-  checkToolInstalled: async () => false,
+  checkToolInstalled: () => Effect.succeed(false),
 }));
 
 describe('xmlUtils CDATA handling', () => {

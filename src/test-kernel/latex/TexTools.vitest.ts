@@ -84,7 +84,9 @@ describe('compileLatex2Pdf structured return', () => {
     'returns { ok: true } with the engine PDF path and no logTail on success',
     () =>
       Effect.gen(function* () {
-        mocks.runToolWithCheck.mockResolvedValue(execResult(true));
+        mocks.runToolWithCheck.mockReturnValue(
+          Effect.succeed(execResult(true)),
+        );
 
         const result = yield* compile();
 
@@ -105,7 +107,9 @@ describe('compileLatex2Pdf structured return', () => {
     'surfaces the last 200 lines of the engine log as logTail on a failed compile',
     () =>
       Effect.gen(function* () {
-        mocks.runToolWithCheck.mockResolvedValue(execResult(false));
+        mocks.runToolWithCheck.mockReturnValue(
+          Effect.succeed(execResult(false)),
+        );
 
         const outputDirectory = path.join(workspacePath, 'build');
         // Zero-padded so containment checks below can't be fooled by numeric
@@ -128,7 +132,7 @@ describe('compileLatex2Pdf structured return', () => {
 
   it.live('finds the engine log for a .ltx source, not just .tex', () =>
     Effect.gen(function* () {
-      mocks.runToolWithCheck.mockResolvedValue(execResult(false));
+      mocks.runToolWithCheck.mockReturnValue(Effect.succeed(execResult(false)));
 
       const outputDirectory = path.join(workspacePath, 'build.ltx');
       // The engine always names the log after the source with ITS OWN
@@ -148,7 +152,9 @@ describe('compileLatex2Pdf structured return', () => {
     'falls back to a discoverable placeholder when no engine log exists on disk',
     () =>
       Effect.gen(function* () {
-        mocks.runToolWithCheck.mockResolvedValue(execResult(false));
+        mocks.runToolWithCheck.mockReturnValue(
+          Effect.succeed(execResult(false)),
+        );
 
         const logTail = failedLogTail(
           yield* compile(
@@ -165,8 +171,8 @@ describe('compileLatex2Pdf structured return', () => {
     'surfaces the exception message as logTail when the compiler invocation throws',
     () =>
       Effect.gen(function* () {
-        mocks.runToolWithCheck.mockRejectedValue(
-          new Error('boom: pdflatex crashed'),
+        mocks.runToolWithCheck.mockReturnValue(
+          Effect.fail(new Error('boom: pdflatex crashed')),
         );
 
         const logTail = failedLogTail(yield* compile());
@@ -194,8 +200,8 @@ describe('compileLatex2Pdf logger seam', () => {
     () =>
       Effect.gen(function* () {
         mocks.runToolWithCheck
-          .mockResolvedValueOnce(false)
-          .mockResolvedValueOnce(execResult(true));
+          .mockReturnValueOnce(Effect.succeed(false))
+          .mockReturnValueOnce(Effect.succeed(execResult(true)));
         const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
 
         const result = yield* compile();

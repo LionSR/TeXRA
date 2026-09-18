@@ -146,7 +146,7 @@ function createFixture(overrides: Partial<ControllerOptions> = {}) {
       },
     },
     latexToolingController: new LatexToolingController({
-      checkToolInstalled: async () => false,
+      checkToolInstalled: () => Effect.succeed(false),
       findPath: () => null,
       detectPackageManager: () => null,
       getPlatform: () => 'linux',
@@ -204,23 +204,28 @@ describe('DefaultDesktopToolingSettingsController', () => {
     controller.postLatexConfigValues();
     await controller.postStartupData();
 
-    expect(posted.map(commandOf)).toEqual([
-      SETTINGS_VIEW_COMMANDS.UPDATE_SETTINGS_SNAPSHOT,
-      SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD,
-      SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_SETTINGS_STATUS,
-    ]);
+    const startup = posted.map(commandOf);
+    expect(startup[0]).toBe(SETTINGS_VIEW_COMMANDS.UPDATE_SETTINGS_SNAPSHOT);
+    // `postStartupData` fans the dashboard and LaTeX reads out with
+    // `Promise.all`, so which of the two posts first is not a contract; that
+    // both land before the refresh repaint below is.
+    expect([...startup.slice(1)].sort()).toEqual(
+      [
+        SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD,
+        SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_SETTINGS_STATUS,
+      ].sort(),
+    );
     // A cold probe cache stays `undefined` so the dashboard build runs the
     // probes; coercing it to `[]` would render "zero external tools".
     expect(buildInputs).toEqual([undefined]);
 
     finishRefresh?.();
     await vi.waitFor(() => {
-      expect(posted.map(commandOf)).toEqual([
-        SETTINGS_VIEW_COMMANDS.UPDATE_SETTINGS_SNAPSHOT,
+      const repainted = posted.map(commandOf);
+      expect(repainted).toHaveLength(4);
+      expect(repainted.at(-1)).toBe(
         SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD,
-        SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_SETTINGS_STATUS,
-        SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD,
-      ]);
+      );
     });
   });
 

@@ -53,7 +53,9 @@ const roots = createFakeWorkspaceRoots();
 async function loadDesktopPreviewHost(
   compileLatex2Pdf: FakeCompile = fakeCompiler(),
   access?: (filePath: string) => Promise<void>,
-  checkToolInstalled = vi.fn(async () => true),
+  checkToolInstalled = vi.fn((): Effect.Effect<boolean> =>
+    Effect.succeed(true),
+  ),
 ): Promise<typeof import('@desktop/main/desktopPreviewHost')> {
   vi.resetModules();
   const { initProcessWorkspaceRoots } =
@@ -311,7 +313,9 @@ describe('desktop preview host', () => {
 
   it('opens compile-preview PDF targets without running LaTeX', async () => {
     const compileLatex2Pdf = fakeCompiler();
-    const checkToolInstalled = vi.fn(async () => true);
+    const checkToolInstalled = vi.fn((): Effect.Effect<boolean> =>
+      Effect.succeed(true),
+    );
     const { createDesktopPreviewHost } = await loadDesktopPreviewHost(
       compileLatex2Pdf,
       undefined,
@@ -332,7 +336,9 @@ describe('desktop preview host', () => {
 
   it('reports missing LaTeX toolchains before compiling preview sources', async () => {
     const compileLatex2Pdf = fakeCompiler();
-    const checkToolInstalled = vi.fn(async () => false);
+    const checkToolInstalled = vi.fn((): Effect.Effect<boolean> =>
+      Effect.succeed(false),
+    );
     const { createDesktopPreviewHost } = await loadDesktopPreviewHost(
       compileLatex2Pdf,
       undefined,

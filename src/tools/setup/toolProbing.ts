@@ -38,13 +38,11 @@ export const locateTool = Effect.fn('locateTool')(function* (
   name: string,
 ): Effect.fn.Return<ToolStatus> {
   // With `showError` false the probe reports a missing tool as `false` and
-  // has no rejection path of its own, so the read carries no error channel.
-  // The fiber's signal reaches the spawned `<tool> --version`, so interrupting
-  // a probe kills the processes — several at once, since the core tools are
+  // has no failure of its own, so the read carries no error channel.
+  // Interruption reaches the spawned `<tool> --version`, so interrupting a
+  // probe kills the processes — several at once, since the core tools are
   // probed concurrently — instead of leaving them to run out their timeout.
-  const knownInstalled = yield* Effect.promise((signal) =>
-    checkToolInstalled(name, false, signal),
-  );
+  const knownInstalled = yield* checkToolInstalled(name, false);
   const resolvedPath = BinaryResolver.findPath(name);
   return {
     name,

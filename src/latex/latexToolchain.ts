@@ -1,3 +1,5 @@
+import { Effect } from 'effect';
+
 import {
   CORE_LATEX_TOOLS,
   SUPPORTED_LATEX_COMPILERS,
@@ -61,29 +63,41 @@ const TOOL_PURPOSES: Record<LatexToolName, string> = {
 const REQUIRED_TOOLS = new Set<LatexToolName>(['latexmk']);
 
 /** Probe the LaTeX tools used by both the extension and CLI surfaces. */
-export async function probeLatexToolchain(): Promise<LatexToolchainProbe> {
-  const toolNames = Object.keys(TOOL_PURPOSES) as LatexToolName[];
-  const tools = await Promise.all(
-    toolNames.map(async (name): Promise<LatexToolStatus> => ({
-      name,
-      installed: await checkToolInstalled(name, false),
-      required: REQUIRED_TOOLS.has(name),
-      purpose: TOOL_PURPOSES[name],
-    })),
-  );
-  const installed = new Set(
-    tools.filter((tool) => tool.installed).map((tool) => tool.name),
-  );
-  return {
-    tools,
-    hasCompiler: SUPPORTED_LATEX_COMPILERS.some((name) => installed.has(name)),
-  };
-}
+export const probeLatexToolchain = Effect.fn('latex.probeLatexToolchain')(
+  function* (): Effect.fn.Return<LatexToolchainProbe> {
+    const toolNames = Object.keys(TOOL_PURPOSES) as LatexToolName[];
+    const tools = yield* Effect.all(
+      toolNames.map((name) =>
+        Effect.map(
+          checkToolInstalled(name, false),
+          (installed): LatexToolStatus => ({
+            name,
+            installed,
+            required: REQUIRED_TOOLS.has(name),
+            purpose: TOOL_PURPOSES[name],
+          }),
+        ),
+      ),
+      { concurrency: 'unbounded' },
+    );
+    const installed = new Set(
+      tools.filter((tool) => tool.installed).map((tool) => tool.name),
+    );
+    return {
+      tools,
+      hasCompiler: SUPPORTED_LATEX_COMPILERS.some((name) =>
+        installed.has(name),
+      ),
+    };
+  },
+);
 
 /** Returns true when a compiler {@link compileLatex2Pdf} can drive is on PATH. */
-export async function hasLatexCompiler(): Promise<boolean> {
-  for (const tool of SUPPORTED_LATEX_COMPILERS) {
-    if (await checkToolInstalled(tool, false)) return true;
-  }
-  return false;
-}
+export const hasLatexCompiler = Effect.fn('latex.hasLatexCompiler')(
+  function* (): Effect.fn.Return<boolean> {
+    for (const tool of SUPPORTED_LATEX_COMPILERS) {
+      if (yield* checkToolInstalled(tool, false)) return true;
+    }
+    return false;
+  },
+);

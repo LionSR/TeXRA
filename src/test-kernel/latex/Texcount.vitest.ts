@@ -139,12 +139,14 @@ describe('texcount diagnostics', () => {
     () =>
       Effect.gen(function* () {
         yield* withPlatform();
-        mocks.runToolWithCheck.mockResolvedValue({
-          success: true,
-          stdout: 'Words in text: 5',
-          stderr: '',
-          exitCode: 0,
-        });
+        mocks.runToolWithCheck.mockReturnValue(
+          Effect.succeed({
+            success: true,
+            stdout: 'Words in text: 5',
+            stderr: '',
+            exitCode: 0,
+          }),
+        );
         const logs = captureLogEntries();
 
         const result = yield* getTeXCount(fakePath('workspace'), 'main.tex', {
@@ -177,12 +179,14 @@ describe('texcount diagnostics', () => {
         yield* withPlatform({
           '/workspace/main.tex': '\\documentclass{article}\n',
         });
-        mocks.runToolWithCheck.mockResolvedValue({
-          success: false,
-          stdout: 'partial output',
-          stderr: 'texcount exploded',
-          exitCode: 1,
-        });
+        mocks.runToolWithCheck.mockReturnValue(
+          Effect.succeed({
+            success: false,
+            stdout: 'partial output',
+            stderr: 'texcount exploded',
+            exitCode: 1,
+          }),
+        );
         const logs = captureLogEntries();
 
         const result = yield* getTeXCount(fakePath('workspace'), 'main.tex', {
