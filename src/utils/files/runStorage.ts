@@ -17,7 +17,7 @@ import {
   createRunStorageLocation,
   pathToLocationIn,
 } from './fileLocation';
-import { entryTypeAt } from './fsDurability';
+import { entryTypeIn } from './fsEntryExists';
 import {
   CHANNEL,
   createSymlink,
@@ -348,13 +348,19 @@ export class RunFileService {
             // link. Any other failure leaves the collision unknown, and
             // linking then replaces an EEXIST destination outright, so the
             // guard fails closed rather than disarming itself.
-            const destination = yield* entryTypeAt(destinationAbsolute).pipe(
+            const destination = yield* entryTypeIn(
+              fs,
+              destinationAbsolute,
+            ).pipe(
               Effect.map((type) =>
-                type === 'SymbolicLink' ? 'staleLink' : 'realFile',
+                type === undefined
+                  ? 'absent'
+                  : type === 'SymbolicLink'
+                    ? 'staleLink'
+                    : 'realFile',
               ),
               Effect.catch((error) =>
                 Effect.sync(() => {
-                  if (isAbsent(error)) return 'absent' as const;
                   log.warn(
                     `Skipping run-dir mirror of ${relativePath}: cannot stat the destination in ${relativeDirectory}: ${toErrorMessage(error)}`,
                   );

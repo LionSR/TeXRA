@@ -21,8 +21,7 @@ import { getPathSegments } from '@utils/core/pathCore';
 
 // Local file imports
 import { createRunStorageLocation } from './fileLocation';
-import { entryTypeAt } from './fsDurability';
-import { entryExists } from './fsEntryExists';
+import { entryExists, entryTypeIn } from './fsEntryExists';
 
 export const CHANNEL = 'runStorage';
 const log = createLog(CHANNEL);
@@ -84,26 +83,6 @@ type RunStorageEntryInspection =
   | { readonly kind: 'invalid'; readonly reason: string };
 
 /**
- * The entry's own type, or `undefined` when nothing is there. `lstat`-backed,
- * so a workspace-mirror symlink reports as the link rather than as what it
- * points at — the same reading the facade's probe gave, which set the
- * `SymbolicLink` bit the walk below tested first. Only absence is recovered;
- * every other failure propagates, as it did.
- */
-const storageEntryType = (
-  absolutePath: string,
-): Effect.Effect<
-  FileSystem.File.Type | undefined,
-  PlatformError.PlatformError
-> =>
-  entryTypeAt(absolutePath).pipe(
-    Effect.catchIf(
-      (error) => error.reason._tag === 'NotFound',
-      () => Effect.succeed(undefined),
-    ),
-  );
-
-/**
  * Inspect one run-relative run-storage entry under `storageRoot` without
  * following a workspace-mirror symlink.
  */
@@ -113,7 +92,12 @@ export const inspectRunStorageEntryUnder = Effect.fn(
   storageRoot: string,
   runId: RunId,
   relativePath: string,
-): Effect.fn.Return<RunStorageEntryInspection, PlatformError.PlatformError> {
+): Effect.fn.Return<
+  RunStorageEntryInspection,
+  PlatformError.PlatformError,
+  FileSystem.FileSystem
+> {
+  const fs = yield* FileSystem.FileSystem;
   const posixPath = relativePath.replaceAll('\\', '/');
   const pathSegments = getPathSegments(posixPath);
   if (
@@ -144,7 +128,7 @@ export const inspectRunStorageEntryUnder = Effect.fn(
   ];
   for (const ancestor of ancestors) {
     const ancestorPath = path.join(storageRoot, ancestor);
-    const ancestorType = yield* storageEntryType(ancestorPath);
+    const ancestorType = yield* entryTypeIn(fs, ancestorPath);
     if (ancestorType === undefined) return { kind: 'missing' };
     if (ancestorType === 'SymbolicLink') {
       return { kind: 'symlink', absolutePath: ancestorPath };
@@ -155,7 +139,7 @@ export const inspectRunStorageEntryUnder = Effect.fn(
   }
 
   const absolutePath = path.join(storageRoot, entry);
-  const type = yield* storageEntryType(absolutePath);
+  const type = yield* entryTypeIn(fs, absolutePath);
   if (type === undefined) return { kind: 'missing' };
   if (type === 'SymbolicLink') return { kind: 'symlink', absolutePath };
   if (type === 'File') {
@@ -288,7 +272,7 @@ export const createSymlink = Effect.fn('runStorage.createSymlink')(function* (
         log.warn(
           `Falling back to copy ${sourceAbsolute} -> ${destination} due to ${code}`,
         );
-        const sourceType = yield* entryTypeAt(sourceAbsolute);
+        const sourceType = yield* entryTypeIn(fs, sourceAbsolute);
         yield* sourceType === 'Directory'
           ? fs.copy(sourceAbsolute, destination, { overwrite: true })
           : fs.copyFile(sourceAbsolute, destination);

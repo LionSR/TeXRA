@@ -9,6 +9,7 @@ import {
 } from 'node:fs/promises';
 import * as path from 'node:path';
 
+import { Effect, type FileSystem } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { workspaceRoots } from '@platform/workspaceRoots';
 
@@ -16,6 +17,7 @@ import { MemoryStateStore } from '@platform/defaults/memoryState';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import { RunIdSchema } from '@shared/schemas';
+import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
@@ -27,6 +29,13 @@ import {
 import { RunFileService } from '@utils/files/runStorage';
 
 const tempDirs = useTempDirs();
+
+/** One of the file service's programs on the node `FileSystem` the process
+ *  runtime serves it with in production. */
+const runFileServiceProgram = <A, E>(
+  program: Effect.Effect<A, E, FileSystem.FileSystem>,
+): Promise<A> =>
+  Effect.runPromise(program.pipe(Effect.provide(nodePlatformLayer)));
 
 /**
  * Creates a temp workspace + storage pair backed by the real node filesystem
@@ -79,9 +88,11 @@ describe('round-dir ownership and editable .tex inheritance', () => {
     const runId = RunIdSchema.parse('a1a1a1a1a1a1');
     const fileService = new RunFileService(runId, workspaceRoots());
 
-    await fileService.mirrorWorkspaceFile(
-      createWorkspaceLocation(draftAbsolute, 'Draft/Draft.tex'),
-      { snapshot: true },
+    await runFileServiceProgram(
+      fileService.mirrorWorkspaceFile(
+        createWorkspaceLocation(draftAbsolute, 'Draft/Draft.tex'),
+        { snapshot: true },
+      ),
     );
 
     const snapshotPath = originalSnapshotPathUnder(
@@ -93,7 +104,7 @@ describe('round-dir ownership and editable .tex inheritance', () => {
       workspaceOriginal,
     );
 
-    await fileService.ensureMirroredInRoundDir(1);
+    await runFileServiceProgram(fileService.ensureMirroredInRoundDir(1));
 
     const roundFilePath = path.join(
       runDirUnder(workspaceRoots().storage, runId),
@@ -137,8 +148,10 @@ describe('round-dir ownership and editable .tex inheritance', () => {
     const runId = RunIdSchema.parse('b2b2b2b2b2b2');
     const fileService = new RunFileService(runId, workspaceRoots());
 
-    await fileService.mirrorWorkspaceFile(
-      createWorkspaceLocation(stylePath, 'macros.sty'),
+    await runFileServiceProgram(
+      fileService.mirrorWorkspaceFile(
+        createWorkspaceLocation(stylePath, 'macros.sty'),
+      ),
     );
 
     const snapshotPath = originalSnapshotPathUnder(
@@ -148,7 +161,7 @@ describe('round-dir ownership and editable .tex inheritance', () => {
     );
     await expect(stat(snapshotPath)).rejects.toMatchObject({ code: 'ENOENT' });
 
-    await fileService.ensureMirroredInRoundDir(1);
+    await runFileServiceProgram(fileService.ensureMirroredInRoundDir(1));
 
     const roundFilePath = path.join(
       runDirUnder(workspaceRoots().storage, runId),

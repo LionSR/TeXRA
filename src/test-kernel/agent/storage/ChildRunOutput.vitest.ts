@@ -18,6 +18,7 @@ import {
 } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { fakePath } from '@test/support/FakePlatform';
+import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 
 const parentRunId = 'aaaaaa111111' as RunId;
@@ -111,7 +112,9 @@ describe('resolveChildRunOutput', () => {
         const absolutePath = yield* persistCompletedChild();
 
         expect(
-          yield* resolveChildRunOutput(parentRunId, absolutePath, session),
+          yield* resolveChildRunOutput(parentRunId, absolutePath, session).pipe(
+            Effect.provide(nodePlatformLayer),
+          ),
         ).toEqual({
           kind: 'runStorage',
           absolutePath,
@@ -126,7 +129,9 @@ describe('resolveChildRunOutput', () => {
       const absolutePath = yield* persistCompletedChild(otherParentRunId);
 
       const error = yield* Effect.flip(
-        resolveChildRunOutput(parentRunId, absolutePath, session),
+        resolveChildRunOutput(parentRunId, absolutePath, session).pipe(
+          Effect.provide(nodePlatformLayer),
+        ),
       );
       expect(error.message).toContain('is not a direct child');
     }),
@@ -141,7 +146,9 @@ describe('resolveChildRunOutput', () => {
         yield* Effect.promise(() => AbsoluteFS.write(undeclaredPath, 'notes'));
 
         const error = yield* Effect.flip(
-          resolveChildRunOutput(parentRunId, undeclaredPath, session),
+          resolveChildRunOutput(parentRunId, undeclaredPath, session).pipe(
+            Effect.provide(nodePlatformLayer),
+          ),
         );
         expect(error.message).toContain('is not a declared output');
       }),
@@ -153,7 +160,9 @@ describe('resolveChildRunOutput', () => {
       yield* Effect.promise(() => AbsoluteFS.delete(absolutePath));
 
       const error = yield* Effect.flip(
-        resolveChildRunOutput(parentRunId, absolutePath, session),
+        resolveChildRunOutput(parentRunId, absolutePath, session).pipe(
+          Effect.provide(nodePlatformLayer),
+        ),
       );
       expect(error.message).toContain('is missing');
     }),
@@ -166,7 +175,7 @@ describe('resolveChildRunOutput', () => {
           parentRunId,
           fakePath('workspace/draft.tex'),
           session,
-        ),
+        ).pipe(Effect.provide(nodePlatformLayer)),
       );
       expect(error.message).toContain('not inside run storage');
     }),
