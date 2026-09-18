@@ -24,9 +24,20 @@ All notable changes to this project will be documented in this file.
 - **The OpenAI "Use the Responses API" setting is gone** — requests to OpenAI
   always use the Responses API, and the classic Chat Completions fallback is
   removed. OpenAI models routed through OpenRouter are unaffected.
+- **The ChatGPT-subscription input budget is now set in thousands of tokens**
+  — the setting is `texra.chatgptCodex.contextWindowK` and takes `272` where it
+  used to take `272000` (up to `872`). Any value you had set under the old key
+  is not carried over; the default 272K applies until you set the new one.
+  Every budget in play is a round thousand, and the old unit made an
+  off-by-1000 typo land inside the valid range: `872` entered for 872,000 was
+  a legal 872-token budget that put every request over the limit.
 
 ### Bug Fixes
 
+- A model call covered by a subscription no longer reports itself as "free" —
+  the run footer and session summary name the plan that covered it
+  (**ChatGPT Pro**, **ChatGPT Plus**), falling back to **ChatGPT
+  subscription** when the account's plan is not known.
 - Generated agent definitions, session titles and helper answers no longer inherit document text-replacement rules.
 - Messages you queue for a run are no longer lost when you stop the run or TeXRA exits unexpectedly: they stay queued and are delivered once the run resumes.
 

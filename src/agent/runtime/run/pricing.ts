@@ -274,6 +274,7 @@ export function priceTurnUsage(
     responseTimeMs,
     provider: bound.origin.protocol,
     usageRoute: bound.usageRoute,
+    ...(bound.usagePlan !== undefined ? { usagePlan: bound.usagePlan } : {}),
     ...(cached !== undefined ? { cachedInputTokens: cached } : {}),
     ...(cached !== undefined && inputTokens >= cached
       ? { cacheMissInputTokens: inputTokens - cached }

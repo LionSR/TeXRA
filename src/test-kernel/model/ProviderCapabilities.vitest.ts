@@ -16,6 +16,11 @@ import {
 } from '@model/providerCapabilities';
 import type { LanguageModel } from '@platform/languageModel';
 import { CHATGPT_CODEX_CONTEXT_WINDOW_SETTING } from '@shared/schemas';
+
+/** The default budget in tokens; the setting itself is stored in thousands. */
+const DEFAULT_INPUT_LIMIT =
+  CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.defaultValue *
+  CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.tokensPerUnit;
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { hostStores, installPlatform } from '@test/support/setupPlatform';
 import type { Effect } from 'effect';
@@ -87,10 +92,8 @@ describe('provider capabilities', () => {
     );
 
     expect(capabilities).toMatchObject({
-      contextWindow:
-        CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.defaultValue +
-        gpt55Config.maxOutputTokens,
-      inputTokenLimit: CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.defaultValue,
+      contextWindow: DEFAULT_INPUT_LIMIT + gpt55Config.maxOutputTokens,
+      inputTokenLimit: DEFAULT_INPUT_LIMIT,
       inputPrice: 0,
       outputPrice: 0,
       usageRoute: 'chatgpt-subscription',
@@ -109,10 +112,8 @@ describe('provider capabilities', () => {
 
       expect(model.codexSubscription).toBe(true);
       expect(capabilities).toMatchObject({
-        contextWindow:
-          CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.defaultValue +
-          model.maxOutputTokens,
-        inputTokenLimit: CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.defaultValue,
+        contextWindow: DEFAULT_INPUT_LIMIT + model.maxOutputTokens,
+        inputTokenLimit: DEFAULT_INPUT_LIMIT,
       });
     },
   );
@@ -124,7 +125,7 @@ describe('provider capabilities', () => {
       await installPlatform({
         config: {
           'texra.chatgptCodex.preferSubscription': true,
-          'texra.chatgptCodex.contextWindow': 872_000,
+          'texra.chatgptCodex.contextWindowK': 872,
         },
       });
 
@@ -140,14 +141,14 @@ describe('provider capabilities', () => {
       await installPlatform({
         config: {
           'texra.chatgptCodex.preferSubscription': true,
-          'texra.chatgptCodex.contextWindow': 900_000,
+          'texra.chatgptCodex.contextWindowK': 900,
         },
       });
 
       expect(
         resolveCodexSubscriptionCapabilities(hostStores(), gpt55Config, false),
       ).toMatchObject({
-        inputTokenLimit: CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.defaultValue,
+        inputTokenLimit: DEFAULT_INPUT_LIMIT,
       });
     });
   });

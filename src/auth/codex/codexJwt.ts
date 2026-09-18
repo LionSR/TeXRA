@@ -6,6 +6,10 @@
  * account id and email. The `id_token` is preferred over the `access_token`
  * because some accounts only carry the account id in the id_token.
  *
+ * The ChatGPT plan (`plus`, `pro`, `team`, ...) rides on the same token, in
+ * `chatgpt_plan_type` either at the top level or under the auth claim. It is
+ * what the run footer names instead of calling a subscription call "free".
+ *
  * The account id lives in one of three places (matching Zed / Roo Code):
  *   1. top-level `chatgpt_account_id`
  *   2. `["https://api.openai.com/auth"].chatgpt_account_id`
@@ -26,18 +30,23 @@ import {
 } from '../oauth/jwtDecode';
 import { CODEX_JWT_AUTH_CLAIM } from './codexConstants';
 
-/** Account id + email distilled from a JWT (either may be absent). */
+/** Account id, email, and plan distilled from a JWT (each may be absent). */
 export interface CodexJwtClaims {
   accountId?: string;
   email?: string;
+  planType?: string;
 }
 
 /** Validates an UNTRUSTED decoded JWT payload and distills the claims we read. */
 const CodexJwtClaimsSchema = z
   .object({
     chatgpt_account_id: NonEmptyJwtClaim,
+    chatgpt_plan_type: NonEmptyJwtClaim,
     [CODEX_JWT_AUTH_CLAIM]: z
-      .object({ chatgpt_account_id: NonEmptyJwtClaim })
+      .object({
+        chatgpt_account_id: NonEmptyJwtClaim,
+        chatgpt_plan_type: NonEmptyJwtClaim,
+      })
       .optional()
       .catch(undefined),
     organizations: z
@@ -52,6 +61,9 @@ const CodexJwtClaimsSchema = z
       claims[CODEX_JWT_AUTH_CLAIM]?.chatgpt_account_id ??
       claims.organizations?.[0]?.id,
     email: claims.email,
+    planType:
+      claims.chatgpt_plan_type ??
+      claims[CODEX_JWT_AUTH_CLAIM]?.chatgpt_plan_type,
   }));
 
 const EMPTY_CLAIMS: CodexJwtClaims = {};
@@ -71,5 +83,6 @@ export function extractCodexClaims(
   return {
     accountId: id?.accountId ?? access?.accountId,
     email: id?.email ?? access?.email,
+    planType: id?.planType ?? access?.planType,
   };
 }

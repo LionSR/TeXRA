@@ -108,7 +108,7 @@ export class UsagePanel extends LitElement {
         white-space: nowrap;
       }
 
-      .run-summary__route--free {
+      .run-summary__route--covered {
         color: var(--color-success);
       }
 
@@ -252,21 +252,24 @@ export class UsagePanel extends LitElement {
 
   /**
    * The visible footer cost: a plain amount when the route carries no badge,
-   * `Free · <route>` for a subscription route that billed nothing, and the
-   * amount beside the route otherwise. The aria summary's shared
-   * {@link usageCostLabel} re-derives the same `subscription && cost === 0`
-   * predicate from `usageRouteBadge`, so changing a subscription route
-   * touches both.
+   * the covering plan alone (`ChatGPT Pro`) for a subscription route that
+   * billed nothing, and the amount beside the route otherwise. The aria
+   * summary's shared {@link usageCostLabel} re-derives the same
+   * `subscription && cost === 0` predicate from `usageRouteBadge`, so
+   * changing a subscription route touches both.
    */
   private renderCostRoute(cost: number): TemplateResult {
-    const badge = usageRouteBadge(this.usage?.usageRoute);
+    const badge = usageRouteBadge(
+      this.usage?.usageRoute,
+      this.usage?.usagePlan,
+    );
     if (!badge) return html`${formatCostUsd(cost)}`;
 
     if (badge.subscription && cost === 0) {
       return html`<span
         id="usage-route-badge"
-        class="run-summary__route run-summary__route--free"
-        >Free · ${badge.compactLabel}</span
+        class="run-summary__route run-summary__route--covered"
+        >${badge.compactLabel}</span
       >`;
     }
 
@@ -319,7 +322,8 @@ export class UsagePanel extends LitElement {
     // The shared rule omits a zero-cost unknown route; the aria summary
     // still states it as "$0.000".
     const costLabel =
-      usageCostLabel(cost, this.usage.usageRoute) ?? formatCostUsd(cost);
+      usageCostLabel(cost, this.usage.usageRoute, this.usage.usagePlan) ??
+      formatCostUsd(cost);
     const parts = [`${formatCompactTokenCount(inputTokens)} input tokens`];
     const optionalParts: ReadonlyArray<readonly [number, string]> = [
       [this.usage.cacheReadInputTokens ?? 0, 'cache read tokens'],

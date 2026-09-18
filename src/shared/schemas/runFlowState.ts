@@ -65,6 +65,8 @@ export const NormalizedUsageSchema = TokenUsageStatsSchema.pick({
   serverToolRequests: TokenCountSchema.optional(),
   /** Canonical route used for usage display and telemetry. */
   usageRoute: UsageRouteSchema.optional(),
+  /** The route's subscription plan, when it names one; display-only. */
+  usagePlan: z.string().optional(),
 });
 export type NormalizedUsage = z.infer<typeof NormalizedUsageSchema>;
 

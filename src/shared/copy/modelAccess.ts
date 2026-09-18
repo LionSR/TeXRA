@@ -31,6 +31,28 @@ export const OWN_API_KEYS = {
   },
 } as const;
 
+/**
+ * Display names for the ChatGPT plans the Codex token can name, keyed by the
+ * `chatgpt_plan_type` claim. An unlisted plan renders as no plan at all
+ * rather than as a raw wire word, so a backend that invents a tier degrades
+ * to "ChatGPT subscription" instead of printing "ChatGPT enterprise_v2".
+ */
+const CHATGPT_PLAN_NAMES: Readonly<Record<string, string>> = Object.freeze({
+  free: 'Free',
+  plus: 'Plus',
+  pro: 'Pro',
+  team: 'Team',
+  business: 'Business',
+  edu: 'Edu',
+  enterprise: 'Enterprise',
+});
+
+/** The display name for a `chatgpt_plan_type`, or undefined when unknown. */
+function chatGptPlanName(planType: string | undefined): string | undefined {
+  if (!planType) return undefined;
+  return CHATGPT_PLAN_NAMES[planType.trim().toLowerCase()];
+}
+
 /** User-facing labels and plan status for a {@link UsageRoute}. `label` is
  *  the detailed payment name, `compactLabel` is its width-constrained badge
  *  name, and `subscription` marks routes covered by a top-up-free plan. Hosts
@@ -41,10 +63,16 @@ interface UsageRouteBadge {
   readonly subscription: boolean;
 }
 
-/** Map a usage route to its display badge, or undefined when the route is
- *  unknown/unset. */
+/**
+ * Map a usage route to its display badge, or undefined when the route is
+ * unknown/unset. `plan` is the route's own plan word when it carries one
+ * (today only the ChatGPT subscription does); naming the tier is what keeps
+ * a subscription call from reading as "free", which users read as "this call
+ * was not covered by anything".
+ */
 export function usageRouteBadge(
   route: UsageRoute | undefined,
+  plan?: string,
 ): UsageRouteBadge | undefined {
   const codingPlan = codingPlanForUsageRoute(route);
   if (codingPlan) {
@@ -55,10 +83,26 @@ export function usageRouteBadge(
     };
   }
   switch (route) {
-    case 'chatgpt-subscription':
-      return { label: 'ChatGPT', compactLabel: 'ChatGPT', subscription: true };
+    case 'chatgpt-subscription': {
+      const planName = chatGptPlanName(plan);
+      return planName
+        ? {
+            label: `ChatGPT ${planName}`,
+            compactLabel: `ChatGPT ${planName}`,
+            subscription: true,
+          }
+        : {
+            label: 'ChatGPT subscription',
+            compactLabel: 'ChatGPT',
+            subscription: true,
+          };
+    }
     case 'xai-subscription':
-      return { label: 'Grok', compactLabel: 'Grok', subscription: true };
+      return {
+        label: 'Grok subscription',
+        compactLabel: 'Grok',
+        subscription: true,
+      };
     case 'api-key':
       return {
         label: OWN_API_KEYS.inline,
@@ -78,18 +122,23 @@ export function usageRouteBadge(
 /**
  * One sentence stating what a usage record cost and who paid for it.
  *
- * Four outcomes: a subscription route with zero cost is free, a known route
- * is billed "via" its payment name, an unknown route with a cost shows the
- * bare amount, and an unknown route with no cost has nothing to say
- * (`undefined`) so callers can omit the line entirely rather than print
- * "$0.000" for a session that never reached a model.
+ * Four outcomes: a subscription route with zero cost is stated as included in
+ * the plan that covers it, a known route is billed "via" its payment name, an
+ * unknown route with a cost shows the bare amount, and an unknown route with
+ * no cost has nothing to say (`undefined`) so callers can omit the line
+ * entirely rather than print "$0.000" for a session that never reached a
+ * model.
+ *
+ * A covered call never says "free": the user is paying for the plan, and
+ * "free" reads as "nothing paid for this".
  */
 export function usageCostLabel(
   cost: number,
   route: UsageRoute | undefined,
+  plan?: string,
 ): string | undefined {
-  const badge = usageRouteBadge(route);
+  const badge = usageRouteBadge(route, plan);
   if (!badge) return cost > 0 ? formatCostUsd(cost) : undefined;
-  if (badge.subscription && cost === 0) return `Free via ${badge.label}`;
+  if (badge.subscription && cost === 0) return `Included in ${badge.label}`;
   return `${formatCostUsd(cost)} via ${badge.label}`;
 }

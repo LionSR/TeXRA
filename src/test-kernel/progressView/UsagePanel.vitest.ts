@@ -41,14 +41,30 @@ function usageAriaLabel(element: UsagePanel): string {
 }
 
 describe('usage-panel route badges', () => {
-  it('shows subscription-backed usage as Free · ChatGPT', async () => {
+  it('names the plan that covers subscription-backed usage', async () => {
     const element = await mountUsagePanel(
-      usage({ cost: 0, usageRoute: 'chatgpt-subscription' }),
+      usage({ cost: 0, usageRoute: 'chatgpt-subscription', usagePlan: 'pro' }),
     );
 
-    expect(panelText(element)).toContain('Free · ChatGPT');
-    expect(usageAriaLabel(element)).toContain('Free via ChatGPT');
+    expect(panelText(element)).toContain('ChatGPT Pro');
+    expect(usageAriaLabel(element)).toContain('Included in ChatGPT Pro');
   });
+
+  // A plan the token never named, or one this build has no copy for, must not
+  // reach the screen as a raw wire word.
+  it.each(['', 'enterprise_v2'])(
+    'falls back to the bare subscription for plan %j',
+    async (usagePlan) => {
+      const element = await mountUsagePanel(
+        usage({ cost: 0, usageRoute: 'chatgpt-subscription', usagePlan }),
+      );
+
+      expect(panelText(element)).toContain('ChatGPT');
+      expect(usageAriaLabel(element)).toContain(
+        'Included in ChatGPT subscription',
+      );
+    },
+  );
 
   it.each([
     {

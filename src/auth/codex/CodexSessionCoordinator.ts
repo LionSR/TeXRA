@@ -88,6 +88,7 @@ const CODEX_POLICY: SubscriptionOAuthPolicy<CodexSession> = {
       expiresAtMs: nowMs + tokens.expires_in * 1000,
       accountId: claims.accountId ?? previous?.accountId,
       email: claims.email ?? previous?.email,
+      planType: claims.planType ?? previous?.planType,
     };
   },
 };
@@ -131,5 +132,10 @@ export class CodexSessionCoordinator extends SubscriptionOAuthCoordinator<CodexS
   /** The stored session's account id, when signed in. */
   getAccountId(): Effect.Effect<string | undefined, AuthPortError> {
     return Effect.map(this.loadSession(), (session) => session?.accountId);
+  }
+
+  /** The stored session's ChatGPT plan, when the token names one. */
+  getPlanType(): Effect.Effect<string | undefined, AuthPortError> {
+    return Effect.map(this.loadSession(), (session) => session?.planType);
   }
 }

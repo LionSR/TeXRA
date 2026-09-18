@@ -84,11 +84,13 @@ function resolveCodexSubscriptionProfile({
   if (model.provider !== ModelProvider.OPENAI) return null;
   if (model.openRouterOnly) return null;
   if (!isCodexSubscriptionEligible(model)) return null;
+  // The setting is stored in thousands of tokens; this is its only reader,
+  // so the unit conversion lives here and nowhere else.
   const inputTokenLimit = Math.min(
     readSettingFrom<number>(
       stores,
       CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.configKey,
-    ),
+    ) * CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.tokensPerUnit,
     model.contextWindow,
   );
   const contextWindow = Math.min(

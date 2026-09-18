@@ -130,6 +130,7 @@ export class UsageMonitor {
       const roundReasoningTokens = latestUsage.reasoningTokens ?? 0;
       const roundCost = latestUsage.cost;
       const usageRoute = latestUsage.usageRoute ?? 'api-key';
+      const usagePlan = latestUsage.usagePlan;
       const roundCacheMissTokens = billedRoundCacheMissTokens(
         latestUsage.cacheMissInputTokens,
         roundInputTokens,
@@ -179,6 +180,7 @@ export class UsageMonitor {
           toolUseTokens: totals.totalToolUsePromptTokens,
         }),
         usageRoute,
+        ...(usagePlan !== undefined ? { usagePlan } : {}),
       };
 
       // One typed trace event feeds both transcript and progress projections.
