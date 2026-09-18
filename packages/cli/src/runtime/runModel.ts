@@ -1,5 +1,7 @@
+import { Effect } from 'effect';
+
 import type { RunModelCandidate } from '@model/runModelDecision';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
   CLI_CHEAP_START_MODEL,
@@ -45,25 +47,32 @@ function cliRunModelCandidates(
  * handed over by the command's own `initCliPlatform` result rather than looked
  * up again here.
  */
-export async function selectCliRunModel(
+export const selectCliRunModel = Effect.fn('selectCliRunModel')(function* (
   context: CliContext,
   modelOverride: string | undefined,
   role: 'chat' | 'run',
   stores: CliModelStores,
-): Promise<string> {
-  try {
-    const resolution = await selectCliRunnableModel(
-      cliRunModelCandidates(context, modelOverride, role),
-      { stores },
-    );
-    if (resolution.notice && context.quietLogs !== true) {
-      writeTextStderr(resolution.notice);
-    }
-    return resolution.model;
-  } catch (error: unknown) {
-    throw new CliUsageError(toErrorMessage(error));
+) {
+  // One failure plane for the whole resolution: the candidate list's own
+  // usage error and the selection's unavailable-model error both reach the
+  // caller as the `CliUsageError` the command surfaces, exactly as the
+  // former try/catch around the await did.
+  const resolution = yield* Effect.try({
+    try: () => cliRunModelCandidates(context, modelOverride, role),
+    catch: ensureError,
+  }).pipe(
+    Effect.flatMap((candidates) =>
+      selectCliRunnableModel(candidates, { stores }),
+    ),
+    Effect.catch((error) =>
+      Effect.fail(new CliUsageError(toErrorMessage(error))),
+    ),
+  );
+  if (resolution.notice && context.quietLogs !== true) {
+    writeTextStderr(resolution.notice);
   }
-}
+  return resolution.model;
+});
 
 /** Derive the headless run context shared by every CLI runner. */
 export function buildHeadlessRunContext(context: CliContext): CliContext {

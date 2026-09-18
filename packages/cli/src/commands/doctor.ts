@@ -39,7 +39,10 @@ async function runDoctor(context: CliContext): Promise<number> {
       services
         ? {
             authProfile: () => services.runtime.runPromise(getCliAuthProfile()),
-            modelAccessList: () => getCliModelAccessList({ stores: services }),
+            modelAccessList: () =>
+              services.runtime.runPromise(
+                getCliModelAccessList({ stores: services }),
+              ),
             ...(roots && {
               usageLoggingOptOut: () => usageLoggingOptOut(roots.config),
             }),

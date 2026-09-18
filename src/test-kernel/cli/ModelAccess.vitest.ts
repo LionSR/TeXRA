@@ -14,6 +14,7 @@ import {
   selectCliRunnableModel,
   type CliModelAccess,
 } from '@cli/runtime/modelAccess';
+import type { ProcessServices } from '@platform/processRuntime';
 import type { ModelOptionData } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { testRuntime } from '@test/support/testProcessRuntime';
@@ -127,12 +128,20 @@ type ResolveCliRunnableModelOptions = Parameters<
  */
 const stores = { ...fakeStores(), runtime: testRuntime() };
 
+/**
+ * Model access returns Effects; this suite is their run boundary, the same
+ * way a citty command action or the Ink form load is in production.
+ */
+function run<A, E>(effect: Effect.Effect<A, E, ProcessServices>): Promise<A> {
+  return stores.runtime.runPromise(effect);
+}
+
 function resolveModelFromAccessList(
   accessList: readonly CliModelAccess[],
   model: string,
   options: Omit<ResolveCliRunnableModelOptions, 'accessList' | 'stores'>,
 ) {
-  return selectCliRunnableModel(model, { ...options, accessList, stores });
+  return run(selectCliRunnableModel(model, { ...options, accessList, stores }));
 }
 
 const INTERACTIVE_RECOVERY = {
@@ -495,11 +504,13 @@ describe('CLI model access resolution', () => {
     );
 
     await expect(
-      selectCliRunnableModel('haiku3', {
-        fallbackReason: 'explicit-override',
-        accessList: [],
-        stores,
-      }),
+      run(
+        selectCliRunnableModel('haiku3', {
+          fallbackReason: 'explicit-override',
+          accessList: [],
+          stores,
+        }),
+      ),
     ).rejects.toThrow('Model "haiku3" is not available (retired).');
   });
 
@@ -546,15 +557,17 @@ describe('CLI model access resolution', () => {
       ]),
     );
 
-    await expect(getCliModelAccessList({ stores })).resolves.toMatchObject([
-      {
-        available: true,
-        model: {
-          value: 'gpt56',
-          availability: 'subscription-access',
+    await expect(run(getCliModelAccessList({ stores }))).resolves.toMatchObject(
+      [
+        {
+          available: true,
+          model: {
+            value: 'gpt56',
+            availability: 'subscription-access',
+          },
         },
-      },
-    ]);
+      ],
+    );
   });
 
   it('loads explicit model ids for diagnostic lists', async () => {
@@ -567,7 +580,7 @@ describe('CLI model access resolution', () => {
     );
 
     await expect(
-      getCliModelAccessList({ stores, models: ['hiddenFixtureModel'] }),
+      run(getCliModelAccessList({ stores, models: ['hiddenFixtureModel'] })),
     ).resolves.toMatchObject([
       {
         available: false,
@@ -593,7 +606,7 @@ describe('CLI model access resolution', () => {
       ]),
     );
 
-    const entries = await getCliModelAccessList({ stores });
+    const entries = await run(getCliModelAccessList({ stores }));
 
     expect(entries).toMatchObject([
       { model: { value: 'sonnet46T' }, available: true },
@@ -618,10 +631,12 @@ describe('CLI model access resolution', () => {
       );
 
     await expect(
-      selectCliRunnableModel('HIDDENFIXTUREMODEL', {
-        fallbackReason: 'explicit-override',
-        stores,
-      }),
+      run(
+        selectCliRunnableModel('HIDDENFIXTUREMODEL', {
+          fallbackReason: 'explicit-override',
+          stores,
+        }),
+      ),
     ).resolves.toEqual({ model: 'hiddenFixtureModel' });
     expect(readModelAvailabilityInputsMock).toHaveBeenNthCalledWith(2, stores, [
       'hiddenFixtureModel',
@@ -638,11 +653,13 @@ describe('CLI model access resolution', () => {
     );
 
     await expect(
-      selectCliRunnableModel('hiddenFixtureModel', {
-        fallbackReason: 'explicit-override',
-        accessList: [missingKeyModel('deepseekT')],
-        stores,
-      }),
+      run(
+        selectCliRunnableModel('hiddenFixtureModel', {
+          fallbackReason: 'explicit-override',
+          accessList: [missingKeyModel('deepseekT')],
+          stores,
+        }),
+      ),
     ).resolves.toEqual({ model: 'hiddenFixtureModel' });
     expectModelOptionsRequested(['hiddenFixtureModel']);
   });
@@ -651,15 +668,17 @@ describe('CLI model access resolution', () => {
     readModelAvailabilityInputsMock.mockReturnValueOnce(Effect.succeed([]));
 
     await expect(
-      selectCliRunnableModel(
-        [
-          { model: 'sonnet46T', reason: 'explicit-override' },
-          { model: 'hiddenFixtureModel', reason: 'environment' },
-        ],
-        {
-          accessList: [model('sonnet46T')],
-          stores,
-        },
+      run(
+        selectCliRunnableModel(
+          [
+            { model: 'sonnet46T', reason: 'explicit-override' },
+            { model: 'hiddenFixtureModel', reason: 'environment' },
+          ],
+          {
+            accessList: [model('sonnet46T')],
+            stores,
+          },
+        ),
       ),
     ).resolves.toEqual({ model: 'sonnet46T' });
   });
@@ -674,10 +693,12 @@ describe('CLI model access resolution', () => {
     );
 
     await expect(
-      loadCliModelAccessEntry('HIDDENFIXTUREMODEL', {
-        accessList: [model('sonnet46T')],
-        stores,
-      }),
+      run(
+        loadCliModelAccessEntry('HIDDENFIXTUREMODEL', {
+          accessList: [model('sonnet46T')],
+          stores,
+        }),
+      ),
     ).resolves.toMatchObject({
       available: false,
       status: 'missing api key',
@@ -707,10 +728,12 @@ describe('CLI model access resolution', () => {
     );
 
     await expect(
-      loadCliModelAccessEntry('User Facing Fixture', {
-        accessList: [model('sonnet46T')],
-        stores,
-      }),
+      run(
+        loadCliModelAccessEntry('User Facing Fixture', {
+          accessList: [model('sonnet46T')],
+          stores,
+        }),
+      ),
     ).resolves.toMatchObject({
       available: false,
       model: {
@@ -731,10 +754,12 @@ describe('CLI model access resolution', () => {
       .mockReturnValueOnce(Effect.succeed([]));
 
     await expect(
-      selectCliRunnableModel('hiddenFixtureModel', {
-        fallbackReason: 'explicit-override',
-        stores,
-      }),
+      run(
+        selectCliRunnableModel('hiddenFixtureModel', {
+          fallbackReason: 'explicit-override',
+          stores,
+        }),
+      ),
     ).rejects.toThrow(
       'Model "hiddenFixtureModel" is configured but has no option data.',
     );

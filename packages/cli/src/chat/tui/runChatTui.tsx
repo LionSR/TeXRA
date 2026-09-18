@@ -220,16 +220,12 @@ export async function runChat(
   // no-models hints, and the header/status all read this same value so they can
   // never disagree.
   const modelSelectionExit = await runtime.runPromiseExit(
-    Effect.tryPromise({
-      try: () =>
-        selectCliRunnableModel(defaults.model, {
-          stores: services,
-          fallbackReason: defaults.modelSource,
-          noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
-            CHAT_STARTUP_MODEL_RECOVERY,
-          ),
-        }),
-      catch: (error: unknown) => error,
+    selectCliRunnableModel(defaults.model, {
+      stores: services,
+      fallbackReason: defaults.modelSource,
+      noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
+        CHAT_STARTUP_MODEL_RECOVERY,
+      ),
     }).pipe(
       Effect.tap((selection) =>
         setCliHelperModel(services.globalState, selection.model),

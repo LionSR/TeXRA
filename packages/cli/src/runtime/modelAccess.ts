@@ -1,3 +1,6 @@
+// Third-party imports
+import { Effect, Result } from 'effect';
+
 // Local imports
 import {
   modelOptionsFrom,
@@ -38,7 +41,12 @@ export interface CliModelPickerItem {
   readonly disabled?: boolean;
 }
 
-export interface CliRunnableModelResolution {
+/**
+ * The shape both success returns below satisfy. Not exported: the resolution
+ * reaches callers as the success channel of `selectCliRunnableModel`'s
+ * Effect, so there is no second name for it to travel under.
+ */
+interface CliRunnableModelResolution {
   readonly model: string;
   readonly notice?: string;
 }
@@ -67,10 +75,10 @@ const CLI_MODEL_FALLBACK_MODE_BY_REASON = {
  * here looks a host up.
  */
 /**
- * The stores availability is computed from, plus the runtime the read runs
- * on. The read is an Effect and this package is the boundary that runs one,
- * so every CLI surface that asks for model access hands over the runtime its
- * entry point already holds rather than looking one up.
+ * The stores availability is computed from, plus the process runtime. Every
+ * read here is an Effect a caller yields, so the runtime travels with the
+ * stores for the two surfaces that are themselves the boundary — the citty
+ * command actions and the Ink form load — rather than for this module.
  */
 export type CliModelStores = ModelOptionStores & {
   readonly runtime: ProcessRuntime;
@@ -206,16 +214,14 @@ function toCliModelAccess(model: ModelOptionData): CliModelAccess {
   };
 }
 
-export async function getCliModelAccessList(
-  options: CliModelAccessListOptions,
-): Promise<CliModelAccess[]> {
-  const models = modelOptionsFrom(
-    await options.stores.runtime.runPromise(
-      readModelAvailabilityInputs(options.stores, options.models),
-    ),
-  );
-  return models.map(toCliModelAccess);
-}
+export const getCliModelAccessList = Effect.fn('getCliModelAccessList')(
+  function* (options: CliModelAccessListOptions) {
+    const models = modelOptionsFrom(
+      yield* readModelAvailabilityInputs(options.stores, options.models),
+    );
+    return models.map(toCliModelAccess);
+  },
+);
 
 export function findCliModelAccessEntry(
   models: readonly CliModelAccess[],
@@ -326,39 +332,40 @@ export function formatCliModelDetails(entry: CliModelAccess): string {
   return lines.join('\n');
 }
 
-async function loadCliModelAccessList(
+/** The caller's preloaded list, or one computed now. */
+const loadCliModelAccessList = Effect.fn('loadCliModelAccessList')(function* (
   options: CliModelAccessEntryOptions,
-): Promise<readonly CliModelAccess[]> {
-  return (
-    options.accessList ?? getCliModelAccessList({ stores: options.stores })
-  );
-}
+) {
+  const models: readonly CliModelAccess[] =
+    options.accessList ??
+    (yield* getCliModelAccessList({ stores: options.stores }));
+  return models;
+});
 
-export async function loadCliModelAccessEntry(
-  model: string,
-  options: CliModelAccessEntryOptions,
-): Promise<CliModelAccess | undefined> {
-  const models = await loadCliModelAccessList(options);
-  const trimmed = model.trim();
-  const listedEntry = findCliModelAccessEntry(models, trimmed);
-  if (listedEntry || trimmed.length === 0) return listedEntry;
+export const loadCliModelAccessEntry = Effect.fn('loadCliModelAccessEntry')(
+  function* (model: string, options: CliModelAccessEntryOptions) {
+    const models = yield* loadCliModelAccessList(options);
+    const trimmed = model.trim();
+    const listedEntry = findCliModelAccessEntry(models, trimmed);
+    if (listedEntry || trimmed.length === 0) return listedEntry;
 
-  const hiddenModelId = resolveKnownCliModelId(trimmed);
-  if (hiddenModelId == null) return undefined;
+    const hiddenModelId = resolveKnownCliModelId(trimmed);
+    if (hiddenModelId == null) return undefined;
 
-  const hiddenModelOption = modelOptionsFrom(
-    await options.stores.runtime.runPromise(
-      readModelAvailabilityInputs(options.stores, [hiddenModelId]),
-    ),
-  )[0];
-  if (!hiddenModelOption) {
-    throw new Error(
-      `Model "${hiddenModelId}" is configured but has no option data.`,
-    );
-  }
+    const hiddenModelOption = modelOptionsFrom(
+      yield* readModelAvailabilityInputs(options.stores, [hiddenModelId]),
+    )[0];
+    if (!hiddenModelOption) {
+      return yield* Effect.fail(
+        new Error(
+          `Model "${hiddenModelId}" is configured but has no option data.`,
+        ),
+      );
+    }
 
-  return toCliModelAccess(hiddenModelOption);
-}
+    return toCliModelAccess(hiddenModelOption);
+  },
+);
 
 type CliAvailableModelsMessageOptions = Pick<
   CliRunnableModelOptions,
@@ -389,118 +396,132 @@ type NormalizedCliModelCandidate = RunModelCandidate & {
   readonly model: string;
 };
 
-function rawCliModelDecisionCandidates(
-  request: string | readonly RunModelCandidate[],
-  options: CliRunnableModelOptions,
-): readonly RunModelCandidate[] {
-  if (typeof request !== 'string') return request;
-  if (!options.fallbackReason) {
-    throw new Error('fallbackReason is required for single-model resolution');
-  }
-  return [{ model: request, reason: options.fallbackReason }];
-}
-
-export async function selectCliRunnableModel(
-  request: string | readonly RunModelCandidate[],
-  options: CliRunnableModelOptions,
-): Promise<CliRunnableModelResolution> {
-  const models = await loadCliModelAccessList(options);
-  const requestedCandidates: NormalizedCliModelCandidate[] =
-    rawCliModelDecisionCandidates(request, options).flatMap((candidate) => {
-      const model = candidate.model?.trim();
-      return model
-        ? [
-            {
-              ...candidate,
-              model,
-              fallbackMode:
-                candidate.fallbackMode ??
-                CLI_MODEL_FALLBACK_MODE_BY_REASON[candidate.reason],
-            },
-          ]
-        : [];
-    });
-  const requestedModels = unique(
-    requestedCandidates.map((candidate) => candidate.model),
-  );
-  const hiddenEntries = await Promise.allSettled(
-    requestedModels.map((model) =>
-      loadCliModelAccessEntry(model, {
-        stores: options.stores,
-        accessList: models,
+export const selectCliRunnableModel = Effect.fn('selectCliRunnableModel')(
+  function* (
+    request: string | readonly RunModelCandidate[],
+    options: CliRunnableModelOptions,
+  ) {
+    const models = yield* loadCliModelAccessList(options);
+    let rawCandidates: readonly RunModelCandidate[];
+    if (typeof request === 'string') {
+      const fallbackReason = options.fallbackReason;
+      if (!fallbackReason) {
+        return yield* Effect.fail(
+          new Error('fallbackReason is required for single-model resolution'),
+        );
+      }
+      rawCandidates = [{ model: request, reason: fallbackReason }];
+    } else {
+      rawCandidates = request;
+    }
+    const requestedCandidates: NormalizedCliModelCandidate[] =
+      rawCandidates.flatMap((candidate) => {
+        const model = candidate.model?.trim();
+        return model
+          ? [
+              {
+                ...candidate,
+                model,
+                fallbackMode:
+                  candidate.fallbackMode ??
+                  CLI_MODEL_FALLBACK_MODE_BY_REASON[candidate.reason],
+              },
+            ]
+          : [];
+      });
+    const requestedModels = unique(
+      requestedCandidates.map((candidate) => candidate.model),
+    );
+    // Every requested id gets its own hidden-entry lookup, and a failed one
+    // is carried as a value so a sibling's success still counts: only the id
+    // the decision actually lands on re-raises its failure below.
+    const hiddenEntries = yield* Effect.forEach(
+      requestedModels,
+      (model) =>
+        Effect.result(
+          loadCliModelAccessEntry(model, {
+            stores: options.stores,
+            accessList: models,
+          }),
+        ),
+      { concurrency: 'unbounded' },
+    );
+    const entryErrorByModel = new Map(
+      hiddenEntries.flatMap((result, index) => {
+        const model = requestedModels[index];
+        return model && Result.isFailure(result)
+          ? ([[model, result.failure]] as const)
+          : [];
       }),
-    ),
-  );
-  const entryErrorByModel = new Map<string, unknown>();
-  let modelsWithHiddenEntry = models;
-  for (const [index, result] of hiddenEntries.entries()) {
-    const model = requestedModels[index];
-    if (!model) continue;
-    if (result.status === 'fulfilled') {
-      const entry = result.value;
+    );
+    let modelsWithHiddenEntry = models;
+    for (const result of hiddenEntries) {
+      if (Result.isFailure(result)) continue;
+      const entry = result.success;
       if (
         entry &&
         !findCliModelAccessEntry(modelsWithHiddenEntry, entry.model.value)
       ) {
         modelsWithHiddenEntry = [...modelsWithHiddenEntry, entry];
       }
-    } else {
-      entryErrorByModel.set(model, result.reason);
     }
-  }
-  const runnableEntries = runnableCliModelAccessEntries(modelsWithHiddenEntry);
-  const availableIds = runnableEntries.map((entry) => entry.model.value);
-  const decision = decideRunModel(
-    [
-      ...requestedCandidates,
-      { model: availableIds[0], reason: 'access-list-default' },
-    ],
-    (candidate) => findCliModelAccessEntry(runnableEntries, candidate) != null,
-  );
-
-  if (decision && !decision.unavailable) {
-    const selectedModel =
-      findCliModelAccessEntry(runnableEntries, decision.model)?.model.value ??
-      decision.model;
-    if (!decision.fallbackFrom || decision.fallbackFrom.mode === 'silent') {
-      return { model: selectedModel };
-    }
-
-    const fallbackLoadError = entryErrorByModel.get(
-      decision.fallbackFrom.model,
+    const runnableEntries = runnableCliModelAccessEntries(
+      modelsWithHiddenEntry,
     );
-    if (fallbackLoadError) throw fallbackLoadError;
+    const availableIds = runnableEntries.map((entry) => entry.model.value);
+    const decision = decideRunModel(
+      [
+        ...requestedCandidates,
+        { model: availableIds[0], reason: 'access-list-default' },
+      ],
+      (candidate) =>
+        findCliModelAccessEntry(runnableEntries, candidate) != null,
+    );
 
-    const unavailableMessage = formatUnavailableModelMessage(
-      decision.fallbackFrom.model,
-      findCliModelAccessEntry(
-        modelsWithHiddenEntry,
+    if (decision && !decision.unavailable) {
+      const selectedModel =
+        findCliModelAccessEntry(runnableEntries, decision.model)?.model.value ??
+        decision.model;
+      if (!decision.fallbackFrom || decision.fallbackFrom.mode === 'silent') {
+        return { model: selectedModel } satisfies CliRunnableModelResolution;
+      }
+
+      const fallbackLoadError = entryErrorByModel.get(
         decision.fallbackFrom.model,
-      ),
+      );
+      if (fallbackLoadError) return yield* Effect.fail(fallbackLoadError);
+
+      const unavailableMessage = formatUnavailableModelMessage(
+        decision.fallbackFrom.model,
+        findCliModelAccessEntry(
+          modelsWithHiddenEntry,
+          decision.fallbackFrom.model,
+        ),
+        availableIds,
+        options,
+      );
+      return {
+        model: selectedModel,
+        notice: `${unavailableMessage} Using "${selectedModel}" instead.`,
+      } satisfies CliRunnableModelResolution;
+    }
+
+    const selectedLoadError = decision
+      ? entryErrorByModel.get(decision.model)
+      : undefined;
+    if (selectedLoadError) return yield* Effect.fail(selectedLoadError);
+
+    const requestedModel =
+      (decision?.model ??
+        requestedCandidates[0]?.model ??
+        (typeof request === 'string' ? request.trim() : '')) ||
+      '<empty>';
+    const unavailableMessage = formatUnavailableModelMessage(
+      requestedModel,
+      findCliModelAccessEntry(modelsWithHiddenEntry, requestedModel),
       availableIds,
       options,
     );
-    return {
-      model: selectedModel,
-      notice: `${unavailableMessage} Using "${selectedModel}" instead.`,
-    };
-  }
-
-  const selectedLoadError = decision
-    ? entryErrorByModel.get(decision.model)
-    : undefined;
-  if (selectedLoadError) throw selectedLoadError;
-
-  const requestedModel =
-    (decision?.model ??
-      requestedCandidates[0]?.model ??
-      (typeof request === 'string' ? request.trim() : '')) ||
-    '<empty>';
-  const unavailableMessage = formatUnavailableModelMessage(
-    requestedModel,
-    findCliModelAccessEntry(modelsWithHiddenEntry, requestedModel),
-    availableIds,
-    options,
-  );
-  throw new Error(unavailableMessage);
-}
+    return yield* Effect.fail(new Error(unavailableMessage));
+  },
+);

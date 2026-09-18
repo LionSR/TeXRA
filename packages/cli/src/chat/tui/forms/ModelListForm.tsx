@@ -62,7 +62,10 @@ export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
   const picker = useAsyncPickerForm<readonly CliModelAccess[], string>({
     title: '/model',
     loadingLabel: 'Loading models...',
-    load: () => getCliModelAccessList({ stores: props.stores }),
+    load: () =>
+      props.stores.runtime.runPromise(
+        getCliModelAccessList({ stores: props.stores }),
+      ),
     isEmpty: (models) => !models.some((model) => model.available),
     closeEmptyOnEnter: true,
     items: (models) =>

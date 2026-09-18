@@ -405,8 +405,8 @@ describe('CLI run command, workflow agents', () => {
       tools: [],
     });
     mocks.selectCliRunModel.mockImplementation(
-      async (_context: CliContext, model: string | undefined) =>
-        model ?? 'deepseekT',
+      (_context: CliContext, model: string | undefined) =>
+        Effect.succeed(model ?? 'deepseekT'),
     );
     mocks.deriveResumability.mockResolvedValue({
       kind: 'checkpoint',

@@ -46,11 +46,15 @@ async function loadModelAccessList(
       // The init call hands back the stores it just wired, so the follow-up
       // `show` lookup reads the same pair the list was computed from.
       const services = await initCliPlatform({ ...context, quietLogs: true });
-      const models = await getCliModelAccessList({
-        stores: services,
-        models:
-          options.includeUnavailable === true ? knownCliModelIds() : undefined,
-      });
+      const models = await services.runtime.runPromise(
+        getCliModelAccessList({
+          stores: services,
+          models:
+            options.includeUnavailable === true
+              ? knownCliModelIds()
+              : undefined,
+        }),
+      );
       return { models, stores: services };
     });
   } catch (error) {
@@ -97,10 +101,12 @@ async function showModel(context: CliContext, id: string): Promise<number> {
   let entry: CliModelAccess | undefined;
   try {
     entry = await suppressCliFetchStackLogs(() =>
-      loadCliModelAccessEntry(id, {
-        stores: result.stores,
-        accessList: result.models,
-      }),
+      result.stores.runtime.runPromise(
+        loadCliModelAccessEntry(id, {
+          stores: result.stores,
+          accessList: result.models,
+        }),
+      ),
     );
   } catch (error) {
     writeTextStderr(formatCliModelListError(error));
