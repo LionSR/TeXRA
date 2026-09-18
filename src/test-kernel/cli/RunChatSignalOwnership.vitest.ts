@@ -300,7 +300,9 @@ describe('runChat signal ownership wiring', () => {
       modelSource: 'default',
     });
     mocks.chatToolUseAgentUsageError.mockReturnValue(undefined);
-    mocks.selectCliRunnableModel.mockResolvedValue({ model: 'gpt-test' });
+    mocks.selectCliRunnableModel.mockReturnValue(
+      Effect.succeed({ model: 'gpt-test' }),
+    );
     mocks.loadInputHistory.mockReturnValue(
       Effect.succeed({
         at: vi.fn(),

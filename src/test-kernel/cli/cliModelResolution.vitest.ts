@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { Effect } from 'effect';
 
 import {
   buildHeadlessRunContext,
@@ -54,22 +55,29 @@ function withRunModel(model: string): Promise<void> {
 /** The stores each command hands to `selectCliRunModel`; model access is mocked. */
 const STORES = { ...fakeStores(), runtime: testRuntime() };
 
+/** `selectCliRunModel` is an Effect now; the suite is its run boundary. */
+const runSelect = (
+  ...args: Parameters<typeof selectCliRunModel>
+): Promise<string> => STORES.runtime.runPromise(selectCliRunModel(...args));
+
 describe('selectCliRunModel precedence', () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    selectCliRunnableModelMock.mockImplementation(async (request) => ({
-      model: Array.isArray(request)
-        ? (request.find((candidate) => candidate.model)?.model ??
-          CLI_CHEAP_START_MODEL)
-        : request,
-    }));
+    selectCliRunnableModelMock.mockImplementation((request) =>
+      Effect.succeed({
+        model: Array.isArray(request)
+          ? (request.find((candidate) => candidate.model)?.model ??
+            CLI_CHEAP_START_MODEL)
+          : request,
+      }),
+    );
   });
 
   it('passes the full run-model candidate list to model access', async () => {
     await withRunModel('deepseekR');
     const context = makeContext({ envModel: OTHER_MODEL });
 
-    await selectCliRunModel(context, KNOWN_MODEL, 'run', STORES);
+    await runSelect(context, KNOWN_MODEL, 'run', STORES);
 
     expect(selectCliRunnableModelMock).toHaveBeenCalledWith(
       [
@@ -85,14 +93,16 @@ describe('selectCliRunModel precedence', () => {
   it('checks model access before returning the model', async () => {
     await withRunModel('staleConfiguredModel');
     const context = makeContext();
-    selectCliRunnableModelMock.mockResolvedValueOnce({
-      model: 'deepseekT',
-      notice: 'Using deepseekT instead.',
-    });
+    selectCliRunnableModelMock.mockReturnValueOnce(
+      Effect.succeed({
+        model: 'deepseekT',
+        notice: 'Using deepseekT instead.',
+      }),
+    );
 
-    await expect(
-      selectCliRunModel(context, undefined, 'run', STORES),
-    ).resolves.toBe('deepseekT');
+    await expect(runSelect(context, undefined, 'run', STORES)).resolves.toBe(
+      'deepseekT',
+    );
     expect(selectCliRunnableModelMock).toHaveBeenCalledWith(
       expect.arrayContaining([
         { model: 'staleConfiguredModel', reason: 'command-config' },
@@ -107,14 +117,16 @@ describe('selectCliRunModel precedence', () => {
   it('does not fall back from an explicit unavailable model', async () => {
     await withRunModel('deepseekT');
     const context = makeContext();
-    selectCliRunnableModelMock.mockRejectedValueOnce(
-      new Error(
-        'Model "opus48T" is not available (missing key). Available models: deepseekT.',
+    selectCliRunnableModelMock.mockReturnValueOnce(
+      Effect.fail(
+        new Error(
+          'Model "opus48T" is not available (missing key). Available models: deepseekT.',
+        ),
       ),
     );
 
     await expect(
-      selectCliRunModel(context, 'opus48T', 'run', STORES),
+      runSelect(context, 'opus48T', 'run', STORES),
     ).rejects.toThrow(CliUsageError);
     expect(selectCliRunnableModelMock).toHaveBeenCalledWith(
       expect.arrayContaining([

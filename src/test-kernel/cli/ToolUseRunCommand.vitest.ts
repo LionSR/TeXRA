@@ -123,8 +123,8 @@ describe('CLI run command, tool-use agents', () => {
       tools: ['read_file'],
     });
     mocks.selectCliRunModel.mockImplementation(
-      async (_context: CliContext, model: string | undefined) =>
-        model ?? 'gpt54',
+      (_context: CliContext, model: string | undefined) =>
+        Effect.succeed(model ?? 'gpt54'),
     );
     mocks.executeCliToolUseConfig.mockResolvedValue({
       ok: true,

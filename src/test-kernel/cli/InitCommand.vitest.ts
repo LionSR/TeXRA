@@ -86,7 +86,7 @@ describe('CLI init command', () => {
     stderr = '';
     mocks.getCliModelAccessList
       .mockReset()
-      .mockResolvedValue([modelAccess('deepseekproT')]);
+      .mockReturnValue(Effect.succeed([modelAccess('deepseekproT')]));
     mocks.getVisibleAgents
       .mockReset()
       .mockReturnValue([
@@ -295,7 +295,7 @@ describe('CLI init command', () => {
       ],
     },
   ])('$name', async ({ accessList }) => {
-    mocks.getCliModelAccessList.mockResolvedValue(accessList);
+    mocks.getCliModelAccessList.mockReturnValue(Effect.succeed(accessList));
     const root = await makeTempDir('texra-init-test-', tempDirs);
     const result = await runInitPrint(root);
 
