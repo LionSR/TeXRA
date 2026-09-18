@@ -121,11 +121,7 @@ export const openBuildDisplayIfTex = (
   session: SessionHandle,
   fileLocation: FileLocation,
   options: { preserveFocus?: boolean } = {},
-): Effect.Effect<
-  boolean,
-  Error | PlatformError.PlatformError,
-  PreparedFileServices
-> =>
+): Effect.Effect<boolean, DisplayFailure, PreparedFileServices> =>
   Effect.gen(function* () {
     const prepared = yield* prepareFileForDisplay(
       session,
@@ -151,11 +147,7 @@ export const prepareBuildDisplay = (
   session: SessionHandle,
   fileLocation: FileLocation,
   options: { preserveFocus?: boolean; scheduleViewer?: boolean } = {},
-): Effect.Effect<
-  boolean,
-  Error | PlatformError.PlatformError,
-  PreparedFileServices
-> =>
+): Effect.Effect<boolean, DisplayFailure, PreparedFileServices> =>
   Effect.gen(function* () {
     const prepared = yield* prepareFileForDisplay(
       session,
@@ -179,6 +171,9 @@ export const prepareBuildDisplay = (
 /** What the file-open/build phase takes from the runtime it is run on. */
 type PreparedFileServices = FileSystem.FileSystem | Path.Path;
 
+/** How it fails: the editor's own rejections, and the existence probe's. */
+type DisplayFailure = Error | PlatformError.PlatformError;
+
 type PrepareFileForDisplayResult =
   { kind: 'done'; delivered: boolean } | { kind: 'latex-ready' };
 
@@ -188,7 +183,7 @@ const prepareFileForDisplay = (
   preserveFocus: boolean,
 ): Effect.Effect<
   PrepareFileForDisplayResult,
-  Error | PlatformError.PlatformError,
+  DisplayFailure,
   PreparedFileServices
 > =>
   Effect.gen(function* () {
