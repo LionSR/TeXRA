@@ -43,16 +43,19 @@ interface DesktopShellAdapter {
  */
 interface DesktopPreviewHost {
   /**
-   * `reportFailure` (default `true`) decides whether the window shows its own
-   * "could not open" dialog before the failure reaches the caller. With it
-   * off, the caller reads the shell's refusal as
-   * {@link ExternalUrlRejected}, which carries that rejection's own text and
-   * the value it was thrown with.
+   * The window shows its own "could not open" dialog and the caller reads
+   * {@link PreviewUnavailable}.
+   */
+  openExternal(url: string): Effect.Effect<void, PreviewUnavailable>;
+  /**
+   * `reportFailure: false` leaves the dialog out and hands the caller the
+   * shell's own rejection, the value it was thrown with — which is why that
+   * form's channel is `unknown` and the default form's is not.
    */
   openExternal(
     url: string,
-    options?: { readonly reportFailure?: boolean },
-  ): Effect.Effect<void, PreviewUnavailable | ExternalUrlRejected>;
+    options: { readonly reportFailure?: boolean },
+  ): Effect.Effect<void, unknown>;
   /** Open a workspace file in the OS default application. */
   openPath(filePath: string): Effect.Effect<void, PreviewUnavailable>;
   /**
@@ -77,20 +80,6 @@ interface DesktopPreviewHostOptions extends DesktopOverlayPostOptions {
  */
 export class PreviewUnavailable extends Data.TaggedError('PreviewUnavailable')<{
   readonly message: string;
-}> {}
-
-/**
- * The shell refused a URL and the caller asked to keep that refusal rather
- * than the window's dialog (`reportFailure: false`). `message` is the
- * rejection's own text, so a caller that words its own report reads exactly
- * what the bare rejection gave it.
- */
-export class ExternalUrlRejected extends Data.TaggedError(
-  'ExternalUrlRejected',
-)<{
-  readonly url: string;
-  readonly message: string;
-  readonly cause: unknown;
 }> {}
 
 export function createDesktopPreviewHost(
@@ -148,28 +137,34 @@ export function createDesktopPreviewHost(
   function openExternalProgram(
     url: string,
     reportFailure: boolean,
-  ): Effect.Effect<void, PreviewUnavailable | ExternalUrlRejected> {
+  ): Effect.Effect<void, unknown> {
     return Effect.tryPromise({
       try: () => options.shell.openExternal(url),
-      catch: (cause) =>
-        new ExternalUrlRejected({
-          url,
-          message: toErrorMessage(cause),
-          cause,
-        }),
+      catch: (error) => error,
     }).pipe(
-      Effect.catch(
-        (
-          error,
-        ): Effect.Effect<never, PreviewUnavailable | ExternalUrlRejected> =>
-          reportFailure
-            ? fail(`Failed to open URL ${url}: ${error.message}`)
-            : // The caller asked to keep the original rejection: an OAuth flow
-              // decides for itself whether a missing browser handler is worth
-              // a dialog.
-              Effect.fail(error),
+      Effect.catch((error) =>
+        reportFailure
+          ? fail(`Failed to open URL ${url}: ${toErrorMessage(error)}`)
+          : // The caller asked to keep the original rejection: an OAuth flow
+            // decides for itself whether a missing browser handler is worth a
+            // dialog.
+            Effect.fail(error),
       ),
     );
+  }
+
+  /** The two forms above as one implementation: the reported one is the
+   *  default, and only the unreported one carries the shell's own value. */
+  function openExternal(url: string): Effect.Effect<void, PreviewUnavailable>;
+  function openExternal(
+    url: string,
+    options: { readonly reportFailure?: boolean },
+  ): Effect.Effect<void, unknown>;
+  function openExternal(
+    url: string,
+    { reportFailure = true }: { readonly reportFailure?: boolean } = {},
+  ): Effect.Effect<void, unknown> {
+    return openExternalProgram(url, reportFailure);
   }
 
   // Opens the PDF in the renderer's pdf workbench tab (an `<iframe>` on
@@ -255,8 +250,7 @@ export function createDesktopPreviewHost(
     openBuildDisplayIn: (roots) => async (location) => {
       await options.runtime.runPromise(buildDisplayProgram(roots, location));
     },
-    openExternal: (url, { reportFailure = true } = {}) =>
-      openExternalProgram(url, reportFailure),
+    openExternal,
     openPath: openPathProgram,
   };
 }

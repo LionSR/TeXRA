@@ -22,10 +22,7 @@ import type {
   DesktopMessageHandler,
   DesktopRenderer,
 } from './desktopIpcTypes.js';
-import type {
-  ExternalUrlRejected,
-  PreviewUnavailable,
-} from './desktopPreviewHost.js';
+import type { PreviewUnavailable } from './desktopPreviewHost.js';
 
 /** A shell action's host call rejected. The window reports it and stays up. */
 class ShellActionFailed extends Data.TaggedError('ShellActionFailed')<{
@@ -60,9 +57,7 @@ interface DesktopShellActionFactoryOptions extends Pick<
   'showInfoMessage'
 > {
   getCustomAgentDirectory(): Effect.Effect<string, AgentDirectoriesFailed>;
-  openExternalUrl(
-    url: string,
-  ): Effect.Effect<void, PreviewUnavailable | ExternalUrlRejected>;
+  openExternalUrl(url: string): Effect.Effect<void, PreviewUnavailable>;
   openLogFolder(): Effect.Effect<void, PreviewUnavailable>;
   openPath(filePath: string): Effect.Effect<void, PreviewUnavailable>;
   openWorkspaceFolder(): Promise<void>;

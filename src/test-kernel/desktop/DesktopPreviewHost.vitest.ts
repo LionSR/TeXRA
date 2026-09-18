@@ -7,7 +7,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { effectRuntime, type ProcessRuntime } from '@platform/processRuntime';
 import type { RunId } from '@shared/schemas';
 import type { HostRequest } from '@shared/session/hostRequest';
-import { Rejected } from '@shared/session/requestErrors';
 import { createModuleMocks } from '@test/support/moduleMocks';
 import {
   createFakeWorkspaceRoots,
@@ -135,6 +134,9 @@ describe('desktop preview host', () => {
         await import('@desktop/main/desktopFileSelection');
       const { HostDraftRequests } =
         await import('@controllers/session/hostDraftRequests');
+      // After `vi.resetModules`, the refusal class the handler compares
+      // against is this graph's instance, not the statically imported one.
+      const { Rejected } = await import('@shared/session/requestErrors');
       const showErrorMessage = vi.fn<(message: string) => Effect.Effect<void>>(
         () => Effect.void,
       );

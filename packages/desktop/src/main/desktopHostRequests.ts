@@ -78,10 +78,7 @@ import {
   type DesktopLatexdiffWorkspaceScan,
 } from './desktopProgressFileActions.js';
 import type { DesktopOnboardingIpc } from './desktopOnboardingIpc.js';
-import type {
-  ExternalUrlRejected,
-  PreviewUnavailable,
-} from './desktopPreviewHost.js';
+import type { PreviewUnavailable } from './desktopPreviewHost.js';
 import type { DesktopAgentRun } from './desktopAgentRun.js';
 import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
 import type { DesktopFileSelection } from './desktopFileSelection.js';
@@ -110,9 +107,7 @@ interface DesktopHostRequestsOptions {
     DesktopOnboardingIpc,
     'skipOnboarding' | 'skipSetup' | 'runSetup' | 'signInWithChatGpt'
   >;
-  openExternalUrl(
-    url: string,
-  ): Effect.Effect<void, PreviewUnavailable | ExternalUrlRejected>;
+  openExternalUrl(url: string): Effect.Effect<void, PreviewUnavailable>;
   /** Re-probe the LaTeX toolchain. */
   recheckTools(): Promise<void>;
   /** The process runtime this window was handed; every request arm below runs
