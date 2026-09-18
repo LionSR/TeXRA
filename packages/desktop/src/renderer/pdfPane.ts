@@ -2,7 +2,7 @@
 // across tab switches like the editor and terminal surfaces, so the viewer's
 // scroll position and zoom survive a layout change.
 
-import type { WorkbenchTab } from '../shared/desktopTaskShell';
+import type { WorkbenchTab } from '../shared/desktopShellState';
 
 /**
  * Convert an absolute filesystem path (already shape-validated by

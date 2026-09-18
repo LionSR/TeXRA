@@ -50,7 +50,7 @@ import {
   type DesktopEnvironmentSummary,
 } from '../shared/desktopWorkspaceMessages';
 import { takePendingFileRequest } from './fileRequests';
-import type { WorkbenchKind } from '../shared/desktopTaskShell';
+import type { WorkbenchKind } from '../shared/desktopShellState';
 import type { ZodType } from 'zod';
 
 /** Callbacks and live state reads the routes need from the renderer. */

@@ -12,7 +12,7 @@ import {
   workbenchTabsTemplate,
   type RailProject,
 } from '@desktop/renderer/taskShell.js';
-import type { WorkbenchTab } from '@desktop/shared/desktopTaskShell.js';
+import type { WorkbenchTab } from '@desktop/shared/desktopShellState.js';
 import { MESSAGE_TYPES, type RunId } from '@shared/schemas';
 import type { ProjectDisplay } from '@shared/session/hostSnapshot';
 import {

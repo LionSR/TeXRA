@@ -2,7 +2,7 @@ import { html, nothing, type TemplateResult } from 'lit';
 
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
-import { workspaceName, type WorkbenchTab } from '../shared/desktopTaskShell';
+import { workspaceName, type WorkbenchTab } from '../shared/desktopShellState';
 import {
   DESKTOP_WORKSPACE_COMMANDS,
   type DesktopEnvironmentSummary,

@@ -1,13 +1,13 @@
 // Third-party imports
 import { describe, expect, it } from 'vitest';
 
-// Local imports - desktop task shell model
+// Local imports - desktop shell state model
 import {
   activeWorkbenchTab,
   closeWorkbench,
   closeWorkbenchTab,
   focusWorkbenchTab,
-  initialDesktopTaskShellState,
+  initialDesktopShellState,
   moveWorkbenchTab,
   openWorkbenchTab,
   renameWorkbenchTab,
@@ -20,28 +20,28 @@ import {
   toggleSummaryBar,
   toggleWorkbench,
   workspaceName,
-  type DesktopTaskShellState,
+  type DesktopShellState,
   type OpenWorkbenchTabRequest,
   type WorkbenchPlacement,
-} from '@desktop/shared/desktopTaskShell';
+} from '@desktop/shared/desktopShellState';
 
 function shellWith(
   ...requests: readonly OpenWorkbenchTabRequest[]
-): DesktopTaskShellState {
+): DesktopShellState {
   return requests.reduce(
     (next, request) => openWorkbenchTab(next, request),
-    initialDesktopTaskShellState(),
+    initialDesktopShellState(),
   );
 }
 
 function active(
-  state: DesktopTaskShellState,
+  state: DesktopShellState,
   placement: WorkbenchPlacement = 'right',
 ): ReturnType<typeof activeWorkbenchTab> {
   return activeWorkbenchTab(state, placement);
 }
 
-describe('desktop task shell model', () => {
+describe('desktop shell state model', () => {
   it('keys editors by path and derives cross-platform basenames', () => {
     const state = shellWith(
       { kind: 'editor', target: '/papers/first.tex' },
@@ -68,7 +68,7 @@ describe('desktop task shell model', () => {
   });
 
   it('replaces the generic editor placeholder when a file opens', () => {
-    let state = openWorkbenchTab(initialDesktopTaskShellState(), {
+    let state = openWorkbenchTab(initialDesktopShellState(), {
       kind: 'editor',
       placement: 'bottom',
     });
@@ -181,8 +181,8 @@ describe('desktop task shell model', () => {
     expect(active(closed)).toBeUndefined();
     expect(active(toggleWorkbench(closed, 'right'))?.kind).toBe('logs');
     expect(active(toggleWorkbench(openState, 'right'))).toBeUndefined();
-    expect(toggleWorkbench(initialDesktopTaskShellState(), 'right')).toEqual(
-      initialDesktopTaskShellState(),
+    expect(toggleWorkbench(initialDesktopShellState(), 'right')).toEqual(
+      initialDesktopShellState(),
     );
   });
 
@@ -205,7 +205,7 @@ describe('desktop task shell model', () => {
   });
 
   it('normalizes titles and tracks dirty state on known tabs', () => {
-    let state = openWorkbenchTab(initialDesktopTaskShellState(), {
+    let state = openWorkbenchTab(initialDesktopShellState(), {
       kind: 'editor',
       target: 'paper.tex',
     });

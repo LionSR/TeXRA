@@ -1,7 +1,7 @@
 // Templates for the conversation-first desktop chrome.
 //
 // These templates intentionally contain no state. The renderer owns resource
-// lifecycles and passes callbacks here, while desktopTaskShell.ts owns the pure
+// lifecycles and passes callbacks here, while desktopShellState.ts owns the pure
 // reducer. Keeping the markup separate makes main.ts a composition module
 // instead of a second UI component.
 
@@ -24,7 +24,7 @@ import {
   WORKBENCH_KIND_META,
   type WorkbenchPlacement,
   type WorkbenchTab,
-} from '../shared/desktopTaskShell.js';
+} from '../shared/desktopShellState.js';
 
 /** One open project as the rail lists it: how its host names it, its session,
  *  its surface. */

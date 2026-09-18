@@ -69,7 +69,7 @@ import {
 import { subagentsPaneTemplate } from './subagentsPane';
 import {
   activeWorkbenchTab,
-  initialDesktopTaskShellState,
+  initialDesktopShellState,
   openWorkbenchTab,
   renameWorkbenchTab,
   setBottomPanelHeight,
@@ -79,10 +79,10 @@ import {
   toggleSidebar,
   toggleSummaryBar,
   workspaceName,
-  type DesktopTaskShellState,
+  type DesktopShellState,
   type WorkbenchTab,
   type WorkbenchPlacement,
-} from '../shared/desktopTaskShell';
+} from '../shared/desktopShellState';
 import { DESKTOP_PROJECT_COMMANDS } from '../shared/desktopProjectMessages';
 import { isSafeAbsolutePdfPath } from '../shared/desktopPdfMessages';
 import { getRendererPlatform } from './rendererPlatform';
@@ -271,21 +271,21 @@ function currentWorkbench() {
   return project;
 }
 
-function shellState(): DesktopTaskShellState {
+function shellState(): DesktopShellState {
   return (
     projectWorkbenches.get(shell.active)?.getState() ??
-    initialDesktopTaskShellState()
+    initialDesktopShellState()
   );
 }
 
-function updateShell(next: DesktopTaskShellState): void {
+function updateShell(next: DesktopShellState): void {
   currentWorkbench().updateState(next);
 }
 
 function layoutChanged(
   session: string,
-  previous: DesktopTaskShellState,
-  next: DesktopTaskShellState,
+  previous: DesktopShellState,
+  next: DesktopShellState,
 ): void {
   if (session !== shell.active || applyingProjectList) return;
   rerenderShell();
@@ -543,7 +543,7 @@ interface SplitPanelElement extends HTMLElement {
 /**
  * Store the split handle's measured size on this project's surface.
  */
-function recordLayoutMeasurement(next: DesktopTaskShellState): void {
+function recordLayoutMeasurement(next: DesktopShellState): void {
   if (applyingProjectList) return;
   projectWorkbenches.get(shell.active)?.updateState(next);
 }

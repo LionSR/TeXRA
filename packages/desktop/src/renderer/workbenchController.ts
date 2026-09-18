@@ -18,11 +18,11 @@ import {
   toggleWorkbench,
   WORKBENCH_PLACEMENTS,
   workbenchTabsForPlacement,
-  type DesktopTaskShellState,
+  type DesktopShellState,
   type WorkbenchKind,
   type WorkbenchPlacement,
   type WorkbenchTab,
-} from '../shared/desktopTaskShell';
+} from '../shared/desktopShellState';
 import { DESKTOP_WORKSPACE_COMMANDS } from '../shared/desktopWorkspaceMessages';
 import type { createEditorPane } from './editorPane';
 import type { createPdfPane } from './pdfPane';
@@ -40,10 +40,10 @@ interface WorkbenchControllerDeps {
   subagentsTemplate(): TemplateResult | typeof nothing;
   settingsView: HTMLElement;
   logsPane: HTMLElement;
-  getState(): DesktopTaskShellState;
+  getState(): DesktopShellState;
   /** Root of the project this window shows; new terminals start there. */
   getWorkspacePath(): string | undefined;
-  updateShell(next: DesktopTaskShellState): void;
+  updateShell(next: DesktopShellState): void;
   postMessage(command: string, payload?: Record<string, unknown>): void;
 }
 

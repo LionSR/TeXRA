@@ -8,12 +8,12 @@ import type { Theme } from '@shared/schemas';
 import { postMessage } from '@shared/hostBridge';
 
 import {
-  DesktopTaskShellStateSchema,
-  initialDesktopTaskShellState,
+  DesktopShellStateSchema,
+  initialDesktopShellState,
   openWorkbenchTab,
   setWorkbenchTabDirty,
-  type DesktopTaskShellState,
-} from '../shared/desktopTaskShell';
+  type DesktopShellState,
+} from '../shared/desktopShellState';
 import { DESKTOP_WORKSPACE_COMMANDS } from '../shared/desktopWorkspaceMessages';
 import { createEditorPane } from './editorPane';
 import {
@@ -37,8 +37,8 @@ export function createProjectWorkbench(options: {
   subagentsTemplate(): TemplateResult | typeof nothing;
   onLayoutChanged(
     session: string,
-    previous: DesktopTaskShellState,
-    next: DesktopTaskShellState,
+    previous: DesktopShellState,
+    next: DesktopShellState,
   ): void;
 }) {
   const { session, surfaces } = options;
@@ -47,8 +47,8 @@ export function createProjectWorkbench(options: {
   const restored = surface.surface$.get().workbench;
   const layout =
     restored === null
-      ? initialDesktopTaskShellState()
-      : DesktopTaskShellStateSchema.parse(restored);
+      ? initialDesktopShellState()
+      : DesktopShellStateSchema.parse(restored);
   surfaces.act(session, {
     kind: 'workbench',
     layout: {
@@ -66,17 +66,16 @@ export function createProjectWorkbench(options: {
   // rather than trusting a cast, but skip the reparse when the raw value is
   // still the one `updateState` last wrote.
   let cachedRaw: unknown = surface.surface$.get().workbench;
-  let cachedState: DesktopTaskShellState =
-    DesktopTaskShellStateSchema.parse(cachedRaw);
-  const getState = (): DesktopTaskShellState => {
+  let cachedState: DesktopShellState = DesktopShellStateSchema.parse(cachedRaw);
+  const getState = (): DesktopShellState => {
     const raw = surface.surface$.get().workbench;
     if (raw !== cachedRaw) {
-      cachedState = DesktopTaskShellStateSchema.parse(raw);
+      cachedState = DesktopShellStateSchema.parse(raw);
       cachedRaw = raw;
     }
     return cachedState;
   };
-  function updateState(next: DesktopTaskShellState): void {
+  function updateState(next: DesktopShellState): void {
     if (disposed) return;
     const previous = getState();
     if (previous === next) return;
