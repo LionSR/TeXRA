@@ -1,3 +1,5 @@
+import { Effect } from 'effect';
+
 import type { RunRegistry } from '@agent/runtime/runRegistry';
 import {
   forEachLiveSession,
@@ -10,7 +12,6 @@ import {
 } from '@platform/interfaces';
 
 import { AgentCliSessionRegistry } from './agentCliSessionRegistry';
-import { Effect } from 'effect';
 
 /**
  * Owns the two stores (`codexThreadsFor`, `claudeAgentSessionsFor`) that hold
