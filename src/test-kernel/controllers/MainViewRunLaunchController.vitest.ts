@@ -54,7 +54,7 @@ const { prepareSurfaceLaunch } =
 function createHost() {
   return {
     showInfoMessage: vi.fn(() => Effect.void),
-    chooseTeamAvailability: vi.fn(async () => 'continue' as const),
+    chooseTeamAvailability: vi.fn(() => Effect.succeed('continue' as const)),
     signInForRemoteAgentCatalog: vi.fn(() => Effect.succeed(true)),
   };
 }
@@ -270,15 +270,12 @@ describe('main-view run launch controller', () => {
             signIn: expect.any(Function),
           }),
         );
-        // `choose` stays Promise-shaped while `signIn` is an Effect port:
-        // assert them as the caller sees them.
+        // Both ports are Effects; assert them as the caller sees them.
         const launchPorts = mocks.resolveTeamLaunch.mock.calls[0]![0] as {
-          choose: (names: readonly string[]) => Promise<unknown>;
+          choose: (names: readonly string[]) => Effect.Effect<unknown>;
           signIn: () => Effect.Effect<boolean>;
         };
-        expect(
-          yield* Effect.promise(() => launchPorts.choose(['writer'])),
-        ).toBe('continue');
+        expect(yield* launchPorts.choose(['writer'])).toBe('continue');
         expect(yield* launchPorts.signIn()).toBe(true);
         expect(host.chooseTeamAvailability).toHaveBeenCalledWith(['writer']);
         expect(host.signInForRemoteAgentCatalog).toHaveBeenCalledOnce();

@@ -6,7 +6,10 @@ import {
 } from '@agent/core/state/runRequests';
 
 // Local imports - team launch
-import type { TeamAvailabilityChoice } from '@common/teams/TeamAvailabilityPreflight';
+import type {
+  TeamAvailabilityChoice,
+  TeamCatalogPortFailed,
+} from '@common/teams/TeamAvailabilityPreflight';
 import {
   formatPartialTeamLaunchMessage,
   formatTeamLaunchBlockedMessage,
@@ -50,7 +53,7 @@ type LaunchPreparation =
 export interface MainViewRunLaunchHost {
   chooseTeamAvailability(
     unavailableNames: readonly string[],
-  ): Promise<TeamAvailabilityChoice | undefined>;
+  ): Effect.Effect<TeamAvailabilityChoice | undefined, TeamCatalogPortFailed>;
   signInForRemoteAgentCatalog(): Effect.Effect<boolean, SignInFailed>;
   showInfoMessage: MessageHost['showInfoMessage'];
 }

@@ -2,6 +2,7 @@ import { Effect } from 'effect';
 import {
   preflightTeamAvailability,
   type TeamAvailabilityChoice,
+  type TeamCatalogPortFailed,
 } from '@common/teams/TeamAvailabilityPreflight';
 import type {
   TeamRosterCatalog,
@@ -45,7 +46,7 @@ export interface TeamRosterApplicationDeps<R = never> {
   readonly choose: (
     preset: AgentModePreset,
     unavailableNames: readonly string[],
-  ) => Promise<TeamAvailabilityChoice | undefined>;
+  ) => Effect.Effect<TeamAvailabilityChoice | undefined, TeamCatalogPortFailed>;
   readonly signIn: () => Effect.Effect<boolean, SignInFailed>;
   readonly forceRefreshRemoteCatalog: () => Effect.Effect<void, unknown, R>;
 }

@@ -17,7 +17,6 @@ import {
   refresh as refreshAgents,
 } from '@agent/index';
 import { supabaseAuthenticated } from '@auth/SupabaseAuth';
-import type { TeamAvailabilityPrompt } from '@common/teams/TeamPlan';
 import { createSettingsAgentControllers } from '@controllers/settingsView/SettingsAgentControllerFactory';
 import { fetchRemoteAgentPromptYaml } from '@controllers/settingsView/remoteAgentPrompt';
 import { applySettingsTeamRoster } from '@controllers/settingsView/SettingsTeamRosterController';
@@ -391,7 +390,7 @@ export class AgentHandlers {
             refreshAgents({ includeRemote: true }),
           presentation: {
             chooseTeamAvailability: (prompt) =>
-              this.chooseTeamAvailability(prompt),
+              chooseTeamAvailabilityViaDialog(prompt, { modal: true }),
             // Both notices ride detached fibers, as the voided toast and the
             // forked error dialog did: the apply flow does not wait on a
             // toast, and a dialog fault is logged rather than failing the
@@ -491,10 +490,6 @@ export class AgentHandlers {
         ),
       ),
     ).pipe(Effect.asVoid);
-  }
-
-  private async chooseTeamAvailability(prompt: TeamAvailabilityPrompt) {
-    return chooseTeamAvailabilityViaDialog(prompt, { modal: true });
   }
 
   private createAgentFromTemplate(category: 'workflow' | 'toolUse') {

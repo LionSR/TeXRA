@@ -1,19 +1,18 @@
 import { Data, Effect } from 'effect';
 
 import type { SignInFailed } from '@common/errors/signInFailed';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /**
  * A team-catalog port the host would not answer.
  *
  * The bag below is bound seven times across the three hosts and the setup
- * tool. `choose` and `commitPreset` reach host dialogs and stores, so their
- * callers raise this instead of the identity-caught `unknown` they used to
- * propagate; `member` says which port refused, which is the only distinction
- * any caller here draws. `canAccessRemoteCatalog` is an Effect over the
- * account plane's own infallible probe, and `signIn` is an `Effect` port
- * carrying its own `SignInFailed` from the host boundary, so neither has a
- * failure to wrap here.
+ * tool. `choose` and `commitPreset` reach host dialogs and stores, so each
+ * raises this from its own host boundary instead of the identity-caught
+ * `unknown` they used to propagate; `member` says which port refused, which
+ * is the only distinction any caller here draws. `canAccessRemoteCatalog` is
+ * an Effect over the account plane's own infallible probe, and `signIn` is an
+ * `Effect` port carrying its own `SignInFailed` from the host boundary, so
+ * neither has a failure to wrap here.
  *
  * A user's own answer is never this: `choose` reporting `undefined` and
  * `signIn` reporting `false` are values the preflight already reads.
@@ -51,7 +50,7 @@ export interface TeamAvailabilityPreflightOptions<T, R = never> {
   readonly providedChoice?: TeamAvailabilityChoice;
   readonly choose: (
     unavailableNames: readonly string[],
-  ) => Promise<TeamAvailabilityChoice | undefined>;
+  ) => Effect.Effect<TeamAvailabilityChoice | undefined, TeamCatalogPortFailed>;
   readonly signIn: () => Effect.Effect<boolean, SignInFailed>;
   /** Force a remote catalog refresh; the failure channel is the refresh's own. */
   readonly refreshRemote: () => Effect.Effect<void, unknown, R>;
@@ -123,16 +122,7 @@ export function preflightTeamAvailability<T, R = never>(
     }
 
     const choice =
-      options.providedChoice ??
-      (yield* Effect.tryPromise({
-        try: () => options.choose(initialUnavailable),
-        catch: (cause) =>
-          new TeamCatalogPortFailed({
-            member: 'choose',
-            message: `The host could not ask about the unavailable members: ${toErrorMessage(cause)}`,
-            cause,
-          }),
-      }));
+      options.providedChoice ?? (yield* options.choose(initialUnavailable));
     if (choice === undefined) {
       return {
         status: 'choice-required',

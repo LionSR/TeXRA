@@ -124,7 +124,7 @@ const applyTeam = Effect.fn('ApplyTeamTool.execute')(function* (
     loadLocalCatalog: () => loadAgents({ includeRemote: false }),
     canAccessRemoteCatalog: () => Effect.succeed(authStatus.authenticated),
     providedChoice: input.unavailableAction ?? undefined,
-    choose: async () => undefined,
+    choose: () => Effect.succeed(undefined),
     signIn,
     forceRefreshRemoteCatalog: () => refresh({ includeRemote: true }),
   });

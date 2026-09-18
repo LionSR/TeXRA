@@ -1,5 +1,8 @@
 import { Data, Effect } from 'effect';
-import type { TeamAvailabilityChoice } from '@common/teams/TeamAvailabilityPreflight';
+import type {
+  TeamAvailabilityChoice,
+  TeamCatalogPortFailed,
+} from '@common/teams/TeamAvailabilityPreflight';
 import {
   formatTeamUnavailableMessage,
   formatUnknownTeamMessage,
@@ -28,7 +31,7 @@ interface SettingsTeamRosterPresentation extends Pick<
 > {
   chooseTeamAvailability(
     prompt: TeamAvailabilityPrompt,
-  ): Promise<TeamAvailabilityChoice | undefined>;
+  ): Effect.Effect<TeamAvailabilityChoice | undefined, TeamCatalogPortFailed>;
 }
 
 interface SettingsTeamRosterOptions<R> extends Omit<

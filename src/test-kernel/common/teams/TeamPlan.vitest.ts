@@ -424,7 +424,7 @@ describe('resolveTeamLaunch', () => {
         category === 'workflow' ? workflowAgents : toolUseAgents,
       canAccessRemoteCatalog: () => Effect.succeed(false),
       refreshRemote: () => Effect.void,
-      choose: async () => 'cancel' as const,
+      choose: () => Effect.succeed('cancel' as const),
       signIn: () => Effect.succeed(false),
       ...overrides,
     };
@@ -470,7 +470,7 @@ describe('resolveTeamLaunch', () => {
         yield* resolveTeamLaunch(
           launchArgs({
             customPresetsRaw: [hostedPreset],
-            choose: async () => 'continue' as const,
+            choose: () => Effect.succeed('continue' as const),
           }),
         ),
       ).toMatchObject({
@@ -485,7 +485,7 @@ describe('resolveTeamLaunch', () => {
     'uses a provided continue choice without invoking the interactive port',
     () =>
       Effect.gen(function* () {
-        const choose = vi.fn(async () => undefined);
+        const choose = vi.fn(() => Effect.succeed(undefined));
         expect(
           yield* resolveTeamLaunch(
             launchArgs({
@@ -512,7 +512,7 @@ describe('resolveTeamLaunch', () => {
         yield* resolveTeamLaunch(
           launchArgs({
             customPresetsRaw: [hostedWriterPreset()],
-            choose: async () => undefined,
+            choose: () => Effect.succeed(undefined),
           }),
         ),
       ).toEqual({ status: 'cancelled' });

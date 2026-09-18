@@ -54,7 +54,7 @@ describe('extension team auth catalog refresh scope', () => {
           },
           loadLocalCatalog: () => Effect.void,
           canAccessRemoteCatalog: () => Effect.succeed(false),
-          choose: async () => 'sign-in',
+          choose: () => Effect.succeed('sign-in' as const),
           signIn: () =>
             Effect.sync(() => {
               // Models/settings listeners run after the preflight-owned fetch and

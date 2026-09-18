@@ -25,6 +25,7 @@ import { capitalize } from '@utils/text/stringUtils';
 import {
   preflightTeamAvailability,
   type TeamAvailabilityChoice,
+  type TeamCatalogPortFailed,
 } from './TeamAvailabilityPreflight';
 import { resolvePresetAgents } from './TeamRoster';
 
@@ -300,7 +301,7 @@ export function resolveTeamLaunch<T extends TeamCatalogAgent, R = never>(args: {
   refreshRemote: () => Effect.Effect<void, unknown, R>;
   choose: (
     unavailableNames: readonly string[],
-  ) => Promise<TeamAvailabilityChoice | undefined>;
+  ) => Effect.Effect<TeamAvailabilityChoice | undefined, TeamCatalogPortFailed>;
   signIn: () => Effect.Effect<boolean, SignInFailed>;
   providedChoice?: TeamAvailabilityChoice;
 }): Effect.Effect<TeamLaunchResolution, unknown, R> {

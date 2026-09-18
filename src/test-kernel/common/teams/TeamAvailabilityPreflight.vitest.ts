@@ -22,8 +22,10 @@ function options(overrides: {
 }) {
   const refresh = vi.fn(() => undefined);
   const signIn = vi.fn(() => Effect.succeed(overrides.signedIn ?? true));
-  const choose = vi.fn(async () =>
-    overrides.choiceRequired ? undefined : (overrides.choice ?? 'cancel'),
+  const choose = vi.fn(() =>
+    Effect.succeed(
+      overrides.choiceRequired ? undefined : (overrides.choice ?? 'cancel'),
+    ),
   );
   return {
     refresh,
