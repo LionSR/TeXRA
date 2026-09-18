@@ -130,12 +130,14 @@ function tui(
   // directly, and the key-check expectations name exactly this object.
   const { secrets } = installedHost();
   detachHost();
-  detachHost = testDefaultSession().interactions.use(
-    createTuiHostInteractions(presentationHost, cliContext, {
-      session: testDefaultSession(),
-      secrets,
-      runtime: testRuntime(),
-    }),
+  detachHost = Effect.runSync(
+    testDefaultSession().interactions.use(
+      createTuiHostInteractions(presentationHost, cliContext, {
+        session: testDefaultSession(),
+        secrets,
+        runtime: testRuntime(),
+      }),
+    ),
   );
   return {
     presentationHost,

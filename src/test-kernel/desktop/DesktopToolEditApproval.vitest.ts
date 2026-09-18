@@ -150,11 +150,13 @@ function createApprovalFixture(
       ),
     );
     // The attached host stages the preview the durable payload cannot carry.
-    const detach = session.interactions.use({
-      presentToolEdit: (request) => {
-        testRuntime().runFork(controller.present(request));
-      },
-    });
+    const detach = Effect.runSync(
+      session.interactions.use({
+        presentToolEdit: (request) => {
+          testRuntime().runFork(controller.present(request));
+        },
+      }),
+    );
     yield* Effect.addFinalizer(() => Effect.sync(detach));
     const started = new Set<RunId>();
     return {

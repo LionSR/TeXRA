@@ -83,11 +83,13 @@ function installTestPlatform(): Promise<void> {
       }),
     );
     detachHostInteractions();
-    detachHostInteractions = session.interactions.use({
-      presentToolEdit: (request) => {
-        stagedToolEdits.set(request.permission.requestId, request);
-      },
-    });
+    detachHostInteractions = Effect.runSync(
+      session.interactions.use({
+        presentToolEdit: (request) => {
+          stagedToolEdits.set(request.permission.requestId, request);
+        },
+      }),
+    );
     publishTestRunStart(session, runId);
   });
 }

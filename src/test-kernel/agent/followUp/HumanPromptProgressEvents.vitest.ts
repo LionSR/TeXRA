@@ -28,7 +28,9 @@ function inToolContext<A, E, R>(
   run: () => Effect.Effect<A, E, R>,
 ) {
   return Effect.acquireUseRelease(
-    Effect.sync(() => testDefaultSession().interactions.use(interactions)),
+    Effect.sync(() =>
+      Effect.runSync(testDefaultSession().interactions.use(interactions)),
+    ),
     () =>
       run().pipe(
         Effect.provide(

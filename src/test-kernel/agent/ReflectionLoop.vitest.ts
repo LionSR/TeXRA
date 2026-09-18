@@ -994,7 +994,7 @@ describe('the output facts a reflection round publishes', () => {
     Effect.gen(function* () {
       const session = yield* createProcessSession();
       const { events, interactions } = createRecordingHost();
-      session.interactions.use(interactions);
+      Effect.runSync(session.interactions.use(interactions));
       const runId = startedRun(session);
       scripted.openFiles = true;
 

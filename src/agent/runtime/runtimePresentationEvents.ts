@@ -70,6 +70,19 @@ export class DiagnosticsReadFailed extends Data.TaggedError(
 }> {}
 
 /**
+ * A host could not present one runtime notice: its `emit` threw, or the
+ * promise it answered with rejected. The presentation plane's one failure, so
+ * the fallback notice and the warn logs that consume it report the same cause
+ * the raw `catch` they replaced reported.
+ */
+export class HostPresentationFailed extends Data.TaggedError(
+  'HostPresentationFailed',
+)<{
+  readonly event: RuntimePresentationEvent;
+  readonly cause: unknown;
+}> {}
+
+/**
  * The host viewer refused to open a PDF the tool had already located on disk.
  * One reason only, by measurement: the implementation hands the file to the
  * host's own viewer, which either opens it or rejects.

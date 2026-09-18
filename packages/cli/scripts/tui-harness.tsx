@@ -443,12 +443,14 @@ const harnessRuntimeHost: CliRuntimeHost = createCliRuntimeHost(
   HARNESS_CLI_CONTEXT,
 );
 HARNESS_DISPOSERS.push(
-  session().interactions.use(
-    createTuiHostInteractions(harnessRuntimeHost, HARNESS_CLI_CONTEXT, {
-      session: session(),
-      secrets: HARNESS_PLATFORM_SERVICES.secrets,
-      runtime: harnessRuntime,
-    }),
+  Effect.runSync(
+    session().interactions.use(
+      createTuiHostInteractions(harnessRuntimeHost, HARNESS_CLI_CONTEXT, {
+        session: session(),
+        secrets: HARNESS_PLATFORM_SERVICES.secrets,
+        runtime: harnessRuntime,
+      }),
+    ),
   ),
 );
 HARNESS_DISPOSERS.push(announceForegroundApprovals());

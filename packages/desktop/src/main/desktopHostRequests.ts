@@ -276,12 +276,12 @@ export function createDesktopHostRequests(
             catch: (error) => error,
           }).pipe(
             Effect.catch((error) =>
-              Effect.sync(() => {
+              Effect.suspend(() => {
                 logger.error('Desktop merge run failed', {
                   data: toLogData(error),
                 });
                 const primaryError = primaryAgentError(error);
-                presentAgentFailure(
+                return presentAgentFailure(
                   session.interactions,
                   {
                     kind: classifyAgentError(primaryError),
@@ -921,22 +921,18 @@ export function createDesktopHostRequests(
           primaryError instanceof Unavailable
             ? primaryError
             : undefined;
-        return Effect.promise(() =>
-          Promise.resolve(
-            presentAgentFailure(
-              session.interactions,
-              {
-                kind: classifyAgentError(primaryError),
-                message: refusal?.reason ?? toErrorMessage(primaryError),
-                // A refused request's guide link (e.g. the launch's
-                // file-management page) must survive into the host-owned
-                // dialog (#11959).
-                ...(refusal instanceof Rejected &&
-                  refusal.docsCommand && { docsCommand: refusal.docsCommand }),
-              },
-              { replayWhenAttached: true },
-            ),
-          ),
+        return presentAgentFailure(
+          session.interactions,
+          {
+            kind: classifyAgentError(primaryError),
+            message: refusal?.reason ?? toErrorMessage(primaryError),
+            // A refused request's guide link (e.g. the launch's
+            // file-management page) must survive into the host-owned
+            // dialog (#11959).
+            ...(refusal instanceof Rejected &&
+              refusal.docsCommand && { docsCommand: refusal.docsCommand }),
+          },
+          { replayWhenAttached: true },
         ).pipe(Effect.andThen(Effect.failCause(cause)));
       }),
     );

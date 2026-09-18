@@ -48,7 +48,6 @@ import { finalizeRun } from '@agent/storage/runLifecycle';
 import type { ResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { createLog, isDebugModeEnabled } from '@logger/logUtils';
 import { redactSecrets } from '@logger/redaction';
-import { DisposableStore } from '@platform/disposable';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
   TEXRA_APPROVAL_POLICY_DEFAULT,
@@ -95,7 +94,7 @@ import type {
   StreamLogStore,
   StreamLogStoreMode,
 } from '@transcript/StreamLogStore';
-import { aggregateError } from '@utils/core';
+import { aggregateError, throwAggregated } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import {
   SessionHostInteractions,
@@ -175,8 +174,8 @@ function draftedRun(events: readonly SessionEventDraft[]): RunId | null {
  * What opening a session supplies (`openSessionEffect`): persistence mode and
  * host-owned policies. The graph constructs its store over its event
  * database. `interactions` is a presentation host the session is born with,
- * attached for its whole life, for an opener with no later attach step of its
- * own.
+ * attached for its whole life by the session owner (`sessionLayer`) as soon as
+ * the handle exists, for an opener with no later attach step of its own.
  *
  * `events` is deliberately absent: the event plane is the session's graph,
  * built by the session owner per workspace root, so a separately-injected
@@ -309,8 +308,15 @@ export class SessionHandle {
    * to skip/retry a focused grandchild `agent()` call.
    */
   readonly workflowControls: WorkflowControlRegistry;
-  /** LIFO owner for the session's constructor-registered teardown. */
-  private readonly teardown = new DisposableStore();
+  /**
+   * LIFO owner for the session's constructor-registered teardown: the
+   * programs {@link unwind} runs, newest first. Each is a step of the
+   * shutdown sequence, so the one owner whose teardown is a program (the
+   * presentation plane, which disposes every attached host and reports each
+   * host's failure) sits in that sequence rather than beside it.
+   */
+  private readonly teardown: Array<Effect.Effect<void>> = [];
+  private unwound = false;
   /**
    * Built by the session owner alone (`sessionLayer.ts`), inside the root's
    * graph, with that graph handed over as a function of the session: the
@@ -355,21 +361,22 @@ export class SessionHandle {
     this.responseTextProcessing =
       init.responseTextProcessing ?? createNeutralResponseTextProcessing();
     this.workflowControls = new WorkflowControlRegistry();
-    if (init.interactions) this.interactions.use(init.interactions);
     // Register teardown in reverse LIFO order so `teardown.dispose()` runs the
     // session's shutdown sequence top-to-bottom: drain traces, then unwind
     // each owner in dependency order.
     // The graph outlives every publisher above it: the owner releases it
     // after this store has run, so a late fact still lands in the log until
     // the last owner has unwound.
-    this.teardown.add(() => {
-      this.disposed = true;
-    });
-    this.teardown.add(() => this.resultListeners.clear());
-    this.teardown.add(() => this.interactions.dispose());
-    // Drop bypass state before the interaction slot settles pending approvals.
-    this.teardown.add(() => this.approvals.clearAll());
-    this.teardown.add(() => this.followUps.dispose());
+    this.teardown.push(
+      Effect.sync(() => {
+        this.disposed = true;
+      }),
+      Effect.sync(() => this.resultListeners.clear()),
+      Effect.suspend(() => this.interactions.dispose()),
+      // Drop bypass state before the interaction slot settles pending approvals.
+      Effect.sync(() => this.approvals.clearAll()),
+      Effect.sync(() => this.followUps.dispose()),
+    );
   }
 
   /** Live host-neutral approval policy for executable requests. */
@@ -553,7 +560,9 @@ export class SessionHandle {
    * Terminal result listeners consume committed table rows, including run
    * usage and agent identity. Cleared when the session unwinds.
    */
-  private readonly resultListeners = new Set<(event: ResultEvent) => void>();
+  private readonly resultListeners = new Set<
+    (event: ResultEvent) => Effect.Effect<void>
+  >();
 
   /**
    * Subscribe to the `run.end` rows of this session's runs, each delivered
@@ -563,7 +572,7 @@ export class SessionHandle {
    * traces are created inside the run and are not reachable from the host
    * otherwise.
    */
-  onResult(listener: (event: ResultEvent) => void): () => void {
+  onResult(listener: (event: ResultEvent) => Effect.Effect<void>): () => void {
     this.resultListeners.add(listener);
     return () => {
       this.resultListeners.delete(listener);
@@ -1133,13 +1142,12 @@ export class SessionHandle {
         yield* Effect.forEach(
           [...this.resultListeners],
           (listener) =>
-            Effect.try({
-              try: () => listener({ ...event, runId: target.id }),
-              catch: (error) => error,
-            }).pipe(
-              Effect.catch((error) =>
+            Effect.suspend(() => listener({ ...event, runId: target.id })).pipe(
+              Effect.catchCause((cause) =>
                 Effect.sync(() => {
-                  logger.warn('Session result listener threw', { data: error });
+                  logger.warn('Session result listener threw', {
+                    data: Cause.squash(cause),
+                  });
                 }),
               ),
             ),
@@ -1247,16 +1255,33 @@ export class SessionHandle {
 
   /**
    * Tear down everything this session owns through the constructor-registered
-   * LIFO store, once: the store aggregates each disposer's failure and still
-   * runs the remaining disposers. The session owner calls it, after disposing
+   * LIFO teardown list, once: every step runs even when an earlier one fails,
+   * and the failures are aggregated into one. The session owner calls it, after disposing
    * the session's runs, whenever it releases the session (a `closeSession`,
    * the runtime's disposal, {@link dispose}). On owner-release paths
    * (`closeSession`, runtime disposal) the owner has already dropped the
    * session from the set {@link forEachLiveSession} reads by then;
    * {@link dispose} unwinds first and drops the session afterwards.
    */
-  unwind(): void {
-    this.teardown.dispose();
+  unwind(): Effect.Effect<void> {
+    return Effect.suspend(() => {
+      if (this.unwound) return Effect.void;
+      this.unwound = true;
+      const steps = this.teardown.toReversed();
+      this.teardown.length = 0;
+      return Effect.forEach(steps, Effect.exit).pipe(
+        Effect.flatMap((exits) =>
+          Effect.sync(() => {
+            throwAggregated(
+              exits.flatMap((exit) =>
+                Exit.isFailure(exit) ? [Cause.squash(exit.cause)] : [],
+              ),
+              'Multiple resources failed to dispose',
+            );
+          }),
+        ),
+      );
+    });
   }
 }
 

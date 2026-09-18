@@ -117,7 +117,7 @@ describe('AgentLaunchContext', () => {
         // The banner claims the failure, so the launch catch adds no generic toast.
         const explicit = createRecordingHost();
         const session = createTestSession();
-        session.interactions.use(explicit.interactions);
+        Effect.runSync(session.interactions.use(explicit.interactions));
 
         try {
           yield* launchWithMissingAgent(
@@ -150,7 +150,7 @@ describe('AgentLaunchContext', () => {
           yield* triggerQueuedMissingAgentFailure(createTestSession());
         const owner = session.interactions;
 
-        owner.use(recording.interactions);
+        yield* owner.use(recording.interactions);
         yield* settle;
 
         expect(
@@ -176,14 +176,16 @@ describe('AgentLaunchContext', () => {
         // pre-registration, so no `result` event exists to present it instead.
         const events: string[] = [];
         const session = createTestSession();
-        session.interactions.use({
-          emit: (event) => {
-            if (event === 'showAgentConfigBanner') {
-              throw new Error('renderer torn down mid-post');
-            }
-            events.push(event);
-          },
-        });
+        Effect.runSync(
+          session.interactions.use({
+            emit: (event) => {
+              if (event === 'showAgentConfigBanner') {
+                throw new Error('renderer torn down mid-post');
+              }
+              events.push(event);
+            },
+          }),
+        );
 
         try {
           yield* launchWithMissingAgent(session);
@@ -206,14 +208,16 @@ describe('AgentLaunchContext', () => {
         const events: string[] = [];
         const session =
           yield* triggerQueuedMissingAgentFailure(createTestSession());
-        session.interactions.use({
-          emit: (event) => {
-            if (event === 'showAgentConfigBanner') {
-              throw new Error('renderer torn down mid-post');
-            }
-            events.push(event);
-          },
-        });
+        Effect.runSync(
+          session.interactions.use({
+            emit: (event) => {
+              if (event === 'showAgentConfigBanner') {
+                throw new Error('renderer torn down mid-post');
+              }
+              events.push(event);
+            },
+          }),
+        );
         yield* settle;
 
         expect(
@@ -229,7 +233,7 @@ describe('AgentLaunchContext', () => {
       Effect.gen(function* () {
         const recording = createRecordingHost();
         const session = createTestSession();
-        session.interactions.use(recording.interactions);
+        Effect.runSync(session.interactions.use(recording.interactions));
 
         mocks.resolve.mockReturnValueOnce({ path: '/agents/chat.yaml' });
         mocks.load.mockReturnValueOnce(
@@ -280,7 +284,7 @@ describe('AgentLaunchContext', () => {
         // the `result` event's own toast, so the user saw the error twice.
         const recording = createRecordingHost();
         const session = createTestSession();
-        session.interactions.use(recording.interactions);
+        Effect.runSync(session.interactions.use(recording.interactions));
         const detachToast = attachTerminalResultToast(
           session,
           session.interactions,

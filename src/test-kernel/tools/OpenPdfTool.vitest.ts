@@ -70,9 +70,11 @@ describe('OpenPdfTool', () => {
     const openPdf = vi.fn<(request: OpenPdfRequest) => Effect.Effect<void>>();
     openPdf.mockReturnValue(Effect.void);
     detachHostInteractions();
-    detachHostInteractions = testDefaultSession().interactions.use({
-      openPdf,
-    });
+    detachHostInteractions = Effect.runSync(
+      testDefaultSession().interactions.use({
+        openPdf,
+      }),
+    );
     return openPdf;
   }
 

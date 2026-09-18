@@ -58,7 +58,7 @@ vi.mock('@effect/sql-sqlite-node/SqliteClient', async (importOriginal) => ({
   >()),
 }));
 
-import { TraceEmitter } from '@agent/trace';
+import { TraceEmitter, type ResultEvent } from '@agent/trace';
 import { runLedgerLayer } from '@agent/runtime/RunLedger';
 import { sessionEventsLayer } from '@agent/runtime/SessionEvents';
 import {
@@ -748,7 +748,7 @@ describe('Sessions owner', () => {
       Effect.gen(function* () {
         const session = yield* open('/workspace/owner/committed-status');
         const handleStatus = vi.spyOn(session.runs, 'handleStatus');
-        const onResult = vi.fn();
+        const onResult = vi.fn((_event: ResultEvent) => Effect.void);
         const detachResult = session.onResult(onResult);
 
         try {
@@ -898,7 +898,7 @@ describe('Sessions owner', () => {
     () =>
       Effect.gen(function* () {
         const session = yield* open('/workspace/owner/foreign-fold');
-        const onResult = vi.fn();
+        const onResult = vi.fn((_event: ResultEvent) => Effect.void);
         const detachResult = session.onResult(onResult);
         const foreign = RunIdSchema.parse('cd34ef');
         const aggregateId = qualifyAggregateId('run', foreign);

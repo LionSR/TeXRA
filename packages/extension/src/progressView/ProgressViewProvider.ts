@@ -342,65 +342,73 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     // asks anything. Requests this host does not present (bash, plan,
     // proposal, retry, question) stay pending in the fold until the view's
     // request row decides them.
-    const detachHostInteractions = session.interactions.use({
-      ...createAgentPresentationHost(this, globalState, this.runtime, session),
-      readDiagnostics: getLinterMessages,
-      addCriticism: (payload) => ({
-        accepted: pushManualCriticism(payload),
-        resolvedPath: payload.absolutePath,
-      }),
-      openPdf: ({ location, preserveFocus }) =>
-        Effect.tryPromise({
-          try: async () => {
-            await vscode.commands.executeCommand(
-              'vscode.open',
-              vscode.Uri.file(location.absolutePath),
-              {
-                viewColumn: vscode.ViewColumn.Beside,
-                preserveFocus,
-              } satisfies vscode.TextDocumentShowOptions,
-            );
-          },
-          catch: (cause) =>
-            new PdfOpenFailed({
-              path: location.absolutePath,
-              message: 'VS Code would not open the PDF in its viewer.',
-              cause,
-            }),
+    const detachHostInteractions = this.runtime.runSync(
+      session.interactions.use({
+        ...createAgentPresentationHost(
+          this,
+          globalState,
+          this.runtime,
+          session,
+        ),
+        readDiagnostics: getLinterMessages,
+        addCriticism: (payload) => ({
+          accepted: pushManualCriticism(payload),
+          resolvedPath: payload.absolutePath,
         }),
-      // Findings from the changeReviewer tool-use session flow in through
-      // the report_review_issue tool and land in the panel + diagnostics.
-      reportReviewIssue: (report) => AgentReviewService.addIssueReport(report),
-      // Staging is the host's half of a `request.opened`; the fold lists the
-      // request either way, so a staging failure is reported, never swallowed.
-      presentToolEdit: (request) => {
-        this.runtime.runFork(
-          this.toolEditApprovals.present(request).pipe(
-            Effect.catchCause((cause) =>
-              Effect.sync(() => {
-                this.logger.error('Tool edit preview staging failed', {
-                  data: Cause.squash(cause),
-                });
+        openPdf: ({ location, preserveFocus }) =>
+          Effect.tryPromise({
+            try: async () => {
+              await vscode.commands.executeCommand(
+                'vscode.open',
+                vscode.Uri.file(location.absolutePath),
+                {
+                  viewColumn: vscode.ViewColumn.Beside,
+                  preserveFocus,
+                } satisfies vscode.TextDocumentShowOptions,
+              );
+            },
+            catch: (cause) =>
+              new PdfOpenFailed({
+                path: location.absolutePath,
+                message: 'VS Code would not open the PDF in its viewer.',
+                cause,
               }),
+          }),
+        // Findings from the changeReviewer tool-use session flow in through
+        // the report_review_issue tool and land in the panel + diagnostics.
+        reportReviewIssue: (report) =>
+          AgentReviewService.addIssueReport(report),
+        // Staging is the host's half of a `request.opened`; the fold lists the
+        // request either way, so a staging failure is reported, never swallowed.
+        presentToolEdit: (request) => {
+          this.runtime.runFork(
+            this.toolEditApprovals.present(request).pipe(
+              Effect.catchCause((cause) =>
+                Effect.sync(() => {
+                  this.logger.error('Tool edit preview staging failed', {
+                    data: Cause.squash(cause),
+                  });
+                }),
+              ),
+            ),
+          );
+        },
+        // An open that never committed leaves the staged preview with no
+        // decision to release it; this is that release, composed into the
+        // session's own program rather than run here: closing the diff view
+        // and deleting the temp files behind it is asynchronous, and the
+        // refusal is not reported until it is done. The controller's programs
+        // take this window's services from the runtime's context, which the
+        // session that composes them does not carry.
+        releaseToolEdit: (requestId) =>
+          Effect.flatMap(this.runtime.contextEffect, (context) =>
+            Effect.provideContext(
+              this.toolEditApprovals.release(requestId),
+              context,
             ),
           ),
-        );
-      },
-      // An open that never committed leaves the staged preview with no
-      // decision to release it; this is that release, composed into the
-      // session's own program rather than run here: closing the diff view
-      // and deleting the temp files behind it is asynchronous, and the
-      // refusal is not reported until it is done. The controller's programs
-      // take this window's services from the runtime's context, which the
-      // session that composes them does not carry.
-      releaseToolEdit: (requestId) =>
-        Effect.flatMap(this.runtime.contextEffect, (context) =>
-          Effect.provideContext(
-            this.toolEditApprovals.release(requestId),
-            context,
-          ),
-        ),
-    });
+      }),
+    );
     // Terminal-error toasts come from the run's `result` event: this
     // re-emits `requestShow*` through the session's interactions, reaching
     // the presentation dispatch above exactly once.

@@ -29,9 +29,11 @@ let detachHostInteractions = (): void => {};
 /** Attach a review sink the way a host does: as a session capability. */
 function useReviewSink(sink: ReportReviewIssueSink): void {
   detachHostInteractions();
-  detachHostInteractions = testDefaultSession().interactions.use({
-    reportReviewIssue: sink,
-  });
+  detachHostInteractions = Effect.runSync(
+    testDefaultSession().interactions.use({
+      reportReviewIssue: sink,
+    }),
+  );
 }
 
 function useAcceptingSink() {

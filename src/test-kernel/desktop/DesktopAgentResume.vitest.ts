@@ -132,7 +132,7 @@ function attachResultPresenter(session: SessionHandle): {
   const emit = vi.fn();
   return {
     emit,
-    detach: session.interactions.use({ emit }),
+    detach: Effect.runSync(session.interactions.use({ emit })),
   };
 }
 

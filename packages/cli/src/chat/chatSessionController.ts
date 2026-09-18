@@ -542,12 +542,14 @@ export function createChatSessionController(
   const presentationHost = createCliRuntimeHost(runtime, sessionContext);
   disposables.add(() => void presentationHost.close());
   disposables.add(
-    runtimeSession.interactions.use(
-      createTuiHostInteractions(presentationHost, sessionContext, {
-        session: runtimeSession,
-        secrets,
-        runtime,
-      }),
+    runtime.runSync(
+      runtimeSession.interactions.use(
+        createTuiHostInteractions(presentationHost, sessionContext, {
+          session: runtimeSession,
+          secrets,
+          runtime,
+        }),
+      ),
     ),
   );
 

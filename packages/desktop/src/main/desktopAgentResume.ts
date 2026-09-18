@@ -125,22 +125,21 @@ export class DesktopProcessResumeOwner {
       Effect.provideContext(attempt, context),
     ).pipe(
       Effect.catchCause((cause) =>
-        Effect.sync(() => {
+        Effect.suspend(() => {
           const error = Cause.squash(cause);
-          if (isCancellationRequested()) return false;
+          if (isCancellationRequested()) return Effect.succeed(false);
           this.logger.error(`Failed to resume desktop run ${runId}`, {
             data: toLogData(error),
           });
           const primaryError = primaryAgentError(error);
-          presentAgentFailure(
+          return presentAgentFailure(
             session.interactions,
             {
               kind: classifyAgentError(primaryError),
               message: `Resume failed: ${toErrorMessage(primaryError)}`,
             },
             { replayWhenAttached: true },
-          );
-          return false;
+          ).pipe(Effect.as(false));
         }),
       ),
       Effect.ensuring(Effect.sync(() => this.options.onLaunchSettled?.())),

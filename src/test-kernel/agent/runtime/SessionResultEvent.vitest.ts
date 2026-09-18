@@ -70,9 +70,11 @@ function setupResultCase(session?: SessionHandle): {
   // the parent edge it is exercising.
   if (!session) publishTestRunStart(runSession, runId);
   const results: ResultEvent[] = [];
-  runSession.onResult((event) => {
-    if (event.runId === runId) results.push(event);
-  });
+  runSession.onResult((event) =>
+    Effect.sync(() => {
+      if (event.runId === runId) results.push(event);
+    }),
+  );
   return { logger, results, ctx };
 }
 
@@ -230,7 +232,7 @@ describe('terminal result event', () => {
   it.effect('bridges a child run result to session.onResult', () =>
     Effect.gen(function* () {
       const session = createTestSession();
-      const onResult = vi.fn();
+      const onResult = vi.fn((_event: ResultEvent) => Effect.void);
       const { logger, ctx } = setupResultCase(session);
       const parentRunId = publishTestRunStart(session);
       publishTestRunStart(session, ctx.runId, {

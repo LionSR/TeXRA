@@ -381,7 +381,7 @@ function goalSession(
   overrides: Record<string, unknown> = {},
 ): Effect.Effect<SessionHandle, SessionOpenError> {
   return Effect.map(createProcessSession(), (session) => {
-    session.interactions.use({ emit: () => {}, ...overrides });
+    Effect.runSync(session.interactions.use({ emit: () => {}, ...overrides }));
     return session;
   });
 }

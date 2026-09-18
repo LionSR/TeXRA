@@ -262,9 +262,11 @@ const ownerLiveness = Layer.effectDiscard(
  * entry's release runs it, and so does the handle's `dispose` before it asks
  * for that release (`graph.close`).
  */
-function unwindSession(session: SessionHandle): void {
-  session.runs.dispose();
-  session.unwind();
+function unwindSession(session: SessionHandle): Effect.Effect<void> {
+  return Effect.suspend(() => {
+    session.runs.dispose();
+    return session.unwind();
+  });
 }
 
 /**
@@ -511,9 +513,7 @@ const sessionHandleLayer = (
           // ends, and the session refuses new runs from the moment it is asked
           // to close. A teardown failure still releases the entry.
           close: () =>
-            Effect.sync(() => unwindSession(session)).pipe(
-              Effect.ensuring(release(key)),
-            ),
+            unwindSession(session).pipe(Effect.ensuring(release(key))),
         };
       };
       // Capture before constructing the handle: constructor publications and
@@ -536,17 +536,23 @@ const sessionHandleLayer = (
       // the handle below has unwound its runs.
       const modelRetries = yield* ModelRetryGate.make;
       const session = yield* Effect.acquireRelease(
-        Effect.sync(
-          () =>
-            new SessionHandle({
-              ...key.open,
-              transcripts,
-              graph,
-              modelRetries,
-            }),
-        ),
+        Effect.gen(function* () {
+          const handle = new SessionHandle({
+            ...key.open,
+            transcripts,
+            graph,
+            modelRetries,
+          });
+          // The presentation host an opener hands over is attached here, as
+          // its own step: `use` replays what is queued for it, which is a
+          // program, and a constructor cannot run one.
+          if (key.open.interactions) {
+            yield* handle.interactions.use(key.open.interactions);
+          }
+          return handle;
+        }),
         (session) =>
-          Effect.sync(() => unwindSession(session)).pipe(
+          unwindSession(session).pipe(
             // Settlement reports what the session's own publications left
             // behind. The release still has to finish, so that report is
             // logged here rather than escaping `Scope.close` and failing the
