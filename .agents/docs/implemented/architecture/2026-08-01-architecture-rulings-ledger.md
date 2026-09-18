@@ -404,3 +404,42 @@ independent refuters before being recorded. Ruling 8 is visible in the tree:
 propose renaming the edge function's `stream_id` column, and do not delete
 `AgentPlatform`'s two fields on the grounds that `Platform` no longer has
 them.
+
+## The process-roots holder is the one named ambient singleton, and it retires with `SessionHandleInit.roots` (ruled 2026-09-19)
+
+**Question.** [#12774](https://github.com/LionSR/TeXRA/pull/12774) deleted the
+workspace-roots `AsyncLocalStorage` carrier, `runInSession`, `RunContext.ts`
+and the `inScope` re-entry on `AgentRun`/`ToolCall`, so production holds no
+`new AsyncLocalStorage`. Four reads of a process-wide roots holder survived.
+Are they debt to be cleared by the next lane, or a named exception?
+
+**Ruling.** A named exception, with one exit. `initProcessWorkspaceRoots` /
+`processWorkspaceRoots` / `tryProcessWorkspaceRoots`
+(`src/platform/workspaceRoots.ts`) stay as the campaign's one ambient
+singleton, tracked by the `ambient:asyncLocalStorage` row of
+`config/ratchets/effect-migration-baseline.json` at its floor of three files
+and four sites. It retires when `SessionHandleInit.roots` becomes required,
+which removes the last fallback read; the row is then deleted rather than
+zeroed.
+
+**Evidence.** The four sites each precede any caller that could hold roots.
+`createSessionHandle` reads `init.roots ?? processWorkspaceRoots()`
+(`src/agent/runtime/sessionGraph.ts`), so the fallback exists only for the
+roots the four composition roots and about ten kernel support files do not yet
+pass; `sessionGraph.ts` also reads `tryProcessWorkspaceRoots()` for the
+graph-level lookup. `getConfigBeforePlatformInit`
+(`src/utils/config/configUtils.ts`) serves a logger write that can precede any
+session, and its own doc comment records that there is no caller to take a
+configuration from. `processSettingsStores`
+(`src/utils/config/platformSettings.ts`) has the two callers AGENTS.md already
+documents as the standing exception: the CLI composition root
+(`packages/cli/src/runtime/initPlatform.ts`) and the delegation tools'
+`working_directory` Zod transform (`src/tools/delegation/inputFields.ts`),
+which the tool facade parses before any per-call value exists.
+
+**Forbids.** A new reader of the holder, in production or in a host; a second
+ambient carrier reintroduced to avoid threading a parameter; widening the
+ratchet row. Making `SessionHandleInit.roots` optional again after it is
+required. Moving the `working_directory` gate into `execute` as a way to drop
+the read: that turns a schema rejection into a tool error and is a behavior
+decision of its own, not a threading change.
