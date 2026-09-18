@@ -231,130 +231,128 @@ const ensureRoutingConfigured = Effect.fn('ensureRoutingConfigured')(function* (
 });
 
 /**
- * Host boundary: the command surface calls this as a `Promise`, so the launch
- * program runs on the process runtime here and folds every failure — a failed
- * host call, a failed model resolution, a failed `runAgent` — into one error
- * report and a `not-started` result, which is the contract the host caller
- * relies on. An interrupted launch is not a failure: the cause is re-raised so
- * a runtime disposal stays a cancellation instead of a launch-failure notice.
+ * The launch program the command surface runs on the process runtime: it
+ * folds every failure — a failed host call, a failed model resolution, a
+ * failed `runAgent` — into one error report and a `not-started` result,
+ * which is the contract its host caller relies on. An interrupted launch is
+ * not a failure: the cause is re-raised so a runtime disposal stays a
+ * cancellation instead of a launch-failure notice.
  */
 export function launchSetupAssistant(
   secrets: PlatformSecrets,
   globalState: StateStore,
   runtime: ProcessRuntime,
   session: SessionHandle,
-): Promise<'launched' | 'already-running' | 'not-started'> {
-  return runtime.runPromise(
-    Effect.gen(function* () {
-      // Every setup entry point funnels through here (command, status pill,
-      // walkthrough, onboarding setup card), so one guard covers them all:
-      // a second concurrent setup conversation would race the first one's
-      // installs and config writes. The launcher's manual Execute path is
-      // deliberately not gated — an explicit user action wins.
-      if (
-        session.runs
-          .getAgentHandles()
-          .some((handle) => agentName(handle.agentName) === SETUP_AGENT_NAME)
-      ) {
-        void vscode.window.showInformationMessage(
-          'The setup assistant is already running. Follow it in the Progress view.',
-        );
+) {
+  return Effect.gen(function* () {
+    // Every setup entry point funnels through here (command, status pill,
+    // walkthrough, onboarding setup card), so one guard covers them all:
+    // a second concurrent setup conversation would race the first one's
+    // installs and config writes. The launcher's manual Execute path is
+    // deliberately not gated — an explicit user action wins.
+    if (
+      session.runs
+        .getAgentHandles()
+        .some((handle) => agentName(handle.agentName) === SETUP_AGENT_NAME)
+    ) {
+      void vscode.window.showInformationMessage(
+        'The setup assistant is already running. Follow it in the Progress view.',
+      );
+      yield* Effect.promise(() =>
+        vscode.commands.executeCommand('texra.showProgressView'),
+      );
+      return 'already-running' as const;
+    }
+
+    // Check routing configuration before credentials: a ChatGPT-
+    // subscription user whose "Use OpenRouter" flag is on without an OR
+    // key would otherwise fall into the credential prompt first because
+    // isCodexSubscriptionActive returns false because
+    // shouldUseCodexSubscription short-circuits when useOpenRouter is true.
+    if (!(yield* ensureRoutingConfigured(session.roots, secrets))) {
+      void vscode.window.showInformationMessage(
+        'Setup assistant cancelled. Fix the "Use OpenRouter" setting in Dashboard → Models, then run `TeXRA: Run Setup Assistant` again.',
+      );
+      return 'not-started' as const;
+    }
+
+    const proceed = yield* ensureCredentialOrPrompt(
+      session.roots,
+      secrets,
+      runtime,
+    );
+    if (!proceed) {
+      void vscode.window.showInformationMessage(
+        'Setup assistant cancelled. Run `TeXRA: Run Setup Assistant` again once you have signed in, turned on your ChatGPT subscription, or set an API key.',
+      );
+      return 'not-started' as const;
+    }
+
+    const resolution = yield* selectLaunchModel(session.roots, secrets);
+    if (!resolution) {
+      // Edge case: no setup-model candidate is usable with the current
+      // credentials. Refuse launch rather than pick a model that crashes at
+      // runtime.
+      const choice = yield* Effect.promise(() =>
+        vscode.window.showWarningMessage(
+          'No model is available with your current keys. Add a provider API key or sign in with your ChatGPT subscription, then try again.',
+          { modal: true },
+          'Open Models tab',
+          'Set API key',
+        ),
+      );
+      if (choice === 'Open Models tab') {
         yield* Effect.promise(() =>
-          vscode.commands.executeCommand('texra.showProgressView'),
+          vscode.commands.executeCommand('texra.showModels'),
         );
-        return 'already-running' as const;
+      } else if (choice === 'Set API key') {
+        yield* Effect.promise(() =>
+          vscode.commands.executeCommand(EXTENSION_COMMANDS.SET_API_KEY),
+        );
       }
+      return 'not-started' as const;
+    }
 
-      // Check routing configuration before credentials: a ChatGPT-
-      // subscription user whose "Use OpenRouter" flag is on without an OR
-      // key would otherwise fall into the credential prompt first because
-      // isCodexSubscriptionActive returns false because
-      // shouldUseCodexSubscription short-circuits when useOpenRouter is true.
-      if (!(yield* ensureRoutingConfigured(session.roots, secrets))) {
-        void vscode.window.showInformationMessage(
-          'Setup assistant cancelled. Fix the "Use OpenRouter" setting in Dashboard → Models, then run `TeXRA: Run Setup Assistant` again.',
+    const config = AgentConfigSchema.parse({
+      agent: 'setup',
+      agentCategory: 'toolUse',
+      model: resolution.model,
+      instruction: SETUP_INSTRUCTION,
+    });
+
+    // Activation initializes the registry, but this command can also be
+    // invoked directly in tests or unusual startup paths. `loadAgents()` is
+    // idempotent: it joins the in-flight load through the catalog lane if one
+    // is running, returns immediately if already initialized, or kicks off a
+    // fresh load.
+    yield* loadAgents();
+
+    const launch = runAgent(
+      { kind: 'fresh', config },
+      {
+        session,
+        onRunResolved: presentLaunchedProgressRun,
+      },
+    );
+
+    yield* resolution.requiresOpenRouter
+      ? withOpenRouterFlagOn(globalState, launch)
+      : launch;
+    return 'launched' as const;
+  }).pipe(
+    Effect.catchCause((cause) => {
+      // Shutdown interrupts this fiber while it waits on a host prompt.
+      // That is a cancellation, not a launch failure: re-raise it so no
+      // error notification appears during teardown.
+      if (Cause.hasInterrupts(cause)) return Effect.failCause(cause);
+      return Effect.sync(() => {
+        const error = Cause.squash(cause);
+        log.error('Setup assistant failed to launch.', { data: error });
+        void vscode.window.showErrorMessage(
+          `Failed to launch setup assistant: ${toErrorMessage(error)}`,
         );
         return 'not-started' as const;
-      }
-
-      const proceed = yield* ensureCredentialOrPrompt(
-        session.roots,
-        secrets,
-        runtime,
-      );
-      if (!proceed) {
-        void vscode.window.showInformationMessage(
-          'Setup assistant cancelled. Run `TeXRA: Run Setup Assistant` again once you have signed in, turned on your ChatGPT subscription, or set an API key.',
-        );
-        return 'not-started' as const;
-      }
-
-      const resolution = yield* selectLaunchModel(session.roots, secrets);
-      if (!resolution) {
-        // Edge case: no setup-model candidate is usable with the current
-        // credentials. Refuse launch rather than pick a model that crashes at
-        // runtime.
-        const choice = yield* Effect.promise(() =>
-          vscode.window.showWarningMessage(
-            'No model is available with your current keys. Add a provider API key or sign in with your ChatGPT subscription, then try again.',
-            { modal: true },
-            'Open Models tab',
-            'Set API key',
-          ),
-        );
-        if (choice === 'Open Models tab') {
-          yield* Effect.promise(() =>
-            vscode.commands.executeCommand('texra.showModels'),
-          );
-        } else if (choice === 'Set API key') {
-          yield* Effect.promise(() =>
-            vscode.commands.executeCommand(EXTENSION_COMMANDS.SET_API_KEY),
-          );
-        }
-        return 'not-started' as const;
-      }
-
-      const config = AgentConfigSchema.parse({
-        agent: 'setup',
-        agentCategory: 'toolUse',
-        model: resolution.model,
-        instruction: SETUP_INSTRUCTION,
       });
-
-      // Activation initializes the registry, but this command can also be
-      // invoked directly in tests or unusual startup paths. `loadAgents()` is
-      // idempotent: it joins the in-flight load through the catalog lane if one
-      // is running, returns immediately if already initialized, or kicks off a
-      // fresh load.
-      yield* loadAgents();
-
-      const launch = runAgent(
-        { kind: 'fresh', config },
-        {
-          session,
-          onRunResolved: presentLaunchedProgressRun,
-        },
-      );
-
-      yield* resolution.requiresOpenRouter
-        ? withOpenRouterFlagOn(globalState, launch)
-        : launch;
-      return 'launched' as const;
-    }).pipe(
-      Effect.catchCause((cause) => {
-        // Shutdown interrupts this fiber while it waits on a host prompt.
-        // That is a cancellation, not a launch failure: re-raise it so no
-        // error notification appears during teardown.
-        if (Cause.hasInterrupts(cause)) return Effect.failCause(cause);
-        return Effect.sync(() => {
-          const error = Cause.squash(cause);
-          log.error('Setup assistant failed to launch.', { data: error });
-          void vscode.window.showErrorMessage(
-            `Failed to launch setup assistant: ${toErrorMessage(error)}`,
-          );
-          return 'not-started' as const;
-        });
-      }),
-    ),
+    }),
   );
 }

@@ -2,6 +2,7 @@
 import * as path from 'node:path';
 
 // Third-party imports
+import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
@@ -10,7 +11,7 @@ import { runGuardedLatexCommand } from '@frontend/editor/activeFileGuards';
 import { showLoggedInfoMessage } from '@frontend/ui/errorHandlingUtils';
 import { TikzPictureManager } from '@latex/TikzPictureManager';
 import { createLog } from '@logger/logUtils';
-import type { ProcessRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import { withSessionFs } from '@platform/rootedFs';
 import { pathToLocationIn } from '@utils/files/fileLocation';
 import { pluralize, truncateWithEllipsis } from '@utils/text/stringUtils';
@@ -18,98 +19,105 @@ import { pluralize, truncateWithEllipsis } from '@utils/text/stringUtils';
 const CHANNEL = 'FigCommands';
 const log = createLog(CHANNEL);
 
-export async function handleExtractTikzFigures(
+export function handleExtractTikzFigures(
   session: SessionHandle,
-  runtime: ProcessRuntime,
-): Promise<void> {
-  await runtime.runPromise(
-    runGuardedLatexCommand(
-      session,
-      {
-        channel: CHANNEL,
-        action: 'extract TikZ figures',
-        errorMessage: 'extractTikzFigures command failed',
-      },
-      async ({ relativePath: filePath }) => {
+): Effect.Effect<void, never, ProcessServices> {
+  return runGuardedLatexCommand(
+    session,
+    {
+      channel: CHANNEL,
+      action: 'extract TikZ figures',
+      errorMessage: 'extractTikzFigures command failed',
+    },
+    ({ relativePath: filePath }) =>
+      Effect.gen(function* () {
         log.debug(`Processing LaTeX file for TikZ figures: ${filePath}`);
 
-        const labeledTikzPictures = await runtime.runPromise(
-          TikzPictureManager.extract(
-            pathToLocationIn(session.roots.workspace, filePath),
-          ),
+        const labeledTikzPictures = yield* TikzPictureManager.extract(
+          pathToLocationIn(session.roots.workspace, filePath),
         );
 
-        if (labeledTikzPictures.length > 0) {
-          const items = labeledTikzPictures.map(([label, pictures]) => ({
-            label: `${label} (${pictures.length} TikZ ${pluralize(pictures.length, 'picture')})`,
-            description: `Figure with label: ${label}`,
-            detail: truncateWithEllipsis(pictures[0], 100),
-          }));
+        if (labeledTikzPictures.length === 0) {
+          yield* showLoggedInfoMessage(
+            CHANNEL,
+            'No TikZ figures found in the current file',
+          );
+          return;
+        }
 
-          const selected = await vscode.window.showQuickPick(items, {
+        const items = labeledTikzPictures.map(([label, pictures]) => ({
+          label: `${label} (${pictures.length} TikZ ${pluralize(pictures.length, 'picture')})`,
+          description: `Figure with label: ${label}`,
+          detail: truncateWithEllipsis(pictures[0], 100),
+        }));
+
+        const selected = yield* Effect.promise(() =>
+          vscode.window.showQuickPick(items, {
             placeHolder: 'Found TikZ figures (select to copy label)',
             prompt: 'Select a TikZ figure label to copy to the clipboard',
             canPickMany: false,
-          });
+          }),
+        );
+        if (!selected) return;
 
-          if (selected) {
-            const label = selected.label.split(' (')[0];
-            await vscode.env.clipboard.writeText(label);
-            await runtime.runPromise(
-              showLoggedInfoMessage(CHANNEL, `Copied figure label: ${label}`),
-            );
-          }
-        } else {
-          await runtime.runPromise(
-            showLoggedInfoMessage(
-              CHANNEL,
-              'No TikZ figures found in the current file',
-            ),
-          );
-        }
-      },
-    ),
+        const label = selected.label.split(' (')[0];
+        yield* Effect.promise(() => vscode.env.clipboard.writeText(label));
+        yield* showLoggedInfoMessage(CHANNEL, `Copied figure label: ${label}`);
+      }),
   );
 }
 
-export async function handleCompileTikzFigures(
+export function handleCompileTikzFigures(
   session: SessionHandle,
   runtime: ProcessRuntime,
-): Promise<void> {
-  await runtime.runPromise(
-    runGuardedLatexCommand(
-      session,
-      {
-        channel: CHANNEL,
-        action: 'compile TikZ figures',
-        errorMessage: 'compileTikzFigures command failed',
-      },
-      async ({ relativePath: filePath }) => {
+): Effect.Effect<void, never, ProcessServices> {
+  return runGuardedLatexCommand(
+    session,
+    {
+      channel: CHANNEL,
+      action: 'compile TikZ figures',
+      errorMessage: 'compileTikzFigures command failed',
+    },
+    ({ relativePath: filePath }) =>
+      Effect.gen(function* () {
         log.debug(`Processing LaTeX file for TikZ compilation: ${filePath}`);
 
-        await vscode.window.withProgress(
-          {
-            location: vscode.ProgressLocation.Notification,
-            title: 'Compiling TikZ Figures',
-            cancellable: false,
-          },
-          async (progress) => {
-            progress.report({
-              message: 'Extracting and compiling TikZ pictures...',
-            });
+        // `withProgress` owns the notification for exactly as long as the
+        // callback it is handed: the compile settles on the process runtime
+        // inside it, the one structural Promise edge this command keeps.
+        yield* Effect.promise(() =>
+          vscode.window.withProgress(
+            {
+              location: vscode.ProgressLocation.Notification,
+              title: 'Compiling TikZ Figures',
+              cancellable: false,
+            },
+            async (progress) => {
+              progress.report({
+                message: 'Extracting and compiling TikZ pictures...',
+              });
 
-            const { roots } = session;
-            const compiledFiles = await runtime.runPromise(
-              withSessionFs(
-                roots,
-                TikzPictureManager.compile(
-                  pathToLocationIn(roots.workspace, filePath),
+              const { roots } = session;
+              const compiledFiles = await runtime.runPromise(
+                withSessionFs(
                   roots,
+                  TikzPictureManager.compile(
+                    pathToLocationIn(roots.workspace, filePath),
+                    roots,
+                  ),
                 ),
-              ),
-            );
+              );
 
-            if (compiledFiles.length > 0) {
+              if (compiledFiles.length === 0) {
+                await runtime.runPromise(
+                  showLoggedInfoMessage(
+                    CHANNEL,
+                    'No TikZ figures found to compile',
+                  ),
+                );
+                return;
+              }
+
               const items = compiledFiles.map((fileLocation) => ({
                 label: path.basename(fileLocation.absolutePath),
                 description: path.dirname(fileLocation.absolutePath),
@@ -136,17 +144,9 @@ export async function handleCompileTikzFigures(
                   `Successfully compiled ${compiledFiles.length} TikZ ${pluralize(compiledFiles.length, 'figure')}`,
                 ),
               );
-            } else {
-              await runtime.runPromise(
-                showLoggedInfoMessage(
-                  CHANNEL,
-                  'No TikZ figures found to compile',
-                ),
-              );
-            }
-          },
+            },
+          ),
         );
-      },
-    ),
+      }),
   );
 }

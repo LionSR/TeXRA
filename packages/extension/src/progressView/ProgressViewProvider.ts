@@ -137,7 +137,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
    */
   private readonly onboardingFunnel: OnboardingFunnelRefresher;
   private readonly debouncedRefreshCatalogs = debounce(
-    () => void this.refreshCatalogs(),
+    () => void this.runtime.runPromise(this.refreshCatalogs()),
     DEBOUNCE_OPTIONS_MS,
   );
 
@@ -492,22 +492,27 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   }
 
   /** The agent, team, and model catalogs (`texra.refreshAllOptions`). */
-  public async refreshCatalogs(
+  public refreshCatalogs(
     options: {
       agentCatalogAlreadyFresh?: boolean;
       selectedToolUseAgent?: string;
     } = {},
-  ): Promise<void> {
-    if (!options.agentCatalogAlreadyFresh) {
-      await this.runtime.runPromise(refresh());
-    }
-    await this.runtime.runPromise(this.snapshot.refreshCatalogs);
-    if (options.selectedToolUseAgent) {
-      this.surfaceAction({
-        kind: 'launch',
-        patch: { agent: { toolUse: options.selectedToolUseAgent } },
-      });
-    }
+  ) {
+    return Effect.suspend(() =>
+      options.agentCatalogAlreadyFresh ? Effect.void : refresh(),
+    ).pipe(
+      Effect.andThen(this.snapshot.refreshCatalogs),
+      Effect.andThen(
+        Effect.sync(() => {
+          if (options.selectedToolUseAgent) {
+            this.surfaceAction({
+              kind: 'launch',
+              patch: { agent: { toolUse: options.selectedToolUseAgent } },
+            });
+          }
+        }),
+      ),
+    );
   }
 
   /** A run loaded an agent from the custom directory. */

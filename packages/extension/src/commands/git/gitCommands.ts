@@ -18,7 +18,6 @@ import {
   type OverleafRemote,
 } from '@latex/overleafProject';
 import { createLog } from '@logger/logUtils';
-import type { ProcessRuntime } from '@platform/processRuntime';
 import { withSessionFs, WorkspaceFs } from '@platform/rootedFs';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { RootedFileSystem } from '@utils/files/rootedFileSystem';
@@ -134,26 +133,30 @@ function findCommitInHistory(
   return labelResult.stdout;
 }
 
-async function promptInput(
+function promptInput(
   title: string,
   prompt: string,
   password = false,
-): Promise<string | null> {
-  const val = await vscode.window.showInputBox({
-    title,
-    prompt,
-    password,
-    ignoreFocusOut: true,
-  });
-  const trimmed = val?.trim() ?? '';
-  if (!trimmed) {
-    // Show cancellation message only if user dismissed with empty string (not Escape)
-    if (val !== undefined) {
-      vscode.window.showWarningMessage('Clone cancelled.');
+): Effect.Effect<string | null> {
+  return Effect.gen(function* () {
+    const val = yield* Effect.promise(() =>
+      vscode.window.showInputBox({
+        title,
+        prompt,
+        password,
+        ignoreFocusOut: true,
+      }),
+    );
+    const trimmed = val?.trim() ?? '';
+    if (!trimmed) {
+      // Show cancellation message only if user dismissed with empty string (not Escape)
+      if (val !== undefined) {
+        vscode.window.showWarningMessage('Clone cancelled.');
+      }
+      return null;
     }
-    return null;
-  }
-  return trimmed;
+    return trimmed;
+  });
 }
 
 /**
@@ -230,12 +233,10 @@ function buildOverleafClonePorts(
     deleteStoredToken: (key) => Effect.orDie(secrets.delete(key)),
     storeToken: (key, token) => Effect.orDie(secrets.set(key, token)),
     promptToken: (spec) =>
-      Effect.promise(() =>
-        promptInput(
-          spec.tokenTitle,
-          spec.tokenHint ?? 'Enter your Git authentication token.',
-          true,
-        ),
+      promptInput(
+        spec.tokenTitle,
+        spec.tokenHint ?? 'Enter your Git authentication token.',
+        true,
       ),
     showInvalidToken: (spec, message) =>
       Effect.promise(async () => {
@@ -338,27 +339,28 @@ function buildOverleafClonePorts(
   };
 }
 
-export async function cloneOverleafProject(
+export function cloneOverleafProject(
   session: SessionHandle,
   secrets: PlatformSecrets,
-  runtime: ProcessRuntime,
-): Promise<void> {
-  const input = await promptInput(
-    'Clone Overleaf/ShareLaTeX Project',
-    'Enter project URL or 24-character project ID.',
-  );
-  if (!input) return;
+) {
+  return Effect.gen(function* () {
+    const input = yield* promptInput(
+      'Clone Overleaf/ShareLaTeX Project',
+      'Enter project URL or 24-character project ID.',
+    );
+    if (!input) return;
 
-  const remote = parseLatexGitUrl(input);
-  if (!remote) {
-    runtime.runFork(showLoggedMessage(CHANNEL, 'Invalid project URL or ID.'));
-    return;
-  }
+    const remote = parseLatexGitUrl(input);
+    if (!remote) {
+      yield* Effect.forkDetach(
+        showLoggedMessage(CHANNEL, 'Invalid project URL or ID.'),
+      );
+      return;
+    }
 
-  // The session's workspace view both names the clone target and lists it,
-  // so the emptiness check and the clone agree on one folder.
-  await runtime.runPromise(
-    withSessionFs(
+    // The session's workspace view both names the clone target and lists it,
+    // so the emptiness check and the clone agree on one folder.
+    yield* withSessionFs(
       session.roots,
       Effect.gen(function* () {
         const workspaceFs = yield* WorkspaceFs;
@@ -375,6 +377,6 @@ export async function cloneOverleafProject(
           buildOverleafClonePorts(secrets, remote, workspaceFs),
         );
       }),
-    ),
-  );
+    );
+  });
 }

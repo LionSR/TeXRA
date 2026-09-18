@@ -1,5 +1,5 @@
 // Third-party imports
-import { Effect } from 'effect';
+import { Cause, Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
@@ -32,15 +32,15 @@ export function registerMainViewCommands(
       id: 'texra.refreshAllOptions',
       handler: (args?: RefreshAllOptionsArgs) =>
         runtime.runPromise(
-          Effect.tryPromise({
-            try: () => progressViewProvider.refreshCatalogs(args ?? {}),
-            catch: (error: unknown) => error,
-          }).pipe(
-            Effect.catch((error) =>
+          progressViewProvider.refreshCatalogs(args ?? {}).pipe(
+            // The command's one terminal boundary, as the rejection the
+            // lift it replaces caught was: a failed catalog load and a
+            // failed snapshot publish are reported alike.
+            Effect.catchCause((cause) =>
               showLoggedErrorMessage(
                 CHANNEL,
                 'Failed to refresh options',
-                error,
+                Cause.squash(cause),
               ).pipe(Effect.asVoid),
             ),
           ),

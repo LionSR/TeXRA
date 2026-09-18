@@ -1,4 +1,5 @@
 // Third-party imports
+import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
@@ -54,7 +55,6 @@ import {
   EXTENSION_COMMAND_HANDLERS,
   type ExtensionCommandActions,
 } from './extensionCommandHandlers';
-import type { Effect } from 'effect';
 
 export function createExtensionCommandActions(
   context: vscode.ExtensionContext,
@@ -91,18 +91,24 @@ export function createExtensionCommandActions(
       runtime.runPromise(
         latexHandleAcceptEdited(baseLocation, editedLocation, copyMeta),
       ),
-    indentTeX: () => handleIndentTeX(session, runtime),
+    indentTeX: () => runtime.runPromise(handleIndentTeX(session)),
     signIn: () => runtime.runPromise(authSignIn),
     signInChatGpt: () => settingsViewProvider.signInSubscription('chatgpt'),
     signInGrok: () => settingsViewProvider.signInSubscription('grok'),
     signOut: () => runtime.runPromise(authSignOut),
-    runSetupAssistant: async () => {
-      await launchSetupAssistant(secrets, globalState, runtime, session);
-    },
+    runSetupAssistant: () =>
+      runtime.runPromise(
+        launchSetupAssistant(secrets, globalState, runtime, session).pipe(
+          Effect.asVoid,
+        ),
+      ),
     openGettingStarted: () => sysOpenGettingStarted(context.extension.id),
     createSampleProject: () =>
-      sysCreateSampleProject(context.extensionPath, runtime, session),
-    downloadArXivSource: () => latexDownloadArXivSource(session, runtime),
+      runtime.runPromise(
+        sysCreateSampleProject(context.extensionPath, session),
+      ),
+    downloadArXivSource: () =>
+      runtime.runPromise(latexDownloadArXivSource(session, runtime)),
     openProgressViewInTab: () => progressViewProvider.popOutToEditor(),
     async openDoc(page) {
       if (!page) return;
@@ -110,19 +116,18 @@ export function createExtensionCommandActions(
         vscode.Uri.parse(`https://texra.ai/guide/${page}.html`),
       );
     },
-    indentCurrentTeX: () => latexIndentCurrentTeX(session, runtime),
-    fixCompilation: () => latexFixCompilation(session, runtime),
-    getTeXCount: () => latexGetTeXCount(session, runtime),
-    extractTikzFigures: () => latexExtractTikzFigures(session, runtime),
-    compileTikzFigures: () => latexCompileTikzFigures(session, runtime),
+    indentCurrentTeX: () => runtime.runPromise(latexIndentCurrentTeX(session)),
+    fixCompilation: () => runtime.runPromise(latexFixCompilation(session)),
+    getTeXCount: () => runtime.runPromise(latexGetTeXCount(session, runtime)),
+    extractTikzFigures: () =>
+      runtime.runPromise(latexExtractTikzFigures(session)),
+    compileTikzFigures: () =>
+      runtime.runPromise(latexCompileTikzFigures(session, runtime)),
     cloneOverleafProject: () =>
-      gitCloneOverleafProject(session, secrets, runtime),
+      runtime.runPromise(gitCloneOverleafProject(session, secrets)),
     removeApiKey: () =>
-      apiRemoveApiKey(
-        session.roots,
-        secrets,
-        refreshAfterProviderKeyChange,
-        runtime,
+      runtime.runPromise(
+        apiRemoveApiKey(session.roots, secrets, refreshAfterProviderKeyChange),
       ),
     showImportOptions: sysShowImportOptions,
     toggleView: () => progressViewProvider.toggleDrawer(),
