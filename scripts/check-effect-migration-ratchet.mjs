@@ -213,7 +213,7 @@ const BOUNDARY_RUNTIME_ENTRIES = new Map([
     'src/platform/processRuntime.ts',
     {
       reason:
-        'the module that owns the process runtime: the host entry installs it here exactly once per process (initProcessRuntime, beside initPlatform), and withForkFailureReporting runs only on the runtime its caller passes — the parameter-entry premise',
+        'the module that owns the process runtime type: withForkFailureReporting runs only on the runtime its caller passes — the parameter-entry premise',
       // The one approved binding: withForkFailureReporting's
       // `runtime: ManagedRuntime` parameter -- pinned to that function by
       // name, so the exemption cannot transfer to another helper's
@@ -1042,7 +1042,7 @@ function selfTestBoundary() {
     'src/platform/processRuntime.ts',
   );
   const siblingParameterProbe = surveySource(
-    "import { type ManagedRuntime } from 'effect';\nexport function withForkFailureReporting(runtime: ManagedRuntime.ManagedRuntime<never, never>) { return runtime.runFork(a); }\nexport function initProcessRuntime(runtime) { install(runtime); }\n",
+    "import { type ManagedRuntime } from 'effect';\nexport function withForkFailureReporting(runtime: ManagedRuntime.ManagedRuntime<never, never>) { return runtime.runFork(a); }\nexport function makeReporting(runtime) { return runtime; }\n",
     'src/platform/processRuntime.ts',
   );
   const runCases = [

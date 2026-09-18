@@ -1120,7 +1120,7 @@ describe('executeCliRequest', () => {
           async (_request: unknown, options: LeaseOptions) => {
             options.onRunLeaseAcquired?.('exec-1' as RunId);
             try {
-              await effectRuntime().runPromise(
+              await testRuntime().runPromise(
                 options.openWorkflowOutput?.(COMPLETED_WORKFLOW_RUN, []) ??
                   Effect.void,
               );
