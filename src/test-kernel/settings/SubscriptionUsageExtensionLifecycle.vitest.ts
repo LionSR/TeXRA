@@ -2,7 +2,9 @@ import { Effect } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  safeExecuteCommand: vi.fn(),
+  // The refresh tail lifts this host command once; the double answers with
+  // the promise the real one returns.
+  safeExecuteCommand: vi.fn(async () => undefined),
 }));
 vi.mock('@frontend/system/commandUtils', () => ({
   safeExecuteCommand: mocks.safeExecuteCommand,

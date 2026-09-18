@@ -1,5 +1,5 @@
 // Third-party imports
-import { Data, Effect } from 'effect';
+import { Data, Effect, Exit } from 'effect';
 
 // Local imports
 import { LoopbackTransportUnavailableError } from '@auth/oauth/loopbackLogin';
@@ -324,15 +324,30 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
     };
   }
 
-  postStartupData() {
-    return Effect.all(
-      [
-        this.postProfileData(),
-        this.postAuthStatus('chatgpt'),
-        this.postAuthStatus('grok'),
-      ],
-      { concurrency: 'unbounded', discard: true },
+  /**
+   * `Promise.all` semantics for the window's repaint fan-outs: every post runs
+   * to completion even when one fails, and the first failure is the result.
+   * `Effect.all` alone would interrupt the siblings of a failed post, which is
+   * not what the awaited `Promise.all` these replace did.
+   */
+  private allPosted(
+    programs: readonly Effect.Effect<void, Error, ProcessServices>[],
+  ) {
+    return Effect.flatMap(
+      Effect.all(programs.map(Effect.exit), { concurrency: 'unbounded' }),
+      (exits) => {
+        const failed = exits.find(Exit.isFailure);
+        return failed ? Effect.failCause(failed.cause) : Effect.void;
+      },
     );
+  }
+
+  postStartupData() {
+    return this.allPosted([
+      this.postProfileData(),
+      this.postAuthStatus('chatgpt'),
+      this.postAuthStatus('grok'),
+    ]);
   }
 
   postSubscriptionUsage(forceRefresh = false) {
@@ -581,15 +596,12 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
     return Effect.gen({ self: this }, function* () {
       const { usageProvider } = SUBSCRIPTION_STATUS_ROWS[providerId];
       if (usageProvider) this.subscriptionUsage.invalidate(usageProvider);
-      yield* Effect.all(
-        [
-          this.postAuthStatus(providerId),
-          this.postModelSelectionData(),
-          this.refreshModelOptions(),
-          ...(usageProvider ? [this.postSubscriptionUsage()] : []),
-        ],
-        { concurrency: 'unbounded', discard: true },
-      );
+      yield* this.allPosted([
+        this.postAuthStatus(providerId),
+        this.postModelSelectionData(),
+        this.refreshModelOptions(),
+        ...(usageProvider ? [this.postSubscriptionUsage()] : []),
+      ]);
       yield* this.credentialChanged();
     });
   }

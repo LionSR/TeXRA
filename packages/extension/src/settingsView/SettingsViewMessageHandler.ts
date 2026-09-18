@@ -43,6 +43,7 @@ import {
   showLoggedInfoMessage,
 } from '@frontend/ui/errorHandlingUtils';
 import { subscribeGoalStateChanges } from '@frontend/events/runFactSubscriptions';
+import { NotificationFailed } from '@hosts/uiHosts';
 import { createLog, type Log } from '@logger/logUtils';
 import {
   modelOptionsFrom,
@@ -60,7 +61,6 @@ import {
   refreshRuntimeModelRegistry,
 } from '@model/runtimeModelRegistry';
 import { setCopilotRoutePreference } from '@model/copilotRouting';
-import { NotificationFailed } from '@hosts/uiHosts';
 import type { StateStore } from '@platform/interfaces';
 import type { LanguageModel } from '@platform/languageModel';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';

@@ -95,7 +95,7 @@ vi.mock('@frontend/ui/dialogs', () => ({
   },
 }));
 vi.mock('@frontend/ui/errorHandlingUtils', () => ({
-  showLoggedErrorMessage: vi.fn(),
+  showLoggedErrorMessage: vi.fn(async () => ''),
   showLoggedMessage: mocks.showLoggedMessage,
 }));
 vi.mock('@shared/settingsView/handlers/agentSelectionHandlers', () => ({

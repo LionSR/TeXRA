@@ -1,5 +1,4 @@
 // Third-party imports
-import type { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
@@ -23,6 +22,7 @@ import type { AgentCategory, SettingsTabPanelName } from '@shared/schemas';
 
 // Local file imports
 import { SettingsViewMessageHandler } from './SettingsViewMessageHandler';
+import type { Effect } from 'effect';
 
 export class SettingsViewProvider {
   public static readonly viewType = 'texra.settingsView';
