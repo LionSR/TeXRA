@@ -10,8 +10,6 @@
     "ambient:asyncLocalStorage": {
       "packages/cli/src/chat/tui/forms/AgentRosterForm.tsx": 1,
       "packages/cli/src/runtime/multiAgentPresets.ts": 1,
-      "packages/extension/src/commands/latex/latexdiffCommands.ts": 2,
-      "packages/extension/src/settingsView/handlers/agentHandlers.ts": 1,
       "src/agent/index/agentRegistry.ts": 1,
       "src/agent/runtime/AgentLaunchContext.ts": 3,
       "src/agent/runtime/RunContext.ts": 1,

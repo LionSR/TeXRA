@@ -43,7 +43,6 @@ import {
 import { createLog } from '@logger/logUtils';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import { withSessionFs } from '@platform/rootedFs';
-import { workspaceRoots } from '@platform/workspaceRoots';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import type { FileLocation } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
@@ -104,8 +103,10 @@ type MarkupItem = vscode.QuickPickItem & { value: MathMarkupOption };
 
 // Returns undefined when the user cancels, logging the cancellation so callers
 // only need to bail out.
-const promptForLatexdiffMathMarkup = Effect.fnUntraced(function* () {
-  const configuredMode = workspaceRoots().workspaceState.get<string>(
+const promptForLatexdiffMathMarkup = Effect.fnUntraced(function* (
+  session: SessionHandle,
+) {
+  const configuredMode = session.roots.workspaceState.get<string>(
     WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
     DEFAULT_MATH_MARKUP,
   );
@@ -296,7 +297,7 @@ const runDiffAndOpen = Effect.fnUntraced(function* (
   ) => Effect.Effect<LaTeXdiffResult, never, FileSystem.FileSystem>,
   runtime: ProcessRuntime,
 ) {
-  const mathMarkup = yield* promptForLatexdiffMathMarkup();
+  const mathMarkup = yield* promptForLatexdiffMathMarkup(session);
   if (!mathMarkup) return;
   log.info(`Running ${toolLabel} with math markup mode: ${mathMarkup}`);
 
@@ -450,13 +451,13 @@ const handleRunLatexdiff = Effect.fnUntraced(function* (
         return;
       }
 
-      const mathMarkup = yield* promptForLatexdiffMathMarkup();
+      const mathMarkup = yield* promptForLatexdiffMathMarkup(session);
       if (!mathMarkup) return;
 
       log.info(`Running latexdiff with math markup mode: ${mathMarkup}`);
 
       const generateBetweenRoundDiffs =
-        workspaceRoots().workspaceState.get<boolean>(
+        session.roots.workspaceState.get<boolean>(
           WorkspaceStateKey.LATEXDIFF_BETWEEN_ROUNDS,
           LATEX_CONFIG_DEFAULTS.latexdiffBetweenRounds,
         );

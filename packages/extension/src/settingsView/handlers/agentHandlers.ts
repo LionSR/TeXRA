@@ -42,9 +42,8 @@ import {
 } from '@frontend/ui/dialogs';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import { NotificationFailed } from '@hosts/uiHosts';
-import type { StateStore } from '@platform/interfaces';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
-import { workspaceRoots } from '@platform/workspaceRoots';
+import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
   agentKey,
   SETTINGS_VIEW_CMD,
@@ -80,12 +79,12 @@ export class AgentHandlers {
       selectedToolUseAgent?: string,
       agentCatalogAlreadyFresh?: boolean,
     ) => Promise<void>,
-    globalState: StateStore,
+    roots: Pick<WorkspaceRoots, 'workspaceState' | 'globalState'>,
     private readonly runtime: ProcessRuntime,
   ) {
     const controllers = createSettingsAgentControllers({
-      workspaceState: workspaceRoots().workspaceState,
-      globalState,
+      workspaceState: roots.workspaceState,
+      globalState: roots.globalState,
       getCustomAgentDirectory: () => agentDirectories.custom(),
       getSourceDirectory: (source) => agentDirectories.getDirectory(source),
     });

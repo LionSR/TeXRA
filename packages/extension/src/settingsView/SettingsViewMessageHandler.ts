@@ -101,7 +101,6 @@ import {
 import { goalList } from '@tools/goal';
 import { getProviderKeyUrl } from '@utils/config/providerConfig';
 import { setToolEnabled } from '@utils/config/constants';
-import { platformSettingsStores } from '@utils/config/platformSettings';
 import { AgentHandlers } from './handlers/agentHandlers';
 import { LatexSettingsHandlers } from './handlers/latexSettingsHandlers';
 import { MemoryHandlers } from './handlers/memoryHandlers';
@@ -210,7 +209,7 @@ export class SettingsViewMessageHandler {
           selectedToolUseAgent,
           agentCatalogAlreadyFresh,
         ),
-      globalState,
+      session.roots,
       this.runtime,
     );
     this.latexHandlers = new LatexSettingsHandlers(ctx);
@@ -703,11 +702,7 @@ export class SettingsViewMessageHandler {
     snapshot: DerivedSettingsSnapshot,
   ): Promise<void> {
     await webview.postMessage(
-      buildSettingsSnapshotMessage(
-        snapshot,
-        platformSettingsStores(),
-        'vscode',
-      ),
+      buildSettingsSnapshotMessage(snapshot, this.session.roots, 'vscode'),
     );
   }
 
@@ -734,7 +729,7 @@ export class SettingsViewMessageHandler {
     const result = await this.runtime.runPromise(
       applyStateSettingUpdate(key, value, {
         host: 'vscode',
-        stores: platformSettingsStores(),
+        stores: this.session.roots,
         // The shared function already gates this hook on
         // `configTarget !== 'global'`; this checks only the workspace half.
         requiresOpenWorkspace: () => !this.session.roots.workspace,
