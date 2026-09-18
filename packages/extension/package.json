@@ -1034,7 +1034,7 @@
   "devDependencies": {
     "@texra/trace-viewer": "workspace:*",
     "@types/vscode": "^1.125.0",
-    "@vscode/vsce": "^3.9.2",
+    "@vscode/vsce": "^4.0.0",
     "concurrently": "^10.0.5",
     "esbuild": "^0.28.2",
     "vite": "^8.3.0"
