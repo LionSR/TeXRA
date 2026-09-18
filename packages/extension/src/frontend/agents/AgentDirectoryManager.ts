@@ -11,6 +11,7 @@ import {
   type AgentDirectoryEntry,
   type AgentDirectoryService,
   type AgentSource,
+  agentSourceDirectory,
   createPlatformAgentDirectories,
 } from '@agent/index';
 import { showLoggedMessageWithDocs } from '@frontend/ui/errorHandlingUtils';
@@ -114,7 +115,7 @@ class AgentDirectoryManager {
     source: AgentSource,
   ): Effect.Effect<string | undefined, AgentDirectoriesFailed> {
     return Effect.suspend(() =>
-      this.getHost().directories.getDirectory(source),
+      agentSourceDirectory(this.getHost().directories, source),
     );
   }
 

@@ -76,12 +76,6 @@ export class AgentDirectoryService {
     });
   }
 
-  getDirectory(
-    source: AgentSource,
-  ): Effect.Effect<string | undefined, AgentDirectoriesFailed> {
-    return agentSourceDirectory(this, source);
-  }
-
   getAllLocal(): Effect.Effect<AgentDirectoryEntry[], AgentDirectoriesFailed> {
     return Effect.gen({ self: this }, function* () {
       const [customDir, builtInDir, builtInToolUseDir] = yield* Effect.all(
@@ -216,10 +210,10 @@ export class AgentDirectoryService {
 }
 
 /**
- * The one `AgentSource` -> local directory mapping. It reads the port rather
- * than this class, so every host holding an `AgentDirectoriesPort` answers a
- * source through the same three readers — and gives `remote` the same verdict
- * — instead of repeating the switch at its own composition root.
+ * The one `AgentSource` to local-directory mapping. It reads the port, not the
+ * service, so every holder of an `AgentDirectoriesPort` answers a source
+ * through the same three readers and gives `remote` the same verdict, instead
+ * of repeating the switch at its own composition root.
  */
 export function agentSourceDirectory(
   directories: AgentDirectoriesPort,

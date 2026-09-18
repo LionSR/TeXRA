@@ -7,7 +7,7 @@ import { Effect } from 'effect';
 import { describe, it } from 'vitest';
 
 // Local imports
-import { AgentDirectoryService } from '@agent/index';
+import { AgentDirectoryService, agentSourceDirectory } from '@agent/index';
 import type { AgentDirectoryIssueReporter } from '@agent/index/AgentDirectoryService';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import { setupPlatform } from '@test/support/setupPlatform';
@@ -153,7 +153,7 @@ describe('AgentDirectoryService', () => {
     const { service } = createService();
 
     assert.equal(
-      await Effect.runPromise(service.getDirectory('remote')),
+      await Effect.runPromise(agentSourceDirectory(service, 'remote')),
       undefined,
     );
   });
