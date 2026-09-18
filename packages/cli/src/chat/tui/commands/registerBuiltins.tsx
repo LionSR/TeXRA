@@ -554,6 +554,7 @@ export function registerBuiltinSlashCommands(options: {
     (formProps) => (
       <SkillsListForm
         workspaceRoot={options.runtimeSession.roots.workspace}
+        stores={options.runtimeSession.roots}
         {...formProps}
       />
     ),

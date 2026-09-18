@@ -45,7 +45,6 @@ import type {
   ModelOptionData,
   ToolDefinition,
 } from '@shared/schemas';
-import type { SettingsStores } from '@shared/config/settingsAccess';
 import { isModelOptionAvailable } from '@shared/schemas';
 import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
 import { unique } from '@utils/core';

@@ -61,10 +61,7 @@ async function loadSkillsSettings(
     stores,
     'cli',
   ) as ActiveSkillSourceScope[];
-  const result = await loadRuntimeSkillDisplay(workspaceRoot, {
-    names: disabledNames,
-    scopes: disabledScopes,
-  });
+  const result = await loadRuntimeSkillDisplay(workspaceRoot, stores);
   return {
     skills: result.skills,
     disabledNames,

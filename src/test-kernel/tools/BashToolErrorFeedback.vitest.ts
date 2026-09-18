@@ -33,10 +33,6 @@ vi.mock('@tools/approval/bashApproval', async (importActual) => {
 });
 
 function stubBashApprovalDisabled(): void {
-  vi.spyOn(agentConfig, 'getConfig').mockImplementation(
-    <T>(key: string, defaultValue?: T): T =>
-      key === BASH_APPROVAL_CONFIG_KEY ? (false as T) : (defaultValue as T),
-  );
   vi.spyOn(agentConfig, 'readConfig').mockImplementation(
     <T>(_config: unknown, key: string, defaultValue?: T): T =>
       key === BASH_APPROVAL_CONFIG_KEY ? (false as T) : (defaultValue as T),
