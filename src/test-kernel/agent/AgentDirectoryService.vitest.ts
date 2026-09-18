@@ -10,7 +10,7 @@ import { describe, it } from 'vitest';
 import { AgentDirectoryService, agentSourceDirectory } from '@agent/index';
 import type { AgentDirectoryIssueReporter } from '@agent/index/AgentDirectoryService';
 import type { GlobalStorageFs } from '@platform/rootedFs';
-import { workspaceRoots } from '@platform/workspaceRoots';
+import { processWorkspaceRoots } from '@platform/workspaceRoots';
 import {
   globalStorageFsTestLayer,
   nodePlatformLayer,
@@ -58,7 +58,7 @@ describe('AgentDirectoryService', () => {
   setupPlatform(() => createTempDirPlatform('texra-agent-dirs-', tempDirs));
 
   function storageBase(): string {
-    return workspaceRoots().globalStorage;
+    return processWorkspaceRoots().globalStorage;
   }
 
   /** The service's readers over the process's global storage view, which the

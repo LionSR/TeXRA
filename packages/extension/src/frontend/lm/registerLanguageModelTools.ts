@@ -112,14 +112,11 @@ export function registerLanguageModelTools(
                   roots: session.roots,
                   tracker: new FileInteractionState(),
                   run: undefined,
-                  inScope: (operation) => operation(),
                 }),
                 Effect.provideService(Runs, session.runs),
                 // Every `WorkspaceFs`/`StorageFs` service read in this call
                 // resolves against this session's folders, and path resolution
-                // takes `ToolCall.roots` as data. `inScope` above is
-                // deliberately a no-op: it installs the ambient workspace-roots
-                // frame (`withRunContext`), which nothing on this path needs.
+                // takes `ToolCall.roots` as data.
                 Effect.provide(sessionFsLayer(session.roots)),
               );
             }),

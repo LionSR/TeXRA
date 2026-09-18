@@ -21,10 +21,7 @@ import {
 import { closeSession } from '@agent/runtime/sessionGraph';
 import { appSignals } from '@eventBus/AppSignals';
 import { WorkspaceFs } from '@platform/rootedFs';
-import {
-  runWithWorkspaceRoots,
-  workspaceRoots,
-} from '@platform/workspaceRoots';
+import { processWorkspaceRoots } from '@platform/workspaceRoots';
 import type { RequestDecision, RunId } from '@shared/schemas';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { installPlatform } from '@test/support/setupPlatform';
@@ -404,7 +401,7 @@ describe('accept_run_files progress events', () => {
     () =>
       Effect.gen(function* () {
         const projectRoots = {
-          ...workspaceRoots(),
+          ...processWorkspaceRoots(),
           workspace: '/project',
           storage: '/project-storage',
         };
@@ -444,8 +441,6 @@ describe('accept_run_files progress events', () => {
             nativeToolTestLayer({
               tracker,
               run: { runId, session: session, toolPolicy: {} },
-              inScope: (operation) =>
-                runWithWorkspaceRoots(projectRoots, operation),
             }),
           ),
         );

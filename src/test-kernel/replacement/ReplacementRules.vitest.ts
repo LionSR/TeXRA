@@ -3,7 +3,7 @@
 
 import { strict as assert } from 'node:assert';
 import { describe, it } from 'vitest';
-import { workspaceRoots } from '@platform/workspaceRoots';
+import { processWorkspaceRoots } from '@platform/workspaceRoots';
 import replacementEngine, {
   applyReplacements,
   NON_REGEX_CATEGORIES,
@@ -478,7 +478,7 @@ describe('personal style contextual replacements', () => {
     ].join('\n');
 
     const result = replacementEngine.applyAll(input, (key) =>
-      readConfig(workspaceRoots().config, key),
+      readConfig(processWorkspaceRoots().config, key),
     );
 
     const expected = [

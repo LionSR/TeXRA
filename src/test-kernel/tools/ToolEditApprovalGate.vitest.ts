@@ -15,7 +15,6 @@ import type { ToolServices } from '@agent/runtime/ToolServices';
 import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
 
 import { WorkspaceFs } from '@platform/rootedFs';
-import { runWithWorkspaceRoots } from '@platform/workspaceRoots';
 import type { RequestDecision, RunId } from '@shared/schemas';
 import { DatabaseWriteFailed } from '@shared/session/database';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
@@ -253,8 +252,6 @@ describe('Tool edit approval gating', () => {
           nativeToolTestLayer({
             tracker,
             run: { runId, session: testDefaultSession(), toolPolicy: {} },
-            inScope: (operation) =>
-              runWithWorkspaceRoots(project.roots, operation),
           }),
         ),
       );

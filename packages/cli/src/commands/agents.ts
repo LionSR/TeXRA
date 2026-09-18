@@ -29,8 +29,8 @@ export async function listAgents(
   context: CliContext,
   options: CliAgentListOptions = {},
 ): Promise<number> {
-  const { runtime } = await initLocalCliPlatform(context);
-  const result = await loadCliAgentList(runtime, options);
+  const services = await initLocalCliPlatform(context);
+  const result = await loadCliAgentList(services, options);
 
   if (!context.quietLogs) {
     const hiddenNotice = formatCliHiddenAgentsNotice(
@@ -65,8 +65,8 @@ export async function showAgent(
   context: CliContext,
   name: string,
 ): Promise<number> {
-  const { runtime } = await initLocalCliPlatform(context);
-  const entry = await resolveCliAgent(runtime, name);
+  const services = await initLocalCliPlatform(context);
+  const entry = await resolveCliAgent(services, name);
   if (!entry) {
     writeTextStderr(missingAgentMessage(name));
     return CliExitCode.Usage;
@@ -79,7 +79,7 @@ export async function showAgent(
   // never worth a fetch here.
   let shown = entry;
   if (entry.source === 'remote' && entry.category === AgentCategory.Workflow) {
-    const [setting] = await runtime.runPromise(
+    const [setting] = await services.runtime.runPromise(
       loadAgentSettingAndPrompts(entry),
     );
     // A scanned entry omits the field rather than carrying an empty list;

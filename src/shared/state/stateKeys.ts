@@ -6,10 +6,10 @@
  * natural `@shared/state/stateKeys` import path, without any risk of pulling in
  * the VS Code module.
  *
- * The stores these keys address are the session's
- * `workspaceRoots().workspaceState` (or the bootstrap-tolerant
- * `tryWorkspaceRoots()`) and the process's `AppState` service
- * (`@platform/interfaces`). Each host wires its own implementation at startup.
+ * The stores these keys address are the session's `roots.workspaceState`,
+ * taken as data from the session, tool call or host command that holds it,
+ * and the process's `AppState` service (`@platform/interfaces`). Each host
+ * wires its own implementation at startup.
  */
 
 export enum WorkspaceStateKey {

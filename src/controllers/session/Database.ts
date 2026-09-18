@@ -3,9 +3,8 @@
  * (`.agents/docs/proposed/architecture/2026-09-03-persistence-substrate-decision.md`): the C1
  * schema, the connection that owns it, and the C6 write path. One database
  * per session root, parameterized by `WorkspaceRoots` (section 7) and never a
- * process singleton; Effect code reads its root from `Context`, never from
- * the async-local `workspaceRoots()`, because the scheduler interleaves
- * fibers.
+ * process singleton; Effect code reads its root from `Context`, because the
+ * scheduler interleaves fibers and no ambient frame survives that.
  *
  * Persistent sessions open one file; explicitly ephemeral sessions use the
  * same schema and transaction implementation in SQLite memory. A failed file

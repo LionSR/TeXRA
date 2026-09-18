@@ -7,6 +7,7 @@ import {
 } from '@cli/chat/tui/commands/handlers/agentModelCommands';
 import { patchSessionMeta, sessionMeta } from '@cli/chat/tui/state/cliState';
 import { AgentCategory } from '@shared/schemas';
+import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 
 vi.mock('@agent/index', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@agent/index')>();
@@ -32,6 +33,9 @@ function registryAgent(category: AgentCategory): AgentEntry {
   };
 }
 
+/** The chat's roster slots; the resolver is mocked, so any pair does. */
+const stores = makeFakeSettingsStores().stores;
+
 beforeEach(() => {
   mockedResolveAgentForLaunch.mockReset();
 });
@@ -50,6 +54,7 @@ describe('CLI chat run config', () => {
       },
     });
     const context = {
+      stores,
       session: {
         runSettled: undefined,
         runCompleted: false,
@@ -68,19 +73,19 @@ describe('CLI chat run config', () => {
   it('rejects missing root chat agents before a prompt is submitted', () => {
     mockedResolveAgentForLaunch.mockReturnValue(undefined);
 
-    expect(chatToolUseAgentUsageError('mathematician')).toContain(
+    expect(chatToolUseAgentUsageError(stores, 'mathematician')).toContain(
       'Tool-use agent not found: mathematician.',
     );
   });
 
   it('rejects workflow agents as root chat agents', () => {
-    mockedResolveAgentForLaunch.mockImplementation((category) =>
+    mockedResolveAgentForLaunch.mockImplementation((_stores, category) =>
       category === AgentCategory.Workflow
         ? registryAgent(AgentCategory.Workflow)
         : undefined,
     );
 
-    expect(chatToolUseAgentUsageError('polish')).toContain(
+    expect(chatToolUseAgentUsageError(stores, 'polish')).toContain(
       '`texra chat` only handles tool-use agents',
     );
   });

@@ -22,10 +22,13 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@agent/index/agentRegistry', () => ({
   getVisibleAgents: mocks.getVisibleAgents,
   getVisibleAgent: mocks.getVisibleAgent,
-  // No test here activates a delegation scope (no RunContext mock), so this
+  // No test here pins a delegation scope, so this
   // always falls through to the workspace-visible roster.
-  resolveDelegationScopeAgents: (scope: unknown, category: string) =>
-    scope ? [] : mocks.getVisibleAgents(category),
+  resolveDelegationScopeAgents: (
+    _stores: unknown,
+    scope: unknown,
+    category: string,
+  ) => (scope ? [] : mocks.getVisibleAgents(category)),
 }));
 
 vi.mock('@model/computeModelOptions', () => ({

@@ -5,9 +5,10 @@
  * by `webviewSessionLayer.ts` from the session key on the wire.
  * `SessionView.key` is `storage`, the same value that keys both layer maps,
  * so no fold arm carries a session key. Effect code reads roots from
- * context, never from the async-local `workspaceRoots()`: Effect's scheduler
- * drains many fibers' continuations in one turn, so that state bleeds across
- * fibers. Only the storage root is on the service: it is all the session
+ * context, which is why the process ever had an async-local carrier to retire
+ * (#12421): Effect's scheduler drains many fibers' continuations in one turn,
+ * so ambient state bleeds across fibers. Only the storage root is on the
+ * service: it is all the session
  * graph reads, and a webview has no config provider or state store to give.
  */
 import { Context } from 'effect';

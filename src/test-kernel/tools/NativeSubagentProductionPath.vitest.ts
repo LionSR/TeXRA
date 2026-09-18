@@ -517,7 +517,6 @@ async function launchWaitingChild(options: {
         runtimeUnavailableTools: [],
       },
     },
-    inScope: <A>(operation: () => A): A => operation(),
   };
   const launch = await testRuntime().runPromise(
     executeSubagent(

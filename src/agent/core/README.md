@@ -20,8 +20,9 @@ What is **not** here, and where it lives instead:
   `@agent/runtime/ModelInvoker.ts`. `core` holds none of the loop.
 - The process's global state store is the `AppState` service from
   `@platform/interfaces` (`yield* AppState` in Effect code, or thread the store
-  in from the host's composition root). Workspace-scoped state comes from
-  `workspaceRoots().workspaceState`.
+  in from the host's composition root). Workspace-scoped state comes from the
+  `roots.workspaceState` the caller holds — a tool call's `call.roots`, a
+  run's `session.roots`, a host command's `session.roots`.
 
 ## Dependency direction
 

@@ -70,7 +70,7 @@ import type { RunHandle } from '@agent/runtime/RunHandle';
 import { Runs } from '@agent/runtime/runRegistry';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { AgentResume } from '@platform/interfaces';
-import { workspaceRoots } from '@platform/workspaceRoots';
+import { processWorkspaceRoots } from '@platform/workspaceRoots';
 import {
   aggregateId as qualifyAggregateId,
   emptyRunEndOutput,
@@ -1351,7 +1351,7 @@ describe('childRunLoop E2E fixtures', () => {
     'gates budgeted child turns through the session child-run budget',
     () =>
       Effect.gen(function* () {
-        const config = workspaceRoots().config as FakeConfigProvider;
+        const config = processWorkspaceRoots().config as FakeConfigProvider;
         config.set(CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY, 1);
         try {
           const first = loopRunId();

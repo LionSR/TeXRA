@@ -261,7 +261,6 @@ function parentContext(): DelegationParent {
         runtimeUnavailableTools: ['user_question'],
       },
     },
-    inScope: (operation) => operation(),
   };
 }
 
@@ -371,7 +370,7 @@ function inBandRunReturning(finalResult: RunEnd) {
 }
 
 function useToolUseAgentEntries(): void {
-  mocks.requireVisibleAgent.mockImplementation((_category, name) => ({
+  mocks.requireVisibleAgent.mockImplementation((_stores, _category, name) => ({
     name,
     source: 'builtInToolUse',
     category: 'toolUse',
@@ -406,12 +405,14 @@ describe('createWorkflowScriptAgentRunner', () => {
       Effect.succeed({ active: null, lastCompleted: null }),
     );
     mocks.recordWorkflowCallAttempt.mockReturnValue(Effect.void);
-    mocks.requireVisibleAgent.mockImplementation((_category, name) => ({
-      name,
-      source: 'builtInWorkflow',
-      category: 'workflow',
-      path: `/agents/${name}.yml`,
-    }));
+    mocks.requireVisibleAgent.mockImplementation(
+      (_stores, _category, name) => ({
+        name,
+        source: 'builtInWorkflow',
+        category: 'workflow',
+        path: `/agents/${name}.yml`,
+      }),
+    );
     mocks.selectAvailableDelegationModel.mockReturnValue(
       Effect.succeed('child-model'),
     );
@@ -762,6 +763,7 @@ describe('createWorkflowScriptAgentRunner', () => {
       );
 
       expect(mocks.requireVisibleAgent).toHaveBeenCalledWith(
+        expect.anything(),
         'workflow',
         'merge',
         {
@@ -1685,6 +1687,7 @@ describe('createWorkflowScriptAgentRunner', () => {
         ).toBe(structuredResult);
 
         expect(mocks.requireVisibleAgent).toHaveBeenCalledWith(
+          expect.anything(),
           'toolUse',
           'assistant',
           expect.anything(),

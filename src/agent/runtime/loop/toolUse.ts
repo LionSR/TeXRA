@@ -369,11 +369,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     const media = yield* Effect.exit(
       run.config.mediaFiles.length
         ? mediaInputParts(
-            run.inScope(() =>
-              run.config.mediaFiles.map((p) =>
-                run.fileService.createLocation(p),
-              ),
-            ),
+            run.config.mediaFiles.map((p) => run.fileService.createLocation(p)),
             bound,
             logger,
             run.session.roots.config,

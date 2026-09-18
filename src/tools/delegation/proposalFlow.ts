@@ -10,6 +10,7 @@ import { Cause, Effect, Exit } from 'effect';
 
 // Local imports
 import type { AgentEntry } from '@agent/index/agentEntry';
+import type { AgentRosterStores } from '@agent/index/agentRegistry';
 import type { ToolCallShape } from '@agent/runtime/ToolCall';
 import type {
   AgentDelegationScope,
@@ -69,13 +70,14 @@ const DEFAULT_DELEGATION_REJECTION_FEEDBACK = [
  * exact `(source, name)` entry instead of re-resolving the bare name.
  */
 export function requireVisibleAgent(
+  stores: AgentRosterStores,
   category: AgentCategory,
   name: string,
   scope?: AgentDelegationScope,
 ): AgentEntry {
-  const agent = getDelegationAgent(category, name, scope);
+  const agent = getDelegationAgent(stores, category, name, scope);
   if (agent) return agent;
-  const available = getDelegationAgents(category, scope)
+  const available = getDelegationAgents(stores, category, scope)
     .map((a) => a.name)
     .join(', ');
   throw new Error(
@@ -89,19 +91,22 @@ export function requireVisibleAgent(
  * accepts both kinds.
  */
 export function requireWorkflowOrToolUseAgent(
+  stores: AgentRosterStores,
   name: string,
   scope?: AgentDelegationScope,
 ): AgentEntry {
   const searched = [AgentCategory.Workflow, AgentCategory.ToolUse] as const;
   for (const category of searched) {
-    const agent = getDelegationAgent(category, name, scope);
+    const agent = getDelegationAgent(stores, category, name, scope);
     if (agent) return agent;
   }
   // Both rosters were searched, so both belong in the message: rethrowing the
   // workflow-only error would advertise half the candidates the caller had.
   const available = searched
     .map((category) => {
-      const names = getDelegationAgents(category, scope).map((a) => a.name);
+      const names = getDelegationAgents(stores, category, scope).map(
+        (a) => a.name,
+      );
       return `${category}: ${names.join(', ') || 'none'}`;
     })
     .join('; ');
@@ -278,12 +283,11 @@ export const proposeAndExecute = Effect.fn('proposeAndExecute')(function* (
   const agentOverride =
     result.agent && result.agent !== proposal.agent ? result.agent : undefined;
   const resolvedAgentOverride = agentOverride
-    ? parent.inScope(() =>
-        getDelegationAgent(
-          proposal.agentCategory,
-          agentOverride,
-          parent.delegationAgentScope ?? undefined,
-        ),
+    ? getDelegationAgent(
+        parent.roots,
+        proposal.agentCategory,
+        agentOverride,
+        parent.delegationAgentScope ?? undefined,
       )
     : undefined;
 

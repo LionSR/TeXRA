@@ -25,7 +25,6 @@ import { tryDefaultSession } from '@agent/runtime';
 import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
 import { DEFAULT_MODELS } from '@model/modelOptionsBasic';
 import { platform } from '@platform/platform';
-import { workspaceRoots } from '@platform/workspaceRoots';
 import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
 import { MEMORY_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import {
@@ -340,11 +339,18 @@ if (RESET_WORKFLOW_SCRIPT_DISABLED) {
 // The one process runtime this harness runs on, as its composition root
 // handed it back: the harness holds it in a local like every other entry.
 const harnessRuntime = HARNESS_PLATFORM_SERVICES.runtime;
+// The roots that same init installed, held as data like every other entry.
+const harnessRoots = HARNESS_PLATFORM_SERVICES.roots;
+if (!harnessRoots) {
+  throw new Error(
+    'The TUI harness platform init installed no workspace roots.',
+  );
+}
 // Seed workspace-storage memory files so `/memory` has rows to list. Files
 // get descending mtimes in list order, so the first name is the newest row
 // and the listing order is deterministic.
 if (HARNESS_MEMORY_FILES.length > 0) {
-  const memoryRoot = path.join(workspaceRoots().storage, MEMORY_STORAGE_DIR);
+  const memoryRoot = path.join(harnessRoots.storage, MEMORY_STORAGE_DIR);
   const newestEpochSeconds = Date.now() / 1000;
   HARNESS_MEMORY_FILES.forEach((name, index) => {
     const filePath = path.join(memoryRoot, name);
@@ -364,7 +370,7 @@ if (
   process.env.HARNESS_VISIBLE_WORKFLOW_AGENTS !== undefined
 ) {
   await harnessRuntime.runPromise(
-    workspaceRoots().workspaceState.update(
+    harnessRoots.workspaceState.update(
       WorkspaceStateKey.AGENT_ROSTER_SELECTION,
       {
         kind: 'custom',
@@ -384,7 +390,7 @@ if (
 }
 if (process.env.HARNESS_VISIBLE_MODELS !== undefined) {
   await harnessRuntime.runPromise(
-    workspaceRoots().globalState.update(GlobalStateKey.MODEL_SELECTION, {
+    harnessRoots.globalState.update(GlobalStateKey.MODEL_SELECTION, {
       enabledExtras: HARNESS_VISIBLE_MODELS,
       disabledDefaults: DEFAULT_MODELS.filter(
         (model) => !HARNESS_VISIBLE_MODELS.includes(model),

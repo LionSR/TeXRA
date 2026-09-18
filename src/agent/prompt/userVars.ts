@@ -116,7 +116,8 @@ export interface BuildUserVarsOptions {
   config: ConfigProvider;
   /**
    * The three setting slots of the same session, held as data for the same
-   * reason: the run's disabled-skill lists answer for this project, not for
+   * reason: the run's disabled-skill lists and the delegation roster behind
+   * `WORKFLOW_AGENTS` / `TOOL_USE_AGENTS` answer for this project, not for
    * whichever roots the calling fiber carries.
    */
   settings: SettingsStores;
@@ -261,13 +262,13 @@ function getBasicVars(
   const selfName = agentConfig.agent;
   const scope = options.delegationAgentScope ?? undefined;
   const workflowAgentsList = formatAgentList(
-    getDelegationAgents(AgentCategory.Workflow, scope).filter(
+    getDelegationAgents(options.settings, AgentCategory.Workflow, scope).filter(
       (agent) => agent.name !== selfName,
     ),
     { tools: 'none', collapseDescriptionNewlines: false },
   );
   const toolUseAgentsList = formatAgentList(
-    getDelegationAgents(AgentCategory.ToolUse, scope).filter(
+    getDelegationAgents(options.settings, AgentCategory.ToolUse, scope).filter(
       (agent) => agent.name !== selfName,
     ),
     { tools: 'inline', collapseDescriptionNewlines: false },

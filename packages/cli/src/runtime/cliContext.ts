@@ -376,8 +376,8 @@ export async function buildCliContext(
   const env = init.env ?? process.env;
   const cwd = await resolveCliCwd(init.globalArgs.cwd);
   // The project file over the user file, resolved by the same
-  // `JsonConfigProvider` `workspaceRoots().config` gives the extension and
-  // desktop hosts — and, from `initCliPlatform` on, this host too. This is the
+  // `JsonConfigProvider` that `roots.config` gives the extension and desktop
+  // hosts — and, from `initCliPlatform` on, this host too. This is the
   // pre-runtime open, which is why it goes through `loadCliStartupConfig`
   // rather than the process runtime.
   const { config, warnings } = await loadCliStartupConfig(

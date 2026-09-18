@@ -92,7 +92,6 @@ describe('executeSubagent child run launch', () => {
         runtimeUnavailableTools: [],
       },
     },
-    inScope: (operation) => operation(),
   };
 
   function runDefaultSubagent() {

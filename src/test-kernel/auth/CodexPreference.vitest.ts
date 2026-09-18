@@ -7,10 +7,10 @@ import {
   isPreferCodexSubscription,
   setPreferCodexSubscription,
 } from '@model/codex/codexPreference';
-import { workspaceRoots } from '@platform/workspaceRoots';
+import { processWorkspaceRoots } from '@platform/workspaceRoots';
 import { installPlatform } from '@test/support/setupPlatform';
 import { FakeScopedConfigProvider } from '@test/support/FakePlatform';
-import { platformSettingsStores } from '@utils/config/platformSettings';
+import { processSettingsStores } from '@utils/config/platformSettings';
 
 const CODEX_PREFER_SUBSCRIPTION_KEY = 'texra.chatgptCodex.preferSubscription';
 
@@ -21,13 +21,13 @@ describe('Codex subscription preference', () => {
     });
 
     const update = await Effect.runPromise(
-      setPreferCodexSubscription(platformSettingsStores(), true),
+      setPreferCodexSubscription(processSettingsStores(), true),
     );
 
     expect(update).toEqual({ effective: true, target: 'workspace' });
-    expect(isPreferCodexSubscription(platformSettingsStores())).toBe(true);
+    expect(isPreferCodexSubscription(processSettingsStores())).toBe(true);
     expect(
-      workspaceRoots().config.inspect(CODEX_PREFER_SUBSCRIPTION_KEY),
+      processWorkspaceRoots().config.inspect(CODEX_PREFER_SUBSCRIPTION_KEY),
     ).toMatchObject({
       workspaceValue: true,
     });
@@ -39,11 +39,11 @@ describe('Codex subscription preference', () => {
     await installPlatform({}, { config });
 
     const update = await Effect.runPromise(
-      setPreferCodexSubscription(platformSettingsStores(), true),
+      setPreferCodexSubscription(processSettingsStores(), true),
     );
 
     expect(update).toEqual({ effective: false, target: 'global' });
-    expect(isPreferCodexSubscription(platformSettingsStores())).toBe(false);
+    expect(isPreferCodexSubscription(processSettingsStores())).toBe(false);
     expect(config.inspect(CODEX_PREFER_SUBSCRIPTION_KEY)).toMatchObject({
       globalValue: true,
     });

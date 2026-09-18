@@ -116,7 +116,6 @@ describe('run-scoped tool resolution', () => {
                   tools: [tool('bash'), tool('second')],
                   toolInjections: new ToolInjectionRegistry(),
                   callbacks: { onModelChanged: () => {} },
-                  inScope: (operation) => operation(),
                 }),
               ),
               Layer.provideMerge(Layer.succeed(RunLedger, session.ledger)),

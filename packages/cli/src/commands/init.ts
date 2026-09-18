@@ -42,7 +42,7 @@ async function gatherOptions(
 }> {
   await stores.runtime.runPromise(loadAgents({ includeRemote: false }));
   const agents = implicitDefaultToolUseAgents(
-    getVisibleAgents(AgentCategory.ToolUse),
+    getVisibleAgents(stores, AgentCategory.ToolUse),
   );
   const models = await stores.runtime.runPromise(
     getCliModelAccessList({ stores }),

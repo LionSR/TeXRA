@@ -20,7 +20,7 @@ import { GlobalStorageFs } from '@platform/rootedFs';
 import { AgentCategory } from '@shared/schemas';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { REPO_ROOT } from '@test/support/repoScan';
-import { installPlatform } from '@test/support/setupPlatform';
+import { hostStores, installPlatform } from '@test/support/setupPlatform';
 import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
 import type { RootedFileSystem } from '@utils/files/rootedFileSystem';
 
@@ -28,7 +28,7 @@ import type { RootedFileSystem } from '@utils/files/rootedFileSystem';
  * source the delegation captured at validation time (see `getAgentPath`). */
 function launchAs(category: AgentCategory, entry: AgentEntry | undefined) {
   return entry
-    ? resolveAgentForLaunch(category, entry.name, entry.source)
+    ? resolveAgentForLaunch(hostStores(), category, entry.name, entry.source)
     : undefined;
 }
 
@@ -112,7 +112,7 @@ describe('cross-category agent resolution', () => {
     // entry, never the colliding custom workflow shadow.
     const toolUse = launchAs(
       'toolUse',
-      getVisibleAgent('toolUse', 'assistant'),
+      getVisibleAgent(hostStores(), 'toolUse', 'assistant'),
     );
     expect(toolUse?.category).toBe('toolUse');
     expect(toolUse?.source).toBe('builtInToolUse');
@@ -121,7 +121,7 @@ describe('cross-category agent resolution', () => {
     // workflow delegation validated.
     const workflow = launchAs(
       'workflow',
-      getVisibleAgent('workflow', 'assistant'),
+      getVisibleAgent(hostStores(), 'workflow', 'assistant'),
     );
     expect(workflow?.category).toBe('workflow');
     expect(workflow?.source).toBe('custom');
@@ -131,15 +131,26 @@ describe('cross-category agent resolution', () => {
     // A direct launch without a pinned source (e.g. the webview "Run") routes
     // through getVisibleAgent — the identical call validation makes — so it
     // resolves to exactly the entry validation would, never a same-name shadow.
-    const toolUse = resolveAgentForLaunch(AgentCategory.ToolUse, 'assistant');
-    expect(toolUse).toBe(getVisibleAgent('toolUse', 'assistant'));
+    const toolUse = resolveAgentForLaunch(
+      hostStores(),
+      AgentCategory.ToolUse,
+      'assistant',
+    );
+    expect(toolUse).toBe(getVisibleAgent(hostStores(), 'toolUse', 'assistant'));
     expect(toolUse?.source).toBe('builtInToolUse');
 
-    const workflow = resolveAgentForLaunch(AgentCategory.Workflow, 'assistant');
-    expect(workflow).toBe(getVisibleAgent('workflow', 'assistant'));
+    const workflow = resolveAgentForLaunch(
+      hostStores(),
+      AgentCategory.Workflow,
+      'assistant',
+    );
+    expect(workflow).toBe(
+      getVisibleAgent(hostStores(), 'workflow', 'assistant'),
+    );
 
     // A stale/missing pinned source falls through to that same visible-set tier.
     const stale = resolveAgentForLaunch(
+      hostStores(),
       AgentCategory.ToolUse,
       'assistant',
       'remote',
@@ -159,6 +170,7 @@ describe('cross-category agent resolution', () => {
 
   it('resolves scoped names within category and drops unknown ones', () => {
     const scoped = resolveDelegationScopeAgents(
+      hostStores(),
       {
         workflow: [],
         toolUse: ['assistant', 'builtInToolUse:assistant', 'missing-agent'],
@@ -176,6 +188,7 @@ describe('cross-category agent resolution', () => {
     // (`custom:review` to the custom one, not the built-in it shadows), and
     // the deduplicated result must keep both, in scope order.
     const scoped = resolveDelegationScopeAgents(
+      hostStores(),
       {
         workflow: [],
         toolUse: ['builtInToolUse:review', 'custom:review'],

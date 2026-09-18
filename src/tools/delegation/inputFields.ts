@@ -28,7 +28,7 @@ import { runStorageLocationUnder } from '@utils/files/runStorageFs';
 import { workspaceAbsolutePath } from '@utils/files/workspaceFS';
 import { entryExists } from '@utils/files/fsEntryExists';
 import { isWorktreeSupportEnabled } from '@utils/config/worktreeConfig';
-import { platformSettingsStores } from '@utils/config/platformSettings';
+import { processSettingsStores } from '@utils/config/platformSettings';
 import {
   ensureError,
   extractErrorMessage,
@@ -170,11 +170,16 @@ export const workingDirectoryField = z
     const trimmed = parsed.success;
     if (!trimmed) return trimmed;
     // The one opt-in read with no caller to take slots from: this is a static
-    // Zod transform on the tool's input schema, parsed by `BaseTool.call`
-    // before any per-call value reaches it, so the stores can only come from
-    // the calling context. Moving the gate to `DelegateAgentTool.execute`,
-    // where `call.roots` is in hand, is what retires this read.
-    if (!isWorktreeSupportEnabled(platformSettingsStores())) {
+    // Zod transform on the tool's input schema, parsed by the tool facade
+    // before any per-call value reaches it, so the slots can only be the
+    // process's. That is also what it resolved to before the workspace-roots
+    // scope was retired — the facade parses on an Effect fiber, which never
+    // carried the launch's frame — so a multi-session host gates on the
+    // process roots here today. Moving the gate to
+    // `DelegateAgentTool.execute`, where `call.roots` is in hand, is what
+    // makes it answer per project; that turns a schema rejection into a tool
+    // error, so it wants its own change.
+    if (!isWorktreeSupportEnabled(processSettingsStores())) {
       return fail(WORKTREE_DISABLED_MESSAGE);
     }
     const existing = Result.try(() => ensureWorkingDirectoryExists(trimmed));

@@ -6,10 +6,10 @@
  * Each value is a {@link RootedFileSystem} — the standard library's
  * `FileSystem` confined to one root — and each layer captures that root when
  * it is built. A consumer therefore takes a filesystem from context and can
- * neither read nor influence which workspace it points at, which is what
- * lets the `inScope` wrappers around tool I/O go away: they exist only to
- * put the right value into `workspaceRoots()`'s AsyncLocalStorage before an
- * ambient-rooted read picks it up.
+ * neither read nor influence which workspace it points at. That is what let
+ * the `inScope` wrappers around tool I/O go away (#12421): they existed only
+ * to put the right value into an AsyncLocalStorage frame before an
+ * ambient-rooted read picked it up.
  */
 
 // Third-party imports

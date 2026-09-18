@@ -4,7 +4,7 @@ import * as path from 'node:path';
 // Third-party imports
 import { Effect, FileSystem, PlatformError } from 'effect';
 import { describe, expect, it } from 'vitest';
-import { workspaceRoots } from '@platform/workspaceRoots';
+import { processWorkspaceRoots } from '@platform/workspaceRoots';
 
 // Local imports
 import type { RunId } from '@shared/schemas';
@@ -212,7 +212,7 @@ describe('inspectRunStorageEntryUnder', () => {
   });
 
   it('preserves source provenance instead of treating workspace inputs as outputs', () => {
-    const fileService = new RunFileService(runId, workspaceRoots());
+    const fileService = new RunFileService(runId, processWorkspaceRoots());
 
     expect(fileService.locateSource('draft.tex')).toEqual({
       kind: 'workspace',

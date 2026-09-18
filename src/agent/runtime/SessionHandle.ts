@@ -273,9 +273,9 @@ export class SessionHandle {
   readonly transcripts: StreamLogStore;
   /**
    * The workspace this session works on: the four per-workspace host roots.
-   * Runs and `runInSession` scopes resolve `workspaceRoots()` and the
-   * workspace config/state through these, so several sessions in one process
-   * each write under their own folder.
+   * Every run, tool call and host command this session serves takes them from
+   * here as data, so several sessions in one process each write under their
+   * own folder.
    */
   readonly roots: WorkspaceRoots;
   /** Session-owned follow-up queue owner. */

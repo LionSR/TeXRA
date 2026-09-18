@@ -24,7 +24,6 @@ vi.mock('@agent/runtime/AgentLaunchContext', async () => {
         try: () => mocks.buildAgentLaunchContext(...args),
         catch: ensureError,
       }),
-    runInLaunchSession: (_ctx: unknown, run: () => unknown) => run(),
   };
 });
 

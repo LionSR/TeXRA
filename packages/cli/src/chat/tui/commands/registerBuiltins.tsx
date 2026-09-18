@@ -338,6 +338,7 @@ export function registerBuiltinSlashCommands(options: {
     return (
       <AgentListForm
         runtime={runtime}
+        stores={stores}
         currentAgent={current}
         availableRows={props.availableRows}
         selectable={selectable}

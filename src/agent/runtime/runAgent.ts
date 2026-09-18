@@ -27,7 +27,6 @@ import {
 import { applyHelperModelPreference } from './helperModelPreference';
 import { executeAgent, type ExecuteAgentOptions } from './executeAgent';
 import { RunHandle } from './RunHandle';
-import { runInSession } from './RunContext';
 import type { SessionHandle } from './SessionHandle';
 import type { AgentFlowResult } from './AgentFlowResult';
 

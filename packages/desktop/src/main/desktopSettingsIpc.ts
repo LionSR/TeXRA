@@ -1,7 +1,8 @@
 import { join } from 'node:path';
 
 import { Cause, Effect, Exit } from 'effect';
-import { runInSession, type SessionHandle } from '@agent/runtime';
+
+import type { SessionHandle } from '@agent/runtime';
 import { formatError } from '@common/errors';
 import { storeCredential } from '@common/secrets/storeCredential';
 import { SettingsMemoryController } from '@controllers/settingsView/SettingsMemoryController';
@@ -418,12 +419,12 @@ export function createDesktopSettingsIpc(
   }
 
   /**
-   * App signals run their listeners on the emitter's call stack, so a listener
-   * fired from a run in another paper would otherwise resolve `workspaceRoots()`
-   * to that paper. Every refresh a signal triggers runs in this paper's session.
+   * App signals run their listeners on the emitter's call stack. Every refresh
+   * a signal triggers reads this paper's own session, which each of these
+   * posters takes from `options.session` as data.
    */
   function runAsyncInPaper(work: () => Promise<void>): void {
-    runAsync(runInSession(options.session, work));
+    runAsync(work());
   }
 
   // Agent runs execute in this same main process and the settings panel shares

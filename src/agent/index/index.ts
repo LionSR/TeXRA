@@ -43,3 +43,5 @@ export {
   getVisibleAgents,
   createWorkspaceAgentRosterController,
 } from './agentRegistry';
+
+export type { AgentRosterStores } from './agentRegistry';

@@ -425,7 +425,6 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
               workingDirectory: run.workingDirectory,
               stopAfterCycle: run.toolPolicy.stopAfterCycle,
               onApprovalPolicyDenial: run.onApprovalPolicyDenial,
-              inScope: run.inScope,
               tracker: turn.workspace.interactions,
               workPlanState: turn.workspace.workPlan,
               trace: logger,

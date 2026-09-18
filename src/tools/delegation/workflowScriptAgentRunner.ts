@@ -123,12 +123,11 @@ const resolveWorkflowCallConfig = Effect.fn('resolveWorkflowCallConfig')(
           'A structured workflow call must name a tool-use agent.',
         );
       }
-      const agent = parent.inScope(() =>
-        requireVisibleAgent(
-          AgentCategory.ToolUse,
-          requestedAgentName,
-          parent.delegationAgentScope ?? undefined,
-        ),
+      const agent = requireVisibleAgent(
+        parent.roots,
+        AgentCategory.ToolUse,
+        requestedAgentName,
+        parent.delegationAgentScope ?? undefined,
       );
       const model = yield* workflowScriptModelSelection(call, parent);
       return {
@@ -147,12 +146,11 @@ const resolveWorkflowCallConfig = Effect.fn('resolveWorkflowCallConfig')(
       const agent =
         requestedAgentName === undefined
           ? defaultAgent
-          : parent.inScope(() =>
-              requireVisibleAgent(
-                AgentCategory.Workflow,
-                requestedAgentName,
-                parent.delegationAgentScope ?? undefined,
-              ),
+          : requireVisibleAgent(
+              parent.roots,
+              AgentCategory.Workflow,
+              requestedAgentName,
+              parent.delegationAgentScope ?? undefined,
             );
       if (agent.category !== AgentCategory.Workflow) {
         throw new WorkflowRunAbortError(

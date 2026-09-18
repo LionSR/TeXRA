@@ -43,11 +43,10 @@ export type OpenPdfInput = z.infer<typeof OpenPdfInputSchema>;
 interface OpenPdfPorts extends WorkspacePathPorts {
   readonly openPdf: HostInteractions['openPdf'];
   /**
-   * The requested path's run-storage identity, resolved in the caller's turn:
-   * the run-storage root is `workspaceRoots().storage`, which is per-session
-   * ambient state, so recognising the path must not depend on whichever roots
-   * the program's fiber carries. Undefined when this run has no storage of its
-   * own or the path lies outside it.
+   * The requested path's run-storage identity, resolved in the caller's turn
+   * against the run's own storage root (`session.roots.storage`), which the
+   * caller holds as data. Undefined when this run has no storage of its own
+   * or the path lies outside it.
    */
   readonly runStorageLocation: RunStorageFileLocation | undefined;
 }

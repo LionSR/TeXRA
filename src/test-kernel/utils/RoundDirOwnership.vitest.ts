@@ -11,7 +11,7 @@ import * as path from 'node:path';
 
 import { Effect, type FileSystem } from 'effect';
 import { describe, expect, it } from 'vitest';
-import { workspaceRoots } from '@platform/workspaceRoots';
+import { processWorkspaceRoots } from '@platform/workspaceRoots';
 
 import { MemoryStateStore } from '@platform/defaults/memoryState';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
@@ -83,7 +83,7 @@ describe('round-dir ownership and editable .tex inheritance', () => {
     await writeFile(draftAbsolute, workspaceOriginal);
 
     const runId = RunIdSchema.parse('a1a1a1a1a1a1');
-    const fileService = new RunFileService(runId, workspaceRoots());
+    const fileService = new RunFileService(runId, processWorkspaceRoots());
 
     await runFileServiceProgram(
       fileService.mirrorWorkspaceFile(
@@ -93,7 +93,7 @@ describe('round-dir ownership and editable .tex inheritance', () => {
     );
 
     const snapshotPath = originalSnapshotPathUnder(
-      workspaceRoots().storage,
+      processWorkspaceRoots().storage,
       runId,
       'Draft/Draft.tex',
     );
@@ -104,7 +104,7 @@ describe('round-dir ownership and editable .tex inheritance', () => {
     await runFileServiceProgram(fileService.ensureMirroredInRoundDir(1));
 
     const roundFilePath = path.join(
-      runDirUnder(workspaceRoots().storage, runId),
+      runDirUnder(processWorkspaceRoots().storage, runId),
       'r1',
       'Draft',
       'Draft.tex',
@@ -143,7 +143,7 @@ describe('round-dir ownership and editable .tex inheritance', () => {
     await writeFile(stylePath, '\\newcommand{\\RR}{\\mathbb{R}}\n');
 
     const runId = RunIdSchema.parse('b2b2b2b2b2b2');
-    const fileService = new RunFileService(runId, workspaceRoots());
+    const fileService = new RunFileService(runId, processWorkspaceRoots());
 
     await runFileServiceProgram(
       fileService.mirrorWorkspaceFile(
@@ -152,7 +152,7 @@ describe('round-dir ownership and editable .tex inheritance', () => {
     );
 
     const snapshotPath = originalSnapshotPathUnder(
-      workspaceRoots().storage,
+      processWorkspaceRoots().storage,
       runId,
       'macros.sty',
     );
@@ -161,13 +161,16 @@ describe('round-dir ownership and editable .tex inheritance', () => {
     await runFileServiceProgram(fileService.ensureMirroredInRoundDir(1));
 
     const roundFilePath = path.join(
-      runDirUnder(workspaceRoots().storage, runId),
+      runDirUnder(processWorkspaceRoots().storage, runId),
       'r1',
       'macros.sty',
     );
     await expectSymlinkTargeting(
       roundFilePath,
-      path.join(runDirUnder(workspaceRoots().storage, runId), 'macros.sty'),
+      path.join(
+        runDirUnder(processWorkspaceRoots().storage, runId),
+        'macros.sty',
+      ),
     );
   });
 

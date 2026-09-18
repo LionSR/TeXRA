@@ -62,7 +62,7 @@ import {
   LanguageModel,
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
 } from '@platform/languageModel';
-import { workspaceRoots } from '@platform/workspaceRoots';
+import { processWorkspaceRoots } from '@platform/workspaceRoots';
 import {
   AgentCategory,
   AgentRunStateSnapshotSchema,
@@ -294,9 +294,13 @@ function agentRun(
     scope: Scope.makeUnsafe(),
     declinedRoutes: [],
     pendingModelSwitch: { value: null },
-    inScope: (operation) => operation(),
     usageMonitor: new UsageMonitor(
-      { logger, runId, runStageId: undefined, config: workspaceRoots().config },
+      {
+        logger,
+        runId,
+        runStageId: undefined,
+        config: processWorkspaceRoots().config,
+      },
       { agentName: CONFIG.agent, agentCategory: SETTING.agentCategory },
     ),
     callbacks: { onModelChanged: () => undefined },

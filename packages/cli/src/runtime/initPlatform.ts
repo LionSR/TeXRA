@@ -47,7 +47,7 @@ import { registerRuntimeShutdownHandlers } from '@tools/agentCliSessionStores';
 import { seedDisabledToolDefaults } from '@tools/toolAvailability';
 import {
   initProcessSettingHost,
-  platformSettingsStores,
+  processSettingsStores,
 } from '@utils/config/platformSettings';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -112,16 +112,16 @@ export type CliPlatformServices = Pick<Platform, 'lifecycle'> &
      * The stores this root opened, handed over rather than read back. `config`,
      * `workspaceState` and `globalState` are the three slots a catalog setting
      * resolves against, so a read or write through `readSettingFrom` /
-     * `writeSettingTo` answers for this process's project without entering the
-     * ambient roots scope.
+     * `writeSettingTo` answers for this process's project, from the record
+     * the caller holds rather than any process-wide lookup.
      */
     readonly secrets: PlatformSecrets;
     /**
      * The process roots this init installed: one process, one project (the
      * `--cwd` workspace). Undefined only when another root installed the
      * platform before this init ran (a test harness's fake host), so the
-     * caller that needs them reports their absence rather than reading the
-     * ambient roots.
+     * caller that needs them reports their absence rather than falling back
+     * to a process-wide lookup.
      */
     readonly roots?: WorkspaceRoots;
     /**
@@ -501,7 +501,7 @@ export async function initCliPlatform(
   // foreign root installed the platform published (a test harness's fake host)
   // — resolved once here through the funnel's own accessor, which is exactly
   // what each of these readers used to do for itself.
-  const settingSlots = installedRoots ?? platformSettingsStores();
+  const settingSlots = installedRoots ?? processSettingsStores();
   const cliServices: CliPlatformServices = {
     runtime,
     config: settingSlots.config,

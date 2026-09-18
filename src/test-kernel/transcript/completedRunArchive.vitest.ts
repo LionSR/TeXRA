@@ -42,7 +42,6 @@ import {
 } from '@cli/runtime/history';
 import { createHostRunActions } from '@controllers/session/hostRunActions';
 import { Secrets } from '@platform/secrets';
-import { runWithWorkspaceRoots } from '@platform/workspaceRoots';
 import {
   LOG_LEVELS,
   MESSAGE_TYPES,
@@ -601,8 +600,6 @@ describe('completedRunArchive facade', () => {
 
         const toolLayer = nativeToolTestLayer({
           run: { session: taskSession, runId, toolPolicy: {} },
-          inScope: (operation) =>
-            runWithWorkspaceRoots(taskSession.roots, operation),
         });
 
         const endpoint = yield* new ExecutionsTool()
@@ -769,8 +766,6 @@ describe('completedRunArchive facade', () => {
           Effect.provide(
             nativeToolTestLayer({
               run: { session: taskSession, runId, toolPolicy: {} },
-              inScope: (operation) =>
-                runWithWorkspaceRoots(taskSession.roots, operation),
             }),
           ),
         );

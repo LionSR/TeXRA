@@ -118,8 +118,6 @@ function buildArguments(input: GrepInput): string[] {
  */
 interface GrepPorts extends WorkspacePathPorts {
   readonly signal: AbortSignal | undefined;
-  /** Enter the host's workspace frame only while the `rg` subprocess spawns. */
-  readonly inScope: <A>(operation: () => A) => A;
 }
 
 const runGrep = Effect.fn('GrepTool.execute')(function* (
@@ -164,21 +162,19 @@ const runGrep = Effect.fn('GrepTool.execute')(function* (
   // longer behind an uninterruptible host-port wrap: interrupting the tool
   // tears the `rg` process down instead of abandoning it.
   const result = yield* Effect.promise(() =>
-    ports.inScope(() =>
-      executeCommand(command, {
-        // No `working_directory` on the call means the search runs from the
-        // session's own workspace root, which the call carries as data.
-        cwd: root ?? ports.workspaceRoot,
-        // The call's own setting slots, carried by the same ports as the root.
-        settings: ports.settings,
-        channel: CHANNEL,
-        truncate: false,
-        maxBuffer: GREP_MAX_BUFFER_CHARS,
-        // Cancellation for the owning agent run — parallel batches must be
-        // able to terminate large-repo rg subprocesses on interrupt.
-        signal: ports.signal,
-      }),
-    ),
+    executeCommand(command, {
+      // No `working_directory` on the call means the search runs from the
+      // session's own workspace root, which the call carries as data.
+      cwd: root ?? ports.workspaceRoot,
+      // The call's own setting slots, carried by the same ports as the root.
+      settings: ports.settings,
+      channel: CHANNEL,
+      truncate: false,
+      maxBuffer: GREP_MAX_BUFFER_CHARS,
+      // Cancellation for the owning agent run — parallel batches must be
+      // able to terminate large-repo rg subprocesses on interrupt.
+      signal: ports.signal,
+    }),
   );
 
   if (result.outputLimitExceeded) {
@@ -243,7 +239,6 @@ export const GrepTool = defineTool({
     const ports: GrepPorts = {
       ...workspacePathPorts(call),
       signal: yield* Effect.abortSignal,
-      inScope: call.inScope,
     };
     return yield* runGrep(ports, input);
   }),

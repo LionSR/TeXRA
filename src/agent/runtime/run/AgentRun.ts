@@ -64,8 +64,8 @@ function launchDeclinedRoutes(
  * Immutable per-run tool policy, resolved by the launch and read from the
  * run's `AgentRun` service.
  *
- * A frozen value the loop takes from context runs without an
- * `AsyncLocalStorage` frame — the property an SDK embedder wants.
+ * A frozen value the loop takes from context, with no ambient frame anywhere
+ * beneath it — the property an SDK embedder wants.
  */
 export interface ToolPolicy {
   /** Hide tools whose approval prompts cannot be answered in this host mode. */
@@ -141,13 +141,6 @@ export interface AgentRunShape {
    * plain slot: the host's request is synchronous.
    */
   readonly pendingModelSwitch: { value: string | null };
-  /**
-   * Run a Promise-tier operation inside the launch's async-local frame (the
-   * ambient `RunContext` and the session's workspace roots). Effect fibers
-   * resume outside that frame, so every call into tool, prompt, goal or
-   * storage code that reads it goes through here.
-   */
-  readonly inScope: <A>(operation: () => A) => A;
   readonly usageMonitor: UsageMonitor;
   readonly callbacks: RunCallbacks;
   /**
@@ -170,7 +163,6 @@ interface AgentRunLayerInput {
   readonly toolInjections: ToolInjections['Service'];
   readonly callbacks: RunCallbacks;
   readonly onApprovalPolicyDenial?: () => void;
-  readonly inScope: <A>(operation: () => A) => A;
 }
 
 /**
@@ -324,7 +316,6 @@ export const agentRunLayer = (
         usageMonitor: ctx.usageMonitor,
         callbacks: input.callbacks,
         interrupt: ctx.interrupt,
-        inScope: input.inScope,
       };
     }),
   );

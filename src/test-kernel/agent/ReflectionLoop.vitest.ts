@@ -31,7 +31,6 @@ import {
 } from '@agent/runtime/loop/rows';
 import { runReflection } from '@agent/runtime/loop/reflection';
 import { ModelInvoker, type InvokeRequest } from '@agent/runtime/ModelInvoker';
-import { runInSession } from '@agent/runtime/RunContext';
 import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
 import type { BoundModel } from '@agent/runtime/run/modelBinding';
 import { turnText } from '@agent/runtime/run/turnText';
@@ -43,7 +42,7 @@ import {
   LanguageModel,
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
 } from '@platform/languageModel';
-import { workspaceRoots } from '@platform/workspaceRoots';
+import { processWorkspaceRoots } from '@platform/workspaceRoots';
 import {
   AgentCategory,
   RUN_OUTCOME,
@@ -452,14 +451,12 @@ function agentRunTestLayer(init: LoopInit) {
         scope,
         declinedRoutes: [],
         pendingModelSwitch: { value: null },
-        inScope: <A>(operation: () => A): A =>
-          runInSession(init.session, operation),
         usageMonitor: new UsageMonitor(
           {
             logger,
             runId: init.runId,
             runStageId: undefined,
-            config: workspaceRoots().config,
+            config: processWorkspaceRoots().config,
           },
           { agentName: 'correct', agentCategory: AgentCategory.Workflow },
         ),

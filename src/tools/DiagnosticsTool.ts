@@ -34,8 +34,6 @@ const log = createLog('DiagnosticsTool');
 interface DiagnosticsPorts extends WorkspacePathPorts {
   readonly readDiagnostics: HostInteractions['readDiagnostics'];
   readonly addCriticism: HostInteractions['addCriticism'];
-  /** Enter the host's workspace frame only while calling its criticism sink. */
-  readonly inScope: <A>(operation: () => A) => A;
 }
 
 /** Resolve an input path to an absolute path against the active working directory. */
@@ -132,7 +130,6 @@ export class DiagnosticsTool extends defineTool({
       ...workspacePathPorts(call),
       readDiagnostics: interactions.readDiagnostics,
       addCriticism: interactions.addCriticism,
-      inScope: call.inScope,
     };
     return yield* input.command === 'add'
       ? this.addCriticism(ports, input)
@@ -218,20 +215,19 @@ export class DiagnosticsTool extends defineTool({
       // Path resolution shares the sink's failure report: both are the "add"
       // command failing before it could annotate anything.
       const added = yield* Effect.try({
-        try: () =>
-          ports.inScope(() => {
-            const absolutePath = resolveAbsolutePath(path, ports);
-            return {
+        try: () => {
+          const absolutePath = resolveAbsolutePath(path, ports);
+          return {
+            absolutePath,
+            result: addCriticismSink({
               absolutePath,
-              result: addCriticismSink({
-                absolutePath,
-                line,
-                message,
-                severity,
-                confidence,
-              }),
-            };
-          }),
+              line,
+              message,
+              severity,
+              confidence,
+            }),
+          };
+        },
         catch: (error) => {
           const detail = toErrorMessage(error);
           log.error(`Failed to add criticism: ${detail}`);

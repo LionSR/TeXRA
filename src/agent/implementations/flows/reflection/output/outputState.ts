@@ -39,7 +39,7 @@ export interface OutputDependencies {
   readonly logger: AgentTrace;
   readonly fileService: RunFileService;
   /** The run's session roots, held as data: the pipeline runs on the run's
-   *  fiber, which is not guaranteed to sit inside the session's roots scope. */
+   *  fiber, and nothing about a fiber names the project it works on. */
   readonly roots: WorkspaceRoots;
 }
 

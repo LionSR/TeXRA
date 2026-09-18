@@ -30,8 +30,6 @@ export interface ToolCallShape {
   /** Absent for a standalone host invocation outside an agent run. */
   readonly run:
     Pick<AgentRunShape, 'session' | 'runId' | 'toolPolicy'> | undefined;
-  /** Enter the host's workspace frame only while calling its filesystem or legacy host API. */
-  readonly inScope: <A>(operation: () => A) => A;
 }
 
 export class ToolCall extends Context.Service<ToolCall, ToolCallShape>()(

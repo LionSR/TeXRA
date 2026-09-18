@@ -36,7 +36,6 @@ import {
   prepareAgentDefinition,
   type PreparedAgentDefinition,
   type AgentLaunchContext,
-  runInLaunchSession,
 } from './AgentLaunchContext';
 import {
   runFlowWithLifecycle,
@@ -113,7 +112,6 @@ function runLayerFor(
   shared: SubagentRunOptions,
   toolInjections: ToolInjections['Service'],
   onIdle: (() => void) | undefined,
-  inScope: <A>(operation: () => A) => A,
 ) {
   const runSession = ctx.session;
   return modelInvokerLayer().pipe(
@@ -123,7 +121,6 @@ function runLayerFor(
         tools: shared.tools,
         toolInjections,
         onApprovalPolicyDenial: shared.onApprovalPolicyDenial,
-        inScope,
         callbacks: {
           onProgress: (update) => {
             if (update.kind === 'overview') {
@@ -200,7 +197,6 @@ function launchToolUseRun(
     readonly toolInjections: ToolInjections['Service'];
   },
   variant: ToolUseLaunchVariant,
-  inScope: <A>(operation: () => A) => A,
 ): Effect.Effect<AgentRuntimeFlowResult, Error, AgentRunServices> {
   const { runId } = ctx;
   const program = runToolUse({
@@ -226,7 +222,6 @@ function launchToolUseRun(
             shared,
             shared.toolInjections,
             variant.kind === 'fresh' ? variant.onIdle : undefined,
-            inScope,
           ),
         ),
       ),
@@ -260,20 +255,13 @@ function launchToolUseRun(
 function launchReflectionRun(
   ctx: AgentLaunchContext,
   options: ExecuteAgentOptions,
-  inScope: <A>(operation: () => A) => A,
 ): Effect.Effect<AgentRuntimeFlowResult, Error, AgentRunServices> {
   const { runId } = ctx;
   const program = runReflection({ resume: options.resumed === true }).pipe(
     // The reflection family injects no conditional tools (memory and plan are
     // tool-use infrastructure), so its run resolves tools from an empty list.
     Effect.provide(
-      runLayerFor(
-        ctx,
-        options,
-        new ToolInjectionRegistry(),
-        undefined,
-        inScope,
-      ),
+      runLayerFor(ctx, options, new ToolInjectionRegistry(), undefined),
     ),
     Effect.flatMap((result) =>
       Effect.gen(function* () {
@@ -406,10 +394,9 @@ export interface ExecuteAgentOptions extends SubagentRunOptions {
    * Return an outcome when output finalization changes the run's verdict.
    *
    * The run yields this program on the run's own fiber, so a stop reaches
-   * it, and installs no session frame around it — Effect carries no
-   * `AsyncLocalStorage` scope — so a host whose handler reads a
-   * session-rooted fact (workspace config, storage) wraps that read in its
-   * own `runInSession`.
+   * it. A handler that needs a session-rooted fact (workspace config,
+   * storage) reads it from the session it was given, not from the calling
+   * fiber: nothing carries one.
    */
   openWorkflowOutput?: (
     result: WorkflowFlowResult,
@@ -532,8 +519,6 @@ export function executeAgent(
         stopAfterCycle: options.stopAfterCycle,
       },
     });
-    const runInScope = <A>(operation: () => A): A =>
-      runInLaunchSession(ctx, operation);
     return yield* Effect.gen(function* () {
       const { setting, config } = ctx;
       const { runId, session: runSession } = ctx;
@@ -598,14 +583,12 @@ export function executeAgent(
                   handle,
                   { ...options, parentRunId, toolInjections },
                   { kind: 'fresh', onIdle: options.onIdle },
-                  runInScope,
                 );
               }
-              return yield* launchReflectionRun(
-                ctx,
-                { ...options, parentRunId },
-                runInScope,
-              );
+              return yield* launchReflectionRun(ctx, {
+                ...options,
+                parentRunId,
+              });
             }),
           // The edge the lifecycle's handle is born with, read as late
           // as that handle is built. A detach landing even after this
@@ -689,8 +672,6 @@ const resumeToolUseWithOwnedLease = Effect.fn('resumeToolUseWithOwnedLease')(
     }
     const { ctx, parentRunId } = setup.value;
     const { setting } = ctx;
-    const runInScope = <A>(operation: () => A): A =>
-      runInLaunchSession(ctx, operation);
     const result = yield* Effect.exit(
       runFlowWithLifecycle(
         ctx,
@@ -715,7 +696,6 @@ const resumeToolUseWithOwnedLease = Effect.fn('resumeToolUseWithOwnedLease')(
                   onCancellationAtFlowAttachment:
                     options.onCancellationAtFlowAttachment,
                 },
-                runInScope,
               ),
         buildLifecycleOptions(options, parentRunId),
       ),

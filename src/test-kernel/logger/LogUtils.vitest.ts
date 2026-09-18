@@ -10,7 +10,7 @@ import type { WorkspaceRoots } from '@platform/workspaceRoots';
 const SECRET = 'sk-proj-redaction-example-1234567890abcdef';
 
 function enableDebugLogging(): void {
-  vi.spyOn(rootsAccess, 'tryWorkspaceRoots').mockReturnValue({
+  vi.spyOn(rootsAccess, 'tryProcessWorkspaceRoots').mockReturnValue({
     config: { get: () => true },
   } as unknown as WorkspaceRoots);
 }
@@ -34,7 +34,9 @@ describe('logUtils', () => {
   });
 
   it('keeps pre-platform error logging on the non-debug path', () => {
-    vi.spyOn(rootsAccess, 'tryWorkspaceRoots').mockReturnValue(undefined);
+    vi.spyOn(rootsAccess, 'tryProcessWorkspaceRoots').mockReturnValue(
+      undefined,
+    );
     const entries = captureEntries();
 
     expect(() =>
@@ -127,7 +129,9 @@ describe('logUtils', () => {
     expect(output).toContain('[redacted]');
     expect(output).not.toContain(SECRET);
 
-    vi.spyOn(rootsAccess, 'tryWorkspaceRoots').mockReturnValue(undefined);
+    vi.spyOn(rootsAccess, 'tryProcessWorkspaceRoots').mockReturnValue(
+      undefined,
+    );
     entries.length = 0;
     Effect.runSync(operation().pipe(Effect.provide(effectDiagnosticsLayer)));
     expect(entries).toHaveLength(1);

@@ -12,8 +12,8 @@ import {
   getUseOpenRouter,
 } from '@utils/config/providerConfig';
 import {
-  platformSettingsStores,
-  readPlatformSetting,
+  processSettingsStores,
+  readSettingFrom,
 } from '@utils/config/platformSettings';
 
 // ---------------------------------------------------------------------------
@@ -48,14 +48,19 @@ describe('readConfig', () => {
 // PlatformSettings
 // ---------------------------------------------------------------------------
 
-describe('readPlatformSetting', () => {
+describe('readSettingFrom', () => {
   it('resolves the default from the catalog schema when the key is unset', async () => {
     await installPlatform({});
-    expect(readPlatformSetting(WorkspaceStateKey.LATEX_FORMATTER)).toBe(
-      LATEX_CONFIG_DEFAULTS.latexFormatter,
-    );
+    expect(
+      readSettingFrom(
+        processSettingsStores(),
+        WorkspaceStateKey.LATEX_FORMATTER,
+      ),
+    ).toBe(LATEX_CONFIG_DEFAULTS.latexFormatter);
     // A globalState-slot key resolves the same way.
-    expect(readPlatformSetting(GlobalStateKey.WEBSOCKET_OPENAI)).toBe(false);
+    expect(
+      readSettingFrom(processSettingsStores(), GlobalStateKey.WEBSOCKET_OPENAI),
+    ).toBe(false);
   });
 
   it('snaps a stored value that fails the schema back to the catalog default', async () => {
@@ -64,16 +69,19 @@ describe('readPlatformSetting', () => {
         [WorkspaceStateKey.LATEX_FORMATTER]: 'not-a-formatter',
       },
     });
-    expect(readPlatformSetting(WorkspaceStateKey.LATEX_FORMATTER)).toBe(
-      LATEX_CONFIG_DEFAULTS.latexFormatter,
-    );
+    expect(
+      readSettingFrom(
+        processSettingsStores(),
+        WorkspaceStateKey.LATEX_FORMATTER,
+      ),
+    ).toBe(LATEX_CONFIG_DEFAULTS.latexFormatter);
   });
 
   it('throws for a key with no catalog entry', async () => {
     await installPlatform({});
-    expect(() => readPlatformSetting('texra.not.a.catalog.key')).toThrow(
-      /no setting catalog entry/i,
-    );
+    expect(() =>
+      readSettingFrom(processSettingsStores(), 'texra.not.a.catalog.key'),
+    ).toThrow(/no setting catalog entry/i);
   });
 });
 
@@ -88,7 +96,7 @@ describe('getProviderEndpoint', () => {
         [GlobalStateKey.ENDPOINT_OPENAI]: 'https://example.test/v1',
       },
     });
-    expect(getProviderEndpoint(platformSettingsStores(), 'openai')).toBe(
+    expect(getProviderEndpoint(processSettingsStores(), 'openai')).toBe(
       'https://example.test/v1',
     );
   });
@@ -96,11 +104,11 @@ describe('getProviderEndpoint', () => {
   it('snaps an invalid stored value back to the catalog default instead of leaking it through', async () => {
     // Regression for #7873: the pre-fix local `read()` helper cast the raw
     // stored value to `string` without validating it, so a corrupted
-    // non-string value flowed straight through. `readPlatformSetting()`
+    // non-string value flowed straight through. `readSettingFrom(processSettingsStores(), )`
     // validates against the entry's schema first.
     await installPlatform({
       globalState: { [GlobalStateKey.ENDPOINT_OPENAI]: 42 },
     });
-    expect(getProviderEndpoint(platformSettingsStores(), 'openai')).toBe('');
+    expect(getProviderEndpoint(processSettingsStores(), 'openai')).toBe('');
   });
 });

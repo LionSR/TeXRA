@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { TraceEmitter } from '@agent/trace';
 import { UsageMonitor } from '@agent/runtime/UsageMonitor';
-import { workspaceRoots } from '@platform/workspaceRoots';
+import { processWorkspaceRoots } from '@platform/workspaceRoots';
 import {
   AgentCategory,
   AgentRunStateSnapshotSchema,
@@ -52,7 +52,12 @@ function createMonitorWithEvents() {
   const runId = 'usage-last-totals' as RunId;
   const recorded = recordTraceEvents(logger);
   const monitor = new UsageMonitor(
-    { logger, runId, runStageId: undefined, config: workspaceRoots().config },
+    {
+      logger,
+      runId,
+      runStageId: undefined,
+      config: processWorkspaceRoots().config,
+    },
     { agentName: 'assistant', agentCategory: AgentCategory.ToolUse },
   );
   return {

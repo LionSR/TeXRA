@@ -32,7 +32,7 @@ import {
   resolveOutputFiles,
 } from '@agent/prompt/userVars';
 import type { ConfigProvider } from '@platform/interfaces';
-import { workspaceRoots } from '@platform/workspaceRoots';
+import { processWorkspaceRoots } from '@platform/workspaceRoots';
 import { AgentCategory } from '@shared/schemas';
 import { setRuntimeSkillSources } from '@skills/runtimeSkills';
 import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
@@ -131,9 +131,9 @@ describe('buildUserVars runtime skill diagnostics', () => {
       spiedTrace({ warn, emit }),
       {
         workspacePath: fakePath('workspace'),
-        storageRoot: workspaceRoots().storage,
-        config: workspaceRoots().config,
-        settings: workspaceRoots(),
+        storageRoot: processWorkspaceRoots().storage,
+        config: processWorkspaceRoots().config,
+        settings: processWorkspaceRoots(),
       },
     );
 
@@ -157,9 +157,9 @@ describe('buildUserVars runtime skill diagnostics', () => {
       spiedTrace({ warn, emit }),
       {
         workspacePath: fakePath('workspace'),
-        storageRoot: workspaceRoots().storage,
-        config: workspaceRoots().config,
-        settings: workspaceRoots(),
+        storageRoot: processWorkspaceRoots().storage,
+        config: processWorkspaceRoots().config,
+        settings: processWorkspaceRoots(),
       },
     );
 
@@ -196,9 +196,9 @@ describe('buildUserVars runtime skill diagnostics', () => {
       spiedTrace({ emit }),
       {
         workspacePath: fakePath('workspace'),
-        storageRoot: workspaceRoots().storage,
-        config: workspaceRoots().config,
-        settings: workspaceRoots(),
+        storageRoot: processWorkspaceRoots().storage,
+        config: processWorkspaceRoots().config,
+        settings: processWorkspaceRoots(),
       },
     );
 
@@ -226,9 +226,9 @@ describe('buildUserVars runtime skill diagnostics', () => {
       spiedTrace({ emit }),
       {
         workspacePath: fakePath('workspace'),
-        storageRoot: workspaceRoots().storage,
-        config: workspaceRoots().config,
-        settings: workspaceRoots(),
+        storageRoot: processWorkspaceRoots().storage,
+        config: processWorkspaceRoots().config,
+        settings: processWorkspaceRoots(),
       },
     );
 
@@ -307,9 +307,9 @@ function buildVars(
     noopTrace,
     {
       workspacePath: fakePath('workspace'),
-      storageRoot: workspaceRoots().storage,
-      config: workspaceRoots().config,
-      settings: workspaceRoots(),
+      storageRoot: processWorkspaceRoots().storage,
+      config: processWorkspaceRoots().config,
+      settings: processWorkspaceRoots(),
     },
   );
 }

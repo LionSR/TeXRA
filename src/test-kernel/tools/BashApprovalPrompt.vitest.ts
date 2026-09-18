@@ -8,7 +8,6 @@ import { describe, expect } from 'vitest';
 
 // Local imports
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { runWithWorkspaceRoots } from '@platform/workspaceRoots';
 import {
   BASH_APPROVAL_CONFIG_KEY,
   TOOL_EDIT_APPROVAL_CONFIG_KEY,
@@ -94,8 +93,6 @@ describe('requestBashApproval queueing', () => {
               runId: generateRunId(),
               toolPolicy: { approvalPromptsUnavailable: true },
             },
-            inScope: (operation) =>
-              runWithWorkspaceRoots(project.roots, operation),
           });
           const bash = yield* requestBashApproval({
             command: 'echo scoped',

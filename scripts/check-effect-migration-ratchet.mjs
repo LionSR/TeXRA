@@ -73,7 +73,7 @@ const RETIRED_ROW_IDS = new Set([
 const PLATFORM_MODULE = '@platform/platform';
 const PLATFORM_MODULE_PATH = 'src/platform/platform';
 /**
- * The AsyncLocalStorage carriers (injection plan
+ * The ambient carriers (injection plan
  * .agents/docs/proposed/architecture/2026-09-10-effect-native-injection-context-pipelines.md
  * §5 rows 5, 6, 8, 9) and the reader exports through which production code
  * consumes them. The row counts CALLS of these readers in files that import
@@ -81,6 +81,17 @@ const PLATFORM_MODULE_PATH = 'src/platform/platform';
  * declarations: a carrier's own module is deleted with the carrier, while
  * every reader call is a site a cohort has to convert. `TraceEmitter`'s
  * per-instance storage (row 7) has no reader export and is not counted.
+ *
+ * No `AsyncLocalStorage` is left behind the row. #12421 deleted the
+ * workspace-roots scope (`workspaceRoots`, `tryWorkspaceRoots`,
+ * `runWithWorkspaceRoots`) and the `@agent/runtime/RunContext` module with
+ * it; what the row still counts is the process-roots holder those readers
+ * fell back to, whose remaining callers are the pre-initialization logger
+ * read, the session owner naming its default session, and the CLI
+ * composition root. Those retire with the holder, and the row goes with
+ * them. The deleted names stay in the reader lists on purpose: a file that
+ * reintroduces one fails as a new file in the row rather than passing
+ * unnoticed.
  */
 const AMBIENT_CARRIERS = [
   {
@@ -451,7 +462,7 @@ const ROWS = [
   },
   {
     id: ROW_AMBIENT,
-    rule: `${INJECTION_PLAN} §3.2 and §6 steps 6, 7, 10, 11: the AsyncLocalStorage carriers (workspace roots, run context, tool call context) become Context services and Context.Reference values on the fiber; a new call of one of their readers is a new dependency on the carrier being deleted`,
+    rule: `${INJECTION_PLAN} §3.2 and §6 steps 6, 7, 10, 11: the ambient carriers (workspace roots, run context, tool call context) become Context services, Context.Reference values on the fiber, or plain data the caller holds; a new call of one of their readers is a new dependency on the carrier being deleted`,
   },
   // At its floor (#12422, #12073): the four files it carries are the adapters
   // that stay, and the counts are their allowlist — a fifth file fails as new
@@ -491,7 +502,7 @@ const SEMANTICS =
   'Scope: *.ts, *.tsx and *.mts under src/ and packages/*/src/, excluding src/test-kernel/, *.vitest.ts, and any dist/ or node_modules/ directory (packages/*/scripts and packages/*/tests are outside the scanned roots). ' +
   'Files are parsed with the TypeScript compiler API, so comments and string literals never count. ' +
   "Rows: 'platform()' counts calls of the platform export of @platform/platform (src/platform/platform.ts) under whatever local name the file binds it to: `import { platform as p }` then p(), and `import * as P` then P.platform(), included; tryPlatform and unrelated bindings such as node:os platform excluded; " +
-  `'ambient:asyncLocalStorage' counts, binding-scoped again, calls of the reader exports of the three AsyncLocalStorage carrier modules (${AMBIENT_READERS_TEXT}) in the files that import them, aliased names and namespace-member calls included, a carrier's own internal calls and bare references passed as values excluded; ` +
+  `'ambient:asyncLocalStorage' counts, binding-scoped again, calls of the reader exports of the three ambient carrier modules (${AMBIENT_READERS_TEXT}) in the files that import them, aliased names and namespace-member calls included, a carrier's own internal calls and bare references passed as values excluded; ` +
   "'new AbortController()' counts new-expressions on the identifier AbortController; " +
   "'import:<pkg>' counts import/export-from/import-equals/require()/import() specifiers exactly equal to the package name (type-only imports included, because they still pin the dependency); " +
   `'Effect.run*' counts calls named runPromise, runPromiseExit, runSync, runFork, or runCallback, and counts them ONLY below R1's boundary kinds (packages/extension/src/**, packages/desktop/src/**, packages/cli/src/**, packages/agent/src/**, or a run on a runtime the file binds as a local or parameter inside a named runtime entry — ${RUNTIME_ENTRY_PATHS.join(', ')}; the tool execute() contract was a kind until #12337). A run at one of those kinds is the destination, not debt, and is absent from this row, so converting a subsystem cannot raise it. --update never adds a file to a row and writes the lower of the committed count and the tree's); ` +

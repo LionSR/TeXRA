@@ -44,10 +44,9 @@ export function workspaceAbsolutePath(
 }
 
 /**
- * Resolve `inputPath` against an explicit workspace root, for code that holds
- * a run's session roots as data rather than reading the calling context's
- * roots scope. Returns 'workspace' or 'external' — callers apply their own
- * policy.
+ * Resolve `inputPath` against an explicit workspace root, which every caller
+ * holds as a run's session roots. Returns 'workspace' or 'external' —
+ * callers apply their own policy.
  */
 export function locateInWorkspace(
   root: string | undefined,

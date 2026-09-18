@@ -30,6 +30,7 @@ import { Effect } from 'effect';
 import {
   findAgentByIdentifier,
   resolveDelegationScopeAgents,
+  type AgentRosterStores,
 } from '@agent/index/agentRegistry';
 import type { AgentEntry } from '@agent/index/agentEntry';
 import {
@@ -147,25 +148,28 @@ export function formatAgentList(
  * in this category — not a not-yet-loaded cache.
  */
 function visibleDelegationAgentsBlock(
+  stores: AgentRosterStores,
   category: AgentCategory,
   scope: AgentDelegationScope | undefined,
 ): string {
-  const agents = getDelegationAgents(category, scope);
+  const agents = getDelegationAgents(stores, category, scope);
   if (agents.length === 0) return NO_AGENTS_LINE;
   return `Available agents:\n${formatAgentList(agents)}`;
 }
 
 /**
- * The two annotation facts that depend on where the reader is standing: the
- * run's pinned delegation scope and the worktree opt-in (read from the calling
- * session's workspace state). Resolved as data so the annotation itself is
- * pure over them.
+ * The annotation facts that depend on where the reader is standing: the run's
+ * pinned delegation scope, the worktree opt-in, and the slots the durable
+ * roster answers from — all of them the calling session's, carried as data so
+ * the annotation itself is pure over them.
  */
 export interface DelegationAnnotationState {
   /** The run's pinned delegation scope, or undefined for the durable roster. */
   readonly delegationScope: AgentDelegationScope | undefined;
   /** This session's `texra.git.worktreeSupport` opt-in. */
   readonly worktreeEnabled: boolean;
+  /** The slots the durable roster is read from when no scope is pinned. */
+  readonly stores: AgentRosterStores;
 }
 
 /**
@@ -181,6 +185,7 @@ export function readDelegationAnnotationState(
   return {
     delegationScope,
     worktreeEnabled: isWorktreeSupportEnabled(stores),
+    stores,
   };
 }
 
@@ -189,20 +194,22 @@ export function readDelegationAnnotationState(
  * the durable roster when no run scope applies.
  */
 export function getDelegationAgents(
+  stores: AgentRosterStores,
   category: AgentCategory,
   scope?: AgentDelegationScope,
 ): AgentEntry[] {
-  return resolveDelegationScopeAgents(scope, category);
+  return resolveDelegationScopeAgents(stores, scope, category);
 }
 
 /** Resolve one delegation target out of that same candidate set. */
 export function getDelegationAgent(
+  stores: AgentRosterStores,
   category: AgentCategory,
   identifier: string,
   scope?: AgentDelegationScope,
 ): AgentEntry | undefined {
   return findAgentByIdentifier(
-    getDelegationAgents(category, scope),
+    getDelegationAgents(stores, category, scope),
     identifier,
   );
 }
@@ -321,9 +328,10 @@ const WORKTREE_DISABLED_LINE =
  * are independent (one keys off the tool name, the other off the whole list),
  * not causally linked.
  *
- * The roster scope and the worktree switch arrive as `state` rather than being
- * read here — see {@link readDelegationAnnotationState} for why the caller
- * resolves them — so everything below is pure over its arguments.
+ * The roster slots, the roster scope and the worktree switch arrive as `state`
+ * rather than being read here — see {@link readDelegationAnnotationState} for
+ * why the caller resolves them — so everything below is pure over its
+ * arguments.
  *
  * The roster block is appended when its anchor is missing; the worktree line is
  * replace-only, because a tool without that line (e.g. delegate_workflow, which
@@ -355,7 +363,12 @@ export function annotateDelegationAvailability(
   const withAgents = replaceDelegationDescriptionBlock(
     withModels,
     AVAILABLE_AGENTS_BLOCK,
-    () => visibleDelegationAgentsBlock(category, state.delegationScope),
+    () =>
+      visibleDelegationAgentsBlock(
+        state.stores,
+        category,
+        state.delegationScope,
+      ),
     { appendIfMissing: true },
   );
   return replaceDelegationDescriptionBlock(

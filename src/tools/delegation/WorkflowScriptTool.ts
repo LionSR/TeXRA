@@ -352,11 +352,10 @@ Durability: the journal is keyed by meta.name and the agent field within this se
         const { meta } = parseWorkflowScript(script);
         return {
           meta,
-          defaultAgent: parent.inScope(() =>
-            requireWorkflowOrToolUseAgent(
-              input.agent,
-              parent.delegationAgentScope ?? undefined,
-            ),
+          defaultAgent: requireWorkflowOrToolUseAgent(
+            parent.roots,
+            input.agent,
+            parent.delegationAgentScope ?? undefined,
           ),
         };
       });

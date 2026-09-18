@@ -37,7 +37,7 @@ export function readConfig<T>(
 /**
  * Read configuration for an explicitly pre-initialization caller, over the
  * process roots the composition root installed. A logger write can precede
- * any session — and any roots scope — so there is no caller to take a
+ * any session, so there is no caller to take a
  * configuration from here; a process whose roots are not installed yet reads
  * the caller's default. Keep this exception narrow: ordinary product paths
  * must read through {@link readConfig} so an initialization-order defect
