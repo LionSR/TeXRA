@@ -9,7 +9,6 @@ import type { SettingsStores } from '@shared/config/settingsAccess';
 
 // Local imports - utilities
 import { ensureArray } from '@utils/core';
-import { ensureError } from '@utils/errors/errorMessage';
 import { renderPrompt } from '@utils/prompt';
 import { loadTexraRules } from '@utils/files/rulesUtils';
 import { buildWorkspaceInfoBlock } from '@utils/system/workspaceInfo';
@@ -242,10 +241,7 @@ export const buildInitialToolUsePrompts = Effect.fn('prompt.initialToolUse')(
       }
     }
     suffixParts.push(
-      yield* Effect.tryPromise({
-        try: () => buildWorkspaceInfoBlock(options.workspace, options.settings),
-        catch: ensureError,
-      }),
+      yield* buildWorkspaceInfoBlock(options.workspace, options.settings),
     );
 
     return {

@@ -123,16 +123,6 @@ interface RunToolContext {
   readonly runId: RunId | undefined;
 }
 
-/** The one wrap of this tool's Promise collaborators. */
-const executionsRead = <A>(
-  context: RunToolContext,
-  read: () => Promise<A>,
-): Effect.Effect<A, ExecutionsReadFailed> =>
-  Effect.tryPromise({
-    try: read,
-    catch: (cause) => new ExecutionsReadFailed({ cause }),
-  });
-
 /**
  * Block until one of `runIds` changes status, the caller's run
  * receives a follow-up (the user breaking the wait), or `timeoutSeconds`
