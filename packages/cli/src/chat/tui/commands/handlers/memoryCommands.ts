@@ -21,7 +21,9 @@ export async function showCliMemoryList(
 ): Promise<void> {
   openInfoPane(
     '/memory list',
-    formatCliMemoryList(await runCliMemory(runtime, roots, loadMemoryItems())),
+    formatCliMemoryList(
+      await runtime.runPromise(runCliMemory(roots, loadMemoryItems())),
+    ),
   );
 }
 
@@ -33,7 +35,9 @@ export async function showCliMemoryPreview(
   openInfoPane(
     '/memory preview',
     formatCliMemoryPreview(
-      await runCliMemory(runtime, roots, loadCliMemoryDetail(inputPath)),
+      await runtime.runPromise(
+        runCliMemory(roots, loadCliMemoryDetail(inputPath)),
+      ),
     ),
   );
 }

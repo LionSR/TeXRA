@@ -41,9 +41,8 @@ export function ResumeListForm(props: ResumeListFormProps): React.JSX.Element {
       loadingLabel="Loading history..."
       load={async () =>
         listResumableCliHistoryEntries(
-          await listCliHistoryEntries(
-            props.runtime,
-            Effect.succeed(props.session),
+          await props.runtime.runPromise(
+            listCliHistoryEntries(Effect.succeed(props.session)),
           ),
         )
       }

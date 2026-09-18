@@ -1,6 +1,5 @@
 import { Effect } from 'effect';
 
-import type { ProcessRuntime } from '@platform/processRuntime';
 import { resolveMemoryStoragePath } from '@platform/defaults/workspaceStorage';
 import { withSessionFs, type StorageFs } from '@platform/rootedFs';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
@@ -99,19 +98,18 @@ export const loadCliMemoryDetail = Effect.fn('cli.loadCliMemoryDetail')(
 );
 
 /**
- * The CLI's run edge for a memory program (PRD run-edge category a): the
- * command action, the slash-command handler, and the list form each call
- * this once, on the runtime their surface already holds, over the storage
- * view of the roots that surface holds — the root is chosen here rather than
- * read inside the program. An unreadable memory ends the command with the
- * error the filesystem raised; the CLI's error reporter prints that message.
+ * A memory program over the storage view of the roots its calling surface
+ * holds — the root is chosen here rather than read inside the program. The
+ * command action, the slash-command handler, and the list form each run the
+ * returned program once, on the runtime their surface already holds. An
+ * unreadable memory ends the command with the error the filesystem raised;
+ * the CLI's error reporter prints that message.
  */
 export function runCliMemory<A>(
-  runtime: ProcessRuntime,
   roots: Pick<WorkspaceRoots, 'workspace' | 'storage' | 'globalStorage'>,
   program: Effect.Effect<A, unknown, StorageFs>,
-): Promise<A> {
-  return runtime.runPromise(withSessionFs(roots, Effect.orDie(program)));
+) {
+  return withSessionFs(roots, Effect.orDie(program));
 }
 
 export function formatCliMemoryPreview(detail: CliMemoryDetail): string {

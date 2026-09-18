@@ -71,10 +71,12 @@ export function ToolsListForm(props: ToolsListFormProps): React.JSX.Element {
       compactTitle="/tools · Toggle available external integrations."
       loadingLabel="Checking tool integrations..."
       load={() =>
-        readCliToolStatuses(props.runtime, {
-          workspaceRoot: props.workspaceRoot,
-          config: props.config,
-        })
+        props.runtime.runPromise(
+          readCliToolStatuses({
+            workspaceRoot: props.workspaceRoot,
+            config: props.config,
+          }),
+        )
       }
       items={(tools) =>
         tools.map((tool) => ({
@@ -94,7 +96,8 @@ export function ToolsListForm(props: ToolsListFormProps): React.JSX.Element {
         const tool = tools.find((candidate) => candidate.id === id);
         const enabled = tool ? cliToolEnabled(tool) : null;
         if (enabled === null) return;
-        void setCliToolEnabled(props.state, id, !enabled, props.runtime)
+        void props.runtime
+          .runPromise(setCliToolEnabled(props.state, id, !enabled))
           .then(reload)
           .catch((error: unknown) => {
             setTransientNotice(toErrorMessage(error));

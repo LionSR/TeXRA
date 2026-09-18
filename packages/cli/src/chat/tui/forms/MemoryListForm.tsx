@@ -36,7 +36,9 @@ export function MemoryListForm(props: MemoryListFormProps): React.JSX.Element {
       loadingLabel="Loading memories..."
       load={async () =>
         (
-          await runCliMemory(props.runtime, props.roots, loadMemoryItems())
+          await props.runtime.runPromise(
+            runCliMemory(props.roots, loadMemoryItems()),
+          )
         ).slice(0, CLI_MEMORY_LIST_LIMIT)
       }
       items={(entries) =>

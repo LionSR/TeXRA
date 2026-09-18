@@ -1,10 +1,11 @@
+import { Effect } from 'effect';
+
 // Local imports
 import {
   buildToolDashboardItems,
   isExternalToolDefVisible,
 } from '@controllers/settingsView/ToolDashboardData';
 import type { StateStore } from '@platform/interfaces';
-import type { ProcessRuntime } from '@platform/processRuntime';
 import type { ToolDashboardItem } from '@shared/schemas';
 import {
   findExternalToolDef,
@@ -24,29 +25,21 @@ export interface CliToolGuide {
  * The external integrations `texra tools` manages: the shared dashboard
  * projection for the CLI host, minus the built-in groups that need no setup.
  *
- * `runtime` is the process runtime the composition root installed, so the
- * disabled-tool read inside the builder (`AppState`) and the toggle that
- * follows it hit the same store. `probeInputs` is the `--cwd` project the
- * same init opened and its configuration, carried as data for the probes
- * that need them.
+ * The calling surface runs this on the process runtime its composition root
+ * installed, so the disabled-tool read inside the builder (`AppState`) and the
+ * toggle that follows it hit the same store. `probeInputs` is the `--cwd`
+ * project the same init opened and its configuration, carried as data for the
+ * probes that need them.
  */
-export async function readCliToolStatuses(
-  runtime: ProcessRuntime,
-  probeInputs: ToolProbeInputs,
-): Promise<ToolDashboardItem[]> {
-  const items = await runtime.runPromise(
-    buildToolDashboardItems('cli', probeInputs),
+export function readCliToolStatuses(probeInputs: ToolProbeInputs) {
+  return Effect.map(buildToolDashboardItems('cli', probeInputs), (items) =>
+    items.filter((item) => item.requiresSetup),
   );
-  return items.filter((item) => item.requiresSetup);
 }
 
-export async function readCliToolStatus(
-  runtime: ProcessRuntime,
-  probeInputs: ToolProbeInputs,
-  id: string,
-): Promise<ToolDashboardItem | undefined> {
-  return (await readCliToolStatuses(runtime, probeInputs)).find(
-    (item) => item.id === id,
+export function readCliToolStatus(probeInputs: ToolProbeInputs, id: string) {
+  return Effect.map(readCliToolStatuses(probeInputs), (items) =>
+    items.find((item) => item.id === id),
   );
 }
 
@@ -80,16 +73,14 @@ export function readCliToolGuide(
   return { text: lines.join('\n'), command: def.authCommand };
 }
 
-export async function setCliToolEnabled(
+export function setCliToolEnabled(
   state: StateStore,
   id: string,
   enabled: boolean,
-  runtime: ProcessRuntime,
-): Promise<boolean> {
+) {
   const def = findCliToolDef(id);
-  if (!def?.toggleable) return false;
-  await runtime.runPromise(setToolEnabled(id, enabled, state));
-  return true;
+  if (!def?.toggleable) return Effect.succeed(false);
+  return Effect.as(setToolEnabled(id, enabled, state), true);
 }
 
 /**

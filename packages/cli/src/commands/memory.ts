@@ -40,10 +40,8 @@ async function runMemoryList(context: CliContext): Promise<number> {
   // Pass the full list to `formatCliMemoryList`; it owns truncation (the
   // `Memories (N):` total and `... N more` overflow line) and JSON/NDJSON
   // consumers should see every memory, not a capped slice.
-  const items = await runCliMemory(
-    services.runtime,
-    memoryRoots(services),
-    loadMemoryItems(),
+  const items = await services.runtime.runPromise(
+    runCliMemory(memoryRoots(services), loadMemoryItems()),
   );
 
   emitCliResult(context, {
@@ -60,10 +58,8 @@ async function runMemoryShow(
 ): Promise<number> {
   const services = await initLocalCliPlatform(context);
 
-  const record = await runCliMemory(
-    services.runtime,
-    memoryRoots(services),
-    loadCliMemoryDetail(inputPath),
+  const record = await services.runtime.runPromise(
+    runCliMemory(memoryRoots(services), loadCliMemoryDetail(inputPath)),
   );
   emitCliResult(context, {
     json: record,

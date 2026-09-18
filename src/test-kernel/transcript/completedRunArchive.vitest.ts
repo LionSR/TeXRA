@@ -291,10 +291,8 @@ describe('completedRunArchive facade', () => {
     expect(trace.status).toBe('ok');
     if (trace.status !== 'ok') throw new Error('Expected trace export');
     const exportInput = await loadChatExportInput(runId);
-    const details = await readCliHistoryDetails(
-      testRuntime(),
-      Effect.succeed(taskSession),
-      runId,
+    const details = await testRuntime().runPromise(
+      readCliHistoryDetails(Effect.succeed(taskSession), runId),
     );
     expect(details).not.toBeNull();
     if (!details) throw new Error('Expected history details');
