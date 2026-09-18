@@ -41,7 +41,12 @@ export interface CliModelPickerItem {
   readonly disabled?: boolean;
 }
 
-export interface CliRunnableModelResolution {
+/**
+ * The shape both success returns below satisfy. Not exported: the resolution
+ * reaches callers as the success channel of `selectCliRunnableModel`'s
+ * Effect, so there is no second name for it to travel under.
+ */
+interface CliRunnableModelResolution {
   readonly model: string;
   readonly notice?: string;
 }

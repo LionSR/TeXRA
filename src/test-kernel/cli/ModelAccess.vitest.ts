@@ -557,16 +557,17 @@ describe('CLI model access resolution', () => {
       ]),
     );
 
-    await expect(run(getCliModelAccessList({ stores }))).resolves.toMatchObject([
-
-      {
-        available: true,
-        model: {
-          value: 'gpt56',
-          availability: 'subscription-access',
+    await expect(run(getCliModelAccessList({ stores }))).resolves.toMatchObject(
+      [
+        {
+          available: true,
+          model: {
+            value: 'gpt56',
+            availability: 'subscription-access',
+          },
         },
-      },
-    ]);
+      ],
+    );
   });
 
   it('loads explicit model ids for diagnostic lists', async () => {

@@ -125,9 +125,9 @@ describe('selectCliRunModel precedence', () => {
       ),
     );
 
-    await expect(
-      runSelect(context, 'opus48T', 'run', STORES),
-    ).rejects.toThrow(CliUsageError);
+    await expect(runSelect(context, 'opus48T', 'run', STORES)).rejects.toThrow(
+      CliUsageError,
+    );
     expect(selectCliRunnableModelMock).toHaveBeenCalledWith(
       expect.arrayContaining([
         { model: 'opus48T', reason: 'explicit-override' },
