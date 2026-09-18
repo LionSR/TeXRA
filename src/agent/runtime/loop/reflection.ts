@@ -965,7 +965,10 @@ export const runReflection = Effect.fn('reflection.run')(function* (
       });
     }
     for (const location of summary.filesToOpen) {
-      interactions.emit('requestOpenFile', { location, preserveFocus: true });
+      yield* interactions.emit('requestOpenFile', {
+        location,
+        preserveFocus: true,
+      });
     }
     if (
       endTurn &&
@@ -977,7 +980,10 @@ export const runReflection = Effect.fn('reflection.run')(function* (
           ? compileFailures.map((failure) => failure.log)
           : result.compiledArtifacts;
       for (const location of locationsToOpen) {
-        interactions.emit('requestOpenFile', { location, preserveFocus: true });
+        yield* interactions.emit('requestOpenFile', {
+          location,
+          preserveFocus: true,
+        });
       }
     }
     if (endTurn) {
@@ -989,7 +995,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
           round,
         );
         if (validation.missing.length > 0) {
-          interactions.emit('requestShowInstruction', {
+          yield* interactions.emit('requestShowInstruction', {
             key: 'missingOutputsInfo',
             message: 'Missing output files detected',
           });

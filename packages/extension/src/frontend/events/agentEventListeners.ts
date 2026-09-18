@@ -10,11 +10,11 @@
 import * as vscode from 'vscode';
 
 import {
+  type HostInteractions,
   type PresentationEventHandlers,
   type RuntimePresentationEvent,
   type RuntimePresentationEventPayloads,
   type SessionHandle,
-  type SessionHostInteractions,
 } from '@agent/runtime';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
@@ -209,7 +209,7 @@ export function createAgentPresentationHost(
   globalState: StateStore,
   runtime: ProcessRuntime,
   session: SessionHandle,
-): Pick<SessionHostInteractions, 'emit'> {
+): Pick<HostInteractions, 'emit'> {
   const handlers: PresentationEventHandlers<RuntimePresentationEventPayloads> =
     {
       requestOpenFile: (payload) =>

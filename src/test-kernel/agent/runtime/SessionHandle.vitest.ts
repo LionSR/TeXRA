@@ -111,12 +111,14 @@ describe('SessionHandle', () => {
       let attempted = false;
       // The handle's owners unwind after the session's runs: a launch reaching
       // the registry from inside that unwind is already refused.
-      vi.spyOn(session.interactions, 'dispose').mockImplementation(() => {
-        attempted = true;
-        expect(() => trackAgent(session, generateRunId())).toThrow(
-          'Cannot register run work after session disposal.',
-        );
-      });
+      vi.spyOn(session.interactions, 'dispose').mockImplementation(() =>
+        Effect.sync(() => {
+          attempted = true;
+          expect(() => trackAgent(session, generateRunId())).toThrow(
+            'Cannot register run work after session disposal.',
+          );
+        }),
+      );
       yield* session.dispose();
       expect(attempted).toBe(true);
     }),

@@ -287,7 +287,7 @@ export function executeCliRequest(
       presentationHost.attachRunProgressRenderer(session, {
         runId: request.runId,
       });
-    const detachHostInteractions = session.interactions.use(
+    const detachHostInteractions = yield* session.interactions.use(
       createHeadlessCliHostInteractions(session, options.runtime, runContext, {
         beforePrompt: () => presentationHost.prepareInteractivePrompt?.(),
         emit: (event, payload) => {
@@ -337,10 +337,15 @@ export function executeCliRequest(
           finalizationFailureReported: boolean;
         };
     let launchVerdict: LaunchVerdict = { kind: 'undecided' };
+    // The lifecycle's `report` port is a plain callback the run loop calls as
+    // it settles; presentation is this host's own program, so it runs on this
+    // host's runtime rather than travelling back through the port.
     const reportFinalizationFailure = (error: unknown): void => {
-      session.interactions.emit('requestShowError', {
-        message: toErrorMessage(error),
-      });
+      options.runtime.runSync(
+        session.interactions.emit('requestShowError', {
+          message: toErrorMessage(error),
+        }),
+      );
     };
     const reportShutdownFinalizationFailure = (error: Error): void => {
       if (
@@ -606,11 +611,12 @@ export function executeCliRequest(
         // throw site -- this CLI-local `failurePresented` flag only tracks
         // `requestShowError`, so it would otherwise re-surface that failure a
         // second time here.
-        terminalResult.reportUnhandled(() =>
+        const unhandled = terminalResult.reportUnhandled(() =>
           session.interactions.emit('requestShowError', {
             message: toErrorMessage(err),
           }),
         );
+        if (unhandled) yield* unhandled;
       }
     }
 

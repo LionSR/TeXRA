@@ -194,9 +194,9 @@ export function runInLaunchSession<T>(ctx: AgentLaunchContext, fn: () => T): T {
 
 /**
  * Present a launch error through its targeted host notice (replayed if no
- * host is attached yet) and throw it claimed: the notice is its one surface,
- * so the launch catch adds no generic toast. No run exists yet, so a host
- * that throws on the notice, live or on replay (a renderer torn down
+ * host is attached yet) and fail with it claimed: the notice is its one
+ * surface, so the launch catch adds no generic toast. No run exists yet, so a
+ * host that throws on the notice, live or on replay (a renderer torn down
  * mid-post, #10398/#10466), shows the generic toast in its place.
  */
 function presentLaunchError<K extends RuntimePresentationEvent>(
@@ -204,35 +204,20 @@ function presentLaunchError<K extends RuntimePresentationEvent>(
   err: AgentError,
   event: K,
   payload: RuntimePresentationEventPayloads[K],
-): never {
-  interactions.emit(event, payload, {
-    replayWhenAttached: true,
-    fallbackMessage: toErrorMessage(err),
-  });
-  attachErrorPresentationClaimed(err);
-  throw err;
-}
-
-async function getAgentPath(
-  agentIdentifier: string,
-  interactions: Pick<SessionHostInteractions, 'emit'>,
-  category: AgentCategory,
-  source?: AgentSource | null,
-): Promise<AgentEntry> {
-  // Single launch resolution rule (see resolveAgentForLaunch): exact
-  // (source, name) when the delegation pinned one, else the same visible-set
-  // resolver validation uses, else the full set for internal agents. Never
-  // blind source-priority on a bare name, so launch can't diverge from
-  // what was validated.
-  const result = resolveAgentForLaunch(category, agentIdentifier, source);
-  if (result) return result;
-
-  return presentLaunchError(
-    interactions,
-    new AgentError(`Could not find agent: ${agentIdentifier}`),
-    'showAgentConfigBanner',
-    { agentName: agentIdentifier, category },
-  );
+): Effect.Effect<never, AgentError> {
+  return interactions
+    .emit(event, payload, {
+      replayWhenAttached: true,
+      fallbackMessage: toErrorMessage(err),
+    })
+    .pipe(
+      Effect.andThen(
+        Effect.suspend(() => {
+          attachErrorPresentationClaimed(err);
+          return Effect.fail(err);
+        }),
+      ),
+    );
 }
 
 const validateModelExists = Effect.fn('AgentLaunchContext.validateModelExists')(
@@ -243,21 +228,17 @@ const validateModelExists = Effect.fn('AgentLaunchContext.validateModelExists')(
     const modelConfig = yield* resolveRuntimeModelConfig(modelName);
     if (modelConfig) return modelConfig;
 
-    return yield* Effect.try({
-      try: () =>
-        presentLaunchError(
-          interactions,
-          new AgentError(`Model ${modelName} is not registered`),
-          'requestShowInstruction',
-          {
-            key: 'modelNotRecognized',
-            message: `Model "${modelName}" is not recognized. Review the documentation for supported models.`,
-            actions: [INSTRUCTION_ACTION.OPEN_MODELS_DOC],
-            showSuppress: false,
-          },
-        ),
-      catch: ensureError,
-    });
+    return yield* presentLaunchError(
+      interactions,
+      new AgentError(`Model ${modelName} is not registered`),
+      'requestShowInstruction',
+      {
+        key: 'modelNotRecognized',
+        message: `Model "${modelName}" is not recognized. Review the documentation for supported models.`,
+        actions: [INSTRUCTION_ACTION.OPEN_MODELS_DOC],
+        showSuppress: false,
+      },
+    );
   },
 );
 
@@ -318,18 +299,33 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
     // lands on the exact entry validation/display resolved. When no source is
     // pinned (direct launches, restored records), resolution falls to the
     // category-scoped rule validation uses; never blind name resolution.
-    const agentEntry = yield* Effect.tryPromise({
+    // Single launch resolution rule (see resolveAgentForLaunch): exact
+    // (source, name) when the delegation pinned one, else the same visible-set
+    // resolver validation uses, else the full set for internal agents. Never
+    // blind source-priority on a bare name, so launch can't diverge from
+    // what was validated.
+    const resolved = yield* Effect.tryPromise({
       try: async () =>
         runInSession(input.session, () =>
-          getAgentPath(
-            fullConfig.agent,
-            interactions,
+          resolveAgentForLaunch(
             fullConfig.agentCategory,
+            fullConfig.agent,
             fullConfig.agentSource,
           ),
         ),
       catch: ensureError,
     });
+    const agentEntry =
+      resolved ??
+      (yield* presentLaunchError(
+        interactions,
+        new AgentError(`Could not find agent: ${fullConfig.agent}`),
+        'showAgentConfigBanner',
+        {
+          agentName: fullConfig.agent,
+          category: fullConfig.agentCategory,
+        },
+      ));
     yield* failIfAborted(input.signal);
     yield* failIfLaunchStopped(input.stopped);
     // `loadAgentSettingAndPrompts` already fills the built-in tool-use category
@@ -386,16 +382,16 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
   (effect, input) =>
     effect.pipe(
       Effect.onError((cause) =>
-        Effect.sync(() => {
+        Effect.suspend(() => {
           const error = Cause.squash(cause);
           if (
             input.suppressErrorNotification ||
             error instanceof ZodError ||
             hasErrorPresentationClaimed(error)
           ) {
-            return;
+            return Effect.void;
           }
-          input.session.interactions.emit(
+          return input.session.interactions.emit(
             'requestShowError',
             { message: toErrorMessage(error) },
             { replayWhenAttached: true },

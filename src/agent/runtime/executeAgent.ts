@@ -583,7 +583,7 @@ export function executeAgent(
               // Subagents don't need to force-open the progress board or show notifications;
               // the orchestrator's run is already visible.
               if (parentRunId === undefined) {
-                runSession.interactions.emit(
+                yield* runSession.interactions.emit(
                   'requestEnsureProgressView',
                   {
                     fallbackNotification: buildFallbackNotification(config),

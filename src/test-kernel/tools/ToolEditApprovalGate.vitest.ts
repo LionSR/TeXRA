@@ -73,15 +73,17 @@ async function installPlatform(
     files,
   });
   detachHostInteractions();
-  detachHostInteractions = testDefaultSession().interactions.use({
-    presentToolEdit: (request) => {
-      approvalRequests.push(request);
-    },
-    releaseToolEdit: (requestId) =>
-      Effect.sync(() => {
-        releasedPreviews.push(requestId);
-      }),
-  });
+  detachHostInteractions = Effect.runSync(
+    testDefaultSession().interactions.use({
+      presentToolEdit: (request) => {
+        approvalRequests.push(request);
+      },
+      releaseToolEdit: (requestId) =>
+        Effect.sync(() => {
+          releasedPreviews.push(requestId);
+        }),
+    }),
+  );
 }
 
 // The write side of both views the edit flow reaches now that the

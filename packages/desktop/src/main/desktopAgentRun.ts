@@ -200,35 +200,37 @@ export function createDesktopAgentRun(
   // asks anything. This host presents only the tool-edit preview; every
   // other request (bash, plan, proposal, retry, question) is listed by the
   // fold and answered by a surface's `request.decide`.
-  const detachHostInteractions = session.interactions.use({
-    emit: handlePresentationEvent,
-    // Staging runs on a fiber of this window's runtime: the session hands
-    // the request over and does not wait, and a staging failure is logged
-    // here rather than left to a fiber nobody reads.
-    presentToolEdit: (request) => {
-      runtime.runFork(
-        toolEditApprovals.present(request).pipe(
-          Effect.catchCause((cause) =>
-            Effect.sync(() => {
-              logger.warn('Failed to stage the tool-edit preview', {
-                data: toLogData(Cause.squash(cause)),
-              });
-            }),
+  const detachHostInteractions = runtime.runSync(
+    session.interactions.use({
+      emit: handlePresentationEvent,
+      // Staging runs on a fiber of this window's runtime: the session hands
+      // the request over and does not wait, and a staging failure is logged
+      // here rather than left to a fiber nobody reads.
+      presentToolEdit: (request) => {
+        runtime.runFork(
+          toolEditApprovals.present(request).pipe(
+            Effect.catchCause((cause) =>
+              Effect.sync(() => {
+                logger.warn('Failed to stage the tool-edit preview', {
+                  data: toLogData(Cause.squash(cause)),
+                });
+              }),
+            ),
           ),
+        );
+      },
+      // An open that never committed leaves the staged preview with no
+      // decision to release it; this is that release, composed rather than
+      // run so the session's own fiber waits for the diff view and the temp
+      // files behind it to go. The controller's programs take this window's
+      // services from the runtime's context, which the session that composes
+      // them does not carry.
+      releaseToolEdit: (requestId) =>
+        Effect.flatMap(runtime.contextEffect, (context) =>
+          Effect.provideContext(toolEditApprovals.release(requestId), context),
         ),
-      );
-    },
-    // An open that never committed leaves the staged preview with no
-    // decision to release it; this is that release, composed rather than
-    // run so the session's own fiber waits for the diff view and the temp
-    // files behind it to go. The controller's programs take this window's
-    // services from the runtime's context, which the session that composes
-    // them does not carry.
-    releaseToolEdit: (requestId) =>
-      Effect.flatMap(runtime.contextEffect, (context) =>
-        Effect.provideContext(toolEditApprovals.release(requestId), context),
-      ),
-  });
+    }),
+  );
 
   /**
    * The launch as an Effect, settling with the run. `onRunCompleted` fires on

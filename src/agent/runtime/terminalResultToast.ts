@@ -3,7 +3,7 @@
  * Shared error guidance comes from `agentErrorPresentation`. Child results
  * and outcomes without error metadata do not produce a notification.
  */
-import { SubscriptionRef } from 'effect';
+import { Effect, SubscriptionRef } from 'effect';
 
 import type { ResultEvent } from '@agent/trace';
 import { agentErrorPresentation } from '@common/errors/agentErrorClassification';
@@ -36,14 +36,16 @@ export function trackTerminalResultPresentation(
   dispose(): void;
 } {
   let handled = false;
-  const dispose = session.onResult((event) => {
-    if (!matches(event)) return;
-    handled =
-      event.error?.kind === 'abort' ||
-      (!isChildResult(session, event) &&
-        event.error !== undefined &&
-        agentErrorPresentation(event.error) !== null);
-  });
+  const dispose = session.onResult((event) =>
+    Effect.sync(() => {
+      if (!matches(event)) return;
+      handled =
+        event.error?.kind === 'abort' ||
+        (!isChildResult(session, event) &&
+          event.error !== undefined &&
+          agentErrorPresentation(event.error) !== null);
+    }),
+  );
   return {
     reportUnhandled: (report) => (handled ? undefined : report()),
     dispose,
@@ -52,20 +54,21 @@ export function trackTerminalResultPresentation(
 
 /**
  * Present a classified failure on a host: its instruction (a missing API key)
- * or its error toast. An abort presents nothing. Returns what the host's emit
- * returned, so a caller can await a host that settles once it is on screen.
+ * or its error toast. An abort presents nothing. The program the presentation
+ * plane builds, so the caller's own fiber carries it rather than dropping a
+ * host failure on the floor.
  */
 export function presentAgentFailure(
   interactions: SessionHostInteractions,
   error: Parameters<typeof agentErrorPresentation>[0],
   options: { replayWhenAttached?: boolean } = {},
-): unknown {
+): Effect.Effect<void> {
   const toast = agentErrorPresentation(error);
   if (toast?.type === 'instruction')
     return interactions.emit('requestShowInstruction', toast.payload, options);
   if (toast?.type === 'error')
     return interactions.emit('requestShowError', toast.payload, options);
-  return undefined;
+  return Effect.void;
 }
 
 /** Returns a detach disposer; callers detach when the run/host tears down. */
@@ -74,8 +77,9 @@ export function attachTerminalResultToast(
   interactions: SessionHostInteractions,
   options: { replayWhenAttached?: boolean } = {},
 ): () => void {
-  return session.onResult((event) => {
-    if (!event.error || isChildResult(session, event)) return;
-    presentAgentFailure(interactions, event.error, options);
-  });
+  return session.onResult((event) =>
+    !event.error || isChildResult(session, event)
+      ? Effect.void
+      : presentAgentFailure(interactions, event.error, options),
+  );
 }

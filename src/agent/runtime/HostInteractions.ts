@@ -1,9 +1,11 @@
+import { Cause, Effect, Exit } from 'effect';
 import type { ReviewIssueReport } from '@agent/review/reviewIssues';
 import { createLog } from '@logger/logUtils';
 import type { FileLocation } from '@shared/schemas';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
+import { throwAggregated } from '@utils/core';
 import type { GenericDiagnostic } from '@utils/diagnostics/diagnosticFormatting';
-import type { Effect } from 'effect';
+import { HostPresentationFailed } from './runtimePresentationEvents';
 import type {
   AgentRuntimeEmitOptions,
   DiagnosticsReadFailed,
@@ -88,7 +90,9 @@ export interface HostInteractions {
   /**
    * Present a runtime event through the active host attachment. Presentation
    * is fire-and-forget: a host that cannot render an event logs the cause. A
-   * host may return a promise that settles once the event is on screen.
+   * host may answer with a promise that settles once the event is on screen;
+   * nothing waits on it, and a rejection is reported rather than left
+   * unhandled (see `presentOn`).
    */
   emit?<K extends RuntimePresentationEvent>(
     event: K,
@@ -137,6 +141,57 @@ interface HostInteractionAttachment {
   disposed: boolean;
 }
 
+/** A queued or live presentation, bound to the host it presents on. */
+type PresentationProgram = (
+  interactions: HostInteractions,
+) => Effect.Effect<void, HostPresentationFailed>;
+
+/**
+ * The one lift of what a host's `emit` answers with. Presentation is
+ * fire-and-forget, so this never waits on a host that answers with a promise
+ * (a desktop dialog settles when the person dismisses it, and the run, the
+ * fold-gated result listeners and the replay loop all raise notices from
+ * fibers that must not block on that). The promise is watched on a detached
+ * fiber instead, so a rejection is reported rather than left unhandled, while
+ * a host that throws synchronously reaches the caller as
+ * {@link HostPresentationFailed} rather than as a defect.
+ */
+function presentOn<K extends RuntimePresentationEvent>(
+  interactions: HostInteractions,
+  event: K,
+  payload: RuntimePresentationEventPayloads[K],
+): Effect.Effect<void, HostPresentationFailed> {
+  return Effect.suspend(() => {
+    const settled: unknown = interactions.emit?.(event, payload);
+    const thenable =
+      typeof settled === 'object' &&
+      settled !== null &&
+      'then' in settled &&
+      typeof settled.then === 'function'
+        ? (settled as PromiseLike<unknown>)
+        : undefined;
+    if (!thenable) return Effect.void;
+    return Effect.forkDetach(
+      Effect.tryPromise({
+        try: async () => await thenable,
+        catch: (cause) => new HostPresentationFailed({ event, cause }),
+      }).pipe(
+        Effect.catch((failure) =>
+          Effect.sync(() => {
+            logger.warn('A host presentation notice never settled', {
+              data: failure.cause,
+            });
+          }),
+        ),
+      ),
+    ).pipe(Effect.asVoid);
+  }).pipe(
+    Effect.catchDefect((defect) =>
+      Effect.fail(new HostPresentationFailed({ event, cause: defect })),
+    ),
+  );
+}
+
 /**
  * Stable per-session presentation owner. The `SessionHandle` exposes this
  * object once, while hosts may attach and detach presentation adapters; the
@@ -145,65 +200,84 @@ interface HostInteractionAttachment {
  */
 export class SessionHostInteractions implements HostInteractions {
   private readonly attachments: HostInteractionAttachment[] = [];
-  private readonly pendingPresentationReplays: Array<
-    (interactions: HostInteractions) => unknown
-  > = [];
+  private readonly pendingPresentationReplays: PresentationProgram[] = [];
   private disposed = false;
 
-  use(interactions: HostInteractions): () => void {
-    if (this.disposed) {
-      interactions.dispose?.();
-      return () => {};
-    }
-    const attachment: HostInteractionAttachment = {
-      interactions,
-      disposed: false,
-    };
-    this.attachments.push(attachment);
-    queueMicrotask(() => this.replayPendingPresentations(attachment));
-    return () => {
-      if (attachment.disposed) return;
-      attachment.disposed = true;
-      const index = this.attachments.indexOf(attachment);
-      if (index !== -1) this.attachments.splice(index, 1);
-      interactions.dispose?.();
-    };
+  /**
+   * Attach a presentation host. The returned Effect yields the detach
+   * disposer once the notices queued while no host was attached have been
+   * replayed to it, so an attach and its replay are one step rather than the
+   * attach and a microtask that followed it.
+   */
+  use(interactions: HostInteractions): Effect.Effect<() => void> {
+    return Effect.suspend(() => {
+      if (this.disposed) {
+        interactions.dispose?.();
+        return Effect.succeed(() => {});
+      }
+      const attachment: HostInteractionAttachment = {
+        interactions,
+        disposed: false,
+      };
+      this.attachments.push(attachment);
+      const detach = (): void => {
+        if (attachment.disposed) return;
+        attachment.disposed = true;
+        const index = this.attachments.indexOf(attachment);
+        if (index !== -1) this.attachments.splice(index, 1);
+        interactions.dispose?.();
+      };
+      return this.replayPendingPresentations(attachment).pipe(
+        Effect.as(detach),
+      );
+    });
   }
 
   emit<K extends RuntimePresentationEvent>(
     event: K,
     payload: RuntimePresentationEventPayloads[K],
     options: AgentRuntimeEmitOptions = {},
-  ): unknown {
+  ): Effect.Effect<void> {
     // Live or replayed, a host that throws on a notice carrying a fallback
     // shows the generic error toast on the same host instead.
-    const present = (interactions: HostInteractions) => {
-      try {
-        return interactions.emit?.(event, payload);
-      } catch (error) {
-        if (options.fallbackMessage === undefined) throw error;
-        logger.warn('Presentation emit failed; showing the generic error', {
-          data: error,
-        });
-        return interactions.emit?.('requestShowError', {
-          message: options.fallbackMessage,
-        });
+    const present: PresentationProgram = (interactions) =>
+      presentOn(interactions, event, payload).pipe(
+        Effect.catch((failure) =>
+          options.fallbackMessage === undefined
+            ? Effect.fail(failure)
+            : Effect.sync(() => {
+                logger.warn(
+                  'Presentation emit failed; showing the generic error',
+                  { data: failure.cause },
+                );
+              }).pipe(
+                Effect.andThen(
+                  presentOn(interactions, 'requestShowError', {
+                    message: options.fallbackMessage,
+                  }),
+                ),
+              ),
+        ),
+      );
+    return Effect.suspend(() => {
+      const active = this.activeAttachment;
+      if (active) {
+        return present(active.interactions).pipe(
+          Effect.catch((failure) =>
+            Effect.sync(() => {
+              logger.warn('Live presentation emit failed', {
+                data: failure.cause,
+              });
+            }),
+          ),
+        );
       }
-    };
-    const active = this.activeAttachment;
-    if (active) {
-      try {
-        return present(active.interactions);
-      } catch (error) {
-        logger.warn('Live presentation emit failed', { data: error });
-        return undefined;
+      // The replay loop warn-logs a replay that fails.
+      if (options.replayWhenAttached && !this.disposed) {
+        this.queuePresentationReplay(present);
       }
-    }
-    // The replay loop warn-logs a replay that throws or rejects.
-    if (options.replayWhenAttached && !this.disposed) {
-      this.queuePresentationReplay(present);
-    }
-    return undefined;
+      return Effect.void;
+    });
   }
 
   get readDiagnostics(): DiagnosticsReader | undefined {
@@ -248,31 +322,46 @@ export class SessionHostInteractions implements HostInteractions {
     return active.interactions.releaseToolEdit?.(requestId);
   }
 
-  dispose(): void {
-    if (this.disposed) return;
-    this.disposed = true;
-    let firstError: unknown;
-    for (const attachment of this.attachments.toReversed()) {
-      if (attachment.disposed) continue;
-      attachment.disposed = true;
-      try {
-        attachment.interactions.dispose?.();
-      } catch (error) {
-        firstError ??= error;
-      }
-    }
-    this.attachments.length = 0;
-    this.pendingPresentationReplays.length = 0;
-    if (firstError !== undefined) throw firstError;
+  /**
+   * Dispose every attachment, newest first. Every host is disposed even when
+   * an earlier one fails, and every failure is reported: the program ends by
+   * raising them as one aggregate, which the session's teardown collects
+   * beside its other owners' — never all but the first, as the `firstError`
+   * this replaced did.
+   */
+  dispose(): Effect.Effect<void> {
+    return Effect.suspend(() => {
+      if (this.disposed) return Effect.void;
+      this.disposed = true;
+      const pending = this.attachments.toReversed().filter((attachment) => {
+        if (attachment.disposed) return false;
+        attachment.disposed = true;
+        return true;
+      });
+      this.attachments.length = 0;
+      this.pendingPresentationReplays.length = 0;
+      return Effect.forEach(pending, (attachment) =>
+        Effect.exit(Effect.sync(() => attachment.interactions.dispose?.())),
+      ).pipe(
+        Effect.flatMap((exits) =>
+          Effect.sync(() => {
+            throwAggregated(
+              exits.flatMap((exit) =>
+                Exit.isFailure(exit) ? [Cause.squash(exit.cause)] : [],
+              ),
+              'Host interaction attachments failed to dispose',
+            );
+          }),
+        ),
+      );
+    });
   }
 
   private get activeAttachment(): HostInteractionAttachment | undefined {
     return this.attachments.at(-1);
   }
 
-  private queuePresentationReplay(
-    replay: (interactions: HostInteractions) => unknown,
-  ): void {
+  private queuePresentationReplay(replay: PresentationProgram): void {
     if (
       this.pendingPresentationReplays.length >= MAX_PENDING_PRESENTATION_REPLAYS
     ) {
@@ -287,27 +376,25 @@ export class SessionHostInteractions implements HostInteractions {
 
   private replayPendingPresentations(
     attachment: HostInteractionAttachment,
-  ): void {
-    while (
-      !attachment.disposed &&
-      this.activeAttachment === attachment &&
-      this.pendingPresentationReplays.length > 0
-    ) {
-      const replay = this.pendingPresentationReplays.shift();
-      if (!replay) return;
-      try {
-        void Promise.resolve(replay(attachment.interactions)).catch(
-          (error: unknown) => {
-            logger.warn('Failed to replay a session presentation notice', {
-              data: error,
-            });
-          },
+  ): Effect.Effect<void> {
+    return Effect.gen({ self: this }, function* () {
+      while (
+        !attachment.disposed &&
+        this.activeAttachment === attachment &&
+        this.pendingPresentationReplays.length > 0
+      ) {
+        const replay = this.pendingPresentationReplays.shift();
+        if (!replay) return;
+        yield* replay(attachment.interactions).pipe(
+          Effect.catch((failure) =>
+            Effect.sync(() => {
+              logger.warn('Failed to replay a session presentation notice', {
+                data: failure.cause,
+              });
+            }),
+          ),
         );
-      } catch (error) {
-        logger.warn('Failed to replay a session presentation notice', {
-          data: error,
-        });
       }
-    }
+    });
   }
 }

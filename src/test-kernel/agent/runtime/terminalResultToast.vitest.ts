@@ -35,10 +35,10 @@ async function toastsFor(
     emitted.push({ event: name, payload });
     return true;
   });
-  const detachHost = session.interactions.use({ emit });
+  const detachHost = Effect.runSync(session.interactions.use({ emit }));
   const detachToast = attachTerminalResultToast(session, session.interactions);
   const committed = new Promise<void>((resolve) =>
-    session.onResult(() => resolve()),
+    session.onResult(() => Effect.sync(() => resolve())),
   );
   try {
     if (parent !== null) publishTestRunStart(session, parent);

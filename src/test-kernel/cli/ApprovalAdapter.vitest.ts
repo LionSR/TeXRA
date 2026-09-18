@@ -72,12 +72,14 @@ function useCliHostInteractions(
 ): void {
   detachHostInteractions();
   testDefaultSession().setApprovalPolicy(cliContext.approvalPolicy);
-  detachHostInteractions = testDefaultSession().interactions.use(
-    createHeadlessCliHostInteractions(
-      testDefaultSession(),
-      testRuntime(),
-      cliContext,
-      hooks,
+  detachHostInteractions = Effect.runSync(
+    testDefaultSession().interactions.use(
+      createHeadlessCliHostInteractions(
+        testDefaultSession(),
+        testRuntime(),
+        cliContext,
+        hooks,
+      ),
     ),
   );
 }

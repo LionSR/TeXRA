@@ -163,7 +163,7 @@ export function createRecordingHost(): {
   };
   const host = sessionWithInteractions(undefined)
     .interactions as SessionHostInteractions & RecordingProgressSink;
-  host.use(interactions);
+  Effect.runSync(host.use(interactions));
   return { events, interactions, host };
 }
 
@@ -309,7 +309,7 @@ export function sessionWithInteractions(
     Object.assign(session, { interactions });
     return session;
   }
-  if (interactions) session.interactions.use(interactions);
+  if (interactions) Effect.runSync(session.interactions.use(interactions));
   return session;
 }
 

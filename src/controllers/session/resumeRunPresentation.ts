@@ -7,7 +7,6 @@ import {
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { FollowUpFailureReason } from '@agent/followUp/ToolUseFollowUp';
 import type { RunId } from '@shared/schemas';
-import { ensureError } from '@utils/errors/errorMessage';
 
 /**
  * The per-attempt monotone cancellation latch every resuming host holds:
@@ -48,18 +47,14 @@ export const resumeRunWithRefusalNotice = Effect.fn(
 
   onRefused?.(result.failed);
   const { session } = options;
-  yield* Effect.tryPromise({
-    try: async () =>
-      session.interactions.emit(
-        'requestShowInstruction',
-        {
-          key: 'resumeRefused',
-          message: describeFollowUpFailure(result.failed),
-          showSuppress: false,
-        },
-        { replayWhenAttached: true },
-      ),
-    catch: ensureError,
-  });
+  yield* session.interactions.emit(
+    'requestShowInstruction',
+    {
+      key: 'resumeRefused',
+      message: describeFollowUpFailure(result.failed),
+      showSuppress: false,
+    },
+    { replayWhenAttached: true },
+  );
   return false;
 });

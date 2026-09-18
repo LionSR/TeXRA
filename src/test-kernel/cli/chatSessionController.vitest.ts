@@ -342,7 +342,7 @@ function installSession(overrides: Record<string, unknown> = {}): void {
   mocks.sessionStub.mockReturnValue({
     approvalPolicy: TEXRA_APPROVAL_POLICY_DEFAULT,
     interactions: {
-      use: vi.fn(() => mocks.detachHostInteractions),
+      use: vi.fn(() => Effect.succeed(mocks.detachHostInteractions)),
     },
     requests: { request: mocks.request },
     followUps: {

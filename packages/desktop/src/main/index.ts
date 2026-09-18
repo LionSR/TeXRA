@@ -1513,23 +1513,17 @@ function createWindow(options: {
                 if (error instanceof Cancelled) return;
                 // Setup continues after its initiating request has completed.
                 const primaryError = primaryAgentError(error);
-                yield* Effect.tryPromise({
-                  try: () =>
-                    Promise.resolve(
-                      presentAgentFailure(
-                        setupSession.interactions,
-                        {
-                          kind: classifyAgentError(primaryError),
-                          message:
-                            primaryError instanceof Rejected
-                              ? primaryError.reason
-                              : toErrorMessage(primaryError),
-                        },
-                        { replayWhenAttached: true },
-                      ),
-                    ),
-                  catch: (emitError) => emitError,
-                });
+                yield* presentAgentFailure(
+                  setupSession.interactions,
+                  {
+                    kind: classifyAgentError(primaryError),
+                    message:
+                      primaryError instanceof Rejected
+                        ? primaryError.reason
+                        : toErrorMessage(primaryError),
+                  },
+                  { replayWhenAttached: true },
+                );
                 return yield* Effect.fail(error);
               }),
             ),
