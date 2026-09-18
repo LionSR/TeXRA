@@ -226,6 +226,21 @@ function runTryResume(
   return testRuntime().runPromise(ctrl.tryResumeRun(runId, recovery));
 }
 
+/** The controller's resume command, run the way the Ink handler runs it. */
+function runResume(
+  ctrl: ReturnType<typeof createChatSessionController>,
+  runId: RunId,
+): Promise<void> {
+  return testRuntime().runPromise(ctrl.resume(runId));
+}
+
+/** An admitted interruption's settlement, as the composer awaits it. */
+function awaitAdmission<E>(
+  completion: Deferred.Deferred<boolean, E>,
+): Promise<boolean> {
+  return testRuntime().runPromise(Deferred.await(completion));
+}
+
 /** The claimed root run's settlement, run the way the exit drain runs it. */
 function awaitRunSettled(session: TuiSession): Promise<void> {
   return testRuntime().runPromise(session.runSettled ?? Effect.void);
@@ -465,7 +480,7 @@ async function retainInterruptedFollowUp(
   const admission = ctrl.admitInterruptedFollowUp({ text });
   expect(admission.kind).toBe('accepted');
   if (admission.kind !== 'accepted') return;
-  await expect(admission.completion).resolves.toBe(false);
+  await expect(awaitAdmission(admission.completion)).resolves.toBe(false);
 }
 
 async function expectInterruptedRetry(
@@ -476,7 +491,7 @@ async function expectInterruptedRetry(
   const retry = ctrl.admitInterruptedFollowUp({ text: 'Retry.' });
   expect(retry.kind).toBe('accepted');
   if (retry.kind !== 'accepted') return;
-  await expect(retry.completion).resolves.toBe(true);
+  await expect(awaitAdmission(retry.completion)).resolves.toBe(true);
   expect(mocks.resumeRun).toHaveBeenCalledWith(
     'a11111',
     expect.objectContaining({
@@ -916,7 +931,7 @@ describe('createChatSessionController', () => {
     const session = makeSession({ runCompleted: true });
     const ctrl = createChatSessionController(makeInit({ session }));
 
-    const resumed = ctrl.resume('aaaaaa' as RunId);
+    const resumed = runResume(ctrl, 'aaaaaa' as RunId);
 
     // The claim (tryClaimRootRunSlot) must land synchronously, before
     // resume() ever reaches its first await — same contract as
@@ -942,7 +957,7 @@ describe('createChatSessionController', () => {
     const session = makeSession();
     const ctrl = createChatSessionController(makeInit({ session }));
 
-    await ctrl.resume('ec0001' as RunId);
+    await runResume(ctrl, 'ec0001' as RunId);
     await awaitRunSettled(session);
 
     expect(sessionMeta.get()).toMatchObject({
@@ -975,7 +990,7 @@ describe('createChatSessionController', () => {
       mocks.resumeRun.mockReturnValueOnce(Effect.succeed({ failed: failure }));
       const ctrl = createChatSessionController(makeInit({ session }));
 
-      await ctrl.resume('ec0001' as RunId);
+      await runResume(ctrl, 'ec0001' as RunId);
       await awaitRunSettled(session);
 
       expect(mocks.appendLocalErrorTranscript).toHaveBeenCalledWith(
@@ -1005,7 +1020,7 @@ describe('createChatSessionController', () => {
     const init = makeInit({ session });
     const ctrl = createChatSessionController(init);
 
-    await ctrl.resume('ec0001' as RunId);
+    await runResume(ctrl, 'ec0001' as RunId);
     await awaitRunSettled(session);
 
     expect(session.runExitCode).toBe(CliExitCode.Success);
@@ -1020,7 +1035,7 @@ describe('createChatSessionController', () => {
     });
     const ctrl = createChatSessionController(makeInit({ session }));
 
-    await ctrl.resume('aaaaaa' as RunId);
+    await runResume(ctrl, 'aaaaaa' as RunId);
     await awaitRunSettled(session);
 
     expect(session.runId).toBe('aaaaaa');
@@ -1039,11 +1054,11 @@ describe('createChatSessionController', () => {
     expect(admission.kind).toBe('accepted');
     if (admission.kind !== 'accepted') return;
 
-    const manualResume = ctrl.resume('aaaaaa' as RunId);
+    const manualResume = runResume(ctrl, 'aaaaaa' as RunId);
     await teardown.settle();
 
     await manualResume;
-    await expect(admission.completion).resolves.toBe(true);
+    await expect(awaitAdmission(admission.completion)).resolves.toBe(true);
     await vi.waitFor(() =>
       expect(mocks.resumeRun).toHaveBeenCalledWith(
         'aaaaaa',
@@ -1068,7 +1083,7 @@ describe('createChatSessionController', () => {
     const session = makeSession({ runCompleted: true });
     const ctrl = createChatSessionController(makeInit({ session }));
 
-    const resumeA = ctrl.resume('aaaaaa' as RunId);
+    const resumeA = runResume(ctrl, 'aaaaaa' as RunId);
     // A is now suspended inside the config read; the slot is
     // already claimed.
     expect(session.runSettled).toBeDefined();
@@ -1116,7 +1131,7 @@ describe('createChatSessionController', () => {
     const ctrl = createChatSessionController(makeInit({ session }));
 
     holdRun('aaaaaa' as RunId);
-    const resumed = ctrl.resume('aaaaaa' as RunId);
+    const resumed = runResume(ctrl, 'aaaaaa' as RunId);
     // resume() has claimed the slot synchronously; once the durable record
     // resolves it suspends inside session.transcripts.ensureLoaded()
     // with session.runId already set to the resumed run.
@@ -1183,7 +1198,7 @@ describe('createChatSessionController', () => {
     const ctrl = createChatSessionController(makeInit({ session }));
 
     holdRun('aaaaaa' as RunId);
-    const resumed = ctrl.resume('aaaaaa' as RunId);
+    const resumed = runResume(ctrl, 'aaaaaa' as RunId);
     await vi.waitFor(() => expect(mocks.resumeRun).toHaveBeenCalledOnce());
     ctrl.stop();
     expect(session.interruptedRunId).toBeUndefined();
@@ -1212,7 +1227,7 @@ describe('createChatSessionController', () => {
     );
     const ctrl = createChatSessionController(makeInit({ session }));
 
-    await expect(ctrl.resume('aaaaaa' as RunId)).resolves.toBeUndefined();
+    await expect(runResume(ctrl, 'aaaaaa' as RunId)).resolves.toBeUndefined();
     await awaitRunSettled(session);
 
     expect(mocks.appendLocalErrorTranscript).toHaveBeenCalledWith(
@@ -1245,7 +1260,7 @@ describe('createChatSessionController', () => {
       }),
     );
 
-    await ctrl.submit('Deliver this if you can.');
+    await testRuntime().runPromise(ctrl.submit('Deliver this if you can.'));
 
     await vi.waitFor(() =>
       expect(mocks.reportRequestDefect).toHaveBeenCalledOnce(),
@@ -1281,7 +1296,7 @@ describe('createChatSessionController', () => {
         }),
     );
 
-    const resumeStarted = ctrl.resume('aaaaaa' as RunId);
+    const resumeStarted = runResume(ctrl, 'aaaaaa' as RunId);
     await vi.waitFor(() =>
       expect(mocks.setCliHelperModel).toHaveBeenCalledWith(
         expect.anything(),
@@ -1500,7 +1515,7 @@ describe('createChatSessionController', () => {
     await teardown.settle();
 
     await expect(launcherResume).resolves.toBe(true);
-    await expect(admission.completion).resolves.toBe(true);
+    await expect(awaitAdmission(admission.completion)).resolves.toBe(true);
     expect(mocks.followUpSubmit).toHaveBeenCalledWith(
       'a11111',
       [{ text: 'Transfer this accepted message.' }],
@@ -1524,7 +1539,7 @@ describe('createChatSessionController', () => {
     session.markRunCompleted();
     await teardown.settle();
     if (admission.kind !== 'accepted') return;
-    await expect(admission.completion).resolves.toBe(true);
+    await expect(awaitAdmission(admission.completion)).resolves.toBe(true);
     expect(mocks.resumeRun).toHaveBeenCalledWith(
       'a11111',
       expect.objectContaining({
@@ -1550,7 +1565,7 @@ describe('createChatSessionController', () => {
 
     session.markRunCompleted();
     await teardown.settle();
-    await expect(first.completion).resolves.toBe(true);
+    await expect(awaitAdmission(first.completion)).resolves.toBe(true);
     expect(mocks.resumeRun).toHaveBeenCalledOnce();
     expect(mocks.resumeRun).toHaveBeenCalledWith(
       'a11111',
@@ -1589,7 +1604,7 @@ describe('createChatSessionController', () => {
       kind: 'not_interrupted',
     });
     resume.resolve(STARTED);
-    await expect(first.completion).resolves.toBe(true);
+    await expect(awaitAdmission(first.completion)).resolves.toBe(true);
   });
 
   it('retains the interrupted conversation after a failed resume', async () => {
@@ -1616,7 +1631,7 @@ describe('createChatSessionController', () => {
     );
     const { ctrl, session } = makeInterruptedController(Effect.void, true);
     await retainInterruptedFollowUp(ctrl, 'First attempt.');
-    await ctrl.resume('aaaaaa' as RunId);
+    await runResume(ctrl, 'aaaaaa' as RunId);
     // The rollback rides the run chain now that the rehydration runs inside
     // `resumeRun`'s adoption hook, so the retry follows the settled resume.
     await awaitRunSettled(session);
@@ -1634,7 +1649,7 @@ describe('createChatSessionController', () => {
       .mockReset()
       .mockReturnValueOnce(Effect.succeed({ failed: 'not_resumable' }));
 
-    await ctrl.resume('aaaaaa' as RunId);
+    await runResume(ctrl, 'aaaaaa' as RunId);
 
     expect(mocks.resumeRun).toHaveBeenCalledWith(
       'aaaaaa',

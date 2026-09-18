@@ -5,7 +5,10 @@ import {
   typoSuggestionThreshold,
 } from '@utils/text/editDistance';
 
-import type { SlashCommandContext } from './handlers/slashContext';
+import type {
+  SlashCommandContext,
+  SlashCommandEffect,
+} from './handlers/slashContext';
 
 /** Help-screen grouping. Uncategorized commands land in a trailing
  *  "Other" section, so plugin-style registrations stay visible. */
@@ -40,7 +43,7 @@ export interface SlashCommand {
   readonly handler?: (
     remainder: string,
     context: SlashCommandContext,
-  ) => void | Promise<void>;
+  ) => SlashCommandEffect;
   /** Additional exact remainders that open the canonical form. */
   readonly formRemainders?: readonly string[];
   /**
