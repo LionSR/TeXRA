@@ -1,0 +1,28 @@
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  viewBox="0 0 240 150"
+  width="240"
+  height="150"
+  role="img"
+  aria-label="TeXRA"
+>
+  <g transform="translate(48 3) scale(2.25)">
+    <path
+      d="M22 10c-5.2 0-8 3.4-8 8.5v5.3c0 3-1.5 4.8-4.7 5.7 3.2.9 4.7 2.7 4.7 5.7v5.3c0 5.1 2.8 8.5 8 8.5"
+      fill="none"
+      stroke="#FEF7E2"
+      stroke-width="4.4"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+    <path
+      d="M42 10c5.2 0 8 3.4 8 8.5v5.3c0 3 1.5 4.8 4.7 5.7-3.2.9-4.7 2.7-4.7 5.7v5.3c0 5.1-2.8 8.5-8 8.5"
+      fill="none"
+      stroke="#FEF7E2"
+      stroke-width="4.4"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+    <path d="M25 17.5h14v5.6h-4.1V47h-5.8V23.1H25z" fill="#FEF7E2" />
+  </g>
+</svg>
