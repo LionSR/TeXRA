@@ -22,7 +22,7 @@ export function subagentsPaneTemplate(
   const selected =
     model.selected == null ? undefined : model.view.runs.get(model.selected);
   if (!selected) {
-    return html`<div class="task-subagents-empty">
+    return html`<div class="shell-subagents-empty">
       Select a task to see the agents it dispatched.
     </div>`;
   }
@@ -32,8 +32,8 @@ export function subagentsPaneTemplate(
     selected.label,
   ];
   return html`
-    <div class="task-subagents">
-      <div class="task-subagents-path">
+    <div class="shell-subagents">
+      <div class="shell-subagents-path">
         ${path.map(
           (label, index) => html`
             ${index > 0 ? waIcon('chevron-right') : nothing}
@@ -48,7 +48,7 @@ export function subagentsPaneTemplate(
         .surface=${model.surface}
         .root=${rootId}
       ></run-tabs>
-      <div class="task-subagents-note">
+      <div class="shell-subagents-note">
         Approvals stay in the child's request panel; this tab only navigates.
       </div>
     </div>

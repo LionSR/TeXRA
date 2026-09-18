@@ -34,7 +34,7 @@ export interface RailProject {
   readonly surface: Surface;
 }
 
-interface TaskSidebarModel {
+interface ShellSidebarModel {
   readonly files: Node;
   readonly filesExpanded: boolean;
   /** Every open project, in `shell.open` order. */
@@ -49,7 +49,7 @@ interface TaskSidebarModel {
   readonly commandsLabel: string;
 }
 
-interface TaskSidebarCallbacks {
+interface ShellSidebarCallbacks {
   onNewTask(): void;
   onSearch(): void;
   onToggleFiles(): void;
@@ -74,14 +74,14 @@ function sidebarAction(options: {
   return html`
     <wa-button
       type="button"
-      class="task-sidebar-action btn-ghost"
+      class="shell-sidebar-action btn-ghost"
       appearance="plain"
       size="s"
       data-primary=${options.primary ? 'true' : 'false'}
       @click=${options.onClick}
     >
       ${waIcon(options.icon, {
-        className: 'task-sidebar-action-icon',
+        className: 'shell-sidebar-action-icon',
         slot: 'start',
       })}
       <span>${options.label}</span>
@@ -104,7 +104,7 @@ function projectBadge(view: SessionView): TemplateResult | typeof nothing {
   ).find(([, count]) => count > 0);
   if (!badge) return nothing;
   const [variant, count] = badge;
-  return html`<wa-badge class="task-project-badge" variant=${variant} pill
+  return html`<wa-badge class="shell-project-badge" variant=${variant} pill
     >${count}</wa-badge
   >`;
 }
@@ -133,7 +133,7 @@ function runTabsTemplate(
 function childRunsAccess(
   project: RailProject,
   options: { active: boolean; flattened: boolean },
-  callbacks: TaskSidebarCallbacks,
+  callbacks: ShellSidebarCallbacks,
 ): TemplateResult | typeof nothing {
   const { view, surface } = project;
   const selected = resolveSelected(view, surface);
@@ -146,7 +146,7 @@ function childRunsAccess(
   return html`
     ${
       options.flattened && root.category === 'workflow'
-        ? html`<div class="task-workflow-calls-note">
+        ? html`<div class="shell-workflow-calls-note">
             ${total === 1 ? 'The 1 call is a child run' : `The ${total} calls are child runs`},
             reachable from the board. They never appear here.
           </div>`
@@ -156,7 +156,7 @@ function childRunsAccess(
       options.active
         ? html`<wa-button
             type="button"
-            class="task-subagents-open btn-ghost"
+            class="shell-subagents-open btn-ghost"
             appearance="plain"
             size="s"
             title="Open the ${label} tab on this task's tree"
@@ -164,7 +164,7 @@ function childRunsAccess(
           >
             ${waIcon(icon, { slot: 'start' })}
             <span>${label}</span>
-            <span class="task-subagents-open-count" slot="end">${total}</span>
+            <span class="shell-subagents-open-count" slot="end">${total}</span>
           </wa-button>`
         : nothing
     }
@@ -181,8 +181,8 @@ function childRunsAccess(
  */
 function projectSection(
   project: RailProject,
-  model: TaskSidebarModel,
-  callbacks: TaskSidebarCallbacks,
+  model: ShellSidebarModel,
+  callbacks: ShellSidebarCallbacks,
 ): TemplateResult {
   const { key, name, initials, subtitle } = project.display;
   const active = key === model.shell.active;
@@ -192,20 +192,20 @@ function projectSection(
   // project's, and this section then lists its top-level runs only.
   const flattened = active && model.subagentsOpen;
   return html`
-    <div class="task-project-item">
+    <div class="shell-project-item">
       <wa-button
         type="button"
-        class="task-project-row btn-ghost ${active ? 'is-active' : ''}"
+        class="shell-project-row btn-ghost ${active ? 'is-active' : ''}"
         appearance="plain"
         size="s"
         title=${key}
         aria-current=${active ? 'true' : nothing}
         @click=${() => callbacks.onSelectProject(key)}
       >
-        <span class="task-project-mark icon-surface is-size-m"
+        <span class="shell-project-mark icon-surface is-size-m"
           >${initials}</span
         >
-        <span class="task-project-copy">
+        <span class="shell-project-copy">
           <strong>${name}</strong>
           <small>${subtitle}</small>
         </span>
@@ -213,7 +213,7 @@ function projectSection(
       ${collapsed ? projectBadge(project.view) : nothing}
       <wa-button
         type="button"
-        class="task-project-fold icon-button is-size-s"
+        class="shell-project-fold icon-button is-size-s"
         appearance="plain"
         size="s"
         title=${foldLabel}
@@ -226,7 +226,7 @@ function projectSection(
       ${renderIconActionButton({
         icon: 'xmark',
         label: `Close ${name}`,
-        className: 'task-project-close icon-button is-size-s',
+        className: 'shell-project-close icon-button is-size-s',
         onClick: () => callbacks.onCloseProject(key),
       })}
     </div>
@@ -234,7 +234,7 @@ function projectSection(
       collapsed
         ? nothing
         : html`
-            <div class="task-sidebar-sessions task-project-runs">
+            <div class="shell-sidebar-sessions shell-project-runs">
               ${runTabsTemplate(project, { topLevelOnly: flattened })}
               ${childRunsAccess(project, { active, flattened }, callbacks)}
             </div>
@@ -245,7 +245,7 @@ function projectSection(
         ? html`
             <wa-button
               type="button"
-              class="task-project-files-toggle btn-ghost"
+              class="shell-project-files-toggle btn-ghost"
               appearance="plain"
               size="s"
               aria-expanded=${model.filesExpanded ? 'true' : 'false'}
@@ -256,7 +256,7 @@ function projectSection(
               })}
               <span>Files</span>
             </wa-button>
-            <div class="task-project-files" ?hidden=${!model.filesExpanded}>
+            <div class="shell-project-files" ?hidden=${!model.filesExpanded}>
               ${model.files}
             </div>
           `
@@ -266,17 +266,17 @@ function projectSection(
 }
 
 function projectsSectionsTemplate(
-  model: TaskSidebarModel,
-  callbacks: TaskSidebarCallbacks,
+  model: ShellSidebarModel,
+  callbacks: ShellSidebarCallbacks,
 ): TemplateResult {
   return html`
-    <section class="task-sidebar-section task-project-section">
-      <div class="task-sidebar-section-heading">
-        <span class="task-sidebar-section-label">
+    <section class="shell-sidebar-section shell-project-section">
+      <div class="shell-sidebar-section-heading">
+        <span class="shell-sidebar-section-label">
           ${model.projects.length > 1 ? 'Projects' : 'Project'}
         </span>
         <wa-badge
-          class="task-sidebar-section-count"
+          class="shell-sidebar-section-count"
           variant="neutral"
           appearance="outlined"
           pill
@@ -286,7 +286,7 @@ function projectsSectionsTemplate(
       ${model.projects.map((project) => projectSection(project, model, callbacks))}
       <wa-button
         type="button"
-        class="task-project-add"
+        class="shell-project-add"
         appearance="outlined"
         size="s"
         @click=${callbacks.onOpenFolder}
@@ -298,29 +298,29 @@ function projectsSectionsTemplate(
   `;
 }
 
-export function taskSidebarTemplate(
-  model: TaskSidebarModel,
-  callbacks: TaskSidebarCallbacks,
+export function shellSidebarTemplate(
+  model: ShellSidebarModel,
+  callbacks: ShellSidebarCallbacks,
 ): TemplateResult {
   let projectsBody: TemplateResult;
   if (model.projects.length === 0) {
     projectsBody = html`
-      <section class="task-sidebar-section task-project-section">
+      <section class="shell-sidebar-section shell-project-section">
         <wa-button
           type="button"
-          class="task-project-row btn-ghost"
+          class="shell-project-row btn-ghost"
           appearance="plain"
           size="s"
           title="Open a project folder"
           @click=${callbacks.onOpenFolder}
         >
-          <span class="task-project-mark icon-surface is-size-m">TX</span>
-          <span class="task-project-copy">
+          <span class="shell-project-mark icon-surface is-size-m">TX</span>
+          <span class="shell-project-copy">
             <strong>No project open</strong>
             <small>Get started</small>
           </span>
           ${waIcon('arrow-up-right-from-square', {
-            className: 'task-project-chevron',
+            className: 'shell-project-chevron',
             slot: 'end',
           })}
         </wa-button>
@@ -330,13 +330,13 @@ export function taskSidebarTemplate(
     projectsBody = projectsSectionsTemplate(model, callbacks);
   }
   return html`
-    <aside class="task-sidebar" aria-label="Projects and tasks">
-      <header class="task-sidebar-brand">
-        <div class="task-sidebar-logo" aria-hidden="true">T</div>
-        <span class="task-sidebar-product">TeXRA</span>
+    <aside class="shell-sidebar" aria-label="Projects and tasks">
+      <header class="shell-sidebar-brand">
+        <div class="shell-sidebar-logo" aria-hidden="true">T</div>
+        <span class="shell-sidebar-product">TeXRA</span>
         <wa-button
           type="button"
-          class="task-sidebar-brand-menu icon-button is-size-s"
+          class="shell-sidebar-brand-menu icon-button is-size-s"
           appearance="plain"
           size="s"
           aria-label=${model.commandsLabel}
@@ -347,7 +347,7 @@ export function taskSidebarTemplate(
         </wa-button>
       </header>
 
-      <nav class="task-sidebar-primary" aria-label="Task actions">
+      <nav class="shell-sidebar-primary" aria-label="Task actions">
         ${sidebarAction({
           icon: 'pencil',
           label: 'New task',
@@ -361,9 +361,9 @@ export function taskSidebarTemplate(
         })}
       </nav>
 
-      <div class="task-sidebar-scroll">${projectsBody}</div>
+      <div class="shell-sidebar-scroll">${projectsBody}</div>
 
-      <footer class="task-sidebar-footer">
+      <footer class="shell-sidebar-footer">
         ${sidebarAction({
           icon: 'terminal',
           label: 'Terminal',
@@ -401,7 +401,7 @@ export function projectChipTemplate(
 ): TemplateResult {
   return html`
     <wa-dropdown
-      class="task-project-chip"
+      class="shell-project-chip"
       placement="bottom-start"
       @wa-select=${(
         event: CustomEvent<{ item: HTMLElement & { value?: string } }>,
@@ -417,7 +417,7 @@ export function projectChipTemplate(
         with-caret
         title=${active?.display.key ?? 'No project open'}
       >
-        <span class="task-project-mark icon-surface is-size-s" slot="start"
+        <span class="shell-project-mark icon-surface is-size-s" slot="start"
           >${active?.display.initials ?? 'TX'}</span
         >
         ${active?.display.name ?? 'No project open'}
@@ -445,7 +445,7 @@ export function projectChipTemplate(
 export function conversationDockTemplate(): TemplateResult {
   return html`
     <div
-      class="task-conversation-dock"
+      class="shell-conversation-dock"
       role="group"
       aria-label="Project actions"
     >
@@ -473,7 +473,7 @@ interface WorkbenchTabsCallbacks {
 
 /** DOM id of one tab's activate button; the tabpanel references it via aria-labelledby. */
 export function workbenchTabDomId(tabId: string, session: string): string {
-  return `task-workbench-tab-${session}-${tabId}`;
+  return `shell-workbench-tab-${session}-${tabId}`;
 }
 
 /** DOM id of the single pane a placement's tab strip switches. */
@@ -481,15 +481,15 @@ export function workbenchPanelDomId(
   placement: WorkbenchPlacement,
   session: string,
 ): string {
-  return `task-workbench-panel-${session}-${placement}`;
+  return `shell-workbench-panel-${session}-${placement}`;
 }
 
 /** Moves focus to a tab's activate button within its tab strip. */
 function focusTabButton(tablist: HTMLElement, tabId: string): void {
   const tab = [
-    ...tablist.querySelectorAll<HTMLElement>('.task-workbench-tab'),
+    ...tablist.querySelectorAll<HTMLElement>('.shell-workbench-tab'),
   ].find((candidate) => candidate.dataset.tabId === tabId);
-  tab?.querySelector<HTMLElement>('.task-workbench-tab-activate')?.focus();
+  tab?.querySelector<HTMLElement>('.shell-workbench-tab-activate')?.focus();
 }
 
 /**
@@ -507,7 +507,7 @@ function handleTablistKeydown(
 ): void {
   if (
     (event.target as HTMLElement | null)?.closest(
-      '.task-workbench-tab-activate',
+      '.shell-workbench-tab-activate',
     ) == null
   ) {
     return;
@@ -551,10 +551,10 @@ function openTabContextMenu(event: MouseEvent): void {
   event.preventDefault();
   const tab = event.currentTarget as HTMLElement;
   const dropdown = tab.querySelector<ContextMenuDropdown>(
-    '.task-workbench-tab-menu',
+    '.shell-workbench-tab-menu',
   );
   const anchor = tab.querySelector<HTMLElement>(
-    '.task-workbench-tab-menu-anchor',
+    '.shell-workbench-tab-menu-anchor',
   );
   if (!dropdown || !anchor) return;
   anchor.style.setProperty('--context-menu-x', `${event.clientX}px`);
@@ -591,18 +591,18 @@ export function workbenchTabsTemplate(
     placement === 'right' ? 'chevron-right' : 'chevron-down';
   return html`
     <div
-      class="task-workbench-tabs"
+      class="shell-workbench-tabs"
       role="tablist"
       aria-label=${`${placement} workbench tabs`}
       @keydown=${(event: KeyboardEvent) =>
         handleTablistKeydown(event, tabs, activeTabId, callbacks)}
     >
-      <div class="task-workbench-tabs-scroll">
+      <div class="shell-workbench-tabs-scroll">
         ${tabs.map((tab) => {
           const active = tab.id === activeTabId;
           return html`
             <div
-              class="task-workbench-tab"
+              class="shell-workbench-tab"
               data-active=${active ? 'true' : 'false'}
               data-kind=${tab.kind}
               data-tab-id=${tab.id}
@@ -610,7 +610,7 @@ export function workbenchTabsTemplate(
             >
               <wa-button
                 type="button"
-                class="task-workbench-tab-activate"
+                class="shell-workbench-tab-activate"
                 appearance="plain"
                 size="s"
                 role="tab"
@@ -622,14 +622,14 @@ export function workbenchTabsTemplate(
                 @click=${() => callbacks.onActivate(tab.id)}
               >
                 ${waIcon(WORKBENCH_KIND_META[tab.kind].icon, {
-                  className: 'task-workbench-tab-icon',
+                  className: 'shell-workbench-tab-icon',
                   slot: 'start',
                 })}
-                <span class="task-workbench-tab-label">${tab.title}</span>
+                <span class="shell-workbench-tab-label">${tab.title}</span>
                 ${
                   tab.dirty
                     ? html`<span
-                        class="task-workbench-tab-dirty"
+                        class="shell-workbench-tab-dirty"
                         slot="end"
                         role="img"
                         aria-label="Unsaved changes"
@@ -641,14 +641,14 @@ export function workbenchTabsTemplate(
                 icon: 'xmark',
                 label: `Close ${tab.title}`,
                 className:
-                  'task-workbench-tab-close icon-button is-size-s focus-ring-inset',
+                  'shell-workbench-tab-close icon-button is-size-s focus-ring-inset',
                 onClick: (event) => {
                   event.stopPropagation();
                   callbacks.onClose(tab.id);
                 },
               })}
               <wa-dropdown
-                class="task-workbench-tab-menu"
+                class="shell-workbench-tab-menu"
                 placement="bottom-start"
                 @wa-select=${(
                   event: CustomEvent<{
@@ -659,7 +659,7 @@ export function workbenchTabsTemplate(
                 <button
                   slot="trigger"
                   type="button"
-                  class="task-workbench-tab-menu-anchor"
+                  class="shell-workbench-tab-menu-anchor"
                   tabindex="-1"
                   aria-hidden="true"
                 ></button>
@@ -686,7 +686,7 @@ export function workbenchTabsTemplate(
       </div>
       <wa-button
         type="button"
-        class="task-workbench-close icon-button is-size-m focus-ring-inset"
+        class="shell-workbench-close icon-button is-size-m focus-ring-inset"
         appearance="plain"
         size="s"
         aria-label=${`Hide ${placement} panel`}

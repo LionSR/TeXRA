@@ -7,7 +7,7 @@ import {
   workbenchPanelDomId,
   workbenchTabDomId,
   workbenchTabsTemplate,
-} from './taskShell';
+} from './desktopShell';
 import {
   activeWorkbenchTab,
   closeWorkbench,
@@ -236,13 +236,13 @@ export function createWorkbenchController({
       title: 'Choose a file',
       body: 'Open a file from the project list to inspect or edit it beside this task.',
       headingTag: 'h2',
-      className: 'task-workbench-placeholder',
+      className: 'shell-workbench-placeholder',
       iconSurfaceSize: 'l',
     });
   }
 
   function workbenchSurfaceTemplate(content: unknown): TemplateResult {
-    return html`<div class="task-workbench-surface">${content}</div>`;
+    return html`<div class="shell-workbench-surface">${content}</div>`;
   }
 
   function workbenchContentTemplate(
@@ -257,7 +257,7 @@ export function createWorkbenchController({
         return workbenchSurfaceTemplate(terminalPane.element);
       case 'browser':
         return html`<div
-          class="task-workbench-surface"
+          class="shell-workbench-surface"
           data-browser-slot=${tab.id}
         ></div>`;
       case 'review':
@@ -313,7 +313,7 @@ export function createWorkbenchController({
     const placementLabel = placement === 'right' ? 'Right' : 'Bottom';
     return html`
       <aside
-        class="task-workbench"
+        class="shell-workbench"
         data-placement=${placement}
         aria-label=${`${placementLabel} workbench`}
       >
@@ -331,9 +331,9 @@ export function createWorkbenchController({
           },
           session,
         )}
-        <div class="task-workbench-body">
+        <div class="shell-workbench-body">
           <section
-            class="task-workbench-pane"
+            class="shell-workbench-pane"
             role="tabpanel"
             id=${workbenchPanelDomId(placement, session)}
             aria-labelledby=${tab ? workbenchTabDomId(tab.id, session) : nothing}
@@ -343,7 +343,7 @@ export function createWorkbenchController({
               (entry) => (entry.kind === 'pdf' ? entry.id : entry.kind),
               (entry) =>
                 html`<div
-                  class="task-workbench-retained-surface"
+                  class="shell-workbench-retained-surface"
                   ?hidden=${entry.id !== tab?.id}
                 >
                   ${workbenchContentTemplate(entry)}

@@ -46,8 +46,8 @@ export function createEnvironmentPopover({
 
     return html`
       <wa-popover
-        class="task-environment-popover"
-        for="taskEnvironmentButton"
+        class="shell-environment-popover"
+        for="shellEnvironmentButton"
         placement="bottom-end"
         distance="6"
         without-arrow
@@ -55,11 +55,11 @@ export function createEnvironmentPopover({
         @wa-show=${handleEnvironmentPopoverShow}
         @wa-hide=${handleEnvironmentPopoverHide}
       >
-        <div class="task-environment-heading">
+        <div class="shell-environment-heading">
           <span>Environment</span>
           <wa-button
             type="button"
-            class="task-environment-refresh icon-button is-size-m"
+            class="shell-environment-refresh icon-button is-size-m"
             appearance="plain"
             size="s"
             aria-label="Refresh environment"
@@ -70,13 +70,13 @@ export function createEnvironmentPopover({
             ${waIcon(environmentLoading ? 'spinner' : 'rotate-right')}
           </wa-button>
         </div>
-        <div class="task-environment-section">
-          <div class="task-environment-row">
-            <span class="task-environment-row-icon"
+        <div class="shell-environment-section">
+          <div class="shell-environment-row">
+            <span class="shell-environment-row-icon"
               >${waIcon('plus-minus')}</span
             >
             <span>Changes</span>
-            <span class="task-environment-trailing task-environment-diff">
+            <span class="shell-environment-trailing shell-environment-diff">
               <span class="is-added"
                 >+${environmentSummary?.additions ?? 0}</span
               >
@@ -85,64 +85,68 @@ export function createEnvironmentPopover({
               >
             </span>
           </div>
-          <div class="task-environment-row">
-            <span class="task-environment-row-icon"
+          <div class="shell-environment-row">
+            <span class="shell-environment-row-icon"
               >${waIcon('folder-open')}</span
             >
             <span title=${workspacePath ?? ''}
               >${workspaceName(workspacePath)}</span
             >
-            <span class="task-environment-trailing">
+            <span class="shell-environment-trailing">
               ${changedFiles} changed
             </span>
           </div>
-          <div class="task-environment-row">
-            <span class="task-environment-row-icon"
+          <div class="shell-environment-row">
+            <span class="shell-environment-row-icon"
               >${waIcon('code-branch')}</span
             >
             <span title=${branchLabel}>${branchLabel}</span>
             ${environmentSyncTemplate(environmentSummary)}
           </div>
-          <div class="task-environment-row">
-            <span class="task-environment-row-icon"
+          <div class="shell-environment-row">
+            <span class="shell-environment-row-icon"
               >${waIcon('circle-dot')}</span
             >
             <span>Commit or push</span>
-            <span class="task-environment-trailing">
+            <span class="shell-environment-trailing">
               ${changedFiles === 0 ? 'Clean' : `${changedFiles} pending`}
             </span>
           </div>
         </div>
 
-        <div class="task-environment-section">
-          <div class="task-environment-section-title">Agents</div>
-          <div class="task-environment-row">
-            <span class="task-environment-row-icon">${waIcon('users')}</span>
+        <div class="shell-environment-section">
+          <div class="shell-environment-section-title">Agents</div>
+          <div class="shell-environment-row">
+            <span class="shell-environment-row-icon">${waIcon('users')}</span>
             <span>Subagents</span>
-            <span class="task-environment-trailing">
+            <span class="shell-environment-trailing">
               ${childCount === 0 ? 'None' : `${childCount} active or completed`}
             </span>
           </div>
         </div>
 
-        <div class="task-environment-section">
-          <div class="task-environment-section-title">Background processes</div>
-          <div class="task-environment-row">
-            <span class="task-environment-row-icon">${waIcon('terminal')}</span>
+        <div class="shell-environment-section">
+          <div class="shell-environment-section-title">
+            Background processes
+          </div>
+          <div class="shell-environment-row">
+            <span class="shell-environment-row-icon"
+              >${waIcon('terminal')}</span
+            >
             <span>Background terminal</span>
-            <span class="task-environment-trailing">
+            <span class="shell-environment-trailing">
               ${terminalCount === 0 ? 'None' : terminalCount}
             </span>
           </div>
         </div>
 
-        <div class="task-environment-section">
-          <div class="task-environment-section-title">Sources</div>
+        <div class="shell-environment-section">
+          <div class="shell-environment-section-title">Sources</div>
           ${
             sources.length === 0
               ? html`
-                  <div class="task-environment-row is-muted">
-                    <span class="task-environment-row-icon">
+                  <div class="shell-environment-row is-muted">
+                    <span class="shell-environment-row-icon">
                       ${waIcon('link')}
                     </span>
                     <span>No open sources</span>
@@ -150,8 +154,8 @@ export function createEnvironmentPopover({
                 `
               : sources.slice(0, MAX_VISIBLE_SOURCES).map(
                   (source) => html`
-                    <div class="task-environment-row">
-                      <span class="task-environment-row-icon">
+                    <div class="shell-environment-row">
+                      <span class="shell-environment-row-icon">
                         ${waIcon('file-code')}
                       </span>
                       <span title=${source.target ?? ''}>${source.title}</span>
@@ -162,7 +166,7 @@ export function createEnvironmentPopover({
           ${
             sources.length > MAX_VISIBLE_SOURCES
               ? html`
-                  <div class="task-environment-more">
+                  <div class="shell-environment-more">
                     +${sources.length - MAX_VISIBLE_SOURCES} more
                   </div>
                 `
@@ -178,12 +182,12 @@ export function createEnvironmentPopover({
   ): TemplateResult {
     if (!summary?.upstream) {
       return html`
-        <span class="task-environment-trailing is-muted">No upstream</span>
+        <span class="shell-environment-trailing is-muted">No upstream</span>
       `;
     }
     if (summary.ahead === 0 && summary.behind === 0) {
       return html`
-        <span class="task-environment-trailing is-success">
+        <span class="shell-environment-trailing is-success">
           ${waIcon('circle-check')} Synced
         </span>
       `;
@@ -199,7 +203,7 @@ export function createEnvironmentPopover({
       .join(', ');
     return html`
       <span
-        class="task-environment-trailing"
+        class="shell-environment-trailing"
         role="img"
         aria-label=${syncLabel}
       >

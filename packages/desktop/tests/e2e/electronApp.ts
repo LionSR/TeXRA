@@ -267,9 +267,9 @@ export async function openWorkbench(
   }, kind);
   await launched.page.waitForFunction(
     (targetKind) => {
-      const shell = document.querySelector<HTMLElement>('.task-shell');
+      const shell = document.querySelector<HTMLElement>('.shell-frame');
       const tab = document.querySelector<HTMLElement>(
-        `.task-workbench-tab[data-kind="${targetKind}"][data-active="true"]`,
+        `.shell-workbench-tab[data-kind="${targetKind}"][data-active="true"]`,
       );
       const surface = document.querySelector<HTMLElement>(
         `[data-desktop-view="${targetKind}"]`,

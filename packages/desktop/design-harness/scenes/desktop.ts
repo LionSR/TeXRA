@@ -8,10 +8,10 @@ import { subagentsPaneTemplate } from '@desktop/renderer/subagentsPane.js';
 import {
   conversationDockTemplate,
   projectChipTemplate,
-  taskSidebarTemplate,
+  shellSidebarTemplate,
   workbenchTabsTemplate,
   type RailProject,
-} from '@desktop/renderer/taskShell.js';
+} from '@desktop/renderer/desktopShell.js';
 import type { WorkbenchTab } from '@desktop/shared/desktopShellState.js';
 import { MESSAGE_TYPES, type RunId } from '@shared/schemas';
 import type { ProjectDisplay } from '@shared/session/hostSnapshot';
@@ -167,7 +167,7 @@ const rail = (
   shell: Shell,
   options: { subagentsOpen?: boolean } = {},
 ) =>
-  taskSidebarTemplate(
+  shellSidebarTemplate(
     {
       files: filesPlaceholder,
       filesExpanded: false,
@@ -183,7 +183,7 @@ const iconBtn = (name: Parameters<typeof waIcon>[0], label: string) =>
   html`<wa-button
     appearance="plain"
     size="s"
-    class="task-header-button icon-button is-size-l"
+    class="shell-header-button icon-button is-size-l"
     aria-label=${label}
     title=${label}
     >${waIcon(name)}</wa-button
@@ -198,9 +198,9 @@ const conversationPane = (
   body: TemplateResult | typeof nothing,
   options: { chip?: boolean; dock?: boolean } = {},
 ) =>
-  html`<main class="task-conversation" aria-label="Task conversation">
-    <header class="task-header">
-      <span class="task-header-button-slot"
+  html`<main class="shell-conversation" aria-label="Task conversation">
+    <header class="shell-header">
+      <span class="shell-header-button-slot"
         >${iconBtn('chevron-left', 'Hide sidebar')}</span
       >
       ${
@@ -208,11 +208,11 @@ const conversationPane = (
           ? nothing
           : projectChipTemplate(projects, active, noop)
       }
-      <span class="task-header-spacer"></span>
+      <span class="shell-header-spacer"></span>
       ${iconBtn('circle-stop', 'Stop')}${iconBtn('window-maximize', 'Layout')}${iconBtn('ellipsis', 'More')}
     </header>
-    <div class="task-conversation-body">
-      <section class="task-conversation-pane" data-pane="conversation">
+    <div class="shell-conversation-body">
+      <section class="shell-conversation-pane" data-pane="conversation">
         <div class="h-conv-col">${body}</div>
         ${
           options.dock === false
@@ -255,11 +255,11 @@ const workbench = (
   activeId: string,
   content: TemplateResult | HTMLElement,
 ) =>
-  html`<aside class="task-workbench" data-placement="right">
+  html`<aside class="shell-workbench" data-placement="right">
     ${workbenchTabsTemplate(tabs, activeId, 'right', workbenchCallbacks, session)}
-    <div class="task-workbench-body">
-      <section class="task-workbench-pane">
-        <div class="task-workbench-surface">${content}</div>
+    <div class="shell-workbench-body">
+      <section class="shell-workbench-pane">
+        <div class="shell-workbench-surface">${content}</div>
       </section>
     </div>
   </aside>`;
