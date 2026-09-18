@@ -478,37 +478,42 @@ export function createDesktopHostRequests(
       yield* reportFileOperationResult(operation, ran.value, inputFile);
     });
 
-  let chatExportControllerLoad: Promise<ChatExportController> | undefined;
-  function getChatExportController(): Promise<ChatExportController> {
-    chatExportControllerLoad ??= runtime
-      .runPromiseExit(
-        Effect.tryPromise({
-          try: async () => {
-            const { ChatExportController: Controller } =
-              await import('@controllers/progressView/ChatExportController');
-            const latexPreamble = await readFile(
-              path.join(options.resourcesPath, 'templates', 'chatExport.tex'),
-              'utf8',
-            );
-            return new Controller({
-              session,
-              latexPreamble,
-            });
-          },
-          catch: (error) => error,
-        }),
-      )
-      .then((exit) => {
-        // A failed load clears the memo so the next export retries, and the
-        // caller sees the original failure, not the fold's envelope.
-        if (Exit.isFailure(exit)) {
-          chatExportControllerLoad = undefined;
-          throw Cause.squash(exit.cause);
-        }
-        return exit.value;
-      });
-    return chatExportControllerLoad;
-  }
+  /**
+   * The chat export controller, loaded on the first export so its module
+   * graph — the formatters, the trace assembler, the LaTeX compiler — stays
+   * out of app startup. The memo is the library's: a successful load is kept
+   * for the window's life, and a failed one expires at once so the next
+   * export retries. `runSync` only allocates the memo here; the load itself
+   * runs inside the export's own program.
+   */
+  const getChatExportController: Effect.Effect<
+    ChatExportController,
+    TranscriptExportFailed
+  > = runtime.runSync(
+    Effect.cachedWithTTL(
+      Effect.tryPromise({
+        try: async () => {
+          const { ChatExportController: Controller } =
+            await import('@controllers/progressView/ChatExportController');
+          const latexPreamble = await readFile(
+            path.join(options.resourcesPath, 'templates', 'chatExport.tex'),
+            'utf8',
+          );
+          return new Controller({
+            session,
+            latexPreamble,
+          });
+        },
+        catch: (cause) =>
+          new TranscriptExportFailed({
+            step: 'openController',
+            message: toErrorMessage(cause),
+            cause,
+          }),
+      }),
+      (exit) => (Exit.isSuccess(exit) ? 'Infinity' : 0),
+    ),
+  );
 
   const exportTranscript = (runId: RunId) =>
     Effect.gen(function* () {
@@ -519,7 +524,7 @@ export function createDesktopHostRequests(
       }
       yield* Effect.provide(
         exportRunTranscript(runId, {
-          pickFormat: () => host.pickTranscriptExportFormat(),
+          pickFormat: host.pickTranscriptExportFormat(),
           // The preview host has already shown its own notice; the port's
           // tag carries that refusal and its wording out unchanged.
           openPath: (filePath) =>

@@ -38,6 +38,7 @@ import {
   TRANSCRIPT_EXPORT_FORMAT_CHOICES,
   type TranscriptExportOpenKind,
 } from '@controllers/progressView/exportTranscript';
+import { TranscriptExportFailed } from '@controllers/progressView/transcriptExportFailure';
 import { ProgressWorkflowFileActionsController } from '@controllers/progressView/ProgressWorkflowFileActionsController';
 import { ApiKeyPromptFailed } from '@controllers/progressView/ProgressApiKeyRetryController';
 import {
@@ -406,29 +407,39 @@ export function createExtensionHostRequests(
     return withSessionFs(
       session.roots,
       exportRunTranscript(runId, {
-        pickFormat: async () =>
-          (
-            await vscode.window.showQuickPick(
-              TRANSCRIPT_EXPORT_FORMAT_CHOICES,
-              {
-                title: 'Export transcript',
-                placeHolder: 'Choose a format',
-                ignoreFocusOut: true,
-              },
-            )
-          )?.format,
+        // The quick pick is a thenable, so it is lifted here -- once, at the
+        // host boundary -- and its refusal is worded into the export's tag.
+        pickFormat: Effect.tryPromise({
+          try: async () =>
+            (
+              await vscode.window.showQuickPick(
+                TRANSCRIPT_EXPORT_FORMAT_CHOICES,
+                {
+                  title: 'Export transcript',
+                  placeHolder: 'Choose a format',
+                  ignoreFocusOut: true,
+                },
+              )
+            )?.format,
+          catch: (cause) =>
+            new TranscriptExportFailed({
+              step: 'pickFormat',
+              message: toErrorMessage(cause),
+              cause,
+            }),
+        }),
         openPath: openExportPath,
         showInfo: (message) => messages.showInfoMessage(message),
         showWarning: (message) => messages.showWarningMessage(message),
         showError: (message) => messages.showErrorMessage(message),
         reportDetail: (message, data) => log.error(message, { data }),
-        getController: () =>
-          Promise.resolve(
+        getController: Effect.sync(
+          () =>
             (chatExportController ??= new ChatExportController({
               session,
               latexPreamble,
             })),
-          ),
+        ),
         getTraceViewerTemplate: () =>
           path.join(
             options.extensionPath,

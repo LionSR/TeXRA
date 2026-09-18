@@ -22,8 +22,7 @@ import type {
 import type { StorageFs, WorkspaceFs } from '@platform/rootedFs';
 import type { RunId } from '@shared/schemas';
 import type { Rejected } from '@shared/session/requestErrors';
-import { toErrorMessage } from '@utils/errors/errorMessage';
-import { TranscriptExportFailed } from './transcriptExportFailure';
+import type { TranscriptExportFailed } from './transcriptExportFailure';
 import type {
   ChatExportController,
   ExportInputStatus,
@@ -57,7 +56,14 @@ export const TRANSCRIPT_EXPORT_FORMAT_CHOICES = [
 }>;
 
 interface TranscriptExportPorts {
-  pickFormat(): Promise<TranscriptExportFormat | undefined>;
+  /** Ask the host which format to write; a cancelled picker answers
+   *  `undefined`. The member is a program: each host wraps its own picker's
+   *  foreign edge exactly once and words a refusal into the port's one tag,
+   *  so nothing is lifted on the way through here. */
+  readonly pickFormat: Effect.Effect<
+    TranscriptExportFormat | undefined,
+    TranscriptExportFailed
+  >;
   /** Open what was just written. The member is a program: both hosts' open
    *  verbs are Effects, so nothing is lifted on the way through here, and
    *  each host words its own refusal into the port's one tag. */
@@ -74,7 +80,13 @@ interface TranscriptExportPorts {
     message: string,
   ): Effect.Effect<void, NotificationFailed | Rejected>;
   reportDetail?(message: string, data?: unknown): void;
-  getController(): Promise<ChatExportController>;
+  /** The host's controller. The memo lives on the host -- the desktop loads
+   *  the controller's module graph on the first export -- and a failed load
+   *  is not memoized, so the next export retries. */
+  readonly getController: Effect.Effect<
+    ChatExportController,
+    TranscriptExportFailed
+  >;
   getTraceViewerTemplate(): string;
 }
 
@@ -140,27 +152,9 @@ export const exportRunTranscript = Effect.fn('exportRunTranscript')(function* (
   TranscriptExportFailure,
   FileSystem.FileSystem | StorageFs | WorkspaceFs
 > {
-  const format = yield* Effect.tryPromise({
-    try: async () => ports.pickFormat(),
-    catch: (cause) =>
-      new TranscriptExportFailed({
-        step: 'pickFormat',
-        message: toErrorMessage(cause),
-        cause,
-      }),
-  });
+  const format = yield* ports.pickFormat;
   if (!format) return;
-  // The host's memo is behind this promise: a failed load clears it there, so
-  // the next export retries. Lifted once, here, under its own step.
-  const controller = yield* Effect.tryPromise({
-    try: async () => ports.getController(),
-    catch: (cause) =>
-      new TranscriptExportFailed({
-        step: 'openController',
-        message: toErrorMessage(cause),
-        cause,
-      }),
-  });
+  const controller = yield* ports.getController;
   if (format === 'html') {
     yield* exportHtml(controller, runId, ports);
     return;
