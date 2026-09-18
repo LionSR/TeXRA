@@ -657,7 +657,12 @@ describe('handleTuiSlashCommand', () => {
 
     expect(handled).toBe(true);
     expect(signOutSupabase).toHaveBeenCalledOnce();
-    expect(signOutChatGpt.mock.calls).toEqual([['chatgpt'], ['grok']]);
+    // The provider ids only: each call also carries the session's setting
+    // stores, and a `ConfigProvider` in an assertion argument breaks the
+    // formatter's own `inspect` probe.
+    expect(
+      signOutChatGpt.mock.calls.map(([, providerId]) => providerId),
+    ).toEqual(['chatgpt', 'grok']);
     const entry = lastEntryText();
     expect(entry).toContain(RESEARCHER_ACCESS_AUTH.signedOut);
     expect(entry).toContain('Signed out of ChatGPT.');

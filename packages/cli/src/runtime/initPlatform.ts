@@ -46,7 +46,10 @@ import { GlobalStateKey } from '@shared/state/stateKeys';
 import { UsageLogService } from '@telemetry/UsageLogService';
 import { registerRuntimeShutdownHandlers } from '@tools/agentCliSessionStores';
 import { seedDisabledToolDefaults } from '@tools/toolAvailability';
-import { initProcessSettingHost } from '@utils/config/platformSettings';
+import {
+  initProcessSettingHost,
+  platformSettingsStores,
+} from '@utils/config/platformSettings';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
@@ -497,19 +500,16 @@ export async function initCliPlatform(
   // process-wide singleton: the secret store is the same stateless view over
   // this process's storage root the composition block installed, and the
   // application state is the store that install opened before it.
-  // The roots this init installed carry the three setting slots. A foreign
-  // root (a test harness's fake host) installed the platform without them, so
-  // there is no slot a catalog read could answer from: say so here rather than
-  // hand back a half-built stores value.
-  if (!installedRoots) {
-    throw new Error(
-      'The CLI platform was installed by another root, so this process has no workspace roots to read settings from.',
-    );
-  }
+  // The three setting slots this process answers a catalog row from: the roots
+  // this init installed when it built them, and otherwise the roots whichever
+  // foreign root installed the platform published (a test harness's fake host)
+  // — resolved once here through the funnel's own accessor, which is exactly
+  // what each of these readers used to do for itself.
+  const settingSlots = installedRoots ?? platformSettingsStores();
   const cliServices: CliPlatformServices = {
     runtime,
-    config: installedRoots.config,
-    workspaceState: installedRoots.workspaceState,
+    config: settingSlots.config,
+    workspaceState: settingSlots.workspaceState,
     // The pure path calculator over this process's storage root (no mkdir),
     // so every CLI entry, including the ones that find the platform already
     // installed, names one root without touching the filesystem again.

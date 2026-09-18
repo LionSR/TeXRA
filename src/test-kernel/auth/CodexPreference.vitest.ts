@@ -8,9 +8,9 @@ import {
   setPreferCodexSubscription,
 } from '@model/codex/codexPreference';
 import { workspaceRoots } from '@platform/workspaceRoots';
-import { platformSettingsStores } from '@utils/config/platformSettings';
 import { installPlatform } from '@test/support/setupPlatform';
 import { FakeScopedConfigProvider } from '@test/support/FakePlatform';
+import { platformSettingsStores } from '@utils/config/platformSettings';
 
 const CODEX_PREFER_SUBSCRIPTION_KEY = 'texra.chatgptCodex.preferSubscription';
 

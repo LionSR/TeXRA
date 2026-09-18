@@ -35,11 +35,11 @@ import {
   type ApiProvider,
 } from '@model/apiProviders';
 import type { ModelOptionStores } from '@model/computeModelOptions';
-import type { SettingsStores } from '@shared/config/settingsAccess';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import type { LanguageModel } from '@platform/languageModel';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { ProcessRuntime } from '@platform/processRuntime';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import {
   readOnboardingFlags,
   setOnboardingDeclined,

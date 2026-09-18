@@ -4,12 +4,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - platform
 import type { PlatformSecrets } from '@platform/secrets';
-import type { SettingsStores } from '@shared/config/settingsAccess';
-import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import {
   LanguageModel,
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
 } from '@platform/languageModel';
+import type { SettingsStores } from '@shared/config/settingsAccess';
+import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 
 const events: string[] = [];
 const mocks = vi.hoisted(() => ({
