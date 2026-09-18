@@ -31,18 +31,17 @@ import { parseFrontmatter } from '@tools/memory/memoryMeta';
 import { displayToStoragePath } from '@tools/memory/memoryUtils';
 import { filterNotNull, unique } from '@utils/core';
 import { isNonEmptyString } from '@utils/text/stringUtils';
-import {
-  getListOfFiles,
-  getPromptFileName,
-  getXmlFormatFromReadableFiles,
-} from '@utils/prompt';
+import { getListOfFiles, getPromptFileName } from '@utils/prompt';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getConfig } from '@utils/config/configUtils';
 import {
   listExternalRoots,
   type ExternalRootKind,
 } from '@utils/files/externalRoots';
-import { setVarFromFile } from '@utils/files/varsUtils';
+import {
+  getXmlFormatFromReadableFiles,
+  setVarFromFile,
+} from '@utils/files/varsUtils';
 import { StorageFS } from '@utils/files/storageFS';
 
 /** Transient user-variable key carrying the run's live model id. */

@@ -82,11 +82,7 @@ export const getSystemPromptWithRules = Effect.fn('prompt.systemWithRules')(
     userVars: TemplateVars,
     workspace: string | undefined,
   ): Effect.fn.Return<string, Error> {
-    const basePrompt = yield* Effect.tryPromise({
-      try: () => renderPrompt(systemPrompt, userVars),
-      catch: ensureError,
-    });
-    const parts = [basePrompt];
+    const parts = [yield* renderPrompt(systemPrompt, userVars)];
 
     const rules = yield* Effect.tryPromise({
       try: () => loadTexraRules(workspace),
@@ -147,10 +143,7 @@ export class PromptBuilder {
           this.workspace,
         ),
         this.buildUserRequest(0),
-        Effect.tryPromise({
-          try: () => renderPrompt(this.agentPrompt.userPrefix, this.userVars),
-          catch: ensureError,
-        }),
+        renderPrompt(this.agentPrompt.userPrefix, this.userVars),
       ],
       { concurrency: 'unbounded' },
     ).pipe(
@@ -180,10 +173,7 @@ export class PromptBuilder {
       return Effect.succeed('');
     }
 
-    return Effect.tryPromise({
-      try: () => renderPrompt(template, this.userVars),
-      catch: ensureError,
-    });
+    return renderPrompt(template, this.userVars);
   }
 
   private getRoundTemplate(currRound: number): string | undefined {
@@ -252,10 +242,7 @@ export const buildInitialToolUsePrompts = Effect.fn('prompt.initialToolUse')(
 
     return {
       ...initial,
-      instructionSuffix: yield* Effect.tryPromise({
-        try: () => renderPrompt(suffixParts.join('\n'), userVars),
-        catch: ensureError,
-      }),
+      instructionSuffix: yield* renderPrompt(suffixParts.join('\n'), userVars),
     };
   },
 );
