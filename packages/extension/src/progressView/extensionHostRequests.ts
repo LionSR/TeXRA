@@ -72,7 +72,12 @@ import {
   type RunId,
 } from '@shared/schemas';
 import type { HostRequest } from '@shared/session/hostRequest';
-import { Cancelled, Rejected } from '@shared/session/requestErrors';
+import {
+  Cancelled,
+  isRequestRefusal,
+  Rejected,
+  type RequestRefusal,
+} from '@shared/session/requestErrors';
 import type {
   HostOutcome,
   SurfaceActionMessage,
@@ -116,6 +121,19 @@ class FilePickerFailed extends Data.TaggedError('FilePickerFailed')<{
   readonly message: string;
 }> {}
 
+/**
+ * An extension capability that still answers with a promise rejected — a VS
+ * Code command, an editor API, a Promise-faced controller port. `member`
+ * names which one; `message` is the rejection's own text and `cause` the
+ * value it was thrown with, so the bridge's log reads what `await` handed
+ * over.
+ */
+class HostCallFailed extends Data.TaggedError('HostCallFailed')<{
+  readonly member: string;
+  readonly message: string;
+  readonly cause: unknown;
+}> {}
+
 interface ExtensionHostRequestsOptions {
   readonly session: SessionHandle;
   readonly extensionPath: string;
@@ -142,7 +160,7 @@ interface ExtensionHostRequests {
   handleHostRequest(
     request: HostRequest,
     port: string,
-  ): Effect.Effect<HostOutcome, unknown, ProcessServices>;
+  ): Effect.Effect<HostOutcome, Error, ProcessServices>;
   closePort(port: string): void;
   /** Stops a recording this host owns; the take is discarded. */
   dispose(): void;
@@ -185,11 +203,24 @@ export function createExtensionHostRequests(
   );
 
   /** A host capability that still answers with a promise - a VS Code command,
-   *  an editor API, a Promise-faced controller port - lifted verbatim: the
-   *  rejection reaches the dispatcher as the value it was thrown with,
-   *  exactly as `await` handed it over. */
-  const fromHost = <A>(call: () => PromiseLike<A>): Effect.Effect<A, unknown> =>
-    Effect.tryPromise({ try: call, catch: (error) => error });
+   *  an editor API, a Promise-faced controller port - lifted once and named:
+   *  a refusal the callee already worded travels as itself, and every other
+   *  rejection is tagged with the member it came from. */
+  const fromHost = <A>(
+    member: string,
+    call: () => PromiseLike<A>,
+  ): Effect.Effect<A, HostCallFailed | RequestRefusal> =>
+    Effect.tryPromise({
+      try: call,
+      catch: (cause) =>
+        isRequestRefusal(cause)
+          ? cause
+          : new HostCallFailed({
+              member,
+              message: toErrorMessage(cause),
+              cause,
+            }),
+    });
 
   /** The native picker of each multi-file launcher list. */
   const multipleFilePickers = createFileSelectionPickers(session);
@@ -378,66 +409,76 @@ export function createExtensionHostRequests(
   }
 
   /** A run's saved setup into the launcher, and the launcher into view. */
-  function restoreIntoLauncher(
-    config: Parameters<typeof launchPatchOf>[0],
-  ): Effect.Effect<void, unknown> {
+  function restoreIntoLauncher(config: Parameters<typeof launchPatchOf>[0]) {
     return Effect.gen(function* () {
       options.surfaceAction({ kind: 'launch', patch: launchPatchOf(config) });
       options.surfaceAction({ kind: 'selectNew' });
-      yield* fromHost(() => options.showInSidebar());
+      yield* fromHost('showInSidebar', () => options.showInSidebar());
     });
   }
 
   /** The Tools sheet's verbs over the launcher's base and edited files. */
-  async function latexdiffs(
-    request: Extract<HostRequest, { kind: 'latexdiffs' }>,
-  ): Promise<void> {
-    const baseFile = request.baseFile ?? '';
-    const editedFile = request.editedFile ?? '';
-    const commit = request.commit ?? 'HEAD';
-    switch (request.action) {
-      case 'latexdiffvc':
-        await runCommand('texra.latexdiffvc', undefined, baseFile, commit);
-        return;
-      case 'packLatexdiffvc':
-      case 'cleanLatexdiffvc':
-        await runCommand(
-          `texra.${request.action}`,
-          undefined,
-          baseFile,
-          commit,
-          request.action === 'cleanLatexdiffvc',
+  function latexdiffs(request: Extract<HostRequest, { kind: 'latexdiffs' }>) {
+    return Effect.gen(function* () {
+      const baseFile = request.baseFile ?? '';
+      const editedFile = request.editedFile ?? '';
+      const commit = request.commit ?? 'HEAD';
+      switch (request.action) {
+        case 'latexdiffvc':
+          yield* fromHost('texra.latexdiffvc', () =>
+            runCommand('texra.latexdiffvc', undefined, baseFile, commit),
+          );
+          return;
+        case 'packLatexdiffvc':
+        case 'cleanLatexdiffvc':
+          yield* fromHost(`texra.${request.action}`, () =>
+            runCommand(
+              `texra.${request.action}`,
+              undefined,
+              baseFile,
+              commit,
+              request.action === 'cleanLatexdiffvc',
+            ),
+          );
+          return;
+        default:
+          break;
+      }
+      if (!baseFile || !editedFile) {
+        return yield* Effect.fail(
+          new Rejected({
+            reason: 'Choose a base file and an edited file first.',
+          }),
         );
-        return;
-      default:
-        break;
-    }
-    if (!baseFile || !editedFile) {
-      throw new Rejected({
-        reason: 'Choose a base file and an edited file first.',
-      });
-    }
-    switch (request.action) {
-      case 'compare':
-        await workflowFileActions.compareOriginal(editedFile, baseFile);
-        return;
-      case 'accept':
-        await workflowFileActions.acceptFile(editedFile, baseFile);
-        return;
-      case 'merge':
-        await runCommand('texra.merge', baseFile, editedFile);
-        return;
-      case 'latexdiff':
-        await runCommand('texra.latexdiff', undefined, baseFile, editedFile);
-        return;
-    }
+      }
+      switch (request.action) {
+        case 'compare':
+          yield* fromHost('workflowFileActions.compareOriginal', () =>
+            workflowFileActions.compareOriginal(editedFile, baseFile),
+          );
+          return;
+        case 'accept':
+          yield* fromHost('workflowFileActions.acceptFile', () =>
+            workflowFileActions.acceptFile(editedFile, baseFile),
+          );
+          return;
+        case 'merge':
+          yield* fromHost('texra.merge', () =>
+            runCommand('texra.merge', baseFile, editedFile),
+          );
+          return;
+        case 'latexdiff':
+          yield* fromHost('texra.latexdiff', () =>
+            runCommand('texra.latexdiff', undefined, baseFile, editedFile),
+          );
+          return;
+      }
+    });
   }
 
   /** The launcher's Send: the surface's selections through the shared
    *  launch preparation, then the one launch command. */
-  function launch(
-    request: Extract<HostRequest, { kind: 'launch' }>,
-  ): Effect.Effect<void, unknown> {
+  function launch(request: Extract<HostRequest, { kind: 'launch' }>) {
     return Effect.gen(function* () {
       const { launch: form } = request;
       const requestedWorkingDirectory = form.workingDirectory.trim();
@@ -474,7 +515,9 @@ export function createExtensionHostRequests(
         },
         session.roots.workspaceState,
       );
-      yield* fromHost(() => runCommand('texra.execute', prepared));
+      yield* fromHost('texra.execute', () =>
+        runCommand('texra.execute', prepared),
+      );
     });
   }
 
@@ -579,9 +622,11 @@ export function createExtensionHostRequests(
   /** The editor's current file into a launcher field. */
   function useCurrentFile(
     request: Extract<HostRequest, { kind: 'useCurrentFile' }>,
-  ): Effect.Effect<HostOutcome, unknown, ProcessServices> {
+  ) {
     return Effect.gen(function* () {
-      const currentOpenFile = yield* fromHost(() => getCurrentFile(session));
+      const currentOpenFile = yield* fromHost('getCurrentFile', () =>
+        getCurrentFile(session),
+      );
       if (!currentOpenFile) {
         return yield* Effect.fail(
           new Rejected({
@@ -596,7 +641,7 @@ export function createExtensionHostRequests(
       if (request.fileType === 'base') {
         const parsed = parseVersionControlDiffFilename(currentOpenFile);
         if (parsed) {
-          const commitLabel = yield* fromHost(() =>
+          const commitLabel = yield* fromHost('texra.findCommitInHistory', () =>
             runCommand<string | null>(
               'texra.findCommitInHistory',
               parsed.commitHash,
@@ -628,7 +673,7 @@ export function createExtensionHostRequests(
             ));
           if (sourceExists) {
             yield* snapshot.refreshFiles;
-            return { kind: 'files', paths: [parsed.sourcePath] };
+            return { kind: 'files', paths: [parsed.sourcePath] } as HostOutcome;
           }
           void runtime.runFork(
             messages.showInfoMessage(
@@ -637,7 +682,7 @@ export function createExtensionHostRequests(
           );
         }
       }
-      return { kind: 'files', paths: [currentOpenFile] };
+      return { kind: 'files', paths: [currentOpenFile] } as HostOutcome;
     });
   }
 
@@ -680,11 +725,11 @@ export function createExtensionHostRequests(
 
   function agentConfigBanner(
     request: Extract<HostRequest, { kind: 'agentConfigBanner' }>,
-  ): Effect.Effect<void, unknown> {
+  ) {
     return Effect.gen(function* () {
       switch (request.action) {
         case 'edit':
-          yield* fromHost(() =>
+          yield* fromHost('texra.showAgents', () =>
             runCommand(
               'texra.showAgents',
               request.sessionType === 'toolUse' ? 'toolUse' : undefined,
@@ -693,12 +738,14 @@ export function createExtensionHostRequests(
           return;
         case 'dir': {
           if (!request.customDirSet) {
-            yield* fromHost(() => runCommand('texra.showAgents'));
+            yield* fromHost('texra.showAgents', () =>
+              runCommand('texra.showAgents'),
+            );
             return;
           }
           const dir = yield* agentDirectories.custom();
           if (dir) {
-            yield* fromHost(() =>
+            yield* fromHost('revealFileInOS', () =>
               vscode.commands.executeCommand(
                 'revealFileInOS',
                 vscode.Uri.file(dir),
@@ -708,57 +755,69 @@ export function createExtensionHostRequests(
           return;
         }
         case 'docs':
-          yield* fromHost(() => runCommand('texra.openDoc', 'custom-agents'));
+          yield* fromHost('texra.openDoc', () =>
+            runCommand('texra.openDoc', 'custom-agents'),
+          );
           return;
       }
     });
   }
 
+  /** The onboarding funnel recomputed after an action that changed its
+   *  inputs. */
+  const refreshOnboardingFunnel = fromHost('refreshOnboardingFunnel', () =>
+    options.refreshOnboardingFunnel(),
+  );
+
   /** The four reads a new credential invalidates, refreshed together as the
    *  four promises were. */
   const refreshAfterCredentialChange = Effect.all(
     [
-      fromHost(() =>
+      fromHost('texra.refreshApiKeyStatus', () =>
         vscode.commands.executeCommand('texra.refreshApiKeyStatus'),
       ),
       snapshot.refreshCatalogs,
       snapshot.refreshAuth,
-      fromHost(() => options.refreshOnboardingFunnel()),
+      refreshOnboardingFunnel,
     ],
     { concurrency: 'unbounded', discard: true },
   );
 
   function onboarding(
     action: Extract<HostRequest, { kind: 'onboarding' }>['action'],
-  ): Effect.Effect<void, unknown, ProcessServices> {
+  ) {
     return Effect.gen(function* () {
       switch (action) {
         case 'signInChatGpt':
-          yield* fromHost(() =>
+          yield* fromHost('signInWithSubscription', () =>
             signInWithSubscription(CHANNEL, 'chatgpt', runtime),
           );
           yield* refreshAfterCredentialChange;
           return;
         case 'setApiKey':
-          yield* fromHost(() => runCommand('texra.setApiKey'));
+          yield* fromHost('texra.setApiKey', () =>
+            runCommand('texra.setApiKey'),
+          );
           // SecretManager has no key-changed event, so the set-key flow's
           // completion is the explicit refresh point for the funnel.
-          yield* fromHost(() => options.refreshOnboardingFunnel());
+          yield* refreshOnboardingFunnel;
           return;
         case 'skip':
           yield* setOnboardingDeclined(options.globalState, true);
-          yield* fromHost(() => options.refreshOnboardingFunnel());
+          yield* refreshOnboardingFunnel;
           return;
         case 'runSetup':
-          yield* fromHost(() => runCommand(GETTING_STARTED_COMMANDS.runSetup));
-          yield* fromHost(() => options.refreshOnboardingFunnel());
+          yield* fromHost(GETTING_STARTED_COMMANDS.runSetup, () =>
+            runCommand(GETTING_STARTED_COMMANDS.runSetup),
+          );
+          yield* refreshOnboardingFunnel;
           return;
         case 'skipSetup':
           yield* setFirstRunDone(options.globalState, true);
-          yield* fromHost(() => options.refreshOnboardingFunnel());
+          yield* refreshOnboardingFunnel;
           return;
         case 'openGettingStarted':
-          yield* fromHost(() =>
+          yield* fromHost(GETTING_STARTED_COMMANDS.openWalkthrough, () =>
             runCommand(GETTING_STARTED_COMMANDS.openWalkthrough),
           );
           return;
@@ -776,11 +835,11 @@ export function createExtensionHostRequests(
   function dispatch(
     request: HostRequest,
     port: string,
-  ): Effect.Effect<HostOutcome, unknown, ProcessServices> {
+  ): Effect.Effect<HostOutcome, Error, ProcessServices> {
     return Effect.gen(function* () {
       switch (request.kind) {
         case 'openFile':
-          yield* fromHost(() =>
+          yield* fromHost('texra.openFile', () =>
             runCommand(
               'texra.openFile',
               request.path,
@@ -789,7 +848,7 @@ export function createExtensionHostRequests(
           );
           return done;
         case 'openLabel': {
-          const opened = yield* fromHost(() =>
+          const opened = yield* fromHost('texra.openLabel', () =>
             runCommand<boolean>('texra.openLabel', request.label, {
               notifyNotFound: false,
             }),
@@ -804,7 +863,7 @@ export function createExtensionHostRequests(
           return done;
         }
         case 'openTaskStorage':
-          yield* fromHost(() =>
+          yield* fromHost('workflowFileActions.openTaskStorage', () =>
             workflowFileActions.openTaskStorage(request.runId),
           );
           return done;
@@ -831,7 +890,9 @@ export function createExtensionHostRequests(
         case 'latexdiff': {
           const diff = yield* runActions.workflowDiffRequest(request.runId);
           if (diff) {
-            yield* fromHost(() => runCommand('texra.runLatexdiff', diff));
+            yield* fromHost('texra.runLatexdiff', () =>
+              runCommand('texra.runLatexdiff', diff),
+            );
           }
           return done;
         }
@@ -841,27 +902,29 @@ export function createExtensionHostRequests(
             request.runId,
           );
           if (operation) {
-            yield* fromHost(() =>
+            yield* fromHost(`texra.${request.kind}`, () =>
               runCommand(`texra.${request.kind}`, operation),
             );
           }
           return done;
         }
         case 'latexdiffs':
-          yield* fromHost(() => latexdiffs(request));
+          yield* latexdiffs(request);
           return done;
         case 'record':
         case 'polish':
         case 'savePastedImage':
           return yield* draftRequests.handle(request, port);
         case 'popOut':
-          yield* fromHost(() => options.popOutToEditor());
+          yield* fromHost('popOutToEditor', () => options.popOutToEditor());
           return done;
         case 'popBack':
-          yield* fromHost(() => options.showInSidebar());
+          yield* fromHost('showInSidebar', () => options.showInSidebar());
           return done;
         case 'openDashboard':
-          yield* fromHost(() => runCommand('texra.showDashboard'));
+          yield* fromHost('texra.showDashboard', () =>
+            runCommand('texra.showDashboard'),
+          );
           return done;
         case 'refreshCommits':
           yield* snapshot.refreshCommits;
@@ -872,7 +935,7 @@ export function createExtensionHostRequests(
         case 'openSettings':
           switch (request.section) {
             case 'agents':
-              yield* fromHost(() =>
+              yield* fromHost('texra.showAgents', () =>
                 runCommand(
                   'texra.showAgents',
                   request.sessionType === 'toolUse' ? 'toolUse' : undefined,
@@ -880,10 +943,14 @@ export function createExtensionHostRequests(
               );
               return done;
             case 'models':
-              yield* fromHost(() => runCommand('texra.showModels'));
+              yield* fromHost('texra.showModels', () =>
+                runCommand('texra.showModels'),
+              );
               return done;
             case 'teams':
-              yield* fromHost(() => runCommand('texra.showMultiAgent'));
+              yield* fromHost('texra.showMultiAgent', () =>
+                runCommand('texra.showMultiAgent'),
+              );
               return done;
           }
           return done;
@@ -898,7 +965,7 @@ export function createExtensionHostRequests(
             ),
           );
           const opened = getOpenedFiles();
-          return {
+          const outcome: HostOutcome = {
             kind: 'files',
             paths:
               allowed.size > 0
@@ -907,6 +974,7 @@ export function createExtensionHostRequests(
                   )
                 : opened,
           };
+          return outcome;
         }
         case 'attachDroppedFiles':
           return yield* attachDroppedFiles(request);
@@ -914,7 +982,9 @@ export function createExtensionHostRequests(
           yield* launch(request);
           return done;
         case 'extractFigures':
-          yield* fromHost(() => runCommand('texra.extractTikzFigures'));
+          yield* fromHost('texra.extractTikzFigures', () =>
+            runCommand('texra.extractTikzFigures'),
+          );
           return done;
         case 'toolEdit':
           toolEditApprovals.handleAction({
@@ -925,7 +995,9 @@ export function createExtensionHostRequests(
           return done;
         case 'fileAction': {
           const config = yield* runActions.readConfig(request.runId);
-          yield* fromHost(() => workflowFileActions.handle(request, config));
+          yield* fromHost('workflowFileActions.handle', () =>
+            workflowFileActions.handle(request, config),
+          );
           return done;
         }
         case 'restoreProposalConfig':
@@ -935,13 +1007,13 @@ export function createExtensionHostRequests(
           return done;
         case 'apiKeyBanner':
           if (request.action === 'set') {
-            yield* fromHost(() =>
+            yield* fromHost('texra.setApiKey', () =>
               runCommand('texra.setApiKey', request.provider ?? undefined),
             );
-            yield* fromHost(() => options.refreshOnboardingFunnel());
+            yield* refreshOnboardingFunnel;
             return done;
           }
-          yield* fromHost(() =>
+          yield* fromHost('env.openExternal', () =>
             vscode.env.openExternal(
               vscode.Uri.parse(
                 (request.provider && getProviderKeyUrl(request.provider)) ||
@@ -954,7 +1026,9 @@ export function createExtensionHostRequests(
           yield* agentConfigBanner(request);
           return done;
         case 'recheckDependencies':
-          yield* fromHost(() => checkCoreDependencies(true));
+          yield* fromHost('checkCoreDependencies', () =>
+            checkCoreDependencies(true),
+          );
           yield* snapshot.refreshHostBanners;
           return done;
         case 'openInstallGuide': {
@@ -967,11 +1041,11 @@ export function createExtensionHostRequests(
             );
           }
           const [command, ...args] = docsCommand.split(',');
-          yield* fromHost(() => runCommand(command, ...args));
+          yield* fromHost(command, () => runCommand(command, ...args));
           return done;
         }
         case 'signIn': {
-          const authenticated = yield* fromHost(() =>
+          const authenticated = yield* fromHost(AUTH_COMMANDS.SIGN_IN, () =>
             vscode.commands.executeCommand<boolean>(AUTH_COMMANDS.SIGN_IN),
           );
           if (authenticated) yield* refreshAfterCredentialChange;
@@ -981,11 +1055,11 @@ export function createExtensionHostRequests(
           yield* snapshot.dismissBanner(request.banner);
           return done;
         case 'gettingStarted':
-          yield* fromHost(() =>
+          yield* fromHost(GETTING_STARTED_COMMANDS[request.action], () =>
             runCommand(GETTING_STARTED_COMMANDS[request.action]),
           );
           if (request.action === 'runSetup') {
-            yield* fromHost(() => options.refreshOnboardingFunnel());
+            yield* refreshOnboardingFunnel;
           }
           return done;
         case 'onboarding':

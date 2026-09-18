@@ -40,3 +40,19 @@ export class Internal extends Data.TaggedError('Internal')<{
 
 export type RequestError =
   NotOwner | Unavailable | Cancelled | Rejected | Internal;
+
+/**
+ * A request's refusal, as opposed to its defect: the three a handler may
+ * answer the surface with. The bridge folds these onto the wire; every other
+ * tag is `Internal`.
+ */
+export type RequestRefusal = Cancelled | Unavailable | Rejected;
+
+/** Whether a failure is one of the three the bridge answers on the wire. */
+export function isRequestRefusal(error: unknown): error is RequestRefusal {
+  return (
+    error instanceof Cancelled ||
+    error instanceof Unavailable ||
+    error instanceof Rejected
+  );
+}

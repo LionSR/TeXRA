@@ -135,6 +135,9 @@ describe('desktop preview host', () => {
         await import('@desktop/main/desktopFileSelection');
       const { HostDraftRequests } =
         await import('@controllers/session/hostDraftRequests');
+      // After `vi.resetModules`, the refusal class the handler compares
+      // against is this graph's instance, not the statically imported one.
+      const { Rejected } = await import('@shared/session/requestErrors');
       const showErrorMessage = vi.fn<(message: string) => Effect.Effect<void>>(
         () => Effect.void,
       );
@@ -146,7 +149,7 @@ describe('desktop preview host', () => {
       });
       const draftRequests = new HostDraftRequests();
       vi.spyOn(draftRequests, 'handle').mockReturnValue(
-        Effect.fail(new Error('Text service unavailable')),
+        Effect.fail(new Rejected({ reason: 'Text service unavailable' })),
       );
       const files = createDesktopFileSelection({
         workspacePath: undefined,
@@ -186,7 +189,7 @@ describe('desktop preview host', () => {
         postToRenderer: () => {},
         postSurfaceAction: () => {},
         signIn: async () => {},
-        getCustomAgentDirectory: async () => '/agents',
+        getCustomAgentDirectory: () => Effect.succeed('/agents'),
         showFirstRunWalkthrough: () => {},
         onboarding: {} as Parameters<
           typeof createDesktopHostRequests

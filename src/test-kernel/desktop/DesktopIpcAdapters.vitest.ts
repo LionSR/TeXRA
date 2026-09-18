@@ -47,7 +47,7 @@ async function createShellHarness(
   const actions = createDesktopShellActions(
     { postToRenderer },
     {
-      getCustomAgentDirectory: async () => '/agents/custom',
+      getCustomAgentDirectory: () => Effect.succeed('/agents/custom'),
       openExternalUrl: vi.fn(() => Effect.void),
       openLogFolder: vi.fn(() => Effect.void),
       openPath: vi.fn(() => Effect.void),

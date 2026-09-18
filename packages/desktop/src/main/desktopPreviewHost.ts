@@ -43,14 +43,18 @@ interface DesktopShellAdapter {
  */
 interface DesktopPreviewHost {
   /**
-   * `reportFailure` (default `true`) decides whether the window shows its own
-   * "could not open" dialog before the failure reaches the caller. With it
-   * off, the caller reads the shell's own rejection — which is why this
-   * channel is `unknown` rather than {@link PreviewUnavailable}.
+   * The window shows its own "could not open" dialog and the caller reads
+   * {@link PreviewUnavailable}.
+   */
+  openExternal(url: string): Effect.Effect<void, PreviewUnavailable>;
+  /**
+   * `reportFailure: false` leaves the dialog out and hands the caller the
+   * shell's own rejection, the value it was thrown with — which is why that
+   * form's channel is `unknown` and the default form's is not.
    */
   openExternal(
     url: string,
-    options?: { readonly reportFailure?: boolean },
+    options: { readonly reportFailure?: boolean },
   ): Effect.Effect<void, unknown>;
   /** Open a workspace file in the OS default application. */
   openPath(filePath: string): Effect.Effect<void, PreviewUnavailable>;
@@ -149,6 +153,20 @@ export function createDesktopPreviewHost(
     );
   }
 
+  /** The two forms above as one implementation: the reported one is the
+   *  default, and only the unreported one carries the shell's own value. */
+  function openExternal(url: string): Effect.Effect<void, PreviewUnavailable>;
+  function openExternal(
+    url: string,
+    options: { readonly reportFailure?: boolean },
+  ): Effect.Effect<void, unknown>;
+  function openExternal(
+    url: string,
+    { reportFailure = true }: { readonly reportFailure?: boolean } = {},
+  ): Effect.Effect<void, unknown> {
+    return openExternalProgram(url, reportFailure);
+  }
+
   // Opens the PDF in the renderer's pdf workbench tab (an `<iframe>` on
   // Electron's built-in Chromium viewer), or reports `false` so the caller
   // falls back to `shell.openPath`.
@@ -232,8 +250,7 @@ export function createDesktopPreviewHost(
     openBuildDisplayIn: (roots) => async (location) => {
       await options.runtime.runPromise(buildDisplayProgram(roots, location));
     },
-    openExternal: (url, { reportFailure = true } = {}) =>
-      openExternalProgram(url, reportFailure),
+    openExternal,
     openPath: openPathProgram,
   };
 }
