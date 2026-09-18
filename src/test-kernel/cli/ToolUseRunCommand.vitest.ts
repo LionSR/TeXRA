@@ -115,13 +115,15 @@ describe('CLI run command, tool-use agents', () => {
       inputFiles: ['problem.md'],
       contextFiles: ['notes.md'],
     });
-    mocks.resolveCliRunAgent.mockResolvedValue({
-      name: 'chat',
-      category: AgentCategory.ToolUse,
-      source: 'builtInToolUse',
-      path: '/agents/chat.yaml',
-      tools: ['read_file'],
-    });
+    mocks.resolveCliRunAgent.mockReturnValue(
+      Effect.succeed({
+        name: 'chat',
+        category: AgentCategory.ToolUse,
+        source: 'builtInToolUse',
+        path: '/agents/chat.yaml',
+        tools: ['read_file'],
+      }),
+    );
     mocks.selectCliRunModel.mockImplementation(
       (_context: CliContext, model: string | undefined) =>
         Effect.succeed(model ?? 'gpt54'),

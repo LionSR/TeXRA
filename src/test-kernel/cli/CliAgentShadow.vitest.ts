@@ -11,11 +11,12 @@ import { getAgentsByCategory } from '@agent/index';
 import { refresh } from '@agent/index/agentRegistry';
 import { chatToolUseAgentUsageError } from '@cli/chat/tui/commands/handlers/agentModelCommands';
 import {
-  assertCliAgentLaunch,
+  checkCliAgentLaunch,
   formatCliAgentList,
   resolveCliAgentInCategory,
   resolveCliRunAgent,
 } from '@cli/runtime/agents';
+import type { ProcessServices } from '@platform/processRuntime';
 import { GlobalStorageFs } from '@platform/rootedFs';
 import { AgentCategory } from '@shared/schemas';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
@@ -33,9 +34,11 @@ import type { RootedFileSystem } from '@utils/files/rootedFileSystem';
  * probe read `tools` off the shadow. Validation now resolves through the same
  * category-scoped launch resolver the run itself uses.
  */
-/** The roster slots and runtime a CLI agent lookup takes, off the fake host. */
-function cliAgentServices() {
-  return { ...hostStores(), runtime: testRuntime() };
+/** Settle a CLI agent lookup the way a CLI entry point does. */
+function runCliAgentLookup<A, E>(
+  lookup: Effect.Effect<A, E, ProcessServices>,
+): Promise<A> {
+  return testRuntime().runPromise(lookup);
 }
 
 describe('CLI agent validation with a shadowed name', () => {
@@ -103,7 +106,7 @@ describe('CLI agent validation with a shadowed name', () => {
 
     expect(entry?.source).toBe('builtInToolUse');
     expect(entry?.category).toBe(AgentCategory.ToolUse);
-    expect(assertCliAgentLaunch(hostStores(), 'assistant', entry, 'chat')).toBe(
+    expect(checkCliAgentLaunch(hostStores(), 'assistant', entry, 'chat')).toBe(
       entry,
     );
     expect(
@@ -142,17 +145,23 @@ describe('CLI agent validation with a shadowed name', () => {
   // unambiguous because the registry is keyed by `source:name`.
   it('refuses a shadowed name for `texra run` and names both candidates', async () => {
     await expect(
-      resolveCliRunAgent(cliAgentServices(), 'assistant'),
+      runCliAgentLookup(resolveCliRunAgent(hostStores(), 'assistant')),
     ).rejects.toThrow(
       'Agent name "assistant" is ambiguous: it matches the workflow agent custom:assistant and the toolUse agent builtInToolUse:assistant. Re-run with the source-qualified name to pick one: `texra run custom:assistant` or `texra run builtInToolUse:assistant`.',
     );
     expect(
-      (await resolveCliRunAgent(cliAgentServices(), 'custom:assistant'))
-        .category,
+      (
+        await runCliAgentLookup(
+          resolveCliRunAgent(hostStores(), 'custom:assistant'),
+        )
+      ).category,
     ).toBe(AgentCategory.Workflow);
     expect(
-      (await resolveCliRunAgent(cliAgentServices(), 'builtInToolUse:assistant'))
-        .category,
+      (
+        await runCliAgentLookup(
+          resolveCliRunAgent(hostStores(), 'builtInToolUse:assistant'),
+        )
+      ).category,
     ).toBe(AgentCategory.ToolUse);
   });
 

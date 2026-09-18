@@ -1,4 +1,5 @@
 /* eslint-disable import/order -- Vitest mocks must be declared before importing the runtime under test. */
+import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Shared mock registrations must evaluate before anything that loads
@@ -274,7 +275,7 @@ describe('CLI agents command', () => {
       textContain: 'source: remote',
     },
   ])('$name', async ({ agent, args, textContain }) => {
-    mocks.resolveCliAgent.mockResolvedValue(agent);
+    mocks.resolveCliAgent.mockReturnValue(Effect.succeed(agent));
 
     const exitCode = await showAgent(createRunCommandCliContext(), args);
 
@@ -293,7 +294,7 @@ describe('CLI agents command', () => {
   });
 
   it('reports missing agents after CLI agent resolution misses', async () => {
-    mocks.resolveCliAgent.mockResolvedValue(undefined);
+    mocks.resolveCliAgent.mockReturnValue(Effect.succeed(undefined));
 
     const exitCode = await showAgent(
       createRunCommandCliContext(),

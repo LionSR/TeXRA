@@ -185,10 +185,12 @@ describe('runResumeCommand', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     await seedRunRecord({ config: TOOL_USE_CONFIG });
-    mocks.resolveCliLaunchAgent.mockResolvedValue({
-      name: 'correct',
-      category: AgentCategory.Workflow,
-    });
+    mocks.resolveCliLaunchAgent.mockReturnValue(
+      Effect.succeed({
+        name: 'correct',
+        category: AgentCategory.Workflow,
+      }),
+    );
     mocks.runChat.mockResolvedValue({ exitCode: 0 });
     mocks.executeCliWorkflowConfig.mockResolvedValue(0);
     mocks.assertOutputDirAvailable.mockResolvedValue(undefined);
@@ -303,8 +305,8 @@ describe('runResumeCommand', () => {
 
   it('reports a missing workflow agent as a usage error', async () => {
     await seedRunRecord({ config: WORKFLOW_CONFIG });
-    mocks.resolveCliLaunchAgent.mockRejectedValue(
-      new CliUsageError('Agent not found: correct.'),
+    mocks.resolveCliLaunchAgent.mockReturnValue(
+      Effect.fail(new CliUsageError('Agent not found: correct.')),
     );
 
     await expect(run(cliContext())).resolves.toBe(2);

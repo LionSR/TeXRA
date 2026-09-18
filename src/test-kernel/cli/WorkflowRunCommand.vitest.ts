@@ -397,13 +397,15 @@ describe('CLI run command, workflow agents', () => {
     cliInitPlatformMock.initCliPlatform.mockResolvedValue(platform);
     mocks.writeResultMeta.mockResolvedValue(undefined);
     mocks.finalizeRun.mockResolvedValue({ ok: true });
-    mocks.resolveCliRunAgent.mockResolvedValue({
-      name: 'polish',
-      category: AgentCategory.Workflow,
-      source: 'builtInWorkflow',
-      path: '/agents/polish.yaml',
-      tools: [],
-    });
+    mocks.resolveCliRunAgent.mockReturnValue(
+      Effect.succeed({
+        name: 'polish',
+        category: AgentCategory.Workflow,
+        source: 'builtInWorkflow',
+        path: '/agents/polish.yaml',
+        tools: [],
+      }),
+    );
     mocks.selectCliRunModel.mockImplementation(
       (_context: CliContext, model: string | undefined) =>
         Effect.succeed(model ?? 'deepseekT'),
