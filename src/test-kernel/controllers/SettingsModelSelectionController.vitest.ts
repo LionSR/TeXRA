@@ -19,15 +19,12 @@ import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 
 /** The controller's deps are file-local; derive them from its constructor. */
 type SettingsModelSelectionControllerDeps = ConstructorParameters<
-  typeof SettingsModelSelectionController
+  typeof SettingsModelSelectionController<never>
 >[0];
 
 // Stub the injected availability resolver so the controller stays decoupled
 // from the global platform / server-side key service in unit tests.
-const resolveModelOptions = async (
-  _stores: ModelOptionStores,
-  models: readonly string[],
-): Promise<ModelOptionData[]> =>
+const modelOptions = (models: readonly string[]): ModelOptionData[] =>
   models
     .map((model) => {
       const config = getRuntimeModelConfig(model);
@@ -40,14 +37,19 @@ const resolveModelOptions = async (
       availability: 'provider-key',
     }));
 
+const resolveModelOptions = (
+  _stores: ModelOptionStores,
+  models: readonly string[],
+): Effect.Effect<ModelOptionData[]> => Effect.succeed(modelOptions(models));
+
 function createController(
   overrides: Partial<SettingsModelSelectionControllerDeps> = {},
 ): SettingsModelSelectionController {
-  return new SettingsModelSelectionController({
+  return new SettingsModelSelectionController<never>({
     stores: makeFakeSettingsStores().stores,
     secrets: new FakeSecrets(),
     resolveModelOptions,
-    getCopilotRoutes: async () => new Map(),
+    copilotRoutes: Effect.succeed(new Map()),
     getPreferredCopilotRouteModels: () => [],
     ...overrides,
   });
@@ -89,7 +91,7 @@ describe('SettingsModelSelectionController', () => {
       },
     });
 
-    const { models } = await controller.buildSelectionData();
+    const { models } = await Effect.runPromise(controller.buildSelectionData());
     const kimi3 = models.find((model) => model.name === 'kimi3');
 
     expect(MODEL_CONFIGS.kimi3.capabilities).toMatchObject({
@@ -103,7 +105,7 @@ describe('SettingsModelSelectionController', () => {
   it('groups membership models under Kimi Code rather than Moonshot', async () => {
     const controller = createController();
 
-    const { models } = await controller.buildSelectionData();
+    const { models } = await Effect.runPromise(controller.buildSelectionData());
 
     expect(models.find((model) => model.name === 'kimiCoding')).toMatchObject({
       provider: 'kimiCode',
@@ -113,20 +115,22 @@ describe('SettingsModelSelectionController', () => {
 
   it('keeps Kimi K3 under Moonshot while preserving its effective route', async () => {
     const controller = createController({
-      resolveModelOptions: async (stores, models) =>
-        (await resolveModelOptions(stores, models)).map((option) =>
-          option.value === 'kimi3'
-            ? {
-                ...option,
-                provider: 'kimiCode',
-                routeLabel: 'Via Kimi Code',
-              }
-            : option,
+      resolveModelOptions: (_stores, models) =>
+        Effect.succeed(
+          modelOptions(models).map((option) =>
+            option.value === 'kimi3'
+              ? {
+                  ...option,
+                  provider: 'kimiCode',
+                  routeLabel: 'Via Kimi Code',
+                }
+              : option,
+          ),
         ),
     });
 
     expect(
-      (await controller.buildSelectionData()).models.find(
+      (await Effect.runPromise(controller.buildSelectionData())).models.find(
         (model) => model.name === 'kimi3',
       ),
     ).toMatchObject({
@@ -147,7 +151,9 @@ describe('SettingsModelSelectionController', () => {
       stores: { ...makeFakeSettingsStores().stores, globalState },
     });
 
-    expect((await controller.buildSelectionData()).helperModel).toBe('gpt55');
+    expect(
+      (await Effect.runPromise(controller.buildSelectionData())).helperModel,
+    ).toBe('gpt55');
 
     await Effect.runPromise(
       controller.setModelEnabled({ modelName: 'gpt55', enabled: false }),
@@ -193,7 +199,7 @@ describe('SettingsModelSelectionController', () => {
       stores: { ...makeFakeSettingsStores().stores, globalState },
     });
 
-    const { models } = await controller.buildSelectionData();
+    const { models } = await Effect.runPromise(controller.buildSelectionData());
     const enabled = models.filter((model) => model.enabled);
 
     // A retired-only selection must not blank out the helper-model dropdown.
@@ -228,7 +234,7 @@ describe('SettingsModelSelectionController', () => {
 
   it('shows the defaults when the stored selection is malformed', async () => {
     const enabledNames = async (controller: SettingsModelSelectionController) =>
-      (await controller.buildSelectionData()).models
+      (await Effect.runPromise(controller.buildSelectionData())).models
         .filter((model) => model.enabled)
         .map((model) => model.name);
     const malformed = createController({
@@ -250,7 +256,9 @@ describe('SettingsModelSelectionController', () => {
       getPreferredCopilotRouteModels: () => ['sonnet46'],
     });
 
-    expect((await controller.buildSelectionData()).copilotModels).toEqual([
+    expect(
+      (await Effect.runPromise(controller.buildSelectionData())).copilotModels,
+    ).toEqual([
       {
         name: 'sonnet46',
         label: MODEL_CONFIGS.sonnet46.label,
@@ -263,18 +271,19 @@ describe('SettingsModelSelectionController', () => {
   it('does not expose reasoning controls for a preferred VS Code route', async () => {
     const controller = createController({
       getPreferredCopilotRouteModels: () => ['sonnet46'],
-      getCopilotRoutes: async () =>
+      copilotRoutes: Effect.succeed(
         sonnet46CopilotRoutes('allowed', {
           ...MODEL_CONFIGS.sonnet46.capabilities,
           supportsReasoningEffort: false,
           maxReasoningEffort: undefined,
           supportedReasoningEfforts: undefined,
         }),
+      ),
     });
 
-    const sonnet = (await controller.buildSelectionData()).models.find(
-      (model) => model.name === 'sonnet46',
-    );
+    const sonnet = (
+      await Effect.runPromise(controller.buildSelectionData())
+    ).models.find((model) => model.name === 'sonnet46');
     expect(MODEL_CONFIGS.sonnet46.capabilities.supportsReasoningEffort).toBe(
       true,
     );
@@ -284,10 +293,12 @@ describe('SettingsModelSelectionController', () => {
 
   it('surfaces discovered Copilot routes as route status, never as picker rows', async () => {
     const controller = createController({
-      getCopilotRoutes: async () => sonnet46CopilotRoutes('consent-required'),
+      copilotRoutes: Effect.succeed(sonnet46CopilotRoutes('consent-required')),
     });
 
-    const { models, copilotModels } = await controller.buildSelectionData();
+    const { models, copilotModels } = await Effect.runPromise(
+      controller.buildSelectionData(),
+    );
 
     expect(copilotModels).toEqual([
       {

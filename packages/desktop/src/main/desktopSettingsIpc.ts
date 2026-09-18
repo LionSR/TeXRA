@@ -191,7 +191,9 @@ export function createDesktopSettingsIpc(
 
   async function postModelSelectionData(): Promise<void> {
     options.postToRenderer(
-      await modelSelectionController.buildModelSelectionMessage(),
+      await runtime.runPromise(
+        modelSelectionController.buildModelSelectionMessage(),
+      ),
     );
   }
 

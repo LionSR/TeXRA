@@ -60,6 +60,7 @@ import {
 } from '@model/runtimeModelRegistry';
 import { setCopilotRoutePreference } from '@model/copilotRouting';
 import type { StateStore } from '@platform/interfaces';
+import type { LanguageModel } from '@platform/languageModel';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import { revealProgressRun } from '@progressView/progressNavigation';
@@ -141,7 +142,7 @@ export class SettingsViewMessageHandler {
   private readonly chatgptHandlers: SubscriptionHandlers;
   private readonly grokHandlers: SubscriptionHandlers;
   private readonly memoryController: SettingsMemoryController;
-  private readonly modelSelectionController: SettingsModelSelectionController;
+  private readonly modelSelectionController: SettingsModelSelectionController<LanguageModel>;
   private readonly profileController: SettingsProfileController;
   private readonly profileKeyController: SettingsProfileKeyController;
   private readonly subscriptionUsage: SubscriptionUsageService;
@@ -161,17 +162,12 @@ export class SettingsViewMessageHandler {
     this.modelSelectionController = new SettingsModelSelectionController({
       stores: session.roots,
       secrets,
-      // The availability read is an Effect; this is the boundary that holds a
-      // runtime to run it on, so the controller takes its rows as data.
-      resolveModelOptions: async (stores, models) =>
-        modelOptionsFrom(
-          await this.runtime.runPromise(
-            readModelAvailabilityInputs(stores, models),
-          ),
+      resolveModelOptions: (stores, models) =>
+        Effect.map(
+          readModelAvailabilityInputs(stores, models),
+          modelOptionsFrom,
         ),
-      // The route catalogue read is an Effect for the same reason.
-      getCopilotRoutes: () =>
-        this.runtime.runPromise(discoveredCopilotRoutes()),
+      copilotRoutes: discoveredCopilotRoutes(),
     });
     this.profileController = new SettingsProfileController({
       host: 'vscode',
@@ -179,10 +175,7 @@ export class SettingsViewMessageHandler {
       // controller takes the session's three stores rather than one store and
       // a config reader.
       stores: session.roots,
-      // The key-status read is an Effect; this is the boundary that holds a
-      // runtime to settle it on.
-      loadProviderKeyStatuses: () =>
-        this.runtime.runPromise(loadApiKeyStatusMap(secrets, API_PROVIDERS)),
+      loadProviderKeyStatuses: loadApiKeyStatusMap(secrets, API_PROVIDERS),
     });
     this.subscriptionUsage = new SubscriptionUsageService({
       secrets,
@@ -689,14 +682,18 @@ export class SettingsViewMessageHandler {
 
   private async sendModelSelectionData(webview: vscode.Webview): Promise<void> {
     await webview.postMessage(
-      await this.modelSelectionController.buildModelSelectionMessage(),
+      await this.runtime.runPromise(
+        this.modelSelectionController.buildModelSelectionMessage(),
+      ),
     );
   }
 
   /** Post the model-selection payload to whichever webview is active. */
   private async postModelSelectionData(): Promise<void> {
     await this.postMessageToActiveWebview(
-      await this.modelSelectionController.buildModelSelectionMessage(),
+      await this.runtime.runPromise(
+        this.modelSelectionController.buildModelSelectionMessage(),
+      ),
     );
   }
 

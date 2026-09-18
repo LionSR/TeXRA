@@ -20,7 +20,6 @@ import {
   getProviderKeyUrl,
   supportsCustomEndpoint,
 } from '@utils/config/providerConfig';
-import { ensureError } from '@utils/errors/errorMessage';
 
 /**
  * Host-supplied storage wiring: `stores` and `loadProviderKeyStatuses` depend
@@ -34,8 +33,10 @@ interface SettingsProfileControllerDeps {
   readonly host: SettingHost;
   /** The three setting slots a catalog row resolves against. */
   readonly stores: SettingsStores;
-  loadProviderKeyStatuses(): Promise<
-    Record<string, ProviderKeyStatus['status']>
+  /** The host's key-status read, as the program it already was. */
+  readonly loadProviderKeyStatuses: Effect.Effect<
+    Record<string, ProviderKeyStatus['status']>,
+    Error
   >;
 }
 
@@ -55,19 +56,13 @@ export class SettingsProfileController {
     this: SettingsProfileController,
   ): Effect.fn.Return<UpdateProfileMessage, Error, SupabaseAuth> {
     const auth = yield* SupabaseAuth;
-    const [storedSessionState, providerKeyStatuses] = yield* Effect.all(
-      [
-        auth.storedSessionState,
-        Effect.tryPromise({
-          try: () => this.getProviderKeyStatuses(),
-          catch: ensureError,
-        }),
-      ],
+    const [storedSessionState, secretStatuses] = yield* Effect.all(
+      [auth.storedSessionState, this.deps.loadProviderKeyStatuses],
       { concurrency: 'unbounded' },
     );
     const base = {
       command: SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE,
-      providerKeyStatuses,
+      providerKeyStatuses: this.providerKeyStatuses(secretStatuses),
     };
 
     // Preserve the distinction between an authoritatively rejected refresh
@@ -114,8 +109,9 @@ export class SettingsProfileController {
   /**
    * Map every canonical provider id to its key status and native controls.
    */
-  private async getProviderKeyStatuses(): Promise<ProviderKeyStatus[]> {
-    const secretStatuses = await this.deps.loadProviderKeyStatuses();
+  private providerKeyStatuses(
+    secretStatuses: Record<string, ProviderKeyStatus['status']>,
+  ): ProviderKeyStatus[] {
     return API_PROVIDERS.map((provider) => ({
       provider,
       displayName: this.getProviderDisplayName(provider),
