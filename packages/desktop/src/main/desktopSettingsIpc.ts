@@ -62,8 +62,6 @@ export interface DesktopSettingsUiHost extends Pick<
   MessageHost,
   'showInfoMessage' | 'showErrorMessage'
 > {
-  /** The window's shell-facing open verb, Effect-typed since the ruling of
-   *  2026-09-18 retired this fan-out's Promise face. */
   openPath(filePath: string): Effect.Effect<void, unknown>;
   /**
    * Select the run as the window's active run. `'unavailable'` covers a

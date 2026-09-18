@@ -115,8 +115,6 @@ interface DefaultDesktopAgentSettingsControllerOptions extends SettingsStatePort
       source: AgentSource,
     ) => Effect.Effect<string | undefined, AgentDirectoriesFailed>;
     readonly selectCustomAgentDirectory: () => Promise<string | undefined>;
-    /** The window's shell-facing `openPath`, Effect-typed since the ruling of
-     *  2026-09-18 retired its Promise face. */
     readonly openPath: (
       filePath: string,
     ) => Effect.Effect<void, PreviewUnavailable>;

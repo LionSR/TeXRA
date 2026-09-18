@@ -27,9 +27,8 @@ export interface DesktopAgentRunHost
    */
   showErrorDialog(message: string, docsCommand?: string): Promise<void>;
   pickTranscriptExportFormat(): Promise<TranscriptExportFormat | undefined>;
-  /** The window's shell-facing open verb, Effect-typed since the ruling of
-   *  2026-09-18 retired this fan-out's Promise face. `line` is carried for the
-   *  hosts that can reveal one; the desktop hands the path to the OS. */
+  /** `line` is carried for the hosts that can reveal one; the desktop hands
+   *  the path to the OS. */
   openPath(
     filePath: string,
     line?: number,

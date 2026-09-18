@@ -104,8 +104,6 @@ interface DesktopHostRequestsOptions {
     DesktopOnboardingIpc,
     'skipOnboarding' | 'skipSetup' | 'runSetup' | 'signInWithChatGpt'
   >;
-  /** The window's shell-facing `openExternal`, Effect-typed since the ruling
-   *  of 2026-09-18 retired this fan-out's Promise face. */
   openExternalUrl(url: string): Effect.Effect<void, unknown>;
   /** Re-probe the LaTeX toolchain. */
   recheckTools(): Promise<void>;

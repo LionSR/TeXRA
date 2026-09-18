@@ -78,8 +78,8 @@ export interface DesktopSupabaseAuthHost extends Pick<
   MessageHost,
   'showInfoMessage' | 'showErrorMessage'
 > {
-  /** The window's shell-facing `openExternal`, with its own "could not open"
-   *  dialog suppressed: this flow words a missing browser itself. */
+  /** The window's `openExternal` with its own "could not open" dialog
+   *  suppressed: this flow words a missing browser itself. */
   openExternalUrl(url: string): Effect.Effect<void, unknown>;
   onSessionChanged(): Promise<void> | void;
 }

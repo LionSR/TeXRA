@@ -55,8 +55,6 @@ interface DesktopShellActionFactoryOptions extends Pick<
   'showInfoMessage'
 > {
   getCustomAgentDirectory(): Promise<string>;
-  /** The window's shell-facing open surface, Effect-typed since the ruling of
-   *  2026-09-18 retired its Promise face. */
   openExternalUrl(url: string): Effect.Effect<void, unknown>;
   openLogFolder(): Effect.Effect<void, unknown>;
   openPath(filePath: string): Effect.Effect<void, unknown>;
