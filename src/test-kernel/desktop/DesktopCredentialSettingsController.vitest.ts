@@ -127,11 +127,13 @@ async function createFixture({
     reason: 'missing_credentials' as const,
   });
   const subscriptionUsage = {
-    getAllUsage: vi.fn(async () => ({
-      chatgpt: unavailable('chatgpt'),
-      kimiCode: unavailable('kimiCode'),
-      glmCodingPlan: unavailable('glmCodingPlan'),
-    })),
+    getAllUsage: vi.fn(() =>
+      Effect.succeed({
+        chatgpt: unavailable('chatgpt'),
+        kimiCode: unavailable('kimiCode'),
+        glmCodingPlan: unavailable('glmCodingPlan'),
+      }),
+    ),
     invalidate: vi.fn(),
   };
 
