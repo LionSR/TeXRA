@@ -30,6 +30,8 @@ export type CodexTokenResponse = z.infer<typeof CodexTokenResponseSchema>;
 export const CodexSessionSchema = SubscriptionSessionBaseSchema.extend({
   accountId: z.string().min(1).optional(),
   email: z.string().min(1).optional(),
+  /** The ChatGPT plan the token was issued for (`plus`, `pro`, `team`, ...). */
+  planType: z.string().min(1).optional(),
 });
 export type CodexSession = z.infer<typeof CodexSessionSchema>;
 

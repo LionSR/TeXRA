@@ -217,7 +217,7 @@ describe('formatResumeHint', () => {
     {
       usageRoute: 'chatgpt-subscription',
       cost: 0,
-      expected: 'Free via ChatGPT',
+      expected: 'Included in ChatGPT subscription',
     },
     {
       usageRoute: 'api-key',

@@ -131,6 +131,9 @@ export interface BoundModel {
   readonly model: Model;
   readonly origin: ModelOrigin;
   readonly usageRoute: UsageRoute;
+  /** The route's subscription plan, when it names one; display-only. Absent
+   *  on every route that is not a subscription, which is most of them. */
+  readonly usagePlan?: string;
   readonly contextWindow: number;
   readonly supportsVision: boolean;
   /** The media-input pipeline takes a bound model structurally, so these two
@@ -1020,6 +1023,9 @@ export const bindModel = Effect.fn('bindModel')(function* (
     model,
     origin,
     usageRoute: credential.usageRoute,
+    ...(credential.route === 'chatgpt-subscription' && credential.plan
+      ? { usagePlan: credential.plan }
+      : {}),
     contextWindow: config.contextWindow,
     supportsVision: config.capabilities.supportsVision,
     supportsNativePdf: config.capabilities.supportsNativePdf,

@@ -92,7 +92,11 @@ function formatResumeUsage(
   lines.push(`output=${usage.outputTokens.toLocaleString('en-US')}`);
   if (reasoning > 0)
     lines.push(`(reasoning ${reasoning.toLocaleString('en-US')})`);
-  const costLine = usageCostLabel(usage.cost, usage.usageRoute);
+  const costLine = usageCostLabel(
+    usage.cost,
+    usage.usageRoute,
+    usage.usagePlan,
+  );
   return costLine
     ? `Token usage: ${lines.join(' ')}\nSession cost: ${costLine}`
     : `Token usage: ${lines.join(' ')}`;

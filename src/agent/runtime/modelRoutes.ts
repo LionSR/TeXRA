@@ -126,6 +126,9 @@ type SubscriptionRouteCredential =
       readonly route: 'chatgpt-subscription';
       readonly accessToken: string;
       readonly accountId: string | null;
+      /** The ChatGPT plan the session's token names, when it names one. It
+       *  is display-only: the backend decides what the plan may call. */
+      readonly plan: string | undefined;
       /** The Codex backend's bare model id, which differs from the API's. */
       readonly requestedModel: string;
       readonly endpoint: string;
@@ -222,13 +225,15 @@ export const resolveSubscriptionCredential = Effect.fn(
     const session = yield* Effect.gen(function* () {
       const accessToken = yield* coordinator.getFreshAccessToken();
       const accountId = (yield* coordinator.getAccountId()) ?? null;
-      return { accessToken, accountId };
+      const plan = yield* coordinator.getPlanType();
+      return { accessToken, accountId, plan };
     }).pipe(Effect.mapError(codexAuthFailure));
     return {
       credential: {
         route: 'chatgpt-subscription',
         accessToken: session.accessToken,
         accountId: session.accountId,
+        plan: session.plan,
         requestedModel: codexBackendModelId(config),
         endpoint: CODEX_BACKEND_BASE_URL,
         provider,

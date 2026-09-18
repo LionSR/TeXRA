@@ -33,12 +33,18 @@ export const TokenUsageStatsSchema = z.strictObject({
   cacheCreationInputTokens: TokenCountSchema.optional(),
   reasoningTokens: TokenCountSchema.optional(),
   usageRoute: UsageRouteSchema.optional(),
+  /** The subscription plan that covered this usage, when the route names one
+   *  (today only `chatgpt-subscription`). Recorded per usage row so a resumed
+   *  run still reports the plan it actually ran on, not today's. */
+  usagePlan: z.string().optional(),
 });
 
 export type TokenUsageStats = z.infer<typeof TokenUsageStatsSchema>;
 
-type EmptyUsageStats = Required<Omit<TokenUsageStats, 'usageRoute'>> &
-  Pick<TokenUsageStats, 'usageRoute'>;
+type EmptyUsageStats = Required<
+  Omit<TokenUsageStats, 'usageRoute' | 'usagePlan'>
+> &
+  Pick<TokenUsageStats, 'usageRoute' | 'usagePlan'>;
 
 /** Returns zero-initialized usage stats. */
 export function emptyUsageStats(): EmptyUsageStats {
@@ -72,7 +78,9 @@ export function sumUsageStats(
 ): TokenUsageStats {
   const total = emptyUsageStats();
   let commonUsageRoute: UsageRoute | undefined;
+  let commonUsagePlan: string | undefined;
   let hasMixedOrMissingUsageRoute = false;
+  let hasMixedOrMissingUsagePlan = false;
   for (const usage of items) {
     total.inputTokens += usage.inputTokens;
     total.outputTokens += usage.outputTokens;
@@ -82,6 +90,14 @@ export function sumUsageStats(
     total.cacheCreationInputTokens += usage.cacheCreationInputTokens ?? 0;
     total.reasoningTokens += usage.reasoningTokens ?? 0;
     if (!isEmptyUsage(usage)) {
+      const usagePlan = usage.usagePlan;
+      if (usagePlan == null) {
+        hasMixedOrMissingUsagePlan = true;
+      } else if (commonUsagePlan == null) {
+        commonUsagePlan = usagePlan;
+      } else if (commonUsagePlan !== usagePlan) {
+        hasMixedOrMissingUsagePlan = true;
+      }
       const usageRoute = usage.usageRoute;
       if (usageRoute == null) {
         hasMixedOrMissingUsageRoute = true;
@@ -94,6 +110,9 @@ export function sumUsageStats(
   }
   if (commonUsageRoute && !hasMixedOrMissingUsageRoute) {
     total.usageRoute = commonUsageRoute;
+  }
+  if (commonUsagePlan && !hasMixedOrMissingUsagePlan) {
+    total.usagePlan = commonUsagePlan;
   }
   return total;
 }

@@ -554,7 +554,8 @@ describe('model availability', () => {
         expect(model.availability).toBe('subscription-access');
         expect(model.context).toBe(
           `${Math.round(
-            (CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.defaultValue +
+            (CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.defaultValue *
+              CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.tokensPerUnit +
               MODEL_CONFIGS.gpt55.maxOutputTokens) /
               1000,
           )}K`,
