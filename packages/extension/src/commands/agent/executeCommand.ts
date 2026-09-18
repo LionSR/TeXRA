@@ -22,8 +22,7 @@ const log = createLog('ExecuteCommand');
  * The "wrapped" launch shape — `{ config, runId?, ... }` — as opposed to
  * a bare `AgentConfig` passed directly (see `runExecuteCommand`'s doc
  * comment). `config` is validated separately against `AgentConfigSchema`, so
- * it stays `z.unknown()` here. `onRun` is a live callback, not serializable
- * data, so it is read directly off the input rather than run through Zod.
+ * it stays `z.unknown()` here.
  */
 const WrappedExecuteInputSchema = z.object({
   config: z.unknown(),
@@ -53,15 +52,14 @@ export const runExecuteCommand = Effect.fn('runExecuteCommand')(function* (
   const parsed = yield* Effect.result(
     Effect.try({
       try: () => {
-        const isWrapped =
-          input !== null && typeof input === 'object' && 'config' in input;
-        const wrapped = isWrapped
-          ? WrappedExecuteInputSchema.parse(input)
-          : null;
+        const wrapped =
+          input !== null && typeof input === 'object' && 'config' in input
+            ? WrappedExecuteInputSchema.parse(input)
+            : null;
         const config = AgentConfigSchema.parse(
           wrapped ? wrapped.config : input,
         );
-        return { wrapped, isWrapped, config };
+        return { wrapped, config };
       },
       catch: ensureError,
     }),
@@ -76,9 +74,7 @@ export const runExecuteCommand = Effect.fn('runExecuteCommand')(function* (
     }
     return yield* Effect.fail(error);
   }
-  const { wrapped, isWrapped, config } = parsed.success;
-  // Not data, so it bypasses the Zod schema above — see that schema's doc.
-  const onRun = isWrapped ? (input as { onRun?: () => void }).onRun : undefined;
+  const { wrapped, config } = parsed.success;
 
   const request = wrapped?.runId
     ? ({ kind: 'resume', config, runId: wrapped.runId } as const)
@@ -94,7 +90,6 @@ export const runExecuteCommand = Effect.fn('runExecuteCommand')(function* (
     preferHelperModel: wrapped?.preferHelperModel ?? false,
     modelCompatibilityKey: wrapped?.modelCompatibilityKey,
     ownApiKeyFallback: wrapped?.ownApiKeyFallback,
-    onRun: onRun && (() => Effect.sync(onRun)),
     onRunResolved: presentLaunchedProgressRun,
   });
 });
