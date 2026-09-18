@@ -98,7 +98,7 @@ async function createHandlerFixture(options: HandlerFixtureOptions = {}) {
       postMessageToActiveWebview: async () => {},
     },
     refreshAfterAgentMutation,
-    globalState,
+    { workspaceState, globalState },
     testRuntime(),
   );
 
