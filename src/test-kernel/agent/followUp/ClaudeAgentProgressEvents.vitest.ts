@@ -1,4 +1,5 @@
 // Third-party imports
+import { Effect } from 'effect';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
@@ -40,19 +41,21 @@ function collectToolLogs(store: StreamLog): unknown[] {
 }
 
 function runTurn(logger: AgentTrace) {
-  return runStreamedTurn({
-    prompt: 'Run lint',
-    logger,
-    signal: new AbortController().signal,
-    model: 'claude-sonnet-4-6',
-    permissionMode: 'acceptEdits',
-    effort: 'high',
-    cwd: undefined,
-    additionalDirectories: undefined,
-    env: {},
-    resumeSessionId: undefined,
-    pathToClaudeCodeExecutable: undefined,
-  });
+  return Effect.runPromise(
+    runStreamedTurn({
+      prompt: 'Run lint',
+      logger,
+      signal: new AbortController().signal,
+      model: 'claude-sonnet-4-6',
+      permissionMode: 'acceptEdits',
+      effort: 'high',
+      cwd: undefined,
+      additionalDirectories: undefined,
+      env: {},
+      resumeSessionId: undefined,
+      pathToClaudeCodeExecutable: undefined,
+    }),
+  );
 }
 
 describe('claude agent progress events', () => {
