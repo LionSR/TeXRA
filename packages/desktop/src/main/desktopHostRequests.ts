@@ -150,9 +150,10 @@ export interface DesktopHostRequests {
 const LATEXDIFF_CHANNEL = 'DesktopHostRequests';
 
 /**
- * A desktop capability that still answers with a promise rejected. `member`
- * names which one; `cause` is the value the promise rejected with, which the
- * request's dialog classifies and presents as it presented the bare rejection.
+ * A desktop capability failed on a channel this request has no tag for.
+ * `member` names which one; `cause` is the value it failed or rejected with,
+ * which the request's dialog classifies and presents as it presented the bare
+ * rejection.
  */
 class HostCallFailed extends Data.TaggedError('HostCallFailed')<{
   readonly member: string;
