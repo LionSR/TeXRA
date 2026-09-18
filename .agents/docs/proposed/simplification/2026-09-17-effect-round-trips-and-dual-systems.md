@@ -477,7 +477,7 @@ item, not a round trip.
 | D32 | Finish the project rename                                          | new    | Mechanical `task` to `project` in the desktop shell and run storage, no aliases.                                                                                                                                    | 0 net                                        | quiet window                                               |
 | D33 | Render the run label in the goal list                              | new    | `GoalTab.ts:125` shows bare hex.                                                                                                                                                                                    | ~+15 LoC                                     | independent                                                |
 | D34 | Close the 1.0 release gates                                        | #12168 | Prerelease-admitting publish path; user-facing note that 0.40 state is not imported.                                                                                                                                | shipping blocker                             | independent                                                |
-| D35 | Storage and file-ownership remainders                              | #11867 | Inquiry metadata onto SQLite; a durable owner for run-directory removal; reflection recovery digest.                                                                                                                | design                                       | after D19                                                  |
+| D35 | Storage and file-ownership remainders                              | #11867 | A durable owner for run-directory removal; reflection recovery digest. (Inquiry metadata was already SQLite rows before this ledger was written: `090ce86bc4`, 2026-09-09.)                                         | design                                       | after D19                                                  |
 | D36 | Measure the acceptance gates or strike them                        | #12076 | One measurement record for cold open, stop latency, commit latency; strike the rest.                                                                                                                                | docs                                         | independent                                                |
 | D37 | Shrink the test-tier baselines                                     | #12528 | `host-agent-mock` tuples out via per-test layers; test-runtime hygiene.                                                                                                                                             | baseline shrink                              | independent                                                |
 
@@ -494,9 +494,14 @@ item, not a round trip.
   (D6) is debt. The `stream_id` rename is struck (section 2).
 - `2026-09-09-texra-1-0-implementation-plan.md` §2 and §3 describe a runtime
   that no longer exists; the compatibility-key and compaction rows are not
-  retirement targets; §7's issue dispositions are stale.
-- `2026-09-15-effect-native-completion-protocol.md`: `platform()` is 4 files
-  / 13 sites, ambient 18 / 26, catch 2 / 2; `currentSession` and
+  retirement targets; §7's issue dispositions are stale. Its two
+  inquiry-metadata rows (the `writeAtomic` caveat and step C) are struck as of
+  2026-09-18: inquiry records have been SQLite rows since `090ce86bc4`
+  (2026-09-09), so `writeAtomic`'s caveat covers memory files and CLI input
+  history only.
+- `2026-09-15-effect-native-completion-protocol.md`: `platform()` was 4 files
+  / 13 sites, ambient 18 / 26, catch 2 / 2 when this ledger was written, and is
+  3 / 3, 3 / 4 and 2 / 2 as of 2026-09-19; `currentSession` and
   `defaultSession` do not exist in production, but `packages/agent/dist/types`
   still advertises them (rebuild).
 - `2026-08-26-effect-4-runtime-migration.md`: §15 decisions 4 and 5 shipped;
