@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import { useApp, useWindowSize } from 'ink';
 
 import { renderCliPrompt } from '@cli/tui/renderCliPrompt';
@@ -35,28 +36,30 @@ export function ConfigApp(props: {
   );
 }
 
-export async function runConfigTui(options: {
+export function runConfigTui(options: {
   readonly stores: SettingsStores;
   readonly secrets: PlatformSecrets;
   readonly runtime: ProcessRuntime;
   readonly workspaceRoot: string | undefined;
   readonly colorEnabled?: boolean;
   readonly onError?: (error: unknown) => void;
-}): Promise<void> {
-  await renderCliPrompt(
-    () => (
-      <ConfigApp
-        stores={options.stores}
-        secrets={options.secrets}
-        workspaceRoot={options.workspaceRoot}
-        runtime={options.runtime}
-        onError={options.onError}
-      />
+}): Effect.Effect<void> {
+  return Effect.asVoid(
+    renderCliPrompt(
+      () => (
+        <ConfigApp
+          stores={options.stores}
+          secrets={options.secrets}
+          workspaceRoot={options.workspaceRoot}
+          runtime={options.runtime}
+          onError={options.onError}
+        />
+      ),
+      {
+        stdout: process.stdout,
+        stderr: process.stderr,
+        colorEnabled: options.colorEnabled,
+      },
     ),
-    {
-      stdout: process.stdout,
-      stderr: process.stderr,
-      colorEnabled: options.colorEnabled,
-    },
   );
 }

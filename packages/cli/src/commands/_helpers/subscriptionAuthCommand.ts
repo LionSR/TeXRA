@@ -1,4 +1,5 @@
 import { defineCommand, type CommandDef } from 'citty';
+import { Effect } from 'effect';
 
 import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
@@ -55,42 +56,41 @@ export function defineSubscriptionAuthCommand(
     init: { device: boolean; noBrowser: boolean },
   ): Promise<number> {
     const services = await initCliPlatform({ ...context, quietLogs: true });
-    const { runtime } = services;
     const writeProgress = cliProgressWriter(context);
 
-    const signInResult = await withCliAuthError(() =>
-      runtime.runPromise(
-        signInCliSubscription(
-          options.providerId,
-          { ...init, device: shouldUseSubscriptionDeviceCode(context, init) },
-          { writeProgress },
-        ),
-      ),
-    );
-    if (!signInResult.ok) return CliExitCode.ModelOrNetworkError;
+    return services.runtime.runPromise(
+      Effect.gen(function* () {
+        const signInResult = yield* withCliAuthError(
+          signInCliSubscription(
+            options.providerId,
+            { ...init, device: shouldUseSubscriptionDeviceCode(context, init) },
+            { writeProgress },
+          ),
+        );
+        if (!signInResult.ok) return CliExitCode.ModelOrNetworkError;
 
-    const update = await runtime.runPromise(
-      provider.setPreferSubscription(services, true),
+        const update = yield* provider.setPreferSubscription(services, true);
+        const account = signInResult.value;
+        const payload = {
+          authenticated: true,
+          email: account.email ?? null,
+          ...options.loginPayloadExtras?.(account),
+          preferSubscription: update.effective,
+        };
+        const signedIn = ACCOUNT_OUTCOME.signedInAs(
+          provider.displayName,
+          account.label,
+        );
+        emitCliResult(context, {
+          json: payload,
+          ndjson: { kind: ndjsonKind, ...payload },
+          text: update.effective
+            ? `${signedIn}\n${provider.displayName} subscription enabled for ${provider.modelFamily}.`
+            : `${signedIn}\n${provider.displayName} subscription preference could not be enabled because a more specific setting overrides the config.`,
+        });
+        return CliExitCode.Success;
+      }),
     );
-    const account = signInResult.value;
-    const payload = {
-      authenticated: true,
-      email: account.email ?? null,
-      ...options.loginPayloadExtras?.(account),
-      preferSubscription: update.effective,
-    };
-    const signedIn = ACCOUNT_OUTCOME.signedInAs(
-      provider.displayName,
-      account.label,
-    );
-    emitCliResult(context, {
-      json: payload,
-      ndjson: { kind: ndjsonKind, ...payload },
-      text: update.effective
-        ? `${signedIn}\n${provider.displayName} subscription enabled for ${provider.modelFamily}.`
-        : `${signedIn}\n${provider.displayName} subscription preference could not be enabled because a more specific setting overrides the config.`,
-    });
-    return CliExitCode.Success;
   }
 
   const loginCommand = defineCliCommand({
@@ -129,27 +129,28 @@ export function defineSubscriptionAuthCommand(
         ...context,
         quietLogs: true,
       });
-      const { runtime } = services;
-      const signOutResult = await withCliAuthError(() =>
-        runtime.runPromise(
-          signOutCliSubscription(services, options.providerId),
-        ),
+      return services.runtime.runPromise(
+        Effect.gen(function* () {
+          const signOutResult = yield* withCliAuthError(
+            signOutCliSubscription(services, options.providerId),
+          );
+          if (!signOutResult.ok) return CliExitCode.ModelOrNetworkError;
+          const update = signOutResult.value;
+          const payload = {
+            authenticated: false,
+            preferSubscription: update.preferenceUpdate?.effective ?? null,
+            ...(update.preferenceError
+              ? { preferenceError: update.preferenceError }
+              : {}),
+          };
+          emitCliResult(context, {
+            json: payload,
+            ndjson: { kind: ndjsonKind, ...payload },
+            text: subscriptionSignOutOutcomeMessage(options.providerId, update),
+          });
+          return CliExitCode.Success;
+        }),
       );
-      if (!signOutResult.ok) return CliExitCode.ModelOrNetworkError;
-      const update = signOutResult.value;
-      const payload = {
-        authenticated: false,
-        preferSubscription: update.preferenceUpdate?.effective ?? null,
-        ...(update.preferenceError
-          ? { preferenceError: update.preferenceError }
-          : {}),
-      };
-      emitCliResult(context, {
-        json: payload,
-        ndjson: { kind: ndjsonKind, ...payload },
-        text: subscriptionSignOutOutcomeMessage(options.providerId, update),
-      });
-      return CliExitCode.Success;
     },
   });
 
@@ -161,19 +162,23 @@ export function defineSubscriptionAuthCommand(
     args: { ...GLOBAL_ARGS },
     async run(context) {
       const services = await initCliPlatform({ ...context, quietLogs: true });
-      const statusResult = await withCliAuthError(() =>
-        services.runtime.runPromise(provider.getStatus(services.secrets)),
+      return services.runtime.runPromise(
+        Effect.gen(function* () {
+          const statusResult = yield* withCliAuthError(
+            provider.getStatus(services.secrets),
+          );
+          if (!statusResult.ok) return CliExitCode.ModelOrNetworkError;
+          const { label, ...status } = statusResult.value;
+          emitCliResult(context, {
+            json: status,
+            ndjson: { kind: `${ndjsonKind}-status`, ...status },
+            text: status.signedIn
+              ? ACCOUNT_OUTCOME.signedInAs(provider.displayName, label)
+              : `Not signed in with ${provider.displayName}.`,
+          });
+          return CliExitCode.Success;
+        }),
       );
-      if (!statusResult.ok) return CliExitCode.ModelOrNetworkError;
-      const { label, ...status } = statusResult.value;
-      emitCliResult(context, {
-        json: status,
-        ndjson: { kind: `${ndjsonKind}-status`, ...status },
-        text: status.signedIn
-          ? ACCOUNT_OUTCOME.signedInAs(provider.displayName, label)
-          : `Not signed in with ${provider.displayName}.`,
-      });
-      return CliExitCode.Success;
     },
   });
 
