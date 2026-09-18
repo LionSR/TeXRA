@@ -52,7 +52,12 @@ export const TRANSCRIPT_EXPORT_FORMAT_CHOICES = [
 
 interface TranscriptExportPorts {
   pickFormat(): Promise<TranscriptExportFormat | undefined>;
-  openPath(filePath: string, kind: TranscriptExportOpenKind): Promise<void>;
+  /** Open what was just written. The member is a program: both hosts' open
+   *  verbs are Effects, so nothing is lifted on the way through here. */
+  openPath(
+    filePath: string,
+    kind: TranscriptExportOpenKind,
+  ): Effect.Effect<void, Error>;
   showInfo: MessageHost['showInfoMessage'];
   showWarning: MessageHost['showWarningMessage'];
   /** The error notice. A host may answer it by refusing the request instead:
@@ -144,10 +149,7 @@ const exportMarkdown = Effect.fn('exportMarkdown')(function* (
   ports: TranscriptExportPorts,
 ): Effect.fn.Return<void, Error, StorageFs> {
   const result = yield* controller.exportAsMarkdown(runId, input);
-  yield* Effect.tryPromise({
-    try: () => ports.openPath(result.absolutePath, 'text'),
-    catch: ensureError,
-  });
+  yield* ports.openPath(result.absolutePath, 'text');
   yield* ports.showInfo(exportedFileMessage(result.storagePath));
 });
 
@@ -167,10 +169,7 @@ const exportLatex = Effect.fn('exportLatex')(function* (
     const pdfFilename = path
       .basename(result.storagePath)
       .replace(/\.tex$/, '.pdf');
-    yield* Effect.tryPromise({
-      try: () => ports.openPath(pdfPath, 'pdf'),
-      catch: ensureError,
-    });
+    yield* ports.openPath(pdfPath, 'pdf');
     yield* ports.showInfo(`Transcript exported and compiled: ${pdfFilename}`);
     return;
   }
@@ -180,10 +179,7 @@ const exportLatex = Effect.fn('exportLatex')(function* (
       { storagePath: result.storagePath, logTail: result.logTail },
     );
   }
-  yield* Effect.tryPromise({
-    try: () => ports.openPath(result.absolutePath, 'text'),
-    catch: ensureError,
-  });
+  yield* ports.openPath(result.absolutePath, 'text');
   yield* ports.showWarning(
     'LaTeX compilation failed. The .tex source file has been opened instead.',
   );
@@ -202,9 +198,6 @@ const exportHtml = Effect.fn('exportHtml')(function* (
     yield* ports.showError(htmlExportErrorMessage(outcome.status));
     return;
   }
-  yield* Effect.tryPromise({
-    try: async () => ports.openPath(outcome.result.absolutePath, 'external'),
-    catch: ensureError,
-  });
+  yield* ports.openPath(outcome.result.absolutePath, 'external');
   yield* ports.showInfo(exportedFileMessage(outcome.result.storagePath));
 });

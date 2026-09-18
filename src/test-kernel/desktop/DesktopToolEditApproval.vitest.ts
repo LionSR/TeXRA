@@ -300,9 +300,10 @@ describe('desktop tool edit approval', () => {
         const { requestApproval, controller, waitForPreviews } =
           yield* createApprovalFixture({
             ui: createStubDesktopAgentRunHost({
-              openPath: async (filePath) => {
-                opened.push(filePath);
-              },
+              openPath: (filePath) =>
+                Effect.sync(() => {
+                  opened.push(filePath);
+                }),
             }),
           });
 
@@ -350,7 +351,7 @@ describe('desktop tool edit approval', () => {
     'routes diff actions through the required desktop diff host',
     () =>
       Effect.gen(function* () {
-        const openPath = vi.fn(async (_filePath: string) => {});
+        const openPath = vi.fn((_filePath: string) => Effect.void);
         const openDiff = vi.fn(
           async (
             _original: DiffSource,
@@ -431,9 +432,10 @@ describe('desktop tool edit approval', () => {
       const { requestApproval, controller, waitForPreviews } =
         yield* createApprovalFixture({
           ui: createStubDesktopAgentRunHost({
-            openPath: async (filePath) => {
-              opened.push(filePath);
-            },
+            openPath: (filePath) =>
+              Effect.sync(() => {
+                opened.push(filePath);
+              }),
           }),
         });
 
@@ -486,9 +488,10 @@ describe('desktop tool edit approval', () => {
         const { requestApproval, controller, waitForPreviews } =
           yield* createApprovalFixture({
             ui: createStubDesktopAgentRunHost({
-              openPath: async (filePath) => {
-                opened.push(filePath);
-              },
+              openPath: (filePath) =>
+                Effect.sync(() => {
+                  opened.push(filePath);
+                }),
               showErrorMessage: (message) =>
                 Effect.sync(() => {
                   messages.push(message);

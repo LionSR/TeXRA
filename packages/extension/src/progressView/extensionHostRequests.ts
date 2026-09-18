@@ -83,7 +83,7 @@ import {
 } from '@shared/state/onboardingState';
 
 import { getProviderKeyUrl } from '@utils/config/providerConfig';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { pathToLocation } from '@utils/files/fileLocation';
 import {
   locateInWorkspace,
@@ -316,22 +316,28 @@ export function createExtensionHostRequests(
 
   let chatExportController: ChatExportController | undefined;
 
-  async function openExportPath(
+  /** The export port's open verb. The editor APIs behind it are thenables, so
+   *  this is where they are lifted -- once, at the host boundary. */
+  const openExportPath = (
     filePath: string,
     kind: TranscriptExportOpenKind,
-  ): Promise<void> {
-    const uri = vscode.Uri.file(filePath);
-    if (kind === 'external') {
-      await vscode.env.openExternal(uri);
-      return;
-    }
-    if (kind === 'pdf') {
-      await vscode.commands.executeCommand('vscode.open', uri);
-      return;
-    }
-    const document = await vscode.workspace.openTextDocument(filePath);
-    await vscode.window.showTextDocument(document, { preview: false });
-  }
+  ): Effect.Effect<void, Error> =>
+    Effect.tryPromise({
+      try: async () => {
+        const uri = vscode.Uri.file(filePath);
+        if (kind === 'external') {
+          await vscode.env.openExternal(uri);
+          return;
+        }
+        if (kind === 'pdf') {
+          await vscode.commands.executeCommand('vscode.open', uri);
+          return;
+        }
+        const document = await vscode.workspace.openTextDocument(filePath);
+        await vscode.window.showTextDocument(document, { preview: false });
+      },
+      catch: ensureError,
+    });
 
   function exportTranscript(runId: RunId) {
     return withSessionFs(

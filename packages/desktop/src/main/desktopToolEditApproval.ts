@@ -82,11 +82,12 @@ export class DesktopToolEditApprovalHost implements ToolEditApprovalHost {
           proposedContent: request.proposedContent,
         }),
       );
-    return new DesktopToolEditPreview(this.options.ui, context, {
-      tempDir,
-      originalPath,
-      proposedPath,
-    });
+    return new DesktopToolEditPreview(
+      this.options.ui,
+      context,
+      { tempDir, originalPath, proposedPath },
+      this.options.runtime,
+    );
   }
 
   // No `revealApprovalSurface`: active-stream selection surfaces the prompt
@@ -126,6 +127,9 @@ class DesktopToolEditPreview implements ToolEditPreview {
     private readonly ui: DesktopToolEditApprovalUi,
     private readonly context: ToolEditPreviewContext,
     private readonly staged: DesktopStagedFiles,
+    /** The window's runtime: `ToolEditPreview` is a Promise-shaped core port,
+     *  so the shell-facing open program settles here. */
+    private readonly runtime: ProcessRuntime,
   ) {}
 
   get originalPath(): string {
@@ -157,7 +161,7 @@ class DesktopToolEditPreview implements ToolEditPreview {
   }
 
   async openProposed(): Promise<void> {
-    await this.ui.openPath(this.staged.proposedPath);
+    await this.runtime.runPromise(this.ui.openPath(this.staged.proposedPath));
   }
 
   async readProposedContent(): Promise<string> {

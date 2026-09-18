@@ -4,6 +4,7 @@ import { readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 // Third-party imports
+import { Effect } from 'effect';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 // Local imports - test support
@@ -30,9 +31,11 @@ let createDesktopDiffHost: DesktopDiffHostModule['createDesktopDiffHost'];
 // `afterEach` removes them the way the desktop quit lifecycle does.
 function createHost(overrides: Partial<DiffHostOptions> = {}) {
   const openedPaths: string[] = [];
-  const openPath = vi.fn(async (filePath: string) => {
-    openedPaths.push(filePath);
-  });
+  const openPath = vi.fn((filePath: string): Effect.Effect<void, unknown> =>
+    Effect.sync(() => {
+      openedPaths.push(filePath);
+    }),
+  );
   const host = createDesktopDiffHost({
     runtime: effectRuntime(),
     openPath,
@@ -200,7 +203,8 @@ describe('createDesktopDiffHost', () => {
   it('removes the patch directory immediately when the editor fails to open', async () => {
     const failure = new Error('editor unavailable');
     const { host, openPath } = createHost();
-    openPath.mockRejectedValue(failure);
+    // The member is a program, so the refusal is its failure, not a rejection.
+    openPath.mockReturnValue(Effect.fail(failure));
 
     // The open failure reaches the caller, carrying the host's own rejection,
     // and not a cleanup artifact.

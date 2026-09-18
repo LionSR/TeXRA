@@ -87,9 +87,10 @@ function createControllerFixture(options: ControllerFixtureOptions = {}) {
       getSourceDirectory: (source) => Effect.succeed(`/agents/${source}`),
       selectCustomAgentDirectory:
         options.selectCustomAgentDirectory ?? (async () => undefined),
-      openPath: async (filePath) => {
-        opened.push(filePath);
-      },
+      openPath: (filePath) =>
+        Effect.sync(() => {
+          opened.push(filePath);
+        }),
       revealPath: async () => undefined,
     },
     renderer: { postToRenderer: (message) => posted.push(message) },

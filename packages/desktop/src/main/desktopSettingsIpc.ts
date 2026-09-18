@@ -62,7 +62,9 @@ export interface DesktopSettingsUiHost extends Pick<
   MessageHost,
   'showInfoMessage' | 'showErrorMessage'
 > {
-  openPath(filePath: string): Promise<void>;
+  /** The window's shell-facing open verb, Effect-typed since the ruling of
+   *  2026-09-18 retired this fan-out's Promise face. */
+  openPath(filePath: string): Effect.Effect<void, unknown>;
   /**
    * Select the run as the window's active run. `'unavailable'` covers a
    * presentation that could not be reached at all; the reveal is then reported
@@ -260,7 +262,9 @@ export function createDesktopSettingsIpc(
   // session's storage view.
   async function openMemoryFile(input: { storagePath: string }): Promise<void> {
     const resolvedPath = resolveMemoryStoragePath(input.storagePath);
-    await options.ui.openPath(join(roots.storage, resolvedPath));
+    await runtime.runPromise(
+      options.ui.openPath(join(roots.storage, resolvedPath)),
+    );
   }
 
   async function openMemoryFolder(): Promise<void> {
@@ -273,7 +277,9 @@ export function createDesktopSettingsIpc(
         ),
       ),
     );
-    await options.ui.openPath(join(roots.storage, memoryPath));
+    await runtime.runPromise(
+      options.ui.openPath(join(roots.storage, memoryPath)),
+    );
   }
 
   async function postGoalList(): Promise<void> {

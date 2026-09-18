@@ -214,7 +214,7 @@ export class DesktopProgressFileActions {
       label,
       candidates,
       (file) => runtime.runPromise(fs.readFileString(file)),
-      (file) => this.ui.openPath(file),
+      (file) => runtime.runPromise(this.ui.openPath(file)),
     );
   }
 

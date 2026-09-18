@@ -31,7 +31,7 @@ interface DesktopDiffHostOptions extends DesktopOverlayPostOptions {
    * Falls back to the OS default editor (writes a `.diff` patch file and
    * calls `openPath`). Used when the renderer overlay is unavailable.
    */
-  openPath(filePath: string): Promise<void>;
+  openPath(filePath: string): Effect.Effect<void, unknown>;
   /**
    * Records the temp directory holding an external-editor patch file. The
    * directory cannot be removed as soon as `openPath` settles because the OS
@@ -150,16 +150,17 @@ export function createDesktopDiffHost(
       Effect.gen(function* () {
         const fs = yield* FileSystem.FileSystem;
         yield* fs.writeFileString(diffPath, patch);
-        yield* Effect.tryPromise({
-          try: () => options.openPath(diffPath),
-          catch: (cause) =>
-            new ExternalOpenFailed({
-              kind: 'path',
-              target: diffPath,
-              message: 'The patch file could not be opened.',
-              cause,
-            }),
-        });
+        yield* options.openPath(diffPath).pipe(
+          Effect.mapError(
+            (cause) =>
+              new ExternalOpenFailed({
+                kind: 'path',
+                target: diffPath,
+                message: 'The patch file could not be opened.',
+                cause,
+              }),
+          ),
+        );
       }),
     );
     if (Exit.isFailure(opened)) {

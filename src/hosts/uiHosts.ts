@@ -28,11 +28,11 @@ export interface DiffViewHost {
  * URL's scheme or the file's type, or the shell refusing the request.
  *
  * This is the tag {@link ExternalOpener.openExternal} fails with. The
- * desktop's sibling `openPath` keeps its `Promise` shape — it is bound in the
- * desktop's browser-view, shell, settings, tooling and credential surfaces, a
- * permanent face by owner ruling — so the Effect-side callers of that fan-out
- * raise this tag from their own `Effect.tryPromise`. `kind` says whether a
- * URL or a local path was refused.
+ * desktop's sibling `openPath` is an Effect as well (owner ruling 2026-09-18,
+ * which retires the earlier "permanent Promise face" for that fan-out), so a
+ * caller wording its own report raises this tag by mapping that member's
+ * failure rather than by lifting a promise. `kind` says whether a URL or a
+ * local path was refused.
  */
 export class ExternalOpenFailed extends Data.TaggedError('ExternalOpenFailed')<{
   readonly kind: 'url' | 'path';
@@ -47,8 +47,9 @@ export class ExternalOpenFailed extends Data.TaggedError('ExternalOpenFailed')<{
  * rather than as `unknown`. Neither VS Code's `env.openExternal` nor
  * Electron's `shell.openExternal` has a cancellation channel, so an
  * interrupted fiber detaches from the wait — the foreign-API limitation the
- * port retains. The desktop's shell-facing fan-out behind this port keeps
- * its `Promise` shape by ruling; the desktop composition root adapts it here.
+ * port retains. The desktop's shell-facing fan-out behind this port is
+ * Effect-typed too (ruling 2026-09-18); the composition root only words the
+ * failure, it no longer crosses a promise to reach it.
  */
 export interface ExternalOpener {
   openExternal(url: string): Effect.Effect<void, ExternalOpenFailed>;

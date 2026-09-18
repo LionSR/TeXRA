@@ -104,7 +104,9 @@ interface DesktopHostRequestsOptions {
     DesktopOnboardingIpc,
     'skipOnboarding' | 'skipSetup' | 'runSetup' | 'signInWithChatGpt'
   >;
-  openExternalUrl(url: string): Promise<void>;
+  /** The window's shell-facing `openExternal`, Effect-typed since the ruling
+   *  of 2026-09-18 retired this fan-out's Promise face. */
+  openExternalUrl(url: string): Effect.Effect<void, unknown>;
   /** Re-probe the LaTeX toolchain. */
   recheckTools(): Promise<void>;
   /** The process runtime this window was handed; every request arm below runs
@@ -320,7 +322,10 @@ export function createDesktopHostRequests(
         fileActions.runMergeFile(baseFile, editedFile),
       latexdiffFile: (baseFile, editedFile) =>
         runLatexdiffFile(baseFile, editedFile),
-      openDirectory: (directory) => host.openPath(directory),
+      // The file-actions host port is still Promise-shaped, so the shell's
+      // open program settles here.
+      openDirectory: (directory) =>
+        runtime.runPromise(host.openPath(directory)),
       openLabel: (label) => fileActions.findAndOpenLabel(label),
       readFile: (file) => readFile(file, 'utf8'),
       showInfo: (message) => runtime.runPromise(host.showInfoMessage(message)),
@@ -598,13 +603,11 @@ export function createDesktopHostRequests(
           const directory = yield* fromHost(() =>
             options.getCustomAgentDirectory(),
           );
-          yield* fromHost(() => host.openPath(directory));
+          yield* host.openPath(directory);
           return;
         }
         case 'docs':
-          yield* fromHost(() =>
-            options.openExternalUrl(`${DESKTOP_DOCS_URL}#agents`),
-          );
+          yield* options.openExternalUrl(`${DESKTOP_DOCS_URL}#agents`);
           return;
       }
     });
@@ -630,7 +633,7 @@ export function createDesktopHostRequests(
           yield* fromHost(() => options.onboarding.skipSetup());
           return;
         case 'openGettingStarted':
-          yield* fromHost(() => options.openExternalUrl(DESKTOP_DOCS_URL));
+          yield* options.openExternalUrl(DESKTOP_DOCS_URL);
           return;
       }
     });
@@ -655,7 +658,7 @@ export function createDesktopHostRequests(
       switch (request.kind) {
         case 'openFile': {
           const { path: filePath, line } = request;
-          yield* fromHost(() => host.openPath(filePath, line ?? undefined));
+          yield* host.openPath(filePath, line ?? undefined);
           return done;
         }
         case 'openLabel': {
@@ -790,10 +793,8 @@ export function createDesktopHostRequests(
           if (request.action === 'set') {
             postDesktopSettingsView(options.postToRenderer, 'models');
           } else {
-            yield* fromHost(() =>
-              options.openExternalUrl(
-                'https://texra.ai/guide/configuration.html',
-              ),
+            yield* options.openExternalUrl(
+              'https://texra.ai/guide/configuration.html',
             );
           }
           return done;

@@ -78,7 +78,9 @@ export interface DesktopSupabaseAuthHost extends Pick<
   MessageHost,
   'showInfoMessage' | 'showErrorMessage'
 > {
-  openExternalUrl(url: string): Promise<void>;
+  /** The window's shell-facing `openExternal`, with its own "could not open"
+   *  dialog suppressed: this flow words a missing browser itself. */
+  openExternalUrl(url: string): Effect.Effect<void, unknown>;
   onSessionChanged(): Promise<void> | void;
 }
 
@@ -424,10 +426,7 @@ export function createDesktopSupabaseAuth(
       const authUrl = requireOAuthRedirectUrl(data, error);
       if (!ownsAttempt(attempt)) return;
 
-      yield* Effect.tryPromise({
-        try: () => host.openExternalUrl(authUrl),
-        catch: (cause) => cause,
-      });
+      yield* host.openExternalUrl(authUrl);
       yield* host.showInfoMessage(
         'Complete sign-in in your browser. TeXRA updates automatically when it finishes.',
       );

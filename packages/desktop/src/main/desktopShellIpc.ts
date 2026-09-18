@@ -37,14 +37,29 @@ function hostCall<A>(
   });
 }
 
+/**
+ * One host program on the shell's own failure channel. The value the reporter
+ * formats stays the one the member failed with, exactly as it was when that
+ * member answered with a promise and {@link hostCall} carried the rejection.
+ */
+function onShellFailure<A, E>(
+  program: Effect.Effect<A, E>,
+): Effect.Effect<A, ShellActionFailed> {
+  return program.pipe(
+    Effect.mapError((cause) => new ShellActionFailed({ cause })),
+  );
+}
+
 interface DesktopShellActionFactoryOptions extends Pick<
   MessageHost,
   'showInfoMessage'
 > {
   getCustomAgentDirectory(): Promise<string>;
-  openExternalUrl(url: string): Promise<void>;
-  openLogFolder(): Promise<void>;
-  openPath(filePath: string): Promise<void>;
+  /** The window's shell-facing open surface, Effect-typed since the ruling of
+   *  2026-09-18 retired its Promise face. */
+  openExternalUrl(url: string): Effect.Effect<void, unknown>;
+  openLogFolder(): Effect.Effect<void, unknown>;
+  openPath(filePath: string): Effect.Effect<void, unknown>;
   openWorkspaceFolder(): Promise<void>;
   signIn(): Promise<void>;
   onAsyncError: (error: unknown) => void;
@@ -108,7 +123,7 @@ export function createDesktopShellActions(
 
   const openCustomAgentDirectory = Effect.gen(function* () {
     const customDir = yield* hostCall(() => options.getCustomAgentDirectory());
-    yield* hostCall(() => options.openPath(customDir));
+    yield* onShellFailure(options.openPath(customDir));
   });
 
   function openAgentDirectory(customDirSet?: boolean) {
@@ -138,9 +153,9 @@ export function createDesktopShellActions(
     signIn: () => runShellAction(hostCall(() => options.signIn())),
     openAgentDirectory,
     openDesktopDocs: () =>
-      runShellAction(hostCall(() => options.openExternalUrl(DESKTOP_DOCS_URL))),
+      runShellAction(onShellFailure(options.openExternalUrl(DESKTOP_DOCS_URL))),
     openLogFolder: () =>
-      runShellAction(hostCall(() => options.openLogFolder())),
+      runShellAction(onShellFailure(options.openLogFolder())),
     openWorkspaceFolder: () =>
       runShellAction(hostCall(() => options.openWorkspaceFolder())),
     saveFile: () => {
