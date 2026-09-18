@@ -43,7 +43,7 @@ const codexMocks = vi.hoisted(() => ({
     }): Effect.Effect<{ email: string }, unknown> =>
       Effect.succeed({ email: 'user@example.com' }),
   ),
-  setPreferSubscription: vi.fn((enabled: boolean) =>
+  setPreferSubscription: vi.fn((_stores: unknown, enabled: boolean) =>
     Effect.succeed({ effective: enabled }),
   ),
   signOut: vi.fn(() => Effect.void),
@@ -233,8 +233,9 @@ describe('DefaultDesktopCredentialSettingsController', () => {
     codexMocks.loginWithDeviceCode.mockReturnValue(
       Effect.succeed({ email: 'user@example.com' }),
     );
-    codexMocks.setPreferSubscription.mockImplementation((enabled: boolean) =>
-      Effect.succeed({ effective: enabled }),
+    codexMocks.setPreferSubscription.mockImplementation(
+      (_stores: unknown, enabled: boolean) =>
+        Effect.succeed({ effective: enabled }),
     );
     codexMocks.signOut.mockReturnValue(Effect.void);
   });
@@ -383,7 +384,11 @@ describe('DefaultDesktopCredentialSettingsController', () => {
       command: SETTINGS_VIEW_COMMANDS.SET_CHATGPT_PREFER_SUBSCRIPTION,
       enabled: true,
     });
-    expect(codexMocks.setPreferSubscription).toHaveBeenCalledWith(true);
+    // The stores travel with the write; the assertion pins the value.
+    expect(codexMocks.setPreferSubscription).toHaveBeenCalledWith(
+      expect.anything(),
+      true,
+    );
     expect(fixture.onCredentialChanged).toHaveBeenCalledOnce();
     expect(fixture.events.at(-1)).toBe('credential');
     expect(fixture.events.slice(0, -1)).toEqual(
@@ -396,7 +401,10 @@ describe('DefaultDesktopCredentialSettingsController', () => {
 
     await fixture.controller.signInChatGpt();
     expect(codexMocks.login).toHaveBeenCalledOnce();
-    expect(codexMocks.setPreferSubscription).toHaveBeenLastCalledWith(true);
+    expect(codexMocks.setPreferSubscription).toHaveBeenLastCalledWith(
+      expect.anything(),
+      true,
+    );
     expect(fixture.infos).toContain(
       'Signed in with ChatGPT as user@example.com.',
     );
