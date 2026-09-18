@@ -1,4 +1,5 @@
 // Third-party imports
+import { Cause, Effect, FileSystem } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
@@ -18,7 +19,6 @@ import {
 import {
   latexdiffPackMessage,
   runPackLatexdiffvc,
-  type LatexdiffPackResult,
 } from '@housekeeping/packLatexdiffvc';
 import { LaTeXdiffService, type LaTeXdiffResult } from '@latex/latexdiff';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '@latex/latexLogging';
@@ -41,22 +41,17 @@ import {
   type MathMarkupOption,
 } from '@latex/latexdiff/mathMarkup';
 import { createLog } from '@logger/logUtils';
-import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
-import {
-  withSessionFs,
-  type StorageFs,
-  type WorkspaceFs,
-} from '@platform/rootedFs';
+import type { ProcessRuntime } from '@platform/processRuntime';
+import { withSessionFs } from '@platform/rootedFs';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import type { FileLocation } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latexConfig';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { pathToLocationIn } from '@utils/files/fileLocation';
+import { entryExists } from '@utils/files/fsEntryExists';
 import { checkToolInstalled } from '@utils/system/toolUtils';
-import type { Effect, FileSystem } from 'effect';
 
 const log = createLog(CHANNEL);
 
@@ -71,30 +66,45 @@ type LatexdiffTool = 'latexdiff' | 'latexdiff-vc';
  * Run a latexdiff command body, skipping it when the tool is missing and
  * reporting any failure under `errorMessage`. Every command in this file goes
  * through here.
+ *
+ * This is the file's one terminal boundary: `catchCause` answers a typed
+ * failure and a defect alike — as the `try`/`catch` it replaces answered a
+ * rejection and a thrown value alike — and `Cause.squash` hands
+ * `showLoggedErrorMessage` the same value the `catch` clause bound, so the
+ * message the user sees is unchanged.
  */
-async function withLatexdiffTool(
+const withLatexdiffTool = <E, R>(
   tool: LatexdiffTool,
   errorMessage: string,
-  action: () => Promise<void>,
-): Promise<void> {
-  try {
-    if (!(await checkToolInstalled(tool))) {
+  action: Effect.Effect<void, E, R>,
+): Effect.Effect<void, never, R> =>
+  Effect.gen(function* () {
+    const installed = yield* Effect.tryPromise({
+      try: () => checkToolInstalled(tool),
+      catch: ensureError,
+    });
+    if (!installed) {
       log.warn(`${tool} is not installed; command will not run.`);
       return;
     }
-    await action();
-  } catch (err) {
-    await showLoggedErrorMessage(CHANNEL, errorMessage, err);
-  }
-}
+    yield* action;
+  }).pipe(
+    Effect.catchCause((cause) =>
+      Effect.promise(async () => {
+        await showLoggedErrorMessage(
+          CHANNEL,
+          errorMessage,
+          Cause.squash(cause),
+        );
+      }),
+    ),
+  );
 
 type MarkupItem = vscode.QuickPickItem & { value: MathMarkupOption };
 
 // Returns undefined when the user cancels, logging the cancellation so callers
 // only need to bail out.
-async function promptForLatexdiffMathMarkup(): Promise<
-  MathMarkupOption | undefined
-> {
+const promptForLatexdiffMathMarkup = Effect.fnUntraced(function* () {
   const configuredMode = workspaceRoots().workspaceState.get<string>(
     WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
     DEFAULT_MATH_MARKUP,
@@ -111,17 +121,23 @@ async function promptForLatexdiffMathMarkup(): Promise<
     ...items.filter((item) => item.value !== configuredMode),
   ];
 
-  const pick = await vscode.window.showQuickPick<MarkupItem>(prioritizedItems, {
-    title: 'Latexdiff math markup',
-    placeHolder: 'Select math markup granularity for this diff run',
-    ignoreFocusOut: true,
-    prompt: `Saved default: ${configuredMode} — press Enter to accept, or pick another`,
+  const pick = yield* Effect.tryPromise({
+    try: () =>
+      Promise.resolve(
+        vscode.window.showQuickPick<MarkupItem>(prioritizedItems, {
+          title: 'Latexdiff math markup',
+          placeHolder: 'Select math markup granularity for this diff run',
+          ignoreFocusOut: true,
+          prompt: `Saved default: ${configuredMode} — press Enter to accept, or pick another`,
+        }),
+      ),
+    catch: ensureError,
   });
   if (!pick) {
     log.debug('Math markup selection cancelled by user');
   }
   return pick?.value;
-}
+});
 
 interface OpenedLatexdiffResult {
   diffLocation: FileLocation;
@@ -134,38 +150,40 @@ interface OpenedLatexdiffResult {
  * enough: an external `compileLatex2Pdf` failure can produce a generated
  * file whose PDF is not viewer-ready.
  */
-async function openLatexdiffResult(
+const openLatexdiffResult = Effect.fnUntraced(function* (
   session: SessionHandle,
   diffFilePath: string,
   runtime: ProcessRuntime,
   options: { scheduleViewer?: boolean } = {},
-): Promise<OpenedLatexdiffResult | undefined> {
+) {
   const diffLocation = pathToLocationIn(session.roots.workspace, diffFilePath);
+  const fs = yield* FileSystem.FileSystem;
 
-  if (!(await AbsoluteFS.exists(diffLocation.absolutePath))) {
-    await showLoggedMessage(
-      CHANNEL,
-      `Diff file could not be found. Expected path: ${diffFilePath}`,
+  if (!(yield* entryExists(fs, diffLocation.absolutePath))) {
+    yield* Effect.promise(() =>
+      showLoggedMessage(
+        CHANNEL,
+        `Diff file could not be found. Expected path: ${diffFilePath}`,
+      ),
     );
     return undefined;
   }
 
-  // Await the file-open/build phase so multi-round latexdiff runs keep their
-  // sequential build/show ordering and failures still propagate to the
-  // command's error handler. The caller decides whether to schedule a viewer
+  // The file-open/build phase stays a settled step so multi-round latexdiff
+  // runs keep their sequential build/show ordering and failures still reach
+  // the command's report. The caller decides whether to schedule a viewer
   // from `viewerReady`; a generated path alone is not enough when external
   // compilation failed (#10553).
-  const viewerReady = await prepareBuildDisplay(
-    session,
-    diffLocation,
-    runtime,
-    {
-      preserveFocus: true,
-      scheduleViewer: options.scheduleViewer,
-    },
-  );
-  return { diffLocation, viewerReady };
-}
+  const viewerReady = yield* Effect.tryPromise({
+    try: () =>
+      prepareBuildDisplay(session, diffLocation, runtime, {
+        preserveFocus: true,
+        scheduleViewer: options.scheduleViewer,
+      }),
+    catch: ensureError,
+  });
+  return { diffLocation, viewerReady } satisfies OpenedLatexdiffResult;
+});
 
 /**
  * Restore the last successfully prepared diff as the active LaTeX document
@@ -174,58 +192,63 @@ async function openLatexdiffResult(
  * viewer target (either a later setup rejected, or the last processed diff was
  * not viewer-ready).
  */
-async function restorePreparedViewerTarget(
+const restorePreparedViewerTarget = (
   diffLocation: FileLocation,
-): Promise<boolean> {
-  try {
-    const doc = await vscode.workspace.openTextDocument(
-      vscode.Uri.file(diffLocation.absolutePath),
-    );
-    await vscode.window.showTextDocument(doc, {
-      preview: true,
-      preserveFocus: true,
-    });
-    return true;
-  } catch (err) {
+): Effect.Effect<boolean> =>
+  Effect.tryPromise({
+    try: async () => {
+      const doc = await vscode.workspace.openTextDocument(
+        vscode.Uri.file(diffLocation.absolutePath),
+      );
+      await vscode.window.showTextDocument(doc, {
+        preview: true,
+        preserveFocus: true,
+      });
+      return true;
+    },
+    catch: ensureError,
+  }).pipe(
     // The original setup error still propagates; a failed restore is a reason
     // to skip the argument-free viewer rather than open a stale/unrelated PDF.
-    log.warn(
-      `Failed to restore the last prepared diff before viewer handoff: ${toErrorMessage(err)}`,
-    );
-    return false;
-  }
-}
+    Effect.catch((err) =>
+      Effect.sync(() => {
+        log.warn(
+          `Failed to restore the last prepared diff before viewer handoff: ${toErrorMessage(err)}`,
+        );
+        return false;
+      }),
+    ),
+  );
 
 /**
  * Prepare every successful diff in result order and schedule exactly one
  * detached viewer handoff for the last viewer-ready diff.
  *
- * Each file-open/build phase stays awaited and serialized, so setup errors
- * propagate to `withLatexdiffTool`. The viewer is restored to the last
- * viewer-ready diff whenever a later processed diff is not viewer-ready,
- * including on normal completion (#10553).
+ * Each file-open/build phase stays settled and serialized, so setup failures
+ * reach `withLatexdiffTool`. The viewer is restored to the last viewer-ready
+ * diff whenever a later processed diff is not viewer-ready, including on
+ * normal completion (#10553) — the handoff is an `ensuring` finalizer, so it
+ * runs on the failing path exactly as the `finally` it replaces did.
  */
-async function prepareLatexdiffResultsAndScheduleViewer(
+const prepareLatexdiffResultsAndScheduleViewer = Effect.fnUntraced(function* (
   session: SessionHandle,
   results: readonly DiffRunResult[],
   runtime: ProcessRuntime,
-): Promise<void> {
+) {
   let lastViewerLocation: FileLocation | undefined;
   let lastProcessedLocation: FileLocation | undefined;
   let completedSetup = false;
 
-  try {
+  yield* Effect.gen(function* () {
     for (const result of results) {
       const suffix = result.description ? ` (${result.description})` : '';
 
       if (result.success) {
-        const opened = await openLatexdiffResult(
+        const opened = yield* openLatexdiffResult(
           session,
           result.diffPath,
           runtime,
-          {
-            scheduleViewer: false,
-          },
+          { scheduleViewer: false },
         );
         if (opened) {
           lastProcessedLocation = opened.diffLocation;
@@ -239,117 +262,53 @@ async function prepareLatexdiffResultsAndScheduleViewer(
       }
     }
     completedSetup = true;
-  } finally {
-    if (lastViewerLocation) {
-      let viewerTargetReady = true;
-      if (
-        !completedSetup ||
-        lastProcessedLocation?.absolutePath !== lastViewerLocation.absolutePath
-      ) {
-        viewerTargetReady =
-          await restorePreparedViewerTarget(lastViewerLocation);
-      }
-      if (viewerTargetReady) {
-        runtime.runFork(scheduleViewerDisplay);
-      }
-    }
-  }
-}
+  }).pipe(
+    Effect.ensuring(
+      Effect.gen(function* () {
+        if (!lastViewerLocation) return;
+        let viewerTargetReady = true;
+        if (
+          !completedSetup ||
+          lastProcessedLocation?.absolutePath !==
+            lastViewerLocation.absolutePath
+        ) {
+          viewerTargetReady =
+            yield* restorePreparedViewerTarget(lastViewerLocation);
+        }
+        if (viewerTargetReady) {
+          runtime.runFork(scheduleViewerDisplay);
+        }
+      }),
+    ),
+  );
+});
 
 /**
  * Prompt for math markup, run a diff, and open the generated diff file. Shared
  * by the `latexdiff` and `latexdiff-vc` entry points, which differ only in the
  * underlying diff call and the tool name used for logging.
  */
-async function runDiffAndOpen(
+const runDiffAndOpen = Effect.fnUntraced(function* (
   session: SessionHandle,
   toolLabel: string,
   runDiff: (
     mathMarkup: MathMarkupOption,
   ) => Effect.Effect<LaTeXdiffResult, never, FileSystem.FileSystem>,
   runtime: ProcessRuntime,
-): Promise<void> {
-  const mathMarkup = await promptForLatexdiffMathMarkup();
+) {
+  const mathMarkup = yield* promptForLatexdiffMathMarkup();
   if (!mathMarkup) return;
   log.info(`Running ${toolLabel} with math markup mode: ${mathMarkup}`);
 
-  const result = await runtime.runPromise(runDiff(mathMarkup));
+  const result = yield* runDiff(mathMarkup);
   if (!result.success) {
-    throw new Error(result.message);
+    // The service answers every diff outcome as a value, so a failed diff
+    // reaches the report through the failure channel carrying its own
+    // message — the text `formatError` prefixed before.
+    return yield* Effect.fail(new Error(result.message));
   }
-  await openLatexdiffResult(session, result.diffPath, runtime);
-}
-
-/** Settle a housekeeping program on the host entry's runtime over the
- *  session's rooted filesystems. */
-function onSessionFiles<A, E>(
-  session: SessionHandle,
-  runtime: ProcessRuntime,
-  program: Effect.Effect<A, E, WorkspaceFs | StorageFs | ProcessServices>,
-): Promise<A> {
-  return runtime.runPromise(withSessionFs(session.roots, program));
-}
-
-// Turn pack/clean run results into user notifications. Folds the notification
-// derivation and display that every latexdiff-vc handler invoked together.
-function reportLatexdiff(result: LatexdiffPackResult): void {
-  const message = latexdiffPackMessage(result);
-  if (message) void showLoggedInfoMessage(CHANNEL, message);
-}
-
-export function registerLatexdiffCommands(
-  context: vscode.ExtensionContext,
-  runtime: ProcessRuntime,
-  session: SessionHandle,
-): void {
-  registerCommandEntries(context, [
-    {
-      id: 'texra.latexdiff',
-      handler: (inputFile: string, baseFile: string, editedFile: string) =>
-        handleLatexdiff(session, inputFile, baseFile, editedFile, runtime),
-    },
-    {
-      id: 'texra.latexdiffvc',
-      handler: (inputFile: string, baseFile: string, commitHash: string) =>
-        handleLatexdiffvc(session, inputFile, baseFile, commitHash, runtime),
-    },
-    {
-      id: 'texra.packLatexdiffvc',
-      handler: (
-        inputFile: string,
-        baseFile: string,
-        commitHash: string,
-        clean: boolean,
-      ) =>
-        handlePackLatexdiffvc(
-          session,
-          inputFile,
-          baseFile,
-          commitHash,
-          clean,
-          runtime,
-        ),
-    },
-    {
-      id: 'texra.cleanLatexdiffvc',
-      // Clean is a pack run with `clean` set, and the failure label follows it.
-      handler: (inputFile: string, baseFile: string, commitHash: string) =>
-        handlePackLatexdiffvc(
-          session,
-          inputFile,
-          baseFile,
-          commitHash,
-          true,
-          runtime,
-        ),
-    },
-    {
-      id: 'texra.runLatexdiff',
-      handler: (config: RunLatexdiffCommandConfig) =>
-        handleRunLatexdiff(session, config, runtime),
-    },
-  ]);
-}
+  yield* openLatexdiffResult(session, result.diffPath, runtime);
+});
 
 /**
  * The file a latexdiff run compares against: the picked base file, falling
@@ -358,134 +317,140 @@ export function registerLatexdiffCommands(
  * — not `??` — is what makes the fallback the producer already pays for
  * actually fire. Reports once and returns undefined when neither is set.
  */
-async function resolveDiffBase(
+const resolveDiffBase = Effect.fnUntraced(function* (
   inputFile: string,
   baseFile: string,
-): Promise<string | undefined> {
+) {
   const fileToUse = baseFile || inputFile;
   if (fileToUse) return fileToUse;
-  await showLoggedMessageWithDocs(
-    CHANNEL,
-    'No base file specified for latexdiff',
-    'latex-diff',
-    'Latexdiff Docs',
+  yield* Effect.promise(() =>
+    showLoggedMessageWithDocs(
+      CHANNEL,
+      'No base file specified for latexdiff',
+      'latex-diff',
+      'Latexdiff Docs',
+    ),
   );
   return undefined;
-}
+});
 
-async function handleLatexdiff(
+const handleLatexdiff = Effect.fnUntraced(function* (
   session: SessionHandle,
   inputFile: string,
   baseFile: string,
   editedFile: string,
   runtime: ProcessRuntime,
-): Promise<void> {
-  const fileToUse = await resolveDiffBase(inputFile, baseFile);
+) {
+  const fileToUse = yield* resolveDiffBase(inputFile, baseFile);
   if (!fileToUse) return;
   if (!editedFile) {
-    await showLoggedMessageWithDocs(
-      CHANNEL,
-      'No revised file specified for latexdiff',
-      'latex-diff',
-      'Latexdiff Docs',
+    yield* Effect.promise(() =>
+      showLoggedMessageWithDocs(
+        CHANNEL,
+        'No revised file specified for latexdiff',
+        'latex-diff',
+        'Latexdiff Docs',
+      ),
     );
     return;
   }
 
-  await withLatexdiffTool('latexdiff', 'Error creating LaTeX diff', () => {
-    const fileToUseLocation = pathToLocationIn(
-      session.roots.workspace,
-      fileToUse,
-    );
-    return runDiffAndOpen(
+  yield* withLatexdiffTool(
+    'latexdiff',
+    'Error creating LaTeX diff',
+    runDiffAndOpen(
       session,
       'latexdiff',
       (mathMarkup) =>
         latexdiffService.runDiff(
-          fileToUseLocation,
+          pathToLocationIn(session.roots.workspace, fileToUse),
           pathToLocationIn(session.roots.workspace, editedFile),
           '_diff',
           mathMarkup,
         ),
       runtime,
-    );
-  });
-}
+    ),
+  );
+});
 
-async function handleLatexdiffvc(
+const handleLatexdiffvc = Effect.fnUntraced(function* (
   session: SessionHandle,
   inputFile: string,
   baseFile: string,
   commitHash: string,
   runtime: ProcessRuntime,
-): Promise<void> {
-  const fileToUse = await resolveDiffBase(inputFile, baseFile);
+) {
+  const fileToUse = yield* resolveDiffBase(inputFile, baseFile);
   if (!fileToUse) return;
-  await withLatexdiffTool('latexdiff-vc', 'Error creating LaTeX diff', () => {
-    const fileToUseLocation = pathToLocationIn(
-      session.roots.workspace,
-      fileToUse,
-    );
-    return runDiffAndOpen(
+  yield* withLatexdiffTool(
+    'latexdiff-vc',
+    'Error creating LaTeX diff',
+    runDiffAndOpen(
       session,
       'latexdiff-vc',
       (mathMarkup) =>
-        latexdiffService.runDiffVc(fileToUseLocation, commitHash, mathMarkup),
+        latexdiffService.runDiffVc(
+          pathToLocationIn(session.roots.workspace, fileToUse),
+          commitHash,
+          mathMarkup,
+        ),
       runtime,
-    );
-  });
-}
+    ),
+  );
+});
 
-async function handlePackLatexdiffvc(
+const handlePackLatexdiffvc = Effect.fnUntraced(function* (
   session: SessionHandle,
   inputFile: string,
   baseFile: string,
   commitHash: string,
   clean: boolean,
-  runtime: ProcessRuntime,
-): Promise<void> {
-  await withLatexdiffTool(
+) {
+  yield* withLatexdiffTool(
     'latexdiff-vc',
     clean ? 'Error cleaning LaTeX diff' : 'Error packing LaTeX diff',
-    async () => {
+    Effect.gen(function* () {
       log.debug(
         `Command called with: inputFile=${inputFile}, baseFile=${baseFile}, commitHash=${commitHash}, clean=${clean}`,
       );
-      const fileToUse = await resolveDiffBase(inputFile, baseFile);
+      const fileToUse = yield* resolveDiffBase(inputFile, baseFile);
       if (!fileToUse) return;
-      reportLatexdiff(
-        await onSessionFiles(
-          session,
-          runtime,
-          runPackLatexdiffvc(fileToUse, commitHash, clean),
-        ),
+      // The pack run is a step of this program, over the session's rooted
+      // filesystems, rather than a nested settle on the entry's runtime.
+      const result = yield* withSessionFs(
+        session.roots,
+        runPackLatexdiffvc(fileToUse, commitHash, clean),
       );
-    },
+      const message = latexdiffPackMessage(result);
+      if (message) void showLoggedInfoMessage(CHANNEL, message);
+    }),
   );
-}
+});
 
-async function handleRunLatexdiff(
+const handleRunLatexdiff = Effect.fnUntraced(function* (
   session: SessionHandle,
   config: RunLatexdiffCommandConfig,
   runtime: ProcessRuntime,
-): Promise<void> {
-  await withLatexdiffTool(
+) {
+  yield* withLatexdiffTool(
     'latexdiff',
     'Error running LaTeX diffs',
-    async () => {
+    Effect.gen(function* () {
       log.debug(`Command called with config: ${JSON.stringify(config)}`);
 
       const { agent, model, inputFile } = config;
 
       if (!agent || !model || !inputFile) {
-        await showLoggedMessage(
-          CHANNEL,
-          'Missing required configuration parameters',
+        yield* Effect.promise(() =>
+          showLoggedMessage(
+            CHANNEL,
+            'Missing required configuration parameters',
+          ),
         );
         return;
       }
 
-      const mathMarkup = await promptForLatexdiffMathMarkup();
+      const mathMarkup = yield* promptForLatexdiffMathMarkup();
       if (!mathMarkup) return;
 
       log.info(`Running latexdiff with math markup mode: ${mathMarkup}`);
@@ -501,33 +466,37 @@ async function handleRunLatexdiff(
         config.outputsByRound,
       );
 
-      const { outcome } = await vscode.window.withProgress(
-        {
-          location: vscode.ProgressLocation.Notification,
-          title: 'Running LaTeX diffs',
-          cancellable: false,
-        },
-        (progress) => {
-          progress.report({
-            increment: 0,
-            message: 'Preparing LaTeX diffs...',
-          });
-          return runtime.runPromise(
-            runLatexdiffForRun({
-              filesystem: nodeFilesystem,
-              ...config,
-              workspaceRoot: session.roots.workspace,
-              storageRoot: session.roots.storage,
-              outputsByRound,
-              mathMarkup,
-              generateBetweenRoundDiffs,
-              runDiscovery: createLatexRunDiscovery(session),
-              latexdiff: { channel: CHANNEL, service: latexdiffService },
-              progress,
-            }),
-          );
-        },
-      );
+      const { outcome } = yield* Effect.tryPromise({
+        try: () =>
+          vscode.window.withProgress(
+            {
+              location: vscode.ProgressLocation.Notification,
+              title: 'Running LaTeX diffs',
+              cancellable: false,
+            },
+            (progress) => {
+              progress.report({
+                increment: 0,
+                message: 'Preparing LaTeX diffs...',
+              });
+              return runtime.runPromise(
+                runLatexdiffForRun({
+                  filesystem: nodeFilesystem,
+                  ...config,
+                  workspaceRoot: session.roots.workspace,
+                  storageRoot: session.roots.storage,
+                  outputsByRound,
+                  mathMarkup,
+                  generateBetweenRoundDiffs,
+                  runDiscovery: createLatexRunDiscovery(session),
+                  latexdiff: { channel: CHANNEL, service: latexdiffService },
+                  progress,
+                }),
+              );
+            },
+          ),
+        catch: ensureError,
+      });
 
       const { results } = outcome;
 
@@ -539,7 +508,9 @@ async function handleRunLatexdiff(
       const successCount = results.filter((r) => r.success).length;
 
       if (successCount === 0) {
-        await showLoggedMessage(CHANNEL, latexdiffAllFailedMessage(mathMarkup));
+        yield* Effect.promise(() =>
+          showLoggedMessage(CHANNEL, latexdiffAllFailedMessage(mathMarkup)),
+        );
       } else if (successCount < results.length) {
         vscode.window.showWarningMessage(
           `${successCount} of ${results.length} LaTeX diff operations completed successfully (math markup: "${mathMarkup}")`,
@@ -550,7 +521,65 @@ async function handleRunLatexdiff(
         );
       }
 
-      await prepareLatexdiffResultsAndScheduleViewer(session, results, runtime);
-    },
+      yield* prepareLatexdiffResultsAndScheduleViewer(
+        session,
+        results,
+        runtime,
+      );
+    }),
   );
+});
+
+export function registerLatexdiffCommands(
+  context: vscode.ExtensionContext,
+  runtime: ProcessRuntime,
+  session: SessionHandle,
+): void {
+  registerCommandEntries(context, [
+    {
+      id: 'texra.latexdiff',
+      handler: (inputFile: string, baseFile: string, editedFile: string) =>
+        runtime.runPromise(
+          handleLatexdiff(session, inputFile, baseFile, editedFile, runtime),
+        ),
+    },
+    {
+      id: 'texra.latexdiffvc',
+      handler: (inputFile: string, baseFile: string, commitHash: string) =>
+        runtime.runPromise(
+          handleLatexdiffvc(session, inputFile, baseFile, commitHash, runtime),
+        ),
+    },
+    {
+      id: 'texra.packLatexdiffvc',
+      handler: (
+        inputFile: string,
+        baseFile: string,
+        commitHash: string,
+        clean: boolean,
+      ) =>
+        runtime.runPromise(
+          handlePackLatexdiffvc(
+            session,
+            inputFile,
+            baseFile,
+            commitHash,
+            clean,
+          ),
+        ),
+    },
+    {
+      id: 'texra.cleanLatexdiffvc',
+      // Clean is a pack run with `clean` set, and the failure label follows it.
+      handler: (inputFile: string, baseFile: string, commitHash: string) =>
+        runtime.runPromise(
+          handlePackLatexdiffvc(session, inputFile, baseFile, commitHash, true),
+        ),
+    },
+    {
+      id: 'texra.runLatexdiff',
+      handler: (config: RunLatexdiffCommandConfig) =>
+        runtime.runPromise(handleRunLatexdiff(session, config, runtime)),
+    },
+  ]);
 }
