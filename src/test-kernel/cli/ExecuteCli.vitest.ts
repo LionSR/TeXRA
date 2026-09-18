@@ -320,6 +320,8 @@ async function stubExecuteCliDeps(): Promise<void> {
   vi.clearAllMocks();
   mocks.close.mockResolvedValue(undefined);
   mocks.detachRunProgressRenderer.mockReturnValue(undefined);
+  // The projection's detach is an Effect the run drains, not a promise.
+  mocks.detachSessionProgressProjection.mockReturnValue(Effect.void);
   mocks.attachRunProgressRenderer.mockReturnValue(
     mocks.detachRunProgressRenderer,
   );

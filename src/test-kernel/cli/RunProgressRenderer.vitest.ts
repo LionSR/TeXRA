@@ -1166,7 +1166,7 @@ describe('CLI run progress renderer', () => {
         },
       ]);
       await settle();
-      await detach();
+      await Effect.runPromise(detach());
     });
 
     const records = ndjsonRecords(output).filter(

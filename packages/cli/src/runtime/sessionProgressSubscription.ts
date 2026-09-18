@@ -1,4 +1,4 @@
-import { Effect, Fiber, Stream, SubscriptionRef } from 'effect';
+import { Deferred, Effect, Fiber, Stream, SubscriptionRef } from 'effect';
 
 import type { SessionHandle } from '@agent/runtime';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
@@ -60,7 +60,7 @@ export function attachCliSessionProgressProjection(
   runtime: ProcessRuntime,
   session: Pick<SessionHandle, 'events' | 'now' | 'view'>,
   writeRecord: CliNdjsonProgressRecordWriter = writeNdjsonStdout,
-): () => Promise<void> {
+): () => Effect.Effect<void> {
   function emit(event: string, payload: unknown): void {
     writeRecord({
       kind: 'progress',
@@ -74,10 +74,7 @@ export function attachCliSessionProgressProjection(
   let delivered = session.now();
   /** The ordinal detach cut at; nothing above it is written. */
   let stopAt: number | undefined;
-  let resolveDrained!: () => void;
-  const drained = new Promise<void>((resolve) => {
-    resolveDrained = resolve;
-  });
+  const drained = Deferred.makeUnsafe<void>();
 
   /** The roster last written per parent, so an unchanged one writes no line. */
   const writtenRosters = new Map<RunId, string>();
@@ -113,7 +110,7 @@ export function attachCliSessionProgressProjection(
     // `stopAt` is the plane's ordinal, which no fold can be past, so the
     // roster gate is open here and the last one goes out with the drain.
     emitRosters();
-    resolveDrained();
+    Deferred.doneUnsafe(drained, Effect.void);
   };
   const passed = (commit: number): void => {
     delivered = Math.max(delivered, commit);
@@ -147,13 +144,17 @@ export function attachCliSessionProgressProjection(
     ),
   );
 
-  return async () => {
-    if (stopAt !== undefined) return drained;
-    stopAt = session.now();
-    settleIfDrained();
-    await drained;
-    runtime.runFork(Fiber.interrupt(fiber));
-    runtime.runFork(Fiber.interrupt(coordinateFiber));
-    runtime.runFork(Fiber.interrupt(rosterFiber));
-  };
+  return () =>
+    Effect.gen(function* () {
+      const first = stopAt === undefined;
+      if (first) {
+        stopAt = session.now();
+        settleIfDrained();
+      }
+      yield* Deferred.await(drained);
+      if (!first) return;
+      runtime.runFork(Fiber.interrupt(fiber));
+      runtime.runFork(Fiber.interrupt(coordinateFiber));
+      runtime.runFork(Fiber.interrupt(rosterFiber));
+    });
 }
