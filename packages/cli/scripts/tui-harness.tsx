@@ -321,6 +321,9 @@ if (SHOW_PROJECT_SKILL) {
 }
 
 const HARNESS_PLATFORM_SERVICES = await initLocalCliPlatform({
+  // The same provider the harness context resolves its rows through, exactly
+  // as startup hands `buildCliContext`'s provider to the real init.
+  config: HARNESS_CLI_CONTEXT.config,
   cwd: HARNESS_CWD,
   installSignalHandlers: false,
   resourcesPath: HARNESS_RESOURCES_PATH,

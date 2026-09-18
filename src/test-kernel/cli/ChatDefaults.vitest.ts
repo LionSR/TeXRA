@@ -1,460 +1,124 @@
-import { mkdir, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
-
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
+import { Effect } from 'effect';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
-import { Effect } from 'effect';
-import { resolveChatDefaults as nativeResolveChatDefaults } from '@cli/runtime/chatDefaults';
-import {
-  CLI_BUILTIN_DEFAULT_MODEL,
-  loadWorkspaceCliConfig,
-} from '@cli/runtime/cliConfig';
-import * as logSinks from '@cli/runtime/logSinks';
-import { nodePlatformLayer } from '@test/support/fsTestUtils';
-import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
+import { resolveChatDefaults } from '@cli/runtime/chatDefaults';
+import { CLI_CHEAP_START_MODEL } from '@cli/runtime/cliConfig';
+import { FakeConfigProvider } from '@test/support/FakePlatform';
+import { installPlatform } from '@test/support/setupPlatform';
 
-/** A cwd with no `.texra` directory, so the workspace tier finds nothing. */
-const NO_WORKSPACE = '/tmp/no-such-texra-workspace';
+type ChatDefaultsInit = Parameters<typeof resolveChatDefaults>[0];
 
 /**
- * Shared config layers exercised at both the workspace and user tiers: an
- * unprefixed `texra.agent`/`texra.model` pair plus a prefixed `texra.chat`
- * override, so tests can assert the command-specific layer wins.
+ * Installs a host whose workspace roots read `workspace` as the project
+ * `.texra/config.json` layer and `user` as the shared user-level file — the
+ * two layers `JsonConfigProvider` merges for the real CLI.
  */
-const CHAT_TIER_CONFIG = {
-  'texra.agent': 'generic',
-  'texra.model': 'gpt55',
-  'texra.chat': { agent: 'assistant', model: 'deepseekT' },
-};
-
-/** The global-storage root of the test under way. Fresh per test, so the
- *  default is a genuinely absent `config.json`. */
-let userConfigDir: string;
-
-/** Write the user tier's `config.json` as JSON. */
-function writeUserConfig(config: unknown): Promise<void> {
-  return writeUserConfigText(JSON.stringify(config));
+async function withConfig(layers: {
+  readonly workspace?: Record<string, unknown>;
+  readonly user?: Record<string, unknown>;
+}): Promise<void> {
+  const config = new FakeConfigProvider(layers.workspace ?? {});
+  for (const [key, value] of Object.entries(layers.user ?? {})) {
+    await Effect.runPromise(config.update(key, value, 'global'));
+  }
+  await installPlatform({}, { config });
 }
 
-/** Write the user tier's `config.json` verbatim — for the corrupt case. */
-function writeUserConfigText(text: string): Promise<void> {
-  return writeFile(join(userConfigDir, 'config.json'), text);
-}
-
-const resolveChatDefaults = (
-  options: Omit<
-    Parameters<typeof nativeResolveChatDefaults>[0],
-    'globalStorageDir'
-  >,
-) =>
-  Effect.runPromise(
-    nativeResolveChatDefaults({
-      ...options,
-      globalStorageDir: userConfigDir,
-    }).pipe(Effect.provide(nodePlatformLayer)),
-  );
-
-// Spied, not stubbed: the workspace tiers below still read real `.texra`
-// config files, while the fast-path tests assert the loader is never reached.
-vi.mock('@cli/runtime/cliConfig', async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import('@cli/runtime/cliConfig')>();
-  return {
-    ...actual,
-    loadWorkspaceCliConfig: vi.fn(actual.loadWorkspaceCliConfig),
-  };
-});
-
-const mockedLoadWorkspaceCliConfig = vi.mocked(loadWorkspaceCliConfig);
-
-const tempDirs = useTempDirs();
-
-beforeEach(async () => {
-  mockedLoadWorkspaceCliConfig.mockClear();
-  // A fresh root per test: the common case is a user config that is simply
-  // not there, which the reader must treat as "no user defaults".
-  userConfigDir = await makeTempDir('texra-chat-defaults-user-', tempDirs);
-});
-
-async function workspaceWithConfig(config: unknown): Promise<string> {
-  const workspace = await makeTempDir('texra-chat-defaults-', tempDirs);
-  await mkdir(join(workspace, '.texra'), { recursive: true });
-  await writeFile(
-    join(workspace, '.texra', 'config.json'),
-    JSON.stringify(config),
-  );
-  return workspace;
-}
-
-function expectChatDefaults(
-  options: Parameters<typeof resolveChatDefaults>[0],
+async function expectChatDefaults(
+  init: ChatDefaultsInit,
   expected: Record<string, unknown>,
 ): Promise<void> {
-  return expect(resolveChatDefaults(options)).resolves.toMatchObject(expected);
+  expect(resolveChatDefaults(init)).toMatchObject(expected);
 }
 
 describe('CLI chat defaults', () => {
-  it('uses assistant and DeepSeek as the built-in chat defaults', async () => {
-    expect(CLI_BUILTIN_DEFAULT_MODEL).toBe('deepseekproT');
-    expect(MODEL_CONFIGS[CLI_BUILTIN_DEFAULT_MODEL]).toBeDefined();
+  it('uses assistant and the cheap-start model as the built-in defaults', async () => {
+    expect(CLI_CHEAP_START_MODEL).toBe('deepseekproT');
+    expect(MODEL_CONFIGS[CLI_CHEAP_START_MODEL]).toBeDefined();
+    await withConfig({});
 
     await expectChatDefaults(
-      { cwd: NO_WORKSPACE },
+      {},
       {
         agent: 'assistant',
-        model: 'deepseekproT',
+        model: CLI_CHEAP_START_MODEL,
         modelSource: 'builtin-default',
       },
     );
   });
 
   it('uses the first visible tool-use agent when assistant is hidden by a roster', async () => {
+    await withConfig({});
+
     await expectChatDefaults(
-      {
-        cwd: NO_WORKSPACE,
-        visibleToolUseAgents: [{ name: 'research' }, { name: 'review' }],
-      },
-      {
-        agent: 'research',
-        model: 'deepseekproT',
-      },
+      { visibleToolUseAgents: [{ name: 'research' }, { name: 'review' }] },
+      { agent: 'research', model: CLI_CHEAP_START_MODEL },
     );
   });
 
-  it('ignores non-llm-zoo model ids in workspace defaults', async () => {
-    const workspace = await workspaceWithConfig({
-      'texra.agent': 'assistant',
-      'texra.model': 'claude-opus-4-7',
+  it('prefers the chat section over the top-level rows', async () => {
+    await withConfig({
+      workspace: {
+        'texra.agent': 'generic',
+        'texra.model': 'gpt55',
+        'texra.chat': { agent: 'assistant', model: 'deepseekT' },
+      },
     });
 
     await expectChatDefaults(
-      { cwd: workspace },
+      {},
       {
         agent: 'assistant',
-        model: 'deepseekproT',
-        modelSource: 'builtin-default',
-      },
-    );
-  });
-
-  it('uses command-specific workspace defaults below environment overrides', async () => {
-    const workspace = await workspaceWithConfig(CHAT_TIER_CONFIG);
-
-    await expectChatDefaults(
-      { cwd: workspace, envModel: 'sonnet46T' },
-      {
-        agent: 'assistant',
-        model: 'sonnet46T',
-        modelSource: 'environment',
-      },
-    );
-  });
-
-  it('ignores simplifier from configured chat default tiers', async () => {
-    const workspace = await workspaceWithConfig({
-      'texra.chat': { agent: 'simplifier', model: 'sonnet46T' },
-    });
-
-    await expectChatDefaults(
-      { cwd: workspace },
-      {
-        agent: 'assistant',
-        model: 'sonnet46T',
+        model: 'deepseekT',
         modelSource: 'workspace-config',
       },
     );
-
-    await writeUserConfig({
-      'texra.agent': 'simplifier',
-      'texra.model': 'sonnet46T',
-    });
-    await expectChatDefaults(
-      { cwd: NO_WORKSPACE },
-      {
-        agent: 'assistant',
-        model: 'sonnet46T',
-        modelSource: 'user-config',
-      },
-    );
   });
 
-  it('does not honor TEXRA_AGENT=simplifier as a default agent', async () => {
-    await expectChatDefaults(
-      { cwd: NO_WORKSPACE, envAgent: 'simplifier' },
-      {
-        agent: 'assistant',
+  it('falls through to the user layer per field', async () => {
+    await withConfig({
+      user: {
+        'texra.agent': 'assistant',
+        'texra.chat': { model: 'deepseekT' },
       },
-    );
-  });
-
-  it('still honors an explicit simplifier agent override', async () => {
-    await expectChatDefaults(
-      {
-        cwd: NO_WORKSPACE,
-        agentOverride: 'simplifier',
-        modelOverride: 'deepseekT',
-      },
-      {
-        agent: 'simplifier',
-      },
-    );
-  });
-
-  it('skips workspace and user I/O when explicit overrides resolve agent and model', async () => {
-    const workspace = await workspaceWithConfig({
-      'texra.chat': { agent: 'assistant', model: 'sonnet46T' },
-    });
-    // Both lower tiers hold values that would otherwise win; neither is read.
-    await writeUserConfig({
-      'texra.agent': 'assistant',
-      'texra.model': 'gpt55',
     });
 
     await expectChatDefaults(
-      {
-        cwd: workspace,
-        agentOverride: 'simplifier',
-        modelOverride: 'deepseekT',
-      },
-      {
-        agent: 'simplifier',
-        model: 'deepseekT',
-        modelSource: 'explicit-override',
-      },
+      {},
+      { agent: 'assistant', model: 'deepseekT', modelSource: 'user-config' },
     );
-    expect(mockedLoadWorkspaceCliConfig).not.toHaveBeenCalled();
   });
 
-  it('keeps default-tier loading when only the model is directly resolved', async () => {
-    const workspace = await workspaceWithConfig({
-      'texra.chat': { agent: 'assistant', model: 'sonnet46T' },
+  it('lets the environment outrank config and an override outrank both', async () => {
+    await withConfig({
+      workspace: { 'texra.chat': { agent: 'assistant', model: 'deepseekT' } },
     });
 
     await expectChatDefaults(
-      { cwd: workspace, modelOverride: 'deepseekT' },
-      {
-        agent: 'assistant',
-        model: 'deepseekT',
-        modelSource: 'explicit-override',
-      },
+      { envModel: 'sonnet46T' },
+      { agent: 'assistant', model: 'sonnet46T', modelSource: 'environment' },
     );
-    expect(mockedLoadWorkspaceCliConfig).toHaveBeenCalledOnce();
-  });
-
-  it('skips workspace and user I/O when environment resolves agent and model', async () => {
-    // A user config that would otherwise win, left unread.
-    await writeUserConfig({ 'texra.agent': 'generic', 'texra.model': 'gpt55' });
-
     await expectChatDefaults(
-      { cwd: NO_WORKSPACE, envAgent: 'assistant', envModel: 'sonnet46T' },
-      {
-        agent: 'assistant',
-        model: 'sonnet46T',
-        modelSource: 'environment',
-      },
+      { envModel: 'sonnet46T', modelOverride: 'gpt55' },
+      { model: 'gpt55', modelSource: 'explicit-override' },
     );
-    expect(mockedLoadWorkspaceCliConfig).not.toHaveBeenCalled();
   });
 
-  it('still loads the model tiers when only the agent is directly resolved', async () => {
-    const workspace = await workspaceWithConfig({
-      'texra.chat': { model: 'sonnet46T' },
+  it('ignores an agent that cannot be an implicit default, unless it is explicit', async () => {
+    await withConfig({
+      workspace: { 'texra.chat': { agent: 'simplifier', model: 'sonnet46T' } },
     });
 
+    // Configured and environment tiers drop it; the explicit flag keeps it.
+    await expectChatDefaults({}, { agent: 'assistant', model: 'sonnet46T' });
     await expectChatDefaults(
-      { cwd: workspace, agentOverride: 'simplifier' },
-      {
-        agent: 'simplifier',
-        model: 'sonnet46T',
-        modelSource: 'workspace-config',
-      },
+      { envAgent: 'simplifier' },
+      { agent: 'assistant' },
     );
-    expect(mockedLoadWorkspaceCliConfig).toHaveBeenCalledOnce();
-  });
-
-  it('uses prefixed command-specific workspace defaults', async () => {
-    const workspace = await workspaceWithConfig(CHAT_TIER_CONFIG);
-
     await expectChatDefaults(
-      { cwd: workspace },
-      {
-        agent: 'assistant',
-        model: 'deepseekT',
-      },
+      { agentOverride: 'simplifier' },
+      { agent: 'simplifier' },
     );
-  });
-
-  it('uses the shared config parser for prefixed user chat defaults', async () => {
-    await writeUserConfig(CHAT_TIER_CONFIG);
-
-    await expectChatDefaults(
-      { cwd: NO_WORKSPACE },
-      {
-        agent: 'assistant',
-        model: 'deepseekT',
-        modelSource: 'user-config',
-      },
-    );
-  });
-
-  it('warns instead of silently dropping defaults when the user config is corrupt', async () => {
-    // Not an absent file — e.g. truncated/hand-edited JSON. The old behavior
-    // caught every read failure alike and silently fell through to {},
-    // indistinguishable from "no user config".
-    await writeUserConfigText('{ "texra.agent": ');
-    const warnSpy = vi
-      .spyOn(logSinks, 'writeTextStderr')
-      .mockImplementation(() => {});
-
-    await expectChatDefaults(
-      { cwd: NO_WORKSPACE },
-      {
-        agent: 'assistant',
-        model: 'deepseekproT',
-      },
-    );
-
-    expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining('config.json'),
-    );
-    warnSpy.mockRestore();
-  });
-
-  it('suppresses user-config warnings under --quiet', async () => {
-    // These warnings are printed inside resolveChatDefaults itself, not
-    // through contextFromArgs's gated configWarnings path, so they need
-    // their own --quiet check to avoid always printing regardless of it.
-    await writeUserConfigText('{ "texra.agent": ');
-    const warnSpy = vi
-      .spyOn(logSinks, 'writeTextStderr')
-      .mockImplementation(() => {});
-
-    await expectChatDefaults(
-      { cwd: NO_WORKSPACE, quiet: true },
-      {
-        agent: 'assistant',
-        model: 'deepseekproT',
-      },
-    );
-
-    expect(warnSpy).not.toHaveBeenCalled();
-    warnSpy.mockRestore();
-  });
-
-  it('warns instead of silently dropping defaults when the user config is not an object', async () => {
-    // Valid JSON, wrong top-level shape (e.g. hand-edited to an array) —
-    // distinct from the corrupt-JSON case above, and from a missing file.
-    await writeUserConfig([]);
-    const warnSpy = vi
-      .spyOn(logSinks, 'writeTextStderr')
-      .mockImplementation(() => {});
-
-    await expectChatDefaults(
-      { cwd: NO_WORKSPACE },
-      {
-        agent: 'assistant',
-        model: 'deepseekproT',
-      },
-    );
-
-    expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining('expected a JSON object'),
-    );
-    warnSpy.mockRestore();
-  });
-
-  it('does not warn about unknown top-level keys in the shared user config', async () => {
-    // config.json is shared by all three hosts; a setting only the
-    // extension or desktop honors is not "unknown" from the user's
-    // perspective just because the CLI doesn't read it.
-    await writeUserConfig({
-      'agentReview.runOnCommit': true,
-      'texra.agent': 'assistant',
-    });
-    const warnSpy = vi
-      .spyOn(logSinks, 'writeTextStderr')
-      .mockImplementation(() => {});
-
-    await expectChatDefaults(
-      { cwd: NO_WORKSPACE },
-      {
-        agent: 'assistant',
-      },
-    );
-
-    expect(warnSpy).not.toHaveBeenCalled();
-    warnSpy.mockRestore();
-  });
-
-  it('still warns about an unknown key inside the CLI-exclusive chat section', async () => {
-    // Unlike the shared top level, texra.chat.* is CLI-only structure in
-    // every host — nothing else reads or writes it — so a typo here (e.g.
-    // "modle" for "model") is always worth a warning, not suppressed by the
-    // same reportUnknownKeys: false that guards the shared top-level rows.
-    await writeUserConfig({
-      'texra.agent': 'assistant',
-      'texra.chat': { modle: 'deepseekT' },
-    });
-    const warnSpy = vi
-      .spyOn(logSinks, 'writeTextStderr')
-      .mockImplementation(() => {});
-
-    await expectChatDefaults(
-      { cwd: NO_WORKSPACE },
-      {
-        agent: 'assistant',
-      },
-    );
-
-    expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining('texra.chat.modle'),
-    );
-    warnSpy.mockRestore();
-  });
-
-  it('does not warn about fields this tier does not resolve', async () => {
-    // agent/model (top-level and chat.*) are the only fields
-    // defaultsFromConfigValues reads here. approvalPolicy is already
-    // validated and warned about separately by loadUserApprovalPolicy;
-    // outputFormat and run.* are never consumed by chat defaults at all.
-    // Warning about them here would duplicate that other warning and, since
-    // orchestrate's launcher loop calls resolveChatDefaults on every
-    // iteration, would reprint on every pass through the loop.
-    await writeUserConfig({
-      'texra.agent': 'assistant',
-      'texra.approvalPolicy': 'not-a-real-policy',
-      'texra.outputFormat': 'not-a-real-format',
-      'texra.run': { model: 42 },
-    });
-    const warnSpy = vi
-      .spyOn(logSinks, 'writeTextStderr')
-      .mockImplementation(() => {});
-
-    await expectChatDefaults(
-      { cwd: NO_WORKSPACE },
-      {
-        agent: 'assistant',
-      },
-    );
-
-    expect(warnSpy).not.toHaveBeenCalled();
-    warnSpy.mockRestore();
-  });
-
-  it('warns once for an invalid user-config field', async () => {
-    const invalidModel = {
-      'texra.agent': 'assistant',
-      'texra.model': 'not-a-real-model-xyz',
-    };
-    const warnSpy = vi
-      .spyOn(logSinks, 'writeTextStderr')
-      .mockImplementation(() => {});
-
-    await writeUserConfig(invalidModel);
-    await resolveChatDefaults({ cwd: NO_WORKSPACE });
-    expect(warnSpy).toHaveBeenCalledTimes(1);
-
-    warnSpy.mockRestore();
   });
 });

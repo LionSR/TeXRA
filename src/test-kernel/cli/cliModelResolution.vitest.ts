@@ -4,15 +4,13 @@ import {
   buildHeadlessRunContext,
   selectCliRunModel,
 } from '@cli/runtime/runModel';
-import {
-  CLI_BUILTIN_DEFAULT_MODEL,
-  type CliConfigValues,
-} from '@cli/runtime/cliConfig';
+import { CLI_CHEAP_START_MODEL } from '@cli/runtime/cliConfig';
 import { CliUsageError, type CliContext } from '@cli/runtime/cliContext';
 import { selectCliRunnableModel } from '@cli/runtime/modelAccess';
 import { effectRuntime } from '@platform/processRuntime';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
-import { fakeStores } from '@test/support/FakePlatform';
+import { FakeConfigProvider, fakeStores } from '@test/support/FakePlatform';
+import { installPlatform } from '@test/support/setupPlatform';
 
 const mocks = vi.hoisted(() => ({
   selectCliRunnableModel: vi.fn(),
@@ -44,7 +42,14 @@ function makeContext(partial: Partial<CliContext> = {}): CliContext {
   });
 }
 
-const runConfig = (model: string): CliConfigValues => ({ run: { model } });
+/** Installs a host whose config carries `texra.run.model` — the tier
+ *  `selectCliRunModel` resolves through the workspace roots. */
+function withRunModel(model: string): Promise<void> {
+  return installPlatform(
+    {},
+    { config: new FakeConfigProvider({ 'texra.run': { model } }) },
+  );
+}
 
 /** The stores each command hands to `selectCliRunModel`; model access is mocked. */
 const STORES = { ...fakeStores(), runtime: effectRuntime() };
@@ -55,16 +60,14 @@ describe('selectCliRunModel precedence', () => {
     selectCliRunnableModelMock.mockImplementation(async (request) => ({
       model: Array.isArray(request)
         ? (request.find((candidate) => candidate.model)?.model ??
-          CLI_BUILTIN_DEFAULT_MODEL)
+          CLI_CHEAP_START_MODEL)
         : request,
     }));
   });
 
   it('passes the full run-model candidate list to model access', async () => {
-    const context = makeContext({
-      envModel: OTHER_MODEL,
-      cliConfig: runConfig('deepseekR'),
-    });
+    await withRunModel('deepseekR');
+    const context = makeContext({ envModel: OTHER_MODEL });
 
     await selectCliRunModel(context, KNOWN_MODEL, 'run', STORES);
 
@@ -73,16 +76,15 @@ describe('selectCliRunModel precedence', () => {
         { model: KNOWN_MODEL, reason: 'explicit-override' },
         { model: OTHER_MODEL, reason: 'environment' },
         { model: 'deepseekR', reason: 'command-config' },
-        { model: CLI_BUILTIN_DEFAULT_MODEL, reason: 'builtin-default' },
+        { model: CLI_CHEAP_START_MODEL, reason: 'builtin-default' },
       ],
       { stores: STORES },
     );
   });
 
   it('checks model access before returning the model', async () => {
-    const context = makeContext({
-      cliConfig: runConfig('staleConfiguredModel'),
-    });
+    await withRunModel('staleConfiguredModel');
+    const context = makeContext();
     selectCliRunnableModelMock.mockResolvedValueOnce({
       model: 'deepseekT',
       notice: 'Using deepseekT instead.',
@@ -103,9 +105,8 @@ describe('selectCliRunModel precedence', () => {
   });
 
   it('does not fall back from an explicit unavailable model', async () => {
-    const context = makeContext({
-      cliConfig: runConfig('deepseekT'),
-    });
+    await withRunModel('deepseekT');
+    const context = makeContext();
     selectCliRunnableModelMock.mockRejectedValueOnce(
       new Error(
         'Model "opus48T" is not available (missing key). Available models: deepseekT.',

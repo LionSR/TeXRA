@@ -14,12 +14,12 @@ import {
   writeInitConfig,
   type InitAnswers,
 } from '@cli/runtime/initConfig';
-import {
-  loadWorkspaceCliConfig,
-  setWorkspaceCliChatAgent,
-} from '@cli/runtime/cliConfig';
+import { setWorkspaceCliChatAgent } from '@cli/runtime/cliConfig';
 import { workspaceTexraConfigPath } from '@platform/defaults/nodeStorage';
-import { nodePlatformLayer } from '@test/support/fsTestUtils';
+import { readSettingFrom } from '@utils/config/platformSettings';
+import { FakeConfigProvider } from '@test/support/FakePlatform';
+import { installPlatform } from '@test/support/setupPlatform';
+import { platformSettingsStores } from '@utils/config/platformSettings';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
 vi.mock('node:fs/promises', async (importOriginal) => {
@@ -65,39 +65,39 @@ describe('writeInitConfig', () => {
 });
 
 describe('setWorkspaceCliChatAgent', () => {
-  it.effect(
-    'updates only chat.agent and preserves other workspace defaults',
-    () =>
-      Effect.gen(function* () {
-        const workspace = yield* Effect.promise(() =>
-          makeTempDir('texra-chat-default-', tempDirs),
-        );
-        const configPath = workspaceTexraConfigPath(workspace);
-        yield* Effect.promise(() =>
-          writeInitConfig(configPath, buildInitConfig(ANSWERS)),
-        );
+  it('updates only chat.agent and preserves the other command defaults', async () => {
+    await installPlatform(
+      {},
+      {
+        config: new FakeConfigProvider({
+          'texra.model': 'deepseekT',
+          'texra.chat': { agent: 'chat', model: 'deepseekT' },
+        }),
+      },
+    );
+    const chatSection = () =>
+      readSettingFrom(platformSettingsStores(), 'texra.chat');
 
-        yield* setWorkspaceCliChatAgent(workspace, 'builtInToolUse:review');
+    await Effect.runPromise(setWorkspaceCliChatAgent('builtInToolUse:review'));
+    expect(chatSection()).toEqual({
+      agent: 'builtInToolUse:review',
+      model: 'deepseekT',
+    });
+    expect(readSettingFrom(platformSettingsStores(), 'texra.model')).toBe(
+      'deepseekT',
+    );
 
-        const raw = JSON.parse(
-          yield* Effect.promise(() => nodeReadFile(configPath, 'utf8')),
-        ) as {
-          'texra.model': string;
-          'texra.chat': { agent: string; model: string };
-        };
-        expect(raw['texra.model']).toBe('deepseekT');
-        expect(raw['texra.chat']).toEqual({
-          agent: 'builtInToolUse:review',
-          model: 'deepseekT',
-        });
-        const withAgent = yield* loadWorkspaceCliConfig(workspace);
-        expect(withAgent.values.chat?.agent).toBe('builtInToolUse:review');
+    await Effect.runPromise(setWorkspaceCliChatAgent(undefined));
+    expect(chatSection()).toEqual({ model: 'deepseekT' });
+  });
 
-        yield* setWorkspaceCliChatAgent(workspace, undefined);
-        const cleared = yield* loadWorkspaceCliConfig(workspace);
-        expect(cleared.values.chat).toEqual({ model: 'deepseekT' });
-      }).pipe(Effect.provide(nodePlatformLayer)),
-  );
+  it('refuses an empty agent rather than clearing the default', async () => {
+    await installPlatform({}, { config: new FakeConfigProvider() });
+
+    await expect(
+      Effect.runPromise(setWorkspaceCliChatAgent('   ')),
+    ).rejects.toThrow('must not be empty');
+  });
 });
 
 describe('ensureTexraGitignored', () => {

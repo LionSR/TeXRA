@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import { initCliPlatform } from '@cli/runtime/initPlatform';
+import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
 import { StateWriteFailed } from '@platform/interfaces';
 import { effectRuntime } from '@platform/processRuntime';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -68,7 +69,6 @@ const mocks = vi.hoisted(() => ({
   initializeCliSupabaseAuth: vi.fn(),
   initializeNodeRuntimeSkills: vi.fn(),
   getCliSecrets: vi.fn(() => ({ kind: 'cli-secrets' })),
-  openTexraConfigStores: vi.fn(),
   cliGlobalState: { get: vi.fn(), update: vi.fn() },
   tryPlatform: vi.fn(),
   publishPlatform: vi.fn(),
@@ -156,13 +156,6 @@ vi.mock('@platform/defaults/lifecycleHost', () => ({
   }),
 }));
 
-// The workspace/global config store pair (and its degrade-to-internal-store
-// rule) is shared with the extension and desktop hosts; stubbed here so this
-// test exercises only the CLI-specific wiring.
-vi.mock('@platform/defaults/nodeStores', () => ({
-  openTexraConfigStores: mocks.openTexraConfigStores,
-}));
-
 vi.mock('@platform/defaults/nodeFilesystem', () => ({ nodeFilesystem: {} }));
 
 vi.mock('@platform/defaults/nodeWorkspace', () => ({
@@ -201,6 +194,9 @@ function cliContext(
     version: '0.0.0-test',
     quietLogs: true,
     skillSourceOptions: {},
+    // The provider the startup read opens and this init installs as the
+    // roots' config, handed over rather than opened a second time here.
+    config: new MemoryConfigProvider(),
     ...overrides,
   };
 }
@@ -251,9 +247,6 @@ describe('CLI platform init', () => {
     mocks.cliGlobalState.update.mockReturnValue(Effect.void);
     mocks.tryPlatform.mockReset();
     mocks.tryPlatform.mockReturnValue({ globalState: stubGlobalState() });
-    mocks.openTexraConfigStores.mockReturnValue(
-      Effect.succeed({ workspace: {}, global: {} }),
-    );
     mocks.authenticated = false;
   });
 
@@ -357,36 +350,6 @@ describe('CLI platform init', () => {
     } finally {
       interruptCodex.mockRestore();
       interruptClaude.mockRestore();
-    }
-  });
-
-  it('shows one project-config degradation warning with its cause in quiet mode', async () => {
-    mocks.tryPlatform.mockReturnValueOnce(undefined);
-    mocks.openTexraConfigStores.mockImplementationOnce(
-      (_storage: unknown, _cwd: string, warn: (message: string) => void) =>
-        Effect.sync(() => {
-          warn(
-            'Cannot open project .texra/config.json; using the internal workspace config store. Cause: Unexpected token } in JSON at position 0',
-          );
-          return { workspace: {}, global: {} };
-        }),
-    );
-    const stderrWrite = vi
-      .spyOn(process.stderr, 'write')
-      .mockImplementation(() => true);
-
-    try {
-      await initCliPlatform(cliContext({ installSignalHandlers: false }));
-
-      expect(stderrWrite).toHaveBeenCalledOnce();
-      expect(stderrWrite).toHaveBeenCalledWith(
-        expect.stringContaining(
-          'Cause: Unexpected token } in JSON at position 0',
-        ),
-        expect.any(Function),
-      );
-    } finally {
-      stderrWrite.mockRestore();
     }
   });
 
