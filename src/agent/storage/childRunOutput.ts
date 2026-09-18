@@ -1,7 +1,6 @@
 import { Effect } from 'effect';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { runInSession } from '@agent/runtime/RunContext';
 import {
   RUN_OUTCOME,
   type RunId,
@@ -9,8 +8,8 @@ import {
 } from '@shared/schemas';
 import { ensureError } from '@utils/errors/errorMessage';
 import {
-  inspectRunStorageEntry,
-  runStorageLocationFromAnyAbsolutePath,
+  inspectRunStorageEntryUnder,
+  runStorageLocationUnder,
 } from '@utils/files/runStorageFs';
 
 import { getRunRecords } from './runRecords';
@@ -26,7 +25,8 @@ export const resolveChildRunOutput = Effect.fn('resolveChildRunOutput')(
     absolutePath: string,
     session: SessionHandle,
   ): Effect.fn.Return<RunStorageFileLocation | undefined, Error> {
-    const reference = runStorageLocationFromAnyAbsolutePath(absolutePath);
+    const storageRoot = session.roots.storage;
+    const reference = runStorageLocationUnder(storageRoot, absolutePath);
     if (!reference) {
       return yield* Effect.fail(
         new Error('Workflow output is not inside run storage.'),
@@ -72,8 +72,10 @@ export const resolveChildRunOutput = Effect.fn('resolveChildRunOutput')(
 
     const entry = yield* Effect.tryPromise({
       try: () =>
-        runInSession(session, () =>
-          inspectRunStorageEntry(reference.runId, reference.relativePath),
+        inspectRunStorageEntryUnder(
+          storageRoot,
+          reference.runId,
+          reference.relativePath,
         ),
       catch: ensureError,
     });

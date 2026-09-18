@@ -32,7 +32,7 @@ import { installPlatform } from '@test/support/setupPlatform';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { AcceptRunFilesTool } from '@tools/AcceptRunFilesTool';
 import { type ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
-import { StorageFS } from '@utils/files/storageFS';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
 
 // Local file imports
 import { autoDecideRequests, createRecordingHost } from '../progressTestUtils';
@@ -158,8 +158,10 @@ function runStorageStat(type: number): FileStat {
   return { type, ctime: 0, mtime: 0, size: 1 };
 }
 
+/** `root` is the storage root the call under test carries as data. */
 function setRunStorageEntries(
   entries: Readonly<Record<string, number>> = {},
+  root: string = storagePath,
 ): void {
   const types = new Map<string, number>([
     [`executions/${runId}`, FileType.Directory],
@@ -172,11 +174,14 @@ function setRunStorageEntries(
       parent = path.posix.dirname(parent);
     }
   }
-  vi.spyOn(StorageFS, 'exists').mockImplementation(async (target) =>
-    types.has(target),
+  const rooted = new Map(
+    [...types].map(([target, type]) => [path.join(root, target), type]),
   );
-  vi.spyOn(StorageFS, 'stat').mockImplementation(async (target) => {
-    const type = types.get(target);
+  vi.spyOn(AbsoluteFS, 'exists').mockImplementation(async (target) =>
+    rooted.has(target),
+  );
+  vi.spyOn(AbsoluteFS, 'stat').mockImplementation(async (target) => {
+    const type = rooted.get(target);
     if (type !== undefined) return runStorageStat(type);
     throw Object.assign(new Error(`Missing: ${target}`), { code: 'ENOENT' });
   });
@@ -226,12 +231,6 @@ describe('accept_run_files progress events', () => {
     absoluteContentFallback = '';
     await installTestPlatform();
     session.approvals.clearAll();
-    // Shared by every test below that stubs the run/workspace paths;
-    // the test that doesn't need it (missing runtime host) fails before
-    // reaching either function.
-    vi.spyOn(StorageFS, 'fullPath').mockImplementation(
-      (target) => `${storagePath}/${target}`,
-    );
   });
 
   afterEach(async () => {
@@ -407,10 +406,7 @@ describe('accept_run_files progress events', () => {
         let approvalProposed = '';
         const { written, dispose } = recordWrittenFiles();
 
-        setRunStorageEntries();
-        vi.spyOn(StorageFS, 'fullPath').mockImplementation(
-          (target) => `${workspaceRoots().storage}/${target}`,
-        );
+        setRunStorageEntries({}, projectRoots.storage);
         workspaceReads.set('draft.tex', {
           exists: true,
           content: 'current project',

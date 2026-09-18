@@ -28,7 +28,7 @@ import { RunLedger } from '@shared/session/runLedger';
 import { emptyRunEndOutput } from '@shared/schemas';
 import { provideAgentEngine } from '@tools/delegation/nativeSubagentStrategy';
 import { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
-import { ensureRunDir } from '@utils/files/runStorageFs';
+import { ensureRunDirUnder } from '@utils/files/runStorageFs';
 import { ensureError } from '@utils/errors/errorMessage';
 
 import {
@@ -567,7 +567,7 @@ export function executeAgent(
               const parentRunId = handle.deliveryTarget;
               // Pre-run UI setup (RUNNING is set by runFlowWithLifecycle)
               yield* Effect.tryPromise({
-                try: () => runInScope(() => ensureRunDir(runId)),
+                try: () => ensureRunDirUnder(runSession.roots.storage, runId),
                 catch: ensureError,
               });
               logger.info(`Starting task run (runId: ${runId})`);

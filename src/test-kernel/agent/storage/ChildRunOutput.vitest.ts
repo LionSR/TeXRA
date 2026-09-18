@@ -1,3 +1,5 @@
+import * as path from 'node:path';
+
 import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { beforeEach, describe, expect } from 'vitest';
@@ -16,7 +18,7 @@ import {
 } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { fakePath } from '@test/support/FakePlatform';
-import { StorageFS } from '@utils/files/storageFS';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
 
 const parentRunId = 'aaaaaa111111' as RunId;
 const childRunId = 'bbbbbb222222' as RunId;
@@ -62,7 +64,9 @@ function completedWorkflowResult(absolutePath: string): ResultMeta {
 
 const persistCompletedChild = (parentId: RunId = parentRunId) =>
   Effect.gen(function* () {
-    const absolutePath = StorageFS.fullPath(
+    const storageRoot = session.roots.storage;
+    const absolutePath = path.join(
+      storageRoot,
       `executions/${childRunId}/${relativePath}`,
     );
     publishTestRunStart(session, parentId);
@@ -91,11 +95,11 @@ const persistCompletedChild = (parentId: RunId = parentRunId) =>
       },
     ]);
     yield* Effect.promise(() =>
-      StorageFS.ensureDir(`executions/${childRunId}/r1`),
+      AbsoluteFS.ensureDir(
+        path.join(storageRoot, `executions/${childRunId}/r1`),
+      ),
     );
-    yield* Effect.promise(() =>
-      StorageFS.write(`executions/${childRunId}/${relativePath}`, 'draft'),
-    );
+    yield* Effect.promise(() => AbsoluteFS.write(absolutePath, 'draft'));
     return absolutePath;
   });
 
@@ -134,9 +138,7 @@ describe('resolveChildRunOutput', () => {
       Effect.gen(function* () {
         const absolutePath = yield* persistCompletedChild();
         const undeclaredPath = absolutePath.replace('draft.tex', 'notes.tex');
-        yield* Effect.promise(() =>
-          StorageFS.write(`executions/${childRunId}/r1/notes.tex`, 'notes'),
-        );
+        yield* Effect.promise(() => AbsoluteFS.write(undeclaredPath, 'notes'));
 
         const error = yield* Effect.flip(
           resolveChildRunOutput(parentRunId, undeclaredPath, session),
@@ -148,9 +150,7 @@ describe('resolveChildRunOutput', () => {
   it.effect('fails loudly when a declared output has disappeared', () =>
     Effect.gen(function* () {
       const absolutePath = yield* persistCompletedChild();
-      yield* Effect.promise(() =>
-        StorageFS.delete(`executions/${childRunId}/${relativePath}`),
-      );
+      yield* Effect.promise(() => AbsoluteFS.delete(absolutePath));
 
       const error = yield* Effect.flip(
         resolveChildRunOutput(parentRunId, absolutePath, session),

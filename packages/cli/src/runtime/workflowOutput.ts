@@ -15,7 +15,7 @@ import {
 import { runOutcomeToCliRunStatus } from '@shared/runs/runStatus';
 import { parseWorkflowOutputRoundDir } from '@shared/constants/workflowOutput';
 import { getSafeDocumentRelativePath } from '@utils/files/outputFileUtils';
-import { getRunDir } from '@utils/files/runStorageFs';
+import { runDirUnder } from '@utils/files/runStorageFs';
 // toPosixPath also trims and resolves `.`/`..` segments beyond a bare slash
 // swap; safe here since these paths come from getSafeDocumentRelativePath /
 // path.relative on the workflow's own generated outputs, never user input.
@@ -149,6 +149,8 @@ export type CliWorkflowRunResult = CliRunResult & {
 interface WorkflowOutputResolutionOptions {
   readonly expectedOutputFiles?: readonly string[];
   readonly runDirectory?: string;
+  /** Storage root of the session that ran the workflow. */
+  readonly storageRoot: string;
   readonly tryCommitPublication?: () => boolean;
 }
 
@@ -245,7 +247,8 @@ export async function resolveWorkflowOutput(
   context: CliContext,
   options: WorkflowOutputResolutionOptions,
 ): Promise<CliWorkflowRunResult> {
-  const runDirectory = options.runDirectory ?? getRunDir(result.runId);
+  const runDirectory =
+    options.runDirectory ?? runDirUnder(options.storageRoot, result.runId);
   const baseResult = { ...result, workingDirectory: context.cwd, runDirectory };
   // Only completed runs may publish to user-requested destinations. Partial or
   // rejected artifacts remain inspectable in run storage through baseResult.

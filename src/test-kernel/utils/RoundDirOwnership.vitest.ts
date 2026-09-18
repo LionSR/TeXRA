@@ -20,7 +20,10 @@ import { installPlatform as installFakePlatform } from '@test/support/setupPlatf
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { createWorkspaceLocation } from '@utils/files/fileLocation';
-import { getOriginalSnapshotPath, getRunDir } from '@utils/files/runStorageFs';
+import {
+  originalSnapshotPathUnder,
+  runDirUnder,
+} from '@utils/files/runStorageFs';
 import { RunFileService } from '@utils/files/runStorage';
 
 const tempDirs = useTempDirs();
@@ -81,7 +84,11 @@ describe('round-dir ownership and editable .tex inheritance', () => {
       { snapshot: true },
     );
 
-    const snapshotPath = getOriginalSnapshotPath(runId, 'Draft/Draft.tex');
+    const snapshotPath = originalSnapshotPathUnder(
+      workspaceRoots().storage,
+      runId,
+      'Draft/Draft.tex',
+    );
     await expect(readFile(snapshotPath, 'utf8')).resolves.toBe(
       workspaceOriginal,
     );
@@ -89,7 +96,7 @@ describe('round-dir ownership and editable .tex inheritance', () => {
     await fileService.ensureMirroredInRoundDir(1);
 
     const roundFilePath = path.join(
-      getRunDir(runId),
+      runDirUnder(workspaceRoots().storage, runId),
       'r1',
       'Draft',
       'Draft.tex',
@@ -134,15 +141,23 @@ describe('round-dir ownership and editable .tex inheritance', () => {
       createWorkspaceLocation(stylePath, 'macros.sty'),
     );
 
-    const snapshotPath = getOriginalSnapshotPath(runId, 'macros.sty');
+    const snapshotPath = originalSnapshotPathUnder(
+      workspaceRoots().storage,
+      runId,
+      'macros.sty',
+    );
     await expect(stat(snapshotPath)).rejects.toMatchObject({ code: 'ENOENT' });
 
     await fileService.ensureMirroredInRoundDir(1);
 
-    const roundFilePath = path.join(getRunDir(runId), 'r1', 'macros.sty');
+    const roundFilePath = path.join(
+      runDirUnder(workspaceRoots().storage, runId),
+      'r1',
+      'macros.sty',
+    );
     await expectSymlinkTargeting(
       roundFilePath,
-      path.join(getRunDir(runId), 'macros.sty'),
+      path.join(runDirUnder(workspaceRoots().storage, runId), 'macros.sty'),
     );
   });
 

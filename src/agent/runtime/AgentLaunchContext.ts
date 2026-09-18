@@ -185,7 +185,7 @@ export const failIfLaunchStopped = (
 
 /**
  * Run `fn` in the scope of the launch's owning session, so session-rooted
- * services (`StorageFS`, `workspaceRootPath`) resolve to the run's session. This is
+ * services (`workspaceRootPath`) resolve to the run's session. This is
  * the `inScope` the run layer hands to everything below the launch.
  */
 export function runInLaunchSession<T>(ctx: AgentLaunchContext, fn: () => T): T {
@@ -535,6 +535,7 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
           // names, readable-file reads and CWD resolve against this project's
           // folder rather than whatever roots the calling fiber carries.
           workspacePath: session.roots.workspace,
+          storageRoot: session.roots.storage,
           delegationAgentScope: config.delegationAgentScope,
           stageId,
         },

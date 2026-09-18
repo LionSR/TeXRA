@@ -28,7 +28,7 @@ import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
 import { unique } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
-import { getRunDir, ensureRunDir } from '@utils/files/runStorageFs';
+import { runDirUnder, ensureRunDirUnder } from '@utils/files/runStorageFs';
 import { sanitizePathSegment } from '@utils/text/sanitizePathSegment';
 import { countLines, formatDuration } from '@utils/text/stringUtils';
 import { unifiedDiffText } from '@utils/text/unifiedDiff';
@@ -335,6 +335,7 @@ interface DiffFileInfo {
  * Files without an original (new files) or where reading fails are omitted.
  */
 async function computeAndWriteWorkflowDiffs(
+  storageRoot: string,
   runId: RunId,
   outputs: OutputFileSummary[],
 ): Promise<Map<string, DiffFileInfo>> {
@@ -388,8 +389,8 @@ async function computeAndWriteWorkflowDiffs(
 
   // Second pass: write diff files to disk.
   if (diffsToWrite.length > 0) {
-    const runDir = getRunDir(runId);
-    await ensureRunDir(runId);
+    const runDir = runDirUnder(storageRoot, runId);
+    await ensureRunDirUnder(storageRoot, runId);
     const diffsDir = path.join(runDir, 'diffs');
     await AbsoluteFS.ensureDir(diffsDir);
 
@@ -420,6 +421,8 @@ export async function buildSubagentResult(
   result: AgentFlowResult,
   options: {
     readonly startedAt: number;
+    /** Storage root of the launching session: where this run's diffs land. */
+    readonly storageRoot: string;
   },
 ): Promise<SubagentResultMeta> {
   let diffInfos: Map<string, DiffFileInfo> | undefined;
@@ -430,6 +433,7 @@ export async function buildSubagentResult(
   ) {
     try {
       diffInfos = await computeAndWriteWorkflowDiffs(
+        options.storageRoot,
         runId,
         result.output.outputs,
       );

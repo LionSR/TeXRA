@@ -274,7 +274,7 @@ export class SessionHandle {
   readonly transcripts: StreamLogStore;
   /**
    * The workspace this session works on: the four per-workspace host roots.
-   * Runs and `runInSession` scopes resolve `StorageFS`/`workspaceRootPath` and the
+   * Runs and `runInSession` scopes resolve `workspaceRootPath` and the
    * workspace config/state through these, so several sessions in one process
    * each write under their own folder.
    */

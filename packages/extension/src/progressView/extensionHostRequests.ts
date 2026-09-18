@@ -300,6 +300,7 @@ export function createExtensionHostRequests(
 
   const workflowFileActions = new ProgressWorkflowFileActionsController({
     state: runOutputs,
+    storageRoot: session.roots.storage,
     host: {
       compareFiles: (baseFile, editedFile) =>
         runCommand(

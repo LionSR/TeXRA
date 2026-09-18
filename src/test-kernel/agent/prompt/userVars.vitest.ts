@@ -32,6 +32,7 @@ import {
   resolveOutputFiles,
 } from '@agent/prompt/userVars';
 import type { ConfigProvider } from '@platform/interfaces';
+import { workspaceRoots } from '@platform/workspaceRoots';
 import { AgentCategory } from '@shared/schemas';
 import { setRuntimeSkillSources } from '@skills/runtimeSkills';
 import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
@@ -128,7 +129,10 @@ describe('buildUserVars runtime skill diagnostics', () => {
       fakePath('agents/generic'),
       { isOpenai: false, isAnthropic: false, isGoogle: false },
       spiedTrace({ warn, emit }),
-      { workspacePath: fakePath('workspace') },
+      {
+        workspacePath: fakePath('workspace'),
+        storageRoot: workspaceRoots().storage,
+      },
     );
 
     expect(vars.AVAILABLE_SKILLS).toBe('');
@@ -149,7 +153,10 @@ describe('buildUserVars runtime skill diagnostics', () => {
       fakePath('agents/generic'),
       { isOpenai: false, isAnthropic: false, isGoogle: false },
       spiedTrace({ warn, emit }),
-      { workspacePath: fakePath('workspace') },
+      {
+        workspacePath: fakePath('workspace'),
+        storageRoot: workspaceRoots().storage,
+      },
     );
 
     expect(vars.AVAILABLE_SKILLS).toBe('');
@@ -183,7 +190,10 @@ describe('buildUserVars runtime skill diagnostics', () => {
       fakePath('agents/generic'),
       { isOpenai: false, isAnthropic: false, isGoogle: false },
       spiedTrace({ emit }),
-      { workspacePath: fakePath('workspace') },
+      {
+        workspacePath: fakePath('workspace'),
+        storageRoot: workspaceRoots().storage,
+      },
     );
 
     expect(emit).toHaveBeenCalledExactlyOnceWith({
@@ -208,7 +218,10 @@ describe('buildUserVars runtime skill diagnostics', () => {
       fakePath('agents/generic'),
       { isOpenai: false, isAnthropic: false, isGoogle: false },
       spiedTrace({ emit }),
-      { workspacePath: fakePath('workspace') },
+      {
+        workspacePath: fakePath('workspace'),
+        storageRoot: workspaceRoots().storage,
+      },
     );
 
     expect(emit).not.toHaveBeenCalled();
@@ -284,7 +297,10 @@ function buildVars(
     fakePath('agents/generic'),
     { isOpenai: false, isAnthropic: false, isGoogle: false },
     noopTrace,
-    { workspacePath: fakePath('workspace') },
+    {
+      workspacePath: fakePath('workspace'),
+      storageRoot: workspaceRoots().storage,
+    },
   );
 }
 

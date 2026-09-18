@@ -242,7 +242,10 @@ export function createNativeSubagentStrategy(
         params.runId,
         params.agentName,
         result,
-        { startedAt: params.startedAt },
+        {
+          startedAt: params.startedAt,
+          storageRoot: params.session.roots.storage,
+        },
       );
     }
     return cachedBuilt;

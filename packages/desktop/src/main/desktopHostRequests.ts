@@ -348,6 +348,7 @@ export function createDesktopHostRequests(
 
   const workflowFileActions = new ProgressWorkflowFileActionsController({
     state: runOutputs,
+    storageRoot: session.roots.storage,
     host: {
       compareFiles: (baseFile, editedFile) =>
         fileActions.compareFiles(baseFile, editedFile),

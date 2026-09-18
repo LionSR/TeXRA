@@ -6,7 +6,11 @@ import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { createLog } from '@logger/logUtils';
 import type { AcceptCopyMeta, RunId } from '@shared/schemas';
 import type { HostRequest } from '@shared/session/hostRequest';
-import { ensureRunDir, findRunDir, getRunDir } from '@utils/files/runStorageFs';
+import {
+  ensureRunDirUnder,
+  findRunDirUnder,
+  runDirUnder,
+} from '@utils/files/runStorageFs';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { RunOutputsSource } from './runOutputs';
 
@@ -34,6 +38,8 @@ interface ProgressWorkflowFileActionsHost {
 interface ProgressWorkflowFileActionsControllerDeps {
   state: ProgressWorkflowFileActionsState;
   host: ProgressWorkflowFileActionsHost;
+  /** Storage root of the session whose runs this controller acts on. */
+  storageRoot: string;
   sendFollowUp(stream: RunId, text: string): Promise<void>;
 }
 
@@ -67,10 +73,11 @@ export class ProgressWorkflowFileActionsController {
 
   async openTaskStorage(runId: RunId): Promise<void> {
     try {
-      let directoryToReveal = await findRunDir(runId);
+      const storageRoot = this.deps.storageRoot;
+      let directoryToReveal = await findRunDirUnder(storageRoot, runId);
       if (!directoryToReveal) {
-        await ensureRunDir(runId);
-        directoryToReveal = getRunDir(runId);
+        await ensureRunDirUnder(storageRoot, runId);
+        directoryToReveal = runDirUnder(storageRoot, runId);
       }
       await this.deps.host.openDirectory(directoryToReveal);
     } catch (error) {

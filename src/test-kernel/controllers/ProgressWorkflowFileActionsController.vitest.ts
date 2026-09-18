@@ -56,6 +56,7 @@ function createDeps(
       getOutputFiles: () => ({}),
     },
     host,
+    storageRoot: '/storage',
     sendFollowUp: async () => {},
   };
 }

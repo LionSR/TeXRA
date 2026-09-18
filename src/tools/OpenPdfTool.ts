@@ -20,7 +20,7 @@ import {
 } from '@tools/pathResolution';
 import { executed } from '@tools/core/result';
 import { pathToLocationIn } from '@utils/files/fileLocation';
-import { runStorageLocationFromAbsolutePath } from '@utils/files/runStorageFs';
+import { runStorageLocationInRunUnder } from '@utils/files/runStorageFs';
 import { hasExtension } from '@utils/core/pathCore';
 
 // Local file imports
@@ -122,9 +122,7 @@ export const OpenPdfTool = defineTool({
       openPdf: call.run?.session.interactions.openPdf,
       runStorageLocation:
         runId && trimmedPath
-          ? call.inScope(() =>
-              runStorageLocationFromAbsolutePath(trimmedPath, runId),
-            )
+          ? runStorageLocationInRunUnder(call.roots.storage, trimmedPath, runId)
           : undefined,
     };
     return yield* openPdfProgram(ports, input);

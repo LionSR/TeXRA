@@ -1,3 +1,5 @@
+import * as path from 'node:path';
+
 import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 
@@ -29,7 +31,7 @@ import {
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
 import { generateRunId } from '@utils/core';
-import { StorageFS } from '@utils/files/storageFS';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { workspaceRootPath } from '@utils/files/workspaceFS';
 import { createTestLaunchContext } from './launchContextTestUtils';
 
@@ -74,15 +76,23 @@ describe('session isolation', () => {
     const sessionA = createTestSession({ roots: paperA });
     const sessionB = createTestSession({ roots: paperB });
     try {
+      const writeNote = async (
+        session: typeof sessionA,
+        note: string,
+      ): Promise<void> => {
+        await AbsoluteFS.ensureDir(session.roots.storage);
+        await AbsoluteFS.write(
+          path.join(session.roots.storage, 'note.txt'),
+          note,
+        );
+      };
       await runInSession(sessionA, async () => {
         expect(workspaceRootPath()).toBe(fakePath('papers/a'));
-        await StorageFS.ensureDir('.');
-        await StorageFS.write('note.txt', 'from a');
+        await writeNote(sessionA, 'from a');
       });
       await runInSession(sessionB, async () => {
         expect(workspaceRootPath()).toBe(fakePath('papers/b'));
-        await StorageFS.ensureDir('.');
-        await StorageFS.write('note.txt', 'from b');
+        await writeNote(sessionB, 'from b');
       });
       const read = async (file: string) =>
         Buffer.from(await platform().fs.readFile(file)).toString('utf8');

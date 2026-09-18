@@ -10,6 +10,7 @@ import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import { setLogSink } from '@logger/logSink';
 import { platform } from '@platform/platform';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
+import { workspaceRoots } from '@platform/workspaceRoots';
 import type { RunId } from '@shared/schemas';
 import { captureLogEntries } from '@test/support/logSinkCapture';
 import { installPlatform } from '@test/support/setupPlatform';
@@ -18,13 +19,13 @@ import { workspaceRootPath } from '@utils/files/workspaceFS';
 
 // A run may have generated files even when no output facts were recorded.
 const mocks = vi.hoisted(() => ({
-  findRunDir: vi.fn(),
+  findRunDirUnder: vi.fn(),
   readRunOutputs: vi.fn(),
 }));
 
 vi.mock('@utils/files/runStorageFs', async (importActual) => ({
   ...(await importActual<typeof import('@utils/files/runStorageFs')>()),
-  findRunDir: mocks.findRunDir,
+  findRunDirUnder: mocks.findRunDirUnder,
 }));
 
 const { discoverLatestRunOutputs } =
@@ -89,10 +90,11 @@ describe('discoverLatestRunOutputs', () => {
         const discovery = discoveryWith([
           matchingRun('exec-headless' as RunId),
         ]);
-        mocks.findRunDir.mockResolvedValue(runDir);
+        mocks.findRunDirUnder.mockResolvedValue(runDir);
 
         const result = yield* discoverLatestRunOutputs(
           discovery,
+          workspaceRoots().storage,
           workspaceRootPath(),
           MATCHING_QUERY,
           'test',
@@ -105,7 +107,10 @@ describe('discoverLatestRunOutputs', () => {
             .map(Number)
             .sort((a, b) => a - b),
         ).toEqual([0, 1]);
-        expect(mocks.findRunDir).toHaveBeenCalledWith('exec-headless');
+        expect(mocks.findRunDirUnder).toHaveBeenCalledWith(
+          workspaceRoots().storage,
+          'exec-headless',
+        );
       }),
   );
 
@@ -121,6 +126,7 @@ describe('discoverLatestRunOutputs', () => {
 
         const result = yield* discoverLatestRunOutputs(
           discovery,
+          workspaceRoots().storage,
           workspaceRootPath(),
           MATCHING_QUERY,
           'test',
@@ -129,7 +135,7 @@ describe('discoverLatestRunOutputs', () => {
 
         expect(mocks.readRunOutputs).toHaveBeenCalledWith('exec-registered');
         expect(result).toEqual({ runId: 'exec-registered', rounds });
-        expect(mocks.findRunDir).not.toHaveBeenCalled();
+        expect(mocks.findRunDirUnder).not.toHaveBeenCalled();
       }),
   );
 
@@ -142,10 +148,11 @@ describe('discoverLatestRunOutputs', () => {
         );
 
         const discovery = discoveryWith([matchingRun('exec-empty' as RunId)]);
-        mocks.findRunDir.mockResolvedValue(emptyDir);
+        mocks.findRunDirUnder.mockResolvedValue(emptyDir);
 
         const result = yield* discoverLatestRunOutputs(
           discovery,
+          workspaceRoots().storage,
           workspaceRootPath(),
           MATCHING_QUERY,
           'test',
@@ -168,6 +175,7 @@ describe('discoverLatestRunOutputs', () => {
         const failure = yield* Effect.flip(
           discoverLatestRunOutputs(
             discovery,
+            workspaceRoots().storage,
             workspaceRootPath(),
             MATCHING_QUERY,
             'test',
@@ -187,6 +195,7 @@ describe('outputDiscovery diagnostics', () => {
   const runScan = (): Effect.Effect<unknown> =>
     scanRunDirForOutputs(
       'abc123' as RunId,
+      workspaceRoots().storage,
       workspaceRootPath(),
       'paper.tex',
       undefined,
@@ -198,7 +207,7 @@ describe('outputDiscovery diagnostics', () => {
     vi.clearAllMocks();
     // clearAllMocks keeps mockRejectedValue implementations — reset so a
     // rejection pinned by one test cannot leak into the next.
-    mocks.findRunDir.mockReset();
+    mocks.findRunDirUnder.mockReset();
     await installPlatform({}, { fs: nodeFilesystem });
   });
 
@@ -213,7 +222,9 @@ describe('outputDiscovery diagnostics', () => {
     'warns on the pinned channel when the run-dir scan cannot read run storage',
     () =>
       Effect.gen(function* () {
-        mocks.findRunDir.mockRejectedValue(new Error('storage index corrupt'));
+        mocks.findRunDirUnder.mockRejectedValue(
+          new Error('storage index corrupt'),
+        );
         const logs = captureLogEntries();
 
         const result = yield* runScan();
@@ -264,7 +275,7 @@ describe('outputDiscovery diagnostics', () => {
             },
           ),
         );
-        mocks.findRunDir.mockResolvedValue(runDir);
+        mocks.findRunDirUnder.mockResolvedValue(runDir);
         const logs = captureLogEntries();
 
         const result = yield* runScan();

@@ -21,7 +21,7 @@ import { asErrorResult, generateTimestamp } from './utils';
  * Whether the run directory exists, by a `stat` whose only absent answer is
  * `NotFound`: a directory that cannot be inspected (permissions, I/O) fails,
  * and the failure reaches {@link asErrorResult} instead of reading as "no
- * files" — the rule the `StorageFS.exists` this replaces followed.
+ * files" — the rule the storage-root `exists` this replaces followed.
  */
 const runDirExists = (storageFs: RootedFileSystem, runDirRelative: string) =>
   storageFs.stat(runDirRelative).pipe(

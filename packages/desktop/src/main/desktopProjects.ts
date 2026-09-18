@@ -194,7 +194,7 @@ async function stopProjectRuns(
 
 /**
  * Open one session over `roots`. The transcript store is opened in the
- * workspace scope (it reads `StorageFS` before the session exists); everything
+ * workspace scope (it opens before the session exists); everything
  * after that runs in the session's own scope. The latex text-join helper is
  * bound here against this project's roots, so a workspace override in
  * `.texra/config.json` is the same value a run in this session would read.

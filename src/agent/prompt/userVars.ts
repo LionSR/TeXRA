@@ -42,7 +42,7 @@ import {
   getXmlFormatFromReadableFiles,
   setVarFromFile,
 } from '@utils/files/varsUtils';
-import { StorageFS } from '@utils/files/storageFS';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
 
 /** Transient user-variable key carrying the run's live model id. */
 export const USER_VAR_MODEL = 'MODEL';
@@ -100,6 +100,12 @@ export interface BuildUserVarsOptions {
    * `undefined` is a session with no folder open.
    */
   workspacePath: string | undefined;
+  /**
+   * Storage root of the same session, held as data for the same reason: the
+   * attached memories are read from this project's storage, not from whichever
+   * roots the calling fiber carries.
+   */
+  storageRoot: string;
   delegationAgentScope?: AgentDelegationScope | null;
   /** Explicit trace stage for diagnostics emitted while loading variables. */
   stageId?: string;
@@ -147,7 +153,7 @@ export async function buildUserVars(
     runtimeSkills,
   ] = await Promise.all([
     getRequiredFileVars(agentSetting, agentPath),
-    getAttachedMemories(agentConfig.memories),
+    getAttachedMemories(agentConfig.memories, options.storageRoot),
     // AVAILABLE_SKILLS is only substituted into TOOL_USE_INSTRUCTIONS, so the
     // catalog (a multi-source readdir + per-skill realpath/read/parse) is dead
     // work for workflow agents. The settings toggle gives users a hard off
@@ -519,6 +525,7 @@ async function getRequiredFileVars(
  */
 async function getAttachedMemories(
   memoryPaths: string[],
+  storageRoot: string,
 ): Promise<AttachedMemoriesResult> {
   if (memoryPaths.length === 0) return { xml: null, misses: [] };
 
@@ -526,7 +533,7 @@ async function getAttachedMemories(
     memoryPaths.map(async (displayPath) => {
       try {
         const storagePath = displayToStoragePath(displayPath);
-        const raw = await StorageFS.read(storagePath);
+        const raw = await AbsoluteFS.read(path.join(storageRoot, storagePath));
         // Strip frontmatter metadata — only inject the user-visible content
         const { content } = parseFrontmatter(raw);
         const trimmed = content.trim();
