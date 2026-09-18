@@ -531,17 +531,17 @@ _Amended 2026-09-06 (second ruling):_ "the boundary" is exactly three kinds
 of place, and nothing inside the tree is one. (a) A host entry that a host
 framework invokes: a VS Code command or webview message handler, an Electron
 IPC handler, a CLI command action, a React or Ink event handler, an activate
-or deactivate hook. (b) The agent tool `execute()` contract in `src/tools`,
-until lane D converts the tool runner (_amended 2026-09-06 (review
-finding):_ Phase 2 **is** lane D, so "until lane D" cannot mean "until this
-phase" without the rule contradicting itself the moment the phase lands. It
-means: the boundary survives Phase 2 and retires when the tool **runner** —
-`Tools`, the dispatcher that calls `execute()` — is itself Effect-typed and
-can await an Effect-returning tool, which Phase 2 does not do. Until then a
-tool's `execute()` returning a Promise is boundary kind (b), not an adapter,
-and `check:effect-migration-ratchet` admits it on exactly that basis);
-a tool's `execute` body is one
-`runPromise` of a program that holds every line of logic. (c) The SDK's
+or deactivate hook. ~~(b) The agent tool `execute()` contract in `src/tools`,
+until lane D converts the tool runner~~ **(b) is retired, twice over.**
+_Amended 2026-09-18:_ the tool method is `call` and it returns an Effect, so
+there is no Promise-returning tool contract left to admit; and
+`check:effect-migration-ratchet` records the kind as retired by
+[#12337](https://github.com/LionSR/TeXRA/pull/12337), which executes tools and
+workflow scripts with Effect. The condition the 2026-09-06 review finding set
+("retires when `Tools`, the dispatcher that calls it, is itself Effect-typed")
+was met. R1 now names **two** boundary kinds, (a) and (c), plus the webview
+runtime entries admitted by name in the rulings ledger. A tool that returns a
+Promise today is an adapter, not boundary kind (b). (c) The SDK's
 public Promise API in `packages/agent/src`. Everything below those three is
 Effect-typed: exported functions return `Effect` or `Stream`, stateful
 objects are `Context.Service` classes with layers, and no class below the
@@ -2059,16 +2059,29 @@ unless the repository owner explicitly amends it.
 
 1. Whether Phase 0 may land as a documented branch/spike only or as a disabled
    foundation commit on main.
-2. Whether the host managed runtime belongs directly in each composition root
-   or behind one host-neutral `ApplicationRuntime` adapter.
+2. ~~Whether the host managed runtime belongs directly in each composition
+   root or behind one host-neutral `ApplicationRuntime` adapter.~~
+   **Answered (ruled 2026-09-18):** directly in each composition root, held in
+   a local and threaded as a parameter where a callee needs it. There is no
+   `ApplicationRuntime` type and no process-global accessor below the entries;
+   the `effectRuntime()` production row is zero. The ruling and what it forbids
+   are in the
+   [rulings ledger](../../implemented/architecture/2026-08-01-architecture-rulings-ledger.md).
+   It also supersedes the disposition recorded for injection carrier 11 in
+   [the injection note](2026-09-10-effect-native-injection-context-pipelines.md)
+   §5, which reads as a pending conversion; the conversion is done.
 3. Whether any run-owned capability has sufficiently independent acquisition,
    lifetime, or substitution to sit outside the otherwise cohesive `AgentRun`
    service. The burden of evidence lies with the split.
-4. Whether Effect's language-service or TSGo plugin is admitted. It is useful
-   but not required for runtime adoption and must be evaluated against the
-   repository's TypeScript 6/7 toolchain.
-5. Whether a future optional Effect-native SDK entry point is desirable after
-   Phase 7.
+4. ~~Whether Effect's language-service or TSGo plugin is admitted.~~
+   **Shipped (recorded 2026-09-18):** admitted. `@effect/language-service` is
+   a dev dependency and is registered under `compilerOptions.plugins` in the
+   root `tsconfig.json`.
+5. ~~Whether a future optional Effect-native SDK entry point is desirable
+   after Phase 7.~~ **Shipped (recorded 2026-09-18):** yes, and it exists.
+   `@texra-ai/agent` exports `./effect` (`packages/agent/src/effect/`:
+   `runtime.ts`, `sessions.ts`, `sessionPrograms.ts`, `errors.ts`) beside the
+   Promise entry, which remains the R1(c) boundary.
 6. ~~Whether nested durable progress uses a hierarchical cursor, an activity
    ledger, or both.~~ **Decided 2026-09-06 by the owner's ruling:** there is
    no cursor of either kind. Progress is the row ledger on the run's two
@@ -2088,6 +2101,12 @@ unless the repository owner explicitly amends it.
    Effect Schema stays out: Zod remains the one data-contract system, so the
    guides' `Schema.TaggedError` reads as `Data.TaggedError` here. This closes
    the R4 question; decisions 1 to 5 above are untouched by it.
+   _Amended 2026-09-18:_ "one `provide` at the process entry" means one
+   composition root, not one `provide` call. The landed runtime provides at
+   three lifetimes — process, a per-session `LayerMap`, and a per-run
+   `Layer.effect` — which is §8.1's carrier table, not a deviation from it.
+   The amendment is recorded in the
+   [rulings ledger](../../implemented/architecture/2026-08-01-architecture-rulings-ledger.md).
 9. **Recorded 2026-09-06.** On the first wave of conversion pull requests
    (#11922 to #11928) the owner ruled: "we should fully embrace Effect. No
    more pass-throughs nor adapters." R1 now names the only three boundary
