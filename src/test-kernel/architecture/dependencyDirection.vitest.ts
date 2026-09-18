@@ -103,6 +103,14 @@ const EFFECT_RUN_ROOTS = [
 const EFFECT_RUN_CALL =
   /\bEffect\.run(?:Promise|PromiseExit|Sync|SyncExit|Fork|Callback)(?:With)?\s*\(/g;
 const BARE_EFFECT_RUN_SITES: Readonly<Record<string, number>> = {
+  // The account plane's one outbound foreign Promise contract (rulings
+  // ledger, #12720): `@supabase/auth-js` calls the GoTrue storage adapter
+  // through Promise callbacks, and the plane answers them with
+  // `Effect.runPromiseWith` over the services it captured when it was built,
+  // so the PKCE flow-state program runs on the plane's own services rather
+  // than on a process-global run edge. The program is service-free and
+  // recovers every failure to `undefined`.
+  'src/auth/SupabaseAuth.ts': 1,
   // The published SDK's Promise entry, which is rule R1's third boundary
   // kind and the one module in `packages/agent` allowed to run an Effect at
   // all. It cannot be handed a runtime: the process runtime does not
@@ -131,11 +139,17 @@ const BARE_EFFECT_RUN_SITES: Readonly<Record<string, number>> = {
   // runtime it is being installed into. The program needs the filesystem and
   // nothing else, and this module is the only place the CLI installs from.
   'packages/cli/src/runtime/cliProcessRuntime.ts': 1,
+  // The CLI's account-plane build, the same pre-runtime construction the VS
+  // Code entry is pinned for below: `ensureCliSupabaseAuth` is called by the
+  // process-runtime install with the plane as one of the values that install
+  // is given, so there is no runtime to borrow yet, and the construction
+  // program reads no service.
+  'packages/cli/src/runtime/supabaseAuth.ts': 1,
   // The desktop composition root, for the same reason: its four stores —
   // global and workspace state, the config pair, and the secrets file — open
   // before `installProcessRuntime`, because two of them are the values that
-  // install is given.
-  'packages/desktop/src/main/platform/index.ts': 1,
+  // install is given, and so does the account plane it hands that install.
+  'packages/desktop/src/main/platform/index.ts': 2,
   // The VS Code entry's two pre-runtime folds, plus the account-plane
   // construction in `initVscodePlatform`: `activate` reports a failed
   // activation and runs the cleanup that disposes the process runtime, so it

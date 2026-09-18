@@ -72,14 +72,14 @@ function gotrueStorage(
    * foreign Promise contract this plane owes, run on the services the plane
    * captured when it was built (rulings ledger, #12720).
    */
-  const runCallback = Effect.runPromiseWith(services);
+  const onCapturedServices = Effect.runPromiseWith(services);
   const onFlowState = <T>(
     action: string,
     key: string,
     program: Effect.Effect<T, SecretsFailed>,
   ): Promise<T | undefined> => {
     if (key === SUPABASE_GOTRUE_STORAGE_KEY) return Promise.resolve(undefined);
-    return runCallback(
+    return onCapturedServices(
       program.pipe(
         Effect.catchCause((cause) =>
           Effect.sync(() => {
