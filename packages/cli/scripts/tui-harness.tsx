@@ -1698,46 +1698,46 @@ registerBuiltinSlashCommands({
       : undefined,
   getApprovalPolicy: () => harnessRuntimeSession.approvalPolicy,
   onApprovalPolicySelect: setHarnessApprovalPolicy,
-  onModelSelect: (model) => {
-    setCliSessionModelOverride(model);
-    appendHarnessAssistantTranscript(
-      `Harness model selected. Future turns: ${model}.`,
-    );
-  },
-  onModelAccessSelect: (selection) => {
-    if (selection.provider === 'kimi-code' && selection.state === 'on') {
-      return harnessRuntime
-        .runPromise(
-          updateCliModelAccess(
-            HARNESS_PLATFORM_SERVICES,
-            HARNESS_CLI_CONTEXT,
-            selection,
-            {
-              writeProgress: appendHarnessAssistantTranscript,
-            },
-          ),
+  onModelSelect: (model) =>
+    Effect.sync(() => {
+      setCliSessionModelOverride(model);
+      appendHarnessAssistantTranscript(
+        `Harness model selected. Future turns: ${model}.`,
+      );
+    }),
+  onModelAccessSelect: (selection) =>
+    selection.provider === 'kimi-code' && selection.state === 'on'
+      ? updateCliModelAccess(
+          HARNESS_PLATFORM_SERVICES,
+          HARNESS_CLI_CONTEXT,
+          selection,
+          { writeProgress: appendHarnessAssistantTranscript },
+        ).pipe(
+          Effect.map((access) => {
+            appendHarnessAssistantTranscript(access.message);
+          }),
         )
-        .then((access) => {
-          appendHarnessAssistantTranscript(access.message);
-        });
-    }
-    appendHarnessAssistantTranscript(
-      `${selection.provider} preference set to ${selection.state}.`,
-    );
-  },
-  onMemorySelect: (storagePath) => {
-    appendHarnessAssistantTranscript(
-      `Harness memory selected: ${storagePath}.`,
-    );
-  },
-  onSkillSelect: (selection) => {
-    appendHarnessAssistantTranscript(
-      `Harness skill selected: ${selection.name}.`,
-    );
-  },
-  onResumeSelect: (id) => {
-    appendHarnessAssistantTranscript(`Harness resume selected: ${id}.`);
-  },
+      : Effect.sync(() => {
+          appendHarnessAssistantTranscript(
+            `${selection.provider} preference set to ${selection.state}.`,
+          );
+        }),
+  onMemorySelect: (storagePath) =>
+    Effect.sync(() => {
+      appendHarnessAssistantTranscript(
+        `Harness memory selected: ${storagePath}.`,
+      );
+    }),
+  onSkillSelect: (selection) =>
+    Effect.sync(() => {
+      appendHarnessAssistantTranscript(
+        `Harness skill selected: ${selection.name}.`,
+      );
+    }),
+  onResumeSelect: (id) =>
+    Effect.sync(() => {
+      appendHarnessAssistantTranscript(`Harness resume selected: ${id}.`);
+    }),
   configStores: session().roots,
   onError: (error) => {
     appendHarnessAssistantTranscript(
