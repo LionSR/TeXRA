@@ -2,13 +2,13 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports - utilities
 import { TeamCatalogPortFailed } from '@common/teams/TeamAvailabilityPreflight';
 import type { TeamAvailabilityPrompt } from '@common/teams/TeamPlan';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { workspaceRelativePath } from '@utils/files/workspaceFS';
 
@@ -28,6 +28,8 @@ interface FileDialogOptions {
   currentFile?: string;
   /** The workspace root the dialog opens in and relativizes picks against. */
   workspacePath: string | undefined;
+  /** The caller's process runtime, which the "no workspace" notice runs on. */
+  runtime: ProcessRuntime;
 }
 
 function computeDefaultUri({
@@ -71,7 +73,9 @@ export async function selectFiles(
 ): Promise<string[] | null> {
   const defaultUri = computeDefaultUri(options);
   if (!defaultUri) {
-    Effect.runFork(showLoggedMessage(CHANNEL, 'No workspace folder open'));
+    options.runtime.runFork(
+      showLoggedMessage(CHANNEL, 'No workspace folder open'),
+    );
     return null;
   }
 

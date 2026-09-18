@@ -91,20 +91,24 @@ export function promptExtensionInstall(
     channel: string;
   },
 ): Effect.Effect<void, StateWriteFailed> {
-  return showInstructionWithSuppress(store, opts.suppressKey, opts.message, [
-    {
-      title: 'Install',
-      // One run: the action callback is promise-shaped for the listener that
-      // builds the other instruction actions, which cannot import `effect`
-      // until its own raw catches move (catch:effect-importer ratchet).
-      callback: () =>
-        Effect.runPromise(
-          safeExecuteCommand(
-            'workbench.extensions.installExtension',
-            [opts.extensionId],
-            opts.channel,
-          ).pipe(Effect.asVoid),
-        ),
-    },
-  ]);
+  return Effect.gen(function* () {
+    let install = false;
+    yield* showInstructionWithSuppress(store, opts.suppressKey, opts.message, [
+      {
+        title: 'Install',
+        // The action records the answer; the install itself is a step of this
+        // program, so it composes instead of being run from the callback.
+        callback: () => {
+          install = true;
+        },
+      },
+    ]);
+    if (install) {
+      yield* safeExecuteCommand(
+        'workbench.extensions.installExtension',
+        [opts.extensionId],
+        opts.channel,
+      );
+    }
+  });
 }

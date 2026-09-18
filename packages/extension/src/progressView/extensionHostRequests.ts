@@ -241,7 +241,7 @@ export function createExtensionHostRequests(
     });
 
   /** The native picker of each multi-file launcher list. */
-  const multipleFilePickers = createFileSelectionPickers(session);
+  const multipleFilePickers = createFileSelectionPickers(session, runtime);
 
   /**
    * Validate an agent request and launch it directly: the port settled with

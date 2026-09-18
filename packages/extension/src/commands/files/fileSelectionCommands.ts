@@ -8,6 +8,7 @@ import { getFilterExtensions } from '@common/files/fileTypeUtils';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { selectFiles } from '@frontend/ui/dialogs';
 import { createLog } from '@logger/logUtils';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type { MultipleDocumentFileType } from '@shared/schemas';
 import { workspaceRelativePath } from '@utils/files/workspaceFS';
 
@@ -22,8 +23,9 @@ interface PickerOptions {
 /** Run a dialog, announce what was picked, and report failures once. */
 function announceSelection(
   select: () => Promise<string[] | null>,
+  runtime: ProcessRuntime,
 ): Promise<string[] | null> {
-  return Effect.runPromise(
+  return runtime.runPromise(
     Effect.tryPromise({
       try: async () => {
         const result = await select();
@@ -51,17 +53,21 @@ function announceSelection(
 
 function createMultiPicker(
   session: SessionHandle,
+  runtime: ProcessRuntime,
   options: PickerOptions,
 ): (currentFile?: string) => Promise<string[] | null> {
   return (currentFile) =>
-    announceSelection(() =>
-      selectFiles({
-        currentFile,
-        workspacePath: session.roots.workspace,
-        openLabel: options.openLabel,
-        filters: options.filters(),
-        allowMany: true,
-      }),
+    announceSelection(
+      () =>
+        selectFiles({
+          currentFile,
+          workspacePath: session.roots.workspace,
+          openLabel: options.openLabel,
+          filters: options.filters(),
+          allowMany: true,
+          runtime,
+        }),
+      runtime,
     );
 }
 
@@ -71,30 +77,31 @@ function createMultiPicker(
  */
 export function createFileSelectionPickers(
   session: SessionHandle,
+  runtime: ProcessRuntime,
 ): Record<
   MultipleDocumentFileType,
   (currentFile?: string) => Promise<string[] | null>
 > {
   return {
-    input: createMultiPicker(session, {
+    input: createMultiPicker(session, runtime, {
       openLabel: 'Select Files',
       filters: () => ({
         'Text files': getFilterExtensions('input'),
       }),
     }),
-    context: createMultiPicker(session, {
+    context: createMultiPicker(session, runtime, {
       openLabel: 'Select Context Files',
       filters: () => ({
         'Text files': getFilterExtensions('context'),
       }),
     }),
-    media: createMultiPicker(session, {
+    media: createMultiPicker(session, runtime, {
       openLabel: 'Select Media',
       filters: () => ({
         'Image files': getFilterExtensions('media'),
       }),
     }),
-    output: createMultiPicker(session, {
+    output: createMultiPicker(session, runtime, {
       openLabel: 'Select Output Files',
       filters: () => ({ 'Text files': ['tex', 'txt', 'md'] }),
     }),

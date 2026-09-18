@@ -6,6 +6,7 @@ import * as vscode from 'vscode';
 import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
 import { registerCommandEntries } from '@commands/_shared/registerCommands';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 
 const CHANNEL = 'mainViewCommands';
@@ -24,12 +25,13 @@ interface RefreshAllOptionsArgs {
 export function registerMainViewCommands(
   context: vscode.ExtensionContext,
   progressViewProvider: ProgressViewProvider,
+  runtime: ProcessRuntime,
 ): void {
   registerCommandEntries(context, [
     {
       id: 'texra.refreshAllOptions',
       handler: (args?: RefreshAllOptionsArgs) =>
-        Effect.runPromise(
+        runtime.runPromise(
           Effect.tryPromise({
             try: () => progressViewProvider.refreshCatalogs(args ?? {}),
             catch: (error: unknown) => error,

@@ -34,6 +34,7 @@ const reportFailure = (err: unknown) =>
  */
 export async function createSampleProjectWithoutWorkspace(
   extensionPath: string,
+  runtime: ProcessRuntime,
 ): Promise<void> {
   const create = Effect.tryPromise({
     catch: (err: unknown) => err,
@@ -64,7 +65,7 @@ export async function createSampleProjectWithoutWorkspace(
     },
   });
 
-  await Effect.runPromise(create.pipe(Effect.catch(reportFailure)));
+  await runtime.runPromise(create.pipe(Effect.catch(reportFailure)));
 }
 
 /**
