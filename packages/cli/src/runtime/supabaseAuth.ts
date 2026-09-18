@@ -3,11 +3,7 @@ import { Cause, Effect, Exit } from 'effect';
 
 // Local imports
 import { invalidateRemoteAgentsAfterSignOut } from '@agent/index';
-import {
-  installAuthProgramEdge,
-  runAuthProgram,
-  unwrapAuthPortCause,
-} from '@auth/authProgram';
+import { unwrapAuthPortCause } from '@auth/authProgram';
 import { DEFAULT_OAUTH_PROVIDER, type OAuthProvider } from '@auth/config';
 import {
   refreshRemoteAgentCatalogAfterSignOut,
@@ -92,19 +88,19 @@ const deferredAuthLog: SupabaseSessionLog = {
 export function ensureCliSupabaseAuth(
   secrets: PlatformSecrets,
 ): SupabaseAuthShape {
-  auth ??= createSupabaseAuth({ secrets, log: deferredAuthLog });
+  // The plane is built before the process runtime it is served on, so it is
+  // built here on a bootstrap fiber: construction reads no service, and the
+  // GoTrue storage callbacks it captures need none either.
+  auth ??= Effect.runSync(
+    createSupabaseAuth({ secrets, log: deferredAuthLog }),
+  );
   return auth;
 }
 
 export function initializeCliSupabaseAuth(
-  runtime: ProcessRuntime,
   secrets: PlatformSecrets,
   log?: SupabaseSessionLog,
 ): void {
-  // The auth subsystem's run edge lives at this host entry (PRD R1), installed
-  // on every init so every later Promise-facing auth surface settles on the
-  // process runtime the composition root hands in.
-  installAuthProgramEdge((program) => runtime.runPromiseExit(program));
   activeAuthLog = log ?? activeAuthLog;
   ensureCliSupabaseAuth(secrets);
 }
@@ -251,38 +247,55 @@ export const signInCliSupabaseDeviceCode = Effect.fn(
   return session;
 });
 
-export async function signOutCliSupabase(): Promise<void> {
-  const authCoordinator = cliSupabaseAuth().coordinator;
-  await runAuthProgram(authCoordinator.clearSession());
-  await runAuthProgram(
-    refreshRemoteAgentCatalogAfterSignOut(
+/**
+ * Sign out of the TeXRA account: clear the stored session, then refresh the
+ * local agent catalog. A plane the composition root never built, and a
+ * storage rejection, both fail as the error the caller reports.
+ */
+export function signOutCliSupabase(): Effect.Effect<void, Error> {
+  return Effect.gen(function* () {
+    const authCoordinator = yield* Effect.try({
+      try: () => cliSupabaseAuth().coordinator,
+      catch: ensureError,
+    });
+    yield* authCoordinator
+      .clearSession()
+      .pipe(Effect.mapError(unwrapAuthPortCause));
+    yield* refreshRemoteAgentCatalogAfterSignOut(
       invalidateRemoteAgentsAfterSignOut(),
       (message) => activeAuthLog?.warn?.('cli-auth', message),
-    ),
-  );
+    );
+  });
 }
 
-export async function getCliAuthProfile(): Promise<CliAuthProfile> {
-  const authCoordinator = cliSupabaseAuth().coordinator;
+export function getCliAuthProfile(): Effect.Effect<CliAuthProfile, Error> {
+  return Effect.gen(function* () {
+    const authCoordinator = yield* Effect.try({
+      try: () => cliSupabaseAuth().coordinator,
+      catch: ensureError,
+    });
 
-  // Classify the stored session instead of asking "is there a token": a
-  // GoTrue outage leaves the session stored and usable once the service
-  // recovers, so reporting it as signed out invites a needless re-login.
-  const sessionState = await runAuthProgram(
-    authCoordinator.getStoredSessionState(),
-  );
-  if (sessionState !== 'authenticated') {
+    // Classify the stored session instead of asking "is there a token": a
+    // GoTrue outage leaves the session stored and usable once the service
+    // recovers, so reporting it as signed out invites a needless re-login.
+    const sessionState = yield* authCoordinator.getStoredSessionState();
+    if (sessionState !== 'authenticated') {
+      return {
+        authenticated: false,
+        sessionState,
+      };
+    }
+
+    const session = yield* authCoordinator
+      .loadSession()
+      .pipe(Effect.mapError(unwrapAuthPortCause));
     return {
-      authenticated: false,
+      authenticated: true,
       sessionState,
+      accountLabel: session?.account.label,
+      expiresAt: session
+        ? new Date(session.expiresAt).toISOString()
+        : undefined,
     };
-  }
-
-  const session = await runAuthProgram(authCoordinator.loadSession());
-  return {
-    authenticated: true,
-    sessionState,
-    accountLabel: session?.account.label,
-    expiresAt: session ? new Date(session.expiresAt).toISOString() : undefined,
-  };
+  });
 }

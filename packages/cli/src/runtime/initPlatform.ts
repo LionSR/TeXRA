@@ -520,7 +520,7 @@ export async function initCliPlatform(
   };
 
   if (!supabaseAuthInitialized) {
-    initializeCliSupabaseAuth(runtime, cliServices.secrets, cliPlatformLog);
+    initializeCliSupabaseAuth(cliServices.secrets, cliPlatformLog);
     supabaseAuthInitialized = true;
   }
 

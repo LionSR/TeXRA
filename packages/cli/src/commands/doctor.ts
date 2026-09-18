@@ -10,6 +10,7 @@ import {
 } from '../runtime/initPlatform';
 
 import { getCliModelAccessList } from '../runtime/modelAccess';
+import { getCliAuthProfile } from '../runtime/supabaseAuth';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { suppressCliFetchStackLogs } from './_helpers/fetchSilencer';
@@ -37,6 +38,7 @@ async function runDoctor(context: CliContext): Promise<number> {
       context,
       services
         ? {
+            authProfile: () => services.runtime.runPromise(getCliAuthProfile()),
             modelAccessList: () => getCliModelAccessList({ stores: services }),
             ...(roots && {
               usageLoggingOptOut: () => usageLoggingOptOut(roots.config),

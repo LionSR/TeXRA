@@ -27,7 +27,7 @@ import {
   writeTextStdout,
 } from './logSinks';
 import { createCliStyle } from './style';
-import { getCliAuthProfile, type CliAuthProfile } from './supabaseAuth';
+import type { CliAuthProfile } from './supabaseAuth';
 import type { CliContext } from './cliContext';
 import type { CliStyle } from './style';
 import type { CliModelAccess } from './modelAccess';
@@ -53,6 +53,11 @@ interface DirectoryStat {
 
 interface DoctorDependencies {
   readonly nodeVersion?: string;
+  /**
+   * The account read is an Effect, and only the CLI root holds a runtime to
+   * settle it on, so this is a probe the caller supplies rather than one this
+   * module defaults to — the same contract as `modelAccessList` below.
+   */
   readonly authProfile?: () => Promise<CliAuthProfile>;
   /**
    * Model availability needs the process stores, which only the CLI root
@@ -390,6 +395,17 @@ const missingModelAccessProbe = (): Promise<never> =>
   );
 
 /**
+ * Same contract for the account read: the CLI root settles the auth profile
+ * on the runtime it holds, or reports a platform init error.
+ */
+const missingAuthProfileProbe = (): Promise<never> =>
+  Promise.reject(
+    new Error(
+      'The account check needs the process runtime the CLI root holds; doctor was given neither an auth probe nor a platform init error.',
+    ),
+  );
+
+/**
  * Same contract for the telemetry consent read: the CLI root passes the
  * opt-out over its platform roots' config, or a platform init error.
  */
@@ -406,7 +422,7 @@ export async function buildDoctorReport(
 ): Promise<DoctorReport> {
   const resolved = {
     nodeVersion: deps.nodeVersion ?? process.versions.node,
-    authProfile: deps.authProfile ?? getCliAuthProfile,
+    authProfile: deps.authProfile ?? missingAuthProfileProbe,
     modelAccessList: deps.modelAccessList ?? missingModelAccessProbe,
     latexToolchain: deps.latexToolchain ?? probeLatexToolchain,
     pathStat: deps.pathStat ?? stat,

@@ -89,12 +89,14 @@ vi.mock('@auth/SupabaseAuth', async (importActual) => {
     ...actual,
     createSupabaseAuth: (init: { secrets: unknown }) => {
       mocks.createSupabaseAuth(init);
-      return fakeSupabaseAuth({
-        client: {
-          auth: { signInWithOAuth: mocks.signInWithOAuth },
-        } as never,
-        coordinator: mocks.authCoordinator as never,
-      });
+      return Effect.succeed(
+        fakeSupabaseAuth({
+          client: {
+            auth: { signInWithOAuth: mocks.signInWithOAuth },
+          } as never,
+          coordinator: mocks.authCoordinator as never,
+        }),
+      );
     },
   };
 });
@@ -175,9 +177,9 @@ async function loadSupabaseAuth() {
     ),
   );
   const supabaseAuth = await import('@cli/runtime/supabaseAuth');
-  // The root's init is what builds the coordinator and installs the auth run
-  // edge; nothing below it builds one on demand.
-  supabaseAuth.initializeCliSupabaseAuth(runtime, cliSecrets);
+  // The root's init is what builds the coordinator; nothing below it builds
+  // one on demand.
+  supabaseAuth.initializeCliSupabaseAuth(cliSecrets);
   return { ...supabaseAuth, runtime };
 }
 
@@ -266,10 +268,10 @@ describe('CLI Supabase auth', () => {
   });
 
   it('builds one account plane for the root secret store', async () => {
-    const { initializeCliSupabaseAuth, runtime } = await loadSupabaseAuth();
+    const { initializeCliSupabaseAuth } = await loadSupabaseAuth();
 
-    initializeCliSupabaseAuth(runtime, cliSecrets);
-    initializeCliSupabaseAuth(runtime, cliSecrets);
+    initializeCliSupabaseAuth(cliSecrets);
+    initializeCliSupabaseAuth(cliSecrets);
 
     expect(mocks.createSupabaseAuth).toHaveBeenCalledTimes(1);
     expect(mocks.createSupabaseAuth).toHaveBeenCalledWith(
@@ -433,7 +435,7 @@ describe('CLI Supabase auth', () => {
   it('removes cached remote agents after sign-out', async () => {
     const { signOutCliSupabase } = await loadSupabaseAuth();
 
-    await signOutCliSupabase();
+    await Effect.runPromise(signOutCliSupabase());
 
     expect(mocks.authCoordinator.clearSession).toHaveBeenCalledOnce();
     expect(mocks.invalidateRemoteAgentsAfterSignOut).toHaveBeenCalledOnce();
@@ -454,7 +456,7 @@ describe('CLI Supabase auth', () => {
     );
     const { getCliAuthProfile } = await loadSupabaseAuth();
 
-    await expect(getCliAuthProfile()).resolves.toEqual({
+    await expect(Effect.runPromise(getCliAuthProfile())).resolves.toEqual({
       authenticated: false,
       sessionState,
     });
@@ -465,16 +467,18 @@ describe('CLI Supabase auth', () => {
       Effect.fail(new Error('local rebuild failed')),
     );
     const warn = vi.fn();
-    const { initializeCliSupabaseAuth, signOutCliSupabase, runtime } =
+    const { initializeCliSupabaseAuth, signOutCliSupabase } =
       await loadSupabaseAuth();
-    initializeCliSupabaseAuth(runtime, cliSecrets, {
+    initializeCliSupabaseAuth(cliSecrets, {
       debug: vi.fn(),
       info: vi.fn(),
       warn,
       error: vi.fn(),
     });
 
-    await expect(signOutCliSupabase()).resolves.toBeUndefined();
+    await expect(
+      Effect.runPromise(signOutCliSupabase()),
+    ).resolves.toBeUndefined();
 
     expect(mocks.authCoordinator.clearSession).toHaveBeenCalledOnce();
     expect(warn).toHaveBeenCalledWith(

@@ -39,7 +39,7 @@ import {
   RESEARCHER_ACCESS_AUTH,
 } from '@shared/copy/accountAuth';
 import { collapseWhitespace } from '@utils/text/stringUtils';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
   abortableSlashCommand,
@@ -222,10 +222,7 @@ const logoutLines = (
 
     if (target === 'texra' || target === 'all') {
       lines.push(
-        yield* Effect.tryPromise({
-          try: () => signOutCliSupabase(),
-          catch: (cause) => ensureError(cause),
-        }).pipe(
+        yield* signOutCliSupabase().pipe(
           Effect.match({
             onFailure: (error) =>
               RESEARCHER_ACCESS_AUTH.signOutFailedWithReason(

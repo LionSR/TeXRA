@@ -243,8 +243,10 @@ export const logoutCommand = defineCliCommand({
     ...GLOBAL_ARGS,
   },
   async run(context) {
-    await initCliPlatform({ ...context, quietLogs: true });
-    const signOutResult = await withCliAuthError(() => signOutCliSupabase());
+    const { runtime } = await initCliPlatform({ ...context, quietLogs: true });
+    const signOutResult = await withCliAuthError(() =>
+      runtime.runPromise(signOutCliSupabase()),
+    );
     if (!signOutResult.ok) return CliExitCode.ModelOrNetworkError;
 
     const payload = { authenticated: false };
@@ -283,8 +285,11 @@ const authStatusCommand = defineCliCommand({
   },
   async run(context) {
     const statusResult = await withCliAuthError(async () => {
-      await initCliPlatform({ ...context, quietLogs: true });
-      return await getCliAuthProfile();
+      const { runtime } = await initCliPlatform({
+        ...context,
+        quietLogs: true,
+      });
+      return await runtime.runPromise(getCliAuthProfile());
     });
     if (!statusResult.ok) return CliExitCode.ModelOrNetworkError;
     const profile = statusResult.value;

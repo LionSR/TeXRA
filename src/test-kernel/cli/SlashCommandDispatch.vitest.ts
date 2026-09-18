@@ -285,7 +285,7 @@ function mockSignOuts(): {
 } {
   const signOutSupabase = vi
     .spyOn(supabaseAuth, 'signOutCliSupabase')
-    .mockResolvedValue(undefined);
+    .mockReturnValue(Effect.void);
   const signOutChatGpt = vi
     .spyOn(subscriptionLogin, 'signOutCliSubscription')
     .mockReturnValue(
@@ -678,7 +678,7 @@ describe('handleTuiSlashCommand', () => {
 
   it('reports successful TeXRA sign-out when ChatGPT logout fails', async () => {
     registerBuiltinSlashCommands({ ...stores });
-    vi.spyOn(supabaseAuth, 'signOutCliSupabase').mockResolvedValue(undefined);
+    vi.spyOn(supabaseAuth, 'signOutCliSupabase').mockReturnValue(Effect.void);
     vi.spyOn(subscriptionLogin, 'signOutCliSubscription').mockReturnValue(
       Effect.fail(new Error('Codex logout failed')),
     );
@@ -694,7 +694,7 @@ describe('handleTuiSlashCommand', () => {
 
   it('reports ChatGPT sign-out success when only preference cleanup fails', async () => {
     registerBuiltinSlashCommands({ ...stores });
-    vi.spyOn(supabaseAuth, 'signOutCliSupabase').mockResolvedValue(undefined);
+    vi.spyOn(supabaseAuth, 'signOutCliSupabase').mockReturnValue(Effect.void);
     vi.spyOn(subscriptionLogin, 'signOutCliSubscription').mockReturnValue(
       Effect.succeed({ preferenceError: 'Config write failed' }),
     );
