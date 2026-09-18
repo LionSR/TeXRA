@@ -310,7 +310,9 @@ export interface ChildRunLoopParams<TTurn, R = never> {
   /**
    * Roll this child's final cost into the parent's usage totals. Omitted by
    * agent-CLI callers (no cost concept today); native delegation passes its
-   * captured `recordSubagentCost` closure.
+   * captured `recordSubagentCost` closure. Synchronous by contract: the loop
+   * runs it inside `Effect.try`, which folds a throw and would take a
+   * returned promise for the observer's result.
    */
   readonly recordCost?: (totalCost: number | undefined) => void;
   /**

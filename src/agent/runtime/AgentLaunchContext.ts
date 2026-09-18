@@ -611,7 +611,9 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
     const { config } = input.definition;
 
     // The runtime takes these resources only after assembly succeeds. Failure
-    // unwinds them in reverse order while preserving the original cause.
+    // unwinds them in reverse order while preserving the original cause. A
+    // disposer is synchronous by contract: the unwind is `Effect.try`, which
+    // folds a throw and would take a returned promise for the result.
     const resources: Array<() => void> = [];
     return yield* assembleAgentLaunchContext(input, runId, resources).pipe(
       Effect.onError((cause) =>

@@ -50,6 +50,10 @@ const logger = createChannelTrace('agentRunLifecycle');
 export interface RunFlowLifecycleOptions {
   /** The launching run: the parent edge on the handle; a child may park at WAITING. */
   parentRunId?: RunId;
+  /**
+   * Reported to the delegation chain through the terminal `deliver` hook, so
+   * it carries that hook's synchronous contract.
+   */
   onError?: (error: unknown, result: AgentFlowResult) => void;
   /**
    * Fires once with the live per-run handle, right after it is tracked (F-2) —
@@ -111,7 +115,9 @@ interface FinalizeRunTerminalParams {
    * untrack, so the parent still sees this child as active while the
    * delivery routes. Receives the resolved outcome so the payload the parent
    * gets reports the same terminal fact as the `run.end` row. Guarded: a
-   * throwing hook cannot abort finalization.
+   * throwing hook cannot abort finalization. Synchronous by contract: the
+   * guard is `Effect.try`, which folds a throw and would take a returned
+   * promise for the hook's result.
    */
   readonly deliver?: (outcome: RunOutcome) => void;
 }
