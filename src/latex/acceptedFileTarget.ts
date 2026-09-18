@@ -7,10 +7,10 @@ import { Cause, Effect, Exit, FileSystem, type PlatformError } from 'effect';
 // Local imports
 import { generateDiffFileName } from '@latex/latexdiff/diffFileNameManager';
 import { createLog } from '@logger/logUtils';
+import { WorkspaceFs } from '@platform/rootedFs';
 import type { FileLocation } from '@shared/schemas';
 import { normalizeFilePath } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { WorkspaceFs } from '@platform/rootedFs';
 import {
   createExternalLocation,
   createRunStorageLocation,
