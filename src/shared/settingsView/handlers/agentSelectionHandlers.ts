@@ -38,13 +38,17 @@ export function buildAgentSelectionMessage(
 
 /** The status reader is the directory controller's Effect; its failure stays
  *  the caller's to report, which is why `E` is left open here. */
-export interface CustomAgentDirPorts<E> {
-  getCustomDirStatus(): Effect.Effect<{ path: string; isDefault: boolean }, E>;
+export interface CustomAgentDirPorts<E, R = never> {
+  getCustomDirStatus(): Effect.Effect<
+    { path: string; isDefault: boolean },
+    E,
+    R
+  >;
 }
 
-export function buildCustomAgentDirMessage<E>(
-  ports: CustomAgentDirPorts<E>,
-): Effect.Effect<UpdateCustomAgentDirMessage, E> {
+export function buildCustomAgentDirMessage<E, R = never>(
+  ports: CustomAgentDirPorts<E, R>,
+): Effect.Effect<UpdateCustomAgentDirMessage, E, R> {
   return Effect.map(ports.getCustomDirStatus(), (status) => ({
     command: SETTINGS_VIEW_COMMANDS.UPDATE_CUSTOM_AGENT_DIR,
     ...status,

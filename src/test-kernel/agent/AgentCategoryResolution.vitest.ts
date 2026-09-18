@@ -17,10 +17,12 @@ import {
 } from '@agent/index/agentRegistry';
 import type { AgentEntry } from '@agent/index/agentEntry';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
+import { GlobalStorageFs } from '@platform/rootedFs';
 import { AgentCategory } from '@shared/schemas';
 import { REPO_ROOT } from '@test/support/repoScan';
 import { installPlatform } from '@test/support/setupPlatform';
 import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
+import type { RootedFileSystem } from '@utils/files/rootedFileSystem';
 
 /** Resolve exactly as launch does: through the single launch resolver, by the
  * source the delegation captured at validation time (see `getAgentPath`). */
@@ -87,7 +89,15 @@ describe('cross-category agent resolution', () => {
       },
     );
 
-    await Effect.runPromise(refresh({ includeRemote: false }));
+    // The fake host answers `custom()` from a temp directory of its own, so
+    // nothing in this load reaches the global storage view.
+    await Effect.runPromise(
+      Effect.provideService(
+        refresh({ includeRemote: false }),
+        GlobalStorageFs,
+        {} as RootedFileSystem,
+      ),
+    );
   });
 
   afterAll(async () => {

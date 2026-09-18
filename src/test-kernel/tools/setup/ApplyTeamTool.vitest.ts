@@ -19,6 +19,7 @@ import {
   installHostAuth,
   installPlatform,
 } from '@test/support/setupPlatform';
+import { unusedGlobalStorageFs } from '@test/support/fsTestUtils';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { REPO_ROOT } from '@test/support/repoScan';
 import { ApplyTeamTool } from '@tools/setup/ApplyTeamTool';
@@ -97,7 +98,9 @@ beforeAll(async () => {
       },
     },
   );
-  await Effect.runPromise(refresh({ includeRemote: false }));
+  await Effect.runPromise(
+    Effect.provide(refresh({ includeRemote: false }), unusedGlobalStorageFs()),
+  );
 });
 
 afterEach(() => {

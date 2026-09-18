@@ -13,11 +13,13 @@ import { type FileSystem, Layer, type Path } from 'effect';
 
 // Local imports
 import {
+  GlobalStorageFs,
+  globalStorageFsLayer,
   sessionFsLayer,
-  type GlobalStorageFs,
   type StorageFs,
   type WorkspaceFs,
 } from '@platform/rootedFs';
+import type { RootedFileSystem } from '@utils/files/rootedFileSystem';
 
 /**
  * The `FileSystem` and `Path` services `installProcessRuntime` provides once
@@ -43,7 +45,34 @@ export function rootedFsLayer(roots: {
 }): Layer.Layer<
   WorkspaceFs | StorageFs | GlobalStorageFs | FileSystem.FileSystem | Path.Path
 > {
-  return Layer.provideMerge(sessionFsLayer(roots), nodePlatformLayer);
+  return Layer.provideMerge(
+    Layer.merge(
+      sessionFsLayer(roots),
+      globalStorageFsLayer(roots.globalStorage),
+    ),
+    nodePlatformLayer,
+  );
+}
+
+/**
+ * A `GlobalStorageFs` no program under test reaches: a suite whose fake host
+ * answers `agentDirectories.custom()` from a directory of its own still names
+ * the service in its requirements, and this satisfies that type without
+ * standing up a root nothing reads.
+ */
+export function unusedGlobalStorageFs(): Layer.Layer<GlobalStorageFs> {
+  return Layer.succeed(GlobalStorageFs)({} as RootedFileSystem);
+}
+
+/**
+ * The process's cross-workspace storage view over `root` — what
+ * `installProcessRuntime` serves as `GlobalStorageFs` — for a suite that runs
+ * one of its consumers on `it.effect`'s own runtime.
+ */
+export function globalStorageFsTestLayer(
+  root: string,
+): Layer.Layer<GlobalStorageFs> {
+  return Layer.provide(globalStorageFsLayer(root), nodePlatformLayer);
 }
 
 /**

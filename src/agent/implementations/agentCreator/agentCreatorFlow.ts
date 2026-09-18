@@ -15,6 +15,7 @@ import { renderAgentTemplateString } from '@agent/templates/agentTemplateRendere
 import { createLog } from '@logger/logUtils';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { LanguageModel } from '@platform/languageModel';
+import type { GlobalStorageFs } from '@platform/rootedFs';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { AgentCategory } from '@shared/schemas';
 import { DELEGATE_MULTI_AGENTS_TOOL_NAME } from '@shared/constants/delegationTools';
@@ -289,7 +290,11 @@ export interface AgentCreatorUI {
     { tools: string[]; groups: string[] } | undefined,
     AgentCreatorUiFailed
   >;
-  getCustomAgentDir(): Effect.Effect<string, AgentCreatorUiFailed>;
+  getCustomAgentDir(): Effect.Effect<
+    string,
+    AgentCreatorUiFailed,
+    GlobalStorageFs
+  >;
   showCreatedInfo(filePath: string): void;
   promptAddToConfig(
     agentName: string,
@@ -352,7 +357,11 @@ const buildAgentBlueprint = Effect.fn('agentCreator.buildBlueprint')(function* (
   agentName: string,
   description: string,
   ui: AgentCreatorUI,
-): Effect.fn.Return<AgentBlueprint | undefined, AgentCreatorUiFailed> {
+): Effect.fn.Return<
+  AgentBlueprint | undefined,
+  AgentCreatorUiFailed,
+  GlobalStorageFs
+> {
   const base = { AGENT_NAME: agentName, DESCRIPTION: description };
 
   if (category === 'toolUse') {
@@ -488,7 +497,10 @@ export const runAgentCreator = Effect.fn('runAgentCreator')(function* (
 ): Effect.fn.Return<
   void,
   unknown,
-  FileSystem.FileSystem | LanguageModel | HttpClient.HttpClient
+  | FileSystem.FileSystem
+  | GlobalStorageFs
+  | LanguageModel
+  | HttpClient.HttpClient
 > {
   const categoryLabel = category === 'toolUse' ? 'Tool Use' : 'Workflow';
   const agentName = yield* ui.promptAgentName(categoryLabel);

@@ -62,7 +62,12 @@ import {
 } from '@model/computeModelOptions';
 import type { StateStore } from '@platform/interfaces';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
-import { withSessionFs, WorkspaceFs } from '@platform/rootedFs';
+import {
+  withSessionFs,
+  WorkspaceFs,
+  type GlobalStorageFs,
+  type StorageFs,
+} from '@platform/rootedFs';
 import type { PlatformSecrets } from '@platform/secrets';
 import { presentLaunchedProgressRun } from '@progressView/progressNavigation';
 import latexPreamble from '@resources/templates/chatExport.tex';
@@ -478,7 +483,9 @@ export function createExtensionHostRequests(
 
   /** The launcher's Send: the surface's selections through the shared
    *  launch preparation, then the one launch command. */
-  function launch(request: Extract<HostRequest, { kind: 'launch' }>) {
+  function launch(
+    request: Extract<HostRequest, { kind: 'launch' }>,
+  ): Effect.Effect<void, Error, GlobalStorageFs> {
     return Effect.gen(function* () {
       const { launch: form } = request;
       const requestedWorkingDirectory = form.workingDirectory.trim();
@@ -514,6 +521,7 @@ export function createExtensionHostRequests(
           signInForRemoteAgentCatalog: runSignInCommand,
         },
         session.roots.workspaceState,
+        session.roots.storage,
       );
       yield* fromHost('texra.execute', () =>
         runCommand('texra.execute', prepared),
@@ -725,7 +733,7 @@ export function createExtensionHostRequests(
 
   function agentConfigBanner(
     request: Extract<HostRequest, { kind: 'agentConfigBanner' }>,
-  ) {
+  ): Effect.Effect<void, Error, GlobalStorageFs> {
     return Effect.gen(function* () {
       switch (request.action) {
         case 'edit':
@@ -835,7 +843,7 @@ export function createExtensionHostRequests(
   function dispatch(
     request: HostRequest,
     port: string,
-  ): Effect.Effect<HostOutcome, Error, ProcessServices> {
+  ): Effect.Effect<HostOutcome, Error, ProcessServices | StorageFs> {
     return Effect.gen(function* () {
       switch (request.kind) {
         case 'openFile':
@@ -1077,8 +1085,11 @@ export function createExtensionHostRequests(
   return {
     // The bridge takes the dispatch program itself: it runs on the fiber the
     // webview's message pump already owns, and its failure reaches the
-    // bridge's refusal-versus-defect fold as the value the arm carried.
-    handleHostRequest: dispatch,
+    // bridge's refusal-versus-defect fold as the value the arm carried. Over
+    // this session's rooted filesystems: the root a request writes under is
+    // chosen here, at the host edge, not read at the depth that writes.
+    handleHostRequest: (request, port) =>
+      withSessionFs(session.roots, dispatch(request, port)),
     closePort: draftRequests.closePort,
     dispose: draftRequests.dispose,
   };

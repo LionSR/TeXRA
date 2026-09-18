@@ -23,10 +23,23 @@ import {
   type AgentDirectoriesPort,
 } from '@platform/interfaces';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
+import type { GlobalStorageFs } from '@platform/rootedFs';
 import { AgentCategory } from '@shared/schemas';
 import { installPlatform } from '@test/support/setupPlatform';
+import { unusedGlobalStorageFs } from '@test/support/fsTestUtils';
 import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
+
+/**
+ * A program over the process's global storage view. Nothing under test here
+ * reads it: the fake agent directories answer `custom()` themselves, so this
+ * only satisfies the requirement the catalog readers name.
+ */
+function onGlobalStorage<A, E>(
+  program: Effect.Effect<A, E, GlobalStorageFs>,
+): Effect.Effect<A, E> {
+  return Effect.provide(program, unusedGlobalStorageFs());
+}
 
 vi.mock('@agent/index', async () => {
   const actual =
@@ -262,13 +275,13 @@ describe('agent registry load state', () => {
       yield* Effect.promise(() =>
         installDirectories(countingDirectories(counter)),
       );
-      yield* refresh({ includeRemote: false });
+      yield* onGlobalStorage(refresh({ includeRemote: false }));
       counter.scans = 0;
 
       yield* Effect.all(
         [
-          loadAgents({ includeRemote: true }),
-          loadAgents({ includeRemote: true }),
+          onGlobalStorage(loadAgents({ includeRemote: true })),
+          onGlobalStorage(loadAgents({ includeRemote: true })),
         ],
         { concurrency: 'unbounded' },
       );
@@ -284,7 +297,7 @@ describe('agent registry load state', () => {
       yield* Effect.promise(() =>
         installDirectories(countingDirectories(counter)),
       );
-      yield* refresh({ includeRemote: false });
+      yield* onGlobalStorage(refresh({ includeRemote: false }));
       assert.strictEqual(getAgent('custom:stateProbe')?.name, 'stateProbe');
 
       const scanFailure = new Error('agent directory unavailable');
@@ -303,7 +316,9 @@ describe('agent registry load state', () => {
         }),
       );
 
-      const error = yield* Effect.flip(refresh({ includeRemote: false }));
+      const error = yield* Effect.flip(
+        onGlobalStorage(refresh({ includeRemote: false })),
+      );
       assert.ok(error instanceof Error);
       assert.strictEqual(error.message, scanFailure.message);
 

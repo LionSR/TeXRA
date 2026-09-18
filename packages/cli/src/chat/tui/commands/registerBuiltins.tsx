@@ -518,7 +518,13 @@ export function registerBuiltinSlashCommands(options: {
   }
 
   const MemoryListFormAdapter = makeSelectFormAdapter<string>(
-    (formProps) => <MemoryListForm runtime={runtime} {...formProps} />,
+    (formProps) => (
+      <MemoryListForm
+        runtime={runtime}
+        roots={options.runtimeSession.roots}
+        {...formProps}
+      />
+    ),
     (value: string) => options.onMemorySelect?.(value),
   );
   // `/resume` reads history from the process session; bind it here so the
@@ -703,8 +709,10 @@ export function registerBuiltinSlashCommands(options: {
     category: 'configuration',
     echo: 'never',
     handler: async (remainder) => {
-      if (remainder.toLowerCase() === 'list') await showCliMemoryList(runtime);
-      else await showCliMemoryPreview(runtime, remainder);
+      const roots = options.runtimeSession.roots;
+      if (remainder.toLowerCase() === 'list')
+        await showCliMemoryList(runtime, roots);
+      else await showCliMemoryPreview(runtime, roots, remainder);
     },
     formComponent: MemoryListFormAdapter,
   });

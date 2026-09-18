@@ -647,6 +647,7 @@ export function App(props: AppProps): React.JSX.Element {
           <>
             <InputBar
               runtime={props.runtime}
+              roots={props.session.roots}
               controlRef={inputBarRef}
               onSubmit={props.onSubmit}
               collapseWhenDisabled={!inputBarVisible}

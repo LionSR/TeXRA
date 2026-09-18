@@ -366,13 +366,18 @@ describe('handleTuiSlashCommand', () => {
       }),
     );
 
-    await showCliMemoryList(testRuntime());
+    const memoryRoots = {
+      workspace: undefined,
+      storage: 'storage',
+      globalStorage: 'globalStorage',
+    };
+    await showCliMemoryList(testRuntime(), memoryRoots);
     expect(infoPane.get()).toEqual({
       title: '/memory list',
       lines: ['No memory files found.'],
     });
 
-    await showCliMemoryPreview(testRuntime(), 'note.md');
+    await showCliMemoryPreview(testRuntime(), memoryRoots, 'note.md');
     expect(infoPane.get()?.title).toBe('/memory list');
     closeInfoPane();
     expect(infoPane.get()).toMatchObject({ title: '/memory preview' });

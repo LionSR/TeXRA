@@ -1,25 +1,21 @@
 // Node imports
 import { Buffer } from 'node:buffer';
 import * as path from 'node:path';
-import { Readable } from 'node:stream';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect, FileSystem } from 'effect';
+import { Effect, type FileSystem, Option, Stream } from 'effect';
 import { afterEach, describe, expect, vi } from 'vitest';
 
 // Local imports
-import { FileType, type FileStat } from '@platform/interfaces';
 import { MEMORY_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
-import {
-  processWorkspaceRoots,
-  runWithWorkspaceRoots,
-} from '@platform/workspaceRoots';
+import { StorageFs } from '@platform/rootedFs';
+import { runWithWorkspaceRoots } from '@platform/workspaceRoots';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { MEMORY_DISPLAY_ROOT } from '@tools/memory/constants';
 import { MemoryTool } from '@tools/memory/MemoryTool';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
+import type { RootedFileSystem } from '@utils/files/rootedFileSystem';
 
 const TEST_TIMESTAMP = Date.parse('2026-01-01T00:00:00.000Z');
 const TEST_FRONTMATTER = [
@@ -39,40 +35,34 @@ const PINNED_FRONTMATTER = [
   'pinned body',
 ].join('\n');
 
-function dirStat(): FileStat {
+/** One `stat` answer of the session's storage view. */
+function entryInfo(
+  type: FileSystem.File.Type,
+  size: number,
+): FileSystem.File.Info {
   return {
-    type: FileType.Directory,
-    ctime: TEST_TIMESTAMP,
-    mtime: TEST_TIMESTAMP,
-    size: 0,
-  };
+    type,
+    mtime: Option.some(new Date(TEST_TIMESTAMP)),
+    size: BigInt(size),
+  } as unknown as FileSystem.File.Info;
 }
 
-function fileStat(size: number): FileStat {
-  return {
-    type: FileType.File,
-    ctime: TEST_TIMESTAMP,
-    mtime: TEST_TIMESTAMP,
-    size,
-  };
+/**
+ * The session's storage view with only the operations the memory tree calls.
+ * The view captures its root when it is built, so a case names the paths it
+ * answers relative to that root, as the tool now does.
+ */
+function storageView(view: Partial<RootedFileSystem>): RootedFileSystem {
+  return view as RootedFileSystem;
 }
 
-function runOfEvent(
-  content: string,
-): ReturnType<typeof AbsoluteFS.createReadStream> {
-  return Readable.from([Buffer.from(content)]) as unknown as ReturnType<
-    typeof AbsoluteFS.createReadStream
-  >;
-}
-
-function memoryRoot(): string {
-  return path.resolve(processWorkspaceRoots().storage, MEMORY_STORAGE_DIR);
-}
-
-function viewMemory(path?: string) {
+function viewMemory(storageFs: RootedFileSystem, memoryPath?: string) {
   return new MemoryTool()
-    .call({ command: 'view', path })
-    .pipe(Effect.provide(nativeToolTestLayer()));
+    .call({ command: 'view', path: memoryPath })
+    .pipe(
+      Effect.provideService(StorageFs, storageFs),
+      Effect.provide(nativeToolTestLayer()),
+    );
 }
 
 describe('MemoryTool view with an omitted path', () => {
@@ -85,10 +75,10 @@ describe('MemoryTool view with an omitted path', () => {
     'lists the empty memory root instead of erroring on a fresh session',
     () =>
       Effect.gen(function* () {
-        vi.spyOn(AbsoluteFS, 'exists').mockResolvedValue(false);
+        const storageFs = storageView({ exists: () => Effect.succeed(false) });
 
-        const omitted = yield* viewMemory();
-        const explicitRoot = yield* viewMemory(MEMORY_DISPLAY_ROOT);
+        const omitted = yield* viewMemory(storageFs);
+        const explicitRoot = yield* viewMemory(storageFs, MEMORY_DISPLAY_ROOT);
 
         expect(omitted).toEqual(explicitRoot);
         expect(omitted).toMatchObject({
@@ -106,7 +96,7 @@ describe('MemoryTool view with an omitted path', () => {
     ['/memories/../outside.md', 'Invalid memory path: /memories/../outside.md'],
   ])('preserves the path validator error for %s', ([inputPath, message]) =>
     Effect.gen(function* () {
-      const result = yield* viewMemory(inputPath);
+      const result = yield* viewMemory(storageView({}), inputPath);
 
       expect(result).toMatchObject({
         status: 'error',
@@ -126,47 +116,57 @@ describe('MemoryTool view with an omitted path', () => {
         vi.useFakeTimers({ toFake: ['Date'] });
         vi.setSystemTime(new Date('2026-01-02T00:00:00.000Z'));
 
-        const rootPath = memoryRoot();
-        const alphaPath = path.join(rootPath, 'alpha');
+        const alphaPath = path.join(MEMORY_STORAGE_DIR, 'alpha');
         const betaPath = path.join(alphaPath, 'beta');
         const pinnedPath = path.join(alphaPath, 'pinned.md');
-        const rootFilePath = path.join(rootPath, 'root.md');
+        const rootFilePath = path.join(MEMORY_STORAGE_DIR, 'root.md');
 
-        vi.spyOn(AbsoluteFS, 'exists').mockResolvedValue(true);
-        vi.spyOn(AbsoluteFS, 'readDir').mockImplementation(async (target) => {
-          if (target === rootPath) {
-            return [
-              ['alpha', FileType.Directory],
-              ['root.md', FileType.File],
-            ];
-          }
-          if (target === alphaPath) {
-            return [
-              ['pinned.md', FileType.File],
-              ['beta', FileType.Directory],
-            ];
-          }
-          if (target === betaPath) {
-            throw new Error('The depth-2 directory must not be traversed');
-          }
-          throw new Error(`Unexpected readDir target: ${target}`);
+        const storageFs = storageView({
+          exists: () => Effect.succeed(true),
+          readDirectoryTyped: (target) => {
+            if (target === MEMORY_STORAGE_DIR) {
+              return Effect.succeed([
+                ['alpha', 'Directory'],
+                ['root.md', 'File'],
+              ] as const);
+            }
+            if (target === alphaPath) {
+              return Effect.succeed([
+                ['pinned.md', 'File'],
+                ['beta', 'Directory'],
+              ] as const);
+            }
+            if (target === betaPath) {
+              return Effect.die(
+                new Error('The depth-2 directory must not be traversed'),
+              );
+            }
+            return Effect.die(
+              new Error(`Unexpected listing target: ${target}`),
+            );
+          },
+          stat: (target) => {
+            if (target === pinnedPath) {
+              return Effect.succeed(
+                entryInfo('File', Buffer.byteLength(PINNED_FRONTMATTER)),
+              );
+            }
+            if (target === rootFilePath) {
+              return Effect.succeed(
+                entryInfo('File', Buffer.byteLength(TEST_FRONTMATTER)),
+              );
+            }
+            return Effect.succeed(entryInfo('Directory', 0));
+          },
+          stream: (target) =>
+            Stream.make(
+              Buffer.from(
+                target === pinnedPath ? PINNED_FRONTMATTER : TEST_FRONTMATTER,
+              ),
+            ),
         });
-        vi.spyOn(AbsoluteFS, 'stat').mockImplementation(async (target) => {
-          if (target === pinnedPath) {
-            return fileStat(Buffer.byteLength(PINNED_FRONTMATTER));
-          }
-          if (target === rootFilePath) {
-            return fileStat(Buffer.byteLength(TEST_FRONTMATTER));
-          }
-          return dirStat();
-        });
-        vi.spyOn(AbsoluteFS, 'createReadStream').mockImplementation((target) =>
-          runOfEvent(
-            target === pinnedPath ? PINNED_FRONTMATTER : TEST_FRONTMATTER,
-          ),
-        );
 
-        const result = yield* viewMemory(MEMORY_DISPLAY_ROOT);
+        const result = yield* viewMemory(storageFs, MEMORY_DISPLAY_ROOT);
 
         expect(result).toEqual({
           status: 'executed',
@@ -186,27 +186,29 @@ describe('MemoryTool view with an omitted path', () => {
 
   it.effect('skips a symlink cycle when listing memory directories', () =>
     Effect.gen(function* () {
-      const rootPath = memoryRoot();
-      const cyclePath = path.join(rootPath, 'cycle');
+      const cyclePath = path.join(MEMORY_STORAGE_DIR, 'cycle');
 
-      vi.spyOn(AbsoluteFS, 'exists').mockResolvedValue(true);
-      vi.spyOn(AbsoluteFS, 'readDir').mockImplementation(async (target) => {
-        if (target === rootPath) {
-          return [['cycle', FileType.Directory | FileType.SymbolicLink]];
-        }
-        if (target === cyclePath) {
-          throw new Error('The symlink cycle must not be traversed');
-        }
-        throw new Error(`Unexpected readDir target: ${target}`);
-      });
-      vi.spyOn(AbsoluteFS, 'stat').mockImplementation(async (target) => {
-        if (target === cyclePath) {
-          throw new Error('The symlink cycle must not be statted');
-        }
-        return dirStat();
+      const storageFs = storageView({
+        exists: () => Effect.succeed(true),
+        readDirectoryTyped: (target) => {
+          if (target === MEMORY_STORAGE_DIR) {
+            return Effect.succeed([['cycle', 'SymbolicLink']] as const);
+          }
+          return Effect.die(
+            new Error('The symlink cycle must not be traversed'),
+          );
+        },
+        stat: (target) => {
+          if (target === cyclePath) {
+            return Effect.die(
+              new Error('The symlink cycle must not be statted'),
+            );
+          }
+          return Effect.succeed(entryInfo('Directory', 0));
+        },
       });
 
-      const result = yield* viewMemory(MEMORY_DISPLAY_ROOT);
+      const result = yield* viewMemory(storageFs, MEMORY_DISPLAY_ROOT);
 
       expect(result).toMatchObject({
         status: 'executed',
@@ -217,28 +219,11 @@ describe('MemoryTool view with an omitted path', () => {
   );
 });
 
-/**
- * The per-call storage root's directory creation runs on the process
- * `FileSystem` now that the `AbsoluteFS` facade is gone, so a case stubs that
- * one method of the real service rather than the deleted static.
- */
-function withStubbedDirectories<A, E, R>(program: Effect.Effect<A, E, R>) {
-  return Effect.gen(function* () {
-    const fs = yield* FileSystem.FileSystem;
-    return yield* program.pipe(
-      Effect.provideService(FileSystem.FileSystem, {
-        ...fs,
-        makeDirectory: () => Effect.void,
-      }),
-    );
-  });
-}
-
 describe('MemoryTool invocation storage root', () => {
   afterEach(() => vi.restoreAllMocks());
 
   it.effect(
-    'uses each tool call root instead of its ambient invocation scope',
+    'writes through the view its call was given, not an ambient root',
     () =>
       Effect.gen(function* () {
         const first = createFakeWorkspaceRoots({ storagePath: '/storage/one' });
@@ -246,12 +231,16 @@ describe('MemoryTool invocation storage root', () => {
           storagePath: '/storage/two',
         });
         const writes: string[] = [];
-        vi.spyOn(AbsoluteFS, 'exists').mockResolvedValue(false);
-        vi.spyOn(AbsoluteFS, 'writeAtomic').mockImplementation(
-          async (target) => {
-            writes.push(target);
-          },
-        );
+        const viewOf = (root: string): RootedFileSystem =>
+          storageView({
+            root,
+            exists: () => Effect.succeed(false),
+            makeDirectory: () => Effect.void,
+            writeFileAtomic: (target) =>
+              Effect.sync(() => {
+                writes.push(path.resolve(root, target));
+              }),
+          });
 
         yield* Effect.forEach(
           [
@@ -259,24 +248,27 @@ describe('MemoryTool invocation storage root', () => {
             [second, 'two.md'],
           ] as const,
           ([roots, file], index) =>
-            withStubbedDirectories(
-              new MemoryTool().call({
+            new MemoryTool()
+              .call({
                 command: 'create',
                 path: `/memories/${file}`,
                 file_text: file,
-              }),
-            ).pipe(
-              Effect.provide(
-                nativeToolTestLayer({
-                  roots,
-                  inScope: (operation) =>
-                    runWithWorkspaceRoots(
-                      index === 0 ? second : first,
-                      operation,
-                    ),
-                }),
+              })
+              .pipe(
+                Effect.provideService(StorageFs, viewOf(roots.storage)),
+                Effect.provide(
+                  nativeToolTestLayer({
+                    roots,
+                    // The call's ambient scope names the OTHER project's roots:
+                    // the view above is what the write must follow.
+                    inScope: (operation) =>
+                      runWithWorkspaceRoots(
+                        index === 0 ? second : first,
+                        operation,
+                      ),
+                  }),
+                ),
               ),
-            ),
           { concurrency: 'unbounded' },
         );
 

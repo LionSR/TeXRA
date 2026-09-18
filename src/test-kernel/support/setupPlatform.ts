@@ -37,6 +37,7 @@ import {
   type LanguageModelPort,
 } from '@platform/languageModel';
 import type { Platform } from '@platform/platform';
+import { globalStorageFsLayer } from '@platform/rootedFs';
 import type { PlatformSecrets, Secrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
@@ -374,6 +375,13 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     // No conditional injections on the bare fake host: a suite that
     // exercises them passes its own list to `resolveAgentTools`.
     ToolInjections.layer([]),
+    // The cross-workspace storage view the process runtime serves, over the
+    // installed host's global root. A suite that exercises it directly
+    // provides its own view innermost.
+    Layer.provide(
+      globalStorageFsLayer(current?.roots.globalStorage ?? ''),
+      Layer.mergeAll(NodeFileSystem.layer, NodePath.layer),
+    ),
   );
   initPlatform(host.platform);
   initProcessWorkspaceRoots(host.roots);

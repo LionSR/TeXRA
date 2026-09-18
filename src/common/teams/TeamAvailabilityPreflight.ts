@@ -42,7 +42,7 @@ export type TeamAvailabilityPreflightResult<T> =
       readonly unavailableNames: readonly string[];
     };
 
-export interface TeamAvailabilityPreflightOptions<T> {
+export interface TeamAvailabilityPreflightOptions<T, R = never> {
   readonly initial: T;
   readonly unresolvedNames: (value: T) => readonly string[];
   readonly texraHostedNames: ReadonlySet<string>;
@@ -54,16 +54,16 @@ export interface TeamAvailabilityPreflightOptions<T> {
   ) => Promise<TeamAvailabilityChoice | undefined>;
   readonly signIn: () => Effect.Effect<boolean, SignInFailed>;
   /** Force a remote catalog refresh; the failure channel is the refresh's own. */
-  readonly refreshRemote: () => Effect.Effect<void, unknown>;
+  readonly refreshRemote: () => Effect.Effect<void, unknown, R>;
   /** Recompute the planned value against the refreshed catalog. */
   readonly replan: () => T;
   /** The caller already forced a remote catalog fetch for `initial`. */
   readonly remoteCatalogRefreshAttempted?: boolean;
 }
 
-function unavailableTexraHostedNames<T>(
+function unavailableTexraHostedNames<T, R>(
   value: T,
-  options: TeamAvailabilityPreflightOptions<T>,
+  options: TeamAvailabilityPreflightOptions<T, R>,
 ): string[] {
   return options
     .unresolvedNames(value)
@@ -75,9 +75,9 @@ function unavailableTexraHostedNames<T>(
  * launches anything. Model credentials are deliberately absent from this API:
  * only TeXRA authentication can make TeXRA-hosted definitions available.
  */
-export function preflightTeamAvailability<T>(
-  options: TeamAvailabilityPreflightOptions<T>,
-): Effect.Effect<TeamAvailabilityPreflightResult<T>, unknown> {
+export function preflightTeamAvailability<T, R = never>(
+  options: TeamAvailabilityPreflightOptions<T, R>,
+): Effect.Effect<TeamAvailabilityPreflightResult<T>, unknown, R> {
   return Effect.gen(function* () {
     const refreshAndRecheck = Effect.gen(function* () {
       yield* options.refreshRemote();

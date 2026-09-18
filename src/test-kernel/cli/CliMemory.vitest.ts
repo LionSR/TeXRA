@@ -10,11 +10,17 @@ import {
   formatCliMemoryList,
   loadCliMemoryDetail,
 } from '@cli/runtime/memory';
+import { StorageFs } from '@platform/rootedFs';
 import type { MemoryViewItem } from '@shared/schemas';
+import type { RootedFileSystem } from '@utils/files/rootedFileSystem';
 
 vi.mock('@tools/memory/memoryFileSystem', () => ({
   loadMemoryPreview: () => Effect.succeed({ lineCount: 1, preview: 'preview' }),
 }));
+
+/** The storage view `loadCliMemoryDetail` takes from context. The mocked
+ *  preview never touches it, so nothing on it is reached. */
+const storageFsStub = {} as RootedFileSystem;
 
 const item: MemoryViewItem = {
   displayPath: '/memories/project.md',
@@ -65,7 +71,7 @@ describe('CLI memory formatting', () => {
       expect(detail).toMatchObject({
         path: '/memories/project.md',
       });
-    }),
+    }).pipe(Effect.provideService(StorageFs, storageFsStub)),
   );
 
   it.effect('rejects absolute paths outside the memory display root', () =>
@@ -75,7 +81,7 @@ describe('CLI memory formatting', () => {
       );
       expect(error).toBeInstanceOf(Error);
       expect((error as Error).message).toContain('Invalid memory path');
-    }),
+    }).pipe(Effect.provideService(StorageFs, storageFsStub)),
   );
 
   it.effect(
@@ -89,6 +95,6 @@ describe('CLI memory formatting', () => {
         expect((error as Error).message).toContain(
           'Invalid memory path: /memories/../outside.md',
         );
-      }),
+      }).pipe(Effect.provideService(StorageFs, storageFsStub)),
   );
 });

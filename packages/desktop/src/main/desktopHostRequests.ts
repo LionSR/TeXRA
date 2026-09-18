@@ -40,7 +40,11 @@ import {
 } from '@model/computeModelOptions';
 import type { AgentDirectoriesFailed, StateStore } from '@platform/interfaces';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
-import { sessionFsLayer } from '@platform/rootedFs';
+import {
+  sessionFsLayer,
+  type GlobalStorageFs,
+  type StorageFs,
+} from '@platform/rootedFs';
 import type { PlatformSecrets } from '@platform/secrets';
 import {
   cloneRoundIndexed,
@@ -101,7 +105,11 @@ interface DesktopHostRequestsOptions {
   /** A host-initiated change to the surface (PRD 8.5). */
   postSurfaceAction(action: SurfaceActionMessage['action']): void;
   signIn(): Promise<void>;
-  getCustomAgentDirectory(): Effect.Effect<string, AgentDirectoriesFailed>;
+  getCustomAgentDirectory(): Effect.Effect<
+    string,
+    AgentDirectoriesFailed,
+    GlobalStorageFs
+  >;
   showFirstRunWalkthrough(): void;
   onboarding: Pick<
     DesktopOnboardingIpc,
@@ -689,7 +697,7 @@ export function createDesktopHostRequests(
   function dispatch(
     request: HostRequest,
     port: string,
-  ): Effect.Effect<HostOutcome, Error, ProcessServices> {
+  ): Effect.Effect<HostOutcome, Error, ProcessServices | StorageFs> {
     return Effect.gen(function* () {
       const done: HostOutcome = { kind: 'done' };
       switch (request.kind) {
@@ -806,6 +814,7 @@ export function createDesktopHostRequests(
             request,
             host,
             session.roots.workspaceState,
+            session.roots.storage,
           );
           yield* fromHost('run.runValidated', () => run.runValidated(launch));
           return done;
@@ -884,7 +893,9 @@ export function createDesktopHostRequests(
     request: HostRequest,
     port: string,
   ): Effect.Effect<HostOutcome, Error, ProcessServices> {
-    return dispatch(request, port).pipe(
+    // Over this paper's rooted filesystems: an arm that writes under the
+    // session's storage takes the view the layer above built from its roots.
+    return Effect.provide(dispatch(request, port), sessionFiles).pipe(
       Effect.catchCause((cause) => {
         const error = Cause.squash(cause);
         if (error instanceof Cancelled) return Effect.failCause(cause);

@@ -19,6 +19,7 @@ import { selectFolder } from '@frontend/ui/dialogs';
 import { createLog } from '@logger/logUtils';
 import type { AgentDirectoriesFailed } from '@platform/interfaces';
 import type { ProcessRuntime } from '@platform/processRuntime';
+import type { GlobalStorageFs } from '@platform/rootedFs';
 import { AGENT_SOURCE } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
@@ -35,7 +36,7 @@ const AGENT_WATCHER_REBUILD_LANE = 'agent-watcher-rebuild';
  */
 async function runSettledEffect<A>(
   runtime: ProcessRuntime,
-  effect: Effect.Effect<A, unknown>,
+  effect: Effect.Effect<A, unknown, GlobalStorageFs>,
 ): Promise<A> {
   const exit = await runtime.runPromiseExit(effect);
   if (Exit.isSuccess(exit)) return exit.value;
@@ -113,13 +114,17 @@ class AgentDirectoryManager {
    */
   getDirectory(
     source: AgentSource,
-  ): Effect.Effect<string | undefined, AgentDirectoriesFailed> {
+  ): Effect.Effect<
+    string | undefined,
+    AgentDirectoriesFailed,
+    GlobalStorageFs
+  > {
     return Effect.suspend(() =>
       agentSourceDirectory(this.getHost().directories, source),
     );
   }
 
-  custom(): Effect.Effect<string, AgentDirectoriesFailed> {
+  custom(): Effect.Effect<string, AgentDirectoriesFailed, GlobalStorageFs> {
     return Effect.suspend(() => this.getHost().directories.custom());
   }
 
@@ -218,7 +223,11 @@ class AgentDirectoryManager {
     await runSettledEffect(runtime, onRebuildLane(this.rebuildAgentWatchers()));
   }
 
-  private rebuildAgentWatchers(): Effect.Effect<void, unknown> {
+  private rebuildAgentWatchers(): Effect.Effect<
+    void,
+    unknown,
+    GlobalStorageFs
+  > {
     return Effect.gen({ self: this }, function* () {
       if (!this.onAgentYamlChange) {
         return;

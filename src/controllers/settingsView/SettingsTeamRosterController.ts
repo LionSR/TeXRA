@@ -31,8 +31,8 @@ interface SettingsTeamRosterPresentation extends Pick<
   ): Promise<TeamAvailabilityChoice | undefined>;
 }
 
-interface SettingsTeamRosterOptions extends Omit<
-  TeamRosterApplicationDeps,
+interface SettingsTeamRosterOptions<R> extends Omit<
+  TeamRosterApplicationDeps<R>,
   'catalog' | 'choose'
 > {
   readonly catalog: SettingsTeamRosterCatalog;
@@ -53,12 +53,12 @@ class TeamRosterRefreshFailed extends Data.TaggedError(
 }> {}
 
 /** Apply a settings team and present its outcome consistently across hosts. */
-export function applySettingsTeamRoster(
+export function applySettingsTeamRoster<R = never>(
   presetId: string,
-  options: SettingsTeamRosterOptions,
-): Effect.Effect<void, unknown> {
+  options: SettingsTeamRosterOptions<R>,
+): Effect.Effect<void, unknown, R> {
   return Effect.gen(function* () {
-    const result = yield* applyTeamRosterWithPreflight(presetId, {
+    const result = yield* applyTeamRosterWithPreflight<R>(presetId, {
       ...options,
       choose: (preset, unavailableNames) =>
         options.presentation.chooseTeamAvailability(

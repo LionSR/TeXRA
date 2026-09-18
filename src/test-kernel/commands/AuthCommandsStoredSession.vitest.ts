@@ -68,13 +68,20 @@ vi.mock('@utils/config/configUtils', () => ({
 // Local imports
 import { SupabaseAuth, type SupabaseAuthShape } from '@auth/SupabaseAuth';
 import { signIn, signOut } from '@commands/auth/authCommands';
+import { GlobalStorageFs } from '@platform/rootedFs';
 import { fakeSupabaseAuth } from '@test/support/fakeSupabaseAuth';
+import { unusedGlobalStorageFs } from '@test/support/fsTestUtils';
 
 /** Run the command against the fake account plane. */
 const withAuth = <A>(
   auth: SupabaseAuthShape,
-  program: Effect.Effect<A, never, SupabaseAuth>,
-): Effect.Effect<A> => Effect.provideService(program, SupabaseAuth, auth);
+  program: Effect.Effect<A, never, GlobalStorageFs | SupabaseAuth>,
+): Effect.Effect<A> =>
+  Effect.provideService(program, SupabaseAuth, auth).pipe(
+    // The sign-out path rebuilds the local agent catalog, which names the
+    // process's global storage view; this suite's catalog read is mocked.
+    Effect.provide(unusedGlobalStorageFs()),
+  );
 
 describe('auth commands for unavailable stored sessions', () => {
   afterEach(() => {

@@ -3,6 +3,7 @@ import { Data, Effect } from 'effect';
 import { type MessageHost, NotificationFailed } from '@hosts/uiHosts';
 import type { AgentDirectoriesFailed } from '@platform/interfaces';
 import type { ProcessRuntime } from '@platform/processRuntime';
+import type { GlobalStorageFs } from '@platform/rootedFs';
 import type { AgentCategory, SettingsTabPanelName } from '@shared/schemas';
 import {
   DESKTOP_SHELL_COMMANDS,
@@ -44,9 +45,9 @@ function hostCall<A>(
  * formats stays the one the member failed with, exactly as it was when that
  * member answered with a promise and {@link hostCall} carried the rejection.
  */
-function onShellFailure<A, E>(
-  program: Effect.Effect<A, E>,
-): Effect.Effect<A, ShellActionFailed> {
+function onShellFailure<A, E, R>(
+  program: Effect.Effect<A, E, R>,
+): Effect.Effect<A, ShellActionFailed, R> {
   return program.pipe(
     Effect.mapError((cause) => new ShellActionFailed({ cause })),
   );
@@ -56,7 +57,11 @@ interface DesktopShellActionFactoryOptions extends Pick<
   MessageHost,
   'showInfoMessage'
 > {
-  getCustomAgentDirectory(): Effect.Effect<string, AgentDirectoriesFailed>;
+  getCustomAgentDirectory(): Effect.Effect<
+    string,
+    AgentDirectoriesFailed,
+    GlobalStorageFs
+  >;
   openExternalUrl(url: string): Effect.Effect<void, PreviewUnavailable>;
   openLogFolder(): Effect.Effect<void, PreviewUnavailable>;
   openPath(filePath: string): Effect.Effect<void, PreviewUnavailable>;
@@ -92,7 +97,11 @@ export function createDesktopShellActions(
    * than escaping the fork unreported.
    */
   function runShellAction(
-    program: Effect.Effect<void, ShellActionFailed | NotificationFailed>,
+    program: Effect.Effect<
+      void,
+      ShellActionFailed | NotificationFailed,
+      GlobalStorageFs
+    >,
   ): void {
     options.runtime.runFork(
       program.pipe(

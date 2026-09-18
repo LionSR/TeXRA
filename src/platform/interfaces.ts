@@ -5,6 +5,8 @@
 import { Context, Data, Effect, Layer } from 'effect';
 import type { AgentSource, RunId } from '@shared/schemas';
 
+import type { GlobalStorageFs } from './rootedFs';
+
 // ---------------------------------------------------------------------------
 // Disposable
 // ---------------------------------------------------------------------------
@@ -265,9 +267,13 @@ export class AgentDirectoriesFailed extends Data.TaggedError(
  * so the one reader that can fault — `custom`, which creates the directory it
  * resolves — carries its failure into the catalog load that asked for it
  * instead of rejecting an await that cannot name it.
+ *
+ * `custom` takes the process's {@link GlobalStorageFs} from context: the
+ * default custom-agents directory lives under the cross-workspace storage
+ * root, and the view that names it is the one the process runtime provides.
  */
 export interface AgentDirectoriesPort {
-  custom(): Effect.Effect<string, AgentDirectoriesFailed>;
+  custom(): Effect.Effect<string, AgentDirectoriesFailed, GlobalStorageFs>;
   builtIn(): Effect.Effect<string, AgentDirectoriesFailed>;
   builtInToolUse(): Effect.Effect<string, AgentDirectoriesFailed>;
 }

@@ -15,6 +15,7 @@ import { isCtrlInput } from '@cli/tui/inputKeys';
 import { COLOR_BORDER, COLOR_HINT } from '@cli/tui/ui/colors';
 import { POINTER } from '@cli/tui/ui/glyphs';
 import type { ProcessRuntime } from '@platform/processRuntime';
+import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { BaseTextInput } from '../input/BaseTextInput';
 import { textInputCappedRowCount } from '../input/textInputDisplay';
@@ -60,6 +61,9 @@ interface InputBarProps {
    *  on, threaded from the chat root that holds it — this bar runs no
    *  Effect of its own. */
   readonly runtime: ProcessRuntime;
+  /** The chat session's roots: the Ctrl-V image probe writes under this
+   *  project's own storage, never under whichever root a later call reads. */
+  readonly roots: Pick<WorkspaceRoots, 'workspace' | 'storage'>;
   /** Forwarded to BaseTextInput; called only on real (non-paste) Enter.
    *  `mediaFiles` carries absolute paths of any pasted-image attachments. */
   readonly onSubmit: (
@@ -114,7 +118,7 @@ const INPUT_BAR_MAX_CONTENT_ROWS = 5;
 const INPUT_BAR_DECORATION_COLUMNS = 6;
 
 export function InputBar(props: InputBarProps): React.JSX.Element {
-  const { disabled, history, onSubmit, runtime } = props;
+  const { disabled, history, onSubmit, roots, runtime } = props;
   const keyboardActive = props.keyboardActive ?? true;
   const [value, setValueState] = useState('');
   const reverseSearchOpen = useSignal(reverseSearchOpenSignal);
@@ -254,7 +258,7 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
     () => ({
       runtime,
       probe: async (attempt: ImagePasteAttempt): Promise<string | null> => {
-        const result = await attachClipboardImage();
+        const result = await attachClipboardImage(runtime, roots);
         if (!attempt.isCurrent()) return null;
         if (!result.ok) {
           setTransientNotice(result.reason);
@@ -271,7 +275,7 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
           ttlMs: Number.POSITIVE_INFINITY,
         }),
     }),
-    [runtime],
+    [roots, runtime],
   );
 
   // Listen for Ctrl-R *outside* the text input — Ink emits the keystroke

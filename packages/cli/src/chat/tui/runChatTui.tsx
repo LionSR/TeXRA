@@ -501,7 +501,8 @@ export async function runChat(
     // an override, to carry this session's CliContext.
     onLoginSelect: (value, output) =>
       loginFromChat(value, runtime, context, output),
-    onMemorySelect: (storagePath) => showCliMemoryPreview(runtime, storagePath),
+    onMemorySelect: (storagePath) =>
+      showCliMemoryPreview(runtime, runtimeSession.roots, storagePath),
     onSkillSelect: chatController.activateSkill,
     onResumeSelect: chatController.resume,
     getConfigStores: platformSettingsStores,

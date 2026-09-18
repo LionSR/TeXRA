@@ -3,6 +3,7 @@ import { Effect } from 'effect';
 import { getAgentsByCategory, loadAgents, refresh } from '@agent/index';
 import { supabaseAuthenticated } from '@auth/SupabaseAuth';
 import type { StateStore } from '@platform/interfaces';
+import type { GlobalStorageFs } from '@platform/rootedFs';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 
 /**
@@ -14,10 +15,14 @@ import { WorkspaceStateKey } from '@shared/state/stateKeys';
  */
 export function createTeamCatalogPorts(workspaceState: StateStore): {
   readonly customPresetsRaw: unknown;
-  readonly ensureCatalogLoaded: () => Effect.Effect<void, unknown>;
+  readonly ensureCatalogLoaded: () => Effect.Effect<
+    void,
+    unknown,
+    GlobalStorageFs
+  >;
   readonly getAgents: typeof getAgentsByCategory;
   readonly canAccessRemoteCatalog: () => Effect.Effect<boolean>;
-  readonly refreshRemote: () => Effect.Effect<void, unknown>;
+  readonly refreshRemote: () => Effect.Effect<void, unknown, GlobalStorageFs>;
 } {
   return {
     customPresetsRaw: workspaceState.get<unknown>(

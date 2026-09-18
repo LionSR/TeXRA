@@ -80,6 +80,7 @@ import {
   setupPlatform,
   type FakeHost,
 } from '@test/support/setupPlatform';
+import { unusedGlobalStorageFs } from '@test/support/fsTestUtils';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
 import { DelegateAgentTool } from '@tools/delegation/DelegationTools';
 import { executeSubagent } from '@tools/delegation/subagentRun';
@@ -541,7 +542,12 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
   setupPlatform(integrationPlatform);
 
   beforeEach(async () => {
-    await Effect.runPromise(refresh({ includeRemote: false }));
+    await Effect.runPromise(
+      Effect.provide(
+        refresh({ includeRemote: false }),
+        unusedGlobalStorageFs(),
+      ),
+    );
     // The process session over a persistent store: one session per root,
     // so the ephemeral default this file's setup installed gives way to it.
     await Effect.runPromise(teardownDefaultSession());
