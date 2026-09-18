@@ -229,11 +229,12 @@ async function initVscodePlatform(
   const auth = Effect.runSync(
     createSupabaseAuth({
       secrets,
-      whenReady: async () => {
-        if (!authReadiness.uriHandlerInstalled) {
-          throw new Error(AUTH_URI_HANDLER_NOT_INITIALIZED);
-        }
-      },
+      whenReady: () =>
+        Effect.suspend(() =>
+          authReadiness.uriHandlerInstalled
+            ? Effect.void
+            : Effect.fail(new Error(AUTH_URI_HANDLER_NOT_INITIALIZED)),
+        ),
       log: logger,
     }).pipe(
       Effect.catch((error) => Effect.succeed(unavailableSupabaseAuth(error))),

@@ -14,7 +14,6 @@ import { waitForCondition } from '@test/support/asyncTestUtils';
 import { createFakeHost, setupPlatform } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { executeCommand, executeCommandSync } from '@utils/system/execUtils';
-import { buildWorkspaceInfoBlock } from '@utils/system/workspaceInfo';
 import { BinaryResolverService } from '@utils/system/binaryResolver';
 
 // ---------------------------------------------------------------------------

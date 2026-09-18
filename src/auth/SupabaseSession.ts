@@ -5,7 +5,7 @@ import {
   parseAuthCallbackCode,
   type AuthCallbackUriParts,
 } from './authCallback';
-import { callPort, SerializedWrites, type AuthPortError } from './authProgram';
+import { AuthPortError, callPort, SerializedWrites } from './authProgram';
 import {
   parseStoredSupabaseSession,
   toStorableSupabaseSession,
@@ -37,7 +37,7 @@ export {
 export interface SupabaseSessionCoordinatorOptions {
   storage: SupabaseSessionStorage;
   getClient: () => Client;
-  whenReady: () => Promise<void>;
+  whenReady: () => Effect.Effect<void, Error>;
   tokenRefreshThresholdMs: number;
   log?: SupabaseSessionLog;
 }
@@ -77,7 +77,9 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
   }
 
   whenReady(): Effect.Effect<void, AuthPortError> {
-    return callPort(() => this.options.whenReady());
+    return this.options
+      .whenReady()
+      .pipe(Effect.mapError((cause) => new AuthPortError({ cause })));
   }
 
   storeSession(session: SupabaseSession): Effect.Effect<void, AuthPortError> {

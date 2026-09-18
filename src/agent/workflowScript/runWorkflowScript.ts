@@ -96,10 +96,10 @@ interface InFlightAgentCall {
   action?: WorkflowControlAction;
   /** The live child the gesture named: what a retry supersedes. */
   target?: RunId;
-  /** A retry's journaled authorization, started before the interrupt it
-   *  authorizes and resolving to the failure that write hit, if any: the loop
-   *  reads it where the replacement is asked for. */
-  superseded?: Promise<Error | undefined>;
+  /** A retry's journaled authorization: the fiber that write runs on, forked
+   *  before the interrupt it authorizes, and joined by the loop where the
+   *  replacement is asked for. Its exit is the write's outcome. */
+  superseded?: Fiber.Fiber<undefined, Error>;
 }
 
 /**
@@ -250,6 +250,7 @@ export function runWorkflowScript<R = never>(
 
       const agentFibers = yield* FiberSet.make<string | undefined, Error>();
       const runGuestAgent = yield* FiberSet.runtimePromise(agentFibers)<R>();
+      const forkGuestAgent = yield* FiberSet.runtime(agentFibers)<R>();
       const permits = yield* Semaphore.make(concurrency);
       const inFlightCalls = new Map<RunId, InFlightAgentCall>();
       let liveCallCounter = 0;
@@ -330,8 +331,8 @@ export function runWorkflowScript<R = never>(
       const authorizeRetry = (
         call: InFlightAgentCall,
         childRunId: RunId,
-      ): Promise<Error | undefined> =>
-        runGuestAgent(
+      ): Fiber.Fiber<undefined, Error> =>
+        forkGuestAgent(
           journalCommitFence
             .commit(
               Effect.suspend(
@@ -340,10 +341,12 @@ export function runWorkflowScript<R = never>(
                   Effect.void,
               ),
             )
-            .pipe(Effect.as(undefined)),
-        ).then(
-          () => undefined,
-          (error: unknown) => ensureError(error),
+            .pipe(
+              Effect.as(undefined),
+              Effect.onExit(() =>
+                Effect.sync(() => call.fiber?.interruptUnsafe()),
+              ),
+            ),
         );
 
       const control: WorkflowScriptControl = (childRunId, action) => {
@@ -355,13 +358,11 @@ export function runWorkflowScript<R = never>(
           call.fiber.interruptUnsafe();
           return true;
         }
-        // A failed write still interrupts: the loop reads the failure where
-        // the replacement would be asked for and aborts the workflow there,
-        // which is where an unauthorized supersession has always ended.
-        call.superseded = authorizeRetry(call, childRunId).then((failure) => {
-          call.fiber?.interruptUnsafe();
-          return failure;
-        });
+        // A failed write still interrupts — `authorizeRetry` interrupts on
+        // every exit: the loop reads the failure where the replacement would
+        // be asked for and aborts the workflow there, which is where an
+        // unauthorized supersession has always ended.
+        call.superseded = authorizeRetry(call, childRunId);
         return true;
       };
       onControl?.(control);
@@ -779,8 +780,11 @@ export function runWorkflowScript<R = never>(
                   const superseded = call.target;
                   const authorization = call.superseded;
                   if (authorization !== undefined) {
-                    const failure = yield* Effect.promise(() => authorization);
-                    if (failure !== undefined) {
+                    const authorized = yield* Fiber.await(authorization);
+                    if (Exit.isFailure(authorized)) {
+                      const failure = ensureError(
+                        Cause.squash(authorized.cause),
+                      );
                       const fault = new WorkflowRunAbortError(
                         `Failed to journal the retry of workflow child ${superseded}: ${toErrorMessage(failure)}`,
                         { cause: failure },

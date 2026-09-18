@@ -2,6 +2,9 @@
 import * as os from 'node:os';
 import * as path from 'node:path';
 
+// Third-party imports
+import { Effect } from 'effect';
+
 // Local imports
 import { escapeTextStrict } from '@shared/utils/xmlEscape';
 import type { SettingsStores } from '@shared/config/settingsAccess';
@@ -56,31 +59,31 @@ function getPlatformLabel(): string {
  * Gather git repository information for the workspace.
  * Returns null if the workspace is not a git repo or git is unavailable.
  */
-async function getGitInfo(
+const getGitInfo = Effect.fn(function* (
   workspacePath: string,
   settings: SettingsStores | undefined,
-): Promise<GitInfo | null> {
-  const opts = {
-    cwd: workspacePath,
-    settings,
-    timeout: GIT_TIMEOUT_MS,
-  } as const;
+) {
+  const opts = { cwd: workspacePath, settings, timeout: GIT_TIMEOUT_MS };
+  const runGit = (...args: string[]) =>
+    Effect.promise((signal) =>
+      executeCommand(['git', ...args], { ...opts, signal }),
+    );
 
   // Deliberately not isGitRepository(): that also requires stdout === 'true',
   // which excludes bare repos and paths inside .git, where `git rev-parse`
   // exits 0 but prints false. Those still have a usable branch and history, so
   // gate on exit status only and let the branch/status calls below decide.
-  const insideWorkTree = await executeCommand(
-    ['git', 'rev-parse', '--is-inside-work-tree'],
-    opts,
-  );
+  const insideWorkTree = yield* runGit('rev-parse', '--is-inside-work-tree');
   if (!insideWorkTree.success) return null;
 
   // Run branch and status checks in parallel
-  const [branchResult, statusResult] = await Promise.all([
-    executeCommand(['git', 'symbolic-ref', '--short', 'HEAD'], opts),
-    executeCommand(['git', 'status', '--porcelain'], opts),
-  ]);
+  const [branchResult, statusResult] = yield* Effect.all(
+    [
+      runGit('symbolic-ref', '--short', 'HEAD'),
+      runGit('status', '--porcelain'),
+    ],
+    { concurrency: 'unbounded' },
+  );
 
   // Unlike a non-zero exit (e.g. detached HEAD), a timeout means we couldn't
   // determine dirty/branch state at all — report unknown (null) rather than
@@ -95,8 +98,8 @@ async function getGitInfo(
   // test is what distinguishes clean from dirty.
   const dirty = statusResult.success && statusResult.stdout !== '';
 
-  return { branch, dirty };
-}
+  return { branch, dirty } satisfies GitInfo;
+});
 
 /**
  * Build a formatted workspace info block for system prompt injection.
@@ -109,14 +112,14 @@ async function getGitInfo(
  * the git reads below spawn with that project's configured identity instead of
  * one resolved from ambient state. `undefined` where the caller has none.
  */
-export async function buildWorkspaceInfoBlock(
+export const buildWorkspaceInfoBlock = Effect.fn(function* (
   wsPath: string | undefined,
   settings: SettingsStores | undefined,
-): Promise<string> {
+) {
   const platform = getPlatformLabel();
   const shell = detectShell();
   const date = isoDateOnly();
-  const git = wsPath ? await getGitInfo(wsPath, settings) : null;
+  const git = wsPath ? yield* getGitInfo(wsPath, settings) : null;
 
   const lines: string[] = [];
 
@@ -163,4 +166,4 @@ export async function buildWorkspaceInfoBlock(
   }
 
   return `\n<workspace_info>\n${lines.join('\n')}\n</workspace_info>`;
-}
+});
