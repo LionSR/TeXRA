@@ -208,7 +208,7 @@ export function createNativeSubagentStrategy(
     ports: ChildRunPorts,
     signal: AbortSignal,
     call: (
-      onRun: (handle: AgentRunHandle) => void,
+      onRun: (handle: AgentRunHandle) => Effect.Effect<void>,
     ) => Effect.Effect<AgentRuntimeFlowResult, Error, AgentRunServices>,
   ) {
     lastErr = undefined;
@@ -216,11 +216,13 @@ export function createNativeSubagentStrategy(
     cachedBuilt = undefined;
     cachedDelivery = undefined;
     let detachAbort = (): void => {};
-    return yield* call((handle) => {
-      detachAbort();
-      runHandle = handle;
-      detachAbort = bindAbortSignals([params.signal, signal], handle);
-    }).pipe(
+    return yield* call((handle) =>
+      Effect.sync(() => {
+        detachAbort();
+        runHandle = handle;
+        detachAbort = bindAbortSignals([params.signal, signal], handle);
+      }),
+    ).pipe(
       Effect.tap((result) =>
         Effect.sync(() => {
           lastResult = toDeliveryResult(result, params.runId);

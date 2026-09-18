@@ -295,14 +295,10 @@ function launchReflectionRun(
             : {}),
         };
         if (flowResult.error || !options.openWorkflowOutput) return flowResult;
-        const openWorkflowOutput = options.openWorkflowOutput;
-        const outputOutcome = yield* Effect.tryPromise({
-          try: () =>
-            inScope(() =>
-              openWorkflowOutput(flowResult, ctx.setting.defaultOutputFiles),
-            ),
-          catch: ensureError,
-        });
+        const outputOutcome = yield* options.openWorkflowOutput(
+          flowResult,
+          ctx.setting.defaultOutputFiles,
+        );
         return outputOutcome === undefined
           ? flowResult
           : { ...flowResult, outcome: outputOutcome };
@@ -398,7 +394,7 @@ export interface SubagentRunOptions {
     result: AgentFlowResult,
   ) => void | Promise<void>;
   /** Fires once with the live per-run handle right after it is tracked (F-2). */
-  onRun?: (handle: AgentRunHandle) => void | Promise<void>;
+  onRun?: (handle: AgentRunHandle) => Effect.Effect<void, Error>;
 }
 
 /** Options for executeAgent. */
@@ -408,6 +404,12 @@ export interface ExecuteAgentOptions extends SubagentRunOptions {
    * checkpoint are still live. A stop during this operation can therefore
    * preserve the checkpoint instead of interrupting an already-terminal run.
    * Return an outcome when output finalization changes the run's verdict.
+   *
+   * The run yields this program on the run's own fiber, so a stop reaches
+   * it, and installs no session frame around it — Effect carries no
+   * `AsyncLocalStorage` scope — so a host whose handler reads a
+   * session-rooted fact (workspace config, storage) wraps that read in its
+   * own `runInSession`.
    */
   openWorkflowOutput?: (
     result: WorkflowFlowResult,
@@ -418,7 +420,7 @@ export interface ExecuteAgentOptions extends SubagentRunOptions {
      * the launch.
      */
     agentDefaultOutputFiles: readonly string[],
-  ) => Promise<RunOutcome | void>;
+  ) => Effect.Effect<RunOutcome | void, Error>;
   /**
    * The stop latch of a launch that owns a stop before the run has a handle
    * of its own (`runAgent`'s launch handle): launch assembly fails at its

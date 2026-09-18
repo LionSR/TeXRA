@@ -18,7 +18,7 @@ import {
 import { beforeEach, describe, expect, onTestFinished, vi } from 'vitest';
 
 interface RunAgentOptions {
-  readonly onRun?: (handle: unknown) => void | Promise<void>;
+  readonly onRun?: (handle: unknown) => Effect.Effect<void>;
   readonly onRunResolved?: (runId: string, trace: unknown) => void;
 }
 
@@ -285,7 +285,7 @@ function completeRunView(): Promise<void> {
 async function driveRun(options: RunAgentOptions): Promise<typeof RESULT> {
   options.onRunResolved?.('ae0001', TRACE);
   await enterRun('ae0001');
-  await options.onRun?.(HANDLE);
+  await Effect.runPromise(options.onRun?.(HANDLE) ?? Effect.void);
   await completeRunView();
   return RESULT;
 }
@@ -339,7 +339,7 @@ describe('agent package run lifecycle', () => {
         // here, before `onRun`.
         mocks.eventListener?.(EVENT);
         await enterRun('ae0001');
-        await options.onRun?.(HANDLE);
+        await Effect.runPromise(options.onRun?.(HANDLE) ?? Effect.void);
         await completeRunView();
         return RESULT;
       },
@@ -358,7 +358,7 @@ describe('agent package run lifecycle', () => {
       async (_input: unknown, options: RunAgentOptions) => {
         options.onRunResolved?.('ae0001', TRACE);
         await enterRun('ae0001');
-        await options.onRun?.(HANDLE);
+        await Effect.runPromise(options.onRun?.(HANDLE) ?? Effect.void);
         mocks.eventListener?.(EVENT);
         await completeRunView();
         return RESULT;
@@ -703,7 +703,7 @@ describe('agent package run lifecycle', () => {
           async (_input: unknown, options: RunAgentOptions) => {
             options.onRunResolved?.('ae0001', TRACE);
             await enterRun('ae0001');
-            await options.onRun?.(HANDLE);
+            await Effect.runPromise(options.onRun?.(HANDLE) ?? Effect.void);
             return RESULT;
           },
         );
@@ -730,7 +730,7 @@ describe('agent package run lifecycle', () => {
       async (_input: unknown, options: RunAgentOptions) => {
         options.onRunResolved?.('ae0001', TRACE);
         await enterRun('ae0001');
-        await options.onRun?.(HANDLE);
+        await Effect.runPromise(options.onRun?.(HANDLE) ?? Effect.void);
         return await new Promise<typeof RESULT>((resolve) => {
           finishRun = resolve;
         });
@@ -769,7 +769,7 @@ describe('agent package run lifecycle', () => {
           landRunStart = resolve;
         });
         await enterRun('ae0001');
-        await options.onRun?.(HANDLE);
+        await Effect.runPromise(options.onRun?.(HANDLE) ?? Effect.void);
         return await new Promise<typeof RESULT>((resolve) => {
           finishRun = resolve;
         });

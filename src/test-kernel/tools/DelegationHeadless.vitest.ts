@@ -360,7 +360,7 @@ function mockWaitingChildOnce(
       });
       testDefaultSession().runs.track(handle);
       runOptions.onRunResolved?.(runId);
-      runOptions.onRun?.(handle);
+      Effect.runSync(runOptions.onRun?.(handle) ?? Effect.void);
       await options.afterRun?.(handle);
       return {
         outcome: RUN_PHASE.WAITING,
@@ -919,7 +919,9 @@ describe('headless delegation', () => {
       });
       mocks.executeAgent.mockImplementationOnce(
         async (_config, _id, options) => {
-          await options.onRun?.({ interrupt } as never);
+          await Effect.runPromise(
+            options.onRun?.({ interrupt } as never) ?? Effect.void,
+          );
           Deferred.doneUnsafe(ready, Effect.void);
           await interrupted;
           return {

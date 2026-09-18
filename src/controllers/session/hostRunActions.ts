@@ -106,7 +106,7 @@ export interface HostRunActionPorts {
       /** This launch replaces a quota-exhausted retry the user answered
        *  with their own API key. */
       ownApiKeyFallback?: boolean;
-      onRun?: () => void;
+      onRun?: () => Effect.Effect<void>;
     },
   ): Effect.Effect<void, Error>;
   loadModelOptions(): Effect.Effect<
@@ -405,9 +405,10 @@ export const createHostRunActions = (
                   { config: { ...config, model } },
                   {
                     ownApiKeyFallback: true,
-                    onRun: () => {
-                      Deferred.doneUnsafe(runStarted, Effect.void);
-                    },
+                    onRun: () =>
+                      Effect.sync(() => {
+                        Deferred.doneUnsafe(runStarted, Effect.void);
+                      }),
                   },
                 )
                 .pipe(

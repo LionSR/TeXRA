@@ -58,30 +58,31 @@ export function launchDesktopAgent(
       onRun: options.onRun,
       onRunResolved: options.onRunResolved,
       suppressErrorNotification: true,
-      openWorkflowOutput: async (result) => {
-        const output = selectAutoOpenFinalOutput(result);
-        if (!output) return;
-        let location: RequestOpenFilePayload['location'];
-        if (output.location === 'workspace') {
-          location = createWorkspaceLocation(
-            output.absolutePath,
-            output.relativePath,
+      openWorkflowOutput: (result) =>
+        Effect.sync(() => {
+          const output = selectAutoOpenFinalOutput(result);
+          if (!output) return;
+          let location: RequestOpenFilePayload['location'];
+          if (output.location === 'workspace') {
+            location = createWorkspaceLocation(
+              output.absolutePath,
+              output.relativePath,
+            );
+          } else if (output.location === 'runStorage') {
+            location = createRunStorageLocation(
+              output.absolutePath,
+              output.relativePath,
+              result.runId,
+            );
+          } else {
+            location = createExternalLocation(output.absolutePath);
+          }
+          context.session.interactions.emit(
+            'requestOpenFile',
+            { location, preserveFocus: false },
+            { replayWhenAttached: true },
           );
-        } else if (output.location === 'runStorage') {
-          location = createRunStorageLocation(
-            output.absolutePath,
-            output.relativePath,
-            result.runId,
-          );
-        } else {
-          location = createExternalLocation(output.absolutePath);
-        }
-        context.session.interactions.emit(
-          'requestOpenFile',
-          { location, preserveFocus: false },
-          { replayWhenAttached: true },
-        );
-      },
+        }),
     }).pipe(Effect.asVoid);
   });
   return Effect.flatMap(context.runtime.contextEffect, (runtimeContext) =>

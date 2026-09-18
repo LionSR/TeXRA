@@ -68,15 +68,15 @@ type CliWorkflowOutputHandler = (
   /** The declared defaults the run hands over; see `RunAgentOptions`. */
   agentDefaultOutputFiles: Parameters<RunAgentWorkflowOutput>[1],
   tryCommitPublication: () => boolean,
-) => Effect.Effect<Awaited<ReturnType<RunAgentWorkflowOutput>>, Error>;
+) => Effect.Effect<Effect.Success<ReturnType<RunAgentWorkflowOutput>>, Error>;
 
 interface CliExecuteOptions {
   /** The process session the run executes under: `initCliPlatform`'s one
    *  memoized open, threaded from the command that holds its services. */
   readonly session: Effect.Effect<SessionHandle, SessionOpenError>;
-  /** The process runtime, from the same services: the shutdown handler, the
-   *  lease drain and the workflow-output handler below are Promise-shaped
-   *  callbacks the agent runtime calls, so each runs its program on this. */
+  /** The process runtime, from the same services: the shutdown handler the
+   *  lifecycle host calls is Promise-shaped, so it runs its programs on
+   *  this. */
   readonly runtime: ProcessRuntime;
   /** The host's shutdown registry, from the same services: the run's
    *  shutdown-status handler registers here. */
@@ -525,28 +525,25 @@ export function executeCliRequest(
           openWorkflowOutput === undefined
             ? undefined
             : (result, agentDefaultOutputFiles) =>
-                options.runtime.runPromise(
-                  openWorkflowOutput(
-                    result,
-                    agentDefaultOutputFiles,
-                    tryCommitWorkflowOutputPublication,
-                  ),
+                openWorkflowOutput(
+                  result,
+                  agentDefaultOutputFiles,
+                  tryCommitWorkflowOutputPublication,
                 ),
         modelCompatibilityKey: options.modelCompatibilityKey,
-        beforeLeaseRelease: async () => {
-          const handled = await options.runtime.runPromise(
-            finalizeShutdownStatus,
-          );
-          if (
-            launchVerdict.kind === 'interrupted' &&
-            launchVerdict.artifactFailure !== undefined
-          ) {
-            const error = launchVerdict.artifactFailure;
-            launchVerdict.artifactFailure = undefined;
-            throw error;
-          }
-          return handled;
-        },
+        beforeLeaseRelease: () =>
+          Effect.gen(function* () {
+            const handled = yield* finalizeShutdownStatus;
+            if (
+              launchVerdict.kind === 'interrupted' &&
+              launchVerdict.artifactFailure !== undefined
+            ) {
+              const error = launchVerdict.artifactFailure;
+              launchVerdict.artifactFailure = undefined;
+              return yield* Effect.fail(ensureError(error));
+            }
+            return handled;
+          }),
         onRunLeaseAcquired: (runId) => {
           ownedRunId = runId;
         },

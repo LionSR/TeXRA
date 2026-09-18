@@ -123,16 +123,14 @@ describe('terminal result event', () => {
 
   it.effect.each([
     {
-      name: 'throws synchronously',
+      name: 'throws while building its program',
       onRun: () => {
         throw new Error('onRun boom');
       },
     },
     {
-      name: 'rejects asynchronously',
-      onRun: async () => {
-        throw new Error('onRun async boom');
-      },
+      name: 'fails',
+      onRun: () => Effect.fail(new Error('onRun failure boom')),
     },
   ])('keeps running when onRun $name', ({ onRun }) =>
     Effect.gen(function* () {

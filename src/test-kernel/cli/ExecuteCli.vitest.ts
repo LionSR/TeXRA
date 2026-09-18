@@ -232,7 +232,7 @@ async function loadExecuteCli() {
 }
 
 type LeaseOptions = {
-  beforeLeaseRelease?: () => Promise<boolean | void>;
+  beforeLeaseRelease?: () => Effect.Effect<boolean | void, Error>;
   openWorkflowOutput?: RunAgentOptions['openWorkflowOutput'];
   onRun?: () => void;
   session?: SessionHandle;
@@ -913,11 +913,9 @@ describe('executeCliRequest', () => {
       leaseOptions.onRunLeaseAcquired?.('exec-1' as RunId);
       const shutdown = platform.lifecycle.runShutdown();
 
-      // beforeLeaseRelease is a Promise on the production option bag, so the
-      // rejection assertion stays promise-shaped.
-      yield* Effect.promise(() =>
-        expect(leaseOptions.beforeLeaseRelease?.()).rejects.toBe(drainError),
-      );
+      expect(
+        yield* Effect.flip(leaseOptions.beforeLeaseRelease?.() ?? Effect.void),
+      ).toBe(drainError);
       hangingRun.resolve(COMPLETED_RUN);
       yield* Effect.promise(() => shutdown);
       yield* Fiber.join(run);
@@ -1040,9 +1038,8 @@ describe('executeCliRequest', () => {
         leaseOptions.onRunLeaseAcquired?.('exec-1' as RunId);
         leaseOptions.onRun?.();
         yield* settle;
-        yield* Effect.promise(async () =>
-          leaseOptions.openWorkflowOutput?.(COMPLETED_WORKFLOW_RUN, []),
-        );
+        yield* leaseOptions.openWorkflowOutput?.(COMPLETED_WORKFLOW_RUN, []) ??
+          Effect.void;
         mockCancelledOutcome();
         hangingRun.resolve(COMPLETED_WORKFLOW_RUN);
 
@@ -1090,9 +1087,8 @@ describe('executeCliRequest', () => {
         leaseOptions.onRunLeaseAcquired?.('exec-1' as RunId);
         leaseOptions.onRun?.();
         yield* settle;
-        yield* Effect.promise(async () =>
-          leaseOptions.openWorkflowOutput?.(COMPLETED_WORKFLOW_RUN, []),
-        );
+        yield* leaseOptions.openWorkflowOutput?.(COMPLETED_WORKFLOW_RUN, []) ??
+          Effect.void;
 
         const shutdown = platform.lifecycle.runShutdown();
         hangingRun.resolve(COMPLETED_WORKFLOW_RUN);
@@ -1137,7 +1133,10 @@ describe('executeCliRequest', () => {
             options.onRunLeaseAcquired?.('exec-1' as RunId);
             options.onRun?.();
             try {
-              await options.openWorkflowOutput?.(COMPLETED_WORKFLOW_RUN, []);
+              await effectRuntime().runPromise(
+                options.openWorkflowOutput?.(COMPLETED_WORKFLOW_RUN, []) ??
+                  Effect.void,
+              );
             } catch {
               outputResolutionFailed = true;
               Deferred.doneUnsafe(outputFailed, Effect.void);
@@ -1221,8 +1220,8 @@ describe('executeCliRequest', () => {
         leaseOptions.onRunLeaseAcquired?.('exec-1' as RunId);
         const shutdown = platform.lifecycle.runShutdown();
 
-        yield* Effect.promise(() =>
-          expect(leaseOptions.beforeLeaseRelease?.()).resolves.toBe(false),
+        expect(yield* leaseOptions.beforeLeaseRelease?.() ?? Effect.void).toBe(
+          false,
         );
         hangingRun.resolve(COMPLETED_RUN);
         yield* Effect.promise(() => shutdown);

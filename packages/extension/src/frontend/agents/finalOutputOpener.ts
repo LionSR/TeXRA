@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { Effect, Result } from 'effect';
 
 import {
   selectAutoOpenFinalOutput,
@@ -17,29 +18,35 @@ const log = createLog('FinalOutputOpener');
  * {@link selectAutoOpenFinalOutput} (shared with the desktop host); this only
  * supplies the VS Code open verb and status-bar hint.
  */
-export async function openFinalOutputIfAvailable(
+export const openFinalOutputIfAvailable = (
   result: WorkflowFlowResult,
-): Promise<void> {
-  const primary = selectAutoOpenFinalOutput(result);
-  if (!primary) return;
+): Effect.Effect<void> =>
+  Effect.gen(function* () {
+    const primary = selectAutoOpenFinalOutput(result);
+    if (!primary) return;
 
-  try {
-    await vscode.window.showTextDocument(
-      vscode.Uri.file(primary.absolutePath),
-      {
-        preview: true,
-        preserveFocus: false,
-      },
+    const previewed = yield* Effect.result(
+      Effect.tryPromise({
+        try: async () => {
+          await vscode.window.showTextDocument(
+            vscode.Uri.file(primary.absolutePath),
+            {
+              preview: true,
+              preserveFocus: false,
+            },
+          );
+          vscode.window.setStatusBarMessage(
+            'Workflow complete — revised file opened in preview. Use the progress toolbar to Accept or Pack.',
+            8000,
+          );
+        },
+        catch: (error: unknown) => error,
+      }),
     );
-    vscode.window.setStatusBarMessage(
-      'Workflow complete — revised file opened in preview. Use the progress toolbar to Accept or Pack.',
-      8000,
-    );
-  } catch (error) {
     // The preview is the whole point of this call: a failure leaves the user
     // with only the status-bar hint, so it is loud, not a debug note.
-    log.warn(
-      `Unable to auto-open final output ${primary.absolutePath}: ${String(error)}`,
-    );
-  }
-}
+    if (Result.isFailure(previewed))
+      log.warn(
+        `Unable to auto-open final output ${primary.absolutePath}: ${String(previewed.failure)}`,
+      );
+  });
