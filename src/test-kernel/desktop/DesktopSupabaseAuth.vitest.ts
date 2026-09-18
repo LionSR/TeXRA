@@ -48,9 +48,6 @@ function createCoordinator() {
       }),
     ),
     createSessionFromCallback,
-    ensureFreshToken: vi.fn(
-      async () => storedSession.current?.accessToken ?? null,
-    ),
   };
 }
 
