@@ -20,6 +20,7 @@ import {
 import { closeSession } from '@agent/runtime/sessionGraph';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { resolveRunStoragePath } from '@platform/defaults/workspaceStorage';
+import { workspaceRoots } from '@platform/workspaceRoots';
 import { RUN_PHASE, DEFAULT_TOOL_CONFIG, aggregateId } from '@shared/schemas';
 import {
   RunIdSchema,
@@ -44,7 +45,7 @@ import { withTempDirEffect } from '@test/support/tempDirPlatform';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
 import { ensureError } from '@utils/errors/errorMessage';
-import { StorageFS } from '@utils/files/storageFS';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
 
 /**
  * Move a run's phase the way its loop does: a `flow.step` row, which is the
@@ -677,8 +678,11 @@ describe('ExecutionsTool', () => {
       yield* withTempStorage(() =>
         Effect.gen(function* () {
           const runId = 'abc123' as RunId;
-          const runDir = resolveRunStoragePath(runId);
-          yield* Effect.promise(() => StorageFS.ensureDir(runDir));
+          const runDir = path.join(
+            workspaceRoots().storage,
+            resolveRunStoragePath(runId),
+          );
+          yield* Effect.promise(() => AbsoluteFS.ensureDir(runDir));
           const listedFiles = [
             'conversation.json',
             'todos.json',
@@ -693,11 +697,11 @@ describe('ExecutionsTool', () => {
           ];
           for (const name of listedFiles) {
             yield* Effect.promise(() =>
-              StorageFS.write(path.join(runDir, name), '{}'),
+              AbsoluteFS.write(path.join(runDir, name), '{}'),
             );
           }
           yield* Effect.promise(() =>
-            StorageFS.write(path.join(runDir, 'output.tex'), 'generated'),
+            AbsoluteFS.write(path.join(runDir, 'output.tex'), 'generated'),
           );
 
           const result = yield* new ExecutionsTool().call({

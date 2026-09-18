@@ -25,7 +25,7 @@ import {
   createExternalLocation,
   createWorkspaceLocation,
 } from '@utils/files/fileLocation';
-import { getRunDir } from '@utils/files/runStorageFs';
+import { runDirUnder } from '@utils/files/runStorageFs';
 import { RunFileService } from '@utils/files/runStorage';
 
 const mocks = vi.hoisted(() => ({
@@ -223,7 +223,10 @@ describe('LatexMediaManager figure baseDir resolution (issue #7228)', () => {
     runId: RunId,
     figurePath: string,
   ): Promise<void> {
-    const mirroredPath = path.join(getRunDir(runId), 'figures/plot.png');
+    const mirroredPath = path.join(
+      runDirUnder(workspaceRoots().storage, runId),
+      'figures/plot.png',
+    );
     const stats = await lstat(mirroredPath);
     expect(stats.isSymbolicLink()).toBe(true);
     const target = await readlink(mirroredPath);

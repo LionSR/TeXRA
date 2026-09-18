@@ -2,7 +2,7 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { workspaceRoots } from '@platform/workspaceRoots';
 
 // Local imports
@@ -10,27 +10,27 @@ import { FileType, type FileStat } from '@platform/interfaces';
 import type { RunId } from '@shared/schemas';
 import { errnoError } from '@test/support/fsTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
-import { StorageFS } from '@utils/files/storageFS';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
 import {
-  inspectRunStorageEntry,
-  runStorageLocationFromAnyAbsolutePath,
+  inspectRunStorageEntryUnder,
+  runStorageLocationUnder,
 } from '@utils/files/runStorageFs';
 import { RunFileService } from '@utils/files/runStorage';
 
 const runId = 'abcdef123456' as RunId;
 const storageRoot = path.resolve(path.sep, 'storage');
 const workspaceRoot = path.resolve(path.sep, 'workspace');
-const originalStat = StorageFS.stat;
-const originalFullPath = StorageFS.fullPath;
+const originalStat = AbsoluteFS.stat;
 
 setupPlatform({ storagePath: storageRoot, workspacePath: workspaceRoot });
 
-function primaryEntry(...segments: string[]): string {
-  return path.posix.join('executions', runId, ...segments);
-}
-
 function storagePath(...segments: string[]): string {
   return path.join(storageRoot, ...segments);
+}
+
+/** The absolute path the rooted helper stats for a run-relative entry. */
+function primaryEntry(...segments: string[]): string {
+  return storagePath('executions', runId, ...segments);
 }
 
 function fileStat(type: number): FileStat {
@@ -41,18 +41,13 @@ function missing(target: string): Error {
   return errnoError('ENOENT', `Missing: ${target}`);
 }
 
-describe('inspectRunStorageEntry', () => {
-  beforeEach(() => {
-    StorageFS.fullPath = (target) => path.join(storageRoot, target);
-  });
-
+describe('inspectRunStorageEntryUnder', () => {
   afterEach(() => {
-    StorageFS.stat = originalStat;
-    StorageFS.fullPath = originalFullPath;
+    AbsoluteFS.stat = originalStat;
   });
 
   it('returns a canonical location for a regular primary-layout file', async () => {
-    StorageFS.stat = async (target) => {
+    AbsoluteFS.stat = async (target: string) => {
       if (target === primaryEntry('r1', 'draft.tex')) {
         return fileStat(FileType.File);
       }
@@ -63,7 +58,7 @@ describe('inspectRunStorageEntry', () => {
     };
 
     await expect(
-      inspectRunStorageEntry(runId, 'r1\\draft.tex'),
+      inspectRunStorageEntryUnder(storageRoot, runId, 'r1\\draft.tex'),
     ).resolves.toEqual({
       kind: 'file',
       location: {
@@ -82,32 +77,32 @@ describe('inspectRunStorageEntry', () => {
   ] as const)(
     'classifies a non-bindable entry as $kind',
     async ({ type, kind }) => {
-      StorageFS.stat = async () => fileStat(type);
+      AbsoluteFS.stat = async () => fileStat(type);
 
       await expect(
-        inspectRunStorageEntry(runId, 'result.tex'),
+        inspectRunStorageEntryUnder(storageRoot, runId, 'result.tex'),
       ).resolves.toMatchObject({ kind });
     },
   );
 
   it('distinguishes missing entries from invalid paths', async () => {
-    StorageFS.stat = async (target) => {
+    AbsoluteFS.stat = async (target: string) => {
       throw missing(target);
     };
 
-    await expect(inspectRunStorageEntry(runId, 'missing.tex')).resolves.toEqual(
-      { kind: 'missing' },
-    );
     await expect(
-      inspectRunStorageEntry(runId, '../outside.tex'),
+      inspectRunStorageEntryUnder(storageRoot, runId, 'missing.tex'),
+    ).resolves.toEqual({ kind: 'missing' });
+    await expect(
+      inspectRunStorageEntryUnder(storageRoot, runId, '../outside.tex'),
     ).resolves.toMatchObject({ kind: 'invalid' });
     await expect(
-      inspectRunStorageEntry(runId, '/outside.tex'),
+      inspectRunStorageEntryUnder(storageRoot, runId, '/outside.tex'),
     ).resolves.toMatchObject({ kind: 'invalid' });
   });
 
   it('rejects a regular file reached through an ancestor symlink', async () => {
-    StorageFS.stat = async (target) => {
+    AbsoluteFS.stat = async (target: string) => {
       if (target.endsWith(path.join('link', 'result.tex'))) {
         return fileStat(FileType.File);
       }
@@ -124,7 +119,7 @@ describe('inspectRunStorageEntry', () => {
     };
 
     await expect(
-      inspectRunStorageEntry(runId, 'r1/link/result.tex'),
+      inspectRunStorageEntryUnder(storageRoot, runId, 'r1/link/result.tex'),
     ).resolves.toMatchObject({
       kind: 'symlink',
       absolutePath: storagePath('executions', runId, 'r1', 'link'),
@@ -133,7 +128,7 @@ describe('inspectRunStorageEntry', () => {
 
   it('rejects a dangling ancestor symlink before treating the leaf as missing', async () => {
     const inspected: string[] = [];
-    StorageFS.stat = async (target) => {
+    AbsoluteFS.stat = async (target: string) => {
       inspected.push(target);
       if (target === primaryEntry()) {
         return fileStat(FileType.Directory);
@@ -145,7 +140,7 @@ describe('inspectRunStorageEntry', () => {
     };
 
     await expect(
-      inspectRunStorageEntry(runId, 'dangling/result.tex'),
+      inspectRunStorageEntryUnder(storageRoot, runId, 'dangling/result.tex'),
     ).resolves.toMatchObject({
       kind: 'symlink',
       absolutePath: storagePath('executions', runId, 'dangling'),
@@ -154,18 +149,19 @@ describe('inspectRunStorageEntry', () => {
   });
 
   it('does not turn storage permission failures into a missing entry', async () => {
-    StorageFS.stat = async () => {
+    AbsoluteFS.stat = async () => {
       throw Object.assign(new Error('Denied'), { code: 'EACCES' });
     };
 
-    await expect(inspectRunStorageEntry(runId, 'result.tex')).rejects.toThrow(
-      'Denied',
-    );
+    await expect(
+      inspectRunStorageEntryUnder(storageRoot, runId, 'result.tex'),
+    ).rejects.toThrow('Denied');
   });
 
   it('recovers run identity from absolute run-storage paths', () => {
     expect(
-      runStorageLocationFromAnyAbsolutePath(
+      runStorageLocationUnder(
+        storageRoot,
         storagePath('executions', runId, 'r2', 'result.tex'),
       ),
     ).toMatchObject({
@@ -174,7 +170,8 @@ describe('inspectRunStorageEntry', () => {
       relativePath: 'r2/result.tex',
     });
     expect(
-      runStorageLocationFromAnyAbsolutePath(
+      runStorageLocationUnder(
+        storageRoot,
         path.join(workspaceRoot, 'result.tex'),
       ),
     ).toBeUndefined();

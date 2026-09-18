@@ -567,8 +567,7 @@ export function executeAgent(
               const parentRunId = handle.deliveryTarget;
               // Pre-run UI setup (RUNNING is set by runFlowWithLifecycle)
               yield* Effect.tryPromise({
-                try: () =>
-                  ensureRunDirUnder(runSession.roots.storage, runId),
+                try: () => ensureRunDirUnder(runSession.roots.storage, runId),
                 catch: ensureError,
               });
               logger.info(`Starting task run (runId: ${runId})`);

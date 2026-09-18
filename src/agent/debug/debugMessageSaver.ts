@@ -22,11 +22,9 @@ interface DebugContext {
   isRemote?: boolean;
   /**
    * The run's session roots, passed as data. A save with a run id lands under
-   * the storage root, a save without one under the workspace root — the two
-   * roots the `StorageFS` facade reads from the ambient `workspaceRoots()`
-   * at call time — and the config provider is the
-   * session's own, so the `texra.debug.saveModelIO` guard below cannot throw
-   * before platform init.
+   * the storage root, a save without one under the workspace root, and the
+   * config provider is the session's own, so the `texra.debug.saveModelIO`
+   * guard below cannot throw before platform init.
    */
   roots: Pick<WorkspaceRoots, 'workspace' | 'storage' | 'config'>;
 }
@@ -52,10 +50,9 @@ interface SaveDebugParams {
  * leaking prompts.
  *
  * Takes the process filesystem from context: the target is an absolute path
- * built from the run's own roots, exactly as `StorageFS` resolved its own,
- * and the write is the same plain (non-atomic) one the facade
- * made through `platform().fs`. A failure is caught and logged, as
- * the old `try`/`catch` did, and never propagates into the run.
+ * built from the run's own roots, and the write is a plain (non-atomic) one.
+ * A failure is caught and logged, as the old `try`/`catch` did, and never
+ * propagates into the run.
  */
 export function maybeSaveDebugObject({
   object,

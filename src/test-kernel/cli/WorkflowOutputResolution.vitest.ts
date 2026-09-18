@@ -85,6 +85,7 @@ describe('CLI workflow output resolution', () => {
         testContext(cwd),
         {
           expectedOutputFiles: ['a.tex', 'b.tex'],
+          storageRoot: join(cwd, 'storage'),
           runDirectory: join(cwd, 'run'),
         },
       ),
@@ -108,7 +109,7 @@ describe('CLI workflow output resolution', () => {
         RUN_OUTCOME.CANCELLED,
       ),
       testContext(cwd),
-      { runDirectory: join(cwd, 'run') },
+      { storageRoot: join(cwd, 'storage'), runDirectory: join(cwd, 'run') },
     );
     const resultForDirectory = await resolveWorkflowOutput(
       undefined,
@@ -120,6 +121,7 @@ describe('CLI workflow output resolution', () => {
       testContext(cwd),
       {
         expectedOutputFiles: ['paper.tex'],
+        storageRoot: join(cwd, 'storage'),
         runDirectory: join(cwd, 'run'),
       },
     );
@@ -159,6 +161,7 @@ describe('CLI workflow output resolution', () => {
       testContext(cwd),
       {
         expectedOutputFiles: ['a.tex', 'b.tex'],
+        storageRoot: join(cwd, 'storage'),
         runDirectory: join(cwd, 'run'),
       },
     );
@@ -206,6 +209,7 @@ describe('CLI workflow output resolution', () => {
       testContext(cwd),
       {
         expectedOutputFiles,
+        storageRoot: join(cwd, 'storage'),
         runDirectory: join(cwd, 'run'),
       },
     );
@@ -248,6 +252,7 @@ describe('CLI workflow output resolution', () => {
       testContext(cwd),
       {
         expectedOutputFiles: ['paper/main.tex', 'paper/chapters/series.tex'],
+        storageRoot: join(cwd, 'storage'),
         runDirectory: join(cwd, 'run'),
       },
     );
@@ -296,6 +301,7 @@ describe('CLI workflow output resolution', () => {
       testContext(cwd),
       {
         expectedOutputFiles: ['paper/main.tex', 'paper/chapters/main.tex'],
+        storageRoot: join(cwd, 'storage'),
         runDirectory: join(cwd, 'run'),
       },
     );
@@ -332,6 +338,7 @@ describe('CLI workflow output resolution', () => {
         testContext(cwd),
         {
           expectedOutputFiles: ['paper/input.tex'],
+          storageRoot: join(cwd, 'storage'),
           runDirectory: join(cwd, 'run'),
         },
       ),
@@ -376,6 +383,7 @@ describe('CLI workflow output resolution', () => {
         testContext(cwd),
         {
           expectedOutputFiles: ['chapters/series.tex'],
+          storageRoot: join(cwd, 'storage'),
           runDirectory: join(cwd, 'run'),
         },
       ),
@@ -397,6 +405,7 @@ describe('CLI workflow output resolution', () => {
       testContext(cwd),
       {
         expectedOutputFiles: ['a.tex'],
+        storageRoot: join(cwd, 'storage'),
         runDirectory: join(cwd, 'run'),
       },
     );
@@ -420,6 +429,7 @@ describe('CLI workflow output resolution', () => {
       ]),
       testContext(cwd),
       {
+        storageRoot: join(cwd, 'storage'),
         runDirectory: join(cwd, 'run'),
       },
     );
@@ -453,6 +463,7 @@ describe('CLI workflow output resolution', () => {
       ]),
       testContext(cwd),
       {
+        storageRoot: join(cwd, 'storage'),
         runDirectory: join(cwd, 'run'),
       },
     );

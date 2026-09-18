@@ -919,7 +919,10 @@ describe('CLI root argument routing', () => {
           runId: 'run-without-output' as RunId,
         },
         createRunCommandCliContext(),
-        { runDirectory: '/tmp/runs/run-without-output' },
+        {
+          storageRoot: '/tmp/storage',
+          runDirectory: '/tmp/runs/run-without-output',
+        },
       ),
     ).resolves.toMatchObject({
       outcome: RUN_OUTCOME.FAILED,
@@ -1027,7 +1030,7 @@ describe('CLI root argument routing', () => {
           runId: 'completed-without-output' as RunId,
         },
         createRunCommandCliContext(),
-        {},
+        { storageRoot: '/tmp/storage' },
       ),
     ).rejects.toThrow(
       'Workflow completed without a generated output; corrected.tex was not written.',
@@ -1049,7 +1052,7 @@ describe('CLI root argument routing', () => {
         runId: 'stopped-without-output' as RunId,
       },
       createRunCommandCliContext(),
-      {},
+      { storageRoot: '/tmp/storage' },
     );
 
     expect(result).toMatchObject({

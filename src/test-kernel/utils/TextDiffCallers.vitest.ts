@@ -14,6 +14,7 @@ import {
   ensureRoundData,
 } from '@agent/implementations/flows/reflection/output/outputState';
 import type { RoundFileMapping } from '@agent/implementations/flows/reflection/output/types';
+import { workspaceRoots } from '@platform/workspaceRoots';
 import {
   fileLocationDisplayPath,
   RUN_OUTCOME,
@@ -30,7 +31,7 @@ import {
 } from '@tools/approval/toolEditApproval';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { createExternalLocation } from '@utils/files/fileLocation';
-import { getRunDir } from '@utils/files/runStorageFs';
+import { runDirUnder } from '@utils/files/runStorageFs';
 import { unifiedDiffText } from '@utils/text/unifiedDiff';
 
 function installFakePlatform(
@@ -79,7 +80,7 @@ describe('shared text-diff caller fixtures', () => {
               diffs: [],
             },
           },
-          { startedAt: Date.now() },
+          { startedAt: Date.now(), storageRoot: workspaceRoots().storage },
         ),
       );
 
@@ -96,7 +97,10 @@ describe('shared text-diff caller fixtures', () => {
       expect(
         yield* Effect.tryPromise(() =>
           AbsoluteFS.read(
-            path.join(getRunDir(runId), 'diffs/section_paper.tex.diff'),
+            path.join(
+              runDirUnder(workspaceRoots().storage, runId),
+              'diffs/section_paper.tex.diff',
+            ),
           ),
         ),
       ).toBe('@@ -1,3 +1,4 @@\n one\n-two\n+TWO\n three\n+four');

@@ -441,6 +441,7 @@ describe('AgentLaunchContext', () => {
 
           expect(mocks.buildVars.mock.calls.at(-1)?.at(6)).toEqual({
             workspacePath: session.roots.workspace,
+            storageRoot: session.roots.storage,
             delegationAgentScope,
             stageId: undefined,
           });

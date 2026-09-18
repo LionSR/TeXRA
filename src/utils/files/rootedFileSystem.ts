@@ -1,13 +1,13 @@
 /**
  * A `FileSystem` confined to one root.
  *
- * The static `StorageFS` facade resolves every path against
- * the ambient `workspaceRoots()` at call time, which is why a caller that
- * wants a different root has to enter an AsyncLocalStorage scope around its
- * I/O. A rooted view inverts that: the root is captured when the view is
- * built, the view resolves relative paths against it, refuses paths that
- * escape it, and delegates every operation to the standard library's
- * `FileSystem`. A consumer takes the view from context and never reads a root.
+ * The retired `StorageFS` facade resolved every path against the ambient
+ * `workspaceRoots()` at call time, which is why a caller that wanted a
+ * different root had to enter an AsyncLocalStorage scope around its I/O. A
+ * rooted view inverts that: the root is captured when the view is built, the
+ * view resolves relative paths against it, refuses paths that escape it, and
+ * delegates every operation to the standard library's `FileSystem`. A
+ * consumer takes the view from context and never reads a root.
  *
  * The view IS a `FileSystem.FileSystem`, so its operations, options and
  * errors are the standard ones: an escape fails with `PlatformError`'s

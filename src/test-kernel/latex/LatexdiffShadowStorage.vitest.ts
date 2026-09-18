@@ -22,7 +22,7 @@ import {
   createRunStorageLocation,
   createWorkspaceLocation,
 } from '@utils/files/fileLocation';
-import { getRunDir } from '@utils/files/runStorageFs';
+import { runDirUnder } from '@utils/files/runStorageFs';
 import { workspaceRootPath } from '@utils/files/workspaceFS';
 import { RunFileService } from '@utils/files/runStorage';
 
@@ -411,7 +411,13 @@ describe('LaTeXdiffService shadow output', () => {
 
     await expect(
       readFile(
-        path.join(getRunDir(runId), 'diff', 'r2', 'refs', 'macros.sty'),
+        path.join(
+          runDirUnder(workspaceRoots().storage, runId),
+          'diff',
+          'r2',
+          'refs',
+          'macros.sty',
+        ),
         'utf8',
       ),
     ).resolves.toBe('\\newcommand{\\RR}{\\mathbb{R}}\n');

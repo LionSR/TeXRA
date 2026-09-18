@@ -76,7 +76,9 @@ vi.mock('@agent/storage', async (importOriginal) => {
 
 vi.mock('@utils/files/runStorageFs', async (importActual) => ({
   ...(await importActual<typeof import('@utils/files/runStorageFs')>()),
-  getRunDir: vi.fn((runId: string) => `/tmp/runs/${runId}`),
+  runDirUnder: vi.fn(
+    (_storageRoot: string, runId: string) => `/tmp/runs/${runId}`,
+  ),
 }));
 
 vi.mock('@cli/runtime/runModel', () => ({
