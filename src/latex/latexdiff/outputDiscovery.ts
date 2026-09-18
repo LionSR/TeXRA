@@ -1,6 +1,6 @@
 /** Read output metadata from the root's event fold for a matching run. */
 import * as path from 'node:path';
-import { Effect, type FileSystem } from 'effect';
+import { Effect, type FileSystem, type Path } from 'effect';
 
 import type {
   RunId,
@@ -8,10 +8,7 @@ import type {
   ReadonlyRoundIndexed,
 } from '@shared/schemas';
 import { toNewestFirstByTimestamp } from '@utils/core';
-import {
-  scanRunDirForOutputs,
-  type RunOutputFilesystem,
-} from './runOutputFiles';
+import { scanRunDirForOutputs } from './runOutputFiles';
 import type { LatexRunDiscoveryPort } from './runDiscovery';
 
 /**
@@ -31,14 +28,13 @@ export const discoverLatestRunOutputs = Effect.fn('discoverLatestRunOutputs')(
       inputFile: string;
     },
     channel: string,
-    filesystem: RunOutputFilesystem,
   ): Effect.fn.Return<
     {
       runId: RunId;
       rounds: ReadonlyRoundIndexed<OutputFileInfo>;
     } | null,
     Error,
-    FileSystem.FileSystem
+    FileSystem.FileSystem | Path.Path
   > {
     const runs = yield* discovery.listAgentRuns();
     // Normalize both sides so trivial path-format differences (duplicate
@@ -76,7 +72,6 @@ export const discoverLatestRunOutputs = Effect.fn('discoverLatestRunOutputs')(
         query.inputFile,
         candidate.inputFiles.slice(1),
         channel,
-        filesystem,
       );
       if (scanned) {
         return { runId: candidate.id, rounds: scanned };

@@ -7,12 +7,10 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect, type FileSystem } from 'effect';
+import { Effect, type FileSystem, type Path } from 'effect';
 
 // Local imports
-import { isFileNotFoundError } from '@common/errors';
 import { withLogChannel } from '@logger/effectLog';
-import type { FileSystemProvider } from '@platform/interfaces';
 import {
   type RunId,
   type FileLocation,
@@ -28,62 +26,48 @@ import {
   pathToLocationIn,
 } from '@utils/files/fileLocation';
 import { findRunDirUnder } from '@utils/files/runStorageFs';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { hasExtension } from '@utils/core/pathCore';
-import { isDirectory, isFile } from '@utils/files/fsEntryType';
+import { readDirectoryTypedTolerant } from '@utils/files/fsDurability';
 
 // Local file imports
 import { hasBetweenRoundDiffSuffix } from './diffFileNameManager';
 
-export type RunOutputFilesystem = Pick<
-  FileSystemProvider,
-  'readDirectory' | 'isSymlink'
->;
-
-/** Whether `absPath` is a symlink; an unreadable entry counts as "not one". */
-const isSymlink = (
-  fs: RunOutputFilesystem,
-  absPath: string,
-): Effect.Effect<boolean> =>
-  Effect.tryPromise({
-    try: () => fs.isSymlink(absPath),
-    catch: ensureError,
-  }).pipe(Effect.orElseSucceed(() => false));
-
 /**
  * Recursively collect all `.tex` file paths under `dir`, returned as paths
  * relative to `dir` using forward slashes (e.g. `"chapters/main.tex"`).
+ *
+ * The listing carries each entry's own (unfollowed) type, so a symlink reports
+ * as one here and needs no second probe: mirrored dependency copies placed by
+ * `ensureMirroredInRoundDir` are links, not revised outputs, and are skipped.
  */
 const collectTexFiles = Effect.fn('latexdiff.collectTexFiles')(function* (
   dir: string,
-  fs: RunOutputFilesystem,
   prefix = '',
-): Effect.fn.Return<string[], never> {
+): Effect.fn.Return<string[], never, FileSystem.FileSystem | Path.Path> {
   // This is a recovery scan: a missing/unreadable subtree means this subtree
   // contributes no outputs, but other rounds/subtrees may still be useful.
-  const entries = yield* Effect.tryPromise({
-    try: () => fs.readDirectory(dir),
-    catch: ensureError,
-  }).pipe(
+  const entries = yield* readDirectoryTypedTolerant(dir).pipe(
     Effect.catch((error) =>
-      isFileNotFoundError(error)
-        ? Effect.succeed<[string, number][]>([])
+      error.reason._tag === 'NotFound'
+        ? Effect.succeed<readonly (readonly [string, FileSystem.File.Type])[]>(
+            [],
+          )
         : Effect.logWarning(
             `Skipping unreadable directory '${dir}': ${error}`,
-          ).pipe(Effect.as<[string, number][]>([])),
+          ).pipe(
+            Effect.as<readonly (readonly [string, FileSystem.File.Type])[]>([]),
+          ),
     ),
   );
   const results: string[] = [];
   for (const [name, type] of entries) {
-    const absPath = path.join(dir, name);
-    // Skip symlinks: they are mirrored dependency copies placed by
-    // ensureMirroredInRoundDir, not revised outputs.
-    if (yield* isSymlink(fs, absPath)) continue;
+    if (type === 'SymbolicLink') continue;
     const relative = prefix ? `${prefix}/${name}` : name;
-    if (isFile(type) && hasExtension(name, '.tex')) {
+    if (type === 'File' && hasExtension(name, '.tex')) {
       results.push(relative);
-    } else if (isDirectory(type)) {
-      results.push(...(yield* collectTexFiles(absPath, fs, relative)));
+    } else if (type === 'Directory') {
+      results.push(...(yield* collectTexFiles(path.join(dir, name), relative)));
     }
   }
   return results;
@@ -107,20 +91,16 @@ export const scanRunDirForOutputs = Effect.fn('latexdiff.scanRunDir')(
     inputFile: string,
     extraBaseFiles: string[] | undefined,
     channel: string,
-    fs: RunOutputFilesystem,
   ): Effect.fn.Return<
     RoundIndexed<OutputFileInfo> | null,
     never,
-    FileSystem.FileSystem
+    FileSystem.FileSystem | Path.Path
   > {
     const scan = Effect.gen(function* () {
       const runDirAbsolute = yield* findRunDirUnder(storageRoot, runId);
       if (!runDirAbsolute) return null;
 
-      const dirEntries = yield* Effect.tryPromise({
-        try: () => fs.readDirectory(runDirAbsolute),
-        catch: ensureError,
-      });
+      const dirEntries = yield* readDirectoryTypedTolerant(runDirAbsolute);
 
       const workspacePath = workspaceRoot ?? '';
       const toAbs = (f: string): string =>
@@ -152,20 +132,18 @@ export const scanRunDirForOutputs = Effect.fn('latexdiff.scanRunDir')(
 
       const rounds: RoundIndexed<OutputFileInfo> = {};
 
+      // A symlinked round dir reports as `SymbolicLink`, never as the
+      // directory it points at, so this one check also skips it.
       for (const [entryName, fileType] of dirEntries) {
-        if (!isDirectory(fileType)) continue;
+        if (fileType !== 'Directory') continue;
         const round = parseWorkflowOutputRoundDir(entryName);
         if (round == null) continue;
 
         const roundDirAbsolute = path.join(runDirAbsolute, entryName);
-        // Skip symlinked round dirs. Use lstat through the platform because
-        // readDirectory FileType values do not reliably include SymbolicLink.
-        if (yield* isSymlink(fs, roundDirAbsolute)) continue;
-
         const outputs: OutputFileInfo[] = [];
         // Collect .tex files recursively: extracted docs may live in subdirs
         // (e.g. r0/chapters/main.tex) when source names include path segments.
-        const allTexFiles = yield* collectTexFiles(roundDirAbsolute, fs);
+        const allTexFiles = yield* collectTexFiles(roundDirAbsolute);
         // Between-round artifacts written to run storage always carry both round
         // numbers (e.g. output_diffr1r0.tex). The bare _diff suffix only appears
         // in workspace-side diffs, never here, so a legitimately-named source

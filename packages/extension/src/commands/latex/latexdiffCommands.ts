@@ -43,7 +43,6 @@ import {
 import { createLog } from '@logger/logUtils';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import { withSessionFs } from '@platform/rootedFs';
-import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import type { FileLocation } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latexConfig';
@@ -478,7 +477,6 @@ const handleRunLatexdiff = Effect.fnUntraced(function* (
               });
               return runtime.runPromise(
                 runLatexdiffForRun({
-                  filesystem: nodeFilesystem,
                   ...config,
                   workspaceRoot: session.roots.workspace,
                   storageRoot: session.roots.storage,

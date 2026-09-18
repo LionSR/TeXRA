@@ -25,7 +25,6 @@ import type {
 } from '@latex/latexdiff/types';
 import type { StateStore } from '@platform/interfaces';
 import type { ProcessRuntime } from '@platform/processRuntime';
-import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import type { OutputFileInfo, ReadonlyRoundIndexed } from '@shared/schemas';
 import type { Rejected } from '@shared/session/requestErrors';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -257,7 +256,6 @@ export class DesktopProgressFileActions {
     const progress: DiffProgressReporter = { report: () => undefined };
     const settled = await this.host.runtime.runPromiseExit(
       runLatexdiffForRun({
-        filesystem: nodeFilesystem,
         agent: scan?.agent ?? '',
         model: scan?.model ?? '',
         inputFile: scan?.inputFile ?? '',

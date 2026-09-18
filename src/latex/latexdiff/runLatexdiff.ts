@@ -10,7 +10,7 @@
  * rendering) and calls this with a {@link DiffProgressReporter}.
  */
 
-import { Effect, FileSystem } from 'effect';
+import { Effect, FileSystem, type Path } from 'effect';
 
 import { withLogChannel } from '@logger/effectLog';
 import {
@@ -27,10 +27,7 @@ import type {
 
 import { runLatexdiffFromMetadata } from './diffOperations';
 import { discoverLatestRunOutputs } from './outputDiscovery';
-import {
-  scanRunDirForOutputs,
-  type RunOutputFilesystem,
-} from './runOutputFiles';
+import { scanRunDirForOutputs } from './runOutputFiles';
 import type { LatexRunDiscoveryPort } from './runDiscovery';
 import type { MathMarkupOption } from './mathMarkup';
 import type {
@@ -78,7 +75,6 @@ export interface RunLatexdiffForRunParams {
   readonly storageRoot: string;
   /** Agent-owned run listing injected by hosts (metadata auto-discovery). */
   readonly runDiscovery: LatexRunDiscoveryPort;
-  readonly filesystem: RunOutputFilesystem;
   readonly outputFiles?: string[];
   /** Run to scope output discovery to (progress-toolbar invocations). */
   readonly runId?: string | null;
@@ -103,7 +99,11 @@ interface LatexdiffExecutionResult {
 export const runLatexdiffForRun = Effect.fn('runLatexdiffForRun')(
   function* (
     params: RunLatexdiffForRunParams,
-  ): Effect.fn.Return<LatexdiffExecutionResult, Error, FileSystem.FileSystem> {
+  ): Effect.fn.Return<
+    LatexdiffExecutionResult,
+    Error,
+    FileSystem.FileSystem | Path.Path
+  > {
     const {
       agent,
       model,
@@ -136,7 +136,6 @@ export const runLatexdiffForRun = Effect.fn('runLatexdiffForRun')(
           inputFile,
           outputFiles,
           latexdiff.channel,
-          params.filesystem,
         );
         if (scanned) {
           outputsByRound = scanned;
@@ -164,7 +163,6 @@ export const runLatexdiffForRun = Effect.fn('runLatexdiffForRun')(
           inputFile,
         },
         latexdiff.channel,
-        params.filesystem,
       );
       if (discovered) {
         outputsByRound = discovered.rounds;
