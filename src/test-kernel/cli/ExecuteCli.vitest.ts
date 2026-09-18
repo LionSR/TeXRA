@@ -232,7 +232,7 @@ async function loadExecuteCli() {
 }
 
 type LeaseOptions = {
-  beforeLeaseRelease?: () => Promise<boolean | void>;
+  beforeLeaseRelease?: () => Effect.Effect<boolean | void, Error>;
   openWorkflowOutput?: RunAgentOptions['openWorkflowOutput'];
   onRun?: () => void;
   session?: SessionHandle;
@@ -913,11 +913,9 @@ describe('executeCliRequest', () => {
       leaseOptions.onRunLeaseAcquired?.('exec-1' as RunId);
       const shutdown = platform.lifecycle.runShutdown();
 
-      // beforeLeaseRelease is a Promise on the production option bag, so the
-      // rejection assertion stays promise-shaped.
-      yield* Effect.promise(() =>
-        expect(leaseOptions.beforeLeaseRelease?.()).rejects.toBe(drainError),
-      );
+      expect(
+        yield* Effect.flip(leaseOptions.beforeLeaseRelease?.() ?? Effect.void),
+      ).toBe(drainError);
       hangingRun.resolve(COMPLETED_RUN);
       yield* Effect.promise(() => shutdown);
       yield* Fiber.join(run);
@@ -1222,8 +1220,8 @@ describe('executeCliRequest', () => {
         leaseOptions.onRunLeaseAcquired?.('exec-1' as RunId);
         const shutdown = platform.lifecycle.runShutdown();
 
-        yield* Effect.promise(() =>
-          expect(leaseOptions.beforeLeaseRelease?.()).resolves.toBe(false),
+        expect(yield* leaseOptions.beforeLeaseRelease?.() ?? Effect.void).toBe(
+          false,
         );
         hangingRun.resolve(COMPLETED_RUN);
         yield* Effect.promise(() => shutdown);
