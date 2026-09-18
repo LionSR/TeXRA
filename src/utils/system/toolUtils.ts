@@ -318,16 +318,22 @@ export const checkToolInstalled = Effect.fn('toolUtils.checkToolInstalled')(
 
     // A probe failure and an absent tool differ only in what the report links
     // to: the failing path has no install-docs command, exactly as before.
+    const answerAsAbsent = (err: unknown) =>
+      Effect.sync(() => {
+        log.warn(`Tool check for '${toolName}' failed: ${toErrorMessage(err)}`);
+        return { installed: false, probeFailed: true };
+      });
+
+    // Both arms, because the `try`/`catch` this replaces answered a rejected
+    // spawn and a synchronous throw alike — `BinaryResolver` and the PATH
+    // build sit inside the probe and are ordinary code that can throw, and a
+    // throw there means "not detected", not a crashed run. Interruption is
+    // neither a failure nor a defect, so it still unwinds the fiber instead of
+    // reporting a missing tool.
     const outcome = yield* probe.pipe(
       Effect.map((installed) => ({ installed, probeFailed: false })),
-      Effect.catch((err) =>
-        Effect.sync(() => {
-          log.warn(
-            `Tool check for '${toolName}' failed: ${toErrorMessage(err)}`,
-          );
-          return { installed: false, probeFailed: true };
-        }),
-      ),
+      Effect.catch(answerAsAbsent),
+      Effect.catchDefect(answerAsAbsent),
     );
 
     if (!outcome.installed && showError) {
