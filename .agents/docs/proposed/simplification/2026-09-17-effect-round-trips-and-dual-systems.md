@@ -13,6 +13,124 @@ re-mines them.
 Owner direction this note serves: 1.0 ships completely clean. Every tech debt
 is eliminated, not ledgered, and every dual system collapses to one mechanism.
 
+## Status (2026-09-18)
+
+Written back one day after the ledger merged (#12681), against `origin/main`
+at `1847cce642`. Fifty of the fifty-six lanes are closed: landed, refuted at
+implementation, or declined by ruling. Each row below names the PR that
+carried the lane; "thin folds" are the single-file items section 3.1 said
+would ride whichever lane opened the file.
+
+### Landed
+
+| Lane | PR                                                                                                                                                                                                                                                                                    |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| R1   | #12695                                                                                                                                                                                                                                                                                |
+| R2   | #12693                                                                                                                                                                                                                                                                                |
+| R3   | #12694                                                                                                                                                                                                                                                                                |
+| R4   | #12711                                                                                                                                                                                                                                                                                |
+| R6   | #12729                                                                                                                                                                                                                                                                                |
+| R7   | #12739                                                                                                                                                                                                                                                                                |
+| R8   | #12706                                                                                                                                                                                                                                                                                |
+| R9   | #12724; the channel's error typing finished in #12740, #12748, #12752                                                                                                                                                                                                                 |
+| R10  | #12719 (runner face), #12726 (Effect-typed controller)                                                                                                                                                                                                                                |
+| R11  | #12702                                                                                                                                                                                                                                                                                |
+| R12  | #12715                                                                                                                                                                                                                                                                                |
+| R13  | #12731                                                                                                                                                                                                                                                                                |
+| R14  | #12736, after the dead-field prep in #12718                                                                                                                                                                                                                                           |
+| R15  | #12728                                                                                                                                                                                                                                                                                |
+| R16  | #12747 (folded into the D19 root threading, as planned)                                                                                                                                                                                                                               |
+| R17  | #12716                                                                                                                                                                                                                                                                                |
+| R18  | #12722                                                                                                                                                                                                                                                                                |
+| R19  | #12734 (`openExternal`, `openPath`; see open items for the third member)                                                                                                                                                                                                              |
+| D1   | #12705                                                                                                                                                                                                                                                                                |
+| D2   | #12696; the ratchet row retired for good in #12700                                                                                                                                                                                                                                    |
+| D3   | #12697                                                                                                                                                                                                                                                                                |
+| D4   | #12701                                                                                                                                                                                                                                                                                |
+| D6   | #12701                                                                                                                                                                                                                                                                                |
+| D7   | #12701                                                                                                                                                                                                                                                                                |
+| D8   | #12711                                                                                                                                                                                                                                                                                |
+| D9   | #12708                                                                                                                                                                                                                                                                                |
+| D10  | #12698                                                                                                                                                                                                                                                                                |
+| D11  | #12719                                                                                                                                                                                                                                                                                |
+| D12  | #12703                                                                                                                                                                                                                                                                                |
+| D13  | #12703                                                                                                                                                                                                                                                                                |
+| D14  | #12727                                                                                                                                                                                                                                                                                |
+| D15  | #12707                                                                                                                                                                                                                                                                                |
+| D16  | #12704                                                                                                                                                                                                                                                                                |
+| D17  | #12704                                                                                                                                                                                                                                                                                |
+| D18  | #12712                                                                                                                                                                                                                                                                                |
+| D19  | #12737 (memory, agent directory, pasted image; deletes `GlobalStorageFS`), #12742 (workspace root as data; deletes the `WorkspaceFS` static), #12744 (path location), #12747 (storage root through run storage; deletes the `StorageFS` statics)                                      |
+| D20  | #12749 for `src/latex`, `src/tools` and the settings-view controllers; the `src/utils` consumers are the open remainder below                                                                                                                                                         |
+| D24  | #12699, by deletion: the stage scope was never entered in production, so it went rather than moving onto `Context.Reference`                                                                                                                                                          |
+| D27  | #12738                                                                                                                                                                                                                                                                                |
+| D28  | #12714                                                                                                                                                                                                                                                                                |
+| D29  | #12717                                                                                                                                                                                                                                                                                |
+| D30  | closed by ruling in #12700: the two remaining catches (`packages/desktop/src/main/index.ts`, `src/tools/github/PollingSourceBase.ts`) are named permanent beside the row, which stays at its floor as the hard allowlist; #12709 and #12713 deleted the redundant catches around them |
+| D31  | #12720                                                                                                                                                                                                                                                                                |
+| D32  | #12743                                                                                                                                                                                                                                                                                |
+| D33  | #12704                                                                                                                                                                                                                                                                                |
+| D34  | #12725                                                                                                                                                                                                                                                                                |
+| D36  | #12720                                                                                                                                                                                                                                                                                |
+| D37  | #12721                                                                                                                                                                                                                                                                                |
+
+Thin folds that landed on their own: #12735 (three dead leftovers), #12746
+(`releaseToolEdit` as an Effect, dead `approvePendingForRun`), #12750 (the
+`HostInteractions` plane's `emit`, replay and dispose as Effects; the
+session's teardown list replaces the `DisposableStore`).
+
+### Refuted or declined at implementation
+
+- **D5** (`SessionOwner` onto the `Sessions` tag): refuted by the call-site
+  read in #12699's lane. The tag is module-private to `sessionLayer.ts` and
+  reading it from `src/agent` adds the `agent -> controllers` edge the port
+  exists to avoid; two of the five owner faces are synchronous and serve the
+  process-shutdown sweep with no fiber to wait on; and
+  `sessionOwnerInstalled()` is not `tryProcessRuntime() !== null`, because
+  the SDK's `composeProcess` depends on the window between the two clears.
+  The global is a port, not a second mechanism. Do not retry as specified.
+- **D26** (`SessionHandle` `DisposableStore` onto a `Scope` finalizer):
+  refuted in the same lane. The store is the synchronous early teardown the
+  async Scope cannot express: `graph.close()` runs it inline before
+  `release(key)`, so a borrowed entry stops admitting runs at once. Moving the
+  registrations onto the Scope would defer that for the length of the borrow,
+  and would lose the idempotent double unwind and the per-disposer catch.
+  #12750 later made `unwind()` itself the program while keeping the inline
+  ordering.
+- **D25** (`AbortController` residents): conversions declined in #12700,
+  which names the four residents beside the ratchet row. The child strategy
+  `signal` feeds execa, the Codex SDK and the Claude Agent SDK, which require
+  a real `AbortSignal`; `ChildRunInterruptible` to fiber interruption is an
+  interrupt-contract change across `RunHandle`, `RunRegistry` and the
+  strategies, not a row edit; `abortableSlashCommand` needs a forked fiber
+  and `interruptUnsafe`, which #12675 rules out. The row stays at its floor.
+- **D35a** (inquiry metadata onto SQLite): already done before the ledger was
+  written. Commit `090ce86bc4` (2026-09-09, "persist global inquiry records
+  in SQLite") landed it; the ledger carried it forward from a stale plan row.
+
+### Open
+
+- **R5** (CLI model-access chain): `getCliModelAccessList` and
+  `selectCliRunModel` are still Promise-shaped over the Effect availability
+  read. R4 and D14 cleared its holds; nothing has taken it.
+- **D20 remainder and D21**: the `src/utils` `AbsoluteFS` consumers, then
+  the terminal slice that deletes `BaseFS`, the `FileSystemProvider` port and
+  `Platform.fs`. #12749 counted 26 consumers left and named itself not the
+  terminal slice.
+- **D22** (`workspaceRoots` carrier and the process-roots fallback): waits on
+  D21; `roots.globalState` still reads through `requireProcessRoots()`.
+- **D23** (`AgentRun.inScope`): waits on D22; the member is still declared
+  and threaded.
+- **D35b and D35c**: a durable owner for run-directory removal, and the
+  reflection recovery digest. Design, after D19; unstarted.
+- **`HostInteractions.emit` answers `unknown`** (#12750's left-out): hosts
+  return a boolean or a promise and the plane lifts it; narrowing the port to
+  `void` changes what each host logs, so it is a separate ruling.
+- **`openBuildDisplayIn`**: the third member of the R19 fan-out still answers
+  the core `BuildDisplayFn`, which is Promise-shaped because the approval
+  controller registers the raw build promise in a request's `inFlightActions`.
+  It converts with that controller, not with the preview host.
+
 ## 1. What the surveys measured
 
 ### 1.1 Round trips
