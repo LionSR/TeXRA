@@ -30,6 +30,8 @@ interface ToolsListFormProps {
    * same store, from the same surface.
    */
   readonly runtime: ProcessRuntime;
+  /** The session's workspace folder, for the probes that need one. */
+  readonly workspaceRoot: string | undefined;
   readonly onClose: () => void;
 }
 
@@ -65,7 +67,7 @@ export function ToolsListForm(props: ToolsListFormProps): React.JSX.Element {
       title="/tools"
       compactTitle="/tools · Toggle available external integrations."
       loadingLabel="Checking tool integrations..."
-      load={() => readCliToolStatuses(props.runtime)}
+      load={() => readCliToolStatuses(props.runtime, props.workspaceRoot)}
       items={(tools) =>
         tools.map((tool) => ({
           value: tool.id,

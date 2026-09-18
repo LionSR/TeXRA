@@ -51,10 +51,19 @@ function resolveLatexdiffSubtype(options?: {
 interface DiffExecutionOptions {
   mathMarkup?: MathMarkupOption;
   subtype?: string;
-  cwd?: string;
+  /**
+   * Directory the latexdiff process runs in — required so the caller names
+   * the root it holds instead of the command reaching for an ambient one
+   * (#12421).
+   */
+  cwd: string | undefined;
 }
 
-type CommandExecOptions = { channel: string; timeout: number; cwd?: string };
+type CommandExecOptions = {
+  channel: string;
+  timeout: number;
+  cwd: string | undefined;
+};
 
 export class DiffCommandExecutor {
   constructor(
@@ -71,20 +80,20 @@ export class DiffCommandExecutor {
   executeDiff(
     inputFile: string,
     editedFile: string,
-    options?: DiffExecutionOptions,
+    options: DiffExecutionOptions,
   ): Effect.Effect<ExecResult, Error> {
     return this.executeWithFallback(
       (useFlatten) =>
         this.buildLatexdiffCommand(inputFile, editedFile, useFlatten, options),
       'latexdiff',
-      options?.cwd,
+      options.cwd,
     ).pipe(withLogChannel(this.channel));
   }
 
   executeDiffVc(
     inputFile: string,
     commitHash: string,
-    options?: DiffExecutionOptions,
+    options: DiffExecutionOptions,
   ): Effect.Effect<ExecResult, Error> {
     return this.executeWithFallback(
       (useFlatten) =>
@@ -95,7 +104,7 @@ export class DiffCommandExecutor {
           options,
         ),
       'latexdiff-vc',
-      options?.cwd,
+      options.cwd,
     ).pipe(withLogChannel(this.channel));
   }
 
@@ -164,7 +173,7 @@ export class DiffCommandExecutor {
   private executeWithFallback(
     commandBuilder: (useFlatten: boolean) => string[],
     commandType: string,
-    cwd?: string,
+    cwd: string | undefined,
   ): Effect.Effect<ExecResult, Error> {
     return Effect.gen({ self: this }, function* () {
       // Snapshot the timeout once per invocation so the value stays consistent

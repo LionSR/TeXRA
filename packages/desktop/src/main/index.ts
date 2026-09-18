@@ -1048,7 +1048,9 @@ function createWindow(options: {
       onboarding: requireOnboardingIpc(),
       openExternalUrl: requestPreviewHost.openExternal,
       recheckTools: async () => {
-        await runtime.runPromise(refreshToolAvailability());
+        await runtime.runPromise(
+          refreshToolAvailability(project.roots.workspace),
+        );
       },
       logger: console,
     });
@@ -1392,6 +1394,7 @@ function createWindow(options: {
         workspaceState: project.roots.workspaceState,
         globalState: options.globalState,
         config: project.roots.config,
+        workspaceRoot: project.roots.workspace,
         runtime,
         renderer: {
           postToRenderer: postForActiveProject,

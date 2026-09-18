@@ -181,7 +181,7 @@ describe('CLI skills runtime', () => {
       },
     ]);
 
-    const result = await readCliRuntimeSkills();
+    const result = await readCliRuntimeSkills(root);
 
     expect(result.skills.map((entry) => skillDisplayItem(entry))).toMatchObject(
       [

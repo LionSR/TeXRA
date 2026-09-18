@@ -23,7 +23,6 @@ import {
   createWorkspaceLocation,
 } from '@utils/files/fileLocation';
 import { runDirUnder } from '@utils/files/runStorageFs';
-import { workspaceRootPath } from '@utils/files/workspaceFS';
 import { RunFileService } from '@utils/files/runStorage';
 
 const mocks = vi.hoisted(() => ({
@@ -86,7 +85,7 @@ describe('LaTeXdiffService shadow output', () => {
       createExternalLocation(path.join(sourceDir, 'revised.tex')),
       '_diff',
       undefined,
-      { outputDirectory: shadowDir },
+      { cwd: workspaceRoots().workspace, outputDirectory: shadowDir },
     );
   });
 
@@ -173,7 +172,7 @@ describe('LaTeXdiffService shadow output', () => {
           createExternalLocation(path.join(sourceDir, 'revised.tex')),
           1,
           undefined,
-          { outputDirectory: shadowDir },
+          { cwd: sessionRoots.workspace, outputDirectory: shadowDir },
         );
 
         expect(mocks.executeCommand).toHaveBeenCalledWith(
@@ -245,7 +244,7 @@ describe('LaTeXdiffService shadow output', () => {
           1: [output(1, first)],
           2: [output(2, second, './paper.tex')],
         },
-        workspaceRoot: workspaceRootPath(),
+        workspaceRoot: workspaceRoots().workspace,
         generateBetweenRoundDiffs: true,
         latexdiff: {
           channel: 'test',
@@ -448,6 +447,9 @@ describe('LaTeXdiffService logger channel', () => {
       ).runDiff(
         createExternalLocation('/missing/base.tex'),
         createExternalLocation('/missing/revised.tex'),
+        '_diff',
+        undefined,
+        { cwd: workspaceRoots().workspace },
       );
 
       expect(result.success).toBe(false);

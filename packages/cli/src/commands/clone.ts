@@ -77,7 +77,13 @@ function buildOverleafClonePorts(
 
     isGitAvailable: () =>
       Effect.sync(
-        () => executeCommandSync(['git', '--version'], { quiet: true }).success,
+        () =>
+          // Directory-independent probe that runs before the workspace roots
+          // exist, so it names the CLI's own resolved cwd.
+          executeCommandSync(['git', '--version'], {
+            cwd: context.cwd,
+            quiet: true,
+          }).success,
       ),
     showGitMissing: () =>
       Effect.sync(() => {

@@ -169,7 +169,7 @@ export async function buildUserVars(
     AgentSkillsEnabledSchema.parse(
       readConfig<unknown>(options.config, AGENT_SKILLS_CONFIG_KEY),
     )
-      ? loadRuntimeSkillCatalog()
+      ? loadRuntimeSkillCatalog(options.workspacePath)
       : // A fresh object per call, not a shared constant: `skills` is handed
         // to the snapshot consumer, and a shared array would accumulate.
         Promise.resolve({ catalog: '', skills: [], issues: [] }),

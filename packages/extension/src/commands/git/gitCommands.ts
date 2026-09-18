@@ -46,7 +46,11 @@ export function registerGitCommands(
   // shared command registry in #3781 batch 3 (see
   // `extensionCommandSurface.ts`).
   registerCommandEntries(context, [
-    { id: 'texra.isGitRepository', handler: isGitRepository },
+    {
+      id: 'texra.isGitRepository',
+      handler: (rootPath?: string) =>
+        isGitRepository(rootPath ?? session.roots.workspace),
+    },
     {
       id: 'texra.getRecentCommits',
       handler: (rootPath?: string) => getRecentCommits(session, rootPath),
@@ -165,7 +169,11 @@ const GIT_DOWNLOAD_URL = 'https://git-scm.com/downloads';
 async function promptGitMissing(): Promise<void> {
   const option = GIT_INSTALL_OPTIONS[process.platform] ?? null;
   const command =
-    option && executeCommandSync([option.tool, '--version']).success
+    option &&
+    // A `--version` probe is directory-independent; name the process cwd
+    // rather than the workspace root it does not read.
+    executeCommandSync([option.tool, '--version'], { cwd: process.cwd() })
+      .success
       ? option.command
       : null;
 
@@ -236,7 +244,12 @@ function buildOverleafClonePorts(
       }),
 
     isGitAvailable: () =>
-      Effect.sync(() => executeCommandSync(['git', '--version']).success),
+      Effect.sync(
+        // Directory-independent probe: see `promptGitMissing`.
+        () =>
+          executeCommandSync(['git', '--version'], { cwd: process.cwd() })
+            .success,
+      ),
     showGitMissing: () => Effect.promise(() => promptGitMissing()),
     listWorkspaceEntries: (workspacePath) =>
       workspaceFs.readDirectory(workspacePath),

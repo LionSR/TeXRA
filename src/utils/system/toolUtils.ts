@@ -344,7 +344,7 @@ type RunToolOptions = {
 export async function runToolWithCheck(
   toolName: string,
   args: string[],
-  options: RunToolOptions = {},
+  options: RunToolOptions,
 ): Promise<ExecResult | false> {
   const { showError = true, ...execOptions } = options;
   if (!(await checkToolInstalled(toolName, showError, execOptions.signal))) {
@@ -467,7 +467,11 @@ export function hasPackageManager(name: SystemPackageManager): boolean {
   const cached = packageManagerAvailability.get(name);
   if (cached !== undefined) return cached;
 
-  const available = executeCommandSync([name, '--version']).success;
+  // A `--version` probe answers the same from any directory, so it names the
+  // process cwd instead of reaching for a workspace root it does not need.
+  const available = executeCommandSync([name, '--version'], {
+    cwd: process.cwd(),
+  }).success;
   packageManagerAvailability.set(name, available);
   log.debug(
     available

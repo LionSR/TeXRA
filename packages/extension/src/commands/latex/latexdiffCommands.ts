@@ -363,6 +363,7 @@ const handleLatexdiff = Effect.fnUntraced(function* (
           pathToLocationIn(session.roots.workspace, editedFile),
           '_diff',
           mathMarkup,
+          { cwd: session.roots.workspace },
         ),
       runtime,
     ),

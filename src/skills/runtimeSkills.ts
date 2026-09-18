@@ -7,7 +7,6 @@ import {
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
 import { readPlatformSetting } from '@utils/config/platformSettings';
-import { workspaceRootPath } from '@utils/files/workspaceFS';
 import { safeHomedir } from '@utils/system/platformPaths';
 
 import {
@@ -51,16 +50,22 @@ export function setRuntimeSkillSources(
     typeof sources === 'function' ? sources : () => sources;
 }
 
-/** The sources for the calling session's workspace, or the home folder without one. */
-function runtimeSkillSources(): readonly SkillSource[] {
+/**
+ * The sources for `workspaceRoot`, or the home folder without one. The root
+ * is carried as data by the caller that holds it — a run's session workspace,
+ * or the host's at the settings surface that asked (#12421).
+ */
+function runtimeSkillSources(
+  workspaceRoot: string | undefined,
+): readonly SkillSource[] {
   return resolveRuntimeSkillSources(
-    workspaceRootPath() ?? safeHomedir() ?? '/nonexistent',
+    workspaceRoot ?? safeHomedir() ?? '/nonexistent',
   );
 }
 
 /** Discover the complete runtime source registry for settings displays. */
-function discoverRuntimeSkills() {
-  return discoverSkillSources(runtimeSkillSources());
+function discoverRuntimeSkills(workspaceRoot: string | undefined) {
+  return discoverSkillSources(runtimeSkillSources(workspaceRoot));
 }
 
 function sourceLabel(source: SkillSource): string {
@@ -106,9 +111,10 @@ export function skillDisplayItem(
 
 /** Discover the complete inventory for host settings displays. */
 export async function loadRuntimeSkillDisplay(
+  workspaceRoot: string | undefined,
   disabled: DisabledSkills = readDisabledSkills(),
 ) {
-  const result = await discoverRuntimeSkills();
+  const result = await discoverRuntimeSkills(workspaceRoot);
   return {
     skills: result.skills.map((entry) => skillDisplayItem(entry, disabled)),
     issues: result.errors.map(({ message, path }) => ({ message, path })),
@@ -131,8 +137,10 @@ export function filterDiscoveredSkills(
 }
 
 /** Discover only skills that may be injected or explicitly activated. */
-export async function loadEnabledRuntimeSkills() {
-  const result = await discoverRuntimeSkills();
+export async function loadEnabledRuntimeSkills(
+  workspaceRoot: string | undefined,
+) {
+  const result = await discoverRuntimeSkills(workspaceRoot);
   return filterDiscoveredSkills(result);
 }
 
@@ -164,8 +172,10 @@ export function formatRuntimeSkillActivation({
   ].join('\n');
 }
 
-export async function loadRuntimeSkillCatalog(): Promise<RuntimeSkillCatalogResult> {
-  const sources = runtimeSkillSources();
+export async function loadRuntimeSkillCatalog(
+  workspaceRoot: string | undefined,
+): Promise<RuntimeSkillCatalogResult> {
+  const sources = runtimeSkillSources(workspaceRoot);
   if (sources.length === 0) {
     return { catalog: '', skills: [], issues: [] };
   }

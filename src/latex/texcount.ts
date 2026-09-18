@@ -93,6 +93,7 @@ const rejectionReason = Effect.fn('texcount.rejectionReason')(function* (
  * the channel the whole count was annotated with.
  */
 const runTexcount = Effect.fn('texcount.runTexcount')(function* (
+  workspaceRoot: string | undefined,
   args: string[],
   channel: string,
   context: string,
@@ -101,6 +102,9 @@ const runTexcount = Effect.fn('texcount.runTexcount')(function* (
     try: (signal) =>
       runToolWithCheck('texcount', args, {
         channel,
+        // The file arguments are workspace-relative, so the root the caller
+        // counted for is also the directory texcount resolves them against.
+        cwd: workspaceRoot,
         truncate: false,
         showError: true,
         signal,
@@ -165,7 +169,12 @@ const getIndividualCounts = Effect.fn('texcount.getIndividualCounts')(
           }
           args.push(filePath);
 
-          const { stdout, error } = yield* runTexcount(args, channel, filePath);
+          const { stdout, error } = yield* runTexcount(
+            workspaceRoot,
+            args,
+            channel,
+            filePath,
+          );
           return {
             output: stdout
               ? `TeX Count Results for ${filePath}:\n${stdout}`
@@ -244,6 +253,7 @@ const getSummedCount = Effect.fn('texcount.getSummedCount')(function* (
   args.push(...validPaths);
 
   const { stdout, error } = yield* runTexcount(
+    workspaceRoot,
     args,
     channel,
     `sum for ${validPaths.join(', ')}`,

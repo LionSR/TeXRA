@@ -2,7 +2,6 @@
 import * as path from 'node:path';
 
 // Local imports
-import { workspaceRoots } from '@platform/workspaceRoots';
 import { relativeToRoot } from '@platform/defaults/nodeWorkspace';
 import { normalizeFilePath } from '@utils/core';
 import { escapesRoot } from '@utils/core/pathCore';
@@ -13,17 +12,6 @@ import {
   locatePathInRoot,
   type ResolvedPath,
 } from './workspaceRoot';
-
-/**
- * The calling context's workspace folder, or `undefined` with none open.
- *
- * The one ambient read left in this module, for the callers that still
- * default their root instead of being handed one (#12421). Every path helper
- * below is a pure function of the root it is given.
- */
-export function workspaceRootPath(): string | undefined {
-  return workspaceRoots().workspace;
-}
 
 /**
  * The workspace-relative form of `filePath`, symlink-aware. A path outside

@@ -284,6 +284,7 @@ const configEditCommand = defineCliCommand({
       stores: installedRoots(services),
       secrets: services.secrets,
       runtime: services.runtime,
+      workspaceRoot: services.roots?.workspace,
       colorEnabled: context.stdoutColorEnabled,
       onError: writeErrorStderr,
     });

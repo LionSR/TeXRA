@@ -48,6 +48,7 @@ vi.mock(
     >()),
     buildToolDashboardItems: (
       host: string,
+      _workspaceRoot: string | undefined,
       cached?: ExternalToolCheckResult[],
     ) => Effect.promise(() => toolData.buildItems(host, cached)),
     planToolTerminalAction: toolData.planTerminalAction,
@@ -57,7 +58,7 @@ vi.mock(
 vi.mock('@tools/toolAvailability', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@tools/toolAvailability')>()),
   getLastCheckResults: () => toolData.lastCheckResults(),
-  refreshToolAvailability: () =>
+  refreshToolAvailability: (_workspaceRoot: string | undefined) =>
     Effect.tryPromise({
       try: () => toolData.refreshAvailability(),
       catch: (cause) => cause as Error,
@@ -129,6 +130,7 @@ function createFixture(overrides: Partial<ControllerOptions> = {}) {
     config: new FakeConfigProvider(),
     globalState,
     workspaceState,
+    workspaceRoot: undefined,
     renderer: {
       postToRenderer: (message) => posted.push(message),
     },

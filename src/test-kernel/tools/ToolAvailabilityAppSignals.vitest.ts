@@ -58,7 +58,7 @@ describe('tool availability app signals', () => {
       });
 
       try {
-        yield* refreshToolAvailability();
+        yield* refreshToolAvailability(undefined);
 
         expect(events).toEqual([undefined]);
       } finally {
@@ -95,7 +95,7 @@ describe('tool availability app signals', () => {
 
         expect([...getUnavailableToolNamesCached()]).toEqual([]);
 
-        yield* runExternalToolChecks();
+        yield* runExternalToolChecks(undefined);
 
         // Toggling a tool on or off never changes this set — it reports missing
         // external dependencies only — so there is nothing to rebuild after a
@@ -137,7 +137,7 @@ describe('tool availability app signals', () => {
           () => import('@tools/toolAvailability'),
         );
 
-        expect(yield* runExternalToolChecks()).toEqual([
+        expect(yield* runExternalToolChecks(undefined)).toEqual([
           expect.objectContaining({
             id: 'broken-probe',
             status: 'unknown',

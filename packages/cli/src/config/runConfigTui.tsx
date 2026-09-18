@@ -16,6 +16,8 @@ export function ConfigApp(props: {
   readonly secrets: PlatformSecrets;
   /** The process runtime the tools row runs on, from the same command. */
   readonly runtime: ProcessRuntime;
+  /** The project the process opened, for the probes that need a workspace. */
+  readonly workspaceRoot: string | undefined;
   readonly onError?: (error: unknown) => void;
 }) {
   const { exit } = useApp();
@@ -26,6 +28,7 @@ export function ConfigApp(props: {
       availableRows={rows}
       secrets={props.secrets}
       runtime={props.runtime}
+      workspaceRoot={props.workspaceRoot}
       onClose={exit}
       onError={props.onError}
     />
@@ -36,6 +39,7 @@ export async function runConfigTui(options: {
   readonly stores: SettingsStores;
   readonly secrets: PlatformSecrets;
   readonly runtime: ProcessRuntime;
+  readonly workspaceRoot: string | undefined;
   readonly colorEnabled?: boolean;
   readonly onError?: (error: unknown) => void;
 }): Promise<void> {
@@ -44,6 +48,7 @@ export async function runConfigTui(options: {
       <ConfigApp
         stores={options.stores}
         secrets={options.secrets}
+        workspaceRoot={options.workspaceRoot}
         runtime={options.runtime}
         onError={options.onError}
       />

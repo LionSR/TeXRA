@@ -109,11 +109,9 @@ class ToolAvailabilityCache {
    * Run all external tool checks in parallel. See {@link runExternalToolChecks}
    * for the full coalescing contract this implements.
    */
-  runChecks(): Effect.Effect<
-    ExternalToolCheckResult[],
-    never,
-    ToolProbeServices
-  > {
+  runChecks(
+    workspaceRoot: string | undefined,
+  ): Effect.Effect<ExternalToolCheckResult[], never, ToolProbeServices> {
     return Effect.suspend(() => {
       if (this.inflightProbe) {
         this.pendingRerun = true;
@@ -124,7 +122,7 @@ class ToolAvailabilityCache {
       // find the slot taken and join it rather than start a second probe.
       const deferred = Deferred.makeUnsafe<ExternalToolCheckResult[]>();
       this.inflightProbe = deferred;
-      return this.probeUntilSettled().pipe(
+      return this.probeUntilSettled(workspaceRoot).pipe(
         Effect.onExit((exit) => {
           this.inflightProbe = null;
           return Deferred.done(deferred, exit);
@@ -136,17 +134,15 @@ class ToolAvailabilityCache {
   /** Recurses instead of looping: a caller joining mid-probe can set
    *  `pendingRerun` again before this settles, same as the `do...while` it
    *  replaces. */
-  private probeUntilSettled(): Effect.Effect<
-    ExternalToolCheckResult[],
-    never,
-    ToolProbeServices
-  > {
+  private probeUntilSettled(
+    workspaceRoot: string | undefined,
+  ): Effect.Effect<ExternalToolCheckResult[], never, ToolProbeServices> {
     this.pendingRerun = false;
-    return runProbes.pipe(
+    return runProbes(workspaceRoot).pipe(
       Effect.flatMap((results) => {
         this.lastResults = results;
         return this.pendingRerun
-          ? this.probeUntilSettled()
+          ? this.probeUntilSettled(workspaceRoot)
           : Effect.succeed(results);
       }),
     );
@@ -179,45 +175,43 @@ const toolAvailabilityCache = new ToolAvailabilityCache();
  * @returns Per-group results with availability status and an optional
  *   human-readable `statusDetail`.
  */
-export function runExternalToolChecks(): Effect.Effect<
-  ExternalToolCheckResult[],
-  never,
-  ToolProbeServices
-> {
-  return toolAvailabilityCache.runChecks();
+export function runExternalToolChecks(
+  workspaceRoot: string | undefined,
+): Effect.Effect<ExternalToolCheckResult[], never, ToolProbeServices> {
+  return toolAvailabilityCache.runChecks(workspaceRoot);
 }
 
-const runProbes: Effect.Effect<
-  ExternalToolCheckResult[],
-  never,
-  ToolProbeServices
-> = Effect.suspend(() =>
-  // Same fan-out as the Promise.all this replaces: every group probes at once
-  // and no group's failure cancels a sibling, because each one resolves to a
-  // result of its own below.
-  Effect.forEach(EXTERNAL_TOOL_DEFS, probeToolGroup, {
-    concurrency: 'unbounded',
-  }),
-);
+const runProbes = (
+  workspaceRoot: string | undefined,
+): Effect.Effect<ExternalToolCheckResult[], never, ToolProbeServices> =>
+  Effect.suspend(() =>
+    // Same fan-out as the Promise.all this replaces: every group probes at once
+    // and no group's failure cancels a sibling, because each one resolves to a
+    // result of its own below.
+    Effect.forEach(
+      EXTERNAL_TOOL_DEFS,
+      (def) => probeToolGroup(def, workspaceRoot),
+      { concurrency: 'unbounded' },
+    ),
+  );
 
-const probeToolGroup = Effect.fn('probeToolGroup')(function* ({
-  id,
-  tools,
-  name,
-  probe,
-  check,
-  statusLabel: getStatusLabel,
-  detailCheck,
-}: ExternalToolDef): Effect.fn.Return<
-  ExternalToolCheckResult,
-  never,
-  ToolProbeServices
-> {
+const probeToolGroup = Effect.fn('probeToolGroup')(function* (
+  {
+    id,
+    tools,
+    name,
+    probe,
+    check,
+    statusLabel: getStatusLabel,
+    detailCheck,
+  }: ExternalToolDef,
+  workspaceRoot: string | undefined,
+): Effect.fn.Return<ExternalToolCheckResult, never, ToolProbeServices> {
   // Run check/status/detail from one shared probe result. Some groups
   // (Codex, Zotero, GitHub PR) touch async local state, so running the
   // callbacks independently can duplicate the same probe work.
   const probed = yield* Effect.gen(function* () {
-    const probeResult = probe ? yield* probe() : undefined;
+    const probeResult = probe ? yield* probe(workspaceRoot) : undefined;
     const available = yield* check(probeResult);
     return { failure: undefined, probeResult, available };
   }).pipe(
@@ -310,8 +304,8 @@ export function getLastCheckResults(): ExternalToolCheckResult[] | null {
  * probe can't race.
  */
 export const refreshToolAvailability = Effect.fn('refreshToolAvailability')(
-  function* () {
-    yield* runExternalToolChecks();
+  function* (workspaceRoot: string | undefined) {
+    yield* runExternalToolChecks(workspaceRoot);
     appSignals.emit('toolAvailabilityChanged', undefined);
   },
 );

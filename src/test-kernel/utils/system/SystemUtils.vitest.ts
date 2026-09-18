@@ -52,7 +52,10 @@ function waitForProcessExit(pid: number): Promise<void> {
   );
 }
 
-type ExecuteCommandOptions = NonNullable<Parameters<typeof executeCommand>[1]>;
+type ExecuteCommandOptions = Omit<
+  NonNullable<Parameters<typeof executeCommand>[1]>,
+  'cwd'
+>;
 
 // Backgrounds a long sleep, records its pid, then blocks on `wait` so the
 // tracked shell keeps running while the descendant holds the inherited stdio.
@@ -61,9 +64,10 @@ const SLEEPER_SCRIPT = 'sleep 60 & echo $! > "$PID_FILE"; wait';
 describe('executeCommand', () => {
   const tempDirs = useTempDirs();
 
-  // executeCommand resolves its cwd from the workspace; point the fake
-  // platform at a directory that exists on disk so spawning succeeds.
-  setupPlatform({ workspacePath: process.cwd() });
+  // The cases below hand `executeCommand` the same directory the fake
+  // platform's workspace names, so the spawn has a real cwd on disk.
+  const WORKSPACE = process.cwd();
+  setupPlatform({ workspacePath: WORKSPACE });
 
   // Runs SLEEPER_SCRIPT in a scratch directory and resolves once the
   // backgrounded sleep has published its pid, so callers can assert on the
@@ -94,11 +98,14 @@ describe('executeCommand', () => {
   }
 
   it('keeps stderr empty for ordinary nonzero exits with stdout only', async () => {
-    const result = await executeCommand([
-      process.execPath,
-      '-e',
-      `process.stdout.write('failure details'); process.exit(7)`,
-    ]);
+    const result = await executeCommand(
+      [
+        process.execPath,
+        '-e',
+        `process.stdout.write('failure details'); process.exit(7)`,
+      ],
+      { cwd: WORKSPACE },
+    );
 
     assert.equal(result.success, false);
     assert.equal(result.exitCode, 7);
@@ -117,6 +124,7 @@ describe('executeCommand', () => {
           `setTimeout(() => process.stdout.write(Buffer.from([0x99, 0x82])), 20);`,
       ],
       {
+        cwd: WORKSPACE,
         buffer: false,
         onStdout: (chunk) => {
           streamed += chunk;
@@ -142,6 +150,7 @@ describe('executeCommand', () => {
           `process.stdout.destroy(); process.stderr.destroy();`,
       ],
       {
+        cwd: WORKSPACE,
         buffer: false,
         onStdout: (chunk) => {
           streamedStdout += chunk;
@@ -167,6 +176,7 @@ describe('executeCommand', () => {
         `process.stdout.write('x'.repeat(${outputChars}))`,
       ],
       {
+        cwd: WORKSPACE,
         buffer: false,
         maxBuffer: 64,
         onStdout: (chunk) => {
@@ -184,7 +194,7 @@ describe('executeCommand', () => {
   it('reports maxBuffer overflow as an error instead of partial success', async () => {
     const result = await executeCommand(
       [process.execPath, '-e', `process.stdout.write('x'.repeat(10_000))`],
-      { maxBuffer: 64 },
+      { cwd: WORKSPACE, maxBuffer: 64 },
     );
 
     assert.equal(result.success, false);
@@ -226,6 +236,7 @@ describe('executeCommand', () => {
       const promise = executeCommand(
         [process.execPath, '-e', 'setTimeout(() => {}, 60000)'],
         {
+          cwd: WORKSPACE,
           signal: controller.signal,
           timeout: 60_000,
           onPid: (pid) => {

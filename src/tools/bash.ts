@@ -290,7 +290,7 @@ function createBackgroundBashStrategy(params: {
         try: () => {
           startedAt = Date.now();
           return executeCommand(command, {
-            ...(params.cwd !== undefined && { cwd: params.cwd }),
+            cwd: params.cwd,
             timeout: params.timeoutMs,
             buffer: false,
             // The string command form gets shell teardown: abort/timeout signal

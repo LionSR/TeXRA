@@ -51,6 +51,8 @@ export interface CliConfigFormProps {
   readonly secrets: PlatformSecrets;
   /** The process runtime the tools row's probes run on, from the same surface. */
   readonly runtime: ProcessRuntime;
+  /** The project the process opened, for the probes that need a workspace. */
+  readonly workspaceRoot: string | undefined;
   readonly onClose: () => void;
   readonly onError?: (error: unknown) => void;
   /**
@@ -321,6 +323,7 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
             availableRows={props.availableRows}
             state={stores.globalState}
             runtime={props.runtime}
+            workspaceRoot={props.workspaceRoot}
             onClose={onBack}
           />
         ),
@@ -328,6 +331,7 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
           <SkillsSettingsForm
             availableRows={props.availableRows}
             stores={stores}
+            workspaceRoot={props.workspaceRoot}
             runtime={props.runtime}
             onClose={onBack}
           />

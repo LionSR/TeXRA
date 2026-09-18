@@ -14,7 +14,7 @@
  * that paper's session scope.
  *
  * Transition: the fallback is a second source for one datum and goes away once
- * every `workspaceRootPath` caller runs inside a roots scope
+ * every `workspaceRoots()` caller runs inside a roots scope
  * (`runInSession` or `runWithWorkspaceRoots`), which the persistence
  * cutover's `Database` layer taking `session.roots.storage` at one site makes
  * checkable. No detector guards the

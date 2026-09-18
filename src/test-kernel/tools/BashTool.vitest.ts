@@ -54,7 +54,7 @@ function mockStreamingCommand(
   result: Partial<ExecResult> = {},
 ): void {
   vi.spyOn(execUtils, 'executeCommand').mockImplementation(
-    async (_command, options = {}) => {
+    async (_command, options) => {
       stream(options);
       return {
         success: true,
@@ -201,7 +201,7 @@ describe('BashTool', () => {
 
       let receivedSignal: AbortSignal | undefined;
       vi.spyOn(execUtils, 'executeCommand').mockImplementation(
-        async (_command, options = {}) => {
+        async (_command, options) => {
           receivedSignal = options.signal;
           return execResult;
         },
@@ -904,7 +904,7 @@ describe('BashTool', () => {
         const started = pDefer<void>();
         let receivedSignal: AbortSignal | undefined;
         vi.spyOn(execUtils, 'executeCommand').mockImplementation(
-          (_command, options = {}) => {
+          (_command, options) => {
             receivedSignal = options.signal;
             options.onStdout?.('started\n');
             started.resolve();
