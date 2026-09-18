@@ -11,13 +11,10 @@
  *   - Extension reuses a persistent storage directory and unlinks the
  *     individual files (via the returned `cleanup`) once done.
  *
- * Why `node:fs/promises` instead of `platform().fs`:
- * the diff editor reads these files outside the platform abstraction, and
- * Extension intentionally bypasses BaseFS normalization so the diff view
- * sees raw bytes. Going through `platform().fs.writeFile` would route
- * through a Uint8Array conversion that's a needless detour for this use,
- * and `platform()` may not be initialized in every host that wants to
- * stage diff inputs.
+ * Why `node:fs/promises` and not an Effect `FileSystem`: the diff editor
+ * reads these files itself, so what is staged must be the caller's raw bytes,
+ * and the staging happens on the Promise tier of a host's approval flow —
+ * there is no fiber here to take the service from.
  */
 
 import { unlink, writeFile } from 'node:fs/promises';

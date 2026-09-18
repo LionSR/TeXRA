@@ -106,10 +106,10 @@ const hasClaudeOauthCredential = Effect.fn('hasClaudeOauthCredential')(
     if (hasClaudeCodeOauthToken(env)) return true;
 
     const configDir = resolveClaudeConfigDir(env.CLAUDE_CONFIG_DIR);
-    // Raw node:fs/promises, not platform().fs: FileSystemProvider
-    // (@platform/interfaces) exposes no access/existence-check primitive, only
-    // `stat`, which would need this same failure branch for a not-found error
-    // — so routing through it buys nothing for this single boolean check.
+    // Raw node:fs/promises, not the `FileSystem` service: `access(F_OK)` is
+    // exactly this question, and the service's `exists` would need this same
+    // failure branch anyway — so taking it from context buys nothing for one
+    // boolean, and this check runs before any root is resolved.
     const credentialFileExists = yield* Effect.tryPromise({
       try: () => access(path.join(configDir, '.credentials.json')),
       catch: (error) => error,

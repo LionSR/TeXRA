@@ -734,7 +734,7 @@ export class ToolEditApprovalController {
         onSuccess: (content) =>
           this.send(entry.request, {
             action: 'approve',
-            // Normalize: this read bypasses BaseFS so may contain CRLF.
+            // Normalize: the host read these bytes itself, so they may be CRLF.
             content: normalizeLineEndings(content),
           }),
       }),

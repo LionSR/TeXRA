@@ -423,9 +423,9 @@ const make = ({
     ) {
       yield* requireRpc;
       if (openFiles.has(absolute) && !forceReload) return;
-      // Uses fs/promises directly rather than platform().fs: this must read the
-      // same real on-disk bytes the spawned `lean --server` process itself sees,
-      // not a host's virtual/faked workspace fs.
+      // Uses fs/promises directly rather than a rooted `FileSystem` view:
+      // this must read the same real on-disk bytes the spawned `lean --server`
+      // process itself sees.
       const text = yield* Effect.tryPromise({
         try: (signal) => readFile(absolute, { encoding: 'utf8', signal }),
         catch: (error) =>

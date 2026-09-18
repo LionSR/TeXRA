@@ -4,7 +4,8 @@
  * carrying each entry's own (unfollowed) type, and exclusive or
  * symlink-dereferencing copies.
  *
- * These are the Effect form of what `baseFS.ts` reached `platform().fs` for.
+ * These are the Effect form of what the retired `baseFS.ts` facade reached
+ * its Promise filesystem port for.
  * Nothing here re-implements an operation `FileSystem` already has — an
  * append, for instance, is `fs.writeFile(path, data, { flag: 'a' })` and gets
  * no wrapper. The Node calls `FileSystem` cannot express (`lstat`,
@@ -65,8 +66,8 @@ function systemErrorFrom(
 }
 
 /**
- * Crash-safe replace, delegated to `write-file-atomic` — the package the
- * `platform().fs` port uses — rather than re-derived: it stages under a name
+ * Crash-safe replace, delegated to `write-file-atomic` rather than
+ * re-derived: it stages under a name
  * unique across processes and threads, fsyncs, preserves an existing
  * target's mode and ownership, and resolves the target's real path so a
  * symlinked target is replaced where it points. For durable state a torn
