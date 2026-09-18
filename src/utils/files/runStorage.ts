@@ -1,8 +1,9 @@
 // Standard library imports
 import * as path from 'node:path';
-import { promises as fs } from 'node:fs';
 
-import { isFileNotFoundError } from '@common/errors';
+// Third-party imports
+import { Effect, FileSystem, PlatformError } from 'effect';
+
 import { createLog } from '@logger/logUtils';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { type RunId, type FileLocation } from '@shared/schemas';
@@ -16,6 +17,7 @@ import {
   createRunStorageLocation,
   pathToLocationIn,
 } from './fileLocation';
+import { entryTypeIn } from './fsEntryExists';
 import {
   CHANNEL,
   createSymlink,
@@ -31,6 +33,12 @@ import {
 import { locateInWorkspace } from './workspaceFS';
 
 const log = createLog(CHANNEL);
+
+/** `isFileNotFoundError` over the standard library's errors: the one reading
+ *  of "nothing is there" the guards below branch on. */
+const isAbsent = (error: Error): boolean =>
+  error instanceof PlatformError.PlatformError &&
+  error.reason._tag === 'NotFound';
 
 export class RunFileService {
   public readonly runDirectory: string;
@@ -60,38 +68,45 @@ export class RunFileService {
    * tools operating inside run storage can resolve them using their
    * familiar workspace-relative paths.
    */
-  public async prepareRunWorkspace(
+  public prepareRunWorkspace(
     baseFiles: FileLocation[],
     options: {
       linkFiles?: FileLocation[];
     } = {},
-  ): Promise<void> {
-    if (this.hasPreparedSnapshot) return;
+  ): Effect.Effect<void, Error, FileSystem.FileSystem> {
+    return Effect.gen({ self: this }, function* () {
+      if (this.hasPreparedSnapshot) return;
 
-    await ensureRunDirUnder(this.roots.storage, this.runId);
+      yield* ensureRunDirUnder(this.roots.storage, this.runId);
 
-    const linkTargets = new Map<string, FileLocation>();
-    for (const target of [...baseFiles, ...(options.linkFiles ?? [])]) {
-      linkTargets.set(target.absolutePath, target);
-    }
+      const linkTargets = new Map<string, FileLocation>();
+      for (const target of [...baseFiles, ...(options.linkFiles ?? [])]) {
+        linkTargets.set(target.absolutePath, target);
+      }
 
-    await Promise.all(
-      baseFiles.map((target) => this.captureOriginalSnapshot(target)),
-    );
+      yield* Effect.forEach(
+        baseFiles,
+        (target) => this.captureOriginalSnapshot(target),
+        { concurrency: 'unbounded', discard: true },
+      );
 
-    await Promise.all(
-      [...linkTargets.values()].map(async (candidate) => {
-        try {
-          await this.mirrorWorkspaceFile(candidate);
-        } catch (error) {
-          log.warn(
-            `Failed to mirror workspace dependency ${candidate.absolutePath}: ${toErrorMessage(error)}`,
-          );
-        }
-      }),
-    );
+      yield* Effect.forEach(
+        [...linkTargets.values()],
+        (candidate) =>
+          this.mirrorWorkspaceFile(candidate).pipe(
+            Effect.catch((error) =>
+              Effect.sync(() => {
+                log.warn(
+                  `Failed to mirror workspace dependency ${candidate.absolutePath}: ${toErrorMessage(error)}`,
+                );
+              }),
+            ),
+          ),
+        { concurrency: 'unbounded', discard: true },
+      );
 
-    this.hasPreparedSnapshot = true;
+      this.hasPreparedSnapshot = true;
+    });
   }
 
   /**
@@ -100,13 +115,16 @@ export class RunFileService {
    * write at `r<N>/<relPath>` can never reach the user's working copy.
    * Idempotent; skips non-workspace, ignored-root, non-regular, and missing sources.
    */
-  private async captureOriginalSnapshot(target: FileLocation): Promise<void> {
-    if (target.kind !== 'workspace') return;
-    if (shouldSkipRelocation(target.relativePath)) return;
+  private captureOriginalSnapshot(
+    target: FileLocation,
+  ): Effect.Effect<void, Error, FileSystem.FileSystem> {
+    return Effect.gen({ self: this }, function* () {
+      if (target.kind !== 'workspace') return;
+      if (shouldSkipRelocation(target.relativePath)) return;
 
-    try {
-      const stats = await fs.stat(target.absolutePath);
-      if (!stats.isFile()) return;
+      const fs = yield* FileSystem.FileSystem;
+      const stats = yield* fs.stat(target.absolutePath);
+      if (stats.type !== 'File') return;
 
       const snapshotAbsolute = originalSnapshotPathUnder(
         this.roots.storage,
@@ -114,17 +132,22 @@ export class RunFileService {
         target.relativePath,
       );
 
-      if (await snapshotExists(snapshotAbsolute)) return;
+      if (yield* snapshotExists(snapshotAbsolute)) return;
 
-      await ensureParentDir(snapshotAbsolute);
-      await fs.copyFile(target.absolutePath, snapshotAbsolute);
-    } catch (error) {
-      if (isFileNotFoundError(error)) return;
-      throw new Error(
-        `Failed to capture original file ${target.absolutePath}: ${toErrorMessage(error)}`,
-        { cause: error },
-      );
-    }
+      yield* ensureParentDir(snapshotAbsolute);
+      yield* fs.copyFile(target.absolutePath, snapshotAbsolute);
+    }).pipe(
+      Effect.catch((error) =>
+        isAbsent(error)
+          ? Effect.void
+          : Effect.fail(
+              new Error(
+                `Failed to capture original file ${target.absolutePath}: ${toErrorMessage(error)}`,
+                { cause: error },
+              ),
+            ),
+      ),
+    );
   }
 
   /** Create a FileLocation for a workflow output file. */
@@ -169,38 +192,40 @@ export class RunFileService {
    * `original/<relPath>`; round-dir symlinks then point there rather than
    * chaining back to the live workspace.
    */
-  public async mirrorWorkspaceFile(
+  public mirrorWorkspaceFile(
     location: FileLocation,
     options: { snapshot?: boolean } = {},
-  ): Promise<FileLocation> {
-    if (
-      location.kind !== 'workspace' ||
-      shouldSkipRelocation(location.relativePath)
-    ) {
-      return location;
-    }
+  ): Effect.Effect<FileLocation, Error, FileSystem.FileSystem> {
+    return Effect.gen({ self: this }, function* () {
+      if (
+        location.kind !== 'workspace' ||
+        shouldSkipRelocation(location.relativePath)
+      ) {
+        return location;
+      }
 
-    await ensureRunDirUnder(this.roots.storage, this.runId);
-    const runAbsolute = runStorageAbsolutePathUnder(
-      this.roots.storage,
-      this.runId,
-      location.relativePath,
-    );
+      yield* ensureRunDirUnder(this.roots.storage, this.runId);
+      const runAbsolute = runStorageAbsolutePathUnder(
+        this.roots.storage,
+        this.runId,
+        location.relativePath,
+      );
 
-    if (!this.mirroredDependencies.has(location.relativePath)) {
-      await createSymlink(location.absolutePath, runAbsolute);
-      this.mirroredDependencies.add(location.relativePath);
-    }
+      if (!this.mirroredDependencies.has(location.relativePath)) {
+        yield* createSymlink(location.absolutePath, runAbsolute);
+        this.mirroredDependencies.add(location.relativePath);
+      }
 
-    if (options.snapshot) {
-      await this.captureOriginalSnapshot(location);
-    }
+      if (options.snapshot) {
+        yield* this.captureOriginalSnapshot(location);
+      }
 
-    return createRunStorageLocation(
-      runAbsolute,
-      location.relativePath,
-      this.runId,
-    );
+      return createRunStorageLocation(
+        runAbsolute,
+        location.relativePath,
+        this.runId,
+      );
+    });
   }
 
   /**
@@ -219,8 +244,10 @@ export class RunFileService {
    *     original workspace source would silently destroy the round's
    *     revised content.
    */
-  public async ensureMirroredInRoundDir(round: number): Promise<void> {
-    await this.ensureMirroredInRunSubdir(workflowOutputRoundDir(round), {
+  public ensureMirroredInRoundDir(
+    round: number,
+  ): Effect.Effect<void, never, FileSystem.FileSystem> {
+    return this.ensureMirroredInRunSubdir(workflowOutputRoundDir(round), {
       protectPrimaryOutput: true,
     });
   }
@@ -230,110 +257,136 @@ export class RunFileService {
    * `<runDir>/diff/r{round}/...`, where workflow latexdiff sources and build
    * artifacts live.
    */
-  public async ensureMirroredInDiffRoundDir(round: number): Promise<void> {
-    await this.ensureMirroredInRunSubdir(
+  public ensureMirroredInDiffRoundDir(
+    round: number,
+  ): Effect.Effect<void, never, FileSystem.FileSystem> {
+    return this.ensureMirroredInRunSubdir(
       path.join('diff', workflowOutputRoundDir(round)),
       { protectPrimaryOutput: false },
     );
   }
 
-  private async ensureMirroredInRunSubdir(
+  private ensureMirroredInRunSubdir(
     relativeDirectory: string,
     options: { protectPrimaryOutput: boolean },
-  ): Promise<void> {
-    if (this.mirroredDependencies.size === 0) return;
+  ): Effect.Effect<void, never, FileSystem.FileSystem> {
+    return Effect.gen({ self: this }, function* () {
+      if (this.mirroredDependencies.size === 0) return;
 
-    await Promise.all(
-      [...this.mirroredDependencies].map(async (relativePath) => {
-        // A dep whose path ends at `output.{ext}` (no subdirectory within the
-        // round) would symlink over the primary revised output that lives at
-        // `r{round}/output.{ext}`. `createSymlink` replaces any existing
-        // entry on EEXIST, so an unguarded mirror would silently destroy the
-        // round's result. Skip these — the dependency is still reachable at
-        // `r{round}/../<relativePath>`, i.e. `<runDir>/<relativePath>`.
-        const { dir: depDir, name: depName } = path.parse(relativePath);
-        if (
-          options.protectPrimaryOutput &&
-          depDir === '' &&
-          depName === WORKFLOW_OUTPUT_BASENAME
-        ) {
-          log.debug(
-            `Skipping run-dir mirror of ${relativePath}: would clobber primary output in ${relativeDirectory}`,
-          );
-          return;
-        }
+      const fs = yield* FileSystem.FileSystem;
+      yield* Effect.forEach(
+        [...this.mirroredDependencies],
+        (relativePath) =>
+          Effect.gen({ self: this }, function* () {
+            // A dep whose path ends at `output.{ext}` (no subdirectory within
+            // the round) would symlink over the primary revised output that
+            // lives at `r{round}/output.{ext}`. `createSymlink` replaces any
+            // existing entry on EEXIST, so an unguarded mirror would silently
+            // destroy the round's result. Skip these — the dependency is still
+            // reachable at `r{round}/../<relativePath>`, i.e.
+            // `<runDir>/<relativePath>`.
+            const { dir: depDir, name: depName } = path.parse(relativePath);
+            if (
+              options.protectPrimaryOutput &&
+              depDir === '' &&
+              depName === WORKFLOW_OUTPUT_BASENAME
+            ) {
+              log.debug(
+                `Skipping run-dir mirror of ${relativePath}: would clobber primary output in ${relativeDirectory}`,
+              );
+              return;
+            }
 
-        // Prefer the immutable `original/` snapshot as the symlink source
-        // for editable inputs, so the chain `r<N>/<rel> → original/<rel>`
-        // never reaches the live workspace. Read-only build assets
-        // (cls/sty/bib/figures) have no snapshot and fall through to the
-        // workspace mirror at `runDir/<rel>`, which is correct — those
-        // are never written to.
-        const snapshotAbsolute = originalSnapshotPathUnder(
-          this.roots.storage,
-          this.runId,
-          relativePath,
-        );
-        const workspaceMirrorAbsolute = runStorageAbsolutePathUnder(
-          this.roots.storage,
-          this.runId,
-          relativePath,
-        );
-        let sourceAbsolute = workspaceMirrorAbsolute;
-        try {
-          await fs.stat(snapshotAbsolute);
-          sourceAbsolute = snapshotAbsolute;
-        } catch (error) {
-          // No snapshot is the ordinary case for a read-only build asset.
-          // Any other failure means the round dir links the live workspace
-          // mirror in place of the pristine snapshot, which a later diff or
-          // revert would read as the base.
-          if (!isFileNotFoundError(error)) {
-            log.warn(
-              `Unable to stat snapshot ${snapshotAbsolute}; linking the workspace mirror instead: ${toErrorMessage(error)}`,
+            // Prefer the immutable `original/` snapshot as the symlink source
+            // for editable inputs, so the chain `r<N>/<rel> → original/<rel>`
+            // never reaches the live workspace. Read-only build assets
+            // (cls/sty/bib/figures) have no snapshot and fall through to the
+            // workspace mirror at `runDir/<rel>`, which is correct — those
+            // are never written to.
+            const snapshotAbsolute = originalSnapshotPathUnder(
+              this.roots.storage,
+              this.runId,
+              relativePath,
             );
-          }
-        }
-        const destinationAbsolute = runStorageAbsolutePathUnder(
-          this.roots.storage,
-          this.runId,
-          path.join(relativeDirectory, relativePath),
-        );
-
-        // Guard against clobbering a real file already written to the round
-        // dir — e.g. a multi-document extracted output at
-        // `r{round}/chapters/ch1.tex` when `chapters/ch1.tex` is also an
-        // `\input` dependency. A stale symlink from a previous call is
-        // safe to replace (idempotent); anything else must be preserved.
-        try {
-          const stat = await fs.lstat(destinationAbsolute);
-          if (!stat.isSymbolicLink()) {
-            log.debug(
-              `Skipping run-dir mirror of ${relativePath}: destination in ${relativeDirectory} is an existing real file`,
+            const workspaceMirrorAbsolute = runStorageAbsolutePathUnder(
+              this.roots.storage,
+              this.runId,
+              relativePath,
             );
-            return;
-          }
-        } catch (error) {
-          // ENOENT is the common case — no collision, proceed with the link.
-          // Any other failure leaves the collision unknown, and linking then
-          // replaces an EEXIST destination outright, so the guard fails
-          // closed rather than disarming itself.
-          if (!isFileNotFoundError(error)) {
-            log.warn(
-              `Skipping run-dir mirror of ${relativePath}: cannot stat the destination in ${relativeDirectory}: ${toErrorMessage(error)}`,
+            // No snapshot is the ordinary case for a read-only build asset.
+            // Any other failure means the round dir links the live workspace
+            // mirror in place of the pristine snapshot, which a later diff or
+            // revert would read as the base.
+            const hasSnapshot = yield* fs.stat(snapshotAbsolute).pipe(
+              Effect.as(true),
+              Effect.catch((error) =>
+                Effect.sync(() => {
+                  if (!isAbsent(error)) {
+                    log.warn(
+                      `Unable to stat snapshot ${snapshotAbsolute}; linking the workspace mirror instead: ${toErrorMessage(error)}`,
+                    );
+                  }
+                  return false;
+                }),
+              ),
             );
-            return;
-          }
-        }
+            const sourceAbsolute = hasSnapshot
+              ? snapshotAbsolute
+              : workspaceMirrorAbsolute;
+            const destinationAbsolute = runStorageAbsolutePathUnder(
+              this.roots.storage,
+              this.runId,
+              path.join(relativeDirectory, relativePath),
+            );
 
-        try {
-          await createSymlink(sourceAbsolute, destinationAbsolute);
-        } catch (error) {
-          log.warn(
-            `Unable to mirror ${relativePath} into ${relativeDirectory}: ${toErrorMessage(error)}`,
-          );
-        }
-      }),
-    );
+            // Guard against clobbering a real file already written to the
+            // round dir — e.g. a multi-document extracted output at
+            // `r{round}/chapters/ch1.tex` when `chapters/ch1.tex` is also an
+            // `\input` dependency. A stale symlink from a previous call is
+            // safe to replace (idempotent); anything else must be preserved.
+            // Absence is the common case — no collision, proceed with the
+            // link. Any other failure leaves the collision unknown, and
+            // linking then replaces an EEXIST destination outright, so the
+            // guard fails closed rather than disarming itself.
+            const destination = yield* entryTypeIn(
+              fs,
+              destinationAbsolute,
+            ).pipe(
+              Effect.map((type) => {
+                if (type === undefined) return 'absent' as const;
+                return type === 'SymbolicLink'
+                  ? ('staleLink' as const)
+                  : ('realFile' as const);
+              }),
+              Effect.catch((error) =>
+                Effect.sync(() => {
+                  log.warn(
+                    `Skipping run-dir mirror of ${relativePath}: cannot stat the destination in ${relativeDirectory}: ${toErrorMessage(error)}`,
+                  );
+                  return 'unreadable' as const;
+                }),
+              ),
+            );
+            if (destination === 'realFile') {
+              log.debug(
+                `Skipping run-dir mirror of ${relativePath}: destination in ${relativeDirectory} is an existing real file`,
+              );
+              return;
+            }
+            if (destination === 'unreadable') return;
+
+            yield* createSymlink(sourceAbsolute, destinationAbsolute).pipe(
+              Effect.catch((error) =>
+                Effect.sync(() => {
+                  log.warn(
+                    `Unable to mirror ${relativePath} into ${relativeDirectory}: ${toErrorMessage(error)}`,
+                  );
+                }),
+              ),
+            );
+          }),
+        { concurrency: 'unbounded', discard: true },
+      );
+    });
   }
 }

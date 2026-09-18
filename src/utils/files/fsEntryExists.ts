@@ -47,3 +47,40 @@ export const entryExists = (
       .exists(target)
       .pipe(Effect.catchIf(absentReason, () => Effect.succeed(false)));
   });
+
+/**
+ * The entry's own type at `target`, or `undefined` when nothing is there —
+ * `BaseFS.stat().type` without the facade, whose provider was lstat-backed: a
+ * link reports as itself rather than as what it points at, and a dangling one
+ * still names an entry.
+ *
+ * `readLink` answers lstat's half, exactly as {@link entryExists} uses it, and
+ * `stat` answers the rest. Only absence is recovered; every other failure
+ * propagates, so an unreadable entry is never read as a missing one.
+ *
+ * The caller passes the filesystem it probes with, so a rooted view answers
+ * for the paths inside its root and the process filesystem answers for the
+ * rest.
+ */
+export const entryTypeIn = (
+  fs: FileSystem.FileSystem,
+  target: string,
+): Effect.Effect<
+  FileSystem.File.Type | undefined,
+  PlatformError.PlatformError
+> =>
+  Effect.gen(function* () {
+    const isLink = yield* fs.readLink(target).pipe(
+      Effect.as(true),
+      // Not a link, or not there at all: the stat below decides.
+      Effect.catch(() => Effect.succeed(false)),
+    );
+    if (isLink) return 'SymbolicLink';
+    return yield* fs.stat(target).pipe(
+      Effect.map((info) => info.type),
+      Effect.catchIf(
+        (error) => error.reason._tag === 'NotFound',
+        () => Effect.succeed(undefined),
+      ),
+    );
+  });

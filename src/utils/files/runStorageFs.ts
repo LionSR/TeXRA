@@ -1,15 +1,15 @@
 // Node imports
 import * as path from 'node:path';
-import { promises as fs } from 'node:fs';
+
+// Third-party imports
+import { Effect, FileSystem, PlatformError } from 'effect';
 
 // Local imports
-import { isFileNotFoundError } from '@common/errors';
 import { createLog } from '@logger/logUtils';
 import {
   resolveRunOriginalSnapshotPath,
   resolveRunStoragePath,
   resolveRunStorageRelativePath,
-  RUNS_STORAGE_DIR,
 } from '@platform/defaults/workspaceStorage';
 import {
   RunIdSchema,
@@ -22,8 +22,7 @@ import { getPathSegments } from '@utils/core/pathCore';
 
 // Local file imports
 import { createRunStorageLocation } from './fileLocation';
-import { AbsoluteFS } from './absoluteFS';
-import { isDirectory, isFile, isSymlink } from './fsEntryType';
+import { entryExists, entryTypeIn } from './fsEntryExists';
 
 export const CHANNEL = 'runStorage';
 const log = createLog(CHANNEL);
@@ -56,24 +55,24 @@ export function originalSnapshotPathUnder(
  * exists, so a caller that addresses run storage by relative path (the
  * storage view's own vocabulary) keeps doing so.
  */
-export async function findExistingRunStoragePathUnder(
-  storageRoot: string,
-  ...segments: string[]
-): Promise<string | undefined> {
+export const findExistingRunStoragePathUnder = Effect.fn(
+  'runStorage.findExistingRunStoragePath',
+)(function* (storageRoot: string, ...segments: string[]) {
+  const fs = yield* FileSystem.FileSystem;
   const storagePath = resolveRunStoragePath(...segments);
-  return (await AbsoluteFS.exists(path.join(storageRoot, storagePath)))
+  return (yield* entryExists(fs, path.join(storageRoot, storagePath)))
     ? storagePath
     : undefined;
-}
+});
 
 /** A run's directory under `storageRoot`, when that directory exists. */
-export async function findRunDirUnder(
+export const findRunDirUnder = Effect.fn('runStorage.findRunDir')(function* (
   storageRoot: string,
   id: RunId,
-): Promise<string | undefined> {
-  const rel = await findExistingRunStoragePathUnder(storageRoot, id);
+) {
+  const rel = yield* findExistingRunStoragePathUnder(storageRoot, id);
   return rel ? path.join(storageRoot, rel) : undefined;
-}
+});
 
 type RunStorageEntryInspection =
   | { readonly kind: 'file'; readonly location: RunStorageFileLocation }
@@ -84,26 +83,22 @@ type RunStorageEntryInspection =
   | { readonly kind: 'missing' }
   | { readonly kind: 'invalid'; readonly reason: string };
 
-async function storageEntryType(
-  absolutePath: string,
-): Promise<number | undefined> {
-  try {
-    return (await AbsoluteFS.stat(absolutePath)).type;
-  } catch (error) {
-    if (isFileNotFoundError(error)) return undefined;
-    throw error;
-  }
-}
-
 /**
  * Inspect one run-relative run-storage entry under `storageRoot` without
  * following a workspace-mirror symlink.
  */
-export async function inspectRunStorageEntryUnder(
+export const inspectRunStorageEntryUnder = Effect.fn(
+  'runStorage.inspectRunStorageEntry',
+)(function* (
   storageRoot: string,
   runId: RunId,
   relativePath: string,
-): Promise<RunStorageEntryInspection> {
+): Effect.fn.Return<
+  RunStorageEntryInspection,
+  PlatformError.PlatformError,
+  FileSystem.FileSystem
+> {
+  const fs = yield* FileSystem.FileSystem;
   const posixPath = normalizeFilePath(relativePath);
   const pathSegments = getPathSegments(posixPath);
   if (
@@ -134,38 +129,37 @@ export async function inspectRunStorageEntryUnder(
   ];
   for (const ancestor of ancestors) {
     const ancestorPath = path.join(storageRoot, ancestor);
-    const ancestorType = await storageEntryType(ancestorPath);
+    const ancestorType = yield* entryTypeIn(fs, ancestorPath);
     if (ancestorType === undefined) return { kind: 'missing' };
-    if (isSymlink(ancestorType)) {
+    if (ancestorType === 'SymbolicLink') {
       return { kind: 'symlink', absolutePath: ancestorPath };
     }
-    if (!isDirectory(ancestorType)) {
+    if (ancestorType !== 'Directory') {
       return { kind: 'unsupported', absolutePath: ancestorPath };
     }
   }
 
   const absolutePath = path.join(storageRoot, entry);
-  const type = await storageEntryType(absolutePath);
+  const type = yield* entryTypeIn(fs, absolutePath);
   if (type === undefined) return { kind: 'missing' };
-  if (isSymlink(type)) return { kind: 'symlink', absolutePath };
-  if (isFile(type)) {
+  if (type === 'SymbolicLink') return { kind: 'symlink', absolutePath };
+  if (type === 'File') {
     return {
       kind: 'file',
       location: createRunStorageLocation(absolutePath, normalizedPath, runId),
     };
   }
-  if (isDirectory(type)) return { kind: 'directory', absolutePath };
+  if (type === 'Directory') return { kind: 'directory', absolutePath };
   return { kind: 'unsupported', absolutePath };
-}
+});
 
-/** Create the runs directory and a run's directory under `storageRoot`. */
-export async function ensureRunDirUnder(
-  storageRoot: string,
-  id: RunId,
-): Promise<void> {
-  await AbsoluteFS.ensureDir(path.join(storageRoot, RUNS_STORAGE_DIR));
-  await AbsoluteFS.ensureDir(runDirUnder(storageRoot, id));
-}
+/** Create a run's directory under `storageRoot`, runs directory included. */
+export const ensureRunDirUnder = Effect.fn('runStorage.ensureRunDir')(
+  function* (storageRoot: string, id: RunId) {
+    const fs = yield* FileSystem.FileSystem;
+    yield* fs.makeDirectory(runDirUnder(storageRoot, id), { recursive: true });
+  },
+);
 
 /** An absolute path inside a run's directory under `storageRoot`. */
 export function runStorageAbsolutePathUnder(
@@ -216,24 +210,33 @@ export function runStorageLocationUnder(
   );
 }
 
-export async function ensureParentDir(filePath: string): Promise<void> {
-  const parentDir = path.dirname(filePath);
-  await fs.mkdir(parentDir, { recursive: true });
-}
+export const ensureParentDir = Effect.fn('runStorage.ensureParentDir')(
+  function* (filePath: string) {
+    const fs = yield* FileSystem.FileSystem;
+    yield* fs.makeDirectory(path.dirname(filePath), { recursive: true });
+  },
+);
 
-/** Non-ENOENT stat failures are re-thrown so a permissions error never silently forces a re-copy over a real snapshot. */
-export async function snapshotExists(absolutePath: string): Promise<boolean> {
-  try {
-    await fs.stat(absolutePath);
-    return true;
-  } catch (error) {
-    if (isFileNotFoundError(error)) return false;
-    throw new Error(
-      `Failed to inspect snapshot destination ${absolutePath}: ${toErrorMessage(error)}`,
-      { cause: error },
-    );
-  }
-}
+/** Non-ENOENT stat failures fail the check so a permissions error never silently forces a re-copy over a real snapshot. */
+export const snapshotExists = Effect.fn('runStorage.snapshotExists')(function* (
+  absolutePath: string,
+): Effect.fn.Return<boolean, Error, FileSystem.FileSystem> {
+  const fs = yield* FileSystem.FileSystem;
+  return yield* fs.stat(absolutePath).pipe(
+    Effect.as(true),
+    Effect.catchIf(
+      (error) => error.reason._tag === 'NotFound',
+      () => Effect.succeed(false),
+    ),
+    Effect.mapError(
+      (error) =>
+        new Error(
+          `Failed to inspect snapshot destination ${absolutePath}: ${toErrorMessage(error)}`,
+          { cause: error },
+        ),
+    ),
+  );
+});
 
 /** Errno codes for which symlink creation is unavailable and a copy is used instead. */
 const SYMLINK_UNSUPPORTED_CODES = new Set([
@@ -243,35 +246,41 @@ const SYMLINK_UNSUPPORTED_CODES = new Set([
   'ENOTSUP',
 ]);
 
-export async function createSymlink(
+export const createSymlink = Effect.fn('runStorage.createSymlink')(function* (
   sourceAbsolute: string,
   destination: string,
-): Promise<void> {
-  await ensureParentDir(destination);
-  try {
-    await fs.symlink(sourceAbsolute, destination);
-  } catch (error) {
-    const err = error as NodeJS.ErrnoException;
-    if (err.code === 'EEXIST') {
-      await fs.rm(destination, { recursive: true, force: true });
-      await fs.symlink(sourceAbsolute, destination);
-      return;
-    }
-    if (err.code && SYMLINK_UNSUPPORTED_CODES.has(err.code)) {
-      log.warn(
-        `Falling back to copy ${sourceAbsolute} -> ${destination} due to ${err.code}`,
-      );
-      const stats = await fs.lstat(sourceAbsolute);
-      if (stats.isDirectory()) {
-        await fs.cp(sourceAbsolute, destination, { recursive: true });
-      } else {
-        await fs.copyFile(sourceAbsolute, destination);
+) {
+  const fs = yield* FileSystem.FileSystem;
+  yield* ensureParentDir(destination);
+  yield* fs.symlink(sourceAbsolute, destination).pipe(
+    // One recovery, exactly as the one `catch` it replaces: an existing
+    // destination is replaced (the anti-clobber rule lives with the callers
+    // that decide what may be replaced, never here), a host that cannot make
+    // links copies instead, and a second failure of either propagates rather
+    // than re-entering this branch.
+    Effect.catch((error) => {
+      if (error.reason._tag === 'AlreadyExists') {
+        return fs
+          .remove(destination, { recursive: true, force: true })
+          .pipe(Effect.andThen(fs.symlink(sourceAbsolute, destination)));
       }
-      return;
-    }
-    throw err;
-  }
-}
+      const code = (error.reason.cause as NodeJS.ErrnoException | undefined)
+        ?.code;
+      if (!code || !SYMLINK_UNSUPPORTED_CODES.has(code)) {
+        return Effect.fail(error);
+      }
+      return Effect.gen(function* () {
+        log.warn(
+          `Falling back to copy ${sourceAbsolute} -> ${destination} due to ${code}`,
+        );
+        const sourceType = yield* entryTypeIn(fs, sourceAbsolute);
+        yield* sourceType === 'Directory'
+          ? fs.copy(sourceAbsolute, destination, { overwrite: true })
+          : fs.copyFile(sourceAbsolute, destination);
+      });
+    }),
+  );
+});
 
 /**
  * Workspace-relative directories that should never be moved into run storage.

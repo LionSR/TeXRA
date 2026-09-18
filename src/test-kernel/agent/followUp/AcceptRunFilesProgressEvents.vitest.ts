@@ -20,7 +20,6 @@ import {
 } from '@agent/runtime/SessionHandle';
 import { closeSession } from '@agent/runtime/sessionGraph';
 import { appSignals } from '@eventBus/AppSignals';
-import { FileType, type FileStat } from '@platform/interfaces';
 import { WorkspaceFs } from '@platform/rootedFs';
 import {
   runWithWorkspaceRoots,
@@ -32,7 +31,6 @@ import { installPlatform } from '@test/support/setupPlatform';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { AcceptRunFilesTool } from '@tools/AcceptRunFilesTool';
 import { type ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
 
 // Local file imports
 import { autoDecideRequests, createRecordingHost } from '../progressTestUtils';
@@ -121,6 +119,7 @@ function withStubbedFiles<A, E, R>(program: Effect.Effect<A, E, R>) {
     // One real `Info` to type a declared file with: a stat of a directory
     // that always exists, with only its type asserted.
     const fileInfo = { ...(yield* processFs.stat('/')), type: 'File' as const };
+    const infoOf = (type: FileSystem.File.Type) => ({ ...fileInfo, type });
     return yield* program.pipe(
       Effect.provideService(WorkspaceFs, {
         ...workspaceFs,
@@ -138,12 +137,24 @@ function withStubbedFiles<A, E, R>(program: Effect.Effect<A, E, R>) {
       }),
       Effect.provideService(FileSystem.FileSystem, {
         ...processFs,
-        stat: (target: string) =>
-          absoluteFilePaths.has(target)
-            ? Effect.succeed(fileInfo)
-            : // A path no case named: the real filesystem's own failure, so the
-              // probe's `NotFound` reading sees the `PlatformError` it handles.
-              processFs.stat(target),
+        exists: (target: string) =>
+          runStorageEntries.has(target)
+            ? Effect.succeed(true)
+            : processFs.exists(target),
+        // The entry probe reads a link through `readLink`, so a seeded
+        // symlink answers here and everything else falls through.
+        readLink: (target: string) =>
+          runStorageEntries.get(target) === 'SymbolicLink'
+            ? Effect.succeed(target)
+            : processFs.readLink(target),
+        stat: (target: string) => {
+          if (absoluteFilePaths.has(target)) return Effect.succeed(fileInfo);
+          const seeded = runStorageEntries.get(target);
+          if (seeded !== undefined) return Effect.succeed(infoOf(seeded));
+          // A path no case named: the real filesystem's own failure, so the
+          // probe's `NotFound` reading sees the `PlatformError` it handles.
+          return processFs.stat(target);
+        },
         readFile: (target: string) =>
           Effect.succeed(
             Buffer.from(
@@ -156,37 +167,33 @@ function withStubbedFiles<A, E, R>(program: Effect.Effect<A, E, R>) {
   });
 }
 
-function runStorageStat(type: number): FileStat {
-  return { type, ctime: 0, mtime: 0, size: 1 };
-}
+/**
+ * The run-storage half: each entry the walk probes, by absolute path, with the
+ * type `lstat` reports for it. Run storage is read through the process
+ * filesystem now, so these are seeded in the same stub the absolute reads are.
+ */
+const runStorageEntries = new Map<string, FileSystem.File.Type>();
 
 /** `root` is the storage root the call under test carries as data. */
 function setRunStorageEntries(
-  entries: Readonly<Record<string, number>> = {},
+  entries: Readonly<Record<string, FileSystem.File.Type>> = {},
   root: string = storagePath,
 ): void {
-  const types = new Map<string, number>([
-    [`executions/${runId}`, FileType.Directory],
+  const types = new Map<string, FileSystem.File.Type>([
+    [`executions/${runId}`, 'Directory'],
     ...Object.entries(entries),
   ]);
   for (const entry of Object.keys(entries)) {
     let parent = path.posix.dirname(entry);
     while (parent !== '.' && parent !== `executions/${runId}`) {
-      types.set(parent, FileType.Directory);
+      types.set(parent, 'Directory');
       parent = path.posix.dirname(parent);
     }
   }
-  const rooted = new Map(
-    [...types].map(([target, type]) => [path.join(root, target), type]),
-  );
-  vi.spyOn(AbsoluteFS, 'exists').mockImplementation(async (target) =>
-    rooted.has(target),
-  );
-  vi.spyOn(AbsoluteFS, 'stat').mockImplementation(async (target) => {
-    const type = rooted.get(target);
-    if (type !== undefined) return runStorageStat(type);
-    throw Object.assign(new Error(`Missing: ${target}`), { code: 'ENOENT' });
-  });
+  runStorageEntries.clear();
+  for (const [target, type] of types) {
+    runStorageEntries.set(path.join(root, target), type);
+  }
 }
 
 /** Stubs the workspace side of an accept and returns the write spy. */
@@ -254,7 +261,7 @@ describe('accept_run_files progress events', () => {
       const { written, dispose } = recordWrittenFiles();
 
       setRunStorageEntries({
-        [`executions/${runId}/output.tex`]: FileType.File,
+        [`executions/${runId}/output.tex`]: 'File',
       });
       stubWorkspaceFiles(false, '');
       absoluteContentFallback = 'accepted content';
@@ -281,7 +288,7 @@ describe('accept_run_files progress events', () => {
         const tool = new AcceptRunFilesTool();
 
         setRunStorageEntries({
-          [`executions/${runId}/output.tex`]: FileType.File,
+          [`executions/${runId}/output.tex`]: 'File',
         });
         stubWorkspaceFiles(false, '');
         absoluteContentFallback = 'proposed content';
@@ -310,7 +317,7 @@ describe('accept_run_files progress events', () => {
         const tool = new AcceptRunFilesTool();
 
         setRunStorageEntries({
-          [`executions/${runId}/output.tex`]: FileType.File,
+          [`executions/${runId}/output.tex`]: 'File',
         });
         stubWorkspaceFiles(false, '');
         absoluteContentFallback = 'proposed content';
@@ -332,8 +339,8 @@ describe('accept_run_files progress events', () => {
       const tool = new AcceptRunFilesTool();
 
       setRunStorageEntries({
-        [`executions/${runId}/first.tex`]: FileType.File,
-        [`executions/${runId}/second.tex`]: FileType.File,
+        [`executions/${runId}/first.tex`]: 'File',
+        [`executions/${runId}/second.tex`]: 'File',
       });
       stubWorkspaceFiles(false, '');
       absoluteContentFallback = 'proposed content';
@@ -489,8 +496,7 @@ describe('accept_run_files progress events', () => {
         let approvals = 0;
 
         setRunStorageEntries({
-          [`executions/${runId}/r1/Draft/appendices.tex`]:
-            FileType.SymbolicLink | FileType.File,
+          [`executions/${runId}/r1/Draft/appendices.tex`]: 'SymbolicLink',
         });
         const write = stubWorkspaceFiles(true, '');
         decideToolEdits(() => {

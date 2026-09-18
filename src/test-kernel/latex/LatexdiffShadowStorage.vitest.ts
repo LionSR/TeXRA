@@ -403,11 +403,14 @@ describe('LaTeXdiffService shadow output', () => {
 
     const runId = 'run-1' as RunId;
     const fileService = new RunFileService(runId, workspaceRoots());
-    await fileService.mirrorWorkspaceFile(
-      createWorkspaceLocation(dependencyPath, 'refs/macros.sty'),
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        yield* fileService.mirrorWorkspaceFile(
+          createWorkspaceLocation(dependencyPath, 'refs/macros.sty'),
+        );
+        yield* fileService.ensureMirroredInDiffRoundDir(2);
+      }).pipe(Effect.provide(nodePlatformLayer)),
     );
-
-    await fileService.ensureMirroredInDiffRoundDir(2);
 
     await expect(
       readFile(

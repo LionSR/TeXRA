@@ -120,7 +120,7 @@ export class LatexDiffManager {
       const fs = yield* FileSystem.FileSystem;
       const exists = yield* entryExists(fs, dependencyPath);
       if (!exists) return;
-      yield* fsCall(() => this.fileService.mirrorWorkspaceFile(targetLocation));
+      yield* this.fileService.mirrorWorkspaceFile(targetLocation);
     }).pipe(
       Effect.catch((error) =>
         Effect.sync(() => {
@@ -162,10 +162,8 @@ export class LatexDiffManager {
 
       // Ensure round-dir has symlinks to all mirrored deps so latexdiff's
       // relative \input{} resolution works when its cwd is runDir/r{round}.
-      yield* fsCall(() => this.fileService.ensureMirroredInRoundDir(currRound));
-      yield* fsCall(() =>
-        this.fileService.ensureMirroredInDiffRoundDir(currRound),
-      );
+      yield* this.fileService.ensureMirroredInRoundDir(currRound);
+      yield* this.fileService.ensureMirroredInDiffRoundDir(currRound);
       const relativePath = path.join('diff', `r${currRound}`);
       const diffDirectory: DiffOutputDirectory = {
         absolutePath: path.join(this.fileService.runDirectory, relativePath),

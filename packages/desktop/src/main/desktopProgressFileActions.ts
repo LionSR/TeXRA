@@ -1,6 +1,6 @@
 import path from 'node:path';
 
-import { Cause, Effect, Exit, FileSystem } from 'effect';
+import { Cause, Data, Effect, Exit, FileSystem } from 'effect';
 
 import {
   getHelperModelName,
@@ -36,6 +36,17 @@ import {
 import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
 
 const DESKTOP_LATEXDIFF_CHANNEL = 'DesktopProgressFileActions';
+
+/**
+ * The diff window would not open. Electron's diff surface answers with a
+ * promise and has no failure channel of its own, so this is the one tag the
+ * compare action's lift raises — the file-actions port takes tags, never a
+ * bare rejection.
+ */
+class DiffViewUnavailable extends Data.TaggedError('DiffViewUnavailable')<{
+  readonly message: string;
+  readonly cause: unknown;
+}> {}
 
 type DesktopProgressFileActionUi = Pick<
   DesktopAgentRunHost,
@@ -92,52 +103,61 @@ export class DesktopProgressFileActions {
     private readonly host: DesktopProgressFileActionHost,
   ) {}
 
-  async compareFiles(baseFile: string, editedFile: string): Promise<void> {
-    await this.ui.openDiff(
-      { filePath: baseFile },
-      { filePath: editedFile },
-      `Compare: ${path.basename(editedFile)} <-> ${path.basename(baseFile)}`,
-    );
+  compareFiles(
+    baseFile: string,
+    editedFile: string,
+  ): Effect.Effect<void, DiffViewUnavailable> {
+    return Effect.tryPromise({
+      try: () =>
+        this.ui.openDiff(
+          { filePath: baseFile },
+          { filePath: editedFile },
+          `Compare: ${path.basename(editedFile)} <-> ${path.basename(baseFile)}`,
+        ),
+      catch: (cause) =>
+        new DiffViewUnavailable({ message: toErrorMessage(cause), cause }),
+    });
   }
 
-  async runMergeFile(baseFile: string, editedFile: string): Promise<void> {
-    const validation = validateRunRequest({
-      config: {
-        agent: 'merge',
-        model: getHelperModelName(this.host.globalState),
-        inputFiles: [baseFile],
-        editedFile,
-      },
+  runMergeFile(
+    baseFile: string,
+    editedFile: string,
+  ): Effect.Effect<void, Rejected> {
+    return Effect.gen({ self: this }, function* () {
+      const validation = validateRunRequest({
+        config: {
+          agent: 'merge',
+          model: getHelperModelName(this.host.globalState),
+          inputFiles: [baseFile],
+          editedFile,
+        },
+      });
+      if (!validation.valid) {
+        yield* this.ui.showErrorMessage(`Merge: ${validation.message}`);
+        return;
+      }
+      this.host.startRun(validation.request);
     });
-    if (!validation.valid) {
-      await this.host.runtime.runPromise(
-        this.ui.showErrorMessage(`Merge: ${validation.message}`),
-      );
-      return;
-    }
-    this.host.startRun(validation.request);
   }
 
   /**
-   * The bridge's Promise face over the host-neutral accept sequence: its reads
-   * and writes are the sequence's own, against the `FileSystem` the window's
-   * runtime carries, so this settles the whole program in one place.
+   * The host-neutral accept sequence, as this bridge's own program: its reads
+   * and writes are the sequence's, against the `FileSystem` the request that
+   * yields it already carries, so nothing settles here.
    */
-  acceptEditedFile(baseFile: string, editedFile: string): Promise<boolean> {
-    return this.host.runtime.runPromise(
-      acceptEditedFileReplace(
-        pathToLocationIn(this.host.session.roots.workspace, baseFile),
-        pathToLocationIn(this.host.session.roots.workspace, editedFile),
-        {
-          confirm: (message) =>
-            Effect.promise(() => this.ui.confirmAcceptFile(message)),
-          emitWritten: (absolutePath) =>
-            appSignals.emit('workspaceFilesWritten', {
-              absolutePaths: [absolutePath],
-            }),
-          showInfo: (message) => this.ui.showInfoMessage(message),
-        },
-      ),
+  acceptEditedFile(baseFile: string, editedFile: string) {
+    return acceptEditedFileReplace(
+      pathToLocationIn(this.host.session.roots.workspace, baseFile),
+      pathToLocationIn(this.host.session.roots.workspace, editedFile),
+      {
+        confirm: (message) =>
+          Effect.promise(() => this.ui.confirmAcceptFile(message)),
+        emitWritten: (absolutePath) =>
+          appSignals.emit('workspaceFilesWritten', {
+            absolutePaths: [absolutePath],
+          }),
+        showInfo: (message) => this.ui.showInfoMessage(message),
+      },
     );
   }
 
