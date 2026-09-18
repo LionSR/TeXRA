@@ -2,6 +2,7 @@
 import * as path from 'node:path';
 
 // Third-party imports
+import { Effect } from 'effect';
 
 // Local imports - platform
 import type {
@@ -11,7 +12,6 @@ import type {
 
 // Local imports - shared
 import type { AgentCategory, AgentSource } from '@shared/schemas';
-import { Effect } from 'effect';
 
 import type { TemplateAgentFilePlan } from './backend/templateAgentCreation';
 

@@ -18,6 +18,7 @@ import {
   SettingsAgentCatalogController,
   type SettingsAgentCatalogState,
 } from '@controllers/settingsView/SettingsAgentCatalogController';
+import type { AgentDirectoriesFailed } from '@platform/interfaces';
 import {
   agentKey,
   type AgentCategory,
@@ -25,7 +26,6 @@ import {
 } from '@shared/schemas';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 
-import type { AgentDirectoriesFailed } from '@platform/interfaces';
 import type { SettingsStatePorts } from '@shared/settingsView/types';
 import type { Effect } from 'effect';
 
