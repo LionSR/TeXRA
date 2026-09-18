@@ -130,15 +130,15 @@ const BARE_EFFECT_RUN_SITES: Readonly<Record<string, number>> = {
   // outermost boundary of the process, so there is nothing above it to run on
   // and no runtime left once the drain has disposed the process one.
   'packages/cli/src/bin/texra.ts': 1,
-  // `loadCliStartupConfig`, the CLI config provider's pre-runtime edge, whose
-  // one caller is `buildCliContext`: it opens the project and user
+  // `contextFromArgs`, the CLI's pre-runtime context edge: the one program it
+  // runs builds the whole `CliContext`, which opens the project and user
   // `config.json` stores BEFORE `initCliPlatform` (and with it
   // `installCliProcessRuntime`), so no process runtime exists to borrow; the
   // program needs the filesystem and nothing else. `initCliPlatform` installs
   // that same provider as the workspace roots' config, so every post-init
   // reader resolves its rows through the roots rather than coming through
-  // here.
-  'packages/cli/src/runtime/cliConfig.ts': 1,
+  // here. Its four citty callers take the resolved context as a value.
+  'packages/cli/src/commands/_helpers/context.ts': 1,
   // The CLI's process-runtime install, which opens the global state store it
   // provides as `AppState` before it installs the runtime that serves it:
   // the service takes the store as a value, so the open cannot run on the

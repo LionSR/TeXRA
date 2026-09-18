@@ -53,10 +53,12 @@ const tempDirs = useTempDirs();
  * assertion. Tests that exercise the user layer pass their own `storageRoot`.
  */
 async function cliContext(init: BuildCliContextInit): Promise<CliContext> {
-  return buildCliContext({
-    storageRoot: await makeTempDir('texra-cli-storage-', tempDirs),
-    ...init,
-  });
+  return Effect.runPromise(
+    buildCliContext({
+      storageRoot: await makeTempDir('texra-cli-storage-', tempDirs),
+      ...init,
+    }),
+  );
 }
 
 async function workspaceWithConfig(config: string): Promise<string> {
@@ -299,7 +301,7 @@ describe('CLI --cwd validation', () => {
   it('accepts an existing directory and returns its realpath', async () => {
     const workspace = await makeTempDir('texra-cli-cwd-', tempDirs);
 
-    await expect(resolveCliCwd(workspace)).resolves.toBe(
+    await expect(Effect.runPromise(resolveCliCwd(workspace))).resolves.toBe(
       canonicalizeWorkspacePath(workspace),
     );
   });
@@ -309,7 +311,7 @@ describe('CLI --cwd validation', () => {
     const workspace = join(root, 'workspace ');
     await mkdir(workspace);
 
-    await expect(resolveCliCwd(workspace)).resolves.toBe(
+    await expect(Effect.runPromise(resolveCliCwd(workspace))).resolves.toBe(
       canonicalizeWorkspacePath(workspace),
     );
   });
@@ -317,8 +319,11 @@ describe('CLI --cwd validation', () => {
   it('rejects a --cwd path that does not exist', async () => {
     const missing = join(tmpdir(), 'texra-cli-cwd-missing-' + Date.now());
 
-    await expect(resolveCliCwd(missing)).rejects.toBeInstanceOf(CliUsageError);
-    await expect(resolveCliCwd(missing)).rejects.toThrow(/does not exist/);
+    const failure = await Effect.runPromise(
+      Effect.flip(resolveCliCwd(missing)),
+    );
+    expect(failure).toBeInstanceOf(CliUsageError);
+    expect(failure.message).toMatch(/does not exist/);
   });
 
   it('rejects a --cwd path that points at a file', async () => {
@@ -326,15 +331,18 @@ describe('CLI --cwd validation', () => {
     const filePath = join(workspace, 'config.json');
     await writeFile(filePath, '{}');
 
-    await expect(resolveCliCwd(filePath)).rejects.toBeInstanceOf(CliUsageError);
-    await expect(resolveCliCwd(filePath)).rejects.toThrow(/not a directory/);
+    const failure = await Effect.runPromise(
+      Effect.flip(resolveCliCwd(filePath)),
+    );
+    expect(failure).toBeInstanceOf(CliUsageError);
+    expect(failure.message).toMatch(/not a directory/);
   });
 
   it('falls back to process.cwd() when no --cwd flag is given', async () => {
     // The shell can't put us in a missing directory, so the no-flag path
     // intentionally skips validation. Trim any platform realpath canonical-
     // ization for the comparison.
-    const result = await resolveCliCwd(undefined);
+    const result = await Effect.runPromise(resolveCliCwd(undefined));
     expect(result).toBe(await realpath(process.cwd()));
   });
 

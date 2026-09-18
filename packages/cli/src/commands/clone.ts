@@ -64,9 +64,9 @@ function buildOverleafClonePorts(
           );
         }
         if (tokenGuidance) writeTextStderr(tokenGuidance);
-        const token = yield* Effect.promise(() =>
-          askCliQuestion(`${spec.tokenTitle}: `, { hidden: true }),
-        );
+        const token = yield* askCliQuestion(`${spec.tokenTitle}: `, {
+          hidden: true,
+        });
         return token.trim() || null;
       }),
     showInvalidToken: (_spec, message) =>

@@ -107,17 +107,19 @@ export function isCliApiSwitchableRetry(payload: RetryPermission): boolean {
 const askCliApprovalQuestion = Effect.fn(
   'approvalPrompts.askCliApprovalQuestion',
 )(function* (context: CliContext, request: CliPromptRequest) {
-  return yield* Effect.tryPromise({
-    try: async () =>
-      context.approvalPrompt
-        ? context.approvalPrompt(request)
-        : askCliQuestion(
-            request.summary
-              ? `${request.summary}\n${request.prompt}`
-              : request.prompt,
-          ),
-    catch: (cause) => cause as Error,
-  });
+  // The injected prompt is a Promise port the tests supply; the terminal
+  // prompt is already an Effect, so only the former needs a lift.
+  const injected = context.approvalPrompt;
+  return injected
+    ? yield* Effect.tryPromise({
+        try: () => injected(request),
+        catch: (cause) => cause as Error,
+      })
+    : yield* askCliQuestion(
+        request.summary
+          ? `${request.summary}\n${request.prompt}`
+          : request.prompt,
+      );
 });
 
 interface ParsedApprovalAnswer {
