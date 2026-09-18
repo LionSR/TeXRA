@@ -84,7 +84,7 @@ function languageModelPort(
 ): LanguageModelPort {
   return {
     isAvailable: () => true,
-    selectModels: vi.fn(async () => models),
+    selectModels: vi.fn(() => Effect.succeed(models)),
     onDidChange: () => ({ dispose() {} }),
   };
 }
@@ -100,9 +100,7 @@ async function installModels(
 function failingDiscoveryPort(): LanguageModelPort {
   return {
     ...languageModelPort([]),
-    selectModels: async () => {
-      throw new Error('native discovery failed');
-    },
+    selectModels: () => Effect.fail(new Error('native discovery failed')),
   };
 }
 
@@ -241,7 +239,7 @@ describe('runtime model registry', () => {
       {
         languageModel: {
           ...languageModelPort([]),
-          selectModels: () => discovery.promise,
+          selectModels: () => Effect.promise(() => discovery.promise),
         },
       },
     );

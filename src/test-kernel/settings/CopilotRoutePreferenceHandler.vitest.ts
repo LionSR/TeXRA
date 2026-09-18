@@ -102,7 +102,7 @@ function languageModelPort(
 ): LanguageModelPort {
   return {
     isAvailable: () => true,
-    selectModels: vi.fn(async () => models),
+    selectModels: vi.fn(() => Effect.succeed(models)),
     onDidChange: () => ({ dispose() {} }),
   };
 }
@@ -242,7 +242,7 @@ describe('Copilot route preference handler', () => {
       let models: readonly LanguageModelInfo[] = [GEMINI_PRO];
       const port = {
         ...languageModelPort([]),
-        selectModels: vi.fn(async () => models),
+        selectModels: vi.fn(() => Effect.succeed(models)),
       };
       await installPlatform({}, { languageModel: port });
       await testRuntime().runPromise(refreshRuntimeModelRegistry());
@@ -267,8 +267,10 @@ describe('Copilot route preference handler', () => {
     await testRuntime().runPromise(refreshRuntimeModelRegistry());
     const forced = createDeferred<readonly LanguageModelInfo[]>();
     vi.mocked(port.selectModels)
-      .mockReturnValueOnce(forced.promise)
-      .mockResolvedValueOnce([{ ...GEMINI_PRO, access: 'unavailable' }]);
+      .mockReturnValueOnce(Effect.promise(() => forced.promise))
+      .mockReturnValueOnce(
+        Effect.succeed([{ ...GEMINI_PRO, access: 'unavailable' }]),
+      );
     const request = requestModelAccess();
     await vi.waitFor(() => expect(port.selectModels).toHaveBeenCalledTimes(2));
     invalidateRuntimeModelRegistry();
@@ -285,8 +287,8 @@ describe('Copilot route preference handler', () => {
     const forced = createDeferred<readonly LanguageModelInfo[]>();
     const retry = createDeferred<readonly LanguageModelInfo[]>();
     vi.mocked(port.selectModels)
-      .mockReturnValueOnce(forced.promise)
-      .mockReturnValueOnce(retry.promise);
+      .mockReturnValueOnce(Effect.promise(() => forced.promise))
+      .mockReturnValueOnce(Effect.promise(() => retry.promise));
     const request = requestModelAccess();
     await vi.waitFor(() => expect(port.selectModels).toHaveBeenCalledTimes(2));
     invalidateRuntimeModelRegistry();
@@ -306,9 +308,9 @@ describe('Copilot route preference handler', () => {
     const port = {
       ...languageModelPort([]),
       selectModels: vi
-        .fn<() => Promise<readonly LanguageModelInfo[]>>()
-        .mockReturnValueOnce(ordinary.promise)
-        .mockReturnValueOnce(forced.promise),
+        .fn<() => Effect.Effect<readonly LanguageModelInfo[], unknown>>()
+        .mockReturnValueOnce(Effect.promise(() => ordinary.promise))
+        .mockReturnValueOnce(Effect.promise(() => forced.promise)),
     };
     await installPlatform({}, { languageModel: port });
     const stale = testRuntime().runPromise(refreshRuntimeModelRegistry());
@@ -327,7 +329,9 @@ describe('Copilot route preference handler', () => {
     const port = await installModels(GEMINI_PRO);
     await testRuntime().runPromise(refreshRuntimeModelRegistry());
     const discovery = createDeferred<readonly LanguageModelInfo[]>();
-    vi.mocked(port.selectModels).mockReturnValueOnce(discovery.promise);
+    vi.mocked(port.selectModels).mockReturnValueOnce(
+      Effect.promise(() => discovery.promise),
+    );
     const first = requestModelAccess();
     const second = requestModelAccess();
     await vi.waitFor(() => expect(port.selectModels).toHaveBeenCalledTimes(2));
@@ -342,10 +346,9 @@ describe('Copilot route preference handler', () => {
     let fail = false;
     const port = {
       ...languageModelPort([]),
-      selectModels: vi.fn(async () => {
-        if (fail) throw failure;
-        return [GEMINI_PRO];
-      }),
+      selectModels: vi.fn(() =>
+        fail ? Effect.fail(failure) : Effect.succeed([GEMINI_PRO]),
+      ),
     };
     await installPlatform({}, { languageModel: port });
     await testRuntime().runPromise(refreshRuntimeModelRegistry());

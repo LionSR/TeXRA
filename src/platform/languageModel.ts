@@ -1,4 +1,4 @@
-import { Context, Layer } from 'effect';
+import { Context, Effect, Layer } from 'effect';
 
 // Local imports - platform
 import type { Disposable } from './interfaces';
@@ -38,7 +38,7 @@ export interface LanguageModelPort {
   isAvailable(): boolean;
   selectModels(
     selector?: LanguageModelSelector,
-  ): Promise<readonly LanguageModelInfo[]>;
+  ): Effect.Effect<readonly LanguageModelInfo[], unknown>;
   /**
    * The host's catalogue or the caller's access to it changed. One event,
    * because every consumer recomputes the same derived value from both:
@@ -51,7 +51,7 @@ export interface LanguageModelPort {
 export const UNAVAILABLE_LANGUAGE_MODEL_PORT: LanguageModelPort = Object.freeze(
   {
     isAvailable: () => false,
-    selectModels: async () => [],
+    selectModels: () => Effect.succeed([]),
     onDidChange: () => ({ dispose() {} }),
   },
 );

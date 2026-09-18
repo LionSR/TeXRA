@@ -98,12 +98,9 @@ const discoverCopilotRoutes = Effect.fn(
   const languageModel = yield* LanguageModel;
   if (!languageModel.isAvailable()) return new Map<string, CopilotModelRoute>();
 
-  const discovered = yield* Effect.tryPromise({
-    // The port's own rejection travels as the failure, so a caller waiting on
-    // this discovery sees the error the host raised, not a wrapped one.
-    try: () => languageModel.selectModels({ vendor: 'copilot' }),
-    catch: (cause) => cause,
-  });
+  // The port's own failure travels on unchanged, so a caller waiting on this
+  // discovery sees the error the host raised, not a wrapped one.
+  const discovered = yield* languageModel.selectModels({ vendor: 'copilot' });
   const entries = new Map<string, CopilotModelRoute>();
   for (const info of discovered.toSorted((left, right) =>
     right.version.localeCompare(left.version),
