@@ -368,17 +368,6 @@ const DEFAULT_TIKZ_TEMPLATE =
   '\\end{document}';
 
 /**
- * Every config-file-backed setting, keyed by its dotted path under `texra.`.
- *
- * All three hosts read `.texra/config.json` and that storage is flat, so the
- * key and the slot are derived rather than restated; a row carries the schema
- * (with its `.prefault()` default), the copy, who honors it, and which UI
- * renders it — exactly the shape every state-backed row below already uses.
- *
- * The record's own declaration order is the catalog order, including the
- * Models tab's control order: reordering these keys reorders that UI.
- */
-/**
  * The terminal client's own `.texra/config.json` rows: which agent and model a
  * command starts with, and how it prints. Every host stores them in the same
  * config tree, but only the CLI runtime reads them, so only `honoredBy.cli` is
@@ -398,6 +387,17 @@ const CliCommandDefaultsSchema = z
   .object({ agent: CliAgentSchema, model: CliModelSchema })
   .optional();
 
+/**
+ * Every config-file-backed setting, keyed by its dotted path under `texra.`.
+ *
+ * All three hosts read `.texra/config.json` and that storage is flat, so the
+ * key and the slot are derived rather than restated; a row carries the schema
+ * (with its `.prefault()` default), the copy, who honors it, and which UI
+ * renders it — exactly the shape every state-backed row below already uses.
+ *
+ * The record's own declaration order is the catalog order, including the
+ * Models tab's control order: reordering these keys reorders that UI.
+ */
 const CORE_SETTING_ROWS: Record<
   string,
   Omit<StateSettingEntry, 'key' | 'slots'>
