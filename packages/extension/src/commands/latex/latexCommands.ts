@@ -27,9 +27,14 @@ import { AgentCategory } from '@shared/schemas';
 
 const log = createLog(CHANNEL);
 
-export async function handleIndentTeX(session: SessionHandle): Promise<void> {
+export async function handleIndentTeX(
+  session: SessionHandle,
+  runtime: ProcessRuntime,
+): Promise<void> {
   try {
-    const result = await indentLatexFilesInDirectory(session.roots.workspace);
+    const result = await runtime.runPromise(
+      indentLatexFilesInDirectory(session.roots.workspace),
+    );
     switch (result.status) {
       case 'missing-config':
         await showLoggedMessage(
@@ -55,6 +60,7 @@ export async function handleIndentTeX(session: SessionHandle): Promise<void> {
 
 export async function handleFixCompilation(
   session: SessionHandle,
+  runtime: ProcessRuntime,
 ): Promise<void> {
   await runGuardedLatexCommand(
     session,
@@ -75,10 +81,12 @@ export async function handleFixCompilation(
           // latexFixer is a tool-use agent; without this the config category
           // prefaults to workflow and resolveAgentForLaunch can't find it.
           agentCategory: AgentCategory.ToolUse,
-          instruction: await buildLatexdiffAwareFixInstruction(
-            `Fix the LaTeX compilation errors in ${relativePath}.`,
-            editor.document.fileName,
-            session.roots.workspace,
+          instruction: await runtime.runPromise(
+            buildLatexdiffAwareFixInstruction(
+              `Fix the LaTeX compilation errors in ${relativePath}.`,
+              editor.document.fileName,
+              session.roots.workspace,
+            ),
           ),
         },
         // This is a "run latexFixer" command, so prefer the helper model.
@@ -90,6 +98,7 @@ export async function handleFixCompilation(
 
 export async function handleIndentCurrentTeX(
   session: SessionHandle,
+  runtime: ProcessRuntime,
 ): Promise<void> {
   await runGuardedLatexCommand(
     session,
@@ -114,10 +123,12 @@ export async function handleIndentCurrentTeX(
         return;
       }
 
-      const success = await formatter.run(
-        relativePath,
-        session.roots.workspace,
-        formatter.configPath,
+      const success = await runtime.runPromise(
+        formatter.run(
+          relativePath,
+          session.roots.workspace,
+          formatter.configPath,
+        ),
       );
 
       if (success) {

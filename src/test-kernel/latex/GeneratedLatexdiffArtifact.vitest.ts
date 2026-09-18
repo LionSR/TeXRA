@@ -1,6 +1,8 @@
 import * as path from 'node:path';
 
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
+import { it as effectIt } from '@effect/vitest';
+import { Effect, FileSystem } from 'effect';
 
 import {
   buildBetweenRoundDiffSuffix,
@@ -8,7 +10,7 @@ import {
   detectGeneratedLatexdiffArtifact,
   parseVersionControlDiffFilename,
 } from '@latex/latexdiff/diffFileNameManager';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
+import { nodePlatformLayer } from '@test/support/fsTestUtils';
 
 describe('detectGeneratedLatexdiffArtifact', () => {
   it.each([
@@ -79,51 +81,63 @@ describe('parseVersionControlDiffFilename', () => {
 });
 
 describe('buildLatexdiffAwareFixInstruction', () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
+  effectIt.live(
+    'leaves the base instruction untouched for a plain source file',
+    () =>
+      Effect.gen(function* () {
+        const base = 'Fix the LaTeX compilation errors in main.tex.';
+        expect(
+          yield* buildLatexdiffAwareFixInstruction(
+            base,
+            '/paper/main.tex',
+            '/paper',
+          ),
+        ).toBe(base);
+      }).pipe(Effect.provide(nodePlatformLayer)),
+  );
 
-  it('leaves the base instruction untouched for a plain source file', async () => {
-    const base = 'Fix the LaTeX compilation errors in main.tex.';
-    expect(
-      await buildLatexdiffAwareFixInstruction(
-        base,
-        '/paper/main.tex',
-        '/paper',
-      ),
-    ).toBe(base);
-  });
+  effectIt.live(
+    'adds latexdiff-artifact guidance when the inferred source exists',
+    () =>
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const root = yield* fs.makeTempDirectoryScoped({
+          prefix: 'texra-latexdiff-fix-',
+        });
+        yield* fs.writeFileString(path.join(root, 'main.tex'), '');
+        const base =
+          'Fix the LaTeX compilation errors in main-diffea268c1.tex.';
 
-  it('adds latexdiff-artifact guidance when the inferred source exists', async () => {
-    vi.spyOn(AbsoluteFS, 'exists').mockResolvedValue(true);
-    const base = 'Fix the LaTeX compilation errors in main-diffea268c1.tex.';
+        const instruction = yield* buildLatexdiffAwareFixInstruction(
+          base,
+          path.join(root, 'main-diffea268c1.tex'),
+          root,
+        );
 
-    const instruction = await buildLatexdiffAwareFixInstruction(
-      base,
-      '/paper/main-diffea268c1.tex',
-      '/paper',
-    );
+        expect(instruction).toBe(
+          [
+            base,
+            'This file is a latexdiff artifact generated from main.tex.',
+            'If an error comes from broken latexdiff markup (\\DIFadd/\\DIFdel or the DIF preamble blocks), repair the markup in place and keep the diff annotations intact.',
+            'If an error originates in the original source document, fix the source too so a regenerated diff stays fixed.',
+          ].join(' '),
+        );
+      }).pipe(Effect.scoped, Effect.provide(nodePlatformLayer)),
+  );
 
-    expect(instruction).toBe(
-      [
-        base,
-        'This file is a latexdiff artifact generated from main.tex.',
-        'If an error comes from broken latexdiff markup (\\DIFadd/\\DIFdel or the DIF preamble blocks), repair the markup in place and keep the diff annotations intact.',
-        'If an error originates in the original source document, fix the source too so a regenerated diff stays fixed.',
-      ].join(' '),
-    );
-  });
+  effectIt.live(
+    'treats a bare `_diff` suffix as a real filename when no source exists',
+    () =>
+      Effect.gen(function* () {
+        const base = 'Fix the LaTeX compilation errors in revised_diff.tex.';
 
-  it('treats a bare `_diff` suffix as a real filename when no source exists', async () => {
-    vi.spyOn(AbsoluteFS, 'exists').mockResolvedValue(false);
-    const base = 'Fix the LaTeX compilation errors in revised_diff.tex.';
-
-    expect(
-      await buildLatexdiffAwareFixInstruction(
-        base,
-        '/paper/revised_diff.tex',
-        '/paper',
-      ),
-    ).toBe(base);
-  });
+        expect(
+          yield* buildLatexdiffAwareFixInstruction(
+            base,
+            '/paper/revised_diff.tex',
+            '/paper',
+          ),
+        ).toBe(base);
+      }).pipe(Effect.provide(nodePlatformLayer)),
+  );
 });

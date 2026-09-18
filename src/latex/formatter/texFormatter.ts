@@ -1,3 +1,5 @@
+// Third-party imports
+
 // Local imports - formatter implementations
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { getConfig } from '@utils/config/configUtils';
@@ -6,6 +8,7 @@ import { readPlatformSetting } from '@utils/config/platformSettings';
 // Local file imports
 import { LATEXINDENT_CONFIG_KEY, runLatexIndent } from './latexindentpt';
 import { TEXFMT_CONFIG_KEY, runTexFmt } from './texfmt';
+import type { Effect, FileSystem } from 'effect';
 
 interface LatexFormatterDefinition {
   /** Setting value that selects this formatter. */
@@ -16,7 +19,7 @@ interface LatexFormatterDefinition {
     filePath: string,
     workspaceRoot: string | undefined,
     configPath?: string,
-  ): Promise<boolean>;
+  ): Effect.Effect<boolean, never, FileSystem.FileSystem>;
 }
 
 export interface LatexFormatter extends LatexFormatterDefinition {

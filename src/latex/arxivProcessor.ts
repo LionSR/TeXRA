@@ -91,23 +91,9 @@ const downloadBackoff = Schedule.exponential(Duration.seconds(1)).pipe(
 );
 
 /**
- * Wrap a foreign Promise edge (tar, the formatter) as a permanent failure:
- * only the download attempt itself is retried, so nothing else has a retry
- * loop to abort.
- */
-const permanent = <T>(
-  run: () => Promise<T>,
-): Effect.Effect<T, ArxivSourcePermanentError> =>
-  Effect.tryPromise({
-    try: run,
-    catch: (cause) =>
-      new ArxivSourcePermanentError({ message: toErrorMessage(cause) }),
-  });
-
-/**
- * {@link permanent}'s envelope around a filesystem step taken from context —
- * the same classification, for the operations that are Effects rather than
- * Promises: a failed read, write or rename is permanent too.
+ * Classify a step outside the download attempt as a permanent failure: only
+ * the attempt itself is retried, so nothing else has a retry loop to abort.
+ * A failed read, write, rename or format run ends the run as it stands.
  */
 const permanentFs = <T, R>(
   effect: Effect.Effect<T, PlatformError.PlatformError, R>,
@@ -549,7 +535,7 @@ class ArxivSourceProcessor {
       if (autoIndent && !isRoot) {
         progressCallback?.('Formatting LaTeX files...', 85);
 
-        const indentResult = yield* permanent(() =>
+        const indentResult = yield* permanentFs(
           indentLatexFilesInDirectory(
             workspaceRoot,
             paperDirFull,

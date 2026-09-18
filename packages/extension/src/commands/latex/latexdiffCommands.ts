@@ -56,7 +56,7 @@ import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { pathToLocationIn } from '@utils/files/fileLocation';
 import { checkToolInstalled } from '@utils/system/toolUtils';
-import type { Effect } from 'effect';
+import type { Effect, FileSystem } from 'effect';
 
 const log = createLog(CHANNEL);
 
@@ -264,7 +264,9 @@ async function prepareLatexdiffResultsAndScheduleViewer(
 async function runDiffAndOpen(
   session: SessionHandle,
   toolLabel: string,
-  runDiff: (mathMarkup: MathMarkupOption) => Effect.Effect<LaTeXdiffResult>,
+  runDiff: (
+    mathMarkup: MathMarkupOption,
+  ) => Effect.Effect<LaTeXdiffResult, never, FileSystem.FileSystem>,
   runtime: ProcessRuntime,
 ): Promise<void> {
   const mathMarkup = await promptForLatexdiffMathMarkup();

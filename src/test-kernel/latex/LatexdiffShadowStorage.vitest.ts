@@ -135,7 +135,7 @@ describe('LaTeXdiffService shadow output', () => {
             ),
           ),
         ).toBe('ENOENT');
-      }),
+      }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
   // A run holds its session roots as data: on the desktop they differ from
@@ -180,7 +180,7 @@ describe('LaTeXdiffService shadow output', () => {
           expect.arrayContaining(['--math-markup=off']),
           expect.anything(),
         );
-      }),
+      }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
   it.effect('generates between-round diffs for modern run-storage paths', () =>
@@ -324,7 +324,7 @@ describe('LaTeXdiffService shadow output', () => {
         expect(diff).toContain('\\bibliography{library}');
         expect(diff).not.toContain('\\begin{thebibliography}');
         expect(diff).not.toContain('\\DIFadd{1}');
-      }),
+      }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
   it.effect(
@@ -388,7 +388,7 @@ describe('LaTeXdiffService shadow output', () => {
         expect(diff).not.toContain('\\DIFadd{1}');
         expect(diff).not.toContain('DIFAUXCMD');
         expect(diff).not.toContain('\\providecommand \\DIFadd');
-      }),
+      }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
   it('mirrors workspace dependencies into diff round storage', async () => {
@@ -454,6 +454,9 @@ describe('LaTeXdiffService logger channel', () => {
           'One or both files do not exist',
         ),
       ).toBe(true);
-    }).pipe(Effect.provide(effectDiagnosticsLayer)),
+    }).pipe(
+      Effect.provide(effectDiagnosticsLayer),
+      Effect.provide(nodePlatformLayer),
+    ),
   );
 });

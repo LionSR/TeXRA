@@ -1,13 +1,12 @@
-import { Effect } from 'effect';
+import { Effect, FileSystem, PlatformError } from 'effect';
 
 import type { ConfigProvider } from '@platform/interfaces';
 import replacementEngine, {
   type ReplacementConfigRead,
 } from '@replacement/engine';
 import type { FileLocation } from '@shared/schemas';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { readConfig } from '@utils/config/configUtils';
-import { ensureError } from '@utils/errors/errorMessage';
+import { readNormalizedFile } from '@utils/files/fsDurability';
 
 /** LaTeX starred math environments that need label removal during diff processing. */
 const STAR_ENVIRONMENTS = [
@@ -77,17 +76,15 @@ export class DiffFileProcessor {
   processDiffFile(
     diffFileLocation: FileLocation,
     editedFileLocation?: FileLocation,
-  ): Effect.Effect<void, Error> {
+  ): Effect.Effect<void, PlatformError.PlatformError, FileSystem.FileSystem> {
     return Effect.gen({ self: this }, function* () {
-      const content = yield* Effect.tryPromise({
-        try: () => AbsoluteFS.read(diffFileLocation.absolutePath),
-        catch: ensureError,
-      });
+      const fs = yield* FileSystem.FileSystem;
+      const content = yield* readNormalizedFile(
+        fs,
+        diffFileLocation.absolutePath,
+      );
       const editedContent = editedFileLocation
-        ? yield* Effect.tryPromise({
-            try: () => AbsoluteFS.read(editedFileLocation.absolutePath),
-            catch: ensureError,
-          })
+        ? yield* readNormalizedFile(fs, editedFileLocation.absolutePath)
         : undefined;
       let processedContent = this.restoreFlattenedBibliography(
         content,
@@ -102,11 +99,10 @@ export class DiffFileProcessor {
       for (const [pattern, replacement] of DOCUMENT_END_FIXES) {
         processedContent = processedContent.replace(pattern, replacement);
       }
-      yield* Effect.tryPromise({
-        try: () =>
-          AbsoluteFS.write(diffFileLocation.absolutePath, processedContent),
-        catch: ensureError,
-      });
+      yield* fs.writeFileString(
+        diffFileLocation.absolutePath,
+        processedContent,
+      );
     });
   }
 

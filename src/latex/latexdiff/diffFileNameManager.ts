@@ -1,7 +1,9 @@
 // Standard library imports
 import * as path from 'node:path';
 
-import { AbsoluteFS } from '@utils/files/absoluteFS';
+import { Effect, FileSystem } from 'effect';
+
+import { entryExists } from '@utils/files/fsEntryExists';
 import { workspaceRelativePath } from '@utils/files/workspaceFS';
 import { COMMIT_HASH_HEX_RANGE } from '@utils/git/commitHashPattern';
 
@@ -134,15 +136,18 @@ export function parseVersionControlDiffFilename(
  * caller's own session root, held as data. `undefined` (no folder open)
  * leaves the hint on the path the caller already has.
  */
-export async function buildLatexdiffAwareFixInstruction(
+export const buildLatexdiffAwareFixInstruction = Effect.fn(
+  'latexdiff.buildLatexdiffAwareFixInstruction',
+)(function* (
   base: string,
   activeFilePath: string,
   workspaceRoot: string | undefined,
-): Promise<string> {
+) {
   const artifact = detectGeneratedLatexdiffArtifact(activeFilePath);
   if (!artifact) return base;
 
-  const sourceExists = await AbsoluteFS.exists(artifact.sourcePath);
+  const fs = yield* FileSystem.FileSystem;
+  const sourceExists = yield* entryExists(fs, artifact.sourcePath);
   // A user may legitimately keep a source file named chapter_diff.tex. Treat
   // a plain `_diff` suffix as generated only when the inferred source exists.
   if (artifact.kind === 'workspaceDiff' && !sourceExists) {
@@ -158,4 +163,4 @@ export async function buildLatexdiffAwareFixInstruction(
     'If an error comes from broken latexdiff markup (\\DIFadd/\\DIFdel or the DIF preamble blocks), repair the markup in place and keep the diff annotations intact.',
     'If an error originates in the original source document, fix the source too so a regenerated diff stays fixed.',
   ].join(' ');
-}
+});
