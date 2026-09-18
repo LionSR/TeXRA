@@ -15,7 +15,9 @@ function createAuth(
   secrets: SessionSecretStore,
   whenReady?: () => Promise<void>,
 ): SupabaseAuthShape {
-  return createSupabaseAuth({ secrets, ...(whenReady ? { whenReady } : {}) });
+  return Effect.runSync(
+    createSupabaseAuth({ secrets, ...(whenReady ? { whenReady } : {}) }),
+  );
 }
 
 describe('SupabaseAuth probes', () => {

@@ -13,7 +13,6 @@ import {
   teardownDefaultSession,
   type SessionHandle,
 } from '@agent/runtime';
-import { installAuthProgramEdge } from '@auth/authProgram';
 import { AUTH_COMMANDS, AUTH_PROVIDER_ID } from '@auth/constants';
 import { setRuntimeExtensionId } from '@auth/config';
 import {
@@ -227,18 +226,14 @@ async function initVscodePlatform(
   // every probe answers signed-out — what the facade's statics answered when
   // initialization threw.
   const auth = Effect.runSync(
-    Effect.try({
-      try: () =>
-        createSupabaseAuth({
-          secrets,
-          whenReady: async () => {
-            if (!authReadiness.uriHandlerInstalled) {
-              throw new Error(AUTH_URI_HANDLER_NOT_INITIALIZED);
-            }
-          },
-          log: logger,
-        }),
-      catch: (cause) => ensureError(cause),
+    createSupabaseAuth({
+      secrets,
+      whenReady: async () => {
+        if (!authReadiness.uriHandlerInstalled) {
+          throw new Error(AUTH_URI_HANDLER_NOT_INITIALIZED);
+        }
+      },
+      log: logger,
     }).pipe(
       Effect.catch((error) => Effect.succeed(unavailableSupabaseAuth(error))),
     ),
@@ -273,10 +268,6 @@ async function initVscodePlatform(
       createVscodeLeanLanguageServices(globalState),
     ),
   });
-  // The auth subsystem's run edge, installed here beside the runtime it
-  // settles on (PRD R1): the edge is a process-wide value, so it belongs to
-  // this composition root rather than to any surface the root constructs.
-  installAuthProgramEdge((program) => runtime.runPromiseExit(program));
   // VS Code restarts the extension host when the first workspace folder
   // changes, so the configuration stores stay pinned for this process.
   const config = new JsonConfigProvider(

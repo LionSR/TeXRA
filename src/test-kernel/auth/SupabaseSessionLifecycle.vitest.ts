@@ -4,10 +4,10 @@ import { setTimeout as delay } from 'node:timers/promises';
 
 // Third-party imports
 import { describe, it } from 'vitest';
-import { Effect } from 'effect';
+import { Effect, Exit } from 'effect';
 
 // Local imports - auth
-import { callPort, runAuthProgram } from '@auth/authProgram';
+import { callPort, settleFailure } from '@auth/authProgram';
 import {
   SupabaseSessionCoordinator,
   toStorableSupabaseSession,
@@ -294,7 +294,7 @@ describe('SupabaseSession', () => {
       } as unknown as Client;
       const { coordinator } = createCoordinator({ client });
 
-      const result = await runAuthProgram(
+      const result = await Effect.runPromise(
         coordinator.createSessionFromCallback({
           path: '/auth-callback',
           query: 'code=pkce-code',
@@ -323,7 +323,7 @@ describe('SupabaseSession', () => {
       } as unknown as Client;
       const { coordinator } = createCoordinator({ client });
 
-      const result = await runAuthProgram(
+      const result = await Effect.runPromise(
         coordinator.createSessionFromCallback({
           path: '/auth-callback',
           query: 'code=bad-code',
@@ -351,7 +351,7 @@ describe('SupabaseSession', () => {
       } as unknown as Client;
       const { coordinator } = createCoordinator({ client });
 
-      const result = await runAuthProgram(
+      const result = await Effect.runPromise(
         coordinator.createSessionFromCallback({
           path: '/auth-callback',
           query: 'code=stale-code',
@@ -368,7 +368,7 @@ describe('SupabaseSession', () => {
     it('rejects retired implicit-token callbacks', async () => {
       const { coordinator } = createCoordinator();
 
-      const result = await runAuthProgram(
+      const result = await Effect.runPromise(
         coordinator.createSessionFromCallback({
           path: '/auth-callback',
           query: new URLSearchParams({
@@ -388,20 +388,26 @@ describe('SupabaseSession', () => {
       const { coordinator, getReadCount } = createCoordinator({
         initialSession: expiredSession(),
       });
-      assert.deepEqual(await runAuthProgram(coordinator.getSessionTokens()), {
-        accessToken: 'refreshed-access',
-        refreshToken: 'refreshed-refresh',
-      });
+      assert.deepEqual(
+        await Effect.runPromise(coordinator.getSessionTokens()),
+        {
+          accessToken: 'refreshed-access',
+          refreshToken: 'refreshed-refresh',
+        },
+      );
       assert.equal(getReadCount(), 1);
     });
 
     it('does not return tokens cleared while loading the session', async () => {
       const { coordinator, getReadCount } = createClearingStorageCoordinator({
         initialSession: makeSession(),
-        onFirstRead: (c) => runAuthProgram(c.clearSession()),
+        onFirstRead: (c) => Effect.runPromise(c.clearSession()),
       });
 
-      assert.equal(await runAuthProgram(coordinator.getSessionTokens()), null);
+      assert.equal(
+        await Effect.runPromise(coordinator.getSessionTokens()),
+        null,
+      );
       assert.equal(getReadCount(), 2);
     });
 
@@ -411,7 +417,7 @@ describe('SupabaseSession', () => {
       const { coordinator, getReadCount } = createClearingStorageCoordinator({
         initialSession: makeSession(),
         onFirstRead: (c) => {
-          void runAuthProgram(c.clearSession());
+          void Effect.runPromise(c.clearSession());
         },
         onDelete: async () => {
           deleteStarted.resolve();
@@ -419,7 +425,7 @@ describe('SupabaseSession', () => {
         },
       });
 
-      const tokensPromise = runAuthProgram(coordinator.getSessionTokens());
+      const tokensPromise = Effect.runPromise(coordinator.getSessionTokens());
       await deleteStarted.promise;
       allowDelete.resolve();
 
@@ -452,9 +458,9 @@ describe('SupabaseSession', () => {
         client,
       });
 
-      const tokenPromise = runAuthProgram(coordinator.ensureFreshToken());
+      const tokenPromise = Effect.runPromise(coordinator.ensureFreshToken());
       await refreshStarted.promise;
-      await runAuthProgram(coordinator.clearSession());
+      await Effect.runPromise(coordinator.clearSession());
       allowRefresh.resolve();
 
       assert.equal(await tokenPromise, null);
@@ -484,10 +490,10 @@ describe('SupabaseSession', () => {
         getClient: () => createClient(),
       });
 
-      const tokenPromise = runAuthProgram(coordinator.ensureFreshToken());
+      const tokenPromise = Effect.runPromise(coordinator.ensureFreshToken());
       await storeStarted.promise;
       // The refresh's store is blocked mid-write; the clear queues behind it.
-      const clearPromise = runAuthProgram(coordinator.clearSession());
+      const clearPromise = Effect.runPromise(coordinator.clearSession());
       await delay(0);
       allowStore.resolve();
 
@@ -511,10 +517,12 @@ describe('SupabaseSession', () => {
         client,
       });
 
-      const statePromise = runAuthProgram(coordinator.getStoredSessionState());
+      const statePromise = Effect.runPromise(
+        coordinator.getStoredSessionState(),
+      );
       await refreshStarted.promise;
       const replacement = replacementSession();
-      await runAuthProgram(coordinator.storeSession(replacement));
+      await Effect.runPromise(coordinator.storeSession(replacement));
       allowRefreshFailure.resolve();
 
       assert.equal(await statePromise, 'authenticated');
@@ -529,15 +537,17 @@ describe('SupabaseSession', () => {
       const { coordinator, read } = createCoordinator({ initialSession });
       const replacement = replacementSession();
 
-      await runAuthProgram(coordinator.storeSession(replacement));
+      await Effect.runPromise(coordinator.storeSession(replacement));
 
       assert.equal(
-        await runAuthProgram(coordinator.clearSessionIfCurrent(initialSession)),
+        await Effect.runPromise(
+          coordinator.clearSessionIfCurrent(initialSession),
+        ),
         false,
       );
       assert.deepEqual(read(), replacement);
       assert.equal(
-        await runAuthProgram(coordinator.clearSessionIfCurrent(replacement)),
+        await Effect.runPromise(coordinator.clearSessionIfCurrent(replacement)),
         true,
       );
       assert.equal(read(), null);
@@ -548,13 +558,13 @@ describe('SupabaseSession', () => {
         status: 401,
         failure: 'invalid',
         request: (coordinator: SupabaseSessionCoordinator) =>
-          runAuthProgram(coordinator.getSessionTokens()),
+          Effect.runPromise(coordinator.getSessionTokens()),
       },
       {
         status: 503,
         failure: 'transient',
         request: (coordinator: SupabaseSessionCoordinator) =>
-          runAuthProgram(coordinator.ensureFreshToken()),
+          Effect.runPromise(coordinator.ensureFreshToken()),
       },
     ])(
       'classifies refresh HTTP $status as $failure and returns no token',
@@ -576,23 +586,23 @@ describe('SupabaseSession', () => {
     );
   });
 
-  describe('runAuthProgram error identity', () => {
-    it('re-throws a port rejection unchanged, whatever its shape', async () => {
+  describe('port failure identity', () => {
+    it('settles a port rejection unchanged, whatever its shape', async () => {
       // The AuthPortError contract: `cause` is the caller's own error and the
-      // Promise edge re-throws it unchanged, so every `instanceof` and message
-      // check a host makes still holds. A non-Error cause is the case that
-      // coercion destroys, and 33 call sites across three hosts rely on it.
+      // fold a Promise-facing host boundary applies (`settleFailure`) hands it
+      // back unchanged, so every `instanceof` and message check a host makes
+      // still holds. A non-Error cause is the case that coercion destroys.
       const rejection = { status: 401, message: 'invalid_grant' };
-      const thrown = await runAuthProgram(
+      const exit = await Effect.runPromiseExit(
         callPort(async () => {
           throw rejection;
         }),
-      ).then(
-        () => null,
-        (error: unknown) => error,
       );
 
-      assert.equal(thrown, rejection);
+      assert.equal(
+        Exit.isFailure(exit) ? settleFailure(exit.cause) : null,
+        rejection,
+      );
     });
   });
 });

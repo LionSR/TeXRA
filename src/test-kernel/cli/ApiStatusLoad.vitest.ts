@@ -119,9 +119,11 @@ function renderPreferenceRoute(
 
 describe('CLI model-access status lines', () => {
   beforeEach(() => {
-    mocks.getCliAuthProfile.mockReset().mockResolvedValue({
-      authenticated: false,
-    });
+    mocks.getCliAuthProfile.mockReset().mockReturnValue(
+      Effect.succeed({
+        authenticated: false,
+      }),
+    );
     mocks.readCliModelAccessStatus.mockReset().mockReturnValue(
       Effect.succeed({
         preferences: {
@@ -164,10 +166,12 @@ describe('CLI model-access status lines', () => {
         chatGptAccountLabel: 'chatgpt@example.com',
       }),
     );
-    mocks.getCliAuthProfile.mockResolvedValue({
-      authenticated: true,
-      accountLabel: 'texra@example.com',
-    });
+    mocks.getCliAuthProfile.mockReturnValue(
+      Effect.succeed({
+        authenticated: true,
+        accountLabel: 'texra@example.com',
+      }),
+    );
     setPersonalKeys('deepseek', 'glm', 'kimiCode');
 
     const lines = await accountStatusLines();
@@ -338,10 +342,12 @@ describe('CLI model-access status lines', () => {
 
   it('preserves a profile note exactly once', async () => {
     const profileNote = 'Account metadata may be stale.';
-    mocks.getCliAuthProfile.mockResolvedValue({
-      authenticated: false,
-      note: profileNote,
-    });
+    mocks.getCliAuthProfile.mockReturnValue(
+      Effect.succeed({
+        authenticated: false,
+        note: profileNote,
+      }),
+    );
 
     const lines = await accountStatusLines();
 
@@ -361,10 +367,12 @@ describe('CLI model-access status lines', () => {
         chatGptAccountLabel: 'chatgpt@example.com',
       }),
     );
-    mocks.getCliAuthProfile.mockResolvedValue({
-      authenticated: true,
-      accountLabel: 'texra@example.com',
-    });
+    mocks.getCliAuthProfile.mockReturnValue(
+      Effect.succeed({
+        authenticated: true,
+        accountLabel: 'texra@example.com',
+      }),
+    );
     mocks.lookupApiKeyOrigin.mockReturnValue(
       Effect.fail(new Error('keychain offline')),
     );

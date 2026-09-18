@@ -149,7 +149,6 @@ import {
 } from './desktopUpdateChecker.js';
 import {
   createDesktopAuthCallbackState,
-  createDesktopAuthCoordinator,
   createDesktopSupabaseAuth,
   type DesktopAuthCallbackState,
   type DesktopAuthCoordinator,
@@ -1961,10 +1960,9 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
             },
           });
 
-          const authCoordinator = createDesktopAuthCoordinator({
-            auth: platformInit.supabaseAuth,
-            runtime,
-          });
+          // The coordinator the account plane built: its surface is
+          // Effect-typed, so the auth flows compose it directly.
+          const authCoordinator = platformInit.supabaseAuth.coordinator;
           const authCallbackState = createDesktopAuthCallbackState(
             runtime,
             console,

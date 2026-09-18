@@ -3,11 +3,7 @@ import { randomBytes } from 'node:crypto';
 import { Cause, Deferred, Effect, Exit, Option } from 'effect';
 
 import { invalidateRemoteAgentsAfterSignOut } from '@agent/index';
-import {
-  installAuthProgramEdge,
-  settleFailure,
-  type AuthPortError,
-} from '@auth/authProgram';
+import { settleFailure, type AuthPortError } from '@auth/authProgram';
 import {
   AUTH_CALLBACK_TIMEOUT_MS,
   DEFAULT_OAUTH_PROVIDER,
@@ -23,7 +19,6 @@ import {
   refreshRemoteAgentCatalogAfterSignOut,
   requireOAuthRedirectUrl,
 } from '@auth/authFlowEffects';
-import type { SupabaseAuthShape } from '@auth/SupabaseAuth';
 import {
   type SupabaseCallbackResult,
   type SupabaseSession,
@@ -503,22 +498,6 @@ export function createDesktopSupabaseAuth(
       subscription.dispose();
     },
   };
-}
-
-export function createDesktopAuthCoordinator(options: {
-  /** The account plane the composition root built and served as
-   *  `SupabaseAuth`. */
-  auth: SupabaseAuthShape;
-  /** The process runtime the composition root built; the auth subsystem's run
-   *  edge is installed over it. */
-  runtime: ProcessRuntime;
-}): DesktopAuthCoordinator {
-  // The auth subsystem's run edge lives at this host entry (PRD R1). The
-  // coordinator's surface is already Effect-typed, so the auth flows above
-  // compose it directly; only the CLI's own composition root settles auth
-  // programs through `runAuthProgram`.
-  installAuthProgramEdge((program) => options.runtime.runPromiseExit(program));
-  return options.auth.coordinator;
 }
 
 function processProtocolCallback(

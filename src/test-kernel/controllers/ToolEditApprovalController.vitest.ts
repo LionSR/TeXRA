@@ -12,12 +12,12 @@ import {
   type ToolEditPreview,
   type ToolEditPreviewContext,
 } from '@controllers/approval/ToolEditApprovalController';
-import { effectRuntime } from '@platform/processRuntime';
 import {
   aggregateId as qualifyAggregateId,
   RunIdSchema,
   type SessionEvent,
 } from '@shared/schemas';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import type {
   BuildDisplayFn,
   LatexPreviewEntry,
@@ -31,7 +31,7 @@ const RUN = RunIdSchema.parse('ab12cd');
 function run<A, E>(
   program: Effect.Effect<A, E, FileSystem.FileSystem>,
 ): Promise<A> {
-  return effectRuntime().runPromise(program);
+  return testRuntime().runPromise(program);
 }
 
 /**

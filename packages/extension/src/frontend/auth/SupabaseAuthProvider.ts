@@ -8,7 +8,6 @@ import { refreshRemoteAgentCatalogAfterSignOut } from '@auth/authFlowEffects';
 import {
   type AuthPortError,
   callPort,
-  runAuthProgram,
   SerializedWrites,
   settleFailure,
 } from '@auth/authProgram';
@@ -305,7 +304,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
     const nonce = this.callbackNonce(uri.query);
     if (nonce && this.activeAttempt?.nonce === nonce) return;
 
-    await runAuthProgram(
+    await this.runtime.runPromise(
       this.processLateAuthCallback(uri).pipe(
         Effect.catchCause((cause) =>
           Effect.sync(() => {
@@ -364,7 +363,12 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
     _scopes?: readonly string[],
     _options?: vscode.AuthenticationProviderSessionOptions,
   ): Promise<vscode.AuthenticationSession[]> {
-    return runAuthProgram(this.loadUsableSessions());
+    // The `vscode.AuthenticationProvider` contract owes VS Code a Promise, so
+    // this is the R1(a) boundary that runs the program on the extension's
+    // runtime; a failure reaches the editor as the port's own error.
+    const exit = await this.runtime.runPromiseExit(this.loadUsableSessions());
+    if (Exit.isSuccess(exit)) return exit.value;
+    throw settleFailure(exit.cause);
   }
 
   /**
@@ -538,7 +542,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
               : 'Authentication attempt was superseded. Try again.',
           );
 
-        return runAuthProgram(
+        const exit = await this.runtime.runPromiseExit(
           this.runOAuthAttempt(
             provider,
             attempt,
@@ -555,6 +559,8 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
             }),
           ),
         );
+        if (Exit.isSuccess(exit)) return exit.value;
+        throw settleFailure(exit.cause);
       },
     );
   }
@@ -681,9 +687,10 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
    */
   async removeSession(sessionId: string): Promise<void> {
     const cancelPending = this.cancelPendingAttempt();
-    await runAuthProgram(
+    const exit = await this.runtime.runPromiseExit(
       cancelPending.pipe(Effect.andThen(this.clearLocalSession(sessionId))),
     );
+    if (Exit.isFailure(exit)) throw settleFailure(exit.cause);
   }
 
   /**

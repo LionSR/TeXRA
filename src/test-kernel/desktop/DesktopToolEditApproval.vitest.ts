@@ -50,7 +50,7 @@ const onRuntime = <A, E>(
   program: Effect.Effect<A, E, FileSystem.FileSystem>,
 ): Effect.Effect<A, unknown> =>
   Effect.tryPromise({
-    try: () => effectRuntime().runPromise(program),
+    try: () => testRuntime().runPromise(program),
     catch: (error) => error,
   });
 
@@ -173,7 +173,7 @@ function createApprovalFixture(
       host,
     });
     yield* Effect.addFinalizer(() =>
-      Effect.promise(() => effectRuntime().runPromise(controller.dispose())),
+      Effect.promise(() => testRuntime().runPromise(controller.dispose())),
     );
     yield* Effect.forkScoped(
       Stream.runForEach(session.events.all(session.now()), (event) =>
@@ -183,7 +183,7 @@ function createApprovalFixture(
     // The attached host stages the preview the durable payload cannot carry.
     const detach = session.interactions.use({
       presentToolEdit: (request) => {
-        effectRuntime().runFork(controller.present(request));
+        testRuntime().runFork(controller.present(request));
       },
     });
     yield* Effect.addFinalizer(() => Effect.sync(detach));

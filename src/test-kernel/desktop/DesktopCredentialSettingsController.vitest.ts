@@ -25,10 +25,12 @@ import { installPlatform } from '@test/support/setupPlatform';
 import { commandOf } from './desktopSettingsTestSupport';
 
 const codexMocks = vi.hoisted(() => ({
-  getStatus: vi.fn(async () => ({
-    signedIn: false,
-    preferSubscription: false,
-  })),
+  getStatus: vi.fn(() =>
+    Effect.succeed({
+      signedIn: false,
+      preferSubscription: false,
+    }),
+  ),
   login: vi.fn(
     (_options: {
       openBrowser(url: string): Effect.Effect<void, unknown>;
@@ -219,10 +221,12 @@ async function createFixture({
 
 describe('DefaultDesktopCredentialSettingsController', () => {
   beforeEach(() => {
-    codexMocks.getStatus.mockResolvedValue({
-      signedIn: false,
-      preferSubscription: false,
-    });
+    codexMocks.getStatus.mockReturnValue(
+      Effect.succeed({
+        signedIn: false,
+        preferSubscription: false,
+      }),
+    );
     codexMocks.login.mockReturnValue(
       Effect.succeed({ email: 'user@example.com' }),
     );

@@ -1,14 +1,14 @@
 /**
- * The Promise edge of the auth subsystem's Effect programs (Effect 4 runtime
- * PRD, R1 and R7): one typed failure for the host ports those programs call,
- * and the settle-fold every Promise-facing auth surface shares. The run edge
- * itself is installed by the host's composition root
- * ({@link installAuthProgramEdge}), so the only `Effect.run*` site in the
- * subsystem lives in host code at the sanctioned boundary, not here.
+ * The typed failure of the auth subsystem's Effect programs (Effect 4 runtime
+ * PRD, R1 and R7): one error for the host ports those programs call, the
+ * serialized-write lane the coordinators share, and the settle-fold a host
+ * boundary applies when it runs one of those programs on its own runtime.
+ * Nothing here runs an Effect: a host entry runs the program it composes, and
+ * the `SupabaseAuth` plane runs its GoTrue storage callbacks on the services
+ * it captured when it was built.
  */
-import { Cause, Data, Deferred, Effect, Exit, Option, Semaphore } from 'effect';
+import { Cause, Data, Deferred, Effect, Option, Semaphore } from 'effect';
 import { ensureError } from '@utils/errors/errorMessage';
-import type { HttpClient } from 'effect/unstable/http';
 
 /**
  * A host port (secret storage), an SDK call, or a provider policy rejected.
@@ -110,63 +110,16 @@ export const unwrapAuthPortCause = (error: AuthPortError): Error =>
 const settleExpected = (error: unknown): unknown =>
   error instanceof AuthPortError ? error.cause : error;
 
-function rethrowPortCause(error: unknown): never {
-  throw settleExpected(error);
-}
-
 /**
- * The value {@link runAuthProgram} throws for `cause` under the default
- * `rethrow`: an expected {@link AuthPortError} re-mints as the port's own
- * rejection, another expected failure stays itself, and a defect or an
- * interruption squashes. A recovery that settles a program inside
- * `Effect.catchCause` classifies the failure through this same fold, so the
- * unwrap rule lives in exactly one place.
+ * The value a Promise-facing boundary throws for `cause`: an expected
+ * {@link AuthPortError} re-mints as the port's own rejection, another
+ * expected failure stays itself, and a defect or an interruption squashes. A
+ * recovery that settles a program inside `Effect.catchCause` classifies the
+ * failure through this same fold, so the unwrap rule lives in exactly one
+ * place.
  */
 export function settleFailure<E>(cause: Cause.Cause<E>): unknown {
   const failure = Cause.findErrorOption(cause);
   if (Option.isSome(failure)) return settleExpected(failure.value);
   return Cause.squash(cause);
-}
-
-/**
- * Settles an auth program as an `Exit`, for the Promise-facing surfaces that
- * settle through {@link runAuthProgram}. Installed like the process roots:
- * exactly once per process, by the host's composition root and over the
- * runtime that root installed, as
- * `(program) => runtime.runPromiseExit(program)`. That keeps the
- * `Effect.run*` call itself in boundary code (PRD R1), and ties the edge's
- * lifetime to the process runtime rather than to any surface the root
- * constructs.
- */
-export type AuthProgramEdge = <A, E>(
-  program: Effect.Effect<A, E, HttpClient.HttpClient>,
-) => Promise<Exit.Exit<A, E>>;
-
-let authProgramEdge: AuthProgramEdge | null = null;
-
-/** Install the process-wide run edge for auth programs. */
-export function installAuthProgramEdge(edge: AuthProgramEdge): void {
-  authProgramEdge = edge;
-}
-
-/**
- * Run one auth program on the installed edge and settle it as a Promise.
- * An expected failure reaches `rethrow`, which re-mints it as the error the
- * caller matches on — by default the port's own error, unwrapped. Defects
- * and interruption propagate as they are.
- */
-export async function runAuthProgram<A, E>(
-  program: Effect.Effect<A, E, HttpClient.HttpClient>,
-  rethrow: (error: E) => never = rethrowPortCause,
-): Promise<A> {
-  if (!authProgramEdge) {
-    throw new Error(
-      'Auth program edge not installed: the host composition root installs it beside the process runtime.',
-    );
-  }
-  const exit = await authProgramEdge(program);
-  if (Exit.isSuccess(exit)) return exit.value;
-  const failure = Cause.findErrorOption(exit.cause);
-  if (Option.isSome(failure)) return rethrow(failure.value);
-  throw Cause.squash(exit.cause);
 }

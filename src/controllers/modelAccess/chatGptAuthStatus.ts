@@ -8,17 +8,18 @@
  * read the subscription preferences (`@model/codex/codexPreference`) without
  * depending on the Codex OAuth machinery.
  */
+import { Effect } from 'effect';
+
 import { getCodexStatus } from '@auth/codex';
-import { runAuthProgram } from '@auth/authProgram';
 import { isPreferCodexSubscription } from '@model/codex/codexPreference';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { ChatGptAuthStatus } from '@shared/schemas';
 
-export async function getChatGptAuthStatus(
+export function getChatGptAuthStatus(
   secrets: PlatformSecrets,
-): Promise<ChatGptAuthStatus> {
-  return {
-    ...(await runAuthProgram(getCodexStatus(secrets))),
+): Effect.Effect<ChatGptAuthStatus> {
+  return Effect.map(getCodexStatus(secrets), (status) => ({
+    ...status,
     preferSubscription: isPreferCodexSubscription(),
-  };
+  }));
 }

@@ -8,7 +8,7 @@ import { Context, Effect, Layer } from 'effect';
 import { createLog } from '@logger/logUtils';
 import type { SecretsFailed } from '@platform/secrets';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
-import { callPort, runAuthProgram, settleFailure } from './authProgram';
+import { callPort, settleFailure } from './authProgram';
 import {
   SUPABASE_CONFIG,
   SUPABASE_GOTRUE_STORAGE_KEY,
@@ -54,7 +54,10 @@ const log = createLog('SupabaseAuth');
  * id retain auth-js's fixed-verifier fallback. Flow-id slots are tracked in a
  * five-entry index; concurrent starts in separate hosts can race that index.
  */
-function gotrueStorage(secrets: SessionSecretStore): SupportedStorage {
+function gotrueStorage(
+  secrets: SessionSecretStore,
+  services: Context.Context<never>,
+): SupportedStorage {
   // Writes are mirrored here so a secret-store failure degrades to the old
   // in-process behavior (same-window sign-in still completes) instead of
   // losing the flow outright.
@@ -65,16 +68,18 @@ function gotrueStorage(secrets: SessionSecretStore): SupportedStorage {
    * slot and a failed store both answer `undefined`, which every caller
    * resolves against the memory mirror. The store is Effect-typed, so the
    * recovery is part of the program and only its result crosses
-   * `@supabase/auth-js`'s own Promise callback surface, on the auth
-   * subsystem's installed run edge.
+   * `@supabase/auth-js`'s own Promise callback surface — the one outbound
+   * foreign Promise contract this plane owes, run on the services the plane
+   * captured when it was built (rulings ledger, #12720).
    */
+  const onCapturedServices = Effect.runPromiseWith(services);
   const onFlowState = <T>(
     action: string,
     key: string,
     program: Effect.Effect<T, SecretsFailed>,
   ): Promise<T | undefined> => {
     if (key === SUPABASE_GOTRUE_STORAGE_KEY) return Promise.resolve(undefined);
-    return runAuthProgram(
+    return onCapturedServices(
       program.pipe(
         Effect.catchCause((cause) =>
           Effect.sync(() => {
@@ -190,124 +195,136 @@ export const supabaseAuthenticated: Effect.Effect<boolean> = Effect.flatMap(
 );
 
 /**
- * Build the account plane against TeXRA's Supabase backend. Throws when the
- * configured credentials are missing; the extension's composition root is the
- * one host that degrades that to {@link unavailableSupabaseAuth} instead of
- * failing activation.
+ * Build the account plane against TeXRA's Supabase backend, capturing the
+ * services of the fiber that builds it: the GoTrue storage adapter owes
+ * `@supabase/auth-js` a Promise, and that is the one site where this plane
+ * runs a program of its own (rulings ledger, #12720). Fails when the
+ * configured credentials are missing or the client refuses them; the
+ * extension's composition root is the one host that degrades that to
+ * {@link unavailableSupabaseAuth} instead of failing activation.
  */
-export function createSupabaseAuth(init: SupabaseAuthInit): SupabaseAuthShape {
-  if (!SUPABASE_CONFIG.url || !SUPABASE_CONFIG.publicKey) {
-    throw new Error(
-      'Supabase authentication is not configured: Supabase credentials missing. Check the TeXRA configuration.',
-    );
-  }
-  const client = createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.publicKey, {
-    auth: {
-      // `persistSession` is what gates GoTrue's use of `storage` at all; the
-      // adapter above is what keeps this honest, writing PKCE flow state
-      // only and never the session, which the host's secret storage owns.
-      // The plane is built before the host installs the auth run edge
-      // (`installAuthProgramEdge`): safe because GoTrue's construction-time
-      // session read asks for the bare session-slot key, which the adapter
-      // short-circuits without reaching `runAuthProgram`. A storage read of a
-      // derived key during construction would hit the uninstalled edge.
-      persistSession: true,
-      storage: gotrueStorage(init.secrets),
-      storageKey: SUPABASE_GOTRUE_STORAGE_KEY,
-      autoRefreshToken: false, // Manual refresh via auth provider
-      // PKCE: browser OAuth returns a one-time ?code= (not tokens) to the
-      // callback, which exchangeCodeForSession trades for a session using
-      // the stored verifier, so no access/refresh token ever transits the
-      // browser or the auth-bridge page. detectSessionInUrl is off because
-      // every host parses its own callback and exchanges the code explicitly.
-      flowType: 'pkce',
-      detectSessionInUrl: false,
-    },
-  });
-  const coordinator = new SupabaseSessionCoordinator({
-    storage: secretBackedSessionStorage(init.secrets, SUPABASE_SESSION_KEY),
-    getClient: () => client,
-    whenReady: init.whenReady ?? (async () => {}),
-    tokenRefreshThresholdMs: TOKEN_REFRESH_THRESHOLD_MS,
-    log: init.log,
-  });
-
-  let initError: Error | null = null;
-  let readinessError: Error | null = null;
-
-  const accessToken: Effect.Effect<string | null> = coordinator
-    .ensureFreshToken()
-    .pipe(
-      Effect.catchCause((cause) =>
-        Effect.sync(() => {
-          log.error(
-            `Error getting access token: ` +
-              `${toErrorMessage(settleFailure(cause))}`,
-          );
-          return null;
+export function createSupabaseAuth(
+  init: SupabaseAuthInit,
+): Effect.Effect<SupabaseAuthShape, Error> {
+  return Effect.gen(function* () {
+    if (!SUPABASE_CONFIG.url || !SUPABASE_CONFIG.publicKey) {
+      return yield* Effect.fail(
+        new Error(
+          'Supabase authentication is not configured: Supabase credentials missing. Check the TeXRA configuration.',
+        ),
+      );
+    }
+    const services = yield* Effect.context<never>();
+    const client = yield* Effect.try({
+      try: () =>
+        createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.publicKey, {
+          auth: {
+            // `persistSession` is what gates GoTrue's use of `storage` at all; the
+            // adapter above is what keeps this honest, writing PKCE flow state
+            // only and never the session, which the host's secret storage owns.
+            // GoTrue's construction-time session read asks for the bare
+            // session-slot key, which the adapter short-circuits without running
+            // anything — the captured services exist by then either way.
+            persistSession: true,
+            storage: gotrueStorage(init.secrets, services),
+            storageKey: SUPABASE_GOTRUE_STORAGE_KEY,
+            autoRefreshToken: false, // Manual refresh via auth provider
+            // PKCE: browser OAuth returns a one-time ?code= (not tokens) to the
+            // callback, which exchangeCodeForSession trades for a session using
+            // the stored verifier, so no access/refresh token ever transits the
+            // browser or the auth-bridge page. detectSessionInUrl is off because
+            // every host parses its own callback and exchanges the code explicitly.
+            flowType: 'pkce',
+            detectSessionInUrl: false,
+          },
         }),
-      ),
-    );
+      catch: (cause) => ensureError(cause),
+    });
+    const coordinator = new SupabaseSessionCoordinator({
+      storage: secretBackedSessionStorage(init.secrets, SUPABASE_SESSION_KEY),
+      getClient: () => client,
+      whenReady: init.whenReady ?? (async () => {}),
+      tokenRefreshThresholdMs: TOKEN_REFRESH_THRESHOLD_MS,
+      log: init.log,
+    });
 
-  return {
-    client,
-    coordinator,
-    isReady: Effect.suspend(() => {
-      if (initError !== null) return Effect.succeed(false);
-      return coordinator.whenReady().pipe(
-        Effect.map(() => {
-          readinessError = null;
-          return true;
-        }),
+    let initError: Error | null = null;
+    let readinessError: Error | null = null;
+
+    const accessToken: Effect.Effect<string | null> = coordinator
+      .ensureFreshToken()
+      .pipe(
         Effect.catchCause((cause) =>
           Effect.sync(() => {
-            const error = settleFailure(cause);
-            readinessError = ensureError(error);
-            log.error(`Auth provider not ready: ${toErrorMessage(error)}`);
-            return false;
+            log.error(
+              `Error getting access token: ` +
+                `${toErrorMessage(settleFailure(cause))}`,
+            );
+            return null;
           }),
         ),
       );
-    }),
-    accessToken,
-    user: Effect.flatMap(accessToken, (token): Effect.Effect<User | null> =>
-      token === null
-        ? Effect.succeed(null)
-        : callPort(() => client.auth.getUser(token)).pipe(
-            Effect.map(({ data, error }) =>
-              error || !data.user ? null : data.user,
-            ),
-            Effect.catchCause((cause) =>
-              Effect.sync(() => {
-                log.error(
-                  `Error getting user: ${toErrorMessage(settleFailure(cause))}`,
-                );
-                return null;
-              }),
-            ),
+
+    return {
+      client,
+      coordinator,
+      isReady: Effect.suspend(() => {
+        if (initError !== null) return Effect.succeed(false);
+        return coordinator.whenReady().pipe(
+          Effect.map(() => {
+            readinessError = null;
+            return true;
+          }),
+          Effect.catchCause((cause) =>
+            Effect.sync(() => {
+              const error = settleFailure(cause);
+              readinessError = ensureError(error);
+              log.error(`Auth provider not ready: ${toErrorMessage(error)}`);
+              return false;
+            }),
           ),
-    ),
-    authenticated: Effect.map(accessToken, (token) => token !== null),
-    storedSessionState: coordinator.getStoredSessionState(),
-    storedAccountLabel: coordinator.getStoredAccountLabel().pipe(
-      Effect.catchCause((cause) =>
-        Effect.sync(() => {
-          // A failed read is otherwise indistinguishable from "no session
-          // stored", and both collapse to the generic account label in
-          // the UI.
-          log.warn(
-            `Error reading stored account label: ` +
-              `${toErrorMessage(settleFailure(cause))}`,
-          );
-          return null;
-        }),
+        );
+      }),
+      accessToken,
+      user: Effect.flatMap(accessToken, (token): Effect.Effect<User | null> =>
+        token === null
+          ? Effect.succeed(null)
+          : callPort(() => client.auth.getUser(token)).pipe(
+              Effect.map(({ data, error }) =>
+                error || !data.user ? null : data.user,
+              ),
+              Effect.catchCause((cause) =>
+                Effect.sync(() => {
+                  log.error(
+                    `Error getting user: ${toErrorMessage(settleFailure(cause))}`,
+                  );
+                  return null;
+                }),
+              ),
+            ),
       ),
-    ),
-    getInitError: () => initError ?? readinessError,
-    setInitError: (error) => {
-      initError = error;
-    },
-  };
+      authenticated: Effect.map(accessToken, (token) => token !== null),
+      storedSessionState: coordinator.getStoredSessionState(),
+      storedAccountLabel: coordinator.getStoredAccountLabel().pipe(
+        Effect.catchCause((cause) =>
+          Effect.sync(() => {
+            // A failed read is otherwise indistinguishable from "no session
+            // stored", and both collapse to the generic account label in
+            // the UI.
+            log.warn(
+              `Error reading stored account label: ` +
+                `${toErrorMessage(settleFailure(cause))}`,
+            );
+            return null;
+          }),
+        ),
+      ),
+      getInitError: () => initError ?? readinessError,
+      setInitError: (error) => {
+        initError = error;
+      },
+    };
+  });
 }
 
 /**

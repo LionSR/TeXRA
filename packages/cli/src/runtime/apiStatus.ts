@@ -9,7 +9,6 @@ import type { SubscriptionUsageSnapshot } from '@shared/schemas';
 import { providerDisplayName } from '@shared/constants/providers';
 import { OWN_API_KEYS } from '@shared/copy/modelAccess';
 import { RESEARCHER_ACCESS } from '@shared/copy/onboarding';
-import { ensureError } from '@utils/errors/errorMessage';
 
 import {
   formatCliChatGptPreference,
@@ -29,11 +28,9 @@ import { getCliAuthProfile } from './supabaseAuth';
  *  the same narrowing the desktop credential controller uses. */
 type SubscriptionUsageReader = Pick<SubscriptionUsageService, 'getUsage'>;
 
-/** The Promise-facing auth profile read, typed once for the readers below. */
-const readCliAuthProfile = Effect.tryPromise({
-  try: () => getCliAuthProfile(),
-  catch: ensureError,
-});
+/** The auth profile read, typed once for the readers below; the program is
+ *  built per read, as each reader asks for the current profile. */
+const readCliAuthProfile = Effect.suspend(getCliAuthProfile);
 
 function formatAccountStatus(signedIn: boolean, accountLabel?: string): string {
   if (!signedIn) return 'signed out';

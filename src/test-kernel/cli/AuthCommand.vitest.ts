@@ -49,9 +49,11 @@ describe('CLI auth command', () => {
   beforeEach(() => {
     stdout = '';
     stderr = '';
-    mocks.getCliAuthProfile.mockReset().mockResolvedValue({
-      authenticated: false,
-    });
+    mocks.getCliAuthProfile.mockReset().mockReturnValue(
+      Effect.succeed({
+        authenticated: false,
+      }),
+    );
     mocks.initCliPlatform
       .mockReset()
       .mockResolvedValue({ runtime: testRuntime() });
@@ -85,10 +87,12 @@ describe('CLI auth command', () => {
   });
 
   it('explains an auth-service outage instead of inviting a re-login', async () => {
-    mocks.getCliAuthProfile.mockResolvedValueOnce({
-      authenticated: false,
-      sessionState: 'transient',
-    });
+    mocks.getCliAuthProfile.mockReturnValueOnce(
+      Effect.succeed({
+        authenticated: false,
+        sessionState: 'transient',
+      }),
+    );
 
     const result = await runCli(['auth', '--no-color']);
 
@@ -100,7 +104,9 @@ describe('CLI auth command', () => {
   });
 
   it('forwards group-level global flags to explicit auth subcommands', async () => {
-    mocks.getCliAuthProfile.mockResolvedValueOnce(SIGNED_IN_PROFILE);
+    mocks.getCliAuthProfile.mockReturnValueOnce(
+      Effect.succeed(SIGNED_IN_PROFILE),
+    );
 
     const result = await runCli(['auth', '--output-format', 'json', 'status']);
 
