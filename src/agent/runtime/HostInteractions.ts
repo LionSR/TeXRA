@@ -90,7 +90,9 @@ export interface HostInteractions {
   /**
    * Present a runtime event through the active host attachment. Presentation
    * is fire-and-forget: a host that cannot render an event logs the cause. A
-   * host may return a promise that settles once the event is on screen.
+   * host may answer with a promise that settles once the event is on screen;
+   * nothing waits on it, and a rejection is reported rather than left
+   * unhandled (see `presentOn`).
    */
   emit?<K extends RuntimePresentationEvent>(
     event: K,
@@ -322,9 +324,10 @@ export class SessionHostInteractions implements HostInteractions {
 
   /**
    * Dispose every attachment, newest first. Every host is disposed even when
-   * an earlier one fails, and every failure is reported: the Effect fails
-   * with each host's own cause, so the session's teardown aggregates them
-   * with the rest of its owners rather than losing all but the first.
+   * an earlier one fails, and every failure is reported: the program ends by
+   * raising them as one aggregate, which the session's teardown collects
+   * beside its other owners' — never all but the first, as the `firstError`
+   * this replaced did.
    */
   dispose(): Effect.Effect<void> {
     return Effect.suspend(() => {

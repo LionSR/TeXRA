@@ -257,10 +257,10 @@ const ownerLiveness = Layer.effectDiscard(
 /**
  * The one teardown of a session's owners, in order: its runs first, so no run
  * is admitted over a session that is unwinding (a lane step still waiting is
- * refused and every waiter wakes), then the handle's own owners. One
- * synchronous step, so nothing interleaves between the two. Idempotent: the
- * entry's release runs it, and so does the handle's `dispose` before it asks
- * for that release (`graph.close`).
+ * refused and every waiter wakes), then the handle's own owners. Every step is
+ * synchronous and they run on one fiber with no await between them, so nothing
+ * interleaves. Idempotent: the entry's release runs it, and so does the
+ * handle's `dispose` before it asks for that release (`graph.close`).
  */
 function unwindSession(session: SessionHandle): Effect.Effect<void> {
   return Effect.suspend(() => {
