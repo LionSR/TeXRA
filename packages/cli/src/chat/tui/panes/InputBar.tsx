@@ -7,6 +7,7 @@ import {
   useState,
 } from 'react';
 import { Box, Text, useInput, useWindowSize } from 'ink';
+import { Cause, Effect } from 'effect';
 
 import { attachClipboardImage } from '@cli/runtime/clipboardImage';
 import { writeTextStderr } from '@cli/runtime/logSinks';
@@ -257,19 +258,19 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
   const onImagePaste = useMemo(
     () => ({
       runtime,
-      probe: async (attempt: ImagePasteAttempt): Promise<string | null> => {
-        const result = await attachClipboardImage(runtime, roots);
-        if (!attempt.isCurrent()) return null;
-        if (!result.ok) {
-          setTransientNotice(result.reason);
-          return null;
-        }
-        return attachmentsRef.current.addPastedImage({
-          path: result.path,
-          mediaType: result.mediaType,
-          displayName: result.displayName,
-        });
-      },
+      probe: (attempt: ImagePasteAttempt) =>
+        Effect.map(attachClipboardImage(roots), (result): string | null => {
+          if (!attempt.isCurrent()) return null;
+          if (!result.ok) {
+            setTransientNotice(result.reason);
+            return null;
+          }
+          return attachmentsRef.current.addPastedImage({
+            path: result.path,
+            mediaType: result.mediaType,
+            displayName: result.displayName,
+          });
+        }),
       onError: (error: unknown) =>
         setTransientNotice(`Image paste failed: ${toErrorMessage(error)}`, {
           ttlMs: Number.POSITIVE_INFINITY,
@@ -311,14 +312,19 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
       // shared log sink so it isn't completely silent.
       const historyPersist =
         historyText.length > 0 && !shouldRedactSlashInput(historyText)
-          ? historyRef.current &&
-            runtime.runPromise(historyRef.current.push(historyText))
-          : null;
-      historyPersist?.catch((err: unknown) => {
-        writeTextStderr(
-          `texra: failed to persist input history: ${String(err)}`,
+          ? historyRef.current?.push(historyText)
+          : undefined;
+      if (historyPersist) {
+        runtime.runFork(
+          Effect.catchCause(historyPersist, (cause) =>
+            Effect.sync(() => {
+              writeTextStderr(
+                `texra: failed to persist input history: ${String(Cause.squash(cause))}`,
+              );
+            }),
+          ),
         );
-      });
+      }
       onSubmit(
         trimmed,
         mediaFiles.length > 0 ? mediaFiles : undefined,

@@ -17,7 +17,7 @@ import {
   metaChordInput,
 } from '@cli/tui/inputKeys';
 import { isTuiColorEnabled } from '@cli/tui/noColorOutput';
-import type { ProcessRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import {
   applyTerminalInputChunk,
   clampCursor,
@@ -63,9 +63,12 @@ interface BaseTextInputProps {
    *  prop because the probe cannot run without the runtime, so a bar that
    *  offers paste always supplies both. */
   readonly onImagePaste?: {
-    /** Resolves to the chip text to insert (e.g. `[Image #1]`), or null when
-     *  there is no image on the clipboard. */
-    readonly probe: (attempt: ImagePasteAttempt) => Promise<string | null>;
+    /** The probe as a program: it yields the chip text to insert (e.g.
+     *  `[Image #1]`), or null when there is no image on the clipboard. This
+     *  input owns the one run, under the timeout below. */
+    readonly probe: (
+      attempt: ImagePasteAttempt,
+    ) => Effect.Effect<string | null, unknown, ProcessServices>;
     readonly runtime: ProcessRuntime;
     readonly onError?: (error: unknown) => void;
   };
@@ -303,18 +306,15 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
       }
       const imagePaste = props.onImagePaste;
       if (isCtrlInput(input, key, 'v') && imagePaste) {
-        // Insert the chip at whatever the caret is when the async probe
-        // resolves (read from a ref, not a keypress-time snapshot) so typing
-        // during the probe isn't clobbered. The probe runs on the process
-        // runtime with an Effect timeout; `matchCause` settles every outcome,
-        // so the tracked promise never rejects. Runtime disposal interrupts
-        // the fiber — not a paste failure to report.
+        // Insert the chip at whatever the caret is when the probe settles
+        // (read from a ref, not a keypress-time snapshot) so typing during
+        // the probe isn't clobbered. The probe runs on the process runtime
+        // with an Effect timeout; `matchCause` settles every outcome, so the
+        // tracked promise never rejects. Runtime disposal interrupts the
+        // fiber — not a paste failure to report.
         const attempt = imagePasteQueue.beginAttempt();
         const paste = imagePaste.runtime.runPromise(
-          Effect.tryPromise({
-            try: () => Promise.resolve().then(() => imagePaste.probe(attempt)),
-            catch: (error: unknown) => error,
-          }).pipe(
+          Effect.suspend(() => imagePaste.probe(attempt)).pipe(
             Effect.timeout(IMAGE_PASTE_TIMEOUT_MS),
             Effect.matchCause({
               onFailure: (cause) => {
