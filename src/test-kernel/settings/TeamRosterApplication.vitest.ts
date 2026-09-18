@@ -171,9 +171,10 @@ describe('team roster application', () => {
                 calls.push(`info:${message}`);
               }),
           },
-          refreshAfterApply: async (selectedToolUseAgent) => {
-            calls.push(`refresh:${selectedToolUseAgent}`);
-          },
+          refreshAfterApply: (selectedToolUseAgent) =>
+            Effect.sync(() => {
+              calls.push(`refresh:${selectedToolUseAgent}`);
+            }),
         });
 
         expect(getPresetToolUseRoot).toHaveBeenCalledWith(
@@ -214,7 +215,7 @@ describe('team roster application', () => {
             }),
           showInfoMessage: () => Effect.void,
         },
-        refreshAfterApply: async () => {},
+        refreshAfterApply: () => Effect.void,
       });
 
       expect(prompts).toEqual([

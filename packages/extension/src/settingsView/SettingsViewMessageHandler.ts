@@ -861,7 +861,8 @@ export class SettingsViewMessageHandler {
     const usageProvider = codingPlanForApiProvider(provider)?.usageProvider;
     // The launcher's API-key banner reads the same credential probe from
     // the host snapshot.
-    await ProgressViewProvider.getInstance()?.refreshHostBanners();
+    const banners = ProgressViewProvider.getInstance()?.snapshot;
+    if (banners) await this.runtime.runPromise(banners.refreshHostBanners);
     await this.refreshCredentialDependentSurfaces({
       usageProvider,
       refreshProfileData: (webview) =>
