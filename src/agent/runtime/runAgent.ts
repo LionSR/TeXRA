@@ -217,18 +217,15 @@ export const runAgent = Effect.fn('runAgent')(function* (
       runId,
       Effect.gen(function* () {
         // Resolve the selected model before registering the run. The helper
-        // model swap reads the enabled-model list and the provider keys, so
-        // both process stores come from this run's context.
+        // model swap reads the enabled-model list, the routing switches and
+        // the provider keys, so it takes this session's setting slots and the
+        // process secret store.
         const modelStores = {
-          globalState: yield* AppState,
+          ...runSession.roots,
           secrets: yield* Secrets,
         };
         const requestedConfig = preferHelperModel
-          ? yield* applyHelperModelPreference(
-              request.config,
-              modelStores,
-              (read) => runInSession(runSession, read),
-            )
+          ? yield* applyHelperModelPreference(request.config, modelStores)
           : request.config;
         yield* failIfLaunchStopped(launchStopped);
         const definition = yield* prepareAgentDefinition({

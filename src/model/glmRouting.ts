@@ -2,6 +2,7 @@ import { ModelProvider } from 'llm-zoo';
 
 import { OPENROUTER_BASE_URL } from '@model/openRouterEndpoint';
 import { normalizeProviderEndpoint } from '@model/providerEndpoint';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { DeclinableUsageRoute } from '@shared/schemas';
 import {
   getGLMCodingPlan,
@@ -21,6 +22,8 @@ type GlmRoute =
   | { readonly route: 'official'; readonly baseUrl: string };
 
 interface GlmRoutingConfig {
+  /** The setting slots the endpoint, region, and coding-plan rows are read from. */
+  readonly stores: SettingsStores;
   readonly baseUrl?: string | null;
   readonly useOpenRouter: boolean;
   /** Routes the asking run declines; a declined coding plan is not taken
@@ -28,16 +31,33 @@ interface GlmRoutingConfig {
   readonly declinedRoutes?: readonly DeclinableUsageRoute[];
 }
 
+/**
+ * Whether a GLM request routes through OpenRouter. The two rows of
+ * {@link resolveGlmRoute}'s precedence that settle before any setting is read
+ * — a per-model base URL wins, then the OpenRouter selection — so the
+ * store-free routing predicates in `openRouterRouting` answer this question
+ * without the setting slots the rest of the table needs.
+ */
+export function isGlmOpenRouterRoute(config: {
+  readonly baseUrl?: string | null;
+  readonly useOpenRouter: boolean;
+}): boolean {
+  return !config.baseUrl && config.useOpenRouter;
+}
+
 /** Resolve the endpoint and usage classification for one GLM request. */
 export function resolveGlmRoute(config: GlmRoutingConfig): GlmRoute {
   if (config.baseUrl) {
     return { route: 'model-custom', baseUrl: config.baseUrl };
   }
-  if (config.useOpenRouter) {
+  if (isGlmOpenRouterRoute(config)) {
     return { route: 'openrouter', baseUrl: OPENROUTER_BASE_URL };
   }
 
-  const providerEndpoint = getProviderEndpoint(ModelProvider.GLM);
+  const providerEndpoint = getProviderEndpoint(
+    config.stores,
+    ModelProvider.GLM,
+  );
   if (providerEndpoint) {
     return {
       route: 'provider-custom',
@@ -45,9 +65,11 @@ export function resolveGlmRoute(config: GlmRoutingConfig): GlmRoute {
     };
   }
 
-  const officialHost = useChinaRegion('glm') ? 'open.bigmodel.cn' : 'api.z.ai';
+  const officialHost = useChinaRegion(config.stores, 'glm')
+    ? 'open.bigmodel.cn'
+    : 'api.z.ai';
   if (
-    getGLMCodingPlan() &&
+    getGLMCodingPlan(config.stores) &&
     !config.declinedRoutes?.includes('glm-coding-plan-subscription')
   ) {
     return {

@@ -54,7 +54,8 @@ export function defineSubscriptionAuthCommand(
     context: CliContext,
     init: { device: boolean; noBrowser: boolean },
   ): Promise<number> {
-    const { runtime } = await initCliPlatform({ ...context, quietLogs: true });
+    const services = await initCliPlatform({ ...context, quietLogs: true });
+    const { runtime } = services;
     const writeProgress = cliProgressWriter(context);
 
     const signInResult = await withCliAuthError(() =>
@@ -69,7 +70,7 @@ export function defineSubscriptionAuthCommand(
     if (!signInResult.ok) return CliExitCode.ModelOrNetworkError;
 
     const update = await runtime.runPromise(
-      provider.setPreferSubscription(true),
+      provider.setPreferSubscription(services, true),
     );
     const account = signInResult.value;
     const payload = {
@@ -124,12 +125,15 @@ export function defineSubscriptionAuthCommand(
     },
     args: { ...GLOBAL_ARGS },
     async run(context) {
-      const { runtime } = await initCliPlatform({
+      const services = await initCliPlatform({
         ...context,
         quietLogs: true,
       });
+      const { runtime } = services;
       const signOutResult = await withCliAuthError(() =>
-        runtime.runPromise(signOutCliSubscription(options.providerId)),
+        runtime.runPromise(
+          signOutCliSubscription(services, options.providerId),
+        ),
       );
       if (!signOutResult.ok) return CliExitCode.ModelOrNetworkError;
       const update = signOutResult.value;

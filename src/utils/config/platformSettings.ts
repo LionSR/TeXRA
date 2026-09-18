@@ -1,4 +1,4 @@
-import type { ConfigWriteFailed } from '@platform/interfaces';
+import type { ConfigTarget, ConfigWriteFailed } from '@platform/interfaces';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import { settingByKey, type SettingHost } from '@shared/schemas';
 import {
@@ -102,10 +102,31 @@ export function writePlatformSetting(
   key: string,
   value: unknown,
 ): Effect.Effect<void, ConfigWriteFailed | Error> {
+  return writeSettingTo(platformSettingsStores(), key, value);
+}
+
+/**
+ * {@link writePlatformSetting} over stores the caller already holds — the
+ * write-side counterpart of {@link readSettingFrom}, resolving the same slot
+ * from the same catalog row and applying the same `onWrite` effects. A caller
+ * that reads a setting from its own roots writes it back through here, so the
+ * read and the write cannot answer for two different workspaces.
+ *
+ * `target` overrides the config scope a config-slot row is written to, for the
+ * one caller that keeps a value in whichever scope already holds it (the
+ * "prefer my subscription" switches); state-slot rows ignore it.
+ */
+export function writeSettingTo(
+  stores: SettingsStores,
+  key: string,
+  value: unknown,
+  target?: ConfigTarget,
+): Effect.Effect<void, ConfigWriteFailed | Error> {
   return writeSetting(
     requireEntry(key),
     value,
-    platformSettingsStores(),
+    stores,
     processSettingHost,
+    target,
   );
 }

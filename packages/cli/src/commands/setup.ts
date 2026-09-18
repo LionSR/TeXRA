@@ -51,7 +51,7 @@ export async function runSetup(context: CliContext): Promise<number> {
   // the picker is skipped — credentials-only (re)configuration is
   // `texra login`'s job under the new vocabulary.
   const hasCredential = await services.runtime.runPromise(
-    hasUsableSetupCredential(services.secrets, credentialLog.warn),
+    hasUsableSetupCredential(services, services.secrets, credentialLog.warn),
   );
   if (!hasCredential) {
     const { runCliOnboarding } = await import('../onboarding/runOnboarding');

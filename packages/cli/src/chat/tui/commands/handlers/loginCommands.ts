@@ -33,6 +33,7 @@ import type { SubscriptionProviderId } from '@controllers/modelAccess/subscripti
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { GlobalStorageFs } from '@platform/rootedFs';
 import type { Secrets, PlatformSecrets } from '@platform/secrets';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import {
   ACCOUNT_OUTCOME,
   CHATGPT_AUTH,
@@ -92,6 +93,7 @@ const SUBSCRIPTION_AUTH_COPY: Record<
  * preference, then report the outcome in this surface's copy.
  */
 async function loginToSubscription(
+  stores: SettingsStores,
   runtime: ProcessRuntime,
   providerId: SubscriptionProviderId,
   args: CliSubscriptionLoginTransportInit,
@@ -106,7 +108,7 @@ async function loginToSubscription(
     { signal },
   );
   const update = await runtime.runPromise(
-    setCliSubscriptionPreference(providerId, true),
+    setCliSubscriptionPreference(stores, providerId, true),
   );
   const auth = SUBSCRIPTION_AUTH_COPY[providerId];
   output.appendOutcome(
@@ -166,6 +168,7 @@ async function loginToTexraAccount(
 
 export function loginFromChat(
   input: string,
+  stores: SettingsStores,
   runtime: ProcessRuntime,
   context?: CliContext,
   output: SlashCommandOutput = transcriptSlashCommandOutput,
@@ -195,6 +198,7 @@ export function loginFromChat(
 
     if (loginArgs.target === 'chatgpt' || loginArgs.target === 'grok') {
       await loginToSubscription(
+        stores,
         runtime,
         loginArgs.target,
         loginArgs,
@@ -216,6 +220,7 @@ export function loginFromChat(
  */
 const logoutLines = (
   target: CliLogoutTarget,
+  stores: SettingsStores,
   secrets: PlatformSecrets,
 ): Effect.Effect<
   readonly string[],
@@ -243,7 +248,7 @@ const logoutLines = (
       providerId: SubscriptionProviderId,
       label: string,
     ): Effect.Effect<void, never, Secrets> =>
-      signOutCliSubscription(providerId).pipe(
+      signOutCliSubscription(stores, providerId).pipe(
         Effect.match({
           onFailure: (error) => {
             lines.push(
@@ -271,7 +276,10 @@ const logoutLines = (
       yield* signOutSubscription('grok', GROK_AUTH.label);
     }
 
-    const overviewLines = yield* loadCliModelAccessOverview(secrets).pipe(
+    const overviewLines = yield* loadCliModelAccessOverview(
+      stores,
+      secrets,
+    ).pipe(
       Effect.match({
         onFailure: (error) => [toErrorMessage(error)],
         onSuccess: (overview) => overview.lines,
@@ -283,6 +291,7 @@ const logoutLines = (
 
 export async function logoutFromChat(
   input: string,
+  stores: SettingsStores,
   runtime: ProcessRuntime,
   secrets: PlatformSecrets,
   output: SlashCommandOutput = transcriptSlashCommandOutput,
@@ -293,6 +302,6 @@ export async function logoutFromChat(
     return;
   }
 
-  const lines = await runtime.runPromise(logoutLines(target, secrets));
+  const lines = await runtime.runPromise(logoutLines(target, stores, secrets));
   output.appendOutcome(collapseWhitespace(lines.join(' · ')));
 }

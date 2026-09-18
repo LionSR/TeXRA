@@ -4,9 +4,9 @@ import { type CliNoAvailableModelsRecoveryOptions } from '@cli/runtime/modelAcce
 import { setTransientNotice } from '@cli/chat/tui/state/cliState';
 import { type TuiSession } from '@cli/chat/tui/state/sessionRunState';
 import { appendLocalAssistantTranscript } from '@cli/chat/tui/state/transcript';
-import type { StateStore } from '@platform/interfaces';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import { type RunId } from '@shared/schemas';
 
@@ -18,12 +18,12 @@ export interface SlashCommandContext {
    *  requests on it, threaded from the chat entry point that opened it. */
   readonly runtimeSession: SessionHandle;
   /**
-   * The process secret store and global state the account, model-access and
-   * model-selection commands read, filled from the `CliPlatformServices` the
-   * chat entry point already holds.
+   * The process secret store and the three setting slots the account,
+   * model-access and model-selection commands read, filled from the
+   * `CliPlatformServices` the chat entry point already holds.
    */
   readonly secrets: PlatformSecrets;
-  readonly state: StateStore;
+  readonly stores: SettingsStores;
   /**
    * The runtime the chat entry point holds. Model access is read as an Effect,
    * so the handlers that ask for it run that program here rather than looking

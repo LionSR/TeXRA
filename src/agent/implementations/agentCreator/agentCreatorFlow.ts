@@ -16,7 +16,6 @@ import { createLog } from '@logger/logUtils';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { LanguageModel } from '@platform/languageModel';
 import type { GlobalStorageFs } from '@platform/rootedFs';
-import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { AgentCategory } from '@shared/schemas';
 import { DELEGATE_MULTI_AGENTS_TOOL_NAME } from '@shared/constants/delegationTools';
 import { TOOL_JSON_SCHEMA_OPTIONS } from '@shared/tools/toolJsonSchema';
@@ -407,12 +406,11 @@ const generateAgentYaml = Effect.fn('agentCreator.generateYaml')(function* (
   blueprint: AgentBlueprint,
   ui: AgentCreatorUI,
   stores: ModelOptionStores,
-  roots: SettingsStores,
 ): Effect.fn.Return<string, unknown, LanguageModel | HttpClient.HttpClient> {
   let lastValidationError: string | undefined;
 
   const attempt = Effect.gen(function* () {
-    const bound = yield* helperModel(stores, roots);
+    const bound = yield* helperModel(stores);
 
     const prompts = config[blueprint.category];
     const schemaRef = getSchemaReference(blueprint.category);
@@ -483,17 +481,15 @@ const generateAgentYaml = Effect.fn('agentCreator.generateYaml')(function* (
  * cancelled. The host's UI calls are its ports; their failures are the
  * host's own errors.
  *
- * `stores` are the process secret store and global state (`Secrets` /
- * `AppState`) the host command already holds; the helper model that drafts the
- * YAML is resolved against them, with `roots` (the host's setting slots)
- * supplying the bind's toggles.
+ * `stores` are the secret store and the host's three setting slots the command
+ * already holds; the helper model that drafts the YAML is resolved and bound
+ * against them.
  */
 export const runAgentCreator = Effect.fn('runAgentCreator')(function* (
   config: CreatorConfig,
   category: AgentCategory,
   ui: AgentCreatorUI,
   stores: ModelOptionStores,
-  roots: SettingsStores,
 ): Effect.fn.Return<
   void,
   unknown,
@@ -521,13 +517,7 @@ export const runAgentCreator = Effect.fn('runAgentCreator')(function* (
   );
   if (!blueprint) return;
 
-  const yamlContent = yield* generateAgentYaml(
-    config,
-    blueprint,
-    ui,
-    stores,
-    roots,
-  );
+  const yamlContent = yield* generateAgentYaml(config, blueprint, ui, stores);
   // The blueprint's path is absolute and its directory is the one the UI
   // just answered with, so the write goes through the process filesystem.
   const fs = yield* FileSystem.FileSystem;

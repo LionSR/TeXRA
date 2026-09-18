@@ -3,6 +3,7 @@ import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports
+import { ToolCall } from '@agent/runtime/ToolCall';
 import { createLog } from '@logger/logUtils';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import { Secrets } from '@platform/secrets';
@@ -32,6 +33,7 @@ const verify = Effect.fn('VerifySetupTool.execute')(function* (
 ) {
   const platform = yield* SetupPlatform;
   const secrets = yield* Secrets;
+  const { roots } = yield* ToolCall;
 
   if (input.tool != null) {
     const name = input.tool.trim();
@@ -80,7 +82,7 @@ const verify = Effect.fn('VerifySetupTool.execute')(function* (
   const [core, hasUsableCredential] = yield* Effect.all(
     [
       collectCoreSetupStatus(platform),
-      hasUsableSetupCredential(secrets, credentialLog.warn),
+      hasUsableSetupCredential(roots, secrets, credentialLog.warn),
     ],
     { concurrency: 'unbounded' },
   );

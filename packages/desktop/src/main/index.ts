@@ -966,10 +966,8 @@ function createWindow(options: {
     );
     const snapshot = createHostSnapshotSource({
       project: projectDisplayOf(project.key, project.root),
-      globalState: options.globalState,
-      workspaceState: project.session.roots.workspaceState,
+      stores: project.session.roots,
       secrets: options.secrets,
-      inScope: (read) => runInSession(project.session, read),
       fileOptions: () =>
         Effect.tryPromise({
           try: () => files.fileOptions(),
@@ -1268,7 +1266,7 @@ function createWindow(options: {
     const credentialSettingsController =
       new DefaultDesktopCredentialSettingsController({
         runtime,
-        inScope: (read) => runInSession(project.session, read),
+        stores: project.roots,
         workspaceState: project.roots.workspaceState,
         globalState: options.globalState,
         config: project.roots.config,

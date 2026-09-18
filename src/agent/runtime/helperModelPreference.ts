@@ -13,10 +13,8 @@ import { Effect } from 'effect';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { createLog } from '@logger/logUtils';
 import {
-  CALLING_SCOPE,
   modelUnavailableReasonFrom,
   readModelAvailabilityInputs,
-  type ModelAvailabilityScope,
   type ModelOptionStores,
 } from '@model/computeModelOptions';
 import { getRuntimeModelConfig } from '@model/runtimeModelRegistry';
@@ -31,20 +29,13 @@ const log = createLog('helperModelPreference');
  * when the helper model already equals it, a tool-use agent's helper model can't
  * call functions, or the helper model is unavailable.
  *
- * `stores` are the process secret store and global state the launching run
- * already holds (the `Secrets` / `AppState` services), so the preference and
- * the availability answer are read from the same stores as the run itself.
- * `inScope` is the launching run's session frame, handed to the reads rather
- * than wrapped around this call: the reads are Effects, so a wrapper would
- * enter the frame around building the program instead of around running it.
+ * `stores` are the secret store and the session's setting slots the launching
+ * run already holds, so the preference and the availability answer are read
+ * from the same stores as the run itself.
  */
 export const applyHelperModelPreference = Effect.fn(
   'applyHelperModelPreference',
-)(function* (
-  config: AgentConfig,
-  stores: ModelOptionStores,
-  inScope: ModelAvailabilityScope = CALLING_SCOPE,
-) {
+)(function* (config: AgentConfig, stores: ModelOptionStores) {
   const helperModel = getHelperModelName(stores.globalState);
   if (helperModel === config.model) return config;
 
@@ -64,7 +55,7 @@ export const applyHelperModelPreference = Effect.fn(
   }
 
   const unavailable = modelUnavailableReasonFrom(
-    yield* readModelAvailabilityInputs(stores, [helperModel], inScope),
+    yield* readModelAvailabilityInputs(stores, [helperModel]),
     helperModel,
   );
   if (unavailable) {

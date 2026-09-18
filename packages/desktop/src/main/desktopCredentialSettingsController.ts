@@ -30,7 +30,6 @@ import {
   modelOptionsFrom,
   readModelAvailabilityInputs,
 } from '@model/computeModelOptions';
-import type { ModelAvailabilityScope } from '@model/computeModelOptions';
 import { discoveredCopilotRoutes } from '@model/runtimeModelRegistry';
 import type { ConfigProvider } from '@platform/interfaces';
 import type { ProcessRuntime } from '@platform/processRuntime';
@@ -47,6 +46,7 @@ import {
   type UpdateGrokAuthStatusMessage,
 } from '@shared/schemas';
 import { ACCOUNT_OUTCOME } from '@shared/copy/accountAuth';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { SettingsStatePorts } from '@shared/settingsView/types';
 import { getProviderKeyUrl } from '@utils/config/providerConfig';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -74,12 +74,11 @@ interface DesktopCredentialSettingsControllerOptions extends SettingsStatePorts 
   readonly config: ConfigProvider;
   readonly secrets: PlatformSecrets;
   /**
-   * The project's session frame. The availability read resolves the workspace
-   * subscription preferences inside it; a fiber started on the runtime
-   * carries no AsyncLocalStorage frame of its own, so the read is handed the
-   * frame explicitly rather than inheriting the caller's.
+   * The project's three setting slots. The availability read resolves this
+   * project's routing switches and subscription preferences against them, so a
+   * window showing one project never answers with another's values.
    */
-  readonly inScope: ModelAvailabilityScope;
+  readonly stores: SettingsStores;
   readonly renderer: {
     postToRenderer(message: unknown): void;
   };
@@ -167,15 +166,16 @@ const SUBSCRIPTION_STATUS_ROWS: Record<
   SubscriptionProviderId,
   {
     readonly buildStatusMessage: (
+      stores: SettingsStores,
       secrets: PlatformSecrets,
     ) => Effect.Effect<unknown>;
     readonly usageProvider?: SubscriptionUsageProvider;
   }
 > = {
   chatgpt: {
-    buildStatusMessage: (secrets) =>
+    buildStatusMessage: (stores, secrets) =>
       Effect.map(
-        getChatGptAuthStatus(secrets),
+        getChatGptAuthStatus(stores, secrets),
         (status) =>
           ({
             command: SETTINGS_VIEW_COMMANDS.UPDATE_CHATGPT_AUTH_STATUS,
@@ -185,9 +185,9 @@ const SUBSCRIPTION_STATUS_ROWS: Record<
     usageProvider: 'chatgpt',
   },
   grok: {
-    buildStatusMessage: (secrets) =>
+    buildStatusMessage: (stores, secrets) =>
       Effect.map(
-        getGrokAuthStatus(secrets),
+        getGrokAuthStatus(stores, secrets),
         (status) =>
           ({
             command: SETTINGS_VIEW_COMMANDS.UPDATE_GROK_AUTH_STATUS,
@@ -232,16 +232,19 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
   ) {
     this.subscriptionUsage =
       options.subscriptionUsage ??
-      new SubscriptionUsageService({ secrets: options.secrets });
+      new SubscriptionUsageService({
+        secrets: options.secrets,
+        stores: options.stores,
+      });
     this.modelSelectionController = new SettingsModelSelectionController({
-      globalState: options.globalState,
+      stores: options.stores,
       secrets: options.secrets,
       // The availability read is an Effect; this is the boundary that holds a
       // runtime to run it on, so the controller takes its rows as data.
       resolveModelOptions: async (stores, models) =>
         modelOptionsFrom(
           await options.runtime.runPromise(
-            readModelAvailabilityInputs(stores, models, options.inScope),
+            readModelAvailabilityInputs(stores, models),
           ),
         ),
       // The route catalogue read is an Effect for the same reason.
@@ -271,7 +274,8 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
       externalOpener: options.externalOpener,
       getProviderDisplayName: (provider) =>
         this.profileController.getProviderDisplayName(provider),
-      getProviderKeyUrl,
+      getProviderKeyUrl: (provider) =>
+        getProviderKeyUrl(options.stores, provider),
       refreshAfterKeyChange: (provider) =>
         this.refreshAfterProviderKeyChange(provider),
       reportFailure: async (message, error) => {
@@ -509,7 +513,7 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
           }),
         );
         await this.options.runtime.runPromise(
-          provider.setPreferSubscription(true),
+          provider.setPreferSubscription(this.options.stores, true),
         );
         await this.options.runtime.runPromise(
           this.options.notifications.showInfoMessage(
@@ -599,7 +603,7 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
         `${provider.displayName} subscription preference update failed: ${toErrorMessage(error)}`,
       async (provider) => {
         const update = await this.options.runtime.runPromise(
-          provider.setPreferSubscription(enabled),
+          provider.setPreferSubscription(this.options.stores, enabled),
         );
         if (update.effective !== enabled) {
           await this.options.runtime.runPromise(
@@ -626,6 +630,7 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
     this.options.renderer.postToRenderer(
       await this.options.runtime.runPromise(
         SUBSCRIPTION_STATUS_ROWS[providerId].buildStatusMessage(
+          this.options.stores,
           this.options.secrets,
         ),
       ),

@@ -19,12 +19,12 @@ import {
   getEnabledModels,
   modelOptionsFrom,
   readModelAvailabilityInputs,
-  type ModelAvailabilityScope,
 } from '@model/computeModelOptions';
 import type { StateStore, StateWriteFailed } from '@platform/interfaces';
 import type { LanguageModel } from '@platform/languageModel';
 import type { GlobalStorageFs } from '@platform/rootedFs';
 import type { PlatformSecrets } from '@platform/secrets';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { FileOptions, SessionType } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type {
@@ -55,25 +55,19 @@ export class HostSnapshotReadFailed extends Data.TaggedError(
 
 interface HostSnapshotSourceOptions {
   project: ProjectDisplay;
-  globalState: StateStore;
-  /** The owning session's workspace-scoped team and roster state. */
-  workspaceState: StateStore;
+  /**
+   * The owning session's three setting slots: its workspace-scoped team and
+   * roster state, its configuration, and the process global state. The model
+   * catalog's availability read resolves the routing switches and the two
+   * "prefer my subscription" preferences against these, so a host with several
+   * open projects in one process answers for the project this source belongs
+   * to.
+   */
+  stores: SettingsStores;
   /** The process secret store, read by the model catalog's availability
    *  answers. The host root that owns it threads it in beside
-   *  {@link HostSnapshotSourceOptions.globalState}. */
+   *  {@link HostSnapshotSourceOptions.stores}. */
   secrets: PlatformSecrets;
-  /**
-   * The owning project's session frame. The model catalog's availability read
-   * resolves the two "prefer my subscription" switches against the session's
-   * workspace roots, and it is an Effect: a fiber resumes outside whatever
-   * frame its caller entered, so the frame is threaded in and applied around
-   * each host call instead of wrapped around the refresh. A host that runs one
-   * session per process (the extension, the CLI) is already in that frame and
-   * omits this; a host with several open projects in one process (the
-   * desktop) passes that project's, or every project reads the process roots'
-   * preferences.
-   */
-  inScope?: ModelAvailabilityScope;
   /** The launcher's single-slot catalogs: base and edited candidates. The
    *  read takes the process `FileSystem` from context; the refresh effects
    *  that reach it carry the requirement. */
@@ -192,7 +186,7 @@ export function createHostSnapshotSource(
         gettingStarted: !hasInputFiles && !dismissed.has('gettingStarted'),
         login:
           !authenticated &&
-          !options.globalState.get<boolean>(
+          !options.stores.globalState.get<boolean>(
             GlobalStateKey.LOGIN_BANNER_DISMISSED,
             false,
           ),
@@ -209,16 +203,15 @@ export function createHostSnapshotSource(
     catalogs = {
       ...catalogs,
       teamOptions: yield* loadTeamOptions(
-        createTeamCatalogPorts(options.workspaceState),
+        createTeamCatalogPorts(options.stores.workspaceState),
       ),
     };
   });
 
   const loadModels = Effect.gen(function* () {
     const inputs = yield* readModelAvailabilityInputs(
-      { secrets: options.secrets, globalState: options.globalState },
-      getEnabledModels(options.globalState),
-      options.inScope,
+      { ...options.stores, secrets: options.secrets },
+      getEnabledModels(options.stores.globalState),
     );
     catalogs = { ...catalogs, modelOptions: modelOptionsFrom(inputs) };
   });
@@ -316,7 +309,7 @@ export function createHostSnapshotSource(
       // update is lazy, and a snapshot taken before it executes still reads
       // the banner as undismissed.
       return Effect.gen(function* () {
-        yield* options.globalState.update(
+        yield* options.stores.globalState.update(
           GlobalStateKey.LOGIN_BANNER_DISMISSED,
           true,
         );

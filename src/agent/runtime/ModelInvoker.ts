@@ -956,12 +956,10 @@ export const modelInvokerLayer = (): Layer.Layer<
             const next = yield* bindModel({
               config,
               stores: run.stores,
-              roots: session.roots,
               compatibilityKey: failed.compatibilityKey,
               declinedRoutes,
               agentCategory: run.config.agentCategory,
               temperature: run.setting.temperature,
-              inScope: run.inScope,
             }).pipe(Scope.provide(run.scope));
             yield* releaseBindingUploads(current.model, current.modelId);
             logger.debug('Refreshed model binding before manual retry');

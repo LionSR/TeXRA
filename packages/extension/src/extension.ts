@@ -554,19 +554,20 @@ async function activateExtension(context: vscode.ExtensionContext) {
     // needs a folder — so the walkthrough's credential buttons work before
     // one is open. Agents still require the workspace-backed platform below;
     // opening a folder reloads the window into that path (welcomeView.ts).
-    const { secrets, runtime, auth, authReadiness } = await initVscodePlatform(
-      context,
-      lifecycle,
-      undefined,
-      mementoStateStore(context.workspaceState),
-      // The credential-only path never initializes a session; a resume
-      // request cannot arrive here because every run belongs to one.
-      () => {
-        throw new Error(
-          'The credential-only activation has no session to resume into.',
-        );
-      },
-    );
+    const { secrets, runtime, auth, authReadiness, roots } =
+      await initVscodePlatform(
+        context,
+        lifecycle,
+        undefined,
+        mementoStateStore(context.workspaceState),
+        // The credential-only path never initializes a session; a resume
+        // request cannot arrive here because every run belongs to one.
+        () => {
+          throw new Error(
+            'The credential-only activation has no session to resume into.',
+          );
+        },
+      );
     wirePostPlatform(secrets, runtime, auth, authReadiness);
     // The full command surface (including the workspace-backed
     // `texra.createSampleProject`) is only registered on the single-folder
@@ -586,12 +587,12 @@ async function activateExtension(context: vscode.ExtensionContext) {
         runtime.runPromise(authSignIn),
       ),
       vscode.commands.registerCommand('texra.auth.chatgpt.signIn', () =>
-        signInWithSubscription('welcomeView', 'chatgpt', runtime),
+        signInWithSubscription(roots, 'welcomeView', 'chatgpt', runtime),
       ),
       // No settings view exists before a folder is open, so there is no
       // credential surface to refresh after the key write.
       vscode.commands.registerCommand(EXTENSION_COMMANDS.SET_API_KEY, () =>
-        apiSetApiKey(secrets, async () => {}, runtime),
+        apiSetApiKey(roots, secrets, async () => {}, runtime),
       ),
     );
     registerWalkthroughWorkspaceAction(context, false);
@@ -680,11 +681,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
   const runtimeSession = await runtime.runPromise(
     initializeDefaultSession({
       responseTextProcessing: createTexraResponseTextProcessing(
-        createAgentResponseTextConnector(
-          { secrets, globalState },
-          roots,
-          languageModel,
-        ),
+        createAgentResponseTextConnector({ ...roots, secrets }, languageModel),
       ),
     }),
   );
@@ -895,7 +892,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
       apiKeyStatusRefreshLanes,
       'refresh',
     )(
-      refreshApiKeyStatusBar(secrets, {
+      refreshApiKeyStatusBar(roots, secrets, {
         setup: apiKeyStatusBarItem,
         tasks: statusBarItem,
       }),

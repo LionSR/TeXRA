@@ -35,11 +35,10 @@ import type { AgentEntry } from '@agent/index/agentEntry';
 import {
   modelOptionsFrom,
   readModelAvailabilityInputs,
-  type ModelAvailabilityScope,
 } from '@model/computeModelOptions';
 import { decideRunModel } from '@model/runModelDecision';
-import { AppState } from '@platform/interfaces';
 import { Secrets } from '@platform/secrets';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import type {
   AgentCategory,
   AgentDelegationScope,
@@ -246,26 +245,18 @@ export const selectAvailableDelegationModel = Effect.fn(
   readonly requestedModel?: string | null;
   readonly parentModel?: string | null;
   /**
-   * Context frame the availability read runs inside. Callers that reach this
-   * from outside their run's own frame — an approved proposal, a workflow
-   * script's per-call model routing — pass their `withRunContext` /
-   * `runInSession` wrapper here. Only the read needs it; the decision below
-   * is pure. It is handed to the read rather than wrapped around it: the read
-   * is an Effect, so wrapping the call would enter the frame around building
-   * the program instead of around running it.
+   * The setting slots the availability read answers from: the calling run's
+   * session roots. Callers that reach this from outside their run — an
+   * approved proposal, a workflow script's per-call model routing — hand in
+   * the roots of the session the delegation belongs to, so the answer does not
+   * depend on which frame the fiber resumed in.
    */
-  readonly withScope?: ModelAvailabilityScope;
+  readonly settings: SettingsStores;
 }) {
-  const { withScope } = input;
-  const stores = {
+  const inputs = yield* readModelAvailabilityInputs({
+    ...input.settings,
     secrets: yield* Secrets,
-    globalState: yield* AppState,
-  };
-  const inputs = yield* readModelAvailabilityInputs(
-    stores,
-    undefined,
-    withScope,
-  );
+  });
   const models = modelOptionsFrom(inputs);
   const availableModels = unique(
     availableModelNamesFromOptions(models)

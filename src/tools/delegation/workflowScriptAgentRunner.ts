@@ -62,7 +62,7 @@ function workflowScriptModelSelection(
   return selectAvailableDelegationModel({
     ...(requestedModel !== undefined && { requestedModel }),
     parentModel: parent.model,
-    withScope: parent.inScope,
+    settings: parent.roots,
   }).pipe(
     Effect.mapError((error) => {
       // A declared model is workflow configuration, so its rejection must not

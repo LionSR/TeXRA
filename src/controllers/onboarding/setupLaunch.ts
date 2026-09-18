@@ -21,6 +21,7 @@ import {
 } from '@model/setupCredentialAccess';
 import type { LanguageModel } from '@platform/languageModel';
 import type { PlatformSecrets } from '@platform/secrets';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import { AgentCategory } from '@shared/schemas';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
@@ -36,6 +37,7 @@ export const SETUP_INSTRUCTION =
  * ChatGPT/Codex subscription, Grok subscription, then direct provider key.
  */
 export function selectSetupCredentialModelExcludingOpenRouter(
+  stores: SettingsStores,
   secrets: PlatformSecrets,
   useOpenRouter = false,
 ): Effect.Effect<string | null, never, LanguageModel> {
@@ -44,6 +46,7 @@ export function selectSetupCredentialModelExcludingOpenRouter(
     // When it is enabled, only managed direct credentials can bypass it.
     if (!useOpenRouter) {
       const subscriptionModel = yield* setupSubscriptionModel(
+        stores,
         credentialLog.warn,
       );
       if (subscriptionModel !== null) return subscriptionModel;
@@ -84,11 +87,12 @@ interface SetupModelResolution {
  * it.
  */
 export function resolveSetupLaunchModel(
+  stores: SettingsStores,
   secrets: PlatformSecrets,
   includeAccessListFallback: boolean,
 ): Effect.Effect<SetupModelResolution | null, never, LanguageModel> {
   return Effect.gen(function* () {
-    const useOpenRouter = getUseOpenRouter();
+    const useOpenRouter = getUseOpenRouter(stores);
     const hasOpenRouterKey = yield* probeSetupCredential(
       hasUsableApiKey(secrets, 'openRouter').pipe(
         Effect.mapError(setupCredentialProbeFailed('OpenRouter API key')),
@@ -102,6 +106,7 @@ export function resolveSetupLaunchModel(
       useOpenRouter && openRouterModel
         ? null
         : yield* selectSetupCredentialModelExcludingOpenRouter(
+            stores,
             secrets,
             useOpenRouter,
           );
@@ -137,11 +142,12 @@ export function resolveSetupLaunchModel(
  * out and the resolution is projected to its model.
  */
 export function buildDesktopSetupRunRequest(
+  stores: SettingsStores,
   secrets: PlatformSecrets,
 ): Effect.Effect<ValidatedRunRequest | null, Error, LanguageModel> {
   return Effect.gen(function* () {
     const model =
-      (yield* resolveSetupLaunchModel(secrets, false))?.model ?? null;
+      (yield* resolveSetupLaunchModel(stores, secrets, false))?.model ?? null;
     if (!model) return null;
     const validation = validateRunRequest({
       config: {

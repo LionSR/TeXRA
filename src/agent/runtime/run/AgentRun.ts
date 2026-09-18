@@ -290,13 +290,11 @@ export const agentRunLayer = (
       const bound = yield* bindModel({
         config: modelConfig,
         stores: ctx.stores,
-        roots: session.roots,
         compatibilityKey,
         ownApiKeyFallback: ctx.ownApiKeyFallback,
         declinedRoutes,
         agentCategory: config.agentCategory,
         temperature: setting.temperature,
-        inScope: input.inScope,
       }).pipe(Scope.provide(scope));
       const model = yield* SynchronizedRef.make(bound);
       const pendingModelSwitch: { value: string | null } = { value: null };

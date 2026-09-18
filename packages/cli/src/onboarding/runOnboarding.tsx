@@ -35,6 +35,7 @@ import {
   type ApiProvider,
 } from '@model/apiProviders';
 import type { ModelOptionStores } from '@model/computeModelOptions';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import type { LanguageModel } from '@platform/languageModel';
 import type { PlatformSecrets } from '@platform/secrets';
@@ -151,6 +152,7 @@ export const maybeRunCliOnboarding = Effect.fn('maybeRunCliOnboarding')(
     }
     const { globalState } = services;
     const hasCredential = yield* hasUsableSetupCredential(
+      services,
       services.secrets,
       credentialLog.warn,
     );
@@ -233,6 +235,7 @@ const runOnboardingFlow = Effect.fn('runOnboardingFlow')(function* (options: {
         (resolve) => (
           <OnboardingApp
             secrets={options.stores.secrets}
+            stores={options.stores}
             runtime={options.stores.runtime}
             pickerSubtitle={
               options.firstRun
@@ -291,6 +294,8 @@ type Screen = 'picker' | 'chatgpt-progress' | 'key-provider' | 'key-entry';
 
 interface OnboardingAppProps {
   readonly secrets: PlatformSecrets;
+  /** The three setting slots the ChatGPT preference is written to. */
+  readonly stores: SettingsStores;
   /** The process runtime the key write and the ChatGPT sign-in run on,
    *  threaded from the entry point that holds it. */
   readonly runtime: ProcessRuntime;
@@ -345,6 +350,7 @@ function OnboardingApp(props: OnboardingAppProps): React.JSX.Element {
     };
     return (
       <ChatGptProgressStep
+        stores={props.stores}
         runtime={props.runtime}
         device={isLikelyRemoteSession()}
         onSuccess={onSuccess}
@@ -493,11 +499,12 @@ interface ChatGptProgressCallbacks {
 
 function ChatGptProgressStep(
   props: ChatGptProgressCallbacks & {
+    readonly stores: SettingsStores;
     readonly runtime: ProcessRuntime;
     readonly device: boolean;
   },
 ): React.JSX.Element {
-  const { device, runtime } = props;
+  const { device, runtime, stores } = props;
   const [message, setMessage] = useState(
     device
       ? 'Requesting a ChatGPT device code...'
@@ -518,7 +525,7 @@ function ChatGptProgressStep(
             },
           );
           const update = yield* subscriptionProvider('chatgpt')
-            .setPreferSubscription(true)
+            .setPreferSubscription(stores, true)
             .pipe(Effect.mapError(ensureError));
           if (!update.effective) {
             if (!isCancelled())

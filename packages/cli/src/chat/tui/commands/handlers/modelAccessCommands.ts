@@ -12,6 +12,7 @@ import { updateCliModelAccess } from '@cli/runtime/modelAccessSelection';
 import type { ApiProvider } from '@model/apiProviders';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import { codingPlanForApiProvider } from '@shared/codingPlanSubscriptions';
 import { collapseWhitespace } from '@utils/text/stringUtils';
 import {
@@ -46,6 +47,7 @@ export const applyCliProviderApiKey = Effect.fn('applyCliProviderApiKey')(
 );
 
 async function applyCliModelAccessSelectionWithSignal(
+  stores: SettingsStores,
   runtime: ProcessRuntime,
   selection: CliModelAccessSelection,
   context: SlashCommandContext | undefined,
@@ -53,7 +55,7 @@ async function applyCliModelAccessSelectionWithSignal(
   signal: AbortSignal,
 ): Promise<void> {
   const access = await runtime.runPromise(
-    updateCliModelAccess(context?.cliContext, selection, {
+    updateCliModelAccess(stores, context?.cliContext, selection, {
       writeProgress: (message) =>
         output.writeProgress(message, { copyable: true }),
     }),
@@ -64,6 +66,7 @@ async function applyCliModelAccessSelectionWithSignal(
 }
 
 export function applyCliModelAccessSelection(
+  stores: SettingsStores,
   runtime: ProcessRuntime,
   selection: CliModelAccessSelection,
   context: SlashCommandContext | undefined,
@@ -71,6 +74,7 @@ export function applyCliModelAccessSelection(
 ): Promise<void> & { readonly abort: () => void } {
   return abortableSlashCommand((signal) =>
     applyCliModelAccessSelectionWithSignal(
+      stores,
       runtime,
       selection,
       context,
@@ -81,6 +85,7 @@ export function applyCliModelAccessSelection(
 }
 
 export function applyCliModelAccessInput(
+  stores: SettingsStores,
   runtime: ProcessRuntime,
   routeInput: string,
   context: SlashCommandContext,
@@ -91,7 +96,7 @@ export function applyCliModelAccessInput(
 
     if (!normalized || normalized === 'status') {
       const lines = await runtime.runPromise(
-        loadCliDetailedAccountStatusLines(context.secrets),
+        loadCliDetailedAccountStatusLines(context.stores, context.secrets),
       );
       output.appendOutcome(lines.join('\n'));
       return;
@@ -104,6 +109,7 @@ export function applyCliModelAccessInput(
     }
 
     await applyCliModelAccessSelectionWithSignal(
+      stores,
       runtime,
       selection,
       context,
@@ -114,11 +120,12 @@ export function applyCliModelAccessInput(
 }
 
 export async function showCliAuthStatus(
+  stores: SettingsStores,
   runtime: ProcessRuntime,
   secrets: PlatformSecrets,
 ): Promise<void> {
   const lines = await runtime.runPromise(
-    loadCliDetailedAccountStatusLines(secrets),
+    loadCliDetailedAccountStatusLines(stores, secrets),
   );
   transcriptSlashCommandOutput.appendOutcome(lines.join('\n'));
 }

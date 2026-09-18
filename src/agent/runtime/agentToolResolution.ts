@@ -32,7 +32,6 @@ import { createLog } from '@logger/logUtils';
 import {
   modelOptionsFrom,
   readModelAvailabilityInputs,
-  type ModelAvailabilityScope,
   type ModelOptionStores,
 } from '@model/computeModelOptions';
 import type { LanguageModel } from '@platform/languageModel';
@@ -79,12 +78,12 @@ interface ResolveAgentToolsInput {
   /** The run's pinned delegation roster scope, when this is a delegated run. */
   delegationScope?: AgentDelegationScope;
   /**
-   * The run's session frame, applied around the model-availability and worktree
-   * reads this resolver makes. It is handed in rather than wrapped around the
-   * call because this resolver is an Effect, so a wrapper would enter the frame
-   * around building the program instead of around running it.
+   * The run's session frame, applied around the worktree read this resolver
+   * makes. It is handed in rather than wrapped around the call because this
+   * resolver is an Effect, so a wrapper would enter the frame around building
+   * the program instead of around running it.
    */
-  inScope?: ModelAvailabilityScope;
+  inScope?: <A>(operation: () => A) => A;
 }
 
 /**
@@ -98,13 +97,12 @@ interface ResolveAgentToolsInput {
 function availableDelegationModelNamesForTools(
   tools: readonly ToolDefinition[],
   stores: ModelOptionStores,
-  inScope: ModelAvailabilityScope | undefined,
 ): Effect.Effect<readonly string[] | null | undefined, never, LanguageModel> {
   if (!hasDelegationTool(tools.map((tool) => tool.name))) {
     return Effect.succeed(undefined);
   }
 
-  return readModelAvailabilityInputs(stores, undefined, inScope).pipe(
+  return readModelAvailabilityInputs(stores).pipe(
     Effect.map((inputs) =>
       availableModelNamesFromOptions(modelOptionsFrom(inputs)),
     ),
@@ -201,7 +199,6 @@ export const resolveAgentTools = Effect.fn('resolveAgentTools')(function* ({
   const availableModelNames = yield* availableDelegationModelNamesForTools(
     resolved,
     stores,
-    inScope,
   );
   // The worktree read resolves inside the caller's frame. The run's pinned
   // delegation scope is already explicit data from AgentRun, so both facts

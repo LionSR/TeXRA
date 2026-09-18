@@ -22,6 +22,7 @@ import type { LanguageModel } from '@platform/languageModel';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import { presentLaunchedProgressRun } from '@progressView/progressNavigation';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import { agentName } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
@@ -47,9 +48,10 @@ interface LaunchModelResolution {
  * fallback's flag flip is expected, unlike desktop's silent-launch path).
  */
 function selectLaunchModel(
+  stores: SettingsStores,
   secrets: PlatformSecrets,
 ): Effect.Effect<LaunchModelResolution | null, never, LanguageModel> {
-  return resolveSetupLaunchModel(secrets, true).pipe(
+  return resolveSetupLaunchModel(stores, secrets, true).pipe(
     Effect.map((resolution) =>
       resolution
         ? {
@@ -108,14 +110,19 @@ function withOpenRouterFlagOn<A, E, R>(
  * routing belongs to `resolveSetupLaunchModel`.
  */
 export function hasAnyUsableSetupCredential(
+  stores: SettingsStores,
   secrets: PlatformSecrets,
 ): Effect.Effect<boolean, never, LanguageModel> {
-  return hasUsableSetupCredential(secrets, credentialLog.warn);
+  return hasUsableSetupCredential(stores, secrets, credentialLog.warn);
 }
 
 const ensureCredentialOrPrompt = Effect.fn('ensureCredentialOrPrompt')(
-  function* (secrets: PlatformSecrets, runtime: ProcessRuntime) {
-    if (yield* hasAnyUsableSetupCredential(secrets)) {
+  function* (
+    stores: SettingsStores,
+    secrets: PlatformSecrets,
+    runtime: ProcessRuntime,
+  ) {
+    if (yield* hasAnyUsableSetupCredential(stores, secrets)) {
       return true;
     }
 
@@ -154,7 +161,7 @@ const ensureCredentialOrPrompt = Effect.fn('ensureCredentialOrPrompt')(
     switch (picked.id) {
       case 'chatgpt':
         yield* Effect.promise(() =>
-          signInWithSubscription(CHANNEL, 'chatgpt', runtime),
+          signInWithSubscription(stores, CHANNEL, 'chatgpt', runtime),
         );
         break;
       case 'apiKey':
@@ -171,7 +178,7 @@ const ensureCredentialOrPrompt = Effect.fn('ensureCredentialOrPrompt')(
         return false;
     }
 
-    return yield* hasAnyUsableSetupCredential(secrets);
+    return yield* hasAnyUsableSetupCredential(stores, secrets);
   },
 );
 
@@ -179,10 +186,11 @@ const ensureCredentialOrPrompt = Effect.fn('ensureCredentialOrPrompt')(
 // A managed direct route can remain runnable even when global OpenRouter is
 // enabled without an OpenRouter key.
 function isRoutingConfigured(
+  stores: SettingsStores,
   secrets: PlatformSecrets,
 ): Effect.Effect<boolean, never, LanguageModel> {
-  if (!getUseOpenRouter()) return Effect.succeed(true);
-  return resolveSetupLaunchModel(secrets, false).pipe(
+  if (!getUseOpenRouter(stores)) return Effect.succeed(true);
+  return resolveSetupLaunchModel(stores, secrets, false).pipe(
     Effect.map((resolution) => resolution !== null),
   );
 }
@@ -194,9 +202,10 @@ function isRoutingConfigured(
  * flag, because concurrent OpenRouter-routed agents may rely on it.
  */
 const ensureRoutingConfigured = Effect.fn('ensureRoutingConfigured')(function* (
+  stores: SettingsStores,
   secrets: PlatformSecrets,
 ) {
-  if (yield* isRoutingConfigured(secrets)) return true;
+  if (yield* isRoutingConfigured(stores, secrets)) return true;
 
   const choice = yield* Effect.promise(() =>
     vscode.window.showWarningMessage(
@@ -220,7 +229,7 @@ const ensureRoutingConfigured = Effect.fn('ensureRoutingConfigured')(function* (
   // Re-check: the user may have resolved the misconfiguration (added an
   // OR key, or disabled Use OpenRouter in the Models tab), in which case
   // we can proceed without forcing them to re-invoke the command.
-  return yield* isRoutingConfigured(secrets);
+  return yield* isRoutingConfigured(stores, secrets);
 });
 
 /**
@@ -263,14 +272,18 @@ export function launchSetupAssistant(
       // key would otherwise fall into the credential prompt first because
       // isCodexSubscriptionActive returns false because
       // shouldUseCodexSubscription short-circuits when useOpenRouter is true.
-      if (!(yield* ensureRoutingConfigured(secrets))) {
+      if (!(yield* ensureRoutingConfigured(session.roots, secrets))) {
         void vscode.window.showInformationMessage(
           'Setup assistant cancelled. Fix the "Use OpenRouter" setting in Dashboard → Models, then run `TeXRA: Run Setup Assistant` again.',
         );
         return 'not-started' as const;
       }
 
-      const proceed = yield* ensureCredentialOrPrompt(secrets, runtime);
+      const proceed = yield* ensureCredentialOrPrompt(
+        session.roots,
+        secrets,
+        runtime,
+      );
       if (!proceed) {
         void vscode.window.showInformationMessage(
           'Setup assistant cancelled. Run `TeXRA: Run Setup Assistant` again once you have signed in, turned on your ChatGPT subscription, or set an API key.',
@@ -278,7 +291,7 @@ export function launchSetupAssistant(
         return 'not-started' as const;
       }
 
-      const resolution = yield* selectLaunchModel(secrets);
+      const resolution = yield* selectLaunchModel(session.roots, secrets);
       if (!resolution) {
         // Edge case: no setup-model candidate is usable with the current
         // credentials. Refuse launch rather than pick a model that crashes at

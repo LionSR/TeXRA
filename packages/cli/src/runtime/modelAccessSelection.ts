@@ -11,6 +11,7 @@ import {
 } from '@model/codingPlanSubscriptions';
 import { AppState, StateWriteFailed } from '@platform/interfaces';
 import { Secrets, type PlatformSecrets } from '@platform/secrets';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -53,7 +54,7 @@ class ModelAccessPreferenceFailed extends Data.TaggedError(
  */
 export const readCliModelAccessStatus = Effect.fn(
   'modelAccessSelection.readCliModelAccessStatus',
-)(function* (secrets: PlatformSecrets) {
+)(function* (stores: SettingsStores, secrets: PlatformSecrets) {
   const [chatGpt, grok, codingPlanEntries] = yield* Effect.all(
     [
       subscriptionProvider('chatgpt').getStatus(secrets),
@@ -66,7 +67,7 @@ export const readCliModelAccessStatus = Effect.fn(
             (keySet) =>
               [
                 runtime.descriptor.id,
-                { preferred: runtime.getEnabled(), keySet },
+                { preferred: runtime.getEnabled(stores), keySet },
               ] as const,
           ),
         { concurrency: 'unbounded' },
@@ -78,10 +79,12 @@ export const readCliModelAccessStatus = Effect.fn(
     codingPlanEntries,
   ) as CliModelAccessStatus['codingPlans'];
   const preferences = {
-    chatGpt: subscriptionProvider('chatgpt').isPreferSubscription()
+    chatGpt: subscriptionProvider('chatgpt').isPreferSubscription(stores)
       ? 'on'
       : 'off',
-    grok: subscriptionProvider('grok').isPreferSubscription() ? 'on' : 'off',
+    grok: subscriptionProvider('grok').isPreferSubscription(stores)
+      ? 'on'
+      : 'off',
   } as const;
   return {
     preferences,
@@ -115,6 +118,7 @@ export function mergeCliTexraAccountStatus(
 const updateSubscriptionCliModelAccess = Effect.fn(
   'modelAccessSelection.updateSubscriptionCliModelAccess',
 )(function* (
+  stores: SettingsStores,
   context: CliContext | undefined,
   selection: CliModelAccessSelection,
   providerId: SubscriptionProviderId,
@@ -124,7 +128,7 @@ const updateSubscriptionCliModelAccess = Effect.fn(
   const secrets = yield* Secrets;
   const { displayName, modelFamily } = provider;
   if (selection.state === 'off') {
-    const update = yield* provider.setPreferSubscription(false).pipe(
+    const update = yield* provider.setPreferSubscription(stores, false).pipe(
       Effect.mapError(
         (cause) =>
           new ModelAccessPreferenceFailed({
@@ -156,7 +160,7 @@ const updateSubscriptionCliModelAccess = Effect.fn(
     accountLabel = account.label;
   }
 
-  const update = yield* provider.setPreferSubscription(true).pipe(
+  const update = yield* provider.setPreferSubscription(stores, true).pipe(
     Effect.mapError(
       (cause) =>
         new ModelAccessPreferenceFailed({
@@ -189,12 +193,13 @@ const updateSubscriptionCliModelAccess = Effect.fn(
 const updateKeyedCliModelAccess = Effect.fn(
   'modelAccessSelection.updateKeyedCliModelAccess',
 )(function* (
+  stores: SettingsStores,
   selection: CliModelAccessSelection,
   runtime: CodingPlanSubscriptionRuntime,
 ) {
   const plan = runtime.descriptor;
   if (selection.state === 'off') {
-    yield* runtime.setEnabled(false).pipe(
+    yield* runtime.setEnabled(stores, false).pipe(
       Effect.mapError(
         (cause) =>
           new ModelAccessPreferenceFailed({
@@ -219,7 +224,7 @@ const updateKeyedCliModelAccess = Effect.fn(
       message: `No ${plan.credentialName} API key configured — add one with /key or /config → API keys (get one at ${plan.credentialSetupUrl}).`,
     } satisfies CliModelAccessSelectionResult;
   }
-  yield* runtime.setEnabled(true).pipe(
+  yield* runtime.setEnabled(stores, true).pipe(
     Effect.mapError(
       (cause) =>
         new ModelAccessPreferenceFailed({
@@ -243,6 +248,7 @@ const updateKeyedCliModelAccess = Effect.fn(
 export const updateCliModelAccess = Effect.fn(
   'modelAccessSelection.updateCliModelAccess',
 )(function* (
+  stores: SettingsStores,
   context: CliContext | undefined,
   selection: CliModelAccessSelection,
   options: CliSubscriptionLoginOptions = { writeProgress: () => undefined },
@@ -251,10 +257,11 @@ export const updateCliModelAccess = Effect.fn(
     (runtime) => runtime.descriptor.cliProvider === selection.provider,
   );
   if (codingPlan) {
-    return yield* updateKeyedCliModelAccess(selection, codingPlan);
+    return yield* updateKeyedCliModelAccess(stores, selection, codingPlan);
   }
   if (selection.provider === 'grok' || selection.provider === 'chatgpt') {
     return yield* updateSubscriptionCliModelAccess(
+      stores,
       context,
       selection,
       selection.provider,

@@ -24,6 +24,8 @@ import type {
 } from '@shared/schemas';
 import { ACCOUNT_OUTCOME } from '@shared/copy/accountAuth';
 
+import type { SettingsStores } from '@shared/config/settingsAccess';
+
 import {
   withHandlerErrorHandling,
   type SettingsHandlerContext,
@@ -45,6 +47,8 @@ export class SubscriptionHandlers {
     private readonly secrets: PlatformSecrets,
     private readonly refreshModelAccess: () => Promise<void>,
     private readonly runtime: ProcessRuntime,
+    /** The view's session setting slots: where the preference is read and written. */
+    private readonly stores: SettingsStores,
   ) {
     this.provider = subscriptionProvider(providerId);
   }
@@ -62,6 +66,7 @@ export class SubscriptionHandlers {
 
   readonly handleSignIn = async (): Promise<void> => {
     await signInWithSubscription(
+      this.stores,
       this.ctx.channel,
       this.providerId,
       this.runtime,
@@ -96,7 +101,7 @@ export class SubscriptionHandlers {
       `Could not update the ${displayName} subscription preference`,
       async () => {
         const update = await this.runtime.runPromise(
-          this.provider.setPreferSubscription(enabled),
+          this.provider.setPreferSubscription(this.stores, enabled),
         );
         if (update.effective !== enabled) {
           void vscode.window.showWarningMessage(

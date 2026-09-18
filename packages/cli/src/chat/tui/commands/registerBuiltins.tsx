@@ -272,12 +272,12 @@ function formSelectionHandler<T>({
 
 export function registerBuiltinSlashCommands(options: {
   /**
-   * The process secret store and global state the built-in forms and handlers
+   * The process secret store and the three setting slots the built-in forms and handlers
    * read: every one of them runs outside Effect, so the stores arrive from the
    * surface that registers the commands.
    */
   secrets: PlatformSecrets;
-  state: StateStore;
+  stores: SettingsStores;
   /** The process runtime the account commands and the `/resume` listing run
    *  their programs on, from the same surface. */
   runtime: ProcessRuntime;
@@ -301,8 +301,8 @@ export function registerBuiltinSlashCommands(options: {
   configStores?: SettingsStores;
   onError?: ErrorHandler;
 }): void {
-  const { secrets, state, runtime } = options;
-  const modelStores = { secrets, globalState: state, runtime };
+  const { secrets, stores, runtime } = options;
+  const modelStores = { ...stores, secrets, runtime };
   const onAgentSelect: SelectHandler<string> =
     options.onAgentSelect ?? ((agent) => patchSessionMeta({ agent }));
   const onModelSelect: SelectHandler<string> =
@@ -310,17 +310,25 @@ export function registerBuiltinSlashCommands(options: {
   const onModelAccessSelect: FormActionHandler<CliModelAccessSelection> =
     options.onModelAccessSelect ??
     ((selection, output) =>
-      applyCliModelAccessSelection(runtime, selection, undefined, output));
+      applyCliModelAccessSelection(
+        stores,
+        runtime,
+        selection,
+        undefined,
+        output,
+      ));
   const onApiKeySave: ApiKeySaveHandler =
     options.onApiKeySave ??
     ((provider, key) =>
       runtime.runPromise(applyCliProviderApiKey(secrets, provider, key)));
   const onLoginSelect: FormActionHandler<LoginFormValue> =
     options.onLoginSelect ??
-    ((value, output) => loginFromChat(value, runtime, undefined, output));
+    ((value, output) =>
+      loginFromChat(value, stores, runtime, undefined, output));
   const onLogoutSelect: FormActionHandler<CliLogoutTarget> =
     options.onLogoutSelect ??
-    ((value, output) => logoutFromChat(value, runtime, secrets, output));
+    ((value, output) =>
+      logoutFromChat(value, stores, runtime, secrets, output));
   const canSelectAgent = options.canSelectAgent ?? (() => true);
   const canSelectModel = options.canSelectModel ?? (() => true);
 
@@ -358,6 +366,7 @@ export function registerBuiltinSlashCommands(options: {
     return (
       <AccountAccessForm
         secrets={secrets}
+        stores={stores}
         runtime={runtime}
         availableRows={props.availableRows}
         onSelect={formSelectionHandler<AccountAccessFormValue>({
@@ -482,7 +491,7 @@ export function registerBuiltinSlashCommands(options: {
   function ToolsListFormAdapter(props: SlashFormProps): React.JSX.Element {
     return (
       <ToolsListForm
-        state={state}
+        state={stores.globalState}
         runtime={runtime}
         workspaceRoot={options.runtimeSession.roots.workspace}
         availableRows={props.availableRows}
@@ -585,7 +594,7 @@ export function registerBuiltinSlashCommands(options: {
     props: SlashFormProps,
   ): React.JSX.Element => (
     <EnabledModelsForm
-      state={state}
+      state={stores.globalState}
       runtime={runtime}
       availableRows={props.availableRows}
       onClose={() => props.onDone(undefined)}
@@ -604,7 +613,7 @@ export function registerBuiltinSlashCommands(options: {
     category: 'account',
     echo: 'ifPersists',
     handler: (remainder, context) =>
-      applyCliModelAccessInput(runtime, remainder, context),
+      applyCliModelAccessInput(stores, runtime, remainder, context),
     formComponent: AccountAccessFormAdapter,
   });
   registerSlashCommand({
@@ -632,7 +641,7 @@ export function registerBuiltinSlashCommands(options: {
     description: 'Show signed-in accounts and active model access',
     category: 'account',
     echo: 'ifPersists',
-    handler: () => showCliAuthStatus(runtime, secrets),
+    handler: () => showCliAuthStatus(stores, runtime, secrets),
   });
   registerSlashCommand({
     name: 'login',
@@ -643,7 +652,7 @@ export function registerBuiltinSlashCommands(options: {
     // by loginFromChat itself.
     echo: 'never',
     handler: (remainder, context) =>
-      loginFromChat(remainder, runtime, context.cliContext),
+      loginFromChat(remainder, stores, runtime, context.cliContext),
     formComponent: AccountAccessFormAdapter,
   });
   registerSlashCommand({
@@ -653,7 +662,7 @@ export function registerBuiltinSlashCommands(options: {
     // Same merged-form mismatch as /login: the typed command does not
     // describe what the form actually did.
     echo: 'never',
-    handler: (remainder) => logoutFromChat(remainder, runtime, secrets),
+    handler: (remainder) => logoutFromChat(remainder, stores, runtime, secrets),
     formComponent: AccountAccessFormAdapter,
   });
   registerSlashCommand({

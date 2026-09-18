@@ -21,8 +21,9 @@ import {
   setModelEnabled,
   type ModelOptionStores,
 } from '@model/computeModelOptions';
-import { StateWriteFailed, type StateStore } from '@platform/interfaces';
+import { StateWriteFailed } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   type CopilotRouteInfo,
@@ -38,8 +39,13 @@ import {
 import { byName } from '@utils/core';
 
 interface SettingsModelSelectionControllerDeps {
-  /** Persisted picker state: enabled models, helper model, reasoning levels. */
-  globalState: StateStore;
+  /**
+   * The three setting slots this tab answers for. `globalState` holds the
+   * persisted picker state (enabled models, helper model, reasoning levels);
+   * all three are what the availability read resolves the routing switches
+   * against, so the rows show the values a run will honor.
+   */
+  stores: SettingsStores;
   /** Provider credentials behind the availability decoration on each option. */
   secrets: PlatformSecrets;
   /**
@@ -76,21 +82,21 @@ export class SettingsModelSelectionController {
   constructor(private readonly deps: SettingsModelSelectionControllerDeps) {}
 
   async buildSelectionData(): Promise<SettingsModelSelectionData> {
-    const visibleModels = getEnabledModels(this.deps.globalState);
+    const visibleModels = getEnabledModels(this.deps.stores.globalState);
     const routes = await this.deps.getCopilotRoutes();
     const preferredModels = new Set(
       this.deps.getPreferredCopilotRouteModels?.() ??
-        preferredCopilotRouteModels(this.deps.globalState),
+        preferredCopilotRouteModels(this.deps.stores.globalState),
     );
     return {
       models: await this.buildSelectionItems(routes, preferredModels),
       helperModel: resolveEffectiveHelperModel(
-        this.deps.globalState.get<string | undefined>(
+        this.deps.stores.globalState.get<string | undefined>(
           GlobalStateKey.HELPER_MODEL,
         ),
         visibleModels,
       ),
-      preferShortModelNames: this.deps.globalState.get<boolean>(
+      preferShortModelNames: this.deps.stores.globalState.get<boolean>(
         GlobalStateKey.PREFER_SHORT_MODEL_NAMES,
         false,
       ),
@@ -133,7 +139,7 @@ export class SettingsModelSelectionController {
     return setModelEnabled({
       model: input.modelName,
       enabled: input.enabled,
-      state: this.deps.globalState,
+      state: this.deps.stores.globalState,
     }).pipe(Effect.asVoid);
   }
 
@@ -145,7 +151,7 @@ export class SettingsModelSelectionController {
     // back to storage. Reads that need the effort go through
     // `reasoningEffortOverrides`.
     const overrides = {
-      ...this.deps.globalState.get<Record<string, string>>(
+      ...this.deps.stores.globalState.get<Record<string, string>>(
         GlobalStateKey.REASONING_LEVELS,
         {},
       ),
@@ -155,7 +161,7 @@ export class SettingsModelSelectionController {
     } else {
       overrides[input.modelName] = input.level;
     }
-    return this.deps.globalState.update(
+    return this.deps.stores.globalState.update(
       GlobalStateKey.REASONING_LEVELS,
       overrides,
     );
@@ -165,8 +171,10 @@ export class SettingsModelSelectionController {
     copilotRoutes: ReadonlyMap<string, CopilotModelRoute>,
     preferredCopilotModels: ReadonlySet<string>,
   ): Promise<ModelSelectionItem[]> {
-    const enabledSet = new Set(getEnabledModels(this.deps.globalState));
-    const reasoningOverrides = reasoningEffortOverrides(this.deps.globalState);
+    const enabledSet = new Set(getEnabledModels(this.deps.stores.globalState));
+    const reasoningOverrides = reasoningEffortOverrides(
+      this.deps.stores.globalState,
+    );
 
     // Resolve availability (personal-key, subscription) once for the
     // models this host shows, via the same shared computation the CLI picker
@@ -187,11 +195,10 @@ export class SettingsModelSelectionController {
         ),
       )
       .map((config) => config.name);
-    const stores = {
-      secrets: this.deps.secrets,
-      globalState: this.deps.globalState,
-    };
-    const optionsData = await this.deps.resolveModelOptions(stores, candidates);
+    const optionsData = await this.deps.resolveModelOptions(
+      { ...this.deps.stores, secrets: this.deps.secrets },
+      candidates,
+    );
 
     const items: ModelSelectionItem[] = [];
     for (const option of optionsData) {

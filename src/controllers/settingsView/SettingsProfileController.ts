@@ -105,6 +105,7 @@ export class SettingsProfileController {
 
   getProviderDisplayName(provider: string): string {
     return getProviderDisplayName(
+      this.deps.stores,
       provider,
       PROVIDER_DISPLAY_NAMES[provider] ?? provider,
     );
@@ -119,8 +120,8 @@ export class SettingsProfileController {
       provider,
       displayName: this.getProviderDisplayName(provider),
       status: secretStatuses[provider] ?? 'not-set',
-      keyUrl: getProviderKeyUrl(provider) ?? '',
-      customEndpoint: getProviderEndpoint(provider),
+      keyUrl: getProviderKeyUrl(this.deps.stores, provider) ?? '',
+      customEndpoint: getProviderEndpoint(this.deps.stores, provider),
       supportsCustomEndpoint: supportsCustomEndpoint(provider),
       providerSettings: this.getProviderSettings(provider),
     }));

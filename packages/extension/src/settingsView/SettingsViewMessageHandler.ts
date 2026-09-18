@@ -159,7 +159,7 @@ export class SettingsViewMessageHandler {
       prompt: new VscodePromptHost(),
     });
     this.modelSelectionController = new SettingsModelSelectionController({
-      globalState,
+      stores: session.roots,
       secrets,
       // The availability read is an Effect; this is the boundary that holds a
       // runtime to run it on, so the controller takes its rows as data.
@@ -184,14 +184,18 @@ export class SettingsViewMessageHandler {
       loadProviderKeyStatuses: () =>
         this.runtime.runPromise(loadApiKeyStatusMap(secrets, API_PROVIDERS)),
     });
-    this.subscriptionUsage = new SubscriptionUsageService({ secrets });
+    this.subscriptionUsage = new SubscriptionUsageService({
+      secrets,
+      stores: session.roots,
+    });
     this.profileKeyController = new SettingsProfileKeyController({
       secrets,
       prompt: new VscodePromptHost(),
       externalOpener: new VscodeExternalOpener(),
       getProviderDisplayName: (provider) =>
         this.profileController.getProviderDisplayName(provider),
-      getProviderKeyUrl,
+      getProviderKeyUrl: (provider) =>
+        getProviderKeyUrl(session.roots, provider),
       refreshAfterKeyChange: (provider) =>
         this.refreshAfterProviderKeyChange(provider),
       reportFailure: async (message, error) => {
@@ -229,23 +233,29 @@ export class SettingsViewMessageHandler {
       'chatgpt',
       async () => ({
         command: SETTINGS_VIEW_COMMANDS.UPDATE_CHATGPT_AUTH_STATUS,
-        status: await this.runtime.runPromise(getChatGptAuthStatus(secrets)),
+        status: await this.runtime.runPromise(
+          getChatGptAuthStatus(session.roots, secrets),
+        ),
       }),
       ctx,
       secrets,
       () => this.refreshAfterSubscriptionAuthChange('chatgpt'),
       this.runtime,
+      session.roots,
     );
     this.grokHandlers = new SubscriptionHandlers(
       'grok',
       async () => ({
         command: SETTINGS_VIEW_COMMANDS.UPDATE_GROK_AUTH_STATUS,
-        status: await this.runtime.runPromise(getGrokAuthStatus(secrets)),
+        status: await this.runtime.runPromise(
+          getGrokAuthStatus(session.roots, secrets),
+        ),
       }),
       ctx,
       secrets,
       () => this.refreshAfterSubscriptionAuthChange(),
       this.runtime,
+      session.roots,
     );
     this.handlerRegistry = this.createHandlerRegistry(context);
 

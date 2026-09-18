@@ -9,6 +9,7 @@ import { isXaiSignedIn } from '@model/xai/xaiSignedIn';
 import { StateWriteFailed } from '@platform/interfaces';
 import type { StateStore } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import {
   MODEL_AVAILABILITY_STATUS,
   REASONING_LEVEL_LABELS,
@@ -67,13 +68,16 @@ import {
 } from './runtimeModelRegistry';
 
 /**
- * The two process stores every availability answer here reads: the secret
- * store behind the provider-key checks and the global state behind the
- * picker's persisted choices. Callers hold them (the `Secrets` / `AppState`
- * services, or the stores a host root threaded down) and pass them in, so
- * this module never looks a host up.
+ * Every store an availability answer here reads: the secret store behind the
+ * provider-key checks, and the three setting slots behind the picker's
+ * persisted choices and the routing switches (the OpenRouter toggle, the two
+ * "prefer my subscription" preferences, the Kimi Code preference). Callers
+ * hold them (a session's `roots`, the `Secrets` service, the stores a host
+ * root threaded down) and pass them in, so this module never looks a host up
+ * and never needs the caller's workspace-roots frame to answer for the
+ * caller's workspace.
  */
-export interface ModelOptionStores {
+export interface ModelOptionStores extends SettingsStores {
   readonly secrets: PlatformSecrets;
   readonly globalState: StateStore;
 }
@@ -281,11 +285,12 @@ type RoutedModels = ReadonlyMap<string, RoutedModel>;
  * back to either.
  */
 function resolveModelRoute(
+  stores: ModelOptionStores,
   model: string,
   config: ModelConfig,
   ctx: ModelRouteContext,
-  globalState: Pick<StateStore, 'get'>,
 ): ModelRoute {
+  const globalState: Pick<StateStore, 'get'> = stores.globalState;
   if (config.retired) {
     return availabilityStatus('retired');
   }
@@ -321,6 +326,7 @@ function resolveModelRoute(
   // so the switch cannot disable models that are otherwise runnable.
   if (ctx.codexSignedIn) {
     const subscriptionCapabilities = resolveCodexSubscriptionCapabilities(
+      stores,
       config,
       ctx.useOpenRouter,
     );
@@ -337,6 +343,7 @@ function resolveModelRoute(
   // xAI model.
   if (ctx.xaiSignedIn) {
     const subscriptionCapabilities = resolveXaiSubscriptionCapabilities(
+      stores,
       config,
       ctx.useOpenRouter,
     );
@@ -391,21 +398,6 @@ function resolveModelAvailability(
 }
 
 /**
- * The calling context's workspace-roots frame, entered around every host call
- * this module makes. The two "prefer my subscription" switches are read from
- * the roots of the calling context, and an availability read reached from an
- * Effect program no longer sits inside its session's frame (a fiber resumes
- * outside the frame its caller entered). A caller that owns a session and is
- * not already inside it therefore hands its `runInSession` / `inScope`
- * wrapper here, rather than wrapping the call and silently losing the frame
- * the moment the program is a value instead of a promise.
- */
-export type ModelAvailabilityScope = <T>(read: () => T) => T;
-
-/** The frame for a caller that is already in the one it wants. */
-export const CALLING_SCOPE: ModelAvailabilityScope = (read) => read();
-
-/**
  * A host fact this module reads synchronously — a workspace preference, a
  * config switch, a stored state entry — could not be read at all, because the
  * host's config or state store threw. That is environmental, not a bug in this
@@ -447,11 +439,6 @@ const hostFact = <A>(
  * One key status per provider, read once. A failed read degrades that provider
  * to unavailable and warns once for the provider, never once per model that
  * consults it (#11508), so one unreadable store cannot flood the log.
- *
- * No `inScope` here: `hasUsableApiKey` is a program over the credential store
- * the caller passed in, and none of the four store implementations reads a
- * workspace-scoped setting, so there is no host frame for this read to be in.
- * The facts that do read one are wrapped where they are read, above.
  */
 function readProviderKeyStatuses(
   secrets: PlatformSecrets,
@@ -484,7 +471,6 @@ function readProviderKeyStatuses(
  */
 function buildAvailabilityContext(
   stores: ModelOptionStores,
-  inScope: ModelAvailabilityScope,
 ): Effect.Effect<ModelAvailabilityContext, ModelHostFactUnreadable> {
   return Effect.gen(function* () {
     const { secrets, globalState } = stores;
@@ -497,15 +483,15 @@ function buildAvailabilityContext(
       preferKimiCode,
       reasoningLevels,
     ] = yield* Effect.all([
-      hostFact('the OpenRouter switch', () => inScope(getUseOpenRouter)),
+      hostFact('the OpenRouter switch', () => getUseOpenRouter(stores)),
       hostFact('the ChatGPT subscription preference', () =>
-        inScope(isPreferCodexSubscription),
+        isPreferCodexSubscription(stores),
       ),
       hostFact('the Grok subscription preference', () =>
-        inScope(isPreferXaiSubscription),
+        isPreferXaiSubscription(stores),
       ),
       hostFact('the Kimi Code routing preference', () =>
-        inScope(getPreferKimiCode),
+        getPreferKimiCode(stores),
       ),
       hostFact('the stored reasoning levels', () =>
         reasoningEffortOverrides(globalState),
@@ -515,8 +501,6 @@ function buildAvailabilityContext(
       [
         readProviderKeyStatuses(secrets, ['openRouter', 'kimiCode']),
         // Only worth a probe when the "prefer subscription" switch is on.
-        // No `inScope`: the probes read the stored OAuth session, not the
-        // workspace-roots frame.
         preferCodexSubscription ? isCodexSignedIn() : Effect.succeed(false),
         preferXaiSubscription ? isXaiSignedIn() : Effect.succeed(false),
       ] as const,
@@ -546,9 +530,9 @@ function buildAvailabilityContext(
  * may have moved while the key read was in flight.
  */
 function routeModels(
+  stores: ModelOptionStores,
   models: readonly string[],
   ctx: ModelRouteContext,
-  globalState: Pick<StateStore, 'get'>,
 ): RoutedModels {
   const routed = new Map<string, RoutedModel>();
   for (const model of models) {
@@ -561,7 +545,7 @@ function routeModels(
     routed.set(model, {
       rawConfig,
       config,
-      route: resolveModelRoute(model, config, ctx, globalState),
+      route: resolveModelRoute(stores, model, config, ctx),
     });
   }
   return routed;
@@ -850,9 +834,7 @@ export interface ModelAvailabilityInputs {
  * behind it is interruptible and its failure is typed. Every host read it
  * makes fails in that channel, the synchronous preference and state reads
  * included ({@link ModelHostFactUnreadable}), so an unreadable host reaches a
- * caller as a failure it can recover from rather than as a defect. `inScope` is the
- * caller's workspace-roots frame — see {@link ModelAvailabilityScope}; a
- * caller already inside the frame it wants omits it.
+ * caller as a failure it can recover from rather than as a defect.
  *
  * When `models` is provided the caller's view of the visible-models list is
  * honored verbatim. Nothing here is cached beyond the caches its reads already
@@ -865,20 +847,15 @@ export interface ModelAvailabilityInputs {
  */
 export const readModelAvailabilityInputs = Effect.fn(
   'readModelAvailabilityInputs',
-)(function* (
-  stores: ModelOptionStores,
-  models?: readonly string[],
-  inScope: ModelAvailabilityScope = CALLING_SCOPE,
-) {
+)(function* (stores: ModelOptionStores, models?: readonly string[]) {
   // Presentation-only refresh: the catalogue keeps its last-known entries on
   // a discovery failure, so this step cannot fail (see `discoveredCopilotRoutes`).
-  // No `inScope`: the discovery reads its port from the fiber's own context
-  // (the `LanguageModel` process service), not from the workspace-roots frame.
   yield* discoveredCopilotRoutes();
-  const routeCtx = yield* buildAvailabilityContext(stores, inScope);
+  const routeCtx = yield* buildAvailabilityContext(stores);
   const visible =
     models ??
     visibleModelsForAccess(
+      stores,
       yield* hostFact('the enabled-model selection', () =>
         getEnabledModels(stores.globalState),
       ),
@@ -888,7 +865,7 @@ export const readModelAvailabilityInputs = Effect.fn(
   // state read in its ladder, the Copilot route preference, so an unreadable
   // state store fails it the same way it fails the reads above.
   const routed = yield* hostFact('the Copilot route preference', () =>
-    routeModels(visible, routeCtx, stores.globalState),
+    routeModels(stores, visible, routeCtx),
   );
   const context = yield* withConsultedKeyStatuses(
     stores.secrets,
@@ -945,6 +922,7 @@ export function modelUnavailableReasonFrom(
 }
 
 function visibleModelsForAccess(
+  stores: ModelOptionStores,
   configuredModels: readonly string[],
   context: ModelRouteContext,
 ): readonly string[] {
@@ -955,8 +933,11 @@ function visibleModelsForAccess(
     if (
       !config.retired &&
       !config.deprecated &&
-      resolveCodexSubscriptionCapabilities(config, context.useOpenRouter) !==
-        null
+      resolveCodexSubscriptionCapabilities(
+        stores,
+        config,
+        context.useOpenRouter,
+      ) !== null
     ) {
       models.add(model);
     }

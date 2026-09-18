@@ -74,8 +74,8 @@ export async function applyCliModelSelection(
     const selection = await context.runtime.runPromise(
       selectCliRunnableModel(nextModel, {
         stores: {
+          ...context.stores,
           secrets: context.secrets,
-          globalState: context.state,
           runtime: context.runtime,
         },
         fallbackReason: 'explicit-override',
@@ -85,7 +85,7 @@ export async function applyCliModelSelection(
       }),
     );
     await context.runtime.runPromise(
-      setCliHelperModel(context.state, selection.model),
+      setCliHelperModel(context.stores.globalState, selection.model),
     );
     setCliSessionModelOverride(selection.model);
     appendLocalAssistantTranscript(`Root model set to ${selection.model}.`);
@@ -113,7 +113,7 @@ export async function applyCliModelSelection(
   setCliSessionModelOverride(nextModel);
   try {
     await context.runtime.runPromise(
-      setCliHelperModel(context.state, nextModel),
+      setCliHelperModel(context.stores.globalState, nextModel),
     );
   } catch (error: unknown) {
     appendLocalAssistantTranscript(

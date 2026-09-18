@@ -13,6 +13,7 @@ import {
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import { ACCOUNT_OUTCOME } from '@shared/copy/accountAuth';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 
 const OPEN_DEFAULT_BROWSER = 'Open in Default Browser';
 const COPY_SIGN_IN_LINK = 'Copy Sign-in Link';
@@ -91,6 +92,7 @@ function vscodePresenter(
 /** Run subscription sign-in and enable subscription routing for the
  * provider's models. */
 export async function signInWithSubscription(
+  stores: SettingsStores,
   channel: string,
   providerId: SubscriptionProviderId,
   runtime: ProcessRuntime,
@@ -121,7 +123,7 @@ export async function signInWithSubscription(
     });
 
     const update = yield* provider
-      .setPreferSubscription(true)
+      .setPreferSubscription(stores, true)
       .pipe(
         Effect.mapError(
           (cause) => new SubscriptionPreferenceUpdateFailed({ cause }),

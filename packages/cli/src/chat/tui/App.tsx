@@ -22,6 +22,7 @@ import {
 } from '@cli/tui/inputKeys';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import { type RunId, type WorkflowControlAction } from '@shared/schemas';
 import { SESSION_LIST } from '@shared/copy/nestedRuns';
 import type { SessionView } from '@shared/session/sessionView';
@@ -125,6 +126,8 @@ export interface AppProps {
    * the chat surface that opened it — this component runs no Effect.
    */
   readonly secrets: PlatformSecrets;
+  /** The session's three setting slots, for the status bar's route probe. */
+  readonly stores: SettingsStores;
   /**
    * The process runtime the input bar's history write and image paste run
    * on, threaded from the same chat surface — this component runs no Effect.
@@ -658,6 +661,7 @@ export function App(props: AppProps): React.JSX.Element {
             />
             <StatusBar
               secrets={props.secrets}
+              stores={props.stores}
               runtime={props.runtime}
               chatInputAvailable={
                 !childInputHidden && unavailableDetail === undefined

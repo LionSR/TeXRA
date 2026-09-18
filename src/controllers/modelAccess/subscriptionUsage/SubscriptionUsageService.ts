@@ -6,6 +6,7 @@ import { codexCoordinator, CodexAuthError } from '@auth/codex';
 import { createLog } from '@logger/logUtils';
 import { exposeApiKey, lookupApiKey } from '@model/apiProviders';
 import type { PlatformSecrets } from '@platform/secrets';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import { CODING_PLAN_SUBSCRIPTIONS } from '@shared/codingPlanSubscriptions';
 import type {
   SubscriptionUsageProvider,
@@ -90,14 +91,17 @@ interface SubscriptionUsageServiceOptions {
 }
 
 /**
- * A caller supplies either the process secret store — the service then reads
- * credentials through {@link defaultCredentials} — or a credential set of its
- * own. One of the two is required, so there is no secret-store lookup left to
- * fall back to.
+ * A caller supplies either the secret store and its setting slots — the
+ * service then reads credentials through {@link defaultCredentials} — or a
+ * credential set of its own. One of the two is required, so there is no
+ * secret-store lookup left to fall back to.
  */
 type SubscriptionUsageServiceInit = SubscriptionUsageServiceOptions &
   (
-    | { readonly secrets: PlatformSecrets }
+    | {
+        readonly secrets: PlatformSecrets;
+        readonly stores: SettingsStores;
+      }
     | { readonly credentials: SubscriptionUsageCredentials }
   );
 
@@ -119,8 +123,9 @@ interface SubscriptionUsageAdapter {
   >;
 }
 
-/** The credential readers over the secret store the caller holds. */
+/** The credential readers over the stores the caller holds. */
 function defaultCredentials(
+  stores: SettingsStores,
   secrets: PlatformSecrets,
 ): SubscriptionUsageCredentials {
   return Object.freeze({
@@ -137,7 +142,7 @@ function defaultCredentials(
       Effect.map(lookupApiKey(secrets, provider), (key) =>
         key === undefined ? undefined : exposeApiKey(key),
       ),
-    useGlmChina: () => Effect.sync(() => useChinaRegion('glm')),
+    useGlmChina: () => Effect.sync(() => useChinaRegion(stores, 'glm')),
   });
 }
 
@@ -175,7 +180,7 @@ export class SubscriptionUsageService {
     this.credentials =
       'credentials' in init
         ? init.credentials
-        : defaultCredentials(init.secrets);
+        : defaultCredentials(init.stores, init.secrets);
     this.now = init.now ?? Date.now;
     this.cacheTtlMs = init.cacheTtlMs ?? DEFAULT_CACHE_TTL_MS;
     this.requestTimeoutMs = init.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;

@@ -118,13 +118,24 @@ export function createExtensionCommandActions(
     cloneOverleafProject: () =>
       gitCloneOverleafProject(session, secrets, runtime),
     removeApiKey: () =>
-      apiRemoveApiKey(secrets, refreshAfterProviderKeyChange, runtime),
+      apiRemoveApiKey(
+        session.roots,
+        secrets,
+        refreshAfterProviderKeyChange,
+        runtime,
+      ),
     showImportOptions: sysShowImportOptions,
     toggleView: () => progressViewProvider.toggleDrawer(),
     showProgressView: (inPlace) =>
       progressViewProvider.showProgressView({ inPlace }),
     setApiKey: (provider) =>
-      apiSetApiKey(secrets, refreshAfterProviderKeyChange, runtime, provider),
+      apiSetApiKey(
+        session.roots,
+        secrets,
+        refreshAfterProviderKeyChange,
+        runtime,
+        provider,
+      ),
     // The wizard is an Effect program; the host entry's runtime, threaded in
     // from `activate`, settles it here at the command boundary.
     createAgentWithAI: (category) =>

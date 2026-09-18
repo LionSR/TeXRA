@@ -16,6 +16,7 @@ import {
   type RunModelDecisionReason,
 } from '@model/runModelDecision';
 import type { ProcessRuntime } from '@platform/processRuntime';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { ModelOptionData } from '@shared/schemas';
 import {
   isModelOptionAvailable,
@@ -159,7 +160,10 @@ function formatModelAccessStatus(model: ModelOptionData): string {
     : MODEL_AVAILABILITY_STATUS[model.availability].label.toLowerCase();
 }
 
-export function formatModelStatusForCli(model: CliModelAccess): string {
+export function formatModelStatusForCli(
+  stores: SettingsStores,
+  model: CliModelAccess,
+): string {
   if (model.model.provider === 'kimiCode') return 'api: Kimi Code subscription';
   if (
     model.model.provider === 'glm' &&
@@ -168,10 +172,11 @@ export function formatModelStatusForCli(model: CliModelAccess): string {
     const config = getRuntimeModelConfig(model.model.value);
     if (config) {
       const route = resolveGlmRoute({
+        stores,
         baseUrl: config.baseUrl,
         useOpenRouter: shouldRouteModelThroughOpenRouter(
           config,
-          getUseOpenRouter(),
+          getUseOpenRouter(stores),
         ),
       });
       if (route.route === 'official-coding-plan') {
@@ -188,12 +193,13 @@ export type GetModelSwitchDisabledReason = (
 ) => string | undefined;
 
 export function modelSelectItemsForCli(
+  stores: SettingsStores,
   models: readonly CliModelAccess[],
   getModelSwitchDisabledReason?: GetModelSwitchDisabledReason,
 ): readonly CliModelPickerItem[] {
   return runnableCliModelAccessEntries(models).map((model) => {
     const disabledReason = getModelSwitchDisabledReason?.(model.model.value);
-    const access = formatModelStatusForCli(model);
+    const access = formatModelStatusForCli(stores, model);
     const status = model.model.reasoning
       ? `${access} · reasoning setting: ${model.model.reasoning}`
       : access;

@@ -6,6 +6,7 @@ import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports
+import { ToolCall } from '@agent/runtime/ToolCall';
 import { createLog } from '@logger/logUtils';
 import { API_PROVIDERS, lookupApiKeyOrigin } from '@model/apiProviders';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
@@ -37,6 +38,7 @@ const OPTIONAL_TOOLS = ['git', 'node', 'python3'] as const;
 const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* () {
   const platform = yield* SetupPlatform;
   const secrets = yield* Secrets;
+  const { roots } = yield* ToolCall;
 
   // `os.homedir()` can throw UV_ENOENT in container/remote environments
   // where the home directory is not resolvable; fall back to a string
@@ -70,7 +72,7 @@ const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* () {
         ),
         { concurrency: 'unbounded' },
       ),
-      hasUsableSetupCredential(secrets, credentialLog.warn),
+      hasUsableSetupCredential(roots, secrets, credentialLog.warn),
       resolveGitHubTokenSource(secrets).pipe(
         // A store the host cannot read is not a token; say so in the log
         // rather than reporting "no token" as if it were an answer.
@@ -83,7 +85,7 @@ const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* () {
           }),
         ),
       ),
-      getChatGptSubscriptionStatus().pipe(
+      getChatGptSubscriptionStatus(roots).pipe(
         // A probe that fails is not the fact "signed out"; setup advice built
         // on it would tell a signed-in user to sign in.
         Effect.catch((failure) =>
