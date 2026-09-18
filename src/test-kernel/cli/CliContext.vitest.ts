@@ -298,53 +298,67 @@ describe('CLI context config defaults', () => {
 });
 
 describe('CLI --cwd validation', () => {
-  it('accepts an existing directory and returns its realpath', async () => {
-    const workspace = await makeTempDir('texra-cli-cwd-', tempDirs);
+  // `it.live`, not `it.effect`: these probe the real filesystem, so a
+  // TestContext clock starting at 0 would be a trap rather than a help.
+  it.live('accepts an existing directory and returns its realpath', () =>
+    Effect.gen(function* () {
+      const workspace = yield* Effect.promise(() =>
+        makeTempDir('texra-cli-cwd-', tempDirs),
+      );
 
-    await expect(Effect.runPromise(resolveCliCwd(workspace))).resolves.toBe(
-      canonicalizeWorkspacePath(workspace),
-    );
-  });
+      expect(yield* resolveCliCwd(workspace)).toBe(
+        canonicalizeWorkspacePath(workspace),
+      );
+    }),
+  );
 
-  it('preserves whitespace in an explicit workspace path', async () => {
-    const root = await makeTempDir('texra-cli-cwd-root-', tempDirs);
-    const workspace = join(root, 'workspace ');
-    await mkdir(workspace);
+  it.live('preserves whitespace in an explicit workspace path', () =>
+    Effect.gen(function* () {
+      const root = yield* Effect.promise(() =>
+        makeTempDir('texra-cli-cwd-root-', tempDirs),
+      );
+      const workspace = join(root, 'workspace ');
+      yield* Effect.promise(() => mkdir(workspace));
 
-    await expect(Effect.runPromise(resolveCliCwd(workspace))).resolves.toBe(
-      canonicalizeWorkspacePath(workspace),
-    );
-  });
+      expect(yield* resolveCliCwd(workspace)).toBe(
+        canonicalizeWorkspacePath(workspace),
+      );
+    }),
+  );
 
-  it('rejects a --cwd path that does not exist', async () => {
-    const missing = join(tmpdir(), 'texra-cli-cwd-missing-' + Date.now());
+  it.live('rejects a --cwd path that does not exist', () =>
+    Effect.gen(function* () {
+      const missing = join(tmpdir(), 'texra-cli-cwd-missing-' + Date.now());
 
-    const failure = await Effect.runPromise(
-      Effect.flip(resolveCliCwd(missing)),
-    );
-    expect(failure).toBeInstanceOf(CliUsageError);
-    expect(failure.message).toMatch(/does not exist/);
-  });
+      const failure = yield* Effect.flip(resolveCliCwd(missing));
+      expect(failure).toBeInstanceOf(CliUsageError);
+      expect(failure.message).toMatch(/does not exist/);
+    }),
+  );
 
-  it('rejects a --cwd path that points at a file', async () => {
-    const workspace = await makeTempDir('texra-cli-cwd-', tempDirs);
-    const filePath = join(workspace, 'config.json');
-    await writeFile(filePath, '{}');
+  it.live('rejects a --cwd path that points at a file', () =>
+    Effect.gen(function* () {
+      const workspace = yield* Effect.promise(() =>
+        makeTempDir('texra-cli-cwd-', tempDirs),
+      );
+      const filePath = join(workspace, 'config.json');
+      yield* Effect.promise(() => writeFile(filePath, '{}'));
 
-    const failure = await Effect.runPromise(
-      Effect.flip(resolveCliCwd(filePath)),
-    );
-    expect(failure).toBeInstanceOf(CliUsageError);
-    expect(failure.message).toMatch(/not a directory/);
-  });
+      const failure = yield* Effect.flip(resolveCliCwd(filePath));
+      expect(failure).toBeInstanceOf(CliUsageError);
+      expect(failure.message).toMatch(/not a directory/);
+    }),
+  );
 
-  it('falls back to process.cwd() when no --cwd flag is given', async () => {
-    // The shell can't put us in a missing directory, so the no-flag path
-    // intentionally skips validation. Trim any platform realpath canonical-
-    // ization for the comparison.
-    const result = await Effect.runPromise(resolveCliCwd(undefined));
-    expect(result).toBe(await realpath(process.cwd()));
-  });
+  it.live('falls back to process.cwd() when no --cwd flag is given', () =>
+    Effect.gen(function* () {
+      // The shell can't put us in a missing directory, so the no-flag path
+      // intentionally skips validation. Trim any platform realpath canonical-
+      // ization for the comparison.
+      const result = yield* resolveCliCwd(undefined);
+      expect(result).toBe(yield* Effect.promise(() => realpath(process.cwd())));
+    }),
+  );
 
   it('lets a buildCliContext caller surface the --cwd usage error', async () => {
     const missing = join(tmpdir(), 'texra-cli-cwd-missing-' + Date.now());
