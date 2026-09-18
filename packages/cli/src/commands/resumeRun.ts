@@ -167,21 +167,20 @@ export async function runResumeCommand(
             Effect.gen(function* () {
               // Fast-fail on an unusable destination before the run restarts;
               // `executeCliWorkflowConfig` reads the same persisted `cli`
-              // block. The stored-destination readers throw on a bad persisted
-              // path, so `Effect.try` keeps that refusal on the typed channel
-              // alongside the probes' own failures.
-              const destinations = yield* Effect.try({
-                try: () => ({
-                  file: resumeWorkflowOutputFile(workflowConfig),
-                  directory: resumeWorkflowOutputDirectory(workflowConfig),
-                }),
+              // block. Each stored-destination reader throws on a bad persisted
+              // path, so `Effect.try` keeps that refusal on the typed channel —
+              // interleaved with its own probe, because the file probe's
+              // `mkdir -p` runs before the directory path is ever read.
+              const outputFile = yield* Effect.try({
+                try: () => resumeWorkflowOutputFile(workflowConfig),
                 catch: ensureError,
               });
-              yield* assertOutputFileAvailable(destinations.file, context.cwd);
-              yield* assertOutputDirAvailable(
-                destinations.directory,
-                context.cwd,
-              );
+              yield* assertOutputFileAvailable(outputFile, context.cwd);
+              const outputDirectory = yield* Effect.try({
+                try: () => resumeWorkflowOutputDirectory(workflowConfig),
+                catch: ensureError,
+              });
+              yield* assertOutputDirAvailable(outputDirectory, context.cwd);
               const recoveryInputIsDurable =
                 yield* workflowRecoveryInputsAreDurable(
                   workflowConfig,
