@@ -18,8 +18,8 @@ import {
 import type { AgentEntry } from '@agent/index/agentEntry';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { GlobalStorageFs } from '@platform/rootedFs';
-import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { AgentCategory } from '@shared/schemas';
+import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { REPO_ROOT } from '@test/support/repoScan';
 import { installPlatform } from '@test/support/setupPlatform';
 import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';

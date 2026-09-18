@@ -18,8 +18,8 @@ import {
 } from '@cli/runtime/agents';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { GlobalStorageFs } from '@platform/rootedFs';
-import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { AgentCategory } from '@shared/schemas';
+import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { REPO_ROOT } from '@test/support/repoScan';
 import { installPlatform } from '@test/support/setupPlatform';
