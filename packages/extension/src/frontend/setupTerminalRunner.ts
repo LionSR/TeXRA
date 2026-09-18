@@ -16,7 +16,7 @@
  */
 
 // Third-party imports
-import { Effect, Fiber, Option } from 'effect';
+import { Effect, Fiber, Option, Stream } from 'effect';
 import stripAnsi from 'strip-ansi';
 import * as vscode from 'vscode';
 
@@ -28,8 +28,6 @@ import {
   type TerminalRunRequest,
   type TerminalRunResult,
 } from '@hosts/uiHosts';
-
-import { raceWithTimeout } from './vscode/raceWithTimeout';
 
 const SHELL_INTEGRATION_WAIT_MS = 2_000;
 const READER_DRAIN_MS = 250;
@@ -48,16 +46,10 @@ export const runTerminalCommand = Effect.fn('setupTerminalRunner.runCommand')(
           cause,
         }),
     });
-    const integration = yield* Effect.tryPromise({
-      try: () => waitForShellIntegration(terminal, SHELL_INTEGRATION_WAIT_MS),
-      catch: (cause) =>
-        new TerminalRunFailed({
-          reason: 'terminal-unavailable',
-          message: 'VS Code would not report terminal shell integration.',
-          command: args.command,
-          cause,
-        }),
-    });
+    const integration = yield* waitForShellIntegration(
+      terminal,
+      SHELL_INTEGRATION_WAIT_MS,
+    );
 
     if (!integration) {
       // The terminal can be closed during the shell-integration wait; a
@@ -96,19 +88,39 @@ function revealTerminal(request: TerminalRunRequest): vscode.Terminal {
   return terminal;
 }
 
-async function waitForShellIntegration(
+/**
+ * Wait for VS Code to report shell integration for `terminal`, or for
+ * `timeoutMs` to elapse. Absent integration is the answer the caller acts on,
+ * not a failure: the runner falls back to `sendText`.
+ */
+function waitForShellIntegration(
   terminal: vscode.Terminal,
   timeoutMs: number,
-): Promise<vscode.TerminalShellIntegration | undefined> {
-  if (terminal.shellIntegration) return terminal.shellIntegration;
-  const raced = await raceWithTimeout<vscode.TerminalShellIntegration>(
-    (resolve) =>
-      vscode.window.onDidChangeTerminalShellIntegration((event) => {
-        if (event.terminal === terminal) resolve(event.shellIntegration);
-      }),
-    timeoutMs,
-  );
-  return raced.timedOut ? undefined : raced.value;
+): Effect.Effect<vscode.TerminalShellIntegration | undefined> {
+  return Effect.suspend(() => {
+    if (terminal.shellIntegration) {
+      return Effect.succeed(terminal.shellIntegration);
+    }
+    return Effect.callback<vscode.TerminalShellIntegration>((resume) => {
+      // One disposal path for every exit, as with the exit-code wait below:
+      // the event that resumes normally unsubscribes itself, because Effect
+      // runs the returned effect only on interruption.
+      let subscription: vscode.Disposable | undefined;
+      const dispose = () => {
+        subscription?.dispose();
+        subscription = undefined;
+      };
+      subscription = vscode.window.onDidChangeTerminalShellIntegration(
+        (event) => {
+          if (event.terminal === terminal) {
+            dispose();
+            resume(Effect.succeed(event.shellIntegration));
+          }
+        },
+      );
+      return Effect.sync(dispose);
+    }).pipe(Effect.timeoutOption(timeoutMs), Effect.map(Option.getOrUndefined));
+  });
 }
 
 const captureExecution = Effect.fn('setupTerminalRunner.capture')(function* (
@@ -178,12 +190,11 @@ const captureExecution = Effect.fn('setupTerminalRunner.capture')(function* (
       }),
   });
   const reader = yield* Effect.forkChild(
-    Effect.tryPromise({
-      try: () => drainStreamTail(stream, TERMINAL_OUTPUT_MAX_CHARS),
-      catch: (cause) => cause,
-    }).pipe(Effect.catch(() => Effect.succeed(''))),
-    // Start on this frame, as the abandoned promise did, so iteration begins
-    // before the caller suspends on the exit-code event.
+    drainStreamTail(stream, TERMINAL_OUTPUT_MAX_CHARS).pipe(
+      Effect.catch(() => Effect.succeed('')),
+    ),
+    // Start on this frame so iteration begins before the caller suspends on
+    // the exit-code event.
     { startImmediately: true },
   );
 
@@ -214,17 +225,20 @@ function truncateTerminalOutput(output: string): string {
 /**
  * Drain an async iterable into a length-capped sliding-window tail,
  * bounding in-flight memory while streaming. The final ANSI strip and cap
- * happen via {@link truncateTerminalOutput}. Chunk errors reject; the fiber
- * that drains decides what to do with them.
+ * happen via {@link truncateTerminalOutput}. A chunk error fails the effect;
+ * the fiber that drains decides what to do with it.
  */
-async function drainStreamTail(
+function drainStreamTail(
   stream: AsyncIterable<string>,
   maxChars: number,
-): Promise<string> {
-  let buf = '';
-  for await (const chunk of stream) {
-    buf += chunk;
-    if (buf.length > maxChars) buf = buf.slice(-maxChars);
-  }
-  return buf;
+): Effect.Effect<string, unknown> {
+  return Stream.fromAsyncIterable(stream, (cause) => cause).pipe(
+    Stream.runFold(
+      () => '',
+      (buf: string, chunk: string) => {
+        const next = buf + chunk;
+        return next.length > maxChars ? next.slice(-maxChars) : next;
+      },
+    ),
+  );
 }

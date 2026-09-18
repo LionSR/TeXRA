@@ -5,40 +5,62 @@
  * For formatting, import directly from `@utils/diagnostics/diagnosticFormatting`.
  */
 
+import { Effect, Option } from 'effect';
 import * as vscode from 'vscode';
 
 import { createLog } from '@logger/logUtils';
 
-import { raceWithTimeout } from './raceWithTimeout';
-
 const log = createLog('VscodeDiagnostics');
 
 /**
- * Wait for diagnostics to change for a specific file.
- * Uses event subscription with timeout.
+ * Wait for diagnostics to change for a specific file, giving up after
+ * `timeoutMs`.
+ *
+ * Nothing subscribes until this effect runs, so a caller that must not miss
+ * an update triggered by its own action forks it with `startImmediately`
+ * before taking that action and joins the fiber afterwards. Interrupting the
+ * wait disposes the subscription.
  */
-export async function waitForDiagnosticsChange(
+export function waitForDiagnosticsChange(
   uri: vscode.Uri,
   timeoutMs: number = 3000,
-): Promise<void> {
+): Effect.Effect<void> {
   if (timeoutMs <= 0) {
-    return;
+    return Effect.void;
   }
 
   const targetKey = uri.toString().toLowerCase();
 
-  const raced = await raceWithTimeout<void>(
-    (resolve) =>
-      vscode.languages.onDidChangeDiagnostics((event) => {
-        const hasMatch = event.uris.some(
-          (eventUri) => eventUri.toString().toLowerCase() === targetKey,
-        );
-        if (hasMatch) resolve();
-      }),
-    timeoutMs,
+  return Effect.callback<void>((resume) => {
+    // One disposal path for every exit: Effect runs the returned effect only
+    // when the wait is interrupted (the timeout below, or the whole program
+    // being interrupted), so the event that resumes normally unsubscribes
+    // itself. `dispose` drops the subscription it disposed, so both paths
+    // can run.
+    let subscription: vscode.Disposable | undefined;
+    const dispose = () => {
+      subscription?.dispose();
+      subscription = undefined;
+    };
+    subscription = vscode.languages.onDidChangeDiagnostics((event) => {
+      const hasMatch = event.uris.some(
+        (eventUri) => eventUri.toString().toLowerCase() === targetKey,
+      );
+      if (hasMatch) {
+        dispose();
+        resume(Effect.void);
+      }
+    });
+    return Effect.sync(dispose);
+  }).pipe(
+    Effect.timeoutOption(timeoutMs),
+    Effect.tap((observed) =>
+      Option.isNone(observed)
+        ? Effect.sync(() =>
+            log.debug(`Timed out waiting for diagnostics: ${uri.fsPath}`),
+          )
+        : Effect.void,
+    ),
+    Effect.asVoid,
   );
-
-  if (raced.timedOut) {
-    log.debug(`Timed out waiting for diagnostics: ${uri.fsPath}`);
-  }
 }
