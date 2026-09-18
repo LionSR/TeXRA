@@ -11,7 +11,7 @@ import {
 } from '@platform/languageModel';
 import type { ToolDefinition } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { FakeConfigProvider } from '@test/support/FakePlatform';
+import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import { hostStores, installPlatform } from '@test/support/setupPlatform';
 import { DiagnosticsTool } from '@tools/DiagnosticsTool';
 import { getDefaultToolRegistry } from '@tools/registry';
@@ -41,7 +41,7 @@ describe('tool-use tool resolution', () => {
       registry: getDefaultToolRegistry(),
       logger,
       toolInjections,
-      config: new FakeConfigProvider(),
+      settings: makeFakeSettingsStores().stores,
       stores: hostStores(),
       ...options,
     }).pipe(
@@ -60,7 +60,7 @@ describe('tool-use tool resolution', () => {
       registry,
       logger,
       toolInjections,
-      config: new FakeConfigProvider(),
+      settings: makeFakeSettingsStores().stores,
       stores: hostStores(),
       runtimeUnavailableTools,
       approvalPromptsUnavailable: false,

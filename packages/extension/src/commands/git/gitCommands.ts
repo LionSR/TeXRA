@@ -22,7 +22,7 @@ import type { ProcessRuntime } from '@platform/processRuntime';
 import { withSessionFs, WorkspaceFs } from '@platform/rootedFs';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { RootedFileSystem } from '@utils/files/rootedFileSystem';
-import { readPlatformSetting } from '@utils/config/platformSettings';
+import { readSettingFrom } from '@utils/config/platformSettings';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { COMMIT_HASH_PATTERN } from '@utils/git/commitHashPattern';
 import { COMMIT_LABEL_FORMAT } from '@utils/git/commitLogFormat';
@@ -70,7 +70,8 @@ async function getRecentCommits(
 
   // The catalog row owns the range and the default: a corrupt persisted value
   // warns once through readSetting and resolves to 20 instead of throwing.
-  const numberOfCommits = readPlatformSetting<number>(
+  const numberOfCommits = readSettingFrom<number>(
+    session.roots,
     'texra.git.numberOfCommitsToShow',
   );
 

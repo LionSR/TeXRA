@@ -529,7 +529,7 @@ export async function runChat(
       onSuspend={() => exitController.handleSigtstp()}
       onKillRun={(runId) => {
         const stop = runtimeSession.runs.kill(runId, {
-          detachActiveChildren: detachSubagentsOnStop(),
+          detachActiveChildren: detachSubagentsOnStop(runtimeSession.roots),
         });
         // A refused detach commit leaves the run alive: the parent's
         // interrupt runs only after the detach batch commits. Surface that

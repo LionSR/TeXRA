@@ -170,6 +170,7 @@ import {
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
+import { workspaceRoots } from '@platform/workspaceRoots';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { ensureError } from '@utils/errors/errorMessage';
 import {
@@ -181,9 +182,9 @@ import {
 
 // The state stores the controller's setting reads land on, as ports of the
 // installed fake host rather than a module mock of `platform()`: the setting
-// path (`detachSubagentsOnStop` -> `readPlatformSetting`) resolves its stores
-// through the host, and the kernel's setup file installs a host before this
-// file's mocks are registered.
+// path (`detachSubagentsOnStop`) reads the session's own roots, which this
+// file's stub takes from the installed host, and the kernel's setup file
+// installs a host before this file's mocks are registered.
 setupPlatform(
   {},
   {
@@ -340,6 +341,7 @@ function installSession(overrides: Record<string, unknown> = {}): void {
     getHandle: mocks.getRunHandle,
   };
   mocks.sessionStub.mockReturnValue({
+    roots: workspaceRoots(),
     approvalPolicy: TEXRA_APPROVAL_POLICY_DEFAULT,
     interactions: {
       use: vi.fn(() => Effect.succeed(mocks.detachHostInteractions)),

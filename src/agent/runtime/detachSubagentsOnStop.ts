@@ -1,11 +1,14 @@
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { readPlatformSetting } from '@utils/config/platformSettings';
+import { readSettingFrom } from '@utils/config/platformSettings';
 
 /**
  * Whether stopping or killing an agent stream should detach its active child
  * executions instead of letting them die with the parent.
  *
- * Read live at stop/kill time so a settings change takes effect immediately.
+ * Read live at stop/kill time, from the settings slots of the session whose
+ * run is being stopped, so a settings change takes effect immediately and a
+ * process holding several papers answers for the right one.
  *
  * This owns the policy for the *configured* stop surfaces, in every host: the
  * extension and desktop progress-view stream stop, the extension review-run
@@ -31,6 +34,9 @@ import { readPlatformSetting } from '@utils/config/platformSettings';
  *
  * The platform must be initialized before a run can be stopped or killed.
  */
-export function detachSubagentsOnStop(): boolean {
-  return readPlatformSetting<boolean>(GlobalStateKey.DETACH_SUBAGENTS_ON_STOP);
+export function detachSubagentsOnStop(settings: SettingsStores): boolean {
+  return readSettingFrom<boolean>(
+    settings,
+    GlobalStateKey.DETACH_SUBAGENTS_ON_STOP,
+  );
 }
