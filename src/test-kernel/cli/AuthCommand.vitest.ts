@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Effect } from 'effect';
 
-import { effectRuntime } from '@platform/processRuntime';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 
 const mocks = vi.hoisted(() => ({
@@ -54,7 +54,7 @@ describe('CLI auth command', () => {
     });
     mocks.initCliPlatform
       .mockReset()
-      .mockResolvedValue({ runtime: effectRuntime() });
+      .mockResolvedValue({ runtime: testRuntime() });
     mocks.signOutCliSubscription.mockReset().mockReturnValue(
       Effect.succeed({
         preferenceUpdate: { effective: false, target: 'global' },

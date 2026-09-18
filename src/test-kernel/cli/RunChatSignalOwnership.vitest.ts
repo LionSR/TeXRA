@@ -18,13 +18,13 @@ import { CliExitCode } from '@cli/runtime/exitCodes';
 import { rootRunId as rootRunIdSignal } from '@cli/chat/tui/state/cliState';
 import { currentView } from '@cli/chat/tui/state/sessionView';
 import { platform } from '@platform/platform';
-import { effectRuntime } from '@platform/processRuntime';
 import {
   aggregateId as qualifyAggregateId,
   AgentCategory,
   USER_FOLLOW_UP_SUPPORT,
   type RunId,
 } from '@shared/schemas';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { installedHost, installFakeHost } from '@test/support/setupPlatform';
@@ -273,7 +273,7 @@ describe('runChat signal ownership wiring', () => {
       globalState: installedHost().roots.globalState,
       secrets: installedHost().secrets,
       session: Effect.succeed(session),
-      runtime: effectRuntime(),
+      runtime: testRuntime(),
     });
     mocks.initCliPlatform.mockImplementation(async () => {
       mocks.callOrder.push('initCliPlatform');

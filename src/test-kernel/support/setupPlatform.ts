@@ -325,7 +325,7 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
   const [
     { initPlatform },
     { initProcessWorkspaceRoots },
-    { effectRuntime, initProcessRuntime, tryProcessRuntime },
+    { initTestProcessRuntime, testRuntime, tryTestProcessRuntime },
     { installAuthProgramEdge },
     { Layer, ManagedRuntime },
     { testHttpClientLayer },
@@ -338,7 +338,7 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
   ] = await Promise.all([
     import('@platform/platform'),
     import('@platform/workspaceRoots'),
-    import('@platform/processRuntime'),
+    import('./testProcessRuntime'),
     import('@auth/authProgram'),
     import('effect'),
     import('@test/support/fetchTestUtils'),
@@ -353,7 +353,7 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
   // The process services, over whichever host is installed when a member is
   // called: hosts change per test, the runtime does not. These imports
   // stay eager: the process runtime is built synchronously by
-  // `effectRuntime().runSync` callers, so a lazily imported (asynchronous)
+  // `testRuntime().runSync` callers, so a lazily imported (asynchronous)
   // layer here fails every one of them.
   processServices ??= Layer.mergeAll(
     testHttpClientLayer,
@@ -385,12 +385,12 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
   // a suite imports it (through `sessionTestUtils` or
   // `defaultSessionTestSetup`) after its own `vi.mock` registrations, which
   // this install, called from a setup file or a `beforeEach`, cannot promise.
-  if (tryProcessRuntime() == null) {
-    initProcessRuntime(ManagedRuntime.make(processServices));
+  if (tryTestProcessRuntime() == null) {
+    initTestProcessRuntime(ManagedRuntime.make(processServices));
   }
   // The auth run edge, unconditionally: a suite that reset modules gets a
   // fresh `@auth/authProgram` instance, and this install must land on it.
-  installAuthProgramEdge((program) => effectRuntime().runPromiseExit(program));
+  installAuthProgramEdge((program) => testRuntime().runPromiseExit(program));
 }
 
 /** Installs a fake host built from `options`/`overrides` right now. */

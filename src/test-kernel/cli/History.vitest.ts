@@ -14,7 +14,7 @@ import {
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { effectRuntime } from '@platform/processRuntime';
+import { testRuntime } from '@test/support/testProcessRuntime';
 
 import {
   createFakeHost,
@@ -149,7 +149,7 @@ function historyDetails(
   options?: { includeFullConversation?: boolean },
 ) {
   return readCliHistoryDetails(
-    effectRuntime(),
+    testRuntime(),
     Effect.succeed(testDefaultSession()),
     id,
     options,
@@ -295,7 +295,7 @@ describe('CLI history runtime', () => {
       secrets: host.secrets,
       session: Effect.succeed(testDefaultSession()),
       roots: host.roots,
-      runtime: effectRuntime(),
+      runtime: testRuntime(),
     });
     mocks.readConfig.mockResolvedValue(config);
     mocks.readConversation.mockResolvedValue(null);
@@ -311,7 +311,7 @@ describe('CLI history runtime', () => {
     mocks.listRuns.mockReturnValue(Effect.succeed([runListEntry('a1a1a1')]));
 
     const entries = await listCliHistoryEntries(
-      effectRuntime(),
+      testRuntime(),
       Effect.succeed(testDefaultSession()),
     );
 
@@ -357,7 +357,7 @@ describe('CLI history runtime', () => {
     );
 
     const entries = await listCliHistoryEntries(
-      effectRuntime(),
+      testRuntime(),
       Effect.succeed(testDefaultSession()),
     );
     expect(entries.map((entry) => entry.status)).toEqual([
@@ -409,7 +409,7 @@ describe('CLI history runtime', () => {
     );
 
     const entries = await listCliHistoryEntries(
-      effectRuntime(),
+      testRuntime(),
       Effect.succeed(testDefaultSession()),
     );
 
@@ -428,7 +428,7 @@ describe('CLI history runtime', () => {
     );
 
     const entries = await listCliHistoryEntries(
-      effectRuntime(),
+      testRuntime(),
       Effect.succeed(testDefaultSession()),
     );
 
@@ -453,7 +453,7 @@ describe('CLI history runtime', () => {
     );
 
     const entries = await listCliHistoryEntries(
-      effectRuntime(),
+      testRuntime(),
       Effect.succeed(testDefaultSession()),
     );
 
@@ -480,7 +480,7 @@ describe('CLI history runtime', () => {
     );
 
     const entries = await listCliHistoryEntries(
-      effectRuntime(),
+      testRuntime(),
       Effect.succeed(testDefaultSession()),
     );
 
@@ -981,7 +981,7 @@ describe('CLI history runtime', () => {
       ).runs.get(runId)?.launchedAt;
 
       const result = await readCliHistoryExportInput(
-        effectRuntime(),
+        testRuntime(),
         Effect.succeed(testDefaultSession()),
         runId,
       );
@@ -1016,7 +1016,7 @@ describe('CLI history runtime', () => {
 
       await expect(
         readCliHistoryExportInput(
-          effectRuntime(),
+          testRuntime(),
           Effect.succeed(testDefaultSession()),
           'facade' as RunId,
         ),
@@ -1030,7 +1030,7 @@ describe('CLI history runtime', () => {
       // baseline: stored config, no conversation, no meta.
       await expect(
         readCliHistoryExportInput(
-          effectRuntime(),
+          testRuntime(),
           Effect.succeed(testDefaultSession()),
           'a1a1a1' as RunId,
         ),
@@ -1045,7 +1045,7 @@ describe('CLI history runtime', () => {
 
       await expect(
         readCliHistoryExportInput(
-          effectRuntime(),
+          testRuntime(),
           Effect.succeed(testDefaultSession()),
           'a1a1a1' as RunId,
         ),
@@ -1063,7 +1063,7 @@ describe('CLI history runtime', () => {
 
       await expect(
         readCliHistoryExportInput(
-          effectRuntime(),
+          testRuntime(),
           Effect.succeed(testDefaultSession()),
           'facade' as RunId,
         ),
@@ -1084,7 +1084,7 @@ describe('CLI history runtime', () => {
       );
 
       await expect(
-        readCliHistoryStandaloneTemplate(effectRuntime(), resourcesPath),
+        readCliHistoryStandaloneTemplate(testRuntime(), resourcesPath),
       ).resolves.toBe('<html>standalone</html>');
     });
 
@@ -1095,7 +1095,7 @@ describe('CLI history runtime', () => {
       );
 
       await expect(
-        readCliHistoryStandaloneTemplate(effectRuntime(), resourcesPath),
+        readCliHistoryStandaloneTemplate(testRuntime(), resourcesPath),
       ).resolves.toBeNull();
     });
 

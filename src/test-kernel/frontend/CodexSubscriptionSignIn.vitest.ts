@@ -47,12 +47,12 @@ vi.mock('@frontend/ui/errorHandlingUtils', () => ({
   showLoggedErrorMessage: mocks.showLoggedErrorMessage,
 }));
 
-const { effectRuntime } = await import('@platform/processRuntime');
+const { testRuntime } = await import('@test/support/testProcessRuntime');
 const { signInWithSubscription } =
   await import('@frontend/auth/subscriptionSignIn');
 
 const signInWithChatGptSubscription = (channel: string) =>
-  signInWithSubscription(channel, 'chatgpt', effectRuntime());
+  signInWithSubscription(channel, 'chatgpt', testRuntime());
 
 function loopbackSession() {
   return {

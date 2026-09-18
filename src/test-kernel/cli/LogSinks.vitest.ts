@@ -2,11 +2,27 @@
 import { PassThrough } from 'node:stream';
 
 // Third-party imports
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import { askCliQuestion, NdjsonStdoutSink } from '@cli/runtime/logSinks';
+import {
+  askCliQuestion,
+  NdjsonStdoutSink,
+  setCliLogRuntime,
+} from '@cli/runtime/logSinks';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
+import { testRuntime } from '@test/support/testProcessRuntime';
+
+// The sink queues each record on a FIFO lane of the runtime its composition
+// root hands it; here that root is this suite. Without one the sink writes
+// straight through, which is the no-runtime edge its own tests cover.
+beforeEach(() => {
+  setCliLogRuntime(testRuntime());
+});
+
+afterEach(() => {
+  setCliLogRuntime(null);
+});
 
 function createStdoutStub(writeResults: boolean[] = [true]) {
   const lines: string[] = [];

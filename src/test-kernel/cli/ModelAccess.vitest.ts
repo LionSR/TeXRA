@@ -14,9 +14,9 @@ import {
   selectCliRunnableModel,
   type CliModelAccess,
 } from '@cli/runtime/modelAccess';
-import { effectRuntime } from '@platform/processRuntime';
 import type { ModelOptionData } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import { FakeStateStore, fakeStores } from '@test/support/FakePlatform';
 import { setupPlatform } from '@test/support/setupPlatform';
 
@@ -125,7 +125,7 @@ type ResolveCliRunnableModelOptions = Parameters<
  * The process stores every access lookup reads, threaded in by the caller the
  * way the CLI composition root threads its own.
  */
-const stores = { ...fakeStores(), runtime: effectRuntime() };
+const stores = { ...fakeStores(), runtime: testRuntime() };
 
 function resolveModelFromAccessList(
   accessList: readonly CliModelAccess[],

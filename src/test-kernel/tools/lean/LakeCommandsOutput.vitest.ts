@@ -13,7 +13,7 @@ const mocks = vi.hoisted(() => ({ execa: vi.fn() }));
 vi.mock('execa', () => ({ execa: mocks.execa }));
 
 // Local imports
-import { effectRuntime } from '@platform/processRuntime';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import { runLakeCommand } from '@tools/lean/direct/lakeCommands';
 
 describe('runLakeCommand output failures', () => {
@@ -38,7 +38,7 @@ describe('runLakeCommand output failures', () => {
       shortMessage: 'Command failed with exit code 7',
     });
 
-    const result = await effectRuntime().runPromise(runLakeCommand(LAKE_BUILD));
+    const result = await testRuntime().runPromise(runLakeCommand(LAKE_BUILD));
 
     expect(result).toEqual({
       exitCode: 7,
@@ -57,7 +57,7 @@ describe('runLakeCommand output failures', () => {
       shortMessage: 'Command failed: stdout maxBuffer exceeded',
     });
 
-    const result = await effectRuntime().runPromise(runLakeCommand(LAKE_BUILD));
+    const result = await testRuntime().runPromise(runLakeCommand(LAKE_BUILD));
 
     expect(result).toEqual({
       exitCode: -1,

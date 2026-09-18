@@ -17,7 +17,6 @@ import {
   type ConfigProvider,
   type StateStore,
 } from '@platform/interfaces';
-import { effectRuntime } from '@platform/processRuntime';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
@@ -31,6 +30,7 @@ import type {
 } from '@shared/schemas';
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import {
   FakeScopedConfigProvider,
   FakeSecrets,
@@ -123,7 +123,7 @@ function createSettingsFixture(overrides: SettingsFixtureOverrides = {}) {
     onTestFinished(() => Effect.runPromise(session.dispose()));
   }
   const settings = createDesktopSettingsIpc({
-    runtime: effectRuntime(),
+    runtime: testRuntime(),
     ...settingsOverrides,
     agentSettingsController:
       overrides.agentSettingsController ??
@@ -472,7 +472,7 @@ describe('desktop settings IPC', () => {
       publishTestRunStart(session, runId);
 
       // A run mutates goals on its paper's session, as the desktop does.
-      await effectRuntime().runPromise(
+      await testRuntime().runPromise(
         startGoal(session, runId, 'Finish the proof'),
       );
       await flushAsyncWork();

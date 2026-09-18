@@ -5,12 +5,12 @@ import { LatexToolingController } from '@controllers/settingsView/LatexToolingCo
 import type { ToolTerminalAction } from '@controllers/settingsView/ToolDashboardData';
 import { DefaultDesktopToolingSettingsController } from '@desktop/main/desktopToolingSettingsController';
 import { appSignals } from '@eventBus/AppSignals';
-import { effectRuntime } from '@platform/processRuntime';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { ToolCommandKind, ToolDashboardItem } from '@shared/schemas';
 import { HOMEBREW_INSTALL_COMMAND } from '@shared/constants/latexToolchain';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { assertSupported, isUnsupported } from '@shared/utils/dispatcher';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import { FakeConfigProvider, FakeStateStore } from '@test/support/FakePlatform';
 import type { ExternalToolCheckResult } from '@tools/toolAvailability';
 
@@ -157,7 +157,7 @@ function createFixture(overrides: Partial<ControllerOptions> = {}) {
     // The controller settles every write on the runtime it is handed; the
     // spread above makes any overridden member possibly undefined, so the
     // default is restated here rather than left to the fixture's shape.
-    runtime: overrides.runtime ?? effectRuntime(),
+    runtime: overrides.runtime ?? testRuntime(),
   });
   // The controller subscribes to a process-global bus, so a fixture left
   // undisposed would keep reacting to later tests' emits.

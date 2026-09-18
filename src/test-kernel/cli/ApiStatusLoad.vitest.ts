@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { effectRuntime } from '@platform/processRuntime';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import { FakeSecrets } from '@test/support/FakePlatform';
 
 const mocks = vi.hoisted(() => ({
@@ -88,7 +88,7 @@ function accountStatusLines(): Promise<string[]> {
   // The status program reads subscription usage, whose credential reads take
   // the process HTTP client from context — so it settles on the kernel's
   // runtime, not a bare one.
-  return effectRuntime().runPromise(loadCliDetailedAccountStatusLines(secrets));
+  return testRuntime().runPromise(loadCliDetailedAccountStatusLines(secrets));
 }
 
 function renderPreferenceRoute(
@@ -238,7 +238,7 @@ describe('CLI model-access status lines', () => {
       ),
     );
 
-    const lines = await effectRuntime().runPromise(
+    const lines = await testRuntime().runPromise(
       loadCliDetailedAccountStatusLines(secrets, {
         now: 1_800_000_000_000,
       }),

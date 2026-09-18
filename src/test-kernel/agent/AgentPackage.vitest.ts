@@ -50,10 +50,10 @@ const mocks = vi.hoisted(() => ({
   initPlatform: vi.fn(),
   initProcessWorkspaceRoots: vi.fn(),
   /** The process's session owner, as `installProcessRuntime` installs it
-   *  and `disposeProcessRuntime` takes it away: what says whether the
-   *  package must compose the process. */
+   *  and `disposeProcessRuntime` takes it away, carrying the runtime it runs
+   *  on: what says whether the package must compose the process. */
   installRuntime: vi.fn(),
-  ownerInstalled: false,
+  ownerRuntime: undefined as ProcessRuntime | undefined,
   loadAgents: vi.fn(),
   runValidatedAgent: vi.fn(),
   getRunHandle: vi.fn(),
@@ -167,7 +167,7 @@ vi.mock('@agent/runtime', async () => {
         catch: (cause) =>
           cause instanceof Error ? cause : new Error(String(cause)),
       }).pipe(Effect.uninterruptible),
-    sessionOwnerInstalled: () => mocks.ownerInstalled,
+    installedProcessRuntime: () => mocks.ownerRuntime,
   };
 });
 
@@ -199,9 +199,10 @@ vi.mock('@transcript/StreamLogStore', () => ({
 }));
 
 // Local imports - package API under test
-import { effectRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type { RunId } from '@shared/schemas';
 import type { SessionView as RuntimeSessionView } from '@shared/session/sessionView';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import {
   runAgent,
   type AgentPlatform,
@@ -305,16 +306,16 @@ describe('agent package run lifecycle', () => {
     mocks.activePlatform = null;
     mocks.agentCategory = 'toolUse';
     mocks.eventListener = undefined;
-    mocks.ownerInstalled = false;
+    mocks.ownerRuntime = undefined;
     mocks.initPlatform.mockImplementation((platform: object) => {
       mocks.activePlatform = platform;
     });
     mocks.installRuntime.mockImplementation(() => {
-      mocks.ownerInstalled = true;
-      return effectRuntime();
+      mocks.ownerRuntime = testRuntime();
+      return mocks.ownerRuntime;
     });
     mocks.disposeRuntime.mockImplementation(async () => {
-      mocks.ownerInstalled = false;
+      mocks.ownerRuntime = undefined;
     });
     mocks.foldDeath = Effect.runSync(Deferred.make<never, Error>());
     mocks.loadAgents.mockReturnValue(Effect.void);

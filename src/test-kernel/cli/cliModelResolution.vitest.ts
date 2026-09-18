@@ -7,7 +7,7 @@ import {
 import { CLI_CHEAP_START_MODEL } from '@cli/runtime/cliConfig';
 import { CliUsageError, type CliContext } from '@cli/runtime/cliContext';
 import { selectCliRunnableModel } from '@cli/runtime/modelAccess';
-import { effectRuntime } from '@platform/processRuntime';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { FakeConfigProvider, fakeStores } from '@test/support/FakePlatform';
 import { installPlatform } from '@test/support/setupPlatform';
@@ -52,7 +52,7 @@ function withRunModel(model: string): Promise<void> {
 }
 
 /** The stores each command hands to `selectCliRunModel`; model access is mocked. */
-const STORES = { ...fakeStores(), runtime: effectRuntime() };
+const STORES = { ...fakeStores(), runtime: testRuntime() };
 
 describe('selectCliRunModel precedence', () => {
   beforeEach(() => {

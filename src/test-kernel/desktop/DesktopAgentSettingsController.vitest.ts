@@ -3,13 +3,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { inquiryRecordsLayer } from '@controllers/session/inquiryRecords';
 
 import { DefaultDesktopAgentSettingsController } from '@desktop/main/desktopAgentSettingsController';
-import { effectRuntime, initProcessRuntime } from '@platform/processRuntime';
 import { processOwnerId } from '@platform/defaults/nodeProcesses';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { assertSupported, isUnsupported } from '@shared/utils/dispatcher';
+import {
+  initTestProcessRuntime,
+  testRuntime,
+} from '@test/support/testProcessRuntime';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 
 import {
@@ -45,7 +48,7 @@ interface ControllerFixtureOptions {
 
 beforeEach(() => {
   const { globalStorage } = createFakeWorkspaceRoots();
-  initProcessRuntime(
+  initTestProcessRuntime(
     ManagedRuntime.make(
       Layer.mergeAll(
         testHttpClientLayer,
@@ -73,7 +76,7 @@ function createControllerFixture(options: ControllerFixtureOptions = {}) {
   const catalog = options.catalog ?? emptyCatalog;
   const visibleCatalog = options.visibleCatalog ?? catalog;
   const controller = new DefaultDesktopAgentSettingsController({
-    runtime: effectRuntime(),
+    runtime: testRuntime(),
     workspaceState,
     globalState,
     registry: {

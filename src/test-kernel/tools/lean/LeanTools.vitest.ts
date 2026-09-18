@@ -7,7 +7,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { effectRuntime } from '@platform/processRuntime';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import { findExternalToolDef } from '@tools/externalToolDefs';
 import { resolveWorkspaceRoot } from '@tools/lean/direct/leanServerPool';
 import {
@@ -62,7 +62,7 @@ describe('resolveWorkspaceRoot', () => {
   let scratch: string;
 
   const resolve = (filePath: string): Promise<string | null> =>
-    effectRuntime().runPromise(resolveWorkspaceRoot(filePath));
+    testRuntime().runPromise(resolveWorkspaceRoot(filePath));
 
   beforeEach(() => {
     scratch = mkdtempSync(path.join(tmpdir(), 'texra-lean-root-'));
@@ -124,7 +124,7 @@ describe('Lean external tool status', () => {
     });
 
     await expect(
-      effectRuntime().runPromise(
+      testRuntime().runPromise(
         lean!.statusLabel!({ extensionAvailable: false, lakeAvailable: true }),
       ),
     ).resolves.toBeUndefined();
@@ -136,14 +136,14 @@ describe('Lean external tool status', () => {
       status: 'starting',
     });
     await expect(
-      effectRuntime().runPromise(
+      testRuntime().runPromise(
         lean!.statusLabel!({ extensionAvailable: false, lakeAvailable: true }),
       ),
     ).resolves.toBe('1 server active');
 
     updateLeanServer('direct:/running', { status: 'running' });
     await expect(
-      effectRuntime().runPromise(
+      testRuntime().runPromise(
         lean!.statusLabel!({ extensionAvailable: false, lakeAvailable: true }),
       ),
     ).resolves.toBe('1 server active');
@@ -210,7 +210,7 @@ describe('runLakeCommand mutex', () => {
   });
 
   it('keeps the current 4,194,304-character tail cap and truncation marker', async () => {
-    const result = await effectRuntime().runPromise(
+    const result = await testRuntime().runPromise(
       runLakeCommand({
         workspaceRoot: workspaceA,
         lakeCommand: NODE,
@@ -231,7 +231,7 @@ describe('runLakeCommand mutex', () => {
   });
 
   it('preserves non-zero exit diagnostics', async () => {
-    const result = await effectRuntime().runPromise(
+    const result = await testRuntime().runPromise(
       runLakeCommand({
         workspaceRoot: workspaceA,
         lakeCommand: NODE,
@@ -250,7 +250,7 @@ describe('runLakeCommand mutex', () => {
   });
 
   it('preserves timeout diagnostics', async () => {
-    const result = await effectRuntime().runPromise(
+    const result = await testRuntime().runPromise(
       runLakeCommand({
         workspaceRoot: workspaceA,
         lakeCommand: NODE,
@@ -269,7 +269,7 @@ describe('runLakeCommand mutex', () => {
     const gateB = path.join(workspaceA, 'gate-b');
     const readyB = path.join(workspaceA, 'ready-b');
 
-    const first = effectRuntime().runPromise(
+    const first = testRuntime().runPromise(
       runLakeCommand({
         workspaceRoot: workspaceA,
         lakeCommand: NODE,
@@ -277,7 +277,7 @@ describe('runLakeCommand mutex', () => {
         serialize: true,
       }),
     );
-    const second = effectRuntime().runPromise(
+    const second = testRuntime().runPromise(
       runLakeCommand({
         workspaceRoot: workspaceA,
         lakeCommand: NODE,
@@ -324,7 +324,7 @@ describe('runLakeCommand mutex', () => {
     const readyB = path.join(secondWorkspace(), 'ready-b');
 
     const calls = Promise.all([
-      effectRuntime().runPromise(
+      testRuntime().runPromise(
         runLakeCommand({
           workspaceRoot: workspaceA,
           lakeCommand: NODE,
@@ -332,7 +332,7 @@ describe('runLakeCommand mutex', () => {
           serialize,
         }),
       ),
-      effectRuntime().runPromise(
+      testRuntime().runPromise(
         runLakeCommand({
           workspaceRoot: secondWorkspace(),
           lakeCommand: NODE,

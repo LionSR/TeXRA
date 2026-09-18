@@ -9,10 +9,10 @@ import { afterEach, beforeEach, describe, expect } from 'vitest';
 import { WorkPlanState } from '@agent/core/state/AgentWorkspaceState';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { platform, type Platform } from '@platform/platform';
-import { effectRuntime } from '@platform/processRuntime';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import { planSummaryLine, GOAL_FEATURE_FLAG_KEY } from '@shared/schemas';
 import type { Goal, Plan, RequestDecision, RunId } from '@shared/schemas';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
@@ -316,7 +316,7 @@ describe('PlanTool — update (plan approval)', () => {
             runId,
             followUpPlan.objective,
             async (planned) => {
-              existing = await effectRuntime().runPromise(
+              existing = await testRuntime().runPromise(
                 startGoal(planned, runId, 'Old objective'),
               );
             },

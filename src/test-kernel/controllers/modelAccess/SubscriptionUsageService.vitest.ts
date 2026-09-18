@@ -15,11 +15,11 @@ import {
 } from '@controllers/modelAccess/subscriptionUsage/glmCodingPlanUsageAdapter';
 import { parseKimiCodeUsage } from '@controllers/modelAccess/subscriptionUsage/kimiCodeUsageAdapter';
 import { SubscriptionUsageService } from '@controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
-import { effectRuntime } from '@platform/processRuntime';
 import {
   SubscriptionUsageSnapshotSchema,
   type SubscriptionUsageSnapshot,
 } from '@shared/schemas';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import { FakeSecrets } from '@test/support/FakePlatform';
 import type { HttpClient } from 'effect/unstable/http';
 
@@ -64,7 +64,7 @@ function runUsage(
     HttpClient.HttpClient
   >,
 ): Promise<SubscriptionUsageSnapshot> {
-  return effectRuntime().runPromise(program);
+  return testRuntime().runPromise(program);
 }
 
 function serviceWith(

@@ -79,9 +79,9 @@ import type {
   LanguageModelInfo,
   LanguageModelPort,
 } from '@platform/languageModel';
-import { effectRuntime } from '@platform/processRuntime';
 import { SettingsViewMessageHandler } from '@settingsView/SettingsViewMessageHandler';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { installedHost, installPlatform } from '@test/support/setupPlatform';
@@ -130,7 +130,7 @@ function createHandler(): SettingsViewMessageHandler {
     } as unknown as vscode.ExtensionContext,
     globalState,
     secrets,
-    effectRuntime(),
+    testRuntime(),
     testDefaultSession(),
   );
   vi.spyOn(
@@ -244,7 +244,7 @@ describe('Copilot route preference handler', () => {
         selectModels: vi.fn(async () => models),
       };
       await installPlatform({}, { languageModel: port });
-      await effectRuntime().runPromise(refreshRuntimeModelRegistry());
+      await testRuntime().runPromise(refreshRuntimeModelRegistry());
       expect(copilotRouteForModel('gemini31p')?.access).toBe('allowed');
       models = [{ ...GEMINI_PRO, access }];
       await requestModelAccess();
@@ -263,7 +263,7 @@ describe('Copilot route preference handler', () => {
 
   it('retries when invalidation supersedes a forced allowed probe', async () => {
     const port = await installModels(GEMINI_PRO);
-    await effectRuntime().runPromise(refreshRuntimeModelRegistry());
+    await testRuntime().runPromise(refreshRuntimeModelRegistry());
     const forced = createDeferred<readonly LanguageModelInfo[]>();
     vi.mocked(port.selectModels)
       .mockReturnValueOnce(forced.promise)
@@ -280,7 +280,7 @@ describe('Copilot route preference handler', () => {
 
   it('fails closed after two superseded forced probes', async () => {
     const port = await installModels(GEMINI_PRO);
-    await effectRuntime().runPromise(refreshRuntimeModelRegistry());
+    await testRuntime().runPromise(refreshRuntimeModelRegistry());
     const forced = createDeferred<readonly LanguageModelInfo[]>();
     const retry = createDeferred<readonly LanguageModelInfo[]>();
     vi.mocked(port.selectModels)
@@ -310,7 +310,7 @@ describe('Copilot route preference handler', () => {
         .mockReturnValueOnce(forced.promise),
     };
     await installPlatform({}, { languageModel: port });
-    const stale = effectRuntime().runPromise(refreshRuntimeModelRegistry());
+    const stale = testRuntime().runPromise(refreshRuntimeModelRegistry());
     const request = requestModelAccess();
     await vi.waitFor(() => expect(port.selectModels).toHaveBeenCalledTimes(2));
     forced.resolve([{ ...GEMINI_PRO, access: 'unavailable' }]);
@@ -324,7 +324,7 @@ describe('Copilot route preference handler', () => {
 
   it('coalesces overlapping user-initiated fresh discoveries', async () => {
     const port = await installModels(GEMINI_PRO);
-    await effectRuntime().runPromise(refreshRuntimeModelRegistry());
+    await testRuntime().runPromise(refreshRuntimeModelRegistry());
     const discovery = createDeferred<readonly LanguageModelInfo[]>();
     vi.mocked(port.selectModels).mockReturnValueOnce(discovery.promise);
     const first = requestModelAccess();
@@ -347,13 +347,13 @@ describe('Copilot route preference handler', () => {
       }),
     };
     await installPlatform({}, { languageModel: port });
-    await effectRuntime().runPromise(refreshRuntimeModelRegistry());
+    await testRuntime().runPromise(refreshRuntimeModelRegistry());
     fail = true;
     await requestModelAccess();
     expect(mocks.showLoggedErrorMessage).toHaveBeenCalled();
     expect(mocks.setCopilotRoutePreference).not.toHaveBeenCalled();
     expect(
-      (await effectRuntime().runPromise(discoveredCopilotRoutes())).get(
+      (await testRuntime().runPromise(discoveredCopilotRoutes())).get(
         'gemini31p',
       )?.access,
     ).toBe('allowed');

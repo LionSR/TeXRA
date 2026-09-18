@@ -11,7 +11,7 @@
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 
-import { Data, Effect, Result } from 'effect';
+import { Cause, Data, Effect, Result } from 'effect';
 
 import { promptExtensionInstall } from '@frontend/ui/instruction';
 import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
@@ -322,18 +322,21 @@ function getClientProvider(
     const lean4Ext =
       vscode.extensions.getExtension<Lean4ExtensionApi>(LEAN4_EXTENSION_ID);
     if (!lean4Ext) {
-      yield* Effect.tryPromise({
-        try: () =>
-          promptExtensionInstall(globalState, {
-            suppressKey: 'lean4-install-tool',
-            message:
-              'Lean 4 extension is required for this operation. Install now?',
-            extensionId: LEAN4_EXTENSION_ID,
-            channel: 'lean',
-          }),
-        catch: (cause) =>
-          `Could not offer the Lean 4 install prompt: ${toErrorMessage(cause)}`,
-      }).pipe(Effect.catch((message) => Effect.sync(() => log.warn(message))));
+      yield* promptExtensionInstall(globalState, {
+        suppressKey: 'lean4-install-tool',
+        message:
+          'Lean 4 extension is required for this operation. Install now?',
+        extensionId: LEAN4_EXTENSION_ID,
+        channel: 'lean',
+      }).pipe(
+        Effect.catchCause((cause) =>
+          Effect.sync(() =>
+            log.warn(
+              `Could not offer the Lean 4 install prompt: ${toErrorMessage(Cause.squash(cause))}`,
+            ),
+          ),
+        ),
+      );
       return yield* Effect.fail(
         new LeanExtensionUnavailable({
           reason: 'not-installed',

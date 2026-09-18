@@ -78,7 +78,6 @@ import { CliExitCode } from '@cli/runtime/exitCodes';
 import { runOutcomeExitCode } from '@cli/runtime/terminalStatus';
 import type { CliRuntimeHost } from '@cli/runtime/cliPresentationHost';
 import type { ApiProvider } from '@model/apiProviders';
-import { effectRuntime } from '@platform/processRuntime';
 import {
   AgentCategory,
   aggregateId,
@@ -95,6 +94,7 @@ import {
   type SurfaceDecision,
 } from '@shared/session/approvalDecision';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { createTuiCliContext } from '@test/cli/fixtures/cliContext';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
@@ -134,7 +134,7 @@ function tui(
     createTuiHostInteractions(presentationHost, cliContext, {
       session: testDefaultSession(),
       secrets,
-      runtime: effectRuntime(),
+      runtime: testRuntime(),
     }),
   );
   return {
@@ -301,7 +301,7 @@ function glmCodingPlanRetry(label: string): RetryPermission {
 function decideCurrent(decision: SurfaceDecision): void {
   const pending = currentApproval.get();
   expect(pending).toBeDefined();
-  pending?.decide(testDefaultSession(), effectRuntime(), decision);
+  pending?.decide(testDefaultSession(), testRuntime(), decision);
 }
 
 function decideRetry(decision: SurfaceDecision): void {
@@ -367,7 +367,7 @@ function waitForNoApproval(): Effect.Effect<void> {
 }
 
 beforeAll(() => {
-  bindSessionView(effectRuntime(), testDefaultSession().view);
+  bindSessionView(testRuntime(), testDefaultSession().view);
 });
 
 beforeEach(() => {
@@ -402,7 +402,7 @@ afterEach(async () => {
   // whatever this test did not answer before the next one reads the head.
   const session = testDefaultSession();
   for (const request of SubscriptionRef.getUnsafe(session.view).requests) {
-    await effectRuntime().runPromise(
+    await testRuntime().runPromise(
       session.requests
         .request({
           kind: 'request.decide',

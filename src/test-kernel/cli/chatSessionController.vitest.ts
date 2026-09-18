@@ -153,7 +153,6 @@ import {
 } from '@cli/chat/tui/state/sessionRunState';
 import { DisposableStore } from '@platform/disposable';
 import type { RecoveryContinuation } from '@platform/interfaces';
-import { effectRuntime } from '@platform/processRuntime';
 import {
   aggregateId,
   RUN_OUTCOME,
@@ -163,6 +162,7 @@ import {
 import { TEXRA_APPROVAL_POLICY_DEFAULT } from '@shared/approvalPolicy';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 import {
@@ -221,12 +221,12 @@ function runTryResume(
   runId: RunId,
   recovery?: RecoveryContinuation,
 ): Promise<boolean> {
-  return effectRuntime().runPromise(ctrl.tryResumeRun(runId, recovery));
+  return testRuntime().runPromise(ctrl.tryResumeRun(runId, recovery));
 }
 
 /** The claimed root run's settlement, run the way the exit drain runs it. */
 function awaitRunSettled(session: TuiSession): Promise<void> {
-  return effectRuntime().runPromise(session.runSettled ?? Effect.void);
+  return testRuntime().runPromise(session.runSettled ?? Effect.void);
 }
 
 /** A root-run claim the test settles by hand, as a run chain settles it. */
@@ -241,7 +241,7 @@ function pendingRunClaim(): {
     settled: Deferred.await(claim),
     settle: async (): Promise<void> => {
       Deferred.doneUnsafe(claim, Effect.void);
-      await effectRuntime().runPromise(
+      await testRuntime().runPromise(
         Effect.andThen(Deferred.await(claim), Effect.yieldNow),
       );
     },
@@ -303,7 +303,7 @@ function makeInit(
     },
     secrets: new FakeSecrets(),
     state: new FakeStateStore(),
-    runtime: effectRuntime(),
+    runtime: testRuntime(),
     ...overrides,
   };
 }
@@ -1227,9 +1227,7 @@ describe('createChatSessionController', () => {
     // the queued task rejects with no surfacing at all.
     holdRun('a11111' as RunId);
     installSession({
-      view: await effectRuntime().runPromise(
-        SubscriptionRef.make(currentView()),
-      ),
+      view: await testRuntime().runPromise(SubscriptionRef.make(currentView())),
     });
     mocks.request.mockReturnValueOnce(Effect.die(new Error('dispatch broke')));
     const session = makeSession({

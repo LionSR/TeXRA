@@ -90,10 +90,10 @@ const HOST_LAYER_IMPORT_PREFIXES = [
 /**
  * Effect run boundary (PRD R1, .agents/docs/proposed/architecture/2026-08-26-effect-4-runtime-migration.md
  * "Execution strategy" rule 3): production code enters Effect through the
- * host-owned runtime, `effectRuntime()` from `@platform/processRuntime`, the
- * SDK public entry, and the composition roots that open a store the runtime
- * they are about to install will serve. Everything else must borrow the
- * installed runtime; each entry below names why it cannot.
+ * runtime its composition root holds and threads to it, the SDK public
+ * entry, and the composition roots that open a store the runtime they are
+ * about to install will serve. Everything else must take the runtime it runs
+ * on; each entry below names why it cannot.
  */
 const EFFECT_RUN_ROOTS = [
   ...ALL_HOST_PRODUCTION_ROOTS,
@@ -105,14 +105,14 @@ const EFFECT_RUN_CALL =
 const BARE_EFFECT_RUN_SITES: Readonly<Record<string, number>> = {
   // The published SDK's Promise entry, which is rule R1's third boundary
   // kind and the one module in `packages/agent` allowed to run an Effect at
-  // all. It cannot borrow `effectRuntime()`: the process runtime does not
+  // all. It cannot be handed a runtime: the process runtime does not
   // exist until this entry's own composition installs it, and `closeSession`
   // has to answer for a process no run initialized and for one whose
   // shutdown already disposed that runtime.
   'packages/agent/src/index.ts': 6,
-  // The CLI platform shutdown sequence, which cannot borrow `effectRuntime()`
-  // for the same reason the SDK entry cannot: `lifecycle.runShutdown()`
-  // disposes the process runtime (`disposeProcessRuntime`) before the
+  // The CLI platform shutdown sequence, which cannot run on the process
+  // runtime for the same reason the SDK entry cannot:
+  // `lifecycle.runShutdown()` disposes it (`disposeCliProcessRuntime`) before the
   // stderr/stdout flushes run, and a teardown path must not depend on the
   // runtime it is tearing down.
   'packages/cli/src/runtime/initPlatform.ts': 1,
@@ -245,7 +245,7 @@ describe('Production core never imports host layers', () => {
 });
 
 describe('Effect run boundaries', () => {
-  it('runs Effect only through effectRuntime() outside the pinned pre-runtime sites', () => {
+  it('runs Effect only on a held runtime outside the pinned pre-runtime sites', () => {
     const sites: Record<string, number> = {};
     for (const root of EFFECT_RUN_ROOTS) {
       for (const file of productionFilesUnder(root).toSorted()) {

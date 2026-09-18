@@ -18,6 +18,7 @@ import {
   type Stream,
   type SubscriptionRef,
 } from 'effect';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import {
   processWorkspaceRoots,
   tryProcessWorkspaceRoots,
@@ -167,6 +168,11 @@ export type SessionOpen = SessionHandleInit & {
 
 /** The process's session owner, as `installProcessRuntime` installs it. */
 export interface SessionOwner {
+  /** The `ManagedRuntime` the owner's programs run on, as the composition
+   *  root that installed both handed it over. It is here rather than in a
+   *  slot of its own because it is the same fact this record already is: a
+   *  process holds an owner and the runtime under it, or neither. */
+  readonly runtime: ProcessRuntime;
   /** The session of `open.roots`' storage root: the one already open there,
    *  or built now over what `open` supplies. The root's entry is registered
    *  with the owner before this Effect's first yield, so a close issued
@@ -199,16 +205,17 @@ export function initSessionOwner(sessions: SessionOwner | undefined): void {
 }
 
 /**
- * Whether this process holds a session owner: false before the first
- * `installProcessRuntime` and again once `disposeProcessRuntime` has
- * uninstalled it. This, not the platform, is what says a process is
+ * The runtime this process's session owner runs on, or `undefined` before
+ * the first `installProcessRuntime` and again once `disposeProcessRuntime`
+ * has uninstalled it. The owner, not the platform, is what says a process is
  * composed: `initPlatform` has no inverse and holds for the life of the
  * process, while the owner and the runtime under it end with the
  * composition that installed them, so a composition root asks here whether
- * it must install its own.
+ * it must install its own and, when it need not, borrows the runtime the
+ * answer carries.
  */
-export function sessionOwnerInstalled(): boolean {
-  return owner !== undefined;
+export function installedProcessRuntime(): ProcessRuntime | undefined {
+  return owner?.runtime;
 }
 
 function sessions(): SessionOwner {

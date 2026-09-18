@@ -8,10 +8,10 @@ vi.mock('@frontend/system/commandUtils', () => ({
   safeExecuteCommand: mocks.safeExecuteCommand,
 }));
 
-import { effectRuntime } from '@platform/processRuntime';
 import { SettingsViewMessageHandler } from '@settingsView/SettingsViewMessageHandler';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { SubscriptionUsageProvider } from '@shared/schemas';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import type * as vscode from 'vscode';
 
 interface Harness {
@@ -46,7 +46,7 @@ function createHarness(activeView = true) {
   Reflect.set(handler, 'viewName', 'SettingsView');
   Reflect.set(handler, 'subscriptionUsage', usage);
   // The usage read is a program; the handler settles it on its runtime.
-  Reflect.set(handler, 'runtime', effectRuntime());
+  Reflect.set(handler, 'runtime', testRuntime());
   Reflect.set(handler, 'sendProfileData', vi.fn());
   Reflect.set(handler, 'sendProfileAndModelSelectionData', vi.fn());
   Reflect.set(handler, 'sendModelSelectionData', vi.fn());

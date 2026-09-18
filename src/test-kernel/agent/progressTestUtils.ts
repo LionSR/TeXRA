@@ -7,7 +7,6 @@ import {
   type HostInteractions,
 } from '@agent/runtime/HostInteractions';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { effectRuntime } from '@platform/processRuntime';
 import {
   aggregateId as qualifyAggregateId,
   aggregateTarget,
@@ -19,6 +18,7 @@ import {
   type RunId,
   type RunOutcome,
 } from '@shared/schemas';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import {
   createTestSession,
   publishTestRunStart,
@@ -60,7 +60,7 @@ async function readSessionEvents(
 ): Promise<DisplaySessionEvent[]> {
   const through = session.now();
   if (through <= fromCommit) return [];
-  return effectRuntime().runPromise(
+  return testRuntime().runPromise(
     Effect.gen(function* () {
       const drained = yield* SubscriptionRef.make(fromCommit);
       return yield* session.events.all(fromCommit, drained).pipe(
@@ -198,7 +198,7 @@ export function autoDecideRequests(
   decide: (request: OpenedRequest) => RequestDecision | null,
 ): { readonly opened: OpenedRequest[]; readonly detach: () => void } {
   const opened: OpenedRequest[] = [];
-  const fiber = effectRuntime().runFork(
+  const fiber = testRuntime().runFork(
     Stream.runForEach(
       session.events
         .all(session.now())
@@ -225,7 +225,7 @@ export function autoDecideRequests(
   return {
     opened,
     detach: () => {
-      effectRuntime().runFork(Fiber.interrupt(fiber));
+      testRuntime().runFork(Fiber.interrupt(fiber));
     },
   };
 }

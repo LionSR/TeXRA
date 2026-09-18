@@ -40,7 +40,7 @@ import {
   resetCliState,
 } from '@cli/chat/tui/state/cliState';
 import { notices, noticesFor } from '@cli/chat/tui/state/transcript';
-import { effectRuntime } from '@platform/processRuntime';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import {
   loadInk,
   renderInteractive,
@@ -76,7 +76,7 @@ describe('InputBar history arrow boundaries', () => {
     const { instance, stdin, stdout } = renderInteractive(
       ink,
       React.createElement(InputBar, {
-        runtime: effectRuntime(),
+        runtime: testRuntime(),
         onSubmit: vi.fn(),
       }),
       { debug: true },
@@ -107,7 +107,7 @@ describe('InputBar history arrow boundaries', () => {
     const { instance, stdin, stdout } = renderInteractive(
       ink,
       React.createElement(InputBar, {
-        runtime: effectRuntime(),
+        runtime: testRuntime(),
         onSubmit: vi.fn(),
         history,
       }),
@@ -162,7 +162,7 @@ describe('InputBar slash submit', () => {
     const { instance, stdin, stdout } = renderInteractive(
       ink,
       React.createElement(InputBar, {
-        runtime: effectRuntime(),
+        runtime: testRuntime(),
         onSubmit: vi.fn(),
       }),
     );
@@ -369,7 +369,7 @@ describe('InputBar draft discard', () => {
     const { instance, stdin, stdout } = renderInteractive(
       ink,
       React.createElement(InputBar, {
-        runtime: effectRuntime(),
+        runtime: testRuntime(),
         onSubmit: (...args: unknown[]) => {
           const [text, mediaFiles, images] = args as [
             string,
@@ -476,7 +476,7 @@ describe('InputBar draft discard', () => {
     const { instance, stdin, stdout } = renderInteractive(
       ink,
       React.createElement(InputBar, {
-        runtime: effectRuntime(),
+        runtime: testRuntime(),
         controlRef,
         onSubmit: (value: string, mediaFiles?: readonly string[]) =>
           submitted.push([value, mediaFiles]),

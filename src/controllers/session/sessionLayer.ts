@@ -63,9 +63,6 @@ import { SupabaseAuth, type SupabaseAuthShape } from '@auth/SupabaseAuth';
 import { createLog } from '@logger/logUtils';
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import {
-  clearProcessRuntime,
-  initProcessRuntime,
-  tryProcessRuntime,
   withForkFailureReporting,
   type ProcessRuntime,
 } from '@platform/processRuntime';
@@ -1169,8 +1166,8 @@ export function installProcessRuntime({
       ),
     ),
   );
-  initProcessRuntime(runtime);
   initSessionOwner({
+    runtime,
     open: (open) => onThisRuntime(openSession(open)),
     current: (root) => heldSessionSync(held, root),
     held: () => [...held.values()],
@@ -1181,35 +1178,30 @@ export function installProcessRuntime({
 }
 
 /**
- * Uninstall the session owner and dispose the runtime it ran on, releasing
- * every session still open there: the one shutdown step for both, so a close
- * issued after it answers as a process with no owner does instead of reaching
- * the disposed runtime.
+ * Uninstall the session owner and dispose `runtime`, the one this process's
+ * root installed it with, releasing every session still open there: the one
+ * shutdown step for both, so a close issued after it answers as a process
+ * with no owner does instead of reaching the disposed runtime.
  *
- * The runtime stays reachable for the whole of its own disposal. Its layer
- * finalizers are what release the open sessions, and they still publish while
- * they unwind -- a session's release unwinds the handle and then awaits the
- * publications that teardown left in flight
- * (`SessionHandle.settlePublications`), on the releasing fiber. The installed reference is cleared afterwards, and only
- * if this runtime is still the installed one, so a replacement installed while
- * this one unwound survives.
+ * The caller passes the runtime it holds. The owner is uninstalled first and
+ * the runtime stays alive for the whole of its own disposal: its layer
+ * finalizers are what release the open sessions, and they still publish
+ * while they unwind -- a session's release unwinds the handle and then
+ * awaits the publications that teardown left in flight
+ * (`SessionHandle.settlePublications`), on the releasing fiber.
  *
- * Idempotent and safe to race: an absent runtime needs no disposal, and a
- * second call joins the disposal already in flight rather than reaching a
- * throwing accessor. The extension's shutdown path calls it from a `finally`
- * and permits a later shutdown, so both happen.
+ * Idempotent and safe to race: a second call joins the disposal already in
+ * flight rather than starting another. The extension's shutdown path calls
+ * it from a `finally` and permits a later shutdown, so both happen.
  */
 let disposal: Promise<void> | null = null;
 
-export function disposeProcessRuntime(): Promise<void> {
+export function disposeProcessRuntime(runtime: ProcessRuntime): Promise<void> {
   if (disposal) return disposal;
-  const runtime = tryProcessRuntime();
-  if (!runtime) return Promise.resolve();
   initSessionOwner(undefined);
   disposal = runtime
     .dispose()
     .finally(() => {
-      clearProcessRuntime(runtime);
       disposal = null;
     })
     .then(() => undefined);

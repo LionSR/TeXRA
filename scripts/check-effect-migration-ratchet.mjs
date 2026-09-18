@@ -65,12 +65,13 @@ const RETIRED_ROW_IDS = new Set([
   // the ID here, `--update` would read the absent row as newly introduced and
   // reseed a future import instead of failing it.
   'import:async-mutex',
+  // #12720 deleted the `effectRuntime` export with the process-runtime slot
+  // itself, so the row it counted has nothing left to count; the ID stays here
+  // so `--update` reads the absent row as retired rather than as new.
   'effectRuntime()',
 ]);
 const PLATFORM_MODULE = '@platform/platform';
 const PLATFORM_MODULE_PATH = 'src/platform/platform';
-const PROCESS_RUNTIME_MODULE = '@platform/processRuntime';
-const PROCESS_RUNTIME_MODULE_PATH = 'src/platform/processRuntime';
 /**
  * The AsyncLocalStorage carriers (injection plan
  * .agents/docs/proposed/architecture/2026-09-10-effect-native-injection-context-pipelines.md
@@ -212,7 +213,7 @@ const BOUNDARY_RUNTIME_ENTRIES = new Map([
     'src/platform/processRuntime.ts',
     {
       reason:
-        'the module that owns the process runtime: the host entry installs it here exactly once per process (initProcessRuntime, beside initPlatform), and withForkFailureReporting runs only on the runtime its caller passes — the parameter-entry premise',
+        'the module that owns the process runtime type: withForkFailureReporting runs only on the runtime its caller passes — the parameter-entry premise',
       // The one approved binding: withForkFailureReporting's
       // `runtime: ManagedRuntime` parameter -- pinned to that function by
       // name, so the exemption cannot transfer to another helper's
@@ -431,7 +432,6 @@ function bindsApprovedRuntime(sourceFile, fileName, spec) {
 const BELOW_BOUNDARY = `below the boundary: R1's boundary kinds are ${BOUNDARY_PATHS_TEXT} (owner ruling 2026-09-06, ${PRD} R1). Convert this file and its callers so the run moves to one of them`;
 
 const ROW_PLATFORM = 'platform()';
-const ROW_EFFECT_RUNTIME = 'effectRuntime()';
 const ROW_AMBIENT = 'ambient:asyncLocalStorage';
 const ROW_ABORT_CONTROLLER = 'new AbortController()';
 const ROW_RUN_BOUNDARY = 'Effect.run*';
@@ -448,10 +448,6 @@ const ROWS = [
   {
     id: ROW_PLATFORM,
     rule: `${PRD} goal 3 / R2: the global platform() reader is being retired; new code receives its services as inputs instead of reading the ambient locator`,
-  },
-  {
-    id: ROW_EFFECT_RUNTIME,
-    rule: `${INJECTION_PLAN} §5 row 11 and §6 step 1: the process runtime global is being retired — each host entry holds its ManagedRuntime in a local, and code below the entries runs as an Effect program that is already on the runtime rather than fetching it through effectRuntime()`,
   },
   {
     id: ROW_AMBIENT,
@@ -495,7 +491,6 @@ const SEMANTICS =
   'Scope: *.ts, *.tsx and *.mts under src/ and packages/*/src/, excluding src/test-kernel/, *.vitest.ts, and any dist/ or node_modules/ directory (packages/*/scripts and packages/*/tests are outside the scanned roots). ' +
   'Files are parsed with the TypeScript compiler API, so comments and string literals never count. ' +
   "Rows: 'platform()' counts calls of the platform export of @platform/platform (src/platform/platform.ts) under whatever local name the file binds it to: `import { platform as p }` then p(), and `import * as P` then P.platform(), included; tryPlatform and unrelated bindings such as node:os platform excluded; " +
-  "'effectRuntime()' counts, the same binding-scoped way, calls of the effectRuntime export of @platform/processRuntime (src/platform/processRuntime): tryProcessRuntime, initProcessRuntime and any other module's effectRuntime excluded; " +
   `'ambient:asyncLocalStorage' counts, binding-scoped again, calls of the reader exports of the three AsyncLocalStorage carrier modules (${AMBIENT_READERS_TEXT}) in the files that import them, aliased names and namespace-member calls included, a carrier's own internal calls and bare references passed as values excluded; ` +
   "'new AbortController()' counts new-expressions on the identifier AbortController; " +
   "'import:<pkg>' counts import/export-from/import-equals/require()/import() specifiers exactly equal to the package name (type-only imports included, because they still pin the dependency); " +
@@ -645,8 +640,7 @@ function isModuleAt(specifier, fileName, alias, modulePath) {
  * bindings of the named exports themselves (aliased or not); `namespaces` are
  * namespace imports whose members of those names are the exports. Import
  * declarations are top-level statements, so no tree walk is needed. Used for
- * the platform locator (`platform`), the process runtime (`effectRuntime`),
- * and each ambient carrier's readers.
+ * the platform locator (`platform`) and each ambient carrier's readers.
  */
 function exportBindings(sourceFile, fileName, alias, modulePath, exports) {
   const locals = new Set();
@@ -697,7 +691,6 @@ function callsBoundExport(callee, { locals, namespaces }, exports) {
 }
 
 const PLATFORM_EXPORTS = new Set(['platform']);
-const PROCESS_RUNTIME_EXPORTS = new Set(['effectRuntime']);
 
 /**
  * Local names a file binds Effect's `Effect` module to, so `Effect.catch`
@@ -758,15 +751,6 @@ function surveySource(text, fileName) {
   );
   const isPlatformRead = (callee) =>
     callsBoundExport(callee, platform, PLATFORM_EXPORTS);
-  const processRuntime = exportBindings(
-    sourceFile,
-    fileName,
-    PROCESS_RUNTIME_MODULE,
-    PROCESS_RUNTIME_MODULE_PATH,
-    PROCESS_RUNTIME_EXPORTS,
-  );
-  const isRuntimeRead = (callee) =>
-    callsBoundExport(callee, processRuntime, PROCESS_RUNTIME_EXPORTS);
   const ambient = AMBIENT_CARRIERS.map((carrier) => {
     const readers = new Set(carrier.readers);
     return {
@@ -812,7 +796,6 @@ function surveySource(text, fileName) {
       const callee = node.expression;
       const name = calleeName(node);
       if (isPlatformRead(callee)) bump(ROW_PLATFORM);
-      if (isRuntimeRead(callee)) bump(ROW_EFFECT_RUNTIME);
       if (isAmbientRead(callee)) bump(ROW_AMBIENT);
       if (name != null && RUN_BOUNDARY_NAMES.has(name)) {
         bump(ROW_RUN_BOUNDARY);
@@ -873,18 +856,6 @@ function selfTestSurvey() {
       expected: { [ROW_PLATFORM]: 1 },
     },
     {
-      // The runtime global under its own name and aliased, through a
-      // namespace, and the near-misses: the non-throwing read, another
-      // module's export of the same name, and a member call on some host.
-      text: "import { effectRuntime, tryProcessRuntime } from '@platform/processRuntime';\nimport * as PR from '@platform/processRuntime';\nimport { effectRuntime as other } from './runtimeShim';\neffectRuntime();\nawait effectRuntime().runPromise(p);\nPR.effectRuntime();\nPR.tryProcessRuntime();\ntryProcessRuntime();\nother();\nhost.effectRuntime();\n",
-      expected: { [ROW_EFFECT_RUNTIME]: 3, [ROW_RUN_BOUNDARY]: 1 },
-    },
-    {
-      text: "import { effectRuntime as rt } from './processRuntime';\nrt();\n",
-      fileName: 'src/platform/probe.ts',
-      expected: { [ROW_EFFECT_RUNTIME]: 1 },
-    },
-    {
       // Readers of all three carriers under their own names, an alias, and a
       // namespace member; the bare reference passed as a value and the
       // namespace's non-reader member do not count.
@@ -922,7 +893,7 @@ function selfTestSurvey() {
       expected: {},
     },
     {
-      text: 'runtime.runFork(fiber);\nEffect.runSync(program);\nawait effectRuntime().runPromiseExit(program);\n',
+      text: 'runtime.runFork(fiber);\nEffect.runSync(program);\nawait held.runPromiseExit(program);\n',
       expected: { [ROW_RUN_BOUNDARY]: 3 },
     },
     {
@@ -1071,7 +1042,7 @@ function selfTestBoundary() {
     'src/platform/processRuntime.ts',
   );
   const siblingParameterProbe = surveySource(
-    "import { type ManagedRuntime } from 'effect';\nexport function withForkFailureReporting(runtime: ManagedRuntime.ManagedRuntime<never, never>) { return runtime.runFork(a); }\nexport function initProcessRuntime(runtime) { install(runtime); }\n",
+    "import { type ManagedRuntime } from 'effect';\nexport function withForkFailureReporting(runtime: ManagedRuntime.ManagedRuntime<never, never>) { return runtime.runFork(a); }\nexport function makeReporting(runtime) { return runtime; }\n",
     'src/platform/processRuntime.ts',
   );
   const runCases = [

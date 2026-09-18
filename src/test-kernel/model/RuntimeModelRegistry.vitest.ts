@@ -26,8 +26,8 @@ import type {
   LanguageModelPort,
 } from '@platform/languageModel';
 import { LanguageModel } from '@platform/languageModel';
-import { effectRuntime } from '@platform/processRuntime';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import {
   fakeHostLanguageModel,
@@ -39,7 +39,7 @@ import {
 /** Run a registry program on the fake host's process runtime, which carries
  *  the `LanguageModel` service the discovery path yields. */
 const runRegistry = <A, E>(effect: Effect.Effect<A, E, LanguageModel>) =>
-  effectRuntime().runPromise(effect);
+  testRuntime().runPromise(effect);
 
 /**
  * The availability read over the installed fake host's language-model port,

@@ -10,7 +10,7 @@ import {
   CLI_NDJSON_CONTRACT,
   type CliNdjsonRecord,
 } from '@cli/schemas/cliOutput';
-import { tryProcessRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type { LogLevel } from '@shared/schemas';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -122,17 +122,30 @@ function guardedStreamWrite(
   );
 }
 
-// The Effect programs here run on the process runtime when one is installed.
-// Both edges where none is — an early command error before
-// `installCliProcessRuntime` (`bin/texra.ts` top-level catch), and the
-// exit-path flushes after `disposeProcessRuntime` — take a direct path.
+/**
+ * The process runtime this CLI's output plane runs its Effects on, handed
+ * over by `installCliProcessRuntime` and taken back once that install has
+ * been disposed (#12720). `null` is a state the plane is in, not a lookup
+ * that failed: it is what both no-runtime edges below are, and the direct
+ * path each of them takes is production behaviour rather than a fallback.
+ */
+let logRuntime: ProcessRuntime | null = null;
+
+export function setCliLogRuntime(runtime: ProcessRuntime | null): void {
+  logRuntime = runtime;
+}
+
+// The Effect programs here run on the process runtime when the CLI's install
+// has handed one over. Both edges where none is — an early command error
+// before `installCliProcessRuntime` (`bin/texra.ts` top-level catch), and the
+// exit-path flushes after the install is disposed — take a direct path.
 // A synchronous throw from `stream.write` still has to mark the stream
 // closed and settle, not crash: this path is production, not a debug
 // fallback.
 function writeRaw(key: StreamKey, text: string): void {
   const stream = openStream(key);
   if (!stream) return;
-  const runtime = tryProcessRuntime();
+  const runtime = logRuntime;
   if (!runtime) {
     bestEffortStreamWrite(
       () =>
@@ -150,9 +163,10 @@ function writeRaw(key: StreamKey, text: string): void {
 
 // A waiting write takes the direct path unconditionally. Its callers are the
 // exit edges — the resume hint, the chat TUI's teardown warning, and the
-// shutdown sequence's final flush, which runs after `disposeProcessRuntime` —
-// so it must never reach for the process runtime, and the settle callback is
-// the promise's own resolve rather than a run nested inside another.
+// shutdown sequence's final flush, which runs after the process runtime has
+// been disposed — so it must never run on that runtime, and the settle
+// callback is the promise's own resolve rather than a run nested inside
+// another.
 function writeRawAndWait(key: StreamKey, text: string): Promise<void> {
   const stream = openStream(key);
   if (!stream) return Promise.resolve();
@@ -294,7 +308,7 @@ export class NdjsonStdoutSink implements LogSink {
     // Appended, never prepended: line-oriented consumers anchor on the
     // record's leading `{"kind":`.
     const record = { ...unstamped, contract: CLI_NDJSON_CONTRACT };
-    const runtime = tryProcessRuntime();
+    const runtime = logRuntime;
     if (!runtime) {
       // No-runtime edge (`texra version --output-format ndjson` builds no
       // platform; post-disposal nothing queues): no lane fiber can be waiting
@@ -312,10 +326,10 @@ export class NdjsonStdoutSink implements LogSink {
   /** Resolves once every record queued before this call has landed: the FIFO
    *  lane runs this no-op only after them. */
   flush(): Promise<void> {
-    const runtime = tryProcessRuntime();
+    const runtime = logRuntime;
     if (!runtime) {
       // Before `installCliProcessRuntime` every write took the direct path
-      // and already landed; after `disposeProcessRuntime` the runtime's
+      // and already landed; after its disposal the runtime's
       // scope close has interrupted any lane fiber still waiting on a drain.
       // Either way nothing remains to wait for.
       return Promise.resolve();

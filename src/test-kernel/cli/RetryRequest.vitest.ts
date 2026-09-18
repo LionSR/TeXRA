@@ -9,9 +9,9 @@ import type {
   PendingApproval,
   RetryApprovalPayload,
 } from '@cli/chat/tui/state/approvalQueue';
-import { effectRuntime } from '@platform/processRuntime';
 import type { RunId } from '@shared/schemas';
 import type { SurfaceDecision } from '@shared/session/approvalDecision';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { waitForCondition as waitFor } from '@test/support/asyncTestUtils';
 import {
@@ -69,7 +69,7 @@ describe('CLI retry request', () => {
       ink,
       React.createElement(ApprovalModal, {
         pending,
-        runtime: effectRuntime(),
+        runtime: testRuntime(),
         session: testDefaultSession(),
       }),
       { columns: 100 },
@@ -122,7 +122,7 @@ describe('CLI retry request', () => {
       ink,
       React.createElement(ApprovalModal, {
         pending,
-        runtime: effectRuntime(),
+        runtime: testRuntime(),
         session: testDefaultSession(),
       }),
       { columns: 100 },

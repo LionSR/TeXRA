@@ -78,6 +78,7 @@ const INSTRUCTION_ACTION_VIEW: Record<
 
 async function handleRequestShowInstruction(
   globalState: StateStore,
+  runtime: ProcessRuntime,
   payload: RequestShowInstructionPayload,
 ): Promise<void> {
   const actions = (payload.actions ?? []).map((token) => {
@@ -93,13 +94,15 @@ async function handleRequestShowInstruction(
     // Settle once VS Code has accepted the dialog, not once the user
     // dismisses it. The "never remind again" path returns without rendering:
     // the user opted out of this notice.
-    await showInstructionWithSuppress(
-      globalState,
-      payload.key,
-      payload.message,
-      actions,
-      payload.showSuppress,
-      { deferDismissal: true },
+    await runtime.runPromise(
+      showInstructionWithSuppress(
+        globalState,
+        payload.key,
+        payload.message,
+        actions,
+        payload.showSuppress,
+        { deferDismissal: true },
+      ),
     );
   } catch (err) {
     log.warn(
@@ -212,7 +215,7 @@ export function createAgentPresentationHost(
       requestOpenFile: (payload) =>
         handleRequestOpenFile(session, runtime, payload),
       requestShowInstruction: (payload) =>
-        handleRequestShowInstruction(globalState, payload),
+        handleRequestShowInstruction(globalState, runtime, payload),
       showAgentConfigBanner: (payload) =>
         handleShowAgentConfigBanner(payload, progressViewProvider),
       requestShowError: handleRequestShowError,

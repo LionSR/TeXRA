@@ -25,7 +25,6 @@ import { tryDefaultSession } from '@agent/runtime';
 import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
 import { DEFAULT_MODELS } from '@model/modelOptionsBasic';
 import { platform } from '@platform/platform';
-import { effectRuntime } from '@platform/processRuntime';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
 import { MEMORY_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
@@ -339,6 +338,9 @@ if (RESET_WORKFLOW_SCRIPT_DISABLED) {
     HARNESS_PLATFORM_SERVICES.runtime,
   );
 }
+// The one process runtime this harness runs on, as its composition root
+// handed it back: the harness holds it in a local like every other entry.
+const harnessRuntime = HARNESS_PLATFORM_SERVICES.runtime;
 // Seed workspace-storage memory files so `/memory` has rows to list. Files
 // get descending mtimes in list order, so the first name is the newest row
 // and the listing order is deterministic.
@@ -354,7 +356,7 @@ if (HARNESS_MEMORY_FILES.length > 0) {
   });
 }
 // The persistent session `initLocalCliPlatform` opened over the harness roots.
-const harnessRuntimeSession = await effectRuntime().runPromise(
+const harnessRuntimeSession = await harnessRuntime.runPromise(
   HARNESS_PLATFORM_SERVICES.session,
 );
 harnessRuntimeSession.setApprovalPolicy(TEXRA_APPROVAL_POLICY_DEFAULT);
@@ -362,7 +364,7 @@ if (
   process.env.HARNESS_VISIBLE_TOOL_USE_AGENTS !== undefined ||
   process.env.HARNESS_VISIBLE_WORKFLOW_AGENTS !== undefined
 ) {
-  await effectRuntime().runPromise(
+  await harnessRuntime.runPromise(
     workspaceRoots().workspaceState.update(
       WorkspaceStateKey.AGENT_ROSTER_SELECTION,
       {
@@ -382,7 +384,7 @@ if (
   );
 }
 if (process.env.HARNESS_VISIBLE_MODELS !== undefined) {
-  await effectRuntime().runPromise(
+  await harnessRuntime.runPromise(
     workspaceRoots().globalState.update(GlobalStateKey.MODEL_SELECTION, {
       enabledExtras: HARNESS_VISIBLE_MODELS,
       disabledDefaults: DEFAULT_MODELS.filter(
@@ -391,7 +393,7 @@ if (process.env.HARNESS_VISIBLE_MODELS !== undefined) {
     }),
   );
 }
-await effectRuntime().runPromise(loadAgents({ includeRemote: false }));
+await harnessRuntime.runPromise(loadAgents({ includeRemote: false }));
 
 // =========================================================================
 // Fold seeding: every fixture is a session fact
@@ -414,7 +416,7 @@ function publish(...drafts: SessionEventDraft[]): void {
 
 // The TUI reads the session fold (PRD 10.1): bind it and subscribe every
 // run's transcript tier the way `runChat` does.
-HARNESS_DISPOSERS.push(bindSessionView(effectRuntime(), session().view));
+HARNESS_DISPOSERS.push(bindSessionView(harnessRuntime, session().view));
 {
   let subscribed = '';
   const syncTranscriptSubscriptions = (): void => {
@@ -422,7 +424,7 @@ HARNESS_DISPOSERS.push(bindSessionView(effectRuntime(), session().view));
     const key = ids.join('\0');
     if (key === subscribed) return;
     subscribed = key;
-    effectRuntime().runFork(
+    harnessRuntime.runFork(
       session().setTranscriptSubscriptions(
         'tui-harness',
         ids.map((id) => ({ id, fromSeq: 0 })),
@@ -437,7 +439,7 @@ HARNESS_DISPOSERS.push(bindSessionView(effectRuntime(), session().view));
 // Approvals go through the session's interaction port with the TUI host
 // attached, exactly as `chatSessionController` wires a live chat.
 const harnessRuntimeHost: CliRuntimeHost = createCliRuntimeHost(
-  effectRuntime(),
+  harnessRuntime,
   HARNESS_CLI_CONTEXT,
 );
 HARNESS_DISPOSERS.push(
@@ -445,7 +447,7 @@ HARNESS_DISPOSERS.push(
     createTuiHostInteractions(harnessRuntimeHost, HARNESS_CLI_CONTEXT, {
       session: session(),
       secrets: HARNESS_PLATFORM_SERVICES.secrets,
-      runtime: effectRuntime(),
+      runtime: harnessRuntime,
     }),
   ),
 );
@@ -1016,7 +1018,7 @@ function requestHarnessApproval(
   payload: PermissionPayload,
   onSettled: (decision: RequestDecision) => void | Promise<void>,
 ): void {
-  void effectRuntime()
+  void harnessRuntime
     .runPromise(session().openRequest(runId, payload))
     .then(onSettled)
     .catch((error: unknown) => {
@@ -1056,7 +1058,7 @@ async function appendHarnessPlanDecision(
   result: RequestDecision,
 ): Promise<void> {
   if (result.action === 'approve_and_goal') {
-    await effectRuntime().runPromise(
+    await harnessRuntime.runPromise(
       startGoal(session(), HARNESS_RUN_ID, PLAN_APPROVAL_OBJECTIVE),
     );
     // The same grant `PlanTool.startGoalForPlan` applies next: approving a
@@ -1145,7 +1147,7 @@ async function seedRunningWorkflow(): Promise<void> {
     userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
   });
   seedPhase(childRunId, RUN_PHASE.RUNNING);
-  const residency = await effectRuntime().runPromise(
+  const residency = await harnessRuntime.runPromise(
     session().transcripts.acquireRunResidency(childRunId),
   );
   const runTrace = createRunTrace(residency);
@@ -1361,7 +1363,7 @@ if (SHOW_WORKFLOW_RUNNING) {
 if (SHOW_BASH_APPROVAL) {
   const showApproval = (index = 1) => {
     const permission = makeBashApprovalPayload(index);
-    return effectRuntime().runPromise(
+    return harnessRuntime.runPromise(
       session().openRequest(permission.runId, {
         kind: 'bash',
         data: permission,
@@ -1405,7 +1407,7 @@ if (SHOW_BASH_APPROVAL) {
 }
 
 if (SHOW_RETRY_APPROVAL) {
-  await effectRuntime().runPromise(
+  await harnessRuntime.runPromise(
     saveProviderApiKey(
       HARNESS_PLATFORM_SERVICES.secrets,
       'openai',
@@ -1594,7 +1596,7 @@ function appendHarnessStatus(): void {
 function resetHarnessForClear(): void {
   const meta = sessionMeta.get();
   cancelHarnessRequests('Session interrupted.');
-  void effectRuntime().runPromise(clearGoal(session(), HARNESS_RUN_ID));
+  void harnessRuntime.runPromise(clearGoal(session(), HARNESS_RUN_ID));
   for (const runId of [...currentView().runs.keys()]) {
     removeRun(runId);
   }
@@ -1690,7 +1692,7 @@ registerBuiltinSlashCommands({
   },
   onModelAccessSelect: (selection) => {
     if (selection.provider === 'kimi-code' && selection.state === 'on') {
-      return effectRuntime()
+      return harnessRuntime
         .runPromise(
           updateCliModelAccess(HARNESS_CLI_CONTEXT, selection, {
             writeProgress: appendHarnessAssistantTranscript,
@@ -1745,7 +1747,7 @@ function renderHarnessApp(): React.JSX.Element {
   return (
     <App
       secrets={HARNESS_PLATFORM_SERVICES.secrets}
-      runtime={effectRuntime()}
+      runtime={harnessRuntime}
       session={session()}
       onSubmit={handleHarnessSubmit}
       onKillRun={markHarnessRunStopped}
@@ -1832,8 +1834,8 @@ if (process.env.HARNESS_SESSION_TREE === '1') {
     log.drained(),
     local({ self: [OWNER], dead: [OTHER_OWNER] }),
   ]);
-  const ref = await effectRuntime().runPromise(SubscriptionRef.make(view));
-  HARNESS_DISPOSERS.push(bindSessionView(effectRuntime(), ref));
+  const ref = await harnessRuntime.runPromise(SubscriptionRef.make(view));
+  HARNESS_DISPOSERS.push(bindSessionView(harnessRuntime, ref));
   rootRunId.set(interrupted);
   activeRunIdSignal.set(PROCESS);
 }
@@ -1847,7 +1849,7 @@ const ink = render(renderHarnessApp(), {
 inkRef.current = ink;
 
 if (SHOW_STREAMING_TOOL_OUTPUT) {
-  const fiber = effectRuntime().runFork(
+  const fiber = harnessRuntime.runFork(
     Effect.gen(function* () {
       yield* Effect.sleep('1 second');
       seedPhase(HARNESS_RUN_ID, RUN_PHASE.RUNNING);
@@ -1877,7 +1879,7 @@ if (SHOW_STREAMING_TOOL_OUTPUT) {
       }
     }),
   );
-  HARNESS_DISPOSERS.push(() => effectRuntime().runFork(Fiber.interrupt(fiber)));
+  HARNESS_DISPOSERS.push(() => harnessRuntime.runFork(Fiber.interrupt(fiber)));
 }
 
 if (SHOW_TERMINAL_RESUME_REPAINT) {

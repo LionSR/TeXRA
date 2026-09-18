@@ -28,9 +28,9 @@ export {
 // and close sessions through it (one session per workspace storage root).
 export {
   closeSession,
+  installedProcessRuntime,
   listSessions,
   openSessionEffect,
-  sessionOwnerInstalled,
   tryDefaultSession,
 } from './sessionGraph';
 

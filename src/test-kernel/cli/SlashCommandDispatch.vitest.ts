@@ -57,7 +57,6 @@ import * as providerApiKey from '@cli/runtime/providerApiKey';
 import * as supabaseAuth from '@cli/runtime/supabaseAuth';
 import { TuiSession } from '@cli/chat/tui/state/sessionRunState';
 import * as codexPreference from '@model/codex/codexPreference';
-import { effectRuntime } from '@platform/processRuntime';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import {
   AgentCategory,
@@ -71,6 +70,7 @@ import {
 import type { TranscriptRow } from '@shared/transcript';
 import { RESEARCHER_ACCESS_AUTH } from '@shared/copy/accountAuth';
 import type { RunView } from '@shared/session/sessionView';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
@@ -156,7 +156,7 @@ function seedChildRoster(parentRunId: RunId, rows: readonly ChildRow[]): void {
 const stores = {
   secrets: new FakeSecrets(),
   state: new FakeStateStore(),
-  runtime: effectRuntime(),
+  runtime: testRuntime(),
   runtimeSession: testDefaultSession(),
 };
 
@@ -208,7 +208,7 @@ function createContext(
     runtimeSession: stores.runtimeSession,
     secrets: stores.secrets,
     state: stores.state,
-    runtime: effectRuntime(),
+    runtime: testRuntime(),
     processCwd: '/tmp/launcher',
     initialAgent: 'chat',
     initialModel: 'deepseekT',
@@ -366,13 +366,13 @@ describe('handleTuiSlashCommand', () => {
       }),
     );
 
-    await showCliMemoryList(effectRuntime());
+    await showCliMemoryList(testRuntime());
     expect(infoPane.get()).toEqual({
       title: '/memory list',
       lines: ['No memory files found.'],
     });
 
-    await showCliMemoryPreview(effectRuntime(), 'note.md');
+    await showCliMemoryPreview(testRuntime(), 'note.md');
     expect(infoPane.get()?.title).toBe('/memory list');
     closeInfoPane();
     expect(infoPane.get()).toMatchObject({ title: '/memory preview' });
@@ -567,7 +567,7 @@ describe('handleTuiSlashCommand', () => {
 
     const completion = loginFromChat(
       'chatgpt --no-browser',
-      effectRuntime(),
+      testRuntime(),
       createCliContext(),
       silentOutput(),
     );
@@ -624,7 +624,7 @@ describe('handleTuiSlashCommand', () => {
       update.program,
     );
     const completion = applyCliModelAccessSelection(
-      effectRuntime(),
+      testRuntime(),
       {
         kind: 'subscription-preference',
         provider: 'chatgpt',

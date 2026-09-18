@@ -5,9 +5,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { maybeBuildGoalContinuation } from '@agent/goal/maybeBuildGoalContinuation';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { effectRuntime } from '@platform/processRuntime';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import { GOAL_FEATURE_FLAG_KEY, type Goal } from '@shared/schemas';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
 import { FakeConfigProvider } from '@test/support/FakePlatform';
 import {
@@ -64,7 +64,7 @@ describe('maybeBuildGoalContinuation', () => {
 
   /** Commit the goal row, which lands its fold, before the read. */
   function goalOnTheRun(objective: string): Promise<Goal> {
-    return effectRuntime().runPromise(startGoal(session, RUN_ID, objective));
+    return testRuntime().runPromise(startGoal(session, RUN_ID, objective));
   }
 
   it('returns a rendered prompt when an active goal is present', async () => {
@@ -141,7 +141,7 @@ describe('maybeBuildGoalContinuation', () => {
 
   it('returns null when the goal is paused', async () => {
     await goalOnTheRun('objective');
-    await effectRuntime().runPromise(pauseGoal(session, RUN_ID));
+    await testRuntime().runPromise(pauseGoal(session, RUN_ID));
 
     await expect(
       Effect.runPromise(maybeBuildGoalContinuation(session, RUN_ID)),

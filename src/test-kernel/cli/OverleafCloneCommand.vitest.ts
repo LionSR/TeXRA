@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // Local imports
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
-import { effectRuntime } from '@platform/processRuntime';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { makeMachineGitEnv } from '@utils/system/gitEnv';
@@ -24,6 +24,18 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('execa', () => ({ execa: mocks.execa }));
+
+// `clone` is a platform-less entry: it installs the process runtime itself
+// and runs on what it gets back. Here it gets the harness's, so this suite
+// can spy on the runtime the command actually runs its program on. Clone is
+// the only entry these tests reach, so the omit shape is the only one.
+vi.mock('@cli/runtime/cliProcessRuntime', async () => {
+  const { testRuntime } = await import('@test/support/testProcessRuntime');
+  return {
+    installCliProcessRuntime: () => Promise.resolve(testRuntime()),
+    disposeCliProcessRuntime: () => Promise.resolve(),
+  };
+});
 
 vi.mock('@cli/runtime/cliSecrets', () => ({
   getCliSecrets: () => ({
@@ -176,7 +188,7 @@ describe('CLI Overleaf clone command', () => {
 
   it('cancels the Git process when the host interrupts cloning', async () => {
     const controller = new AbortController();
-    const runtime = effectRuntime();
+    const runtime = testRuntime();
     const runPromise = runtime.runPromise.bind(runtime);
     const runSpy = vi
       .spyOn(runtime, 'runPromise')

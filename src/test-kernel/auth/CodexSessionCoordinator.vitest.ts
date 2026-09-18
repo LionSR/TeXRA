@@ -19,7 +19,7 @@ import type {
   CodexTokenResponse,
 } from '@auth/codex/codexSessionTypes';
 import { codexAccountLabel } from '@auth/codex/codexSessionTypes';
-import { effectRuntime } from '@platform/processRuntime';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import type { HttpClient } from 'effect/unstable/http';
 
@@ -380,7 +380,7 @@ describe('CodexSessionCoordinator', () => {
 
         // The loopback login's run boundary: the host signal interrupts the
         // login's fiber while its session store is blocked mid-write.
-        const login = effectRuntime().runPromiseExit(
+        const login = testRuntime().runPromiseExit(
           coordinator.loginWithCode({
             code: 'new-code',
             verifier: 'new-verifier',

@@ -17,7 +17,6 @@ import * as SessionResumeRetrieval from '@agent/runtime/SessionResumeRetrieval';
 import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
 import * as AgentRunner from '@agent/runtime/runAgent';
 import { DesktopProcessResumeOwner } from '@desktop/main/desktopAgentResume';
-import { effectRuntime } from '@platform/processRuntime';
 import {
   AgentCategory,
   aggregateId,
@@ -26,6 +25,7 @@ import {
   type RunId,
   type SessionEventDraft,
 } from '@shared/schemas';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import {
   createProcessSession,
@@ -153,7 +153,7 @@ async function createResumeHarness(): Promise<{
   await Effect.runPromise(session.settlePublications());
   const owner = new DesktopProcessResumeOwner({
     sessions: () => [session],
-    runtime: effectRuntime,
+    runtime: testRuntime,
   });
   let disposed = false;
   const dispose = async (): Promise<void> => {
@@ -219,7 +219,7 @@ describe('desktop process resume owner', () => {
     const harness = await createResumeHarness();
 
     await expect(
-      effectRuntime().runPromise(harness.owner.tryResumeRun(runId)),
+      testRuntime().runPromise(harness.owner.tryResumeRun(runId)),
     ).resolves.toBe(true);
     expect(runAgent).toHaveBeenCalledOnce();
   });
@@ -231,7 +231,7 @@ describe('desktop process resume owner', () => {
     const presenter = attachResultPresenter(harness.session);
 
     await expect(
-      effectRuntime().runPromise(harness.owner.tryResumeRun(runId)),
+      testRuntime().runPromise(harness.owner.tryResumeRun(runId)),
     ).resolves.toBe(false);
     expectOneErrorPresentation(presenter, 'Resume failed: launch failed');
     expect(runAgent.mock.calls[0]?.[1].suppressErrorNotification).toBe(true);
@@ -252,7 +252,7 @@ describe('desktop process resume owner', () => {
     const presenter = attachResultPresenter(harness.session);
 
     await expect(
-      effectRuntime().runPromise(harness.owner.tryResumeRun(runId)),
+      testRuntime().runPromise(harness.owner.tryResumeRun(runId)),
     ).resolves.toBe(false);
     expectOneErrorPresentation(
       presenter,
@@ -271,7 +271,7 @@ describe('desktop process resume owner', () => {
     attachResultPresenter(harness.session).detach();
 
     await expect(
-      effectRuntime().runPromise(harness.owner.tryResumeRun(runId)),
+      testRuntime().runPromise(harness.owner.tryResumeRun(runId)),
     ).resolves.toBe(false);
     const replacement = attachResultPresenter(harness.session);
     await Promise.resolve();
@@ -316,7 +316,7 @@ describe('desktop process resume owner', () => {
     const presenter = attachResultPresenter(harness.session);
 
     await expect(
-      effectRuntime().runPromise(harness.owner.tryResumeRun(runId)),
+      testRuntime().runPromise(harness.owner.tryResumeRun(runId)),
     ).resolves.toBe(false);
     expectOneErrorPresentation(
       presenter,
@@ -337,7 +337,7 @@ describe('desktop process resume owner', () => {
     );
 
     await expect(
-      effectRuntime().runPromise(harness.owner.tryResumeRun(runId)),
+      testRuntime().runPromise(harness.owner.tryResumeRun(runId)),
     ).resolves.toBe(false);
     const presenter = attachResultPresenter(harness.session);
     await Promise.resolve();
@@ -362,7 +362,7 @@ describe('desktop process resume owner', () => {
     );
 
     await expect(
-      effectRuntime().runPromise(harness.owner.tryResumeRun(runId)),
+      testRuntime().runPromise(harness.owner.tryResumeRun(runId)),
     ).resolves.toBe(false);
     const presenter = attachResultPresenter(harness.session);
     await Promise.resolve();
@@ -377,7 +377,7 @@ describe('desktop process resume owner', () => {
 
     await harness.dispose();
     await expect(
-      effectRuntime().runPromise(harness.owner.tryResumeRun(runId)),
+      testRuntime().runPromise(harness.owner.tryResumeRun(runId)),
     ).resolves.toBe(false);
     expect(retrieveSessionResumeData).not.toHaveBeenCalled();
   });
@@ -386,9 +386,7 @@ describe('desktop process resume owner', () => {
     const retrieval = await gateWorkflowResume();
     const harness = await createResumeHarness();
 
-    const resume = effectRuntime().runPromise(
-      harness.owner.tryResumeRun(runId),
-    );
+    const resume = testRuntime().runPromise(harness.owner.tryResumeRun(runId));
     await retrieval.started;
     await harness.dispose();
     retrieval.release();
@@ -401,9 +399,7 @@ describe('desktop process resume owner', () => {
     const retrieval = await gateWorkflowResume();
     const harness = await createResumeHarness();
 
-    const resume = effectRuntime().runPromise(
-      harness.owner.tryResumeRun(runId),
-    );
+    const resume = testRuntime().runPromise(harness.owner.tryResumeRun(runId));
     await retrieval.started;
     harness.session.publish([
       { type: 'run.removed', aggregateId: aggregateId('run', runId) },
@@ -424,7 +420,7 @@ describe('desktop process resume owner', () => {
     );
 
     await expect(
-      effectRuntime().runPromise(harness.owner.tryResumeRun(runId)),
+      testRuntime().runPromise(harness.owner.tryResumeRun(runId)),
     ).resolves.toBe(false);
     expect(runAgent).not.toHaveBeenCalled();
     expect(retrieveSessionResumeData).not.toHaveBeenCalled();

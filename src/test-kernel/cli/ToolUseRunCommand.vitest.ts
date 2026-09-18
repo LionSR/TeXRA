@@ -15,7 +15,7 @@ import { ensureError } from '@utils/errors/errorMessage';
 
 import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
-import { effectRuntime } from '@platform/processRuntime';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import { RUN_OUTCOME, AgentCategory } from '@shared/schemas';
 import { createRunCommandCliContext } from '@test/cli/fixtures/cliContext';
 import {
@@ -108,7 +108,7 @@ describe('CLI run command, tool-use agents', () => {
     vi.clearAllMocks();
     // The CLI init hands its caller the platform's stores; the commands
     // under test read `secrets`/`globalState` off what it returns.
-    const platform = { ...installedHost().platform, runtime: effectRuntime() };
+    const platform = { ...installedHost().platform, runtime: testRuntime() };
     cliInitPlatformMock.initLocalCliPlatform.mockResolvedValue(platform);
     cliInitPlatformMock.initCliPlatform.mockResolvedValue(platform);
     mocks.withExpandedRunInputs.mockResolvedValue({

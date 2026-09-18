@@ -10,9 +10,9 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import type { executeCliRequest } from '@cli/runtime/executeCli';
 import { AgentError } from '@common/errors';
-import { effectRuntime } from '@platform/processRuntime';
 import { RUN_OUTCOME } from '@shared/schemas';
 import type { AggregateId, FlowSnapshotPayload, RunId } from '@shared/schemas';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import {
   fakeProcessServices,
   installFakeHost,
@@ -190,7 +190,7 @@ async function loadExecuteCli() {
       Effect.provide(
         runtime.executeCliRequest(request, context, {
           session: Effect.succeed(testDefaultSession()),
-          runtime: effectRuntime(),
+          runtime: testRuntime(),
           lifecycle: installedHost().platform.lifecycle,
           ...options,
         }),
@@ -206,7 +206,7 @@ async function loadExecuteCli() {
       Effect.provide(
         runtime.executeCliConfig(config, context, {
           session: Effect.succeed(testDefaultSession()),
-          runtime: effectRuntime(),
+          runtime: testRuntime(),
           lifecycle: installedHost().platform.lifecycle,
           ...options,
         }),
@@ -222,7 +222,7 @@ async function loadExecuteCli() {
       Effect.provide(
         runtime.executeCliToolUseConfig(config, context, {
           session: Effect.succeed(testDefaultSession()),
-          runtime: effectRuntime(),
+          runtime: testRuntime(),
           lifecycle: installedHost().platform.lifecycle,
           ...options,
         }),
@@ -1120,7 +1120,7 @@ describe('executeCliRequest', () => {
           async (_request: unknown, options: LeaseOptions) => {
             options.onRunLeaseAcquired?.('exec-1' as RunId);
             try {
-              await effectRuntime().runPromise(
+              await testRuntime().runPromise(
                 options.openWorkflowOutput?.(COMPLETED_WORKFLOW_RUN, []) ??
                   Effect.void,
               );

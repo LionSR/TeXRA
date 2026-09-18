@@ -10,12 +10,12 @@ import {
   LanguageModel,
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
 } from '@platform/languageModel';
-import { effectRuntime } from '@platform/processRuntime';
 import {
   readOnboardingFlags,
   setOnboardingDeclined,
 } from '@shared/state/onboardingState';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import {
   FakeSecrets,
   createFakePlatform,
@@ -71,7 +71,7 @@ describe('maybeRunCliOnboarding headless parity', () => {
                 ...createFakePlatform(),
                 globalState: createFakeWorkspaceRoots().globalState,
                 secrets: new FakeSecrets(),
-                runtime: effectRuntime(),
+                runtime: testRuntime(),
               },
               {
                 mode: 'interactive',

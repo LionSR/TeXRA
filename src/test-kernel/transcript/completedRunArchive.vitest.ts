@@ -41,7 +41,6 @@ import {
   cliHistoryDetailNdjsonRecord,
 } from '@cli/runtime/history';
 import { createHostRunActions } from '@controllers/session/hostRunActions';
-import { effectRuntime } from '@platform/processRuntime';
 import { Secrets } from '@platform/secrets';
 import { runWithWorkspaceRoots } from '@platform/workspaceRoots';
 import {
@@ -54,6 +53,7 @@ import {
 } from '@shared/schemas';
 import type { RunId, TodoItem } from '@shared/schemas';
 import type { StreamLogAppendInput } from '@shared/session/traceEntries';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import {
   createTempDirPlatform,
   useTempDirs,
@@ -285,7 +285,7 @@ describe('completedRunArchive facade', () => {
     if (trace.status !== 'ok') throw new Error('Expected trace export');
     const exportInput = await loadChatExportInput(runId);
     const details = await readCliHistoryDetails(
-      effectRuntime(),
+      testRuntime(),
       Effect.succeed(taskSession),
       runId,
     );

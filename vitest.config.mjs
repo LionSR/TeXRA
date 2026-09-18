@@ -75,7 +75,7 @@ const REACHES_A_HOST = [
   /from\s+['"](?:lit|lit-html|lit\/|@lit\/|jsdom)/,
   /@vitest-environment\s+jsdom|new JSDOM\s*\(/,
   /from\s+['"]@platform\//,
-  /from\s+['"]@test\/support\/(?:setupPlatform|setupFakePlatform|FakePlatform|FakeHosts|tempDirPlatform|sessionTestUtils|defaultSessionTestSetup|sessionGraphTestSetup)['"]/,
+  /from\s+['"]@test\/support\/(?:setupPlatform|setupFakePlatform|FakePlatform|FakeHosts|tempDirPlatform|sessionTestUtils|defaultSessionTestSetup|sessionGraphTestSetup|testProcessRuntime)['"]/,
   /import\s+['"]@test\/support\/(?:defaultSessionTestSetup|sessionGraphTestSetup)['"]/,
 ];
 // What the scan cannot see: a module under test that reads the host itself,

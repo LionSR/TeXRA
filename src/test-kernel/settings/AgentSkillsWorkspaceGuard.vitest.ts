@@ -32,11 +32,11 @@ import {
   initializeDefaultSession,
   teardownDefaultSession,
 } from '@agent/runtime/SessionHandle';
-import { effectRuntime } from '@platform/processRuntime';
 import { processWorkspaceRoots } from '@platform/workspaceRoots';
 import { SettingsViewMessageHandler } from '@settingsView/SettingsViewMessageHandler';
 import { AGENT_SKILLS_CONFIG_KEY } from '@shared/schemas';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { setupPlatform } from '@test/support/setupPlatform';
 
@@ -47,8 +47,8 @@ setupPlatform({ workspacePath: undefined });
 // import above builds its process default before `setupPlatform` installs
 // the folderless roots, which would otherwise leave a workspace behind it.
 beforeEach(async () => {
-  await effectRuntime().runPromise(teardownDefaultSession());
-  await effectRuntime().runPromise(
+  await testRuntime().runPromise(teardownDefaultSession());
+  await testRuntime().runPromise(
     initializeDefaultSession({
       roots: processWorkspaceRoots(),
       transcriptMode: {
@@ -77,7 +77,7 @@ function createHarness(): AgentSkillsHarness {
   Reflect.set(handler, 'session', testDefaultSession());
   // The shared write path is an Effect program now, settled on the same
   // process runtime the real constructor is handed.
-  Reflect.set(handler, 'runtime', effectRuntime());
+  Reflect.set(handler, 'runtime', testRuntime());
   return handler as AgentSkillsHarness;
 }
 

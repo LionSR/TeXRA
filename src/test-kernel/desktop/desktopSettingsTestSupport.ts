@@ -11,9 +11,9 @@ import {
   readModelAvailabilityInputs,
 } from '@model/computeModelOptions';
 import { discoveredCopilotRoutes } from '@model/runtimeModelRegistry';
-import { effectRuntime } from '@platform/processRuntime';
 import { unsupported } from '@shared/utils/dispatcher';
 import type { SettingsStatePorts } from '@shared/settingsView/types';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import { FakeSecrets } from '@test/support/FakePlatform';
 
 const noOp = async (): Promise<void> => undefined;
@@ -93,12 +93,12 @@ export function createStubDesktopCredentialSettingsController(
       // the runtime this process holds.
       resolveModelOptions: async (stores, models) =>
         modelOptionsFrom(
-          await effectRuntime().runPromise(
+          await testRuntime().runPromise(
             readModelAvailabilityInputs(stores, models),
           ),
         ),
       getCopilotRoutes: () =>
-        effectRuntime().runPromise(discoveredCopilotRoutes()),
+        testRuntime().runPromise(discoveredCopilotRoutes()),
     }),
     refreshModelOptions: noOp,
     postProfileData: noOp,
