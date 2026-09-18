@@ -11,9 +11,9 @@ import {
   readModelAvailabilityInputs,
 } from '@model/computeModelOptions';
 import { discoveredCopilotRoutes } from '@model/runtimeModelRegistry';
-import { testRuntime } from '@test/support/testProcessRuntime';
 import { unsupported } from '@shared/utils/dispatcher';
 import type { SettingsStatePorts } from '@shared/settingsView/types';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import { FakeSecrets } from '@test/support/FakePlatform';
 
 const noOp = async (): Promise<void> => undefined;

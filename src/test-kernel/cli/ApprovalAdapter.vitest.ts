@@ -32,7 +32,6 @@ import {
   buildToolEditApprovalContent,
   formatRetryRequestMessage,
 } from '@cli/runtime/approval/approvalSummaries';
-import { testRuntime } from '@test/support/testProcessRuntime';
 import { decideRetryApproval } from '@shared/approvalPolicy';
 import {
   AgentCategory,
@@ -44,6 +43,7 @@ import {
   type RetryPermission,
   type RunId,
 } from '@shared/schemas';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';

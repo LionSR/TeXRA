@@ -5,9 +5,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { maybeBuildGoalContinuation } from '@agent/goal/maybeBuildGoalContinuation';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { testRuntime } from '@test/support/testProcessRuntime';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import { GOAL_FEATURE_FLAG_KEY, type Goal } from '@shared/schemas';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
 import { FakeConfigProvider } from '@test/support/FakePlatform';
 import {

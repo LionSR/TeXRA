@@ -1,6 +1,6 @@
 import { installProcessRuntime } from '@controllers/session/sessionLayer';
-import { initTestProcessRuntime } from './testProcessRuntime';
 import { directLeanLanguageServices } from '@tools/lean/direct/directLspAdapter';
+import { initTestProcessRuntime } from './testProcessRuntime';
 import { createFakeWorkspaceRoots } from './FakePlatform';
 import {
   fakeHostAgentResume,

@@ -8,7 +8,6 @@ import {
   type CliNdjsonProgressRecordWriter,
 } from '@cli/runtime/sessionProgressSubscription';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
-import { testRuntime } from '@test/support/testProcessRuntime';
 import {
   aggregateId as qualifyAggregateId,
   AgentCategory,
@@ -16,6 +15,7 @@ import {
   USER_FOLLOW_UP_SUPPORT,
 } from '@shared/schemas';
 import type { RunId } from '@shared/schemas';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import {
   createTestSession,
   publishTestRunStart,

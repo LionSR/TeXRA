@@ -7,7 +7,6 @@ import {
   type HostInteractions,
 } from '@agent/runtime/HostInteractions';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { testRuntime } from '@test/support/testProcessRuntime';
 import {
   aggregateId as qualifyAggregateId,
   aggregateTarget,
@@ -19,6 +18,7 @@ import {
   type RunId,
   type RunOutcome,
 } from '@shared/schemas';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import {
   createTestSession,
   publishTestRunStart,

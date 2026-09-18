@@ -17,7 +17,6 @@ import {
   type ConfigProvider,
   type StateStore,
 } from '@platform/interfaces';
-import { testRuntime } from '@test/support/testProcessRuntime';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
@@ -31,6 +30,7 @@ import type {
 } from '@shared/schemas';
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import {
   FakeScopedConfigProvider,
   FakeSecrets,

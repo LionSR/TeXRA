@@ -15,8 +15,8 @@ import {
   resolveCodexSubscriptionCapabilities,
 } from '@model/providerCapabilities';
 import type { LanguageModel } from '@platform/languageModel';
-import { testRuntime } from '@test/support/testProcessRuntime';
 import { CHATGPT_CODEX_CONTEXT_WINDOW_SETTING } from '@shared/schemas';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import { hostStores, installPlatform } from '@test/support/setupPlatform';
 import type { Effect } from 'effect';
 

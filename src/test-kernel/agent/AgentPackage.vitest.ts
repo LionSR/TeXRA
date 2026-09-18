@@ -200,9 +200,9 @@ vi.mock('@transcript/StreamLogStore', () => ({
 
 // Local imports - package API under test
 import type { ProcessRuntime } from '@platform/processRuntime';
-import { testRuntime } from '@test/support/testProcessRuntime';
 import type { RunId } from '@shared/schemas';
 import type { SessionView as RuntimeSessionView } from '@shared/session/sessionView';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import {
   runAgent,
   type AgentPlatform,

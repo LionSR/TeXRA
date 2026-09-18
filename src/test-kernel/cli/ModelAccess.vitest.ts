@@ -14,9 +14,9 @@ import {
   selectCliRunnableModel,
   type CliModelAccess,
 } from '@cli/runtime/modelAccess';
-import { testRuntime } from '@test/support/testProcessRuntime';
 import type { ModelOptionData } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import { FakeStateStore, fakeStores } from '@test/support/FakePlatform';
 import { setupPlatform } from '@test/support/setupPlatform';
 

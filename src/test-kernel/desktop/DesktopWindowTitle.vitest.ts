@@ -7,12 +7,12 @@ import {
   getDesktopWindowTitle,
   installDesktopWindowTitle,
 } from '@desktop/main/desktopWindowTitle';
-import { testRuntime } from '@test/support/testProcessRuntime';
 import { formatSessionTitle, NATIVE_WINDOW_TITLE } from '@shared/sessionTitle';
 import {
   emptySessionView,
   type SessionView,
 } from '@shared/session/sessionView';
+import { testRuntime } from '@test/support/testProcessRuntime';
 
 /** A session as the title reads it: the fold's level and nothing else. */
 function createSession(rollup: Partial<SessionView['rollup']> = {}) {

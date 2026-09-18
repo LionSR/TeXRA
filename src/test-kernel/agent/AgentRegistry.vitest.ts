@@ -25,8 +25,8 @@ import {
   type AgentDirectoriesPort,
 } from '@platform/interfaces';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
-import { testRuntime } from '@test/support/testProcessRuntime';
 import { AgentCategory } from '@shared/schemas';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { REPO_ROOT } from '@test/support/repoScan';
 import { installPlatform } from '@test/support/setupPlatform';

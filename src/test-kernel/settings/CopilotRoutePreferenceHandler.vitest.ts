@@ -79,9 +79,9 @@ import type {
   LanguageModelInfo,
   LanguageModelPort,
 } from '@platform/languageModel';
-import { testRuntime } from '@test/support/testProcessRuntime';
 import { SettingsViewMessageHandler } from '@settingsView/SettingsViewMessageHandler';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { installedHost, installPlatform } from '@test/support/setupPlatform';

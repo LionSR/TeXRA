@@ -3,16 +3,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { inquiryRecordsLayer } from '@controllers/session/inquiryRecords';
 
 import { DefaultDesktopAgentSettingsController } from '@desktop/main/desktopAgentSettingsController';
-import {
-  initTestProcessRuntime,
-  testRuntime,
-} from '@test/support/testProcessRuntime';
 import { processOwnerId } from '@platform/defaults/nodeProcesses';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { assertSupported, isUnsupported } from '@shared/utils/dispatcher';
+import {
+  initTestProcessRuntime,
+  testRuntime,
+} from '@test/support/testProcessRuntime';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 
 import {

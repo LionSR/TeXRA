@@ -40,8 +40,8 @@ import {
   initWizardModelSelectItems,
 } from '@cli/init/runInitWizard';
 import type { CliModelAccess } from '@cli/runtime/modelAccess';
-import { testRuntime } from '@test/support/testProcessRuntime';
 import { AgentCategory } from '@shared/schemas';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';

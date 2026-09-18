@@ -10,11 +10,11 @@ import { ExternalOpenFailed } from '@hosts/uiHosts';
 import * as logger from '@logger/logUtils';
 import { apiKeySecretName } from '@model/apiProviders';
 import type { ModelOptionStores } from '@model/computeModelOptions';
-import { testRuntime } from '@test/support/testProcessRuntime';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { ModelOptionData } from '@shared/schemas';
 import { assertSupported } from '@shared/utils/dispatcher';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import {
   FakeConfigProvider,
   FakeSecrets,

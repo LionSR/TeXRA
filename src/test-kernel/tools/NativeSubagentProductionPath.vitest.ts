@@ -55,7 +55,6 @@ import {
   type TurnEvent,
   type TurnResult,
 } from '@llm/turn';
-import { testRuntime } from '@test/support/testProcessRuntime';
 import {
   AgentResume,
   AgentResumeFailed,
@@ -68,6 +67,7 @@ import {
   type RunId,
   AgentCategory,
 } from '@shared/schemas';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import {

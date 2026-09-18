@@ -8,7 +8,6 @@
 import '@test/support/sessionGraphTestSetup';
 import { SubscriptionRef } from 'effect';
 import { bindSessionView, sessionView } from '@cli/chat/tui/state/sessionView';
-import { testRuntime } from '@test/support/testProcessRuntime';
 import {
   AgentCategory,
   isPlainAgentIdentity,
@@ -27,6 +26,7 @@ import {
   isTerminalOutcomePhase,
 } from '@shared/runs/runStatus';
 import { runStatusCopy } from '@shared/runs/runStatusDisplay';
+import { testRuntime } from '@test/support/testProcessRuntime';
 
 let unbind: (() => void) | undefined;
 

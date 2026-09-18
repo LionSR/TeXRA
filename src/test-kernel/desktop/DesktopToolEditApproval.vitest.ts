@@ -8,9 +8,9 @@ import { afterEach, describe, expect, onTestFinished, vi } from 'vitest';
 
 import type { DesktopToolEditApprovalUi } from '@desktop/main/desktopToolEditApproval';
 import type { DiffSource } from '@hosts/uiHosts';
+import type { RunId } from '@shared/schemas';
 import { testRuntime } from '@test/support/testProcessRuntime';
 
-import type { RunId } from '@shared/schemas';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { createModuleMocks } from '@test/support/moduleMocks';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';

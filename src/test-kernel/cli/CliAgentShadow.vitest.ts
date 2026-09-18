@@ -17,8 +17,8 @@ import {
   resolveCliRunAgent,
 } from '@cli/runtime/agents';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
-import { testRuntime } from '@test/support/testProcessRuntime';
 import { AgentCategory } from '@shared/schemas';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import { REPO_ROOT } from '@test/support/repoScan';
 import { installPlatform } from '@test/support/setupPlatform';
 import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';

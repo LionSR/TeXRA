@@ -30,7 +30,6 @@ import {
   type ApiKeyStatus,
   type ApiProvider,
 } from '@model/apiProviders';
-import { testRuntime } from '@test/support/testProcessRuntime';
 import {
   TEXRA_APPROVAL_POLICY_CONFIG_KEY,
   type TexraApprovalPolicy,
@@ -42,6 +41,7 @@ import {
 } from '@shared/schemas';
 import type { SurfacedSettingEntry } from '@shared/schemas';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import {
   createDeferred,

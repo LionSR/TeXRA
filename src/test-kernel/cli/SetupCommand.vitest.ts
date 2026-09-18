@@ -35,8 +35,8 @@ vi.mock('@cli/runtime/initPlatform', () => ({
 
 import { runSetup } from '@cli/commands/setup';
 import { CliExitCode } from '@cli/runtime/exitCodes';
-import { testRuntime } from '@test/support/testProcessRuntime';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import { createFakePlatform } from '@test/support/FakePlatform';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 

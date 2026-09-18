@@ -5,12 +5,12 @@ import { LatexToolingController } from '@controllers/settingsView/LatexToolingCo
 import type { ToolTerminalAction } from '@controllers/settingsView/ToolDashboardData';
 import { DefaultDesktopToolingSettingsController } from '@desktop/main/desktopToolingSettingsController';
 import { appSignals } from '@eventBus/AppSignals';
-import { testRuntime } from '@test/support/testProcessRuntime';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { ToolCommandKind, ToolDashboardItem } from '@shared/schemas';
 import { HOMEBREW_INSTALL_COMMAND } from '@shared/constants/latexToolchain';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { assertSupported, isUnsupported } from '@shared/utils/dispatcher';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import { FakeConfigProvider, FakeStateStore } from '@test/support/FakePlatform';
 import type { ExternalToolCheckResult } from '@tools/toolAvailability';
 

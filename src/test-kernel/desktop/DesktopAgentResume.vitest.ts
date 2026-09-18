@@ -17,7 +17,6 @@ import * as SessionResumeRetrieval from '@agent/runtime/SessionResumeRetrieval';
 import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
 import * as AgentRunner from '@agent/runtime/runAgent';
 import { DesktopProcessResumeOwner } from '@desktop/main/desktopAgentResume';
-import { testRuntime } from '@test/support/testProcessRuntime';
 import {
   AgentCategory,
   aggregateId,
@@ -26,6 +25,7 @@ import {
   type RunId,
   type SessionEventDraft,
 } from '@shared/schemas';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import {
   createProcessSession,

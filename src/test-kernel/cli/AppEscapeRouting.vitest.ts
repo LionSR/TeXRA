@@ -37,7 +37,6 @@ import {
   updateWorkflowPopupView,
   workflowPopupView,
 } from '@cli/chat/tui/state/cliState';
-import { testRuntime } from '@test/support/testProcessRuntime';
 import {
   AgentCategory,
   RUN_PHASE,
@@ -52,6 +51,7 @@ import type { TranscriptRow } from '@shared/transcript';
 import { runUnreadableMessage } from '@shared/runs/runStatusDisplay';
 import type { SessionView, RunView } from '@shared/session/sessionView';
 import { workflowRunModel } from '@shared/runs/workflowRunModel';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { FakeSecrets } from '@test/support/FakePlatform';
 import { textRowFixture } from '@test/support/transcriptRowFixtures';

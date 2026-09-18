@@ -5,9 +5,9 @@ import { Effect, ManagedRuntime } from 'effect';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { ProcessRuntime } from '@platform/processRuntime';
-import { testRuntime } from '@test/support/testProcessRuntime';
 import type { RunId } from '@shared/schemas';
 import type { HostRequest } from '@shared/session/hostRequest';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import { createModuleMocks } from '@test/support/moduleMocks';
 import {
   createFakeWorkspaceRoots,

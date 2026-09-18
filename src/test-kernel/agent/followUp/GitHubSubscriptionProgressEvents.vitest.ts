@@ -16,8 +16,8 @@ vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
 
 // Local imports
 import { appSignals } from '@eventBus/AppSignals';
-import { testRuntime } from '@test/support/testProcessRuntime';
 import type { RunId } from '@shared/schemas';
+import { testRuntime } from '@test/support/testProcessRuntime';
 
 // Test support imports
 import { createTestSession } from '@test/support/sessionTestUtils';

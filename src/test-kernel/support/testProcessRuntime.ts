@@ -9,16 +9,21 @@
  * file, a `beforeEach` and whichever suite runs next, so its local lives
  * here rather than in a closure none of the three share.
  *
- * `installFakeHost` is the one writer. It imports this module dynamically,
- * for the same reason it imports the platform modules that way: a suite that
- * calls `vi.resetModules()` gets fresh module instances, and the install has
- * to land in the instance the code under test will import next.
+ * Two writers, in the order the harness runs them: `installFakeHost` builds
+ * the bare runtime over the fake host's process services, and
+ * `sessionGraphTestSetup` replaces it with the session graph family when the
+ * suite that imported it needs one — the same order, and the same last
+ * install wins, that the production slot gave them. `installFakeHost`
+ * imports this module dynamically, for the same reason it imports the
+ * platform modules that way: a suite that calls `vi.resetModules()` gets
+ * fresh module instances, and the install has to land in the instance the
+ * code under test will import next.
  */
 import type { ProcessRuntime } from '@platform/processRuntime';
 
 let runtime: ProcessRuntime | undefined;
 
-/** Install the harness's runtime. Called by `installFakeHost` only. */
+/** Install the harness's runtime. */
 export function initTestProcessRuntime(instance: ProcessRuntime): void {
   runtime = instance;
 }

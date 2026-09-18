@@ -3,8 +3,8 @@ import { join } from 'node:path';
 import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { testRuntime } from '@test/support/testProcessRuntime';
 import { aggregateId as qualifyAggregateId, type RunId } from '@shared/schemas';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import { waitForCondition } from '@test/support/asyncTestUtils';
 import { FakeStateStore } from '@test/support/FakePlatform';
 import type * as VSCode from 'vscode';

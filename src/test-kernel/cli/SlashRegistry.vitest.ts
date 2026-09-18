@@ -33,8 +33,8 @@ import {
 } from '@cli/chat/tui/state/cliState';
 import { notices, noticesFor } from '@cli/chat/tui/state/transcript';
 import type { CliModelAccessSelection } from '@cli/runtime/modelAccessRoute';
-import { testRuntime } from '@test/support/testProcessRuntime';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
 import { loadInk, renderInteractive } from '@test/support/inkTestHarness.ts';

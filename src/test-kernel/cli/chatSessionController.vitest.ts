@@ -153,7 +153,6 @@ import {
 } from '@cli/chat/tui/state/sessionRunState';
 import { DisposableStore } from '@platform/disposable';
 import type { RecoveryContinuation } from '@platform/interfaces';
-import { testRuntime } from '@test/support/testProcessRuntime';
 import {
   aggregateId,
   RUN_OUTCOME,
@@ -163,6 +162,7 @@ import {
 import { TEXRA_APPROVAL_POLICY_DEFAULT } from '@shared/approvalPolicy';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 import {

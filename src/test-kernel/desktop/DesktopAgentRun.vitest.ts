@@ -9,7 +9,6 @@ import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import { ToolUseAgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import * as DesktopAgentLaunch from '@desktop/main/desktopAgentLaunch';
 import { createDesktopAgentRun } from '@desktop/main/desktopAgentRun';
-import { testRuntime } from '@test/support/testProcessRuntime';
 import {
   AgentCategory,
   aggregateId,
@@ -18,6 +17,7 @@ import {
   type RunId,
   type SessionEventDraft,
 } from '@shared/schemas';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import {
   createTestSession,
   publishTestRunStart,

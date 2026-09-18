@@ -22,9 +22,9 @@ import {
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
 } from '@platform/languageModel';
 import type { ProcessRuntime } from '@platform/processRuntime';
-import { testRuntime } from '@test/support/testProcessRuntime';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import {
   FakeSecrets,
   createFakePlatform,

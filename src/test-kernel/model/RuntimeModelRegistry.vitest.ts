@@ -26,8 +26,8 @@ import type {
   LanguageModelPort,
 } from '@platform/languageModel';
 import { LanguageModel } from '@platform/languageModel';
-import { testRuntime } from '@test/support/testProcessRuntime';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import {
   fakeHostLanguageModel,

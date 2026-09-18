@@ -10,10 +10,10 @@ import {
 } from 'vitest';
 
 import * as logger from '@logger/logUtils';
-import { testRuntime } from '@test/support/testProcessRuntime';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import { AgentCategory, TELEMETRY_ENABLED_KEY } from '@shared/schemas';
 import { UsageLogService } from '@telemetry/UsageLogService';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import {
   createFakePlatform,

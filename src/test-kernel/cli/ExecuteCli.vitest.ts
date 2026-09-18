@@ -10,9 +10,9 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import type { executeCliRequest } from '@cli/runtime/executeCli';
 import { AgentError } from '@common/errors';
-import { testRuntime } from '@test/support/testProcessRuntime';
 import { RUN_OUTCOME } from '@shared/schemas';
 import type { AggregateId, FlowSnapshotPayload, RunId } from '@shared/schemas';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import {
   fakeProcessServices,
   installFakeHost,
