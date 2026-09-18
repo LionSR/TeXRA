@@ -147,11 +147,15 @@ function historyDetails(
   id: RunId,
   options?: { includeFullConversation?: boolean },
 ) {
-  return readCliHistoryDetails(
-    testRuntime(),
-    Effect.succeed(testDefaultSession()),
-    id,
-    options,
+  return testRuntime().runPromise(
+    readCliHistoryDetails(Effect.succeed(testDefaultSession()), id, options),
+  );
+}
+
+// The same open, for the listing the CLI's `history list` run arm runs.
+function historyEntries() {
+  return testRuntime().runPromise(
+    listCliHistoryEntries(Effect.succeed(testDefaultSession())),
   );
 }
 
@@ -308,10 +312,7 @@ describe('CLI history runtime', () => {
   it('formats history list rows with the stable tab-separated text shape', async () => {
     mocks.listRuns.mockReturnValue(Effect.succeed([runListEntry('a1a1a1')]));
 
-    const entries = await listCliHistoryEntries(
-      testRuntime(),
-      Effect.succeed(testDefaultSession()),
-    );
+    const entries = await historyEntries();
 
     expect(formatCliHistoryText(entries)).toBe(
       'a1a1a1\t2026-05-18T08:00:00.000Z\tcorrect\tcompleted\tintro.tex',
@@ -354,10 +355,7 @@ describe('CLI history runtime', () => {
       ),
     );
 
-    const entries = await listCliHistoryEntries(
-      testRuntime(),
-      Effect.succeed(testDefaultSession()),
-    );
+    const entries = await historyEntries();
     expect(entries.map((entry) => entry.status)).toEqual([
       'cancelled',
       'failed',
@@ -406,10 +404,7 @@ describe('CLI history runtime', () => {
       ]),
     );
 
-    const entries = await listCliHistoryEntries(
-      testRuntime(),
-      Effect.succeed(testDefaultSession()),
-    );
+    const entries = await historyEntries();
 
     expect(entries.map((entry) => entry.id)).toEqual(['visible']);
   });
@@ -425,10 +420,7 @@ describe('CLI history runtime', () => {
       ]),
     );
 
-    const entries = await listCliHistoryEntries(
-      testRuntime(),
-      Effect.succeed(testDefaultSession()),
-    );
+    const entries = await historyEntries();
 
     expect(entries.map((entry) => entry.id)).toEqual(['root']);
   });
@@ -450,10 +442,7 @@ describe('CLI history runtime', () => {
       ]),
     );
 
-    const entries = await listCliHistoryEntries(
-      testRuntime(),
-      Effect.succeed(testDefaultSession()),
-    );
+    const entries = await historyEntries();
 
     expect(entries[0]?.agent).toBe('engineer');
     expect(entries[0]?.teamPresetId).toBe('software-engineer');
@@ -477,10 +466,7 @@ describe('CLI history runtime', () => {
       ]),
     );
 
-    const entries = await listCliHistoryEntries(
-      testRuntime(),
-      Effect.succeed(testDefaultSession()),
-    );
+    const entries = await historyEntries();
 
     expect(formatCliHistoryText(entries)).toBe(
       'chat1\t2026-05-18T11:00:00.000Z\tassistant\tresumable\tSketch a proof outline',
@@ -978,10 +964,8 @@ describe('CLI history runtime', () => {
         await Effect.runPromise(session.readView([]))
       ).runs.get(runId)?.launchedAt;
 
-      const result = await readCliHistoryExportInput(
-        testRuntime(),
-        Effect.succeed(testDefaultSession()),
-        runId,
+      const result = await testRuntime().runPromise(
+        readCliHistoryExportInput(Effect.succeed(testDefaultSession()), runId),
       );
 
       expect(result).toEqual({
@@ -1013,10 +997,11 @@ describe('CLI history runtime', () => {
       mockNothingPersisted();
 
       await expect(
-        readCliHistoryExportInput(
-          testRuntime(),
-          Effect.succeed(testDefaultSession()),
-          'facade' as RunId,
+        testRuntime().runPromise(
+          readCliHistoryExportInput(
+            Effect.succeed(testDefaultSession()),
+            'facade' as RunId,
+          ),
         ),
       ).resolves.toEqual({ status: 'not_found' });
     });
@@ -1027,10 +1012,11 @@ describe('CLI history runtime', () => {
       // the id not resolving to anything at all. This is the beforeEach
       // baseline: stored config, no conversation, no meta.
       await expect(
-        readCliHistoryExportInput(
-          testRuntime(),
-          Effect.succeed(testDefaultSession()),
-          'a1a1a1' as RunId,
+        testRuntime().runPromise(
+          readCliHistoryExportInput(
+            Effect.succeed(testDefaultSession()),
+            'a1a1a1' as RunId,
+          ),
         ),
       ).resolves.toEqual({ status: 'incomplete' });
     });
@@ -1042,10 +1028,11 @@ describe('CLI history runtime', () => {
       ]);
 
       await expect(
-        readCliHistoryExportInput(
-          testRuntime(),
-          Effect.succeed(testDefaultSession()),
-          'a1a1a1' as RunId,
+        testRuntime().runPromise(
+          readCliHistoryExportInput(
+            Effect.succeed(testDefaultSession()),
+            'a1a1a1' as RunId,
+          ),
         ),
       ).resolves.toEqual({ status: 'incomplete' });
     });
@@ -1060,10 +1047,11 @@ describe('CLI history runtime', () => {
       mocks.readConversation.mockResolvedValue([]);
 
       await expect(
-        readCliHistoryExportInput(
-          testRuntime(),
-          Effect.succeed(testDefaultSession()),
-          'facade' as RunId,
+        testRuntime().runPromise(
+          readCliHistoryExportInput(
+            Effect.succeed(testDefaultSession()),
+            'facade' as RunId,
+          ),
         ),
       ).resolves.toEqual({ status: 'not_found' });
       await expect(historyDetails('facade' as RunId)).resolves.toBeNull();
@@ -1082,7 +1070,9 @@ describe('CLI history runtime', () => {
       );
 
       await expect(
-        readCliHistoryStandaloneTemplate(testRuntime(), resourcesPath),
+        testRuntime().runPromise(
+          readCliHistoryStandaloneTemplate(resourcesPath),
+        ),
       ).resolves.toBe('<html>standalone</html>');
     });
 
@@ -1093,7 +1083,9 @@ describe('CLI history runtime', () => {
       );
 
       await expect(
-        readCliHistoryStandaloneTemplate(testRuntime(), resourcesPath),
+        testRuntime().runPromise(
+          readCliHistoryStandaloneTemplate(resourcesPath),
+        ),
       ).resolves.toBeNull();
     });
 

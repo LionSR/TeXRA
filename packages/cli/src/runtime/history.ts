@@ -17,7 +17,6 @@ import { loadChatExportInput, type ChatExportInput } from '@agent/export';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
 import { redactDisplayValue } from '@logger/redaction';
-import type { ProcessRuntime } from '@platform/processRuntime';
 import {
   RunIdSchema,
   aggregateTarget,
@@ -158,172 +157,137 @@ export function parseCliHistoryId(raw: string): RunId | undefined {
 /**
  * The history readers take the process session as the open that yields it
  * (`CliPlatformServices.session`): a listing is the first thing `history`
- * asks of the session, so the open runs inside the reader's own program, on
- * the runtime the caller holds (`CliPlatformServices.runtime`).
+ * asks of the session, so the open runs inside the reader's own program, which
+ * the calling surface runs once on the runtime it holds
+ * (`CliPlatformServices.runtime`).
  */
-export async function listCliHistoryEntries(
-  runtime: ProcessRuntime,
-  session: Effect.Effect<SessionHandle, SessionOpenError>,
-): Promise<CliHistoryEntry[]> {
-  // A row's resumability comes from the checkpoint `stat` the listing already
-  // did; only a failed workflow row still reads its persisted state. That read
-  // is bounded here so a history full of failed workflow runs cannot open one
-  // file handle burst per run. `Effect.forEach` preserves input order.
-  return runtime.runPromise(
-    Effect.gen(function* () {
-      const opened = yield* session;
-      const entries = yield* listRuns(opened);
-      return yield* Effect.forEach(
-        entries.filter(isUserVisibleRun),
-        (entry) => toCliHistoryEntry(entry, opened),
-        { concurrency: HISTORY_ENTRY_CONCURRENCY },
-      );
-    }),
-  );
-}
+export const listCliHistoryEntries = Effect.fn('cli.listCliHistoryEntries')(
+  function* (session: Effect.Effect<SessionHandle, SessionOpenError>) {
+    // A row's resumability comes from the checkpoint `stat` the listing already
+    // did; only a failed workflow row still reads its persisted state. That
+    // read is bounded here so a history full of failed workflow runs cannot
+    // open one file handle burst per run. `Effect.forEach` preserves input
+    // order.
+    const opened = yield* session;
+    const entries = yield* listRuns(opened);
+    return yield* Effect.forEach(
+      entries.filter(isUserVisibleRun),
+      (entry) => toCliHistoryEntry(entry, opened),
+      { concurrency: HISTORY_ENTRY_CONCURRENCY },
+    );
+  },
+);
 
-export async function readCliHistoryDetails(
-  runtime: ProcessRuntime,
-  sessionOpen: Effect.Effect<SessionHandle, SessionOpenError>,
-  id: RunId,
-  options: { includeFullConversation?: boolean } = {},
-): Promise<CliHistoryDetails | null> {
-  const {
-    run,
-    config,
-    resultMeta,
-    runEnd,
-    report,
-    conversationResult,
-    generatedFiles,
-    checkpointPresent,
-    currentModel,
-    resumable,
-    workspaceFiles,
-  } = await runtime.runPromise(
-    Effect.gen(function* () {
-      const session = yield* sessionOpen;
-      const store = getRunRecords(session, id);
-      const [
-        run,
-        config,
-        resultMeta,
-        runEnd,
-        report,
-        conversationResult,
-        persistedWorkspaceFilePaths,
-        generatedFiles,
-        checkpointPresent,
-      ] = yield* Effect.all(
-        [
-          session.readView([]).pipe(Effect.map((view) => view.runs.get(id))),
-          store.readConfig(),
-          store.readResultMeta(),
-          store.readRunEnd(),
-          store.readReport(),
-          readCompletedRunConversation(id, session),
-          store.readWorkspaceFiles(),
-          listRunGeneratedFiles(id, session),
-          checkpointExists(id, session),
-        ],
-        { concurrency: 9 },
-      );
-      const currentModel = config
-        ? yield* readCliResumedModel(session, id, config)
-        : undefined;
-      // The same rule the listing applies, from the same facts: `status` is a
-      // frozen contract, so `history show` must not answer it differently from
-      // `history list` for the run in the row the caller just read. A run whose
-      // config is missing or malformed has no category to resume under and no
-      // config for a host to adopt, so it is not offered, the listing never
-      // reaches this rule for such a row, which lists as incomplete.
-      const resumable =
-        config !== null &&
-        (yield* isCliRunResumable(
-          {
-            id,
-            checkpointPresent,
-            agentCategory: config.agentCategory,
-            outcome:
-              run && isTerminalOutcomePhase(run.status)
-                ? run.status
-                : undefined,
-          },
-          session,
-        ));
-      // Sized inside the program rather than after it: the listing reads the
-      // filesystem, so it belongs on the runtime the caller already holds.
-      const workspaceFiles = yield* listRunWorkspaceFiles(
-        config,
-        persistedWorkspaceFilePaths,
-      );
-      return {
-        run,
-        config,
-        resultMeta,
-        runEnd,
-        report,
-        conversationResult,
-        generatedFiles,
-        checkpointPresent,
-        currentModel,
-        resumable,
-        workspaceFiles,
-      } as const;
-    }),
-  );
-  const conversation = conversationResult.conversation;
-  const hasTranscriptEvidence =
-    hasCompletedRunConversationEvidence(conversationResult);
-  const conversationPreview = createConversationPreview(conversation);
-  const fullConversation = options.includeFullConversation
-    ? createConversationTranscript(conversation)
-    : undefined;
-  const files = mergeHistoryFiles(
-    generatedFiles,
-    workspaceFiles.map((file) => ({
-      path: file.displayPath,
-      size: file.size,
-      isDirectory: file.isDirectory,
-    })),
-  );
-
-  if (
-    !run &&
-    !config &&
-    !conversationPreview &&
-    !fullConversation &&
-    !checkpointPresent &&
-    !hasTranscriptEvidence
+export const readCliHistoryDetails = Effect.fn('cli.readCliHistoryDetails')(
+  function* (
+    sessionOpen: Effect.Effect<SessionHandle, SessionOpenError>,
+    id: RunId,
+    options: { includeFullConversation?: boolean } = {},
   ) {
-    return null;
-  }
-  return redactDisplayValue({
-    id,
-    status: resolveHistoryRunStatus({
-      resumable,
-      outcome:
-        run && isTerminalOutcomePhase(run.status) ? run.status : undefined,
-    }),
-    run: run
-      ? {
-          launchedAt: run.launchedAt,
-          parentId: run.parentId,
-          description: run.description,
-        }
-      : null,
-    config,
-    result: resultMeta ? unwrapResultMeta(resultMeta, runEnd) : null,
-    report,
-    conversationPreview,
-    ...(options.includeFullConversation
-      ? { conversation: fullConversation }
-      : {}),
-    files,
-    hasFlowRecord: checkpointPresent,
-    currentModel,
-  });
-}
+    const session = yield* sessionOpen;
+    const store = getRunRecords(session, id);
+    const [
+      run,
+      config,
+      resultMeta,
+      runEnd,
+      report,
+      conversationResult,
+      persistedWorkspaceFilePaths,
+      generatedFiles,
+      checkpointPresent,
+    ] = yield* Effect.all(
+      [
+        session.readView([]).pipe(Effect.map((view) => view.runs.get(id))),
+        store.readConfig(),
+        store.readResultMeta(),
+        store.readRunEnd(),
+        store.readReport(),
+        readCompletedRunConversation(id, session),
+        store.readWorkspaceFiles(),
+        listRunGeneratedFiles(id, session),
+        checkpointExists(id, session),
+      ],
+      { concurrency: 9 },
+    );
+    const currentModel = config
+      ? yield* readCliResumedModel(session, id, config)
+      : undefined;
+    // The same rule the listing applies, from the same facts: `status` is a
+    // frozen contract, so `history show` must not answer it differently from
+    // `history list` for the run in the row the caller just read. A run whose
+    // config is missing or malformed has no category to resume under and no
+    // config for a host to adopt, so it is not offered, the listing never
+    // reaches this rule for such a row, which lists as incomplete.
+    const resumable =
+      config !== null &&
+      (yield* isCliRunResumable(
+        {
+          id,
+          checkpointPresent,
+          agentCategory: config.agentCategory,
+          outcome:
+            run && isTerminalOutcomePhase(run.status) ? run.status : undefined,
+        },
+        session,
+      ));
+    const workspaceFiles = yield* listRunWorkspaceFiles(
+      config,
+      persistedWorkspaceFilePaths,
+    );
+    const conversation = conversationResult.conversation;
+    const hasTranscriptEvidence =
+      hasCompletedRunConversationEvidence(conversationResult);
+    const conversationPreview = createConversationPreview(conversation);
+    const fullConversation = options.includeFullConversation
+      ? createConversationTranscript(conversation)
+      : undefined;
+    const files = mergeHistoryFiles(
+      generatedFiles,
+      workspaceFiles.map((file) => ({
+        path: file.displayPath,
+        size: file.size,
+        isDirectory: file.isDirectory,
+      })),
+    );
+
+    if (
+      !run &&
+      !config &&
+      !conversationPreview &&
+      !fullConversation &&
+      !checkpointPresent &&
+      !hasTranscriptEvidence
+    ) {
+      return null;
+    }
+    return redactDisplayValue({
+      id,
+      status: resolveHistoryRunStatus({
+        resumable,
+        outcome:
+          run && isTerminalOutcomePhase(run.status) ? run.status : undefined,
+      }),
+      run: run
+        ? {
+            launchedAt: run.launchedAt,
+            parentId: run.parentId,
+            description: run.description,
+          }
+        : null,
+      config,
+      result: resultMeta ? unwrapResultMeta(resultMeta, runEnd) : null,
+      report,
+      conversationPreview,
+      ...(options.includeFullConversation
+        ? { conversation: fullConversation }
+        : {}),
+      files,
+      hasFlowRecord: checkpointPresent,
+      currentModel,
+    }) satisfies CliHistoryDetails;
+  },
+);
 
 /** Outcome of loading a stored run's export input (see {@link readCliHistoryExportInput}). */
 type CliHistoryExportInputResult =
@@ -351,21 +315,21 @@ type CliHistoryExportInputResult =
  * both as "not found" would mislead a caller whose id is valid but whose
  * run simply never produced a conversation.
  */
-export async function readCliHistoryExportInput(
-  runtime: ProcessRuntime,
+export const readCliHistoryExportInput = Effect.fn(
+  'cli.readCliHistoryExportInput',
+)(function* (
   session: Effect.Effect<SessionHandle, SessionOpenError>,
   id: RunId,
-): Promise<CliHistoryExportInputResult> {
+) {
   const { run, config, conversation, hasTranscriptEvidence, exportInput } =
-    await runtime.runPromise(
-      Effect.flatMap(session, (opened) => loadChatExportInput(id, opened)),
-    );
-  if (exportInput) return { status: 'ok', exportInput };
+    yield* Effect.flatMap(session, (opened) => loadChatExportInput(id, opened));
+  if (exportInput)
+    return { status: 'ok', exportInput } satisfies CliHistoryExportInputResult;
   if (!run && !config && !conversation && !hasTranscriptEvidence) {
-    return { status: 'not_found' };
+    return { status: 'not_found' } satisfies CliHistoryExportInputResult;
   }
-  return { status: 'incomplete' };
-}
+  return { status: 'incomplete' } satisfies CliHistoryExportInputResult;
+});
 
 /** Single-file trace-viewer bundle (file://-safe, inlined assets). */
 const TRACE_VIEWER_DIR_NAME = 'traceViewer';
@@ -381,29 +345,26 @@ const TRACE_VIEWER_DIR_NAME = 'traceViewer';
  * reported as "rebuild the CLI", so it surfaces as a usage error naming the
  * real cause.
  */
-export async function readCliHistoryStandaloneTemplate(
-  runtime: ProcessRuntime,
+export function readCliHistoryStandaloneTemplate(
   resourcesPath: string,
-): Promise<string | null> {
+): Effect.Effect<string | null, CliUsageError> {
   const templatePath = path.join(
     resourcesPath,
     TRACE_VIEWER_DIR_NAME,
     'index.html',
   );
-  return runtime.runPromise(
-    Effect.tryPromise({
-      try: () => readFile(templatePath, 'utf8'),
-      catch: (cause) => cause,
-    }).pipe(
-      Effect.catch((error) =>
-        isFileNotFoundError(error) || isNotADirectoryError(error)
-          ? Effect.succeed(null)
-          : Effect.fail(
-              new CliUsageError(
-                `history export: cannot read ${templatePath}: ${toErrorMessage(error)}`,
-              ),
+  return Effect.tryPromise({
+    try: () => readFile(templatePath, 'utf8'),
+    catch: (cause) => cause,
+  }).pipe(
+    Effect.catch((error) =>
+      isFileNotFoundError(error) || isNotADirectoryError(error)
+        ? Effect.succeed(null)
+        : Effect.fail(
+            new CliUsageError(
+              `history export: cannot read ${templatePath}: ${toErrorMessage(error)}`,
             ),
-      ),
+          ),
     ),
   );
 }

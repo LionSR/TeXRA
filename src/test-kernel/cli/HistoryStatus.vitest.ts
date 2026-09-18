@@ -201,10 +201,8 @@ describe('CLI history status formatting', () => {
     const id = 'bad-f10' as RunId;
     await seedSnapshot(id, TOOL_USE_CONFIG, 'orchestrator', 'toolUse');
 
-    const details = await readCliHistoryDetails(
-      testRuntime(),
-      Effect.succeed(testDefaultSession()),
-      id,
+    const details = await testRuntime().runPromise(
+      readCliHistoryDetails(Effect.succeed(testDefaultSession()), id),
     );
 
     expect(details?.hasFlowRecord).toBe(true);
@@ -219,10 +217,8 @@ describe('CLI history status formatting', () => {
     const id = 'c0ffee-f10' as RunId;
     await seedSnapshot(id, WORKFLOW_CONFIG, 'correct', 'reflection');
 
-    const details = await readCliHistoryDetails(
-      testRuntime(),
-      Effect.succeed(testDefaultSession()),
-      id,
+    const details = await testRuntime().runPromise(
+      readCliHistoryDetails(Effect.succeed(testDefaultSession()), id),
     );
 
     expect(details?.hasFlowRecord).toBe(true);
@@ -259,10 +255,8 @@ describe('CLI history status formatting', () => {
       ]),
     );
 
-    const details = await readCliHistoryDetails(
-      testRuntime(),
-      Effect.succeed(testDefaultSession()),
-      id,
+    const details = await testRuntime().runPromise(
+      readCliHistoryDetails(Effect.succeed(testDefaultSession()), id),
     );
 
     expect(details?.hasFlowRecord).toBe(true);

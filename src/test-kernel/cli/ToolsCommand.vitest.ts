@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { testRuntime } from '@test/support/testProcessRuntime';
@@ -56,7 +57,7 @@ describe('CLI tools command', () => {
       text: 'Install help',
       command: 'echo install',
     });
-    mocks.setCliToolEnabled.mockReset().mockResolvedValue(true);
+    mocks.setCliToolEnabled.mockReset().mockReturnValue(Effect.succeed(true));
     mocks.execa.mockReset();
     stdoutSpy = spyOnStreamWrite(process.stdout, (chunk) => {
       stdout += chunk;
@@ -81,13 +82,12 @@ describe('CLI tools command', () => {
 
     expect(result.exitCode).toBe(0);
     expect(stderr).toBe('');
-    // The toggle is settled on the runtime its caller holds, so the call
-    // carries it beside the store.
+    // The toggle is a program over the store the init handed back; the run arm
+    // settles it on the runtime it holds.
     expect(mocks.setCliToolEnabled).toHaveBeenCalledWith(
       globalState,
       'codex',
       false,
-      expect.anything(),
     );
     expect(JSON.parse(stdout)).toEqual({
       id: 'codex',

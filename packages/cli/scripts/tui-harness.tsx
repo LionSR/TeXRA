@@ -329,11 +329,12 @@ const HARNESS_PLATFORM_SERVICES = await initLocalCliPlatform({
   version: '0.0.0-harness',
 });
 if (RESET_WORKFLOW_SCRIPT_DISABLED) {
-  await setCliToolEnabled(
-    HARNESS_PLATFORM_SERVICES.globalState,
-    'workflow-script',
-    false,
-    HARNESS_PLATFORM_SERVICES.runtime,
+  await HARNESS_PLATFORM_SERVICES.runtime.runPromise(
+    setCliToolEnabled(
+      HARNESS_PLATFORM_SERVICES.globalState,
+      'workflow-script',
+      false,
+    ),
   );
 }
 // The one process runtime this harness runs on, as its composition root
