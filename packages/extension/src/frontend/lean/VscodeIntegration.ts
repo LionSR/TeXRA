@@ -447,11 +447,11 @@ function fetchDiagnosticsForFile(
     );
     if (Result.isFailure(opened)) {
       // Could not be opened in the editor — the file itself is the problem,
-      // and VS Code's own reason is what says which part of it.
+      // and the failure already names it and which step VS Code refused.
       return {
         ok: false,
         kind: 'file_missing',
-        message: `Could not open ${absolutePath} in the editor: ${opened.failure.message}`,
+        message: opened.failure.message,
       } satisfies FetchDiagnosticsResult;
     }
 
