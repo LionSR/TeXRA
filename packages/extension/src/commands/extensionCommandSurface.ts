@@ -150,7 +150,6 @@ export function createExtensionCommandActions(
           globalState,
           category,
           secrets,
-          runtime,
           session,
         ),
       ),

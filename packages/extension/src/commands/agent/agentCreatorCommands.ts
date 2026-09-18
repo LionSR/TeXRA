@@ -16,7 +16,6 @@ import {
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { promptToAddAgentToConfig } from '@frontend/agents/register';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
-import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { StateStore } from '@platform/interfaces';
 import type { AgentCategory } from '@shared/schemas';
@@ -179,10 +178,7 @@ function pickToolGroups(
   );
 }
 
-function buildVSCodeUI(
-  runtime: ProcessRuntime,
-  session: SessionHandle,
-): AgentCreatorUI {
+function buildVSCodeUI(session: SessionHandle): AgentCreatorUI {
   return {
     promptAgentName(categoryLabel) {
       return askForInput({
@@ -245,22 +241,21 @@ function buildVSCodeUI(
     },
 
     promptAddToConfig(agentName, category) {
-      return Effect.tryPromise({
-        try: () =>
-          promptToAddAgentToConfig(
-            agentName,
-            'custom',
-            category,
-            runtime,
-            session,
-          ),
-        catch: (cause) =>
-          new AgentCreatorUiFailed({
-            reason: 'config-update-failed',
-            message: 'The new agent could not be added to the configuration.',
-            cause,
-          }),
-      });
+      return promptToAddAgentToConfig(
+        agentName,
+        'custom',
+        category,
+        session,
+      ).pipe(
+        Effect.mapError(
+          (cause) =>
+            new AgentCreatorUiFailed({
+              reason: 'config-update-failed',
+              message: 'The new agent could not be added to the configuration.',
+              cause,
+            }),
+        ),
+      );
     },
 
     openCreatedFile(filePath) {
@@ -297,12 +292,11 @@ export function handleCreateAgentWithAI(
   globalState: StateStore,
   category: AgentCategory,
   secrets: PlatformSecrets,
-  runtime: ProcessRuntime,
   session: SessionHandle,
 ) {
   return Effect.gen(function* () {
     const config = yield* loadCreatorConfig(context);
-    yield* runAgentCreator(config, category, buildVSCodeUI(runtime, session), {
+    yield* runAgentCreator(config, category, buildVSCodeUI(session), {
       ...session.roots,
       secrets,
     });
