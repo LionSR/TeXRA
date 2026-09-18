@@ -165,7 +165,6 @@ interface AutoResumeOptions {
  * this way.
  */
 class ChatSessionCallFailed extends Data.TaggedError('ChatSessionCallFailed')<{
-  readonly member: 'selectRunnableModel';
   readonly message: string;
   readonly cause: unknown;
 }> {}
@@ -1132,7 +1131,6 @@ export function createChatSessionController(
               // recovery. The tag carries that message verbatim, because the
               // transcript renders `toErrorMessage` of this failure.
               new ChatSessionCallFailed({
-                member: 'selectRunnableModel',
                 message: toErrorMessage(cause),
                 cause,
               }),
