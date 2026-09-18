@@ -82,10 +82,12 @@ export class DiagnosticsReadFailed extends Data.TaggedError(
 }> {}
 
 /**
- * A host could not present one runtime notice: its `emit` threw, or the
- * program it answered with failed. The presentation plane's one failure, so
- * the fallback notice and the warn logs that consume it report the same cause
- * the raw `catch` they replaced reported.
+ * A host could not present one runtime notice: its `emit` threw. The
+ * presentation plane's one failure, so the fallback notice and the warn logs
+ * that consume it report the same cause the raw `catch` they replaced
+ * reported. A failure of the program `emit` answers with is not this one:
+ * nothing waits on a presentation, so `presentOn` warn-logs it on the
+ * detached fiber that runs it and no `fallbackMessage` follows.
  */
 export class HostPresentationFailed extends Data.TaggedError(
   'HostPresentationFailed',
