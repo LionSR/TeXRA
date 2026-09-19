@@ -112,11 +112,8 @@ function buildArguments(input: GrepInput): string[] {
   return args;
 }
 
-/** The per-call context this tool reads from the caller's turn. */
-type GrepPorts = WorkspacePathPorts;
-
 const runGrep = Effect.fn('GrepTool.execute')(function* (
-  ports: GrepPorts,
+  ports: WorkspacePathPorts,
   input: GrepInput,
 ): Effect.fn.Return<ToolResult, unknown, FileSystem.FileSystem> {
   const root = ports.toolRoot();
