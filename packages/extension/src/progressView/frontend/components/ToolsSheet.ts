@@ -19,7 +19,7 @@ import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import type { Surface } from '@shared/session/surface';
 import { SessionUiEvents } from '@shared/session/uiEvents';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
-import '@webview/frontend/components/LatexDiffsSection';
+import './LatexDiffsSection';
 
 @customElement('tools-sheet')
 export class ToolsSheet extends LitElement {

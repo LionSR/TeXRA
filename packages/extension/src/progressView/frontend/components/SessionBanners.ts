@@ -11,11 +11,11 @@ import { customElement, property } from 'lit/decorators.js';
 
 import type { SessionType } from '@shared/schemas';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
-import '@webview/frontend/components/AgentConfigBanner';
-import '@webview/frontend/components/ApiKeyBanner';
-import '@webview/frontend/components/DependencyBanner';
-import '@webview/frontend/components/GettingStartedBanner';
-import '@webview/frontend/components/LoginBanner';
+import './AgentConfigBanner';
+import './ApiKeyBanner';
+import './DependencyBanner';
+import './GettingStartedBanner';
+import './LoginBanner';
 
 @customElement('session-banners')
 export class SessionBanners extends LitElement {

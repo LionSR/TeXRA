@@ -119,7 +119,6 @@ const VSCODE_FREE_ZONE_DIRS = [
   'packages/agent/src',
   'packages/llm/src',
   'packages/desktop/src',
-  'packages/extension/src/webview/frontend',
   'packages/extension/src/progressView/frontend',
   'packages/extension/src/settingsView/frontend',
 ].map((dir) => path.join(__dirname, dir));
@@ -135,7 +134,6 @@ const HOST_LAYER_RESTRICTED_IMPORT_PATHS = [
 const HOST_LAYER_RESTRICTED_IMPORT_PATTERNS = [
   {
     group: [
-      '@webview/**',
       '@commands/**',
       '@progressView/**',
       '@settingsView/**',
@@ -728,7 +726,7 @@ export default tseslint.config(
   // modules, but runtime values must come from browser-safe shared modules.
   {
     files: [
-      'packages/extension/src/{webview,progressView,settingsView}/frontend/**/*.{ts,tsx,mts}',
+      'packages/extension/src/{progressView,settingsView}/frontend/**/*.{ts,tsx,mts}',
     ],
     rules: {
       'no-restricted-imports': [

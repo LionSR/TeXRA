@@ -108,8 +108,7 @@ repo and the first thing to check on any diff.
 `src/shared/`, `src/replacement/`, `src/eventBus/`, `src/hosts/`,
 `src/common/`, `src/utils/`, `src/logger/`, `packages/agent/src/`, `packages/llm/src/`,
 `packages/desktop/src/`, and the webview
-frontends — `packages/extension/src/webview/frontend/`,
-`packages/extension/src/progressView/frontend/`, and
+frontends — `packages/extension/src/progressView/frontend/` and
 `packages/extension/src/settingsView/frontend/`. Do not confuse
 `src/common/` and `src/utils/` (repo-root, host-neutral, enforced VS
 Code-free) with `packages/extension/src/common/` below (extension-only,
