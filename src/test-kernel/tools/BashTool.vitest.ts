@@ -54,17 +54,18 @@ function mockStreamingCommand(
   result: Partial<ExecResult> = {},
 ): void {
   vi.spyOn(execUtils, 'executeCommand').mockImplementation(
-    async (_command, options) => {
-      stream(options);
-      return {
-        success: true,
-        stdout: '',
-        stderr: '',
-        timedOut: false,
-        exitCode: 0,
-        ...result,
-      };
-    },
+    (_command, options) =>
+      Effect.sync(() => {
+        stream(options);
+        return {
+          success: true,
+          stdout: '',
+          stderr: '',
+          timedOut: false,
+          exitCode: 0,
+          ...result,
+        };
+      }),
   );
 }
 
@@ -78,14 +79,14 @@ const DONE_EXEC_RESULT: ExecResult = {
 };
 
 /**
- * Stub `executeCommand` to park on a promise the test resolves manually.
- * Returns the resolver so the case can interleave assertions before the
- * (mocked) process settles.
+ * Stub `executeCommand` to park until the test settles it. Returns the
+ * resolver so the case can interleave assertions before the (mocked) process
+ * settles.
  */
 function holdCommand(): (result: ExecResult) => void {
   const command = pDefer<ExecResult>();
-  vi.spyOn(execUtils, 'executeCommand').mockImplementation(
-    () => command.promise,
+  vi.spyOn(execUtils, 'executeCommand').mockImplementation(() =>
+    Effect.promise(() => command.promise),
   );
   return command.resolve;
 }
@@ -199,12 +200,8 @@ describe('BashTool', () => {
         exitCode: 0,
       };
 
-      let receivedSignal: AbortSignal | undefined;
-      vi.spyOn(execUtils, 'executeCommand').mockImplementation(
-        async (_command, options) => {
-          receivedSignal = options.signal;
-          return execResult;
-        },
+      vi.spyOn(execUtils, 'executeCommand').mockReturnValue(
+        Effect.succeed(execResult),
       );
 
       const result = yield* new BashTool().call({ command: 'echo long' }).pipe(
@@ -228,11 +225,6 @@ describe('BashTool', () => {
       assert.ok(
         formatToolResultAsText(result).includes(longOutput),
         'Model payload should contain the complete stdout text',
-      );
-      assert.equal(
-        receivedSignal instanceof AbortSignal,
-        true,
-        'Bash command should receive its fiber-owned abort signal',
       );
     }).pipe(
       Effect.provide(
@@ -592,8 +584,8 @@ describe('BashTool', () => {
         // resumed — every other child-run type routes through the shared
         // wake-aware submitFollowUp path. Prove the wake actually fires
         // by asserting the host resume port gets invoked once the run completes.
-        vi.spyOn(execUtils, 'executeCommand').mockResolvedValue(
-          DONE_EXEC_RESULT,
+        vi.spyOn(execUtils, 'executeCommand').mockReturnValue(
+          Effect.succeed(DONE_EXEC_RESULT),
         );
 
         const parentRunId = startedParentRun();
@@ -652,8 +644,8 @@ describe('BashTool', () => {
         // whole wait budget. Prove the ordering: hold the host resume port open
         // and confirm the run is already untracked (terminal) by the time
         // that port is even invoked.
-        vi.spyOn(execUtils, 'executeCommand').mockResolvedValue(
-          DONE_EXEC_RESULT,
+        vi.spyOn(execUtils, 'executeCommand').mockReturnValue(
+          Effect.succeed(DONE_EXEC_RESULT),
         );
 
         const parentRunId = startedParentRun();
@@ -902,27 +894,20 @@ describe('BashTool', () => {
     () =>
       Effect.gen(function* () {
         const started = pDefer<void>();
-        let receivedSignal: AbortSignal | undefined;
+        let commandTornDown = false;
         vi.spyOn(execUtils, 'executeCommand').mockImplementation(
-          (_command, options) => {
-            receivedSignal = options.signal;
-            options.onStdout?.('started\n');
-            started.resolve();
-            return new Promise<ExecResult>((resolve) => {
-              options.signal?.addEventListener(
-                'abort',
-                () =>
-                  resolve({
-                    success: false,
-                    stdout: '',
-                    stderr: 'Command aborted by user',
-                    timedOut: false,
-                    exitCode: 130,
-                  }),
-                { once: true },
-              );
-            });
-          },
+          (_command, options) =>
+            Effect.gen(function* () {
+              options.onStdout?.('started\n');
+              started.resolve();
+              return yield* Effect.never;
+            }).pipe(
+              Effect.onInterrupt(() =>
+                Effect.sync(() => {
+                  commandTornDown = true;
+                }),
+              ),
+            ),
         );
         const hookCalls: string[] = [];
         const fiber = yield* Effect.forkChild(
@@ -944,10 +929,12 @@ describe('BashTool', () => {
         );
         yield* Effect.promise(() => started.promise);
         assert.deepEqual(hookCalls, ['output:started\n']);
-        assert.equal(receivedSignal?.aborted, false);
+        assert.equal(commandTornDown, false);
         yield* Fiber.interrupt(fiber);
         const exit = yield* Fiber.await(fiber);
-        assert.equal(receivedSignal?.aborted, true);
+        // The command no longer takes a threaded abort signal: interrupting
+        // the tool's fiber interrupts the spawn effect itself.
+        assert.equal(commandTornDown, true);
         assert.equal(Exit.hasInterrupts(exit), true);
       }),
   );

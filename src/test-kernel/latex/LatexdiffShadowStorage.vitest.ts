@@ -88,12 +88,14 @@ describe('LaTeXdiffService shadow output', () => {
   });
 
   beforeEach(() => {
-    mocks.executeCommand.mockResolvedValue({
-      success: true,
-      stdout:
-        '\\documentclass{article}\n\\begin{document}\nchanged\n\\end{document}\n',
-      stderr: '',
-    });
+    mocks.executeCommand.mockReturnValue(
+      Effect.succeed({
+        success: true,
+        stdout:
+          '\\documentclass{article}\n\\begin{document}\nchanged\n\\end{document}\n',
+        stderr: '',
+      }),
+    );
   });
 
   afterEach(async () => {
@@ -296,21 +298,23 @@ describe('LaTeXdiffService shadow output', () => {
             ].join('\n'),
           ),
         );
-        mocks.executeCommand.mockResolvedValueOnce({
-          success: true,
-          stdout: [
-            '\\documentclass{article}',
-            '\\begin{document}',
-            'new \\cite{a}',
-            '\\bibliographystyle{plain}',
-            '\\begin{thebibliography}{}',
-            '\\providecommand \\@ifxundefined [\\DIFadd{1}]{% corrupted bbl macro',
-            '\\end{thebibliography}',
-            '\\end{document}',
-            '',
-          ].join('\n'),
-          stderr: '',
-        });
+        mocks.executeCommand.mockReturnValueOnce(
+          Effect.succeed({
+            success: true,
+            stdout: [
+              '\\documentclass{article}',
+              '\\begin{document}',
+              'new \\cite{a}',
+              '\\bibliographystyle{plain}',
+              '\\begin{thebibliography}{}',
+              '\\providecommand \\@ifxundefined [\\DIFadd{1}]{% corrupted bbl macro',
+              '\\end{thebibliography}',
+              '\\end{document}',
+              '',
+            ].join('\n'),
+            stderr: '',
+          }),
+        );
 
         const result = yield* runShadowDiff(sourceDir, shadowDir);
 
