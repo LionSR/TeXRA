@@ -992,7 +992,7 @@ const closeSession = (root: string) =>
  * `SetupPlatform` over the root's host-varying setup capabilities; and
  * `ToolInjections` over `AGENT_TOOL_INJECTIONS`, the same list for every host.
  */
-export interface ProcessRuntimeOptions {
+interface ProcessRuntimeOptions {
   readonly processStart: Effect.Effect<string | undefined>;
   readonly globalStorage: string;
   readonly updateCheckStorage: string;

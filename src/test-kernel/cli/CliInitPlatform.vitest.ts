@@ -58,7 +58,6 @@ const mocks = vi.hoisted(() => ({
   consoleLogSink: { write: vi.fn() },
   signInCliSupabase: vi.fn(),
   authenticated: false,
-  createNodePlatform: vi.fn(() => ({})),
   createNodeWorkspaceRoots: vi.fn(() => ({
     workspace: '/workspace',
     storage: '/workspace/.texra/storage',
@@ -129,7 +128,6 @@ vi.mock('@platform/platform', () => ({
 // nodeHost; stub it so the test exercises only the CLI-specific wiring and
 // feature registration does not run twice across cases.
 vi.mock('@platform/defaults/nodeHost', () => ({
-  createNodePlatform: mocks.createNodePlatform,
   createNodeWorkspaceRoots: mocks.createNodeWorkspaceRoots,
   initializeNodeRuntimeSkills: mocks.initializeNodeRuntimeSkills,
 }));
