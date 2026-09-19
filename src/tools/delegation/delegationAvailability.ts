@@ -97,43 +97,26 @@ const NO_AGENTS_LINE =
   'Available agents: none are currently in the active roster. Ask the user to enable delegation targets in Settings → Agents before delegating.';
 
 /** How an agent's tool list is rendered inside a roster entry. */
-type AgentListToolsStyle = 'block' | 'inline' | 'none';
-
-interface FormatAgentListOptions {
-  /** Where an agent's tool list goes when present. Defaults to `'block'`. */
-  readonly tools?: AgentListToolsStyle;
-  /** Collapse newlines inside descriptions to spaces. Defaults to `true`. */
-  readonly collapseDescriptionNewlines?: boolean;
-}
-
 /**
- * Format an agent list for a delegation roster (tool descriptions and
- * prompt-template agent vars share this one formatter so the copy can't drift).
+ * Format an agent list for a delegation tool's "Available agents:" block.
  *
- * For tool descriptions newlines inside a description are collapsed to single
- * spaces so each agent stays one paragraph — a blank line in a (e.g. user- or
- * remote-defined) description would otherwise look like the end of the
- * "Available agents:" block to a reader or the block regex. Prompt-template
- * rendering passes `collapseDescriptionNewlines: false` because the prompt
- * needs the description verbatim.
+ * Newlines inside a description are collapsed to single spaces so each agent
+ * stays one paragraph — a blank line in a (e.g. user- or remote-defined)
+ * description would otherwise look like the end of the block to a reader or
+ * the block regex.
  */
-export function formatAgentList(
+function formatAgentList(
   agents: { name: string; description?: string; tools?: string[] }[],
-  options: FormatAgentListOptions = {},
 ): string {
-  const { tools = 'block', collapseDescriptionNewlines = true } = options;
   return agents
     .map((agent) => {
-      const desc = collapseDescriptionNewlines
-        ? (agent.description || 'No description').replaceAll(/\s*\n\s*/g, ' ')
-        : agent.description || 'No description';
-      let toolsSuffix = '';
-      if (tools !== 'none' && agent.tools?.length) {
-        toolsSuffix =
-          tools === 'inline'
-            ? ` [${agent.tools.join(', ')}]`
-            : `\n  Tools: ${agent.tools.join(', ')}`;
-      }
+      const desc = (agent.description || 'No description').replaceAll(
+        /\s*\n\s*/g,
+        ' ',
+      );
+      const toolsSuffix = agent.tools?.length
+        ? `\n  Tools: ${agent.tools.join(', ')}`
+        : '';
       return `- ${agent.name}: ${desc}${toolsSuffix}`;
     })
     .join('\n');

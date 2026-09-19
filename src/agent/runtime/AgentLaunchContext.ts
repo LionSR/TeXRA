@@ -509,11 +509,7 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
         setting,
         prompt,
         agentPath,
-        {
-          isOpenai: modelConfig.provider === ModelProvider.OPENAI,
-          isAnthropic: modelConfig.provider === ModelProvider.ANTHROPIC,
-          isGoogle: modelConfig.provider === ModelProvider.GOOGLE,
-        },
+        modelConfig.provider === ModelProvider.ANTHROPIC,
         agentLogger,
         {
           // The session's own root, handed to prompt assembly as data: file
@@ -523,7 +519,6 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
           storageRoot: session.roots.storage,
           config: session.roots.config,
           settings: session.roots,
-          delegationAgentScope: config.delegationAgentScope,
           stageId,
         },
       );

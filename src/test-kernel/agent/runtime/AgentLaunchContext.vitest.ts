@@ -399,10 +399,6 @@ describe('AgentLaunchContext', () => {
       Effect.gen(function* () {
         const order: string[] = [];
         const failure = new Error('user vars unavailable');
-        const delegationAgentScope = {
-          workflow: ['builtInWorkflow:correct'],
-          toolUse: ['builtInToolUse:orchestrator'],
-        };
         const postProcessResponse = vi.fn((text: string) => text);
         const responseTextProcessing = {
           normalizeResponseText: (text: string) => text,
@@ -439,7 +435,6 @@ describe('AgentLaunchContext', () => {
                 agent: 'chat',
                 model: 'gpt55',
                 agentCategory: AgentCategory.ToolUse,
-                delegationAgentScope,
               }),
               runId: EXECUTION_ID,
               session,
@@ -455,7 +450,6 @@ describe('AgentLaunchContext', () => {
             storageRoot: session.roots.storage,
             config: session.roots.config,
             settings: session.roots,
-            delegationAgentScope,
             stageId: undefined,
           });
           expect(endStage).toHaveBeenCalledExactlyOnceWith(RUN_OUTCOME.FAILED);
