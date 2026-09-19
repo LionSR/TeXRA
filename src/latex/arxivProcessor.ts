@@ -204,14 +204,6 @@ const INVALID_ARXIV_INPUT_ERROR =
 const PDF_ONLY_SUBMISSION_ERROR =
   'This arXiv paper only has a PDF submission — no LaTeX source is available for download';
 
-export function resolveArxivPaperDirectoryRelative(
-  id: string,
-  options: Pick<DownloadSourceOptions, 'destination'> = {},
-): string {
-  const paperDirName = id.replaceAll('/', '_');
-  return options.destination === 'root' ? '.' : `References/${paperDirName}`;
-}
-
 /**
  * Normalize input that may be a URL or plain ID into a valid arXiv ID.
  * Accepts formats like:
@@ -513,9 +505,10 @@ class ArxivSourceProcessor {
         );
       }
 
-      const paperDirRelative = resolveArxivPaperDirectoryRelative(id, {
-        destination,
-      });
+      // An old-style ID ('math/0501234') carries a slash, which would nest
+      // the paper under an extra directory level; flatten it into the name.
+      const paperDirRelative =
+        destination === 'root' ? '.' : `References/${id.replaceAll('/', '_')}`;
       const isRoot = paperDirRelative === '.';
       const paperDirFull = path.join(workspaceRoot, paperDirRelative);
 

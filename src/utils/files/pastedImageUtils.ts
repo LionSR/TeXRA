@@ -31,7 +31,7 @@ export function pastedImageFullPath(
  * filenames over IPC, so reject path separators, absolute paths, empty names,
  * and non-TeXRA pasted-image names instead of silently normalizing them.
  */
-export function pastedImageFileName(fileName: string): string {
+function pastedImageFileName(fileName: string): string {
   if (
     !fileName ||
     fileName.includes('\0') ||

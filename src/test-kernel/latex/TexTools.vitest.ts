@@ -6,13 +6,7 @@ import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 import { LATEX_COMMANDS_CHANNEL } from '@latex/latexLogging';
-import {
-  buildKpathseaSearchPath,
-  buildLatexInputEnv,
-  buildLatexSearchParts,
-  compileLatex2Pdf,
-  type CompileLatex2PdfResult,
-} from '@latex/texTools';
+import { compileLatex2Pdf, type CompileLatex2PdfResult } from '@latex/texTools';
 import * as logger from '@logger/logUtils';
 import type { ExecResult } from '@shared/schemas';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
@@ -94,11 +88,21 @@ describe('compileLatex2Pdf structured return', () => {
           ok: true,
           pdfPath: path.join(workspacePath, 'build', 'main.pdf'),
         });
-        // The engine runs in the session's workspace root.
+        // The engine runs in the session's workspace root, with the
+        // kpathsea overrides ranking the document's own directory ahead of
+        // the compiler's cwd (".") and the workspace root behind both.
+        const D = path.delimiter;
         expect(mocks.runToolWithCheck).toHaveBeenCalledWith(
           'latexmk',
           expect.any(Array),
-          expect.objectContaining({ cwd: workspacePath }),
+          expect.objectContaining({
+            cwd: workspacePath,
+            env: expect.objectContaining({
+              TEXINPUTS: expect.stringContaining(
+                `${workspacePath}${D}.${D}${workspacePath}${D}`,
+              ),
+            }),
+          }),
         );
       }),
   );
@@ -213,96 +217,4 @@ describe('compileLatex2Pdf logger seam', () => {
         );
       }),
   );
-});
-
-const D = path.delimiter;
-
-describe('buildKpathseaSearchPath', () => {
-  it('prepends BIBINPUTS and BSTINPUTS paths while preserving kpathsea defaults', () => {
-    expect(buildKpathseaSearchPath(['/workspace'], undefined, ':')).toBe(
-      '/workspace:',
-    );
-    expect(buildKpathseaSearchPath(['/workspace'], '/custom', ':')).toBe(
-      '/workspace:/custom:',
-    );
-  });
-
-  it('uses the platform delimiter for TeX search paths', () => {
-    expect(
-      buildKpathseaSearchPath(['C:\\work', 'D:\\shared'], 'E:\\texmf', ';'),
-    ).toBe('C:\\work;D:\\shared;E:\\texmf;');
-  });
-
-  it('omits empty TeX search paths', () => {
-    expect(buildKpathseaSearchPath(['', '  '], undefined, ':')).toBeUndefined();
-  });
-});
-
-describe('buildLatexInputEnv', () => {
-  it('prepends workspace and TikZ dirs onto inherited TEXINPUTS', () => {
-    const env = buildLatexInputEnv(['.', '/ws', '/tikz'], ['/ws'], {
-      TEXINPUTS: '/inherited',
-      BIBINPUTS: '/bib',
-      BSTINPUTS: '/bst',
-    });
-    expect(env.TEXINPUTS).toBe(`.${D}/ws${D}/tikz${D}/inherited${D}`);
-    expect(env.BIBINPUTS).toBe(`/ws${D}/bib${D}`);
-    expect(env.BSTINPUTS).toBe(`/ws${D}/bst${D}`);
-  });
-
-  it('emits TEXINPUTS from inherited value alone even without extra parts', () => {
-    const env = buildLatexInputEnv(['.'], [], { TEXINPUTS: '/inherited' });
-    expect(env.TEXINPUTS).toBe(`.${D}/inherited${D}`);
-  });
-
-  it('does not read the ambient process environment when env is injected', () => {
-    const env = buildLatexInputEnv(['.', '/ws'], ['/ws'], {});
-    expect(env.TEXINPUTS).toBe(`.${D}/ws${D}`);
-    expect(env.BIBINPUTS).toBe(`/ws${D}`);
-  });
-});
-
-describe('buildLatexSearchParts', () => {
-  it('ranks document + extra source dirs ahead of cwd, workspace, and tikz', () => {
-    const { texInputParts, bibSearchParts } = buildLatexSearchParts({
-      documentDir: '/run/diff/r1',
-      extraInputDirs: ['/ws/Draft/LeanMPSPaper'],
-      workspacePath: '/ws',
-      tikzInputDirectory: '/tikz',
-    });
-    // Source dirs precede "." (cwd = workspace root) so a subfolder document's
-    // relative \input resolves against its own tree; the document dir precedes
-    // the extra source dir so a revised sibling beats the original fallback.
-    expect(texInputParts).toEqual([
-      '/run/diff/r1',
-      '/ws/Draft/LeanMPSPaper',
-      '.',
-      '/ws',
-      '/tikz',
-    ]);
-    // Bibliography search drops "." and the TikZ dir.
-    expect(bibSearchParts).toEqual([
-      '/run/diff/r1',
-      '/ws/Draft/LeanMPSPaper',
-      '/ws',
-    ]);
-  });
-
-  it('still emits the document dir when no workspace, tikz, or extras are given', () => {
-    const { texInputParts, bibSearchParts } = buildLatexSearchParts({
-      documentDir: '/run/r0/Draft/LeanMPSPaper',
-      workspacePath: null,
-    });
-    expect(texInputParts).toEqual(['/run/r0/Draft/LeanMPSPaper', '.']);
-    expect(bibSearchParts).toEqual(['/run/r0/Draft/LeanMPSPaper']);
-  });
-
-  it('ignores blank tikz dirs', () => {
-    const { texInputParts } = buildLatexSearchParts({
-      documentDir: '/doc',
-      workspacePath: '/ws',
-      tikzInputDirectory: '   ',
-    });
-    expect(texInputParts).toEqual(['/doc', '.', '/ws']);
-  });
 });

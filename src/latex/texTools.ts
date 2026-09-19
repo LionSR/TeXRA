@@ -69,7 +69,7 @@ class LatexCompilerNotRun extends Data.TaggedError('LatexCompilerNotRun')<{
   readonly cause: unknown;
 }> {}
 
-export function buildKpathseaSearchPath(
+function buildKpathseaSearchPath(
   prependPaths: readonly string[],
   existingValue: string | undefined,
   delimiter: string = path.delimiter,
@@ -91,16 +91,16 @@ export function buildKpathseaSearchPath(
  * for a LaTeX compile, prepending the workspace and TikZ input directories onto
  * any inherited values.
  *
- * The `env` seam keeps the `process.env` read injectable for tests; this is the
- * lone environment touch in this VS Code-free module. The subprocess still
- * inherits the rest of `process.env` via `executeCommand`'s `commandEnv`, so
- * these keys only override the three search paths that need prepending.
+ * The `process.env` read here is the lone environment touch in this VS Code-free
+ * module. The subprocess still inherits the rest of `process.env` via
+ * `executeCommand`'s `commandEnv`, so these keys only override the three search
+ * paths that need prepending.
  */
-export function buildLatexInputEnv(
+function buildLatexInputEnv(
   texInputParts: readonly string[],
   bibSearchParts: readonly string[],
-  env: NodeJS.ProcessEnv = process.env,
 ): Record<string, string> {
+  const env = process.env;
   const texInputs = buildKpathseaSearchPath(texInputParts, env.TEXINPUTS);
   const bibInputs = buildKpathseaSearchPath(bibSearchParts, env.BIBINPUTS);
   const bstInputs = buildKpathseaSearchPath(bibSearchParts, env.BSTINPUTS);
@@ -122,7 +122,7 @@ export function buildLatexInputEnv(
  * Bibliography search omits `.` and TikZ — only directories that can hold
  * `.bib`/`.bst` matter there.
  */
-export function buildLatexSearchParts(input: {
+function buildLatexSearchParts(input: {
   documentDir: string;
   extraInputDirs?: readonly string[];
   workspacePath?: string | null;

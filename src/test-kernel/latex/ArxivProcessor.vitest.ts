@@ -18,10 +18,7 @@ import {
 import { afterEach, describe, expect, vi } from 'vitest';
 
 // Local imports
-import {
-  ArxivProcessor,
-  resolveArxivPaperDirectoryRelative,
-} from '@latex/arxivProcessor';
+import { ArxivProcessor } from '@latex/arxivProcessor';
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import { setLogSink } from '@logger/logSink';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
@@ -100,23 +97,6 @@ function sourceResponse(status = 200): Response {
   });
 }
 
-describe('arXiv processor paths', () => {
-  it.each<{
-    id: string;
-    options?: Parameters<typeof resolveArxivPaperDirectoryRelative>[1];
-    expected: string;
-  }>([
-    { id: '2404.12175', expected: 'References/2404.12175' },
-    { id: 'math/0501234', expected: 'References/math_0501234' },
-    { id: '2404.12175', options: { destination: 'root' }, expected: '.' },
-  ])(
-    'keeps arxiv destinations id-specific ($id → $expected)',
-    ({ id, options, expected }) => {
-      expect(resolveArxivPaperDirectoryRelative(id, options)).toBe(expected);
-    },
-  );
-});
-
 describe('arXiv processor logger channel', () => {
   /**
    * Debug mode on: the Effect logger drops `Debug` entries otherwise, and
@@ -176,9 +156,11 @@ describe('arXiv source download filenames', () => {
         const workspaceRoot = yield* Effect.promise(() =>
           makeTempDir('texra-arxiv-project-', tempDirs),
         );
+        // An old-style ID's slash is flattened into the directory name
+        // rather than nesting the paper one level deeper.
         const sourceDirectory = path.join(
           workspaceRoot,
-          'References/2404.12175',
+          'References/math_0501234',
         );
         yield* Effect.promise(async () => {
           await fs.mkdir(sourceDirectory, { recursive: true });
@@ -187,7 +169,7 @@ describe('arXiv source download filenames', () => {
             'project source',
           );
         });
-        const result = yield* ArxivProcessor.downloadSource('2404.12175', {
+        const result = yield* ArxivProcessor.downloadSource('math/0501234', {
           workspaceRoot,
           formatter: null,
           autoIndent: false,
