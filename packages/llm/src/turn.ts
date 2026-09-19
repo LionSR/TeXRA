@@ -1761,6 +1761,95 @@ export const pullStream = <
   );
 
 /**
+ * Merges one delta chunk's {reasoning, text, refusal} triple into `content`
+ * and appends the phase/delta `TurnEvent`s a streaming Chat-family decoder
+ * needs, tracking the phase currently open across chunks. Shared by every
+ * such protocol's stream decoder.
+ */
+export const mergeTextPhaseDeltas = (
+  parts: readonly (readonly [
+    part: 'reasoning' | 'text' | 'refusal',
+    text: string | null | undefined,
+  ])[],
+  activePhase: 'reasoning' | 'text' | undefined,
+  events: TurnEvent[],
+  content: Array<{ kind: 'text' | 'refusal'; text: string }>,
+): 'reasoning' | 'text' | undefined => {
+  for (const [part, text] of parts) {
+    if (text == null || text === '') continue;
+    const phase = part === 'reasoning' ? 'reasoning' : 'text';
+    if (activePhase !== phase) {
+      if (activePhase !== undefined)
+        events.push({
+          kind: 'phase',
+          part: activePhase,
+          boundary: 'end',
+          providerItemIndex: null,
+        });
+      events.push({
+        kind: 'phase',
+        part: phase,
+        boundary: 'start',
+        providerItemIndex: null,
+      });
+      activePhase = phase;
+    }
+    if (part !== 'reasoning') {
+      const previous = content.at(-1);
+      if (previous?.kind === part) previous.text += text;
+      else content.push({ kind: part, text });
+    }
+    events.push({ kind: 'delta', part, text, providerItemIndex: null });
+  }
+  return activePhase;
+};
+
+/**
+ * Merges one streamed tool-call fragment into `calls` by index, rejecting a
+ * mid-stream change to the call's `id` or function `name`. Shared by every
+ * Chat-family protocol's stream decoder; a provider-specific field (such as
+ * OpenAI's `type`) is the caller's to merge alongside this.
+ */
+export const mergeToolCallDelta = <
+  T extends { id?: string; name?: string; arguments: string },
+>(
+  calls: Map<number, T>,
+  fragment: {
+    readonly index: number;
+    readonly id?: string | null;
+    readonly function?: {
+      readonly name?: string | null;
+      readonly arguments?: string | null;
+    } | null;
+  },
+  makeCall: () => T,
+  identityErrorMessage: string,
+): Effect.Effect<void, ModelError> =>
+  Effect.gen(function* () {
+    const call = calls.get(fragment.index) ?? makeCall();
+    if (
+      (fragment.id != null &&
+        call.id !== undefined &&
+        fragment.id !== call.id) ||
+      (fragment.function?.name != null &&
+        call.name !== undefined &&
+        fragment.function.name !== call.name)
+    )
+      return yield* new ModelError({
+        kind: 'malformed-output',
+        message: identityErrorMessage,
+      });
+    call.id = fragment.id ?? call.id;
+    call.name = fragment.function?.name ?? call.name;
+    call.arguments += fragment.function?.arguments ?? '';
+    calls.set(fragment.index, call);
+  });
+
+/** Data-URL wire form providers accept for base64-inlined media parts. */
+export const dataUrl = (mimeType: string, base64: string): string =>
+  `data:${mimeType};base64,${base64}`;
+
+/**
  * Parses a persisted local-call's argument text back into the JSON object a
  * provider request carries. This process authored the history, so a
  * malformed payload is our bug, not the model's: every protocol reports it
