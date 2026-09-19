@@ -51,13 +51,11 @@ export interface LoopbackCallbackServer {
    *  the commit out before `close`, rather than closing the server under a
    *  commit in flight. */
   readonly commitStarted: boolean;
-  /** Settles (success or failure) exactly when the login attempt does, with
-   *  no cancellation side effects — the branch to race a browser launch
-   *  against, since the race's loser is interrupted. */
-  readonly sessionSettled: Effect.Effect<void, Error>;
   /** Await the completed session: the OAuth callback, a callback failure, or
-   *  the login-attempt timeout. Interruption is the caller cancelling the
-   *  login; `cancel` is what refuses further callbacks. */
+   *  the login-attempt timeout. Settles (success or failure) exactly when the
+   *  login attempt does and has no cancellation side effects, so it is also
+   *  the branch to race a browser launch against. Interruption is the caller
+   *  cancelling the login; `cancel` is what refuses further callbacks. */
   readonly waitForSession: Effect.Effect<SupabaseSession, Error>;
   /** Refuse further callbacks unless a commit is already underway. */
   readonly cancel: Effect.Effect<void>;
@@ -159,7 +157,6 @@ export const startLoopbackCallbackServer = Effect.fn(
     get commitStarted() {
       return attemptState.commitStarted;
     },
-    sessionSettled: Deferred.await(sessionDeferred).pipe(Effect.asVoid),
     waitForSession: Deferred.await(sessionDeferred),
     cancel: Effect.sync(refuseFurtherCallbacks),
     close: Effect.andThen(Scope.close(scope, Exit.void), closeServer(server)),
