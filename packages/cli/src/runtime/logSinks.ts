@@ -35,9 +35,8 @@ interface LogRecord {
   readonly fields: LogFields;
 }
 
-export interface LogSink {
+interface LogSink {
   write(record: LogRecord): void;
-  flush?(): Effect.Effect<void>;
 }
 
 export interface Logger {
@@ -71,12 +70,7 @@ function isCliPipeClosureError(error: unknown): boolean {
   return code === 'EPIPE' || code === 'ERR_STREAM_DESTROYED';
 }
 
-let pipeErrorHandlersInstalled = false;
-
 export function installCliPipeErrorHandlers(): void {
-  if (pipeErrorHandlersInstalled) return;
-  pipeErrorHandlersInstalled = true;
-
   for (const key of ['stdout', 'stderr'] as const) {
     process[key].on('error', (error) => {
       if (isCliPipeClosureError(error)) {
@@ -94,40 +88,12 @@ function openStream(key: StreamKey): (typeof process)[StreamKey] | undefined {
   return stream.destroyed ? undefined : stream;
 }
 
-// CLI output is best effort: a synchronous throw from `stream.write` or a
-// write error reported to its callback marks the stream closed and settles
-// instead of throwing — throwing from here would bypass the command error
-// boundary and can crash the process.
-function guardedStreamWrite(
-  key: StreamKey,
-  stream: (typeof process)[StreamKey],
-  text: string,
-  onSettled: () => void,
-): Effect.Effect<void> {
-  return Effect.try({
-    try: () => {
-      stream.write(text, (error) => {
-        if (error) closed[key] = true;
-        onSettled();
-      });
-    },
-    catch: (cause) => cause,
-  }).pipe(
-    Effect.catch(() =>
-      Effect.sync(() => {
-        closed[key] = true;
-        onSettled();
-      }),
-    ),
-  );
-}
-
 /**
- * The process runtime this CLI's output plane runs its Effects on, handed
- * over by `installCliProcessRuntime` and taken back once that install has
- * been disposed (#12720). `null` is a state the plane is in, not a lookup
- * that failed: it is what both no-runtime edges below are, and the direct
- * path each of them takes is production behaviour rather than a fallback.
+ * The process runtime the NDJSON sink queues its lane fibers on, handed over
+ * by `installCliProcessRuntime` and taken back once that install has been
+ * disposed (#12720). `null` is a state the plane is in, not a lookup that
+ * failed: it is what the sink's no-runtime edge below is, and the direct
+ * write it takes there is production behaviour rather than a fallback.
  */
 let logRuntime: ProcessRuntime | null = null;
 
@@ -135,30 +101,23 @@ export function setCliLogRuntime(runtime: ProcessRuntime | null): void {
   logRuntime = runtime;
 }
 
-// The Effect programs here run on the process runtime when the CLI's install
-// has handed one over. Both edges where none is — an early command error
-// before `installCliProcessRuntime` (`bin/texra.ts` top-level catch), and the
-// exit-path flushes after the install is disposed — take a direct path.
-// A synchronous throw from `stream.write` still has to mark the stream
-// closed and settle, not crash: this path is production, not a debug
-// fallback.
+// CLI output is best effort, and a fire-and-forget write has nothing to wait
+// for, so it never needs the process runtime: a synchronous throw from
+// `stream.write` or a write error reported to its callback marks the stream
+// closed instead of propagating. Throwing from here would bypass the command
+// error boundary and can crash the process.
 function writeRaw(key: StreamKey, text: string): void {
   const stream = openStream(key);
   if (!stream) return;
-  const runtime = logRuntime;
-  if (!runtime) {
-    bestEffortStreamWrite(
-      () =>
-        stream.write(text, (error) => {
-          if (error) closed[key] = true;
-        }),
-      () => {
-        closed[key] = true;
-      },
-    );
-    return;
-  }
-  runtime.runSync(guardedStreamWrite(key, stream, text, () => undefined));
+  bestEffortStreamWrite(
+    () =>
+      stream.write(text, (error) => {
+        if (error) closed[key] = true;
+      }),
+    () => {
+      closed[key] = true;
+    },
+  );
 }
 
 // A waiting write takes the direct path unconditionally. Its callers are the
@@ -361,10 +320,7 @@ export class NdjsonStdoutSink implements LogSink {
    */
   private writeLine(record: CliNdjsonRecord): Effect.Effect<void> {
     return Effect.gen({ self: this }, function* () {
-      if (this.isClosed()) {
-        this.closeQueue();
-        return;
-      }
+      if (this.isClosed()) return;
       const writeResult = yield* Effect.try({
         try: () => this.stdout.write(`${JSON.stringify(record)}\n`),
         catch: (cause) => cause,
