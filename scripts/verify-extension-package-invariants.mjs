@@ -3,7 +3,6 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
-  collectRelativeFiles,
   extensionManifestSnapshot,
   readJson,
   REQUIRED_PACKAGED_PATHS,
@@ -118,34 +117,6 @@ function verifyAssets(packageJson, failures) {
   }
 }
 
-function verifyBundledSkills(packageJson, failures) {
-  const sourceDir = path.join(packageDir, 'resources', 'skills');
-  const sourceExists = fs.existsSync(sourceDir);
-  assert(sourceExists, 'Bundled skills directory is missing.', failures);
-  if (!sourceExists) return;
-
-  const sourceFiles = collectRelativeFiles(sourceDir);
-  const chatSkills = packageJson.contributes?.chatSkills ?? [];
-  const expectedNames = sourceFiles
-    .filter((relativePath) => /^[^/]+\/SKILL\.md$/.test(relativePath))
-    .map((relativePath) => relativePath.split('/')[0]);
-  assert(
-    JSON.stringify(chatSkills.map((skill) => skill.name).toSorted()) ===
-      JSON.stringify(expectedNames.toSorted()),
-    'Extension chatSkills must register every bundled skill.',
-    failures,
-  );
-
-  for (const skill of chatSkills) {
-    const expectedPath = `resources/skills/${skill.name}/SKILL.md`;
-    assert(
-      skill.path === expectedPath,
-      `Chat skill ${skill.name} must point to ${expectedPath}.`,
-      failures,
-    );
-  }
-}
-
 function verifyVscodeIgnore(failures) {
   if (!fs.existsSync(vscodeIgnorePath)) {
     failures.push(`Missing ${path.relative(rootDir, vscodeIgnorePath)}.`);
@@ -169,7 +140,6 @@ function verifyVscodeIgnore(failures) {
 const packageJson = readJson(packagePath);
 const failures = [];
 verifyAssets(packageJson, failures);
-verifyBundledSkills(packageJson, failures);
 verifyVscodeIgnore(failures);
 
 reportCheckFailures('Extension package invariant check', failures);

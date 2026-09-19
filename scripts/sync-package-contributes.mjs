@@ -1,5 +1,6 @@
 // Node.js imports
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -11,9 +12,10 @@ import { build } from 'esbuild';
 
 // Code-generate the catalog-derived parts of the VS Code manifest
 // (`contributes.commands`, `contributes.keybindings`) from the command catalog
-// so the manifest never has to be hand-edited; `contributes.configuration` is
+// and `contributes.chatSkills` from the bundled skills on disk, so the
+// manifest never has to be hand-edited; `contributes.configuration` is
 // forbidden outright (native settings view). In `--check` mode this is the CI
-// diff gate: it fails when the committed manifest drifts from the catalog.
+// diff gate: it fails when the committed manifest drifts from either source.
 
 const rootDir = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -44,6 +46,26 @@ try {
 }
 const { packageCommandContributions, commandKeybindings } = commandCatalog;
 
+// One chat skill per bundled `resources/skills/<name>/SKILL.md`.
+const skillsDir = path.join(
+  rootDir,
+  'packages',
+  'extension',
+  'resources',
+  'skills',
+);
+const chatSkills = (await readdir(skillsDir, { withFileTypes: true }))
+  .filter(
+    (entry) =>
+      entry.isDirectory() &&
+      existsSync(path.join(skillsDir, entry.name, 'SKILL.md')),
+  )
+  .map((entry) => ({
+    name: entry.name,
+    path: `resources/skills/${entry.name}/SKILL.md`,
+  }))
+  .toSorted((a, b) => a.name.localeCompare(b.name));
+
 function normalizeLineEndings(text) {
   return text.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
 }
@@ -60,6 +82,7 @@ const contributes = {
   ...packageJson.contributes,
   commands: packageCommandContributions,
   keybindings: commandKeybindings,
+  chatSkills,
 };
 const nextPackageJson = {
   ...packageJson,

@@ -256,51 +256,35 @@ function verifyDepSpecs(config, configDir) {
   for (const dep of deps) verifyConfigDep(configDir, dep);
 }
 
-/** Verify relative dependencies of a full config blob. `strict` controls
- * whether an unparsable/unsupported config forces a skip. Callers use this
- * only when the hook is about to hand Prettier index-sourced config content
- * (a snapshot or an explicitly resolved pointer target): clean configs that
- * Prettier resolves from the working tree are left to Prettier's own loader. */
-function verifyConfigDeps(configPath, configBlob, strict) {
+/** Verify relative dependencies of a full config blob; an unparsable or
+ * unsupported config forces a skip. Called only when the hook is about to
+ * hand Prettier index-sourced config content (a snapshot or an explicitly
+ * resolved pointer target): clean configs that Prettier resolves from the
+ * working tree are left to Prettier's own loader. */
+function verifyConfigDeps(configPath, configBlob) {
   const ext = parse(configPath).ext.toLowerCase();
-  const text = stripBom(configBlob.toString('utf8'));
-  const unparsable = () => {
-    throw new SkipError(
-      `cannot parse ${relToCwd(configPath)} to verify its relative ` +
-        'dependencies; skipped auto-staging.',
-    );
-  };
-  let value;
-  if (ext === '.json') {
-    try {
-      value = JSON.parse(text);
-    } catch {
-      if (strict) unparsable();
-      return;
-    }
-  } else if (ext === '') {
-    // Prettier parses an extensionless `.prettierrc` with its YAML loader,
-    // and JSON is a YAML subset, so one YAML parse covers both forms.
-    try {
-      value = parseYaml(text);
-    } catch {
-      if (strict) unparsable();
-      return;
-    }
-  } else if (ext === '.yaml' || ext === '.yml') {
-    try {
-      value = parseYaml(text);
-    } catch {
-      if (strict) unparsable();
-      return;
-    }
-  } else if (strict) {
+  // Prettier parses an extensionless `.prettierrc` with its YAML loader, and
+  // JSON is a YAML subset, so one YAML parse covers both forms.
+  const parseConfig =
+    ext === '.json'
+      ? JSON.parse
+      : ext === '' || ext === '.yaml' || ext === '.yml'
+        ? parseYaml
+        : undefined;
+  if (parseConfig === undefined) {
     throw new SkipError(
       `cannot verify relative dependencies for ${relToCwd(configPath)}; ` +
         'skipped auto-staging.',
     );
-  } else {
-    return;
+  }
+  let value;
+  try {
+    value = parseConfig(stripBom(configBlob.toString('utf8')));
+  } catch {
+    throw new SkipError(
+      `cannot parse ${relToCwd(configPath)} to verify its relative ` +
+        'dependencies; skipped auto-staging.',
+    );
   }
   verifyDepSpecs(value, dirname(configPath));
 }
@@ -438,7 +422,7 @@ function configSnapshotFor(worktreeConfigPath, stagedConfig) {
   if (normalizedEquals(readFileSync(worktreeConfigPath), stagedConfig)) {
     return { config: null, snapshotPath: null };
   }
-  verifyConfigDeps(worktreeConfigPath, stagedConfig, true);
+  verifyConfigDeps(worktreeConfigPath, stagedConfig);
   const snapshotPath = writeConfigSnapshot(worktreeConfigPath, stagedConfig);
   return { config: snapshotPath, snapshotPath };
 }

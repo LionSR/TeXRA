@@ -2,7 +2,7 @@
 
 Use this checklist after touching shared frontend code (`src/shared/`,
 `packages/extension/src/common/webview/`,
-`packages/extension/src/{webview,progressView,settingsView}/frontend/`,
+`packages/extension/src/{progressView,settingsView}/frontend/`,
 `packages/desktop/src/renderer/`) to confirm each major surface still mounts
 in both hosts.
 

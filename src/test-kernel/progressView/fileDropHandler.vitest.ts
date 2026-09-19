@@ -1,6 +1,6 @@
 // Third-party imports
 import { describe, expect, it, vi } from 'vitest';
-import { FileDropController } from '@webview/frontend/fileDropHandler';
+import { FileDropController } from '@progressView/frontend/fileDropHandler';
 import type { ReactiveControllerHost } from 'lit';
 
 // Local imports - component under test
