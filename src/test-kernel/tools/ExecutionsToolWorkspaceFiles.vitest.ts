@@ -17,7 +17,6 @@ import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { initializeDefaultSession } from '@agent/runtime/sessionGraph';
 import { closeSession } from '@agent/runtime/sessionGraph';
 import { resolveRunStoragePath } from '@platform/defaults/workspaceStorage';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { RUN_PHASE, DEFAULT_TOOL_CONFIG, aggregateId } from '@shared/schemas';
 import {
   RunIdSchema,
@@ -25,6 +24,7 @@ import {
   type RunPhase,
   type TodoItem,
 } from '@shared/schemas';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { createFakeRunRecords } from '@test/support/FakeRunRecords';
 import { testRunHandle } from '@test/support/runHandleFixtures';

@@ -2,8 +2,8 @@ import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { afterEach, describe, expect, vi } from 'vitest';
 
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { setupPlatform } from '@test/support/setupPlatform';
 import * as gitignoreUtils from '@tools/gitignore';

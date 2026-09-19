@@ -9,8 +9,8 @@ import {
   AgentReviewRunController,
   type AgentReviewRunToken,
 } from '@frontend/review/AgentReviewRunController';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import type { RunId } from '@shared/schemas';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 
 function createRunHarness() {
   const stopAgentRun = vi.fn(() => Effect.void);

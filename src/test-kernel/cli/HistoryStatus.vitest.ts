@@ -1,5 +1,4 @@
 import '@test/support/sessionGraphTestSetup';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { Effect } from 'effect';
@@ -28,6 +27,7 @@ import {
   resolveHistoryRunStatus,
 } from '@shared/schemas';
 import type { FlowSnapshotPayload, RunId } from '@shared/schemas';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { setupPlatform } from '@test/support/setupPlatform';
 import {

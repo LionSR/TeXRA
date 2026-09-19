@@ -62,7 +62,6 @@ import {
   type ModelOrigin,
   type TurnResult,
 } from '@llm/turn';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { DatabaseWriteFailed } from '@shared/session/database';
 import {
   AgentCategory,
@@ -72,6 +71,7 @@ import {
 } from '@shared/schemas';
 import { RunLedger } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';

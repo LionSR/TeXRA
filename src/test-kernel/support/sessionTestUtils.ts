@@ -9,12 +9,12 @@ import {
   type SessionHandleInit,
 } from '@agent/runtime/SessionHandle';
 import { isDebugModeEnabled } from '@logger/logUtils';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { aggregateId, type RunId, type RunPhase } from '@shared/schemas';
 import { isTranscriptEvent } from '@shared/schemas';
 import type { SessionOpenError } from '@shared/session/database';
 import { createTranscriptFold } from '@shared/session/traceFold';
 import { StreamLog } from '@shared/session/traceEntries';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { createRunTrace } from '@transcript';
 import { generateRunId } from '@utils/core';
 

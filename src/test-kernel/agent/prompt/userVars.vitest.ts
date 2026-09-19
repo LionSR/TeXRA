@@ -32,9 +32,9 @@ import {
   resolveOutputFiles,
 } from '@agent/prompt/userVars';
 import type { ConfigProvider } from '@platform/interfaces';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { AgentCategory } from '@shared/schemas';
 import { setRuntimeSkillSources } from '@skills/runtimeSkills';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { spiedTrace } from '@test/support/spiedTrace';

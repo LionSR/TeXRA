@@ -18,9 +18,9 @@ import {
   ensureRoundData,
 } from '@agent/implementations/flows/reflection/output/outputState';
 import type { WorkspaceFs } from '@platform/rootedFs';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import type { RunId, FileLocation } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { installPlatform } from '@test/support/setupPlatform';
 import { createFakeWorkspaceRoots, fakePath } from '@test/support/FakePlatform';
 import { spiedTrace } from '@test/support/spiedTrace';

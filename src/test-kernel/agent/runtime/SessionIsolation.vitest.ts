@@ -9,7 +9,6 @@ import { describe, expect, vi } from 'vitest';
 import { settleLiveSessionRuns } from '@agent/runtime/SessionHandle';
 import { runFlowWithLifecycle } from '@agent/runtime/AgentRunLifecycle';
 import { Runs } from '@agent/runtime/runRegistry';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import {
   AgentCategory,
   RUN_OUTCOME,
@@ -18,6 +17,7 @@ import {
   type RunId,
 } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { createFakeWorkspaceRoots, fakePath } from '@test/support/FakePlatform';
 import {

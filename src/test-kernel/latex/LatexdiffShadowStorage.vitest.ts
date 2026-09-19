@@ -7,11 +7,11 @@ import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import { setLogSink } from '@logger/logSink';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { MemoryStateStore } from '@platform/defaults/memoryState';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import type { RunId, OutputFileInfo } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { captureLogEntries } from '@test/support/logSinkCapture';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { installPlatform } from '@test/support/setupPlatform';

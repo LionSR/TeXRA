@@ -1,6 +1,5 @@
 // Node imports
 import { readFile as nodeReadFile, writeFile } from 'node:fs/promises';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import path, { join } from 'node:path';
 
 // Third-party imports
@@ -17,6 +16,7 @@ import {
 } from '@cli/runtime/initConfig';
 import { setWorkspaceCliChatAgent } from '@cli/runtime/cliConfig';
 import { workspaceTexraConfigPath } from '@platform/defaults/nodeStorage';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { FakeConfigProvider } from '@test/support/FakePlatform';
 import { installPlatform } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';

@@ -1,8 +1,8 @@
 import { writeFile } from 'node:fs/promises';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import * as path from 'node:path';
 
 import { Effect, Layer, Stream } from 'effect';
+
 /**
  * Production-shaped regression for #9531. Agent registration, launch, child
  * looping, persisted resume, result/report writes, parent admission, recovery,
@@ -68,6 +68,7 @@ import {
   type RunId,
   AgentCategory,
 } from '@shared/schemas';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';

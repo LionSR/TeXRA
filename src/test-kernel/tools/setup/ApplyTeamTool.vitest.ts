@@ -8,10 +8,10 @@ import { afterEach, beforeAll, beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports
 import { refresh } from '@agent/index/agentRegistry';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import type { AgentRosterSelection } from '@shared/schemas';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { getDefaultTeamId } from '@shared/state/onboardingState';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { fakeSupabaseAuth } from '@test/support/fakeSupabaseAuth';
 import {
   hostStores,

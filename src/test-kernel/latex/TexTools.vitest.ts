@@ -14,8 +14,8 @@ import {
   type CompileLatex2PdfResult,
 } from '@latex/texTools';
 import * as logger from '@logger/logUtils';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import type { ExecResult } from '@shared/schemas';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { fakePath } from '@test/support/FakePlatform';
 import { rootedFsLayer } from '@test/support/fsTestUtils';
 import { installPlatform } from '@test/support/setupPlatform';

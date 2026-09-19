@@ -1,6 +1,5 @@
 // Test composition imports
 import '@test/support/sessionGraphTestSetup';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 
 /* eslint-disable import/order -- Vitest mocks must be declared before importing the runtime under test. */
 
@@ -8,6 +7,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 import { Effect } from 'effect';
 import { it as effectIt } from '@effect/vitest';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import {
   createTestSession,
   publishTestRunStart,

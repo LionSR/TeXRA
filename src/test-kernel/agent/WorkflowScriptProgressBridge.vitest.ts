@@ -1,5 +1,4 @@
 import '@test/support/sessionGraphTestSetup';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { Deferred, Effect, Fiber } from 'effect';
 import { it } from '@effect/vitest';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
@@ -20,6 +19,7 @@ import {
   type RunId,
   type WorkflowCallProgress,
 } from '@shared/schemas';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';

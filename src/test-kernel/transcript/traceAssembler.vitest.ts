@@ -7,7 +7,6 @@ import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import {
   aggregateId,
   emptyRunEndOutput,
@@ -18,6 +17,7 @@ import {
   AgentCategory,
   USER_FOLLOW_UP_SUPPORT,
 } from '@shared/schemas';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { settleSessionEvents } from '@test/agent/progressTestUtils';
 import {
   createTestSession,

@@ -1,5 +1,4 @@
 import '@test/support/defaultSessionTestSetup';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -50,6 +49,7 @@ import {
 } from '@cli/runtime/cliConfig';
 import { pickGlobalArgs } from '@cli/runtime/globalArgs';
 import { RUN_OUTCOME, AgentCategory, type RunId } from '@shared/schemas';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 import { createRunCommandCliContext } from '@test/cli/fixtures/cliContext';
 import {

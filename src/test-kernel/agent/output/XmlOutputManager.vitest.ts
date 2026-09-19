@@ -14,8 +14,8 @@ import {
 } from '@agent/implementations/flows/reflection/output/outputState';
 
 import { XmlOutputManager } from '@agent/implementations/flows/reflection/output/XmlOutputManager';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import type { FileLocation, OutputFileInfo, RunId } from '@shared/schemas';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { installPlatform } from '@test/support/setupPlatform';
 import { fakePath } from '@test/support/FakePlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';

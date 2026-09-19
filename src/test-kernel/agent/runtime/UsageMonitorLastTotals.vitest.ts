@@ -3,7 +3,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { TraceEmitter } from '@agent/trace';
 import { UsageMonitor } from '@agent/runtime/UsageMonitor';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import {
   AgentCategory,
   AgentRunStateSnapshotSchema,
@@ -12,6 +11,7 @@ import {
   type RunId,
 } from '@shared/schemas';
 import { UsageLogService } from '@telemetry/UsageLogService';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 
 // Local file imports
 import { recordTraceEvents, traceEventsOfType } from '../progressTestUtils';

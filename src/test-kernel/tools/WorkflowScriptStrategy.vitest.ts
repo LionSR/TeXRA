@@ -1,5 +1,4 @@
 import '@test/support/sessionGraphTestSetup';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { it } from '@effect/vitest';
 import { Deferred, Effect, Fiber } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
@@ -22,6 +21,7 @@ import {
   type RunId,
 } from '@shared/schemas';
 import { DatabaseWriteFailed } from '@shared/session/database';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import {

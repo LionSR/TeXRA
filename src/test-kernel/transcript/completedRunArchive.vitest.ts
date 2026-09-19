@@ -1,5 +1,4 @@
 import { it as effectIt } from '@effect/vitest';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 /** Completed conversation reads and task reads through the archive facade. */
 import { Effect, Layer, Stream, SubscriptionRef } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -51,6 +50,7 @@ import {
 } from '@shared/schemas';
 import type { RunId, TodoItem } from '@shared/schemas';
 import type { StreamLogAppendInput } from '@shared/session/traceEntries';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import {

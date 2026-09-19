@@ -4,9 +4,9 @@ import * as path from 'node:path';
 // Local imports
 import type { runCompileCheck } from '@agent/implementations/flows/reflection/output/compileCheck';
 import type { OutputState } from '@agent/implementations/flows/reflection/output/outputState';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import type { RunId, FileLocation, OutputFileInfo } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { installPlatform } from '@test/support/setupPlatform';
 import { fakePath } from '@test/support/FakePlatform';
 import { rootedFsLayer } from '@test/support/fsTestUtils';

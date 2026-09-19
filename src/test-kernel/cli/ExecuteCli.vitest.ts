@@ -1,5 +1,4 @@
 import '@test/support/sessionGraphTestSetup';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { it } from '@effect/vitest';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 import { Deferred, Effect, Fiber } from 'effect';
@@ -13,6 +12,7 @@ import type { executeCliRequest } from '@cli/runtime/executeCli';
 import { AgentError } from '@common/errors';
 import { RUN_OUTCOME } from '@shared/schemas';
 import type { AggregateId, FlowSnapshotPayload, RunId } from '@shared/schemas';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import {
   fakeProcessServices,

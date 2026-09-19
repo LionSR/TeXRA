@@ -1,6 +1,5 @@
 // Node imports
 import { createRequire } from 'node:module';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 
 // Third-party imports
 import { Effect } from 'effect';
@@ -25,6 +24,7 @@ import {
   USER_FOLLOW_UP_SUPPORT,
   type RunId,
 } from '@shared/schemas';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';

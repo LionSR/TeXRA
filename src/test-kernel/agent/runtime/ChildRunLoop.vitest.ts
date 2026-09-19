@@ -70,7 +70,6 @@ import type { RunHandle } from '@agent/runtime/RunHandle';
 import { Runs } from '@agent/runtime/runRegistry';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { AgentResume } from '@platform/interfaces';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import {
   aggregateId as qualifyAggregateId,
   emptyRunEndOutput,
@@ -82,6 +81,7 @@ import {
   CHILD_RUN_CONCURRENCY_BUDGET_SETTING,
 } from '@shared/schemas';
 import { DatabaseNotOwner } from '@shared/session/database';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import {
   createProcessSession,
   publishTestRunStart,

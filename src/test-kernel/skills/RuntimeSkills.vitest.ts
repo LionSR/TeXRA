@@ -6,7 +6,6 @@ import { Effect } from 'effect';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { TraceEmitter } from '@agent/trace';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import {
   ACTIVE_SKILLS_SNAPSHOT_MAX_SKILLS,
   MESSAGE_TYPES,
@@ -19,6 +18,7 @@ import {
   loadRuntimeSkillCatalog as loadRuntimeSkillCatalogEffect,
   setRuntimeSkillSources,
 } from '@skills/runtimeSkills';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { writeSkill } from '@test/support/skillFixtures';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';

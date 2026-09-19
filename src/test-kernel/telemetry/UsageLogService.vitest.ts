@@ -10,9 +10,9 @@ import {
 } from 'vitest';
 
 import * as logger from '@logger/logUtils';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { AgentCategory, TELEMETRY_ENABLED_KEY } from '@shared/schemas';
 import { UsageLogService } from '@telemetry/UsageLogService';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import {

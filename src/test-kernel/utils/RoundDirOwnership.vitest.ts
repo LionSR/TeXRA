@@ -11,11 +11,11 @@ import * as path from 'node:path';
 
 import { Effect, type FileSystem } from 'effect';
 import { describe, expect, it } from 'vitest';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 
 import { MemoryStateStore } from '@platform/defaults/memoryState';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import { RunIdSchema } from '@shared/schemas';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
