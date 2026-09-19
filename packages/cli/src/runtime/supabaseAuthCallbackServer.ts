@@ -41,16 +41,15 @@ class RecoverableCallbackRequestError extends Error {
 
 /**
  * The loopback server's surface is Effect-typed (PRD R1): the sign-in
- * program composes the waits and the close, and its host entry's run edge
- * turns a cancellation signal into fiber interruption.
+ * program composes the waits and the close, and its host entry's run edge is
+ * where a cancellation signal becomes fiber interruption.
  */
 export interface LoopbackCallbackServer {
   readonly redirectTo: string;
   /** Whether the storage commit has begun. A cancellation that lands after
-   *  this point still settles the sign-in: v4 fiber interruption is sticky
-   *  (once delivered it re-fires at every interruptible boundary, so the
-   *  wait cannot recover in-runtime), and the Promise edge re-awaits the
-   *  session on a fresh fiber instead. */
+   *  this point still settles the sign-in: the sign-in's release half waits
+   *  the commit out before `close`, rather than closing the server under a
+   *  commit in flight. */
   readonly commitStarted: boolean;
   /** Settles (success or failure) exactly when the login attempt does, with
    *  no cancellation side effects — the branch to race a browser launch

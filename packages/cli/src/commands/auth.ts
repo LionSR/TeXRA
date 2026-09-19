@@ -160,23 +160,19 @@ const runLoginCommand = Effect.fn('runLoginCommand')(function* (
   if (context.outputFormat === 'text' && !init.noBrowser) {
     writeTextStdout(RESEARCHER_ACCESS_AUTH.startingBrowser(provider));
   }
-  // The loopback sign-in keeps its Promise face: it owns a sticky-interruption
-  // recovery at that edge, so it is wrapped once here rather than retyped.
   const loginResult = yield* withCliAuthError(
-    Effect.promise(() =>
-      signInCliSupabase(runtime, {
-        provider,
-        openBrowser: !init.noBrowser,
-        selectAccount: init.selectAccount,
-        loginHint: init.loginHint,
-        manualBrowserHint: 'texra login --no-browser',
-        onAuthUrl: (url) => {
-          if (init.noBrowser) {
-            cliProgressWriter(context)(formatCliManualAuthUrlMessage(url));
-          }
-        },
-      }),
-    ),
+    signInCliSupabase(runtime, {
+      provider,
+      openBrowser: !init.noBrowser,
+      selectAccount: init.selectAccount,
+      loginHint: init.loginHint,
+      manualBrowserHint: 'texra login --no-browser',
+      onAuthUrl: (url) => {
+        if (init.noBrowser) {
+          cliProgressWriter(context)(formatCliManualAuthUrlMessage(url));
+        }
+      },
+    }),
   );
   if (!loginResult.ok) return CliExitCode.ModelOrNetworkError;
 
