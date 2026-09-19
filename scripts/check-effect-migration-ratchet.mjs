@@ -69,6 +69,11 @@ const RETIRED_ROW_IDS = new Set([
   // itself, so the row it counted has nothing left to count; the ID stays here
   // so `--update` reads the absent row as retired rather than as new.
   'effectRuntime()',
+  // `SessionHandleInit.roots` became required, which deleted the last reader
+  // of the process-roots holder and the holder with it; the reader lists in
+  // AMBIENT_CARRIERS stay, so a reintroduced carrier fails as a new file, and
+  // the ID stays here so `--update` reads the absent row as retired.
+  'ambient:asyncLocalStorage',
 ]);
 const PLATFORM_MODULE = '@platform/platform';
 const PLATFORM_MODULE_PATH = 'src/platform/platform';
@@ -82,16 +87,13 @@ const PLATFORM_MODULE_PATH = 'src/platform/platform';
  * every reader call is a site a cohort has to convert. `TraceEmitter`'s
  * per-instance storage (row 7) has no reader export and is not counted.
  *
- * No `AsyncLocalStorage` is left behind the row. #12421 deleted the
- * workspace-roots scope (`workspaceRoots`, `tryWorkspaceRoots`,
- * `runWithWorkspaceRoots`) and the `@agent/runtime/RunContext` module with
- * it; what the row still counts is the process-roots holder those readers
- * fell back to, whose remaining callers are the pre-initialization logger
- * read, the session owner naming its default session, and the CLI
- * composition root. Those retire with the holder, and the row goes with
- * them. The deleted names stay in the reader lists on purpose: a file that
- * reintroduces one fails as a new file in the row rather than passing
- * unnoticed.
+ * Nothing is left behind the row: #12421 deleted the workspace-roots scope
+ * (`workspaceRoots`, `tryWorkspaceRoots`, `runWithWorkspaceRoots`) and the
+ * `@agent/runtime/RunContext` module with it, and making
+ * `SessionHandleInit.roots` required deleted the process-roots holder those
+ * readers fell back to. The row is retired from the baseline; the survey and
+ * these reader lists stay, so a file that reintroduces any of these names
+ * fails as a new file rather than passing unnoticed.
  */
 const AMBIENT_CARRIERS = [
   {

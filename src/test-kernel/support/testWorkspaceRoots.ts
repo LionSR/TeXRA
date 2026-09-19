@@ -55,8 +55,3 @@ const VIEW: WorkspaceRoots = Object.freeze({
 export function testWorkspaceRoots(): WorkspaceRoots {
   return VIEW;
 }
-
-/** The installed fake host's roots, or `undefined` before the first install. */
-export function tryTestWorkspaceRoots(): WorkspaceRoots | undefined {
-  return installed ?? undefined;
-}

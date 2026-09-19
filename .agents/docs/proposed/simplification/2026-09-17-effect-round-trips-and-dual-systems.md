@@ -423,10 +423,12 @@ The rest are unclaimed lanes.
   programs in one `Promise.all` inside it. #12823 closed the sibling
   `refreshAfterCredentialChange` and left this one, because nothing lifts it
   and its signature belongs to the catalog module.
-- **The `working_directory` worktree gate**
-  (`src/tools/delegation/inputFields.ts`) is a static Zod `.transform` reading
-  the process slots. Moving it into `execute` turns a schema rejection into a
-  tool error, so it is a behavior decision rather than a threading change.
+- ~~**The process-roots holder**~~ and ~~**the `working_directory` worktree
+  gate**~~: done. `SessionHandleInit.roots` is required, the holder and its
+  three readers (`sessionGraph.ts`, `getConfigBeforePlatformInit`,
+  `processSettingsStores`) are deleted, the gate moved into
+  `DelegateAgentTool.execute`, and the `ambient:asyncLocalStorage` ratchet row
+  is retired. Recorded in the architecture rulings ledger.
 - **D35b and D35c**: a durable owner for run-directory removal, and the
   reflection recovery digest. Design, unstarted.
 - **No re-survey since wave 5.** The final re-survey at `b133beba3c` is what

@@ -105,8 +105,8 @@ No facade. Delete `createLog`, the four free functions, `ChannelWriter`, `LogUti
   `LogFields`, and `StderrTextSink` do not.
 
 Level filtering moves to `References.MinimumLogLevel`, so a suppressed debug line never builds
-its message. `isDebugModeEnabled()` and its per-line `getConfigBeforePlatformInit` read — a
-documented pre-initialization exception currently serving as the steady-state path — are deleted.
+its message. `isDebugModeEnabled()` and its per-line read of the `ConfigProvider` its composition root
+installed (`setDebugModeConfig`) are deleted.
 The `texra.logger.debugMode` setting survives for its other two consumers (the transcript
 recorder's verbose flag and webview debug-mode delivery); the logger stops reading it.
 

@@ -505,3 +505,55 @@ a release runs uninterruptibly, which is the property the old edge borrowed.
 re-proposing the recovered-session semantics as something a fiber can observe
 in-fiber. A cancelled sign-in that must still be honoured is a change to the
 release half of that scope or nothing.
+
+---
+
+## The process-roots holder is retired, and the `working_directory` gate moved with it (ruled 2026-09-19)
+
+**Question.** "The process-roots holder is the one named ambient singleton"
+above named the exit — `SessionHandleInit.roots` becomes required — but left
+two of the four reads without a threading answer:
+the pre-initialization logger read, and the delegation tools' static
+`working_directory` Zod transform, whose move into `execute` that entry
+forbade as a threading change. Does the holder survive them?
+
+**Ruling.** No: the holder is deleted, and both reads got an owner rather than
+a fallback.
+
+- `SessionHandleInit.roots` is required. `openSessionEffect` snapshots the
+  record structurally and the owner keys the session by it, as before; there is
+  no `?? processWorkspaceRoots()`.
+- `initializeDefaultSession` / `teardownDefaultSession` move beside the session
+  owner in `sessionGraph.ts` and record the storage root the default session
+  was opened over, so `tryDefaultSession` names it without a process-wide
+  roots record.
+- `getConfigBeforePlatformInit` is deleted. `@logger/logUtils` still owns the
+  `texra.logger.debugMode` key and default, now over a `ConfigProvider` the
+  composition root installs (`setDebugModeConfig`), read per entry as before;
+  a process whose root has not installed one logs as if debug mode were off,
+  which is exactly what the absent-roots branch did.
+- `processSettingsStores` is deleted. The CLI answers catalog rows from the
+  roots its own init built, and a process whose platform another root
+  installed without publishing roots is a composition defect that fails loudly
+  instead of reading a process-wide record.
+- The `working_directory` worktree gate moves into `DelegateAgentTool.execute`.
+  This reverses the "wants its own change" clause above **deliberately**, as
+  the price of the holder's last reader: a disabled-worktree
+  `working_directory` is now a tool error rather than a schema rejection, and
+  the gate answers for the project the call is on (`call.roots`) rather than
+  for whichever workspace the process came up in. The refusal text is
+  unchanged.
+- The `ambient:asyncLocalStorage` row is deleted from
+  `config/ratchets/effect-migration-baseline.json` and its id added to
+  `RETIRED_ROW_IDS`; the survey and its reader lists stay, so a reintroduced
+  carrier fails as a new file.
+
+The test harness keeps an installed-roots accessor of its own
+(`@test/support/testWorkspaceRoots`, installed by `installFakeHost`): a suite
+is its own composition root, and its assertions and seeding happen outside any
+session. That is test scaffolding, not a production carrier, and the ratchet's
+scope excludes `src/test-kernel/`.
+
+**Forbids.** Reintroducing a process-wide roots record, in production or in a
+host, including as a field on `Platform`. Making `SessionHandleInit.roots`
+optional again. Moving the `working_directory` gate back into the schema.

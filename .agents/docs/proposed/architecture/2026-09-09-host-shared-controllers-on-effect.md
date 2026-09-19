@@ -349,10 +349,9 @@ root (an R1 boundary kind, uncounted).
 
 Two hard boundaries, both verified:
 
-- Phase two starts at `initProcessSettingHost`. `initPlatform` and
-  `initProcessWorkspaceRoots` may only be imported by the five files in
-  `COMPOSITION_ROOT_FILES` (`eslint.config.mjs:42-53`), so the shared program
-  can never own them. The original design listed `createNodePlatform` among
+- Phase two starts at `initProcessSettingHost`. `initPlatform` may only be
+  imported by the five files in `COMPOSITION_ROOT_FILES`
+  (`eslint.config.mjs:42-53`), so the shared program can never own it. The original design listed `createNodePlatform` among
   its calls while also saying platform creation stays per host; the former is
   wrong.
 - `controllers -> telemetry` is not an edge in
