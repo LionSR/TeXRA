@@ -57,11 +57,7 @@ import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 // Local file imports
 import { defineTool } from './core/define';
 import { buildAgentWorkspaceOptions } from './agentWorkspaceOptions';
-import {
-  codexBinarySupportsXhigh,
-  importCodexClass,
-  findCodexBinaryPath,
-} from './codexImport';
+import { importCodexClass, findCodexBinaryPath } from './codexImport';
 import { type ChildRun } from './delegation/childRun';
 import { codexThreadsFor } from './agentCliSessionStores';
 import {
@@ -109,9 +105,9 @@ import type {
 
 /** Lazy accessor for codexConfig.ts exports (loaded once, cached). */
 let _configModule: typeof import('./codexConfig.js') | null = null;
-async function getCodexConfig(): Promise<typeof import('./codexConfig.js')> {
-  return (_configModule ??= await import('./codexConfig.js'));
-}
+const getCodexConfig = Effect.promise(
+  async () => (_configModule ??= await import('./codexConfig.js')),
+);
 
 // ============================================================================
 // Schema
@@ -428,18 +424,21 @@ function startCodexLoop(params: {
 // Thread creation
 // ============================================================================
 
-async function createCodexThread(
+const createCodexThread = Effect.fn('codex.createCodexThread')(function* (
   input: CodexInput,
   sandboxMode: SandboxMode,
   roots: WorkspaceRoots,
   workingDir?: string,
-): Promise<Thread> {
-  const CodexClass = await importCodexClass();
-  const codexPath = await findCodexBinaryPath();
+) {
+  const CodexClass = yield* importCodexClass();
+  const codexPath = yield* Effect.try({
+    try: findCodexBinaryPath,
+    catch: ensureError,
+  });
   const codex = new CodexClass({
     codexPathOverride: codexPath,
   });
-  const config = await getCodexConfig();
+  const config = yield* getCodexConfig;
   // Resumed threads keep their stored workspace unless explicitly overridden.
   const workspace =
     workingDir || !input.thread_id
@@ -460,15 +459,25 @@ async function createCodexThread(
       requestedEffort === 'xhigh'
         ? config.getCodexCliReasoningEffort(
             roots.workspaceState,
-            await codexBinarySupportsXhigh(codexPath),
+            // The capability probe spawns the resolved binary: one foreign
+            // edge, wrapped here until `executeCommand` itself answers in
+            // Effect.
+            yield* Effect.promise(() =>
+              config.codexBinarySupportsXhigh(codexPath),
+            ),
           )
         : requestedEffort,
     skipGitRepoCheck: true as const,
   };
-  return input.thread_id
-    ? codex.resumeThread(input.thread_id, threadOptions)
-    : codex.startThread(threadOptions);
-}
+  // The Codex SDK's own thread constructors, which answer synchronously.
+  return yield* Effect.try({
+    try: (): Thread =>
+      input.thread_id
+        ? codex.resumeThread(input.thread_id, threadOptions)
+        : codex.startThread(threadOptions),
+    catch: ensureError,
+  });
+});
 
 // ============================================================================
 // Tool
@@ -515,7 +524,7 @@ export class CodexTool extends defineTool({
     // user-configured default) rather than mutating the parsed input object.
     const sandboxMode =
       input.sandbox_mode ??
-      (yield* agentCliCall(getCodexConfig)).getCodexSandboxMode(
+      (yield* getCodexConfig).getCodexSandboxMode(
         toolCall.roots.workspaceState,
       );
 
@@ -561,7 +570,7 @@ const launchCodexSession = Effect.fn('codex.launchCodexSession')(function* (
 > {
   const workingDir = parseWorkingDirectory(parentWorkingDirectory);
   const { roots } = yield* ToolCall;
-  const thread = yield* agentCliCall(() =>
+  const thread = yield* agentCliCall(
     createCodexThread(input, sandboxMode, roots, workingDir),
   );
   // Synthetic run metadata for the child run: Codex runs outside the normal

@@ -62,10 +62,10 @@ type AgentCliSessionStoreAccessor = (
 ) => AgentCliSessionRegistry;
 
 /**
- * A Promise collaborator of the dispatch/launch chain (bash approval,
- * follow-up submission, thread/session setup, the owned-run launch guard)
- * rejected. `cause` is what it raised. The tools' `execute()` edges re-raise
- * the cause itself, so the tool runner surfaces the same error instance the
+ * A collaborator of the dispatch/launch chain (bash approval, follow-up
+ * submission, thread/session setup, the owned-run launch guard) failed.
+ * `cause` is what it raised. The tools' `execute()` edges re-raise the cause
+ * itself, so the tool runner surfaces the same error instance the
  * collaborator raised, exactly as the previous `await` chain did.
  */
 class AgentCliCallFailed extends Data.TaggedError('AgentCliCallFailed')<{
@@ -73,17 +73,14 @@ class AgentCliCallFailed extends Data.TaggedError('AgentCliCallFailed')<{
 }> {}
 
 /**
- * The one wrap of the agent-CLI chain's Promise collaborators — the shared
- * dispatch/launch steps and each provider tool's own setup (SDK import,
- * binary lookup, config/env assembly).
+ * The one re-tagging of the agent-CLI chain's collaborators onto this
+ * chain's error channel — the shared dispatch/launch steps and each provider
+ * tool's own setup (SDK import, binary lookup, thread creation).
  */
-export const agentCliCall = <A>(
-  call: () => Promise<A>,
+export const agentCliCall = <A, E>(
+  call: Effect.Effect<A, E>,
 ): Effect.Effect<A, AgentCliCallFailed> =>
-  Effect.tryPromise({
-    try: call,
-    catch: (cause) => new AgentCliCallFailed({ cause }),
-  });
+  Effect.mapError(call, (cause) => new AgentCliCallFailed({ cause }));
 
 /** The failures the agent-CLI dispatch/launch chain can raise. */
 export type AgentCliToolFailure = ToolError | AgentCliCallFailed;

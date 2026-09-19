@@ -15,7 +15,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@tools/claudeAgentImport', () => ({
-  importClaudeAgentSdk: async () => mocks.query,
+  importClaudeAgentSdk: () => Effect.succeed(mocks.query),
   findClaudeBinaryPath: () => undefined,
 }));
 

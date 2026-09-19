@@ -80,7 +80,7 @@ vi.mock('@tools/claudeAgentConfig', () => ({
 }));
 
 vi.mock('@tools/claudeAgentImport', () => ({
-  importClaudeAgentSdk: async () => mocks.query,
+  importClaudeAgentSdk: () => Effect.succeed(mocks.query),
   findClaudeBinaryPath: mocks.findClaudeBinaryPath,
 }));
 
@@ -128,7 +128,7 @@ describe('claude_agent tool launch and resume fallback', () => {
 
     mocks.registerRun.mockReturnValue(Effect.void);
     mocks.buildClaudeAgentEnv.mockReturnValue(Effect.succeed({}));
-    mocks.findClaudeBinaryPath.mockResolvedValue(undefined);
+    mocks.findClaudeBinaryPath.mockReturnValue(undefined);
     mocks.createChildRun.mockReturnValue(
       Effect.succeed(createFakeAgentCliChildRun(childRunId)),
     );
@@ -172,9 +172,9 @@ describe('claude_agent tool launch and resume fallback', () => {
 
   it.live('does not create a run when Claude binary discovery fails', () =>
     Effect.gen(function* () {
-      mocks.findClaudeBinaryPath.mockRejectedValue(
-        new Error('Claude binary lookup failed'),
-      );
+      mocks.findClaudeBinaryPath.mockImplementation(() => {
+        throw new Error('Claude binary lookup failed');
+      });
 
       const result = yield* new ClaudeAgentTool().call({
         prompt: 'must not create a stale child',

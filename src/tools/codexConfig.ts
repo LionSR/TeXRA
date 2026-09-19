@@ -1,4 +1,7 @@
+import { z } from 'zod';
+
 // Local imports - agent config
+import { createLog } from '@logger/logUtils';
 import type { StateStore } from '@platform/interfaces';
 import type { CodexReasoningEffort } from '@shared/schemas';
 import {
@@ -10,6 +13,8 @@ import {
   parseCodexSandboxMode,
 } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { executeCommand } from '@utils/system/execUtils';
+
 import { createEnumStateGetter } from './support/enumConfig';
 
 // Type-only imports
@@ -25,6 +30,10 @@ import type {
 
 /** Short model name passed to the Codex CLI via --model. */
 export const CODEX_CLI_MODEL = 'gpt-5.5';
+
+const log = createLog('codexConfig');
+const codexXhighSupportByBinary = new Map<string, boolean>();
+const codexXhighProbes = new Map<string, Promise<boolean>>();
 
 // ============================================================================
 // Reasoning effort
@@ -90,3 +99,101 @@ export const getCodexSandboxMode: (workspaceState: StateStore) => SandboxMode =
     CODEX_SANDBOX_MODE_DEFAULT,
     parseCodexSandboxMode,
   );
+
+// ============================================================================
+// Extra High capability probe
+//
+// `xhigh` is a level the resolved Codex runtime either reports or does not,
+// so the effort above is only allowed to keep it once this probe says so.
+// ============================================================================
+
+type BundledCodexModel = {
+  slug?: string;
+  supported_reasoning_levels?: Array<{ effort?: string }>;
+};
+
+/** Just the shape `catalogSupportsXhigh` depends on — a `models` array. Model
+ *  entries stay `unknown` here and are duck-typed below, so one malformed
+ *  entry elsewhere in the catalog can't take down a lookup for a model it
+ *  doesn't concern. */
+const BundledCodexCatalogSchema = z.object({
+  models: z.array(z.unknown()),
+});
+
+function catalogSupportsXhigh(
+  stdout: string,
+  model: string,
+): boolean | undefined {
+  try {
+    const parsed: unknown = JSON.parse(stdout);
+    const catalog = BundledCodexCatalogSchema.safeParse(parsed);
+    if (!catalog.success) return undefined;
+    const entry = catalog.data.models.find(
+      (item): item is BundledCodexModel =>
+        typeof item === 'object' &&
+        item != null &&
+        (item as BundledCodexModel).slug === model,
+    );
+    if (entry == null) return false;
+    return (entry.supported_reasoning_levels ?? []).some(
+      (level) => level.effort === 'xhigh',
+    );
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Probe whether the resolved Codex runtime reports `xhigh` for the pinned
+ * CLI model. Timeouts and spawn failures are not cached so a later call
+ * retries instead of permanently capping Extra High to High.
+ */
+export async function codexBinarySupportsXhigh(
+  binaryPath: string | undefined,
+): Promise<boolean> {
+  if (!binaryPath) return false;
+
+  const cached = codexXhighSupportByBinary.get(binaryPath);
+  if (cached != null) return cached;
+
+  const inflight = codexXhighProbes.get(binaryPath);
+  if (inflight) return inflight;
+
+  const probe = (async (): Promise<boolean> => {
+    const result = await executeCommand(
+      [binaryPath, 'debug', 'models', '--bundled'],
+      // A capability probe of the binary itself: it runs no git command, and
+      // this module holds no workspace whose identity it could carry.
+      { quiet: true, timeout: 5_000, cwd: process.cwd(), settings: undefined },
+    );
+    if (result.timedOut || result.exitCode === 127) {
+      log.warn('Codex xhigh capability probe failed; not caching the result', {
+        data: {
+          binaryPath,
+          timedOut: result.timedOut,
+          exitCode: result.exitCode,
+          stderr: result.stderr,
+        },
+      });
+      return false;
+    }
+    if (!result.success) {
+      codexXhighSupportByBinary.set(binaryPath, false);
+      return false;
+    }
+    const supported = catalogSupportsXhigh(result.stdout, CODEX_CLI_MODEL);
+    if (supported == null) {
+      log.warn('Codex xhigh capability probe returned unreadable catalog', {
+        data: { binaryPath },
+      });
+      return false;
+    }
+    codexXhighSupportByBinary.set(binaryPath, supported);
+    return supported;
+  })().finally(() => {
+    codexXhighProbes.delete(binaryPath);
+  });
+
+  codexXhighProbes.set(binaryPath, probe);
+  return probe;
+}
