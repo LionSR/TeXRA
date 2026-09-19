@@ -56,9 +56,9 @@ import './components/SessionBanners';
 import './components/SessionComposer';
 import './components/SessionDrawer';
 import './components/ToolsSheet';
-import '@webview/frontend/components/FileSelectGroup';
-import '@webview/frontend/components/OnboardingSetupCard';
-import '@webview/frontend/components/OnboardingWelcomeCard';
+import './components/FileSelectGroup';
+import './components/OnboardingSetupCard';
+import './components/OnboardingWelcomeCard';
 
 registerTeXRAWebAwesomeIcons();
 

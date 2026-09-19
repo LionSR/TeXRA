@@ -24,11 +24,6 @@
         "./src/common/*.ts",
         "./src/common/*/index.ts"
       ],
-      "@webview/*": [
-        "./packages/extension/src/webview/*",
-        "./packages/extension/src/webview/*.ts",
-        "./packages/extension/src/webview/*/index.ts"
-      ],
       "@agent/*": [
         "./src/agent/*",
         "./src/agent/*.ts",

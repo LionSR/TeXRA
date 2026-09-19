@@ -125,6 +125,8 @@ process.on('exit', () => {
 });
 
 // --- scenarios (verified against the committed harness) ------------------
+// `smoke: true` marks the subset PR CI runs (`--smoke`). The tag travels
+// with the scenario, so renaming one cannot silently drop it from the gate.
 const SCENARIOS = [
   {
     name: 'transcript',
@@ -181,6 +183,7 @@ const SCENARIOS = [
   },
   {
     name: 'workflow-running',
+    smoke: true,
     frame: 'viewport',
     rows: 30,
     cols: 100,
@@ -395,6 +398,7 @@ const SCENARIOS = [
   },
   {
     name: 'subagent-followup-summary',
+    smoke: true,
     frame: 'scrollback',
     env: { HARNESS_ENTRIES: '0', HARNESS_SUBAGENT_FOLLOWUPS: '1' },
     expect: [
@@ -435,6 +439,7 @@ const SCENARIOS = [
   },
   {
     name: 'root-transcript-reader-full-tool-output',
+    smoke: true,
     cols: 80,
     env: { HARNESS_ENTRIES: '0', HARNESS_LONG_TOOL_OUTPUT: '1' },
     keys: [DC4],
@@ -563,6 +568,7 @@ const SCENARIOS = [
   },
   {
     name: 'narrow-slash-palette-command-names',
+    smoke: true,
     rows: 16,
     cols: 52,
     env: { HARNESS_ENTRIES: '4' },
@@ -996,6 +1002,7 @@ const SCENARIOS = [
     // publishes a real activation and executing flow step; frame settlement
     // advances the displayed duration beyond zero.
     name: 'single-run-liveness',
+    smoke: true,
     env: { HARNESS_ENTRIES: '4', HARNESS_TODOS: '1' },
     frame: 'viewport',
     expectPatterns: [
@@ -1130,6 +1137,7 @@ const SCENARIOS = [
   },
   {
     name: 'compact-api-form',
+    smoke: true,
     rows: 12,
     cols: 80,
     env: { HARNESS_ENTRIES: '4' },
@@ -1302,6 +1310,7 @@ const SCENARIOS = [
   },
   {
     name: 'edit-approval',
+    smoke: true,
     env: { HARNESS_ENTRIES: '4', HARNESS_EDIT_APPROVAL: '1' },
     bootExpect: '· Ctrl-C ',
     frame: 'viewport',
@@ -1792,6 +1801,7 @@ const SCENARIOS = [
   },
   {
     name: 'agent-proposal-approve-all',
+    smoke: true,
     rows: 24,
     cols: 100,
     env: { HARNESS_ENTRIES: '2', HARNESS_AGENT_PROPOSAL: '1' },
@@ -2275,6 +2285,7 @@ const SCENARIOS = [
   },
   {
     name: 'subagent-list-focus-full-frame',
+    smoke: true,
     frame: 'scrollback',
     cols: 120,
     env: {
@@ -2329,6 +2340,7 @@ const SCENARIOS = [
   },
   {
     name: 'hidden-root-approval-tab-return',
+    smoke: true,
     frame: 'scrollback',
     cols: 120,
     env: {
@@ -2843,10 +2855,11 @@ const SCENARIOS = [
 
 function formatUsage() {
   return [
-    '[validate-tui] usage: node scripts/validate-tui.mjs [--snapshot-dir DIR] [--no-build] [scenario ...]',
+    '[validate-tui] usage: node scripts/validate-tui.mjs [--snapshot-dir DIR] [--no-build] [--smoke] [scenario ...]',
     '',
     'Options:',
     '  --snapshot-dir DIR  Write per-scenario .txt/.svg frames and an index.html report',
+    '  --smoke             Run the CI smoke subset (the `smoke: true` scenarios)',
     `  --no-build          Use the existing ${DEFAULT_HARNESS_RELATIVE_PATH} instead of rebuilding it`,
     '  --list, --list-scenarios',
     '                      Print available scenario names and exit',
@@ -2877,6 +2890,7 @@ const PARSE_ARGS_DEF = {
   // property instead). Modeling the positive form and negating it is the
   // only way citty's `--no-*` negation syntax can drive this flag.
   build: { type: 'boolean', default: true },
+  smoke: { type: 'boolean' },
   snapshotDir: { type: 'string' },
 };
 const KNOWN_FLAG_TOKENS = new Set([
@@ -2886,6 +2900,7 @@ const KNOWN_FLAG_TOKENS = new Set([
   '--list-scenarios',
   '--list-selected',
   '--no-build',
+  '--smoke',
   '--snapshot-dir',
 ]);
 
@@ -2950,6 +2965,7 @@ function parseArgs(argv) {
     snapshotDir,
     listSelected: Boolean(args.listSelected),
     noBuild: args.build === false,
+    smoke: Boolean(args.smoke),
   };
 }
 
@@ -3023,7 +3039,14 @@ if (oracleGraphFailure) {
 }
 
 const args = parseArgs(process.argv.slice(2));
-const only = args.scenarios;
+const smokeNames = SCENARIOS.filter((scenario) => scenario.smoke).map(
+  (scenario) => scenario.name,
+);
+if (args.smoke && smokeNames.length === 0) {
+  console.error('[validate-tui] --smoke selected no scenarios');
+  process.exit(1);
+}
+const only = args.smoke ? [...smokeNames, ...args.scenarios] : args.scenarios;
 const unknownScenarios = [
   ...new Set(only.filter((name) => !scenarioByName.has(name))),
 ];

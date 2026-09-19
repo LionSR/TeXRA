@@ -44,7 +44,6 @@ const VSCODE_FREE_ZONES = [
   'packages/agent/src',
   'packages/llm/src',
   'packages/desktop/src',
-  'packages/extension/src/webview/frontend',
   'packages/extension/src/progressView/frontend',
   'packages/extension/src/settingsView/frontend',
 ] as const;
@@ -76,7 +75,6 @@ const SHARED_AGENT_IMPORT_ALLOWLIST_SET = new Set<string>(
 const HOST_LAYER_IMPORT_SPECIFIERS = ['@common/webview'] as const;
 
 const HOST_LAYER_IMPORT_PREFIXES = [
-  '@webview/',
   '@commands/',
   '@progressView/',
   '@settingsView/',

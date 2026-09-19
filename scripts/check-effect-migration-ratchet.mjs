@@ -154,7 +154,6 @@ const BOUNDARY_HOST_ROOTS = [
  * BOUNDARY_RUNTIME_ENTRIES below; the directory exclusion still fences the rest.
  */
 const BOUNDARY_HOST_EXCLUSIONS = [
-  'packages/extension/src/webview/frontend/',
   'packages/extension/src/progressView/frontend/',
   'packages/extension/src/settingsView/frontend/',
 ];
@@ -1190,7 +1189,6 @@ function selfTestBoundary() {
     ['src/shared/signals.ts', false],
     ['src/platform/processRuntime.ts', false],
     ['src/shared/session/sessionFold.ts', false],
-    ['packages/extension/src/webview/frontend/app.ts', false],
     ['packages/extension/src/settingsView/frontend/settings.ts', false],
     // The extension-host frontend (no view-name segment) is host code and
     // stays a boundary — the two are easy to confuse, so both are pinned.
