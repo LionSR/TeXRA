@@ -19,9 +19,10 @@ import {
   formatCliAgentRoster,
   readCliAgentRoster,
 } from '../runtime/agentRoster';
+import { installCliProcessRuntime } from '../runtime/cliProcessRuntime';
 import { CliExitCode } from '../runtime/exitCodes';
 import {
-  initLocalCliPlatform,
+  initCliPlatform,
   type CliPlatformServices,
 } from '../runtime/initPlatform';
 import { writeErrorStderr } from '../runtime/logSinks';
@@ -237,10 +238,15 @@ const configAgentsCommand = defineCliCommand({
       description: 'Return chat-agent selection to the automatic default',
     },
   },
-  run: (context, ctx) =>
-    initLocalCliPlatform(context).then((services) =>
-      services.runtime.runPromise(
-        configureAgentRoster(context, services, {
+  run: async (context, ctx) => {
+    const runtime = await installCliProcessRuntime(context.storageRoot);
+    return runtime.runPromise(
+      Effect.gen(function* () {
+        const services = yield* initCliPlatform({
+          ...context,
+          quietLogs: true,
+        });
+        return yield* configureAgentRoster(context, services, {
           inherit: ctx.args.inherit === true,
           all: ctx.args.all === true,
           team: optString(ctx.args.team),
@@ -250,18 +256,27 @@ const configAgentsCommand = defineCliCommand({
           clearDefault: ctx.args['clear-default'] === true,
           defaultAgent: optString(ctx.args['default-agent']),
           clearDefaultAgent: ctx.args['clear-default-agent'] === true,
-        }),
-      ),
-    ),
+        });
+      }),
+    );
+  },
 });
 
 const configShowCommand = defineCliCommand({
   meta: { name: 'show', description: 'Show effective CLI configuration' },
   args: { ...GLOBAL_ARGS },
-  run: (context) =>
-    initLocalCliPlatform(context).then((services) =>
-      services.runtime.runPromise(showConfig(context, services)),
-    ),
+  run: async (context) => {
+    const runtime = await installCliProcessRuntime(context.storageRoot);
+    return runtime.runPromise(
+      Effect.gen(function* () {
+        const services = yield* initCliPlatform({
+          ...context,
+          quietLogs: true,
+        });
+        return yield* showConfig(context, services);
+      }),
+    );
+  },
 });
 
 const configEditCommand = defineCliCommand({
@@ -277,9 +292,14 @@ const configEditCommand = defineCliCommand({
         'Interactive configuration requires a terminal. Use `texra config show` or `texra config agents` in scripts.',
       );
     }
-    const services = await initLocalCliPlatform(context);
+    const runtime = await installCliProcessRuntime(context.storageRoot);
+    const services = await runtime.runPromise(
+      initCliPlatform({ ...context, quietLogs: true }),
+    );
+    // The config TUI mounts Ink at this Promise edge rather than inside a
+    // fiber of the runtime it outlives, so the import and the run stay here.
     const { runConfigTui } = await import('../config/runConfigTui');
-    await services.runtime.runPromise(
+    await runtime.runPromise(
       runConfigTui({
         stores: installedRoots(services),
         secrets: services.secrets,

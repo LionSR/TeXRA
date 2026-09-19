@@ -2,7 +2,6 @@ import { Effect, Result } from 'effect';
 
 import { withProcessServices } from '@platform/processRuntime';
 import { usageLoggingOptOut } from '@telemetry/UsageLogService';
-import { ensureError } from '@utils/errors/errorMessage';
 import {
   buildDoctorReport,
   doctorExitCode,
@@ -29,10 +28,7 @@ function doctorReport(context: CliContext): Effect.Effect<DoctorReport> {
     // builds it. Its failure is a row in the report rather than a throw, so it
     // is folded into a Result here and handed to the builder as data.
     const init = yield* Effect.result(
-      Effect.tryPromise({
-        try: () => initCliPlatform({ ...context, quietLogs: true }),
-        catch: ensureError,
-      }),
+      initCliPlatform({ ...context, quietLogs: true }),
     );
     if (Result.isFailure(init)) {
       // A failed init disposed the runtime it installed (see

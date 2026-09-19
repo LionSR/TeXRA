@@ -17,7 +17,8 @@ import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { executeCliWorkflowConfig } from './workflow';
 import { formatResumeCommand } from '../chat/tui/state/resumeHint';
 import { CliExitCode } from '../runtime/exitCodes';
-import { initInteractiveCliPlatform } from '../runtime/initPlatform';
+import { installCliProcessRuntime } from '../runtime/cliProcessRuntime';
+import { initCliPlatform } from '../runtime/initPlatform';
 import { writeTextStderr } from '../runtime/logSinks';
 import { buildHeadlessRunContext } from '../runtime/runModel';
 import { resolveCliLaunchAgent } from '../runtime/agents';
@@ -78,13 +79,14 @@ export async function runResumeCommand(
   context: CliContext,
   id: RunId,
 ): Promise<number> {
-  const stores = await initInteractiveCliPlatform({
-    ...context,
-    quietLogs: true,
-  });
+  // This entry never suppresses the platform's own signal handlers: the
+  // window below (the ownership gate, the resume) still needs a graceful
+  // handler, and `runChat` hands ownership over once Ink mounts.
+  const runtime = await installCliProcessRuntime(context.storageRoot);
 
-  const decision = await stores.runtime.runPromise(
+  const decision = await runtime.runPromise(
     Effect.gen(function* () {
+      const stores = yield* initCliPlatform({ ...context, quietLogs: true });
       const session = yield* stores.session;
       const store = getRunRecords(session, id);
       const configResult = yield* Effect.result(store.readConfig());

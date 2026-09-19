@@ -51,8 +51,8 @@ const SKIPPED = { configured: false, declined: false };
 
 describe('maybeRunCliOnboarding gate', () => {
   let originalIsTty: unknown;
-  // The services bag `initInteractiveCliPlatform` hands its callers, which the
-  // gate now reads instead of the ambient platform singleton.
+  // The services bag `initCliPlatform` hands its callers, which the gate now
+  // reads instead of the ambient platform singleton.
   let services: ModelOptionStores & { readonly runtime: ProcessRuntime };
 
   beforeEach(() => {

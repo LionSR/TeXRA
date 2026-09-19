@@ -1,8 +1,10 @@
 import { defineCommand } from 'citty';
+import { Effect } from 'effect';
 
 import { readDisabledSkills, skillDisplayItem } from '@skills/runtimeSkills';
 
 import { CliExitCode } from '../runtime/exitCodes';
+import { installCliProcessRuntime } from '../runtime/cliProcessRuntime';
 import {
   initCliPlatform,
   type CliPlatformServices,
@@ -46,50 +48,58 @@ async function listSkills(
     readonly additionalPaths: readonly string[];
   },
 ): Promise<number> {
-  const services = await initCliPlatform({ ...context, quietLogs: true });
-  const roots = skillsRoots(services);
-  const result = await services.runtime.runPromise(
-    readCliSkills(context, roots, options),
+  // The command's one run, on the process runtime this entry installs or
+  // joins: the init and the skill read it feeds are one program on it.
+  const runtime = await installCliProcessRuntime(context.storageRoot);
+  return runtime.runPromise(
+    Effect.gen(function* () {
+      const services = yield* initCliPlatform({ ...context, quietLogs: true });
+      const roots = skillsRoots(services);
+      const result = yield* readCliSkills(context, roots, options);
+      const exitCode = result.errors.some(
+        (issue) =>
+          issue.code === 'missing_source' ||
+          issue.code === 'invalid_source' ||
+          issue.code === 'source_read_error',
+      )
+        ? CliExitCode.Usage
+        : CliExitCode.Success;
+
+      // Parse errors surface on stderr for json + text (NDJSON consumers get
+      // them as `kind: skill-issue` records instead), so the stdout contract
+      // stays scriptable with `jq '.[]'`.
+      if (context.outputFormat !== 'ndjson') {
+        for (const issue of result.errors) {
+          writeTextStderr(formatCliSkillIssue(issue));
+        }
+      }
+
+      // Emit the bare-array JSON / per-line NDJSON shape every other
+      // `<resource> list` command produces, via the shared emitCliResult
+      // helper. The text list is suppressed on a usage error with no skills
+      // (nothing useful to show); the helper skips the write for the
+      // resulting empty string.
+      const disabled = readDisabledSkills(roots);
+      const items = result.skills.map((entry) =>
+        skillDisplayItem(entry, disabled),
+      );
+      emitCliResult(context, {
+        json: items,
+        ndjson: [
+          ...items.map((skill) => ({ kind: 'skill' as const, skill })),
+          ...result.errors.map((issue) => ({
+            kind: 'skill-issue' as const,
+            issue,
+          })),
+        ],
+        text:
+          exitCode === CliExitCode.Success || result.skills.length > 0
+            ? formatCliSkillList(result.skills)
+            : '',
+      });
+      return exitCode;
+    }),
   );
-  const exitCode = result.errors.some(
-    (issue) =>
-      issue.code === 'missing_source' ||
-      issue.code === 'invalid_source' ||
-      issue.code === 'source_read_error',
-  )
-    ? CliExitCode.Usage
-    : CliExitCode.Success;
-
-  // Parse errors surface on stderr for json + text (NDJSON consumers get them
-  // as `kind: skill-issue` records instead), so the stdout contract stays
-  // scriptable with `jq '.[]'`.
-  if (context.outputFormat !== 'ndjson') {
-    for (const issue of result.errors) {
-      writeTextStderr(formatCliSkillIssue(issue));
-    }
-  }
-
-  // Emit the bare-array JSON / per-line NDJSON shape every other
-  // `<resource> list` command produces, via the shared emitCliResult helper.
-  // The text list is suppressed on a usage error with no skills (nothing
-  // useful to show); the helper skips the write for the resulting empty string.
-  const disabled = readDisabledSkills(roots);
-  const items = result.skills.map((entry) => skillDisplayItem(entry, disabled));
-  emitCliResult(context, {
-    json: items,
-    ndjson: [
-      ...items.map((skill) => ({ kind: 'skill' as const, skill })),
-      ...result.errors.map((issue) => ({
-        kind: 'skill-issue' as const,
-        issue,
-      })),
-    ],
-    text:
-      exitCode === CliExitCode.Success || result.skills.length > 0
-        ? formatCliSkillList(result.skills)
-        : '',
-  });
-  return exitCode;
 }
 
 const skillsListCommand = defineCliCommand({

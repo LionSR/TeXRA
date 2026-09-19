@@ -133,7 +133,8 @@ import { clearTerminalScrollback } from '../src/tui/terminalCleanup';
 import { defaultShortcutModifierLabel } from '../src/runtime/shortcutLabels';
 import { resolveCliModelAccessRoute } from '../src/runtime/modelAccessRoute';
 import { updateCliModelAccess } from '../src/runtime/modelAccessSelection';
-import { initLocalCliPlatform } from '../src/runtime/initPlatform';
+import { installCliProcessRuntime } from '../src/runtime/cliProcessRuntime';
+import { initCliPlatform } from '../src/runtime/initPlatform';
 import { saveProviderApiKey } from '../src/runtime/providerApiKey';
 import { resolveCliResourcesPath } from '../src/runtime/resourcesPath';
 import {
@@ -317,17 +318,23 @@ if (SHOW_PROJECT_SKILL) {
   seedHarnessProjectSkill();
 }
 
-const HARNESS_PLATFORM_SERVICES = await initLocalCliPlatform({
-  // The same provider the harness context resolves its rows through, exactly
-  // as startup hands `buildCliContext`'s provider to the real init.
-  config: HARNESS_CLI_CONTEXT.config,
-  cwd: HARNESS_CWD,
-  installSignalHandlers: false,
-  resourcesPath: HARNESS_RESOURCES_PATH,
-  storageRoot: path.join(HARNESS_CWD, '.texra-storage'),
-  skillSourceOptions: {},
-  version: '0.0.0-harness',
-});
+const HARNESS_STORAGE_ROOT = path.join(HARNESS_CWD, '.texra-storage');
+const HARNESS_PLATFORM_SERVICES = await (
+  await installCliProcessRuntime(HARNESS_STORAGE_ROOT)
+).runPromise(
+  initCliPlatform({
+    // The same provider the harness context resolves its rows through,
+    // exactly as startup hands `buildCliContext`'s provider to the real init.
+    config: HARNESS_CLI_CONTEXT.config,
+    cwd: HARNESS_CWD,
+    installSignalHandlers: false,
+    quietLogs: true,
+    resourcesPath: HARNESS_RESOURCES_PATH,
+    storageRoot: HARNESS_STORAGE_ROOT,
+    skillSourceOptions: {},
+    version: '0.0.0-harness',
+  }),
+);
 if (RESET_WORKFLOW_SCRIPT_DISABLED) {
   await HARNESS_PLATFORM_SERVICES.runtime.runPromise(
     setCliToolEnabled(
@@ -361,7 +368,7 @@ if (HARNESS_MEMORY_FILES.length > 0) {
     utimesSync(filePath, mtime, mtime);
   });
 }
-// The persistent session `initLocalCliPlatform` opened over the harness roots.
+// The persistent session `initCliPlatform` opened over the harness roots.
 const harnessRuntimeSession = await harnessRuntime.runPromise(
   HARNESS_PLATFORM_SERVICES.session,
 );

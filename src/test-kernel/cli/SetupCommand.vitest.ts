@@ -11,7 +11,8 @@ const mocks = vi.hoisted(() => ({
   hasUsableSetupCredential: vi.fn(),
   runCliOnboarding: vi.fn(),
   runChat: vi.fn(),
-  initInteractiveCliPlatform: vi.fn(),
+  initCliPlatform: vi.fn(),
+  installCliProcessRuntime: vi.fn(),
 }));
 
 vi.mock('@model/setupCredentialAccess', () => ({
@@ -26,12 +27,20 @@ vi.mock('@cli/chat/tui/runChatTui', () => ({
   runChat: mocks.runChat,
 }));
 
-// `texra setup` always ends in the chat TUI (below), so it must route through
-// initInteractiveCliPlatform — not plain initCliPlatform — to leave the TUI
-// as the sole SIGINT/SIGTERM owner once it mounts (see initPlatform.ts).
+// `texra setup` always ends in the chat TUI (below), so it must never pass
+// `installSignalHandlers: false` — that leaves the TUI as the sole
+// SIGINT/SIGTERM owner once it mounts (see initPlatform.ts).
 vi.mock('@cli/runtime/initPlatform', () => ({
-  initInteractiveCliPlatform: mocks.initInteractiveCliPlatform,
+  initCliPlatform: mocks.initCliPlatform,
 }));
+
+vi.mock('@cli/runtime/cliProcessRuntime', async () => {
+  const { Effect } = await import('effect');
+  return {
+    installCliProcessRuntime: mocks.installCliProcessRuntime,
+    disposeCliProcessRuntime: Effect.void,
+  };
+});
 
 import { runSetup } from '@cli/commands/setup';
 import { CliExitCode } from '@cli/runtime/exitCodes';
@@ -56,11 +65,16 @@ describe('texra setup combined flow', () => {
     mocks.runChat
       .mockReset()
       .mockResolvedValue({ exitCode: CliExitCode.Success });
-    // The init now hands its caller the services it already holds, so the
-    // stub resolves with a bag rather than undefined.
-    mocks.initInteractiveCliPlatform
+    // The init now hands its caller the services it already holds, as a
+    // program the command's own run yields.
+    mocks.initCliPlatform
       .mockReset()
-      .mockResolvedValue({ ...createFakePlatform(), runtime: testRuntime() });
+      .mockReturnValue(
+        Effect.succeed({ ...createFakePlatform(), runtime: testRuntime() }),
+      );
+    mocks.installCliProcessRuntime
+      .mockReset()
+      .mockImplementation(async () => testRuntime());
   });
 
   it('rejects non-interactive terminals before doing anything', async () => {
@@ -73,7 +87,7 @@ describe('texra setup combined flow', () => {
         mode: 'headless',
       });
       expect(exit).toBe(CliExitCode.Usage);
-      expect(mocks.initInteractiveCliPlatform).not.toHaveBeenCalled();
+      expect(mocks.initCliPlatform).not.toHaveBeenCalled();
       expect(mocks.runCliOnboarding).not.toHaveBeenCalled();
       expect(mocks.runChat).not.toHaveBeenCalled();
     } finally {
@@ -81,7 +95,7 @@ describe('texra setup combined flow', () => {
     }
   });
 
-  it('routes platform init through the TUI-owning signal path, not headless init', async () => {
+  it('leaves the platform signal handler installed for the TUI to take over', async () => {
     mocks.runCliOnboarding.mockReturnValue(
       Effect.succeed({
         configured: true,
@@ -91,8 +105,11 @@ describe('texra setup combined flow', () => {
 
     await runSetup(INTERACTIVE_CONTEXT);
 
-    expect(mocks.initInteractiveCliPlatform).toHaveBeenCalledWith(
+    expect(mocks.initCliPlatform).toHaveBeenCalledWith(
       expect.objectContaining({ ...INTERACTIVE_CONTEXT, quietLogs: true }),
+    );
+    expect(mocks.initCliPlatform.mock.calls[0]?.[0]).not.toHaveProperty(
+      'installSignalHandlers',
     );
   });
 

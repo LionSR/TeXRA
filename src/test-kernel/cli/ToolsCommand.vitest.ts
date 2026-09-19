@@ -7,6 +7,7 @@ import { FakeStateStore } from '@test/support/FakePlatform';
 
 const mocks = vi.hoisted(() => ({
   initCliPlatform: vi.fn(),
+  installCliProcessRuntime: vi.fn(),
   readCliToolGuide: vi.fn(),
   setCliToolEnabled: vi.fn(),
   execa: vi.fn(),
@@ -19,6 +20,11 @@ vi.mock('execa', async (importOriginal) => ({
 
 vi.mock('@cli/runtime/initPlatform', () => ({
   initCliPlatform: mocks.initCliPlatform,
+}));
+
+vi.mock('@cli/runtime/cliProcessRuntime', () => ({
+  installCliProcessRuntime: mocks.installCliProcessRuntime,
+  disposeCliProcessRuntime: Effect.void,
 }));
 
 vi.mock('@cli/runtime/tools', async (importOriginal) => {
@@ -52,7 +58,10 @@ describe('CLI tools command', () => {
     globalState = new FakeStateStore();
     mocks.initCliPlatform
       .mockReset()
-      .mockResolvedValue({ globalState, runtime: testRuntime() });
+      .mockReturnValue(Effect.succeed({ globalState, runtime: testRuntime() }));
+    mocks.installCliProcessRuntime
+      .mockReset()
+      .mockImplementation(async () => testRuntime());
     mocks.readCliToolGuide.mockReset().mockReturnValue({
       text: 'Install help',
       command: 'echo install',

@@ -8,7 +8,8 @@ import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 const mocks = vi.hoisted(() => ({
   clearDefaultTeam: vi.fn(),
   getVisibleAgents: vi.fn(),
-  initLocalCliPlatform: vi.fn(),
+  initCliPlatform: vi.fn(),
+  installCliProcessRuntime: vi.fn(),
   readCliAgentRoster: vi.fn(),
   // Every roster mutation is a composed Effect now, so the doubles answer with
   // one: a bare `vi.fn()` returns undefined, which `runPromise` cannot run.
@@ -29,7 +30,12 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@cli/runtime/initPlatform', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@cli/runtime/initPlatform')>()),
-  initLocalCliPlatform: mocks.initLocalCliPlatform,
+  initCliPlatform: mocks.initCliPlatform,
+}));
+
+vi.mock('@cli/runtime/cliProcessRuntime', async () => ({
+  installCliProcessRuntime: mocks.installCliProcessRuntime,
+  disposeCliProcessRuntime: Effect.void,
 }));
 
 vi.mock('@agent/index', async (importOriginal) => ({
@@ -66,10 +72,12 @@ describe('CLI config command', () => {
     vi.clearAllMocks();
     // The roster controller and the roster read are mocked above, so the
     // roots only have to be present.
-    mocks.initLocalCliPlatform.mockResolvedValue({
-      runtime: testRuntime(),
-      roots: {},
-    });
+    mocks.initCliPlatform.mockReturnValue(
+      Effect.succeed({ runtime: testRuntime(), roots: {} }),
+    );
+    mocks.installCliProcessRuntime.mockImplementation(async () =>
+      testRuntime(),
+    );
     mocks.getVisibleAgents.mockReturnValue([
       {
         category: 'toolUse',

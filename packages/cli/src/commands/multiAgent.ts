@@ -6,7 +6,6 @@ import { canLaunchTeam, teamPlanHasGaps } from '@common/teams/TeamPlan';
 import type { StateStore } from '@platform/interfaces';
 import { byCategory, AgentCategory } from '@shared/schemas';
 import { filterNotNullish } from '@utils/core';
-import { ensureError } from '@utils/errors/errorMessage';
 
 import { missingToolUseAgentMessage } from '../runtime/agents';
 import {
@@ -17,7 +16,6 @@ import {
 import { CliExitCode } from '../runtime/exitCodes';
 import {
   initCliPlatform,
-  initLocalCliPlatform,
   type CliPlatformServices,
 } from '../runtime/initPlatform';
 import { installCliProcessRuntime } from '../runtime/cliProcessRuntime';
@@ -134,10 +132,7 @@ export const runMultiAgentPreset = Effect.fn('runMultiAgentPreset')(function* (
   if (init.inputFiles.length === 0 && !hasInstruction) {
     throw new CliUsageError(MULTI_AGENT_TASK_REQUIRED_MESSAGE);
   }
-  const services = yield* Effect.tryPromise({
-    try: () => initCliPlatform({ ...context, quietLogs: true }),
-    catch: ensureError,
-  });
+  const services = yield* initCliPlatform({ ...context, quietLogs: true });
 
   const rejectsHeadlessAsk =
     context.mode === 'headless' && context.approvalPolicy === 'ask';
@@ -272,8 +267,16 @@ const multiAgentListCommand = defineCliCommand({
     ...GLOBAL_ARGS,
   },
   run: async (context) => {
-    const services = await initLocalCliPlatform(context);
-    return services.runtime.runPromise(runMultiAgentList(context, services));
+    const runtime = await installCliProcessRuntime(context.storageRoot);
+    return runtime.runPromise(
+      Effect.gen(function* () {
+        const services = yield* initCliPlatform({
+          ...context,
+          quietLogs: true,
+        });
+        return yield* runMultiAgentList(context, services);
+      }),
+    );
   },
 });
 
@@ -291,9 +294,15 @@ const multiAgentShowCommand = defineCliCommand({
     },
   },
   run: async (context, ctx) => {
-    const services = await initCliPlatform({ ...context, quietLogs: true });
-    return services.runtime.runPromise(
-      runMultiAgentShow(context, ctx.args.preset, services),
+    const runtime = await installCliProcessRuntime(context.storageRoot);
+    return runtime.runPromise(
+      Effect.gen(function* () {
+        const services = yield* initCliPlatform({
+          ...context,
+          quietLogs: true,
+        });
+        return yield* runMultiAgentShow(context, ctx.args.preset, services);
+      }),
     );
   },
 });

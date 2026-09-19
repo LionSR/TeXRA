@@ -47,7 +47,7 @@ const mocks = vi.hoisted(() => ({
   discoverTerminalCapabilities: vi.fn(),
   handOffCliShutdownSignalHandlers: vi.fn(),
   initCliPlatform: vi.fn(),
-  initInteractiveCliPlatform: vi.fn(),
+  installCliProcessRuntime: vi.fn(),
   installTerminalRestoreOnExit: vi.fn(),
   installTerminalTitleUpdates: vi.fn(),
   loadInputHistory: vi.fn(),
@@ -98,9 +98,13 @@ vi.mock('@latex/texraResponseTextProcessing', () => ({
 vi.mock('@cli/runtime/initPlatform', () => ({
   handOffCliShutdownSignalHandlers: mocks.handOffCliShutdownSignalHandlers,
   initCliPlatform: mocks.initCliPlatform,
-  initInteractiveCliPlatform: mocks.initInteractiveCliPlatform,
   runCliPlatformShutdownSequence: mocks.runCliPlatformShutdownSequence,
   setCliHelperModel: mocks.setCliHelperModel,
+}));
+
+vi.mock('@cli/runtime/cliProcessRuntime', () => ({
+  installCliProcessRuntime: mocks.installCliProcessRuntime,
+  disposeCliProcessRuntime: Effect.void,
 }));
 
 vi.mock('@cli/onboarding/runOnboarding', () => ({
@@ -265,8 +269,8 @@ describe('runChat signal ownership wiring', () => {
     // the suite opens it over the fake host's roots, once per test.
     await Effect.runPromise(teardownDefaultSession());
     const session = await Effect.runPromise(initializeDefaultSession({}));
-    // Both inits now hand back the services the composition root holds; the
-    // fake host installed above owns those stores here.
+    // The init hands back the services the composition root holds; the fake
+    // host installed above owns those stores here.
     const cliServices = () => ({
       ...platform(),
       globalStorage: installedHost().roots.globalStorage,
@@ -275,14 +279,15 @@ describe('runChat signal ownership wiring', () => {
       session: Effect.succeed(session),
       runtime: testRuntime(),
     });
-    mocks.initCliPlatform.mockImplementation(async () => {
-      mocks.callOrder.push('initCliPlatform');
-      return cliServices();
-    });
-    mocks.initInteractiveCliPlatform.mockImplementation(async () => {
-      mocks.callOrder.push('initInteractiveCliPlatform');
-      return cliServices();
-    });
+    mocks.initCliPlatform.mockImplementation(() =>
+      Effect.sync(() => {
+        mocks.callOrder.push('initCliPlatform');
+        return cliServices();
+      }),
+    );
+    mocks.installCliProcessRuntime.mockImplementation(async () =>
+      testRuntime(),
+    );
     mocks.handOffCliShutdownSignalHandlers.mockImplementation(() => {
       mocks.callOrder.push('handOffCliShutdownSignalHandlers');
     });
@@ -396,17 +401,16 @@ describe('runChat signal ownership wiring', () => {
         }),
       ]);
 
-      expect(mocks.initInteractiveCliPlatform).toHaveBeenCalledWith({
+      expect(mocks.initCliPlatform).toHaveBeenCalledWith({
         ...INTERACTIVE_CONTEXT,
         quietLogs: true,
       });
-      expect(mocks.initCliPlatform).not.toHaveBeenCalled();
       expect(mocks.installTerminalTitleUpdates).toHaveBeenCalledWith(
         INTERACTIVE_CONTEXT.cwd,
       );
       expect(mocks.handOffCliShutdownSignalHandlers).toHaveBeenCalledTimes(1);
       expect(mocks.callOrder).toEqual([
-        'initInteractiveCliPlatform',
+        'initCliPlatform',
         'ink.render',
         'handOffCliShutdownSignalHandlers',
         'process.on:SIGINT',

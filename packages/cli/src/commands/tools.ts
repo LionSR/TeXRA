@@ -6,6 +6,7 @@ import { parse as shellParse } from 'shell-quote';
 import type { ToolProbeInputs } from '@tools/externalToolDefs';
 
 import { CliExitCode } from '../runtime/exitCodes';
+import { installCliProcessRuntime } from '../runtime/cliProcessRuntime';
 import {
   initCliPlatform,
   type CliPlatformServices,
@@ -66,37 +67,44 @@ function toolProbeInputs(services: CliPlatformServices): ToolProbeInputs {
 }
 
 async function listTools(context: CliContext): Promise<number> {
-  // The init call hands back the process runtime it just wired, so the status
-  // read and any follow-up toggle hit the same state store.
-  const services = await initCliPlatform({ ...context, quietLogs: true });
-  const items = await services.runtime.runPromise(
-    readCliToolStatuses(toolProbeInputs(services)),
-  );
+  // The command's one run, on the process runtime this entry installs or
+  // joins: the init and the status read it feeds are one program on it, so
+  // they hit the same state store without a Promise between them.
+  const runtime = await installCliProcessRuntime(context.storageRoot);
+  return runtime.runPromise(
+    Effect.gen(function* () {
+      const services = yield* initCliPlatform({ ...context, quietLogs: true });
+      const items = yield* readCliToolStatuses(toolProbeInputs(services));
 
-  emitCliResult(context, {
-    json: items,
-    ndjson: items.map((tool) => ({ kind: 'tool-status', tool })),
-    text: formatCliToolList(items),
-  });
-  return CliExitCode.Success;
+      emitCliResult(context, {
+        json: items,
+        ndjson: items.map((tool) => ({ kind: 'tool-status', tool })),
+        text: formatCliToolList(items),
+      });
+      return CliExitCode.Success;
+    }),
+  );
 }
 
 async function showTool(context: CliContext, id: string): Promise<number> {
-  const services = await initCliPlatform({ ...context, quietLogs: true });
-  const item = await services.runtime.runPromise(
-    readCliToolStatus(toolProbeInputs(services), id),
-  );
-  if (!item) {
-    writeTextStderr(formatCliToolNotFoundMessage(id));
-    return CliExitCode.Usage;
-  }
+  const runtime = await installCliProcessRuntime(context.storageRoot);
+  return runtime.runPromise(
+    Effect.gen(function* () {
+      const services = yield* initCliPlatform({ ...context, quietLogs: true });
+      const item = yield* readCliToolStatus(toolProbeInputs(services), id);
+      if (!item) {
+        writeTextStderr(formatCliToolNotFoundMessage(id));
+        return CliExitCode.Usage;
+      }
 
-  emitCliResult(context, {
-    json: item,
-    ndjson: { kind: 'tool-status', tool: item },
-    text: formatCliToolStatus(item),
-  });
-  return CliExitCode.Success;
+      emitCliResult(context, {
+        json: item,
+        ndjson: { kind: 'tool-status', tool: item },
+        text: formatCliToolStatus(item),
+      });
+      return CliExitCode.Success;
+    }),
+  );
 }
 
 async function toggleTool(
@@ -104,25 +112,28 @@ async function toggleTool(
   id: string,
   enabled: boolean,
 ): Promise<number> {
-  const services = await initCliPlatform({ ...context, quietLogs: true });
-  const ok = await services.runtime.runPromise(
-    setCliToolEnabled(services.globalState, id, enabled),
+  const runtime = await installCliProcessRuntime(context.storageRoot);
+  return runtime.runPromise(
+    Effect.gen(function* () {
+      const services = yield* initCliPlatform({ ...context, quietLogs: true });
+      const ok = yield* setCliToolEnabled(services.globalState, id, enabled);
+      if (!ok) {
+        writeTextStderr(formatCliToolNotToggleableMessage(id));
+        return CliExitCode.Usage;
+      }
+      const result: CliToolToggleResult = {
+        id,
+        enabled,
+        action: enabled ? 'enabled' : 'disabled',
+      };
+      emitCliResult(context, {
+        json: result,
+        ndjson: { kind: 'tool-toggle', tool: result },
+        text: `${enabled ? 'Enabled' : 'Disabled'} ${id}.`,
+      });
+      return CliExitCode.Success;
+    }),
   );
-  if (!ok) {
-    writeTextStderr(formatCliToolNotToggleableMessage(id));
-    return CliExitCode.Usage;
-  }
-  const result: CliToolToggleResult = {
-    id,
-    enabled,
-    action: enabled ? 'enabled' : 'disabled',
-  };
-  emitCliResult(context, {
-    json: result,
-    ndjson: { kind: 'tool-toggle', tool: result },
-    text: `${enabled ? 'Enabled' : 'Disabled'} ${id}.`,
-  });
-  return CliExitCode.Success;
 }
 
 // Not routed through executeCommand: install/auth guide commands are
@@ -177,56 +188,66 @@ async function installTool(
   id: string,
   run: boolean,
 ): Promise<number> {
-  const services = await initCliPlatform({ ...context, quietLogs: true });
-  const guide = readCliToolGuide(id, 'install');
-  if (!guide) {
-    writeTextStderr(formatCliToolNotFoundMessage(id));
-    return CliExitCode.Usage;
-  }
+  const runtime = await installCliProcessRuntime(context.storageRoot);
+  return runtime.runPromise(
+    Effect.gen(function* () {
+      yield* initCliPlatform({ ...context, quietLogs: true });
+      const guide = readCliToolGuide(id, 'install');
+      if (!guide) {
+        writeTextStderr(formatCliToolNotFoundMessage(id));
+        return CliExitCode.Usage;
+      }
 
-  // --run launches an external command in the terminal, so it only makes sense
-  // in text mode; surface the more specific "no command" guidance when there is
-  // nothing to run.
-  if (run && context.outputFormat !== 'text') {
-    writeTextStderr(
-      guide.command
-        ? 'Cannot combine --output-format json|ndjson with tools install --run running an external command; use text output to run it, or omit the run request to inspect the guide.'
-        : formatCliToolMissingInstallCommandMessage(id),
-    );
-    return CliExitCode.Usage;
-  }
+      // --run launches an external command in the terminal, so it only makes
+      // sense in text mode; surface the more specific "no command" guidance
+      // when there is nothing to run.
+      if (run && context.outputFormat !== 'text') {
+        writeTextStderr(
+          guide.command
+            ? 'Cannot combine --output-format json|ndjson with tools install --run running an external command; use text output to run it, or omit the run request to inspect the guide.'
+            : formatCliToolMissingInstallCommandMessage(id),
+        );
+        return CliExitCode.Usage;
+      }
 
-  const result = toolGuideResult(id, 'install', guide);
-  emitCliResult(context, {
-    json: result,
-    ndjson: { kind: 'tool-guide', guide: result },
-    text: result.text,
-  });
-  if (!run) return CliExitCode.Success;
-  if (!guide.command) {
-    writeTextStderr(formatCliToolMissingInstallCommandMessage(id));
-    return CliExitCode.Usage;
-  }
-  return services.runtime.runPromise(shellRun(guide.command));
+      const result = toolGuideResult(id, 'install', guide);
+      emitCliResult(context, {
+        json: result,
+        ndjson: { kind: 'tool-guide', guide: result },
+        text: result.text,
+      });
+      if (!run) return CliExitCode.Success;
+      if (!guide.command) {
+        writeTextStderr(formatCliToolMissingInstallCommandMessage(id));
+        return CliExitCode.Usage;
+      }
+      return yield* shellRun(guide.command);
+    }),
+  );
 }
 
 async function authTool(context: CliContext, id: string): Promise<number> {
-  const services = await initCliPlatform({ ...context, quietLogs: true });
-  const guide = readCliToolGuide(id, 'auth');
-  if (!guide) {
-    writeTextStderr(formatCliToolNotFoundMessage(id));
-    return CliExitCode.Usage;
-  }
+  const runtime = await installCliProcessRuntime(context.storageRoot);
+  return runtime.runPromise(
+    Effect.gen(function* () {
+      yield* initCliPlatform({ ...context, quietLogs: true });
+      const guide = readCliToolGuide(id, 'auth');
+      if (!guide) {
+        writeTextStderr(formatCliToolNotFoundMessage(id));
+        return CliExitCode.Usage;
+      }
 
-  const result = toolGuideResult(id, 'auth', guide);
-  emitCliResult(context, {
-    json: result,
-    ndjson: { kind: 'tool-guide', guide: result },
-    text: result.text,
-  });
-  if (!guide.command || context.outputFormat !== 'text')
-    return CliExitCode.Success;
-  return services.runtime.runPromise(shellRun(guide.command));
+      const result = toolGuideResult(id, 'auth', guide);
+      emitCliResult(context, {
+        json: result,
+        ndjson: { kind: 'tool-guide', guide: result },
+        text: result.text,
+      });
+      if (!guide.command || context.outputFormat !== 'text')
+        return CliExitCode.Success;
+      return yield* shellRun(guide.command);
+    }),
+  );
 }
 
 const toolsListCommand = defineCliCommand({

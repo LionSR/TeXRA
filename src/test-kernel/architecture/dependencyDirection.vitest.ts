@@ -122,9 +122,9 @@ const BARE_EFFECT_RUN_SITES: Readonly<Record<string, number>> = {
   // runtime for the same reason the SDK entry cannot: `lifecycle.runShutdown`
   // disposes it (`disposeCliProcessRuntime`) before the stderr/stdout flushes
   // run, and a teardown path must not depend on the runtime it is tearing
-  // down. The second is the same disposal on the failed-init path, where the
-  // runtime the init installed must go before the failure is re-raised.
-  'packages/cli/src/runtime/initPlatform.ts': 2,
+  // down. The init itself is a program now, so the failed-init disposal is an
+  // `Effect.onError` on that program rather than a second run here.
+  'packages/cli/src/runtime/initPlatform.ts': 1,
   // The CLI process entry: one run for the command and its two finalizers,
   // the platform's shutdown drain and the final NDJSON flush. It is the
   // outermost boundary of the process, so there is nothing above it to run on

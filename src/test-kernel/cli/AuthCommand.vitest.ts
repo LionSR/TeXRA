@@ -7,12 +7,21 @@ import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 const mocks = vi.hoisted(() => ({
   getCliAuthProfile: vi.fn(),
   initCliPlatform: vi.fn(),
+  installCliProcessRuntime: vi.fn(),
   signOutCliSubscription: vi.fn(),
 }));
 
 vi.mock('@cli/runtime/initPlatform', () => ({
   initCliPlatform: mocks.initCliPlatform,
 }));
+
+vi.mock('@cli/runtime/cliProcessRuntime', async () => {
+  const { Effect } = await import('effect');
+  return {
+    installCliProcessRuntime: mocks.installCliProcessRuntime,
+    disposeCliProcessRuntime: Effect.void,
+  };
+});
 
 vi.mock('@cli/runtime/supabaseAuth', async (importOriginal) => {
   const actual =
@@ -56,7 +65,10 @@ describe('CLI auth command', () => {
     );
     mocks.initCliPlatform
       .mockReset()
-      .mockResolvedValue({ runtime: testRuntime() });
+      .mockReturnValue(Effect.succeed({ runtime: testRuntime() }));
+    mocks.installCliProcessRuntime
+      .mockReset()
+      .mockImplementation(async () => testRuntime());
     mocks.signOutCliSubscription.mockReset().mockReturnValue(
       Effect.succeed({
         preferenceUpdate: { effective: false, target: 'global' },

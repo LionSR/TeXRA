@@ -104,13 +104,22 @@ vi.mock('@transcript', async () => {
 // bootstraps platform agent directories keyed by `resourcesPath`, which is
 // unrelated to (and heavier than) what these tests exercise.
 vi.mock('@cli/runtime/initPlatform', () => ({
-  initLocalCliPlatform: vi.fn(),
+  initCliPlatform: vi.fn(),
 }));
+
+vi.mock('@cli/runtime/cliProcessRuntime', async () => {
+  const { Effect } = await import('effect');
+  const { testRuntime } = await import('@test/support/testProcessRuntime');
+  return {
+    installCliProcessRuntime: vi.fn(async () => testRuntime()),
+    disposeCliProcessRuntime: Effect.void,
+  };
+});
 
 // Imported after vi.mock so the mocked dependencies are in place.
 import { parseHistoryListLimit, runHistoryExport } from '@cli/commands/history';
 import { CliExitCode } from '@cli/runtime/exitCodes';
-import { initLocalCliPlatform } from '@cli/runtime/initPlatform';
+import { initCliPlatform } from '@cli/runtime/initPlatform';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 import type { TraceDocument } from '@transcript';
@@ -288,17 +297,19 @@ describe('CLI history runtime', () => {
     await Effect.runPromise(initializeDefaultSession({}));
     vi.clearAllMocks();
     const host = installedHost();
-    vi.mocked(initLocalCliPlatform).mockResolvedValue({
-      ...host.platform,
-      globalStorage: host.roots.globalStorage,
-      config: host.roots.config,
-      workspaceState: host.roots.workspaceState,
-      globalState: host.roots.globalState,
-      secrets: host.secrets,
-      session: Effect.succeed(testDefaultSession()),
-      roots: host.roots,
-      runtime: testRuntime(),
-    });
+    vi.mocked(initCliPlatform).mockReturnValue(
+      Effect.succeed({
+        ...host.platform,
+        globalStorage: host.roots.globalStorage,
+        config: host.roots.config,
+        workspaceState: host.roots.workspaceState,
+        globalState: host.roots.globalState,
+        secrets: host.secrets,
+        session: Effect.succeed(testDefaultSession()),
+        roots: host.roots,
+        runtime: testRuntime(),
+      }),
+    );
     mocks.readConfig.mockResolvedValue(config);
     mocks.readConversation.mockResolvedValue(null);
     mocks.readWorkspaceFiles.mockResolvedValue([]);

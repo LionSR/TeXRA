@@ -17,11 +17,9 @@ import {
 } from '@cli/onboarding/setupContinuation';
 import { resolveChatDefaults } from '@cli/runtime/chatDefaults';
 import { setCliAgentResumeHandler } from '@cli/runtime/cliAgentResume';
+import { installCliProcessRuntime } from '@cli/runtime/cliProcessRuntime';
 import { CliExitCode } from '@cli/runtime/exitCodes';
-import {
-  initInteractiveCliPlatform,
-  setCliHelperModel,
-} from '@cli/runtime/initPlatform';
+import { initCliPlatform, setCliHelperModel } from '@cli/runtime/initPlatform';
 import {
   formatCliNoAvailableModelsRecovery,
   selectCliRunnableModel,
@@ -156,20 +154,24 @@ export async function runChat(
   }
 
   // The platform's own SIGINT/SIGTERM handler stays live through onboarding
-  // and model resolution below, this function does not suppress it. Once
-  // Ink actually mounts (below), handOffCliShutdownSignalHandlers() removes
-  // it immediately before this function installs its own process.on pair, so
-  // exactly one owner is ever registered for a given signal; see
-  // initInteractiveCliPlatform's doc comment for the full handoff design.
-  const services = await initInteractiveCliPlatform({
-    ...context,
-    quietLogs: true,
-  });
-  const initialResume = init.initialResume;
+  // and model resolution below, this function does not suppress it (it never
+  // passes `installSignalHandlers: false`). Once Ink actually mounts (below),
+  // handOffCliShutdownSignalHandlers() removes it immediately before this
+  // function installs its own process.on pair, so exactly one owner is ever
+  // registered for a given signal; see `initCliPlatform`'s doc comment for
+  // the full handoff design.
+  //
   // The entry's runtime, in a local: the chat is the first thing that opens
   // the process session, and the Effects below settle on the same runtime.
-  const { runtime } = services;
-  const runtimeSession = await runtime.runPromise(services.session);
+  // The init and that first session open are one program on it.
+  const runtime = await installCliProcessRuntime(context.storageRoot);
+  const { services, runtimeSession } = await runtime.runPromise(
+    Effect.gen(function* () {
+      const built = yield* initCliPlatform({ ...context, quietLogs: true });
+      return { services: built, runtimeSession: yield* built.session };
+    }),
+  );
+  const initialResume = init.initialResume;
   runtimeSession.setApprovalPolicy(context.approvalPolicy);
   // First-run gate (interactive only; headless already rejected above). A
   // credential-less user signs in or saves a key here; the model
@@ -608,7 +610,7 @@ export async function runChat(
     interruptActive: () => chatController.stop(),
   });
   // Transfer signal ownership from the platform handler and arm this session's
-  // handlers, not any earlier: everything above (initInteractiveCliPlatform,
+  // handlers, not any earlier: everything above (the platform init,
   // onboarding, model resolution) ran with the platform's own handler still
   // live, so a signal during that window still got a graceful shutdown.
   exitController.install();
