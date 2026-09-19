@@ -5,7 +5,7 @@
 // holds no setting slots to name, and its one commit is the user's own rather
 // than an agent's.
 import type { ExecResult } from '@shared/schemas';
-import { executeCommandSync } from '@utils/system/execUtils';
+import { executeCommandSync } from '@utils/system/execCore';
 
 export function git(cwd: string, ...args: readonly string[]): ExecResult {
   return executeCommandSync(['git', ...args], {

@@ -13,7 +13,7 @@ import { Effect } from 'effect';
 import { execa } from 'execa';
 
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
-import { deriveCommandStderr } from '@utils/system/execUtils';
+import { deriveCommandStderr } from '@utils/system/execCore';
 
 const LAKE_RUN_TIMEOUT_MS = 10 * 60 * 1000;
 const LAKE_MAX_OUTPUT_CHARS = 4 * 1024 * 1024;

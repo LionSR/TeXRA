@@ -17,7 +17,7 @@ import {
   parseLatexGitUrl,
   type OverleafRemote,
 } from '@latex/overleafProject';
-import { executeCommandSync } from '@utils/system/execUtils';
+import { executeCommandSync } from '@utils/system/execCore';
 import { makeMachineGitEnv } from '@utils/system/gitEnv';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
