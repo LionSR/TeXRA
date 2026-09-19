@@ -39,7 +39,8 @@ prompts:
   workflow-only variables (`INPUT_FILE`, `INPUT_CONTENT`, `ALL_INPUTS`,
   `ALL_CONTEXTS`, `INPUT_FILES`, `OUTPUT_FILES`).
 - `{% if IS_ANTHROPIC_MODEL %}...{% endif %}` works for model-specific
-  instructions.
+  instructions. It is the only model gate: there is no variable for any other
+  provider, and an invented one renders as false.
 - Agent names: lowercase with underscores or dashes.
 
 ## Choosing tools

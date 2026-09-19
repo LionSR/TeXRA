@@ -63,7 +63,8 @@ Workflow agent prompts receive:
   `settings.defaultOutputFiles`.
 
 Both categories support `{% if IS_ANTHROPIC_MODEL %}...{% endif %}` blocks
-for model-specific instructions.
+for model-specific instructions. It is the only model gate: there is no
+variable for any other provider, and an invented one renders as false.
 
 ## Settings guide
 
