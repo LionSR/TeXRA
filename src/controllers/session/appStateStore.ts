@@ -123,9 +123,7 @@ export const openAppStateStore = Effect.fn('appStateStore.openAppStateStore')(
   function* (storage: string) {
     // Memoized after the entry's own read: a cache hit on every host that
     // installed its process runtime before opening its stores.
-    const ownerId = processOwnerId(
-      yield* Effect.promise(() => nodeProcesses.selfIdentity()),
-    );
+    const ownerId = processOwnerId(yield* nodeProcesses.selfIdentity());
     const values = new Map(
       yield* withScopedDatabase(
         storage,

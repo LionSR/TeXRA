@@ -12,8 +12,11 @@ import { execFile } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { promisify } from 'node:util';
 
+import { Effect } from 'effect';
+
 import { createLog } from '@logger/logUtils';
 import type { OwnerId } from '@shared/schemas';
+import { ensureError } from '@utils/errors/errorMessage';
 
 /** This process's complete owner identity (contract C5). */
 export function processOwnerId(processStart: string | undefined): OwnerId {
@@ -27,6 +30,24 @@ export function processOwnerId(processStart: string | undefined): OwnerId {
 const log = createLog('NodeProcesses');
 const execFileAsync = promisify(execFile);
 
+/** The one wrap of this module's `node:fs` edge. */
+const readTextFile = (file: string): Effect.Effect<string, Error> =>
+  Effect.tryPromise({
+    try: () => readFile(file, 'utf8'),
+    catch: ensureError,
+  });
+
+/** The one wrap of this module's `node:child_process` edge. */
+const runCommand = (
+  file: string,
+  args: readonly string[],
+  env?: NodeJS.ProcessEnv,
+): Effect.Effect<string, Error> =>
+  Effect.tryPromise({
+    try: () => execFileAsync(file, [...args], env ? { env } : {}),
+    catch: ensureError,
+  }).pipe(Effect.map(({ stdout }) => stdout));
+
 /**
  * Linux: the boot id plus the raw start ticks from field 22 of
  * `/proc/<pid>/stat`. The ticks are boot-relative and never converted (a
@@ -37,22 +58,25 @@ const execFileAsync = promisify(execFile);
  */
 let linuxBootId: string | undefined;
 
-async function readLinuxIdentity(pid: number): Promise<string> {
-  linuxBootId ??= (
-    await readFile('/proc/sys/kernel/random/boot_id', 'utf8')
-  ).trim();
-  const stat = await readFile(`/proc/${pid}/stat`, 'utf8');
-  const afterComm = stat
-    .slice(stat.lastIndexOf(')') + 1)
-    .trim()
-    .split(/\s+/);
-  // `afterComm[0]` is field 3 (state); field 22 is therefore index 19.
-  const startTicks = afterComm[19];
-  if (startTicks === undefined || !/^\d+$/.test(startTicks)) {
-    throw new Error(`Unparseable /proc/${pid}/stat: ${stat.trim()}`);
-  }
-  return `${linuxBootId}:${startTicks}`;
-}
+const readLinuxIdentity = (pid: number): Effect.Effect<string, Error> =>
+  Effect.gen(function* () {
+    linuxBootId ??= (yield* readTextFile(
+      '/proc/sys/kernel/random/boot_id',
+    )).trim();
+    const stat = yield* readTextFile(`/proc/${pid}/stat`);
+    const afterComm = stat
+      .slice(stat.lastIndexOf(')') + 1)
+      .trim()
+      .split(/\s+/);
+    // `afterComm[0]` is field 3 (state); field 22 is therefore index 19.
+    const startTicks = afterComm[19];
+    if (startTicks === undefined || !/^\d+$/.test(startTicks)) {
+      return yield* Effect.fail(
+        new Error(`Unparseable /proc/${pid}/stat: ${stat.trim()}`),
+      );
+    }
+    return `${linuxBootId}:${startTicks}`;
+  });
 
 /**
  * macOS and the BSDs: `ps -o lstart=` prints the start time as
@@ -61,56 +85,69 @@ async function readLinuxIdentity(pid: number): Promise<string> {
  * `LC_TIME`, so the call pins `LC_ALL=C` for one spelling. The string is
  * compared verbatim, never parsed.
  */
-async function readPsIdentity(pid: number): Promise<string> {
-  const { stdout } = await execFileAsync(
-    'ps',
-    ['-o', 'lstart=', '-p', String(pid)],
-    { env: { ...process.env, LC_ALL: 'C' } },
-  );
-  const identity = stdout.trim();
-  if (identity === '') throw new Error(`ps printed no start time for ${pid}`);
-  return identity;
-}
+const readPsIdentity = (pid: number): Effect.Effect<string, Error> =>
+  Effect.gen(function* () {
+    const stdout = yield* runCommand(
+      'ps',
+      ['-o', 'lstart=', '-p', String(pid)],
+      { ...process.env, LC_ALL: 'C' },
+    );
+    const identity = stdout.trim();
+    if (identity === '') {
+      return yield* Effect.fail(
+        new Error(`ps printed no start time for ${pid}`),
+      );
+    }
+    return identity;
+  });
 
 /**
  * Windows: the process creation time as an ISO-8601 round-trip string via
  * PowerShell. It costs a few hundred milliseconds, which only the lease
  * probes pay, and it is the one source that makes a Windows owner provable.
  */
-async function readWindowsIdentity(pid: number): Promise<string> {
-  const { stdout } = await execFileAsync('powershell.exe', [
-    '-NoProfile',
-    '-NonInteractive',
-    '-Command',
-    `(Get-Process -Id ${pid}).StartTime.ToUniversalTime().ToString('o')`,
-  ]);
-  const identity = stdout.trim();
-  if (identity === '') {
-    throw new Error(`PowerShell printed no start time for ${pid}`);
-  }
-  return identity;
-}
+const readWindowsIdentity = (pid: number): Effect.Effect<string, Error> =>
+  Effect.gen(function* () {
+    const stdout = yield* runCommand('powershell.exe', [
+      '-NoProfile',
+      '-NonInteractive',
+      '-Command',
+      `(Get-Process -Id ${pid}).StartTime.ToUniversalTime().ToString('o')`,
+    ]);
+    const identity = stdout.trim();
+    if (identity === '') {
+      return yield* Effect.fail(
+        new Error(`PowerShell printed no start time for ${pid}`),
+      );
+    }
+    return identity;
+  });
 
-async function readIdentity(pid: number): Promise<string | undefined> {
-  try {
+const readIdentity = (pid: number): Effect.Effect<string | undefined> =>
+  Effect.suspend(() => {
     switch (process.platform) {
       case 'linux':
-        return await readLinuxIdentity(pid);
+        return readLinuxIdentity(pid);
       case 'win32':
-        return await readWindowsIdentity(pid);
+        return readWindowsIdentity(pid);
       default:
-        return await readPsIdentity(pid);
+        return readPsIdentity(pid);
     }
-  } catch (error) {
-    // The source fails when the pid does not exist; callers probing a
-    // foreign pid separate that case with `kill(pid, 0)`. Any failure to read
-    // this process's own identity is worth seeing once.
-    if (pid === process.pid) {
-      log.warn('Could not read this process start identity', { data: error });
-    }
-    return undefined;
-  }
-}
+  }).pipe(
+    Effect.catch((error) =>
+      Effect.sync(() => {
+        // The source fails when the pid does not exist; callers probing a
+        // foreign pid separate that case with `kill(pid, 0)`. Any failure to
+        // read this process's own identity is worth seeing once.
+        if (pid === process.pid) {
+          log.warn('Could not read this process start identity', {
+            data: error,
+          });
+        }
+        return undefined;
+      }),
+    ),
+  );
 
 /** Memoized only once read successfully, so a transient failure is retried. */
 let selfIdentity: string | undefined;
@@ -121,13 +158,18 @@ let selfIdentity: string | undefined;
  * string that cannot change while a process runs and that no later process
  * with the same pid can repeat: two equal strings name one process, two
  * different strings name two. Callers only compare it verbatim. Neither
- * method rejects: an unreadable identity is undefined, and `selfIdentity` is
+ * program fails: an unreadable identity is undefined, and `selfIdentity` is
  * memoized once read, retried until then.
  */
 export const nodeProcesses = {
   identity: readIdentity,
-  async selfIdentity() {
-    selfIdentity ??= await readIdentity(process.pid);
-    return selfIdentity;
-  },
+  selfIdentity: (): Effect.Effect<string | undefined> =>
+    Effect.suspend(() =>
+      selfIdentity === undefined
+        ? Effect.map(readIdentity(process.pid), (identity) => {
+            selfIdentity = identity;
+            return identity;
+          })
+        : Effect.succeed(selfIdentity),
+    ),
 };

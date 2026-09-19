@@ -139,11 +139,12 @@ const BARE_EFFECT_RUN_SITES: Readonly<Record<string, number>> = {
   // reader resolves its rows through the roots rather than coming through
   // here. Its four citty callers take the resolved context as a value.
   'packages/cli/src/commands/_helpers/context.ts': 1,
-  // The CLI's process-runtime install, which opens the global state store it
-  // provides as `AppState` before it installs the runtime that serves it:
-  // the service takes the store as a value, so the open cannot run on the
-  // runtime it is being installed into. The program needs the filesystem and
-  // nothing else, and this module is the only place the CLI installs from.
+  // The CLI's process-runtime install, which reads the process identity and
+  // opens the global state store it provides as `AppState` before it installs
+  // the runtime that serves them: both are values that install is given, so
+  // neither can run on the runtime it is being installed into. The program
+  // needs the filesystem and nothing else, and this module is the only place
+  // the CLI installs from.
   'packages/cli/src/runtime/cliProcessRuntime.ts': 1,
   // The CLI's account-plane build, the same pre-runtime construction the VS
   // Code entry is pinned for below: `ensureCliSupabaseAuth` is called by the
@@ -170,19 +171,21 @@ const BARE_EFFECT_RUN_SITES: Readonly<Record<string, number>> = {
   // before the window was wired runs the same shutdown an ordinary quit does,
   // and that drain disposes the runtime it would otherwise borrow.
   'packages/desktop/src/main/index.ts': 1,
-  // The desktop composition root, for the same reason: its four stores —
-  // global and workspace state, the config pair, and the secrets file — open
-  // before `installProcessRuntime`, because two of them are the values that
-  // install is given, and so does the account plane it hands that install.
+  // The desktop composition root, for the same reason: its process identity
+  // and its four stores — global and workspace state, the config pair, and
+  // the secrets file — resolve before `installProcessRuntime`, because three
+  // of them are the values that install is given, and so does the account
+  // plane it hands that install.
   'packages/desktop/src/main/platform/index.ts': 2,
-  // The VS Code entry's two pre-runtime folds, plus the account-plane
-  // construction in `initVscodePlatform`: `activate` reports a failed
+  // The VS Code entry's two pre-runtime folds, plus the account-plane and
+  // process-identity resolution in `initVscodePlatform`: `activate` reports a failed
   // activation and runs the cleanup that disposes the process runtime, so it
   // cannot borrow the runtime it is tearing down (the reason
   // `initPlatform.ts` above is pinned), the workspace `.env` load happens
   // before `initVscodePlatform` installs a runtime at all, and the
   // account-plane build degrades a missing-credentials throw to the
-  // unavailable shape BEFORE the runtime that will serve it exists. All three
+  // unavailable shape BEFORE the runtime that will serve it exists, and reads
+  // the process identity that install is given on the same run. All three
   // programs are service-free. The fourth is `deactivate`'s shutdown: the
   // drain and the teardown that follows it dispose the process runtime, so
   // that one program cannot settle on it either. Every other Effect in this

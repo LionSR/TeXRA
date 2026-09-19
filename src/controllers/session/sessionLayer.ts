@@ -1003,13 +1003,14 @@ const closeSession = (root: string, signal?: AbortSignal) =>
  * and install it with the session family it serves: called by a
  * composition root exactly once at startup, right beside `initPlatform()`,
  * which calls {@link disposeProcessRuntime} on its shutdown path after the
- * last session has released its graph. The identity is the process start
- * a host read before installing, or its pending read for a process whose
- * composition root is its first run (the package): the map itself never
- * waits for it, so an open registers its root with the owner before the
- * caller's first await, and only the entry's build does. The owner it
- * installs answers in Effect, on the opener's own fiber; its one
- * synchronous face, `current`, reads the held map and runs nothing.
+ * last session has released its graph. The identity is a program for the
+ * process start: already-resolved on a host that read it before installing,
+ * still a pending read for a process whose composition root is its first
+ * run (the package). The map itself never waits for it, so an open
+ * registers its root with the owner before the caller's first await, and
+ * only the entry's build does. The owner it installs answers in Effect, on
+ * the opener's own fiber; its one synchronous face, `current`, reads the
+ * held map and runs nothing.
  *
  * The process services (injection plan §3.1, the one process provide point)
  * are merged here from what the root hands over: `Secrets` and `AppState`
@@ -1024,7 +1025,7 @@ const closeSession = (root: string, signal?: AbortSignal) =>
  * `ToolInjections` over `AGENT_TOOL_INJECTIONS`, the same list for every host.
  */
 export interface ProcessRuntimeOptions {
-  readonly processStart: string | undefined | Promise<string | undefined>;
+  readonly processStart: Effect.Effect<string | undefined>;
   readonly globalStorage: string;
   readonly updateCheckStorage: string;
   readonly secrets: PlatformSecrets;
@@ -1090,19 +1091,13 @@ export function installProcessRuntime({
   editorModel,
   lean,
 }: ProcessRuntimeOptions): ProcessRuntime {
-  const identity =
-    processStart instanceof Promise
-      ? Layer.effect(
-          ProcessIdentity,
-          Effect.map(
-            // Non-rejecting by contract: the one caller that passes a
-            // pending read passes `nodeProcesses.selfIdentity()`, declared as
-            // `string | undefined`, unreadable being undefined.
-            Effect.promise(() => processStart),
-            (start) => ({ ownerId: processOwnerId(start) }),
-          ),
-        )
-      : ProcessIdentity.layer(processOwnerId(processStart));
+  // Non-failing by contract: `nodeProcesses.selfIdentity()` reports an
+  // unreadable identity as undefined, and a root that already read one hands
+  // over `Effect.succeed(...)`, which builds this layer synchronously.
+  const identity = Layer.effect(
+    ProcessIdentity,
+    Effect.map(processStart, (start) => ({ ownerId: processOwnerId(start) })),
+  );
   const services = Layer.mergeAll(
     inquiryRecordsLayer(globalStorage),
     updateCheckRecordsLayer(updateCheckStorage),

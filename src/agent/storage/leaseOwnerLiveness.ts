@@ -68,9 +68,7 @@ export const proveOwnerLiveness = (
       return 'unprovable';
     }
     if (yield* pidProvablyDead(owner.pid)) return 'dead';
-    const observed = yield* Effect.promise(() =>
-      nodeProcesses.identity(owner.pid),
-    );
+    const observed = yield* nodeProcesses.identity(owner.pid);
     if (observed === undefined) {
       // The process may have exited between the two probes.
       if (yield* pidProvablyDead(owner.pid)) return 'dead';

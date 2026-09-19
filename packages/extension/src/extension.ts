@@ -213,8 +213,6 @@ async function initVscodePlatform(
 }> {
   // The process runtime comes first: the config stores below are opened as
   // Effect programs, so it must exist before the platform this host wires.
-  // The process identity is read before installing: an opener that uses the
-  // synchronous `open` would otherwise face an asynchronous layer build.
   const storage = createNodeStorageProvider({ workspacePath: workspaceRoot });
   installLongRunningModelDispatcher();
   // Both process stores exist before the runtime here: VS Code hands the
@@ -226,19 +224,26 @@ async function initVscodePlatform(
   // failing activation: registration below records and reports the error, and
   // every probe answers signed-out — what the facade's statics answered when
   // initialization threw.
-  const auth = Effect.runSync(
-    createSupabaseAuth({
-      secrets,
-      whenReady: () =>
-        Effect.suspend(() =>
-          authReadiness.uriHandlerInstalled
-            ? Effect.void
-            : Effect.fail(new Error(AUTH_URI_HANDLER_NOT_INITIALIZED)),
-        ),
-      log: logger,
-    }).pipe(
-      Effect.catch((error) => Effect.succeed(unavailableSupabaseAuth(error))),
-    ),
+  // The account plane and the process identity both resolve before the
+  // runtime that serves them, on one pre-runtime run: an opener that uses the
+  // synchronous `open` would otherwise face an asynchronous identity layer
+  // build.
+  const { auth, processStart } = await Effect.runPromise(
+    Effect.gen(function* () {
+      const auth = yield* createSupabaseAuth({
+        secrets,
+        whenReady: () =>
+          Effect.suspend(() =>
+            authReadiness.uriHandlerInstalled
+              ? Effect.void
+              : Effect.fail(new Error(AUTH_URI_HANDLER_NOT_INITIALIZED)),
+          ),
+        log: logger,
+      }).pipe(
+        Effect.catch((error) => Effect.succeed(unavailableSupabaseAuth(error))),
+      );
+      return { auth, processStart: yield* nodeProcesses.selfIdentity() };
+    }),
   );
   // The resume port closes over the runtime installed just below: a resume
   // attempt runs on it, and the port is only invoked after activation has
@@ -248,7 +253,7 @@ async function initVscodePlatform(
       tryResumeFromResumeData(runId, runtime, getSession(), recovery),
   };
   const runtime = installProcessRuntime({
-    processStart: await nodeProcesses.selfIdentity(),
+    processStart: Effect.succeed(processStart),
     globalStorage: storage.getGlobalStoragePath(),
     updateCheckStorage: storage.getGlobalStoragePath(),
     secrets,
