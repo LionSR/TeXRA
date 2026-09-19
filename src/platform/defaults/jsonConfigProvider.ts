@@ -23,7 +23,6 @@ import {
  */
 export interface ConfigStore {
   get<T>(key: string): T | undefined;
-  has(key: string): boolean;
   set(key: string, value: unknown): Effect.Effect<void, Error>;
 }
 
@@ -83,12 +82,5 @@ export class JsonConfigProvider implements ConfigProvider {
       globalValue: this.globalStore.get<T>(storedKey),
       workspaceValue: this.workspaceStore.get<T>(storedKey),
     };
-  }
-
-  isExplicitlySet(key: string): boolean {
-    const storedKey = canonicalConfigKey(key);
-    return (
-      this.workspaceStore.has(storedKey) || this.globalStore.has(storedKey)
-    );
   }
 }

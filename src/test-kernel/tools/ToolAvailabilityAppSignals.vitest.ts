@@ -27,7 +27,6 @@ const probeInputs: ToolProbeInputs = {
     get: unreadConfig,
     update: unreadConfig,
     inspect: unreadConfig,
-    isExplicitlySet: unreadConfig,
   } satisfies ConfigProvider,
 };
 

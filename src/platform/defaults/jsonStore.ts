@@ -194,10 +194,6 @@ export class JsonStore implements StateStore {
     return value === undefined ? (defaultValue as T) : (value as T);
   }
 
-  has(key: string): boolean {
-    return Object.hasOwn(this.data, key);
-  }
-
   /**
    * Commit one mutation: take the file's lane in {@link writeLanes}, apply
    * the mutation to this instance's record, and flush it. Lanes are claimed

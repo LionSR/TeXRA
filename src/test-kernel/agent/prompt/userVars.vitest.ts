@@ -57,7 +57,6 @@ const callerDefaultConfig: ConfigProvider = {
   },
   update: () => Effect.void,
   inspect: () => undefined,
-  isExplicitlySet: () => false,
 };
 
 setupPlatform({}, { config: fakeConfig });

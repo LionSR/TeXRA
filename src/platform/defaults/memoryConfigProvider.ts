@@ -10,14 +10,10 @@ class MemoryConfigStore implements ConfigStore {
     return this.values.get(key) as T | undefined;
   }
 
-  has(key: string): boolean {
-    return this.values.has(key);
-  }
-
   set(key: string, value: unknown): Effect.Effect<void, Error> {
     return Effect.sync(() => {
-      // `JsonStore` treats `undefined` as a delete; match it so
-      // `isExplicitlySet` agrees across backings.
+      // `JsonStore` treats `undefined` as a delete; match it so a cleared
+      // key reads the same across backings.
       if (value === undefined) {
         this.values.delete(key);
       } else {
