@@ -343,10 +343,16 @@ export const launchAgentCliSession = Effect.fn(
 });
 
 /**
- * Run the shared agent-CLI execute() prelude: refuse a run that cannot collect
- * the result, request bash approval for the labelled command, fire the
- * post-approval in-progress hook, then dispatch to the resume/launch branch
- * with the active run context.
+ * Run the shared agent-CLI execute() prelude: refuse a call that has no run to
+ * launch under or cannot collect the result, request bash approval for the
+ * labelled command, fire the post-approval in-progress hook, then dispatch to
+ * the resume/launch branch with the active run.
+ *
+ * The run check is the one place either tool asks it: an agent-CLI child is
+ * registered under its parent run and delivers every turn as a follow-up to
+ * it, so a standalone host invocation has nowhere to put the child. Failing
+ * here hands the whole chain a `NonNullable` run instead of re-asking at each
+ * step, and refuses before the approval prompt rather than after it.
  *
  * Both agent-CLI tools deliver every turn as a follow-up message. A run with
  * `stopAfterCycle` ends after the current cycle, so that follow-up would land
@@ -360,9 +366,14 @@ const withAgentCliApproval = Effect.fn('agentCliShared.withAgentCliApproval')(
     toolCall: ToolCallShape,
     requestApproval: typeof requestBashApproval,
     run: (
-      run: ToolCallShape['run'],
+      run: AgentCliRun,
     ) => Effect.Effect<ToolResult, AgentCliToolFailure, R>,
   ): Effect.fn.Return<ToolResult, AgentCliToolFailure, R | ToolCall> {
+    if (!toolCall.run) {
+      return yield* Effect.fail(
+        new ToolError(`${toolName} requires an active run context.`),
+      );
+    }
     if (toolCall.stopAfterCycle) {
       return yield* Effect.fail(
         new ToolError(
@@ -382,9 +393,14 @@ const withAgentCliApproval = Effect.fn('agentCliShared.withAgentCliApproval')(
   },
 );
 
+/** The launching run, once {@link withAgentCliApproval} has established it. */
+type AgentCliRun = NonNullable<ToolCallShape['run']>;
+
 /** Run context resolved for an agent-CLI launch, handed to the provider's
  * `launch` callback by {@link dispatchAgentCliTool}. */
 interface AgentCliLaunchContext {
+  /** The launching run's session: the child's registration and delivery target. */
+  session: SessionHandle;
   parentRunId: RunId;
   parentWorkingDirectory: string | undefined;
   /** Release the disk-based fallback claim if the launch fails before promoting
@@ -407,7 +423,6 @@ interface AgentCliLaunchContext {
  * runs it at its own edge with {@link reraiseAgentCliCallFailure} piped in.
  */
 export function dispatchAgentCliTool<R = never>(params: {
-  session: SessionHandle;
   toolCall: ToolCallShape;
   /** Bound at the tool entry so approval retains the parent run's policy. */
   requestApproval: typeof requestBashApproval;
@@ -445,7 +460,7 @@ export function dispatchAgentCliTool<R = never>(params: {
     (run) =>
       Effect.gen(function* () {
         const registry = store(yield* Runs);
-        const callerRunId = run?.runId;
+        const callerRunId = run.runId;
         if (sourceId) {
           yield* requireCallerOwnership(
             sourceId,
@@ -455,23 +470,18 @@ export function dispatchAgentCliTool<R = never>(params: {
           );
         }
         return yield* resumeOrLaunchAgentCliSession(registry, {
-          session: params.session,
+          session: run.session,
           id: resumeId,
           prompt,
           callerRunId,
           labels,
-          launch: (releaseFallbackClaim) => {
-            if (!run) {
-              return Effect.fail(
-                new ToolError(`${agentName} requires an active run context.`),
-              );
-            }
-            return launch({
+          launch: (releaseFallbackClaim) =>
+            launch({
+              session: run.session,
               parentRunId: run.runId,
               parentWorkingDirectory: params.toolCall.workingDirectory,
               releaseFallbackClaim,
-            });
-          },
+            }),
         });
       }),
   );
