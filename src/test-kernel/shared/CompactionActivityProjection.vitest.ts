@@ -8,19 +8,26 @@ import {
   type StreamLogEntry,
 } from '@shared/schemas';
 import {
-  applyCompactionActivityEntries,
+  applyCompactionActivityEntry,
   createCompactionActivityProjection,
   settleCompactionActivities,
   type CompactionActivityProjection,
 } from '@shared/runs/compactionActivityProjection';
 
+/** Feed entries to the production reducer in source order, as the fold does. */
+function apply(
+  projection: CompactionActivityProjection,
+  entries: readonly StreamLogEntry[],
+): CompactionActivityProjection {
+  for (const entry of entries) applyCompactionActivityEntry(projection, entry);
+  return projection;
+}
+
 /** Test-local full replay through the production reducer (the resync path). */
 function projectCompactionActivities(
   entries: readonly StreamLogEntry[],
 ): CompactionActivityProjection {
-  const projection = createCompactionActivityProjection();
-  applyCompactionActivityEntries(projection, entries);
-  return projection;
+  return apply(createCompactionActivityProjection(), entries);
 }
 
 function activityEntry(
@@ -98,32 +105,14 @@ describe('compaction activity projection', () => {
     ).toEqual([]);
   });
 
-  it('matches full replay and incremental application', () => {
-    const entries = [
-      activityEntry(1, 'a', 'started'),
-      activityEntry(2, 'b', 'started'),
-      activityEntry(3, 'a', 'completed'),
-      activityEntry(4, 'b', 'skipped'),
-    ];
-    const incremental = createCompactionActivityProjection();
-    applyCompactionActivityEntries(incremental, entries.slice(0, 2));
-    applyCompactionActivityEntries(incremental, entries.slice(2));
-
-    expect(incremental).toEqual(projectCompactionActivities(entries));
-  });
-
   it('keeps compaction active while the same response starts streaming text', () => {
-    const projection = createCompactionActivityProjection();
-
-    applyCompactionActivityEntries(projection, [
+    const projection = projectCompactionActivities([
       activityEntry(1, 'live', 'started'),
       advancingEntry(2),
     ]);
     expect(projection.blocks[0]?.status).toBe('running');
 
-    applyCompactionActivityEntries(projection, [
-      activityEntry(3, 'live', 'completed'),
-    ]);
+    apply(projection, [activityEntry(3, 'live', 'completed')]);
     expect(projection.blocks[0]).toMatchObject({
       status: 'completed',
       finishedAt: 30,
@@ -138,18 +127,14 @@ describe('compaction activity projection', () => {
     ]);
     expect(projection.blocks[0]?.status).toBe('running');
 
-    applyCompactionActivityEntries(projection, [
-      advancingEntry(4, MESSAGE_TYPES.USER_MESSAGE),
-    ]);
+    apply(projection, [advancingEntry(4, MESSAGE_TYPES.USER_MESSAGE)]);
     expect(projection.blocks[0]).toMatchObject({
       status: 'interrupted',
       finalized: false,
       finishedAt: 40,
     });
 
-    applyCompactionActivityEntries(projection, [
-      activityEntry(5, 'live', 'completed'),
-    ]);
+    apply(projection, [activityEntry(5, 'live', 'completed')]);
     expect(projection.blocks[0]).toMatchObject({
       status: 'completed',
       finalized: true,
@@ -168,16 +153,14 @@ describe('compaction activity projection', () => {
       finishedAt: 20,
     });
 
-    settleCompactionActivities(projection, { finishedAt: 25 });
+    settleCompactionActivities(projection, 25);
     expect(projection.blocks[0]).toMatchObject({
       status: 'interrupted',
       finalized: true,
       finishedAt: 20,
     });
 
-    applyCompactionActivityEntries(projection, [
-      activityEntry(4, 'late', 'completed'),
-    ]);
+    apply(projection, [activityEntry(4, 'late', 'completed')]);
     expect(projection.blocks[0]?.status).toBe('interrupted');
   });
 });
