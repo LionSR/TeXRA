@@ -51,7 +51,7 @@ Things the tree won't tell you:
   `packages/agent/src/**` from importing host layers, and the ratchets in
   `config/ratchets/` freeze the remaining edges — `host-agent-import-baseline`
   (no NEW distinct `@agent/*` deep-import specifier from a host, type-only
-  included), `shared-schemas-deep-import`, `host-agent-mock`,
+  included), `host-agent-mock`,
   `architecture-edges`, and `effect-migration` (per-file allowlists of
   shrink-only counts: `platform()`, `new AbortController(`,
   superseded package imports, `Effect.run*` boundary calls, raw catches in
@@ -70,8 +70,10 @@ Things the tree won't tell you:
   another lint rule. npm publication is deliberately held until a named external
   consumer exists. Kernel architecture tests under
   `src/test-kernel/architecture/` (including
-  `approvalPolicyAuthorityRatchet.vitest.ts`) also pin single-authority
-  invariants with hardcoded allowlists rather than baseline JSON.
+  `approvalPolicyAuthorityRatchet.vitest.ts`, and
+  `sharedSchemasDeepImportRatchet.vitest.ts`, which forbids every
+  `@shared/schemas/<leaf>` import outright) also pin single-authority
+  invariants with hardcoded rules rather than baseline JSON.
 - **`src/utils/` is host-agnostic, not universally browser-safe.** Only the
   `BROWSER_SAFE_UTILS` allowlist in `eslint.config.mjs` (`@utils/core`,
   `@utils/errors/errorMessage`,
