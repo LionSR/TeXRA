@@ -771,26 +771,33 @@ function createWindow(options: {
       if (provider === undefined) return;
       yield* desktopAuth.signIn(provider);
     });
-  const signInForRemoteAgentCatalog = () =>
-    Effect.tryPromise({
-      try: async () => {
-        const provider = await chooseOAuthProvider();
-        if (provider === undefined) return false;
-        teamSignInPending = true;
-        try {
-          return (
-            (await desktopAuth.signInAndWaitForSession(provider)) &&
-            (await runtime.runPromise(options.supabaseAuth.authenticated))
-          );
-        } finally {
-          teamSignInPending = false;
-        }
-      },
-      catch: (cause) =>
-        new SignInFailed({
-          message: `The desktop sign-in could not run: ${toErrorMessage(cause)}`,
-          cause,
-        }),
+  const signInFailed = (cause: unknown) =>
+    new SignInFailed({
+      message: `The desktop sign-in could not run: ${toErrorMessage(cause)}`,
+      cause,
+    });
+  const signInForRemoteAgentCatalog = (): Effect.Effect<
+    boolean,
+    SignInFailed
+  > =>
+    Effect.gen(function* () {
+      const provider = yield* Effect.tryPromise({
+        try: chooseOAuthProvider,
+        catch: signInFailed,
+      });
+      if (provider === undefined) return false;
+      teamSignInPending = true;
+      return yield* Effect.gen(function* () {
+        const signedIn = yield* desktopAuth.signInAndWaitForSession(provider);
+        return signedIn && (yield* options.supabaseAuth.authenticated);
+      }).pipe(
+        Effect.mapError(signInFailed),
+        Effect.ensuring(
+          Effect.sync(() => {
+            teamSignInPending = false;
+          }),
+        ),
+      );
     });
   windowResources.add(
     options.setupAuth.registerSignIn(signInForRemoteAgentCatalog),

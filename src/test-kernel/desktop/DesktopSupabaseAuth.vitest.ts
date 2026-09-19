@@ -330,8 +330,8 @@ describe('desktop Supabase auth', () => {
     const { router, coordinator, oauthClient, auth } = createAuthSetup();
 
     let completed = false;
-    const completion = auth
-      .signInAndWaitForSession(undefined, { timeoutMs: 1_000 })
+    const completion = testRuntime()
+      .runPromise(auth.signInAndWaitForSession(undefined, { timeoutMs: 1_000 }))
       .then((result) => {
         completed = true;
         return result;
@@ -349,9 +349,9 @@ describe('desktop Supabase auth', () => {
 
   it('cancels a waiting system-browser sign-in without throwing', async () => {
     const { oauthClient, auth } = createAuthSetup();
-    const completion = auth.signInAndWaitForSession(undefined, {
-      timeoutMs: 1_000,
-    });
+    const completion = testRuntime().runPromise(
+      auth.signInAndWaitForSession(undefined, { timeoutMs: 1_000 }),
+    );
     await vi.waitFor(() =>
       expect(oauthClient.auth.signInWithOAuth).toHaveBeenCalled(),
     );
@@ -375,9 +375,9 @@ describe('desktop Supabase auth', () => {
         isAuthError: true,
       }),
     );
-    const completion = auth.signInAndWaitForSession(undefined, {
-      timeoutMs: 1_000,
-    });
+    const completion = testRuntime().runPromise(
+      auth.signInAndWaitForSession(undefined, { timeoutMs: 1_000 }),
+    );
     await vi.waitFor(() =>
       expect(oauthClient.auth.signInWithOAuth).toHaveBeenCalled(),
     );
@@ -412,9 +412,9 @@ describe('desktop Supabase auth', () => {
     coordinator.createSessionFromCallback.mockReturnValueOnce(
       Effect.fail(new AuthPortError({ cause: new Error('callback failure') })),
     );
-    const completion = auth.signInAndWaitForSession(undefined, {
-      timeoutMs: 1_000,
-    });
+    const completion = testRuntime().runPromise(
+      auth.signInAndWaitForSession(undefined, { timeoutMs: 1_000 }),
+    );
     await vi.waitFor(() =>
       expect(oauthClient.auth.signInWithOAuth).toHaveBeenCalled(),
     );
@@ -792,13 +792,15 @@ describe('desktop Supabase auth', () => {
   it('keeps a newer attempt valid beyond a superseded waiter timeout', async () => {
     const { router, coordinator, oauthClient, auth } = createAuthSetup();
 
-    const first = auth.signInAndWaitForSession(undefined, { timeoutMs: 10 });
+    const first = testRuntime().runPromise(
+      auth.signInAndWaitForSession(undefined, { timeoutMs: 10 }),
+    );
     await vi.waitFor(() => {
       expect(oauthClient.auth.signInWithOAuth).toHaveBeenCalledOnce();
     });
-    const second = auth.signInAndWaitForSession(undefined, {
-      timeoutMs: 1_000,
-    });
+    const second = testRuntime().runPromise(
+      auth.signInAndWaitForSession(undefined, { timeoutMs: 1_000 }),
+    );
     await expect(first).resolves.toBe(false);
     await new Promise((resolve) => setTimeout(resolve, 20));
 
@@ -819,7 +821,9 @@ describe('desktop Supabase auth', () => {
     vi.useFakeTimers();
     try {
       await expect(
-        auth.signInAndWaitForSession(undefined, { timeoutMs: 60_000 }),
+        testRuntime().runPromise(
+          auth.signInAndWaitForSession(undefined, { timeoutMs: 60_000 }),
+        ),
       ).rejects.toThrow();
       expect(showErrorMessage).not.toHaveBeenCalled();
       // The waiter and its timeout go with the failed attempt, so nothing is
