@@ -1422,9 +1422,7 @@ function createWindow(options: {
         },
         subscriptionUsage,
         onCredentialChanged: () =>
-          runtime.runPromise(
-            onboardingIpcRef.current?.refreshOnboardingFunnel() ?? Effect.void,
-          ),
+          onboardingIpcRef.current?.refreshOnboardingFunnel() ?? Effect.void,
         onModelOptionsChanged: refreshCatalogs,
         // Credential operations already show their specific failure dialog. Keep
         // the shared callback log-only so one failure never opens a second,

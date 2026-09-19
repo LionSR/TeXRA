@@ -51,7 +51,7 @@ import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { SettingsStatePorts } from '@shared/settingsView/types';
 import { getProviderKeyUrl } from '@utils/config/providerConfig';
 import { allSettledVoid } from '@utils/core/allSettledVoid';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /**
  * A sign-in presenter (the device-code dialog, the browser-opened notice)
@@ -122,7 +122,14 @@ interface DesktopCredentialSettingsControllerOptions extends SettingsStatePorts 
     SubscriptionUsageService,
     'getAllUsage' | 'invalidate'
   >;
-  readonly onCredentialChanged: () => Promise<void>;
+  /** A credential changed: the window's dependent surfaces refresh. A
+   *  program like the catalog fan-out below it, so the refresh joins the run
+   *  that wrote the credential rather than opening one of its own. */
+  readonly onCredentialChanged: () => Effect.Effect<
+    void,
+    Error,
+    ProcessServices
+  >;
   /** The model catalog changed: every open paper's `host` snapshot reloads
    *  it (PRD 8.1). */
   readonly onModelOptionsChanged: () => Effect.Effect<
@@ -366,14 +373,6 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
     return this.options.onModelOptionsChanged();
   }
 
-  /** The window's credential fan-out, lifted once, as above. */
-  private credentialChanged() {
-    return Effect.tryPromise({
-      try: () => this.options.onCredentialChanged(),
-      catch: ensureError,
-    });
-  }
-
   refreshAuthDependentData() {
     return this.postModelSelectionData().pipe(
       Effect.andThen(this.refreshModelOptions()),
@@ -560,7 +559,7 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
       }
       yield* this.postModelSelectionData();
       yield* this.refreshModelOptions();
-      yield* this.credentialChanged();
+      yield* this.options.onCredentialChanged();
     });
   }
 
@@ -573,7 +572,7 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
       yield* this.postModelSelectionData();
       yield* this.refreshModelOptions();
       if (usageProvider) yield* this.postSubscriptionUsage();
-      yield* this.credentialChanged();
+      yield* this.options.onCredentialChanged();
     });
   }
 
@@ -590,7 +589,7 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
       ];
       if (usageProvider) posts.push(this.postSubscriptionUsage());
       yield* allSettledVoid(posts);
-      yield* this.credentialChanged();
+      yield* this.options.onCredentialChanged();
     });
   }
 

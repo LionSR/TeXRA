@@ -113,9 +113,11 @@ async function createFixture({
   const errors: string[] = [];
   const signIn = vi.fn(() => Effect.void);
   const signOut = vi.fn(async () => undefined);
-  const onCredentialChanged = vi.fn(async () => {
-    events.push('credential');
-  });
+  const onCredentialChanged = vi.fn(() =>
+    Effect.sync(() => {
+      events.push('credential');
+    }),
+  );
   const onModelOptionsChanged = vi.fn(() =>
     Effect.sync(() => {
       events.push('modelOptions');
