@@ -19,7 +19,7 @@ import {
   checkToolInstalled,
   detectPackageManager,
 } from '@utils/system/toolUtils';
-import { BinaryResolver } from '@utils/system/binaryResolver';
+import { findToolInCommonPaths } from '@utils/system/platformPaths';
 
 import {
   postToWebview,
@@ -131,7 +131,7 @@ function resolveUpdateValue(
 export class LatexSettingsHandlers {
   private readonly toolingController = new LatexToolingController({
     checkToolInstalled: (tool) => checkToolInstalled(tool, false),
-    findPath: (tool) => BinaryResolver.findPath(tool),
+    findPath: findToolInCommonPaths,
     detectPackageManager,
     getPlatform: () => normalizePlatform(process.platform),
     isLatexWorkshopInstalled: () =>

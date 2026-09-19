@@ -17,7 +17,7 @@ import { createFakeHost, setupPlatform } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { executeCommandSync } from '@utils/system/execCore';
 import { executeCommand } from '@utils/system/execUtils';
-import { BinaryResolverService } from '@utils/system/binaryResolver';
+import { resolveOptionalCommand } from '@utils/system/binaryResolver';
 
 // ---------------------------------------------------------------------------
 // execUtils
@@ -397,45 +397,34 @@ describe('executeCommand', () => {
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
-// BinaryResolver
+// resolveOptionalCommand
 // ---------------------------------------------------------------------------
 
-function createResolver(
-  paths: Record<string, string | null>,
-  isWindows = false,
-): BinaryResolverService {
-  return new BinaryResolverService({
-    findTool: (toolName) => paths[toolName] ?? null,
-    isWindows,
-  });
-}
-
-describe('BinaryResolverService', () => {
+describe('resolveOptionalCommand', () => {
   it('routes Perl scripts through the Perl launcher', () => {
-    const resolver = createResolver({
-      latexindent: '/usr/local/texlive/scripts/latexindent/latexindent.pl',
-    });
+    const resolvedPath =
+      '/usr/local/texlive/scripts/latexindent/latexindent.pl';
 
-    assert.deepEqual(resolver.resolveOptionalCommand('latexindent', ['-w']), {
-      command: 'perl',
-      args: ['/usr/local/texlive/scripts/latexindent/latexindent.pl', '-w'],
-      resolvedPath: '/usr/local/texlive/scripts/latexindent/latexindent.pl',
-    });
+    assert.deepEqual(
+      resolveOptionalCommand('latexindent', ['-w'], { resolvedPath }),
+      {
+        command: 'perl',
+        args: [resolvedPath, '-w'],
+        resolvedPath,
+      },
+    );
   });
 
   it('launches extensionless Windows binaries directly', () => {
-    const resolver = createResolver({ sox: 'C:\\msys64\\usr\\bin\\sox' }, true);
+    const resolvedPath = 'C:\\msys64\\usr\\bin\\sox';
 
-    assert.deepEqual(resolver.resolveOptionalCommand('sox'), {
-      command: 'C:\\msys64\\usr\\bin\\sox',
-      args: [],
-      resolvedPath: 'C:\\msys64\\usr\\bin\\sox',
-    });
+    assert.deepEqual(
+      resolveOptionalCommand('sox', [], { resolvedPath, isWindows: true }),
+      { command: resolvedPath, args: [], resolvedPath },
+    );
   });
 
   it('returns null when a command cannot be resolved', () => {
-    const resolver = createResolver({});
-
-    assert.deepEqual(resolver.resolveOptionalCommand('tex-fmt'), null);
+    assert.deepEqual(resolveOptionalCommand('texra-no-such-binary'), null);
   });
 });
