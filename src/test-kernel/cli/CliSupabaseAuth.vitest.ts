@@ -421,7 +421,14 @@ describe('CLI Supabase auth', () => {
         });
         const interrupting = yield* Effect.forkChild(Fiber.interrupt(fiber));
 
-        yield* Effect.promise(() => releaseReachedWait);
+        // A teardown that skipped the grace would settle the fiber instead of
+        // reaching the wait, so race the two rather than waiting one out.
+        const reachedWait = yield* Effect.raceFirst(
+          Effect.promise(() => releaseReachedWait).pipe(Effect.as(true)),
+          Fiber.await(fiber).pipe(Effect.as(false)),
+        );
+
+        expect(reachedWait).toBe(true);
         expect(callbackServer.closed).not.toHaveBeenCalled();
         yield* Deferred.succeed(commit, session);
         const exit = yield* Fiber.await(fiber);
