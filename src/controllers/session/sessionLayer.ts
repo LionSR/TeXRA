@@ -296,42 +296,44 @@ const sessionHandleLayer = (
           SubscriptionRef.getUnsafe(view.ref).cursor,
           SubscriptionRef.getUnsafe(delivered),
         );
+      /** The settled level as a stream: `settledCursor` re-read on every
+       *  move of either coordinate. It ends with the fold (`view.changes`,
+       *  rather than the bare ref `folded` wakes on, whose tail outlives
+       *  every reader), so a wait on it is answered or dies, never hangs. */
+      const settledChanges = Stream.merge(
+        view.changes,
+        SubscriptionRef.changes(delivered),
+        { haltStrategy: 'left' },
+      ).pipe(Stream.map(settledCursor));
       /** Wait until the tail has delivered and the view has folded every
        *  commit up to `commit`: what "published" means to a caller that
-       *  reads the view next. */
+       *  reads the view next. One wait on the level both coordinates feed,
+       *  since `settledCursor` is already their min. */
       const settleTo = (commit: CommitOrdinal) =>
-        Effect.gen(function* () {
-          yield* SubscriptionRef.changes(delivered).pipe(
-            Stream.filter((delivered) => delivered >= commit),
-            Stream.runHead,
-            Effect.raceFirst(
-              Deferred.await(tailEnded).pipe(
-                // Invariant: the tail outlives every publication it settles.
-                // A wait on a tail that ended can never be answered, so it
-                // dies, with the read failure that ended the tail, if any.
-                Effect.orDie,
-                Effect.andThen(
-                  Effect.die(
-                    new Error('Session committed-event consumer stopped'),
-                  ),
+        settledChanges.pipe(
+          Stream.filter((cursor) => cursor >= commit),
+          Stream.runHead,
+          Effect.raceFirst(
+            Deferred.await(tailEnded).pipe(
+              // Invariant: the tail outlives every publication it settles.
+              // A wait on a tail that ended can never be answered, so it
+              // dies, with the read failure that ended the tail, if any.
+              Effect.orDie,
+              Effect.andThen(
+                Effect.die(
+                  new Error('Session committed-event consumer stopped'),
                 ),
               ),
             ),
-          );
-          yield* view.changes.pipe(
-            Stream.filter((state) => state.cursor >= commit),
-            Stream.runHead,
-            Effect.flatMap((state) =>
-              Option.isSome(state)
-                ? Effect.void
-                : Effect.die(
-                    new Error(
-                      'Session view stopped before publication settled',
-                    ),
-                  ),
-            ),
-          );
-        });
+          ),
+          Effect.flatMap((cursor) =>
+            Option.isSome(cursor)
+              ? Effect.void
+              : Effect.die(
+                  new Error('Session view stopped before publication settled'),
+                ),
+          ),
+        );
       const settlePublication = (rows: readonly SessionEvent[]) => {
         const last = rows.at(-1);
         return last === undefined
