@@ -34,6 +34,11 @@ All notable changes to this project will be documented in this file.
 
 ### Bug Fixes
 
+- **GPT-5.6 works on a ChatGPT subscription again.** Selecting GPT-5.6 sent an
+  abbreviated model name the Codex service does not recognise, and it answered
+  that the model "is not supported when using Codex with a ChatGPT account" —
+  which reads as a problem with your plan rather than with the name. The full
+  model name is sent now.
 - A model call covered by a subscription no longer reports itself as "free" —
   the run footer and session summary name the plan that covered it
   (**ChatGPT Pro**, **ChatGPT Plus**), falling back to **ChatGPT
