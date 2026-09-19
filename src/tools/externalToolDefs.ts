@@ -59,7 +59,6 @@ import {
 import { isGitRepository } from '@utils/git/isGitRepository';
 import { formatResultCount } from '@utils/text/stringUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { getProcessSettingHost } from '@utils/config/platformSettings';
 
 const log = createLog('externalToolDefs');
 
@@ -587,7 +586,9 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
           const extensionAvailable =
             setup.extensions?.isInstalled(LEAN4_EXTENSION_ID) ?? false;
           const lakeAvailable = findToolInCommonPaths('lake') !== null;
-          const requiresExtension = getProcessSettingHost() === 'vscode';
+          // The setup port the probe already holds names the running product,
+          // and only the VS Code build drives Lean through the extension.
+          const requiresExtension = setup.host === 'extension';
           return { extensionAvailable, lakeAvailable, requiresExtension };
         }),
       fallback: () =>
