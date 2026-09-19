@@ -37,6 +37,7 @@ import {
 } from '@llm/openaiResponses';
 import { openrouterChatModel } from '@llm/openrouterChat';
 import {
+  type ChatConfiguration,
   type Model,
   type ModelConfiguration,
   type ModelError,
@@ -185,6 +186,11 @@ type Protocol = ModelConfiguration['protocol'];
 /** The protocols the package constructs a model for; the editor's is the host's. */
 type HttpProtocol = Exclude<Protocol, 'vscode-lm'>;
 type HttpConfiguration = Exclude<ModelConfiguration, { protocol: 'vscode-lm' }>;
+/** One protocol's configuration, keyed by the discriminant it carries. */
+type ConfigurationOf<P extends HttpProtocol> = Extract<
+  HttpConfiguration,
+  { protocol: P }
+>;
 
 const PROTOCOL_BY_KEY: Record<ModelCompatibilityKey, Protocol | 'validation'> =
   {
@@ -319,67 +325,157 @@ const CODEX_ALLOWED_EFFORTS: readonly RouteEffort[] = [
   ReasoningEffort.MEDIUM,
 ];
 
-function configurationFor(
-  protocol: HttpProtocol,
-  config: ModelConfig,
+type ResponsesAuthentication = Parameters<
+  typeof openaiResponsesWebSocketModel
+>[1];
+
+/** The Responses bearer: a subscription token names its account, a key does not. */
+function responsesAuthentication(
   credential: RouteCredential,
-  input: BindModelInput,
-): HttpConfiguration {
-  const { capabilities } = config;
-  const maxOutputTokens =
-    input.agentCategory === AgentCategory.ToolUse
-      ? Math.max(
-          1,
-          Math.floor(config.maxOutputTokens * TOOL_USE_MAX_OUTPUT_FACTOR),
-        )
-      : config.maxOutputTokens;
-  const supportsTemperature = !capabilities.supportsReasoning;
-  const effort = routeEffort(capabilities.reasoningEffort);
-  const supportedEfforts = supportedRouteEfforts(config);
-  const thinkingMode = capabilities.supportsReasoning ? 'enabled' : 'disabled';
-  // The user's parallel-tool-calls choice, honored on every OpenAI-descended
-  // arm, the DeepSeek, Kimi and GLM reasoning routes included, matching what
-  // the retired OpenAI handler base sent. The Anthropic arm never read the
-  // setting and keeps the provider default.
-  const parallelToolCalls = readConfig<boolean>(
-    input.stores.config,
-    'texra.model.openaiParallelToolCalls',
-  );
-  const base = binding(config, credential);
-  switch (protocol) {
-    case 'anthropic-messages':
-      return {
-        ...base,
-        protocol,
-        supportsInputTokenEstimation: capabilities.supportsTokenCounting,
-        supportsTemperature,
-        supportsForcedToolChoice: true,
-        defaults: {
-          maxOutputTokens,
-          temperature: supportsTemperature ? input.temperature : null,
-          parallelToolCalls: true,
-          thinking: anthropicThinking(capabilities, maxOutputTokens),
-          effort: capabilities.supportsReasoningEffort ? effort : null,
-          cache: capabilities.supportsPromptCaching ? '5m' : 'disabled',
-          stopSequences: [],
-        },
-      };
-    case 'openai-chat':
-      return {
-        ...base,
-        protocol,
-        supportsTemperature,
-        supportedEfforts: [...supportedEfforts],
-        defaults: {
-          maxOutputTokens,
-          temperature: supportsTemperature ? input.temperature : null,
-          parallelToolCalls,
-          effort: capabilities.supportsReasoningEffort
-            ? capabilities.reasoningEffort
-            : null,
-        },
-      };
-    case 'openai-responses': {
+): ResponsesAuthentication {
+  return credential.route === 'chatgpt-subscription'
+    ? {
+        kind: 'codex',
+        accessToken: credential.accessToken,
+        accountId: credential.accountId,
+      }
+    : { kind: 'api-key', apiKey: routeBearer(credential) };
+}
+
+/** The seven OpenAI-compatible chat protocols share one package factory. */
+function chatModel(
+  configuration: ChatConfiguration,
+  credential: RouteCredential,
+): Model {
+  return openaiChatModel(configuration, { apiKey: routeBearer(credential) });
+}
+
+/**
+ * What every protocol's configuration is derived from, computed once per bind:
+ * the shared binding, the run's ceilings, and the effort and thinking facts
+ * the arms read off the catalog and the live settings.
+ */
+interface BindingFacts {
+  readonly config: ModelConfig;
+  /** `config.capabilities`, which most arms read several fields of. */
+  readonly capabilities: ModelConfig['capabilities'];
+  readonly credential: RouteCredential;
+  readonly input: BindModelInput;
+  /** Requested model and deployment; only a route addressed under another
+   *  name overrides it. */
+  readonly base: ReturnType<typeof binding>;
+  /**
+   * The three request controls every OpenAI-descended route defaults from, in
+   * the package's own order. An arm that clamps or fixes one overrides it
+   * after the spread; an arm whose route takes only some of the three names
+   * those, because a spread is not excess-property-checked and the package
+   * parses its configuration strictly.
+   */
+  readonly controls: {
+    readonly maxOutputTokens: number;
+    readonly temperature: number | null;
+    readonly parallelToolCalls: boolean;
+  };
+  readonly supportsTemperature: boolean;
+  readonly effort: RouteEffort | null;
+  readonly supportedEfforts: readonly RouteEffort[];
+  readonly thinkingMode: 'enabled' | 'disabled';
+}
+
+/**
+ * Whether a bound configuration admits background work. `false` is a protocol
+ * with no background mode at all, which is most of them; a predicate reads the
+ * fact off the configuration the bind produced.
+ */
+type BackgroundRule<P extends HttpProtocol> =
+  false | ((configuration: ConfigurationOf<P>) => boolean);
+
+/**
+ * What one HTTP protocol contributes: the configuration it binds over the
+ * shared facts, the package factory its model comes from, and its background
+ * stance. Three facts in one place, so a new provider is one entry instead of
+ * an arm in each of three switches.
+ */
+interface ProtocolDescriptor<P extends HttpProtocol> {
+  readonly configure: (facts: BindingFacts) => ConfigurationOf<P>;
+  readonly construct: (
+    configuration: ConfigurationOf<P>,
+    credential: RouteCredential,
+  ) => Model;
+  readonly background: BackgroundRule<P>;
+}
+
+/**
+ * One entry per protocol the package speaks. The mapped key set is the
+ * exhaustiveness the three switches used to carry: a protocol added to
+ * `ModelConfiguration` and left out here does not compile, and each entry's
+ * configuration is checked against that protocol's own shape.
+ */
+const PROTOCOL_DESCRIPTORS: {
+  readonly [P in HttpProtocol]: ProtocolDescriptor<P>;
+} = {
+  'anthropic-messages': {
+    configure: ({
+      base,
+      capabilities,
+      controls,
+      supportsTemperature,
+      effort,
+    }) => ({
+      ...base,
+      protocol: 'anthropic-messages',
+      supportsInputTokenEstimation: capabilities.supportsTokenCounting,
+      supportsTemperature,
+      supportsForcedToolChoice: true,
+      defaults: {
+        ...controls,
+        parallelToolCalls: true,
+        thinking: anthropicThinking(capabilities, controls.maxOutputTokens),
+        effort: capabilities.supportsReasoningEffort ? effort : null,
+        cache: capabilities.supportsPromptCaching ? '5m' : 'disabled',
+        stopSequences: [],
+      },
+    }),
+    construct: (configuration, credential) =>
+      anthropicMessagesModel(configuration, {
+        apiKey: routeBearer(credential),
+      }),
+    background: false,
+  },
+  'openai-chat': {
+    configure: ({
+      base,
+      capabilities,
+      controls,
+      supportsTemperature,
+      supportedEfforts,
+    }) => ({
+      ...base,
+      protocol: 'openai-chat',
+      supportsTemperature,
+      supportedEfforts: [...supportedEfforts],
+      defaults: {
+        ...controls,
+        effort: capabilities.supportsReasoningEffort
+          ? capabilities.reasoningEffort
+          : null,
+      },
+    }),
+    construct: chatModel,
+    background: false,
+  },
+  'openai-responses': {
+    configure: ({
+      base,
+      config,
+      capabilities,
+      controls,
+      credential,
+      input,
+      supportsTemperature,
+      effort,
+      supportedEfforts,
+    }) => {
       // GPT-5 asks for a reasoning summary only when the user turned the
       // toggle on; every other reasoning-capable Responses model keeps
       // asking, as the retired Responses handler did. `null` omits the
@@ -402,7 +498,7 @@ function configurationFor(
         return {
           ...base,
           requestedModel: credential.requestedModel,
-          protocol,
+          protocol: 'openai-responses',
           background: 'unsupported',
           supportsInputTokenEstimation: false,
           supportsTemperature,
@@ -418,9 +514,9 @@ function configurationFor(
           },
           defaults: {
             maxOutputTokens: null,
-            temperature: supportsTemperature ? input.temperature : null,
+            temperature: controls.temperature,
             store: false,
-            parallelToolCalls,
+            parallelToolCalls: controls.parallelToolCalls,
             reasoning: capabilities.supportsReasoning
               ? {
                   effort: capabilities.supportsReasoningEffort
@@ -436,7 +532,7 @@ function configurationFor(
       }
       return {
         ...base,
-        protocol,
+        protocol: 'openai-responses',
         background: 'supported',
         supportsInputTokenEstimation: false,
         supportsTemperature,
@@ -450,13 +546,13 @@ function configurationFor(
           : ['low', 'medium', 'high'],
         instructions: { kind: 'optional' },
         defaults: {
-          maxOutputTokens,
-          temperature: supportsTemperature ? input.temperature : null,
+          maxOutputTokens: controls.maxOutputTokens,
+          temperature: controls.temperature,
           // The route stores responses server-side, which is what
           // `previous_response_id` chaining and background submission both
           // read; the Codex arm above is the stateless one.
           store: true,
-          parallelToolCalls,
+          parallelToolCalls: controls.parallelToolCalls,
           reasoning: capabilities.supportsReasoning
             ? {
                 effort: capabilities.supportsReasoningEffort ? effort : null,
@@ -467,166 +563,265 @@ function configurationFor(
           serviceTier: config.serviceTier ?? null,
         },
       };
-    }
-    case 'google-interactions':
-      return {
-        ...base,
-        protocol,
-        background: 'supported',
-        supportsInputTokenEstimation: capabilities.supportsTokenCounting,
-        defaults: {
-          maxOutputTokens,
-          // Server-side conversation state is the user's choice: on, Google
-          // holds the conversation and each round sends only the new turn
-          // (and background execution becomes reachable); off, every round
-          // resends the full transcript and nothing is retained.
-          store: readConfig<boolean>(
-            input.stores.config,
-            'texra.model.useGoogleInteractionsServerState',
-          ),
-          thinkingLevel:
-            effort === 'low' || effort === 'medium' || effort === 'high'
-              ? effort
-              : 'high',
-        },
-      };
-    case 'deepseek-chat':
-      return {
-        ...base,
-        protocol,
-        supportedEfforts: [...supportedEfforts],
-        supportsForcedToolChoice: true,
-        defaults: {
-          maxOutputTokens,
-          temperature: supportsTemperature ? input.temperature : null,
-          parallelToolCalls,
-          thinking: { mode: thinkingMode },
-          effort: null,
-        },
-      };
-    case 'kimi-chat':
-      return {
-        ...base,
-        protocol,
-        supportsImageInput: capabilities.supportsVision,
-        // Moonshot's own endpoint counts tokens; a managed coding endpoint
-        // opts in through the catalog.
-        supportsInputTokenEstimation:
-          !isKimiCodeExclusiveModel(config) ||
-          capabilities.supportsTokenCounting,
-        thinkingControl: kimiThinkingControl(config),
-        supportedEfforts: [...supportedEfforts],
-        supportsForcedToolChoice: true,
-        temperatureByThinking: kimiTemperatureByThinking(
-          config,
-          input.temperature,
+    },
+    construct: (configuration, credential) =>
+      openaiResponsesModel(configuration, {
+        authentication: responsesAuthentication(credential),
+      }),
+    background: (configuration) => configuration.background === 'supported',
+  },
+  'google-interactions': {
+    configure: ({ base, capabilities, controls, input, effort }) => ({
+      ...base,
+      protocol: 'google-interactions',
+      background: 'supported',
+      supportsInputTokenEstimation: capabilities.supportsTokenCounting,
+      defaults: {
+        maxOutputTokens: controls.maxOutputTokens,
+        // Server-side conversation state is the user's choice: on, Google
+        // holds the conversation and each round sends only the new turn
+        // (and background execution becomes reachable); off, every round
+        // resends the full transcript and nothing is retained.
+        store: readConfig<boolean>(
+          input.stores.config,
+          'texra.model.useGoogleInteractionsServerState',
         ),
-        defaults: {
-          maxOutputTokens,
-          parallelToolCalls,
-          thinking: { mode: thinkingMode },
-          effort: null,
-          preserveThinking: true,
-        },
-      };
-    case 'glm-chat':
-      return {
-        ...base,
-        protocol,
-        supportsImageInput: capabilities.supportsVision,
-        supportsThinkingDisabled: true,
-        supportedEfforts: [...supportedEfforts],
-        defaults: {
-          maxOutputTokens,
-          temperature: supportsTemperature
-            ? Math.min(1, input.temperature)
-            : null,
-          parallelToolCalls,
-          thinking: { mode: thinkingMode },
-          effort: null,
-          clearThinking: false,
-        },
-      };
-    case 'xai-chat': {
+        thinkingLevel:
+          effort === 'low' || effort === 'medium' || effort === 'high'
+            ? effort
+            : 'high',
+      },
+    }),
+    construct: (configuration, credential) =>
+      googleInteractionsModel(configuration, {
+        apiKey: routeBearer(credential),
+      }),
+    // Google retrieves a background result through server-side state.
+    background: (configuration) =>
+      configuration.background === 'supported' && configuration.defaults.store,
+  },
+  'deepseek-chat': {
+    configure: ({ base, controls, supportedEfforts, thinkingMode }) => ({
+      ...base,
+      protocol: 'deepseek-chat',
+      supportedEfforts: [...supportedEfforts],
+      supportsForcedToolChoice: true,
+      defaults: {
+        ...controls,
+        thinking: { mode: thinkingMode },
+        effort: null,
+      },
+    }),
+    construct: chatModel,
+    background: false,
+  },
+  'kimi-chat': {
+    configure: ({
+      base,
+      config,
+      capabilities,
+      controls,
+      input,
+      supportedEfforts,
+      thinkingMode,
+    }) => ({
+      ...base,
+      protocol: 'kimi-chat',
+      supportsImageInput: capabilities.supportsVision,
+      // Moonshot's own endpoint counts tokens; a managed coding endpoint
+      // opts in through the catalog.
+      supportsInputTokenEstimation:
+        !isKimiCodeExclusiveModel(config) || capabilities.supportsTokenCounting,
+      thinkingControl: kimiThinkingControl(config),
+      supportedEfforts: [...supportedEfforts],
+      supportsForcedToolChoice: true,
+      temperatureByThinking: kimiTemperatureByThinking(
+        config,
+        input.temperature,
+      ),
+      defaults: {
+        maxOutputTokens: controls.maxOutputTokens,
+        parallelToolCalls: controls.parallelToolCalls,
+        thinking: { mode: thinkingMode },
+        effort: null,
+        preserveThinking: true,
+      },
+    }),
+    construct: chatModel,
+    background: false,
+  },
+  'glm-chat': {
+    configure: ({
+      base,
+      capabilities,
+      controls,
+      input,
+      supportsTemperature,
+      supportedEfforts,
+      thinkingMode,
+    }) => ({
+      ...base,
+      protocol: 'glm-chat',
+      supportsImageInput: capabilities.supportsVision,
+      supportsThinkingDisabled: true,
+      supportedEfforts: [...supportedEfforts],
+      defaults: {
+        ...controls,
+        temperature: supportsTemperature
+          ? Math.min(1, input.temperature)
+          : null,
+        thinking: { mode: thinkingMode },
+        effort: null,
+        clearThinking: false,
+      },
+    }),
+    construct: chatModel,
+    background: false,
+  },
+  'xai-chat': {
+    configure: ({ base, capabilities, controls, effort, supportedEfforts }) => {
       const xaiEffort = effort === ReasoningEffort.MAX ? null : effort;
       return {
         ...base,
-        protocol,
+        protocol: 'xai-chat',
         supportsImageInput: capabilities.supportsVision,
         supportedEfforts: supportedEfforts.filter(
           (value): value is Exclude<RouteEffort, ReasoningEffort.MAX> =>
             value !== ReasoningEffort.MAX,
         ),
         defaults: {
-          maxOutputTokens,
-          temperature: supportsTemperature ? input.temperature : null,
-          parallelToolCalls,
+          ...controls,
           effort: capabilities.supportsReasoningEffort ? xaiEffort : null,
         },
       };
-    }
-    case 'dashscope-chat':
-      return {
-        ...base,
-        protocol,
-        defaults: {
-          maxOutputTokens,
-          temperature: Math.min(1.99, input.temperature),
-          parallelToolCalls,
-          stopSequences: [],
-          thinking: { mode: 'disabled' },
-        },
-      };
-    case 'minimax-chat':
-      return {
-        ...base,
-        protocol,
-        reasoningSplit: capabilities.supportsReasoning,
-        defaults: {
-          maxOutputTokens,
-          temperature: input.temperature,
-          parallelToolCalls,
-          stopSequences: [],
-        },
-      };
-    case 'openrouter-chat':
-      return {
-        ...base,
-        requestedModel:
-          config.openrouterFullName ?? `${config.provider}/${config.fullName}`,
-        protocol,
-        supportsTemperature,
-        supportsForcedToolChoice: true,
-        supportsImageInput: capabilities.supportsVision,
-        supportsAudioInput: capabilities.supportsNativeAudio,
-        supportedEfforts: [...supportedEfforts],
-        defaults: {
-          maxOutputTokens,
-          temperature: supportsTemperature ? input.temperature : null,
-          effort: capabilities.supportsReasoningEffort
-            ? capabilities.reasoningEffort
-            : null,
-          stopSequences: [],
-        },
-      };
-  }
+    },
+    construct: chatModel,
+    background: false,
+  },
+  'dashscope-chat': {
+    configure: ({ base, controls, input }) => ({
+      ...base,
+      protocol: 'dashscope-chat',
+      defaults: {
+        ...controls,
+        temperature: Math.min(1.99, input.temperature),
+        stopSequences: [],
+        thinking: { mode: 'disabled' },
+      },
+    }),
+    construct: chatModel,
+    background: false,
+  },
+  'minimax-chat': {
+    configure: ({ base, capabilities, controls, input }) => ({
+      ...base,
+      protocol: 'minimax-chat',
+      reasoningSplit: capabilities.supportsReasoning,
+      defaults: {
+        ...controls,
+        temperature: input.temperature,
+        stopSequences: [],
+      },
+    }),
+    construct: chatModel,
+    background: false,
+  },
+  'openrouter-chat': {
+    configure: ({
+      base,
+      config,
+      capabilities,
+      controls,
+      supportsTemperature,
+      supportedEfforts,
+    }) => ({
+      ...base,
+      requestedModel:
+        config.openrouterFullName ?? `${config.provider}/${config.fullName}`,
+      protocol: 'openrouter-chat',
+      supportsTemperature,
+      supportsForcedToolChoice: true,
+      supportsImageInput: capabilities.supportsVision,
+      supportsAudioInput: capabilities.supportsNativeAudio,
+      supportedEfforts: [...supportedEfforts],
+      defaults: {
+        maxOutputTokens: controls.maxOutputTokens,
+        temperature: controls.temperature,
+        effort: capabilities.supportsReasoningEffort
+          ? capabilities.reasoningEffort
+          : null,
+        stopSequences: [],
+      },
+    }),
+    construct: (configuration, credential) =>
+      openrouterChatModel(configuration, { apiKey: routeBearer(credential) }),
+    background: false,
+  },
+};
+
+/** The configuration one protocol binds, over the facts every arm shares. */
+function configurationFor(
+  protocol: HttpProtocol,
+  config: ModelConfig,
+  credential: RouteCredential,
+  input: BindModelInput,
+): HttpConfiguration {
+  const { capabilities } = config;
+  const maxOutputTokens =
+    input.agentCategory === AgentCategory.ToolUse
+      ? Math.max(
+          1,
+          Math.floor(config.maxOutputTokens * TOOL_USE_MAX_OUTPUT_FACTOR),
+        )
+      : config.maxOutputTokens;
+  const supportsTemperature = !capabilities.supportsReasoning;
+  return PROTOCOL_DESCRIPTORS[protocol].configure({
+    config,
+    capabilities,
+    credential,
+    input,
+    base: binding(config, credential),
+    controls: {
+      maxOutputTokens,
+      temperature: supportsTemperature ? input.temperature : null,
+      // The user's parallel-tool-calls choice, honored on every
+      // OpenAI-descended arm, the DeepSeek, Kimi and GLM reasoning routes
+      // included, matching what the retired OpenAI handler base sent. The
+      // Anthropic arm never read the setting and keeps the provider default.
+      parallelToolCalls: readConfig<boolean>(
+        input.stores.config,
+        'texra.model.openaiParallelToolCalls',
+      ),
+    },
+    supportsTemperature,
+    effort: routeEffort(capabilities.reasoningEffort),
+    supportedEfforts: supportedRouteEfforts(config),
+    thinkingMode: capabilities.supportsReasoning ? 'enabled' : 'disabled',
+  });
 }
 
-type ResponsesAuthentication = Parameters<
-  typeof openaiResponsesWebSocketModel
->[1];
-
-/** The Responses bearer: a subscription token names its account, a key does not. */
-function responsesAuthentication(
+/**
+ * The model of one bound configuration, from its protocol's own factory; a
+ * subscription token is the bearer where an API key would be, and the Codex
+ * session additionally names its account. Generic in the protocol so the
+ * table entry and the configuration handed to it stay the same arm.
+ */
+function constructModel<P extends HttpProtocol>(
+  configuration: ConfigurationOf<P>,
   credential: RouteCredential,
-): ResponsesAuthentication {
-  return credential.route === 'chatgpt-subscription'
-    ? {
-        kind: 'codex',
-        accessToken: credential.accessToken,
-        accountId: credential.accountId,
-      }
-    : { kind: 'api-key', apiKey: routeBearer(credential) };
+): Model {
+  return PROTOCOL_DESCRIPTORS[configuration.protocol].construct(
+    configuration,
+    credential,
+  );
+}
+
+/** Whether a binding's configuration admits background work. */
+function backgroundCapable<P extends HttpProtocol>(
+  configuration: ConfigurationOf<P>,
+): boolean {
+  const rule = PROTOCOL_DESCRIPTORS[configuration.protocol].background;
+  return rule === false ? false : rule(configuration);
 }
 
 /**
@@ -648,37 +843,6 @@ function responsesWebSocketSelected(
     credential.route === 'chatgpt-subscription' ||
     credential.endpoint === OPENAI_DEFAULT_ENDPOINT
   );
-}
-
-/**
- * One constructor per protocol; a subscription token is the bearer where an
- * API key would be, and the Codex session additionally names its account.
- */
-function constructModel(
-  configuration: HttpConfiguration,
-  credential: RouteCredential,
-): Model {
-  const apiKey = routeBearer(credential);
-  switch (configuration.protocol) {
-    case 'anthropic-messages':
-      return anthropicMessagesModel(configuration, { apiKey });
-    case 'openai-responses':
-      return openaiResponsesModel(configuration, {
-        authentication: responsesAuthentication(credential),
-      });
-    case 'google-interactions':
-      return googleInteractionsModel(configuration, { apiKey });
-    case 'openrouter-chat':
-      return openrouterChatModel(configuration, { apiKey });
-    case 'openai-chat':
-    case 'deepseek-chat':
-    case 'kimi-chat':
-    case 'glm-chat':
-    case 'xai-chat':
-    case 'dashscope-chat':
-    case 'minimax-chat':
-      return openaiChatModel(configuration, { apiKey });
-  }
 }
 
 /**
@@ -710,21 +874,6 @@ export function backgroundDelivery(
     bound.modelName.toLowerCase().startsWith('gpt') &&
     readConfig<boolean>(config, 'texra.model.useBackgroundResponses')
   );
-}
-
-/** Whether a binding's configuration admits background work. */
-function backgroundCapable(configuration: HttpConfiguration): boolean {
-  switch (configuration.protocol) {
-    case 'openai-responses':
-      return configuration.background === 'supported';
-    case 'google-interactions':
-      // Google retrieves a background result through server-side state.
-      return (
-        configuration.background === 'supported' && configuration.defaults.store
-      );
-    default:
-      return false;
-  }
 }
 
 /**
