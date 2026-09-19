@@ -10,11 +10,7 @@ import {
   type RunAgentOptions,
   type RunAgentRequest,
 } from '@agent/runtime';
-import {
-  deriveResumability,
-  type ResumabilityDecision,
-  finalizeRun,
-} from '@agent/storage';
+import { deriveResumability, finalizeRun } from '@agent/storage';
 import { AgentError } from '@common/errors';
 import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
 import { hasErrorPresentationClaimed } from '@common/errors/sdkError/errorMetadata';
@@ -41,7 +37,9 @@ import { warnApprovalDenied } from './approval/approvalPrompts';
 import { cliApprovalPromptsUnavailable } from './approval/settleApprovals';
 import { createHeadlessCliHostInteractions } from './approvalAdapter';
 import {
+  advertisesInterruptedRun,
   formatInterruptedResumeHint,
+  type ResumableCheckpoint,
   tryReadCliCwd,
   writeInterruptedResumeHint,
 } from './interruptedResumeHint';
@@ -99,7 +97,7 @@ interface CliExecuteOptions {
   readonly onInterruptedRunFinalized?: (runId: RunId) => void | Promise<void>;
   /** Refine generic flow resumability for the launched workflow's state. */
   readonly canAdvertiseInterruptedRun?: (
-    resumability: Extract<ResumabilityDecision, { kind: 'checkpoint' }>,
+    resumability: ResumableCheckpoint,
   ) => boolean;
 }
 
@@ -341,14 +339,15 @@ export function executeCliRequest(
         };
     let launchVerdict: LaunchVerdict = { kind: 'undecided' };
     // The lifecycle's `report` port is a plain callback the run loop calls as
-    // it settles; presentation is this host's own program, so it runs on this
-    // host's runtime rather than travelling back through the port.
+    // it settles; presentation is this host's own, so it goes straight to this
+    // host rather than travelling back through the session attachment. That
+    // routing is the attribution: a finalization notice is not the run's own
+    // failure, so it must not set `failurePresented` and silently suppress the
+    // classified `AgentError` message below (§15).
     const reportFinalizationFailure = (error: unknown): void => {
-      options.runtime.runSync(
-        session.interactions.emit('requestShowError', {
-          message: toErrorMessage(error),
-        }),
-      );
+      presentationHost.emit('requestShowError', {
+        message: toErrorMessage(error),
+      });
     };
     const reportShutdownFinalizationFailure = (error: Error): void => {
       if (
@@ -388,13 +387,13 @@ export function executeCliRequest(
             : undefined;
           // The lease was released just above, so the checkpoint alone decides
           // whether the recovery notice is usable.
-          if (
-            resumability?.kind === 'checkpoint' &&
-            onFinalized !== undefined
-          ) {
+          if (onFinalized !== undefined) {
             const advertise = yield* Effect.try({
               try: () =>
-                options.canAdvertiseInterruptedRun?.(resumability) ?? true,
+                advertisesInterruptedRun(
+                  resumability,
+                  options.canAdvertiseInterruptedRun,
+                ),
               catch: (error: unknown) => error,
             });
             if (advertise) {
@@ -466,20 +465,19 @@ export function executeCliRequest(
           options.runtime,
           Effect.gen(function* () {
             if (stop) yield* stop.settlement;
-            let resumableCheckpoint:
-              Extract<ResumabilityDecision, { kind: 'checkpoint' }> | undefined;
+            let advertisesCheckpoint = false;
             if (interruptedRunId) {
               const inspection = yield* Effect.result(
                 deriveResumability(interruptedRunId, session),
               );
               // The ordinary bounded shutdown path below remains authoritative
               // when checkpoint inspection itself is unavailable.
-              if (
+              advertisesCheckpoint =
                 Result.isSuccess(inspection) &&
-                inspection.success.kind === 'checkpoint'
-              ) {
-                resumableCheckpoint = inspection.success;
-              }
+                advertisesInterruptedRun(
+                  inspection.success,
+                  options.canAdvertiseInterruptedRun,
+                );
             }
             // Earlier shutdown handlers interrupt the live agent sessions. Wait
             // for runAgent to finish unwinding before the final drain releases
@@ -492,12 +490,7 @@ export function executeCliRequest(
             // established, however, keep shutdown alive until the promised
             // recovery notice has been flushed — that wait is uninterruptible
             // precisely because it outranks the deadline.
-            if (
-              resumableCheckpoint &&
-              (options.canAdvertiseInterruptedRun?.(resumableCheckpoint) ??
-                true) &&
-              options.onInterruptedRunFinalized
-            ) {
+            if (advertisesCheckpoint && options.onInterruptedRunFinalized) {
               yield* Effect.uninterruptible(
                 Deferred.await(shutdownFinalizationDone),
               );
@@ -570,10 +563,9 @@ export function executeCliRequest(
       | { readonly ok: false } = { ok: false };
     let primaryRunFailure: { readonly error: unknown } | undefined;
     let shutdownLaunchAborted = false;
-    let presentationAttached = true;
+    // Run exactly once: the early detach below is taken only on a path that
+    // then throws or returns before the success tail that `ensuring`s it.
     const detachPresentation = Effect.gen(function* () {
-      if (!presentationAttached) return;
-      presentationAttached = false;
       detachResultToast();
       terminalResult.dispose();
       detachRunProgressRenderer();
@@ -621,7 +613,6 @@ export function executeCliRequest(
     }
 
     disposeShutdownStatus.dispose();
-    let finalizationCompleted = false;
     const cleanupFailures: unknown[] = [];
     const finalization = yield* Effect.result(
       Effect.gen(function* () {
@@ -637,11 +628,10 @@ export function executeCliRequest(
         return undefined;
       }),
     );
-    finalizationCompleted = Result.isSuccess(finalization);
     if (Result.isFailure(finalization))
       cleanupFailures.push(finalization.failure);
     Deferred.doneUnsafe(shutdownFinalizationDone, Effect.void);
-    if (!runResult.ok || !finalizationCompleted) {
+    if (!runResult.ok || Result.isFailure(finalization)) {
       const detachment = yield* Effect.result(detachPresentation);
       if (Result.isFailure(detachment))
         cleanupFailures.push(detachment.failure);

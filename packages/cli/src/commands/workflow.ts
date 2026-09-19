@@ -1,11 +1,7 @@
 import * as path from 'node:path';
 import { Effect, Result } from 'effect';
 
-import {
-  deriveResumability,
-  getRunRecords,
-  type ResumabilityDecision,
-} from '@agent/storage';
+import { deriveResumability, getRunRecords } from '@agent/storage';
 import { type AgentConfigPayload, type SessionHandle } from '@agent/runtime';
 import { RUN_OUTCOME, type RunId, AgentCategory } from '@shared/schemas';
 import type { SessionOpenError } from '@shared/session/database';
@@ -18,7 +14,9 @@ import {
 } from '../runtime/cliContext';
 import { CliExitCode } from '../runtime/exitCodes';
 import {
+  advertisesInterruptedRun,
   formatInterruptedResumeHint,
+  type ResumableCheckpoint,
   tryReadCliCwd,
   writeInterruptedResumeHint,
 } from '../runtime/interruptedResumeHint';
@@ -323,7 +321,7 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
     const recoveryProcessCwd = tryReadCliCwd();
     const recoveryInputIsDurable = options.recoveryInputIsDurable ?? true;
     const canAdvertiseInterruptedRun = (
-      resumability: Extract<ResumabilityDecision, { kind: 'checkpoint' }>,
+      resumability: ResumableCheckpoint,
     ): boolean => {
       // Only a reflection run reaches here — this is the workflow command.
       // The two facts the hint turns on sit in different halves of the
@@ -357,8 +355,7 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
         if (!run.ok || !run.outcomePersisted) return;
         const resumability = yield* deriveResumability(runId, session);
         if (
-          resumability.kind === 'checkpoint' &&
-          canAdvertiseInterruptedRun(resumability)
+          advertisesInterruptedRun(resumability, canAdvertiseInterruptedRun)
         ) {
           writeResumeHint(runId);
         }
