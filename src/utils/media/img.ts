@@ -141,19 +141,14 @@ const resizeImageIfNeeded = Effect.fn('img.resizeImageIfNeeded')(function* (
           `${maxDimension}x${maxDimension}>`,
           tempPath,
         ];
-        const result = yield* Effect.tryPromise({
-          try: (signal) =>
-            executeCommand(convertArgs, {
-              channel: CHANNEL,
-              // Both operands are absolute paths, so the conversion is
-              // independent of where it runs: the process cwd is the honest
-              // root rather than a workspace this module never receives, and
-              // there are no workspace settings to carry with it.
-              cwd: process.cwd(),
-              settings: undefined,
-              signal,
-            }),
-          catch: conversionFailure,
+        const result = yield* executeCommand(convertArgs, {
+          channel: CHANNEL,
+          // Both operands are absolute paths, so the conversion is
+          // independent of where it runs: the process cwd is the honest
+          // root rather than a workspace this module never receives, and
+          // there are no workspace settings to carry with it.
+          cwd: process.cwd(),
+          settings: undefined,
         });
         if (!result.success) {
           return yield* new MediaConversionFailed({
@@ -248,18 +243,13 @@ const singlePagePdf2Png = Effect.fn('img.singlePagePdf2Png')(function* (
   // ImageMagick and GraphicsMagick hand the rasterization to a Ghostscript
   // delegate, so signal the tree: an interrupted conversion must not leave the
   // delegate running over the page it is still writing.
-  const result = yield* Effect.tryPromise({
-    try: (signal) =>
-      executeCommand(convertArgs, {
-        channel: CHANNEL,
-        // Absolute input and output paths, and no workspace of its own: see
-        // `resizeImageIfNeeded`.
-        cwd: process.cwd(),
-        settings: undefined,
-        signal,
-        killProcessTree: true,
-      }),
-    catch: conversionFailure,
+  const result = yield* executeCommand(convertArgs, {
+    channel: CHANNEL,
+    // Absolute input and output paths, and no workspace of its own: see
+    // `resizeImageIfNeeded`.
+    cwd: process.cwd(),
+    settings: undefined,
+    killProcessTree: true,
   });
   if (!result.success) {
     return yield* new MediaConversionFailed({

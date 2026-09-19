@@ -64,10 +64,7 @@ const getGitInfo = Effect.fn(function* (
   settings: SettingsStores | undefined,
 ) {
   const opts = { cwd: workspacePath, settings, timeout: GIT_TIMEOUT_MS };
-  const runGit = (...args: string[]) =>
-    Effect.promise((signal) =>
-      executeCommand(['git', ...args], { ...opts, signal }),
-    );
+  const runGit = (...args: string[]) => executeCommand(['git', ...args], opts);
 
   // Deliberately not isGitRepository(): that also requires stdout === 'true',
   // which excludes bare repos and paths inside .git, where `git rev-parse`

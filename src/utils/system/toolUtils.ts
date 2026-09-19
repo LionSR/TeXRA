@@ -30,11 +30,8 @@ import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 // Local file imports
 import { IS_WINDOWS, extendEnvPath } from './platformPaths';
 import { BinaryResolver } from './binaryResolver';
-import {
-  executeCommand,
-  executeCommandSync,
-  type ExecuteCommandBaseOptions,
-} from './execUtils';
+import { executeCommandSync } from './execCore';
+import { executeCommand, type ExecuteCommandBaseOptions } from './execUtils';
 
 const log = createLog('toolUtils');
 
@@ -363,10 +360,8 @@ type RunToolOptions = {
  * Run a tool after verifying it is installed, answering `false` when the tool
  * is missing.
  *
- * This is the module's `executeCommand` edge, lifted exactly once: the
- * `AbortSignal` `Effect.tryPromise` supplies aborts on interruption, so
- * stopping the fiber tears down the spawned process the same way the threaded
- * signal used to.
+ * Interruption tears the spawned process down: `executeCommand` is an Effect
+ * whose own finalizer terminates the child, so there is nothing to thread.
  */
 export const runToolWithCheck = Effect.fn('toolUtils.runToolWithCheck')(
   function* (
@@ -378,11 +373,7 @@ export const runToolWithCheck = Effect.fn('toolUtils.runToolWithCheck')(
     if (!(yield* checkToolInstalled(toolName, showError))) {
       return false;
     }
-    return yield* Effect.tryPromise({
-      try: (signal) =>
-        executeCommand([toolName, ...args], { ...execOptions, signal }),
-      catch: ensureError,
-    });
+    return yield* executeCommand([toolName, ...args], execOptions);
   },
 );
 

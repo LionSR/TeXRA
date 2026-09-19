@@ -16,6 +16,8 @@
  * (`null` vs `{ commits: [], isGitRepo }` vs the wire-schema constant).
  */
 
+import { Effect } from 'effect';
+
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { executeCommand } from '@utils/system/execUtils';
 import { isGitRepository } from '@utils/git/isGitRepository';
@@ -52,13 +54,13 @@ export interface GitReadOptions {
  * failure. Failures go to `options.onError` unless `reportFailure` is false
  * (expected-failure probes such as `@{upstream}` on an unpublished branch).
  */
-async function readGit(
+const readGit = Effect.fn('repositoryOverview.readGit')(function* (
   workspace: string,
   args: readonly string[],
   options: GitReadOptions,
   reportFailure = true,
-): Promise<string | undefined> {
-  const result = await executeCommand(['git', ...args], {
+): Effect.fn.Return<string | undefined> {
+  const result = yield* executeCommand(['git', ...args], {
     cwd: workspace,
     settings: options.settings,
     timeout: GIT_TIMEOUT_MS,
@@ -74,7 +76,7 @@ async function readGit(
     );
   }
   return undefined;
-}
+});
 
 export interface GitRecentCommits {
   commits: string[];
@@ -91,12 +93,14 @@ export interface GitRecentCommits {
  * read (the extension validates its commit-limit setting in between); hosts
  * without such policy should use `readRecentCommits` instead.
  */
-export async function readRecentCommitLabels(
+export const readRecentCommitLabels = Effect.fn(
+  'repositoryOverview.readRecentCommitLabels',
+)(function* (
   workspacePath: string,
   limit: number,
   options: GitReadOptions,
-): Promise<string[] | undefined> {
-  const output = await readGit(
+): Effect.fn.Return<string[] | undefined> {
+  const output = yield* readGit(
     workspacePath,
     [
       // `--no-pager` is portable; Windows lacks `cat` on PATH (#3817).
@@ -109,24 +113,26 @@ export async function readRecentCommitLabels(
     options,
   );
   return output === undefined ? undefined : splitCommitLines(output);
-}
+});
 
 /**
  * Probing recent-commits read: reports `isGitRepo: false` when the workspace
  * is not a repository, otherwise the labels (`[]` when the log read fails —
  * the probe already passed, so a failed log is still a git repo).
  */
-export async function readRecentCommits(
+export const readRecentCommits = Effect.fn(
+  'repositoryOverview.readRecentCommits',
+)(function* (
   workspacePath: string,
   limit: number,
   options: GitReadOptions,
-): Promise<GitRecentCommits> {
-  if (!(await isGitRepository(workspacePath, options.settings))) {
+): Effect.fn.Return<GitRecentCommits> {
+  if (!(yield* isGitRepository(workspacePath, options.settings))) {
     return { commits: [], isGitRepo: false };
   }
-  const commits = await readRecentCommitLabels(workspacePath, limit, options);
+  const commits = yield* readRecentCommitLabels(workspacePath, limit, options);
   return { commits: commits ?? [], isGitRepo: true };
-}
+});
 
 /**
  * Live repository state: branch, change totals, and upstream sync.
@@ -148,30 +154,35 @@ export interface GitEnvironmentSummary {
  * Probe and read the repository's environment summary. Returns `undefined`
  * when `workspacePath` is not inside a git working tree.
  */
-export async function readGitEnvironmentSummary(
+export const readGitEnvironmentSummary = Effect.fn(
+  'repositoryOverview.readGitEnvironmentSummary',
+)(function* (
   workspacePath: string,
   options: GitReadOptions,
-): Promise<GitEnvironmentSummary | undefined> {
-  if (!(await isGitRepository(workspacePath, options.settings))) {
+): Effect.fn.Return<GitEnvironmentSummary | undefined> {
+  if (!(yield* isGitRepository(workspacePath, options.settings))) {
     return undefined;
   }
 
   const [branchOutput, statusOutput, numstatOutput, upstreamOutput] =
-    await Promise.all([
-      readGit(workspacePath, ['rev-parse', '--abbrev-ref', 'HEAD'], options),
-      readGit(
-        workspacePath,
-        ['status', '--short', '--untracked-files=normal'],
-        options,
-      ),
-      readGit(workspacePath, ['diff', '--numstat', 'HEAD', '--'], options),
-      readGit(
-        workspacePath,
-        ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}'],
-        options,
-        false,
-      ),
-    ]);
+    yield* Effect.all(
+      [
+        readGit(workspacePath, ['rev-parse', '--abbrev-ref', 'HEAD'], options),
+        readGit(
+          workspacePath,
+          ['status', '--short', '--untracked-files=normal'],
+          options,
+        ),
+        readGit(workspacePath, ['diff', '--numstat', 'HEAD', '--'], options),
+        readGit(
+          workspacePath,
+          ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}'],
+          options,
+          false,
+        ),
+      ],
+      { concurrency: 'unbounded' },
+    );
   const { additions, deletions } = parseNumstat(numstatOutput);
   const changedFiles = splitOutputLines(statusOutput ?? '').length;
   const branch =
@@ -181,7 +192,7 @@ export async function readGitEnvironmentSummary(
   let behind = 0;
 
   if (upstream) {
-    const divergence = await readGit(
+    const divergence = yield* readGit(
       workspacePath,
       ['rev-list', '--left-right', '--count', `HEAD...${upstream}`],
       options,
@@ -199,7 +210,7 @@ export async function readGitEnvironmentSummary(
     ahead,
     behind,
   };
-}
+});
 
 function parseNumstat(output: string | undefined): {
   additions: number;
