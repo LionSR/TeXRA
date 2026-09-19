@@ -27,7 +27,7 @@ import {
 import type { AuthCallbackUriParts } from '@auth/authCallback';
 import type { MessageHost } from '@hosts/uiHosts';
 import type { StateStore, StateWriteFailed } from '@platform/interfaces';
-import type { ProcessRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { TEXRA_PROTOCOL } from '../shared/desktopProtocol.js';
@@ -49,10 +49,12 @@ interface DesktopSupabaseAuth {
   /** Start the browser sign-in for one provider. The Effect fails with
    *  whatever the attempt failed with; its caller words that failure. */
   signIn(provider?: OAuthProvider): Effect.Effect<void, unknown>;
+  /** Start the browser sign-in and answer whether a session landed before
+   *  the callback deadline. */
   signInAndWaitForSession(
     provider?: OAuthProvider,
     options?: { timeoutMs?: number },
-  ): Promise<boolean>;
+  ): Effect.Effect<boolean, unknown>;
   signOut(): Promise<void>;
   dispose(): void;
 }
@@ -78,7 +80,9 @@ export interface DesktopSupabaseAuthHost extends Pick<
   /** The window's `openExternal` with its own "could not open" dialog
    *  suppressed: this flow words a missing browser itself. */
   openExternalUrl(url: string): Effect.Effect<void, unknown>;
-  onSessionChanged(): Promise<void> | void;
+  /** Repaint every surface an account change touches. A program, so the
+   *  callback that commits a session runs it inside its own fiber. */
+  onSessionChanged(): Effect.Effect<void, unknown, ProcessServices>;
 }
 
 interface DesktopSupabaseAuthOptions {
@@ -146,11 +150,11 @@ function runCleanupDetached(
  * error when the dialog host is already gone. `notify` is the Effect-shaped
  * host call (a `MessageHost` member, or a wrapped `onSessionChanged`).
  */
-function warnOnNotificationFailure(
+function warnOnNotificationFailure<R>(
   log: DesktopAuthLog,
-  notify: Effect.Effect<unknown, unknown>,
+  notify: Effect.Effect<unknown, unknown, R>,
   failureMessage: string,
-): Effect.Effect<void> {
+): Effect.Effect<void, never, R> {
   return notify.pipe(
     Effect.catchCause((cause) =>
       Effect.sync(() => {
@@ -296,39 +300,39 @@ export function createDesktopSupabaseAuth(
   const waitForCompletion = (
     attempt: DesktopAuthAttempt,
     timeoutMs: number,
-  ): Promise<boolean> => {
+  ): Effect.Effect<boolean> => {
     // First completion wins: the attempt's own settle, or the timeout. The
     // timeout's sleep belongs to the waiting fiber, so a settle cancels it —
     // no timer outlives its attempt, and none is left over to clear a later
-    // attempt's pending callback state.
+    // attempt's pending callback state. The deferred and its settle hook are
+    // installed here, when the attempt is claimed, so a callback that lands
+    // before the wait is forked still resolves it.
     const outcome = Deferred.makeUnsafe<boolean>();
     attempt.settle = (success) => {
       Deferred.doneUnsafe(outcome, Effect.succeed(success));
     };
-    return runtime.runPromise(
-      Effect.gen(function* () {
-        const settled = yield* Deferred.await(outcome).pipe(
-          Effect.timeoutOption(timeoutMs),
+    return Effect.gen(function* () {
+      const settled = yield* Deferred.await(outcome).pipe(
+        Effect.timeoutOption(timeoutMs),
+      );
+      if (Option.isSome(settled)) return settled.value;
+      const wasOwned = ownsAttempt(attempt);
+      settleAttempt(attempt, false);
+      if (wasOwned) {
+        runCleanupDetached(
+          runtime,
+          log,
+          callbackState.clearAwaitingCallback(attempt.nonce),
+          'Desktop sign-in timeout cleanup failed',
         );
-        if (Option.isSome(settled)) return settled.value;
-        const wasOwned = ownsAttempt(attempt);
-        settleAttempt(attempt, false);
-        if (wasOwned) {
-          runCleanupDetached(
-            runtime,
-            log,
-            callbackState.clearAwaitingCallback(attempt.nonce),
-            'Desktop sign-in timeout cleanup failed',
-          );
-        }
-        return false;
-      }),
-    );
+      }
+      return false;
+    });
   };
   const runQueuedCallback = (queued: {
     callback: DesktopProtocolCallback;
     attempt: DesktopAuthAttempt;
-  }): Effect.Effect<void> =>
+  }): Effect.Effect<void, never, ProcessServices> =>
     Effect.gen(function* () {
       const processed = yield* Effect.exit(
         processProtocolCallback(
@@ -431,14 +435,14 @@ export function createDesktopSupabaseAuth(
 
   const startSignIn = (
     provider: OAuthProvider,
-    onAttempt?: (attempt: DesktopAuthAttempt) => void,
+    onAttempt?: (attempt: DesktopAuthAttempt) => Effect.Effect<void>,
   ): Effect.Effect<void, unknown> =>
     Effect.gen(function* () {
       invalidateActiveAttempt();
       const nonce = randomBytes(16).toString('hex');
       const attempt = createAuthAttempt(nonce);
       activeAttempt = attempt;
-      onAttempt?.(attempt);
+      if (onAttempt) yield* onAttempt(attempt);
       const started = yield* Effect.exit(startSignInAttempt(provider, attempt));
       if (Exit.isFailure(started)) {
         if (ownsAttempt(attempt)) activeAttempt = undefined;
@@ -450,27 +454,33 @@ export function createDesktopSupabaseAuth(
   return {
     signIn: (provider = DEFAULT_OAUTH_PROVIDER) => startSignIn(provider),
 
-    async signInAndWaitForSession(
+    signInAndWaitForSession: (
       provider = DEFAULT_OAUTH_PROVIDER,
       waitOptions = {},
-    ) {
-      let startedAttempt: DesktopAuthAttempt | undefined;
-      let completion: Promise<boolean> | undefined;
-      const started = await runtime.runPromiseExit(
-        startSignIn(provider, (attempt) => {
-          startedAttempt = attempt;
-          completion = waitForCompletion(
-            attempt,
-            waitOptions.timeoutMs ?? AUTH_CALLBACK_TIMEOUT_MS,
-          );
-        }),
-      );
-      if (Exit.isFailure(started)) {
-        startedAttempt?.settle(false);
-        throw Cause.squash(started.cause);
-      }
-      return completion ?? false;
-    },
+    ) =>
+      Effect.gen(function* () {
+        let startedAttempt: DesktopAuthAttempt | undefined;
+        let completion: Effect.Effect<boolean> | undefined;
+        const started = yield* Effect.exit(
+          startSignIn(provider, (attempt) =>
+            Effect.sync(() => {
+              startedAttempt = attempt;
+              // Claims the attempt's settle hook here, where the attempt is
+              // claimed, so a callback that lands before the wait below
+              // starts still resolves it.
+              completion = waitForCompletion(
+                attempt,
+                waitOptions.timeoutMs ?? AUTH_CALLBACK_TIMEOUT_MS,
+              );
+            }),
+          ),
+        );
+        if (Exit.isFailure(started)) {
+          startedAttempt?.settle(false);
+          return yield* Effect.failCause(started.cause);
+        }
+        return completion ? yield* completion : false;
+      }),
 
     async signOut() {
       invalidateActiveAttempt();
@@ -489,7 +499,7 @@ export function createDesktopSupabaseAuth(
         }),
       );
       if (Exit.isFailure(cleared)) throw settleFailure(cleared.cause);
-      await host.onSessionChanged();
+      await runtime.runPromise(host.onSessionChanged());
     },
 
     dispose() {
@@ -508,7 +518,7 @@ function processProtocolCallback(
   onCommitLane: <A, E, R>(
     effect: Effect.Effect<A, E, R>,
   ) => Effect.Effect<A, E, R>,
-): Effect.Effect<boolean, unknown> {
+): Effect.Effect<boolean, unknown, ProcessServices> {
   return Effect.gen(function* () {
     const result = yield* coordinator.createSessionFromCallback({
       path: callback.path,
@@ -555,12 +565,7 @@ function processProtocolCallback(
 
         yield* warnOnNotificationFailure(
           log,
-          Effect.tryPromise({
-            try: async () => {
-              await host.onSessionChanged();
-            },
-            catch: (cause) => cause,
-          }),
+          host.onSessionChanged(),
           'Desktop auth surface refresh failed',
         );
         return yield* stillOwned();

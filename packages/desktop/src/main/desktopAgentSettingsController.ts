@@ -183,7 +183,7 @@ interface DefaultDesktopAgentSettingsControllerOptions extends SettingsStatePort
 
 export interface DesktopAgentSettingsController {
   readonly handlers: DesktopAgentHandlers;
-  postStartupData(): Promise<void>;
+  postStartupData(): Effect.Effect<void, Error, ProcessServices>;
   refreshCatalogData(): Effect.Effect<void, Error, ProcessServices>;
 }
 
@@ -345,9 +345,11 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
     );
   }
 
-  postStartupData(): Promise<void> {
-    this.postAgentModePresets();
-    return this.runtime.runPromise(
+  postStartupData(): Effect.Effect<void, Error, ProcessServices> {
+    return Effect.andThen(
+      Effect.sync(() => {
+        this.postAgentModePresets();
+      }),
       Effect.all([this.postAgentSelectionData(), this.postCustomAgentDir()], {
         concurrency: 'unbounded',
       }).pipe(Effect.asVoid),

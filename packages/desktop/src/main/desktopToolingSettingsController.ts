@@ -7,7 +7,7 @@ import {
 } from '@controllers/settingsView/ToolDashboardData';
 import { appSignals } from '@eventBus/AppSignals';
 import type { ConfigProvider } from '@platform/interfaces';
-import type { ProcessRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type {
   SettingsViewInboundHandlerRegistry,
@@ -65,7 +65,7 @@ export interface DesktopToolingSettingsController {
   readonly toolHandlers: DesktopToolHandlers;
   readonly latexHandlers: DesktopLatexHandlers;
   postLatexConfigValues(): void;
-  postStartupData(): Promise<void>;
+  postStartupData(): Effect.Effect<void, Error, ProcessServices>;
   /**
    * Releases the app-signal subscription. Scoped to the window that built this
    * controller: `createWindow` runs again on macOS dock reactivation, so an
@@ -138,25 +138,24 @@ export class DefaultDesktopToolingSettingsController implements DesktopToolingSe
     );
   }
 
-  postStartupData(): Promise<void> {
-    return this.options.runtime.runPromise(
-      Effect.all(
-        [this.postToolDashboardData(), this.postLatexSettingsStatus()],
-        { concurrency: 'unbounded' },
-      ).pipe(
-        // The re-probe is not awaited and outlives this run: the cached data
-        // is already posted, and its own `toolAvailabilityChanged` signal
-        // repaints the dashboard through the subscription above when it
-        // lands. Forked on the runtime rather than in this fiber, like that
-        // subscription, so a defect still reaches the fork-failure reporter.
-        Effect.andThen(
-          Effect.sync(() => {
-            this.options.runtime.runFork(
-              this.reportingFailure(refreshToolAvailability(this.probeInputs)),
-            );
-          }),
-        ),
+  postStartupData(): Effect.Effect<void, Error, ProcessServices> {
+    return Effect.all(
+      [this.postToolDashboardData(), this.postLatexSettingsStatus()],
+      { concurrency: 'unbounded' },
+    ).pipe(
+      // The re-probe is not awaited and outlives this program: the cached
+      // data is already posted, and its own `toolAvailabilityChanged` signal
+      // repaints the dashboard through the subscription above when it lands.
+      // Forked on the runtime rather than in this fiber, like that
+      // subscription, so a defect still reaches the fork-failure reporter.
+      Effect.andThen(
+        Effect.sync(() => {
+          this.options.runtime.runFork(
+            this.reportingFailure(refreshToolAvailability(this.probeInputs)),
+          );
+        }),
       ),
+      Effect.asVoid,
     );
   }
 

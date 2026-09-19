@@ -60,7 +60,7 @@ export function createStubDesktopAgentSettingsController(): DesktopAgentSettings
       saveAgentModePreset: noOp,
       deleteAgentModePreset: noOp,
     },
-    postStartupData: noOp,
+    postStartupData: noOpEffect,
     refreshCatalogData: () => Effect.void,
   };
 }
@@ -106,7 +106,7 @@ export function createStubDesktopCredentialSettingsController(
     postSubscriptionUsage: noOpEffect,
     refreshAfterProviderSettingChange: noOpEffect,
     refreshAuthDependentData: noOpEffect,
-    signInChatGpt: noOp,
+    signInChatGpt: noOpEffect,
     ...overrides,
   };
 }
@@ -134,7 +134,7 @@ export function createStubDesktopToolingSettingsController(
       runInstallCommand: noOp,
     },
     postLatexConfigValues: () => undefined,
-    postStartupData: noOp,
+    postStartupData: noOpEffect,
     dispose: () => undefined,
     ...overrides,
   };

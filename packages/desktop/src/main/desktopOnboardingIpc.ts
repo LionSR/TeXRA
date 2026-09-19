@@ -1,6 +1,6 @@
 import { Data, Effect } from 'effect';
 import { OnboardingFunnelRefresher } from '@controllers/onboarding/onboardingFunnel';
-import type { ProcessRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import type { StateStore, StateWriteFailed } from '@platform/interfaces';
 import type { LanguageModel } from '@platform/languageModel';
 import type { OnboardingFunnelState } from '@shared/schemas';
@@ -50,11 +50,11 @@ export class OnboardingCallFailed extends Data.TaggedError(
 }> {}
 
 /** How a card action fails: the funnel's flag write, plus whatever the
- *  promise-faced sign-in rejected with. */
-type OnboardingAction<E = never> = Effect.Effect<
+ *  sign-in program failed with. */
+type OnboardingAction<E = never, R = LanguageModel> = Effect.Effect<
   void,
   StateWriteFailed | E,
-  LanguageModel
+  R
 >;
 
 interface DesktopOnboardingIpcOptions {
@@ -70,7 +70,7 @@ interface DesktopOnboardingIpcOptions {
    *  program is forked below, so its own failure is the host's to word. */
   kickoffSetup: () => Effect.Effect<void, unknown>;
   /** Run ChatGPT sign-in flow from the welcome card. */
-  signInWithChatGpt: () => Promise<void>;
+  signInWithChatGpt: () => Effect.Effect<void, unknown, ProcessServices>;
   onAsyncError: (error: unknown) => void;
   /** The process runtime the composition root built; the funnel refresh runs
    *  on it rather than on a looked-up one. */
@@ -95,7 +95,10 @@ export interface DesktopOnboardingIpc extends DesktopMessageHandler {
   skipSetup(): OnboardingAction;
   /** The setup card's Run Setup: launches the setup conversation. */
   runSetup(): OnboardingAction;
-  signInWithChatGpt(): OnboardingAction<OnboardingCallFailed | RequestRefusal>;
+  signInWithChatGpt(): OnboardingAction<
+    OnboardingCallFailed | RequestRefusal,
+    ProcessServices
+  >;
 }
 
 export function createDesktopOnboardingIpc(
@@ -182,11 +185,11 @@ export function createDesktopOnboardingIpc(
     });
 
   const signInWithChatGpt = (): OnboardingAction<
-    OnboardingCallFailed | RequestRefusal
+    OnboardingCallFailed | RequestRefusal,
+    ProcessServices
   > =>
-    Effect.tryPromise({
-      try: () => options.signInWithChatGpt(),
-      catch: (cause) =>
+    options.signInWithChatGpt().pipe(
+      Effect.mapError((cause) =>
         isRequestRefusal(cause)
           ? cause
           : new OnboardingCallFailed({
@@ -194,7 +197,9 @@ export function createDesktopOnboardingIpc(
               message: toErrorMessage(cause),
               cause,
             }),
-    }).pipe(Effect.flatMap(() => funnel.run()));
+      ),
+      Effect.flatMap(() => funnel.run()),
+    );
 
   return {
     handleMessage(message: DesktopCommandMessage): boolean {

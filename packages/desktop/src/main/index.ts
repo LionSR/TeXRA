@@ -720,19 +720,20 @@ function createWindow(options: {
     );
   };
   let teamSignInPending = false;
-  const refreshDesktopAuthSurfaces = async () => {
-    await Promise.all(
-      [...projectBindings.values()].map((binding) =>
-        runtime.runPromise(binding.snapshot.refreshAuth),
-      ),
-    );
-    await settingsIpcRef.current?.refreshAuthDependentData({
-      deferAgentCatalogRefresh: teamSignInPending,
+  /** Every surface an account change touches, as one program: the open
+   *  papers' auth snapshots, the settings view, then the onboarding funnel. */
+  const refreshDesktopAuthSurfaces = () =>
+    Effect.gen(function* () {
+      yield* Effect.forEach(
+        [...projectBindings.values()],
+        (binding) => binding.snapshot.refreshAuth,
+        { concurrency: 'unbounded', discard: true },
+      );
+      yield* settingsIpcRef.current?.refreshAuthDependentData({
+        deferAgentCatalogRefresh: teamSignInPending,
+      }) ?? Effect.void;
+      yield* onboardingIpcRef.current?.refreshOnboardingFunnel() ?? Effect.void;
     });
-    await runtime.runPromise(
-      onboardingIpcRef.current?.refreshOnboardingFunnel() ?? Effect.void,
-    );
-  };
   const desktopAuthHost: DesktopSupabaseAuthHost = {
     openExternalUrl: (url) =>
       previewHost.openExternal(url, { reportFailure: false }),
@@ -770,26 +771,33 @@ function createWindow(options: {
       if (provider === undefined) return;
       yield* desktopAuth.signIn(provider);
     });
-  const signInForRemoteAgentCatalog = () =>
-    Effect.tryPromise({
-      try: async () => {
-        const provider = await chooseOAuthProvider();
-        if (provider === undefined) return false;
-        teamSignInPending = true;
-        try {
-          return (
-            (await desktopAuth.signInAndWaitForSession(provider)) &&
-            (await runtime.runPromise(options.supabaseAuth.authenticated))
-          );
-        } finally {
-          teamSignInPending = false;
-        }
-      },
-      catch: (cause) =>
-        new SignInFailed({
-          message: `The desktop sign-in could not run: ${toErrorMessage(cause)}`,
-          cause,
-        }),
+  const signInFailed = (cause: unknown) =>
+    new SignInFailed({
+      message: `The desktop sign-in could not run: ${toErrorMessage(cause)}`,
+      cause,
+    });
+  const signInForRemoteAgentCatalog = (): Effect.Effect<
+    boolean,
+    SignInFailed
+  > =>
+    Effect.gen(function* () {
+      const provider = yield* Effect.tryPromise({
+        try: chooseOAuthProvider,
+        catch: signInFailed,
+      });
+      if (provider === undefined) return false;
+      teamSignInPending = true;
+      return yield* Effect.gen(function* () {
+        const signedIn = yield* desktopAuth.signInAndWaitForSession(provider);
+        return signedIn && (yield* options.supabaseAuth.authenticated);
+      }).pipe(
+        Effect.mapError(signInFailed),
+        Effect.ensuring(
+          Effect.sync(() => {
+            teamSignInPending = false;
+          }),
+        ),
+      );
     });
   windowResources.add(
     options.setupAuth.registerSignIn(signInForRemoteAgentCatalog),
@@ -1588,7 +1596,10 @@ function createWindow(options: {
             ),
           );
         }),
-      signInWithChatGpt: () => requireSettingsIpc().signInChatGpt(),
+      // Suspended so the "settings IPC not attached" guard raises when the
+      // card's program runs, not when the port is built.
+      signInWithChatGpt: () =>
+        Effect.suspend(() => requireSettingsIpc().signInChatGpt()),
       onAsyncError: reportAsyncError,
       runtime,
     },

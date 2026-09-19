@@ -87,7 +87,7 @@ async function createOnboardingHarness({
     {
       hasCredential: () => Effect.succeed(false),
       kickoffSetup: () => Effect.void,
-      signInWithChatGpt: async () => {},
+      signInWithChatGpt: () => Effect.void,
       onAsyncError: vi.fn(),
       ...options,
       runtime,

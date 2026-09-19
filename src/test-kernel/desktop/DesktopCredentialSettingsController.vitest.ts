@@ -401,7 +401,7 @@ describe('DefaultDesktopCredentialSettingsController', () => {
       ]),
     );
 
-    await fixture.controller.signInChatGpt();
+    await testRuntime().runPromise(fixture.controller.signInChatGpt());
     expect(codexMocks.login).toHaveBeenCalledOnce();
     expect(codexMocks.setPreferSubscription).toHaveBeenLastCalledWith(
       expect.anything(),
@@ -420,7 +420,7 @@ describe('DefaultDesktopCredentialSettingsController', () => {
     codexMocks.login.mockReturnValueOnce(
       Effect.fail(new Error('authorization denied')),
     );
-    await fixture.controller.signInChatGpt();
+    await testRuntime().runPromise(fixture.controller.signInChatGpt());
 
     expect(fixture.errors).toEqual([
       'ChatGPT sign-in failed: authorization denied',
@@ -467,7 +467,7 @@ describe('DefaultDesktopCredentialSettingsController', () => {
       }),
     );
 
-    await fixture.controller.signInChatGpt();
+    await testRuntime().runPromise(fixture.controller.signInChatGpt());
 
     expect(openSubscriptionSignInUrl).toHaveBeenCalledExactlyOnceWith(
       'https://auth.openai.com/authorize',
