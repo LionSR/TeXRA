@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 // Local imports
 import { getRunRecords, registerRun } from '@agent/storage';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
+import type { ChildRunStrategy } from '@agent/runtime/childRunLoop';
 import { Runs } from '@agent/runtime/runRegistry';
 import { AgentResume } from '@platform/interfaces';
 import {
@@ -98,6 +99,16 @@ function startBashChild(runId: RunId) {
     }),
   );
 }
+
+/** A launch strategy for the cancelled-admission test: the loop never starts,
+ *  so none of these run. */
+const neverRunStrategy: ChildRunStrategy<void> = {
+  stageLabel: 'unreachable',
+  launch: () => Effect.void,
+  isTerminal: () => true,
+  formatDelivery: () => Effect.succeed('unreachable'),
+  formatError: () => 'unreachable',
+};
 
 function startCodexChild(runId: RunId, description: string) {
   return Effect.runPromise(
@@ -420,7 +431,9 @@ describe('child run progress events', () => {
               Effect.tap(() => Deferred.await(releasePublication)),
             ),
           );
-        const startLoop = vi.fn(() => Effect.void);
+        const buildLaunch = vi.fn(() =>
+          Effect.succeed({ strategy: neverRunStrategy }),
+        );
         try {
           const launching = yield* Effect.forkChild(
             launchAgentCliSession({
@@ -430,7 +443,7 @@ describe('child run progress events', () => {
               description: 'Cancelled admission',
               config,
               registerFailedMessage: 'registration failed',
-              startLoop,
+              buildLaunch,
               summary: 'unreachable',
               launchedLine: 'unreachable',
               followUpLine: 'unreachable',
@@ -447,7 +460,7 @@ describe('child run progress events', () => {
           expect(
             Exit.isFailure(stopped) && Cause.hasInterrupts(stopped.cause),
           ).toBe(true);
-          expect(startLoop).not.toHaveBeenCalled();
+          expect(buildLaunch).not.toHaveBeenCalled();
           expect(
             (yield* getRunRecords(session, id).readRunEnd())?.outcome,
           ).toBe(RUN_OUTCOME.CANCELLED);
@@ -486,7 +499,7 @@ describe('child run progress events', () => {
               description: 'Fail during synchronous loop setup',
               config,
               registerFailedMessage: 'registration failed',
-              startLoop: (context) => {
+              buildLaunch: (context) => {
                 childRun = context.childRun;
                 childRunId = context.runId;
                 throw setupError;

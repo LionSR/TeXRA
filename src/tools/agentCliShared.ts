@@ -2,7 +2,7 @@
 // Host-agnostic, VS Code-free.
 
 // Third-party imports
-import { Cause, Data, Effect, Exit, Fiber } from 'effect';
+import { Data, Effect } from 'effect';
 
 // Local imports
 import { registerRun } from '@agent/storage';
@@ -11,11 +11,9 @@ import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { RunHandle } from '@agent/runtime/RunHandle';
 import { Runs, type RunRegistry } from '@agent/runtime/runRegistry';
-import {
-  startChildRunLoop,
-  runWithOwnedRunLeaseLaunchGuard,
-  type ChildRunPorts,
-  type ChildRunStrategy,
+import type {
+  ChildRunPorts,
+  ChildRunStrategy,
 } from '@agent/runtime/childRunLoop';
 import { ToolCall, type ToolCallShape } from '@agent/runtime/ToolCall';
 import {
@@ -26,7 +24,6 @@ import {
 import { AgentResume } from '@platform/interfaces';
 import {
   emptyUsageStats,
-  RUN_OUTCOME,
   sumUsageStats,
   ToolError,
   type FollowUpContent,
@@ -49,6 +46,10 @@ import {
   createChildRun,
   type ChildRun,
 } from './delegation/childRun';
+import {
+  startDetachedChildRunLoop,
+  type DetachedChildRunLaunch,
+} from './delegation/detachedChildRun';
 import type {
   AgentCliSessionEntry,
   AgentCliSessionRegistry,
@@ -221,7 +222,7 @@ const resumeOrLaunchAgentCliSession = Effect.fn(
   }
 });
 
-interface AgentCliLaunchParams {
+interface AgentCliLaunchParams<TTurn> {
   session: SessionHandle;
   /** The launching run: the child's parent edge. */
   parentRunId: RunId;
@@ -229,23 +230,38 @@ interface AgentCliLaunchParams {
   description: string;
   config: AgentConfig;
   registerFailedMessage: string;
-  startLoop: (ctx: {
+  /**
+   * Build the provider's loop strategy (and its late-failure trace) around the
+   * child stream the launch guard created. See {@link buildAgentCliLaunch}.
+   */
+  buildLaunch: (ctx: {
     childRun: ChildRun;
     runId: RunId;
-  }) => Effect.Effect<void, Error, Runs | AgentResume>;
+  }) => Effect.Effect<DetachedChildRunLaunch<TTurn>, Error, Runs>;
   summary: string;
   launchedLine: string;
   followUpLine: string;
 }
 
 /**
- * Register a fresh agent-CLI run, create its child stream tab, start the
- * provider's turn loop, and return the "launched" ToolResult.
+ * Register a fresh agent-CLI run, then run the shared detached-child launch
+ * choreography over it: create the child stream tab inside the owned-run
+ * launch guard, hand the provider's strategy to the child run loop, and return
+ * the "launched" ToolResult.
+ *
+ * `registerRun` stays here rather than moving to `registerChildRun`: an
+ * agent-CLI run stamps `identity.tool`, TERMINAL_BACKED follow-up support and
+ * a run description that the native registration does not.
+ *
+ * Failure channel: a setup failure propagates as the choreography raised it.
+ * A typed failure is re-tagged onto this chain's `AgentCliCallFailed`; an
+ * interrupt that lands once the child stream exists re-raises as an interrupt
+ * into the calling tool fiber rather than being squashed into a failure.
  */
 export const launchAgentCliSession = Effect.fn(
   'agentCliShared.launchAgentCliSession',
-)(function* (
-  params: AgentCliLaunchParams,
+)(function* <TTurn>(
+  params: AgentCliLaunchParams<TTurn>,
 ): Effect.fn.Return<ToolResult, AgentCliToolFailure, Runs | AgentResume> {
   return yield* Effect.uninterruptibleMask((restore) =>
     Effect.gen(function* () {
@@ -279,65 +295,42 @@ export const launchAgentCliSession = Effect.fn(
             ),
         ),
       );
-      // The launch guard owns the release-on-failure policy for every launch site
-      // (bash background, the two detached child paths, and this one): a failed
-      // launch must not leave a record that refuses a relaunch for the rest of the
-      // process's life.
-      const childRun = yield* runWithOwnedRunLeaseLaunchGuard(
-        params.session,
+
+      const { childRunId } = yield* startDetachedChildRunLoop({
+        session: params.session,
         runId,
-        Effect.gen(function* () {
+        parentRunId: params.parentRunId,
+        agentName: params.agentName,
+        // An agent-CLI child is an external process on the user's own
+        // subscription, outside both the cost contract and the child-run
+        // concurrency budget, exactly as a background shell is
+        // (`.agents/docs/implemented/architecture/2026-08-15-child-run-concurrency-budget.md`).
+        budgeted: false,
+        createChildRun: () =>
           // Deliberate interruption checkpoint, not dead code: everything from
           // here to the started loop is uninterruptible, so without this the
           // pending interrupt would only be observed after the loop has been
           // launched. `ChildRunProgressEvents.vitest.ts` pins the behavior — a
           // cancel arriving while the record is committed but the detached work
           // has not started must leave the run CANCELLED with no loop behind it.
-          yield* restore(Effect.void);
-          const stream = yield* createChildRun(
-            params.session,
-            runId,
-            params.parentRunId,
-            {
-              run: identity,
-              userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.TERMINAL_BACKED,
-              description: params.description,
-              config: params.config,
-            },
-          );
-          const started = yield* Effect.exit(
-            Effect.suspend(() => params.startLoop({ childRun: stream, runId })),
-          );
-          if (Exit.isFailure(started)) {
-            const startError = Cause.squash(started.cause);
-            const finalized = yield* Effect.exit(
-              stream.finalize({
-                outcome: RUN_OUTCOME.FAILED,
-                error: startError,
+          restore(Effect.void).pipe(
+            Effect.andThen(
+              createChildRun(params.session, runId, params.parentRunId, {
+                run: identity,
+                userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.TERMINAL_BACKED,
+                description: params.description,
+                config: params.config,
               }),
-            );
-            if (Exit.isFailure(finalized)) {
-              return yield* Effect.fail(
-                new AggregateError(
-                  [startError, Cause.squash(finalized.cause)],
-                  `Agent CLI run ${runId} failed and its child stream could not be finalized`,
-                ),
-              );
-            }
-            return yield* Effect.fail(ensureError(startError));
-          }
-          return stream;
-        }),
-      ).pipe(
-        Effect.uninterruptible,
-        Effect.mapError((cause) => new AgentCliCallFailed({ cause })),
-      );
+            ),
+          ),
+        buildLaunch: (childRun) => params.buildLaunch({ childRun, runId }),
+      }).pipe(Effect.mapError((cause) => new AgentCliCallFailed({ cause })));
 
       return executed(
         [
           params.launchedLine,
           `Run ID: ${runId}`,
-          `Run: ${childRun.childRunId}`,
+          `Run: ${childRunId}`,
           params.followUpLine,
         ].join('\n'),
         params.summary,
@@ -493,12 +486,8 @@ interface AgentCliTurnUsage {
 }
 
 interface AgentCliLoopParams<TTurn> {
-  session: SessionHandle;
   childRun: ChildRun;
-  parentRunId: RunId;
   runId: RunId;
-  /** Passed through to `startChildRunLoop` (registry lookups, log labels). */
-  agentName: string;
   /** Stage label opened on the child trace (e.g. "Codex session"). */
   stageLabel: string;
   initialPrompt: string;
@@ -536,31 +525,30 @@ interface AgentCliLoopParams<TTurn> {
   /** Omitted by providers (codex) that always throw on failure. */
   isTurnError?: (turn: TTurn) => boolean;
   onTurnError?: (turn: TTurn, logger: AgentTrace) => void;
-  /** Logged if the loop's completion promise rejects after launch. */
+  /** Logged if the loop fails after launch. */
   loopFailedMessage: string;
 }
 
 /**
- * Run the shared agent-CLI session loop. `startChildRunLoop` processes prompts
- * from the child's follow-up queue one at a time and delivers each turn's
- * result to the parent's follow-up queue; this wraps that with the scaffolding
- * common to every agent-CLI provider (codex, claudeAgent): a dedup'd
- * session/thread registration closure, the `lastPrompt` capture feeding
- * `formatDelivery`/`formatError`, and the boilerplate-identical
- * `ChildRunStrategy` fields (`isTerminal`, `getUsage`, `onLoopStart`,
- * `onTurnSuccess`, `publishUsage`, `releaseSessionOwnership`). Callers supply
- * only their provider-specific turn run, usage/delivery formatting, and
- * registry entry construction.
+ * Build the shared agent-CLI child-run launch. `startChildRunLoop` (reached
+ * through {@link launchAgentCliSession}'s detached-launch choreography)
+ * processes prompts from the child's follow-up queue one at a time and
+ * delivers each turn's result to the parent's follow-up queue; this supplies
+ * the `ChildRunStrategy` scaffolding common to every agent-CLI provider
+ * (codex, claudeAgent): a dedup'd session/thread registration closure, the
+ * `lastPrompt` capture feeding `formatDelivery`/`formatError`, and the
+ * boilerplate-identical strategy fields (`isTerminal`, `getUsage`,
+ * `onLoopStart`, `onTurnSuccess`, `publishUsage`, `releaseSessionOwnership`).
+ * Callers supply only their provider-specific turn run, usage/delivery
+ * formatting, and registry entry construction.
  */
-export function startAgentCliLoop<TTurn>(
+export function buildAgentCliLaunch<TTurn>(
   params: AgentCliLoopParams<TTurn>,
-): Effect.Effect<void, Error, Runs | AgentResume> {
+): Effect.Effect<DetachedChildRunLaunch<TTurn>, never, Runs> {
   return Effect.gen(function* () {
     const {
       childRun,
-      parentRunId,
       runId,
-      agentName,
       stageLabel,
       initialPrompt,
       store,
@@ -647,22 +635,14 @@ export function startAgentCliLoop<TTurn>(
       },
     };
 
-    const completion = yield* startChildRunLoop({
-      session: params.session,
-      childRun,
-      parentRunId,
-      runId,
-      agentName,
+    return {
       strategy,
-    });
-    yield* Effect.forkDetach(
-      Fiber.join(completion).pipe(
-        Effect.catchCause((cause) =>
-          Effect.sync(() => {
-            logger.error(loopFailedMessage, { data: Cause.squash(cause) });
-          }),
-        ),
-      ),
-    );
-  }).pipe(Effect.uninterruptible);
+      // Nobody awaits an agent-CLI child: own a late loop failure here as a
+      // trace diagnostic, since the loop already owns its one user-facing
+      // result delivery.
+      onLoopFailed: (error: unknown): void => {
+        logger.error(loopFailedMessage, { data: error });
+      },
+    };
+  });
 }

@@ -77,10 +77,10 @@ import { claudeAgentSessionsFor } from './agentCliSessionStores';
 import {
   agentCliCall,
   type AgentCliToolFailure,
+  buildAgentCliLaunch,
   dispatchAgentCliTool,
   launchAgentCliSession,
   reraiseAgentCliCallFailure,
-  startAgentCliLoop,
 } from './agentCliShared';
 import {
   formatChildRunDelivery,
@@ -94,6 +94,7 @@ import {
   modelSupportsAdaptiveThinking,
   type ClaudeTurnUsage,
 } from './claudeAgentShared';
+import type { DetachedChildRunLaunch } from './delegation/detachedChildRun';
 
 // Third-party type imports (import/order places these after local imports)
 import type {
@@ -416,10 +417,8 @@ function extractToolErrorMessage(content: unknown): string | undefined {
 // Session loop — drains follow-ups, runs turns, delivers results to parent
 // ============================================================================
 
-function startClaudeAgentLoop(params: {
-  session: SessionHandle;
+function buildClaudeAgentLaunch(params: {
   childRun: ChildRun;
-  parentRunId: RunId;
   runId: RunId;
   initialPrompt: string;
   model: string;
@@ -439,8 +438,8 @@ function startClaudeAgentLoop(params: {
   resumeSessionId: string | undefined;
   /** Release the fallback claim if the loop exits before promoting it. */
   releaseFallbackClaim: (() => void) | undefined;
-}): Effect.Effect<void, Error, Runs | AgentResume> {
-  const { childRun, parentRunId, runId, initialPrompt } = params;
+}): Effect.Effect<DetachedChildRunLaunch<TurnResult>, never, Runs> {
+  const { childRun, runId, initialPrompt } = params;
   const { logger } = childRun;
 
   // The SDK needs the prior session id to resume the same conversation across
@@ -452,17 +451,14 @@ function startClaudeAgentLoop(params: {
     ? undefined
     : params.resumeSessionId;
 
-  return startAgentCliLoop({
-    session: params.session,
+  return buildAgentCliLaunch({
     childRun,
-    parentRunId,
     runId,
-    agentName: CLAUDE_AGENT_NAME,
     stageLabel: 'Claude Code session',
     initialPrompt,
     store: claudeAgentSessionsFor,
     releaseFallbackClaim: params.releaseFallbackClaim,
-    // `startAgentCliLoop` calls this inside its own `Effect.suspend`, so the
+    // The shared loop calls this inside its own `Effect.suspend`, so the
     // reads below happen per turn, as the awaited closure they replace did.
     runProviderTurn: (prompt, _ports, signal) => {
       const forkSession = isFirstTurn && params.forkSession;
@@ -679,11 +675,9 @@ const launchClaudeAgentSession = Effect.fn(
     description: input.prompt,
     config: agentConfig,
     registerFailedMessage: 'Failed to register Claude Code CLI run.',
-    startLoop: ({ childRun, runId }) =>
-      startClaudeAgentLoop({
-        session,
+    buildLaunch: ({ childRun, runId }) =>
+      buildClaudeAgentLaunch({
         childRun,
-        parentRunId,
         runId,
         initialPrompt: input.prompt,
         model,

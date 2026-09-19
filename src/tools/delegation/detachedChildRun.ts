@@ -61,7 +61,7 @@ export const registerChildRun = Effect.fn('registerChildRun')(function* (
 });
 
 /** The strategy wiring a launch site supplies inside the guard. */
-interface DetachedChildRunLaunch<TTurn, R> {
+export interface DetachedChildRunLaunch<TTurn, R = never> {
   /** Provider-specific run strategy for the child loop. */
   readonly strategy: ChildRunStrategy<TTurn, R>;
   /**
@@ -90,10 +90,12 @@ export type DetachedChildRunInput<
     | {
         /** Create the stream inside the launch guard, before any stream-dependent setup. */
         readonly createChildRun: () => Effect.Effect<ChildRun, Error, Runs>;
-        /** Build attempt-scoped setup around the stream retained by the launch guard. */
+        /** Build attempt-scoped setup around the stream retained by the launch
+         * guard. It runs in the choreography's own context, so it may read the
+         * session's `Runs` (the agent-CLI strategies resolve their registry there). */
         readonly buildLaunch: (
           childRun: ChildRun,
-        ) => Effect.Effect<DetachedChildRunLaunch<TTurn, R>, Error>;
+        ) => Effect.Effect<DetachedChildRunLaunch<TTurn, R>, Error, R | Runs>;
       }
     | {
         /** Native strategies let `executeAgent` own handle creation for every turn. */
@@ -104,7 +106,8 @@ export type DetachedChildRunInput<
          */
         readonly buildLaunch: () => Effect.Effect<
           DetachedChildRunLaunch<TTurn, R>,
-          Error
+          Error,
+          R | Runs
         >;
       }
   );
