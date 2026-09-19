@@ -4,6 +4,7 @@ import OpenAI from 'openai';
 import { z } from 'zod';
 
 // Local imports - canonical model contract
+import { chatDeltaAccumulator, chatUsageCounts } from './chatStream.js';
 import { openaiFailure } from './openaiError.js';
 import {
   InputTokenEstimateSchema,
@@ -269,12 +270,7 @@ const miniMaxUsage = (
   receipt === undefined
     ? null
     : {
-        inputTokens: receipt.prompt_tokens ?? null,
-        outputTokens: receipt.completion_tokens ?? null,
-        totalTokens: receipt.total_tokens ?? null,
-        cachedInputTokens: receipt.prompt_tokens_details?.cached_tokens ?? null,
-        reasoningTokens:
-          receipt.completion_tokens_details?.reasoning_tokens ?? null,
+        ...chatUsageCounts(receipt),
         ...(receipt.total_characters !== undefined
           ? {
               providerUsage: {
@@ -733,12 +729,9 @@ const normalizeUsage = Effect.fn('llm.chatUsage')(function* (
     });
   }
   return {
-    inputTokens: receipt.prompt_tokens,
-    outputTokens: receipt.completion_tokens,
-    totalTokens: receipt.total_tokens,
+    ...chatUsageCounts(receipt),
+    // The reconciled provider cache receipt above, not the generic field.
     cachedInputTokens: cached,
-    reasoningTokens:
-      receipt.completion_tokens_details?.reasoning_tokens ?? null,
   } satisfies NonNullable<TurnResult['usage']>;
 });
 
@@ -1053,18 +1046,8 @@ export function openaiChatModel(
           let miniMaxContentSeen = false;
           let miniMaxEvidence: ReturnType<typeof miniMaxDetection> = {};
           let miniMaxReceipt: z.infer<typeof MiniMaxUsageSchema> | undefined;
-          let activePhase: 'reasoning' | 'text' | undefined;
           let receivedSentinel = false;
-          const content: Array<{ kind: 'text' | 'refusal'; text: string }> = [];
-          const calls = new Map<
-            number,
-            {
-              id?: string;
-              name?: string;
-              type?: 'function';
-              arguments: string;
-            }
-          >();
+          const assistant = chatDeltaAccumulator();
 
           const bytes = pullStream(() => body.read(), openaiFailure);
           const chunks = sseEvents(
@@ -1341,78 +1324,20 @@ export function openaiChatModel(
                       'This reasoning Chat protocol does not support a refusal field.',
                   });
                 }
-                for (const [part, text] of [
-                  [
-                    'reasoning',
-                    miniMaxReasoningDelta || choice.delta.reasoning_content,
-                  ],
-                  ['text', choice.delta.content],
-                  ['refusal', choice.delta.refusal],
-                ] as const) {
-                  if (text == null || text === '') continue;
-                  const phase = part === 'reasoning' ? 'reasoning' : 'text';
-                  if (activePhase !== phase) {
-                    if (activePhase !== undefined)
-                      events.push({
-                        kind: 'phase',
-                        part: activePhase,
-                        boundary: 'end',
-                        providerItemIndex: null,
-                      });
-                    events.push({
-                      kind: 'phase',
-                      part: phase,
-                      boundary: 'start',
-                      providerItemIndex: null,
-                    });
-                    activePhase = phase;
-                  }
-                  if (part !== 'reasoning') {
-                    const previous = content.at(-1);
-                    if (previous?.kind === part) previous.text += text;
-                    else content.push({ kind: part, text });
-                  }
-                  events.push({
-                    kind: 'delta',
-                    part,
-                    text,
-                    providerItemIndex: null,
-                  });
-                }
-                for (const delta of choice.delta.tool_calls ?? []) {
-                  const call = calls.get(delta.index) ?? { arguments: '' };
-                  if (
-                    (delta.id != null &&
-                      call.id !== undefined &&
-                      delta.id !== call.id) ||
-                    (delta.function?.name != null &&
-                      call.name !== undefined &&
-                      delta.function.name !== call.name)
-                  ) {
-                    return yield* new ModelError({
-                      kind: 'malformed-output',
-                      message:
-                        'The model changed a streamed tool call identity.',
-                    });
-                  }
-                  call.id = delta.id ?? call.id;
-                  call.name = delta.function?.name ?? call.name;
-                  call.type = delta.type ?? call.type;
-                  call.arguments += delta.function?.arguments ?? '';
-                  calls.set(delta.index, call);
-                }
-                if (
-                  choice.delta.tool_calls?.length &&
-                  activePhase !== undefined
-                ) {
-                  events.push({
-                    kind: 'phase',
-                    part: activePhase,
-                    boundary: 'end',
-                    providerItemIndex: null,
-                  });
-                  activePhase = undefined;
-                }
+                events.push(
+                  ...assistant.absorbText({
+                    reasoning:
+                      miniMaxReasoningDelta || choice.delta.reasoning_content,
+                    text: choice.delta.content,
+                    refusal: choice.delta.refusal,
+                  }),
+                );
+                yield* assistant.absorbToolCalls(
+                  choice.delta.tool_calls,
+                  'The model changed a streamed tool call identity.',
+                );
+                if (choice.delta.tool_calls?.length)
+                  events.push(...assistant.closePhase());
                 if (
                   choice.finish_reason != null &&
                   choice.finish_reason !== 'end_turn'
@@ -1452,7 +1377,8 @@ export function openaiChatModel(
                     'The model stream ended without a completed response.',
                 });
               }
-              if ((finishReason === 'tool-calls') !== calls.size > 0) {
+              const toolCalls = assistant.toolCalls();
+              if ((finishReason === 'tool-calls') !== toolCalls.length > 0) {
                 return yield* new ModelError({
                   kind: 'malformed-output',
                   message:
@@ -1506,7 +1432,7 @@ export function openaiChatModel(
                 });
               }
               if (
-                content.length > 0 ||
+                assistant.parts.length > 0 ||
                 miniMaxContentSeen ||
                 miniMaxName !== undefined ||
                 miniMaxAudio !== undefined
@@ -1514,9 +1440,9 @@ export function openaiChatModel(
                 completedContent.push({
                   kind: 'message',
                   content:
-                    miniMaxContentSeen && content.length === 0
+                    miniMaxContentSeen && assistant.parts.length === 0
                       ? [{ kind: 'text', text: '' }]
-                      : content,
+                      : assistant.parts,
                   ...(turn.protocol === 'minimax-chat' &&
                   (miniMaxName !== undefined || miniMaxAudio !== undefined)
                     ? {
@@ -1532,9 +1458,7 @@ export function openaiChatModel(
                       }
                     : {}),
                 });
-              for (const [ordinal, [index, call]] of [...calls]
-                .toSorted(([left], [right]) => left - right)
-                .entries()) {
+              for (const [ordinal, [index, call]] of toolCalls.entries()) {
                 if (
                   index !== ordinal ||
                   call.id === undefined ||
@@ -1577,13 +1501,7 @@ export function openaiChatModel(
                 usage:
                   xaiReceipt !== undefined
                     ? {
-                        ...(usage ?? {
-                          inputTokens: null,
-                          outputTokens: null,
-                          totalTokens: null,
-                          cachedInputTokens: null,
-                          reasoningTokens: null,
-                        }),
+                        ...(usage ?? chatUsageCounts({})),
                         providerUsage: xaiReceipt,
                       }
                     : (usage ?? choiceUsage),
@@ -1595,14 +1513,7 @@ export function openaiChatModel(
                   cause: parsedResult.error,
                 });
               }
-              const events: TurnEvent[] = [];
-              if (activePhase !== undefined)
-                events.push({
-                  kind: 'phase',
-                  part: activePhase,
-                  boundary: 'end',
-                  providerItemIndex: null,
-                });
+              const events: TurnEvent[] = assistant.closePhase();
               events.push({ kind: 'completed', result: parsedResult.data });
               return events;
             }),
