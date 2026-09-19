@@ -65,10 +65,10 @@ import { codexThreadsFor } from './agentCliSessionStores';
 import {
   agentCliCall,
   type AgentCliToolFailure,
+  buildAgentCliLaunch,
   dispatchAgentCliTool,
   launchAgentCliSession,
   reraiseAgentCliCallFailure,
-  startAgentCliLoop,
 } from './agentCliShared';
 import {
   formatChildRunDelivery,
@@ -84,6 +84,7 @@ import {
   buildCodexTodoToolLog,
   buildCodexTurnToolLog,
 } from './codexShared';
+import type { DetachedChildRunLaunch } from './delegation/detachedChildRun';
 
 // Third-party type imports (import/order places these after local imports)
 import type {
@@ -344,16 +345,14 @@ export function runStreamedTurn(
 // ============================================================================
 
 /**
- * Run the Codex session loop. The shared loop runner processes prompts from the
- * child's follow-up queue one at a time and delivers each turn's result to the
- * parent's follow-up queue; this strategy supplies the Codex-specific turn
- * run, registry bookkeeping, and result formatting.
+ * Build the Codex session loop's strategy. The shared child run loop processes
+ * prompts from the child's follow-up queue one at a time and delivers each
+ * turn's result to the parent's follow-up queue; this strategy supplies the
+ * Codex-specific turn run, registry bookkeeping, and result formatting.
  */
-function startCodexLoop(params: {
-  session: SessionHandle;
+function buildCodexLaunch(params: {
   thread: Thread;
   childRun: ChildRun;
-  parentRunId: RunId;
   runId: RunId;
   initialPrompt: string;
   /**
@@ -363,23 +362,19 @@ function startCodexLoop(params: {
   resumeThreadId: string | undefined;
   /** Release the fallback claim if the loop exits before promoting it. */
   releaseFallbackClaim: (() => void) | undefined;
-}): Effect.Effect<void, Error, Runs | AgentResume> {
+}): Effect.Effect<DetachedChildRunLaunch<RunResult>, never, Runs> {
   const {
     thread,
     childRun,
-    parentRunId,
     runId,
     initialPrompt,
     resumeThreadId: fallbackThreadId,
     releaseFallbackClaim,
   } = params;
   const { logger } = childRun;
-  return startAgentCliLoop({
-    session: params.session,
+  return buildAgentCliLaunch({
     childRun,
-    parentRunId,
     runId,
-    agentName: 'codex',
     stageLabel: 'Codex session',
     initialPrompt,
     store: codexThreadsFor,
@@ -588,12 +583,10 @@ const launchCodexSession = Effect.fn('codex.launchCodexSession')(function* (
     description: input.prompt,
     config,
     registerFailedMessage: 'Failed to register Codex run.',
-    startLoop: ({ childRun, runId }) =>
-      startCodexLoop({
-        session,
+    buildLaunch: ({ childRun, runId }) =>
+      buildCodexLaunch({
         thread,
         childRun,
-        parentRunId,
         runId,
         initialPrompt: input.prompt,
         resumeThreadId: input.thread_id ?? undefined,
