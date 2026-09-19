@@ -33,6 +33,7 @@ import { emitRunFact } from '@agent/runtime/runFactEvents';
 import type { Runs } from '@agent/runtime/runRegistry';
 import { ToolCall, type ToolCallShape } from '@agent/runtime/ToolCall';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
+import { createLog } from '@logger/logUtils';
 import type { AgentResume } from '@platform/interfaces';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type {
@@ -55,6 +56,7 @@ import { formatWallTimeSeconds, previewLabel } from '@utils/text/stringUtils';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
+import { CODEX_CLI_MODEL } from './codexConfig';
 import { defineTool } from './core/define';
 import { buildAgentWorkspaceOptions } from './agentWorkspaceOptions';
 import { importCodexClass, findCodexBinaryPath } from './codexImport';
@@ -459,12 +461,7 @@ const createCodexThread = Effect.fn('codex.createCodexThread')(function* (
       requestedEffort === 'xhigh'
         ? config.getCodexCliReasoningEffort(
             roots.workspaceState,
-            // The capability probe spawns the resolved binary: one foreign
-            // edge, wrapped here until `executeCommand` itself answers in
-            // Effect.
-            yield* Effect.promise(() =>
-              config.codexBinarySupportsXhigh(codexPath),
-            ),
+            yield* config.codexBinarySupportsXhigh(codexPath),
           )
         : requestedEffort,
     skipGitRepoCheck: true as const,

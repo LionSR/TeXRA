@@ -6,7 +6,6 @@ import { withLogChannel } from '@logger/effectLog';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { ExecResult } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import { ensureError } from '@utils/errors/errorMessage';
 import { executeCommand } from '@utils/system/execUtils';
 import { readSettingFrom } from '@utils/config/platformSettings';
 
@@ -167,8 +166,7 @@ export class DiffCommandExecutor {
   /**
    * Run `commandBuilder(true)`, and on a bibliography failure retry it without
    * `--flatten`. The subprocess is torn down by the fiber's own interruption:
-   * `Effect.tryPromise` hands the thunk the `AbortSignal` that `executeCommand`
-   * uses to kill the process group.
+   * `executeCommand` kills the process group from its own finalizer.
    */
   private executeWithFallback(
     commandBuilder: (useFlatten: boolean) => string[],
@@ -229,16 +227,11 @@ export class DiffCommandExecutor {
   private exec(
     command: string[],
     execOptions: CommandExecOptions,
-  ): Effect.Effect<ExecResult, Error> {
-    return Effect.tryPromise({
-      try: (signal) =>
-        executeCommand(command, {
-          ...execOptions,
-          // The roots of the workspace being diffed, held by this executor.
-          settings: this.roots,
-          signal,
-        }),
-      catch: ensureError,
+  ): Effect.Effect<ExecResult> {
+    return executeCommand(command, {
+      ...execOptions,
+      // The roots of the workspace being diffed, held by this executor.
+      settings: this.roots,
     });
   }
 

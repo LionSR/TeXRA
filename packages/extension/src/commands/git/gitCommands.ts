@@ -19,6 +19,7 @@ import {
 } from '@latex/overleafProject';
 import { createLog } from '@logger/logUtils';
 import { withSessionFs, WorkspaceFs } from '@platform/rootedFs';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { RootedFileSystem } from '@utils/files/rootedFileSystem';
 import { readSettingFrom } from '@utils/config/platformSettings';
@@ -26,7 +27,7 @@ import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { COMMIT_HASH_PATTERN } from '@utils/git/commitHashPattern';
 import { COMMIT_LABEL_FORMAT } from '@utils/git/commitLogFormat';
 import { readRecentCommitLabels } from '@utils/git/repositoryOverview';
-import { executeCommandSync } from '@utils/system/execUtils';
+import { executeCommandSync } from '@utils/system/execCore';
 import { makeMachineGitEnv } from '@utils/system/gitEnv';
 import { isGitRepository } from '@utils/git/isGitRepository';
 
@@ -35,6 +36,7 @@ const log = createLog(CHANNEL);
 
 export function registerGitCommands(
   context: vscode.ExtensionContext,
+  runtime: ProcessRuntime,
   session: SessionHandle,
 ): void {
   // `isGitRepository`, `getRecentCommits`, and `findCommitInHistory`
@@ -48,11 +50,14 @@ export function registerGitCommands(
     {
       id: 'texra.isGitRepository',
       handler: (rootPath?: string) =>
-        isGitRepository(rootPath ?? session.roots.workspace, session.roots),
+        runtime.runPromise(
+          isGitRepository(rootPath ?? session.roots.workspace, session.roots),
+        ),
     },
     {
       id: 'texra.getRecentCommits',
-      handler: (rootPath?: string) => getRecentCommits(session, rootPath),
+      handler: (rootPath?: string) =>
+        runtime.runPromise(getRecentCommits(session, rootPath)),
     },
     {
       id: 'texra.findCommitInHistory',
@@ -62,14 +67,14 @@ export function registerGitCommands(
   ]);
 }
 
-async function getRecentCommits(
+const getRecentCommits = Effect.fn('gitCommands.getRecentCommits')(function* (
   session: SessionHandle,
   rootPath?: string,
-): Promise<string[] | null> {
+): Effect.fn.Return<string[] | null> {
   const workspacePath = rootPath ?? session.roots.workspace;
   if (
     !workspacePath ||
-    !(await isGitRepository(workspacePath, session.roots))
+    !(yield* isGitRepository(workspacePath, session.roots))
   ) {
     return null;
   }
@@ -81,17 +86,21 @@ async function getRecentCommits(
     'texra.git.numberOfCommitsToShow',
   );
 
-  const commits = await readRecentCommitLabels(workspacePath, numberOfCommits, {
-    // The session's own slots: the read answers for this project.
-    settings: session.roots,
-    // A failed `git log` comes back as undefined and is answered as an empty
-    // list; without this hook that failure would be invisible in this host
-    // (the desktop host passes its own onError to the same read).
-    onError: (error) =>
-      log.warn(`recent commit read failed: ${toErrorMessage(error)}`),
-  });
+  const commits = yield* readRecentCommitLabels(
+    workspacePath,
+    numberOfCommits,
+    {
+      // The session's own slots: the read answers for this project.
+      settings: session.roots,
+      // A failed `git log` comes back as undefined and is answered as an
+      // empty list; without this hook that failure would be invisible in this
+      // host (the desktop host passes its own onError to the same read).
+      onError: (error) =>
+        log.warn(`recent commit read failed: ${toErrorMessage(error)}`),
+    },
+  );
   return commits ?? [];
-}
+});
 
 function findCommitInHistory(
   session: SessionHandle,

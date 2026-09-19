@@ -879,7 +879,7 @@ const PROVIDER_CONFIG_READER = 'src/utils/config/providerConfig.ts';
 const GIT_AUTHOR_RUNTIME_REACHABILITY = {
   command: 'texra run <tool-use-agent> --instruction "create a git commit"',
   through:
-    'packages/cli/src/commands/workflow.ts -> packages/cli/src/runtime/executeCli.ts -> src/utils/system/execUtils.ts -> src/utils/system/gitAuthorEnv.ts',
+    'packages/cli/src/commands/workflow.ts -> packages/cli/src/runtime/executeCli.ts -> src/utils/system/execCore.ts -> src/utils/system/gitAuthorEnv.ts',
 } satisfies CliRuntimeReachability;
 const GIT_WORKTREE_RUNTIME_REACHABILITY = {
   command:

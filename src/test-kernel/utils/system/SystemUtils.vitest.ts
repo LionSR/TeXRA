@@ -7,13 +7,16 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 // Third-party imports
+import { Effect, Exit, Fiber } from 'effect';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 
 // Local imports
+import type { ExecResult } from '@shared/schemas';
 import { waitForCondition } from '@test/support/asyncTestUtils';
 import { createFakeHost, setupPlatform } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
-import { executeCommand, executeCommandSync } from '@utils/system/execUtils';
+import { executeCommandSync } from '@utils/system/execCore';
+import { executeCommand } from '@utils/system/execUtils';
 import { BinaryResolverService } from '@utils/system/binaryResolver';
 
 // ---------------------------------------------------------------------------
@@ -73,17 +76,19 @@ describe('executeCommand', () => {
     command: string | string[],
     options: ExecuteCommandOptions,
   ): Promise<{
-    promise: ReturnType<typeof executeCommand>;
+    promise: Promise<ExecResult>;
     childPid: number;
   }> {
     const dir = await makeTempDir('texra-exec-sleeper-', tempDirs);
     const pidFile = join(dir, 'sleep.pid');
-    const promise = executeCommand(command, {
-      ...options,
-      cwd: dir,
-      settings: undefined,
-      env: { PID_FILE: pidFile },
-    });
+    const promise = Effect.runPromise(
+      executeCommand(command, {
+        ...options,
+        cwd: dir,
+        settings: undefined,
+        env: { PID_FILE: pidFile },
+      }),
+    );
 
     await waitForCondition(() => existsSync(pidFile), {
       timeoutMs: 1000,
@@ -96,13 +101,15 @@ describe('executeCommand', () => {
   }
 
   it('keeps stderr empty for ordinary nonzero exits with stdout only', async () => {
-    const result = await executeCommand(
-      [
-        process.execPath,
-        '-e',
-        `process.stdout.write('failure details'); process.exit(7)`,
-      ],
-      { cwd: WORKSPACE, settings: undefined },
+    const result = await Effect.runPromise(
+      executeCommand(
+        [
+          process.execPath,
+          '-e',
+          `process.stdout.write('failure details'); process.exit(7)`,
+        ],
+        { cwd: WORKSPACE, settings: undefined },
+      ),
     );
 
     assert.equal(result.success, false);
@@ -114,21 +121,23 @@ describe('executeCommand', () => {
 
   it('decodes streamed Unicode split across byte chunks', async () => {
     let streamed = '';
-    const result = await executeCommand(
-      [
-        process.execPath,
-        '-e',
-        `process.stdout.write(Buffer.from([0xf0, 0x9f])); ` +
-          `setTimeout(() => process.stdout.write(Buffer.from([0x99, 0x82])), 20);`,
-      ],
-      {
-        cwd: WORKSPACE,
-        settings: undefined,
-        buffer: false,
-        onStdout: (chunk) => {
-          streamed += chunk;
+    const result = await Effect.runPromise(
+      executeCommand(
+        [
+          process.execPath,
+          '-e',
+          `process.stdout.write(Buffer.from([0xf0, 0x9f])); ` +
+            `setTimeout(() => process.stdout.write(Buffer.from([0x99, 0x82])), 20);`,
+        ],
+        {
+          cwd: WORKSPACE,
+          settings: undefined,
+          buffer: false,
+          onStdout: (chunk) => {
+            streamed += chunk;
+          },
         },
-      },
+      ),
     );
 
     assert.equal(result.success, true);
@@ -139,26 +148,28 @@ describe('executeCommand', () => {
   it('flushes pending multibyte stdout and stderr exactly once on stream close', async () => {
     let streamedStdout = '';
     let streamedStderr = '';
-    const result = await executeCommand(
-      [
-        process.execPath,
-        '-e',
-        `const fs = require('node:fs'); ` +
-          `fs.writeSync(1, Buffer.from([0xf0, 0x9f])); ` +
-          `fs.writeSync(2, Buffer.from([0xe2, 0x82])); ` +
-          `process.stdout.destroy(); process.stderr.destroy();`,
-      ],
-      {
-        cwd: WORKSPACE,
-        settings: undefined,
-        buffer: false,
-        onStdout: (chunk) => {
-          streamedStdout += chunk;
+    const result = await Effect.runPromise(
+      executeCommand(
+        [
+          process.execPath,
+          '-e',
+          `const fs = require('node:fs'); ` +
+            `fs.writeSync(1, Buffer.from([0xf0, 0x9f])); ` +
+            `fs.writeSync(2, Buffer.from([0xe2, 0x82])); ` +
+            `process.stdout.destroy(); process.stderr.destroy();`,
+        ],
+        {
+          cwd: WORKSPACE,
+          settings: undefined,
+          buffer: false,
+          onStdout: (chunk) => {
+            streamedStdout += chunk;
+          },
+          onStderr: (chunk) => {
+            streamedStderr += chunk;
+          },
         },
-        onStderr: (chunk) => {
-          streamedStderr += chunk;
-        },
-      },
+      ),
     );
 
     assert.equal(result.success, true);
@@ -169,21 +180,23 @@ describe('executeCommand', () => {
   it('disables maxBuffer enforcement when buffering is disabled', async () => {
     const outputChars = 10_000;
     let streamedChars = 0;
-    const result = await executeCommand(
-      [
-        process.execPath,
-        '-e',
-        `process.stdout.write('x'.repeat(${outputChars}))`,
-      ],
-      {
-        cwd: WORKSPACE,
-        settings: undefined,
-        buffer: false,
-        maxBuffer: 64,
-        onStdout: (chunk) => {
-          streamedChars += chunk.length;
+    const result = await Effect.runPromise(
+      executeCommand(
+        [
+          process.execPath,
+          '-e',
+          `process.stdout.write('x'.repeat(${outputChars}))`,
+        ],
+        {
+          cwd: WORKSPACE,
+          settings: undefined,
+          buffer: false,
+          maxBuffer: 64,
+          onStdout: (chunk) => {
+            streamedChars += chunk.length;
+          },
         },
-      },
+      ),
     );
 
     assert.equal(result.success, true);
@@ -193,9 +206,11 @@ describe('executeCommand', () => {
   });
 
   it('reports maxBuffer overflow as an error instead of partial success', async () => {
-    const result = await executeCommand(
-      [process.execPath, '-e', `process.stdout.write('x'.repeat(10_000))`],
-      { cwd: WORKSPACE, settings: undefined, maxBuffer: 64 },
+    const result = await Effect.runPromise(
+      executeCommand(
+        [process.execPath, '-e', `process.stdout.write('x'.repeat(10_000))`],
+        { cwd: WORKSPACE, settings: undefined, maxBuffer: 64 },
+      ),
     );
 
     assert.equal(result.success, false);
@@ -228,23 +243,65 @@ describe('executeCommand', () => {
   );
 
   it(
+    'tears down shell process groups when the running fiber is interrupted',
+    async () => {
+      if (process.platform === 'win32') return;
+
+      const dir = await makeTempDir('texra-exec-interrupt-', tempDirs);
+      const pidFile = join(dir, 'sleep.pid');
+      const childPid = await Effect.runPromise(
+        Effect.gen(function* () {
+          const fiber = yield* Effect.forkChild(
+            executeCommand(SLEEPER_SCRIPT, {
+              cwd: dir,
+              settings: undefined,
+              timeout: 60_000,
+              env: { PID_FILE: pidFile },
+            }),
+          );
+          yield* Effect.promise(() =>
+            waitForCondition(() => existsSync(pidFile), {
+              timeoutMs: 1000,
+              intervalMs: 20,
+              timeoutMessage: `Timed out waiting for ${pidFile}`,
+            }),
+          );
+          const pid = Number.parseInt(readFileSync(pidFile, 'utf8'), 10);
+          yield* Fiber.interrupt(fiber);
+          expect(Exit.hasInterrupts(yield* Fiber.await(fiber))).toBe(true);
+          return pid;
+        }),
+      );
+
+      assert.ok(Number.isInteger(childPid) && childPid > 0);
+      // The interrupt is the only teardown here: no abort signal is threaded
+      // through, so the backgrounded sleep dies because `executeCommand`'s own
+      // finalizer signalled the detached shell's process group.
+      await waitForProcessExit(childPid);
+    },
+    PROCESS_EXIT_TEST_TIMEOUT_MS,
+  );
+
+  it(
     'aborts array-form commands via execa native cancelSignal',
     async () => {
       if (process.platform === 'win32') return;
 
       const controller = new AbortController();
       let childPid: number | undefined;
-      const promise = executeCommand(
-        [process.execPath, '-e', 'setTimeout(() => {}, 60000)'],
-        {
-          cwd: WORKSPACE,
-          settings: undefined,
-          signal: controller.signal,
-          timeout: 60_000,
-          onPid: (pid) => {
-            childPid = pid;
+      const promise = Effect.runPromise(
+        executeCommand(
+          [process.execPath, '-e', 'setTimeout(() => {}, 60000)'],
+          {
+            cwd: WORKSPACE,
+            settings: undefined,
+            signal: controller.signal,
+            timeout: 60_000,
+            onPid: (pid) => {
+              childPid = pid;
+            },
           },
-        },
+        ),
       );
 
       await waitForCondition(() => childPid !== undefined, {

@@ -254,15 +254,12 @@ const getGitHubPRPrerequisites = Effect.fn('getGitHubPRPrerequisites')(
   function* (workspaceRoot: string | undefined) {
     const secrets = yield* Secrets;
     const tokenPresent = (yield* getGitHubToken(secrets)) !== undefined;
-    // The probe reports "not a repository" as `false` and never rejects; the
-    // fiber's signal reaches its `git` spawn, so an interrupted dashboard
-    // refresh kills the process instead of abandoning it. An availability
-    // probe carries the workspace root the caller handed it and nothing else:
-    // `ExternalToolDef.probe` takes no setting slots, so the `rev-parse`
-    // spawn names none.
-    const inGitRepo = yield* Effect.promise((signal) =>
-      isGitRepository(workspaceRoot, undefined, signal),
-    );
+    // The probe reports "not a repository" as `false` and never fails;
+    // interrupting a dashboard refresh kills its `git` process instead of
+    // abandoning it. An availability probe carries the workspace root the
+    // caller handed it and nothing else: `ExternalToolDef.probe` takes no
+    // setting slots, so the `rev-parse` spawn names none.
+    const inGitRepo = yield* isGitRepository(workspaceRoot, undefined);
     return { tokenPresent, inGitRepo };
   },
 );

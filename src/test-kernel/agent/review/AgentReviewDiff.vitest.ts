@@ -3,6 +3,7 @@ import { mkdir, realpath, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
 // Third-party imports
+import { Effect } from 'effect';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 // Local imports
@@ -38,10 +39,9 @@ describe('collectReviewDiff (real git repository)', () => {
   let repo: string;
 
   async function git(...args: string[]): Promise<string> {
-    const result = await executeCommand(['git', ...args], {
-      cwd: repo,
-      settings: undefined,
-    });
+    const result = await Effect.runPromise(
+      executeCommand(['git', ...args], { cwd: repo, settings: undefined }),
+    );
     expect(result.success, `git ${args.join(' ')}: ${result.stderr}`).toBe(
       true,
     );

@@ -397,19 +397,16 @@ const gitInDir = (
   settings: SettingsStores,
 ): Effect.Effect<string, ToolError> =>
   Effect.flatMap(
-    // `executeCommand` never rejects — a failed `git` is a result with
+    // `executeCommand` never fails — a failed `git` is a result with
     // `success: false`, which the flatMap below turns into the tool's own
-    // error. Taking the fiber's signal makes the spawn interruptible.
-    Effect.promise((signal) =>
-      executeCommand(['git', ...args], {
-        cwd,
-        // The calling session's slots, carried from the tool call.
-        settings,
-        timeout: 10_000,
-        channel: 'github_subscription',
-        signal,
-      }),
-    ),
+    // error. Interrupting the fiber tears the spawn down.
+    executeCommand(['git', ...args], {
+      cwd,
+      // The calling session's slots, carried from the tool call.
+      settings,
+      timeout: 10_000,
+      channel: 'github_subscription',
+    }),
     (result) =>
       result.success
         ? Effect.succeed(result.stdout.trim())

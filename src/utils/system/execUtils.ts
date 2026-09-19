@@ -1,65 +1,31 @@
 // Third-party imports
-import * as path from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
 
-import {
-  execa,
-  execaSync,
-  type Options,
-  type ResultPromise,
-  ExecaError,
-  type StdoutStderrOption,
-  type SyncOptions,
-} from 'execa';
+import { Effect, type Scope } from 'effect';
+import { execa, type Options, type ResultPromise } from 'execa';
 import { quote as shellQuote } from 'shell-quote';
-import treeKill from 'tree-kill';
 
 // Internal imports
 import { createLog } from '@logger/logUtils';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { ExecResult } from '@shared/schemas';
 import { onAbort as onAbortSignal } from '@utils/core';
-import { toErrorMessage } from '@utils/errors/errorMessage';
-import { getGitAuthorEnv } from '@utils/system/gitAuthorEnv';
-import { IS_WINDOWS, extendEnvPath } from '@utils/system/platformPaths';
+import {
+  CHANNEL,
+  commandEnv,
+  deriveCommandStderr,
+  logCommandStderr,
+  logExecutionErrorAndBuildResult,
+  normalizeEncoding,
+  resultFromProcessOutput,
+  signalProcessGroup,
+  type ExecEncoding,
+  type ExecaTextEncoding,
+  type ExecOutput,
+} from '@utils/system/execCore';
+import { IS_WINDOWS } from '@utils/system/platformPaths';
 
-const CHANNEL = 'execUtils';
-
-type ExecaTextEncoding = Extract<
-  NonNullable<Options['encoding']>,
-  'utf8' | 'utf16le'
->;
-type ExecEncoding = ExecaTextEncoding | 'utf-8';
-type ExecOutput = Extract<StdoutStderrOption, string>;
-
-const MAX_OUTPUT_LENGTH = 150;
 const FORCE_KILL_DELAY_MS = 5_000;
-
-/** Channel-bound logger view (see `createLog` in `@logger/logUtils`). */
-type Log = ReturnType<typeof createLog>;
-
-function normalizeOutput(text: string | null | undefined): string {
-  return text?.trim() ?? '';
-}
-
-/**
- * Prefer captured stderr; fall back to execa's `shortMessage` only when
- * stderr is empty and the result looks abnormal (caller-defined: max-buffer
- * trip, missing exit code, timeout, ...). Shared by every execa result
- * normalizer in the codebase so this fallback rule only exists once.
- */
-export function deriveCommandStderr(
-  stderr: string,
-  shortMessage: string | undefined,
-  looksAbnormal: boolean,
-): string {
-  return stderr || (looksAbnormal ? (shortMessage ?? '') : '');
-}
-
-/** Normalize Node's 'utf-8' alias to execa's 'utf8' encoding option. */
-function normalizeEncoding(encoding: ExecEncoding = 'utf8'): ExecaTextEncoding {
-  return encoding === 'utf-8' ? 'utf8' : encoding;
-}
 
 function subscribeDecodedOutput(
   stream: NodeJS.ReadableStream,
@@ -81,134 +47,6 @@ function subscribeDecodedOutput(
   });
   stream.once('end', finalize);
   stream.once('close', finalize);
-}
-
-function commandEnv(
-  workspacePath: string,
-  settings: SettingsStores | undefined,
-  envOverrides?: Record<string, string>,
-): Record<string, string | undefined> {
-  const env = {
-    ...process.env,
-    ...getGitAuthorEnv(settings),
-    ...envOverrides,
-  };
-  env.PATH = extendEnvPath(env.PATH);
-
-  // Export project context so AI agents can orient themselves immediately.
-  env.PROJECT_DIR = workspacePath;
-  env.PROJECT_NAME = path.basename(workspacePath);
-  return env;
-}
-
-function resultFromProcessOutput(
-  stdout: string | null | undefined,
-  stderr: string | null | undefined,
-  exitCode: number,
-  flags: { timedOut?: boolean; outputLimitExceeded?: boolean } = {},
-): ExecResult {
-  const timedOut = flags.timedOut ?? false;
-  return {
-    success: exitCode === 0 && !timedOut && !flags.outputLimitExceeded,
-    stdout: normalizeOutput(stdout),
-    stderr: normalizeOutput(stderr),
-    timedOut,
-    exitCode,
-    ...(flags.outputLimitExceeded ? { outputLimitExceeded: true } : {}),
-  };
-}
-
-function resultFromExecutionError(err: unknown): ExecResult {
-  if (err instanceof ExecaError) {
-    const outputLimitExceeded = err.isMaxBuffer ?? false;
-    return {
-      success: false,
-      stdout: normalizeOutput(`${err.stdout ?? ''}`),
-      stderr: normalizeOutput(`${err.stderr || toErrorMessage(err)}`),
-      timedOut: err.timedOut ?? false,
-      exitCode: outputLimitExceeded ? 2 : (err.exitCode ?? 127),
-      ...(outputLimitExceeded ? { outputLimitExceeded: true } : {}),
-    };
-  }
-
-  return {
-    success: false,
-    stdout: '',
-    stderr: normalizeOutput(toErrorMessage(err)),
-    timedOut: false,
-    exitCode: 127,
-  };
-}
-
-function logExecutionErrorAndBuildResult(
-  err: unknown,
-  options: { quiet?: boolean; channel?: string },
-): ExecResult {
-  if (!options.quiet) {
-    createLog(options.channel ?? CHANNEL).error(
-      `Error executing command: ${toErrorMessage(err)}`,
-    );
-  }
-  return resultFromExecutionError(err);
-}
-
-function logCommandStderr(
-  log: Log,
-  stderr: string | null | undefined,
-  truncate = false,
-): void {
-  const normalizedStderr = normalizeOutput(stderr);
-  if (!normalizedStderr) return;
-
-  const stderrForLog =
-    truncate && normalizedStderr.length > MAX_OUTPUT_LENGTH
-      ? `...${normalizedStderr.slice(-MAX_OUTPUT_LENGTH)}`
-      : normalizedStderr;
-  log.debug(`Command stderr: ${stderrForLog}`);
-}
-
-/**
- * Signal a process and all of its descendants.
- *
- * Two platform strategies, each picking the most reliable mechanism:
- *
- * - **Windows** has no process-group signalling, so a bare `process.kill(pid)`
- *   only hit the shell and left piped children (e.g. `find | head`) running
- *   with stdout still open, hanging `await subprocess`. We delegate to
- *   `tree-kill`, which shells out to `taskkill /T /F` to tear down the whole
- *   process tree — closing that long-standing orphaned-children gap.
- *
- * - **POSIX** signals the whole process group via the negative PID. Callers
- *   that need teardown spawn the shell `detached` (a new group leader), so the
- *   group kill reaches backgrounded children (`cmd &`) directly and
- *   synchronously. Group membership is stronger than a parent/child (`ps
- *   --ppid`) walk here: it survives re-parenting and double-forks that a tree
- *   walk would miss. Falls back to the bare PID when the target isn't a group
- *   leader.
- *
- * Best-effort and fire-and-forget — a process that already exited is a no-op,
- * matching the previous contract where every caller ignored the result.
- */
-function signalProcessGroup(pid: number, signal: NodeJS.Signals): void {
-  if (IS_WINDOWS) {
-    treeKill(pid, signal, (error) => {
-      if (error) {
-        createLog(CHANNEL).debug(
-          `tree-kill failed for pid ${pid} (${signal}): ${toErrorMessage(error)}`,
-        );
-      }
-    });
-    return;
-  }
-  try {
-    process.kill(-pid, signal);
-  } catch {
-    try {
-      process.kill(pid, signal);
-    } catch {
-      // Process already exited — nothing to signal.
-    }
-  }
 }
 
 export interface ExecuteCommandBaseOptions {
@@ -253,8 +91,15 @@ export interface ExecuteCommandBaseOptions {
   stdout?: ExecOutput;
   stderr?: ExecOutput;
   /**
-   * Abort signal used to terminate the subprocess and any shell children;
-   * `killProcessTree` extends array-form signalling to the whole tree.
+   * A caller-owned cancellation channel, for the one case fiber interruption
+   * cannot express: a command whose **result still has to be delivered** after
+   * it is stopped (the background bash child run, whose strategy sets
+   * `deliverAfterInterrupt`). Aborting it terminates the subprocess and any
+   * shell children, and the call still resolves — with exit code 130 when the
+   * child reports none.
+   *
+   * Every other caller stops the command by interrupting the fiber: teardown
+   * is identical and the abandoned result is exactly what interruption means.
    */
   signal?: AbortSignal;
   /** Skip wrapper logging (pre-platform CLI callers whose sink is the console). */
@@ -274,8 +119,24 @@ export interface ExecuteCommandBaseOptions {
   killProcessTree?: boolean;
 }
 
+/** Mutable per-invocation teardown state shared by the watchers below. */
+interface CommandTeardown {
+  shellTimedOut: boolean;
+  shellAborted: boolean;
+  interrupted: boolean;
+  forceKillTimeoutId: ReturnType<typeof setTimeout> | undefined;
+}
+
 /**
  * Execute external command with output handling and workspace path management.
+ *
+ * Never fails: every spawn error, non-zero exit, timeout and max-buffer trip is
+ * reported in the {@link ExecResult} (`success`, `exitCode`, `timedOut`,
+ * `outputLimitExceeded`), so callers need no error channel of their own.
+ *
+ * Interrupting the fiber tears the subprocess down — that is the cancellation
+ * path for every caller but the background-bash one that needs a result back
+ * (see {@link ExecuteCommandBaseOptions.signal}).
  *
  * The command form picks the teardown strategy:
  *
@@ -286,36 +147,49 @@ export interface ExecuteCommandBaseOptions {
  *   `killProcessTree` opts a call into whole-tree signalling (a process group
  *   on POSIX, `taskkill /T` on Windows); even then the await tracks only the
  *   spawned process, so the tree is signalled, not joined.
- * - the string form spawns a detached shell and hand-rolls SIGTERM/SIGKILL via
+ * - the string form spawns a detached shell and signals SIGTERM/SIGKILL via
  *   `signalProcessGroup` on the negative PID so piped children and
  *   backgrounded jobs are torn down as a unit. Orphan risk on hard host kill,
- *   and a separate hand-rolled shell timeout, apply here.
+ *   and a separate shell timeout, apply here.
  */
-export async function executeCommand(
+export function executeCommand(
   command: string | string[],
   options: ExecuteCommandBaseOptions,
-): Promise<ExecResult> {
-  // Hoisted so the finally block can clear them on both success and error paths.
-  let shellTimeoutId: ReturnType<typeof setTimeout> | undefined;
-  let forceKillTimeoutId: ReturnType<typeof setTimeout> | undefined;
-  let removeAbortListener: (() => void) | undefined;
+): Effect.Effect<ExecResult> {
+  return Effect.scoped(runCommand(command, options)).pipe(
+    Effect.catch((error) =>
+      Effect.succeed(logExecutionErrorAndBuildResult(error, options)),
+    ),
+  );
+}
 
-  try {
+function runCommand(
+  command: string | string[],
+  options: ExecuteCommandBaseOptions,
+): Effect.Effect<ExecResult, unknown, Scope.Scope> {
+  return Effect.gen(function* () {
     if (options.signal?.aborted) {
       return resultFromProcessOutput(null, 'Command aborted by user', 130);
     }
 
     const workspacePath = options.cwd;
     if (!workspacePath) {
-      throw new Error('No workspace path found');
+      return yield* Effect.fail(new Error('No workspace path found'));
     }
 
-    const env = commandEnv(workspacePath, options.settings, options.env);
     const encoding = normalizeEncoding(options.encoding);
+    const log = createLog(options.channel ?? CHANNEL);
+    const isArrayForm = Array.isArray(command);
+    const teardown: CommandTeardown = {
+      shellTimedOut: false,
+      shellAborted: false,
+      interrupted: false,
+      forceKillTimeoutId: undefined,
+    };
 
     const execaOptions: Options = {
       cwd: workspacePath,
-      env,
+      env: commandEnv(workspacePath, options.settings, options.env),
       encoding,
       timeout: options.timeout,
       reject: false,
@@ -326,30 +200,85 @@ export async function executeCommand(
       stderr: options.stderr,
     };
 
-    const log = createLog(options.channel ?? CHANNEL);
+    const subprocess = yield* Effect.try({
+      try: (): ResultPromise => {
+        if (Array.isArray(command)) {
+          const [cmd, ...args] = command;
+          if (!options.quiet) {
+            log.debug(`Running command: ${shellQuote(command)}`);
+          }
+          return execa(cmd, args, {
+            ...execaOptions,
+            cancelSignal: options.signal,
+            forceKillAfterDelay: FORCE_KILL_DELAY_MS,
+            // Passed through to execa: a process group on POSIX, `taskkill /T`
+            // on Windows, so the signal reaches the Ghostscript delegate a
+            // tracked-pid kill would leave behind.
+            killDescendants: options.killProcessTree,
+          });
+        }
+        if (!options.quiet) {
+          log.debug(`Running command: ${command}`);
+        }
+        // Shell commands with pipes (e.g. "find / | head -2") create child
+        // processes that inherit stdout.  execa's built-in timeout only kills
+        // the shell process; the piped children keep stdout open which causes
+        // the awaited subprocess to hang indefinitely.
+        //
+        // Fix: when a timeout is configured, spawn in a new process group
+        // (detached) and kill the entire group (-pid) on timeout so all
+        // children are terminated.  Without a timeout we use the normal
+        // (non-detached) path to avoid orphan risk on parent crash.
+        //
+        // On Windows, negative-PID signaling is not supported so we fall back
+        // to subprocess.kill() (kills the shell only) + stream destruction.
+        //
+        // Tradeoff: `detached` means the process group is NOT automatically
+        // cleaned up if the extension host is hard-killed (SIGKILL / crash) --
+        // long-running shell commands would be orphaned. This only affects
+        // shell-form commands that opt into timeout/cancel handling, primarily
+        // the bash tool. Acceptable because the alternative is an await that
+        // hangs forever or approved children left running after a user stop.
+        const { timeout, ...execaNoTimeout } = execaOptions;
+        // Only use detached when we have a timeout/signal and need
+        // process-group killing. On POSIX, detached creates a process group we
+        // can kill as a unit. On Windows, detached opens a new console window
+        // so we always skip it.
+        const useDetached = (!!timeout || !!options.signal) && !IS_WINDOWS;
+        return execa(command, {
+          ...execaNoTimeout,
+          shell: true,
+          ...(useDetached ? { detached: true } : {}),
+        });
+      },
+      catch: (error) => error,
+    });
 
-    let subprocess: ResultPromise;
-    let shellTimedOut = false;
-    let shellAborted = false;
+    // A command that ran to completion — including one its abort signal or
+    // timeout tore down — must not leave a SIGKILL armed against a pid the OS
+    // may recycle. An interrupted one is the opposite case: SIGTERM has just
+    // been sent and the escalation behind it has to survive, which is why this
+    // finalizer stands down once the interrupt handler below has fired.
+    yield* Effect.addFinalizer(() =>
+      Effect.sync(() => {
+        if (teardown.interrupted) return;
+        if (teardown.forceKillTimeoutId !== undefined) {
+          clearTimeout(teardown.forceKillTimeoutId);
+          teardown.forceKillTimeoutId = undefined;
+        }
+      }),
+    );
 
-    // Only the shell/string form needs this hand-rolled abort + force-kill
-    // machinery: it terminates via `signalProcessGroup` (negative-PID /
-    // tree-kill) so piped children don't outlive the shell. The array form
-    // leaves all signalling to execa's own `cancelSignal` /
-    // `forceKillAfterDelay` natives below, extended to the whole tree when the
-    // caller sets `killProcessTree`; its only hand-rolled piece is the
-    // signal-free stream-destroy backstop armed for abort and timeout
-    // teardown.
-    const terminateSubprocess = (signal: NodeJS.Signals): void => {
+    const terminateGroup = (signal: NodeJS.Signals): void => {
       const pid = subprocess.pid;
       if (!pid) return;
 
       signalProcessGroup(pid, signal);
 
-      // Force-kill after FORCE_KILL_DELAY_MS if SIGTERM didn't work,
-      // and destroy runs as a last resort to unblock `await subprocess`.
-      if (signal === 'SIGTERM' && forceKillTimeoutId === undefined) {
-        forceKillTimeoutId = setTimeout(() => {
+      // Force-kill after FORCE_KILL_DELAY_MS if SIGTERM didn't work, and
+      // destroy the streams as a last resort so the await always unblocks.
+      if (signal === 'SIGTERM' && teardown.forceKillTimeoutId === undefined) {
+        teardown.forceKillTimeoutId = setTimeout(() => {
           signalProcessGroup(pid, 'SIGKILL');
           subprocess.stdout?.destroy();
           subprocess.stderr?.destroy();
@@ -357,118 +286,99 @@ export async function executeCommand(
       }
     };
 
-    const installAbortListener = (
-      onAbort: () => void,
-      armOnTimeout = false,
-    ): void => {
-      removeAbortListener = onAbortSignal(options.signal, onAbort);
-      if (armOnTimeout && options.timeout !== undefined) {
-        shellTimeoutId = setTimeout(onAbort, options.timeout);
-      }
+    // Array-form abort/force-kill is execa's (`cancelSignal` /
+    // `forceKillAfterDelay` above), and execa signals only the tracked pid
+    // unless `killProcessTree` asked for the whole tree: a descendant that
+    // inherited stdio (e.g. `bash -c 'work & wait'`) can keep the pipes open
+    // after the tracked process dies, hanging the await forever. Destroy the
+    // streams once execa's force-kill delay has elapsed so the await always
+    // unblocks. No signal is sent from here; the tree signal is execa's own
+    // kill path.
+    const armStreamDestroy = (): void => {
+      if (teardown.forceKillTimeoutId !== undefined) return;
+      teardown.forceKillTimeoutId = setTimeout(() => {
+        subprocess.stdout?.destroy();
+        subprocess.stderr?.destroy();
+      }, FORCE_KILL_DELAY_MS);
     };
 
-    let shellTimeout: number | undefined;
-    if (Array.isArray(command)) {
-      const [cmd, ...args] = command;
-      if (!options.quiet) {
-        log.debug(`Running command: ${shellQuote(command)}`);
-      }
-      subprocess = execa(cmd, args, {
-        ...execaOptions,
-        cancelSignal: options.signal,
-        forceKillAfterDelay: FORCE_KILL_DELAY_MS,
-        // Passed through to execa: a process group on POSIX, `taskkill /T`
-        // on Windows, so the signal reaches the Ghostscript delegate a
-        // tracked-pid kill would leave behind.
-        killDescendants: options.killProcessTree,
-      });
-    } else {
-      if (!options.quiet) {
-        log.debug(`Running command: ${command}`);
-      }
-      // Shell commands with pipes (e.g. "find / | head -2") create child
-      // processes that inherit stdout.  execa's built-in timeout only kills
-      // the shell process; the piped children keep stdout open which causes
-      // `await subprocess` to hang indefinitely.
-      //
-      // Fix: when a timeout is configured, spawn in a new process group
-      // (detached) and manually kill the entire group (-pid) on timeout so
-      // all children are terminated.  Without a timeout we use the normal
-      // (non-detached) path to avoid orphan risk on parent crash.
-      //
-      // On Windows, negative-PID signaling is not supported so we fall back
-      // to subprocess.kill() (kills the shell only) + stream destruction.
-      //
-      // Tradeoff: `detached` means the process group is NOT automatically
-      // cleaned up if the extension host is hard-killed (SIGKILL / crash) --
-      // long-running shell commands would be orphaned. This only affects
-      // shell-form commands that opt into timeout/cancel handling, primarily
-      // the bash tool. Acceptable because the alternative is `await` hanging
-      // forever or leaving approved children running after a user stop.
-      const { timeout, ...execaNoTimeout } = execaOptions;
-      shellTimeout = timeout;
-      // Only use detached when we have a timeout/signal and need process-group killing.
-      // On POSIX, detached creates a process group we can kill as a unit.
-      // On Windows, detached opens a new console window so we always skip it.
-      const useDetached = (!!shellTimeout || !!options.signal) && !IS_WINDOWS;
-      subprocess = execa(command, {
-        ...execaNoTimeout,
-        shell: true,
-        ...(useDetached ? { detached: true } : {}),
-      });
+    const onAbort = isArrayForm
+      ? armStreamDestroy
+      : (): void => {
+          teardown.shellAborted = true;
+          terminateGroup('SIGTERM');
+        };
+    const onTimeout = isArrayForm
+      ? armStreamDestroy
+      : (): void => {
+          teardown.shellTimedOut = true;
+          terminateGroup('SIGTERM');
+        };
+    // Fiber interruption performs the same teardown the abort signal does; the
+    // array form additionally needs the kill execa's `cancelSignal` would have
+    // sent, since no signal is aborting here.
+    const onInterrupt = isArrayForm
+      ? (): void => {
+          teardown.interrupted = true;
+          // execa's `forceKillAfterDelay` and `killDescendants` apply to this
+          // kill exactly as they do to the `cancelSignal` path.
+          subprocess.kill('SIGTERM');
+          armStreamDestroy();
+        }
+      : (): void => {
+          teardown.interrupted = true;
+          terminateGroup('SIGTERM');
+        };
+
+    if (options.signal) {
+      yield* Effect.acquireRelease(
+        Effect.sync(() => onAbortSignal(options.signal, onAbort)),
+        (removeAbortListener) => Effect.sync(removeAbortListener),
+      );
     }
 
-    if (subprocess.pid && options.onPid) options.onPid(subprocess.pid);
-    if (Array.isArray(command)) {
-      // Array-form abort/force-kill is execa's (`cancelSignal` /
-      // `forceKillAfterDelay` above), and execa signals only the tracked pid
-      // unless `killProcessTree` asked for the whole tree: a descendant that
-      // inherited stdio (e.g. `bash -c 'work & wait'`) can keep the pipes open
-      // after the tracked process dies, hanging `await subprocess` forever.
-      // Destroy the runs once execa's force-kill delay has elapsed so the
-      // await always unblocks. No signal is sent from here; the tree signal is
-      // execa's own kill path.
-      installAbortListener(() => {
-        if (forceKillTimeoutId !== undefined) return;
-        forceKillTimeoutId = setTimeout(() => {
-          subprocess.stdout?.destroy();
-          subprocess.stderr?.destroy();
-        }, FORCE_KILL_DELAY_MS);
-      }, true);
-    } else {
-      installAbortListener(() => {
-        shellAborted = true;
-        terminateSubprocess('SIGTERM');
-      });
+    // The string form has no execa timeout (it was stripped above so the whole
+    // process group is torn down rather than the shell alone); the array form
+    // leaves the kill to execa and only arms the stream-destroy backstop.
+    const timeoutMs = options.timeout;
+    if (timeoutMs !== undefined && (isArrayForm || timeoutMs > 0)) {
+      yield* Effect.forkScoped(
+        Effect.gen(function* () {
+          yield* Effect.sleep(timeoutMs);
+          onTimeout();
+        }),
+      );
     }
 
-    if (shellTimeout) {
-      shellTimeoutId = setTimeout(() => {
-        shellTimedOut = true;
-        terminateSubprocess('SIGTERM');
-      }, shellTimeout);
-    }
+    yield* Effect.try({
+      try: () => {
+        if (subprocess.pid && options.onPid) options.onPid(subprocess.pid);
+        // Subscribe to the output streams for live output if callbacks provided
+        if (options.onStdout && subprocess.stdout) {
+          subscribeDecodedOutput(subprocess.stdout, encoding, options.onStdout);
+        }
+        if (options.onStderr && subprocess.stderr) {
+          subscribeDecodedOutput(subprocess.stderr, encoding, options.onStderr);
+        }
+      },
+      catch: (error) => error,
+    });
 
-    // Subscribe to stdout/stderr runs for live output if callbacks provided
-    if (options.onStdout && subprocess.stdout) {
-      subscribeDecodedOutput(subprocess.stdout, encoding, options.onStdout);
-    }
-    if (options.onStderr && subprocess.stderr) {
-      subscribeDecodedOutput(subprocess.stderr, encoding, options.onStderr);
-    }
-
-    const result = await subprocess;
+    const result = yield* Effect.tryPromise({
+      try: () => subprocess,
+      catch: (error) => error,
+    }).pipe(Effect.onInterrupt(() => Effect.sync(onInterrupt)));
 
     const stdout = (result.stdout as string) ?? '';
     const stderr = (result.stderr as string) ?? '';
-    // `shellAborted` covers the hand-rolled shell-form path; `isCanceled`
-    // covers the array-form path, aborted natively via execa's `cancelSignal`.
-    const aborted = shellAborted || (result.isCanceled ?? false);
+    // `shellAborted` covers the shell-form teardown path; `isCanceled` covers
+    // the array-form path, aborted natively via execa's `cancelSignal`.
+    const aborted = teardown.shellAborted || (result.isCanceled ?? false);
     const maxBufferExceeded = result.isMaxBuffer ?? false;
     const exitCode = maxBufferExceeded
       ? 2
       : (result.exitCode ?? (aborted ? 130 : 1));
-    const timedOut = (result.timedOut ?? false) || shellTimedOut;
+    const timedOut = (result.timedOut ?? false) || teardown.shellTimedOut;
     const shouldUseShortMessage =
       maxBufferExceeded || result.exitCode === undefined || timedOut;
     const normalizedStderr =
@@ -488,63 +398,5 @@ export async function executeCommand(
       timedOut,
       outputLimitExceeded: maxBufferExceeded,
     });
-  } catch (err) {
-    return logExecutionErrorAndBuildResult(err, options);
-  } finally {
-    if (shellTimeoutId !== undefined) clearTimeout(shellTimeoutId);
-    if (forceKillTimeoutId !== undefined) clearTimeout(forceKillTimeoutId);
-    removeAbortListener?.();
-  }
-}
-
-/**
- * Synchronous companion to executeCommand for APIs that must return a value
- * synchronously, such as native binary resolvers passed to SDK constructors.
- * `cwd` is required, like {@link executeCommand}'s; prefer `executeCommand`
- * for normal workspace command runs.
- */
-export function executeCommandSync(
-  command: readonly [string, ...string[]],
-  options: {
-    encoding?: ExecEncoding;
-    channel?: string;
-    truncate?: boolean;
-    env?: Record<string, string>;
-    timeout?: number;
-    /** See {@link ExecuteCommandBaseOptions.cwd}. */
-    cwd: string;
-    /** See {@link ExecuteCommandBaseOptions.settings}. */
-    settings: SettingsStores | undefined;
-    /** Skip wrapper logging (pre-platform CLI callers whose sink is the console). */
-    quiet?: boolean;
-  },
-): ExecResult {
-  try {
-    const [cmd, ...args] = command;
-    const workspacePath = options.cwd;
-    const execaOptions: SyncOptions = {
-      cwd: workspacePath,
-      env: commandEnv(workspacePath, options.settings, options.env),
-      encoding: normalizeEncoding(options.encoding),
-      timeout: options.timeout,
-      reject: false,
-    };
-    const log = createLog(options.channel ?? CHANNEL);
-    if (!options.quiet) {
-      log.debug(`Running command: ${shellQuote(command)}`);
-    }
-    const result = execaSync(cmd, args, execaOptions);
-    const stdout = (result.stdout as string) ?? '';
-    const stderr = (result.stderr as string) ?? '';
-    const exitCode = result.exitCode ?? 1;
-    const timedOut = result.timedOut ?? false;
-
-    if (!options.quiet) {
-      logCommandStderr(log, stderr, options.truncate);
-    }
-
-    return resultFromProcessOutput(stdout, stderr, exitCode, { timedOut });
-  } catch (err) {
-    return logExecutionErrorAndBuildResult(err, options);
-  }
+  });
 }

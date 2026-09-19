@@ -51,8 +51,8 @@ vi.mock('@cli/runtime/cliContext', async (importOriginal) => ({
   readCliAmbientState: mocks.readCliAmbientState,
 }));
 
-vi.mock('@utils/system/execUtils', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@utils/system/execUtils')>()),
+vi.mock('@utils/system/execCore', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@utils/system/execCore')>()),
   executeCommandSync: mocks.executeCommandSync,
 }));
 

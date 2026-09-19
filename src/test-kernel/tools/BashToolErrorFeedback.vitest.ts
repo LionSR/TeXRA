@@ -59,13 +59,15 @@ describe('BashTool error feedback', () => {
     () =>
       Effect.gen(function* () {
         stubBashApprovalDisabled();
-        vi.spyOn(execUtils, 'executeCommand').mockResolvedValueOnce({
-          success: false,
-          stdout: 'stdout failure guidance',
-          stderr: 'stderr failure details',
-          timedOut: false,
-          exitCode: 2,
-        });
+        vi.spyOn(execUtils, 'executeCommand').mockReturnValueOnce(
+          Effect.succeed({
+            success: false,
+            stdout: 'stdout failure guidance',
+            stderr: 'stderr failure details',
+            timedOut: false,
+            exitCode: 2,
+          }),
+        );
 
         const result = yield* new BashTool().call({ command: 'echo long' });
         expect(result.status).toBe('error');
@@ -107,13 +109,15 @@ describe('BashTool error feedback', () => {
     ({ stderr, exitCode }) =>
       Effect.gen(function* () {
         stubBashApprovalDisabled();
-        vi.spyOn(execUtils, 'executeCommand').mockResolvedValueOnce({
-          success: false,
-          stdout: '',
-          stderr,
-          timedOut: false,
-          exitCode,
-        });
+        vi.spyOn(execUtils, 'executeCommand').mockReturnValueOnce(
+          Effect.succeed({
+            success: false,
+            stdout: '',
+            stderr,
+            timedOut: false,
+            exitCode,
+          }),
+        );
 
         const result = yield* new BashTool().call({
           command: 'missing-command',
@@ -163,15 +167,15 @@ describe('BashTool error feedback', () => {
   it.effect('does not reject ampersands in later shell command segments', () =>
     Effect.gen(function* () {
       stubBashApprovalDisabled();
-      const executeSpy = vi
-        .spyOn(execUtils, 'executeCommand')
-        .mockResolvedValue({
+      const executeSpy = vi.spyOn(execUtils, 'executeCommand').mockReturnValue(
+        Effect.succeed({
           success: true,
           stdout: 'done',
           stderr: '',
           timedOut: false,
           exitCode: 0,
-        });
+        }),
+      );
 
       const result = yield* new BashTool().call({
         command: 'nohup longtask; echo done &',

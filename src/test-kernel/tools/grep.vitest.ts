@@ -32,13 +32,15 @@ describe('GrepTool run', () => {
       Effect.gen(function* () {
         const executeSpy = vi
           .spyOn(execUtils, 'executeCommand')
-          .mockResolvedValue({
-            success: true,
-            stdout: 'one\n\ntwo\nthree\nfour\n',
-            stderr: '',
-            timedOut: false,
-            exitCode: 0,
-          });
+          .mockReturnValue(
+            Effect.succeed({
+              success: true,
+              stdout: 'one\n\ntwo\nthree\nfour\n',
+              stderr: '',
+              timedOut: false,
+              exitCode: 0,
+            }),
+          );
 
         const result = yield* new GrepTool().call({
           pattern: 'item',
@@ -60,13 +62,15 @@ describe('GrepTool run', () => {
 
   it.effect('omits the continuation hint on an exact final page', () =>
     Effect.gen(function* () {
-      vi.spyOn(execUtils, 'executeCommand').mockResolvedValue({
-        success: true,
-        stdout: 'one\ntwo\nthree\nfour\n',
-        stderr: '',
-        timedOut: false,
-        exitCode: 0,
-      });
+      vi.spyOn(execUtils, 'executeCommand').mockReturnValue(
+        Effect.succeed({
+          success: true,
+          stdout: 'one\ntwo\nthree\nfour\n',
+          stderr: '',
+          timedOut: false,
+          exitCode: 0,
+        }),
+      );
 
       const result = yield* new GrepTool().call({
         pattern: 'item',
@@ -87,14 +91,16 @@ describe('GrepTool run', () => {
     'reports output-limit overflow without paginating partial matches',
     () =>
       Effect.gen(function* () {
-        vi.spyOn(execUtils, 'executeCommand').mockResolvedValue({
-          success: false,
-          stdout: 'partial-match-one\npartial-match-two',
-          stderr: 'maxBuffer exceeded',
-          timedOut: false,
-          exitCode: 2,
-          outputLimitExceeded: true,
-        });
+        vi.spyOn(execUtils, 'executeCommand').mockReturnValue(
+          Effect.succeed({
+            success: false,
+            stdout: 'partial-match-one\npartial-match-two',
+            stderr: 'maxBuffer exceeded',
+            timedOut: false,
+            exitCode: 2,
+            outputLimitExceeded: true,
+          }),
+        );
 
         const result = yield* new GrepTool().call({
           pattern: 'item',
@@ -115,13 +121,15 @@ describe('GrepTool run', () => {
 
   it.effect('preserves ripgrep error classification', () =>
     Effect.gen(function* () {
-      vi.spyOn(execUtils, 'executeCommand').mockResolvedValue({
-        success: false,
-        stdout: '',
-        stderr: 'regex parse error: unclosed group',
-        timedOut: false,
-        exitCode: 2,
-      });
+      vi.spyOn(execUtils, 'executeCommand').mockReturnValue(
+        Effect.succeed({
+          success: false,
+          stdout: '',
+          stderr: 'regex parse error: unclosed group',
+          timedOut: false,
+          exitCode: 2,
+        }),
+      );
 
       const result = yield* new GrepTool().call({
         pattern: '(',
@@ -141,13 +149,15 @@ describe('GrepTool run', () => {
         mockWorkspaceGitignore();
         const executeSpy = vi
           .spyOn(execUtils, 'executeCommand')
-          .mockResolvedValue({
-            success: true,
-            stdout: '/outside/dist/external.tex:external\n',
-            stderr: '',
-            timedOut: false,
-            exitCode: 0,
-          });
+          .mockReturnValue(
+            Effect.succeed({
+              success: true,
+              stdout: '/outside/dist/external.tex:external\n',
+              stderr: '',
+              timedOut: false,
+              exitCode: 0,
+            }),
+          );
         yield* processWorkspaceRoots().workspaceState.update(
           WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED,
           false,
@@ -179,13 +189,15 @@ describe('GrepTool run', () => {
         mockWorkspaceGitignore();
         const executeSpy = vi
           .spyOn(execUtils, 'executeCommand')
-          .mockResolvedValue({
-            success: true,
-            stdout: '',
-            stderr: '',
-            timedOut: false,
-            exitCode: 1,
-          });
+          .mockReturnValue(
+            Effect.succeed({
+              success: true,
+              stdout: '',
+              stderr: '',
+              timedOut: false,
+              exitCode: 1,
+            }),
+          );
 
         const result = yield* new GrepTool()
           .call({

@@ -966,14 +966,14 @@ function createWindow(options: {
     });
     return result.canceled ? undefined : result.filePaths;
   };
-  const recentCommitsOf = async (project: DesktopProject) => {
-    if (!project.root) return { commits: [] as string[], isGitRepo: false };
-    return readRecentCommits(project.root, DESKTOP_RECENT_COMMIT_LIMIT, {
-      // This project's own slots: the read runs for the paper it belongs to.
-      settings: project.roots,
-      onError: reportBackgroundError,
-    });
-  };
+  const recentCommitsOf = (project: DesktopProject) =>
+    project.root
+      ? readRecentCommits(project.root, DESKTOP_RECENT_COMMIT_LIMIT, {
+          // This project's own slots: the read runs for the paper it belongs to.
+          settings: project.roots,
+          onError: reportBackgroundError,
+        })
+      : Effect.succeed({ commits: [] as string[], isGitRepo: false });
   /**
    * One binding per open project for this window (PRD 8.1, 12.2): the
    * session bridge the renderer subscribes to, the project's `host` snapshot,
@@ -1030,16 +1030,7 @@ function createWindow(options: {
               }),
           ),
         ),
-      readRecentCommits: () =>
-        Effect.tryPromise({
-          try: () => recentCommitsOf(project),
-          catch: (cause) =>
-            new HostSnapshotReadFailed({
-              member: 'readRecentCommits',
-              message: 'The recent commits could not be read.',
-              cause,
-            }),
-        }),
+      readRecentCommits: () => recentCommitsOf(project),
       onError: reportBackgroundError,
       publish: (next) => {
         runtime.runFork(bridge.setHost(next));
@@ -1702,13 +1693,19 @@ function createWindow(options: {
         },
         runtime,
         getWorkspacePath: () => project.root,
-        getEnvironmentSummary: async () =>
+        getEnvironmentSummary: () =>
           project.root
-            ? ((await readGitEnvironmentSummary(project.root, {
-                settings: project.roots,
-                onError: reportBackgroundError,
-              })) ?? EMPTY_DESKTOP_ENVIRONMENT_SUMMARY)
-            : EMPTY_DESKTOP_ENVIRONMENT_SUMMARY,
+            ? runtime.runPromise(
+                readGitEnvironmentSummary(project.root, {
+                  settings: project.roots,
+                  onError: reportBackgroundError,
+                }).pipe(
+                  Effect.map(
+                    (summary) => summary ?? EMPTY_DESKTOP_ENVIRONMENT_SUMMARY,
+                  ),
+                ),
+              )
+            : Promise.resolve(EMPTY_DESKTOP_ENVIRONMENT_SUMMARY),
         onAsyncError: reportAsyncError,
       },
     );

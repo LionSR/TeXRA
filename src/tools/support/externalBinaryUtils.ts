@@ -25,7 +25,7 @@ import which from 'which';
 import { isModuleNotFoundError } from '@common/errors';
 import { createLog } from '@logger/logUtils';
 import { nodeHostEnvironment } from '@platform/defaults/nodeHostEnvironment';
-import { executeCommandSync } from '@utils/system/execUtils';
+import { executeCommandSync } from '@utils/system/execCore';
 import { IS_WINDOWS, extendEnvPath } from '@utils/system/platformPaths';
 
 const log = createLog('ExternalBinaryUtils');
