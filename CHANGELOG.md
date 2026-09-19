@@ -34,6 +34,22 @@ All notable changes to this project will be documented in this file.
 
 ### Bug Fixes
 
+- **Windows: TeXRA finds git again.** Git installed while TeXRA was running —
+  including from the "Run in Terminal" button on our own "Git not found in
+  PATH" message — is now picked up on the next command instead of only after
+  a restart. Git installed with the "Use Git from Git Bash only" option is
+  found as well. On some machines an unusual `SCOOP` or `MSYS2_HOME` setting
+  could make every external command fail; it no longer does.
+- **The ChatGPT-subscription input budget is now set in thousands of tokens**
+  — the setting is `texra.chatgptCodex.contextWindowK` and takes `272` where it
+  used to take `272000` (up to `872`). Any value you had set under the old key
+  is not carried over; the default 272K applies until you set the new one.
+  Every budget in play is a round thousand, and the old unit made an
+  off-by-1000 typo land inside the valid range: `872` entered for 872,000 was
+  a legal 872-token budget that put every request over the limit.
+
+### Bug Fixes
+
 - **Windows: installing git no longer requires restarting TeXRA.** Windows
   cannot push a changed `PATH` into an already-running process, so git
   installed on the advice of our own "Git not found in PATH" message stayed
