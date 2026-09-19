@@ -1,36 +1,20 @@
 import * as path from 'node:path';
 
 import { Effect } from 'effect';
-import {
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  expectTypeOf,
-  it,
-  vi,
-} from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { noopTrace } from '@agent/trace';
 import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
-import type {
-  BuiltUserVars,
-  TemplateVars,
-} from '@agent/core/definition/AgentCycleOptions';
 import {
   AgentPromptSchema,
   AgentWorkflowSettingSchema,
   type AgentPrompt,
   type AgentSetting,
 } from '@agent/core/definition/AgentDataclass';
-import {
-  buildUserVars as buildUserVarsEffect,
-  getToolFlags,
-  resolveOutputFiles,
-} from '@agent/prompt/userVars';
+import { buildUserVars as buildUserVarsEffect } from '@agent/prompt/userVars';
 import type { ConfigProvider } from '@platform/interfaces';
 import { AgentCategory } from '@shared/schemas';
 import { setRuntimeSkillSources } from '@skills/runtimeSkills';
@@ -84,16 +68,24 @@ const baseConfig: AgentConfig = AgentConfigSchema.parse({
   inputFile: 'input.tex',
 });
 
-describe('getToolFlags', () => {
-  it('derives round count from additional userRequest entries', () => {
-    const prompt: AgentPrompt = {
-      ...basePrompt,
-      userRequest: ['round0', 'reflect1', 'reflect2'],
-    };
-    const setting: AgentSetting = { ...baseSetting, rounds: 1 };
+describe('buildUserVars round count', () => {
+  it('derives the round count from additional userRequest entries', async () => {
+    const vars = await buildUserVars(
+      baseConfig,
+      { ...baseSetting, rounds: 1 },
+      { ...basePrompt, userRequest: ['round0', 'reflect1', 'reflect2'] },
+      fakePath('agents/generic'),
+      false,
+      noopTrace,
+      {
+        workspacePath: fakePath('workspace'),
+        storageRoot: testWorkspaceRoots().storage,
+        config: testWorkspaceRoots().config,
+        settings: testWorkspaceRoots(),
+      },
+    );
 
-    const flags = getToolFlags(setting, prompt);
-    expect(flags.ROUNDS).toBe(3);
+    expect(vars.ROUNDS).toBe(3);
   });
 });
 
@@ -132,7 +124,7 @@ describe('buildUserVars runtime skill diagnostics', () => {
       { ...baseSetting, agentCategory: AgentCategory.ToolUse },
       basePrompt,
       fakePath('agents/generic'),
-      { isOpenai: false, isAnthropic: false, isGoogle: false },
+      false,
       spiedTrace({ warn, emit }),
       {
         workspacePath: fakePath('workspace'),
@@ -158,7 +150,7 @@ describe('buildUserVars runtime skill diagnostics', () => {
       { ...baseSetting, agentCategory: AgentCategory.ToolUse },
       basePrompt,
       fakePath('agents/generic'),
-      { isOpenai: false, isAnthropic: false, isGoogle: false },
+      false,
       spiedTrace({ warn, emit }),
       {
         workspacePath: fakePath('workspace'),
@@ -197,7 +189,7 @@ describe('buildUserVars runtime skill diagnostics', () => {
       { ...baseSetting, agentCategory: AgentCategory.ToolUse },
       basePrompt,
       fakePath('agents/generic'),
-      { isOpenai: false, isAnthropic: false, isGoogle: false },
+      false,
       spiedTrace({ emit }),
       {
         workspacePath: fakePath('workspace'),
@@ -227,7 +219,7 @@ describe('buildUserVars runtime skill diagnostics', () => {
       baseSetting,
       basePrompt,
       fakePath('agents/generic'),
-      { isOpenai: false, isAnthropic: false, isGoogle: false },
+      false,
       spiedTrace({ emit }),
       {
         workspacePath: fakePath('workspace'),
@@ -241,29 +233,29 @@ describe('buildUserVars runtime skill diagnostics', () => {
   });
 });
 
-// resolveOutputFiles is pure: it returns the normalized list and the prompt
-// variable, and leaves writing the list back onto the config to buildUserVars.
+// buildUserVars normalizes the output list onto the config and exposes it as
+// the OUTPUT_FILES prompt variable; both reads come from the same resolution.
 describe('output file prompt variables', () => {
   it.each([
     {
       name: 'exposes declared generated outputs without using an order variable',
-      config: { outputFiles: ['main.tex', 'appendix.tex'] },
+      config: {
+        inputFiles: ['draft.tex', 'notes.tex'],
+        outputFiles: ['main.tex', 'appendix.tex'],
+      },
       setting: {},
-      expectedVars: { OUTPUT_FILES: ['main.tex', 'appendix.tex'] },
       expectedOutputFiles: ['main.tex', 'appendix.tex'],
     },
     {
       name: 'falls back to default generated outputs',
       config: {},
       setting: { defaultOutputFiles: ['slides.tex'] },
-      expectedVars: { OUTPUT_FILES: ['slides.tex'] },
       expectedOutputFiles: ['slides.tex'],
     },
     {
       name: 'leaves input-named outputs implicit',
       config: { inputFiles: ['main.tex', 'appendix.tex'], outputFiles: [] },
       setting: { defaultOutputFiles: [] },
-      expectedVars: {},
       expectedOutputFiles: [],
     },
     {
@@ -273,23 +265,36 @@ describe('output file prompt variables', () => {
         outputFiles: ['appendix.tex'],
       },
       setting: { defaultOutputFiles: [] },
-      expectedVars: {},
       expectedOutputFiles: [],
     },
-  ])('$name', ({ config, setting, expectedVars, expectedOutputFiles }) => {
-    const agentConfig = config as unknown as AgentConfig;
-    const resolved = resolveOutputFiles(
+  ])('$name', async ({ config, setting, expectedOutputFiles }) => {
+    const agentConfig = AgentConfigSchema.parse({
+      agent: 'generic',
+      model: 'test-model',
+      ...config,
+    });
+
+    const vars = await buildUserVars(
       agentConfig,
-      setting as unknown as AgentSetting,
+      { ...baseSetting, ...setting },
+      basePrompt,
+      fakePath('agents/generic'),
+      false,
+      noopTrace,
+      {
+        workspacePath: fakePath('workspace'),
+        storageRoot: testWorkspaceRoots().storage,
+        config: testWorkspaceRoots().config,
+        settings: testWorkspaceRoots(),
+      },
     );
 
-    expect(resolved.vars).toEqual(expectedVars);
-    expect(resolved.outputFiles).toEqual(expectedOutputFiles);
+    expect(agentConfig.outputFiles).toEqual(expectedOutputFiles);
+    expect(vars.OUTPUT_FILES).toEqual(
+      expectedOutputFiles.length > 0 ? expectedOutputFiles : undefined,
+    );
   });
 });
-
-// Compile-time pins for the buildUserVars contract: no runtime I/O, so this
-// describe does not touch the platform.
 
 // The describes below replace the whole global platform in their own
 // beforeEach and never restore it — they MUST stay the last describes in
@@ -308,7 +313,7 @@ function buildVars(
     agentSetting,
     agentPrompt,
     fakePath('agents/generic'),
-    { isOpenai: false, isAnthropic: false, isGoogle: false },
+    false,
     noopTrace,
     {
       workspacePath: fakePath('workspace'),

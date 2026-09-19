@@ -18,6 +18,13 @@ All notable changes to this project will be documented in this file.
   pre-release versions of the extension in VS Code, install the CLI with
   `npm install -g @texra-ai/cli@preview`, or pick a desktop installer marked
   pre-release. Project documents and research files are unchanged either way.
+- **Four template variables are removed from custom agents** —
+  `{{ WORKFLOW_AGENTS }}`, `{{ TOOL_USE_AGENTS }}`, `{% if IS_OPENAI_MODEL %}`
+  and `{% if IS_GOOGLE_MODEL %}` are no longer filled in when an agent's
+  prompts are rendered. A prompt that still uses one renders it as empty, so
+  remove it from your agent YAML. `{% if IS_ANTHROPIC_MODEL %}` is unchanged,
+  and the delegation roster an agent can see is still listed in the
+  descriptions of its delegation tools.
 - **One streaming toggle instead of one per provider** — the per-provider
   Streaming switches in the Models tab are gone. The global **Enable
   streaming** setting now governs every provider.

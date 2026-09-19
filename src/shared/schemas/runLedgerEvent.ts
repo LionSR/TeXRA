@@ -376,10 +376,9 @@ const SettledToolResultSchema = z.discriminatedUnion('status', [
  *
  * Under `usage`, `add` is the ONLY operation. The run's accounting is derived
  * from the priced usage of every response row plus additive tool costs (D12);
- * a `set` rewriting `totalCost`, an `append`, or a `delete` whose total the
- * next parse prefaults back to zero would each make a resumed run's cost a
- * number no row accounts for, and `applyMutations` cannot tell the difference
- * because the rewritten totals still parse.
+ * a `set` rewriting `totalCost` would make a resumed run's cost a number no
+ * row accounts for, and `applyMutations` cannot tell the difference because
+ * the rewritten totals still parse.
  */
 const StateOperationSchema = z
   .discriminatedUnion('op', [
@@ -387,15 +386,6 @@ const StateOperationSchema = z
       op: z.literal('set'),
       path: z.array(z.string().min(1)).min(1),
       value: JsonValueSchema,
-    }),
-    z.strictObject({
-      op: z.literal('delete'),
-      path: z.array(z.string().min(1)).min(1),
-    }),
-    z.strictObject({
-      op: z.literal('append'),
-      path: z.array(z.string().min(1)).min(1),
-      items: z.array(JsonValueSchema).min(1),
     }),
     z.strictObject({
       op: z.literal('add'),

@@ -45,7 +45,6 @@ vi.mock('@utils/config/worktreeConfig', () => ({
 const {
   annotateDelegationAvailability,
   availableModelNamesFromOptions,
-  formatAgentList,
   readDelegationAnnotationState,
   selectAvailableDelegationModel,
 } = await import('@tools/delegation/delegationAvailability');

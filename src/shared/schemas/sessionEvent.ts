@@ -605,7 +605,7 @@ export type DisplaySessionEvent = z.infer<typeof DisplaySessionEventSchema>;
  * to the stored shape of `SessionEventSchema`; `sessionEventFormat.vitest.ts`
  * pins that shape and fails a change that leaves the version alone.
  */
-export const SESSION_EVENT_FORMAT = 5;
+export const SESSION_EVENT_FORMAT = 6;
 
 export const SessionEventSchema = z.discriminatedUnion('type', [
   ...DisplaySessionEventSchema.options,

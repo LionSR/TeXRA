@@ -16,7 +16,6 @@ import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { ConfigProvider } from '@platform/interfaces';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import type {
-  AgentDelegationScope,
   AttachedMemoryMiss,
   FileListEntry,
   UserVars,
@@ -27,10 +26,6 @@ import {
   AgentSkillsEnabledSchema,
 } from '@shared/schemas';
 import { loadRuntimeSkillCatalog } from '@skills/runtimeSkills';
-import {
-  formatAgentList,
-  getDelegationAgents,
-} from '@tools/delegation/delegationAvailability';
 import { parseFrontmatter } from '@tools/memory/memoryMeta';
 import { displayToStoragePath } from '@tools/memory/memoryUtils';
 import { filterNotNull, unique } from '@utils/core';
@@ -86,17 +81,7 @@ type LoadedFileEntry = FileListEntry & {
   varName: string;
 };
 
-/**
- * Minimal provider info needed for prompt variable rendering: the provider
- * family of the run's model config, not the bound model itself.
- */
-interface ModelProviderFlags {
-  isOpenai: boolean;
-  isAnthropic: boolean;
-  isGoogle: boolean;
-}
-
-export interface BuildUserVarsOptions {
+interface BuildUserVarsOptions {
   /**
    * Workspace root of the session this run belongs to, held as data: prompt
    * file names, the readable-file reads and `CWD` all resolve against it, so
@@ -118,12 +103,10 @@ export interface BuildUserVarsOptions {
   config: ConfigProvider;
   /**
    * The three setting slots of the same session, held as data for the same
-   * reason: the run's disabled-skill lists and the delegation roster behind
-   * `WORKFLOW_AGENTS` / `TOOL_USE_AGENTS` answer for this project, not for
+   * reason: the run's disabled-skill lists answer for this project, not for
    * whichever roots the calling fiber carries.
    */
   settings: SettingsStores;
-  delegationAgentScope?: AgentDelegationScope | null;
   /** Explicit trace stage for diagnostics emitted while loading variables. */
   stageId?: string;
 }
@@ -152,14 +135,13 @@ type AttachedMemoriesResult = {
  * Build all user variables needed for prompt rendering.
  *
  * @param options.workspacePath - Workspace root of the run's session.
- * @param options.delegationAgentScope - Run-scoped delegation roster. Defaults to the workspace roster.
  */
 export const buildUserVars = Effect.fn('buildUserVars')(function* (
   agentConfig: AgentConfig,
   agentSetting: AgentSetting,
   agentPrompt: AgentPrompt,
   agentPath: string,
-  providerFlags: ModelProviderFlags,
+  isAnthropicModel: boolean,
   logger: AgentTrace,
   options: BuildUserVarsOptions,
 ): Effect.fn.Return<BuiltUserVars, Error, FileSystem.FileSystem> {
@@ -217,7 +199,7 @@ export const buildUserVars = Effect.fn('buildUserVars')(function* (
   // The custom `requiredFilesInternal` keys ride beside the fixed vocabulary
   // (BuiltUserVars) and reach templates through the channel boundary.
   const userVars: BuiltUserVars = {
-    ...getBasicVars(agentConfig, providerFlags, options),
+    ...getBasicVars(agentConfig, isAnthropicModel, options),
     ...(yield* getFileVars(
       agentConfig,
       agentSetting,
@@ -245,11 +227,7 @@ type BasicVars = Pick<
   UserVars,
   | 'MODEL'
   | 'INSTRUCTION'
-  | 'IS_OPENAI_MODEL'
   | 'IS_ANTHROPIC_MODEL'
-  | 'IS_GOOGLE_MODEL'
-  | 'WORKFLOW_AGENTS'
-  | 'TOOL_USE_AGENTS'
   | 'CWD'
   | 'DEFAULT_BIB_PATH'
   | 'BUILTIN_WORKFLOW_DIR'
@@ -260,25 +238,9 @@ type BasicVars = Pick<
 
 function getBasicVars(
   agentConfig: AgentConfig,
-  providerFlags: ModelProviderFlags,
+  isAnthropicModel: boolean,
   options: BuildUserVarsOptions,
 ): BasicVars {
-  // Filter out the current agent so it doesn't see itself as a delegation target
-  const selfName = agentConfig.agent;
-  const scope = options.delegationAgentScope ?? undefined;
-  const workflowAgentsList = formatAgentList(
-    getDelegationAgents(options.settings, AgentCategory.Workflow, scope).filter(
-      (agent) => agent.name !== selfName,
-    ),
-    { tools: 'none', collapseDescriptionNewlines: false },
-  );
-  const toolUseAgentsList = formatAgentList(
-    getDelegationAgents(options.settings, AgentCategory.ToolUse, scope).filter(
-      (agent) => agent.name !== selfName,
-    ),
-    { tools: 'inline', collapseDescriptionNewlines: false },
-  );
-
   // Get default bib path from settings (empty string if not configured)
   const defaultBibPath = readConfig<string>(
     options.config,
@@ -288,11 +250,7 @@ function getBasicVars(
   return {
     MODEL: agentConfig.model,
     INSTRUCTION: agentConfig.instruction,
-    IS_OPENAI_MODEL: providerFlags.isOpenai,
-    IS_ANTHROPIC_MODEL: providerFlags.isAnthropic,
-    IS_GOOGLE_MODEL: providerFlags.isGoogle,
-    WORKFLOW_AGENTS: workflowAgentsList,
-    TOOL_USE_AGENTS: toolUseAgentsList,
+    IS_ANTHROPIC_MODEL: isAnthropicModel,
     CWD: options.workspacePath ?? '.',
     DEFAULT_BIB_PATH: defaultBibPath,
     ...getAgentDirectoryVars(),
@@ -610,7 +568,7 @@ const getAttachedMemories = Effect.fn('userVars.getAttachedMemories')(
  * The run's normalized output list plus the prompt variable derived from it.
  * The caller owns writing the list back onto the config; see `buildUserVars`.
  */
-export function resolveOutputFiles(
+function resolveOutputFiles(
   agentConfig: AgentConfig,
   agentSetting: AgentSetting,
 ): { outputFiles: string[]; vars: Pick<UserVars, 'OUTPUT_FILES'> } {
@@ -648,7 +606,7 @@ const TOOL_GUIDANCE = {
     'codex and claude_code are both independent sandboxed coders distinct from the in-process delegate_agent specialists. Prefer whichever vendor fits the task, and for parallel or isolated edits run them against a git worktree.',
 } as const;
 
-export function getToolFlags(
+function getToolFlags(
   agentSetting: AgentSetting,
   agentPrompt: AgentPrompt,
 ): ToolFlagVars {
