@@ -527,8 +527,8 @@ importers:
         specifier: ^3.2.4
         version: 3.2.4(chokidar@3.6.0)
       openai:
-        specifier: ^7.4.0
-        version: 7.4.0(ws@8.21.3)(zod@4.4.3)
+        specifier: 7.10.0
+        version: 7.10.0(patch_hash=d98512d39fc954483b782c38a6d4417f03559d68c718dfa4cc567382a26eaaf8)(undici@7.29.0)(ws@8.21.3)(zod@4.4.3)
       p-defer:
         specifier: ^4.0.1
         version: 4.0.1
@@ -899,8 +899,8 @@ importers:
         specifier: ^6.0.1
         version: 6.0.1
       openai:
-        specifier: ^7.4.0
-        version: 7.4.0(ws@8.21.3)(zod@4.4.3)
+        specifier: 7.10.0
+        version: 7.10.0(patch_hash=d98512d39fc954483b782c38a6d4417f03559d68c718dfa4cc567382a26eaaf8)(undici@7.29.0)(ws@8.21.3)(zod@4.4.3)
       p-map:
         specifier: ^7.0.7
         version: 7.0.7
@@ -5674,27 +5674,6 @@ packages:
       '@smithy/signature-v4':
         optional: true
       undici:
-        optional: true
-      ws:
-        optional: true
-      zod:
-        optional: true
-
-  openai@7.4.0:
-    resolution: {integrity: sha512-+C9Muit5x8j9R8ej8ZzVgKcrVDtqFqTy9gxFdov0EItLgU68zrJtF9ZeT0cyqJQW9S3PCJkdFgADtRGquRBtew==}
-    engines: {node: '>=22.0.0'}
-    peerDependencies:
-      '@aws-sdk/credential-provider-node': '>=3.972.0 <4'
-      '@smithy/hash-node': '>=4.3.0 <5'
-      '@smithy/signature-v4': '>=5.4.0 <6'
-      ws: ^8.18.0
-      zod: ^3.25 || ^4.0
-    peerDependenciesMeta:
-      '@aws-sdk/credential-provider-node':
-        optional: true
-      '@smithy/hash-node':
-        optional: true
-      '@smithy/signature-v4':
         optional: true
       ws:
         optional: true
@@ -11771,11 +11750,6 @@ snapshots:
   openai@7.10.0(patch_hash=d98512d39fc954483b782c38a6d4417f03559d68c718dfa4cc567382a26eaaf8)(undici@7.29.0)(ws@8.21.3)(zod@4.4.3):
     optionalDependencies:
       undici: 7.29.0
-      ws: 8.21.3
-      zod: 4.4.3
-
-  openai@7.4.0(ws@8.21.3)(zod@4.4.3):
-    optionalDependencies:
       ws: 8.21.3
       zod: 4.4.3
 
