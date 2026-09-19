@@ -1,5 +1,3 @@
-import { z } from 'zod';
-
 import type { ServerToolContentBlock } from '@agent/types/ServerTools';
 import {
   AgentWorkspaceStateSnapshotSchema,
@@ -11,56 +9,31 @@ import {
   type Plan,
   type TodoItem,
   type WorkPlanSnapshot,
-  WorkPlanSnapshotSchema,
 } from '@shared/schemas';
 
-/**
- * The persisted slices, read off the one snapshot schema (`@shared/schemas`).
- * `.unwrap()` drops the composition's `.prefault({})`: the whole snapshot
- * substitutes a missing slice, a slice parsed on its own still refuses
- * `undefined`.
- */
-const ResponseAssemblyStateSchema =
-  AgentWorkspaceStateSnapshotSchema.shape.assembly.unwrap();
-type ResponseAssemblyState = z.output<typeof ResponseAssemblyStateSchema>;
-const FileInteractionStateSnapshotSchema =
-  AgentWorkspaceStateSnapshotSchema.shape.interactions.unwrap();
-type FileInteractionStateSnapshot = z.output<
-  typeof FileInteractionStateSnapshotSchema
->;
-const MediaAttachmentStateSnapshotSchema =
-  AgentWorkspaceStateSnapshotSchema.shape.media.unwrap();
-type MediaAttachmentStateSnapshot = z.output<
-  typeof MediaAttachmentStateSnapshotSchema
->;
-const ReasoningCacheStateSchema =
-  AgentWorkspaceStateSnapshotSchema.shape.reasoning.unwrap();
-type ReasoningCacheState = z.output<typeof ReasoningCacheStateSchema>;
-
 export class FileInteractionState {
-  private readonly readFiles = new Set<string>();
-  private readonly edits = new Map<string, LineChanges>();
-  private _toolCallCount = 0;
+  private readonly readFiles: Set<string>;
+  private readonly edits: Map<string, LineChanges>;
+  private _toolCallCount: number;
+
+  /** Fresh, or rehydrated from the slice `AgentWorkspaceState` parsed. */
+  constructor(snapshot?: AgentWorkspaceSnapshot['interactions']) {
+    this.readFiles = new Set(snapshot?.readFiles);
+    this.edits = new Map(
+      snapshot?.edits.map(({ path, added, removed }) => [
+        path,
+        { added, removed },
+      ]),
+    );
+    this._toolCallCount = snapshot?.toolCallCount ?? 0;
+  }
 
   /** Total number of tool calls executed in this session. */
   get toolCallCount(): number {
     return this._toolCallCount;
   }
 
-  static fromSnapshot(snapshot: unknown): FileInteractionState {
-    const parsed = FileInteractionStateSnapshotSchema.parse(snapshot);
-    const state = new FileInteractionState();
-    for (const filePath of parsed.readFiles) {
-      state.readFiles.add(filePath);
-    }
-    for (const { path, added, removed } of parsed.edits) {
-      state.edits.set(path, { added, removed });
-    }
-    state._toolCallCount = parsed.toolCallCount;
-    return state;
-  }
-
-  toSnapshot(): FileInteractionStateSnapshot {
+  toSnapshot(): AgentWorkspaceSnapshot['interactions'] {
     return {
       readFiles: [...this.readFiles],
       edits: [...this.edits.entries()].map(([path, diff]) => ({
@@ -121,11 +94,9 @@ export class MediaAttachmentState {
   private readonly _files: FileLocation[] = [];
   private readonly pathSet = new Set<string>();
 
-  static fromSnapshot(snapshot: unknown): MediaAttachmentState {
-    const parsed = MediaAttachmentStateSnapshotSchema.parse(snapshot);
-    const state = new MediaAttachmentState();
-    state.addMediaFiles(parsed.files);
-    return state;
+  /** Fresh, or rehydrated from the slice `AgentWorkspaceState` parsed. */
+  constructor(snapshot?: AgentWorkspaceSnapshot['media']) {
+    this.addMediaFiles(snapshot?.files ?? []);
   }
 
   /**
@@ -136,7 +107,7 @@ export class MediaAttachmentState {
     return this._files;
   }
 
-  toSnapshot(): MediaAttachmentStateSnapshot {
+  toSnapshot(): AgentWorkspaceSnapshot['media'] {
     return { files: [...this._files] };
   }
 
@@ -165,25 +136,23 @@ function emptyServerToolContent(): ServerToolContentState {
 }
 
 export class WorkPlanState {
-  private _todos: TodoItem[] = [];
-  private _plan: Plan | null = null;
+  private _todos: TodoItem[];
+  private _plan: Plan | null;
   private _onTodosUpdate?: (todos: TodoItem[]) => void;
   private _onPlanUpdate?: (plan: Plan | null) => void;
 
-  static fromSnapshot(snapshot: unknown): WorkPlanState {
-    const parsed = WorkPlanSnapshotSchema.parse(snapshot);
-    const state = new WorkPlanState();
-    state._todos = [...parsed.todos];
-    state._plan = parsed.plan;
-    return state;
+  /** Fresh, or rehydrated from the slice `AgentWorkspaceState` parsed. */
+  constructor(snapshot?: WorkPlanSnapshot) {
+    this._todos = [...(snapshot?.todos ?? [])];
+    this._plan = snapshot?.plan ?? null;
   }
 
   toSnapshot(): WorkPlanSnapshot {
-    return WorkPlanSnapshotSchema.parse({
+    return {
       todos: [...this._todos],
       plan: this._plan ? { ...this._plan } : null,
       planSummary: this._plan ? planSummaryLine(this._plan.objective) : null,
-    });
+    };
   }
 
   get todos(): TodoItem[] {
@@ -243,23 +212,17 @@ export class WorkPlanState {
 
 export class AgentWorkspaceState {
   private constructor(
-    public readonly assembly: ResponseAssemblyState,
+    public readonly assembly: AgentWorkspaceSnapshot['assembly'],
     public readonly media: MediaAttachmentState,
-    public readonly reasoning: ReasoningCacheState,
+    public readonly reasoning: AgentWorkspaceSnapshot['reasoning'],
     public readonly interactions: FileInteractionState,
     public readonly serverToolContent: ServerToolContentState,
     public readonly workPlan: WorkPlanState,
   ) {}
 
+  /** A run's starting state: the canonical empty snapshot, hydrated. */
   static create(): AgentWorkspaceState {
-    return new AgentWorkspaceState(
-      ResponseAssemblyStateSchema.parse({}),
-      new MediaAttachmentState(),
-      ReasoningCacheStateSchema.parse({}),
-      new FileInteractionState(),
-      emptyServerToolContent(),
-      new WorkPlanState(),
-    );
+    return AgentWorkspaceState.fromSnapshot({ workPlan: {} });
   }
 
   /**
@@ -284,11 +247,11 @@ export class AgentWorkspaceState {
     const parsed = AgentWorkspaceStateSnapshotSchema.parse(snapshot);
     return new AgentWorkspaceState(
       parsed.assembly,
-      MediaAttachmentState.fromSnapshot(parsed.media),
+      new MediaAttachmentState(parsed.media),
       parsed.reasoning,
-      FileInteractionState.fromSnapshot(parsed.interactions),
+      new FileInteractionState(parsed.interactions),
       emptyServerToolContent(),
-      WorkPlanState.fromSnapshot(parsed.workPlan),
+      new WorkPlanState(parsed.workPlan),
     );
   }
 

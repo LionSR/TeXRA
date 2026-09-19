@@ -2,10 +2,7 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports
-import {
-  AgentWorkspaceState,
-  FileInteractionState,
-} from '@agent/core/state/AgentWorkspaceState';
+import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 
 describe('agent workspace work-plan state', () => {
   it.each([
@@ -60,9 +57,10 @@ describe('agent workspace file-interaction state', () => {
   });
 
   it('prefaults missing added/removed on persisted file-edit snapshots', () => {
-    const state = FileInteractionState.fromSnapshot({
-      edits: [{ path: 'legacy.md' }],
-    });
+    const state = AgentWorkspaceState.fromSnapshot({
+      workPlan: {},
+      interactions: { edits: [{ path: 'legacy.md' }] },
+    }).interactions;
 
     expect(state.editedFilePaths).toEqual(['legacy.md']);
     expect(state.toSnapshot()).toEqual({
