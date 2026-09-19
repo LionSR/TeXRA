@@ -63,8 +63,9 @@ export interface SessionGraph {
    *  producer with no fiber of its own to wait on. */
   readonly detach: SessionEventsShape['detach'];
   /** Every detached job enqueued before this call has run and the view has
-   *  folded what they committed; fails with their aggregated refusals. */
-  readonly settle: Effect.Effect<void, Error>;
+   *  folded what they committed. A barrier, never a reporter: a refused job
+   *  belongs to whoever enqueued it. */
+  readonly settle: Effect.Effect<void>;
   /** The run ledger over this root's event plane: the run loop's one
    *  writer of run rows, provided to each run's program from here. */
   readonly ledger: Context.Service.Shape<typeof RunLedger>;

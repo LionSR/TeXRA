@@ -673,10 +673,7 @@ export class RunRegistry {
 
   /**
    * Resolve once every run this registry holds has left it: the drain a
-   * session close and a project close both wait on, over the same set
-   * {@link getActiveIds} reports — the tracked handles and the native child
-   * loops retained between turns, so a child with final delivery still to do
-   * is never left running under a released session.
+   * session close and a project close both wait on, over {@link getActiveIds}.
    *
    * Interrupting the waiting fiber — which is what a close budget does —
    * detaches the registry listeners with it, so a bounded wait leaves none
