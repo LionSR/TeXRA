@@ -308,7 +308,12 @@ export function initializeDefaultSession(
   init: SessionHandleInit,
 ): Effect.Effect<SessionHandle, SessionOpenError> {
   return Effect.suspend(() => {
-    if (tryDefaultSession()) {
+    // Keyed by the root, as the owner keys every session: a default still open
+    // over the root being initialized is the lifecycle error. A host that has
+    // moved on to another root (a suite reinstalling its fake host) is opening
+    // the default of a different project, not a second default of this one.
+    const open = tryDefaultSession();
+    if (open && open.roots.storage === init.roots.storage) {
       throw new Error('The default session has already been initialized.');
     }
     return openSessionEffect(init).pipe(

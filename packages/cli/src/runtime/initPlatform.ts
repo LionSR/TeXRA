@@ -442,17 +442,19 @@ export function initCliPlatform(
     // process-wide singleton: the secret store is the same stateless view over
     // this process's storage root the composition block installed, and the
     // application state is the store that install opened before it.
-    // The three setting slots this process answers a catalog row from are the
-    // roots this init built. A process whose platform some other root
-    // installed published no roots for the CLI to answer from, and there is no
-    // process-wide record to reach for, so that is a composition defect rather
-    // than a silently wrong project.
-    if (!installedRoots) {
+    // The three setting slots this process answers a catalog row from: the
+    // roots this init built, or — when another root installed the platform
+    // before this init ran (a test harness's fake host) — the roots that
+    // root's process session was opened over, which is where `session` below
+    // already looks. There is no process-wide roots record to reach for, so a
+    // process with neither is a composition defect rather than a silently
+    // wrong project.
+    const settingSlots = installedRoots ?? tryDefaultSession()?.roots;
+    if (!settingSlots) {
       throw new Error(
-        'The CLI platform was installed by another root, which published no workspace roots for the CLI to read its settings from.',
+        'The CLI platform was installed by another root that opened no process session, so the CLI has no workspace roots to read its settings from.',
       );
     }
-    const settingSlots = installedRoots;
     const cliServices: CliPlatformServices = {
       runtime,
       config: settingSlots.config,
