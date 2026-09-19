@@ -832,33 +832,6 @@ const heldSession = (root: string) =>
   });
 
 /**
- * Resolve once every run the registry holds has left it. Interrupting
- * this fiber — which is what the close budget below does — detaches the
- * registry listeners with it, so a bounded wait leaves none behind. The
- * registry state is re-read once those listeners are attached, closing the
- * window between the read below and a registration the fiber only reaches a
- * scheduler step later: `raceAllFirst` starts its arms immediately and in
- * order, so the wait registers first and the re-check then sees a last
- * run that left inside the window, instead of waiting out the whole
- * close budget for a notification that can no longer come. The loop reads
- * registry state only, so it needs no session scope of its own.
- */
-const untilSettled = (runs: RunRegistry): Effect.Effect<void> =>
-  Effect.gen(function* () {
-    for (;;) {
-      const active = runs.getActiveIds();
-      if (active.length === 0) return;
-      const alreadySettled = Effect.suspend(() =>
-        runs.getActiveIds().length === 0 ? Effect.void : Effect.never,
-      );
-      yield* Effect.raceAllFirst([
-        runs.waitForAnyChange(active).pipe(Effect.asVoid),
-        alreadySettled,
-      ]);
-    }
-  });
-
-/**
  * Close the session of one root (PR #11893, agent SDK architecture
  * proposal, section 9): refuse new runs, stop the root runs it
  * owns (the stop cascades into their children) and the children no root
@@ -918,7 +891,7 @@ const closeSession = (root: string) =>
     // The entry remains owned until waiting metadata finalization, not merely
     // handle removal, has completed as well as every live driver.
     const settled = Fiber.join(termination).pipe(
-      Effect.andThen(untilSettled(runs)),
+      Effect.andThen(runs.awaitDrained()),
     );
     // One budget for the whole close: the shutdown-phase deadline, forked
     // once so the flush below shares what settlement left.
@@ -936,10 +909,12 @@ const closeSession = (root: string) =>
         // Re-raise the original defect after arming that cleanup so callers
         // still observe the failed close instead of a false success report.
         Effect.forkDetach(
-          untilSettled(runs).pipe(
-            Effect.andThen(flushArtifacts),
-            Effect.ensuring(sessions.invalidate(key)),
-          ),
+          runs
+            .awaitDrained()
+            .pipe(
+              Effect.andThen(flushArtifacts),
+              Effect.ensuring(sessions.invalidate(key)),
+            ),
           { startImmediately: true },
         ).pipe(Effect.andThen(Effect.failCause(cause))),
       ),
