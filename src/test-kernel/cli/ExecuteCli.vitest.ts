@@ -248,8 +248,10 @@ type LeaseOptions = {
  */
 function stubHangingRun(published: Deferred.Deferred<LeaseOptions>): {
   resolve: (result: unknown) => void;
+  reject: (error: unknown) => void;
 } {
   let resolveRun!: (result: unknown) => void;
+  let rejectRun!: (error: unknown) => void;
   mocks.runAgent.mockImplementation(async (request, options: LeaseOptions) => {
     Deferred.doneUnsafe(published, Effect.succeed(options));
     const runId = request.runId as RunId;
@@ -264,8 +266,9 @@ function stubHangingRun(published: Deferred.Deferred<LeaseOptions>): {
     launchHandle.attachInterruptHandler({ interrupt: () => undefined });
     options.session?.runs.track(launchHandle);
     try {
-      return await new Promise((resolve) => {
+      return await new Promise((resolve, reject) => {
         resolveRun = resolve;
+        rejectRun = reject;
       });
     } finally {
       if (options.session?.runs.getHandle(runId) === launchHandle) {
@@ -273,7 +276,10 @@ function stubHangingRun(published: Deferred.Deferred<LeaseOptions>): {
       }
     }
   });
-  return { resolve: (result: unknown) => resolveRun(result) };
+  return {
+    resolve: (result: unknown) => resolveRun(result),
+    reject: (error: unknown) => rejectRun(error),
+  };
 }
 
 /** Observe the session's terminal artifact drain. */
@@ -1272,6 +1278,68 @@ describe('executeCliRequest', () => {
       expect(mocks.close).toHaveBeenCalledTimes(1);
       expect(onInterruptedRunFinalized).not.toHaveBeenCalled();
     }),
+  );
+
+  it.live(
+    'still presents a classified run failure when shutdown finalization also failed',
+    () =>
+      Effect.gen(function* () {
+        const { platform, executeCliRequest } = yield* Effect.promise(
+          loadExecuteCliOnInstalledHost,
+        );
+        // Imported dynamically (like the tests above) so the `instanceof`
+        // check in executeCli.ts sees the same module instance.
+        const { AgentError: RuntimeAgentError } = yield* Effect.promise(
+          () => import('@common/errors'),
+        );
+        // The production `emit` wrapper, which the default stub replaces: it
+        // is the thing that sets `failurePresented`, so only with it installed
+        // can this suite see whether a finalization notice claims the run's
+        // own failure presentation.
+        mocks.createHeadlessCliHostInteractions.mockImplementationOnce(
+          (_session, _runtime, _context, hooks) => ({
+            emit: hooks.emit,
+            dispose: mocks.disposeHostInteractions,
+          }),
+        );
+        mocks.finalizeRun.mockImplementation(async (input) => {
+          input.report?.(new Error('terminal metadata disk full'));
+          return { ok: false, outcomePersisted: false };
+        });
+        const published = yield* Deferred.make<LeaseOptions>();
+        const hangingRun = stubHangingRun(published);
+
+        const run = yield* Effect.forkChild(
+          executeCliRequest(baseRequest(), cliContext(), {}),
+        );
+        const leaseOptions = yield* Deferred.await(published);
+        yield* settle;
+        leaseOptions.onRunLeaseAcquired?.('exec-1' as RunId);
+        const shutdown = Effect.runPromise(platform.lifecycle.runShutdown);
+        yield* settle;
+        // The drain runs under the lease, before the launch settles: this is
+        // the instant at which its failure notice used to claim the run's own
+        // presentation and suppress the message below.
+        expect(yield* leaseOptions.beforeLeaseRelease?.() ?? Effect.void).toBe(
+          true,
+        );
+        hangingRun.reject(
+          new RuntimeAgentError('Error executing agent chat: boom'),
+        );
+        yield* Effect.promise(() => shutdown);
+
+        expect(yield* Fiber.join(run)).toEqual({
+          ok: false,
+          exitCode: CliExitCode.AgentError,
+        });
+        expect(mocks.emit).toHaveBeenCalledTimes(2);
+        expect(mocks.emit).toHaveBeenCalledWith('requestShowError', {
+          message: 'terminal metadata disk full',
+        });
+        expect(mocks.emit).toHaveBeenCalledWith('requestShowError', {
+          message: 'Error executing agent chat: boom',
+        });
+      }),
   );
 
   it.live('removes the shutdown status hook after owned runs finish', () =>
