@@ -4,12 +4,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import { setLogSink, type LogEntry } from '@logger/logSink';
 import * as logger from '@logger/logUtils';
-import type { ConfigProvider } from '@platform/interfaces';
 
 const SECRET = 'sk-proj-redaction-example-1234567890abcdef';
 
 function enableDebugLogging(): void {
-  logger.setDebugModeConfig({ get: () => true } as unknown as ConfigProvider);
+  logger.setDebugModeConfig({ get: () => true });
 }
 
 /** Install a capturing sink and return the entries it receives. */

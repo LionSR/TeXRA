@@ -20,7 +20,6 @@ import { serializeError } from 'serialize-error';
 // Local imports
 import * as loggerSelf from '@logger/logUtils';
 import { LOG_CHANNEL, writeLogEntry, type LogEntry } from '@logger/logSink';
-import type { ConfigProvider } from '@platform/interfaces';
 import { LOG_LEVELS, type LogLevel } from '@shared/schemas';
 
 export interface LogUtilsOptions {
@@ -36,18 +35,27 @@ const ENTRY_LEVEL: Record<LogLevel, string> = {
 };
 
 /**
+ * The one configuration read this module makes, as the port its consumer
+ * declares: a `ConfigProvider` satisfies it structurally, and the logger keeps
+ * no import of `@platform` for it — the logger subsystem depends on no host.
+ */
+export interface DebugModeConfig {
+  get(path: string, defaultValue: boolean): boolean;
+}
+
+/**
  * The configuration `texra.logger.debugMode` is read from: process-wide, like
  * the sink in `@logger/logSink`, because a log line has no session to take a
  * provider from. Installed by the composition root beside its sink; absent
  * until then, so startup reporting that precedes the host's configuration
  * logs as if debug mode were off rather than reaching for an ambient record.
  */
-let debugModeConfig: ConfigProvider | undefined;
+let debugModeConfig: DebugModeConfig | undefined;
 
 /** Install (or, with `null`, uninstall) the configuration `isDebugModeEnabled`
  *  reads. A composition root calls this once, with its own workspace roots'
  *  provider. */
-export function setDebugModeConfig(config: ConfigProvider | null): void {
+export function setDebugModeConfig(config: DebugModeConfig | null): void {
   debugModeConfig = config ?? undefined;
 }
 
