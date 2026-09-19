@@ -121,11 +121,15 @@ export function signInWithSubscription(
         }),
     ).pipe(
       // A transport defect is reported the same as its typed failure, exactly
-      // as the rejection this replaces was.
+      // as the rejection this replaces was. An interrupt is not: shutdown
+      // cancelling the sign-in is not a sign-in failure, and the
+      // `Effect.tryPromise` this replaces never saw one.
       Effect.catchCause((cause) =>
-        Effect.fail(
-          new SubscriptionSignInFailed({ cause: Cause.squash(cause) }),
-        ),
+        Cause.hasInterruptsOnly(cause)
+          ? Effect.interrupt
+          : Effect.fail(
+              new SubscriptionSignInFailed({ cause: Cause.squash(cause) }),
+            ),
       ),
     );
 

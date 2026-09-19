@@ -124,11 +124,17 @@ export function downloadArXivSource(
     }
   }).pipe(
     Effect.catchCause((cause) =>
-      showLoggedErrorMessage(
-        CHANNEL,
-        'Failed to download arXiv source',
-        Cause.squash(cause),
-      ).pipe(Effect.asVoid),
+      // Shutdown interrupts this fiber while it waits on a host prompt or on
+      // the download. That is a cancellation, not a download failure, and the
+      // `Effect.catch` this replaces never saw it, so it must not become a
+      // notification now that the download runs on this fiber.
+      Cause.hasInterruptsOnly(cause)
+        ? Effect.interrupt
+        : showLoggedErrorMessage(
+            CHANNEL,
+            'Failed to download arXiv source',
+            Cause.squash(cause),
+          ).pipe(Effect.asVoid),
     ),
   );
 }

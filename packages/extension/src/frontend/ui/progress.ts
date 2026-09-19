@@ -17,8 +17,10 @@ type ProgressReporter = vscode.Progress<{
  * this program resolves when the body settles. The body itself is a step of
  * the calling fiber — not a nested settle on a runtime the caller had to be
  * given — so its services, its interruption and its typed failures are the
- * caller's own. `ensuring` resolves the task on every exit, interruption
- * included, so the notification can never outlive the work.
+ * caller's own. `ensuring` covers every step from the moment the notification
+ * opens, so an interrupt landing before the task callback has even run still
+ * resolves the promise VS Code is waiting on and the notification cannot
+ * outlive the work.
  */
 export const withVSCodeProgress = <A, E, R>(
   options: vscode.ProgressOptions,
@@ -49,13 +51,11 @@ export const withVSCodeProgress = <A, E, R>(
       return bodyDone;
     });
 
-    const { progress, token } = yield* Effect.promise(() => started);
-
-    const exit = yield* Effect.exit(body(progress, token)).pipe(
-      Effect.ensuring(Effect.sync(() => taskSettled())),
-    );
-
-    yield* Effect.promise(() => dismissed);
-
-    return yield* exit;
+    return yield* Effect.gen(function* () {
+      const { progress, token } = yield* Effect.promise(() => started);
+      const exit = yield* Effect.exit(body(progress, token));
+      yield* Effect.sync(() => taskSettled());
+      yield* Effect.promise(() => dismissed);
+      return yield* exit;
+    }).pipe(Effect.ensuring(Effect.sync(() => taskSettled())));
   });
