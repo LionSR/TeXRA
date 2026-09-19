@@ -8,7 +8,6 @@ import {
   CodexAuthError,
   codexCoordinator,
   formatCodexAuthUnavailableMessage,
-  isCodexSessionRoutable,
 } from '@auth/codex';
 import {
   XaiAuthError,
@@ -27,6 +26,7 @@ import {
   resolveCodexSubscriptionCapabilities,
   resolveXaiSubscriptionCapabilities,
 } from '@model/providerCapabilities';
+import { isCodexSignedIn } from '@model/codex/codexSubscription';
 import { isXaiSignedIn } from '@model/xai/xaiSubscription';
 import {
   resolveDirectModelApiKeyProvider,
@@ -179,7 +179,7 @@ const codexAuthFailure = (error: unknown): Error =>
  * The subscription route a model binds under, if the user prefers one, the
  * model is eligible on it, and a session is signed in. Decided above
  * {@link resolveRouteCredential}: an eligible model with the preference on
- * but no routable session falls back to the API key, and says so, because
+ * but no signed-in session falls back to the API key, and says so, because
  * the preference is a preference (the model list already shows which route
  * serves the model), while a signed-in session that fails to refresh is a
  * failure and surfaces as one. The returned config is the route's own: the
@@ -209,17 +209,15 @@ export const resolveSubscriptionCredential = Effect.fn(
       catch: ensureError,
     });
     if (profile === null) return null;
-    const routable = yield* isCodexSessionRoutable(secrets).pipe(
-      Effect.mapError(codexAuthFailure),
-    );
-    if (!routable) {
+    const signedIn = yield* isCodexSignedIn();
+    if (!signedIn) {
       log.warn(
         `Prefer ChatGPT subscription is on but no ChatGPT session is signed in: model ${config.name} bills the OpenAI API key.`,
       );
       return null;
     }
     const coordinator = codexCoordinator(secrets);
-    // Same conversion as the routability check above: a refresh that fails
+    // The session read is the only refresh on this path: a refresh that fails
     // must reach the user with the "sign in again, or turn off the
     // preference" instruction, not as a raw auth error.
     const session = yield* Effect.gen(function* () {

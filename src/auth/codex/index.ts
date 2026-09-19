@@ -14,10 +14,6 @@ export {
   CodexAuthError,
   formatCodexAuthUnavailableMessage,
 } from './codexSessionTypes';
-export {
-  codexCoordinator,
-  getCodexStatus,
-  isCodexSessionRoutable,
-} from './codexAuthAccess';
+export { codexCoordinator, getCodexStatus } from './codexAuthAccess';
 export { loginWithLoopback } from './codexLoopbackLogin';
 export { loginWithDeviceCode } from './codexDeviceLogin';
