@@ -41,7 +41,7 @@ interface SetStatusFallback {
 }
 
 /** `wa-tag` reads compact and inline; `wa-badge` reads as a filled pill. */
-export type StatusBadgeAppearance = 'badge' | 'tag';
+type StatusBadgeAppearance = 'badge' | 'tag';
 
 export interface StatusBadgeOptions {
   /** Pre-rendered leading icon (a `waIcon()` call, a spinner, ...). */
