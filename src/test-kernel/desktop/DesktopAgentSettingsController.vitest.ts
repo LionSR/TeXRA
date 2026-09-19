@@ -97,9 +97,10 @@ function createControllerFixture(options: ControllerFixtureOptions = {}) {
       revealPath: async () => undefined,
     },
     renderer: { postToRenderer: (message) => posted.push(message) },
-    onCatalogChanged: async (selectedToolUseAgent) => {
-      catalogChanges.push(selectedToolUseAgent);
-    },
+    onCatalogChanged: (selectedToolUseAgent) =>
+      Effect.sync(() => {
+        catalogChanges.push(selectedToolUseAgent);
+      }),
     prompts: {
       promptText: options.promptText ?? (() => Effect.succeed(undefined)),
       confirm: async (input) => {

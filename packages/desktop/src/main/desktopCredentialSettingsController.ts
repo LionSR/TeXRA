@@ -125,7 +125,11 @@ interface DesktopCredentialSettingsControllerOptions extends SettingsStatePorts 
   readonly onCredentialChanged: () => Promise<void>;
   /** The model catalog changed: every open paper's `host` snapshot reloads
    *  it (PRD 8.1). */
-  readonly onModelOptionsChanged: () => Promise<void>;
+  readonly onModelOptionsChanged: () => Effect.Effect<
+    void,
+    never,
+    ProcessServices
+  >;
   readonly onError: (error: unknown) => void;
   /** The process runtime the composition root built; this controller's
    *  Effect-typed provider calls settle on it. */
@@ -355,13 +359,9 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
     );
   }
 
-  /** Every open paper reloads the model catalog: the window's own
-   *  promise-shaped fan-out, lifted once. */
+  /** Every open paper reloads the model catalog: the window's own fan-out. */
   refreshModelOptions() {
-    return Effect.tryPromise({
-      try: () => this.options.onModelOptionsChanged(),
-      catch: ensureError,
-    });
+    return this.options.onModelOptionsChanged();
   }
 
   /** The window's credential fan-out, lifted once, as above. */

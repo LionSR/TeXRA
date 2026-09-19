@@ -1164,13 +1164,12 @@ function createWindow(options: {
   // Each project's catalogs answer for that project: its snapshot source was
   // built over its own roots, so the presets come from that project's
   // workspace state, not the caller's.
-  const refreshCatalogs = async () => {
-    await Promise.all(
-      [...projectBindings.values()].map((binding) =>
-        runtime.runPromise(binding.snapshot.refreshCatalogs),
-      ),
+  const refreshCatalogs = () =>
+    Effect.forEach(
+      [...projectBindings.values()],
+      (binding) => binding.snapshot.refreshCatalogs,
+      { concurrency: 'unbounded', discard: true },
     );
-  };
   const subscriptionUsage = new SubscriptionUsageService({
     secrets: options.secrets,
     stores: activeProject().session.roots,
@@ -1299,16 +1298,17 @@ function createWindow(options: {
       },
       notifications: { showInfoMessage, showErrorMessage },
       resourcesPath: options.resourcesPath,
-      onCatalogChanged: async (selectedToolUseAgent) => {
-        await refreshCatalogs();
-        if (!selectedToolUseAgent) return;
-        const binding = projectBindings.get(project.key);
-        if (!binding || binding !== documentBinding) return;
-        binding.bridge.surfaceAction({
-          kind: 'launch',
-          patch: { agent: { toolUse: selectedToolUseAgent } },
-        });
-      },
+      onCatalogChanged: (selectedToolUseAgent) =>
+        Effect.gen(function* () {
+          yield* refreshCatalogs();
+          if (!selectedToolUseAgent) return;
+          const binding = projectBindings.get(project.key);
+          if (!binding || binding !== documentBinding) return;
+          binding.bridge.surfaceAction({
+            kind: 'launch',
+            patch: { agent: { toolUse: selectedToolUseAgent } },
+          });
+        }),
     });
     const credentialSettingsController =
       new DefaultDesktopCredentialSettingsController({

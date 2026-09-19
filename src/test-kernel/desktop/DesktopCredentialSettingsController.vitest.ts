@@ -116,9 +116,11 @@ async function createFixture({
   const onCredentialChanged = vi.fn(async () => {
     events.push('credential');
   });
-  const onModelOptionsChanged = vi.fn(async () => {
-    events.push('modelOptions');
-  });
+  const onModelOptionsChanged = vi.fn(() =>
+    Effect.sync(() => {
+      events.push('modelOptions');
+    }),
+  );
   const unavailable = (provider: string) => ({
     state: 'unavailable' as const,
     provider: provider as 'chatgpt',

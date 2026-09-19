@@ -142,7 +142,9 @@ interface DefaultDesktopAgentSettingsControllerOptions extends SettingsStatePort
    * and custom-dir changes), so refreshing one without the other would leave
    * the launcher's team picker stale.
    */
-  readonly onCatalogChanged: (selectedToolUseAgent?: string) => Promise<void>;
+  readonly onCatalogChanged: (
+    selectedToolUseAgent?: string,
+  ) => Effect.Effect<void, never, ProcessServices>;
   readonly prompts: {
     readonly promptText: (input: {
       title: string;
@@ -367,16 +369,12 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
 
   /**
    * The window's composition root owns what a catalog change means for the
-   * open papers, and answers with a promise; this is the one place that
-   * crosses back into it.
+   * open papers; this is the one place that crosses back into it.
    */
   private catalogChanged(
     selectedToolUseAgent?: string,
-  ): Effect.Effect<void, Error> {
-    return Effect.tryPromise({
-      try: () => this.onCatalogChanged(selectedToolUseAgent),
-      catch: ensureError,
-    });
+  ): Effect.Effect<void, never, ProcessServices> {
+    return this.onCatalogChanged(selectedToolUseAgent);
   }
 
   private postAgentSelectionData(): Effect.Effect<
@@ -700,7 +698,7 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
       this.catalogController.saveCurrentPreset(name),
     );
     this.postAgentModePresets();
-    await this.onCatalogChanged();
+    await this.runtime.runPromise(this.onCatalogChanged());
     await this.runtime.runPromise(
       this.notifications.showInfoMessage(`Saved team "${preset.name}"`),
     );
@@ -730,6 +728,6 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
       this.catalogController.deleteCustomPreset(presetId),
     );
     this.postAgentModePresets();
-    await this.onCatalogChanged();
+    await this.runtime.runPromise(this.onCatalogChanged());
   }
 }
