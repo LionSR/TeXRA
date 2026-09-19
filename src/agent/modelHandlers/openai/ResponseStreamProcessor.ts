@@ -98,7 +98,11 @@ export class ResponseStreamProcessor {
       // Function call arguments complete - finalize the thinking stream since
       // no more thinking deltas will arrive after tool calls begin.
       this.closeThinkingStream();
-      this.deps.logger.debug(`Tool call ready during streaming: ${event.name}`);
+      // openai dropped `name` from this event; `item_id` is the identifier it
+      // still carries, and the output item that follows names the function.
+      this.deps.logger.debug(
+        `Tool call ready during streaming: ${event.item_id}`,
+      );
     } else if (event.type === 'response.output_item.done') {
       const item = event.item;
       this.outputItems.push(item);

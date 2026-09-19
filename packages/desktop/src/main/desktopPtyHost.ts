@@ -16,7 +16,7 @@ import { createRequire } from 'node:module';
 import { platform as osPlatform } from 'node:os';
 import { dirname, join } from 'node:path';
 
-import { extendEnvPath } from '@utils/system/platformPaths';
+import { withExtendedPath } from '@utils/system/platformPaths';
 
 /**
  * Structural subset of node-pty we depend on. Declared locally so this module
@@ -120,10 +120,7 @@ function ptyEnvironment(): Record<string, string> {
   // Integrations card would offer `brew install ...` to a shell that then
   // reports `brew: command not found`. Overwrite in place: Windows spells
   // the variable `Path`, and adding a second `PATH` key would shadow it.
-  const pathKey =
-    Object.keys(env).find((key) => key.toUpperCase() === 'PATH') ?? 'PATH';
-  env[pathKey] = extendEnvPath(env[pathKey]);
-  return env;
+  return withExtendedPath(env);
 }
 
 /**

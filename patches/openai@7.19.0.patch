@@ -1,0 +1,112 @@
+diff --git a/internal/responses/response-accumulator.js b/internal/responses/response-accumulator.js
+index bc3223abc6d737dc905a638afd4d704d1bc994fa..4f0bf6197c670fc000de3cbe5854c45868681871 100644
+--- a/internal/responses/response-accumulator.js
++++ b/internal/responses/response-accumulator.js
+@@ -301,6 +301,8 @@ const supportedResponseEventTypes = createSupportedResponseEventTypes([
+     'response.mcp_list_tools.completed',
+     'response.mcp_list_tools.failed',
+     'keepalive',
++    // TeXRA: the ChatGPT-subscription backend emits response.metadata.
++    'response.metadata',
+     'error',
+ ]);
+ function assertNever(_value) {
+@@ -878,6 +880,8 @@ function isIgnoredResponseEvent(event) {
+         case 'response.mcp_list_tools.completed':
+         case 'response.mcp_list_tools.failed':
+         case 'keepalive':
++        // TeXRA: ignore the ChatGPT-subscription backend's metadata frame.
++        case 'response.metadata':
+         case 'error': {
+             return true;
+         }
+diff --git a/internal/responses/response-accumulator.mjs b/internal/responses/response-accumulator.mjs
+index 47541c9ffc20e9853455b59bd3c35dfc5aed9383..ecbd00273cbde0c4d20cff29516e44d3ddf8e2f9 100644
+--- a/internal/responses/response-accumulator.mjs
++++ b/internal/responses/response-accumulator.mjs
+@@ -297,6 +297,8 @@ const supportedResponseEventTypes = createSupportedResponseEventTypes([
+     'response.mcp_list_tools.completed',
+     'response.mcp_list_tools.failed',
+     'keepalive',
++    // TeXRA: the ChatGPT-subscription backend emits response.metadata.
++    'response.metadata',
+     'error',
+ ]);
+ function assertNever(_value) {
+@@ -874,6 +876,8 @@ function isIgnoredResponseEvent(event) {
+         case 'response.mcp_list_tools.completed':
+         case 'response.mcp_list_tools.failed':
+         case 'keepalive':
++        // TeXRA: ignore the ChatGPT-subscription backend's metadata frame.
++        case 'response.metadata':
+         case 'error': {
+             return true;
+         }
+diff --git a/lib/responses/ResponseAccumulator.d.mts b/lib/responses/ResponseAccumulator.d.mts
+index 85be10b50e285a31e3eb0613874fc533fb850170..3d14bae469d3f1fdce26c4dc21eda442ac48082a 100644
+--- a/lib/responses/ResponseAccumulator.d.mts
++++ b/lib/responses/ResponseAccumulator.d.mts
+@@ -1,5 +1,9 @@
+ import type { Response, ResponseStreamEvent } from "../../resources/responses/responses.mjs";
+ /** A transport keepalive event that leaves the accumulated response unchanged. */
++type ResponseMetadataEvent = {
++    type: 'response.metadata';
++    [key: string]: unknown;
++};
+ type ResponseKeepAliveEvent = {
+     /** Identifies a non-content keepalive event emitted by the response transport. */
+     type: 'keepalive';
+@@ -13,6 +17,6 @@ type ResponseKeepAliveEvent = {
+  * in place, while response lifecycle events return a detached replacement. Event
+  * payloads are cloned, so retaining or replaying the raw events is safe.
+  */
+-export declare function accumulateResponse(event: ResponseStreamEvent | ResponseKeepAliveEvent, snapshot?: Response): Response;
++export declare function accumulateResponse(event: ResponseStreamEvent | ResponseKeepAliveEvent | ResponseMetadataEvent, snapshot?: Response): Response;
+ export {};
+ //# sourceMappingURL=ResponseAccumulator.d.mts.map
+\ No newline at end of file
+diff --git a/lib/responses/ResponseAccumulator.d.ts b/lib/responses/ResponseAccumulator.d.ts
+index e81a0a0c08e7c0eeea27b9837caa310e3b503ade..5c648647963d2cd0cec7a2af2313a86e1a3a6f33 100644
+--- a/lib/responses/ResponseAccumulator.d.ts
++++ b/lib/responses/ResponseAccumulator.d.ts
+@@ -1,5 +1,9 @@
+ import type { Response, ResponseStreamEvent } from "../../resources/responses/responses.js";
+ /** A transport keepalive event that leaves the accumulated response unchanged. */
++type ResponseMetadataEvent = {
++    type: 'response.metadata';
++    [key: string]: unknown;
++};
+ type ResponseKeepAliveEvent = {
+     /** Identifies a non-content keepalive event emitted by the response transport. */
+     type: 'keepalive';
+@@ -13,6 +17,6 @@ type ResponseKeepAliveEvent = {
+  * in place, while response lifecycle events return a detached replacement. Event
+  * payloads are cloned, so retaining or replaying the raw events is safe.
+  */
+-export declare function accumulateResponse(event: ResponseStreamEvent | ResponseKeepAliveEvent, snapshot?: Response): Response;
++export declare function accumulateResponse(event: ResponseStreamEvent | ResponseKeepAliveEvent | ResponseMetadataEvent, snapshot?: Response): Response;
+ export {};
+ //# sourceMappingURL=ResponseAccumulator.d.ts.map
+\ No newline at end of file
+diff --git a/src/internal/responses/response-accumulator.ts b/src/internal/responses/response-accumulator.ts
+index 7b7c895c07e9847ebf84cd875908623c79270fd1..9d987ef8b8024774e5cae42b565b2ddfd1291d0f 100644
+--- a/src/internal/responses/response-accumulator.ts
++++ b/src/internal/responses/response-accumulator.ts
+@@ -527,6 +527,8 @@ const supportedResponseEventTypes = createSupportedResponseEventTypes([
+   'response.mcp_list_tools.completed',
+   'response.mcp_list_tools.failed',
+   'keepalive',
++  // TeXRA: the ChatGPT-subscription backend emits response.metadata.
++  'response.metadata',
+   'error',
+ ] as const);
+ 
+@@ -1186,6 +1188,8 @@ function isIgnoredResponseEvent(event: ResponseAccumulatorEvent): event is Respo
+     case 'response.mcp_list_tools.completed':
+     case 'response.mcp_list_tools.failed':
+     case 'keepalive':
++    // TeXRA: ignore the ChatGPT-subscription backend's metadata frame.
++    case 'response.metadata':
+     case 'error': {
+       return true;
+     }
