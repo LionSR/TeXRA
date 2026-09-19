@@ -14,11 +14,9 @@ import type { SupabaseSessionLog } from '@auth/SupabaseSession';
 import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
 import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { consoleLogSink, setLogSink } from '@logger/logSink';
+import { setDebugModeConfig } from '@logger/logUtils';
 import { initPlatform, tryPlatform, type Platform } from '@platform/platform';
-import {
-  initProcessWorkspaceRoots,
-  type WorkspaceRoots,
-} from '@platform/workspaceRoots';
+import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
   AppState,
   type LifecycleHost,
@@ -49,10 +47,7 @@ import { GlobalStateKey } from '@shared/state/stateKeys';
 import { UsageLogService } from '@telemetry/UsageLogService';
 import { registerRuntimeShutdownHandlers } from '@tools/agentCliSessionStores';
 import { seedDisabledToolDefaults } from '@tools/toolAvailability';
-import {
-  initProcessSettingHost,
-  processSettingsStores,
-} from '@utils/config/platformSettings';
+import { initProcessSettingHost } from '@utils/config/platformSettings';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
@@ -367,6 +362,7 @@ export function initCliPlatform(
         // opened.
         const openSession = yield* Effect.cached(
           initializeDefaultSession({
+            roots,
             responseTextProcessing: createTexraResponseTextProcessing(
               createAgentResponseTextConnector({
                 ...roots,
@@ -426,7 +422,9 @@ export function initCliPlatform(
           'cli',
         );
         initPlatform(platform);
-        initProcessWorkspaceRoots(roots);
+        // The logger's process-wide debug-mode read, over this host's
+        // configuration.
+        setDebugModeConfig(roots.config);
         installedRoots = roots;
         sessionOpen = openSession;
         initProcessSettingHost('cli');
@@ -444,12 +442,17 @@ export function initCliPlatform(
     // process-wide singleton: the secret store is the same stateless view over
     // this process's storage root the composition block installed, and the
     // application state is the store that install opened before it.
-    // The three setting slots this process answers a catalog row from: the roots
-    // this init installed when it built them, and otherwise the roots whichever
-    // foreign root installed the platform published (a test harness's fake host)
-    // — resolved once here through the funnel's own accessor, which is exactly
-    // what each of these readers used to do for itself.
-    const settingSlots = installedRoots ?? processSettingsStores();
+    // The three setting slots this process answers a catalog row from are the
+    // roots this init built. A process whose platform some other root
+    // installed published no roots for the CLI to answer from, and there is no
+    // process-wide record to reach for, so that is a composition defect rather
+    // than a silently wrong project.
+    if (!installedRoots) {
+      throw new Error(
+        'The CLI platform was installed by another root, which published no workspace roots for the CLI to read its settings from.',
+      );
+    }
+    const settingSlots = installedRoots;
     const cliServices: CliPlatformServices = {
       runtime,
       config: settingSlots.config,

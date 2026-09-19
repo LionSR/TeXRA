@@ -18,7 +18,7 @@ import {
   ensureRoundData,
 } from '@agent/implementations/flows/reflection/output/outputState';
 import type { WorkspaceFs } from '@platform/rootedFs';
-import { processWorkspaceRoots } from '@platform/workspaceRoots';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import type { RunId, FileLocation } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { installPlatform } from '@test/support/setupPlatform';
@@ -80,8 +80,8 @@ function createDiffCompiler(runId: RunId, logger: AgentTrace) {
     () => ({}),
     logger,
     runId,
-    new RunFileService(runId, processWorkspaceRoots()),
-    processWorkspaceRoots(),
+    new RunFileService(runId, testWorkspaceRoots()),
+    testWorkspaceRoots(),
   );
 
   return manager as unknown as {
@@ -251,7 +251,7 @@ describe('workflow LaTeX compile input directories', () => {
 
     expect(
       resolveWorkspaceSourceDir(
-        processWorkspaceRoots(),
+        testWorkspaceRoots(),
         createWorkspaceLocation(
           path.join(workspacePath, 'Draft', 'main.tex'),
           path.join('Draft', 'main.tex'),
@@ -260,13 +260,13 @@ describe('workflow LaTeX compile input directories', () => {
     ).toBe(path.join(workspacePath, 'Draft'));
     expect(
       resolveWorkspaceSourceDir(
-        processWorkspaceRoots(),
+        testWorkspaceRoots(),
         runStorageFile(runId, path.join('r3', 'Draft', 'main.tex')),
       ),
     ).toBe(path.join(workspacePath, 'Draft'));
     expect(
       resolveWorkspaceSourceDir(
-        processWorkspaceRoots(),
+        testWorkspaceRoots(),
         createRunStorageLocation(
           path.join(runDir(runId), 'original', 'r3', 'Draft', 'main.tex'),
           path.join('r3', 'Draft', 'main.tex'),
@@ -276,7 +276,7 @@ describe('workflow LaTeX compile input directories', () => {
     ).toBe(path.join(workspacePath, 'r3', 'Draft'));
     expect(
       resolveWorkspaceSourceDir(
-        processWorkspaceRoots(),
+        testWorkspaceRoots(),
         createWorkspaceLocation(
           path.join(workspacePath, 'r3', 'Draft', 'main.tex'),
           path.join('r3', 'Draft', 'main.tex'),
@@ -290,7 +290,7 @@ describe('workflow LaTeX compile input directories', () => {
 
     expect(
       resolveWorkspaceSourceDir(
-        processWorkspaceRoots(),
+        testWorkspaceRoots(),
         createExternalLocation(fakePath('external/project/main.tex')),
       ),
     ).toBeUndefined();
@@ -301,7 +301,7 @@ describe('workflow LaTeX compile input directories', () => {
 
     expect(
       resolveWorkspaceSourceDir(
-        processWorkspaceRoots(),
+        testWorkspaceRoots(),
         createWorkspaceLocation(
           path.join(workspacePath, 'Draft', 'main.tex'),
           path.join('Draft', 'main.tex'),

@@ -14,7 +14,7 @@ import {
   type CompileLatex2PdfResult,
 } from '@latex/texTools';
 import * as logger from '@logger/logUtils';
-import { processWorkspaceRoots } from '@platform/workspaceRoots';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import type { ExecResult } from '@shared/schemas';
 import { fakePath } from '@test/support/FakePlatform';
 import { rootedFsLayer } from '@test/support/fsTestUtils';
@@ -48,7 +48,7 @@ function compile(
   sourceFile = 'main.tex',
   outputDirectory = path.join(workspacePath, 'build'),
 ): Effect.Effect<CompileLatex2PdfResult> {
-  const roots = processWorkspaceRoots();
+  const roots = testWorkspaceRoots();
   return compileLatex2Pdf(
     pathToLocationIn(roots.workspace, path.join(workspacePath, sourceFile)),
     roots.config,

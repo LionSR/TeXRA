@@ -9,7 +9,7 @@ import { describe, expect, vi } from 'vitest';
 import { settleLiveSessionRuns } from '@agent/runtime/SessionHandle';
 import { runFlowWithLifecycle } from '@agent/runtime/AgentRunLifecycle';
 import { Runs } from '@agent/runtime/runRegistry';
-import { processWorkspaceRoots } from '@platform/workspaceRoots';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import {
   AgentCategory,
   RUN_OUTCOME,
@@ -89,8 +89,8 @@ describe('session isolation', () => {
       expect(await read(fakePath('storage/b/note.txt'))).toBe('from b');
       // Neither paper's roots are the process's: a session answers from the
       // record it holds, and the process roots name only the default session.
-      expect(processWorkspaceRoots().workspace).toBe(fakePath('workspace'));
-      expect(processWorkspaceRoots().storage).toBe(
+      expect(testWorkspaceRoots().workspace).toBe(fakePath('workspace'));
+      expect(testWorkspaceRoots().storage).toBe(
         fakePath('workspace/.texra/storage'),
       );
     } finally {

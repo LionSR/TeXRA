@@ -13,7 +13,7 @@ import {
 } from '@latex/LatexMediaManager';
 import { DiffFileProcessor } from '@latex/latexdiff/diffFileProcessor';
 import { sessionFsLayer } from '@platform/rootedFs';
-import { processWorkspaceRoots } from '@platform/workspaceRoots';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import type { FileLocation, RunId, ToolConfig } from '@shared/schemas';
 import { installPlatform } from '@test/support/setupPlatform';
@@ -71,7 +71,7 @@ describe('DiffFileProcessor line formatting', () => {
   it('preserves package blank-line insertion order', () => {
     const processed = (
       new DiffFileProcessor(
-        processWorkspaceRoots().config,
+        testWorkspaceRoots().config,
       ) as unknown as DiffFileProcessorInternals
     ).processLineByLine(
       [
@@ -153,7 +153,7 @@ describe('LatexMediaManager PDF compilation', () => {
       );
 
       const workspaceState = AgentWorkspaceState.create();
-      const roots = processWorkspaceRoots();
+      const roots = testWorkspaceRoots();
       const manager = new LatexMediaManager(logger, roots);
       yield* manager
         .processInputFiles(
@@ -222,7 +222,7 @@ describe('LatexMediaManager figure baseDir resolution (issue #7228)', () => {
     figurePath: string,
   ): Promise<void> {
     const mirroredPath = path.join(
-      runDirUnder(processWorkspaceRoots().storage, runId),
+      runDirUnder(testWorkspaceRoots().storage, runId),
       'figures/plot.png',
     );
     const stats = await lstat(mirroredPath);
@@ -243,8 +243,8 @@ describe('LatexMediaManager figure baseDir resolution (issue #7228)', () => {
         const workspaceState = AgentWorkspaceState.create();
         const manager = new LatexMediaManager(
           logger,
-          processWorkspaceRoots(),
-          new RunFileService(runId, processWorkspaceRoots()),
+          testWorkspaceRoots(),
+          new RunFileService(runId, testWorkspaceRoots()),
         ) as unknown as LatexMediaManagerFigureInternals;
         yield* manager.extractFiguresFromFiles(
           [createWorkspaceLocation(texPath, 'main.tex')],

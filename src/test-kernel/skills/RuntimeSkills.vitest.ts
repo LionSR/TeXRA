@@ -6,7 +6,7 @@ import { Effect } from 'effect';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { TraceEmitter } from '@agent/trace';
-import { processWorkspaceRoots } from '@platform/workspaceRoots';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import {
   ACTIVE_SKILLS_SNAPSHOT_MAX_SKILLS,
   MESSAGE_TYPES,
@@ -44,13 +44,13 @@ setupPlatform({ workspacePath: WORKSPACE_ROOT });
 afterEach(async () => {
   setRuntimeSkillSources([]);
   await Effect.runPromise(
-    processWorkspaceRoots().config.update(
+    testWorkspaceRoots().config.update(
       WorkspaceStateKey.DISABLED_SKILLS,
       undefined,
     ),
   );
   await Effect.runPromise(
-    processWorkspaceRoots().config.update(
+    testWorkspaceRoots().config.update(
       WorkspaceStateKey.DISABLED_SKILL_SOURCES,
       undefined,
     ),
@@ -98,7 +98,7 @@ describe('runtime skills', () => {
 
     const result = await loadRuntimeSkillCatalog(
       WORKSPACE_ROOT,
-      processWorkspaceRoots(),
+      testWorkspaceRoots(),
     );
 
     expect(result.catalog).toContain(
@@ -132,7 +132,7 @@ describe('runtime skills', () => {
 
     const result = await loadRuntimeSkillCatalog(
       WORKSPACE_ROOT,
-      processWorkspaceRoots(),
+      testWorkspaceRoots(),
     );
 
     expect(result.skills).toStrictEqual([
@@ -175,13 +175,11 @@ describe('runtime skills', () => {
         { scope: 'project', path: projectRoot },
         { scope: 'user', path: userRoot },
       ]);
-      await Effect.runPromise(
-        processWorkspaceRoots().config.update(key, value),
-      );
+      await Effect.runPromise(testWorkspaceRoots().config.update(key, value));
 
       const result = await loadRuntimeSkillCatalog(
         WORKSPACE_ROOT,
-        processWorkspaceRoots(),
+        testWorkspaceRoots(),
       );
 
       expect(result.skills.map((skill) => skill.name)).toStrictEqual(expected);
@@ -206,7 +204,7 @@ describe('runtime skills', () => {
 
     const result = await loadRuntimeSkillCatalog(
       WORKSPACE_ROOT,
-      processWorkspaceRoots(),
+      testWorkspaceRoots(),
     );
     const catalogNames = catalogSkillNames(result.catalog);
     const snapshotNames = result.skills.map((skill) => skill.name);

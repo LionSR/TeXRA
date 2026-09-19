@@ -8,7 +8,7 @@ import { beforeEach, describe, expect } from 'vitest';
 import { getRunRecords } from '@agent/storage';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { ChatExportController } from '@controllers/progressView/ChatExportController';
-import { processWorkspaceRoots } from '@platform/workspaceRoots';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { MemoryStateStore } from '@platform/defaults/memoryState';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import {
@@ -99,7 +99,7 @@ describe('ChatExportController.exportAsHtml', () => {
 
   beforeEach(async () => {
     await installStoragePlatform();
-    session = createTestSession({ roots: processWorkspaceRoots() });
+    session = createTestSession({ roots: testWorkspaceRoots() });
     controller = new ChatExportController({
       latexPreamble: '',
       session,
@@ -171,7 +171,7 @@ describe('ChatExportController.buildExportInput', () => {
 
   beforeEach(async () => {
     await installStoragePlatform();
-    session = createTestSession({ roots: processWorkspaceRoots() });
+    session = createTestSession({ roots: testWorkspaceRoots() });
     controller = new ChatExportController({
       latexPreamble: '',
       session,

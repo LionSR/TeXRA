@@ -1,5 +1,6 @@
 // Test composition imports
 import '@test/support/sessionGraphTestSetup';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 
 /* eslint-disable import/order -- Vitest mocks must be declared before importing the runtime under test. */
 
@@ -292,9 +293,11 @@ describe('CLI history runtime', () => {
 
   beforeEach(async () => {
     const { initializeDefaultSession, teardownDefaultSession } =
-      await import('@agent/runtime/SessionHandle');
+      await import('@agent/runtime/sessionGraph');
     await Effect.runPromise(teardownDefaultSession());
-    await Effect.runPromise(initializeDefaultSession({}));
+    await Effect.runPromise(
+      initializeDefaultSession({ roots: testWorkspaceRoots() }),
+    );
     vi.clearAllMocks();
     const host = installedHost();
     vi.mocked(initCliPlatform).mockReturnValue(

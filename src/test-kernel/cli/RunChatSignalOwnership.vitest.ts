@@ -1,5 +1,6 @@
 // Node imports
 import { createRequire } from 'node:module';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 
 // Third-party imports
 import { Effect } from 'effect';
@@ -268,7 +269,9 @@ describe('runChat signal ownership wiring', () => {
     // The init opens the process session over the roots it installed; here
     // the suite opens it over the fake host's roots, once per test.
     await Effect.runPromise(teardownDefaultSession());
-    const session = await Effect.runPromise(initializeDefaultSession({}));
+    const session = await Effect.runPromise(
+      initializeDefaultSession({ roots: testWorkspaceRoots() }),
+    );
     // The init hands back the services the composition root holds; the fake
     // host installed above owns those stores here.
     const cliServices = () => ({

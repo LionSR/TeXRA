@@ -11,14 +11,23 @@ beforeEach(() => {
 
 /** Fresh module instances per test (beforeEach resets the module registry). */
 async function importSessionRuntime() {
-  // The reset also emptied the fresh roots module a session reads at
-  // construction; reinstall the suite default into it.
+  // The reset also emptied the harness's roots holder, which is where these
+  // tests name the roots they open a session over; reinstall the suite
+  // default into it.
   const { installPlatform } = await import('@test/support/setupPlatform');
   await installPlatform();
   await import('@test/support/sessionGraphTestSetup');
   const sessionHandle = await import('@agent/runtime/SessionHandle');
-  const { tryDefaultSession } = await import('@agent/runtime/sessionGraph');
-  return { ...sessionHandle, tryDefaultSession };
+  const graph = await import('@agent/runtime/sessionGraph');
+  const { testWorkspaceRoots } =
+    await import('@test/support/testWorkspaceRoots');
+  return {
+    ...sessionHandle,
+    initializeDefaultSession: graph.initializeDefaultSession,
+    teardownDefaultSession: graph.teardownDefaultSession,
+    tryDefaultSession: graph.tryDefaultSession,
+    roots: testWorkspaceRoots(),
+  };
 }
 
 describe('default session lifecycle', () => {
@@ -30,6 +39,7 @@ describe('default session lifecycle', () => {
         initializeDefaultSession,
         teardownDefaultSession,
         tryDefaultSession,
+        roots,
       } = yield* Effect.promise(() => importSessionRuntime());
 
       expect(tryDefaultSession()).toBeUndefined();
@@ -38,7 +48,10 @@ describe('default session lifecycle', () => {
         kind: 'ephemeral',
         reason: 'default session lifecycle test',
       } as const;
-      const session = yield* initializeDefaultSession({ transcriptMode });
+      const session = yield* initializeDefaultSession({
+        roots,
+        transcriptMode,
+      });
       yield* Effect.gen(function* () {
         expect(tryDefaultSession()).toBe(session);
         expect(session.transcripts.mode).toEqual(transcriptMode);
@@ -46,7 +59,7 @@ describe('default session lifecycle', () => {
         // initialization dies (SessionHandle.ts:1403-1415), so the assertion
         // reads the exit and its die reason rather than `Effect.flip`.
         const exit = yield* Effect.exit(
-          initializeDefaultSession({ transcriptMode }),
+          initializeDefaultSession({ roots, transcriptMode }),
         );
         assert(Exit.isFailure(exit));
         const defect = exit.cause.reasons.find(Cause.isDieReason)?.defect;
@@ -56,12 +69,9 @@ describe('default session lifecycle', () => {
     }),
   );
 
-  it.live.each([
-    { label: 'implicit process roots', rootKind: 'implicit' },
-    { label: 'inherited explicit roots', rootKind: 'inherited' },
-  ] as const)(
-    'retains its opening $label until the owner closes it after a host swap',
-    ({ rootKind }) =>
+  it.live(
+    'retains the roots it was opened over until the owner closes it after a host swap',
+    () =>
       Effect.gen(function* () {
         const { initializeDefaultSession } = yield* Effect.promise(() =>
           importSessionRuntime(),
@@ -77,29 +87,27 @@ describe('default session lifecycle', () => {
         yield* Effect.promise(() =>
           installPlatform({ storagePath: originalStorage }),
         );
-        const processRoots = yield* Effect.promise(async () => {
-          const { processWorkspaceRoots } =
-            await import('@platform/workspaceRoots');
-          return processWorkspaceRoots();
+        const installedRoots = yield* Effect.promise(async () => {
+          const { testWorkspaceRoots } =
+            await import('@test/support/testWorkspaceRoots');
+          return testWorkspaceRoots();
         });
         const originalRoots = {
-          workspace: processRoots.workspace,
-          storage: processRoots.storage,
-          globalStorage: processRoots.globalStorage,
-          config: processRoots.config,
-          workspaceState: processRoots.workspaceState,
-          globalState: processRoots.globalState,
+          workspace: installedRoots.workspace,
+          storage: installedRoots.storage,
+          globalStorage: installedRoots.globalStorage,
+          config: installedRoots.config,
+          workspaceState: installedRoots.workspaceState,
+          globalState: installedRoots.globalState,
         } satisfies WorkspaceRoots;
-        const roots =
-          rootKind === 'inherited'
-            ? (Object.create(processRoots) as WorkspaceRoots)
-            : undefined;
-        if (roots) {
-          expect(Object.keys(roots)).toEqual([]);
-        }
+        // The opener may hand over a record whose slots are inherited rather
+        // than own: the session snapshots them structurally, so a later host
+        // swap cannot move the root its owner keys it by.
+        const roots = Object.create(installedRoots) as WorkspaceRoots;
+        expect(Object.keys(roots)).toEqual([]);
         const session = yield* initializeDefaultSession({
+          roots,
           transcriptMode: { kind: 'ephemeral', reason: 'root snapshot test' },
-          ...(roots && { roots }),
         });
         try {
           yield* Effect.promise(() =>
@@ -129,9 +137,11 @@ describe('default session lifecycle', () => {
         initializeDefaultSession,
         teardownDefaultSession,
         tryDefaultSession,
+        roots,
       } = yield* Effect.promise(() => importSessionRuntime());
 
       const first = yield* initializeDefaultSession({
+        roots,
         transcriptMode: { kind: 'ephemeral', reason: 'first activation' },
       });
       // `initializeDefaultSession` carries no error channel and a second
@@ -139,6 +149,7 @@ describe('default session lifecycle', () => {
       // reads the exit and its die reason rather than `Effect.flip`.
       const exit = yield* Effect.exit(
         initializeDefaultSession({
+          roots,
           transcriptMode: {
             kind: 'ephemeral',
             reason: 'replacement attempt',
@@ -158,6 +169,7 @@ describe('default session lifecycle', () => {
       expect(tryDefaultSession()).toBeUndefined();
 
       const second = yield* initializeDefaultSession({
+        roots,
         transcriptMode: { kind: 'ephemeral', reason: 'second activation' },
       });
       try {
@@ -168,10 +180,7 @@ describe('default session lifecycle', () => {
         const { closeSession } = yield* Effect.promise(
           () => import('@agent/runtime/sessionGraph'),
         );
-        const { processWorkspaceRoots } = yield* Effect.promise(
-          () => import('@platform/workspaceRoots'),
-        );
-        yield* closeSession(processWorkspaceRoots().storage);
+        yield* closeSession(roots.storage);
         expect(tryDefaultSession()).toBeUndefined();
       } finally {
         yield* teardownDefaultSession();

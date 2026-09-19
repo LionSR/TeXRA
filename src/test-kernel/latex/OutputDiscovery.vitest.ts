@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 import type { LatexRunDiscoveryPort } from '@latex/latexdiff/runDiscovery';
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import { setLogSink } from '@logger/logSink';
-import { processWorkspaceRoots } from '@platform/workspaceRoots';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import type { RunId } from '@shared/schemas';
 import { captureLogEntries } from '@test/support/logSinkCapture';
 import { installPlatform } from '@test/support/setupPlatform';
@@ -92,8 +92,8 @@ describe('discoverLatestRunOutputs', () => {
 
         const result = yield* discoverLatestRunOutputs(
           discovery,
-          processWorkspaceRoots().storage,
-          processWorkspaceRoots().workspace,
+          testWorkspaceRoots().storage,
+          testWorkspaceRoots().workspace,
           MATCHING_QUERY,
           'test',
         ).pipe(Effect.provide(nodePlatformLayer));
@@ -105,7 +105,7 @@ describe('discoverLatestRunOutputs', () => {
             .sort((a, b) => a - b),
         ).toEqual([0, 1]);
         expect(mocks.findRunDirUnder).toHaveBeenCalledWith(
-          processWorkspaceRoots().storage,
+          testWorkspaceRoots().storage,
           'exec-headless',
         );
       }),
@@ -123,8 +123,8 @@ describe('discoverLatestRunOutputs', () => {
 
         const result = yield* discoverLatestRunOutputs(
           discovery,
-          processWorkspaceRoots().storage,
-          processWorkspaceRoots().workspace,
+          testWorkspaceRoots().storage,
+          testWorkspaceRoots().workspace,
           MATCHING_QUERY,
           'test',
         ).pipe(Effect.provide(nodePlatformLayer));
@@ -148,8 +148,8 @@ describe('discoverLatestRunOutputs', () => {
 
         const result = yield* discoverLatestRunOutputs(
           discovery,
-          processWorkspaceRoots().storage,
-          processWorkspaceRoots().workspace,
+          testWorkspaceRoots().storage,
+          testWorkspaceRoots().workspace,
           MATCHING_QUERY,
           'test',
         ).pipe(Effect.provide(nodePlatformLayer));
@@ -170,8 +170,8 @@ describe('discoverLatestRunOutputs', () => {
         const failure = yield* Effect.flip(
           discoverLatestRunOutputs(
             discovery,
-            processWorkspaceRoots().storage,
-            processWorkspaceRoots().workspace,
+            testWorkspaceRoots().storage,
+            testWorkspaceRoots().workspace,
             MATCHING_QUERY,
             'test',
           ).pipe(Effect.provide(nodePlatformLayer)),
@@ -189,8 +189,8 @@ describe('outputDiscovery diagnostics', () => {
   const runScan = (): Effect.Effect<unknown> =>
     scanRunDirForOutputs(
       'abc123' as RunId,
-      processWorkspaceRoots().storage,
-      processWorkspaceRoots().workspace,
+      testWorkspaceRoots().storage,
+      testWorkspaceRoots().workspace,
       'paper.tex',
       undefined,
       'test',

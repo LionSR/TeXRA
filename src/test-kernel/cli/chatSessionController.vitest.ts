@@ -153,7 +153,7 @@ import {
 } from '@cli/chat/tui/state/sessionRunState';
 import { DisposableStore } from '@platform/disposable';
 import type { RecoveryContinuation } from '@platform/interfaces';
-import { processWorkspaceRoots } from '@platform/workspaceRoots';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import {
   aggregateId,
   RUN_OUTCOME,
@@ -357,7 +357,7 @@ function installSession(overrides: Record<string, unknown> = {}): void {
     getHandle: mocks.getRunHandle,
   };
   mocks.sessionStub.mockReturnValue({
-    roots: processWorkspaceRoots(),
+    roots: testWorkspaceRoots(),
     approvalPolicy: TEXRA_APPROVAL_POLICY_DEFAULT,
     interactions: {
       use: vi.fn(() => Effect.succeed(mocks.detachHostInteractions)),

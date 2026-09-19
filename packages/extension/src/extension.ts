@@ -90,10 +90,7 @@ import {
   type LanguageModelPort,
 } from '@platform/languageModel';
 import type { PlatformSecrets } from '@platform/secrets';
-import {
-  initProcessWorkspaceRoots,
-  type WorkspaceRoots,
-} from '@platform/workspaceRoots';
+import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
   createNodeWorkspaceRoots,
   initializeNodeRuntimeSkills,
@@ -297,7 +294,8 @@ async function initVscodePlatform(
     workspaceState,
     globalState,
   });
-  initProcessWorkspaceRoots(roots);
+  // The logger's process-wide debug-mode read, over this host's configuration.
+  logger.setDebugModeConfig(roots.config);
   processRuntime = runtime;
   return { secrets, runtime, auth, authReadiness, roots };
 }
@@ -704,6 +702,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
   // the runtime it was handed instead of reading the global back.
   const runtimeSession = await runtime.runPromise(
     initializeDefaultSession({
+      roots,
       responseTextProcessing: createTexraResponseTextProcessing(
         createAgentResponseTextConnector({ ...roots, secrets }, languageModel),
       ),

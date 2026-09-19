@@ -14,14 +14,12 @@ import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports
 import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
-import {
-  initializeDefaultSession,
-  type SessionHandle,
-} from '@agent/runtime/SessionHandle';
+import { type SessionHandle } from '@agent/runtime/SessionHandle';
+import { initializeDefaultSession } from '@agent/runtime/sessionGraph';
 import { closeSession } from '@agent/runtime/sessionGraph';
 import { appSignals } from '@eventBus/AppSignals';
 import { WorkspaceFs } from '@platform/rootedFs';
-import { processWorkspaceRoots } from '@platform/workspaceRoots';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import type { RequestDecision, RunId } from '@shared/schemas';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { installPlatform } from '@test/support/setupPlatform';
@@ -71,6 +69,7 @@ function installTestPlatform(): Promise<void> {
   }).then(async () => {
     session = await Effect.runPromise(
       initializeDefaultSession({
+        roots: testWorkspaceRoots(),
         transcriptMode: {
           kind: 'ephemeral',
           reason: 'accept files test session',
@@ -401,7 +400,7 @@ describe('accept_run_files progress events', () => {
     () =>
       Effect.gen(function* () {
         const projectRoots = {
-          ...processWorkspaceRoots(),
+          ...testWorkspaceRoots(),
           workspace: '/project',
           storage: '/project-storage',
         };

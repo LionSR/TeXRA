@@ -42,7 +42,7 @@ import {
   LanguageModel,
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
 } from '@platform/languageModel';
-import { processWorkspaceRoots } from '@platform/workspaceRoots';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import {
   AgentCategory,
   RUN_OUTCOME,
@@ -456,7 +456,7 @@ function agentRunTestLayer(init: LoopInit) {
             logger,
             runId: init.runId,
             runStageId: undefined,
-            config: processWorkspaceRoots().config,
+            config: testWorkspaceRoots().config,
           },
           { agentName: 'correct', agentCategory: AgentCategory.Workflow },
         ),

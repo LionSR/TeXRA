@@ -345,11 +345,11 @@ const localRules = {
         type: 'problem',
         docs: {
           description:
-            'Disallow initPlatform and initProcessWorkspaceRoots imports outside composition roots.',
+            'Disallow initPlatform imports outside composition roots.',
         },
         messages: {
           forbidden:
-            'initPlatform and initProcessWorkspaceRoots may only be imported by composition roots; elsewhere use platform() and take the workspace roots as data from the session, run or tool call that holds them.',
+            'initPlatform may only be imported by composition roots; elsewhere use platform() and take the workspace roots as data from the session, run or tool call that holds them.',
         },
         schema: [],
       },
@@ -367,8 +367,7 @@ const localRules = {
               return (
                 specifier.type === 'ImportSpecifier' &&
                 specifier.imported.type === 'Identifier' &&
-                (specifier.imported.name === 'initPlatform' ||
-                  specifier.imported.name === 'initProcessWorkspaceRoots')
+                specifier.imported.name === 'initPlatform'
               );
             });
 

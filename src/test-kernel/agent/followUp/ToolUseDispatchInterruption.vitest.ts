@@ -34,7 +34,7 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { UsageMonitor } from '@agent/runtime/UsageMonitor';
 import { TraceEmitter } from '@agent/trace';
 import type { Model, TurnResult } from '@llm/turn';
-import { processWorkspaceRoots } from '@platform/workspaceRoots';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import {
   AgentCategory,
   type RequestDecision,
@@ -254,7 +254,7 @@ function agentRunTestLayer(init: HarnessInit) {
             logger,
             runId: init.runId,
             runStageId: undefined,
-            config: processWorkspaceRoots().config,
+            config: testWorkspaceRoots().config,
           },
           { agentName: 'chat', agentCategory: AgentCategory.ToolUse },
         ),

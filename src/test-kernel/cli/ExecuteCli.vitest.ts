@@ -1,4 +1,5 @@
 import '@test/support/sessionGraphTestSetup';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { it } from '@effect/vitest';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 import { Deferred, Effect, Fiber } from 'effect';
@@ -58,9 +59,11 @@ async function installFreshDefaultSession(): Promise<void> {
   await installStoragePlatform();
   await import('@test/support/sessionGraphTestSetup');
   const { initializeDefaultSession, teardownDefaultSession } =
-    await import('@agent/runtime/SessionHandle');
+    await import('@agent/runtime/sessionGraph');
   await Effect.runPromise(teardownDefaultSession());
-  await Effect.runPromise(initializeDefaultSession({}));
+  await Effect.runPromise(
+    initializeDefaultSession({ roots: testWorkspaceRoots() }),
+  );
 }
 
 async function installStoragePlatform(): Promise<void> {

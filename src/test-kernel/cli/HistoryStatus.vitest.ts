@@ -1,4 +1,5 @@
 import '@test/support/sessionGraphTestSetup';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { Effect } from 'effect';
@@ -12,7 +13,7 @@ import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import {
   initializeDefaultSession,
   teardownDefaultSession,
-} from '@agent/runtime/SessionHandle';
+} from '@agent/runtime/sessionGraph';
 import {
   formatCliHistoryDetailsText,
   listResumableCliHistoryEntries,
@@ -54,7 +55,9 @@ setupPlatform(() => createTempDirPlatform('texra-history-status-', tempDirs));
 
 beforeEach(async () => {
   await Effect.runPromise(teardownDefaultSession());
-  await Effect.runPromise(initializeDefaultSession({}));
+  await Effect.runPromise(
+    initializeDefaultSession({ roots: testWorkspaceRoots() }),
+  );
 });
 
 const SNAPSHOT_RUNTIME = {

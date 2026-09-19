@@ -14,7 +14,7 @@ import {
 } from '@agent/implementations/flows/reflection/output/outputState';
 
 import { XmlOutputManager } from '@agent/implementations/flows/reflection/output/XmlOutputManager';
-import { processWorkspaceRoots } from '@platform/workspaceRoots';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import type { FileLocation, OutputFileInfo, RunId } from '@shared/schemas';
 import { installPlatform } from '@test/support/setupPlatform';
 import { fakePath } from '@test/support/FakePlatform';
@@ -72,9 +72,9 @@ function createXmlManager(
       outputFiles: options.outputFiles ?? [],
     } as unknown as AgentConfig,
     logger,
-    new RunFileService(RUN_ID, processWorkspaceRoots()),
+    new RunFileService(RUN_ID, testWorkspaceRoots()),
     options.outputState ?? createOutputState(),
-    processWorkspaceRoots().config,
+    testWorkspaceRoots().config,
   );
 }
 

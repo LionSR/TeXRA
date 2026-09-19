@@ -4,15 +4,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import { setLogSink, type LogEntry } from '@logger/logSink';
 import * as logger from '@logger/logUtils';
-import * as rootsAccess from '@platform/workspaceRoots';
-import type { WorkspaceRoots } from '@platform/workspaceRoots';
+import type { ConfigProvider } from '@platform/interfaces';
 
 const SECRET = 'sk-proj-redaction-example-1234567890abcdef';
 
 function enableDebugLogging(): void {
-  vi.spyOn(rootsAccess, 'tryProcessWorkspaceRoots').mockReturnValue({
-    config: { get: () => true },
-  } as unknown as WorkspaceRoots);
+  logger.setDebugModeConfig({ get: () => true } as unknown as ConfigProvider);
 }
 
 /** Install a capturing sink and return the entries it receives. */
@@ -30,13 +27,12 @@ function payloadOf(entry: LogEntry | undefined): string {
 describe('logUtils', () => {
   afterEach(() => {
     vi.restoreAllMocks();
+    logger.setDebugModeConfig(null);
     setLogSink(null);
   });
 
   it('keeps pre-platform error logging on the non-debug path', () => {
-    vi.spyOn(rootsAccess, 'tryProcessWorkspaceRoots').mockReturnValue(
-      undefined,
-    );
+    logger.setDebugModeConfig(null);
     const entries = captureEntries();
 
     expect(() =>
@@ -129,9 +125,7 @@ describe('logUtils', () => {
     expect(output).toContain('[redacted]');
     expect(output).not.toContain(SECRET);
 
-    vi.spyOn(rootsAccess, 'tryProcessWorkspaceRoots').mockReturnValue(
-      undefined,
-    );
+    logger.setDebugModeConfig(null);
     entries.length = 0;
     Effect.runSync(operation().pipe(Effect.provide(effectDiagnosticsLayer)));
     expect(entries).toHaveLength(1);

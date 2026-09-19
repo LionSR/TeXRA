@@ -12,11 +12,12 @@
  * the other session-scoped owners.
  *
  * A session is one per workspace storage root, built and held by the
- * process's session owner (the `Sessions` map behind `openSessionEffect`): the
- * extension and the CLI open one over the process roots, the desktop one
- * per project, the SDK one per platform. The default instance is installed
- * explicitly through {@link initializeDefaultSession} and inspected through
- * {@link tryDefaultSession}. There is no other way to reach these owners:
+ * process's session owner (the `Sessions` map behind `openSessionEffect` in
+ * `sessionGraph.ts`): the extension and the CLI open one over the roots their
+ * composition root built, the desktop one per project, the SDK one per
+ * platform. That module also owns the process-default session
+ * (`initializeDefaultSession` / `tryDefaultSession`). There is no other way to
+ * reach these owners:
  * the invariant is "no session-scoped mutable module export" (#7694) — a
  * run-scoped caller receives its session as data, never through a standalone
  * singleton import.
@@ -102,12 +103,7 @@ import {
 } from './HostInteractions';
 import { redactedForFact } from './loop/rows';
 import { runEventDraft } from './SessionEvents';
-import {
-  heldSessions,
-  openSessionEffect,
-  tryDefaultSession,
-  type SessionGraph,
-} from './sessionGraph';
+import { heldSessions, type SessionGraph } from './sessionGraph';
 import { WorkflowControlRegistry } from './workflowControlRegistry';
 import { createNeutralResponseTextProcessing } from './responseTextProcessing';
 import type { SessionApprovals } from './runApprovalQueue';
@@ -183,8 +179,14 @@ function draftedRun(events: readonly SessionEventDraft[]): RunId | null {
  * reads. The session co-constructs it.
  */
 export type SessionHandleInit = Partial<
-  Pick<SessionHandle, 'responseTextProcessing' | 'roots'>
+  Pick<SessionHandle, 'responseTextProcessing'>
 > & {
+  /**
+   * The workspace this session works on. Required: the opener is the one
+   * caller that knows which paper it opened, and there is no process-wide
+   * roots record to fall back to.
+   */
+  readonly roots: WorkspaceRoots;
   readonly interactions?: HostInteractions;
   readonly transcriptMode?: StreamLogStoreMode;
 };
@@ -326,7 +328,6 @@ export class SessionHandle {
   constructor(
     init: SessionHandleInit &
       Pick<SessionHandle, 'transcripts' | 'modelRetries'> & {
-        readonly roots: WorkspaceRoots;
         readonly graph: (session: SessionHandle) => SessionGraph;
       },
   ) {
@@ -1451,27 +1452,3 @@ export const settleLiveSessionRuns: Effect.Effect<void> = Effect.gen(
     }
   },
 ).pipe(Effect.withSpan('settleLiveSessionRuns'));
-
-/**
- * Open the process-default session, the session of the process roots, after
- * its transcript store is valid. Its owner holds it, as it holds every
- * session: {@link tryDefaultSession} reads it from there on each call, so no
- * second reference to it exists to go stale when the root is closed. A
- * second initialization while one is open is a lifecycle error and dies.
- */
-export function initializeDefaultSession(
-  init: SessionHandleInit,
-): Effect.Effect<SessionHandle, SessionOpenError> {
-  return Effect.suspend(() => {
-    if (tryDefaultSession()) {
-      throw new Error('The default session has already been initialized.');
-    }
-    return openSessionEffect(init);
-  });
-}
-
-/** Dispose the process-default session during host teardown; nothing to
- *  do when none is open. */
-export function teardownDefaultSession(): Effect.Effect<void> {
-  return Effect.suspend(() => tryDefaultSession()?.dispose() ?? Effect.void);
-}

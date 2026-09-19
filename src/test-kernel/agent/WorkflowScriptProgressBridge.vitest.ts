@@ -1,12 +1,11 @@
 import '@test/support/sessionGraphTestSetup';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { Deferred, Effect, Fiber } from 'effect';
 import { it } from '@effect/vitest';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
-import {
-  initializeDefaultSession,
-  type SessionHandle,
-} from '@agent/runtime/SessionHandle';
+import { type SessionHandle } from '@agent/runtime/SessionHandle';
+import { initializeDefaultSession } from '@agent/runtime/sessionGraph';
 import { closeSession } from '@agent/runtime/sessionGraph';
 import { TraceEmitter, type AgentEvent } from '@agent/trace';
 import { runPersistedWorkflowScript } from '@agent/workflowScript/checkpoint';
@@ -42,6 +41,7 @@ beforeEach(async () => {
   // be created after that root is in place and remain rooted there.
   session = await Effect.runPromise(
     initializeDefaultSession({
+      roots: testWorkspaceRoots(),
       transcriptMode: {
         kind: 'ephemeral',
         reason: 'workflow script progress bridge test session',

@@ -1,4 +1,5 @@
 import { it as effectIt } from '@effect/vitest';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 /** Completed conversation reads and task reads through the archive facade. */
 import { Effect, Layer, Stream, SubscriptionRef } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -29,10 +30,8 @@ import {
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
 import { loadChatExportInput as loadChatExportInputEffect } from '@agent/export/loadChatExportInput';
-import {
-  initializeDefaultSession,
-  type SessionHandle,
-} from '@agent/runtime/SessionHandle';
+import { type SessionHandle } from '@agent/runtime/SessionHandle';
+import { initializeDefaultSession } from '@agent/runtime/sessionGraph';
 import { resumeRun } from '@agent/runtime/resumeRun';
 import { closeSession } from '@agent/runtime/sessionGraph';
 import {
@@ -462,7 +461,9 @@ describe('completedRunArchive facade', () => {
 
         yield* Effect.promise(() => stampRun(runId));
         yield* closeTestSession(taskSession);
-        const session = yield* initializeDefaultSession({});
+        const session = yield* initializeDefaultSession({
+          roots: testWorkspaceRoots(),
+        });
         taskSession = session;
         publishTestRunStart(session, runId);
         yield* session.settlePublications();

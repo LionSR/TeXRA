@@ -32,9 +32,9 @@ vi.mock('@frontend/ui/errorHandlingUtils', async (original) => {
 import {
   initializeDefaultSession,
   teardownDefaultSession,
-} from '@agent/runtime/SessionHandle';
+} from '@agent/runtime/sessionGraph';
 import type { ProcessServices } from '@platform/processRuntime';
-import { processWorkspaceRoots } from '@platform/workspaceRoots';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { SettingsViewMessageHandler } from '@settingsView/SettingsViewMessageHandler';
 import { AGENT_SKILLS_CONFIG_KEY } from '@shared/schemas';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
@@ -52,7 +52,7 @@ beforeEach(async () => {
   await testRuntime().runPromise(teardownDefaultSession());
   await testRuntime().runPromise(
     initializeDefaultSession({
-      roots: processWorkspaceRoots(),
+      roots: testWorkspaceRoots(),
       transcriptMode: {
         kind: 'ephemeral',
         reason: 'settings workspace guard suite',

@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { TraceEmitter } from '@agent/trace';
 import { UsageMonitor } from '@agent/runtime/UsageMonitor';
-import { processWorkspaceRoots } from '@platform/workspaceRoots';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import {
   AgentCategory,
   AgentRunStateSnapshotSchema,
@@ -56,7 +56,7 @@ function createMonitorWithEvents() {
       logger,
       runId,
       runStageId: undefined,
-      config: processWorkspaceRoots().config,
+      config: testWorkspaceRoots().config,
     },
     { agentName: 'assistant', agentCategory: AgentCategory.ToolUse },
   );

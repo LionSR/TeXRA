@@ -7,7 +7,7 @@ import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
-import { processWorkspaceRoots } from '@platform/workspaceRoots';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import {
   aggregateId,
   emptyRunEndOutput,
@@ -99,7 +99,7 @@ describe('assembleTrace', () => {
   setupPlatform(() => createTempDirPlatform('texra-trace-', tempDirs));
 
   beforeEach(() => {
-    session = createTestSession({ roots: processWorkspaceRoots() });
+    session = createTestSession({ roots: testWorkspaceRoots() });
   });
 
   afterEach(async () => {

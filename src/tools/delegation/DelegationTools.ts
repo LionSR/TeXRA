@@ -55,6 +55,7 @@ import {
 import {
   assertWorkflowFilesExist,
   memoriesField,
+  rejectDisabledWorktreeDirectory,
   workingDirectoryField,
   withToolUseSubagentHandoffInstruction,
   rejectOversizedBibAttachments,
@@ -259,6 +260,14 @@ Git worktree support: resolved from the active workspace at runtime.`,
     const resumeAgent = this.resumeAgent;
     return Effect.gen(function* () {
       const call = requireDelegationParent('delegate_agent', yield* ToolCall);
+      // The `working_directory` opt-in, over this call's project: the schema
+      // parses the path, the session it runs on says whether worktrees are
+      // enabled for it.
+      const disabled = rejectDisabledWorktreeDirectory(
+        call.roots,
+        input.working_directory ?? undefined,
+      );
+      if (disabled) return disabled;
       // Resume path: execution_id is set
       if (input.execution_id) {
         return yield* resumeAgent(

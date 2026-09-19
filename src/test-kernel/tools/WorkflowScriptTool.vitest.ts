@@ -1,5 +1,6 @@
 /* eslint-disable import/order -- Vitest mocks must be declared before importing the module under test. */
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import * as nodePath from 'node:path';
 
 import { it } from '@effect/vitest';
@@ -13,10 +14,8 @@ import { fakePath } from '@test/support/FakePlatform';
 import { TraceEmitter } from '@agent/trace';
 import { deriveWorkflowScriptCheckpointId } from '@agent/workflowScript/checkpoint';
 import { getRunRecords } from '@agent/storage';
-import {
-  initializeDefaultSession,
-  type SessionHandle,
-} from '@agent/runtime/SessionHandle';
+import { type SessionHandle } from '@agent/runtime/SessionHandle';
+import { initializeDefaultSession } from '@agent/runtime/sessionGraph';
 import { closeSession } from '@agent/runtime/sessionGraph';
 import {
   AgentCategory,
@@ -307,6 +306,7 @@ beforeEach(async () => {
   // host through the per-test platform swap.
   session = await Effect.runPromise(
     initializeDefaultSession({
+      roots: testWorkspaceRoots(),
       transcriptMode: {
         kind: 'ephemeral',
         reason: 'workflow script tool test session',

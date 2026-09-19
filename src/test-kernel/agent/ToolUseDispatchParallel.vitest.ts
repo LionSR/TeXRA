@@ -62,7 +62,7 @@ import {
   type ModelOrigin,
   type TurnResult,
 } from '@llm/turn';
-import { processWorkspaceRoots } from '@platform/workspaceRoots';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { DatabaseWriteFailed } from '@shared/session/database';
 import {
   AgentCategory,
@@ -273,7 +273,7 @@ function agentRun(
         logger,
         runId,
         runStageId: undefined,
-        config: processWorkspaceRoots().config,
+        config: testWorkspaceRoots().config,
       },
       { agentName: config.agent, agentCategory: setting.agentCategory },
     ),

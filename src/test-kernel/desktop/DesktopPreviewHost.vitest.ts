@@ -58,9 +58,6 @@ async function loadDesktopPreviewHost(
   ),
 ): Promise<typeof import('@desktop/main/desktopPreviewHost')> {
   vi.resetModules();
-  const { initProcessWorkspaceRoots } =
-    await import('@platform/workspaceRoots');
-  initProcessWorkspaceRoots(createFakeWorkspaceRoots());
   mocks.doMock('@latex/texTools', () => ({ compileLatex2Pdf }));
   mocks.doMock('@latex/latexToolchain', () => ({
     hasLatexCompiler: checkToolInstalled,

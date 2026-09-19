@@ -17,7 +17,7 @@ import {
   type ConfigProvider,
   type StateStore,
 } from '@platform/interfaces';
-import { processWorkspaceRoots } from '@platform/workspaceRoots';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   BASH_APPROVAL_CONFIG_KEY,
@@ -111,7 +111,7 @@ function createSettingsFixture(overrides: SettingsFixtureOverrides = {}) {
     overrides.session ??
     createTestSession({
       roots: {
-        ...processWorkspaceRoots(),
+        ...testWorkspaceRoots(),
         storage: '/workspace/settings-ipc/storage',
         config,
         workspaceState,

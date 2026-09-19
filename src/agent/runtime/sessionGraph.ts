@@ -19,11 +19,7 @@ import {
   type SubscriptionRef,
 } from 'effect';
 import type { ProcessRuntime } from '@platform/processRuntime';
-import {
-  processWorkspaceRoots,
-  tryProcessWorkspaceRoots,
-  type WorkspaceRoots,
-} from '@platform/workspaceRoots';
+import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type {
   AggregateId,
   CommitOrdinal,
@@ -161,11 +157,6 @@ export interface SessionGraph {
   readonly close: () => Effect.Effect<void>;
 }
 
-/** What opening a session supplies, with its roots resolved. */
-export type SessionOpen = SessionHandleInit & {
-  readonly roots: WorkspaceRoots;
-};
-
 /** The process's session owner, as `installProcessRuntime` installs it. */
 export interface SessionOwner {
   /** The `ManagedRuntime` the owner's programs run on, as the composition
@@ -177,7 +168,7 @@ export interface SessionOwner {
    *  or built now over what `open` supplies. The root's entry is registered
    *  with the owner before this Effect's first yield, so a close issued
    *  after it finds the session and waits for its build. */
-  open(open: SessionOpen): Effect.Effect<SessionHandle, SessionOpenError>;
+  open(open: SessionHandleInit): Effect.Effect<SessionHandle, SessionOpenError>;
   /** The session open on a storage root, if one is; never builds one, and
    *  does not see an entry still building or already releasing. */
   current(root: string): SessionHandle | undefined;
@@ -246,7 +237,7 @@ function sessions(): SessionOwner {
 export function openSessionEffect(
   init: SessionHandleInit,
 ): Effect.Effect<SessionHandle, SessionOpenError> {
-  return Effect.suspend(() => sessions().open(resolveRoots(init)));
+  return Effect.suspend(() => sessions().open(snapshotRoots(init)));
 }
 
 /**
@@ -267,11 +258,11 @@ export function heldSessions(): readonly SessionHandle[] {
   return owner?.held() ?? [];
 }
 
-function resolveRoots(init: SessionHandleInit): SessionOpen {
-  // The owner keys and releases a session by this root, so neither a live
-  // process-root view nor a caller's mutable root record may change it later.
-  // Read the structural fields so inherited or non-enumerable getters work too.
-  const roots = init.roots ?? processWorkspaceRoots();
+function snapshotRoots(init: SessionHandleInit): SessionHandleInit {
+  // The owner keys and releases a session by this root, so a caller's mutable
+  // or inherited root record may not change it later. Read the structural
+  // fields so inherited or non-enumerable getters work too.
+  const roots = init.roots;
   return {
     ...init,
     roots: {
@@ -286,15 +277,58 @@ function resolveRoots(init: SessionHandleInit): SessionOpen {
 }
 
 /**
+ * The storage root {@link initializeDefaultSession} opened this process's
+ * default session over, so {@link tryDefaultSession} names it without a
+ * process-wide roots record. A composition fact of the same kind as
+ * {@link owner}, which is why it sits beside it.
+ */
+let defaultSessionRoot: string | undefined;
+
+/**
  * Inspect whether the host has installed its process-default session: the
- * session open on the process roots' storage root, if one is, read through
- * its owner on every call rather than from a cached reference, so a root
- * closed through the owner has no default session until one is opened
- * again. No owner, or no process roots yet, no session.
+ * session open on the root {@link initializeDefaultSession} named, if one
+ * still is, read through its owner on every call rather than from a cached
+ * reference, so a root closed through the owner has no default session until
+ * one is opened again. No owner, or no default opened yet, no session.
  */
 export function tryDefaultSession(): SessionHandle | undefined {
-  const roots = tryProcessWorkspaceRoots();
-  return roots && owner?.current(roots.storage);
+  return defaultSessionRoot === undefined
+    ? undefined
+    : owner?.current(defaultSessionRoot);
+}
+
+/**
+ * Open the process-default session, over the roots the host's composition
+ * root built. Its owner holds it, as it holds every session:
+ * {@link tryDefaultSession} reads it from there on each call, so no second
+ * reference to it exists to go stale when the root is closed. A second
+ * initialization while one is open is a lifecycle error and dies.
+ */
+export function initializeDefaultSession(
+  init: SessionHandleInit,
+): Effect.Effect<SessionHandle, SessionOpenError> {
+  return Effect.suspend(() => {
+    if (tryDefaultSession()) {
+      throw new Error('The default session has already been initialized.');
+    }
+    return openSessionEffect(init).pipe(
+      Effect.tap((session) =>
+        Effect.sync(() => {
+          defaultSessionRoot = session.roots.storage;
+        }),
+      ),
+    );
+  });
+}
+
+/** Dispose the process-default session during host teardown; nothing to
+ *  do when none is open. */
+export function teardownDefaultSession(): Effect.Effect<void> {
+  return Effect.suspend(() => {
+    const session = tryDefaultSession();
+    defaultSessionRoot = undefined;
+    return session?.dispose() ?? Effect.void;
+  });
 }
 
 /**

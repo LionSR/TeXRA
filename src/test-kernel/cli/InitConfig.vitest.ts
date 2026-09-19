@@ -1,5 +1,6 @@
 // Node imports
 import { readFile as nodeReadFile, writeFile } from 'node:fs/promises';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import path, { join } from 'node:path';
 
 // Third-party imports
@@ -19,10 +20,7 @@ import { workspaceTexraConfigPath } from '@platform/defaults/nodeStorage';
 import { FakeConfigProvider } from '@test/support/FakePlatform';
 import { installPlatform } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
-import {
-  processSettingsStores,
-  readSettingFrom,
-} from '@utils/config/platformSettings';
+import { readSettingFrom } from '@utils/config/platformSettings';
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs/promises')>();
@@ -76,24 +74,21 @@ describe('setWorkspaceCliChatAgent', () => {
       },
     );
     const chatSection = () =>
-      readSettingFrom(processSettingsStores(), 'texra.chat');
+      readSettingFrom(testWorkspaceRoots(), 'texra.chat');
 
     await Effect.runPromise(
-      setWorkspaceCliChatAgent(
-        processSettingsStores(),
-        'builtInToolUse:review',
-      ),
+      setWorkspaceCliChatAgent(testWorkspaceRoots(), 'builtInToolUse:review'),
     );
     expect(chatSection()).toEqual({
       agent: 'builtInToolUse:review',
       model: 'deepseekT',
     });
-    expect(readSettingFrom(processSettingsStores(), 'texra.model')).toBe(
+    expect(readSettingFrom(testWorkspaceRoots(), 'texra.model')).toBe(
       'deepseekT',
     );
 
     await Effect.runPromise(
-      setWorkspaceCliChatAgent(processSettingsStores(), undefined),
+      setWorkspaceCliChatAgent(testWorkspaceRoots(), undefined),
     );
     expect(chatSection()).toEqual({ model: 'deepseekT' });
   });
@@ -102,9 +97,7 @@ describe('setWorkspaceCliChatAgent', () => {
     await installPlatform({}, { config: new FakeConfigProvider() });
 
     await expect(
-      Effect.runPromise(
-        setWorkspaceCliChatAgent(processSettingsStores(), '   '),
-      ),
+      Effect.runPromise(setWorkspaceCliChatAgent(testWorkspaceRoots(), '   ')),
     ).rejects.toThrow('must not be empty');
   });
 });

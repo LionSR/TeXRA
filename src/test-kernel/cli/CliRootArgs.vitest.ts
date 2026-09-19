@@ -1,4 +1,5 @@
 import '@test/support/defaultSessionTestSetup';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -87,7 +88,9 @@ async function initNodeBackedPlatform(options: {
     storagePath: options.storagePath,
     globalStoragePath: options.globalStoragePath,
   });
-  await Effect.runPromise(initializeDefaultSession({}));
+  await Effect.runPromise(
+    initializeDefaultSession({ roots: testWorkspaceRoots() }),
+  );
 }
 
 async function initDefaultFakePlatform(): Promise<void> {

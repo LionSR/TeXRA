@@ -1,4 +1,5 @@
 import '@test/support/sessionGraphTestSetup';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 
 // Node imports
 import * as path from 'node:path';
@@ -12,7 +13,7 @@ import { afterEach, beforeEach, describe, expect, vi, type Mock } from 'vitest';
 
 // Local imports
 import type { HostInteractions } from '@agent/runtime/HostInteractions';
-import { initializeDefaultSession } from '@agent/runtime/SessionHandle';
+import { initializeDefaultSession } from '@agent/runtime/sessionGraph';
 import { closeSession } from '@agent/runtime/sessionGraph';
 import type { RunId } from '@shared/schemas';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
@@ -43,6 +44,7 @@ describe('OpenPdfTool', () => {
   beforeEach(async () => {
     const session = await Effect.runPromise(
       initializeDefaultSession({
+        roots: testWorkspaceRoots(),
         transcriptMode: { kind: 'ephemeral', reason: 'OpenPdfTool test' },
       }),
     );

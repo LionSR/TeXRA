@@ -32,14 +32,12 @@ import {
   disposeProcessRuntime,
   installProcessRuntime,
 } from '@controllers/session/sessionLayer';
+import { setDebugModeConfig } from '@logger/logUtils';
 import { initPlatform, tryPlatform, type Platform } from '@platform/platform';
 import type { AgentResumePort } from '@platform/interfaces';
 import type { LanguageModelPort } from '@platform/languageModel';
 import type { PlatformSecrets } from '@platform/secrets';
-import {
-  initProcessWorkspaceRoots,
-  type WorkspaceRoots,
-} from '@platform/workspaceRoots';
+import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { nodeProcesses } from '@platform/defaults/nodeProcesses';
 import { directLeanLanguageServices } from '@tools/lean/direct/directLspAdapter';
 import {
@@ -203,7 +201,9 @@ export function composeProcess(platform: AgentPlatform): ProcessHold {
     // The process-wide installations, once for the life of the process.
     if (!active) {
       initPlatform(platform);
-      initProcessWorkspaceRoots(platform.roots);
+      // The logger's process-wide debug-mode read, over this embedder's
+      // configuration.
+      setDebugModeConfig(platform.roots.config);
     }
     // The identity stays a pending read -- the package's composition root is
     // synchronous, so it hands the program over rather than a value: the

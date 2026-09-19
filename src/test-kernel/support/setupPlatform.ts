@@ -326,7 +326,8 @@ export function fakeProcessServices(): FakeProcessServicesLayer {
 export async function installFakeHost(host: FakeHost): Promise<void> {
   const [
     { initPlatform },
-    { initProcessWorkspaceRoots },
+    { initTestWorkspaceRoots },
+    { setDebugModeConfig },
     { initTestProcessRuntime, tryTestProcessRuntime },
     { Layer, ManagedRuntime },
     { testHttpClientLayer },
@@ -338,7 +339,8 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     { SupabaseAuth },
   ] = await Promise.all([
     import('@platform/platform'),
-    import('@platform/workspaceRoots'),
+    import('@test/support/testWorkspaceRoots'),
+    import('@logger/logUtils'),
     import('./testProcessRuntime'),
     import('effect'),
     import('@test/support/fetchTestUtils'),
@@ -385,7 +387,10 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     ),
   );
   initPlatform(host.platform);
-  initProcessWorkspaceRoots(host.roots);
+  initTestWorkspaceRoots(host.roots);
+  // The logger's process-wide debug-mode read, over this fake host's
+  // configuration, as a composition root installs it.
+  setDebugModeConfig(host.roots.config);
   // A bare process runtime for the Promise-facing boundaries that run
   // fibers (the loopback sign-in). The session graph family is not installed
   // here: `sessionGraphTestSetup` loads the graph's production modules, and

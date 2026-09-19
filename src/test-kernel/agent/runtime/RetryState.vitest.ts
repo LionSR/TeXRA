@@ -62,7 +62,7 @@ import {
   LanguageModel,
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
 } from '@platform/languageModel';
-import { processWorkspaceRoots } from '@platform/workspaceRoots';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import {
   AgentCategory,
   AgentRunStateSnapshotSchema,
@@ -299,7 +299,7 @@ function agentRun(
         logger,
         runId,
         runStageId: undefined,
-        config: processWorkspaceRoots().config,
+        config: testWorkspaceRoots().config,
       },
       { agentName: CONFIG.agent, agentCategory: SETTING.agentCategory },
     ),

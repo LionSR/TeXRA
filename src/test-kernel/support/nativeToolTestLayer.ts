@@ -5,7 +5,7 @@ import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
 import { Runs } from '@agent/runtime/runRegistry';
 import { ToolCall, type ToolCallShape } from '@agent/runtime/ToolCall';
 import { sessionFsLayer } from '@platform/rootedFs';
-import { processWorkspaceRoots } from '@platform/workspaceRoots';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { testRunRegistry } from '@test/support/runHandleFixtures';
 
@@ -13,7 +13,7 @@ import { testRunRegistry } from '@test/support/runHandleFixtures';
  *  answers for. The call's `Runs` are its run's session's; a call outside any
  *  run gets a registry over an empty fold, as it tracks no run. */
 export function nativeToolTestLayer(options: Partial<ToolCallShape> = {}) {
-  const roots = options.roots ?? processWorkspaceRoots();
+  const roots = options.roots ?? testWorkspaceRoots();
   return Layer.mergeAll(
     Layer.effectContext(testRuntime().contextEffect),
     // The call's rooted filesystems, from the same roots it is given.

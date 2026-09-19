@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect } from 'vitest';
 import { WorkPlanState } from '@agent/core/state/AgentWorkspaceState';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { platform, type Platform } from '@platform/platform';
-import { processWorkspaceRoots } from '@platform/workspaceRoots';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { planSummaryLine, GOAL_FEATURE_FLAG_KEY } from '@shared/schemas';
 import type { Goal, Plan, RequestDecision, RunId } from '@shared/schemas';
 import { testRuntime } from '@test/support/testProcessRuntime';
@@ -359,7 +359,7 @@ describe('PlanTool — update (plan approval)', () => {
           try {
             expect(permission.goalEnabled).toBe(true);
 
-            (processWorkspaceRoots().config as FakeConfigProvider).set(
+            (testWorkspaceRoots().config as FakeConfigProvider).set(
               GOAL_FEATURE_FLAG_KEY,
               false,
             );

@@ -1,6 +1,5 @@
 // Local imports
 import type { ConfigProvider } from '@platform/interfaces';
-import { tryProcessWorkspaceRoots } from '@platform/workspaceRoots';
 
 /**
  * Read a configuration path over an explicit provider: the configuration of
@@ -32,22 +31,4 @@ export function readConfig<T>(
   defaultValue?: T,
 ): T {
   return config.get<T>(path, defaultValue as T);
-}
-
-/**
- * Read configuration for an explicitly pre-initialization caller, over the
- * process roots the composition root installed. A logger write can precede
- * any session, so there is no caller to take a
- * configuration from here; a process whose roots are not installed yet reads
- * the caller's default. Keep this exception narrow: ordinary product paths
- * must read through {@link readConfig} so an initialization-order defect
- * remains observable.
- */
-export function getConfigBeforePlatformInit<T>(
-  path: string,
-  defaultValue: T,
-): T {
-  return (
-    tryProcessWorkspaceRoots()?.config.get(path, defaultValue) ?? defaultValue
-  );
 }

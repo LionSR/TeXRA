@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import { setLogSink } from '@logger/logSink';
-import { processWorkspaceRoots } from '@platform/workspaceRoots';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { MemoryStateStore } from '@platform/defaults/memoryState';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import type { RunId, OutputFileInfo } from '@shared/schemas';
@@ -78,12 +78,12 @@ describe('LaTeXdiffService shadow output', () => {
     const { LaTeXdiffService } = yield* Effect.promise(
       () => import('@latex/latexdiff'),
     );
-    return yield* new LaTeXdiffService('test', processWorkspaceRoots()).runDiff(
+    return yield* new LaTeXdiffService('test', testWorkspaceRoots()).runDiff(
       createExternalLocation(path.join(sourceDir, 'base.tex')),
       createExternalLocation(path.join(sourceDir, 'revised.tex')),
       '_diff',
       undefined,
-      { cwd: processWorkspaceRoots().workspace, outputDirectory: shadowDir },
+      { cwd: testWorkspaceRoots().workspace, outputDirectory: shadowDir },
     );
   });
 
@@ -152,10 +152,10 @@ describe('LaTeXdiffService shadow output', () => {
           ),
         );
         const sessionRoots = {
-          ...processWorkspaceRoots(),
+          ...testWorkspaceRoots(),
           workspaceState: new MemoryStateStore(),
         };
-        yield* processWorkspaceRoots().workspaceState.update(
+        yield* testWorkspaceRoots().workspaceState.update(
           WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
           'coarse',
         );
@@ -244,11 +244,11 @@ describe('LaTeXdiffService shadow output', () => {
           1: [output(1, first)],
           2: [output(2, second, './paper.tex')],
         },
-        workspaceRoot: processWorkspaceRoots().workspace,
+        workspaceRoot: testWorkspaceRoots().workspace,
         generateBetweenRoundDiffs: true,
         latexdiff: {
           channel: 'test',
-          service: new LaTeXdiffService('test', processWorkspaceRoots()),
+          service: new LaTeXdiffService('test', testWorkspaceRoots()),
         },
         progress: { report: vi.fn() },
       });
@@ -375,7 +375,7 @@ describe('LaTeXdiffService shadow output', () => {
         });
 
         yield* new DiffFileProcessor(
-          processWorkspaceRoots().config,
+          testWorkspaceRoots().config,
         ).processDiffFile(createExternalLocation(diffPath));
 
         const diff = yield* Effect.promise(() => readFile(diffPath, 'utf8'));
@@ -403,7 +403,7 @@ describe('LaTeXdiffService shadow output', () => {
     await installNodeBackedPlatform(workspaceDir, storageRoot);
 
     const runId = 'run-1' as RunId;
-    const fileService = new RunFileService(runId, processWorkspaceRoots());
+    const fileService = new RunFileService(runId, testWorkspaceRoots());
     await Effect.runPromise(
       Effect.gen(function* () {
         yield* fileService.mirrorWorkspaceFile(
@@ -416,7 +416,7 @@ describe('LaTeXdiffService shadow output', () => {
     await expect(
       readFile(
         path.join(
-          runDirUnder(processWorkspaceRoots().storage, runId),
+          runDirUnder(testWorkspaceRoots().storage, runId),
           'diff',
           'r2',
           'refs',
@@ -445,13 +445,13 @@ describe('LaTeXdiffService logger channel', () => {
 
       const result = yield* new LaTeXdiffService(
         'pinnedLatexdiffChannel',
-        processWorkspaceRoots(),
+        testWorkspaceRoots(),
       ).runDiff(
         createExternalLocation('/missing/base.tex'),
         createExternalLocation('/missing/revised.tex'),
         '_diff',
         undefined,
-        { cwd: processWorkspaceRoots().workspace },
+        { cwd: testWorkspaceRoots().workspace },
       );
 
       expect(result.success).toBe(false);
