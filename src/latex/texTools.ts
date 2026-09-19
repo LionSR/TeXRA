@@ -69,21 +69,21 @@ class LatexCompilerNotRun extends Data.TaggedError('LatexCompilerNotRun')<{
   readonly cause: unknown;
 }> {}
 
+// `path.delimiter` throughout, so the joined value is ':'-separated on POSIX
+// and ';'-separated on Windows, which is what kpathsea parses on each.
 function buildKpathseaSearchPath(
   prependPaths: readonly string[],
   existingValue: string | undefined,
-  delimiter: string = path.delimiter,
 ): string | undefined {
+  const D = path.delimiter;
   const prefix = prependPaths
     .map((part) => part.trim())
     .filter((part) => part.length > 0)
-    .join(delimiter);
+    .join(D);
   if (!prefix) return undefined;
 
-  const value = existingValue
-    ? `${prefix}${delimiter}${existingValue}`
-    : prefix;
-  return value.endsWith(delimiter) ? value : `${value}${delimiter}`;
+  const value = existingValue ? `${prefix}${D}${existingValue}` : prefix;
+  return value.endsWith(D) ? value : `${value}${D}`;
 }
 
 /**
