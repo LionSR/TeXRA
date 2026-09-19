@@ -12,7 +12,7 @@ import { createLog } from '@logger/logUtils';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { readConfig } from '@utils/config/configUtils';
 import {
-  BinaryResolver,
+  resolveOptionalCommand,
   type ResolvedBinaryCommand,
 } from '@utils/system/binaryResolver';
 import { extendEnvPath } from '@utils/system/platformPaths';
@@ -89,12 +89,12 @@ function resolveSoxCommand(
       throw new Error(`Path must be absolute: ${configuredPath}`);
     }
     if (existsSync(configuredPath)) {
-      return BinaryResolver.resolveOptionalCommand('sox', [], {
+      return resolveOptionalCommand('sox', [], {
         resolvedPath: configuredPath,
       });
     }
   }
-  return BinaryResolver.resolveOptionalCommand('sox');
+  return resolveOptionalCommand('sox');
 }
 
 /**

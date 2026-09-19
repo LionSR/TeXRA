@@ -80,7 +80,7 @@ import {
   readGitEnvironmentSummary,
   readRecentCommits,
 } from '@utils/git/repositoryOverview';
-import { BinaryResolver } from '@utils/system/binaryResolver';
+import { findToolInCommonPaths } from '@utils/system/platformPaths';
 import {
   checkToolInstalled,
   detectPackageManager,
@@ -1448,7 +1448,7 @@ function createWindow(options: {
         },
         latexToolingController: new LatexToolingController({
           checkToolInstalled: (tool) => checkToolInstalled(tool, false),
-          findPath: (tool) => BinaryResolver.findPath(tool),
+          findPath: findToolInCommonPaths,
           detectPackageManager,
           getPlatform: () => normalizePlatform(process.platform),
           // Extension hosting is deliberately unavailable in TeXRA Desktop.

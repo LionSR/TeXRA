@@ -47,7 +47,7 @@ import {
 import { SetupPlatform } from '@tools/setup/platform';
 import { ZOTERO_PORT_KEY } from '@tools/zotero/bbtClient';
 import { readConfig } from '@utils/config/configUtils';
-import { BinaryResolver } from '@utils/system/binaryResolver';
+import { findToolInCommonPaths } from '@utils/system/platformPaths';
 import { IS_WINDOWS } from '@utils/system/platformPaths';
 import { isWSL } from '@utils/system/wslDetect';
 import {
@@ -586,7 +586,7 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
           const setup = yield* SetupPlatform;
           const extensionAvailable =
             setup.extensions?.isInstalled(LEAN4_EXTENSION_ID) ?? false;
-          const lakeAvailable = BinaryResolver.findPath('lake') !== null;
+          const lakeAvailable = findToolInCommonPaths('lake') !== null;
           const requiresExtension = getProcessSettingHost() === 'vscode';
           return { extensionAvailable, lakeAvailable, requiresExtension };
         }),
