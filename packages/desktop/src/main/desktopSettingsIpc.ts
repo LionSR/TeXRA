@@ -154,8 +154,10 @@ export function createDesktopSettingsIpc(
     );
   };
   // The memory controller's prompts are the window's own dialogs; a window
-  // that has gone away rejects them, and that reaches the controller as
-  // `PromptFailed` rather than as an unknown rejection.
+  // that has gone away rejects them, and that reaches the controller as a
+  // typed failure rather than as an unknown rejection — `PromptFailed` for
+  // the confirmation, and the notification member's own tag for the warning
+  // it is.
   const memoryController = new SettingsMemoryController({
     prompt: {
       confirm: (message, promptOptions) =>
@@ -171,19 +173,7 @@ export function createDesktopSettingsIpc(
             }),
         }),
       warning: (message) =>
-        options.ui.showInfoMessage(message).pipe(
-          Effect.map(() => undefined),
-          Effect.catchTag('NotificationFailed', (failure) =>
-            Effect.fail(
-              new PromptFailed({
-                reason: 'host-unavailable',
-                member: 'warning',
-                message: 'The desktop window would not show the warning.',
-                cause: failure.cause,
-              }),
-            ),
-          ),
-        ),
+        options.ui.showInfoMessage(message).pipe(Effect.map(() => undefined)),
     },
   });
   const modelSelectionController =

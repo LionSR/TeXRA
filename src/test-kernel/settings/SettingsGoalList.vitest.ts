@@ -69,7 +69,10 @@ async function expectSendGoalListFailure(
     testRuntime().runPromise(createHandler().sendGoalList(webview)),
   ).resolves.toBeUndefined();
 
-  expect(showErrorMessage).toHaveBeenCalledWith(expectedError);
+  // The message, not the overload: the host passes VS Code's explicit
+  // `MessageOptions` slot on every path now, and which overload it picks is
+  // not what this test is about.
+  expect(showErrorMessage.mock.calls[0]?.[0]).toBe(expectedError);
 }
 
 describe('settings goal list', () => {

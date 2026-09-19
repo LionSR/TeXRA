@@ -53,7 +53,7 @@ import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { openFinalOutputIfAvailable } from '@frontend/agents/finalOutputOpener';
 import { runSignInCommand } from '@frontend/auth/signInCommand';
 import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
-import { VscodeMessageHost } from '@frontend/hosts/VscodeMessageHost';
+import { VscodeUiHost } from '@frontend/hosts/VscodeUiHost';
 import { chooseTeamAvailabilityViaDialog } from '@frontend/ui/dialogs';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { ExternalOpenFailed } from '@hosts/uiHosts';
@@ -198,7 +198,7 @@ function runCommand<T = void>(
 
 /** The typed notification surface the run-action ports, the launch host, and
  *  the transcript export ports take. */
-const messages = new VscodeMessageHost();
+const messages = new VscodeUiHost();
 
 export function createExtensionHostRequests(
   options: ExtensionHostRequestsOptions,

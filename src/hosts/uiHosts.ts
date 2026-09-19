@@ -71,37 +71,44 @@ export interface ExternalOpener {
 }
 
 /**
- * Why a prompt never reached the user.
+ * Why a confirmation or an input box never reached the user.
  *
  * Read off what the implementations raise, and nothing else: the desktop's
  * `dialog.showMessageBox(window, …)` rejects once the window it anchors to is
- * gone (`host-unavailable`), and VS Code's `window.show*Message` /
- * `showInputBox` reject when the host's own dialog machinery faults
- * (`presentation-failed`).
+ * gone (`host-unavailable`), and VS Code's `showInputBox` rejects when the
+ * host's own dialog machinery faults (`presentation-failed`).
  *
- * A user who dismisses a prompt is **not** a failure: `info`/`warning`/
- * `error`/`input` answer `undefined` and `confirm` answers `false`, exactly as
- * they did before this port was typed. Neither is an interruption — a fiber
- * interrupted while a prompt is open dismisses or detaches from the wait and
- * the interruption propagates, so no caller reads it as a host fault.
+ * The message members answer to {@link NotificationFailed} instead: a message
+ * the host would not show is the same fault whether or not it carried buttons,
+ * so there is one tag for it rather than one per shape. This tag is what is
+ * left — the two members whose dialog is not a `show*Message` call on any
+ * host.
+ *
+ * A user who dismisses a prompt is **not** a failure: `input` answers
+ * `undefined` and `confirm` answers `false`, exactly as they did before this
+ * port was typed. Neither is an interruption — a fiber interrupted while a
+ * prompt is open dismisses or detaches from the wait and the interruption
+ * propagates, so no caller reads it as a host fault.
  */
 export class PromptFailed extends Data.TaggedError('PromptFailed')<{
   readonly reason: 'host-unavailable' | 'presentation-failed';
   /** The port member that could not present, for the caller's own report. */
-  readonly member: 'info' | 'warning' | 'error' | 'confirm' | 'input';
+  readonly member: 'confirm' | 'input';
   readonly message: string;
   readonly cause?: unknown;
 }> {}
 
 /**
- * A notification never reached the user: VS Code's `window.show*Message` or
- * the desktop's `dialog.showMessageBox` rejected, which they do only when the
+ * A message never reached the user: VS Code's `window.show*Message` or the
+ * desktop's `dialog.showMessageBox` rejected, which they do only when the
  * host's own dialog machinery faults or the window a box is anchored to is
- * already gone. A user who ignores a notification is not a failure — these
- * members answer nothing.
+ * already gone. A user who ignores a message, or dismisses one that offered
+ * buttons, is not a failure — that is an answer, or the absence of one.
  *
- * This is the one tag every {@link MessageHost} member fails with, so a
- * caller matches `NotificationFailed` rather than catching `unknown`.
+ * This is the one tag both message surfaces fail with: every
+ * {@link MessageHost} member and {@link PromptHost}'s `info`/`warning`/
+ * `error`. The two shapes are the same host call with and without items, so
+ * they raise the same tag and `member` names the call rather than the shape.
  * `message` is the rejection's own text, so it survives being shown through a
  * reporting surface that renders only the message.
  */
@@ -166,25 +173,30 @@ export interface PromptInputOptions {
  * and a text input.
  *
  * Every member is an `Effect`, so a host that could not present reaches the
- * caller as {@link PromptFailed} rather than as `unknown`, and interrupting
- * the fiber that awaits a prompt dismisses it where the host has a
- * cancellation channel (VS Code's input box) and detaches from it where it
+ * caller through the failure channel rather than as `unknown`, and
+ * interrupting the fiber that awaits a prompt dismisses it where the host has
+ * a cancellation channel (VS Code's input box) and detaches from it where it
  * has none (native message boxes). The user's own answer — a dismissal
  * included — is a value, never an error.
+ *
+ * `info`/`warning`/`error` are {@link MessageHost}'s members with items and an
+ * answer, so they fail with {@link NotificationFailed}, the same tag that
+ * surface raises; `confirm` and `input` open a dialog that is not a
+ * `show*Message` call on any host and keep {@link PromptFailed}.
  */
 export interface PromptHost {
   info<T extends string = string>(
     message: string,
     options?: PromptMessageOptions<T>,
-  ): Effect.Effect<T | undefined, PromptFailed>;
+  ): Effect.Effect<T | undefined, NotificationFailed>;
   warning<T extends string = string>(
     message: string,
     options?: PromptMessageOptions<T>,
-  ): Effect.Effect<T | undefined, PromptFailed>;
+  ): Effect.Effect<T | undefined, NotificationFailed>;
   error<T extends string = string>(
     message: string,
     options?: PromptMessageOptions<T>,
-  ): Effect.Effect<T | undefined, PromptFailed>;
+  ): Effect.Effect<T | undefined, NotificationFailed>;
   confirm(
     message: string,
     options: PromptConfirmOptions,

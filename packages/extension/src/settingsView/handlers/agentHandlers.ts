@@ -34,7 +34,7 @@ import type { SettingsAgentCatalogController } from '@controllers/settingsView/S
 import { withAgentCatalogAuthRefreshDeferred } from '@frontend/auth/agentCatalogRefreshScope';
 import { runSignInCommand } from '@frontend/auth/signInCommand';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
-import { VscodeMessageHost } from '@frontend/hosts/VscodeMessageHost';
+import { VscodeUiHost } from '@frontend/hosts/VscodeUiHost';
 import {
   chooseTeamAvailabilityViaDialog,
   confirmModal,
@@ -64,7 +64,7 @@ import {
 } from './SettingsHandlerContext';
 
 /** The typed notification surface this host's settings actions present on. */
-const messages = new VscodeMessageHost();
+const messages = new VscodeUiHost();
 
 /** Agent selection, directory, and team handler delegate. */
 export class AgentHandlers {

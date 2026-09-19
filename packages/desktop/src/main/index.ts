@@ -1323,7 +1323,9 @@ function createWindow(options: {
         // The window's dialogs behind the host-neutral prompt port. The
         // renderer overlay settles a prompt it could not deliver as "no
         // answer", so `input` has no failure of its own; the native dialogs
-        // reject once the window they anchor to is gone.
+        // reject once the window they anchor to is gone. `info` is the
+        // notification member with an answer nobody reads, so it is that
+        // program and its tag, not a re-wording of it.
         prompt: {
           input: (input) =>
             promptController.request({
@@ -1348,19 +1350,7 @@ function createWindow(options: {
                 }),
             }),
           info: (message) =>
-            showInfoMessage(message).pipe(
-              Effect.map(() => undefined),
-              Effect.catch((failure: NotificationFailed) =>
-                Effect.fail(
-                  new PromptFailed({
-                    reason: 'host-unavailable',
-                    member: 'info',
-                    message: 'The desktop window would not show the notice.',
-                    cause: failure.cause,
-                  }),
-                ),
-              ),
-            ),
+            showInfoMessage(message).pipe(Effect.map(() => undefined)),
         },
         externalOpener: {
           // The sign-in variant is the same program with the window's own
