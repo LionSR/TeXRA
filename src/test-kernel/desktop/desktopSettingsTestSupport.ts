@@ -32,7 +32,7 @@ export function createStubDesktopSettingsUiHost(
     openPath: () => Effect.void,
     revealRun: async () => 'revealed',
     getRunLabel: () => undefined,
-    promptForSecret: async () => undefined,
+    promptForSecret: () => Effect.succeed(undefined),
     openExternal: noOp,
     showInfoMessage: () => Effect.void,
     showErrorMessage: () => Effect.void,

@@ -147,7 +147,7 @@ interface DefaultDesktopAgentSettingsControllerOptions extends SettingsStatePort
     readonly promptText: (input: {
       title: string;
       prompt: string;
-    }) => Promise<string | undefined>;
+    }) => Effect.Effect<string | undefined>;
     /**
      * Confirm a destructive or overwriting action. Used by the custom-agent
      * delete and overwrite paths and by team deletion, which the extension
@@ -519,10 +519,12 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
       return;
     }
 
-    const name = await this.prompts.promptText({
-      title: `New ${templateAgentCategoryLabel(data.category)} agent`,
-      prompt: templateAgentNamePrompt(data.category),
-    });
+    const name = await this.runtime.runPromise(
+      this.prompts.promptText({
+        title: `New ${templateAgentCategoryLabel(data.category)} agent`,
+        prompt: templateAgentNamePrompt(data.category),
+      }),
+    );
     if (!name) return;
 
     const invalid = this.directoryController.validateTemplateName(name);
@@ -686,10 +688,12 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
   }
 
   private async saveAgentModePreset(): Promise<void> {
-    const name = await this.prompts.promptText({
-      title: 'Save agent team',
-      prompt: 'Name for the new team',
-    });
+    const name = await this.runtime.runPromise(
+      this.prompts.promptText({
+        title: 'Save agent team',
+        prompt: 'Name for the new team',
+      }),
+    );
     if (!name?.trim()) return;
     await this.runtime.runPromise(this.registry.loadAgents());
     const preset = await this.runtime.runPromise(

@@ -1327,13 +1327,11 @@ function createWindow(options: {
         // reject once the window they anchor to is gone.
         prompt: {
           input: (input) =>
-            Effect.promise(() =>
-              promptController.request({
-                title: input.prompt ?? 'Set API key',
-                prompt: input.prompt ?? 'Enter API key',
-                password: input.password,
-              }),
-            ),
+            promptController.request({
+              title: input.prompt ?? 'Set API key',
+              prompt: input.prompt ?? 'Enter API key',
+              password: input.password,
+            }),
           confirm: (message, promptOptions) =>
             Effect.tryPromise({
               try: () =>

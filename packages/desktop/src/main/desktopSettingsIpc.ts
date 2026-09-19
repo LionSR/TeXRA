@@ -82,7 +82,7 @@ export interface DesktopSettingsUiHost extends Pick<
   promptForSecret(input: {
     title: string;
     prompt: string;
-  }): Promise<string | undefined>;
+  }): Effect.Effect<string | undefined>;
   openExternal(url: string): Promise<void>;
   confirmAction(message: string, confirmLabel?: string): Promise<boolean>;
   onError(error: unknown): void;
@@ -478,10 +478,12 @@ export function createDesktopSettingsIpc(
   // `refreshToolAvailability` emits `toolAvailabilityChanged`, which is what
   // repaints the dashboard.
   async function setGitHubToken(): Promise<void> {
-    const token = await options.ui.promptForSecret({
-      title: 'GitHub token',
-      prompt: GITHUB_TOKEN_PROMPT,
-    });
+    const token = await runtime.runPromise(
+      options.ui.promptForSecret({
+        title: 'GitHub token',
+        prompt: GITHUB_TOKEN_PROMPT,
+      }),
+    );
     if (token == null) return;
     await runtime.runPromise(
       storeCredential(options.secrets, {

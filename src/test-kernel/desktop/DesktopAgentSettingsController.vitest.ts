@@ -36,7 +36,7 @@ interface ControllerFixtureOptions {
   readonly refreshAgents?: (options?: {
     includeRemote?: boolean;
   }) => Effect.Effect<void>;
-  readonly promptText?: () => Promise<string | undefined>;
+  readonly promptText?: () => Effect.Effect<string | undefined>;
   readonly confirm?: () => Promise<boolean>;
   readonly chooseTeamAvailability?: () => Effect.Effect<
     'cancel' | 'continue' | 'sign-in'
@@ -101,7 +101,7 @@ function createControllerFixture(options: ControllerFixtureOptions = {}) {
       catalogChanges.push(selectedToolUseAgent);
     },
     prompts: {
-      promptText: options.promptText ?? (async () => undefined),
+      promptText: options.promptText ?? (() => Effect.succeed(undefined)),
       confirm: async (input) => {
         confirmed.push(input.message);
         return (await options.confirm?.()) ?? true;
@@ -328,7 +328,7 @@ describe('DefaultDesktopAgentSettingsController', () => {
       createControllerFixture({
         catalog,
         visibleCatalog,
-        promptText: async () => '  Paper Team  ',
+        promptText: () => Effect.succeed('  Paper Team  '),
       });
     const savePreset = assertSupported(controller.handlers.saveAgentModePreset);
 
