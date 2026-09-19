@@ -104,7 +104,7 @@ import {
 } from '@shared/transcript/transcriptText';
 import { getModelLabel } from '@shared/model/modelLabel';
 import {
-  applyCompactionActivityEntries,
+  applyCompactionActivityEntry,
   createCompactionActivityProjection,
   settleCompactionActivities,
   type CompactionActivityProjection,
@@ -1072,7 +1072,7 @@ function applyEntry(
   }
   reconcileCompactionRows(
     next,
-    applyCompactionActivityEntries(indexes.compactionState, [entry]),
+    applyCompactionActivityEntry(indexes.compactionState, entry),
   );
   const key = inflightKey(run.id, entry.id);
   const { inflight } = sessionIndexesOf(view);
@@ -1126,7 +1126,7 @@ function withSettledTranscript(run: RunView, finishedAt: number): RunView {
   if (!isTranscriptSettlementPhase(run.status)) return run;
   const changed = settleCompactionActivities(
     indexesOf(run.transcript).compactionState,
-    { finishedAt },
+    finishedAt,
   );
   if (changed.length === 0) return run;
   const transcript = replaceTranscript(run.transcript, {});
