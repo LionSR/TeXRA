@@ -89,7 +89,7 @@ const LOG_LEVEL_PRESENTATION = {
  * than dropped. IDs derive from entry contents, so keyed details rows preserve
  * their expanded state across automatic refreshes.
  */
-export function parseDesktopLogEntries(text: string): DesktopLogEntry[] {
+function parseDesktopLogEntries(text: string): DesktopLogEntry[] {
   const lines = text
     .replaceAll('\r\n', '\n')
     .replaceAll('\r', '\n')

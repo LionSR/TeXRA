@@ -644,30 +644,6 @@
       "name": "getSecretStorageMode"
     },
     {
-      "file": "packages/desktop/src/renderer/desktopCommandPalette.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "executeCommandPaletteEntry"
-    },
-    {
-      "file": "packages/desktop/src/renderer/desktopCommandPalette.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "filterCommandPaletteEntries"
-    },
-    {
-      "file": "packages/desktop/src/renderer/desktopCommandPalette.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "getNextCommandPaletteIndex"
-    },
-    {
-      "file": "packages/desktop/src/renderer/logsPane.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "parseDesktopLogEntries"
-    },
-    {
       "file": "packages/extension/src/commands/extensionCommandHandlers.ts",
       "category": "production-dead",
       "kind": "exports",
@@ -812,18 +788,6 @@
       "name": "parseKimiCodeUsage"
     },
     {
-      "file": "src/latex/arxivProcessor.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "resolveArxivPaperDirectoryRelative"
-    },
-    {
-      "file": "src/latex/arxivProcessor.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "DownloadSourceOptions"
-    },
-    {
       "file": "src/replacement/engine.ts",
       "category": "production-dead",
       "kind": "exports",
@@ -902,12 +866,6 @@
       "name": "SubscriptionUsageSnapshotSchema"
     },
     {
-      "file": "src/shared/settingsView/handlers/stateSettingWrite.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "resolveStateSettingWrite"
-    },
-    {
       "file": "src/shared/subagentFollowup.ts",
       "category": "production-dead",
       "kind": "exports",
@@ -984,12 +942,6 @@
       "category": "production-dead",
       "kind": "exports",
       "name": "countPinnedMemories"
-    },
-    {
-      "file": "src/utils/files/pastedImageUtils.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "pastedImageFileName"
     },
     {
       "file": "src/utils/system/binaryResolver.ts",

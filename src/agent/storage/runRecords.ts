@@ -56,7 +56,7 @@ export interface ChildTurnKey {
  * run that never had turns (a run recorded before the run ledger, or one
  * whose loop never accepted a turn).
  */
-export interface ChildTurnState {
+interface ChildTurnState {
   readonly active: ChildTurnKey | null;
   readonly lastCompleted: ChildTurnKey | null;
 }

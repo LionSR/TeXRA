@@ -56,7 +56,7 @@ type StateSettingWrite =
  * identify its rebroadcast owner, or return `null` to ignore it. This function
  * performs no I/O.
  */
-export function resolveStateSettingWrite(
+function resolveStateSettingWrite(
   key: string,
   value: unknown,
 ): StateSettingWrite {

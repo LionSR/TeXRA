@@ -61,18 +61,10 @@ function commandPaletteOptionId(entryId: string): string {
   return `desktop-command-palette-option-${entryId}`;
 }
 
-// Pure helpers exported for unit testing (filter/index/dispatch) — the
-// test-kernel suite exercises the same source of truth the palette runs.
-
-export function filterCommandPaletteEntries<
-  T extends {
-    id: string;
-    label: string;
-    description?: string;
-    meta?: string;
-    category?: string;
-  },
->(entries: readonly T[], query: string): T[] {
+function filterCommandPaletteEntries(
+  entries: readonly CommandPaletteEntry[],
+  query: string,
+): CommandPaletteEntry[] {
   const normalizedQuery = query.trim().toLowerCase();
   if (!normalizedQuery) return [...entries];
 
@@ -90,7 +82,7 @@ export function filterCommandPaletteEntries<
   });
 }
 
-export function getNextCommandPaletteIndex(
+function getNextCommandPaletteIndex(
   currentIndex: number,
   itemCount: number,
   delta: number,
@@ -99,7 +91,7 @@ export function getNextCommandPaletteIndex(
   return (currentIndex + delta + itemCount) % itemCount;
 }
 
-export function executeCommandPaletteEntry(
+function executeCommandPaletteEntry(
   entry: CommandPaletteEntry | undefined,
   onExecute: (id: string) => boolean | Promise<boolean>,
 ): boolean {

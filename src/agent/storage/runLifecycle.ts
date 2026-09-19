@@ -50,7 +50,7 @@ function pinRunWorkingDirectory(
   return workingDirectory ? { ...record, workingDirectory } : record;
 }
 
-export interface RegisterRunOptions {
+interface RegisterRunOptions {
   /** The launching run: the whole parent edge, stamped on `run.start`. */
   readonly parentRunId?: RunId;
   readonly checkpointId?: string;

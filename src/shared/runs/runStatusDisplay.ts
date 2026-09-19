@@ -161,7 +161,7 @@ export function formatRoundStageLabel(
 }
 
 /** Where a run's loop stands, in the coordinate its family counts in. */
-export interface FlowPosition {
+interface FlowPosition {
   readonly kind: 'round' | 'turn';
   readonly index: number;
 }

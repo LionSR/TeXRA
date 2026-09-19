@@ -7,7 +7,7 @@ import { it as effectIt } from '@effect/vitest';
 import { Cause, Effect, Exit, FileSystem, Path } from 'effect';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { getMimeType } from '@utils/files/mimeUtils';
-import { pastedImageFileName } from '@utils/files/pastedImageUtils';
+import { pastedImageFullPath } from '@utils/files/pastedImageUtils';
 import { entryExists } from '@utils/files/fsEntryExists';
 import { rootedFileSystem } from '@utils/files/rootedFileSystem';
 
@@ -26,10 +26,10 @@ describe('getMimeType', () => {
 // PastedImageUtils
 // ---------------------------------------------------------------------------
 
-describe('pastedImageFileName', () => {
+describe('pastedImageFullPath', () => {
   it('accepts generated pasted image basenames', () => {
-    expect(pastedImageFileName('pasted_1234_abcd.png')).toBe(
-      'pasted_1234_abcd.png',
+    expect(pastedImageFullPath('/storage', 'pasted_1234_abcd.png')).toBe(
+      '/storage/pasted/pasted_1234_abcd.png',
     );
   });
 
@@ -40,7 +40,7 @@ describe('pastedImageFileName', () => {
     'avatar.png',
     '',
   ])('rejects paths and non-pasted names from webview input: %s', (name) => {
-    expect(() => pastedImageFileName(name)).toThrow(
+    expect(() => pastedImageFullPath('/storage', name)).toThrow(
       'Invalid pasted image filename.',
     );
   });

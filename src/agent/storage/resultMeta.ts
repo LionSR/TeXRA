@@ -7,7 +7,7 @@ import type { ResultMeta, RunEnd, RunOutcome } from '@shared/schemas';
  * persistence-only producer context dropped. `outcome` is absent only while
  * the run has not ended — an interim turn already leaves a manifest.
  */
-export type PublicRunResult =
+type PublicRunResult =
   | Extract<ResultMeta, { producer: 'backgroundBash' }>
   | (Omit<RunEnd, 'outcome'> & { readonly outcome?: RunOutcome });
 

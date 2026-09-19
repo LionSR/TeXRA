@@ -24,19 +24,6 @@ interface DesktopCommandPaletteModule {
     platform?: NodeJS.Platform;
     canOpen?: () => boolean;
   }): DesktopCommandPaletteController;
-  filterCommandPaletteEntries<T extends { id: string; label: string }>(
-    entries: readonly T[],
-    query: string,
-  ): T[];
-  getNextCommandPaletteIndex(
-    currentIndex: number,
-    itemCount: number,
-    delta: number,
-  ): number;
-  executeCommandPaletteEntry(
-    entry: { id: string; label: string } | undefined,
-    onExecute: (id: string) => boolean | Promise<boolean>,
-  ): boolean;
 }
 
 async function loadDesktopCommandPalette(): Promise<DesktopCommandPaletteModule> {
@@ -59,46 +46,11 @@ function pressKey(target: EventTarget, init: KeyboardEventInit): void {
 }
 
 describe('desktop command palette', () => {
-  // Pure-helper tests still need the Lit/JSDOM globals installed because the
-  // module under test imports lit-html at top level. Sharing the same DOM
-  // setup across all tests in this file keeps lit-html's captured `document`
-  // pointing at the jsdom-backed instance.
+  // The module under test imports lit-html at top level, so the Lit/JSDOM
+  // globals must be installed before it loads; sharing the same DOM setup
+  // across the file keeps lit-html's captured `document` pointing at the
+  // jsdom-backed instance.
   useLitComponentTestDom(loadDesktopCommandPalette);
-
-  const entries = [
-    {
-      id: 'texra.showMainView',
-      label: 'Show Launcher',
-      category: 'TeXRA',
-      accelerator: 'Command+Option+M',
-    },
-    {
-      id: 'texra.desktop.showLogs',
-      label: 'Show Logs',
-      category: 'TeXRA',
-    },
-    {
-      id: 'texra.showModels',
-      label: 'Show Models',
-      category: 'TeXRA',
-    },
-  ];
-
-  it('filters command entries by label, category, and id tokens', async () => {
-    const { filterCommandPaletteEntries } = await loadDesktopCommandPalette();
-
-    expect(
-      filterCommandPaletteEntries(entries, 'logs').map((entry) => entry.id),
-    ).toEqual(['texra.desktop.showLogs']);
-    expect(
-      filterCommandPaletteEntries(entries, 'texra models').map(
-        (entry) => entry.id,
-      ),
-    ).toEqual(['texra.showModels']);
-    expect(
-      filterCommandPaletteEntries(entries, '').map((entry) => entry.id),
-    ).toEqual(entries.map((entry) => entry.id));
-  });
 
   // wa-dialog + wa-input wiring (Lit-rendered web components). The DOM
   // polyfills installed by useLitComponentTestDom above let those WA
@@ -166,10 +118,25 @@ describe('desktop command palette', () => {
     expect(controller.element.open).toBe(true);
     expect(paletteCommandIds(controller.element).length).toBeGreaterThan(1);
 
+    const allCommandIds = paletteCommandIds(controller.element);
+
     setWaInputValue(controller.element, 'models');
     await flushDialogTicks();
 
     expect(paletteCommandIds(controller.element)).toEqual(['texra.showModels']);
+
+    // A multi-token query matches across the row's category and label, and an
+    // empty query restores the whole catalog.
+    setWaInputValue(controller.element, 'texra models');
+    await flushDialogTicks();
+    expect(paletteCommandIds(controller.element)).toEqual(['texra.showModels']);
+
+    setWaInputValue(controller.element, '');
+    await flushDialogTicks();
+    expect(paletteCommandIds(controller.element)).toEqual(allCommandIds);
+
+    setWaInputValue(controller.element, 'models');
+    await flushDialogTicks();
 
     // Enter on the wa-input forwards the keydown to the palette's keydown
     // handler, which dispatches the active command and closes the dialog.

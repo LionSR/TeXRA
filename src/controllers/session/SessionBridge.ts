@@ -110,7 +110,7 @@ export interface AttachedPort {
 }
 
 /** Expected refusal when a host attaches after the bridge has closed. */
-export class SessionBridgeClosedError extends Error {
+class SessionBridgeClosedError extends Error {
   constructor() {
     super('SessionBridge is closed; cannot attach a port');
     this.name = 'SessionBridgeClosedError';
