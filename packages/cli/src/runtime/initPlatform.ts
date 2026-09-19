@@ -305,7 +305,7 @@ export function initCliPlatform(
     // state store comes from its own context, and on the first init everything
     // below runs in the same fiber rather than as a chain of separate runs.
     //
-    // Double init is the normal path (every command calls one of these), so the
+    // Double init is the normal path (every command runs this), so the
     // already-installed platform is the value returned on the second and later
     // calls; the first call keeps the one it builds below.
     //
