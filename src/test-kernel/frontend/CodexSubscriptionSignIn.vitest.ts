@@ -55,12 +55,7 @@ const { signInWithSubscription } =
 
 const signInWithChatGptSubscription = (channel: string) =>
   testRuntime().runPromise(
-    signInWithSubscription(
-      makeFakeSettingsStores().stores,
-      channel,
-      'chatgpt',
-      testRuntime(),
-    ),
+    signInWithSubscription(makeFakeSettingsStores().stores, channel, 'chatgpt'),
   );
 
 function loopbackSession() {

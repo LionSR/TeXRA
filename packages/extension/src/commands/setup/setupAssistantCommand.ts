@@ -19,7 +19,6 @@ import { createLog } from '@logger/logUtils';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import type { StateStore, StateWriteFailed } from '@platform/interfaces';
 import type { LanguageModel } from '@platform/languageModel';
-import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import { presentLaunchedProgressRun } from '@progressView/progressNavigation';
 import type { SettingsStores } from '@shared/config/settingsAccess';
@@ -117,11 +116,7 @@ export function hasAnyUsableSetupCredential(
 }
 
 const ensureCredentialOrPrompt = Effect.fn('ensureCredentialOrPrompt')(
-  function* (
-    stores: SettingsStores,
-    secrets: PlatformSecrets,
-    runtime: ProcessRuntime,
-  ) {
+  function* (stores: SettingsStores, secrets: PlatformSecrets) {
     if (yield* hasAnyUsableSetupCredential(stores, secrets)) {
       return true;
     }
@@ -160,7 +155,7 @@ const ensureCredentialOrPrompt = Effect.fn('ensureCredentialOrPrompt')(
     // credential; only the walkthrough leaves setup un-launched.
     switch (picked.id) {
       case 'chatgpt':
-        yield* signInWithSubscription(stores, CHANNEL, 'chatgpt', runtime);
+        yield* signInWithSubscription(stores, CHANNEL, 'chatgpt');
         break;
       case 'apiKey':
         yield* Effect.promise(() =>
@@ -241,7 +236,6 @@ const ensureRoutingConfigured = Effect.fn('ensureRoutingConfigured')(function* (
 export function launchSetupAssistant(
   secrets: PlatformSecrets,
   globalState: StateStore,
-  runtime: ProcessRuntime,
   session: SessionHandle,
 ) {
   return Effect.gen(function* () {
@@ -276,11 +270,7 @@ export function launchSetupAssistant(
       return 'not-started' as const;
     }
 
-    const proceed = yield* ensureCredentialOrPrompt(
-      session.roots,
-      secrets,
-      runtime,
-    );
+    const proceed = yield* ensureCredentialOrPrompt(session.roots, secrets);
     if (!proceed) {
       void vscode.window.showInformationMessage(
         'Setup assistant cancelled. Run `TeXRA: Run Setup Assistant` again once you have signed in, turned on your ChatGPT subscription, or set an API key.',

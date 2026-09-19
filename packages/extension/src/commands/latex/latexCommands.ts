@@ -10,6 +10,7 @@ import {
   showLoggedInfoMessage,
   showLoggedMessage,
 } from '@frontend/ui/errorHandlingUtils';
+import { withVSCodeProgress } from '@frontend/ui/progress';
 import {
   getTeXCount,
   parseTeXCountStats,
@@ -20,7 +21,7 @@ import { resolveLatexFormatter } from '@latex/formatter/texFormatter';
 import { indentLatexFilesInDirectory } from '@latex/formatter/indentDirectory';
 import { buildLatexdiffAwareFixInstruction } from '@latex/latexdiff/diffFileNameManager';
 import { createLog } from '@logger/logUtils';
-import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
+import type { ProcessServices } from '@platform/processRuntime';
 import { AgentCategory } from '@shared/schemas';
 
 const log = createLog(CHANNEL);
@@ -152,7 +153,6 @@ export function handleIndentCurrentTeX(
 
 export function handleGetTeXCount(
   session: SessionHandle,
-  runtime: ProcessRuntime,
 ): Effect.Effect<void, never, ProcessServices> {
   return runGuardedLatexCommand(
     session,
@@ -187,43 +187,45 @@ export function handleGetTeXCount(
           return;
         }
 
-        // `withProgress` owns the notification for exactly as long as the
-        // callback it is handed: the count settles on the process runtime
-        // inside it, the one structural Promise edge this command keeps.
-        yield* Effect.promise(() =>
-          vscode.window.withProgress(
-            {
-              location: vscode.ProgressLocation.Notification,
-              title: 'Counting LaTeX Document',
-              cancellable: false,
-            },
-            async (progress) => {
+        // The notification lives for exactly as long as the body below, which
+        // is a step of this program rather than a nested settle.
+        yield* withVSCodeProgress(
+          {
+            location: vscode.ProgressLocation.Notification,
+            title: 'Counting LaTeX Document',
+            cancellable: false,
+          },
+          (progress) =>
+            Effect.gen(function* () {
               progress.report({ message: 'Running texcount...' });
 
-              const { output, errors } = await runtime.runPromise(
-                getTeXCount(session.roots.workspace, relativePath, {
+              const { output, errors } = yield* getTeXCount(
+                session.roots.workspace,
+                relativePath,
+                {
                   mode: countingMode.value,
                   channel: CHANNEL,
                   settings: session.roots,
-                }),
+                },
               );
 
               if (!output) {
                 const message =
                   errors[0] ??
                   'Failed to get tex count. Please verify the file path.';
-                await runtime.runPromise(showLoggedMessage(CHANNEL, message));
+                yield* showLoggedMessage(CHANNEL, message);
                 return;
               }
 
               const stats = parseTeXCountStats(output);
 
-              await vscode.window.showQuickPick(stats, {
-                placeHolder: 'TeXCount Results (press Esc to dismiss)',
-                canPickMany: false,
-              });
-            },
-          ),
+              yield* Effect.promise(() =>
+                vscode.window.showQuickPick(stats, {
+                  placeHolder: 'TeXCount Results (press Esc to dismiss)',
+                  canPickMany: false,
+                }),
+              );
+            }),
         );
       }),
   );

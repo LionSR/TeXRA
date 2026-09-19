@@ -1,5 +1,5 @@
 // Third-party imports
-import { Data, Effect } from 'effect';
+import { Cause, Data, Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
@@ -11,9 +11,11 @@ import {
   type SubscriptionSignInPresenter,
 } from '@controllers/modelAccess/subscriptionProviders';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
-import type { ProcessRuntime } from '@platform/processRuntime';
+import { withVSCodeProgress } from '@frontend/ui/progress';
+import type { Secrets } from '@platform/secrets';
 import { ACCOUNT_OUTCOME } from '@shared/copy/accountAuth';
 import type { SettingsStores } from '@shared/config/settingsAccess';
+import type { HttpClient } from 'effect/unstable/http';
 
 const OPEN_DEFAULT_BROWSER = 'Open in Default Browser';
 const COPY_SIGN_IN_LINK = 'Copy Sign-in Link';
@@ -92,39 +94,44 @@ function vscodePresenter(
 /**
  * Run subscription sign-in and enable subscription routing for the provider's
  * models. The whole flow is one program the caller settles at its own
- * boundary; `runtime` is here only for the one foreign edge inside it, VS
- * Code's `withProgress`, which takes a promise.
+ * boundary: the OAuth leg is a step of it, under a progress notification that
+ * lives for exactly as long as that step.
  */
 export function signInWithSubscription(
   stores: SettingsStores,
   channel: string,
   providerId: SubscriptionProviderId,
-  runtime: ProcessRuntime,
-): Effect.Effect<boolean> {
+): Effect.Effect<boolean, never, HttpClient.HttpClient | Secrets> {
   const provider = subscriptionProvider(providerId);
   const { displayName, modelFamily } = provider;
 
   return Effect.gen(function* () {
-    const account: SubscriptionAccount = yield* Effect.tryPromise({
-      try: () =>
-        vscode.window.withProgress(
-          {
-            location: vscode.ProgressLocation.Notification,
-            title: `Signing in with ${displayName}...`,
-            cancellable: false,
-          },
-          () =>
-            runtime.runPromise(
-              provider.signIn({
-                // Remote windows cannot reach the extension host's loopback port
-                // from the user's local browser.
-                transport: vscode.env.remoteName ? 'device' : 'loopback',
-                present: vscodePresenter(provider),
-              }),
+    const account: SubscriptionAccount = yield* withVSCodeProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: `Signing in with ${displayName}...`,
+        cancellable: false,
+      },
+      () =>
+        provider.signIn({
+          // Remote windows cannot reach the extension host's loopback port
+          // from the user's local browser.
+          transport: vscode.env.remoteName ? 'device' : 'loopback',
+          present: vscodePresenter(provider),
+        }),
+    ).pipe(
+      // A transport defect is reported the same as its typed failure, exactly
+      // as the rejection this replaces was. An interrupt is not: shutdown
+      // cancelling the sign-in is not a sign-in failure, and the
+      // `Effect.tryPromise` this replaces never saw one.
+      Effect.catchCause((cause) =>
+        Cause.hasInterruptsOnly(cause)
+          ? Effect.interrupt
+          : Effect.fail(
+              new SubscriptionSignInFailed({ cause: Cause.squash(cause) }),
             ),
-        ),
-      catch: (cause) => new SubscriptionSignInFailed({ cause }),
-    });
+      ),
+    );
 
     const update = yield* provider
       .setPreferSubscription(stores, true)

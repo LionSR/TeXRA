@@ -607,7 +607,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
       ),
       vscode.commands.registerCommand('texra.auth.chatgpt.signIn', () =>
         runtime.runPromise(
-          signInWithSubscription(roots, 'welcomeView', 'chatgpt', runtime),
+          signInWithSubscription(roots, 'welcomeView', 'chatgpt'),
         ),
       ),
       // No settings view exists before a folder is open, so there is no

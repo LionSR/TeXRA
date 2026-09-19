@@ -17,7 +17,7 @@ import {
   type SubscriptionProviderId,
 } from '@controllers/modelAccess/subscriptionProviders';
 import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
-import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
+import type { ProcessServices } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import type {
   UpdateChatGptAuthStatusMessage,
@@ -59,11 +59,6 @@ export class SubscriptionHandlers {
       Error,
       ProcessServices
     >,
-    /**
-     * Settles the sign-in flow's progress notification, which VS Code hands a
-     * promise.
-     */
-    private readonly runtime: ProcessRuntime,
     /** The view's session setting slots: where the preference is read and written. */
     private readonly stores: SettingsStores,
   ) {
@@ -84,12 +79,9 @@ export class SubscriptionHandlers {
   }
 
   readonly handleSignIn = () =>
-    signInWithSubscription(
-      this.stores,
-      this.ctx.channel,
-      this.providerId,
-      this.runtime,
-    ).pipe(Effect.andThen(this.refreshState()));
+    signInWithSubscription(this.stores, this.ctx.channel, this.providerId).pipe(
+      Effect.andThen(this.refreshState()),
+    );
 
   handleSignOut() {
     const { displayName } = this.provider;
