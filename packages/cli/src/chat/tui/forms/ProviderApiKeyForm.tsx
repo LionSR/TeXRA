@@ -1,4 +1,5 @@
 import { Text } from 'ink';
+import { Cause, Effect } from 'effect';
 import { useState } from 'react';
 
 import {
@@ -6,6 +7,7 @@ import {
   type ApiKeyStatus,
   type ApiProvider,
 } from '@model/apiProviders';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import { codingPlanForApiProvider } from '@shared/codingPlanSubscriptions';
 import { providerDisplayName } from '@shared/constants/providers';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -80,10 +82,15 @@ export function formatProviderApiKeySummary(
 interface ProviderApiKeyFormProps {
   readonly availableRows?: number;
   readonly statusView?: ProviderApiKeyStatusView;
+  /** The key write as a program; this form owns its one run. It yields the
+   *  extra notice a provider needs, if any. */
   readonly onSave: (
     provider: ApiProvider,
     key: string,
-  ) => Promise<string | void>;
+  ) => Effect.Effect<string | void, unknown>;
+  /** The runtime that program settles on, from the surface that mounted this
+   *  form — Ink components run no Effect of their own. */
+  readonly runtime: ProcessRuntime;
   readonly onDone: (provider: ApiProvider, modelNotice?: string) => void;
   readonly onCancel: () => void;
 }
@@ -134,15 +141,19 @@ export function ProviderApiKeyForm(
       }}
       onSubmit={(key) => {
         setSaving(true);
-        void props
-          .onSave(provider, key)
-          .then((modelNotice) =>
-            props.onDone(provider, modelNotice || undefined),
-          )
-          .catch((saveError: unknown) => {
-            setSaving(false);
-            setError(toErrorMessage(saveError));
-          });
+        void props.runtime.runPromise(
+          Effect.matchCause(
+            Effect.suspend(() => props.onSave(provider, key)),
+            {
+              onSuccess: (modelNotice) =>
+                props.onDone(provider, modelNotice || undefined),
+              onFailure: (cause) => {
+                setSaving(false);
+                setError(toErrorMessage(Cause.squash(cause)));
+              },
+            },
+          ),
+        );
       }}
     />
   );
