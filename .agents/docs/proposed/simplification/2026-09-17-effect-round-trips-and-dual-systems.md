@@ -16,11 +16,12 @@ is eliminated, not ledgered, and every dual system collapses to one mechanism.
 ## Status (2026-09-19)
 
 Written back against `origin/main` at `b133beba3c`, two days after the ledger
-merged (#12681). The clean-up ran as four waves: this ledger's own R and D
-lanes, then three censuses of what they left. 108 PRs merged between #12693
-and #12818, three of them dependency bumps. Each row names the PR that carried
-the lane; "thin folds" are the single-file items section 3.1 said would ride
-whichever lane opened the file.
+merged (#12681), and extended at `ca4e74a597` with wave 5. The clean-up ran as
+five waves: this ledger's own R and D lanes, three censuses of what they left,
+and the final re-survey. 116 PRs merged between #12693 and #12828, three of
+them dependency bumps. Each row names the PR that carried the lane; "thin
+folds" are the single-file items section 3.1 said would ride whichever lane
+opened the file.
 
 ### Landed
 
@@ -163,6 +164,53 @@ Census at `993e8d81ad`: 146 host files, 492 sites (316 convert, 124 host-entry,
   resume preflight's reader and probe interleaving) and #12815 (an unparsable
   `package.json` candidate no longer fails CLI startup).
 
+#### Wave 5: the final re-survey's host-package faces
+
+Final re-survey at `b133beba3c`: 30 confirmed chains collapsing to 17 distinct
+Promise faces, every one of them in `packages/cli`, `packages/desktop` or
+`packages/extension`. The host-agnostic tree held no round trip left, only
+Promise-native leaves that each Effect caller wrapped at its own site. Eight
+PRs closed it.
+
+- #12820, refactor(desktop): close four desktop round trips (shell open,
+  project stop, prompts, catalog refresh). Deletes the Promise faces of
+  `openWorkspaceFolder`, `stopProjectRuns`, `DesktopPromptController.request`
+  and the two catalog-refresh ports, with `hostCall` and the project registry's
+  `runtime` option; the prompt controller becomes `Effect.callback`, so an
+  interrupted caller's resolver is removed by the finalizer instead of
+  surviving to window teardown.
+- #12821, refactor(cli): make the CLI Supabase sign-in an Effect program.
+  `signInCliSupabase` becomes an `Effect.acquireRelease` over the loopback
+  callback server, deleting four runs, three lifts and `CliLoginOptions.signal`.
+- #12822, refactor(cli): close three small Promise faces (log flush, init
+  config writes, resume TUI handoff). `LogSink.flush`, the init config writers
+  and the resume command's TUI handoff become Effects, and
+  `CliShutdownStepFailed` ceases to exist.
+- #12823, refactor(extension): close the file-dialog and progress-view Promise
+  faces. Thirteen Promise faces and nine lifts go across agent registration,
+  `@frontend/ui/dialogs` and `ProgressViewProvider`, whose `attach` is now a
+  program; net seven runs fewer, with the eight that remain at R1 host entries.
+- #12824, refactor: close the last host-neutral Promise leaves (process
+  identity, external-binary and SDK probes). `nodeProcesses` identity, the
+  external-binary resolver and the Claude and Codex SDK importers become
+  Effects, which collapses `ProcessRuntimeOptions.processStart`'s three-way
+  union and deletes the `catch {}` that swallowed an unresolvable platform
+  package.
+- #12825, refactor(utils): make executeCommand Effect-native and convert its
+  callers. `executeCommand` returns `Effect.Effect<ExecResult>`, fiber
+  interruption replaces the hand-rolled abort, timeout and force-kill block,
+  and fifteen lifts go; `options.signal` survives for background bash alone,
+  which needs a result from a command its own stop signal terminated.
+- #12826, refactor(desktop): close the desktop auth and settings-poster round
+  trips. Sixteen Promise faces go with twenty-one runs and `runAsyncInPaper`,
+  covering the ChatGPT sign-in chain, the auth-surface refresh,
+  `signInAndWaitForSession` and the eight settings-view posters.
+- #12828, refactor(cli): make the CLI platform init an Effect program.
+  `initCliPlatform` becomes `Effect.Effect<CliPlatformServices, Error>`,
+  `initLocalCliPlatform` and `initInteractiveCliPlatform` are deleted, and
+  every command entry installs or joins the process runtime once and runs one
+  program on it.
+
 ### Refuted or declined at implementation
 
 - **D5** (`SessionOwner` onto the `Sessions` tag): refuted by the call-site
@@ -239,17 +287,20 @@ Census at `993e8d81ad`: 146 host files, 492 sites (316 convert, 124 host-entry,
   unwraps `AuthPortError` only), and handing the fetch the fiber's
   `AbortSignal` instead of the caller's `AbortSignal.timeout` would drop
   `requestTimeoutMs` entirely.
-- **`initCliPlatform` and its two siblings** (#12788): declined. Of their ~25
-  call sites, 22 are R1 citty actions or the Ink entry and only three re-lifted
-  the promise. Retyping would ripple into ~20 command modules and ~12 suites
-  that stub it with `mockResolvedValue`, for one net lift removed; the lane
-  closed the six runs inside the init instead.
+- **`initCliPlatform` and its two siblings** (#12788): declined at the time. Of
+  their ~25 call sites, 22 are R1 citty actions or the Ink entry and only three
+  re-lifted the promise. Retyping would ripple into ~20 command modules and ~12
+  suites that stub it with `mockResolvedValue`, for one net lift removed; the
+  lane closed the six runs inside the init instead. Superseded by #12828, which
+  took the ripple as its whole subject and deleted both siblings.
 - **`NdjsonStdoutSink.flush` and `writeRawAndWait`** (#12788, #12811):
   declined. `flush` has two genuine Promise consumers plus the shutdown hook,
   so converting adds two runs and changes the shared `LogSink` interface;
   `writeRawAndWait` runs after the process runtime is disposed, so its Effect
   form needed a bare `Effect.runSync` and was reverted. The raw write stays
-  quarantined in the effect-free `bestEffortStreamWrite.ts`.
+  quarantined in the effect-free `bestEffortStreamWrite.ts`. #12822 later took
+  `flush` after all, by retyping the `LogSink` member itself; `writeRawAndWait`
+  stands refuted, and the evidence is below.
 - **`readCliStdinText`** (#12811) and **`runResumeCommand`** (#12807): not
   round trips. `materializeStdinWorkflowInput` already wraps the
   `process.stdin` edge exactly once with no caller re-lifting it, and
@@ -262,25 +313,100 @@ Census at `993e8d81ad`: 146 host files, 492 sites (316 convert, 124 host-entry,
   `src/shared/settingsView/handlers/stateSettingWrite.ts` calls it and discards
   the result, so an Effect there would silently never run and `/config`'s
   approval row would stop reaching the live session.
+- **`installCliProcessRuntime` as a program** (#12828):
+  refuted. `packages/cli/src/runtime/cliProcessRuntime.ts:92` is the true
+  bootstrap edge, so there is no runtime to run it on, and an Effect face there
+  forces a bare `Effect.run*` at every citty action: `BARE_EFFECT_RUN_SITES`
+  would grow from 7 CLI entries to about 20. Its Promise face is what lets each
+  command await the install and then run exactly one program. Its own internal
+  run cannot move either until `installProcessRuntime` stops taking `appState`
+  as a value (`src/controllers/session/sessionLayer.ts:1045`), which is a
+  cross-host core change.
+- **`defineCliCommand`'s `run`** (#12828): stays `Promise<number>`
+  (`packages/cli/src/commands/_helpers/defineCliCommand.ts:27`). Effect-typing
+  it would collapse about 15 entry runs into one, but it types 35 command
+  handlers, two of which are entirely Promise-native; `installGithubAction.ts`
+  has no `effect` import and does have `try`/`catch`, so pulling it in would
+  trip `catch:effect-importer` for a file that lane had no business touching.
+  Worth its own lane.
+- **`processStart` does not collapse to `string | undefined`** (#12824). The
+  survey asked for that; `composeProcess`
+  (`packages/agent/src/effect/runtime.ts:180`) is a deliberately synchronous
+  public composition root, so it cannot resolve the read.
+  `Effect.Effect<string | undefined>` is the collapse actually available: one
+  type, one layer construction, and the package's own call site unchanged.
+- **`codexBinarySupportsXhigh`** (#12824, then closed by #12825): deferred, not
+  refused. Its body is `executeCommand` and its in-flight dedup was a
+  `Map<string, Promise<boolean>>` with no behavior-identical Effect spelling,
+  so #12824 wrapped it once at its call site and #12825 converted it in place
+  once `executeCommand` answered in Effect, with `withPerKeyLane` for the
+  dedup. One delta is recorded there: where the probe is deliberately not
+  cached (timeout, exit 127) a second caller now re-probes instead of sharing
+  the first `false`, which is that branch's documented intent.
+- **`DesktopSupabaseAuth.signOut` and
+  `DefaultDesktopAgentSettingsController.runReported`** (#12826): not round
+  trips. Nothing lifts either one. `signOut`'s whole consumer chain is Promise
+  consumers, and converting it would drop the `settleFailure(cause)`
+  translation its rejection carries at `desktopSupabaseAuth.ts:491`;
+  `runReported`'s six callers are four registry arms and two `async` arm
+  bodies, so an Effect face would move one run into six rather than delete any.
+- **`pathExists`** (#12822): stays `Promise<boolean>`
+  (`packages/cli/src/runtime/initConfig.ts:46`), so `commands/init.ts:159`
+  keeps one `Effect.promise`. Its second caller,
+  `packages/cli/src/commands/installGithubAction.ts:170`, sits inside a
+  Promise-native citty action, where an Effect callee means a bare
+  `Effect.run*` in a file the run-boundary allowlist freezes.
+- **`writeRawAndWait` and `writeTextStderrAndWait`** (#12822): stay
+  Promise-shaped (`packages/cli/src/runtime/logSinks.ts:170`, `:209`).
+  `flushTextStderr` wraps that one `stream.write` callback edge once, which is
+  what deletes the lift at the shutdown sequence; converting the primitive
+  itself pulls in `runtime/interruptedResumeHint.ts:23`,
+  `chat/tui/sessionExitController.ts:193`, `commands/workflow.ts:357`,
+  `runtime/executeCli.ts:216` and three suites' mock bags, all Ink and SIGINT
+  exit paths. That is a CLI teardown lane.
+- **`createSampleProjectWithoutWorkspace`** (#12823): keeps its Promise face
+  (`packages/extension/src/commands/system/sampleProjectCommands.ts:35`). It is
+  registered directly as a VS Code command at `extension.ts:594`, so its single
+  run is an R1 host entry, and converting it would push two runs into
+  `extension.ts` to delete one. Its body is an `Effect.gen` that yields
+  `selectFolder`.
 
 ### Open
 
-- **`executeCommand`** (`src/utils/system/execUtils.ts`) is the one large
-  Promise edge left: 72 callers, a campaign rather than a lane.
-  `runToolWithCheck` wraps it once (`src/utils/system/toolUtils.ts`) and
-  derives the child's `AbortSignal` from fiber interruption there.
-  `checkToolInstalled` and the git-author `commandEnv` question ride with it.
-- **`desktopSettingsIpc.ts`'s roughly 40 handler arms** stay Promise-shaped.
-  They are the desktop's own R1 arms, and `postStartupData` keeps a Promise
-  face on all three settings controllers because the IPC calls them in one
-  `Promise.all`.
+Two owner rulings gate the rest.
+
+- **Ruling wanted: the shared `MessageHandler` dispatcher contract**
+  (`src/shared/utils/dispatcher.ts`). It is Promise-shaped and types a webview
+  frontend as well as both graphical hosts, so it holds the desktop settings
+  view's roughly 40 registry arms at one `runtime.runPromise` each and is the
+  single largest adapter source left, around twenty of them. #12820, #12823 and
+  #12826 each stopped at it by design. Changing it is a shared-contract
+  decision, not a lane, and the webview side has to move with it.
+- **Ruling wanted: whether a cancelled CLI loopback sign-in should recover the
+  session** as it did before #12821. The ruling recorded in section 2 takes the
+  recommended option, interruption, because a fiber cannot observe its own
+  external interruption as a value in rc.115. Restoring the old semantics means
+  restoring a run edge, that is, a Promise face, so it needs the owner's word
+  before anyone builds it.
+
+The rest are ordinary lanes.
+
 - **The CLI config-forms remainder**: `ProviderApiKeyForm.onSave` and
   `ApiKeySaveHandler` leave one `runtime.runPromise` in `registerBuiltins.tsx`,
   and `ErrorHandler`'s `void | Promise<void>` ripples into `CliConfigForm`.
-- **Sign-in and dialog faces**: `signInCliSupabase` (owner-documented
-  sticky-interruption recovery at that edge), `signInForRemoteAgentCatalog`,
-  `signInAndWaitForSession` and `signOut` on the desktop, and the sibling
-  `confirmAcceptFile` / `showInstructionDialog` / `showErrorDialog` host ports.
+- **`shellRun`'s quiet parse failure** (`packages/cli/src/commands/tools.ts`):
+  `Effect.orElseSucceed(() => null)` preserves the old `catch {}` exactly.
+  Making it loud is a behavior change and needs its own PR.
+- **`packages/cli/src/runtime/browser.ts`** (`tryOpenBrowser`) is deferred and
+  spans five callers across the CLI commands and the GitHub token form.
+- **Desktop host ports that are still Promise-shaped**: `onCredentialChanged`
+  (`desktopCredentialSettingsController.ts:125`, lifted at `:372`) is a real
+  round trip that fell between wave 5's two desktop lanes, each of which left
+  it to the other; `confirmAcceptFile`, `showInstructionDialog` and
+  `showErrorDialog` on `DesktopAgentRunHost`; and `DesktopSettingsUiHost`'s
+  `revealRun`, `openExternal` and `confirmAction`, which are Promise-native
+  rather than round trips. `getEnvironmentSummary` keeps one run behind the
+  Promise-shaped workspace IPC port.
 - **`window.showErrorMessage` is wrapped twice**: `VscodeMessageHost.notify`
   for the action-less toast and `VscodePromptHost.showMessage` for the
   answerable one, under different failure tags and return types. Collapsing
@@ -289,6 +415,12 @@ Census at `993e8d81ad`: 146 host files, 492 sites (316 convert, 124 host-entry,
 - **`runGuardedLatexCommand`'s `operation`** stays `(guard) => Promise<void>`,
   lifted once, with eight `runtime.runPromise` calls inside the
   `vscode.window.withProgress` bodies it serves.
+- **The progress view's catalog-refresh callback**:
+  `runAfterAgentCatalogAuthRefresh` still keeps a `() => Promise<void>` queue
+  fed by two view providers, and `ProgressViewProvider.ts:470` settles three
+  programs in one `Promise.all` inside it. #12823 closed the sibling
+  `refreshAfterCredentialChange` and left this one, because nothing lifts it
+  and its signature belongs to the catalog module.
 - **The process-roots holder**: `processWorkspaceRoots` and
   `tryProcessWorkspaceRoots` (`src/platform/workspaceRoots.ts`), read at four
   sites in three files (`sessionGraph.ts`, `configUtils.ts`'s
@@ -300,20 +432,11 @@ Census at `993e8d81ad`: 146 host files, 492 sites (316 convert, 124 host-entry,
   (`src/tools/delegation/inputFields.ts`) is a static Zod `.transform` reading
   the process slots. Moving it into `execute` turns a schema rejection into a
   tool error, so it is a behavior decision rather than a threading change.
-- **The progress view's refresh funnel**:
-  `ProgressViewProvider.refreshAfterCredentialChange` still settles four
-  programs where one would do, and `runAfterAgentCatalogAuthRefresh` keeps a
-  `() => Promise<void>` queue fed by two view providers.
 - **D35b and D35c**: a durable owner for run-directory removal, and the
   reflection recovery digest. Design, unstarted.
-- **`shellRun`'s quiet parse failure** (`packages/cli/src/commands/tools.ts`):
-  `Effect.orElseSucceed(() => null)` preserves the old `catch {}` exactly.
-  Making it loud is a behavior change and needs its own PR.
-- **`packages/cli/src/runtime/browser.ts`** (`tryOpenBrowser`) is deferred and
-  spans five callers across the CLI commands and the GitHub token form.
-- **A second acceptance re-survey has not been run.** The first, at
-  `5a8b011f470d`, is what produced waves 2 to 4; the finished tree has not been
-  measured again.
+- **No re-survey since wave 5.** The final re-survey at `b133beba3c` is what
+  produced wave 5; the tree at `ca4e74a597` has not been measured again, and
+  the acceptance criterion below asks for exactly that.
 
 ## 1. What the surveys measured
 
@@ -397,6 +520,27 @@ affected lane.
   to say it is a deliberate cheap-start choice derived from the shared table.
 - **`AgentPlatform` re-declares `agentResume` and `languageModel`** so the
   embedder contract is unchanged while `Platform` loses both fields.
+- **Cancelling a CLI loopback sign-in reports as interruption** (2026-09-19,
+  #12821). The old Promise face re-awaited `callbackServer.waitForSession` on a
+  fresh fiber when a storage commit had already begun and returned the session
+  despite the abort. A fiber cannot observe its own external interruption as a
+  value in rc.115 (probed against `Effect.exit`, `Effect.result` and
+  `uninterruptibleMask`), so only a run edge turns that interrupt into data.
+  What the recovery actually bought moves into the `acquireRelease` release
+  half, which waits for an in-flight commit before closing the loopback server;
+  the recovered-session semantics live in the release half or not at all. No
+  production caller ever observed the old recovery, because the one caller that
+  passed a signal wrapped the call in `Effect.tryPromise`, which abandons a late
+  resolution on interrupt.
+- **The desktop OAuth callback deadline starts when the wait program runs**
+  (2026-09-19, #12826). `waitForCompletion` still installs its `Deferred` and
+  the attempt's settle hook where the attempt is claimed, so an early callback
+  still resolves it, but the 10-minute `AUTH_CALLBACK_TIMEOUT_MS` clock no
+  longer runs concurrently with `signInWithOAuth`, `openExternalUrl` and the
+  "Complete sign-in in your browser" dialog. The concurrency-exact version was
+  built and backed out: `Effect.forkChild` does not start eagerly in rc.115
+  (measured), so it neither preserved the old start point nor survived the
+  fake-timer assertion. Revisit only if a user reports a stale deadline.
 
 ## 3. The lanes
 
@@ -546,28 +690,49 @@ item, not a round trip.
   carries a census more than one release stale.
 - Every ratchet baseline shrinks or is deleted; none widens.
 
-**Measured outcome (2026-09-19).** Lines were not the win; elements were.
-Across waves 2 to 4, `git diff --shortstat 9bd6f99dd4..origin/main -- src
-packages` reports 317 files changed, 10,512 insertions and 9,227 deletions, a
-net of +1,285 lines; over the whole campaign (`0bfb72448c..origin/main`) it is
-796 files, 28,960 insertions and 26,891 deletions, a net of +2,069. The pattern
-held per lane: roughly +10 to +90 lines for `Effect.fn` and `Effect.gen` bodies
-and for typed failure channels, against ports, wrappers and Promise faces that
-ceased to exist, so the surveys' LoC estimates were unreliable while their
-element claims held. What shrank is the element count and the ratchets.
+**Measured outcome (2026-09-19, after wave 5).** Lines were not the win;
+elements were. Across waves 2 to 5, `git diff --shortstat
+9bd6f99dd4..origin/main -- src packages` reports 367 files changed, 14,111
+insertions and 12,170 deletions, a net of +1,941 lines; over the whole campaign
+(`0bfb72448c..origin/main`) it is 810 files, 32,316 insertions and 29,591
+deletions, a net of +2,725. The pattern held per lane: roughly +10 to +90 lines
+for `Effect.fn` and `Effect.gen` bodies and for typed failure channels, against
+ports, wrappers and Promise faces that ceased to exist, so the surveys' LoC
+estimates were unreliable while their element claims held. Wave 5 is the
+clearest case: #12828 is +263 lines and deletes a Promise face, two exported
+wrappers, one pinned bare run, six lifts and four `try`/`catch` blocks.
+
+What shrank is the element count and the ratchets.
 `config/ratchets/effect-migration-baseline.json` went from five rows to four:
 `import:async-mutex` was deleted with `src/utils/core/keyedMutex.ts`,
-`platform()` fell from 4 files / 13 sites to 3 / 3 (`agentRegistry.ts`,
-`PollingSourceBase.ts`, `toolUtils.ts`), `ambient:asyncLocalStorage` fell from
-18 files / 26 sites to the 3 files / 4 sites of the process-roots holder, and
-`new AbortController()` fell from the four named residents to two. Waves 2 to 4
-alone deleted the `new AbortController()` rows for
-`packages/cli/src/chat/tui/commands/handlers/slashContext.ts` and
-`src/platform/defaults/lifecycleHost.ts`; `src/agent/runtime/childRunLoop.ts`
-and `src/tools/claudeAgent.ts` remain, as D25 ruled. `catch:effect-importer` is
-unchanged at its two named permanent residents. `Platform` is down to
-`lifecycle`, `agentDirectories` and `toolMissingHandler`, and production holds
-no `new AsyncLocalStorage`.
+`platform()` fell from 4 files / 13 sites to 3 / 3, `ambient:asyncLocalStorage`
+fell from 18 files / 26 sites to the 3 files / 4 sites of the process-roots
+holder, and `new AbortController()` fell from the four named residents to two.
+`node scripts/check-effect-migration-ratchet.mjs` at `ca4e74a597`, over 1,402
+production files, reports every one of its eight tracked patterns at its
+baseline with no headroom (the baseline file carries rows only for the four
+that are not empty):
+
+```
+platform()                3 files / 3 sites (baseline 3 files / 3 sites)
+ambient:asyncLocalStorage 3 files / 4 sites (baseline 3 files / 4 sites)
+new AbortController()     2 files / 2 sites (baseline 2 files / 2 sites)
+import:p-queue            0 files / 0 sites (baseline 0 files / 0 sites)
+import:p-defer            0 files / 0 sites (baseline 0 files / 0 sites)
+import:async-mutex        0 files / 0 sites (baseline 0 files / 0 sites)
+Effect.run*               0 files / 0 sites (baseline 0 files / 0 sites)
+catch:effect-importer     2 files / 2 sites (baseline 2 files / 2 sites)
+```
+
+`Effect.run*` stays empty, which is the point: the runs wave 5 moved all sit
+in the host packages and the SDK, which are boundary kinds rather than debt.
+`catch:effect-importer` held at its two named permanent residents through eleven
+files that newly import `effect` at runtime and reach zero raw catches in the
+same PR (`desktopPromptController.ts`, `initConfig.ts`, `register.ts`,
+`progressNavigation.ts`, `SettingsViewProvider.ts`, `nodeProcesses.ts`,
+`claudeAgentImport.ts`, `codexImport.ts`, `execUtils.ts`, `codexConfig.ts`,
+`models.ts`). `Platform` is down to `lifecycle`, `agentDirectories` and
+`toolMissingHandler`, and production holds no `new AsyncLocalStorage`.
 
 ## 7. Risks
 
