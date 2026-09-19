@@ -10,7 +10,6 @@ import {
   timestampField,
   usageWindow,
   type ParsedSubscriptionUsage,
-  type SubscriptionUsageHttp,
 } from './subscriptionUsageParsing';
 
 export const GLM_CODING_PLAN_USAGE_URL =
@@ -162,13 +161,12 @@ export function parseGlmCodingPlanUsage(
 }
 
 export function fetchGlmCodingPlanUsage(
-  http: SubscriptionUsageHttp,
   apiKey: string,
   signal: AbortSignal,
   usageUrl = GLM_CODING_PLAN_USAGE_URL,
 ): Effect.Effect<ParsedSubscriptionUsage, unknown> {
   return Effect.map(
-    fetchSubscriptionUsage(http, {
+    fetchSubscriptionUsage({
       url: usageUrl,
       headers: {
         Accept: 'application/json',

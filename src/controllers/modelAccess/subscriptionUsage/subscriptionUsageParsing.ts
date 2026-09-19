@@ -1,4 +1,5 @@
 import { Effect } from 'effect';
+import { FetchHttpClient } from 'effect/unstable/http';
 import { z } from 'zod';
 
 import type { SubscriptionUsageWindow } from '@shared/schemas';
@@ -11,10 +12,6 @@ export interface ParsedSubscriptionUsage {
   readonly windows: readonly SubscriptionUsageWindow[];
 }
 
-export interface SubscriptionUsageHttp {
-  (url: string, init: RequestInit): Promise<Response>;
-}
-
 export class SubscriptionUsageHttpError extends Error {
   constructor(readonly status: number) {
     super(`Subscription usage request failed with HTTP ${status}`);
@@ -24,38 +21,38 @@ export class SubscriptionUsageHttpError extends Error {
 
 /**
  * The one subscription-usage request every provider adapter makes, and the
- * stack's only foreign edge: the injected `SubscriptionUsageHttp` is the
- * platform `fetch`, adapted here rather than by a caller. Only the URL and
- * headers differ per provider, so the GET, the abort wiring, and the non-OK
- * status assertion live here; the decoded body goes back to the adapter's own
- * `parseX`. The failure channel stays `unknown` so the transport's own
- * rejection travels unwrapped into the service's classification of it
- * (`SyntaxError` -> malformed body, `SubscriptionUsageHttpError` -> refused).
+ * stack's only foreign edge: `fetch` comes from `FetchHttpClient.Fetch`, the
+ * reference that already defaults to the platform's own, so nothing has to be
+ * threaded here to reach it. Only the URL and headers differ per provider, so
+ * the GET, the abort wiring, and the non-OK status assertion live here; the
+ * decoded body goes back to the adapter's own `parseX`. The failure channel
+ * stays `unknown` so the transport's own rejection travels unwrapped into the
+ * service's classification of it (`SyntaxError` -> malformed body,
+ * `SubscriptionUsageHttpError` -> refused).
  */
-export function fetchSubscriptionUsage(
-  http: SubscriptionUsageHttp,
-  request: {
-    readonly url: string;
-    readonly headers: Record<string, string>;
-    readonly signal: AbortSignal;
-  },
-): Effect.Effect<unknown, unknown> {
-  return Effect.tryPromise({
-    try: () =>
-      http(request.url, {
-        method: 'GET',
-        headers: request.headers,
-        signal: request.signal,
-      }),
-    catch: (cause) => cause,
-  }).pipe(
-    Effect.flatMap((response) =>
-      response.ok
-        ? Effect.tryPromise({
-            try: () => response.json(),
-            catch: (cause) => cause,
-          })
-        : Effect.fail(new SubscriptionUsageHttpError(response.status)),
+export function fetchSubscriptionUsage(request: {
+  readonly url: string;
+  readonly headers: Record<string, string>;
+  readonly signal: AbortSignal;
+}): Effect.Effect<unknown, unknown> {
+  return Effect.flatMap(FetchHttpClient.Fetch, (fetch) =>
+    Effect.tryPromise({
+      try: () =>
+        fetch(request.url, {
+          method: 'GET',
+          headers: request.headers,
+          signal: request.signal,
+        }),
+      catch: (cause) => cause,
+    }).pipe(
+      Effect.flatMap((response) =>
+        response.ok
+          ? Effect.tryPromise({
+              try: () => response.json(),
+              catch: (cause) => cause,
+            })
+          : Effect.fail(new SubscriptionUsageHttpError(response.status)),
+      ),
     ),
   );
 }
