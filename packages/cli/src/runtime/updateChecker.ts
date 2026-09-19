@@ -5,7 +5,6 @@ import { z } from 'zod';
 
 import { Effect, Result } from 'effect';
 import { parseJsonWith } from '@common/parsing/safeParseJson';
-import { ensureError } from '@utils/errors/errorMessage';
 import { UPDATE_CHECK_SKIP_ENV } from '@utils/system/semverUpdateCheck';
 import { executeCommand } from '@utils/system/execUtils';
 import { isEnvFlagEnabled } from '@utils/system/envFlags';
@@ -145,15 +144,11 @@ const readCommandStdout: CommandRunner = (command, args, timeoutMs, cwd) =>
     // setting slots, since none are open yet, and quiet: true so wrapper debug
     // lines can't leak to the console sink.
     const workingDir = cwd ?? (yield* resolveCliCwd(undefined));
-    const result = yield* Effect.tryPromise({
-      try: () =>
-        executeCommand([command, ...args], {
-          timeout: timeoutMs,
-          cwd: workingDir,
-          settings: undefined,
-          quiet: true,
-        }),
-      catch: ensureError,
+    const result = yield* executeCommand([command, ...args], {
+      timeout: timeoutMs,
+      cwd: workingDir,
+      settings: undefined,
+      quiet: true,
     });
     return result.success ? result.stdout : undefined;
   });
