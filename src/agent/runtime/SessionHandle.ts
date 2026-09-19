@@ -986,7 +986,7 @@ export class SessionHandle {
    * remembers who the fact belongs to, so a drain can answer for one run's
    * facts rather than for whatever the session happened to have queued. A
    * refused batch wrote nothing and is never retried here (D6 b, R7): the
-   * cause is logged as itself and kept on the publication's Exit for the
+   * cause is logged as itself and kept in the publication's `refusal` for the
    * settle that answers for it, and the job itself returns quietly so the
    * publisher's own settle stays a barrier rather than a second reporter.
    */
