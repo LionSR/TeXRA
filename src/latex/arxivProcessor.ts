@@ -190,7 +190,7 @@ function joinedStream<T, A, E>(
 
 export type ArxivDownloadDestination = 'root' | 'references';
 
-export interface DownloadSourceOptions {
+interface DownloadSourceOptions {
   workspaceRoot: string;
   formatter: LatexFormatter | null;
   progressCallback?: (msg: string, increment?: number) => void;
