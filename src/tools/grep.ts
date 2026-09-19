@@ -112,13 +112,8 @@ function buildArguments(input: GrepInput): string[] {
   return args;
 }
 
-/**
- * The per-call context this tool reads from the caller's turn: the batch's
- * abort signal and the working directory.
- */
-interface GrepPorts extends WorkspacePathPorts {
-  readonly signal: AbortSignal | undefined;
-}
+/** The per-call context this tool reads from the caller's turn. */
+type GrepPorts = WorkspacePathPorts;
 
 const runGrep = Effect.fn('GrepTool.execute')(function* (
   ports: GrepPorts,
@@ -156,26 +151,20 @@ const runGrep = Effect.fn('GrepTool.execute')(function* (
   ];
 
   // `executeCommand` reports every failure in its result (`success`,
-  // `exitCode`, `timedOut`, `outputLimitExceeded`) and never rejects, so the
-  // spawn has no error channel of its own. `ports.signal` is the fiber's own
-  // abort signal, and the region is interruptible now that the spawn is no
-  // longer behind an uninterruptible host-port wrap: interrupting the tool
-  // tears the `rg` process down instead of abandoning it.
-  const result = yield* Effect.promise(() =>
-    executeCommand(command, {
-      // No `working_directory` on the call means the search runs from the
-      // session's own workspace root, which the call carries as data.
-      cwd: root ?? ports.workspaceRoot,
-      // The call's own setting slots, carried by the same ports as the root.
-      settings: ports.settings,
-      channel: CHANNEL,
-      truncate: false,
-      maxBuffer: GREP_MAX_BUFFER_CHARS,
-      // Cancellation for the owning agent run — parallel batches must be
-      // able to terminate large-repo rg subprocesses on interrupt.
-      signal: ports.signal,
-    }),
-  );
+  // `exitCode`, `timedOut`, `outputLimitExceeded`) and never fails, so the
+  // spawn has no error channel of its own. The region is interruptible, and
+  // interrupting the tool tears the `rg` process down instead of abandoning
+  // it — parallel batches must be able to stop large-repo searches.
+  const result = yield* executeCommand(command, {
+    // No `working_directory` on the call means the search runs from the
+    // session's own workspace root, which the call carries as data.
+    cwd: root ?? ports.workspaceRoot,
+    // The call's own setting slots, carried by the same ports as the root.
+    settings: ports.settings,
+    channel: CHANNEL,
+    truncate: false,
+    maxBuffer: GREP_MAX_BUFFER_CHARS,
+  });
 
   if (result.outputLimitExceeded) {
     return yield* Effect.fail(
@@ -236,10 +225,6 @@ export const GrepTool = defineTool({
   schema: GrepInputSchema,
   execute: Effect.fn('GrepTool.call')(function* (input: GrepInput) {
     const call = yield* ToolCall;
-    const ports: GrepPorts = {
-      ...workspacePathPorts(call),
-      signal: yield* Effect.abortSignal,
-    };
-    return yield* runGrep(ports, input);
+    return yield* runGrep(workspacePathPorts(call), input);
   }),
 });

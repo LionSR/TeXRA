@@ -6,7 +6,6 @@ import { formatError } from '@common/errors';
 import { withLogChannel } from '@logger/effectLog';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { FileLocation } from '@shared/schemas';
-import { ensureError } from '@utils/errors/errorMessage';
 import { readNormalizedFile } from '@utils/files/fsDurability';
 import { entryExists } from '@utils/files/fsEntryExists';
 import { pathToLocationIn } from '@utils/files/fileLocation';
@@ -335,17 +334,12 @@ export class LaTeXdiffService {
     });
   }
 
-  private getGitRoot(cwd: string): Effect.Effect<string | null, Error> {
-    return Effect.tryPromise({
-      try: (signal) =>
-        executeCommand(['git', 'rev-parse', '--show-toplevel'], {
-          channel: this.channel,
-          cwd,
-          // The roots of the workspace being diffed, held by this service.
-          settings: this.roots,
-          signal,
-        }),
-      catch: ensureError,
+  private getGitRoot(cwd: string): Effect.Effect<string | null> {
+    return executeCommand(['git', 'rev-parse', '--show-toplevel'], {
+      channel: this.channel,
+      cwd,
+      // The roots of the workspace being diffed, held by this service.
+      settings: this.roots,
     }).pipe(
       Effect.map((result) =>
         result.success && result.stdout ? result.stdout.trim() : null,

@@ -292,33 +292,33 @@ function createBackgroundBashStrategy(params: {
     deliverAfterInterrupt: true,
 
     launch: (_ports, signal) =>
-      Effect.tryPromise({
-        try: () => {
-          startedAt = Date.now();
-          return executeCommand(command, {
-            cwd: params.cwd,
-            settings: params.settings,
-            timeout: params.timeoutMs,
-            buffer: false,
-            // The string command form gets shell teardown: abort/timeout signal
-            // the whole process group so backgrounded jobs and piped children are
-            // torn down rather than left running.
-            signal,
-            onStdout: (chunk) => {
-              stdout.append(chunk);
-              logChunk(chunk, 'info');
-            },
-            onStderr: (chunk) => {
-              stderr.append(chunk);
-              logChunk(chunk, 'warn');
-            },
-          });
-        },
-        catch: ensureError,
+      Effect.suspend(() => {
+        startedAt = Date.now();
+        return executeCommand(command, {
+          cwd: params.cwd,
+          settings: params.settings,
+          timeout: params.timeoutMs,
+          buffer: false,
+          // The child run's own stop signal, not the fiber's: this strategy
+          // sets `deliverAfterInterrupt`, so a stopped background command must
+          // still come back with a result. The string command form gets shell
+          // teardown — abort/timeout signal the whole process group so
+          // backgrounded jobs and piped children are torn down rather than
+          // left running.
+          signal,
+          onStdout: (chunk) => {
+            stdout.append(chunk);
+            logChunk(chunk, 'info');
+          },
+          onStderr: (chunk) => {
+            stderr.append(chunk);
+            logChunk(chunk, 'warn');
+          },
+        });
       }),
 
     isTerminal: () => true,
-    // `executeCommand` never rejects on a non-zero exit — it resolves with the
+    // `executeCommand` never fails on a non-zero exit — it answers with the
     // exit code, so the failure is an application-level one.
     isTurnError: (turn) => !turn.success,
     onTurnError: (turn, turnLogger) =>
@@ -445,30 +445,24 @@ export class BashTool extends defineTool({
         FOREGROUND_OUTPUT_TAIL_CHARS,
       );
       const startedAt = Date.now();
-      const signal = yield* Effect.abortSignal;
-      const result = yield* Effect.tryPromise({
-        try: () =>
-          executeCommand(command, {
-            cwd,
-            // The call's own session roots: a `git commit` the agent runs
-            // carries this paper's configured identity.
-            settings: toolCall.roots,
-            buffer: false,
-            timeout: timeoutMs,
-            // The string command form gets shell teardown: abort/timeout signal the
-            // whole process group so piped children and backgrounded jobs are torn
-            // down.
-            onStdout: (chunk) => {
-              stdout.append(chunk);
-              toolCall.hooks?.onToolOutput?.(chunk);
-            },
-            onStderr: (chunk) => {
-              stderr.append(chunk);
-              toolCall.hooks?.onToolOutput?.(chunk);
-            },
-            signal,
-          }),
-        catch: ensureError,
+      const result = yield* executeCommand(command, {
+        cwd,
+        // The call's own session roots: a `git commit` the agent runs
+        // carries this paper's configured identity.
+        settings: toolCall.roots,
+        buffer: false,
+        timeout: timeoutMs,
+        // The string command form gets shell teardown: interruption and
+        // timeout signal the whole process group so piped children and
+        // backgrounded jobs are torn down.
+        onStdout: (chunk) => {
+          stdout.append(chunk);
+          toolCall.hooks?.onToolOutput?.(chunk);
+        },
+        onStderr: (chunk) => {
+          stderr.append(chunk);
+          toolCall.hooks?.onToolOutput?.(chunk);
+        },
       });
       // Spawn/cancellation diagnostics can come from executeCommand itself
       // rather than either subprocess stream, so retain those as a fallback.

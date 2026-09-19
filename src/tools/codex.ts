@@ -459,12 +459,7 @@ const createCodexThread = Effect.fn('codex.createCodexThread')(function* (
       requestedEffort === 'xhigh'
         ? config.getCodexCliReasoningEffort(
             roots.workspaceState,
-            // The capability probe spawns the resolved binary: one foreign
-            // edge, wrapped here until `executeCommand` itself answers in
-            // Effect.
-            yield* Effect.promise(() =>
-              config.codexBinarySupportsXhigh(codexPath),
-            ),
+            yield* config.codexBinarySupportsXhigh(codexPath),
           )
         : requestedEffort,
     skipGitRepoCheck: true as const,
