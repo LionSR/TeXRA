@@ -132,19 +132,6 @@ export type SettingsViewSnapshot =
   | 'skills'
   | 'telemetry';
 
-interface CliRuntimeReachability {
-  /**
-   * Representative CLI command that reaches this setting after it has been set.
-   * Placeholders are allowed when the command needs an installed agent/model.
-   */
-  readonly command: string;
-  /**
-   * Short manual trace from the CLI command surface to the honoring reader.
-   * This is a review checklist item, not executable wiring.
-   */
-  readonly through: string;
-}
-
 /** Evidence that one host's runtime honors a setting. */
 interface SettingHonor {
   /**
@@ -153,12 +140,6 @@ interface SettingHonor {
    * host honors a key by naming a file that does not exist.
    */
   readonly reader: string;
-  /**
-   * Runtime-reachability trace. Required by the guardrail suite whenever the
-   * row is also surfaced in the CLI `/config` panel, so an editable row is
-   * never a silent no-op.
-   */
-  readonly reachability?: CliRuntimeReachability;
 }
 
 /** Which hosts' runtimes honor the setting, and how that is known. */
@@ -286,20 +267,10 @@ function sameSlot(store: SettingStore): SettingSlots {
 
 /**
  * Every host's runtime reads the setting through one host-neutral module in
- * `src/`, so all three honor it. `cliReachability` is supplied when the row is
- * also editable in `/config`.
+ * `src/`, so all three honor it.
  */
-function everyHost(
-  reader: string,
-  cliReachability?: CliRuntimeReachability,
-): SettingHonoredBy {
-  return {
-    vscode: { reader },
-    desktop: { reader },
-    cli: cliReachability
-      ? { reader, reachability: cliReachability }
-      : { reader },
-  };
+function everyHost(reader: string): SettingHonoredBy {
+  return { vscode: { reader }, desktop: { reader }, cli: { reader } };
 }
 
 type SurfacedSettingInput = Omit<
@@ -448,12 +419,7 @@ const CORE_SETTING_ROWS: Record<
     title: 'Child-run concurrency budget',
     description: CHILD_RUN_CONCURRENCY_BUDGET_SETTING.description,
     category: 'multi-agent',
-    honoredBy: everyHost('src/agent/runtime/childRunBudget.ts', {
-      command:
-        'texra run <tool-use-agent> --instruction "dispatch two subagents"',
-      through:
-        'packages/cli/src/commands/workflow.ts -> packages/cli/src/runtime/executeCli.ts -> src/tools/delegation/detachedChildRun.ts -> src/agent/runtime/childRunLoop.ts -> src/agent/runtime/childRunBudget.ts',
-    }),
+    honoredBy: everyHost('src/agent/runtime/childRunBudget.ts'),
     surfaces: { settingsView: 'multi-agent', cliConfig: true },
   },
   'goal.enabled': {
@@ -549,12 +515,7 @@ const CORE_SETTING_ROWS: Record<
     title: 'Compaction threshold',
     description: MODEL_COMPACTION_THRESHOLD_SETTING.description,
     category: 'model',
-    honoredBy: everyHost('src/agent/runtime/run/compaction.ts', {
-      command:
-        'texra run <tool-use-agent> --instruction "answer a short question"',
-      through:
-        'packages/cli/src/commands/workflow.ts -> packages/cli/src/runtime/executeCli.ts -> src/agent/runtime/loop/toolUse.ts -> src/agent/runtime/run/compaction.ts',
-    }),
+    honoredBy: everyHost('src/agent/runtime/run/compaction.ts'),
     surfaces: { settingsView: 'multi-agent', cliConfig: true },
   },
   'model.retry.maxAttempts': {
@@ -562,12 +523,7 @@ const CORE_SETTING_ROWS: Record<
     title: 'Automatic retries',
     description: MODEL_RETRY_MAX_ATTEMPTS_SETTING.description,
     category: 'model',
-    honoredBy: everyHost('src/agent/runtime/ModelInvoker.ts', {
-      command:
-        'texra run <tool-use-agent> --instruction "answer a short question"',
-      through:
-        'packages/cli/src/commands/workflow.ts -> packages/cli/src/runtime/executeCli.ts -> src/agent/runtime/executeAgent.ts -> src/agent/runtime/ModelInvoker.ts',
-    }),
+    honoredBy: everyHost('src/agent/runtime/ModelInvoker.ts'),
     surfaces: { settingsView: 'multi-agent', cliConfig: true },
   },
   // Thin provider modules own the public prefer-switch surface; the shared
@@ -583,12 +539,7 @@ const CORE_SETTING_ROWS: Record<
     title: 'Subscription input token budget (K tokens)',
     description: CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.description,
     category: 'model',
-    honoredBy: everyHost('src/model/providerCapabilities.ts', {
-      command:
-        'texra run <tool-use-agent> --instruction "answer a short question"',
-      through:
-        'packages/cli/src/commands/workflow.ts -> packages/cli/src/runtime/executeCli.ts -> src/agent/runtime/run/modelBinding.ts -> src/model/providerCapabilities.ts',
-    }),
+    honoredBy: everyHost('src/model/providerCapabilities.ts'),
     // This bucket controls snapshot/rebroadcast routing, not tab placement;
     // reuse it for the Subscriptions control because no subscriptions bucket exists.
     surfaces: { settingsView: 'multi-agent', cliConfig: true },
@@ -760,12 +711,7 @@ const CORE_SETTING_ROWS: Record<
     description:
       'Expose enabled TeXRA and imported skills to tool-use agent prompts. Skills are off by default.',
     category: 'tools',
-    honoredBy: everyHost('src/agent/prompt/userVars.ts', {
-      command:
-        'texra run <tool-use-agent> --instruction "answer a short question"',
-      through:
-        'packages/cli/src/commands/workflow.ts -> packages/cli/src/runtime/executeCli.ts -> src/agent/runtime/runAgent.ts -> src/agent/runtime/executeAgent.ts -> src/agent/runtime/AgentLaunchContext.ts -> src/agent/prompt/userVars.ts',
-    }),
+    honoredBy: everyHost('src/agent/prompt/userVars.ts'),
     surfaces: { settingsView: 'skills', cliConfig: true },
   },
   'toolUse.requireEditApproval': {
@@ -848,15 +794,7 @@ const CORE_SETTINGS: readonly StateSettingEntry[] = [
     honoredBy: {
       vscode: { reader: 'src/utils/config/platformSettings.ts' },
       desktop: { reader: 'src/utils/config/platformSettings.ts' },
-      cli: {
-        reader: 'packages/cli/src/runtime/cliConfig.ts',
-        reachability: {
-          command:
-            'texra run <tool-use-agent> --instruction "run a shell command"',
-          through:
-            'packages/cli/src/commands/workflow.ts -> packages/cli/src/runtime/executeCli.ts -> packages/cli/src/runtime/cliContext.ts -> packages/cli/src/runtime/cliConfig.ts -> src/agent/runtime/SessionHandle.ts -> src/tools/approval/bashApproval.ts',
-        },
-      },
+      cli: { reader: 'packages/cli/src/runtime/cliConfig.ts' },
     },
     enumLabels: ['Never', 'Ask', 'Auto-approve'],
     surfaces: { settingsView: 'approval', cliConfig: true },
@@ -876,94 +814,6 @@ const WORKFLOW_COMPILE_READER =
 const ROUTE_ENDPOINT_READER = 'src/agent/runtime/run/routeEndpoint.ts';
 const PROVIDER_CONFIG_READER = 'src/utils/config/providerConfig.ts';
 
-const GIT_AUTHOR_RUNTIME_REACHABILITY = {
-  command: 'texra run <tool-use-agent> --instruction "create a git commit"',
-  through:
-    'packages/cli/src/commands/workflow.ts -> packages/cli/src/runtime/executeCli.ts -> src/utils/system/execCore.ts -> src/utils/system/gitAuthorEnv.ts',
-} satisfies CliRuntimeReachability;
-const GIT_WORKTREE_RUNTIME_REACHABILITY = {
-  command:
-    'texra run <tool-use-agent> --instruction "delegate a task to a subagent"',
-  through:
-    'packages/cli/src/commands/workflow.ts -> packages/cli/src/runtime/executeCli.ts -> src/tools/delegation/DelegationTools.ts -> src/tools/delegation/inputFields.ts -> src/utils/config/worktreeConfig.ts',
-} satisfies CliRuntimeReachability;
-const DETACH_SUBAGENTS_RUNTIME_REACHABILITY = {
-  command: 'texra chat',
-  through:
-    'packages/cli/src/commands/chat.ts -> packages/cli/src/chat/tui/runChatTui.tsx -> packages/cli/src/chat/chatSessionController.ts -> src/agent/runtime/detachSubagentsOnStop.ts',
-} satisfies CliRuntimeReachability;
-const ORCHESTRATOR_KILL_RUNTIME_REACHABILITY = {
-  command:
-    'texra run <tool-use-agent> --instruction "delegate two tasks, then stop the slower subagent"',
-  through:
-    'packages/cli/src/commands/workflow.ts -> src/agent/runtime/runAgent.ts -> src/tools/ExecutionsTool.ts',
-} satisfies CliRuntimeReachability;
-const WORKFLOW_COMPILE_RUNTIME_REACHABILITY = {
-  command:
-    'texra run <workflow-agent> --input paper.tex --instruction "revise the paper"',
-  through:
-    'packages/cli/src/commands/workflow.ts -> src/agent/implementations/flows/reflection/output/compileCheck.ts',
-} satisfies CliRuntimeReachability;
-const WORKFLOW_REJECT_RUNTIME_REACHABILITY = {
-  command:
-    'texra run <workflow-agent> --input paper.tex --instruction "revise the paper"',
-  through:
-    'packages/cli/src/commands/workflow.ts -> src/agent/runtime/loop/reflection.ts',
-} satisfies CliRuntimeReachability;
-const OPENAI_WEBSOCKET_RUNTIME_REACHABILITY = {
-  command:
-    'texra run <workflow-agent> --model <openai-model> --input paper.tex --instruction "summarize the paper"',
-  through:
-    'packages/cli/src/commands/workflow.ts -> src/agent/runtime/run/modelBinding.ts',
-} satisfies CliRuntimeReachability;
-const OPENROUTER_ROUTING_RUNTIME_REACHABILITY = {
-  command:
-    'texra run <tool-use-agent> --model <openrouter-routable-model> --instruction "answer a short question"',
-  through:
-    'packages/cli/src/commands/workflow.ts -> packages/cli/src/runtime/executeCli.ts -> src/agent/runtime/run/modelBinding.ts -> src/utils/config/providerConfig.ts',
-} satisfies CliRuntimeReachability;
-const KIMI_CODE_ROUTING_RUNTIME_REACHABILITY = {
-  // Requires a Kimi Code API key (`texra chat` /key flow or KIMI_CODE_API_KEY).
-  command:
-    'texra run <tool-use-agent> --model kimi3 --instruction "answer a short question"',
-  through:
-    'packages/cli/src/commands/workflow.ts -> packages/cli/src/runtime/executeCli.ts -> src/agent/runtime/run/modelBinding.ts -> src/model/kimiCodeSubscriptionRouting.ts',
-} satisfies CliRuntimeReachability;
-const PROVIDER_REGION_RUNTIME_REACHABILITY = {
-  command:
-    'texra run <tool-use-agent> --model <dashscope/minimax/moonshot/glm-model> --instruction "answer a short question"',
-  through:
-    'packages/cli/src/commands/workflow.ts -> packages/cli/src/runtime/executeCli.ts -> src/agent/runtime/run/modelBinding.ts -> src/agent/runtime/run/routeEndpoint.ts',
-} satisfies CliRuntimeReachability;
-const PROVIDER_ENDPOINT_RUNTIME_REACHABILITY = {
-  command:
-    'texra run <tool-use-agent> --model <provider-model> --instruction "answer a short question"',
-  through:
-    'packages/cli/src/commands/workflow.ts -> packages/cli/src/runtime/executeCli.ts -> src/agent/runtime/run/modelBinding.ts -> src/agent/runtime/run/routeEndpoint.ts',
-} satisfies CliRuntimeReachability;
-const CODEX_AGENT_RUNTIME_REACHABILITY = {
-  command: 'texra run <tool-use-agent> --instruction "launch a Codex subagent"',
-  through:
-    'packages/cli/src/commands/workflow.ts -> packages/cli/src/runtime/executeCli.ts -> src/tools/codex.ts -> src/tools/codexConfig.ts',
-} satisfies CliRuntimeReachability;
-const CLAUDE_AGENT_RUNTIME_REACHABILITY = {
-  command:
-    'texra run <tool-use-agent> --instruction "launch a Claude Code subagent"',
-  through:
-    'packages/cli/src/commands/workflow.ts -> packages/cli/src/runtime/executeCli.ts -> src/tools/claudeAgent.ts -> src/tools/claudeAgentConfig.ts',
-} satisfies CliRuntimeReachability;
-const TOOL_AVAILABILITY_RUNTIME_REACHABILITY = {
-  command: 'texra run <tool-use-agent> --instruction "use an external tool"',
-  through:
-    'packages/cli/src/commands/workflow.ts -> packages/cli/src/runtime/executeCli.ts -> src/agent/runtime/agentToolResolution.ts -> src/tools/toolAvailability.ts',
-} satisfies CliRuntimeReachability;
-const TOOL_PATH_PROTECTION_RUNTIME_REACHABILITY = {
-  command:
-    'texra run <tool-use-agent> --instruction "read a file outside the working directory"',
-  through:
-    'packages/cli/src/commands/workflow.ts -> packages/cli/src/runtime/executeCli.ts -> src/tools/pathResolution.ts',
-} satisfies CliRuntimeReachability;
-
 /**
  * The one documented slot divergence in the catalog, carried by the git
  * identity rows: the extension and desktop store them in WorkspaceState —
@@ -980,31 +830,13 @@ const WORKSPACE_STATE_CLI_CONFIG_SLOTS: SettingSlots = {
   cli: 'config',
 };
 
-const SKILL_AVAILABILITY_REACHABILITY = {
-  command: 'texra run <tool-use-agent> --instruction "answer a short question"',
-  through:
-    'packages/cli/src/commands/workflow.ts -> packages/cli/src/runtime/executeCli.ts -> src/agent/runtime/runAgent.ts -> src/agent/runtime/executeAgent.ts -> src/agent/runtime/AgentLaunchContext.ts -> src/agent/prompt/userVars.ts -> src/skills/runtimeSkills.ts',
-} satisfies CliRuntimeReachability;
+const GIT_AUTHOR_HONORED_BY = everyHost(GIT_AUTHOR_READER);
 
-const GIT_AUTHOR_HONORED_BY = everyHost(
-  GIT_AUTHOR_READER,
-  GIT_AUTHOR_RUNTIME_REACHABILITY,
-);
+const CODEX_AGENT_HONORED_BY = everyHost(CODEX_CONFIG_READER);
 
-const CODEX_AGENT_HONORED_BY = everyHost(
-  CODEX_CONFIG_READER,
-  CODEX_AGENT_RUNTIME_REACHABILITY,
-);
+const CLAUDE_AGENT_HONORED_BY = everyHost(CLAUDE_AGENT_CONFIG_READER);
 
-const CLAUDE_AGENT_HONORED_BY = everyHost(
-  CLAUDE_AGENT_CONFIG_READER,
-  CLAUDE_AGENT_RUNTIME_REACHABILITY,
-);
-
-const WORKFLOW_COMPILE_HONORED_BY = everyHost(
-  WORKFLOW_COMPILE_READER,
-  WORKFLOW_COMPILE_RUNTIME_REACHABILITY,
-);
+const WORKFLOW_COMPILE_HONORED_BY = everyHost(WORKFLOW_COMPILE_READER);
 
 // Written by the extension/desktop Models tab and the CLI's `/config` panel
 // through the same catalog write path.
@@ -1017,10 +849,7 @@ const PROVIDER_ENDPOINT_SETTINGS = PROVIDER_ENDPOINT_STATE_ENTRIES.map(
       description: `Custom base URL for ${displayName} API requests. Leave empty to use the default endpoint.`,
       category: 'model',
       slots: sameSlot('globalState'),
-      honoredBy: everyHost(
-        ROUTE_ENDPOINT_READER,
-        PROVIDER_ENDPOINT_RUNTIME_REACHABILITY,
-      ),
+      honoredBy: everyHost(ROUTE_ENDPOINT_READER),
       surfaces: { settingsView: 'profile', cliConfig: true },
     }),
 );
@@ -1091,10 +920,7 @@ const PROVIDER_ROUTING_SETTINGS = (
     description: copy.description,
     category: 'model',
     slots: sameSlot('globalState'),
-    honoredBy: everyHost(
-      ROUTE_ENDPOINT_READER,
-      PROVIDER_REGION_RUNTIME_REACHABILITY,
-    ),
+    honoredBy: everyHost(ROUTE_ENDPOINT_READER),
     surfaces: {
       settingsView: 'profile',
       cliConfig: true,
@@ -1148,10 +974,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
       'Allow spawned subagents to run in isolated git worktrees so parallel edits do not conflict.',
     category: 'git',
     slots: WORKSPACE_STATE_CLI_CONFIG_SLOTS,
-    honoredBy: everyHost(
-      GIT_WORKTREE_READER,
-      GIT_WORKTREE_RUNTIME_REACHABILITY,
-    ),
+    honoredBy: everyHost(GIT_WORKTREE_READER),
     surfaces: { settingsView: 'git-author', cliConfig: true },
   }),
 
@@ -1171,10 +994,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
       'Allow the orchestrator to stop subagents that are no longer needed.',
     category: 'multi-agent',
     slots: sameSlot('globalState'),
-    honoredBy: everyHost(
-      'src/tools/ExecutionsTool.ts',
-      ORCHESTRATOR_KILL_RUNTIME_REACHABILITY,
-    ),
+    honoredBy: everyHost('src/tools/ExecutionsTool.ts'),
     surfaces: { settingsView: 'multi-agent', cliConfig: true },
   }),
   surfacedSetting({
@@ -1185,10 +1005,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
       'Let active subagents continue when the orchestrator is stopped.',
     category: 'multi-agent',
     slots: sameSlot('globalState'),
-    honoredBy: everyHost(
-      'src/agent/runtime/detachSubagentsOnStop.ts',
-      DETACH_SUBAGENTS_RUNTIME_REACHABILITY,
-    ),
+    honoredBy: everyHost('src/agent/runtime/detachSubagentsOnStop.ts'),
     surfaces: { settingsView: 'multi-agent', cliConfig: true },
   }),
 
@@ -1338,10 +1155,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
       'Reject an agent edit when the automatic post-output compile fails, so broken LaTeX is not accepted.',
     category: 'workflow',
     slots: sameSlot('workspaceState'),
-    honoredBy: everyHost(
-      'src/agent/runtime/loop/reflection.ts',
-      WORKFLOW_REJECT_RUNTIME_REACHABILITY,
-    ),
+    honoredBy: everyHost('src/agent/runtime/loop/reflection.ts'),
     surfaces: { settingsView: 'latex', cliConfig: true },
   }),
 
@@ -1429,10 +1243,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
       'EXPERIMENTAL: use the persistent WebSocket transport for OpenAI Responses requests (lower latency for tool-use loops), and let the ChatGPT-subscription Codex backend attempt WebSocket. Off by default.',
     category: 'model',
     slots: sameSlot('globalState'),
-    honoredBy: everyHost(
-      'src/agent/runtime/run/modelBinding.ts',
-      OPENAI_WEBSOCKET_RUNTIME_REACHABILITY,
-    ),
+    honoredBy: everyHost('src/agent/runtime/run/modelBinding.ts'),
     surfaces: {
       settingsView: 'profile',
       cliConfig: true,
@@ -1482,10 +1293,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
       'Route all API calls through OpenRouter instead of direct provider APIs. Requires an OpenRouter API key; your OpenRouter key is always used directly.',
     category: 'model',
     slots: sameSlot('globalState'),
-    honoredBy: everyHost(
-      PROVIDER_CONFIG_READER,
-      OPENROUTER_ROUTING_RUNTIME_REACHABILITY,
-    ),
+    honoredBy: everyHost(PROVIDER_CONFIG_READER),
     onWrite: { invalidatesModelOptions: true },
     surfaces: {
       settingsView: 'profile',
@@ -1510,10 +1318,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
       'Route dual-backend Kimi models (K3) through the Kimi Code coding endpoint when a Kimi Code API key is set. The two coding-only models always use the key. When off, K3 uses the Moonshot open platform.',
     category: 'model',
     slots: sameSlot('globalState'),
-    honoredBy: everyHost(
-      'src/agent/runtime/run/modelBinding.ts',
-      KIMI_CODE_ROUTING_RUNTIME_REACHABILITY,
-    ),
+    honoredBy: everyHost('src/agent/runtime/run/modelBinding.ts'),
     // Kimi Code and OpenRouter are alternative routes for the same dual-backend
     // models, so enabling one clears the other on every write path.
     onWrite: {
@@ -1542,10 +1347,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
       'Use a Coding Plan subscription key instead of pay-as-you-go. Routes requests through the coding-specific endpoint with monthly quota limits.',
     category: 'model',
     slots: sameSlot('globalState'),
-    honoredBy: everyHost(
-      ROUTE_ENDPOINT_READER,
-      PROVIDER_REGION_RUNTIME_REACHABILITY,
-    ),
+    honoredBy: everyHost(ROUTE_ENDPOINT_READER),
     onWrite: { invalidatesModelOptions: true },
     surfaces: {
       settingsView: 'profile',
@@ -1575,10 +1377,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
       'Enable or disable external tool integration groups used by agent tool resolution.',
     category: 'tools',
     slots: sameSlot('globalState'),
-    honoredBy: everyHost(
-      'src/tools/toolAvailability.ts',
-      TOOL_AVAILABILITY_RUNTIME_REACHABILITY,
-    ),
+    honoredBy: everyHost('src/tools/toolAvailability.ts'),
     openForm: 'tools',
     surfaces: { cliConfig: true },
   }),
@@ -1589,10 +1388,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     description: 'Enable or disable individual skills in this workspace.',
     category: 'tools',
     slots: sameSlot('config'),
-    honoredBy: everyHost(
-      'src/skills/runtimeSkills.ts',
-      SKILL_AVAILABILITY_REACHABILITY,
-    ),
+    honoredBy: everyHost('src/skills/runtimeSkills.ts'),
     openForm: 'skills',
     surfaces: { settingsView: 'skills', cliConfig: true },
   }),
@@ -1603,10 +1399,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     description: 'Enable or disable skill source groups in this workspace.',
     category: 'tools',
     slots: sameSlot('config'),
-    honoredBy: everyHost(
-      'src/skills/runtimeSkills.ts',
-      SKILL_AVAILABILITY_REACHABILITY,
-    ),
+    honoredBy: everyHost('src/skills/runtimeSkills.ts'),
     openForm: 'skills',
     surfaces: { settingsView: 'skills', cliConfig: true },
   }),
@@ -1618,10 +1411,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
       'Keep file-reading, editing, search, diagnostics, and PDF tools inside the active working directory. Turn this off only when an agent must use arbitrary filesystem paths.',
     category: 'tools',
     slots: sameSlot('workspaceState'),
-    honoredBy: everyHost(
-      'src/tools/pathResolution.ts',
-      TOOL_PATH_PROTECTION_RUNTIME_REACHABILITY,
-    ),
+    honoredBy: everyHost('src/tools/pathResolution.ts'),
     surfaces: { settingsView: 'approval', cliConfig: true },
   }),
 ];
@@ -1702,8 +1492,7 @@ export function settingsViewSnapshotEntries(
 /**
  * The `/config` roster: every row the CLI panel renders, across both catalog
  * tiers. `surfaces.cliConfig` is the single predicate, so a row can be honored
- * by the CLI runtime without being editable there (and the guardrail suite
- * still demands runtime-reachability evidence for the ones that are).
+ * by the CLI runtime without being editable there.
  */
 export const CLI_STATE_SETTINGS: readonly SurfacedSettingEntry[] =
   SURFACED_SETTINGS.filter((entry) => entry.surfaces.cliConfig === true);
