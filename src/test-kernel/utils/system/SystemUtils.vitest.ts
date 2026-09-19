@@ -11,10 +11,10 @@ import { Effect, Exit, Fiber } from 'effect';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 
 // Local imports
+import type { ExecResult } from '@shared/schemas';
 import { waitForCondition } from '@test/support/asyncTestUtils';
 import { createFakeHost, setupPlatform } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
-import type { ExecResult } from '@shared/schemas';
 import { executeCommandSync } from '@utils/system/execCore';
 import { executeCommand } from '@utils/system/execUtils';
 import { BinaryResolverService } from '@utils/system/binaryResolver';
