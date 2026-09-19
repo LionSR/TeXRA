@@ -44,6 +44,7 @@ import type { SessionView } from '@shared/session/sessionView';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { assertNoParentTraversal } from '@tools/pathResolution';
 import { executed } from '@tools/core/result';
+import { requireToolRun } from '@tools/core/toolRun';
 import {
   hasCompletedRunConversationEvidence,
   readCompletedRunConversation,
@@ -232,14 +233,10 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     this: ExecutionsTool,
     input: ExecutionsToolInput,
   ) {
-    const toolCall = yield* ToolCall;
-    if (!toolCall.run)
-      return yield* Effect.fail(
-        new ToolError('This tool requires an active agent session.'),
-      );
+    const run = yield* requireToolRun('executions', yield* ToolCall);
     const context: RunToolContext = {
-      session: toolCall.run.session,
-      runId: toolCall.run.runId,
+      session: run.session,
+      runId: run.runId,
     };
     return yield* this.run(context, input).pipe(
       Effect.catchTag('ExecutionsReadFailed', (error) =>
