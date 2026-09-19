@@ -14,7 +14,7 @@ import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local imports - utils
 import { checkToolInstalled } from '@utils/system/toolUtils';
-import { extendEnvPath } from '@utils/system/platformPaths';
+import { withExtendedPath } from '@utils/system/platformPaths';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Format Detection (inlined from xmlFormatDetection.ts - only used here)
@@ -154,7 +154,7 @@ const convertWithPandoc = Effect.fn('xml.convertWithPandoc')(function* (
       execa('pandoc', ['-f', format, '-t', 'markdown'], {
         input: text,
         stripFinalNewline: false,
-        env: { ...process.env, PATH: extendEnvPath() },
+        env: withExtendedPath(process.env),
       }),
     catch: ensureError,
   }).pipe(

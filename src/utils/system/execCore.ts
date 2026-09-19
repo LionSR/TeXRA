@@ -30,7 +30,7 @@ import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { ExecResult } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getGitAuthorEnv } from '@utils/system/gitAuthorEnv';
-import { IS_WINDOWS, extendEnvPath } from '@utils/system/platformPaths';
+import { IS_WINDOWS, withExtendedPath } from '@utils/system/platformPaths';
 
 export const CHANNEL = 'execUtils';
 
@@ -76,12 +76,15 @@ export function commandEnv(
   settings: SettingsStores | undefined,
   envOverrides?: Record<string, string>,
 ): Record<string, string | undefined> {
-  const env = {
+  // withExtendedPath, not a bare `env.PATH =`: on Windows the copy of
+  // `process.env` carries the variable as `Path`, so assigning `PATH` would
+  // leave both spellings on the environment handed to the shell — and the one
+  // the shell actually resolves against is then undefined.
+  const env = withExtendedPath({
     ...process.env,
     ...getGitAuthorEnv(settings),
     ...envOverrides,
-  };
-  env.PATH = extendEnvPath(env.PATH);
+  });
 
   // Export project context so AI agents can orient themselves immediately.
   env.PROJECT_DIR = workspacePath;
