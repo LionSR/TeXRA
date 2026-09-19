@@ -53,7 +53,7 @@ const SHOW_OF_MEMBER: Record<
  * a `CancellationToken`, so an interrupted `input` closes the box the run
  * opened instead of leaving it waiting for an answer nobody will read.
  */
-export class VscodeUiHost implements MessageHost, PromptHost {
+class VscodeUiHost implements MessageHost, PromptHost {
   showInfoMessage(message: string): Effect.Effect<void, NotificationFailed> {
     return Effect.asVoid(this.info(message));
   }
