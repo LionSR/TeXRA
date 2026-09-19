@@ -39,14 +39,23 @@ interface ProviderCapabilityKey {
 const CODEX_MODEL_DATE_PIN = /-\d{4}-\d{2}-\d{2}$/;
 
 /**
- * The bare model id the Codex backend keys on: the `shortName` when present,
- * else the `fullName` with its llm-zoo date pin stripped.
+ * The model id the Codex backend keys on: the `fullName` with its llm-zoo date
+ * pin stripped.
+ *
+ * Never the `shortName`. That is llm-zoo's display abbreviation, and for every
+ * Codex-eligible model but one it happens to equal the backend slug — which is
+ * why preferring it went unnoticed. The exception is the GPT-5.6 family, whose
+ * members are `gpt-5.6-sol`, `-terra` and `-luna`: there is no bare `gpt-5.6`
+ * model anywhere, but that is exactly the `shortName` llm-zoo gives Sol. We
+ * sent it and the backend answered
+ * `The 'gpt-5.6' model is not supported when using Codex with a ChatGPT
+ * account.` — a message that reads as a subscription problem and sends users
+ * to check their plan, when the id was simply not a model.
  */
 export function codexBackendModelId(config: {
-  readonly shortName?: string;
   readonly fullName: string;
 }): string {
-  return config.shortName || config.fullName.replace(CODEX_MODEL_DATE_PIN, '');
+  return config.fullName.replace(CODEX_MODEL_DATE_PIN, '');
 }
 
 /**
