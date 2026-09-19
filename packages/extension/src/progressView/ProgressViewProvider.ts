@@ -12,9 +12,11 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import {
   Cause,
+  Data,
   Effect,
   Exit,
   Fiber,
+  FileSystem,
   Scope,
   Stream,
   SubscriptionRef,
@@ -99,6 +101,19 @@ const log = createLog('ProgressViewProvider');
 export type ProgressRunRevealResult = 'revealed' | 'missing';
 
 /** One transport port: a VS Code webview attached to the bridge. */
+/**
+ * A placement the window refused: the sidebar focus command, or a tab
+ * attaching to a bridge that has closed. Tagged because these reach the
+ * request channel, whose failures are tags without exception.
+ */
+export class SurfacePlacementFailed extends Data.TaggedError(
+  'SurfacePlacementFailed',
+)<{
+  readonly member: string;
+  readonly message: string;
+  readonly cause: unknown;
+}> {}
+
 interface Port {
   readonly attached: AttachedPort;
   readonly disposables: vscode.Disposable[];
@@ -158,7 +173,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     this.session = session;
     this.contentProvider = new BundledViewContentProvider(
       context,
-      runtime,
       'ProgressView',
       'progressView',
     );
@@ -428,10 +442,12 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     return this._instance;
   }
 
-  public async initialize(): Promise<void> {
-    await this.runtime.runPromise(this.snapshot.refresh);
-    await this.runtime.runPromise(this.refreshOnboardingFunnel());
-    this.logger.debug('ProgressViewProvider initialized');
+  public initialize() {
+    return Effect.gen({ self: this }, function* () {
+      yield* this.snapshot.refresh;
+      yield* this.refreshOnboardingFunnel();
+      this.logger.debug('ProgressViewProvider initialized');
+    });
   }
 
   // --- The host snapshot's producers ---
@@ -476,19 +492,24 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         });
         return;
       }
-      void this.refreshAfterCredentialChange();
+      this.runtime.runFork(this.refreshAfterCredentialChange());
     });
   }
 
   /** Every credential-dependent surface: catalogs, sign-in, the funnel. */
-  private async refreshAfterCredentialChange(): Promise<void> {
-    await this.runtime.runPromise(refresh());
-    await Promise.all([
-      this.runtime.runPromise(this.snapshot.refreshCatalogs),
-      this.runtime.runPromise(this.snapshot.refreshAuth),
-      this.runtime.runPromise(this.snapshot.refreshHostBanners),
-      this.runtime.runPromise(this.refreshOnboardingFunnel()),
-    ]);
+  private refreshAfterCredentialChange() {
+    return Effect.gen({ self: this }, function* () {
+      yield* refresh();
+      yield* Effect.all(
+        [
+          this.snapshot.refreshCatalogs,
+          this.snapshot.refreshAuth,
+          this.snapshot.refreshHostBanners,
+          this.refreshOnboardingFunnel(),
+        ],
+        { concurrency: 'unbounded' },
+      );
+    });
   }
 
   /** The agent, team, and model catalogs (`texra.refreshAllOptions`). */
@@ -545,7 +566,11 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     };
     this.closeSidebarPort();
     this.sidebarView = webviewView;
-    this.sidebarPort = this.attach('sidebar', webviewView);
+    // The slot is VS Code's own synchronous entry: it hands back a resolved
+    // view, so the attachment settles here.
+    this.sidebarPort = this.runtime.runSync(
+      this.attach('sidebar', webviewView),
+    );
     this.sidebarPort.disposables.push(
       webviewView.onDidDispose(() => {
         this.closeSidebarPort();
@@ -558,44 +583,61 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   private attach(
     id: 'sidebar' | 'editor',
     view: vscode.WebviewView | vscode.WebviewPanel,
-  ): Port {
-    const send = (message: DownMessage): void => {
-      void Promise.resolve(view.webview.postMessage(message)).then(
-        (delivered) => {
-          if (!delivered) {
-            log.warn(`A ${message.kind} message was not delivered to ${id}`);
-          }
-        },
-        (error: unknown) => {
-          log.warn(
-            `Posting a ${message.kind} message to ${id} failed: ${toErrorMessage(error)}`,
-          );
-        },
+  ): Effect.Effect<Port, SurfacePlacementFailed, FileSystem.FileSystem> {
+    return Effect.gen({ self: this }, function* () {
+      const send = (message: DownMessage): void => {
+        void Promise.resolve(view.webview.postMessage(message)).then(
+          (delivered) => {
+            if (!delivered) {
+              log.warn(`A ${message.kind} message was not delivered to ${id}`);
+            }
+          },
+          (error: unknown) => {
+            log.warn(
+              `Posting a ${message.kind} message to ${id} failed: ${toErrorMessage(error)}`,
+            );
+          },
+        );
+      };
+      const attached = yield* this.bridge.attach({ id, send }).pipe(
+        Effect.mapError(
+          (cause) =>
+            new SurfacePlacementFailed({
+              member: 'attach',
+              message: toErrorMessage(cause),
+              cause,
+            }),
+        ),
       );
-    };
-    const attached = this.runtime.runSync(this.bridge.attach({ id, send }));
-    // The template is read off this tick (it never rejects: a failed render
-    // is a logged error page); a port closed before it lands paints nothing.
-    let open = true;
-    const disposables: vscode.Disposable[] = [
-      view.webview.onDidReceiveMessage((message) => {
-        this.runtime.runFork(attached.receive(message));
-      }),
-      {
-        dispose: () => {
-          open = false;
+      // The template is read off this tick (it never fails: a failed render
+      // is a logged error page); a port closed before it lands paints nothing.
+      let open = true;
+      const disposables: vscode.Disposable[] = [
+        view.webview.onDidReceiveMessage((message) => {
+          this.runtime.runFork(attached.receive(message));
+        }),
+        {
+          dispose: () => {
+            open = false;
+          },
         },
-      },
-    ];
-    void this.contentProvider
-      .getHtmlContent(view.webview, {
-        sessionKey: this.bridge.key,
-        placement: id,
-      })
-      .then((html) => {
-        if (open) view.webview.html = html;
-      });
-    return { attached, disposables, send };
+      ];
+      yield* Effect.forkDetach(
+        this.contentProvider
+          .getHtmlContent(view.webview, {
+            sessionKey: this.bridge.key,
+            placement: id,
+          })
+          .pipe(
+            Effect.flatMap((html) =>
+              Effect.sync(() => {
+                if (open) view.webview.html = html;
+              }),
+            ),
+          ),
+      );
+      return { attached, disposables, send };
+    });
   }
 
   private closePort(port: Port | undefined): void {
@@ -650,20 +692,24 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
    *  Send in the view the user is in, which is the visible surface and its
    *  own draft. With none showing, the sidebar, shown first so the action
    *  has a surface to land on. */
-  public async submit(): Promise<void> {
-    const port = this.visibleSurfacePort();
-    if (port !== undefined && port === this.editor?.port) {
-      port.send(this.frameOf({ kind: 'submit' }));
-      return;
-    }
-    await this.showInSidebar();
-    this.sidebarPort?.send(this.frameOf({ kind: 'submit' }));
+  public submit() {
+    return Effect.gen({ self: this }, function* () {
+      const port = this.visibleSurfacePort();
+      if (port !== undefined && port === this.editor?.port) {
+        port.send(this.frameOf({ kind: 'submit' }));
+        return;
+      }
+      yield* this.showInSidebar();
+      this.sidebarPort?.send(this.frameOf({ kind: 'submit' }));
+    });
   }
 
   /** `texra.toggleView`: the Sessions drawer of the sidebar. */
-  public async toggleDrawer(): Promise<void> {
-    await this.showInSidebar();
-    this.sidebarPort?.send(this.frameOf({ kind: 'toggleDrawer' }));
+  public toggleDrawer() {
+    return Effect.gen({ self: this }, function* () {
+      yield* this.showInSidebar();
+      this.sidebarPort?.send(this.frameOf({ kind: 'toggleDrawer' }));
+    });
   }
 
   public isViewVisible(): boolean {
@@ -677,31 +723,43 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     return getActiveSidebarView() === SIDEBAR_VIEWS.PROGRESS;
   }
 
-  public async showInSidebar(): Promise<void> {
-    await vscode.commands.executeCommand('texra.mainView.focus');
+  public showInSidebar(): Effect.Effect<void, SurfacePlacementFailed> {
+    return Effect.tryPromise({
+      try: async () => {
+        await vscode.commands.executeCommand('texra.mainView.focus');
+      },
+      catch: (cause) =>
+        new SurfacePlacementFailed({
+          member: 'showInSidebar',
+          message: toErrorMessage(cause),
+          cause,
+        }),
+    });
   }
 
   /** The New-task state in the sidebar (`texra.showMainView`). */
-  public async showLauncher(): Promise<void> {
-    await this.showInSidebar();
-    this.surfaceAction({ kind: 'selectNew' });
+  public showLauncher() {
+    return Effect.gen({ self: this }, function* () {
+      yield* this.showInSidebar();
+      this.surfaceAction({ kind: 'selectNew' });
+    });
   }
 
-  public async showProgressView(options?: {
-    inPlace?: boolean;
-  }): Promise<void> {
-    if (this.editor) {
-      this.editor.panel.reveal(vscode.ViewColumn.One);
-      return;
-    }
-    if (!options?.inPlace) await this.showInSidebar();
-    // Showing progress from the launcher means showing a conversation: the
-    // newest stream, the one the sidebar would open on by itself.
-    if (this.sidebarShowsProgress()) return;
-    const newest = SubscriptionRef.getUnsafe(this.session.view).order.at(0);
-    if (newest !== undefined) {
-      this.surfaceAction({ kind: 'select', runId: newest });
-    }
+  public showProgressView(options?: { inPlace?: boolean }) {
+    return Effect.gen({ self: this }, function* () {
+      if (this.editor) {
+        this.editor.panel.reveal(vscode.ViewColumn.One);
+        return;
+      }
+      if (!options?.inPlace) yield* this.showInSidebar();
+      // Showing progress from the launcher means showing a conversation: the
+      // newest stream, the one the sidebar would open on by itself.
+      if (this.sidebarShowsProgress()) return;
+      const newest = SubscriptionRef.getUnsafe(this.session.view).order.at(0);
+      if (newest !== undefined) {
+        this.surfaceAction({ kind: 'select', runId: newest });
+      }
+    });
   }
 
   /** Select a stream this window just launched (the launch's
@@ -710,46 +768,52 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     this.surfaceAction({ kind: 'select', runId });
   }
 
-  public async revealRun(runId: RunId): Promise<ProgressRunRevealResult> {
-    const view = SubscriptionRef.getUnsafe(this.session.view);
-    if (!view.runs.has(runId)) return 'missing';
-    await this.showProgressView();
-    this.surfaceAction({ kind: 'select', runId });
-    return 'revealed';
+  public revealRun(
+    runId: RunId,
+  ): Effect.Effect<ProgressRunRevealResult, SurfacePlacementFailed> {
+    return Effect.gen({ self: this }, function* () {
+      const view = SubscriptionRef.getUnsafe(this.session.view);
+      if (!view.runs.has(runId)) return 'missing' as const;
+      yield* this.showProgressView();
+      this.surfaceAction({ kind: 'select', runId });
+      return 'revealed' as const;
+    });
   }
 
   public runLabel(runId: RunId): string | undefined {
     return SubscriptionRef.getUnsafe(this.session.view).runs.get(runId)?.label;
   }
 
-  public async popOutToEditor(): Promise<void> {
-    if (this.editor) {
-      this.editor.panel.reveal(vscode.ViewColumn.One);
-      return;
-    }
-    const panel = vscode.window.createWebviewPanel(
-      'texra.progress.panel',
-      'TeXRA',
-      vscode.ViewColumn.One,
-      {
-        enableScripts: true,
-        enableCommandUris: true,
-        retainContextWhenHidden: true,
-        localResourceRoots: getSharedLocalResourceRoots(
-          this.context,
-          'progressView',
-        ),
-      },
-    );
-    panel.iconPath = new vscode.ThemeIcon('pulse');
-    const port = this.attach('editor', panel);
-    this.editor = { panel, port };
-    port.disposables.push(
-      panel.onDidDispose(() => {
-        this.closePort(port);
-        this.editor = undefined;
-      }),
-    );
+  public popOutToEditor() {
+    return Effect.gen({ self: this }, function* () {
+      if (this.editor) {
+        this.editor.panel.reveal(vscode.ViewColumn.One);
+        return;
+      }
+      const panel = vscode.window.createWebviewPanel(
+        'texra.progress.panel',
+        'TeXRA',
+        vscode.ViewColumn.One,
+        {
+          enableScripts: true,
+          enableCommandUris: true,
+          retainContextWhenHidden: true,
+          localResourceRoots: getSharedLocalResourceRoots(
+            this.context,
+            'progressView',
+          ),
+        },
+      );
+      panel.iconPath = new vscode.ThemeIcon('pulse');
+      const port = yield* this.attach('editor', panel);
+      this.editor = { panel, port };
+      port.disposables.push(
+        panel.onDidDispose(() => {
+          this.closePort(port);
+          this.editor = undefined;
+        }),
+      );
+    });
   }
 
   public dispose(): void {

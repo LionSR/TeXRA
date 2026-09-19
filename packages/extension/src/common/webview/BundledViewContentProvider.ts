@@ -3,7 +3,6 @@ import * as vscode from 'vscode';
 import { nanoid } from 'nanoid';
 
 import { createLog } from '@logger/logUtils';
-import type { ProcessRuntime } from '@platform/processRuntime';
 import { HOST_BRIDGE_API_KEY } from '@shared/hostBridgeTypes';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
@@ -83,8 +82,6 @@ export class BundledViewContentProvider {
 
   constructor(
     private readonly context: vscode.ExtensionContext,
-    /** The host entry's runtime, whose filesystem reads the template. */
-    private readonly runtime: ProcessRuntime,
     private readonly viewName: string,
     /**
      * The one folder name a view owns: `src/<viewFolder>/index.html` holds its
@@ -105,39 +102,37 @@ export class BundledViewContentProvider {
   public getHtmlContent(
     webview: vscode.Webview,
     attributes: Record<string, string> = {},
-  ): Promise<string> {
+  ): Effect.Effect<string, never, FileSystem.FileSystem> {
     const htmlPath = vscode.Uri.joinPath(
       this.context.extensionUri,
       'src',
       this.viewFolder,
       'index.html',
     );
-    return this.runtime.runPromise(
-      buildWebviewHtml(
-        webview,
-        htmlPath,
-        {
-          commonStyleUri: this.buildUri(['src', 'common', 'styles/common.css']),
-          bundleUri: this.buildUri(['dist', this.viewFolder, 'bundle.js']),
-          styleUri: this.buildUri(['dist', this.viewFolder, 'index.css']),
-        },
-        attributes,
-      ).pipe(
-        Effect.tap(() =>
-          Effect.sync(() => {
-            this.log.debug(`Generated HTML content for ${this.viewName}`);
-          }),
-        ),
-        // A view that cannot render its template still gets a page: the
-        // failure is logged here, once, with its cause.
-        Effect.catchCause((cause) =>
-          Effect.sync(() => {
-            this.log.error(
-              `Error generating HTML content: ${toErrorMessage(Cause.squash(cause))}`,
-            );
-            return '<html><body>Error loading content</body></html>';
-          }),
-        ),
+    return buildWebviewHtml(
+      webview,
+      htmlPath,
+      {
+        commonStyleUri: this.buildUri(['src', 'common', 'styles/common.css']),
+        bundleUri: this.buildUri(['dist', this.viewFolder, 'bundle.js']),
+        styleUri: this.buildUri(['dist', this.viewFolder, 'index.css']),
+      },
+      attributes,
+    ).pipe(
+      Effect.tap(() =>
+        Effect.sync(() => {
+          this.log.debug(`Generated HTML content for ${this.viewName}`);
+        }),
+      ),
+      // A view that cannot render its template still gets a page: the
+      // failure is logged here, once, with its cause.
+      Effect.catchCause((cause) =>
+        Effect.sync(() => {
+          this.log.error(
+            `Error generating HTML content: ${toErrorMessage(Cause.squash(cause))}`,
+          );
+          return '<html><body>Error loading content</body></html>';
+        }),
       ),
     );
   }

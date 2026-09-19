@@ -158,8 +158,8 @@ interface ExtensionHostRequestsOptions {
   /** A host-initiated change to the surface (PRD 8.5). */
   surfaceAction(action: SurfaceActionMessage['action']): void;
   /** The placement commands the sidebar and the editor tab share. */
-  popOutToEditor(): Promise<void>;
-  showInSidebar(): Promise<void>;
+  popOutToEditor(): Effect.Effect<void, HostRequestFailure, ProcessServices>;
+  showInSidebar(): Effect.Effect<void, HostRequestFailure, ProcessServices>;
   /** The onboarding funnel recomputes after an action that changes its
    *  inputs (a key stored, a sign-in, the setup assistant run). */
   refreshOnboardingFunnel(): Effect.Effect<
@@ -460,7 +460,7 @@ export function createExtensionHostRequests(
     return Effect.gen(function* () {
       options.surfaceAction({ kind: 'launch', patch: launchPatchOf(config) });
       options.surfaceAction({ kind: 'selectNew' });
-      yield* fromHost('showInSidebar', () => options.showInSidebar());
+      yield* options.showInSidebar();
     });
   }
 
@@ -958,10 +958,10 @@ export function createExtensionHostRequests(
         case 'savePastedImage':
           return yield* draftRequests.handle(request, port);
         case 'popOut':
-          yield* fromHost('popOutToEditor', () => options.popOutToEditor());
+          yield* options.popOutToEditor();
           return done;
         case 'popBack':
-          yield* fromHost('showInSidebar', () => options.showInSidebar());
+          yield* options.showInSidebar();
           return done;
         case 'openDashboard':
           yield* fromHost('texra.showDashboard', () =>
