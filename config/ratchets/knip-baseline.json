@@ -254,54 +254,6 @@
       "name": "queuedFollowUpPanelDisplay"
     },
     {
-      "file": "packages/cli/src/chat/tui/panes/StaticConversationTranscript.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "DEFAULT_STATIC_TRANSCRIPT_RING_BUDGETS"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/panes/StaticConversationTranscript.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "advanceStaticTranscriptState"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/panes/StaticConversationTranscript.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "buildStaticTranscriptItems"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/panes/StaticConversationTranscript.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "buildStaticTranscriptState"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/panes/StaticConversationTranscript.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "sessionHeaderIdentityLine"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/panes/StaticConversationTranscript.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "trimStaticTranscriptItems"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/panes/StaticConversationTranscript.tsx",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "StaticTranscriptItem"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/panes/StaticConversationTranscript.tsx",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "StaticTranscriptRingBudgets"
-    },
-    {
       "file": "packages/cli/src/chat/tui/panes/TodosPlanPanel.tsx",
       "category": "production-dead",
       "kind": "exports",
@@ -318,6 +270,30 @@
       "category": "production-dead",
       "kind": "exports",
       "name": "toolDisplaySpanTextProps"
+    },
+    {
+      "file": "packages/cli/src/chat/tui/panes/staticTranscriptRing.ts",
+      "category": "production-dead",
+      "kind": "exports",
+      "name": "DEFAULT_STATIC_TRANSCRIPT_RING_BUDGETS"
+    },
+    {
+      "file": "packages/cli/src/chat/tui/panes/staticTranscriptRing.ts",
+      "category": "production-dead",
+      "kind": "exports",
+      "name": "buildStaticTranscriptItems"
+    },
+    {
+      "file": "packages/cli/src/chat/tui/panes/staticTranscriptRing.ts",
+      "category": "production-dead",
+      "kind": "exports",
+      "name": "sessionHeaderIdentityLine"
+    },
+    {
+      "file": "packages/cli/src/chat/tui/panes/staticTranscriptRing.ts",
+      "category": "production-dead",
+      "kind": "exports",
+      "name": "trimStaticTranscriptItems"
     },
     {
       "file": "packages/cli/src/chat/tui/render/DiffView.tsx",

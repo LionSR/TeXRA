@@ -26,7 +26,7 @@ import {
   trimStaticTranscriptItems,
   type StaticTranscriptItem,
   type StaticTranscriptRingBudgets,
-} from '@cli/chat/tui/panes/StaticConversationTranscript';
+} from '@cli/chat/tui/panes/staticTranscriptRing';
 import { staticScrollbackTarget } from '@cli/chat/tui/appLayout';
 import { staticTranscriptRepaintEpoch } from '@cli/chat/tui/state/staticTranscriptRepaint';
 import {
