@@ -96,7 +96,6 @@ const AVAILABLE_AGENTS_BLOCK = /^Available agents:.*(?:\n(?!\n).+)*/m;
 const NO_AGENTS_LINE =
   'Available agents: none are currently in the active roster. Ask the user to enable delegation targets in Settings → Agents before delegating.';
 
-/** How an agent's tool list is rendered inside a roster entry. */
 /**
  * Format an agent list for a delegation tool's "Available agents:" block.
  *
