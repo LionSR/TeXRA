@@ -30,6 +30,17 @@ describe('withExtendedPath', () => {
     expect(extended[key]).toContain('/seed/bin');
   });
 
+  // `commandEnv` merges caller overrides onto `process.env`, so on Windows an
+  // override spelled `PATH` lands beside the platform's `Path` before this
+  // runs. Writing one back would leave the other in place.
+  it('collapses an override spelling onto the platform key', () => {
+    const extended = withExtendedPath({ Path: '/from/env', PATH: '/override' });
+
+    expect(pathKeys(extended)).toEqual(['Path']);
+    expect(extended.Path).toContain('/override');
+    expect(extended.Path).not.toContain('/from/env');
+  });
+
   it('defaults to PATH when the environment names none', () => {
     expect(pathKeys(withExtendedPath({ HOME: '/home/u' }))).toEqual(['PATH']);
   });
