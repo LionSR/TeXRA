@@ -296,42 +296,44 @@ const sessionHandleLayer = (
           SubscriptionRef.getUnsafe(view.ref).cursor,
           SubscriptionRef.getUnsafe(delivered),
         );
+      /** The settled level as a stream: `settledCursor` re-read on every
+       *  move of either coordinate. It ends with the fold (`view.changes`,
+       *  rather than the bare ref `folded` wakes on, whose tail outlives
+       *  every reader), so a wait on it is answered or dies, never hangs. */
+      const settledChanges = Stream.merge(
+        view.changes,
+        SubscriptionRef.changes(delivered),
+        { haltStrategy: 'left' },
+      ).pipe(Stream.map(settledCursor));
       /** Wait until the tail has delivered and the view has folded every
        *  commit up to `commit`: what "published" means to a caller that
-       *  reads the view next. */
+       *  reads the view next. One wait on the level both coordinates feed,
+       *  since `settledCursor` is already their min. */
       const settleTo = (commit: CommitOrdinal) =>
-        Effect.gen(function* () {
-          yield* SubscriptionRef.changes(delivered).pipe(
-            Stream.filter((delivered) => delivered >= commit),
-            Stream.runHead,
-            Effect.raceFirst(
-              Deferred.await(tailEnded).pipe(
-                // Invariant: the tail outlives every publication it settles.
-                // A wait on a tail that ended can never be answered, so it
-                // dies, with the read failure that ended the tail, if any.
-                Effect.orDie,
-                Effect.andThen(
-                  Effect.die(
-                    new Error('Session committed-event consumer stopped'),
-                  ),
+        settledChanges.pipe(
+          Stream.filter((cursor) => cursor >= commit),
+          Stream.runHead,
+          Effect.raceFirst(
+            Deferred.await(tailEnded).pipe(
+              // Invariant: the tail outlives every publication it settles.
+              // A wait on a tail that ended can never be answered, so it
+              // dies, with the read failure that ended the tail, if any.
+              Effect.orDie,
+              Effect.andThen(
+                Effect.die(
+                  new Error('Session committed-event consumer stopped'),
                 ),
               ),
             ),
-          );
-          yield* view.changes.pipe(
-            Stream.filter((state) => state.cursor >= commit),
-            Stream.runHead,
-            Effect.flatMap((state) =>
-              Option.isSome(state)
-                ? Effect.void
-                : Effect.die(
-                    new Error(
-                      'Session view stopped before publication settled',
-                    ),
-                  ),
-            ),
-          );
-        });
+          ),
+          Effect.flatMap((cursor) =>
+            Option.isSome(cursor)
+              ? Effect.void
+              : Effect.die(
+                  new Error('Session view stopped before publication settled'),
+                ),
+          ),
+        );
       const settlePublication = (rows: readonly SessionEvent[]) => {
         const last = rows.at(-1);
         return last === undefined
@@ -830,52 +832,14 @@ const heldSession = (root: string) =>
   });
 
 /**
- * Resolve once every run the registry holds has left it. Interrupting
- * this fiber — which is what the close budget below does — detaches the
- * registry listeners with it, so a bounded wait leaves none behind. The
- * registry state is re-read once those listeners are attached, closing the
- * window between the read below and a registration the fiber only reaches a
- * scheduler step later: `raceAllFirst` starts its arms immediately and in
- * order, so the wait registers first and the re-check then sees a last
- * run that left inside the window, instead of waiting out the whole
- * close budget for a notification that can no longer come. The loop reads
- * registry state only, so it needs no session scope of its own.
- */
-const untilSettled = (runs: RunRegistry): Effect.Effect<void> =>
-  Effect.gen(function* () {
-    for (;;) {
-      const active = runs.getActiveIds();
-      if (active.length === 0) return;
-      const alreadySettled = Effect.suspend(() =>
-        runs.getActiveIds().length === 0 ? Effect.void : Effect.never,
-      );
-      yield* Effect.raceAllFirst([
-        runs.waitForAnyChange(active).pipe(Effect.asVoid),
-        alreadySettled,
-      ]);
-    }
-  });
-
-/** Resolves once `signal` aborts; interrupting it detaches the listener. */
-const aborted = (signal: AbortSignal) =>
-  Effect.callback<void>((resume, interrupt) => {
-    if (signal.aborted) return resume(Effect.void);
-    signal.addEventListener('abort', () => resume(Effect.void), {
-      once: true,
-      signal: interrupt,
-    });
-  });
-
-/**
  * Close the session of one root (PR #11893, agent SDK architecture
  * proposal, section 9): refuse new runs, stop the root runs it
  * owns (the stop cascades into their children) and the children no root
  * owns any more (a native subagent detached from a stopped parent, between
  * turns), wait for their drivers to settle them inside one budget,
  * flush the session's artifacts while its stores are still open, and
- * release the entry. The budget is the caller's `signal` when it passes one
- * (the lifecycle's shutdown phase, whose deadline started before this
- * close), the lifecycle's phase deadline otherwise: never both. Executions
+ * release the entry. The budget is the lifecycle's shutdown-phase deadline.
+ * Executions
  * that outlive the budget are reported, and the entry stays, refusing new
  * work, until they actually settle; only then is it released, so no later
  * open builds a second session over a root whose stores a run still
@@ -891,7 +855,7 @@ const aborted = (signal: AbortSignal) =>
  * region around it, so the budget still interrupts the settlement wait and
  * the flush, and the report still returns at the deadline.
  */
-const closeSession = (root: string, signal?: AbortSignal) =>
+const closeSession = (root: string) =>
   Effect.gen(function* () {
     const sessions = yield* Sessions;
     const held = yield* heldSession(root);
@@ -927,12 +891,12 @@ const closeSession = (root: string, signal?: AbortSignal) =>
     // The entry remains owned until waiting metadata finalization, not merely
     // handle removal, has completed as well as every live driver.
     const settled = Fiber.join(termination).pipe(
-      Effect.andThen(untilSettled(runs)),
+      Effect.andThen(runs.awaitDrained()),
     );
-    // One budget for the whole close: the caller's signal, else the phase
-    // deadline, forked once so the flush below shares what settlement left.
+    // One budget for the whole close: the shutdown-phase deadline, forked
+    // once so the flush below shares what settlement left.
     const budget = yield* Effect.forkChild(
-      signal ? aborted(signal) : Effect.sleep(SHUTDOWN_PHASE_DEADLINE_MS),
+      Effect.sleep(SHUTDOWN_PHASE_DEADLINE_MS),
     );
     const didSettle = yield* Effect.raceFirst(
       settled.pipe(Effect.as(true)),
@@ -945,10 +909,12 @@ const closeSession = (root: string, signal?: AbortSignal) =>
         // Re-raise the original defect after arming that cleanup so callers
         // still observe the failed close instead of a false success report.
         Effect.forkDetach(
-          untilSettled(runs).pipe(
-            Effect.andThen(flushArtifacts),
-            Effect.ensuring(sessions.invalidate(key)),
-          ),
+          runs
+            .awaitDrained()
+            .pipe(
+              Effect.andThen(flushArtifacts),
+              Effect.ensuring(sessions.invalidate(key)),
+            ),
           { startImmediately: true },
         ).pipe(Effect.andThen(Effect.failCause(cause))),
       ),
@@ -1171,7 +1137,7 @@ export function installProcessRuntime({
     current: (root) => heldSessionSync(held, root),
     held: () => [...held.values()],
     list: () => onThisRuntime(listSessions),
-    close: (root, signal) => onThisRuntime(closeSession(root, signal)),
+    close: (root) => onThisRuntime(closeSession(root)),
   });
   return runtime;
 }

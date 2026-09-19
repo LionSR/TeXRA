@@ -487,10 +487,10 @@ export function makeSessions(
         }
         return sessionOf(handle, services);
       }),
-    close: (roots?: WorkspaceRoots, signal?: AbortSignal) =>
+    close: (roots?: WorkspaceRoots) =>
       Effect.gen(function* () {
         const root = (roots ?? runtime.roots).storage;
-        const report = yield* closeOwnedSession(root, signal);
+        const report = yield* closeOwnedSession(root);
         // A close that could not settle leaves the session open with its
         // runs live, so the listener stays with them; the close that finally
         // settles ends it, and its own finalizer drops the key.

@@ -86,9 +86,8 @@ export class SessionEvents extends Context.Service<
     ) => Effect.Effect<A, E>;
     /** Enqueue one job synchronously and return: the door for a producer
      *  with no fiber to wait on (a trace subscriber, a status transition).
-     *  Its order is the moment of this call. A refusal is logged and kept
-     *  for the next `settle`; a job enqueued after the plane closed goes
-     *  nowhere. */
+     *  Its order is the moment of this call. A refusal is logged as itself;
+     *  a job enqueued after the plane closed goes nowhere. */
     readonly detach: (
       job: (
         append: Append,
@@ -97,10 +96,13 @@ export class SessionEvents extends Context.Service<
         DatabaseNotOwner | DatabaseReadFailed | DatabaseWriteFailed
       >,
     ) => void;
-    /** Wait for every detached job enqueued before this call to run, then
-     *  fail with their aggregated refusals, if any; on success, the highest
-     *  commit those jobs appended, or null when none appended. */
-    readonly settle: Effect.Effect<CommitOrdinal | null, Error>;
+    /** Wait for every detached job enqueued before this call to run, and
+     *  answer with the highest commit those jobs appended, or null when none
+     *  appended. A barrier, never a reporter: a refused job is logged as
+     *  itself where it ran and is kept by whoever enqueued it, which is who
+     *  decides what its loss means (`SessionHandle` holds it for the drain
+     *  that stamps its run's terminal row). */
+    readonly settle: Effect.Effect<CommitOrdinal | null>;
     /** The cold listing hydrate (C8): the latest row per aggregate and type
      *  for the listing fact types plus the outstanding approvals, in commit
      *  order; never a transcript row; completes. */

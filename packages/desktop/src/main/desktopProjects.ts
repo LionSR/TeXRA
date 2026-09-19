@@ -177,11 +177,7 @@ const stopProjectRuns = Effect.fn('desktopProjects.stopProjectRuns')(function* (
     return [runs.kill(runId, { detachActiveChildren: false }).settlement];
   });
   yield* Effect.all(stops, { concurrency: 'unbounded' });
-  for (;;) {
-    const active = runs.getActiveIds();
-    if (active.length === 0) return;
-    yield* runs.waitForAnyChange(active);
-  }
+  yield* runs.awaitDrained();
 });
 
 /**

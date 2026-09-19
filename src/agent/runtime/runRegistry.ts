@@ -671,6 +671,35 @@ export class RunRegistry {
     });
   }
 
+  /**
+   * Resolve once every run this registry holds has left it: the drain a
+   * session close and a project close both wait on, over {@link getActiveIds}.
+   *
+   * Interrupting the waiting fiber — which is what a close budget does —
+   * detaches the registry listeners with it, so a bounded wait leaves none
+   * behind. The re-check arm is load-bearing rather than defensive: the
+   * registry is re-read once those listeners are attached, closing the window
+   * between the read above and a departure the fiber only reaches a scheduler
+   * step later. `raceAllFirst` starts its arms immediately and in order, so
+   * the wait registers first and the re-check then sees a last run that left
+   * inside the window, instead of waiting out the whole close budget for a
+   * notification that can no longer come.
+   */
+  awaitDrained(): Effect.Effect<void> {
+    return Effect.gen({ self: this }, function* () {
+      for (;;) {
+        const active = this.getActiveIds();
+        if (active.length === 0) return;
+        yield* Effect.raceAllFirst([
+          this.waitForAnyChange(active).pipe(Effect.asVoid),
+          Effect.suspend(() =>
+            this.getActiveIds().length === 0 ? Effect.void : Effect.never,
+          ),
+        ]);
+      }
+    });
+  }
+
   private *activeChildActivations(
     parentRunId: RunId,
   ): Generator<ChildRunActivation> {

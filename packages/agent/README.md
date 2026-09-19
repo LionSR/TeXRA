@@ -114,8 +114,7 @@ opening a root twice (two runs, or a run beside a host in the same process)
 resolves the one session already open there; a second root gets its own. When the session was opened by a host (the extension, the desktop, or the CLI in the same process), that host's decision delivery applies to every run on it: retries and approvals prompt in the host's UI and the run waits there, as PR #11893 section 8 rules; the package's inline retry denial applies only to sessions the package opened itself. A
 session ends only through `closeSession(roots)`: it refuses new runs on the
 root, interrupts the runs it owns and waits for them to settle within the
-runtime's shutdown budget (or the `signal` you pass, when the close runs under
-a budget of your own), flushes its artifacts, and releases the session,
+runtime's shutdown budget, flushes its artifacts, and releases the session,
 returning `{ settled, abandoned }`. `settled` is true when every run ended in
 time; otherwise `abandoned` names the runs still live, and the session stays
 open, refusing new runs, until they end. The platform's shutdown path
@@ -206,7 +205,7 @@ const program = Effect.gen(function* () {
 | Service    | What it is                                                                                                                                                                                  |
 | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `Runtime`  | The composed process: the platform and its workspace roots. `Runtime.layer(platform)` provides it and `Sessions`, with this scope as the lifetime of the hold it takes on that composition. |
-| `Sessions` | The process's one session owner: `open(roots?)`, `close(roots?, signal?)`, `list`. One session per workspace storage root, the same owner every TeXRA host opens through.                   |
+| `Sessions` | The process's one session owner: `open(roots?)`, `close(roots?)`, `list`. One session per workspace storage root, the same owner every TeXRA host opens through.                            |
 | `Session`  | `start`, `request`, `view.changes`, and `subscribe`, whose transcript interest is held for a `Scope` and cleared when it closes. A value, one per root, not a tag.                          |
 | `Run`      | `runId`, `result`, `view`, `events`, `interrupt`. `start` succeeds at admission: the run exists in the session, its row published and its trace live.                                       |
 

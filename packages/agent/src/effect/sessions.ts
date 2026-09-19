@@ -126,12 +126,11 @@ export class Sessions extends Context.Service<
       roots?: WorkspaceRoots,
     ) => Effect.Effect<Session, SessionOpenError>;
     /**
-     * Refuse new runs, settle the ones it owns inside `signal`'s budget or
-     * the runtime's shutdown-phase budget, flush, release.
+     * Refuse new runs, settle the ones it owns inside the runtime's
+     * shutdown-phase budget, flush, release.
      */
     readonly close: (
       roots?: WorkspaceRoots,
-      signal?: AbortSignal,
     ) => Effect.Effect<SessionCloseReport>;
     readonly list: Effect.Effect<readonly Session[]>;
   }

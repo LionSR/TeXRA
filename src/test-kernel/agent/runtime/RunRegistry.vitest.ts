@@ -301,6 +301,35 @@ describe('runRegistry', () => {
     }
   });
 
+  // The drain's re-check arm, which is the whole of `awaitDrained` that a
+  // bare wait loop lacks: `waitForAnyChange` registers its listeners a step
+  // after the active set was read, so a run that leaves inside that window
+  // wakes nobody. A session close would block until its budget; the desktop
+  // project close, which has no budget, hung forever.
+  it.effect(
+    'drains when the last run leaves inside the listener-registration window',
+    () =>
+      Effect.gen(function* () {
+        const { registry } = createRegistry();
+        const runId = generateRunId();
+        registry.track(createHandle(runId));
+        const register = registry.waitForAnyChange.bind(registry);
+        vi.spyOn(registry, 'waitForAnyChange').mockImplementation((ids) => {
+          // The departure lands after the active read and before the listener
+          // that would have reported it.
+          registry.untrack(runId);
+          return register(ids);
+        });
+        try {
+          yield* registry.awaitDrained();
+          expect(registry.getActiveIds()).toEqual([]);
+        } finally {
+          registry.dispose();
+        }
+      }),
+    { timeout: 2000 },
+  );
+
   it.effect(
     'lets exactly one stop claim a suspended run and reports its teardown',
     () =>

@@ -33,15 +33,7 @@
  * session is justified only as the ownership container.
  */
 
-import {
-  Cause,
-  Deferred,
-  Effect,
-  Exit,
-  Option,
-  Stream,
-  SubscriptionRef,
-} from 'effect';
+import { Cause, Effect, Exit, Option, Stream, SubscriptionRef } from 'effect';
 
 import type { AgentEvent, AgentTrace, ResultEvent } from '@agent/trace';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
@@ -135,18 +127,22 @@ export class RunArtifactDrainError extends Error {
 }
 
 /**
- * One publication in flight and the run whose fact it carries, so a settle
- * can answer for one run's facts rather than for whatever the session
- * happened to have queued. `runId` is `null` for a fact no single run owns:
- * every settle answers for those.
+ * One publication and the run whose fact it carries, so a settle can answer
+ * for one run's facts rather than for whatever the session happened to have
+ * queued. `runId` is `null` for a fact no single run owns: every settle
+ * answers for those.
+ *
+ * A publication that committed is dropped from the tracked set; one that was
+ * refused stays, carrying its squashed cause in `refusal`, until the drain
+ * that answers for its run reports it. An absent `refusal` therefore means
+ * "still on the publisher", which only a publication enqueued after a drain's
+ * barrier can be: the plane's own settle is what waits for the cohort. The
+ * cause is boxed rather than held bare so that a defect whose value is
+ * `undefined` is still a refusal here, never an in-flight publication.
  */
 interface TrackedPublication {
   readonly runId: RunId | null;
-  /** Completed with the job's own Exit once the publisher has run it. */
-  readonly settled: Deferred.Deferred<
-    unknown,
-    DatabaseNotOwner | DatabaseReadFailed | DatabaseWriteFailed
-  >;
+  refusal?: { readonly cause: unknown };
 }
 
 /** The run one published batch belongs to, read off the aggregates it
@@ -990,7 +986,7 @@ export class SessionHandle {
    * remembers who the fact belongs to, so a drain can answer for one run's
    * facts rather than for whatever the session happened to have queued. A
    * refused batch wrote nothing and is never retried here (D6 b, R7): the
-   * cause is logged as itself and kept on the publication's Exit for the
+   * cause is logged as itself and kept in the publication's `refusal` for the
    * settle that answers for it, and the job itself returns quietly so the
    * publisher's own settle stays a barrier rather than a second reporter.
    */
@@ -1003,10 +999,7 @@ export class SessionHandle {
       DatabaseNotOwner | DatabaseReadFailed | DatabaseWriteFailed
     >,
   ): void {
-    const publication: TrackedPublication = {
-      runId,
-      settled: Deferred.makeUnsafe(),
-    };
+    const publication: TrackedPublication = { runId };
     this.publications.add(publication);
     this.graph.detach((append) =>
       job(append).pipe(
@@ -1027,7 +1020,7 @@ export class SessionHandle {
             // stays tracked until a drain that answers for it reports it
             // ({@link settlePublications}).
             if (Exit.isSuccess(exit)) this.publications.delete(publication);
-            Deferred.doneUnsafe(publication.settled, exit);
+            else publication.refusal = { cause: Cause.squash(exit.cause) };
           }),
         ),
         Effect.asVoid,
@@ -1040,9 +1033,9 @@ export class SessionHandle {
    *  A refused batch wrote nothing and is never retried (D6 b, R7):
    *  `DatabaseNotOwner` says this process no longer holds the aggregate and
    *  `DatabaseWriteFailed` says the transaction rolled back. Failures belong
-   *  to those Exits, not a session-wide leftover array a later settler would
-   *  drain: a failed publication stays in the tracked set as its own Exit
-   *  until the drain that answers for it takes it out.
+   *  to the tracked entries, not a session-wide leftover array a later
+   *  settler would drain: a failed publication stays in the tracked set,
+   *  carrying its cause, until the drain that answers for it takes it out.
    *
    *  Every publication settles whoever asks, but a run id narrows whose
    *  rollback the caller hears: that run's own facts only — never a sibling
@@ -1077,18 +1070,14 @@ export class SessionHandle {
     options: { readonly consume?: boolean } = {},
   ): Effect.Effect<void, Error> {
     return Effect.gen({ self: this }, function* () {
+      // The plane's own settle is the barrier: every publication enqueued
+      // before this call has run by the time it returns, and each one's
+      // refusal is already recorded on its entry.
       yield* this.graph.settle;
-      const settled = yield* Effect.forEach(
-        [...this.publications],
-        (publication) =>
-          Effect.exit(Deferred.await(publication.settled)).pipe(
-            Effect.map((exit) => ({ publication, exit })),
-          ),
-        { concurrency: 'unbounded' },
-      );
-      const reported = settled.flatMap(({ publication, exit }) =>
-        Exit.isFailure(exit) && publication.runId === (runId ?? null)
-          ? [{ publication, error: Cause.squash(exit.cause) }]
+      const reported = [...this.publications].flatMap((publication) =>
+        publication.refusal !== undefined &&
+        publication.runId === (runId ?? null)
+          ? [{ publication, cause: publication.refusal.cause }]
           : [],
       );
       if (options.consume !== false)
@@ -1098,7 +1087,7 @@ export class SessionHandle {
         return yield* Effect.fail(
           ensureError(
             aggregateError(
-              reported.map(({ error }) => error),
+              reported.map(({ cause }) => cause),
               'Session publication failed',
             ),
           ),

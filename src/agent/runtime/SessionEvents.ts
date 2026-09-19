@@ -37,8 +37,6 @@ import {
   type SessionCursor,
   type SessionEventsShape,
 } from '@shared/session/sessionEvents';
-import { aggregateError } from '@utils/core';
-import { ensureError } from '@utils/errors/errorMessage';
 
 const logger = createLog('sessionEvents');
 
@@ -190,10 +188,12 @@ export const sessionEventsLayer = Layer.effect(
     ) {
       return yield* exclusive((append) => append(events));
     });
-    /** Detached jobs still running or queued: what `settle` waits for.
-     *  Failures belong to those deferreds, not to a session-wide leftover
-     *  array a later settler would drain. Each completes with the last
-     *  commit its job appended, so a settler waits for exactly its cohort. */
+    /** Detached jobs still running or queued: what `settle` waits for. Each
+     *  completes with the last commit its job appended, so a settler waits
+     *  for exactly its cohort. A job's own refusal is logged where it
+     *  happened and belongs to whoever enqueued it (`SessionHandle` keeps it
+     *  for the drain that decides its run's terminal row), so this cohort
+     *  reports position and never failure. */
     const pending = new Set<Deferred.Deferred<CommitOrdinal | null, unknown>>();
     const detach: SessionEventsShape['detach'] = (job) => {
       const done = Deferred.makeUnsafe<CommitOrdinal | null, unknown>();
@@ -221,29 +221,16 @@ export const sessionEventsLayer = Layer.effect(
         logger.warn('Session publication dropped: the plane has closed');
       }
     };
-    const settle: Effect.Effect<CommitOrdinal | null, Error> = Effect.suspend(
-      () =>
-        Effect.forEach([...pending], (done) =>
-          Effect.exit(Deferred.await(done)),
-        ),
+    const settle: Effect.Effect<CommitOrdinal | null> = Effect.suspend(() =>
+      Effect.forEach([...pending], (done) => Effect.exit(Deferred.await(done))),
     ).pipe(
-      Effect.flatMap((exits) => {
-        const failures = exits.flatMap((exit) =>
-          Exit.isFailure(exit) ? [Cause.squash(exit.cause)] : [],
-        );
-        if (failures.length > 0) {
-          return Effect.fail(
-            ensureError(aggregateError(failures, 'Session publication failed')),
-          );
-        }
+      Effect.map((exits) => {
         const commits = exits.flatMap((exit) =>
           Exit.isSuccess(exit) && exit.value !== null ? [exit.value] : [],
         );
-        return Effect.succeed(
-          commits.length === 0
-            ? null
-            : commits.reduce((a, b) => Math.max(a, b)),
-        );
+        return commits.length === 0
+          ? null
+          : commits.reduce((a, b) => Math.max(a, b));
       }),
     );
     // THE tail (C7): the drain woken by the log's level.
