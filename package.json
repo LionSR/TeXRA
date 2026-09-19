@@ -156,7 +156,7 @@
     "nanoid": "^6.0.1",
     "neverthrow": "^8.2.0",
     "nunjucks": "^3.2.4",
-    "openai": "7.10.0",
+    "openai": "7.19.0",
     "p-defer": "^4.0.1",
     "p-map": "^7.0.7",
     "p-queue": "^9.3.3",
