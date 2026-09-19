@@ -134,7 +134,7 @@ export const settingsViewHandlers: SettingsViewOutboundHandlerRegistry = {
       // row with no field, or a field whose key left the catalog, is reported
       // rather than rendering a default forever — the same guarantee
       // `applySettingsSnapshot` gives the other snapshots.
-      const unrendered = new Set<string>(LATEX_CONFIG_KEYS);
+      const unrendered = new Set(Object.keys(LATEX_CONFIG_KEYS));
       for (const key of Object.keys(data.values)) {
         if (!unrendered.delete(key)) {
           console.warn(

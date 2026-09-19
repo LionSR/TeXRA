@@ -149,7 +149,7 @@ const STATE_SETTING_KEYS: readonly string[] = STATE_SETTINGS.map(
 
 describe('state settings catalog', () => {
   it('backs every rendered LaTeX setting with a catalog entry', () => {
-    for (const key of LATEX_CONFIG_KEYS) {
+    for (const key of Object.keys(LATEX_CONFIG_KEYS)) {
       assert.ok(
         settingByKey(key),
         `the LaTeX tab renders a key with no catalog entry: ${key}`,
