@@ -369,17 +369,18 @@ const SettledToolResultSchema = z.discriminatedUnion('status', [
 
 /**
  * Per-call state operations over the run's mutable slices, never a whole-state
- * copy that could overwrite a concurrent call. `add` is not optional
- * generality: `recordSubagentCost` adds raw USD into the run's usage totals
- * from inside a tool call, and an enumerated slice list cannot express it.
- * Folding a result applies its mutation exactly once.
+ * copy that could overwrite a concurrent call. The vocabulary is exactly what
+ * a settling tool call produces: `set` rewrites one slice path (the workspace
+ * snapshot a tool's edits leave behind), and `add` is not optional generality
+ * either — `recordSubagentCost` adds raw USD into the run's usage totals from
+ * inside a tool call, and an enumerated slice list cannot express it. Folding
+ * a result applies its mutation exactly once.
  *
  * Under `usage`, `add` is the ONLY operation. The run's accounting is derived
  * from the priced usage of every response row plus additive tool costs (D12);
- * a `set` rewriting `totalCost`, an `append`, or a `delete` whose total the
- * next parse prefaults back to zero would each make a resumed run's cost a
- * number no row accounts for, and `applyMutations` cannot tell the difference
- * because the rewritten totals still parse.
+ * a `set` rewriting `totalCost` would make a resumed run's cost a number no
+ * row accounts for, and `applyMutations` cannot tell the difference because
+ * the rewritten totals still parse.
  */
 const StateOperationSchema = z
   .discriminatedUnion('op', [
@@ -387,15 +388,6 @@ const StateOperationSchema = z
       op: z.literal('set'),
       path: z.array(z.string().min(1)).min(1),
       value: JsonValueSchema,
-    }),
-    z.strictObject({
-      op: z.literal('delete'),
-      path: z.array(z.string().min(1)).min(1),
-    }),
-    z.strictObject({
-      op: z.literal('append'),
-      path: z.array(z.string().min(1)).min(1),
-      items: z.array(JsonValueSchema).min(1),
     }),
     z.strictObject({
       op: z.literal('add'),
