@@ -92,11 +92,12 @@ type FormActionHandler<T> = (
   value: T,
   output: SlashCommandOutput,
 ) => SlashCommandEffect;
+/** The key write as a program; the form that collects the key runs it. */
 type ApiKeySaveHandler = (
   provider: ApiProvider,
   key: string,
-) => string | void | Promise<string | void>;
-type ErrorHandler = (error: unknown) => void | Promise<void>;
+) => Effect.Effect<string | void, unknown>;
+type ErrorHandler = (error: unknown) => void;
 type SelectionCompletion = 'afterAction' | 'beforeAction' | 'busy';
 
 /** Build a form selection handler with consistent completion and errors. */
@@ -119,11 +120,11 @@ function formSelectionHandler<T>({
   readonly completion?: SelectionCompletion;
   readonly busyTitle?: (value: T) => string;
 }): (value: T) => void {
-  // The host's error hook is still a Promise-facing callback the forms share,
-  // so it is awaited here, once, rather than re-typed across the form tree.
+  // Every host's error hook writes to its transcript and returns; reporting
+  // is a step of the failure path, not a wait inside it.
   const reportError = (error: unknown): Effect.Effect<void> =>
-    Effect.promise(async () => {
-      await onError?.(error);
+    Effect.sync(() => {
+      onError?.(error);
     });
   return (value) => {
     if (completion === 'busy') {
@@ -315,8 +316,7 @@ export function registerBuiltinSlashCommands(options: {
       applyCliModelAccessSelection(stores, selection, undefined, output));
   const onApiKeySave: ApiKeySaveHandler =
     options.onApiKeySave ??
-    ((provider, key) =>
-      runtime.runPromise(applyCliProviderApiKey(secrets, provider, key)));
+    ((provider, key) => applyCliProviderApiKey(secrets, provider, key));
   const onLoginSelect: FormActionHandler<LoginFormValue> =
     options.onLoginSelect ??
     ((value, output) =>
@@ -440,7 +440,8 @@ export function registerBuiltinSlashCommands(options: {
     return (
       <ProviderApiKeyForm
         availableRows={props.availableRows}
-        onSave={(provider, key) => Promise.resolve(onApiKeySave(provider, key))}
+        runtime={runtime}
+        onSave={onApiKeySave}
         onDone={(provider, modelNotice) => {
           const label = providerDisplayName(provider);
           appendLocalAssistantTranscript(

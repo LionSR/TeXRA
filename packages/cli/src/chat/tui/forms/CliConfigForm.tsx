@@ -298,19 +298,17 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
           <ProviderApiKeyForm
             availableRows={props.availableRows}
             statusView={apiKeyStatusView}
-            // This port still takes a Promise (its other consumer is the
-            // slash-command form), so the save and the refresh that follows
-            // it settle as one program under one run.
+            runtime={runtime}
+            // The save and the refresh that follows it are one program; the
+            // form settles it on the runtime this surface handed it.
             onSave={(provider, key) =>
-              runtime.runPromise(
-                Effect.gen(function* () {
-                  yield* saveProviderApiKey(secrets, provider, key);
-                  markApiKey((current) => ({
-                    statuses: { ...current.statuses, [provider]: 'set' },
-                  }));
-                  yield* refreshApiKeyStatuses();
-                }),
-              )
+              Effect.gen(function* () {
+                yield* saveProviderApiKey(secrets, provider, key);
+                markApiKey((current) => ({
+                  statuses: { ...current.statuses, [provider]: 'set' },
+                }));
+                yield* refreshApiKeyStatuses();
+              })
             }
             onDone={onBack}
             onCancel={onBack}

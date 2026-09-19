@@ -371,20 +371,26 @@ describe('slashRegistry', () => {
     resetCliState(CHAT_SESSION);
     const saves: Array<{ provider: string; key: string }> = [];
     registerBuiltins({
-      onApiKeySave: async (provider, key) => {
-        saves.push({ provider, key });
-      },
+      onApiKeySave: (provider, key) =>
+        Effect.sync(() => {
+          saves.push({ provider, key });
+        }),
     });
     const keyCommand = requireSlashCommand('keys');
     expect(keyCommand.formEscapeAction).toBe('close');
 
     expect(openRegisteredCliSlashForm(keyCommand, '')).toBe(true);
     const keyNode = renderOpenForm<{
-      onSave?: (provider: 'moonshot', key: string) => Promise<void>;
+      onSave?: (
+        provider: 'moonshot',
+        key: string,
+      ) => Effect.Effect<string | void, unknown>;
       onCancel?: () => void;
     }>();
 
-    await keyNode.props?.onSave?.('moonshot', 'private-test-value');
+    await Effect.runPromise(
+      keyNode.props?.onSave?.('moonshot', 'private-test-value') ?? Effect.void,
+    );
     expect(saves).toEqual([
       { provider: 'moonshot', key: 'private-test-value' },
     ]);
