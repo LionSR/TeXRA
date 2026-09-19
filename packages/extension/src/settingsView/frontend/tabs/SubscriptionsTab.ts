@@ -17,7 +17,6 @@ import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import {
   CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
-  SETTINGS_TAB_PANEL_BY_NAME,
   type ChatGptAuthStatus,
   type CopilotRouteInfo,
   type GrokAuthStatus,
@@ -186,7 +185,7 @@ export class SubscriptionsTab extends LitElement {
                 appearance: 'outlined',
                 onClick: () =>
                   postMessage(SETTINGS_VIEW_COMMANDS.SET_TAB, {
-                    tab: SETTINGS_TAB_PANEL_BY_NAME.MODELS,
+                    tab: 'models',
                   }),
               })}
             </div>

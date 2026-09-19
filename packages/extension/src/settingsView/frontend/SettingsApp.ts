@@ -17,7 +17,6 @@ import { commonViewStyles, designTokens } from '@shared/styles';
 // Local imports - shared schemas and constants
 import {
   dispatchSettingsViewOutbound,
-  SETTINGS_TAB_PANEL_BY_NAME,
   type SettingsTabPanelName,
 } from '@shared/schemas';
 import { isKnownUnsupported } from '@shared/utils/dispatcher';
@@ -185,16 +184,14 @@ export class SettingsApp extends SignalWatcher(LitElement) {
   }
 
   private handleManageProviderKeys(): void {
-    selectedPanel.set(SETTINGS_TAB_PANEL_BY_NAME.MODELS);
+    selectedPanel.set('models');
   }
 
   private entriesForGroup(
     group: SettingsNavGroup,
   ): readonly SettingsNavEntry[] {
     return group.entries.filter(
-      (entry) =>
-        entry.panel !== SETTINGS_TAB_PANEL_BY_NAME.SHORTCUTS ||
-        this.isDesktopHost,
+      (entry) => entry.panel !== 'shortcuts' || this.isDesktopHost,
     );
   }
 
@@ -425,8 +422,8 @@ export class SettingsApp extends SignalWatcher(LitElement) {
     const desktopHost = this.isDesktopHost;
     const requestedPanel = selectedPanel.get();
     const activePanel =
-      !desktopHost && requestedPanel === SETTINGS_TAB_PANEL_BY_NAME.SHORTCUTS
-        ? SETTINGS_TAB_PANEL_BY_NAME.ACCOUNT
+      !desktopHost && requestedPanel === 'shortcuts'
+        ? 'account'
         : requestedPanel;
     const activeGroup =
       SETTINGS_NAV_GROUPS.find((group) =>

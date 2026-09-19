@@ -78,71 +78,40 @@ export {
 } from './profileViewMessages';
 
 /**
- * The set of settings tabs — single source of truth for tab names. The wire
- * format is the derived panel name (`SET_TAB.tab`), so order carries no
- * meaning beyond stable iteration. Retired internal panels are removed
- * together with their producers and command surfaces so no stale IPC target
- * remains.
+ * The set of settings tabs — single source of truth for tab names, spelled the
+ * one way they travel: the panel name on the wire (`SET_TAB.tab`) and in every
+ * `data-panel` selector. Order carries no meaning beyond stable iteration.
+ * Retired internal panels are removed together with their producers and
+ * command surfaces so no stale IPC target remains.
  */
 export const SETTINGS_TAB_ORDER = [
-  'MEMORY',
-  'MODELS',
-  'AGENTS',
-  'MULTI_AGENT',
-  'TOOLS',
-  'SKILLS',
-  'AI_AGENTS',
-  'GIT',
-  'LATEX',
-  'GOAL',
-  'ACCOUNT',
-  'SHORTCUTS',
-  'SUBSCRIPTIONS',
+  'memory',
+  'models',
+  'agents',
+  'multi-agent',
+  'tools',
+  'skills',
+  'ai-agents',
+  'git',
+  'latex',
+  'goal',
+  'account',
+  'shortcuts',
+  'subscriptions',
 ] as const;
-
-export type SettingsTabName = (typeof SETTINGS_TAB_ORDER)[number];
-
-/**
- * Recursive replace used to derive the panel-name literal type from the
- * uppercase tab name (`MULTI_AGENT` → `multi-agent`), mirroring the runtime
- * transformation in `SETTINGS_TAB_PANEL_BY_NAME`.
- */
-type ReplaceAll<
-  S extends string,
-  From extends string,
-  To extends string,
-> = S extends `${infer Head}${From}${infer Tail}`
-  ? `${Head}${To}${ReplaceAll<Tail, From, To>}`
-  : S;
 
 /**
  * Webview panel-addressing key for a tab, e.g. `'multi-agent'`. A literal
- * union derived from {@link SettingsTabName}, so an appended tab widens it and
+ * union over {@link SETTINGS_TAB_ORDER}, so an appended tab widens it and
  * exhaustiveness-checked switches (SettingsApp's `renderActivePanel`) become
- * compile errors until they add a case — the panel-name equivalent of the
- * `Record<SettingsTabName, …>` metadata maps.
+ * compile errors until they add a case — the same effect the
+ * `Record<SettingsTabPanelName, …>` metadata maps have.
  */
-export type SettingsTabPanelName = ReplaceAll<
-  Lowercase<SettingsTabName>,
-  '_',
-  '-'
->;
-
-export const SETTINGS_TAB_PANEL_BY_NAME = Object.fromEntries(
-  SETTINGS_TAB_ORDER.map((name) => [
-    name,
-    name.toLowerCase().replaceAll('_', '-'),
-  ]),
-) as Record<SettingsTabName, SettingsTabPanelName>;
-
-export const SETTINGS_TAB_PANEL_NAMES: readonly SettingsTabPanelName[] =
-  SETTINGS_TAB_ORDER.map((name) => SETTINGS_TAB_PANEL_BY_NAME[name]);
+export type SettingsTabPanelName = (typeof SETTINGS_TAB_ORDER)[number];
 
 /**
  * Presentation-only grouping for the settings top navigation. Groups address
- * panels by `SettingsTabName`, which the nav renders as the panel name
- * (`SETTINGS_TAB_PANEL_BY_NAME`) — the same name that travels over IPC as
- * `SET_TAB.tab`.
+ * panels by the same name that travels over IPC as `SET_TAB.tab`.
  *
  * Every tab must appear in exactly one group, or its panel becomes unreachable
  * from the nav while still being a valid IPC target. `SharedSchemas.vitest.ts`
@@ -150,21 +119,21 @@ export const SETTINGS_TAB_PANEL_NAMES: readonly SettingsTabPanelName[] =
  * appended tab cannot ship without being placed here.
  */
 export const SETTINGS_TAB_GROUPS = [
-  { label: 'Account', tabs: ['ACCOUNT', 'SUBSCRIPTIONS'] },
-  { label: 'Models', tabs: ['MODELS'] },
-  { label: 'Agents', tabs: ['AGENTS', 'MULTI_AGENT'] },
-  { label: 'Capabilities', tabs: ['TOOLS', 'SKILLS', 'AI_AGENTS', 'LATEX'] },
-  { label: 'Workspace', tabs: ['GIT', 'SHORTCUTS'] },
-  { label: 'Data & Activity', tabs: ['MEMORY', 'GOAL'] },
+  { label: 'Account', tabs: ['account', 'subscriptions'] },
+  { label: 'Models', tabs: ['models'] },
+  { label: 'Agents', tabs: ['agents', 'multi-agent'] },
+  { label: 'Capabilities', tabs: ['tools', 'skills', 'ai-agents', 'latex'] },
+  { label: 'Workspace', tabs: ['git', 'shortcuts'] },
+  { label: 'Data & Activity', tabs: ['memory', 'goal'] },
 ] as const satisfies readonly {
   label: string;
-  tabs: readonly SettingsTabName[];
+  tabs: readonly SettingsTabPanelName[];
 }[];
 
 /** Outbound schema to switch tabs, addressed by panel name. */
 const SetTabMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_COMMANDS.SET_TAB),
-  tab: z.enum(SETTINGS_TAB_PANEL_NAMES),
+  tab: z.enum(SETTINGS_TAB_ORDER),
   agentSubTab: AgentCategorySchema.optional(),
 });
 

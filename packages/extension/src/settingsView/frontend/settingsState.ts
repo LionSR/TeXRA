@@ -35,7 +35,6 @@ import {
   DEFAULT_LATEX_SETTINGS_STATUS,
   MODEL_COMPACTION_THRESHOLD_SETTING,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
-  SETTINGS_TAB_PANEL_BY_NAME,
   settingsViewSettingByKey,
   TELEMETRY_ENABLED_KEY,
   TOOL_EDIT_APPROVAL_CONFIG_KEY,
@@ -139,7 +138,7 @@ export function applySettingsSnapshot(
  * presents as the entry point.
  */
 export const selectedPanel = trackedSignal<SettingsTabPanelName>(
-  () => SETTINGS_TAB_PANEL_BY_NAME.ACCOUNT,
+  () => 'account',
 );
 
 // ---------------------------------------------------------------------------

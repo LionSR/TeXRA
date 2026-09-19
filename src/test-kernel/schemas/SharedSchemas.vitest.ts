@@ -8,7 +8,6 @@ import {
   dispatchSettingsViewOutbound,
   SETTINGS_TAB_GROUPS,
   SETTINGS_TAB_ORDER,
-  SETTINGS_TAB_PANEL_NAMES,
   WebSearchPayloadSchema,
   planSummaryLine,
   parseClaudeAgentModel,
