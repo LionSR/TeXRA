@@ -805,7 +805,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
     runtime,
     runtimeSession,
   );
-  await progressViewProvider.initialize();
+  await runtime.runPromise(progressViewProvider.initialize());
 
   log.info('TeXRA extension activated');
 

@@ -9,7 +9,6 @@ import * as vscode from 'vscode';
 import { TeamCatalogPortFailed } from '@common/teams/TeamAvailabilityPreflight';
 import type { TeamAvailabilityPrompt } from '@common/teams/TeamPlan';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
-import type { ProcessRuntime } from '@platform/processRuntime';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { workspaceRelativePath } from '@utils/files/workspaceFS';
 
@@ -29,8 +28,6 @@ interface FileDialogOptions {
   currentFile?: string;
   /** The workspace root the dialog opens in and relativizes picks against. */
   workspacePath: string | undefined;
-  /** The caller's process runtime, which the "no workspace" notice runs on. */
-  runtime: ProcessRuntime;
 }
 
 function computeDefaultUri({
@@ -69,32 +66,41 @@ export async function confirmModal(
 /**
  * Generic helper to show an open file dialog and return selected relative paths.
  */
-export async function selectFiles(
+export function selectFiles(
   options: FileDialogOptions,
-): Promise<string[] | null> {
-  const defaultUri = computeDefaultUri(options);
-  if (!defaultUri) {
-    options.runtime.runFork(
-      showLoggedMessage(CHANNEL, 'No workspace folder open'),
+): Effect.Effect<string[] | null, unknown> {
+  return Effect.gen(function* () {
+    const defaultUri = computeDefaultUri(options);
+    if (!defaultUri) {
+      // The notice is detached, as the caller's `runFork` left it: the picker
+      // answers "nothing picked" straight away rather than waiting on a toast
+      // the user may never dismiss.
+      yield* Effect.forkDetach(
+        showLoggedMessage(CHANNEL, 'No workspace folder open'),
+      );
+      return null;
+    }
+
+    const fileUris = yield* Effect.tryPromise({
+      try: async () =>
+        vscode.window.showOpenDialog({
+          canSelectMany: options.allowMany ?? false,
+          openLabel: options.openLabel,
+          canSelectFiles: true,
+          canSelectFolders: false,
+          defaultUri,
+          filters: options.filters,
+        }),
+      catch: (cause: unknown) => cause,
+    });
+
+    if (!fileUris?.length) {
+      return null;
+    }
+    return fileUris.map((uri) =>
+      workspaceRelativePath(options.workspacePath, uri.fsPath),
     );
-    return null;
-  }
-
-  const fileUris = await vscode.window.showOpenDialog({
-    canSelectMany: options.allowMany ?? false,
-    openLabel: options.openLabel,
-    canSelectFiles: true,
-    canSelectFolders: false,
-    defaultUri,
-    filters: options.filters,
   });
-
-  if (!fileUris?.length) {
-    return null;
-  }
-  return fileUris.map((uri) =>
-    workspaceRelativePath(options.workspacePath, uri.fsPath),
-  );
 }
 
 /**
@@ -152,15 +158,18 @@ interface FolderDialogOptions {
  * no workspace, so it's safe to call before a workspace (or `platform()`) is
  * available.
  */
-export async function selectFolder(
+export function selectFolder(
   options: FolderDialogOptions,
-): Promise<string | null> {
-  const folders = await vscode.window.showOpenDialog({
-    canSelectFiles: false,
-    canSelectFolders: true,
-    canSelectMany: false,
-    openLabel: options.openLabel,
-    title: options.title,
-  });
-  return folders?.[0]?.fsPath ?? null;
+): Effect.Effect<string | null, unknown> {
+  return Effect.tryPromise({
+    try: async () =>
+      vscode.window.showOpenDialog({
+        canSelectFiles: false,
+        canSelectFolders: true,
+        canSelectMany: false,
+        openLabel: options.openLabel,
+        title: options.title,
+      }),
+    catch: (cause: unknown) => cause,
+  }).pipe(Effect.map((folders) => folders?.[0]?.fsPath ?? null));
 }

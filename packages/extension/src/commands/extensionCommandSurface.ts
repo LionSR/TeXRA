@@ -81,7 +81,8 @@ export function createExtensionCommandActions(
     },
     // New Session is the header's "+" (PRD 12.4): the New-task state into
     // view with the launcher's selections as they are.
-    resetMainView: () => progressViewProvider.showLauncher(),
+    resetMainView: () =>
+      runtime.runPromise(progressViewProvider.showLauncher()),
     cleanBuild: () => onSessionFiles(runCleanBuild),
     pack: (config) => onSessionFiles(fileHandlePack(config)),
     clean: (config) => onSessionFiles(fileHandleClean(config)),
@@ -109,7 +110,8 @@ export function createExtensionCommandActions(
       ),
     downloadArXivSource: () =>
       runtime.runPromise(latexDownloadArXivSource(session, runtime)),
-    openProgressViewInTab: () => progressViewProvider.popOutToEditor(),
+    openProgressViewInTab: () =>
+      runtime.runPromise(progressViewProvider.popOutToEditor()),
     async openDoc(page) {
       if (!page) return;
       await vscode.env.openExternal(
@@ -130,9 +132,9 @@ export function createExtensionCommandActions(
         apiRemoveApiKey(session.roots, secrets, refreshAfterProviderKeyChange),
       ),
     showImportOptions: sysShowImportOptions,
-    toggleView: () => progressViewProvider.toggleDrawer(),
+    toggleView: () => runtime.runPromise(progressViewProvider.toggleDrawer()),
     showProgressView: (inPlace) =>
-      progressViewProvider.showProgressView({ inPlace }),
+      runtime.runPromise(progressViewProvider.showProgressView({ inPlace })),
     setApiKey: (provider) =>
       apiSetApiKey(
         session.roots,
@@ -150,7 +152,6 @@ export function createExtensionCommandActions(
           globalState,
           category,
           secrets,
-          runtime,
           session,
         ),
       ),
@@ -158,7 +159,7 @@ export function createExtensionCommandActions(
     // (Cmd+Alt+E): its Send, in the view the user is in.
     execute: (input) =>
       input === undefined
-        ? progressViewProvider.submit()
+        ? runtime.runPromise(progressViewProvider.submit())
         : runtime.runPromise(agentRunExecuteCommand(input, session)),
   };
 }

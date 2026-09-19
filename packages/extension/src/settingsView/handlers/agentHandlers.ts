@@ -328,10 +328,7 @@ export class AgentHandlers {
       this.ctx,
       'Failed to set custom agent directory',
       Effect.gen({ self: this }, function* () {
-        const selectedPath = yield* Effect.tryPromise({
-          try: () => agentDirectories.promptCustom(),
-          catch: ensureError,
-        });
+        const selectedPath = yield* agentDirectories.promptCustom();
         if (!selectedPath) return;
         yield* this.refreshAgentDirUI();
       }),

@@ -298,7 +298,11 @@ export interface AgentCreatorUI {
   promptAddToConfig(
     agentName: string,
     category: AgentCategory,
-  ): Effect.Effect<void, AgentCreatorUiFailed>;
+  ): Effect.Effect<
+    void,
+    AgentCreatorUiFailed,
+    GlobalStorageFs | FileSystem.FileSystem
+  >;
   openCreatedFile(filePath: string): Effect.Effect<void, AgentCreatorUiFailed>;
   renderTemplate(template: string, vars: Record<string, unknown>): string;
 }

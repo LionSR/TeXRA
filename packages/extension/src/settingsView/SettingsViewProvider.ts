@@ -1,4 +1,5 @@
 // Third-party imports
+import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
@@ -22,7 +23,6 @@ import type { AgentCategory, SettingsTabPanelName } from '@shared/schemas';
 
 // Local file imports
 import { SettingsViewMessageHandler } from './SettingsViewMessageHandler';
-import type { Effect } from 'effect';
 
 export class SettingsViewProvider {
   public static readonly viewType = 'texra.settingsView';
@@ -40,7 +40,6 @@ export class SettingsViewProvider {
   ) {
     this.contentProvider = new BundledViewContentProvider(
       context,
-      runtime,
       'SettingsView',
       'settingsView',
     );
@@ -143,9 +142,15 @@ export class SettingsViewProvider {
   private setupWebviewContent(panel: vscode.WebviewPanel): vscode.Disposable {
     // The template is read off this tick (it never rejects: a failed render
     // is a logged error page); a panel closed before it lands is not painted.
-    void this.contentProvider.getHtmlContent(panel.webview).then((html) => {
-      if (this._view === panel) panel.webview.html = html;
-    });
+    this.runtime.runFork(
+      this.contentProvider.getHtmlContent(panel.webview).pipe(
+        Effect.flatMap((html) =>
+          Effect.sync(() => {
+            if (this._view === panel) panel.webview.html = html;
+          }),
+        ),
+      ),
+    );
     return panel.webview.onDidReceiveMessage((message) =>
       this.messageHandler.handleMessage(message, panel),
     );

@@ -75,7 +75,7 @@ export function registerCommands(
     // Registered here rather than through the shared registry because the
     // handler needs the provider instance.
     vscode.commands.registerCommand('texra.showMainView', () =>
-      progressViewProvider.showLauncher(),
+      runtime.runPromise(progressViewProvider.showLauncher()),
     ),
   );
 }

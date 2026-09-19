@@ -1,15 +1,21 @@
+import { Effect } from 'effect';
+
 import type { RunId } from '@shared/schemas';
 
 import {
   ProgressViewProvider,
   type ProgressRunRevealResult,
+  type SurfacePlacementFailed,
 } from './ProgressViewProvider';
 
-export async function revealProgressRun(
+export function revealProgressRun(
   runId: RunId,
-): Promise<ProgressRunRevealResult | 'unavailable'> {
+): Effect.Effect<
+  ProgressRunRevealResult | 'unavailable',
+  SurfacePlacementFailed
+> {
   const provider = ProgressViewProvider.getInstance();
-  return provider ? provider.revealRun(runId) : 'unavailable';
+  return provider ? provider.revealRun(runId) : Effect.succeed('unavailable');
 }
 
 /**

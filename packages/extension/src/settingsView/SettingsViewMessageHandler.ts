@@ -488,9 +488,8 @@ export class SettingsViewMessageHandler {
         run(this.handleSetInlineCriticismEnabled(message.enabled)),
       getGoalList: () =>
         run(this.withActiveWebview((w) => this.sendGoalList(w))),
-      revealGoalRun: async (message) => {
-        await revealProgressRun(message.runId);
-      },
+      revealGoalRun: (message) =>
+        run(revealProgressRun(message.runId).pipe(Effect.asVoid)),
     };
   }
 

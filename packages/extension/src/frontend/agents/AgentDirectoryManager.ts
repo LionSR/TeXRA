@@ -132,29 +132,37 @@ class AgentDirectoryManager {
     return Effect.suspend(() => this.getHost().directories.custom());
   }
 
-  async promptCustom(): Promise<string | undefined> {
-    const selectedPath = await selectFolder({ openLabel: 'Select Folder' });
-    if (!selectedPath) {
-      return undefined;
-    }
+  promptCustom(): Effect.Effect<
+    string | undefined,
+    unknown,
+    FileSystem.FileSystem
+  > {
+    return Effect.gen({ self: this }, function* () {
+      const selectedPath = yield* selectFolder({ openLabel: 'Select Folder' });
+      if (!selectedPath) {
+        return undefined;
+      }
 
-    // The picked folder is the user's, outside every session root. A
-    // directory already there is the post-condition, and a recursive
-    // makeDirectory is a no-op on one, so nothing here is recovered: a real
-    // fault (the path is a file, the volume is read-only) rejects and
-    // surfaces instead of writing the setting anyway.
-    await this.getHost().runtime.runPromise(
-      Effect.flatMap(Effect.service(FileSystem.FileSystem), (fs) =>
-        fs.makeDirectory(selectedPath, { recursive: true }),
-      ),
-    );
+      // The picked folder is the user's, outside every session root. A
+      // directory already there is the post-condition, and a recursive
+      // makeDirectory is a no-op on one, so nothing here is recovered: a real
+      // fault (the path is a file, the volume is read-only) fails and
+      // surfaces instead of writing the setting anyway.
+      const fs = yield* FileSystem.FileSystem;
+      yield* fs.makeDirectory(selectedPath, { recursive: true });
 
-    await this.getHost().globalState.update(
-      GlobalStateKey.CUSTOM_AGENT_DIR,
-      selectedPath,
-    );
+      yield* Effect.tryPromise({
+        try: async () => {
+          await this.getHost().globalState.update(
+            GlobalStateKey.CUSTOM_AGENT_DIR,
+            selectedPath,
+          );
+        },
+        catch: (cause: unknown) => cause,
+      });
 
-    return selectedPath;
+      return selectedPath;
+    });
   }
 
   /**

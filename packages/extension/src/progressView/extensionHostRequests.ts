@@ -130,11 +130,6 @@ class DropFileUnreadable extends Data.TaggedError('DropFileUnreadable')<{
   readonly message: string;
 }> {}
 
-/** A native file picker that failed instead of answering. */
-class FilePickerFailed extends Data.TaggedError('FilePickerFailed')<{
-  readonly message: string;
-}> {}
-
 /**
  * An extension capability that still answers with a promise rejected — a VS
  * Code command, an editor API, a Promise-faced controller port. `member`
@@ -163,8 +158,8 @@ interface ExtensionHostRequestsOptions {
   /** A host-initiated change to the surface (PRD 8.5). */
   surfaceAction(action: SurfaceActionMessage['action']): void;
   /** The placement commands the sidebar and the editor tab share. */
-  popOutToEditor(): Promise<void>;
-  showInSidebar(): Promise<void>;
+  popOutToEditor(): Effect.Effect<void, HostRequestFailure, ProcessServices>;
+  showInSidebar(): Effect.Effect<void, HostRequestFailure, ProcessServices>;
   /** The onboarding funnel recomputes after an action that changes its
    *  inputs (a key stored, a sign-in, the setup assistant run). */
   refreshOnboardingFunnel(): Effect.Effect<
@@ -241,7 +236,7 @@ export function createExtensionHostRequests(
     });
 
   /** The native picker of each multi-file launcher list. */
-  const multipleFilePickers = createFileSelectionPickers(session, runtime);
+  const multipleFilePickers = createFileSelectionPickers(session);
 
   /**
    * Validate an agent request and launch it directly: the port settled with
@@ -465,7 +460,7 @@ export function createExtensionHostRequests(
     return Effect.gen(function* () {
       options.surfaceAction({ kind: 'launch', patch: launchPatchOf(config) });
       options.surfaceAction({ kind: 'selectNew' });
-      yield* fromHost('showInSidebar', () => options.showInSidebar());
+      yield* options.showInSidebar();
     });
   }
 
@@ -676,9 +671,7 @@ export function createExtensionHostRequests(
     request: Extract<HostRequest, { kind: 'useCurrentFile' }>,
   ) {
     return Effect.gen(function* () {
-      const currentOpenFile = yield* fromHost('getCurrentFile', () =>
-        getCurrentFile(session),
-      );
+      const currentOpenFile = yield* getCurrentFile(session);
       if (!currentOpenFile) {
         return yield* Effect.fail(
           new Rejected({
@@ -752,23 +745,9 @@ export function createExtensionHostRequests(
         }),
       );
     }
-    return Effect.tryPromise({
-      try: () => pick(),
-      catch: (cause) =>
-        new FilePickerFailed({ message: toErrorMessage(cause) }),
-    }).pipe(
-      // The picker's failure is shown where it happened, then refused with
-      // the text it carried. The notice itself is the window's, so a window
-      // that cannot show it is a defect here, as it was before.
-      Effect.catchTag('FilePickerFailed', (error) =>
-        showLoggedErrorMessage(
-          CHANNEL,
-          `Error selecting ${fileType}`,
-          error,
-        ).pipe(
-          Effect.andThen(Effect.fail(new Rejected({ reason: error.message }))),
-        ),
-      ),
+    // The picker reports its own failures where they happen and answers
+    // `null`, so the only outcomes left here are a selection and a cancel.
+    return pick().pipe(
       Effect.flatMap((selected) =>
         selected
           ? Effect.succeed<HostOutcome>({ kind: 'files', paths: selected })
@@ -979,10 +958,10 @@ export function createExtensionHostRequests(
         case 'savePastedImage':
           return yield* draftRequests.handle(request, port);
         case 'popOut':
-          yield* fromHost('popOutToEditor', () => options.popOutToEditor());
+          yield* options.popOutToEditor();
           return done;
         case 'popBack':
-          yield* fromHost('showInSidebar', () => options.showInSidebar());
+          yield* options.showInSidebar();
           return done;
         case 'openDashboard':
           yield* fromHost('texra.showDashboard', () =>
