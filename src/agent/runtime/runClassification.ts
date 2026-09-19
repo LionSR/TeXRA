@@ -13,8 +13,7 @@
  * - `resumable`: a `flow.snapshot` exists on the run aggregate and nobody
  *   alive holds the claim. Continued only through the explicit Resume
  *   affordance.
- * - `finished`: no checkpoint. Its persisted outcome, when present, is the
- *   display fact.
+ * - `finished`: no checkpoint.
  * - `unclassified`: the claim or metadata could not be read or is malformed.
  *   Nothing is known, so nothing is mutated.
  *
@@ -24,12 +23,10 @@
 import { Effect } from 'effect';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import {
-  deriveResumability,
-  type ResumabilityFault,
-} from '@agent/storage/resumability';
+import { deriveResumability } from '@agent/storage/resumability';
 import { createLog } from '@logger/logUtils';
-import type { OwnerId, RunId, RunOutcome } from '@shared/schemas';
+import type { OwnerId, RunId } from '@shared/schemas';
+import { claimStanding } from '@shared/session/database';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const log = createLog('RunClassification');
@@ -37,19 +34,9 @@ const log = createLog('RunClassification');
 export type RunClassification =
   | { readonly kind: 'held_elsewhere'; readonly owner: OwnerId }
   | { readonly kind: 'owned_here' }
-  | { readonly kind: 'resumable'; readonly outcome?: RunOutcome }
-  | { readonly kind: 'finished'; readonly outcome?: RunOutcome }
-  | {
-      readonly kind: 'unclassified';
-      readonly cause: string;
-      /**
-       * Which durable fact was unreadable, when a fact-level probe named one.
-       * A caller words a run's refusal from this, never from `cause`, which is
-       * display text. Absent when the classification failed above the facts
-       * (an unreadable run index, a claim that could not be read).
-       */
-      readonly fault?: ResumabilityFault | 'claim-unreadable';
-    };
+  | { readonly kind: 'resumable' }
+  | { readonly kind: 'finished' }
+  | { readonly kind: 'unclassified'; readonly cause: string };
 
 /** What the durable facts alone decide, ownership already settled. */
 type RunFactsClassification = Exclude<
@@ -63,14 +50,10 @@ const classifyRunFacts = Effect.fn('classifyRunFacts')(function* (
   session: SessionHandle,
 ): Effect.fn.Return<RunFactsClassification> {
   const facts = yield* deriveResumability(runId, session);
-  if (facts.kind === 'checkpoint') {
-    return { kind: 'resumable', outcome: facts.outcome };
-  }
-  if (facts.kind === 'none') {
-    return { kind: 'finished', outcome: facts.outcome };
-  }
+  if (facts.kind === 'checkpoint') return { kind: 'resumable' };
+  if (facts.kind === 'none') return { kind: 'finished' };
   log.warn(`Cannot classify ${runId}: ${facts.cause}`);
-  return { kind: 'unclassified', cause: facts.cause, fault: facts.fault };
+  return { kind: 'unclassified', cause: facts.cause };
 });
 
 /** Classify one run. Never throws: an unreadable fact is `unclassified`. */
@@ -83,11 +66,11 @@ export const classifyRun = Effect.fn('classifyRun')(function* (
     const error = claimResult.failure;
     const cause = `claim unreadable (${toErrorMessage(error)})`;
     log.warn(`Cannot classify ${runId}: ${cause}`, { data: error });
-    return { kind: 'unclassified', cause, fault: 'claim-unreadable' };
+    return { kind: 'unclassified', cause };
   }
-  const claim = claimResult.success;
-  if (claim.liveness === 'self') return { kind: 'owned_here' };
-  if (claim.ownerId !== null && claim.liveness !== 'dead')
-    return { kind: 'held_elsewhere', owner: claim.ownerId };
+  const standing = claimStanding(claimResult.success);
+  if (standing.kind === 'self') return { kind: 'owned_here' };
+  if (standing.kind === 'held')
+    return { kind: 'held_elsewhere', owner: standing.owner };
   return yield* classifyRunFacts(runId, session);
 });

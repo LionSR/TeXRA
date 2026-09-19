@@ -2,11 +2,7 @@ import { Effect } from 'effect';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { createLog } from '@logger/logUtils';
-import {
-  type FlowSnapshotPayload,
-  type RunId,
-  type RunOutcome,
-} from '@shared/schemas';
+import { type FlowSnapshotPayload, type RunId } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { getRunRecords } from './runRecords';
@@ -14,45 +10,27 @@ import { getRunRecords } from './runRecords';
 const log = createLog('Resumability');
 
 /**
- * Which durable fact was unreadable. The checkpoint's own content is never
- * judged here: `RunLedger.load` refuses a run whose rows do not fold, at the
- * one place that acts on them. Callers discriminate on this, never on
- * {@link ResumabilityDecision.cause}, which is display text.
- */
-export type ResumabilityFault = 'metadata-unreadable' | 'checkpoint-unreadable';
-
-/**
  * What the durable run facts alone say about continuing a run: a
  * `flow.snapshot` exists on the run aggregate, nothing is left to resume, or
- * the storage itself could not be read (reported with its cause, never
- * guessed).
+ * the storage itself could not be read (reported with its cause, which is
+ * display text, never guessed).
  */
 export type ResumabilityDecision =
-  | {
-      readonly kind: 'checkpoint';
-      readonly snapshot: FlowSnapshotPayload;
-      readonly outcome?: RunOutcome;
-    }
-  | {
-      readonly kind: 'none';
-      readonly outcome?: RunOutcome;
-    }
-  | {
-      readonly kind: 'unreadable';
-      readonly cause: string;
-      readonly fault: ResumabilityFault;
-    };
+  | { readonly kind: 'checkpoint'; readonly snapshot: FlowSnapshotPayload }
+  | { readonly kind: 'none' }
+  | { readonly kind: 'unreadable'; readonly cause: string };
 
 /**
  * Single storage-owned resumability decision.
  *
  * A checkpoint means exactly one thing: the run aggregate carries a
  * `flow.snapshot`, read through the indexed latest-snapshot read. The
- * terminal outcome is read and reported on the decision for display, but it
- * never blocks: rows live until explicit deletion (C9), so a failed or
- * cancelled run is offered as "continue from its last snapshot". Ownership
- * is not decided here; `classifyRun` (`@agent/runtime/runClassification`)
- * combines this decision with the run claim.
+ * terminal record is read only to prove the run's metadata is readable at
+ * all: the outcome never blocks, because rows live until explicit deletion
+ * (C9), so a failed or cancelled run is offered as "continue from its last
+ * snapshot". Ownership is not decided here; `classifyRun`
+ * (`@agent/runtime/runClassification`) combines this decision with the run
+ * claim.
  */
 export const deriveResumability = Effect.fn('deriveResumability')(function* (
   runId: RunId,
@@ -68,12 +46,9 @@ export const deriveResumability = Effect.fn('deriveResumability')(function* (
     );
     return {
       kind: 'unreadable',
-      fault: 'metadata-unreadable',
       cause: `run metadata could not be read (${toErrorMessage(error)})`,
     };
   }
-  const outcome = endResult.success?.outcome;
-  const metaFields = outcome === undefined ? {} : { outcome };
   const snapshot = yield* session.ledger
     .latestSnapshot(runId)
     .pipe(Effect.result);
@@ -84,18 +59,13 @@ export const deriveResumability = Effect.fn('deriveResumability')(function* (
     );
     return {
       kind: 'unreadable',
-      fault: 'checkpoint-unreadable',
       cause: `checkpoint could not be read (${toErrorMessage(error)})`,
     };
   }
   if (snapshot.success !== null) {
-    return {
-      kind: 'checkpoint',
-      snapshot: snapshot.success.payload,
-      ...metaFields,
-    };
+    return { kind: 'checkpoint', snapshot: snapshot.success.payload };
   }
-  return { kind: 'none', ...metaFields };
+  return { kind: 'none' };
 });
 
 /**

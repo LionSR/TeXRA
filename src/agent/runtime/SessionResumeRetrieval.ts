@@ -12,7 +12,11 @@ import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { deriveResumability } from '@agent/storage/resumability';
 import { createLog } from '@logger/logUtils';
-import type { ModelCompatibilityKey, RunId } from '@shared/schemas';
+import type {
+  FlowSnapshotPayload,
+  ModelCompatibilityKey,
+  RunId,
+} from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
 
 const logger = createLog('SessionResumeRetrieval');
@@ -31,11 +35,20 @@ type WorkflowResumeData = ResumeIdentity & { readonly type: 'workflow' };
 
 type SessionResumeData = ToolUseResumeData | WorkflowResumeData;
 
-const RESUME_TYPE_BY_CATEGORY: Partial<
-  Record<AgentConfig['agentCategory'], SessionResumeData['type']>
+/**
+ * Each category's resume family, in one exhaustive table: the resume type a
+ * host launches and the snapshot family the run's rows must be in. A new
+ * category fails to compile here rather than resolving to nothing at runtime.
+ */
+const RESUME_BY_CATEGORY: Record<
+  AgentConfig['agentCategory'],
+  {
+    readonly type: SessionResumeData['type'];
+    readonly family: FlowSnapshotPayload['family'];
+  }
 > = {
-  [AgentCategory.ToolUse]: 'toolUse',
-  [AgentCategory.Workflow]: 'workflow',
+  [AgentCategory.ToolUse]: { type: 'toolUse', family: 'toolUse' },
+  [AgentCategory.Workflow]: { type: 'workflow', family: 'reflection' },
 };
 
 /**
@@ -53,11 +66,8 @@ export const retrieveSessionResumeData = Effect.fn('retrieveSessionResumeData')(
     agentConfig: AgentConfig,
     session: SessionHandle,
   ): Effect.fn.Return<SessionResumeData | null, Error> {
-    const type = RESUME_TYPE_BY_CATEGORY[agentConfig.agentCategory];
-    if (type === undefined) {
-      logger.warn(`Unknown agent config type for run: ${runId}`);
-      return null;
-    }
+    const { type, family: expectedFamily } =
+      RESUME_BY_CATEGORY[agentConfig.agentCategory];
     const resumability = yield* deriveResumability(runId, session);
     if (resumability.kind === 'unreadable') {
       return yield* Effect.fail(
@@ -73,7 +83,6 @@ export const retrieveSessionResumeData = Effect.fn('retrieveSessionResumeData')(
       return null;
     }
     const { snapshot } = resumability;
-    const expectedFamily = type === 'toolUse' ? 'toolUse' : 'reflection';
     if (snapshot.family !== expectedFamily) {
       return yield* Effect.fail(
         new Error(

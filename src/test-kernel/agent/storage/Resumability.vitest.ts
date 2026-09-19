@@ -89,7 +89,6 @@ describe('deriveResumability', () => {
       Effect.runPromise(deriveResumability(runId, session)),
     ).resolves.toMatchObject({
       kind: 'checkpoint',
-      outcome: RUN_OUTCOME.FAILED,
       snapshot: OPENING_SNAPSHOT,
     });
   });
@@ -122,10 +121,7 @@ describe('deriveResumability', () => {
 
     await expect(
       Effect.runPromise(deriveResumability(runId, session)),
-    ).resolves.toEqual({
-      kind: 'none',
-      outcome: RUN_OUTCOME.CANCELLED,
-    });
+    ).resolves.toEqual({ kind: 'none' });
   });
 
   it('reports a run with no durable state as not resumable', async () => {
@@ -151,9 +147,8 @@ describe('deriveResumability', () => {
 
     await expect(
       Effect.runPromise(deriveResumability(runId, session)),
-    ).resolves.toMatchObject({
+    ).resolves.toEqual({
       kind: 'unreadable',
-      fault: 'metadata-unreadable',
       cause: 'run metadata could not be read (corrupt run metadata)',
     });
   });
@@ -172,9 +167,8 @@ describe('deriveResumability', () => {
 
     await expect(
       Effect.runPromise(deriveResumability(runId, session)),
-    ).resolves.toMatchObject({
+    ).resolves.toEqual({
       kind: 'unreadable',
-      fault: 'checkpoint-unreadable',
       cause: 'checkpoint could not be read (disk offline)',
     });
   });

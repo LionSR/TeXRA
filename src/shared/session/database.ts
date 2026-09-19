@@ -62,6 +62,25 @@ export interface AggregateClaim {
   readonly liveness: OwnerLiveness | 'self' | null;
 }
 
+/**
+ * Who holds a claim relative to this process: this process itself, an owner
+ * that is alive or cannot be proven dead, or nobody. The one derivation every
+ * ladder that reads a claim shares — the run listing, the run
+ * classification, and the resume gate all answer the same question of the
+ * same two fields, and a run whose owner is provably dead is free.
+ */
+export type ClaimStanding =
+  | { readonly kind: 'self' }
+  | { readonly kind: 'held'; readonly owner: OwnerId }
+  | { readonly kind: 'free' };
+
+export function claimStanding(claim: AggregateClaim): ClaimStanding {
+  if (claim.liveness === 'self') return { kind: 'self' };
+  if (claim.ownerId !== null && claim.liveness !== 'dead')
+    return { kind: 'held', owner: claim.ownerId };
+  return { kind: 'free' };
+}
+
 /** The database could not be opened, or its schema could not be applied. */
 export class DatabaseOpenFailed extends Data.TaggedError('DatabaseOpenFailed')<{
   readonly path: string;

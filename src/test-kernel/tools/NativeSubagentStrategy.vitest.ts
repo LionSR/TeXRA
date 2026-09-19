@@ -33,7 +33,6 @@ const mocks = vi.hoisted(() => ({
   persistChildRunDelivery: vi.fn(),
   readConfig: vi.fn(),
   resumeToolUseTurn: vi.fn(),
-  retrieveSessionResumeData: vi.fn(),
   throwDeliveryFormatting: false,
   throwErrorFormatting: false,
 }));
@@ -73,17 +72,12 @@ vi.mock('@agent/storage/childRunDeliveryPersistence', () => ({
   persistChildRunDelivery: mocks.persistChildRunDelivery,
 }));
 
-vi.mock('@agent/runtime/SessionResumeRetrieval', () => ({
-  retrieveSessionResumeData: mocks.retrieveSessionResumeData,
-}));
-
 vi.mock('@agent/followUp/ToolUseFollowUp', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@agent/followUp/ToolUseFollowUp')>()),
   submitFollowUp: mocks.submitFollowUp,
 }));
 
 import { testRunHandle } from '@test/support/runHandleFixtures';
-import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 import {
   createTestSession,
   publishTestRunStart,
@@ -537,9 +531,6 @@ describe('NativeSubagentStrategy', () => {
         mocks.readConfig.mockReturnValue(
           Effect.succeed({ agentCategory: 'toolUse' }),
         );
-        mocks.retrieveSessionResumeData.mockReturnValue(
-          Effect.succeed(createToolUseResumeData({ runId: params.runId })),
-        );
         const turn = new AbortController();
         const replacementInterrupt = vi.fn();
         let replacementReady!: () => void;
@@ -704,9 +695,6 @@ describe('NativeSubagentStrategy', () => {
         mocks.readConfig.mockReturnValue(
           Effect.succeed({ agentCategory: 'toolUse' }),
         );
-        mocks.retrieveSessionResumeData.mockReturnValue(
-          Effect.succeed(createToolUseResumeData({ runId: params.runId })),
-        );
         const resumeError = new Error('resume storage unreadable');
         mocks.resumeToolUseTurn.mockRejectedValueOnce(resumeError);
 
@@ -768,12 +756,7 @@ describe('NativeSubagentStrategy', () => {
           model: 'gpt5',
           agentCategory: 'toolUse',
         });
-        const resume = createToolUseResumeData({
-          agentConfig: config,
-          runId: childRunId,
-        });
         mocks.readConfig.mockReturnValue(Effect.succeed(config));
-        mocks.retrieveSessionResumeData.mockReturnValue(Effect.succeed(resume));
         // The resumed flow takes its batch from the queue the child loop
         // owns, as the tool-use loop's drain does.
         const taken: unknown[] = [];
@@ -842,9 +825,12 @@ describe('NativeSubagentStrategy', () => {
           expect(mocks.submitFollowUp).toHaveBeenCalledTimes(3);
 
           expect(mocks.resumeToolUseTurn).toHaveBeenCalledTimes(2);
+          // The turn is handed the run and its persisted config; the
+          // snapshot is read once inside the turn, under its run lease.
+          const identity = { runId: childRunId, agentConfig: config };
           expect(
             mocks.resumeToolUseTurn.mock.calls.map((call) => call[0]),
-          ).toEqual([resume, resume]);
+          ).toEqual([identity, identity]);
           expect(taken).toEqual([
             [
               {
@@ -958,7 +944,6 @@ describe('NativeSubagentStrategy', () => {
           expect(session.followUps.hasLiveOwner(childRunId)).toBe(false);
 
           expect(mocks.resumeToolUseTurn).not.toHaveBeenCalled();
-          expect(mocks.retrieveSessionResumeData).not.toHaveBeenCalled();
         } finally {
           session.followUps.terminalize(childRunId);
         }
