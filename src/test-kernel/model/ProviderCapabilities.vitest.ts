@@ -13,6 +13,7 @@ import { installTexraAccountProbes } from '@controllers/modelAccess/installTexra
 import {
   isCodexSubscriptionActive,
   resolveCodexSubscriptionCapabilities,
+  codexBackendModelId,
 } from '@model/providerCapabilities';
 import type { LanguageModel } from '@platform/languageModel';
 import { CHATGPT_CODEX_CONTEXT_WINDOW_SETTING } from '@shared/schemas';
@@ -203,5 +204,27 @@ describe('ChatGPT subscription model routing', () => {
         isCodexSubscriptionActive(hostStores(), 'unknown-subscription-model'),
       ),
     ).resolves.toBe(false);
+  });
+});
+
+describe('codexBackendModelId', () => {
+  // The bug this pins: llm-zoo's `shortName` for GPT-5.6 Sol is the bare
+  // `gpt-5.6`, which is not a model the Codex backend serves — it answers
+  // "The 'gpt-5.6' model is not supported when using Codex with a ChatGPT
+  // account", which reads as a plan problem rather than a bad id.
+  it.each([
+    ['gpt56', 'gpt-5.6-sol'],
+    ['gpt56-', 'gpt-5.6-terra'],
+    ['gpt56--', 'gpt-5.6-luna'],
+    ['gpt6', 'gpt-6-astra'],
+    ['gpt55', 'gpt-5.5'],
+  ])('sends the backend slug for %s', (key, slug) => {
+    expect(codexBackendModelId(MODEL_CONFIGS[key])).toBe(slug);
+  });
+
+  it('strips the llm-zoo date pin', () => {
+    expect(codexBackendModelId({ fullName: 'gpt-5.5-2026-04-23' })).toBe(
+      'gpt-5.5',
+    );
   });
 });
