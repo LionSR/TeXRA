@@ -74,7 +74,7 @@ import { createLog, isDebugModeEnabled } from '@logger/logUtils';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import type { StateStore, StateWriteFailed } from '@platform/interfaces';
 import type { LanguageModel } from '@platform/languageModel';
-import type { ProcessRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import {
   agentKeyOf,
@@ -87,6 +87,7 @@ import type {
   DownMessage,
   SurfaceActionMessage,
 } from '@shared/session/sessionFrames';
+import { allSettledVoid } from '@utils/core/allSettledVoid';
 import { debounce } from '@utils/core';
 import { DEBOUNCE_OPTIONS_MS } from '@utils/config/constants';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -500,15 +501,15 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   private refreshAfterCredentialChange() {
     return Effect.gen({ self: this }, function* () {
       yield* refresh();
-      yield* Effect.all(
-        [
-          this.snapshot.refreshCatalogs,
-          this.snapshot.refreshAuth,
-          this.snapshot.refreshHostBanners,
-          this.refreshOnboardingFunnel(),
-        ],
-        { concurrency: 'unbounded' },
-      );
+      // `Promise.all` semantics, which is what this fan-out had: a failed
+      // repaint must not take the other three with it, and a half-repainted
+      // view is not an improvement on a failed one.
+      yield* allSettledVoid<StateWriteFailed, ProcessServices>([
+        this.snapshot.refreshCatalogs,
+        this.snapshot.refreshAuth,
+        this.snapshot.refreshHostBanners,
+        this.refreshOnboardingFunnel(),
+      ]);
     });
   }
 
