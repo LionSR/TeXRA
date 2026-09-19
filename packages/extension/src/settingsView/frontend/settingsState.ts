@@ -35,7 +35,6 @@ import {
   DEFAULT_LATEX_SETTINGS_STATUS,
   MODEL_COMPACTION_THRESHOLD_SETTING,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
-  SETTINGS_TAB_PANEL_BY_NAME,
   settingsViewSettingByKey,
   TELEMETRY_ENABLED_KEY,
   TOOL_EDIT_APPROVAL_CONFIG_KEY,
@@ -44,7 +43,6 @@ import {
   type AgentScanIssue,
   type AgentSelectionItem,
   type ByCategory,
-  type ChatGptAuthStatus,
   type ClaudeAgentEffort,
   type ClaudeAgentModel,
   type ClaudeAgentPermissionMode,
@@ -53,7 +51,6 @@ import {
   type CodexSandboxMode,
   type CopilotRouteInfo,
   type GoalListItem,
-  type GrokAuthStatus,
   type MemoryViewItem,
   type ModelSelectionItem,
   type ProviderKeyStatus,
@@ -61,6 +58,7 @@ import {
   type SettingsTabPanelName,
   type SkillDisplayIssue,
   type SkillDisplayItem,
+  type SubscriptionAuthStatuses,
   type SubscriptionUsageSnapshots,
   type ToolDashboardItem,
 } from '@shared/schemas';
@@ -139,7 +137,7 @@ export function applySettingsSnapshot(
  * presents as the entry point.
  */
 export const selectedPanel = trackedSignal<SettingsTabPanelName>(
-  () => SETTINGS_TAB_PANEL_BY_NAME.ACCOUNT,
+  () => 'account',
 );
 
 // ---------------------------------------------------------------------------
@@ -292,14 +290,14 @@ export const gitSettingsLoaded = trackedSignal(() => false);
 export const githubTokenStatus = trackedSignal<'secret' | 'env' | 'none'>(
   () => 'none',
 );
-export const chatgptAuth = trackedSignal<ChatGptAuthStatus>(() => ({
-  signedIn: false,
-  preferSubscription: false,
-}));
-export const grokAuth = trackedSignal<GrokAuthStatus>(() => ({
-  signedIn: false,
-  preferSubscription: false,
-}));
+/**
+ * Sign-in status per subscription provider, addressed by the same provider id
+ * the payload carries. A provider missing from the record has not reported
+ * yet; the section renders its signed-out row until it does.
+ */
+export const subscriptionAuth = trackedSignal<SubscriptionAuthStatuses>(
+  () => ({}),
+);
 export const subscriptionUsage =
   trackedSignal<SubscriptionUsageSnapshots | null>(() => null);
 export const prSubscriptions = trackedSignal<readonly PRSubscriptionEntry[]>(

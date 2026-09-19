@@ -20,8 +20,7 @@ import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import {
   CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
-  type ChatGptAuthStatus,
-  type GrokAuthStatus,
+  type SubscriptionAuthStatus,
   type SubscriptionUsageSnapshot,
 } from '@shared/schemas';
 import { CHATGPT_AUTH, GROK_AUTH } from '@shared/copy/accountAuth';
@@ -43,9 +42,6 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
 
 import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
-
-/** Sign-in status shared by every subscription provider. */
-export type SubscriptionAuthStatus = ChatGptAuthStatus | GrokAuthStatus;
 
 /** Everything one provider contributes to the shared section. */
 export interface SubscriptionSectionProvider {

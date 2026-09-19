@@ -78,71 +78,40 @@ export {
 } from './profileViewMessages';
 
 /**
- * The set of settings tabs — single source of truth for tab names. The wire
- * format is the derived panel name (`SET_TAB.tab`), so order carries no
- * meaning beyond stable iteration. Retired internal panels are removed
- * together with their producers and command surfaces so no stale IPC target
- * remains.
+ * The set of settings tabs — single source of truth for tab names, spelled the
+ * one way they travel: the panel name on the wire (`SET_TAB.tab`) and in every
+ * `data-panel` selector. Order carries no meaning beyond stable iteration.
+ * Retired internal panels are removed together with their producers and
+ * command surfaces so no stale IPC target remains.
  */
 export const SETTINGS_TAB_ORDER = [
-  'MEMORY',
-  'MODELS',
-  'AGENTS',
-  'MULTI_AGENT',
-  'TOOLS',
-  'SKILLS',
-  'AI_AGENTS',
-  'GIT',
-  'LATEX',
-  'GOAL',
-  'ACCOUNT',
-  'SHORTCUTS',
-  'SUBSCRIPTIONS',
+  'memory',
+  'models',
+  'agents',
+  'multi-agent',
+  'tools',
+  'skills',
+  'ai-agents',
+  'git',
+  'latex',
+  'goal',
+  'account',
+  'shortcuts',
+  'subscriptions',
 ] as const;
-
-export type SettingsTabName = (typeof SETTINGS_TAB_ORDER)[number];
-
-/**
- * Recursive replace used to derive the panel-name literal type from the
- * uppercase tab name (`MULTI_AGENT` → `multi-agent`), mirroring the runtime
- * transformation in `SETTINGS_TAB_PANEL_BY_NAME`.
- */
-type ReplaceAll<
-  S extends string,
-  From extends string,
-  To extends string,
-> = S extends `${infer Head}${From}${infer Tail}`
-  ? `${Head}${To}${ReplaceAll<Tail, From, To>}`
-  : S;
 
 /**
  * Webview panel-addressing key for a tab, e.g. `'multi-agent'`. A literal
- * union derived from {@link SettingsTabName}, so an appended tab widens it and
+ * union over {@link SETTINGS_TAB_ORDER}, so an appended tab widens it and
  * exhaustiveness-checked switches (SettingsApp's `renderActivePanel`) become
- * compile errors until they add a case — the panel-name equivalent of the
- * `Record<SettingsTabName, …>` metadata maps.
+ * compile errors until they add a case — the same effect the
+ * `Record<SettingsTabPanelName, …>` metadata maps have.
  */
-export type SettingsTabPanelName = ReplaceAll<
-  Lowercase<SettingsTabName>,
-  '_',
-  '-'
->;
-
-export const SETTINGS_TAB_PANEL_BY_NAME = Object.fromEntries(
-  SETTINGS_TAB_ORDER.map((name) => [
-    name,
-    name.toLowerCase().replaceAll('_', '-'),
-  ]),
-) as Record<SettingsTabName, SettingsTabPanelName>;
-
-export const SETTINGS_TAB_PANEL_NAMES: readonly SettingsTabPanelName[] =
-  SETTINGS_TAB_ORDER.map((name) => SETTINGS_TAB_PANEL_BY_NAME[name]);
+export type SettingsTabPanelName = (typeof SETTINGS_TAB_ORDER)[number];
 
 /**
  * Presentation-only grouping for the settings top navigation. Groups address
- * panels by `SettingsTabName`, which the nav renders as the panel name
- * (`SETTINGS_TAB_PANEL_BY_NAME`) — the same name that travels over IPC as
- * `SET_TAB.tab`.
+ * panels by the same name that travels over IPC as `SET_TAB.tab`.
  *
  * Every tab must appear in exactly one group, or its panel becomes unreachable
  * from the nav while still being a valid IPC target. `SharedSchemas.vitest.ts`
@@ -150,21 +119,21 @@ export const SETTINGS_TAB_PANEL_NAMES: readonly SettingsTabPanelName[] =
  * appended tab cannot ship without being placed here.
  */
 export const SETTINGS_TAB_GROUPS = [
-  { label: 'Account', tabs: ['ACCOUNT', 'SUBSCRIPTIONS'] },
-  { label: 'Models', tabs: ['MODELS'] },
-  { label: 'Agents', tabs: ['AGENTS', 'MULTI_AGENT'] },
-  { label: 'Capabilities', tabs: ['TOOLS', 'SKILLS', 'AI_AGENTS', 'LATEX'] },
-  { label: 'Workspace', tabs: ['GIT', 'SHORTCUTS'] },
-  { label: 'Data & Activity', tabs: ['MEMORY', 'GOAL'] },
+  { label: 'Account', tabs: ['account', 'subscriptions'] },
+  { label: 'Models', tabs: ['models'] },
+  { label: 'Agents', tabs: ['agents', 'multi-agent'] },
+  { label: 'Capabilities', tabs: ['tools', 'skills', 'ai-agents', 'latex'] },
+  { label: 'Workspace', tabs: ['git', 'shortcuts'] },
+  { label: 'Data & Activity', tabs: ['memory', 'goal'] },
 ] as const satisfies readonly {
   label: string;
-  tabs: readonly SettingsTabName[];
+  tabs: readonly SettingsTabPanelName[];
 }[];
 
 /** Outbound schema to switch tabs, addressed by panel name. */
 const SetTabMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_COMMANDS.SET_TAB),
-  tab: z.enum(SETTINGS_TAB_PANEL_NAMES),
+  tab: z.enum(SETTINGS_TAB_ORDER),
   agentSubTab: AgentCategorySchema.optional(),
 });
 
@@ -470,37 +439,46 @@ const UpdateGitHubTokenStatusMessageSchema = z.object({
   status: z.enum(['secret', 'env', 'none']),
 });
 
-/** Outbound: backend → frontend ChatGPT-subscription sign-in status. */
-const ChatGptAuthStatusSchema = z.object({
+/**
+ * The OAuth subscription providers a settings view signs in and out of. The
+ * wire vocabulary for `SubscriptionProvider.id` in the host-neutral catalog
+ * (`@controllers/modelAccess/subscriptionProviders`), which derives its id
+ * type from here so a provider is spelled one way everywhere.
+ */
+export const SUBSCRIPTION_AUTH_PROVIDERS = ['chatgpt', 'grok'] as const;
+
+/**
+ * Outbound: backend → frontend subscription sign-in status, addressed by
+ * provider. One shape for every provider — both carry the same session facts
+ * and the same routing preference — so the payload names the provider instead
+ * of the command doing it.
+ */
+const SubscriptionAuthStatusSchema = z.object({
+  provider: z.enum(SUBSCRIPTION_AUTH_PROVIDERS),
   signedIn: z.boolean(),
   email: z.string().nullish(),
   accountId: z.string().nullish(),
   preferSubscription: z.boolean(),
 });
-export type ChatGptAuthStatus = z.infer<typeof ChatGptAuthStatusSchema>;
-
-const UpdateChatGptAuthStatusMessageSchema = z.object({
-  command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_CHATGPT_AUTH_STATUS),
-  status: ChatGptAuthStatusSchema,
-});
-export type UpdateChatGptAuthStatusMessage = z.infer<
-  typeof UpdateChatGptAuthStatusMessageSchema
+export type SubscriptionAuthStatus = z.infer<
+  typeof SubscriptionAuthStatusSchema
 >;
 
-/** Outbound: backend → frontend Grok-subscription sign-in status. */
-const GrokAuthStatusSchema = z.object({
-  signedIn: z.boolean(),
-  email: z.string().nullish(),
-  preferSubscription: z.boolean(),
-});
-export type GrokAuthStatus = z.infer<typeof GrokAuthStatusSchema>;
+/**
+ * Sign-in status per provider, as a settings view holds it. Partial because a
+ * provider that has not reported yet has no row; its section renders the
+ * signed-out state until one lands.
+ */
+export type SubscriptionAuthStatuses = Readonly<
+  Partial<Record<SubscriptionAuthStatus['provider'], SubscriptionAuthStatus>>
+>;
 
-const UpdateGrokAuthStatusMessageSchema = z.object({
-  command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_GROK_AUTH_STATUS),
-  status: GrokAuthStatusSchema,
+const UpdateSubscriptionAuthStatusMessageSchema = z.object({
+  command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_SUBSCRIPTION_AUTH_STATUS),
+  status: SubscriptionAuthStatusSchema,
 });
-export type UpdateGrokAuthStatusMessage = z.infer<
-  typeof UpdateGrokAuthStatusMessageSchema
+export type UpdateSubscriptionAuthStatusMessage = z.infer<
+  typeof UpdateSubscriptionAuthStatusMessageSchema
 >;
 
 const UpdateSubscriptionUsageMessageSchema = z.object({
@@ -616,8 +594,7 @@ const SettingsViewOutboundMessageSchema = z.discriminatedUnion('command', [
   UpdateSkillsListMessageSchema,
   UpdateToolDashboardMessageSchema,
   UpdateGitHubTokenStatusMessageSchema,
-  UpdateChatGptAuthStatusMessageSchema,
-  UpdateGrokAuthStatusMessageSchema,
+  UpdateSubscriptionAuthStatusMessageSchema,
   UpdateSubscriptionUsageMessageSchema,
   UpdatePRSubscriptionsMessageSchema,
   UpdateLatexSettingsStatusMessageSchema,

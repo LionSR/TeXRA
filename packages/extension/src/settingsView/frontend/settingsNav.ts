@@ -6,14 +6,11 @@
 
 import {
   SETTINGS_TAB_GROUPS,
-  SETTINGS_TAB_PANEL_BY_NAME,
-  type SettingsTabName,
   type SettingsTabPanelName,
 } from '@shared/schemas';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 
 export interface SettingsNavEntry {
-  readonly name: SettingsTabName;
   /** `wa-tab-panel` name — the addressing key the nav and e2e selectors share. */
   readonly panel: SettingsTabPanelName;
   readonly icon: TeXRAIconName;
@@ -28,83 +25,83 @@ export interface SettingsNavGroup {
 }
 
 /**
- * Per-panel nav metadata. `Record<SettingsTabName, …>` makes an appended tab a
- * compile error until it has a label and icon.
+ * Per-panel nav metadata. `Record<SettingsTabPanelName, …>` makes an appended
+ * tab a compile error until it has a label and icon.
  */
 const SETTINGS_TAB_METADATA: Record<
-  SettingsTabName,
+  SettingsTabPanelName,
   {
     readonly icon: TeXRAIconName;
     readonly label: string;
     readonly description: string;
   }
 > = {
-  MEMORY: {
+  memory: {
     icon: 'database',
     label: 'Memory',
     description: 'Control and inspect the notes TeXRA keeps across tasks.',
   },
-  MODELS: {
+  models: {
     icon: 'server',
     label: 'Providers & Models',
     description: 'Choose model access, credentials, and defaults.',
   },
-  AGENTS: {
+  agents: {
     icon: 'robot',
     label: 'Agents',
     description:
       'Configure the agents and agent sets available to tasks, plus session reliability.',
   },
-  MULTI_AGENT: {
+  'multi-agent': {
     icon: 'users',
     label: 'Teams',
     description:
       'Build coordinated agent teams and choose orchestration behavior.',
   },
-  TOOLS: {
+  tools: {
     icon: 'screwdriver-wrench',
     label: 'Tools',
     description:
       'Review tool availability, permissions, and desktop diagnostics.',
   },
-  SKILLS: {
+  skills: {
     icon: 'wand-magic-sparkles',
     label: 'Skills',
     description: 'Choose which reusable instructions agents can load.',
   },
-  AI_AGENTS: {
+  'ai-agents': {
     icon: 'link',
     label: 'Integrations',
     description:
       'Connect coding agents, services, reference managers, and other tools.',
   },
-  GIT: {
+  git: {
     icon: 'code-branch',
     label: 'Git',
     description: 'Configure agent commit identity and GitHub activity access.',
   },
-  LATEX: {
+  latex: {
     icon: 'file-code',
     label: 'LaTeX',
     description:
       'Check dependencies and tune compile, diff, and formatting behavior.',
   },
-  GOAL: {
+  goal: {
     icon: 'compass',
     label: 'Goals',
     description: 'Monitor autonomous goals and return to their active tasks.',
   },
-  ACCOUNT: {
+  account: {
     icon: 'circle-user',
     label: 'Account & Usage',
     description: 'Manage sign-in and current model usage.',
   },
-  SUBSCRIPTIONS: {
+  subscriptions: {
     icon: 'gem',
     label: 'Subscriptions',
     description: 'Manage ChatGPT, Kimi Code, and Copilot model access.',
   },
-  SHORTCUTS: {
+  shortcuts: {
     icon: 'code',
     label: 'Shortcuts',
     description: 'Customize desktop commands and resolve key conflicts.',
@@ -128,9 +125,8 @@ export const SETTINGS_NAV_GROUPS: readonly SettingsNavGroup[] =
   SETTINGS_TAB_GROUPS.map((group) => ({
     label: group.label,
     icon: SETTINGS_GROUP_ICONS[group.label],
-    entries: group.tabs.map((name) => ({
-      name,
-      panel: SETTINGS_TAB_PANEL_BY_NAME[name],
-      ...SETTINGS_TAB_METADATA[name],
+    entries: group.tabs.map((panel) => ({
+      panel,
+      ...SETTINGS_TAB_METADATA[panel],
     })),
   }));

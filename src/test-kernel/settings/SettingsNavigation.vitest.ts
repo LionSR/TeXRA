@@ -10,7 +10,6 @@ vi.mock('@shared/hostBridge', () => ({
 }));
 
 import type { SettingsNavGroup } from '@settingsView/frontend/settingsNav';
-import { SETTINGS_TAB_PANEL_BY_NAME } from '@shared/schemas';
 import type { SettingsTabPanelName } from '@shared/schemas';
 
 import { useLitComponentTestDom } from './litComponentTestUtils';
@@ -29,7 +28,7 @@ function getSelectedPanel(): SettingsTabPanelName {
 }
 
 async function mountSettingsApp(
-  initialTab: SettingsTabPanelName = SETTINGS_TAB_PANEL_BY_NAME.ACCOUNT,
+  initialTab: SettingsTabPanelName = 'account',
 ): Promise<LitElementLike> {
   const app = document.createElement('settings-app') as LitElementLike;
   app.setAttribute('data-desktop-view', 'settings');
@@ -72,7 +71,7 @@ describe('hierarchical settings navigation', () => {
   });
 
   beforeEach(() => {
-    setSelectedPanel(SETTINGS_TAB_PANEL_BY_NAME.ACCOUNT);
+    setSelectedPanel('account');
   });
 
   it('selects the first page when changing category, then any page within it', async () => {
@@ -98,7 +97,7 @@ describe('hierarchical settings navigation', () => {
   });
 
   it('activates the page addressed by a wire panel name', async () => {
-    const app = await mountSettingsApp(SETTINGS_TAB_PANEL_BY_NAME.LATEX);
+    const app = await mountSettingsApp('latex');
 
     expect(activePanelLabel(app)).toBe('LaTeX');
     expect(
@@ -123,7 +122,7 @@ describe('hierarchical settings navigation', () => {
     );
     await app.updateComplete;
 
-    expect(getSelectedPanel()).toBe(SETTINGS_TAB_PANEL_BY_NAME.MODELS);
+    expect(getSelectedPanel()).toBe('models');
     expect(activePanelLabel(app)).toBe('Providers & Models');
     expect(app.shadowRoot?.querySelector('models-tab')).not.toBeNull();
     expect(app.shadowRoot?.querySelector('account-tab')).toBeNull();
@@ -131,13 +130,13 @@ describe('hierarchical settings navigation', () => {
 
   it('keeps desktop-only shortcuts out of the extension navigation', async () => {
     const app = document.createElement('settings-app') as LitElementLike;
-    setSelectedPanel(SETTINGS_TAB_PANEL_BY_NAME.SHORTCUTS);
+    setSelectedPanel('shortcuts');
     document.body.append(app);
     await app.updateComplete;
 
     expect(
       app.shadowRoot?.querySelector(
-        `.settings-page-button[data-panel="${SETTINGS_TAB_PANEL_BY_NAME.SHORTCUTS}"]`,
+        '.settings-page-button[data-panel="shortcuts"]',
       ),
     ).toBeNull();
     expect(activePanelLabel(app)).toBe('Account & Usage');

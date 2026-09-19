@@ -25,8 +25,9 @@ import { installPlatform } from '@test/support/setupPlatform';
 import { commandOf } from './desktopSettingsTestSupport';
 
 const codexMocks = vi.hoisted(() => ({
-  getStatus: vi.fn(() =>
+  getStatus: vi.fn((providerId: 'chatgpt' | 'grok' = 'chatgpt') =>
     Effect.succeed({
+      provider: providerId,
       signedIn: false,
       preferSubscription: false,
     }),
@@ -63,8 +64,8 @@ vi.mock('@auth/codex', async (importOriginal) => ({
   loginWithLoopback: codexMocks.login,
 }));
 
-vi.mock('@controllers/modelAccess/chatGptAuthStatus', () => ({
-  getChatGptAuthStatus: codexMocks.getStatus,
+vi.mock('@controllers/modelAccess/subscriptionAuthStatus', () => ({
+  subscriptionAuthStatus: codexMocks.getStatus,
 }));
 
 vi.mock('@model/codex/codexSubscription', () => ({
@@ -225,8 +226,9 @@ async function createFixture({
 
 describe('DefaultDesktopCredentialSettingsController', () => {
   beforeEach(() => {
-    codexMocks.getStatus.mockReturnValue(
+    codexMocks.getStatus.mockImplementation((providerId = 'chatgpt') =>
       Effect.succeed({
+        provider: providerId,
         signedIn: false,
         preferSubscription: false,
       }),
@@ -397,7 +399,7 @@ describe('DefaultDesktopCredentialSettingsController', () => {
     expect(fixture.events.at(-1)).toBe('credential');
     expect(fixture.events.slice(0, -1)).toEqual(
       expect.arrayContaining([
-        `render:${SETTINGS_VIEW_COMMANDS.UPDATE_CHATGPT_AUTH_STATUS}`,
+        `render:${SETTINGS_VIEW_COMMANDS.UPDATE_SUBSCRIPTION_AUTH_STATUS}`,
         `render:${SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION}`,
         'modelOptions',
       ]),

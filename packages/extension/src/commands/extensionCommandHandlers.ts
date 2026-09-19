@@ -14,7 +14,6 @@ import {
   AcceptCopyMetaSchema,
   AgentCategorySchema,
   FileLocationSchema,
-  SETTINGS_TAB_PANEL_BY_NAME,
   type AcceptCopyMeta,
   type AgentCategory,
   type FileLocation,
@@ -182,7 +181,7 @@ export const EXTENSION_COMMAND_HANDLERS = {
   'texra.auth.grok.signIn': (actions) => awaitTrue(actions.signInGrok()),
   'texra.auth.signOut': (actions) => awaitTrue(actions.signOut()),
   'texra.auth.viewProfile': (actions) =>
-    awaitTrue(actions.showSettings(SETTINGS_TAB_PANEL_BY_NAME.ACCOUNT)),
+    awaitTrue(actions.showSettings('account')),
   [EXTENSION_COMMANDS.RUN_SETUP_ASSISTANT]: (actions) =>
     awaitTrue(actions.runSetupAssistant()),
   [EXTENSION_COMMANDS.OPEN_GETTING_STARTED]: (actions) =>

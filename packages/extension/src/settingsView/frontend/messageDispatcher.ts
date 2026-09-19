@@ -12,7 +12,7 @@ import { create } from 'mutative';
 
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
-  LATEX_CONFIG_FIELD_TO_KEY,
+  LATEX_CONFIG_KEYS,
   type LatexConfigValues,
 } from '@shared/constants/latexConfig';
 import { type SettingsViewOutboundHandlerRegistry } from '@shared/schemas';
@@ -23,7 +23,6 @@ import {
   agentSubTab,
   applySettingsSnapshot,
   authenticated,
-  chatgptAuth,
   copilotRouteInfos,
   customAgentDir,
   customAgentDirIsDefault,
@@ -32,7 +31,6 @@ import {
   githubTokenStatus,
   gitSettingsLoaded,
   goalItems,
-  grokAuth,
   helperModel,
   inlineCriticismEnabled,
   latexConfigValues,
@@ -49,6 +47,7 @@ import {
   sessionProblem,
   skillLoadIssues,
   skillsList,
+  subscriptionAuth,
   subscriptionUsage,
   toolDashboardItems,
   toolDashboardLoaded,
@@ -129,16 +128,26 @@ export const settingsViewHandlers: SettingsViewOutboundHandlerRegistry = {
   // Catalog-derived settings snapshots.
   [SETTINGS_VIEW_COMMANDS.UPDATE_SETTINGS_SNAPSHOT]: (data) => {
     if (data.snapshot === 'latex') {
-      // The dispatcher already parsed each row against its own catalog
-      // schema, so this only re-keys catalog keys to field names.
-      latexConfigValues.set(
-        Object.fromEntries(
-          Object.entries(LATEX_CONFIG_FIELD_TO_KEY).map(([field, key]) => [
-            field,
-            data.values[key],
-          ]),
-        ) as LatexConfigValues,
-      );
+      // The LaTeX tab renders its own keyed record rather than the catalog
+      // signals, so it takes the payload whole: every row the snapshot carries
+      // reaches the tab, including one added after this line was written. A
+      // row with no field, or a field whose key left the catalog, is reported
+      // rather than rendering a default forever — the same guarantee
+      // `applySettingsSnapshot` gives the other snapshots.
+      const unrendered = new Set(Object.keys(LATEX_CONFIG_KEYS));
+      for (const key of Object.keys(data.values)) {
+        if (!unrendered.delete(key)) {
+          console.warn(
+            `[settings] The LaTeX tab declares no field for catalog setting "${key}"; it cannot render it.`,
+          );
+        }
+      }
+      for (const key of unrendered) {
+        console.warn(
+          `[settings] The LaTeX tab renders "${key}", which the LaTeX snapshot does not carry; it will show its default.`,
+        );
+      }
+      latexConfigValues.set(data.values as LatexConfigValues);
       return;
     }
     applySettingsSnapshot(data.values);
@@ -171,12 +180,11 @@ export const settingsViewHandlers: SettingsViewOutboundHandlerRegistry = {
     githubTokenStatus.set(data.status);
   },
 
-  [SETTINGS_VIEW_COMMANDS.UPDATE_CHATGPT_AUTH_STATUS]: (data) => {
-    chatgptAuth.set(data.status);
-  },
-
-  [SETTINGS_VIEW_COMMANDS.UPDATE_GROK_AUTH_STATUS]: (data) => {
-    grokAuth.set(data.status);
+  [SETTINGS_VIEW_COMMANDS.UPDATE_SUBSCRIPTION_AUTH_STATUS]: (data) => {
+    subscriptionAuth.set({
+      ...subscriptionAuth.get(),
+      [data.status.provider]: data.status,
+    });
   },
 
   [SETTINGS_VIEW_COMMANDS.UPDATE_PR_SUBSCRIPTIONS]: (data) => {
