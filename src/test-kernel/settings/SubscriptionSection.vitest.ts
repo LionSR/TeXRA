@@ -8,11 +8,9 @@ vi.mock('@shared/hostBridge', () => ({
   postMessage: mocks.postMessage,
 }));
 
-import type {
-  SubscriptionAuthStatus,
-  SubscriptionSectionProvider,
-} from '@settingsView/frontend/components/profile/SubscriptionSection';
+import type { SubscriptionSectionProvider } from '@settingsView/frontend/components/profile/SubscriptionSection';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import type { SubscriptionAuthStatus } from '@shared/schemas';
 
 import {
   mountComponent,
@@ -77,6 +75,7 @@ describe('subscription-section provider descriptors', () => {
 
   it('renders the Grok section and posts its sign-out command when signed in', async () => {
     const element = await mount(grokSection, {
+      provider: 'grok',
       signedIn: true,
       email: 'someone@example.com',
       preferSubscription: true,

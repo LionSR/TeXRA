@@ -17,9 +17,8 @@ import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import {
   CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
-  type ChatGptAuthStatus,
   type CopilotRouteInfo,
-  type GrokAuthStatus,
+  type SubscriptionAuthStatuses,
   type SubscriptionUsageSnapshots,
 } from '@shared/schemas';
 import { TickerController } from '@shared/litControllers/TickerController';
@@ -72,10 +71,10 @@ export class SubscriptionsTab extends LitElement {
 
   /** Parent-owned acknowledgement generation for restoring rejected edits. */
   @property({ attribute: false }) ackGeneration = 0;
-  @property({ attribute: false }) chatgptAuth: ChatGptAuthStatus | null = null;
+  @property({ attribute: false }) subscriptionAuth: SubscriptionAuthStatuses =
+    {};
   @property({ attribute: false }) chatgptCodexContextWindow =
     CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.defaultValue;
-  @property({ attribute: false }) grokAuth: GrokAuthStatus | null = null;
   @property({ attribute: false }) usage: SubscriptionUsageSnapshots | null =
     null;
   @property({ attribute: false }) copilotModels: CopilotRouteInfo[] = [];
@@ -122,14 +121,14 @@ export class SubscriptionsTab extends LitElement {
         <subscription-section
           .ackGeneration=${this.ackGeneration}
           .provider=${CHATGPT_SUBSCRIPTION_SECTION}
-          .auth=${this.chatgptAuth}
+          .auth=${this.subscriptionAuth.chatgpt ?? null}
           .contextWindow=${this.chatgptCodexContextWindow}
           .usage=${this.usage?.chatgpt ?? null}
           .now=${this._ticker.now}
         ></subscription-section>
         <subscription-section
           .provider=${GROK_SUBSCRIPTION_SECTION}
-          .auth=${this.grokAuth}
+          .auth=${this.subscriptionAuth.grok ?? null}
           .now=${this._ticker.now}
         ></subscription-section>
         ${CODING_PLAN_SUBSCRIPTIONS.map((section) =>

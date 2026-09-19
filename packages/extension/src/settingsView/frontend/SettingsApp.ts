@@ -58,9 +58,7 @@ import {
   authenticated,
   approvalPolicy,
   bashApprovalEnabled,
-  chatgptAuth,
   chatgptCodexContextWindow,
-  grokAuth,
   childRunConcurrencyBudget,
   claudeAgentEffort,
   claudeAgentModel,
@@ -104,6 +102,7 @@ import {
   sessionProblem,
   skillLoadIssues,
   skillsList,
+  subscriptionAuth,
   subscriptionUsage,
   telemetryEnabled,
   toolDashboardItems,
@@ -284,9 +283,8 @@ export class SettingsApp extends SignalWatcher(LitElement) {
         return html`
           <subscriptions-tab
             .ackGeneration=${multiAgentSettingsRevision.get()}
-            .chatgptAuth=${chatgptAuth.get()}
             .chatgptCodexContextWindow=${chatgptCodexContextWindow.get()}
-            .grokAuth=${grokAuth.get()}
+            .subscriptionAuth=${subscriptionAuth.get()}
             .usage=${subscriptionUsage.get()}
             .copilotModels=${copilotRouteInfos.get()}
           ></subscriptions-tab>

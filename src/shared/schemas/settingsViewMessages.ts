@@ -439,37 +439,46 @@ const UpdateGitHubTokenStatusMessageSchema = z.object({
   status: z.enum(['secret', 'env', 'none']),
 });
 
-/** Outbound: backend → frontend ChatGPT-subscription sign-in status. */
-const ChatGptAuthStatusSchema = z.object({
+/**
+ * The OAuth subscription providers a settings view signs in and out of. The
+ * wire vocabulary for `SubscriptionProvider.id` in the host-neutral catalog
+ * (`@controllers/modelAccess/subscriptionProviders`), which derives its id
+ * type from here so a provider is spelled one way everywhere.
+ */
+export const SUBSCRIPTION_AUTH_PROVIDERS = ['chatgpt', 'grok'] as const;
+
+/**
+ * Outbound: backend → frontend subscription sign-in status, addressed by
+ * provider. One shape for every provider — both carry the same session facts
+ * and the same routing preference — so the payload names the provider instead
+ * of the command doing it.
+ */
+const SubscriptionAuthStatusSchema = z.object({
+  provider: z.enum(SUBSCRIPTION_AUTH_PROVIDERS),
   signedIn: z.boolean(),
   email: z.string().nullish(),
   accountId: z.string().nullish(),
   preferSubscription: z.boolean(),
 });
-export type ChatGptAuthStatus = z.infer<typeof ChatGptAuthStatusSchema>;
-
-const UpdateChatGptAuthStatusMessageSchema = z.object({
-  command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_CHATGPT_AUTH_STATUS),
-  status: ChatGptAuthStatusSchema,
-});
-export type UpdateChatGptAuthStatusMessage = z.infer<
-  typeof UpdateChatGptAuthStatusMessageSchema
+export type SubscriptionAuthStatus = z.infer<
+  typeof SubscriptionAuthStatusSchema
 >;
 
-/** Outbound: backend → frontend Grok-subscription sign-in status. */
-const GrokAuthStatusSchema = z.object({
-  signedIn: z.boolean(),
-  email: z.string().nullish(),
-  preferSubscription: z.boolean(),
-});
-export type GrokAuthStatus = z.infer<typeof GrokAuthStatusSchema>;
+/**
+ * Sign-in status per provider, as a settings view holds it. Partial because a
+ * provider that has not reported yet has no row; its section renders the
+ * signed-out state until one lands.
+ */
+export type SubscriptionAuthStatuses = Readonly<
+  Partial<Record<SubscriptionAuthStatus['provider'], SubscriptionAuthStatus>>
+>;
 
-const UpdateGrokAuthStatusMessageSchema = z.object({
-  command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_GROK_AUTH_STATUS),
-  status: GrokAuthStatusSchema,
+const UpdateSubscriptionAuthStatusMessageSchema = z.object({
+  command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_SUBSCRIPTION_AUTH_STATUS),
+  status: SubscriptionAuthStatusSchema,
 });
-export type UpdateGrokAuthStatusMessage = z.infer<
-  typeof UpdateGrokAuthStatusMessageSchema
+export type UpdateSubscriptionAuthStatusMessage = z.infer<
+  typeof UpdateSubscriptionAuthStatusMessageSchema
 >;
 
 const UpdateSubscriptionUsageMessageSchema = z.object({
@@ -585,8 +594,7 @@ const SettingsViewOutboundMessageSchema = z.discriminatedUnion('command', [
   UpdateSkillsListMessageSchema,
   UpdateToolDashboardMessageSchema,
   UpdateGitHubTokenStatusMessageSchema,
-  UpdateChatGptAuthStatusMessageSchema,
-  UpdateGrokAuthStatusMessageSchema,
+  UpdateSubscriptionAuthStatusMessageSchema,
   UpdateSubscriptionUsageMessageSchema,
   UpdatePRSubscriptionsMessageSchema,
   UpdateLatexSettingsStatusMessageSchema,

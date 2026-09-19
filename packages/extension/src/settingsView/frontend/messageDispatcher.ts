@@ -23,7 +23,6 @@ import {
   agentSubTab,
   applySettingsSnapshot,
   authenticated,
-  chatgptAuth,
   copilotRouteInfos,
   customAgentDir,
   customAgentDirIsDefault,
@@ -32,7 +31,6 @@ import {
   githubTokenStatus,
   gitSettingsLoaded,
   goalItems,
-  grokAuth,
   helperModel,
   inlineCriticismEnabled,
   latexConfigValues,
@@ -49,6 +47,7 @@ import {
   sessionProblem,
   skillLoadIssues,
   skillsList,
+  subscriptionAuth,
   subscriptionUsage,
   toolDashboardItems,
   toolDashboardLoaded,
@@ -171,12 +170,11 @@ export const settingsViewHandlers: SettingsViewOutboundHandlerRegistry = {
     githubTokenStatus.set(data.status);
   },
 
-  [SETTINGS_VIEW_COMMANDS.UPDATE_CHATGPT_AUTH_STATUS]: (data) => {
-    chatgptAuth.set(data.status);
-  },
-
-  [SETTINGS_VIEW_COMMANDS.UPDATE_GROK_AUTH_STATUS]: (data) => {
-    grokAuth.set(data.status);
+  [SETTINGS_VIEW_COMMANDS.UPDATE_SUBSCRIPTION_AUTH_STATUS]: (data) => {
+    subscriptionAuth.set({
+      ...subscriptionAuth.get(),
+      [data.status.provider]: data.status,
+    });
   },
 
   [SETTINGS_VIEW_COMMANDS.UPDATE_PR_SUBSCRIPTIONS]: (data) => {

@@ -3,8 +3,7 @@ import { Data, Effect } from 'effect';
 
 // Local imports
 import { LoopbackTransportUnavailableError } from '@auth/oauth/loopbackLogin';
-import { getChatGptAuthStatus } from '@controllers/modelAccess/chatGptAuthStatus';
-import { getGrokAuthStatus } from '@controllers/modelAccess/grokAuthStatus';
+import { subscriptionAuthStatus } from '@controllers/modelAccess/subscriptionAuthStatus';
 import {
   subscriptionProvider,
   type SubscriptionDeviceCodePrompt,
@@ -43,8 +42,7 @@ import {
 import {
   type SettingsViewInboundHandlerRegistry,
   type SubscriptionUsageProvider,
-  type UpdateChatGptAuthStatusMessage,
-  type UpdateGrokAuthStatusMessage,
+  type UpdateSubscriptionAuthStatusMessage,
 } from '@shared/schemas';
 import { ACCOUNT_OUTCOME } from '@shared/copy/accountAuth';
 import type { SettingsStores } from '@shared/config/settingsAccess';
@@ -169,46 +167,13 @@ type DesktopGrokHandlers = Pick<
 
 /**
  * The settings-view half of a subscription provider, which the host-neutral
- * `SUBSCRIPTION_PROVIDERS` catalog deliberately does not carry: the outbound
- * status message this renderer listens for, and the usage snapshot (ChatGPT
- * only) that an auth change invalidates. Kept host-side because the catalog
- * also serves the CLI, which has no settings view. Adding a third provider is
- * one row here, not another pair of hand-copied methods below.
+ * `SUBSCRIPTION_PROVIDERS` catalog deliberately does not carry: the usage
+ * snapshot (ChatGPT only) that an auth change invalidates. Kept host-side
+ * because the catalog also serves the CLI, which has no settings view.
  */
-const SUBSCRIPTION_STATUS_ROWS: Record<
-  SubscriptionProviderId,
-  {
-    readonly buildStatusMessage: (
-      stores: SettingsStores,
-      secrets: PlatformSecrets,
-    ) => Effect.Effect<unknown>;
-    readonly usageProvider?: SubscriptionUsageProvider;
-  }
-> = {
-  chatgpt: {
-    buildStatusMessage: (stores, secrets) =>
-      Effect.map(
-        getChatGptAuthStatus(stores, secrets),
-        (status) =>
-          ({
-            command: SETTINGS_VIEW_COMMANDS.UPDATE_CHATGPT_AUTH_STATUS,
-            status,
-          }) satisfies UpdateChatGptAuthStatusMessage,
-      ),
-    usageProvider: 'chatgpt',
-  },
-  grok: {
-    buildStatusMessage: (stores, secrets) =>
-      Effect.map(
-        getGrokAuthStatus(stores, secrets),
-        (status) =>
-          ({
-            command: SETTINGS_VIEW_COMMANDS.UPDATE_GROK_AUTH_STATUS,
-            status,
-          }) satisfies UpdateGrokAuthStatusMessage,
-      ),
-  },
-};
+const SUBSCRIPTION_USAGE_PROVIDERS_BY_ID: Readonly<
+  Partial<Record<SubscriptionProviderId, SubscriptionUsageProvider>>
+> = { chatgpt: 'chatgpt' };
 
 export interface DesktopCredentialSettingsController {
   readonly profileHandlers: DesktopProfileHandlers;
@@ -580,7 +545,7 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
     providerId: SubscriptionProviderId,
   ) {
     return Effect.gen({ self: this }, function* () {
-      const { usageProvider } = SUBSCRIPTION_STATUS_ROWS[providerId];
+      const usageProvider = SUBSCRIPTION_USAGE_PROVIDERS_BY_ID[providerId];
       if (usageProvider) this.subscriptionUsage.invalidate(usageProvider);
       const posts: Effect.Effect<void, Error, ProcessServices>[] = [
         this.postAuthStatus(providerId),
@@ -648,12 +613,16 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
 
   private postAuthStatus(providerId: SubscriptionProviderId) {
     return Effect.map(
-      SUBSCRIPTION_STATUS_ROWS[providerId].buildStatusMessage(
+      subscriptionAuthStatus(
+        providerId,
         this.options.stores,
         this.options.secrets,
       ),
-      (message) => {
-        this.options.renderer.postToRenderer(message);
+      (status) => {
+        this.options.renderer.postToRenderer({
+          command: SETTINGS_VIEW_COMMANDS.UPDATE_SUBSCRIPTION_AUTH_STATUS,
+          status,
+        } satisfies UpdateSubscriptionAuthStatusMessage);
       },
     );
   }

@@ -12,7 +12,7 @@
  * Lives in `src/controllers/` rather than `src/auth/` because a row binds an
  * auth transport to its model-layer routing preference, and `src/auth/**` is
  * fenced off from `@model` (eslint `AUTH_RESTRICTED_IMPORT_PATTERNS`). This is
- * the same composition `chatGptAuthStatus.ts` / `grokAuthStatus.ts` already do.
+ * the same composition `subscriptionAuthStatus.ts` beside it already does.
  */
 import { Effect } from 'effect';
 
@@ -45,12 +45,18 @@ import {
 import type { ConfigWriteFailed } from '@platform/interfaces';
 import { Secrets, type PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
+import type { SUBSCRIPTION_AUTH_PROVIDERS } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { HttpClient } from 'effect/unstable/http';
 
 const log = createLog('subscriptionProviders');
 
-export type SubscriptionProviderId = 'chatgpt' | 'grok';
+/**
+ * A provider's id, spelled once: the wire vocabulary in
+ * `@shared/schemas/settingsViewMessages` is the same set the catalog keys on.
+ */
+export type SubscriptionProviderId =
+  (typeof SUBSCRIPTION_AUTH_PROVIDERS)[number];
 
 /** The device-code prompt a host renders while polling for approval. */
 export interface SubscriptionDeviceCodePrompt {

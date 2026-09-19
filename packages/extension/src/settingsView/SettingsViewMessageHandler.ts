@@ -18,8 +18,7 @@ import type { SessionHandle } from '@agent/runtime';
 import { AUTH_COMMANDS } from '@auth/constants';
 import { SettingsMemoryController } from '@controllers/settingsView/SettingsMemoryController';
 import { SettingsModelSelectionController } from '@controllers/settingsView/SettingsModelSelectionController';
-import { getChatGptAuthStatus } from '@controllers/modelAccess/chatGptAuthStatus';
-import { getGrokAuthStatus } from '@controllers/modelAccess/grokAuthStatus';
+import { subscriptionAuthStatus } from '@controllers/modelAccess/subscriptionAuthStatus';
 import { SubscriptionUsageService } from '@controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
 import type { SubscriptionProviderId } from '@controllers/modelAccess/subscriptionProviders';
 import {
@@ -228,10 +227,6 @@ export class SettingsViewMessageHandler {
     this.githubHandlers = new GitHubSubscriptionHandlers(ctx, secrets);
     this.chatgptHandlers = new SubscriptionHandlers(
       'chatgpt',
-      Effect.map(getChatGptAuthStatus(session.roots, secrets), (status) => ({
-        command: SETTINGS_VIEW_COMMANDS.UPDATE_CHATGPT_AUTH_STATUS,
-        status,
-      })),
       ctx,
       secrets,
       () => this.refreshAfterSubscriptionAuthChange('chatgpt'),
@@ -239,10 +234,6 @@ export class SettingsViewMessageHandler {
     );
     this.grokHandlers = new SubscriptionHandlers(
       'grok',
-      Effect.map(getGrokAuthStatus(session.roots, secrets), (status) => ({
-        command: SETTINGS_VIEW_COMMANDS.UPDATE_GROK_AUTH_STATUS,
-        status,
-      })),
       ctx,
       secrets,
       () => this.refreshAfterSubscriptionAuthChange(),
@@ -691,7 +682,7 @@ export class SettingsViewMessageHandler {
 
       yield* this.sendProfileAndModelSelectionData(webview);
 
-      yield* allSettledVoid([
+      yield* allSettledVoid<Error, ProcessServices>([
         this.memoryHandlers.sendMemoryData(webview),
         this.sendSettingsSnapshot(webview, 'memory'),
         this.agentHandlers.sendAgentSelectionData(webview),

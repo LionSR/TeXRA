@@ -4,13 +4,14 @@
  * ChatGPT (Codex) and Grok (xAI) run the identical flow: a host-neutral OAuth
  * sign-in, a sign-out through the provider's auth coordinator, a routing
  * preference write, and a status round-trip back to the settings webview after
- * each. Everything provider-specific except the outbound wire message comes
- * from the shared `SUBSCRIPTION_PROVIDERS` catalog, so this file configures a
- * provider by id plus its status-message program.
+ * each. Everything provider-specific comes from the shared
+ * `SUBSCRIPTION_PROVIDERS` catalog and the one provider-keyed status message,
+ * so this file configures a provider by id alone.
  */
 import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
+import { subscriptionAuthStatus } from '@controllers/modelAccess/subscriptionAuthStatus';
 import {
   subscriptionProvider,
   type SubscriptionProvider,
@@ -19,10 +20,7 @@ import {
 import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
 import type { ProcessServices } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
-import type {
-  UpdateChatGptAuthStatusMessage,
-  UpdateGrokAuthStatusMessage,
-} from '@shared/schemas';
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { ACCOUNT_OUTCOME } from '@shared/copy/accountAuth';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { allSettledVoid } from '@utils/core/allSettledVoid';
@@ -33,25 +31,12 @@ import {
   type SettingsHandlerContext,
 } from './SettingsHandlerContext';
 
-/** Outbound status message a subscription provider pushes to the webview. */
-type SubscriptionAuthStatusMessage =
-  UpdateChatGptAuthStatusMessage | UpdateGrokAuthStatusMessage;
-
 /** Subscription sign-in handler delegate for one provider. */
 export class SubscriptionHandlers {
   private readonly provider: SubscriptionProvider;
 
   constructor(
     private readonly providerId: SubscriptionProviderId,
-    /**
-     * Current sign-in status, already wrapped as its outbound wire message:
-     * the read as the program it is, re-run on every post.
-     */
-    private readonly statusMessage: Effect.Effect<
-      SubscriptionAuthStatusMessage,
-      never,
-      ProcessServices
-    >,
     private readonly ctx: SettingsHandlerContext,
     private readonly secrets: PlatformSecrets,
     private readonly refreshModelAccess: () => Effect.Effect<
@@ -65,9 +50,15 @@ export class SubscriptionHandlers {
     this.provider = subscriptionProvider(providerId);
   }
 
+  /** The status read as the program it is, re-run on every post. */
   sendAuthStatus(webview: vscode.Webview) {
-    return Effect.flatMap(this.statusMessage, (message) =>
-      postToWebview(webview, message),
+    return Effect.flatMap(
+      subscriptionAuthStatus(this.providerId, this.stores, this.secrets),
+      (status) =>
+        postToWebview(webview, {
+          command: SETTINGS_VIEW_COMMANDS.UPDATE_SUBSCRIPTION_AUTH_STATUS,
+          status,
+        }),
     );
   }
 

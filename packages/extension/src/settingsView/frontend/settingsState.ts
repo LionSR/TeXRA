@@ -43,7 +43,6 @@ import {
   type AgentScanIssue,
   type AgentSelectionItem,
   type ByCategory,
-  type ChatGptAuthStatus,
   type ClaudeAgentEffort,
   type ClaudeAgentModel,
   type ClaudeAgentPermissionMode,
@@ -52,7 +51,6 @@ import {
   type CodexSandboxMode,
   type CopilotRouteInfo,
   type GoalListItem,
-  type GrokAuthStatus,
   type MemoryViewItem,
   type ModelSelectionItem,
   type ProviderKeyStatus,
@@ -60,6 +58,7 @@ import {
   type SettingsTabPanelName,
   type SkillDisplayIssue,
   type SkillDisplayItem,
+  type SubscriptionAuthStatuses,
   type SubscriptionUsageSnapshots,
   type ToolDashboardItem,
 } from '@shared/schemas';
@@ -291,14 +290,14 @@ export const gitSettingsLoaded = trackedSignal(() => false);
 export const githubTokenStatus = trackedSignal<'secret' | 'env' | 'none'>(
   () => 'none',
 );
-export const chatgptAuth = trackedSignal<ChatGptAuthStatus>(() => ({
-  signedIn: false,
-  preferSubscription: false,
-}));
-export const grokAuth = trackedSignal<GrokAuthStatus>(() => ({
-  signedIn: false,
-  preferSubscription: false,
-}));
+/**
+ * Sign-in status per subscription provider, addressed by the same provider id
+ * the payload carries. A provider missing from the record has not reported
+ * yet; the section renders its signed-out row until it does.
+ */
+export const subscriptionAuth = trackedSignal<SubscriptionAuthStatuses>(
+  () => ({}),
+);
 export const subscriptionUsage =
   trackedSignal<SubscriptionUsageSnapshots | null>(() => null);
 export const prSubscriptions = trackedSignal<readonly PRSubscriptionEntry[]>(
