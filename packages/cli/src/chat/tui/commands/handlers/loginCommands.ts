@@ -117,9 +117,6 @@ const loginToTexraAccount = Effect.fn('loginToTexraAccount')(function* (
   const accountWarning = githubSelectAccountWarning(args);
   if (accountWarning) output.writeProgress(accountWarning);
 
-  // The device flow is already a program; the browser flow is still the
-  // Promise edge `signInCliSupabase` owns, wrapped exactly once here so the
-  // caller's interruption reaches it as the abort signal it already takes.
   const session = args.device
     ? yield* signInCliSupabaseDeviceCode({
         onDeviceCode: (authorization) => {
@@ -128,24 +125,19 @@ const loginToTexraAccount = Effect.fn('loginToTexraAccount')(function* (
           });
         },
       })
-    : yield* Effect.tryPromise({
-        try: (signal) =>
-          signInCliSupabase(runtime, {
-            provider: args.provider,
-            openBrowser: !args.noBrowser,
-            selectAccount: args.selectAccount,
-            loginHint: args.loginHint,
-            manualBrowserHint: '/login --no-browser',
-            onAuthUrl: (url) => {
-              if (args.noBrowser) {
-                output.writeProgress(formatCliManualAuthUrlMessage(url), {
-                  copyable: true,
-                });
-              }
-            },
-            signal,
-          }),
-        catch: (cause) => cause,
+    : yield* signInCliSupabase(runtime, {
+        provider: args.provider,
+        openBrowser: !args.noBrowser,
+        selectAccount: args.selectAccount,
+        loginHint: args.loginHint,
+        manualBrowserHint: '/login --no-browser',
+        onAuthUrl: (url) => {
+          if (args.noBrowser) {
+            output.writeProgress(formatCliManualAuthUrlMessage(url), {
+              copyable: true,
+            });
+          }
+        },
       });
   output.appendOutcome(RESEARCHER_ACCESS_AUTH.signedIn(session.account.label));
 });

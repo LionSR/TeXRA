@@ -361,7 +361,9 @@ describe('CLI platform init', () => {
 
   it('wires setup sign-in to the existing CLI login implementation', async () => {
     mocks.authenticated = true;
-    mocks.signInCliSupabase.mockResolvedValue({ account: { label: 'User' } });
+    mocks.signInCliSupabase.mockReturnValue(
+      Effect.succeed({ account: { label: 'User' } }),
+    );
 
     // The runtime this root installed, as it hands it back: the root's own
     // local, not a process-wide read.

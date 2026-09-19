@@ -1,6 +1,6 @@
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect, Exit, Fiber } from 'effect';
+import { Deferred, Effect, Exit, Fiber } from 'effect';
 import { beforeEach, describe, expect, type Mock, vi } from 'vitest';
 import { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
 
@@ -344,12 +344,7 @@ describe('CLI Supabase auth', () => {
       );
       const { signInCliSupabase, signInCliSupabaseDeviceCode, runtime } =
         yield* Effect.promise(() => loadSupabaseAuth());
-      yield* Effect.promise(() =>
-        signInCliSupabase(runtime, {
-          openBrowser: false,
-          signal: controller.signal,
-        }),
-      );
+      yield* signInCliSupabase(runtime, { openBrowser: false });
       const fiber = yield* Effect.forkChild(
         signInCliSupabaseDeviceCode().pipe(Effect.provide(testHttpClientLayer)),
       );
@@ -371,70 +366,104 @@ describe('CLI Supabase auth', () => {
     }),
   );
 
-  it('settles browser sign-in cancellation while its launcher remains pending', async () => {
-    const controller = new AbortController();
-    const callbackServer = stubBrowserSignIn({
-      waitForSession: Effect.never,
-      sessionSettled: Effect.never,
-    });
-    mocks.openBrowser.mockReturnValue(new Promise(() => {}));
-    const { signInCliSupabase, runtime } = await loadSupabaseAuth();
-    const completion = signInCliSupabase(runtime, {
-      signal: controller.signal,
-    });
-    const rejection = expect(completion).rejects.toThrow(/interrupted/);
+  it.effect(
+    'settles browser sign-in cancellation while its launcher remains pending',
+    () =>
+      Effect.gen(function* () {
+        const callbackServer = stubBrowserSignIn({
+          waitForSession: Effect.never,
+          sessionSettled: Effect.never,
+        });
+        mocks.openBrowser.mockReturnValue(new Promise(() => {}));
+        const { signInCliSupabase, runtime } = yield* Effect.promise(() =>
+          loadSupabaseAuth(),
+        );
+        const fiber = yield* Effect.forkChild(signInCliSupabase(runtime), {
+          startImmediately: true,
+        });
 
-    controller.abort();
+        yield* Fiber.interrupt(fiber);
+        const exit = yield* Fiber.await(fiber);
 
-    await rejection;
-    // Cancellation reached the transport as fiber interruption: the server
-    // refuses further callbacks and the release half closed it.
-    expect(callbackServer.cancelled).toHaveBeenCalledOnce();
-    expect(callbackServer.closed).toHaveBeenCalledOnce();
-  });
-
-  it('settles a commit that began before cancellation despite the abort', async () => {
-    const controller = new AbortController();
-    const session = { access_token: 'token' };
-    const callbackServer = stubBrowserSignIn({
-      waitForSession: Effect.never,
-      sessionSettled: Effect.never,
-      commitStarted: true,
-    });
-    mocks.openBrowser.mockReturnValue(new Promise(() => {}));
-    const { signInCliSupabase, runtime } = await loadSupabaseAuth();
-    const completion = signInCliSupabase(runtime, {
-      signal: controller.signal,
-    });
-
-    controller.abort();
-    // The commit grace re-awaits the session on a fresh fiber; arm the
-    // commit's completion after the interrupted fiber settled.
-    callbackServer.setWaitForSession(Effect.succeed(session));
-
-    await expect(completion).resolves.toBe(session);
-    expect(callbackServer.closed).toHaveBeenCalledOnce();
-  });
-
-  it('keeps a completed callback successful if the browser launcher later fails', async () => {
-    let failBrowserLaunch!: (error: Error) => void;
-    const session = { access_token: 'token' };
-    const callbackServer = stubBrowserSignIn({
-      waitForSession: Effect.succeed(session),
-    });
-    mocks.openBrowser.mockReturnValue(
-      new Promise((_resolve, reject) => {
-        failBrowserLaunch = reject;
+        // Cancellation reached the transport as fiber interruption: the server
+        // refuses further callbacks and the release half closed it.
+        expect(Exit.isFailure(exit) && Exit.hasInterrupts(exit)).toBe(true);
+        expect(callbackServer.cancelled).toHaveBeenCalledOnce();
+        expect(callbackServer.closed).toHaveBeenCalledOnce();
       }),
-    );
-    const { signInCliSupabase, runtime } = await loadSupabaseAuth();
+  );
 
-    await expect(signInCliSupabase(runtime)).resolves.toBe(session);
-    failBrowserLaunch(new Error('launcher exited late'));
-    await Promise.resolve();
+  it.effect(
+    'closes the callback server only once a commit that began before cancellation settles',
+    () =>
+      Effect.gen(function* () {
+        const session = { access_token: 'token' };
+        const commit = yield* Deferred.make<typeof session, never>();
+        // Signals the moment the teardown starts waiting the commit out.
+        let releaseWaiting!: () => void;
+        const releaseReachedWait = new Promise<void>((resolve) => {
+          releaseWaiting = resolve;
+        });
+        const callbackServer = stubBrowserSignIn({
+          waitForSession: Effect.suspend(() => {
+            releaseWaiting();
+            return Deferred.await(commit);
+          }),
+          sessionSettled: Effect.never,
+          commitStarted: true,
+        });
+        mocks.openBrowser.mockReturnValue(new Promise(() => {}));
+        const { signInCliSupabase, runtime } = yield* Effect.promise(() =>
+          loadSupabaseAuth(),
+        );
+        const fiber = yield* Effect.forkChild(signInCliSupabase(runtime), {
+          startImmediately: true,
+        });
+        const interrupting = yield* Effect.forkChild(Fiber.interrupt(fiber));
 
-    expect(callbackServer.closed).toHaveBeenCalledOnce();
-  });
+        // A teardown that skipped the grace would settle the fiber instead of
+        // reaching the wait, so race the two rather than waiting one out.
+        const reachedWait = yield* Effect.raceFirst(
+          Effect.promise(() => releaseReachedWait).pipe(Effect.as(true)),
+          Fiber.await(fiber).pipe(Effect.as(false)),
+        );
+
+        expect(reachedWait).toBe(true);
+        expect(callbackServer.closed).not.toHaveBeenCalled();
+        yield* Deferred.succeed(commit, session);
+        const exit = yield* Fiber.await(fiber);
+        yield* Fiber.join(interrupting);
+
+        expect(Exit.isFailure(exit) && Exit.hasInterrupts(exit)).toBe(true);
+        expect(callbackServer.closed).toHaveBeenCalledOnce();
+      }),
+  );
+
+  it.effect(
+    'keeps a completed callback successful if the browser launcher later fails',
+    () =>
+      Effect.gen(function* () {
+        let failBrowserLaunch!: (error: Error) => void;
+        const session = { access_token: 'token' };
+        const callbackServer = stubBrowserSignIn({
+          waitForSession: Effect.succeed(session),
+        });
+        mocks.openBrowser.mockReturnValue(
+          new Promise((_resolve, reject) => {
+            failBrowserLaunch = reject;
+          }),
+        );
+        const { signInCliSupabase, runtime } = yield* Effect.promise(() =>
+          loadSupabaseAuth(),
+        );
+
+        expect(yield* signInCliSupabase(runtime)).toBe(session);
+        failBrowserLaunch(new Error('launcher exited late'));
+        yield* Effect.promise(() => Promise.resolve());
+
+        expect(callbackServer.closed).toHaveBeenCalledOnce();
+      }),
+  );
 
   it('removes cached remote agents after sign-out', async () => {
     const { runtime, signOutCliSupabase } = await loadSupabaseAuth();

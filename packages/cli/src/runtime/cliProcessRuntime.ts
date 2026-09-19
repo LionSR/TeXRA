@@ -44,7 +44,6 @@
 import { Effect } from 'effect';
 
 import { installedProcessRuntime } from '@agent/runtime';
-import { SupabaseAuth } from '@auth/SupabaseAuth';
 import { SignInFailed } from '@common/errors/signInFailed';
 import { openAppStateStore } from '@controllers/session/appStateStore';
 import {
@@ -149,21 +148,20 @@ export function installCliProcessRuntime(
       setup: {
         host: 'cli',
         // The one closure left over the runtime being installed, and a real
-        // one: signing in runs a program on it, long after this returns.
+        // one: signing in runs a program on it, long after this returns. The
+        // account plane it reports on is the one built above, which is also
+        // the plane this runtime serves as `SupabaseAuth`.
         signIn: () =>
-          Effect.tryPromise({
-            try: async () => {
-              await signInCliSupabase(runtime, { openBrowser: true });
-              return runtime.runPromise(
-                Effect.flatMap(SupabaseAuth, (plane) => plane.authenticated),
-              );
-            },
-            catch: (cause) =>
-              new SignInFailed({
-                message: `The CLI sign-in could not run: ${toErrorMessage(cause)}`,
-                cause,
-              }),
-          }),
+          signInCliSupabase(runtime, { openBrowser: true }).pipe(
+            Effect.andThen(auth.authenticated),
+            Effect.mapError(
+              (cause) =>
+                new SignInFailed({
+                  message: `The CLI sign-in could not run: ${toErrorMessage(cause)}`,
+                  cause,
+                }),
+            ),
+          ),
       },
       lean: directLeanLanguageServices(),
     });

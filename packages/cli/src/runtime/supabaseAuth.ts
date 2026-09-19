@@ -1,5 +1,5 @@
 // Third-party imports
-import { Cause, Effect, Exit, FileSystem } from 'effect';
+import { Effect, FileSystem } from 'effect';
 
 // Local imports
 import { invalidateRemoteAgentsAfterSignOut } from '@agent/index';
@@ -56,7 +56,6 @@ interface CliLoginOptions {
   loginHint?: string;
   onAuthUrl?: (url: string) => void;
   manualBrowserHint?: string;
-  signal?: AbortSignal;
 }
 
 const CLI_MANUAL_AUTH_URL_PROMPT =
@@ -121,41 +120,45 @@ function cliSupabaseAuth(): SupabaseAuthShape {
   return auth;
 }
 
-export async function signInCliSupabase(
-  runtime: ProcessRuntime,
-  options: CliLoginOptions = {},
-): Promise<SupabaseSession> {
-  const authCoordinator = cliSupabaseAuth().coordinator;
-  const callbackServer = await runtime.runPromise(
-    startLoopbackCallbackServer(runtime, authCoordinator),
-  );
-  try {
-    const exit = await runtime.runPromiseExit(
-      loopbackSignIn(authCoordinator, callbackServer, options),
-      { signal: options.signal },
+/**
+ * The CLI's browser sign-in: hold the loopback callback server open for one
+ * login attempt. Cancellation arrives as fiber interruption, so the caller's
+ * own run edge owns it; the callback server's teardown is the release half of
+ * the acquisition, which runs whether the attempt succeeds, fails, or is
+ * cancelled.
+ */
+export const signInCliSupabase = Effect.fn('supabaseAuth.signInCliSupabase')(
+  function* (runtime: ProcessRuntime, options: CliLoginOptions = {}) {
+    const authCoordinator = cliSupabaseAuth().coordinator;
+    const callbackServer = yield* Effect.acquireRelease(
+      startLoopbackCallbackServer(runtime, authCoordinator),
+      // A storage commit that began before cancellation still settles the
+      // sign-in (the historical `commitStarted` contract), so the teardown
+      // waits that commit out instead of closing the server under it: a
+      // release runs uninterruptibly, which is what the old Promise edge
+      // bought by re-awaiting on a fresh fiber. The wait is bounded by the
+      // attempt timeout the server arms in its own scope, so a commit that
+      // never settles cannot hold the teardown open. A close that cannot
+      // complete on a listening server is a defect, not a login failure — by
+      // then the session is already stored.
+      (server) =>
+        Effect.suspend(() =>
+          server.commitStarted
+            ? Effect.ignore(server.waitForSession)
+            : Effect.void,
+        ).pipe(Effect.andThen(Effect.orDie(server.close))),
     );
-    if (Exit.isSuccess(exit)) return exit.value;
-    // A storage commit that began before cancellation still settles the
-    // sign-in: v4 fiber interruption is sticky (once delivered it re-fires at
-    // every interruptible boundary), so the wait cannot recover in-runtime —
-    // the Promise edge re-awaits the session on a fresh fiber instead. This
-    // is the historical abort contract (`commitStarted`), now settled at the
-    // boundary (R7: a product edge may represent cancellation as data).
-    if (Cause.hasInterrupts(exit.cause) && callbackServer.commitStarted) {
-      return await runtime.runPromise(callbackServer.waitForSession);
-    }
-    throw Cause.squash(exit.cause);
-  } finally {
-    await runtime.runPromise(callbackServer.close);
-  }
-}
+    return yield* loopbackSignIn(authCoordinator, callbackServer, options);
+  },
+  Effect.scoped,
+);
 
 /**
  * The loopback sign-in program: drive the OAuth redirect and browser launch,
- * then await the callback session. The caller's cancellation signal arrives
- * as fiber interruption (R5), which `LoopbackCallbackServer.cancel` turns
- * into refused callbacks; the server is closed by the Promise edge's finally
- * on success, failure, and cancellation alike.
+ * then await the callback session. The caller's cancellation arrives as fiber
+ * interruption (R5), which `LoopbackCallbackServer.cancel` turns into refused
+ * callbacks; the server is closed by the acquisition's release on success,
+ * failure, and cancellation alike.
  */
 const loopbackSignIn = (
   authCoordinator: SupabaseSessionCoordinator,
