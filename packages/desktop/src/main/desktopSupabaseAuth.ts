@@ -254,12 +254,14 @@ function readPendingOAuthState(
  */
 interface DesktopAuthAttempt {
   readonly nonce: string;
-  /** Resolves the `signInAndWaitForSession` waiter attached to this attempt. */
-  settle(success: boolean): void;
+  /** The attempt's outcome, which the `signInAndWaitForSession` waiter
+   *  attached to this attempt awaits. Minted with the attempt and completed
+   *  once, so a callback landing before the wait starts still resolves it. */
+  readonly outcome: Deferred.Deferred<boolean>;
 }
 
 function createAuthAttempt(nonce: string): DesktopAuthAttempt {
-  return { nonce, settle: () => {} };
+  return { nonce, outcome: Deferred.makeUnsafe<boolean>() };
 }
 
 export function createDesktopSupabaseAuth(
@@ -283,36 +285,29 @@ export function createDesktopSupabaseAuth(
   let activeAttempt: DesktopAuthAttempt | undefined;
   const ownsAttempt = (attempt: DesktopAuthAttempt): boolean =>
     activeAttempt === attempt;
-  const invalidateActiveAttempt = (): void => {
-    const superseded = activeAttempt;
-    activeAttempt = undefined;
-    superseded?.settle(false);
-  };
+  // First completion wins: a later settle of the same attempt is a no-op.
   const settleAttempt = (
     attempt: DesktopAuthAttempt,
     success: boolean,
   ): void => {
-    attempt.settle(success);
+    Deferred.doneUnsafe(attempt.outcome, Effect.succeed(success));
     if (ownsAttempt(attempt)) {
       activeAttempt = undefined;
     }
   };
+  const invalidateActiveAttempt = (): void => {
+    if (activeAttempt) settleAttempt(activeAttempt, false);
+  };
   const waitForCompletion = (
     attempt: DesktopAuthAttempt,
     timeoutMs: number,
-  ): Effect.Effect<boolean> => {
-    // First completion wins: the attempt's own settle, or the timeout. The
+  ): Effect.Effect<boolean> =>
+    // First completion wins: the attempt's own outcome, or the timeout. The
     // timeout's sleep belongs to the waiting fiber, so a settle cancels it —
     // no timer outlives its attempt, and none is left over to clear a later
-    // attempt's pending callback state. The deferred and its settle hook are
-    // installed here, when the attempt is claimed, so a callback that lands
-    // before the wait is forked still resolves it.
-    const outcome = Deferred.makeUnsafe<boolean>();
-    attempt.settle = (success) => {
-      Deferred.doneUnsafe(outcome, Effect.succeed(success));
-    };
-    return Effect.gen(function* () {
-      const settled = yield* Deferred.await(outcome).pipe(
+    // attempt's pending callback state.
+    Effect.gen(function* () {
+      const settled = yield* Deferred.await(attempt.outcome).pipe(
         Effect.timeoutOption(timeoutMs),
       );
       if (Option.isSome(settled)) return settled.value;
@@ -328,7 +323,6 @@ export function createDesktopSupabaseAuth(
       }
       return false;
     });
-  };
   const runQueuedCallback = (queued: {
     callback: DesktopProtocolCallback;
     attempt: DesktopAuthAttempt;
@@ -433,54 +427,41 @@ export function createDesktopSupabaseAuth(
       );
     });
 
+  /** Claims a fresh attempt and returns it, so the waiting variant can await
+   *  the outcome of the attempt this call owns. */
   const startSignIn = (
     provider: OAuthProvider,
-    onAttempt?: (attempt: DesktopAuthAttempt) => Effect.Effect<void>,
-  ): Effect.Effect<void, unknown> =>
+  ): Effect.Effect<DesktopAuthAttempt, unknown> =>
     Effect.gen(function* () {
       invalidateActiveAttempt();
       const nonce = randomBytes(16).toString('hex');
       const attempt = createAuthAttempt(nonce);
       activeAttempt = attempt;
-      if (onAttempt) yield* onAttempt(attempt);
       const started = yield* Effect.exit(startSignInAttempt(provider, attempt));
       if (Exit.isFailure(started)) {
-        if (ownsAttempt(attempt)) activeAttempt = undefined;
+        settleAttempt(attempt, false);
         yield* callbackState.clearAwaitingCallback(nonce);
         yield* Effect.failCause(started.cause);
       }
+      return attempt;
     });
 
   return {
-    signIn: (provider = DEFAULT_OAUTH_PROVIDER) => startSignIn(provider),
+    signIn: (provider = DEFAULT_OAUTH_PROVIDER) =>
+      Effect.asVoid(startSignIn(provider)),
 
     signInAndWaitForSession: (
       provider = DEFAULT_OAUTH_PROVIDER,
       waitOptions = {},
     ) =>
-      Effect.gen(function* () {
-        let startedAttempt: DesktopAuthAttempt | undefined;
-        let completion: Effect.Effect<boolean> | undefined;
-        const started = yield* Effect.exit(
-          startSignIn(provider, (attempt) =>
-            Effect.sync(() => {
-              startedAttempt = attempt;
-              // Claims the attempt's settle hook here, where the attempt is
-              // claimed, so a callback that lands before the wait below
-              // starts still resolves it.
-              completion = waitForCompletion(
-                attempt,
-                waitOptions.timeoutMs ?? AUTH_CALLBACK_TIMEOUT_MS,
-              );
-            }),
+      startSignIn(provider).pipe(
+        Effect.flatMap((attempt) =>
+          waitForCompletion(
+            attempt,
+            waitOptions.timeoutMs ?? AUTH_CALLBACK_TIMEOUT_MS,
           ),
-        );
-        if (Exit.isFailure(started)) {
-          startedAttempt?.settle(false);
-          return yield* Effect.failCause(started.cause);
-        }
-        return completion ? yield* completion : false;
-      }),
+        ),
+      ),
 
     async signOut() {
       invalidateActiveAttempt();
@@ -496,10 +477,10 @@ export function createDesktopSupabaseAuth(
             invalidateRemoteAgentsAfterSignOut(),
             (message) => log.warn(message),
           );
+          yield* host.onSessionChanged();
         }),
       );
       if (Exit.isFailure(cleared)) throw settleFailure(cleared.cause);
-      await runtime.runPromise(host.onSessionChanged());
     },
 
     dispose() {
