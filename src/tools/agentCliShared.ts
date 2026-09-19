@@ -254,9 +254,12 @@ interface AgentCliLaunchParams<TTurn> {
  * a run description that the native registration does not.
  *
  * Failure channel: a setup failure propagates as the choreography raised it.
- * A typed failure is re-tagged onto this chain's `AgentCliCallFailed`; an
- * interrupt that lands once the child stream exists re-raises as an interrupt
- * into the calling tool fiber rather than being squashed into a failure.
+ * A typed failure is re-tagged onto this chain's `AgentCliCallFailed`; a
+ * cause carrying an interrupt re-raises as an interrupt into the calling tool
+ * fiber rather than being squashed into a failure. Under today's topology the
+ * only reachable interrupt is the `restore` checkpoint below, before the child
+ * stream exists (everything after it is uninterruptible), so this states the
+ * primitive's semantics rather than a second live arm.
  */
 export const launchAgentCliSession = Effect.fn(
   'agentCliShared.launchAgentCliSession',

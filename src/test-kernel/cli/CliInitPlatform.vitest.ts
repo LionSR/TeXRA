@@ -332,7 +332,7 @@ describe('CLI platform init', () => {
     // Regression: the CLI was the one host that never registered these, so a
     // background `bash` run (spawned detached, in its own process group) and
     // any live codex / claude_agent session outlived `texra` as orphans.
-    // Asserted through the real `registerAgentShutdownHandlers` and its
+    // Asserted through the real `registerAgentShutdownHandler` and its
     // observable effect on shutdown, not by mocking the @agent module. The
     // init installs the process runtime the session graph runs on, so the
     // session is built after it, not on a runtime an earlier case's shutdown
