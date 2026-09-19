@@ -1,7 +1,8 @@
-import { Effect, Result } from 'effect';
+import { Cause, Effect, Exit } from 'effect';
 
 import { withProcessServices } from '@platform/processRuntime';
 import { usageLoggingOptOut } from '@telemetry/UsageLogService';
+import { ensureError } from '@utils/errors/errorMessage';
 import {
   buildDoctorReport,
   doctorExitCode,
@@ -25,20 +26,26 @@ import type { CliContext } from '../runtime/cliContext';
 function doctorReport(context: CliContext): Effect.Effect<DoctorReport> {
   return Effect.gen(function* () {
     // The one step that cannot run on the process runtime, because it is what
-    // builds it. Its failure is a row in the report rather than a throw, so it
-    // is folded into a Result here and handed to the builder as data.
-    const init = yield* Effect.result(
+    // builds it. Its failure is a row in the report rather than a throw, so
+    // it is folded here and handed to the builder as data — over the whole
+    // cause, because a platform that dies on the way up is as much "no
+    // platform" as one that fails.
+    const init = yield* Effect.exit(
       initCliPlatform({ ...context, quietLogs: true }),
     );
-    if (Result.isFailure(init)) {
+    if (Exit.isFailure(init)) {
       // A failed init disposed the runtime it installed (see
       // `initPlatform.ts`), so the degraded report — node, workspace,
       // resources, LaTeX, config and the platform-failure row — renders with
       // nothing provided. It reads no service and nothing in it logs through
       // Effect.
-      return yield* buildDoctorReport(context, {}, init.failure);
+      return yield* buildDoctorReport(
+        context,
+        {},
+        ensureError(Cause.squash(init.cause)),
+      );
     }
-    const services = init.success;
+    const services = init.value;
     // Consent is read from the workspace configuration the init installed;
     // without it the telemetry check reports the gap.
     const roots = services.roots;
