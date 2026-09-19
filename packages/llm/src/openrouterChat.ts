@@ -6,6 +6,7 @@ import { Effect, Stream } from 'effect';
 import { z } from 'zod';
 
 // Local imports - canonical model contract
+import { chatDeltaAccumulator, chatUsageCounts } from './chatStream.js';
 import {
   ModelConfigurationSchema,
   ModelError,
@@ -196,11 +197,7 @@ const UsageSchema = z
       .nullish(),
   })
   .transform((usage): NonNullable<TurnResult['usage']> => ({
-    inputTokens: usage.prompt_tokens ?? null,
-    outputTokens: usage.completion_tokens ?? null,
-    totalTokens: usage.total_tokens ?? null,
-    cachedInputTokens: usage.prompt_tokens_details?.cached_tokens ?? null,
-    reasoningTokens: usage.completion_tokens_details?.reasoning_tokens ?? null,
+    ...chatUsageCounts(usage),
     providerUsage: {
       kind: 'openrouter',
       ...(usage.cost !== undefined ? { cost: usage.cost } : {}),
@@ -792,15 +789,9 @@ export function openrouterChatModel(
           let plain: string | null | undefined;
           let details:
             NonNullable<Reasoning['details']>[number][] | null | undefined;
-          let activePhase: 'reasoning' | 'text' | undefined;
           let sentinel = false;
-          const textParts: Array<{ kind: 'text' | 'refusal'; text: string }> =
-            [];
+          const assistant = chatDeltaAccumulator();
           const annotations: Annotation[] = [];
-          const calls = new Map<
-            number,
-            { id?: string; name?: string; arguments: string }
-          >();
           const progress = sseEvents(
             bytes,
             'OpenRouter returned malformed SSE.',
@@ -938,41 +929,13 @@ export function openrouterChatModel(
                         })
                         .join('')
                     : (delta.reasoning ?? '');
-                  for (const [part, text] of [
-                    ['reasoning', visibleReasoning],
-                    ['text', delta.content],
-                    ['refusal', delta.refusal],
-                  ] as const) {
-                    if (text == null || text === '') continue;
-                    const phase = part === 'reasoning' ? 'reasoning' : 'text';
-                    if (activePhase !== phase) {
-                      if (activePhase !== undefined)
-                        events.push({
-                          kind: 'phase',
-                          part: activePhase,
-                          boundary: 'end',
-                          providerItemIndex: null,
-                        });
-                      events.push({
-                        kind: 'phase',
-                        part: phase,
-                        boundary: 'start',
-                        providerItemIndex: null,
-                      });
-                      activePhase = phase;
-                    }
-                    events.push({
-                      kind: 'delta',
-                      part,
-                      text,
-                      providerItemIndex: null,
-                    });
-                    if (part !== 'reasoning') {
-                      const previous = textParts.at(-1);
-                      if (previous?.kind === part) previous.text += text;
-                      else textParts.push({ kind: part, text });
-                    }
-                  }
+                  events.push(
+                    ...assistant.absorbText({
+                      reasoning: visibleReasoning,
+                      text: delta.content,
+                      refusal: delta.refusal,
+                    }),
+                  );
                   for (const annotation of delta.annotations ?? []) {
                     if (annotation.kind === 'file-annotation') {
                       const previous = annotations.find(
@@ -992,38 +955,12 @@ export function openrouterChatModel(
                     }
                     annotations.push(annotation);
                   }
-                  if (
-                    (delta.tool_calls?.length ?? 0) > 0 &&
-                    activePhase !== undefined
-                  ) {
-                    events.push({
-                      kind: 'phase',
-                      part: activePhase,
-                      boundary: 'end',
-                      providerItemIndex: null,
-                    });
-                    activePhase = undefined;
-                  }
-                  for (const fragment of delta.tool_calls ?? []) {
-                    const call = calls.get(fragment.index) ?? { arguments: '' };
-                    if (
-                      (fragment.id != null &&
-                        call.id !== undefined &&
-                        fragment.id !== call.id) ||
-                      (fragment.function?.name != null &&
-                        call.name !== undefined &&
-                        fragment.function.name !== call.name)
-                    )
-                      return yield* new ModelError({
-                        kind: 'malformed-output',
-                        message:
-                          'OpenRouter changed a local tool-call identity.',
-                      });
-                    call.id ??= fragment.id ?? undefined;
-                    call.name ??= fragment.function?.name ?? undefined;
-                    call.arguments += fragment.function?.arguments ?? '';
-                    calls.set(fragment.index, call);
-                  }
+                  if ((delta.tool_calls?.length ?? 0) > 0)
+                    events.push(...assistant.closePhase());
+                  yield* assistant.absorbToolCalls(
+                    delta.tool_calls,
+                    'OpenRouter changed a local tool-call identity.',
+                  );
                 }
                 if (choice?.native_finish_reason !== undefined) {
                   if (
@@ -1069,7 +1006,8 @@ export function openrouterChatModel(
                   message:
                     'OpenRouter ended without an identified terminal result and DONE marker.',
                 });
-              if ((finished === 'tool_calls') !== calls.size > 0)
+              const toolCalls = assistant.toolCalls();
+              if ((finished === 'tool_calls') !== toolCalls.length > 0)
                 return yield* new ModelError({
                   kind: 'malformed-output',
                   message:
@@ -1086,12 +1024,10 @@ export function openrouterChatModel(
                     ...(details !== undefined ? { details } : {}),
                   },
                 });
-              if (textParts.length > 0)
-                content.push({ kind: 'message', content: textParts });
+              if (assistant.parts.length > 0)
+                content.push({ kind: 'message', content: assistant.parts });
               const ids = new Set<string>();
-              for (const [ordinal, [index, call]] of [...calls.entries()]
-                .sort(([a], [b]) => a - b)
-                .entries()) {
+              for (const [ordinal, [index, call]] of toolCalls.entries()) {
                 if (
                   index !== ordinal ||
                   call.id === undefined ||
@@ -1116,13 +1052,7 @@ export function openrouterChatModel(
               content.push(...annotations);
               if (serviceTier !== undefined)
                 usage = {
-                  ...(usage ?? {
-                    inputTokens: null,
-                    outputTokens: null,
-                    totalTokens: null,
-                    cachedInputTokens: null,
-                    reasoningTokens: null,
-                  }),
+                  ...(usage ?? chatUsageCounts({})),
                   providerUsage: {
                     ...usage?.providerUsage,
                     kind: 'openrouter',
@@ -1158,14 +1088,7 @@ export function openrouterChatModel(
                     'OpenRouter returned inconsistent completed content.',
                   cause: result.error,
                 });
-              const events: TurnEvent[] = [];
-              if (activePhase !== undefined)
-                events.push({
-                  kind: 'phase',
-                  part: activePhase,
-                  boundary: 'end',
-                  providerItemIndex: null,
-                });
+              const events: TurnEvent[] = assistant.closePhase();
               events.push({ kind: 'completed', result: result.data });
               return events;
             }),
