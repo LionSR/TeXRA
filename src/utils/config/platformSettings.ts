@@ -28,11 +28,6 @@ export function initProcessSettingHost(host: SettingHost): void {
   processSettingHost = host;
 }
 
-/** The host this process is, as installed by {@link initProcessSettingHost}. */
-export function getProcessSettingHost(): SettingHost {
-  return processSettingHost;
-}
-
 /**
  * The one catalog reader: a setting read from the three slots the caller holds
  * as data. A session's `WorkspaceRoots` carries all three, so a tool call's

@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 
 import { attachSdkUsageRoute } from '@common/errors/sdkError/errorMetadata';
 import { formatProviderHttpError } from '@common/errors/sdkError/providerErrorFormat';
-import { parseXaiSubscriptionLimit } from '@common/errors/sdkError/xaiSubscriptionDetection';
 import { type UsageRoute } from '@shared/schemas';
 
 const USAGE_LIMIT_BODY = {
@@ -31,47 +30,6 @@ function xaiError(
   return error;
 }
 
-describe('parseXaiSubscriptionLimit', () => {
-  it('ignores quota wording on an error with no route stamp', () => {
-    expect(
-      parseXaiSubscriptionLimit(new Error(USAGE_LIMIT_BODY.message), {
-        error: USAGE_LIMIT_BODY,
-      }),
-    ).toBeNull();
-  });
-
-  it('returns null when the attempt was bound to the API-key route', () => {
-    expect(
-      parseXaiSubscriptionLimit(
-        xaiError('rejected', USAGE_LIMIT_BODY, 'api-key'),
-        { error: USAGE_LIMIT_BODY },
-      ),
-    ).toBeNull();
-  });
-
-  it('parses a SuperGrok usage-limit body on the subscription route', () => {
-    expect(
-      parseXaiSubscriptionLimit(xaiError('rejected'), {
-        error: USAGE_LIMIT_BODY,
-      }),
-    ).toEqual({ resetsInSeconds: 3600 });
-  });
-
-  it('parses the unenveloped body shape too', () => {
-    expect(
-      parseXaiSubscriptionLimit(xaiError('rejected'), USAGE_LIMIT_BODY),
-    ).toEqual({ resetsInSeconds: 3600 });
-  });
-
-  it('ignores a transient rate limit on the subscription route', () => {
-    expect(
-      parseXaiSubscriptionLimit(xaiError('rate limited'), {
-        error: RATE_LIMIT_BODY,
-      }),
-    ).toBeNull();
-  });
-});
-
 describe('formatProviderHttpError for Grok subscription limits', () => {
   it('classifies a subscription-route usage limit as switchable exhaustion', () => {
     const providerError = formatProviderHttpError(
@@ -85,6 +43,14 @@ describe('formatProviderHttpError for Grok subscription limits', () => {
     expect(providerError.message).toContain(
       'Resets in 1h. Switch to your own xAI API key',
     );
+  });
+
+  it('does not classify a transient rate limit on the subscription route', () => {
+    const providerError = formatProviderHttpError(
+      xaiError('xAI rejected the request', RATE_LIMIT_BODY),
+    );
+
+    expect(providerError.classification?.kind).not.toBe('xai-subscription');
   });
 
   it('does not classify the same body on the API-key route as exhaustion', () => {

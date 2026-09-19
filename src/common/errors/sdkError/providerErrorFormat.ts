@@ -14,6 +14,7 @@ import {
   type ExhaustionReason,
   type ProviderError,
   type ProviderErrorClassification,
+  type UsageRoute,
   getExhaustionReason,
 } from '@shared/schemas';
 import {
@@ -29,6 +30,7 @@ import {
 } from '../errorPredicates';
 import { isContextWindowError, isUserAbort } from './errorPatterns';
 import {
+  detectSdkUsageRoute,
   hasContextWindowErrorMarker,
   hasMissingApiKeyErrorMarker,
   providerErrorMetadata,
@@ -44,19 +46,18 @@ import {
   getErrorClassNames,
   getHeaderValue,
   inferStatusCodeFromBody,
+  matchUsageLimitMessage,
   isModelScopedRateLimitBody,
   isUpstreamCreditDepletedBody,
   safeGetReasonPhrase,
   type QuotaLimitInfo,
 } from './errorInspection';
 import { parseChatGptSubscriptionLimit } from './chatgptSubscriptionDetection';
-import { parseKimiCodeSubscriptionLimit } from './kimiCodeSubscriptionDetection';
 import {
   describeGlmCodingPlanRateLimit,
   isGlmCodingPlanRateLimit,
   parseGlmCodingPlanLimit,
 } from './glmCodingPlanDetection';
-import { parseXaiSubscriptionLimit } from './xaiSubscriptionDetection';
 import {
   type SdkErrorEntry,
   SDK_ERRORS,
@@ -72,6 +73,19 @@ interface QuotaLimitMatch {
 }
 
 /**
+ * A subscription usage-limit parser guarded by the credential route the run
+ * stamped on the failure. Route stamp plus body inspection, no clock reads:
+ * the plan's endpoint is shared with the API-key path, so the stamp is what
+ * keeps a direct-key rate limit from being read as plan exhaustion.
+ */
+const routeUsageLimit =
+  (route: UsageRoute, pattern: RegExp) =>
+  (err: unknown, rawErrorBody: unknown): QuotaLimitInfo | null =>
+    detectSdkUsageRoute(err) === route
+      ? matchUsageLimitMessage(err, rawErrorBody, pattern)
+      : null;
+
+/**
  * Quota-limit body parsers, keyed by the catalog's exhaustion reason. Total
  * over {@link QuotaFallbackExhaustionReason}, so a fifth `QUOTA_FALLBACK_ROUTES`
  * entry fails to compile until its detector lands rather than shipping a
@@ -83,8 +97,43 @@ const QUOTA_LIMIT_PARSERS: Record<
 > = {
   'chatgpt-subscription': (_err, rawErrorBody) =>
     parseChatGptSubscriptionLimit(rawErrorBody),
-  'xai-subscription': parseXaiSubscriptionLimit,
-  'kimi-code-subscription': parseKimiCodeSubscriptionLimit,
+  /*
+   * Detection for the Grok (xAI SuperGrok) subscription usage limit. SuperGrok
+   * hits the same `api.x.ai` surface as an API key, so the bound credential
+   * route the run stamped on the failure is the only reliable "this was a
+   * subscription call" signal. Combined with quota/usage-limit wording (and not
+   * a transient rate-limit phrase) that identifies a plan whose quota ran out —
+   * the signal that lets the retry UI offer a switch to the stored xAI API key.
+   * Transient 429 rate limits ("rate limit", "too many requests") do not match
+   * and must not flip the preference.
+   */
+  'xai-subscription': routeUsageLimit(
+    'xai-subscription',
+    /usage limit|quota.{0,24}(exceeded|exhausted|reached)|exceeded your (usage|quota)|weekly (usage )?limit|monthly (usage )?limit/i,
+  ),
+  /*
+   * Detection for the Kimi Code (Moonshot coding-subscription) usage limit.
+   * When a user drives Kimi-subscription-eligible models through their Kimi
+   * Code membership (the `api.kimi.com/coding/v1` coding endpoint), the backend
+   * rejects requests once the membership's usage quota is exhausted with a
+   * distinctive message:
+   *
+   *   "You've reached your usage limit for this billing cycle. Your quota will
+   *    be refreshed in the next cycle. To continue now, purchase extra usage or
+   *    upgrade your plan: https://www.kimi.com/code/#pricing"
+   *
+   * The "usage limit for this billing cycle" / "quota will be refreshed in the
+   * next cycle" phrasing is unique to the Kimi Code membership backend, so
+   * matching it reliably identifies a subscription request whose quota ran
+   * out — the signal that lets the retry UI offer "switch to your own API key"
+   * (parallel to the Codex `usage_limit_reached` affordance). The bound
+   * credential route keeps the Moonshot open platform from being misread as a
+   * subscription limit.
+   */
+  'kimi-code-subscription': routeUsageLimit(
+    'kimi-code-subscription',
+    /usage limit for this billing cycle|quota will be refreshed in the next cycle/i,
+  ),
   'glm-coding-plan': (_err, rawErrorBody) =>
     parseGlmCodingPlanLimit(rawErrorBody),
 };
