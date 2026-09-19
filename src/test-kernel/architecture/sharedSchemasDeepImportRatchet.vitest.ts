@@ -94,7 +94,11 @@ describe('@shared/schemas deep-import ratchet', () => {
     ).toEqual([]);
   });
 
-  it('detects a deep import in every module-loading form', () => {
+  // The forms the shared scanner covers. `module.require(...)`,
+  // `require.resolve(...)` and `import.meta.resolve(...)` are deliberately
+  // not covered: they appear zero times in the tree, and keeping a private
+  // scanner for them is the machinery this ratchet just shed.
+  it('detects a deep import in every scanned module-loading form', () => {
     const source = parseSourceFile('probe.ts', {
       setParentNodes: false,
       text: `

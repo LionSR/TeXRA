@@ -135,7 +135,7 @@ by what it reaches, not by how many tests it has:
   anything.
 - **`kernel`** — everything that needs a host: the fake platform installed per
   file, each file in its own module registry. The DOM suites (`progressView`,
-  `settings`, `frontend`, `desktop`, `webview`) live here too; a Lit element
+  `settings`, `frontend`, `desktop`) live here too; a Lit element
   class is bound to the window that first loaded it.
 
 Membership is computed from the suite's source, not declared. A suite under a
@@ -258,7 +258,7 @@ frozen deep-import lists, not another lint rule.
 - `src/common/` holds host-neutral, cross-cutting logic with domain meaning (errors, files, parsing, storage, constants), not a backend-only zone. Some browser-adjacent shared code imports dependency-light modules such as `@common/parsing/safeParseJson`; import through the `@common/*` alias and check the target's dependencies before using it from browser code.
 - `packages/extension/src/common/` holds extension-only helpers (webview base classes, shared styles):
   - `packages/extension/src/common/webview/` - Webview content provider (`BundledViewContentProvider`), webview HTML builder (`buildWebviewHtml`), command constants
-- `src/utils/` holds host-agnostic utilities. A subset of it must additionally stay **browser-safe**, because the webview frontends import it: exactly the four modules in the `BROWSER_SAFE_UTILS` allowlist in `eslint.config.mjs` (`@utils/core`, `@utils/errors/errorMessage`, `@utils/files/pastedImageName`, `@utils/text/stringUtils`). ESLint lets `webview/frontend/`, `progressView/frontend/` and `settingsView/frontend/` import only those at runtime, and holds the four to no Node built-ins and runtime imports of each other only. The rest of `src/utils/` is not browser-reachable and must not be assumed browser-safe.
+- `src/utils/` holds host-agnostic utilities. A subset of it must additionally stay **browser-safe**, because the webview frontends import it: exactly the four modules in the `BROWSER_SAFE_UTILS` allowlist in `eslint.config.mjs` (`@utils/core`, `@utils/errors/errorMessage`, `@utils/files/pastedImageName`, `@utils/text/stringUtils`). ESLint lets `progressView/frontend/` and `settingsView/frontend/` import only those at runtime, and holds the four to no Node built-ins and runtime imports of each other only. The rest of `src/utils/` is not browser-reachable and must not be assumed browser-safe.
 
   Do not read this as "everything in `utils/` is shared with the webviews": it is not, and an earlier version of this line said so incorrectly. What it does mean: if a helper is specific to one side, prefer `frontend/` or `common/`, and if you add an import to one of the four browser-reachable modules, check that it stays browser-safe.
   - `utils/core/` - Async, type-guard, math, comparator, URL, and path-basics primitives (`debounce`, `filterNotNull`, `clamp`, `byName`, `tryParseUrl`, `normalizeFilePath`, `getBasename`, `getFileStem`)
@@ -646,9 +646,6 @@ one the view you're touching already uses:
   components (`progressView/frontend/components/`) read the `SessionView` fold
   (`src/shared/session/sessionView.ts`) and `Surface` records as properties
   directly; there is no command-constant registry or slice layer here.
-- **`webview/frontend`** is not a third view with its own content provider —
-  it's the shared Lit component library (banners, file pickers, onboarding
-  cards) that `progressView` composes. There is no `MainViewContentProvider`.
 - **Naming Convention**: within whichever pattern applies, follow
   `[Domain]View[Component]` (e.g. `SettingsViewMessageHandler`,
   `ProgressViewProvider`). Adding a genuinely new pattern needs an update to
