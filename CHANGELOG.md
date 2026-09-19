@@ -49,20 +49,12 @@ All notable changes to this project will be documented in this file.
   that the model "is not supported when using Codex with a ChatGPT account" —
   which reads as a problem with your plan rather than with the name. The full
   model name is sent now.
-- **Windows: installing git no longer requires restarting TeXRA.** Windows
-  cannot push a changed `PATH` into an already-running process, so git
-  installed on the advice of our own "Git not found in PATH" message stayed
-  invisible until the window was reloaded, and nothing said so. TeXRA now
-  searches Git for Windows' own install directories and no longer memoizes a
-  directory as missing for the rest of the session, so a freshly installed git
-  is picked up on the next command instead.
-- **Windows: three adjacent PATH defects.** The environment handed to a spawned
-  command assigned `PATH` onto a copy of `process.env`, which on Windows spells
-  it `Path`, so the child received both spellings of one variable with no
-  defined rule for which wins. The "Use Git from Git Bash only" installer
-  option, which deliberately keeps git off the system `PATH`, left git
-  undiscoverable. And a relative `SCOOP` or `MSYS2_HOME` threw out of the PATH
-  builder, failing every command with `Path must be absolute`.
+- **Windows: TeXRA finds git again.** Git installed while TeXRA was running —
+  including from the "Run in Terminal" button on our own "Git not found in
+  PATH" message — is now picked up on the next command instead of only after
+  a restart. Git installed with the "Use Git from Git Bash only" option is
+  found as well. On some machines an unusual `SCOOP` or `MSYS2_HOME` setting
+  could make every external command fail; it no longer does.
 - A model call covered by a subscription no longer reports itself as "free" —
   the run footer and session summary name the plan that covered it
   (**ChatGPT Pro**, **ChatGPT Plus**), falling back to **ChatGPT
