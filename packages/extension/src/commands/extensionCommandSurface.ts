@@ -99,9 +99,7 @@ export function createExtensionCommandActions(
     signOut: () => runtime.runPromise(authSignOut),
     runSetupAssistant: () =>
       runtime.runPromise(
-        launchSetupAssistant(secrets, globalState, runtime, session).pipe(
-          Effect.asVoid,
-        ),
+        launchSetupAssistant(secrets, globalState, session).pipe(Effect.asVoid),
       ),
     openGettingStarted: () => sysOpenGettingStarted(context.extension.id),
     createSampleProject: () =>
@@ -109,7 +107,7 @@ export function createExtensionCommandActions(
         sysCreateSampleProject(context.extensionPath, session),
       ),
     downloadArXivSource: () =>
-      runtime.runPromise(latexDownloadArXivSource(session, runtime)),
+      runtime.runPromise(latexDownloadArXivSource(session)),
     openProgressViewInTab: () =>
       runtime.runPromise(progressViewProvider.popOutToEditor()),
     async openDoc(page) {
@@ -120,11 +118,11 @@ export function createExtensionCommandActions(
     },
     indentCurrentTeX: () => runtime.runPromise(latexIndentCurrentTeX(session)),
     fixCompilation: () => runtime.runPromise(latexFixCompilation(session)),
-    getTeXCount: () => runtime.runPromise(latexGetTeXCount(session, runtime)),
+    getTeXCount: () => runtime.runPromise(latexGetTeXCount(session)),
     extractTikzFigures: () =>
       runtime.runPromise(latexExtractTikzFigures(session)),
     compileTikzFigures: () =>
-      runtime.runPromise(latexCompileTikzFigures(session, runtime)),
+      runtime.runPromise(latexCompileTikzFigures(session)),
     cloneOverleafProject: () =>
       runtime.runPromise(gitCloneOverleafProject(session, secrets)),
     removeApiKey: () =>

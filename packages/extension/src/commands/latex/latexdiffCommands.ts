@@ -16,6 +16,7 @@ import {
   showLoggedMessage,
   showLoggedMessageWithDocs,
 } from '@frontend/ui/errorHandlingUtils';
+import { withVSCodeProgress } from '@frontend/ui/progress';
 import {
   latexdiffPackMessage,
   runPackLatexdiffvc,
@@ -399,7 +400,6 @@ const handlePackLatexdiffvc = Effect.fnUntraced(function* (
 const handleRunLatexdiff = Effect.fnUntraced(function* (
   session: SessionHandle,
   config: RunLatexdiffCommandConfig,
-  runtime: ProcessRuntime,
 ) {
   yield* withLatexdiffTool(
     'latexdiff',
@@ -433,39 +433,33 @@ const handleRunLatexdiff = Effect.fnUntraced(function* (
         config.outputsByRound,
       );
 
-      const { outcome } = yield* Effect.tryPromise({
-        try: () =>
-          vscode.window.withProgress(
-            {
-              location: vscode.ProgressLocation.Notification,
-              title: 'Running LaTeX diffs',
-              cancellable: false,
+      const { outcome } = yield* withVSCodeProgress(
+        {
+          location: vscode.ProgressLocation.Notification,
+          title: 'Running LaTeX diffs',
+          cancellable: false,
+        },
+        (progress) => {
+          progress.report({
+            increment: 0,
+            message: 'Preparing LaTeX diffs...',
+          });
+          return runLatexdiffForRun({
+            ...config,
+            workspaceRoot: session.roots.workspace,
+            storageRoot: session.roots.storage,
+            outputsByRound,
+            mathMarkup,
+            generateBetweenRoundDiffs,
+            runDiscovery: createLatexRunDiscovery(session),
+            latexdiff: {
+              channel: CHANNEL,
+              service: new LaTeXdiffService(CHANNEL, session.roots),
             },
-            (progress) => {
-              progress.report({
-                increment: 0,
-                message: 'Preparing LaTeX diffs...',
-              });
-              return runtime.runPromise(
-                runLatexdiffForRun({
-                  ...config,
-                  workspaceRoot: session.roots.workspace,
-                  storageRoot: session.roots.storage,
-                  outputsByRound,
-                  mathMarkup,
-                  generateBetweenRoundDiffs,
-                  runDiscovery: createLatexRunDiscovery(session),
-                  latexdiff: {
-                    channel: CHANNEL,
-                    service: new LaTeXdiffService(CHANNEL, session.roots),
-                  },
-                  progress,
-                }),
-              );
-            },
-          ),
-        catch: ensureError,
-      });
+            progress,
+          });
+        },
+      );
 
       const { results } = outcome;
 
@@ -545,7 +539,7 @@ export function registerLatexdiffCommands(
     {
       id: 'texra.runLatexdiff',
       handler: (config: RunLatexdiffCommandConfig) =>
-        runtime.runPromise(handleRunLatexdiff(session, config, runtime)),
+        runtime.runPromise(handleRunLatexdiff(session, config)),
     },
   ]);
 }

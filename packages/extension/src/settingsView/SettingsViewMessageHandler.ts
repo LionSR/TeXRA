@@ -237,7 +237,6 @@ export class SettingsViewMessageHandler {
       ctx,
       secrets,
       () => this.refreshAfterSubscriptionAuthChange('chatgpt'),
-      this.runtime,
       session.roots,
     );
     this.grokHandlers = new SubscriptionHandlers(
@@ -249,7 +248,6 @@ export class SettingsViewMessageHandler {
       ctx,
       secrets,
       () => this.refreshAfterSubscriptionAuthChange(),
-      this.runtime,
       session.roots,
     );
     this.handlerRegistry = this.createHandlerRegistry(context);

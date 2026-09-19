@@ -826,12 +826,7 @@ export function createExtensionHostRequests(
     return Effect.gen(function* () {
       switch (action) {
         case 'signInChatGpt':
-          yield* signInWithSubscription(
-            session.roots,
-            CHANNEL,
-            'chatgpt',
-            runtime,
-          );
+          yield* signInWithSubscription(session.roots, CHANNEL, 'chatgpt');
           yield* refreshAfterCredentialChange;
           return;
         case 'setApiKey':

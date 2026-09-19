@@ -9,9 +9,10 @@ import * as vscode from 'vscode';
 import type { SessionHandle } from '@agent/runtime';
 import { runGuardedLatexCommand } from '@frontend/editor/activeFileGuards';
 import { showLoggedInfoMessage } from '@frontend/ui/errorHandlingUtils';
+import { withVSCodeProgress } from '@frontend/ui/progress';
 import { TikzPictureManager } from '@latex/TikzPictureManager';
 import { createLog } from '@logger/logUtils';
-import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
+import type { ProcessServices } from '@platform/processRuntime';
 import { withSessionFs } from '@platform/rootedFs';
 import { pathToLocationIn } from '@utils/files/fileLocation';
 import { pluralize, truncateWithEllipsis } from '@utils/text/stringUtils';
@@ -69,7 +70,6 @@ export function handleExtractTikzFigures(
 
 export function handleCompileTikzFigures(
   session: SessionHandle,
-  runtime: ProcessRuntime,
 ): Effect.Effect<void, never, ProcessServices> {
   return runGuardedLatexCommand(
     session,
@@ -82,38 +82,33 @@ export function handleCompileTikzFigures(
       Effect.gen(function* () {
         log.debug(`Processing LaTeX file for TikZ compilation: ${filePath}`);
 
-        // `withProgress` owns the notification for exactly as long as the
-        // callback it is handed: the compile settles on the process runtime
-        // inside it, the one structural Promise edge this command keeps.
-        yield* Effect.promise(() =>
-          vscode.window.withProgress(
-            {
-              location: vscode.ProgressLocation.Notification,
-              title: 'Compiling TikZ Figures',
-              cancellable: false,
-            },
-            async (progress) => {
+        // The notification lives for exactly as long as the body below, which
+        // is a step of this program rather than a nested settle.
+        yield* withVSCodeProgress(
+          {
+            location: vscode.ProgressLocation.Notification,
+            title: 'Compiling TikZ Figures',
+            cancellable: false,
+          },
+          (progress) =>
+            Effect.gen(function* () {
               progress.report({
                 message: 'Extracting and compiling TikZ pictures...',
               });
 
               const { roots } = session;
-              const compiledFiles = await runtime.runPromise(
-                withSessionFs(
+              const compiledFiles = yield* withSessionFs(
+                roots,
+                TikzPictureManager.compile(
+                  pathToLocationIn(roots.workspace, filePath),
                   roots,
-                  TikzPictureManager.compile(
-                    pathToLocationIn(roots.workspace, filePath),
-                    roots,
-                  ),
                 ),
               );
 
               if (compiledFiles.length === 0) {
-                await runtime.runPromise(
-                  showLoggedInfoMessage(
-                    CHANNEL,
-                    'No TikZ figures found to compile',
-                  ),
+                yield* showLoggedInfoMessage(
+                  CHANNEL,
+                  'No TikZ figures found to compile',
                 );
                 return;
               }
@@ -125,27 +120,28 @@ export function handleCompileTikzFigures(
                 iconPath: vscode.ThemeIcon.File,
               }));
 
-              const selected = await vscode.window.showQuickPick(items, {
-                placeHolder: 'Compiled TikZ figures (select to open)',
-                prompt: 'Select a compiled TikZ figure to open in the editor',
-                canPickMany: false,
-              });
+              const selected = yield* Effect.promise(() =>
+                vscode.window.showQuickPick(items, {
+                  placeHolder: 'Compiled TikZ figures (select to open)',
+                  prompt: 'Select a compiled TikZ figure to open in the editor',
+                  canPickMany: false,
+                }),
+              );
 
               if (selected) {
-                await vscode.commands.executeCommand(
-                  'vscode.open',
-                  selected.resourceUri,
+                yield* Effect.promise(() =>
+                  vscode.commands.executeCommand(
+                    'vscode.open',
+                    selected.resourceUri,
+                  ),
                 );
               }
 
-              await runtime.runPromise(
-                showLoggedInfoMessage(
-                  CHANNEL,
-                  `Successfully compiled ${compiledFiles.length} TikZ ${pluralize(compiledFiles.length, 'figure')}`,
-                ),
+              yield* showLoggedInfoMessage(
+                CHANNEL,
+                `Successfully compiled ${compiledFiles.length} TikZ ${pluralize(compiledFiles.length, 'figure')}`,
               );
-            },
-          ),
+            }),
         );
       }),
   );
