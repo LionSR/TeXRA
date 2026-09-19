@@ -19,7 +19,7 @@ import type { Runs } from './runRegistry';
  * {@link ToolInjections}; core flow code iterates what it is handed and does
  * not know which features exist.
  */
-export interface ConditionalToolInjection {
+interface ConditionalToolInjection {
   readonly toolName: RegisteredToolName;
   /** Whether the run resolving its tools, in the workspace whose settings
    *  slots `settings` are, gets this tool. */

@@ -98,7 +98,7 @@ export const getSystemPromptWithRules = Effect.fn('prompt.systemWithRules')(
 );
 
 /** The rendered round-0 prompts: system prompt, user prefix, and initial request. */
-export interface InitialPrompts {
+interface InitialPrompts {
   systemPrompt: string;
   userPrefix: string;
   userRequest: string;

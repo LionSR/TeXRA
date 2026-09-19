@@ -12,7 +12,7 @@ export interface ValidatedRunRequest {
   runId?: RunId;
 }
 
-export type RunValidationResult =
+type RunValidationResult =
   | { valid: true; request: ValidatedRunRequest }
   | { valid: false; message: string; issue?: z.ZodIssue };
 

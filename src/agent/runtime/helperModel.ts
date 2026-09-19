@@ -69,7 +69,7 @@ export const helperModel = Effect.fn('helperModel')(function* (
 });
 
 /** A single non-streaming helper-model text completion. */
-export interface HelperPrompt {
+interface HelperPrompt {
   /** User message content. */
   readonly userPrompt: string;
   /** Optional system prompt. */

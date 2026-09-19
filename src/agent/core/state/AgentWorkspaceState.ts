@@ -90,7 +90,7 @@ export class FileInteractionState {
   }
 }
 
-export class MediaAttachmentState {
+class MediaAttachmentState {
   private readonly _files: FileLocation[] = [];
   private readonly pathSet = new Set<string>();
 

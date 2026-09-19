@@ -142,12 +142,12 @@ const OUTPUT_TOKEN_LIMIT_FACTOR = 2.5;
 /** Decodes the raw-output bytes a resumed run reads back at a byte offset. */
 const utf8 = new TextDecoder();
 
-export interface ReflectionStart {
+interface ReflectionStart {
   /** The caller launched this as a resume; the ledger decides what it is. */
   readonly resume: boolean;
 }
 
-export interface ReflectionResult {
+interface ReflectionResult {
   readonly outcome: RunOutcome;
   readonly roundOutputs: RoundOutput[];
   readonly usage: RunUsageTotals;
