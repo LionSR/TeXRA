@@ -26,7 +26,9 @@ import { Secrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { ToolError, type RunId, type ToolResult } from '@shared/schemas';
 import { parseWorkingDirectory } from '@tools/pathResolution';
+import { nullishWithDefault } from '@tools/core/inputSchema';
 import { executed } from '@tools/core/result';
+import { requireToolRun } from '@tools/core/toolRun';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { executeCommand } from '@utils/system/execUtils';
 
@@ -87,12 +89,12 @@ const GitHubSubscriptionInputSchema = z.discriminatedUnion('command', [
      * Defaults to `DEFAULT_CHECK_ANNOTATION_LEVEL`; use "warning" to include
      * warnings, or "notice" to include every annotation GitHub reports.
      */
-    min_annotation_level: z
-      .enum(['failure', 'warning', 'notice'])
-      .nullish()
-      .describe(
-        `Lowest inline check-annotation level for PR subscriptions. Defaults to ${DEFAULT_ANNOTATION_LEVEL_DESCRIPTION}; "warning" includes warnings, "notice" includes every annotation.`,
-      ),
+    min_annotation_level: nullishWithDefault(
+      z.enum(['failure', 'warning', 'notice']),
+      DEFAULT_CHECK_ANNOTATION_LEVEL,
+    ).describe(
+      `Lowest inline check-annotation level for PR subscriptions. Defaults to ${DEFAULT_ANNOTATION_LEVEL_DESCRIPTION}; "warning" includes warnings, "notice" includes every annotation.`,
+    ),
   }),
   z.looseObject({
     command: z.literal('unsubscribe').describe('Stop watching the path.'),
@@ -222,8 +224,7 @@ const execSubscribe = Effect.fn('GitHubSubscriptionTool.subscribe')(function* (
 ) {
   yield* requireToken();
   const target = requirePath(input);
-  const minAnnotationLevel =
-    input.min_annotation_level ?? DEFAULT_CHECK_ANNOTATION_LEVEL;
+  const minAnnotationLevel = input.min_annotation_level;
   const annotationLevelDescription =
     ANNOTATION_LEVEL_DESCRIPTIONS[minAnnotationLevel];
   if (target.kind === 'repo') {
@@ -604,14 +605,7 @@ export const GitHubSubscriptionTool = defineTool({
   execute: (input: GitHubSubscriptionInput) =>
     Effect.gen(function* () {
       const toolCall = yield* ToolCall;
-      const run = toolCall.run;
-      if (!run) {
-        return yield* Effect.fail(
-          new ToolError(
-            'github_subscription must be called from within an agent stream.',
-          ),
-        );
-      }
+      const run = yield* requireToolRun('github_subscription', toolCall);
       switch (input.command) {
         case 'subscribe':
           return yield* execSubscribe(input, run.runId, run.session);

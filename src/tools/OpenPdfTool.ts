@@ -18,6 +18,7 @@ import {
   workspacePathPorts,
   type WorkspacePathPorts,
 } from '@tools/pathResolution';
+import { nullishWithDefault } from '@tools/core/inputSchema';
 import { executed } from '@tools/core/result';
 import { pathToLocationIn } from '@utils/files/fileLocation';
 import { runStorageLocationInRunUnder } from '@utils/files/runStorageFs';
@@ -28,10 +29,9 @@ import { defineTool } from './core/define';
 
 const OpenPdfInputSchema = z.strictObject({
   path: z.string().describe('Path to the PDF file to open.'),
-  preserve_focus: z
-    .boolean()
-    .nullish()
-    .describe('Whether the editor should preserve focus after opening.'),
+  preserve_focus: nullishWithDefault(z.boolean(), false).describe(
+    'Whether the editor should preserve focus after opening.',
+  ),
 });
 
 export type OpenPdfInput = z.infer<typeof OpenPdfInputSchema>;
@@ -94,7 +94,7 @@ const openPdfProgram = Effect.fn('OpenPdfTool.execute')(function* (
   // viewer refused rather than seeing an unknown rejection escape the tool.
   yield* openPdf({
     location,
-    preserveFocus: input.preserve_focus ?? false,
+    preserveFocus: input.preserve_focus,
   }).pipe(
     Effect.catchTag('PdfOpenFailed', (error) =>
       Effect.fail(

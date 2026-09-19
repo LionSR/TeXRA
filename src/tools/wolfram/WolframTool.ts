@@ -13,6 +13,7 @@ import {
   buildBashApprovalRejectedResult,
   requestBashApproval,
 } from '@tools/approval/bashApproval';
+import { nullishWithDefault } from '@tools/core/inputSchema';
 import { executed } from '@tools/core/result';
 import { runToolWithCheck } from '@utils/system/toolUtils';
 import { previewLabel, splitContentLines } from '@utils/text/stringUtils';
@@ -42,14 +43,12 @@ function wolframApprovalCommand(code: string): string {
 
 const WolframInputSchema = z.strictObject({
   code: z.string(),
-  timeout: z
-    .int()
-    .min(1000)
-    .max(600_000)
-    .nullish()
-    .describe(
-      'Timeout in milliseconds (max 600,000 ms / 10 min, default 30,000 ms / 30 s).',
-    ),
+  timeout: nullishWithDefault(
+    z.int().min(1000).max(600_000),
+    WOLFRAM_CODE_TIMEOUT_MS,
+  ).describe(
+    'Timeout in milliseconds (max 600,000 ms / 10 min, default 30,000 ms / 30 s).',
+  ),
 });
 
 type WolframInput = z.infer<typeof WolframInputSchema>;
@@ -79,7 +78,6 @@ const runWolfram = Effect.fn('WolframTool.execute')(function* (
     return buildBashApprovalRejectedResult(command, approval);
   }
 
-  const effectiveTimeout = input.timeout ?? WOLFRAM_CODE_TIMEOUT_MS;
   // `runToolWithCheck` answers `false` for a missing `wolframscript` and
   // reports a failed run in its `ExecResult`. Interrupting the tool kills the
   // process: the interruption is what aborts the spawn.
@@ -88,7 +86,7 @@ const runWolfram = Effect.fn('WolframTool.execute')(function* (
     settings: ports.settings,
     showError: false,
     truncate: false,
-    timeout: effectiveTimeout,
+    timeout: input.timeout,
     channel: 'WolframTool',
   });
   if (!result) {
@@ -101,7 +99,7 @@ const runWolfram = Effect.fn('WolframTool.execute')(function* (
   const parts: string[] = [];
   if (result.timedOut) {
     parts.push(
-      `Run timed out after ${effectiveTimeout / 1000}s.\n` +
+      `Run timed out after ${input.timeout / 1000}s.\n` +
         `To fix: increase the timeout parameter up to 600s (600000ms): { "timeout": 600000 }`,
     );
   }

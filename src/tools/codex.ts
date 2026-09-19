@@ -489,14 +489,8 @@ export class CodexTool extends defineTool({
 }) {
   protected execute(input: CodexInput) {
     return Effect.gen({ self: this }, function* () {
-      const toolCall = yield* ToolCall;
-      if (!toolCall.run)
-        return yield* Effect.fail(
-          new ToolError('This tool requires an active agent session.'),
-        );
-      const session = toolCall.run.session;
       return yield* reraiseAgentCliCallFailure(
-        this.run(input, session, toolCall, requestBashApproval),
+        this.run(input, yield* ToolCall, requestBashApproval),
       );
     });
   }
@@ -504,7 +498,6 @@ export class CodexTool extends defineTool({
   private readonly run = Effect.fn('CodexTool.run')(function* (
     this: CodexTool,
     input: CodexInput,
-    session: SessionHandle,
     toolCall: ToolCallShape,
     requestApproval: typeof requestBashApproval,
   ): Effect.fn.Return<
@@ -521,7 +514,6 @@ export class CodexTool extends defineTool({
       );
 
     return yield* dispatchAgentCliTool({
-      session,
       toolCall,
       requestApproval,
       agentName: 'codex',
@@ -542,7 +534,7 @@ export class CodexTool extends defineTool({
           context.parentRunId,
           context.parentWorkingDirectory,
           context.releaseFallbackClaim,
-          session,
+          context.session,
         ),
     });
   });

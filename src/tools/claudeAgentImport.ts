@@ -34,8 +34,6 @@ type QueryFn = typeof import('@anthropic-ai/claude-agent-sdk').query;
 // SDK import
 // ---------------------------------------------------------------------------
 
-let cachedQuery: QueryFn | undefined;
-
 /**
  * Import the `query` function from `@anthropic-ai/claude-agent-sdk`.
  *
@@ -45,35 +43,34 @@ let cachedQuery: QueryFn | undefined;
  * is wrapped exactly once, here; a missing package is re-stated as install
  * guidance with the original attached as `cause`, so callers classify it off
  * the cause chain rather than the message text.
+ *
+ * No memo of its own: `import()` resolves an already-loaded module from Node's
+ * module cache, so a repeat call is a cache hit — the same shape
+ * `importCodexClass` has.
  */
 export function importClaudeAgentSdk(): Effect.Effect<QueryFn, Error> {
-  return Effect.suspend(() =>
-    cachedQuery
-      ? Effect.succeed(cachedQuery)
-      : Effect.tryPromise({
-          try: (): Promise<Record<string, unknown>> =>
-            import('@anthropic-ai/claude-agent-sdk'),
-          catch: (err) =>
-            isModuleNotFoundError(err)
-              ? new Error(
-                  '@anthropic-ai/claude-agent-sdk package not found. Reinstall TeXRA or run corepack pnpm install in the TeXRA workspace.',
-                  { cause: err },
-                )
-              : ensureError(err),
-        }).pipe(
-          Effect.flatMap((mod) =>
-            Effect.try({
-              try: () =>
-                resolveSdkExport<QueryFn>(mod, {
-                  exportName: 'query',
-                  specifier: '@anthropic-ai/claude-agent-sdk',
-                  errorLabel: 'query()',
-                }),
-              catch: ensureError,
-            }),
-          ),
-          Effect.map((query) => (cachedQuery = query)),
-        ),
+  return Effect.tryPromise({
+    try: (): Promise<Record<string, unknown>> =>
+      import('@anthropic-ai/claude-agent-sdk'),
+    catch: (err) =>
+      isModuleNotFoundError(err)
+        ? new Error(
+            '@anthropic-ai/claude-agent-sdk package not found. Reinstall TeXRA or run corepack pnpm install in the TeXRA workspace.',
+            { cause: err },
+          )
+        : ensureError(err),
+  }).pipe(
+    Effect.flatMap((mod) =>
+      Effect.try({
+        try: () =>
+          resolveSdkExport<QueryFn>(mod, {
+            exportName: 'query',
+            specifier: '@anthropic-ai/claude-agent-sdk',
+            errorLabel: 'query()',
+          }),
+        catch: ensureError,
+      }),
+    ),
   );
 }
 

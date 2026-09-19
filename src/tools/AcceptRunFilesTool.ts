@@ -30,6 +30,7 @@ import {
 import type { RequestRefusal, RunId, FileLocation } from '@shared/schemas';
 import { assertNoParentTraversal } from '@tools/pathResolution';
 import { defineTool } from '@tools/core/define';
+import { requireToolRun } from '@tools/core/toolRun';
 import {
   buildApprovalRejectedResult,
   requestToolEditApproval,
@@ -202,12 +203,7 @@ Parameters map directly to subagent-result delivery attributes:
     const acceptFiles = (call: ToolCallShape) => this.acceptFiles(input, call);
     return Effect.gen(function* () {
       const call = yield* ToolCall;
-      if (!call.run) {
-        return yield* Effect.fail(
-          new ToolError('This tool requires an active agent session.'),
-        );
-      }
-      const session = call.run.session;
+      const { session } = yield* requireToolRun('accept_run_files', call);
       const directory = yield* findExistingRunStoragePathUnder(
         call.roots.storage,
         input.execution_id,

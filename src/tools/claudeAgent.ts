@@ -39,7 +39,6 @@ import type { Runs } from '@agent/runtime/runRegistry';
 import { ToolCall, type ToolCallShape } from '@agent/runtime/ToolCall';
 import type { AgentResume } from '@platform/interfaces';
 import { Secrets } from '@platform/secrets';
-import { ToolError } from '@shared/schemas';
 import {
   ClaudeAgentEffortSchema,
   ClaudeAgentPermissionModeSchema,
@@ -558,14 +557,8 @@ export class ClaudeAgentTool extends defineTool({
 }) {
   protected execute(input: ClaudeAgentInput) {
     return Effect.gen({ self: this }, function* () {
-      const toolCall = yield* ToolCall;
-      if (!toolCall.run)
-        return yield* Effect.fail(
-          new ToolError('This tool requires an active agent session.'),
-        );
-      const session = toolCall.run.session;
       return yield* reraiseAgentCliCallFailure(
-        this.run(input, session, toolCall, requestBashApproval),
+        this.run(input, yield* ToolCall, requestBashApproval),
       );
     });
   }
@@ -573,7 +566,6 @@ export class ClaudeAgentTool extends defineTool({
   private readonly run = Effect.fn('ClaudeAgentTool.run')(function* (
     this: ClaudeAgentTool,
     input: ClaudeAgentInput,
-    session: SessionHandle,
     toolCall: ToolCallShape,
     requestApproval: typeof requestBashApproval,
   ): Effect.fn.Return<
@@ -592,7 +584,6 @@ export class ClaudeAgentTool extends defineTool({
     const isFork = input.fork_session === true;
 
     return yield* dispatchAgentCliTool({
-      session,
       toolCall,
       requestApproval,
       agentName: CLAUDE_AGENT_NAME,
@@ -618,7 +609,7 @@ export class ClaudeAgentTool extends defineTool({
           context.parentRunId,
           context.parentWorkingDirectory,
           context.releaseFallbackClaim,
-          session,
+          context.session,
         ),
     });
   });

@@ -47,6 +47,7 @@ import { appendHead, appendTail } from '@utils/text/appendTail';
 // Local file imports
 import { defineTool } from './core/define';
 import { nullishWithDefault } from './core/inputSchema';
+import { requireToolRun } from './core/toolRun';
 import { childRunDescription, createChildRun } from './delegation/childRun';
 import { startDetachedChildRunLoop } from './delegation/detachedChildRun';
 import { parseWorkingDirectory } from './pathResolution';
@@ -205,14 +206,12 @@ const BashInputSchema = z.strictObject({
     .describe(
       'Optional human-readable purpose for the command. Ignored by execution.',
     ),
-  timeout: z
-    .int()
-    .min(1000)
-    .max(600_000)
-    .nullish()
-    .describe(
-      'Timeout in milliseconds (max 600,000 ms / 10 min, default 120,000 ms / 2 min).',
-    ),
+  timeout: nullishWithDefault(
+    z.int().min(1000).max(600_000),
+    BASH_TOOL_DEFAULT_TIMEOUT_MS,
+  ).describe(
+    'Timeout in milliseconds (max 600,000 ms / 10 min, default 120,000 ms / 2 min).',
+  ),
   run_in_background: nullishWithDefault(z.boolean(), false).describe(
     'Run command in background. Returns immediately with run ID and a background task tab. Result delivered as follow-up when complete.',
   ),
@@ -400,28 +399,20 @@ export class BashTool extends defineTool({
         return buildBashApprovalRejectedResult(input.command, approval);
       }
 
-      const timeoutMs = input.timeout ?? BASH_TOOL_DEFAULT_TIMEOUT_MS;
-
       if (input.run_in_background) {
-        if (!toolCall.run) {
-          return yield* Effect.fail(
-            new ToolError(
-              'bash run_in_background must be called from within an agent stream.',
-            ),
-          );
-        }
+        const run = yield* requireToolRun('bash run_in_background', toolCall);
         return yield* this.executeBackground(
-          toolCall.run.session,
+          run.session,
           input.command,
-          timeoutMs,
-          toolCall.run.runId,
+          input.timeout,
+          run.runId,
           cwd,
         );
       }
 
       return yield* this.executeForeground(
         input.command,
-        timeoutMs,
+        input.timeout,
         toolCall,
         cwd,
       );
