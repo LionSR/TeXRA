@@ -1,8 +1,30 @@
+import type { ResumabilityDecision } from '@agent/storage';
 import type { RunId } from '@shared/schemas';
 
 import { formatResumeCommand } from '../chat/tui/state/resumeHint';
 import { readCliCwd, type CliContext } from './cliContext';
 import { writeTextStderr, writeTextStderrAndWait } from './logSinks';
+
+/** The one resumability answer a hint can be advertised from. */
+export type ResumableCheckpoint = Extract<
+  ResumabilityDecision,
+  { kind: 'checkpoint' }
+>;
+
+/**
+ * The one reading of "this decision advertises a resumable run": a checkpoint
+ * the command's own refinement agrees to, where no refinement means yes. Each
+ * probe on the interrupt path asks this at its own instant, and `refine` may
+ * throw, so its caller decides whether that is fatal.
+ */
+export function advertisesInterruptedRun(
+  resumability: ResumabilityDecision | undefined,
+  refine: ((checkpoint: ResumableCheckpoint) => boolean) | undefined,
+): boolean {
+  return (
+    resumability?.kind === 'checkpoint' && (refine?.(resumability) ?? true)
+  );
+}
 
 /** Read the launch directory without making recovery depend on its lifetime. */
 export function tryReadCliCwd(): string | undefined {
