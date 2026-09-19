@@ -440,20 +440,6 @@ function mutate(
   switch (op.op) {
     case 'set':
       return Result.succeed({ ...node, [key]: op.value });
-    case 'delete': {
-      if (!Object.hasOwn(node, key)) {
-        return Result.fail(`delete names no ${op.path.join('.')}`);
-      }
-      const { [key]: _removed, ...others } = node;
-      return Result.succeed(others);
-    }
-    case 'append': {
-      const current = node[key];
-      if (!Array.isArray(current)) {
-        return Result.fail(`append targets a non-array ${op.path.join('.')}`);
-      }
-      return Result.succeed({ ...node, [key]: [...current, ...op.items] });
-    }
     case 'add': {
       const current = node[key];
       if (typeof current !== 'number') {
