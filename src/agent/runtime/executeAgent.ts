@@ -59,7 +59,7 @@ import { agentRunLayer } from './run/AgentRun';
 import { runReflection } from './loop/reflection';
 import { runToolUse } from './loop/toolUse';
 import {
-  ToolInjectionRegistry,
+  NO_TOOL_INJECTIONS,
   ToolInjections,
   type AgentRunServices,
 } from './toolInjection';
@@ -260,9 +260,7 @@ function launchReflectionRun(
   const program = runReflection({ resume: options.resumed === true }).pipe(
     // The reflection family injects no conditional tools (memory and plan are
     // tool-use infrastructure), so its run resolves tools from an empty list.
-    Effect.provide(
-      runLayerFor(ctx, options, new ToolInjectionRegistry(), undefined),
-    ),
+    Effect.provide(runLayerFor(ctx, options, NO_TOOL_INJECTIONS, undefined)),
     Effect.flatMap((result) =>
       Effect.gen(function* () {
         const flowResult: WorkflowFlowResult = {

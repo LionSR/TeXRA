@@ -4,7 +4,6 @@ import { Effect } from 'effect';
 
 import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
 import { resolveAgentTools } from '@agent/runtime/agentToolResolution';
-import { ToolInjectionRegistry } from '@agent/runtime/toolInjection';
 import {
   LanguageModel,
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
@@ -22,10 +21,16 @@ function toolDefs(names: readonly string[]): ToolDefinition[] {
 }
 
 describe('tool-use tool resolution', () => {
-  let toolInjections: ToolInjectionRegistry;
+  // The injections this run resolves with: the production shape, built here
+  // rather than taken from the process list.
+  let injected: readonly {
+    readonly toolName: 'update_config';
+    readonly shouldInject: () => boolean;
+  }[] = [];
+  const toolInjections = { list: () => injected };
 
   beforeEach(() => {
-    toolInjections = new ToolInjectionRegistry();
+    injected = [];
   });
 
   function resolveNames(
@@ -130,10 +135,7 @@ describe('tool-use tool resolution', () => {
     'filters injected approval-gated tools when approval prompts are unavailable',
     () =>
       Effect.gen(function* () {
-        toolInjections.register({
-          toolName: 'update_config',
-          shouldInject: () => true,
-        });
+        injected = [{ toolName: 'update_config', shouldInject: () => true }];
 
         expect(
           yield* resolveNames(['grep'], { approvalPromptsUnavailable: true }),

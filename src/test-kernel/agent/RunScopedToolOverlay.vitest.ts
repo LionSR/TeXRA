@@ -17,7 +17,7 @@ import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
 import { ModelInvoker, type InvokeRequest } from '@agent/runtime/ModelInvoker';
 import { runToolUse } from '@agent/runtime/loop/toolUse';
 import { agentRunLayer } from '@agent/runtime/run/AgentRun';
-import { ToolInjectionRegistry } from '@agent/runtime/toolInjection';
+import { NO_TOOL_INJECTIONS } from '@agent/runtime/toolInjection';
 import {
   LanguageModel,
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
@@ -114,7 +114,7 @@ describe('run-scoped tool resolution', () => {
                   parentRunId: null,
                   // Run-scoped tools, one of them shadowing a registered tool.
                   tools: [tool('bash'), tool('second')],
-                  toolInjections: new ToolInjectionRegistry(),
+                  toolInjections: NO_TOOL_INJECTIONS,
                   callbacks: { onModelChanged: () => {} },
                 }),
               ),
@@ -169,7 +169,7 @@ describe('run-scoped tool resolution', () => {
           approvalPromptsUnavailable: true,
           runtimeUnavailableTools: ['inquiry'],
           // No conditional injections: this pins the declared-tool gates alone.
-          toolInjections: new ToolInjectionRegistry(),
+          toolInjections: NO_TOOL_INJECTIONS,
           stores: hostStores(),
         }).pipe(
           Effect.provide(LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT)),
