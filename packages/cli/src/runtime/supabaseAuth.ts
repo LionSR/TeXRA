@@ -202,7 +202,7 @@ const loopbackSignIn = (
             ),
           catch: (cause) => ensureError(cause),
         }),
-        callbackServer.sessionSettled,
+        Effect.asVoid(callbackServer.waitForSession),
       );
     }
 

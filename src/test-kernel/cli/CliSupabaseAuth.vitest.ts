@@ -199,7 +199,6 @@ const DEVICE_AUTHORIZATION = Object.freeze({
 interface FakeCallbackServer {
   readonly redirectTo: string;
   readonly commitStarted: boolean;
-  readonly sessionSettled: Effect.Effect<void, unknown>;
   readonly waitForSession: Effect.Effect<unknown, unknown>;
   readonly cancel: Effect.Effect<void>;
   readonly close: Effect.Effect<void, unknown>;
@@ -213,7 +212,6 @@ interface FakeCallbackServer {
 /** Arm the browser sign-in transport and hand back its loopback server. */
 function stubBrowserSignIn(init: {
   readonly waitForSession: Effect.Effect<unknown, unknown>;
-  readonly sessionSettled?: Effect.Effect<void, unknown>;
   readonly commitStarted?: boolean;
 }): FakeCallbackServer {
   const cancelled = vi.fn<() => void>();
@@ -224,7 +222,6 @@ function stubBrowserSignIn(init: {
   const callbackServer: FakeCallbackServer = {
     redirectTo: 'http://127.0.0.1:0/callback',
     commitStarted: init.commitStarted ?? false,
-    sessionSettled: init.sessionSettled ?? Effect.void,
     waitForSession: Effect.suspend(() => wait.current),
     cancel: Effect.sync(cancelled),
     close: Effect.sync(closed),
@@ -372,7 +369,6 @@ describe('CLI Supabase auth', () => {
       Effect.gen(function* () {
         const callbackServer = stubBrowserSignIn({
           waitForSession: Effect.never,
-          sessionSettled: Effect.never,
         });
         mocks.openBrowser.mockReturnValue(new Promise(() => {}));
         const { signInCliSupabase, runtime } = yield* Effect.promise(() =>
@@ -404,15 +400,19 @@ describe('CLI Supabase auth', () => {
         const releaseReachedWait = new Promise<void>((resolve) => {
           releaseWaiting = resolve;
         });
-        const callbackServer = stubBrowserSignIn({
+        const callbackServer: FakeCallbackServer = stubBrowserSignIn({
+          // The sign-in awaits the session and the teardown awaits it again;
+          // the teardown's wait is the one that follows the cancellation the
+          // interrupt delivers, which is what `cancel` having run marks.
           waitForSession: Effect.suspend(() => {
-            releaseWaiting();
+            if (callbackServer.cancelled.mock.calls.length > 0) {
+              releaseWaiting();
+            }
             return Deferred.await(commit);
           }),
-          sessionSettled: Effect.never,
           commitStarted: true,
         });
-        mocks.openBrowser.mockReturnValue(new Promise(() => {}));
+        mocks.openBrowser.mockResolvedValue(undefined);
         const { signInCliSupabase, runtime } = yield* Effect.promise(() =>
           loadSupabaseAuth(),
         );
