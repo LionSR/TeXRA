@@ -443,3 +443,65 @@ ratchet row. Making `SessionHandleInit.roots` optional again after it is
 required. Moving the `working_directory` gate into `execute` as a way to drop
 the read: that turns a schema rejection into a tool error and is a behavior
 decision of its own, not a threading change.
+
+## The shared `MessageHandler` dispatcher contract stays Promise-shaped (ruled 2026-09-19)
+
+**Question.** `src/shared/utils/dispatcher.ts` types every webview message arm
+as `MessageHandler<T> = (data: T) => Promise<void> | void`, and each graphical
+host's registry therefore runs its arm's program with one
+`runtime.runPromise`. That is the largest remaining cluster of runs in the two
+graphical hosts, about twenty of them, and #12820, #12823 and #12826 each
+stopped at it by design. Is the contract debt for a later lane, or does it stay
+Promise-shaped?
+
+**Ruling.** It stays Promise-shaped, and it is not a round trip. The dispatcher
+is the R1 host entry for every webview message on both graphical hosts, so the
+run at each arm is the boundary run that R1 admits rather than an adapter
+around one.
+
+**Evidence.** The contract is shared across the hosts and the frontend at once:
+`src/shared/schemas/settingsViewMessages.ts` declares the dispatcher, the
+extension side uses it in `SettingsViewMessageHandler.ts` and in the webview
+frontend `SettingsApp.ts`, and the desktop side in `hostBridge.ts`,
+`desktopSettingsIpc.ts` and `desktopToolingSettingsController.ts`. Each registry
+arm runs exactly one program and nothing lifts a dispatcher result back into
+Effect, so there is no Effect to Promise to Effect hop to delete. Retyping the
+handler as an Effect would move each of those runs one frame up, from inside
+the arm into whatever calls `createDispatcher`'s returned function, and the
+count would not drop, because the message still arrives from a host callback
+that is not on a fiber. The frontend would have to take the new type with it,
+which puts the contract change on a browser bundle for no deletion.
+
+**Forbids.** Re-mining the dispatcher or its registries as a round-trip source.
+A second Effect-shaped dispatcher beside this one, a per-host `MessageHandler`
+variant, and an adapter that wraps an Effect arm into the Promise shape. If the
+contract is ever revisited it is a shared-contract decision taken with the
+webview frontends, not a lane.
+
+## A cancelled CLI loopback sign-in reports as interruption (ruled 2026-09-19; landed in [#12821](https://github.com/LionSR/TeXRA/pull/12821))
+
+**Question.** Before #12821 the loopback sign-in's Promise face re-awaited the
+callback server on a fresh fiber when a storage commit had already begun, and
+returned the session despite the cancellation. #12821 made cancellation plain
+fiber interruption. Should the old recover-the-session semantics be restored?
+
+**Ruling.** No. Declined; interruption is the reported outcome. The lane that
+asked stands as landed.
+
+**Evidence.** Effect 4 rc.115 gives a fiber no way to observe its own external
+interruption as a value: `Effect.exit`, `Effect.result` and
+`Effect.uninterruptibleMask` all propagate it, each probed in the lane. So the
+old recovery is expressible only behind a Promise face, that is, a restored run
+edge, which is what this campaign deletes. No production caller ever read the
+recovered session: the one caller that passes a cancellation signal wrapped the
+call in `Effect.tryPromise`, which abandons a late resolution on interrupt.
+What the recovery actually bought now lives in the release half of the
+`Effect.acquireRelease` around the loopback server in
+`packages/cli/src/runtime/supabaseAuth.ts`, which waits out
+`server.commitStarted`'s in-flight `waitForSession` before closing the server;
+a release runs uninterruptibly, which is the property the old edge borrowed.
+
+**Forbids.** Restoring a Promise face on the loopback sign-in path, and
+re-proposing the recovered-session semantics as something a fiber can observe
+in-fiber. A cancelled sign-in that must still be honoured is a change to the
+release half of that scope or nothing.

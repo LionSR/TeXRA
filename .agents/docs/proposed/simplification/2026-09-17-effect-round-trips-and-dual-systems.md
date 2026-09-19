@@ -373,61 +373,56 @@ PRs closed it.
 
 ### Open
 
-Two owner rulings gate the rest.
+Both owner rulings that gated this list were taken on 2026-09-19 and are
+recorded in section 2 and in the architecture rulings ledger: the shared
+`MessageHandler` dispatcher contract stays Promise-shaped and is not a round
+trip, and a cancelled CLI loopback sign-in reports as interruption. Neither is
+re-mined.
 
-- **Ruling wanted: the shared `MessageHandler` dispatcher contract**
-  (`src/shared/utils/dispatcher.ts`). It is Promise-shaped and types a webview
-  frontend as well as both graphical hosts, so it holds the desktop settings
-  view's roughly 40 registry arms at one `runtime.runPromise` each and is the
-  single largest adapter source left, around twenty of them. #12820, #12823 and
-  #12826 each stopped at it by design. Changing it is a shared-contract
-  decision, not a lane, and the webview side has to move with it.
-- **Ruling wanted: whether a cancelled CLI loopback sign-in should recover the
-  session** as it did before #12821. The ruling recorded in section 2 takes the
-  recommended option, interruption, because a fiber cannot observe its own
-  external interruption as a value in rc.115. Restoring the old semantics means
-  restoring a run edge, that is, a Promise face, so it needs the owner's word
-  before anyone builds it.
+Wave 6 is in flight. These four lanes have owners, so they are not free to
+claim.
 
-The rest are ordinary lanes.
+- **The sibling Promise ports**: `onCredentialChanged`
+  (`desktopCredentialSettingsController.ts:125`, lifted at `:372`), the real
+  round trip that fell between wave 5's two desktop lanes because each left it
+  to the other; `ProviderApiKeyForm.onSave` with `ApiKeySaveHandler`, which
+  leaves one `runtime.runPromise` in `registerBuiltins.tsx`; and `ErrorHandler`'s
+  `void | Promise<void>`, which ripples into `CliConfigForm`.
+- **One `window.showErrorMessage` wrap instead of two**:
+  `VscodeMessageHost.notify` takes the action-less toast and
+  `VscodePromptHost.showMessage` the answerable one, under different failure
+  tags and return types. Collapsing them merges the two ports, which is a
+  `src/hosts/uiHosts.ts` decision with desktop and CLI implementations behind
+  it.
+- **`runGuardedLatexCommand`'s `operation` becomes an Effect**, deleting the
+  one lift and the eight `runtime.runPromise` calls inside the
+  `vscode.window.withProgress` bodies it serves.
+- **`SessionHandleInit.roots` becomes required**, which removes the last
+  fallback read of the process-roots holder (`processWorkspaceRoots` and
+  `tryProcessWorkspaceRoots` in `src/platform/workspaceRoots.ts`, four sites in
+  three files: `sessionGraph.ts`, `configUtils.ts`'s
+  `getConfigBeforePlatformInit` and `platformSettings.ts`'s
+  `processSettingsStores`) and retires the last ambient ratchet row, deleted
+  rather than zeroed. Ruled and recorded in the architecture rulings ledger.
 
-- **The CLI config-forms remainder**: `ProviderApiKeyForm.onSave` and
-  `ApiKeySaveHandler` leave one `runtime.runPromise` in `registerBuiltins.tsx`,
-  and `ErrorHandler`'s `void | Promise<void>` ripples into `CliConfigForm`.
+The rest are unclaimed lanes.
+
 - **`shellRun`'s quiet parse failure** (`packages/cli/src/commands/tools.ts`):
   `Effect.orElseSucceed(() => null)` preserves the old `catch {}` exactly.
   Making it loud is a behavior change and needs its own PR.
 - **`packages/cli/src/runtime/browser.ts`** (`tryOpenBrowser`) is deferred and
   spans five callers across the CLI commands and the GitHub token form.
-- **Desktop host ports that are still Promise-shaped**: `onCredentialChanged`
-  (`desktopCredentialSettingsController.ts:125`, lifted at `:372`) is a real
-  round trip that fell between wave 5's two desktop lanes, each of which left
-  it to the other; `confirmAcceptFile`, `showInstructionDialog` and
-  `showErrorDialog` on `DesktopAgentRunHost`; and `DesktopSettingsUiHost`'s
-  `revealRun`, `openExternal` and `confirmAction`, which are Promise-native
-  rather than round trips. `getEnvironmentSummary` keeps one run behind the
-  Promise-shaped workspace IPC port.
-- **`window.showErrorMessage` is wrapped twice**: `VscodeMessageHost.notify`
-  for the action-less toast and `VscodePromptHost.showMessage` for the
-  answerable one, under different failure tags and return types. Collapsing
-  them means merging the two ports, which is a `src/hosts/uiHosts.ts` decision
-  with desktop and CLI implementations behind it.
-- **`runGuardedLatexCommand`'s `operation`** stays `(guard) => Promise<void>`,
-  lifted once, with eight `runtime.runPromise` calls inside the
-  `vscode.window.withProgress` bodies it serves.
+- **The remaining desktop host ports**: `confirmAcceptFile`,
+  `showInstructionDialog` and `showErrorDialog` on `DesktopAgentRunHost`, and
+  `DesktopSettingsUiHost`'s `revealRun`, `openExternal` and `confirmAction`,
+  which are Promise-native rather than round trips. `getEnvironmentSummary`
+  keeps one run behind the Promise-shaped workspace IPC port.
 - **The progress view's catalog-refresh callback**:
   `runAfterAgentCatalogAuthRefresh` still keeps a `() => Promise<void>` queue
   fed by two view providers, and `ProgressViewProvider.ts:470` settles three
   programs in one `Promise.all` inside it. #12823 closed the sibling
   `refreshAfterCredentialChange` and left this one, because nothing lifts it
   and its signature belongs to the catalog module.
-- **The process-roots holder**: `processWorkspaceRoots` and
-  `tryProcessWorkspaceRoots` (`src/platform/workspaceRoots.ts`), read at four
-  sites in three files (`sessionGraph.ts`, `configUtils.ts`'s
-  `getConfigBeforePlatformInit`, `platformSettings.ts`'s
-  `processSettingsStores`). It is the one named ambient singleton left after
-  #12774 deleted the carriers, and it retires when `SessionHandleInit.roots`
-  becomes required. Ruled and recorded in the architecture rulings ledger.
 - **The `working_directory` worktree gate**
   (`src/tools/delegation/inputFields.ts`) is a static Zod `.transform` reading
   the process slots. Moving it into `execute` turns a schema rejection into a
@@ -531,7 +526,17 @@ affected lane.
   the recovered-session semantics live in the release half or not at all. No
   production caller ever observed the old recovery, because the one caller that
   passed a signal wrapped the call in `Effect.tryPromise`, which abandons a late
-  resolution on interrupt.
+  resolution on interrupt. The owner ruled on 2026-09-19 that restoring the old
+  semantics, which would mean restoring a Promise face, is declined; the entry
+  in the architecture rulings ledger is the closed record.
+- **The shared `MessageHandler` dispatcher contract stays Promise-shaped**
+  (2026-09-19). `src/shared/utils/dispatcher.ts` is the R1 host entry for every
+  webview message on both graphical hosts and types the webview frontends as
+  well, each registry arm runs exactly one program, and nothing lifts a
+  dispatcher result back into Effect. Retyping the handler would move about
+  twenty runs one frame up without deleting any, and would carry the contract
+  change into a browser bundle for no gain. It is not a round trip; the
+  architecture rulings ledger holds the closed record.
 - **The desktop OAuth callback deadline starts when the wait program runs**
   (2026-09-19, #12826). `waitForCompletion` still installs its `Deferred` and
   the attempt's settle hook where the attempt is claimed, so an early callback
