@@ -11,8 +11,11 @@ import {
   ModelError,
   authOrRejectionKind,
   chatToolResultMessages,
+  dataUrl,
   enrichModelError,
   hasErrorField,
+  mergeTextPhaseDeltas,
+  mergeToolCallDelta,
   parseInboundToolArguments,
   parseJsonOrModelError,
   pullStream,
@@ -379,7 +382,7 @@ const requestBody = Effect.fn('llm.openrouterRequest')(function* (
           content.push({
             type: 'image_url',
             image_url: {
-              url: `data:${part.mimeType};base64,${part.base64}`,
+              url: dataUrl(part.mimeType, part.base64),
               ...(part.detail !== undefined ? { detail: part.detail } : {}),
             },
           });
@@ -389,7 +392,7 @@ const requestBody = Effect.fn('llm.openrouterRequest')(function* (
         ) {
           content.push({
             type: 'file',
-            file: { file_data: `data:${part.mimeType};base64,${part.base64}` },
+            file: { file_data: dataUrl(part.mimeType, part.base64) },
           });
         } else if (part.kind === 'audio' && configuration.supportsAudioInput) {
           const formats: Record<string, string> = {
@@ -938,41 +941,16 @@ export function openrouterChatModel(
                         })
                         .join('')
                     : (delta.reasoning ?? '');
-                  for (const [part, text] of [
-                    ['reasoning', visibleReasoning],
-                    ['text', delta.content],
-                    ['refusal', delta.refusal],
-                  ] as const) {
-                    if (text == null || text === '') continue;
-                    const phase = part === 'reasoning' ? 'reasoning' : 'text';
-                    if (activePhase !== phase) {
-                      if (activePhase !== undefined)
-                        events.push({
-                          kind: 'phase',
-                          part: activePhase,
-                          boundary: 'end',
-                          providerItemIndex: null,
-                        });
-                      events.push({
-                        kind: 'phase',
-                        part: phase,
-                        boundary: 'start',
-                        providerItemIndex: null,
-                      });
-                      activePhase = phase;
-                    }
-                    events.push({
-                      kind: 'delta',
-                      part,
-                      text,
-                      providerItemIndex: null,
-                    });
-                    if (part !== 'reasoning') {
-                      const previous = textParts.at(-1);
-                      if (previous?.kind === part) previous.text += text;
-                      else textParts.push({ kind: part, text });
-                    }
-                  }
+                  activePhase = mergeTextPhaseDeltas(
+                    [
+                      ['reasoning', visibleReasoning],
+                      ['text', delta.content],
+                      ['refusal', delta.refusal],
+                    ],
+                    activePhase,
+                    events,
+                    textParts,
+                  );
                   for (const annotation of delta.annotations ?? []) {
                     if (annotation.kind === 'file-annotation') {
                       const previous = annotations.find(
@@ -1004,26 +982,13 @@ export function openrouterChatModel(
                     });
                     activePhase = undefined;
                   }
-                  for (const fragment of delta.tool_calls ?? []) {
-                    const call = calls.get(fragment.index) ?? { arguments: '' };
-                    if (
-                      (fragment.id != null &&
-                        call.id !== undefined &&
-                        fragment.id !== call.id) ||
-                      (fragment.function?.name != null &&
-                        call.name !== undefined &&
-                        fragment.function.name !== call.name)
-                    )
-                      return yield* new ModelError({
-                        kind: 'malformed-output',
-                        message:
-                          'OpenRouter changed a local tool-call identity.',
-                      });
-                    call.id ??= fragment.id ?? undefined;
-                    call.name ??= fragment.function?.name ?? undefined;
-                    call.arguments += fragment.function?.arguments ?? '';
-                    calls.set(fragment.index, call);
-                  }
+                  for (const fragment of delta.tool_calls ?? [])
+                    yield* mergeToolCallDelta(
+                      calls,
+                      fragment,
+                      () => ({ arguments: '' }),
+                      'OpenRouter changed a local tool-call identity.',
+                    );
                 }
                 if (choice?.native_finish_reason !== undefined) {
                   if (

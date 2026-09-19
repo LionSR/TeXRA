@@ -10,8 +10,11 @@ import {
   ModelConfigurationSchema,
   ModelError,
   chatToolResultMessages,
+  dataUrl,
   enrichModelError,
   hasErrorField,
+  mergeTextPhaseDeltas,
+  mergeToolCallDelta,
   parseInboundToolArguments,
   parseJsonOrModelError,
   pullStream,
@@ -353,7 +356,7 @@ const chatMessages = Effect.fn('llm.chatMessages')(function* (
           content.push({
             type: 'image_url',
             image_url: {
-              url: `data:${part.mimeType};base64,${part.base64}`,
+              url: dataUrl(part.mimeType, part.base64),
               ...(part.detail !== undefined ? { detail: part.detail } : {}),
             },
           });
@@ -1341,65 +1344,28 @@ export function openaiChatModel(
                       'This reasoning Chat protocol does not support a refusal field.',
                   });
                 }
-                for (const [part, text] of [
+                activePhase = mergeTextPhaseDeltas(
                   [
-                    'reasoning',
-                    miniMaxReasoningDelta || choice.delta.reasoning_content,
+                    [
+                      'reasoning',
+                      miniMaxReasoningDelta || choice.delta.reasoning_content,
+                    ],
+                    ['text', choice.delta.content],
+                    ['refusal', choice.delta.refusal],
                   ],
-                  ['text', choice.delta.content],
-                  ['refusal', choice.delta.refusal],
-                ] as const) {
-                  if (text == null || text === '') continue;
-                  const phase = part === 'reasoning' ? 'reasoning' : 'text';
-                  if (activePhase !== phase) {
-                    if (activePhase !== undefined)
-                      events.push({
-                        kind: 'phase',
-                        part: activePhase,
-                        boundary: 'end',
-                        providerItemIndex: null,
-                      });
-                    events.push({
-                      kind: 'phase',
-                      part: phase,
-                      boundary: 'start',
-                      providerItemIndex: null,
-                    });
-                    activePhase = phase;
-                  }
-                  if (part !== 'reasoning') {
-                    const previous = content.at(-1);
-                    if (previous?.kind === part) previous.text += text;
-                    else content.push({ kind: part, text });
-                  }
-                  events.push({
-                    kind: 'delta',
-                    part,
-                    text,
-                    providerItemIndex: null,
-                  });
-                }
+                  activePhase,
+                  events,
+                  content,
+                );
                 for (const delta of choice.delta.tool_calls ?? []) {
-                  const call = calls.get(delta.index) ?? { arguments: '' };
-                  if (
-                    (delta.id != null &&
-                      call.id !== undefined &&
-                      delta.id !== call.id) ||
-                    (delta.function?.name != null &&
-                      call.name !== undefined &&
-                      delta.function.name !== call.name)
-                  ) {
-                    return yield* new ModelError({
-                      kind: 'malformed-output',
-                      message:
-                        'The model changed a streamed tool call identity.',
-                    });
-                  }
-                  call.id = delta.id ?? call.id;
-                  call.name = delta.function?.name ?? call.name;
-                  call.type = delta.type ?? call.type;
-                  call.arguments += delta.function?.arguments ?? '';
-                  calls.set(delta.index, call);
+                  yield* mergeToolCallDelta(
+                    calls,
+                    delta,
+                    () => ({ arguments: '' }),
+                    'The model changed a streamed tool call identity.',
+                  );
+                  const call = calls.get(delta.index);
+                  if (call !== undefined) call.type = delta.type ?? call.type;
                 }
                 if (
                   choice.delta.tool_calls?.length &&

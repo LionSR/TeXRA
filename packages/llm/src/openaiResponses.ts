@@ -20,6 +20,7 @@ import {
   ModelConfigurationSchema,
   ModelError,
   authOrRejectionKind,
+  dataUrl,
   enrichModelError,
   FILE_UPLOAD_LIFETIME_SECONDS,
   pullStream,
@@ -452,7 +453,7 @@ const responsesContent = Effect.fn('llm.responses.content')(function* (
           part.detail === undefined
             ? 'auto'
             : RESPONSES_IMAGE_DETAIL[part.detail],
-        image_url: `data:${mimeType};base64,${part.base64}`,
+        image_url: dataUrl(mimeType, part.base64),
       };
     }
     case 'document': {
@@ -469,7 +470,7 @@ const responsesContent = Effect.fn('llm.responses.content')(function* (
         // OpenAI reads the type off the name when the bytes are inline, and
         // the canonical document part carries no name of its own.
         filename: `document.${part.mimeType.split('/').pop() ?? 'bin'}`,
-        file_data: `data:${part.mimeType};base64,${part.base64}`,
+        file_data: dataUrl(part.mimeType, part.base64),
       };
     }
     case 'audio':
