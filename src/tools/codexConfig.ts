@@ -147,46 +147,43 @@ const catalogSupportsXhigh = (
     Effect.catch(() => Effect.succeed(undefined)),
   );
 
-const probeXhighSupport = Effect.fn('codexConfig.probeXhighSupport')(
-  function* (binaryPath: string): Effect.fn.Return<boolean> {
-    const cached = codexXhighSupportByBinary.get(binaryPath);
-    if (cached != null) return cached;
+const probeXhighSupport = Effect.fn('codexConfig.probeXhighSupport')(function* (
+  binaryPath: string,
+): Effect.fn.Return<boolean> {
+  const cached = codexXhighSupportByBinary.get(binaryPath);
+  if (cached != null) return cached;
 
-    const result = yield* executeCommand(
-      [binaryPath, 'debug', 'models', '--bundled'],
-      // A capability probe of the binary itself: it runs no git command, and
-      // this module holds no workspace whose identity it could carry.
-      { quiet: true, timeout: 5_000, cwd: process.cwd(), settings: undefined },
-    );
-    if (result.timedOut || result.exitCode === 127) {
-      log.warn('Codex xhigh capability probe failed; not caching the result', {
-        data: {
-          binaryPath,
-          timedOut: result.timedOut,
-          exitCode: result.exitCode,
-          stderr: result.stderr,
-        },
-      });
-      return false;
-    }
-    if (!result.success) {
-      codexXhighSupportByBinary.set(binaryPath, false);
-      return false;
-    }
-    const supported = yield* catalogSupportsXhigh(
-      result.stdout,
-      CODEX_CLI_MODEL,
-    );
-    if (supported == null) {
-      log.warn('Codex xhigh capability probe returned unreadable catalog', {
-        data: { binaryPath },
-      });
-      return false;
-    }
-    codexXhighSupportByBinary.set(binaryPath, supported);
-    return supported;
-  },
-);
+  const result = yield* executeCommand(
+    [binaryPath, 'debug', 'models', '--bundled'],
+    // A capability probe of the binary itself: it runs no git command, and
+    // this module holds no workspace whose identity it could carry.
+    { quiet: true, timeout: 5_000, cwd: process.cwd(), settings: undefined },
+  );
+  if (result.timedOut || result.exitCode === 127) {
+    log.warn('Codex xhigh capability probe failed; not caching the result', {
+      data: {
+        binaryPath,
+        timedOut: result.timedOut,
+        exitCode: result.exitCode,
+        stderr: result.stderr,
+      },
+    });
+    return false;
+  }
+  if (!result.success) {
+    codexXhighSupportByBinary.set(binaryPath, false);
+    return false;
+  }
+  const supported = yield* catalogSupportsXhigh(result.stdout, CODEX_CLI_MODEL);
+  if (supported == null) {
+    log.warn('Codex xhigh capability probe returned unreadable catalog', {
+      data: { binaryPath },
+    });
+    return false;
+  }
+  codexXhighSupportByBinary.set(binaryPath, supported);
+  return supported;
+});
 
 /**
  * Probe whether the resolved Codex runtime reports `xhigh` for the pinned
