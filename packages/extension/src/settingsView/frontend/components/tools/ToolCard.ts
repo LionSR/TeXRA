@@ -30,6 +30,7 @@ import type {
 } from '@shared/schemas';
 import { DetailsOpenController } from '@shared/litControllers/DetailsOpenController';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
+import { renderStatusBadge } from '@shared/wa/statusIcons';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 // Local imports - shared schemas
@@ -249,15 +250,15 @@ export class ToolCard extends LitElement {
 
   // Only the non-available statuses reach this badge (see `render`), and they
   // all read neutral; the icon carries the distinction.
-  private renderStatusBadge(): TemplateResult {
+  private renderStatusTag(): TemplateResult {
     const { status } = this.item;
     const label = toolDependencyStatusLabel(status, this.item.statusLabel);
 
-    return html`
-      <wa-tag class="tool-badge" variant="neutral" size="s">
-        ${waIcon(ToolCard.STATUS_ICON[status])} ${label}
-      </wa-tag>
-    `;
+    return renderStatusBadge({
+      icon: waIcon(ToolCard.STATUS_ICON[status]),
+      label,
+      className: 'tool-badge',
+    });
   }
 
   private renderInstallAction(
@@ -419,7 +420,7 @@ export class ToolCard extends LitElement {
             <h3 class="tool-name">
               <bdi dir="auto">${this.item.name}</bdi>
             </h3>
-            ${isAvailable ? nothing : this.renderStatusBadge()}
+            ${isAvailable ? nothing : this.renderStatusTag()}
             ${this.renderAuthNote()}
           </div>
           ${this.renderToggle()}

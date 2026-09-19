@@ -1,7 +1,9 @@
 // Third-party imports
+import '@awesome.me/webawesome/dist/components/badge/badge.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import { css, html, type CSSResult, type TemplateResult } from 'lit';
+import { ifDefined } from 'lit/directives/if-defined.js';
 
 // Local imports
 import type { ProviderKeyStatus } from '@shared/schemas';
@@ -36,6 +38,38 @@ type WaTagVariant = 'brand' | 'neutral' | 'success' | 'warning' | 'danger';
 interface SetStatusFallback {
   readonly label: string;
   readonly variant?: WaTagVariant;
+}
+
+/** `wa-tag` reads compact and inline; `wa-badge` reads as a filled pill. */
+type StatusBadgeAppearance = 'badge' | 'tag';
+
+export interface StatusBadgeOptions {
+  /** Pre-rendered leading icon (a `waIcon()` call, a spinner, ...). */
+  readonly icon: TemplateResult;
+  readonly label: string;
+  readonly variant?: WaTagVariant;
+  readonly appearance?: StatusBadgeAppearance;
+  readonly className?: string;
+}
+
+/**
+ * Single source of truth for the "icon + label" status indicator, rendered as
+ * either a `wa-badge` (filled pill) or a `wa-tag` (compact inline chip) so the
+ * settingsView and progressView surfaces cannot drift on markup independently.
+ */
+export function renderStatusBadge({
+  icon,
+  label,
+  variant = 'neutral',
+  appearance = 'tag',
+  className,
+}: StatusBadgeOptions): TemplateResult {
+  if (appearance === 'badge') {
+    // prettier-ignore
+    return html`<wa-badge variant=${variant} appearance="filled" class=${ifDefined(className)}>${icon} ${label}</wa-badge>`;
+  }
+  // prettier-ignore
+  return html`<wa-tag variant=${variant} size="s" class=${ifDefined(className)}>${icon} ${label}</wa-tag>`;
 }
 
 export interface SetStatusIconOptions<Status extends string> {

@@ -7,9 +7,6 @@
  * templates with `// prettier-ignore` to prevent whitespace issues.
  */
 
-// Side-effect imports - register WA components
-import '@awesome.me/webawesome/dist/components/badge/badge.js';
-
 // Third-party imports
 import { html, nothing, type TemplateResult } from 'lit';
 import { classMap } from 'lit/directives/class-map.js';
@@ -24,6 +21,7 @@ import { highlightSpans } from '@shared/highlighting/highlightCode';
 // Local imports - shared utilities
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { stopSpinnerMotion } from '@shared/wa/spinner';
+import { renderStatusBadge } from '@shared/wa/statusIcons';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { copyWithFeedback } from '@shared/utils/clipboard';
 import { getBasename } from '@utils/core';
@@ -192,8 +190,11 @@ export function buildStatusBadge(
   iconName: TeXRAIconName | typeof SPINNER_ICON_NAME,
   label: string,
 ): TemplateResult {
-  // prettier-ignore
-  return html`<wa-badge variant="neutral" appearance="filled">${renderIconOrSpinner(iconName)} ${label}</wa-badge>`;
+  return renderStatusBadge({
+    icon: renderIconOrSpinner(iconName),
+    label,
+    appearance: 'badge',
+  });
 }
 
 /** Options for building a details summary header. */
