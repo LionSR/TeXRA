@@ -53,7 +53,7 @@ const SHOW_OF_MEMBER: Record<
  * a `CancellationToken`, so an interrupted `input` closes the box the run
  * opened instead of leaving it waiting for an answer nobody will read.
  */
-export class VscodeUiHost implements MessageHost, PromptHost {
+class VscodeUiHost implements MessageHost, PromptHost {
   showInfoMessage(message: string): Effect.Effect<void, NotificationFailed> {
     return Effect.asVoid(this.info(message));
   }
@@ -201,3 +201,10 @@ export class VscodeUiHost implements MessageHost, PromptHost {
     });
   }
 }
+
+/**
+ * The process's one instance. The host holds no state — every member reads
+ * `vscode.window` at call time — so the surfaces that present on it share
+ * this rather than each constructing a copy of the same empty object.
+ */
+export const vscodeUi = new VscodeUiHost();

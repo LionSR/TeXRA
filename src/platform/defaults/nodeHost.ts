@@ -75,12 +75,7 @@ export function createNodeWorkspaceRoots(
   };
 }
 
-export interface NodeRuntimeSkillOptions {
-  readonly resourcesPath: string;
-  readonly skillSourceOptions?: SkillSourceOptions;
-}
-
-export interface NodeRuntimeSkillOptions {
+interface NodeRuntimeSkillOptions {
   readonly resourcesPath: string;
   readonly skillSourceOptions?: SkillSourceOptions;
 }

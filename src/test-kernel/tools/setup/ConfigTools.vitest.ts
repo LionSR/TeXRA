@@ -84,8 +84,8 @@ describe('ConfigTools — update_config allowlist', () => {
 
       assert.equal(result.status, 'error');
       assert.equal(
-        config.isExplicitlySet(key),
-        false,
+        config.inspect(key),
+        undefined,
         'must not write rejected settings',
       );
     }),

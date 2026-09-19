@@ -205,10 +205,6 @@ export class FakeConfigProvider implements ConfigProvider {
     };
   }
 
-  isExplicitlySet(key: string): boolean {
-    return this.resolveExistingKey(key) !== undefined;
-  }
-
   private resolveExistingKey(key: string): string | undefined {
     return this.configKeys(key).find((candidate) => this.values.has(candidate));
   }
@@ -309,14 +305,6 @@ export class FakeScopedConfigProvider implements ConfigProvider {
         ? (this.workspaceValues.get(key) as T)
         : undefined,
     };
-  }
-
-  isExplicitlySet(key: string): boolean {
-    return (
-      this.globalValues.has(key) ||
-      this.workspaceValues.has(key) ||
-      this.workspaceFolderValues.has(key)
-    );
   }
 
   /** Seeds a legacy global value directly, without going through `update()`. */

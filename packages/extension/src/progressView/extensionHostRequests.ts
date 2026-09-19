@@ -61,7 +61,7 @@ import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { openFinalOutputIfAvailable } from '@frontend/agents/finalOutputOpener';
 import { runSignInCommand } from '@frontend/auth/signInCommand';
 import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
-import { VscodeUiHost } from '@frontend/hosts/VscodeUiHost';
+import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { chooseTeamAvailabilityViaDialog } from '@frontend/ui/dialogs';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { ExternalOpenFailed } from '@hosts/uiHosts';
@@ -193,8 +193,6 @@ function runCommand<T = void>(
 
 /** The typed notification surface the run-action ports, the launch host, and
  *  the transcript export ports take. */
-const messages = new VscodeUiHost();
-
 export function createExtensionHostRequests(
   options: ExtensionHostRequestsOptions,
 ): ExtensionHostRequests {
@@ -290,8 +288,8 @@ export function createExtensionHostRequests(
               cause,
             }),
         }),
-      showInfo: (message) => messages.showInfoMessage(message),
-      showWarning: (message) => messages.showWarningMessage(message),
+      showInfo: (message) => vscodeUi.showInfoMessage(message),
+      showWarning: (message) => vscodeUi.showWarningMessage(message),
     }),
   );
 
@@ -340,8 +338,8 @@ export function createExtensionHostRequests(
         Effect.flatMap(Effect.service(FileSystem.FileSystem), (fs) =>
           Effect.map(fs.readFileString(file), normalizeLineEndings),
         ),
-      showInfo: (message) => messages.showInfoMessage(message),
-      showError: (message) => messages.showErrorMessage(message),
+      showInfo: (message) => vscodeUi.showInfoMessage(message),
+      showError: (message) => vscodeUi.showErrorMessage(message),
       logError: (message, error) => {
         log.error(message, {
           data: error instanceof Error ? error : undefined,
@@ -418,9 +416,9 @@ export function createExtensionHostRequests(
             }),
         }),
         openPath: openExportPath,
-        showInfo: (message) => messages.showInfoMessage(message),
-        showWarning: (message) => messages.showWarningMessage(message),
-        showError: (message) => messages.showErrorMessage(message),
+        showInfo: (message) => vscodeUi.showInfoMessage(message),
+        showWarning: (message) => vscodeUi.showWarningMessage(message),
+        showError: (message) => vscodeUi.showErrorMessage(message),
         reportDetail: (message, data) => log.error(message, { data }),
         getController: Effect.sync(
           () =>
@@ -534,7 +532,7 @@ export function createExtensionHostRequests(
       const prepared = yield* prepareSurfaceLaunch(
         request,
         {
-          showInfoMessage: (message) => messages.showInfoMessage(message),
+          showInfoMessage: (message) => vscodeUi.showInfoMessage(message),
           // A dismissed launch notification is a cancellation here; the
           // settings view keeps `undefined` as "ask again".
           chooseTeamAvailability: (unavailableNames) =>
@@ -641,7 +639,7 @@ export function createExtensionHostRequests(
         );
         if (attached.attachedCount > 0 && attached.rejectedCount > 0) {
           void runtime.runFork(
-            messages.showInfoMessage(
+            vscodeUi.showInfoMessage(
               `Attached ${formatResultCount(attached.attachedCount, 'dropped file')}; skipped ${formatResultCount(attached.rejectedCount, 'unsupported, folder, or out-of-workspace item')}.`,
             ),
           );
@@ -684,7 +682,7 @@ export function createExtensionHostRequests(
             });
           } else {
             void runtime.runFork(
-              messages.showInfoMessage(
+              vscodeUi.showInfoMessage(
                 `The commit ${parsed.commitHash} referenced by ${path.basename(currentOpenFile)} was not found in the repository history.`,
               ),
             );
@@ -706,7 +704,7 @@ export function createExtensionHostRequests(
             return { kind: 'files', paths: [parsed.sourcePath] } as HostOutcome;
           }
           void runtime.runFork(
-            messages.showInfoMessage(
+            vscodeUi.showInfoMessage(
               `The base file ${parsed.sourcePath} could not be found. Keeping ${currentOpenFile} selected.`,
             ),
           );

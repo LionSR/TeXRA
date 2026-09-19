@@ -124,7 +124,7 @@ describe('desktop JsonConfigProvider (dual-store)', () => {
 
       yield* provider.update('files.exclude', undefined);
 
-      expect(provider.isExplicitlySet('files.exclude')).toBe(false);
+      expect(provider.inspect('files.exclude')?.workspaceValue).toBeUndefined();
       expect(workspaceStore.snapshot()).toEqual({});
     }).pipe(Effect.provide(nodePlatformLayer)),
   );

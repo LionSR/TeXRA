@@ -22,10 +22,10 @@ import {
   fromEditor,
   tabInputFileUri,
   VscodeDiffViewHost,
+  type DiffSession,
 } from '@frontend/approval/VscodeDiffViewHost';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
-import type { DiffSession, DiffViewHost } from '@hosts/uiHosts';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { BuildDisplayFn } from '@tools/approval/latexPreview';
 import type { ApprovalTempFiles } from '@tools/approval/tempFileManager';
@@ -40,7 +40,7 @@ import { pluralize } from '@utils/text/stringUtils';
 const CHANNEL = 'ToolEditApproval';
 
 export class VscodeToolEditApprovalHost implements ToolEditApprovalHost {
-  private readonly diffViewHost: DiffViewHost = new VscodeDiffViewHost();
+  private readonly diffViewHost = new VscodeDiffViewHost();
   readonly openBuildDisplay: BuildDisplayFn = (location, options) =>
     Effect.asVoid(openBuildDisplayIfTex(this.session, location, options));
 
@@ -101,7 +101,7 @@ class VscodeToolEditPreview implements ToolEditPreview {
   private tabCloseListener: vscode.Disposable | undefined;
 
   constructor(
-    private readonly diffViewHost: DiffViewHost,
+    private readonly diffViewHost: VscodeDiffViewHost,
     private readonly request: ToolEditApprovalRequest,
     private readonly context: ToolEditPreviewContext,
     private readonly staged: ApprovalTempFiles,

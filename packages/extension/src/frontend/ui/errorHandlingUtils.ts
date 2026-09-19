@@ -4,14 +4,12 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { formatError } from '@common/errors';
-import { VscodeUiHost } from '@frontend/hosts/VscodeUiHost';
+import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { createLog, type Log } from '@logger/logUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /** Valid documentation identifiers for error messages. */
 type DocId = 'intelligent-merge' | 'custom-agents' | 'latex-diff';
-
-const ui = new VscodeUiHost();
 
 /**
  * Present a notice and keep these helpers' own failure channel empty.
@@ -46,7 +44,7 @@ export function showLoggedErrorMessage(
     const log = createLog(channel);
     const message = formatError(prefix, err);
     log.error(message);
-    yield* announce(log, ui.showErrorMessage(message), undefined);
+    yield* announce(log, vscodeUi.showErrorMessage(message), undefined);
     return message;
   });
 }
@@ -59,7 +57,7 @@ export function showLoggedMessage(
   return Effect.gen(function* () {
     const log = createLog(channel);
     log.error(message);
-    yield* announce(log, ui.showErrorMessage(message), undefined);
+    yield* announce(log, vscodeUi.showErrorMessage(message), undefined);
     return message;
   });
 }
@@ -72,7 +70,7 @@ export function showLoggedInfoMessage(
   return Effect.gen(function* () {
     const log = createLog(channel);
     log.info(message);
-    yield* announce(log, ui.showInfoMessage(message), undefined);
+    yield* announce(log, vscodeUi.showInfoMessage(message), undefined);
     return message;
   });
 }
@@ -89,7 +87,7 @@ export function showLoggedMessageWithDocs(
     log.error(message);
     const selection = yield* announce(
       log,
-      ui.error(message, { items: [actionLabel] }),
+      vscodeUi.error(message, { items: [actionLabel] }),
       undefined,
     );
     if (selection !== actionLabel) return;

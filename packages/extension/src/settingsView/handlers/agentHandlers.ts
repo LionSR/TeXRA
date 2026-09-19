@@ -34,11 +34,8 @@ import type { SettingsAgentCatalogController } from '@controllers/settingsView/S
 import { withAgentCatalogAuthRefreshDeferred } from '@frontend/auth/agentCatalogRefreshScope';
 import { runSignInCommand } from '@frontend/auth/signInCommand';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
-import { VscodeUiHost } from '@frontend/hosts/VscodeUiHost';
-import {
-  chooseTeamAvailabilityViaDialog,
-  confirmModal,
-} from '@frontend/ui/dialogs';
+import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
+import { chooseTeamAvailabilityViaDialog } from '@frontend/ui/dialogs';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import { NotificationFailed } from '@hosts/uiHosts';
 import type { ProcessServices } from '@platform/processRuntime';
@@ -62,9 +59,6 @@ import {
   withHandlerErrorHandling,
   type SettingsHandlerContext,
 } from './SettingsHandlerContext';
-
-/** The typed notification surface this host's settings actions present on. */
-const messages = new VscodeUiHost();
 
 /** Agent selection, directory, and team handler delegate. */
 export class AgentHandlers {
@@ -132,10 +126,7 @@ export class AgentHandlers {
           catch: ensureError,
         }),
       confirmAction: (message, confirmLabel) =>
-        Effect.tryPromise({
-          try: () => confirmModal(message, confirmLabel),
-          catch: ensureError,
-        }),
+        vscodeUi.confirm(message, { confirmLabel }),
       showInfoMessage: (message) =>
         this.forkInfoNotice(message, 'Agent settings'),
       showErrorMessage: (message) =>
@@ -430,8 +421,9 @@ export class AgentHandlers {
         const target = this.catalogController.getCustomPreset(data.presetId);
         if (!target) return;
 
-        const confirmed = yield* Effect.promise(() =>
-          confirmModal(`Delete team "${target.name}"?`, 'Delete'),
+        const confirmed = yield* vscodeUi.confirm(
+          `Delete team "${target.name}"?`,
+          { confirmLabel: 'Delete' },
         );
         if (!confirmed) return;
 
@@ -451,7 +443,7 @@ export class AgentHandlers {
    */
   private forkInfoNotice(message: string, scope: string) {
     return Effect.forkDetach(
-      messages.showInfoMessage(message).pipe(
+      vscodeUi.showInfoMessage(message).pipe(
         Effect.catchTag('NotificationFailed', (failure) =>
           Effect.sync(() => {
             this.ctx.log.warn(`${scope} notice failed: ${failure.message}`);

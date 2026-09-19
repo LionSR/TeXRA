@@ -7,7 +7,7 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { appSignals } from '@eventBus/AppSignals';
-import { confirmModal } from '@frontend/ui/dialogs';
+import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { registerDiffRefresh } from '@frontend/ui/diffView';
 import {
   showLoggedErrorMessage,
@@ -268,10 +268,9 @@ export const handleAcceptEdited = Effect.fn(
       return yield* acceptEditedFileReplace(baseLocation, editedLocation, {
         ...acceptPorts,
         confirm: (message) =>
-          Effect.tryPromise({
-            try: () => confirmModal(message, 'Replace file', 'Cancel'),
-            catch: replaceFailed,
-          }),
+          vscodeUi
+            .confirm(message, { confirmLabel: 'Replace file' })
+            .pipe(Effect.mapError(replaceFailed)),
       }).pipe(
         Effect.catchTag('PlatformError', (error) =>
           Effect.fail(replaceFailed(error)),

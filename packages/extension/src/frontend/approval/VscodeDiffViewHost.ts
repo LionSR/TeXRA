@@ -3,11 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { Effect, Option } from 'effect';
 import * as vscode from 'vscode';
 
-import {
-  type DiffSession,
-  type DiffSource,
-  type DiffViewHost,
-} from '@hosts/uiHosts';
+import { type DiffSource, type DiffViewHost } from '@hosts/uiHosts';
 import { REVEAL_TIMEOUT_MS } from '@tools/approval/toolEditApproval';
 
 import { firstEventOrTimeout } from '../vscode/vscodeEventWait';
@@ -34,6 +30,17 @@ export const fromEditor = <A>(
   call: () => PromiseLike<A>,
 ): Effect.Effect<A, unknown> =>
   Effect.tryPromise({ try: call, catch: (error) => error });
+
+/**
+ * The two sides and the title one open diff was shown under. Only this host
+ * reads one back: closing a diff, revealing its first change and reading its
+ * proposed side are all written against VS Code's tab model.
+ */
+export interface DiffSession {
+  original: DiffSource;
+  proposed: DiffSource;
+  title: string;
+}
 
 export class VscodeDiffViewHost implements DiffViewHost {
   openDiff(

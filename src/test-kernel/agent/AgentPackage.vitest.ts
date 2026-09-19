@@ -859,7 +859,6 @@ describe('agent package Node configuration', () => {
     );
     expect(config.get('goal.enabled')).toBe(true);
     expect(config.inspect('goal.enabled')?.globalValue).toBe(true);
-    expect(config.isExplicitlySet('goal.enabled')).toBe(true);
 
     await Effect.runPromise(config.update('goal.enabled', undefined, 'global'));
     // With no explicit value, resolution matches every host: the core-schema
@@ -867,6 +866,6 @@ describe('agent package Node configuration', () => {
     expect(config.get('texra.goal.enabled', false)).toBe(true);
     // A key outside the core schema still falls back to the caller default.
     expect(config.get('custom.nonCoreKey', false)).toBe(false);
-    expect(config.isExplicitlySet('texra.goal.enabled')).toBe(false);
+    expect(config.inspect('texra.goal.enabled')?.globalValue).toBeUndefined();
   });
 });

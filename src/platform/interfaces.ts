@@ -73,7 +73,6 @@ export interface ConfigProvider {
     target?: ConfigTarget,
   ): Effect.Effect<void, ConfigWriteFailed>;
   inspect<T = unknown>(key: string): ConfigInspection<T> | undefined;
-  isExplicitlySet(key: string): boolean;
 }
 
 // ---------------------------------------------------------------------------
