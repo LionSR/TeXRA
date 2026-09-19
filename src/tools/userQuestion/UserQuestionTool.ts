@@ -4,7 +4,6 @@ import { z } from 'zod';
 import { ToolCall } from '@agent/runtime/ToolCall';
 import { createLog } from '@logger/logUtils';
 import {
-  ToolError,
   UserQuestionAnswersSchema,
   UserQuestionPromptSchema,
 } from '@shared/schemas';
@@ -12,6 +11,7 @@ import type { UserQuestionPermission } from '@shared/schemas';
 import { refusalOf } from '@shared/session/approvalDecision';
 import { defineTool } from '@tools/core/define';
 import { executed } from '@tools/core/result';
+import { requireToolRun } from '@tools/core/toolRun';
 import { generateShortId } from '@utils/core';
 
 const logger = createLog('UserQuestionTool');
@@ -40,14 +40,10 @@ type AskUserQuestionInput = z.infer<typeof AskUserQuestionInputSchema>;
 const askUserQuestion = Effect.fn('AskUserQuestionTool.execute')(function* (
   input: AskUserQuestionInput,
 ) {
-  const call = yield* ToolCall;
-  const run = call.run;
-  if (!run) {
-    return yield* Effect.fail(
-      new ToolError('ask_user_question requires an active run context.'),
-    );
-  }
-  const { runId, session } = run;
+  const { runId, session } = yield* requireToolRun(
+    'ask_user_question',
+    yield* ToolCall,
+  );
   const requestId = `user-question-${generateShortId()}`;
 
   logger.info('User question requested', {

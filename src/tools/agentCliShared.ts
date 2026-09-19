@@ -37,6 +37,7 @@ import {
   buildBashApprovalRejectedResult,
 } from '@tools/approval/bashApproval';
 import { executed } from '@tools/core/result';
+import { requireToolRun, type ToolRun } from '@tools/core/toolRun';
 import { generateRunId } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { previewLabel } from '@utils/text/stringUtils';
@@ -365,15 +366,9 @@ const withAgentCliApproval = Effect.fn('agentCliShared.withAgentCliApproval')(
     approvalLabel: string,
     toolCall: ToolCallShape,
     requestApproval: typeof requestBashApproval,
-    run: (
-      run: AgentCliRun,
-    ) => Effect.Effect<ToolResult, AgentCliToolFailure, R>,
+    run: (run: ToolRun) => Effect.Effect<ToolResult, AgentCliToolFailure, R>,
   ): Effect.fn.Return<ToolResult, AgentCliToolFailure, R | ToolCall> {
-    if (!toolCall.run) {
-      return yield* Effect.fail(
-        new ToolError(`${toolName} requires an active run context.`),
-      );
-    }
+    const activeRun = yield* requireToolRun(toolName, toolCall);
     if (toolCall.stopAfterCycle) {
       return yield* Effect.fail(
         new ToolError(
@@ -389,12 +384,9 @@ const withAgentCliApproval = Effect.fn('agentCliShared.withAgentCliApproval')(
       return buildBashApprovalRejectedResult(approvalLabel, approval);
     }
 
-    return yield* run(toolCall.run);
+    return yield* run(activeRun);
   },
 );
-
-/** The launching run, once {@link withAgentCliApproval} has established it. */
-type AgentCliRun = NonNullable<ToolCallShape['run']>;
 
 /** Run context resolved for an agent-CLI launch, handed to the provider's
  * `launch` callback by {@link dispatchAgentCliTool}. */

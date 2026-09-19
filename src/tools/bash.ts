@@ -47,6 +47,7 @@ import { appendHead, appendTail } from '@utils/text/appendTail';
 // Local file imports
 import { defineTool } from './core/define';
 import { nullishWithDefault } from './core/inputSchema';
+import { requireToolRun } from './core/toolRun';
 import { childRunDescription, createChildRun } from './delegation/childRun';
 import { startDetachedChildRunLoop } from './delegation/detachedChildRun';
 import { parseWorkingDirectory } from './pathResolution';
@@ -399,18 +400,12 @@ export class BashTool extends defineTool({
       }
 
       if (input.run_in_background) {
-        if (!toolCall.run) {
-          return yield* Effect.fail(
-            new ToolError(
-              'bash run_in_background must be called from within an agent stream.',
-            ),
-          );
-        }
+        const run = yield* requireToolRun('bash run_in_background', toolCall);
         return yield* this.executeBackground(
-          toolCall.run.session,
+          run.session,
           input.command,
           input.timeout,
-          toolCall.run.runId,
+          run.runId,
           cwd,
         );
       }

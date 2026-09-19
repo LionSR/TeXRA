@@ -28,6 +28,7 @@ import { ToolError, type RunId, type ToolResult } from '@shared/schemas';
 import { parseWorkingDirectory } from '@tools/pathResolution';
 import { nullishWithDefault } from '@tools/core/inputSchema';
 import { executed } from '@tools/core/result';
+import { requireToolRun } from '@tools/core/toolRun';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { executeCommand } from '@utils/system/execUtils';
 
@@ -604,14 +605,7 @@ export const GitHubSubscriptionTool = defineTool({
   execute: (input: GitHubSubscriptionInput) =>
     Effect.gen(function* () {
       const toolCall = yield* ToolCall;
-      const run = toolCall.run;
-      if (!run) {
-        return yield* Effect.fail(
-          new ToolError(
-            'github_subscription must be called from within an agent stream.',
-          ),
-        );
-      }
+      const run = yield* requireToolRun('github_subscription', toolCall);
       switch (input.command) {
         case 'subscribe':
           return yield* execSubscribe(input, run.runId, run.session);
