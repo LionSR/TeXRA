@@ -36,33 +36,39 @@ export async function createSampleProjectWithoutWorkspace(
   extensionPath: string,
   runtime: ProcessRuntime,
 ): Promise<void> {
-  const create = Effect.tryPromise({
-    catch: (err: unknown) => err,
-    try: async () => {
-      const parentPath = await selectFolder({
-        openLabel: 'Create sample project here',
-        title: 'Choose where to create the TeXRA sample project',
-      });
-      if (!parentPath) {
-        return;
-      }
+  const create = Effect.gen(function* () {
+    const parentPath = yield* selectFolder({
+      openLabel: 'Create sample project here',
+      title: 'Choose where to create the TeXRA sample project',
+    });
+    if (!parentPath) {
+      return;
+    }
 
-      const dest = path.join(parentPath, 'texra-sample');
-      if (existsSync(dest)) {
-        void vscode.window.showInformationMessage(
-          'A texra-sample folder already exists there — opening it.',
-        );
-      } else {
-        await cp(path.join(extensionPath, 'resources', 'examples'), dest, {
-          recursive: true,
-        });
-      }
-      await vscode.commands.executeCommand(
-        'vscode.openFolder',
-        vscode.Uri.file(dest),
-        { forceNewWindow: false },
+    const dest = path.join(parentPath, 'texra-sample');
+    if (existsSync(dest)) {
+      void vscode.window.showInformationMessage(
+        'A texra-sample folder already exists there — opening it.',
       );
-    },
+    } else {
+      yield* Effect.tryPromise({
+        try: () =>
+          cp(path.join(extensionPath, 'resources', 'examples'), dest, {
+            recursive: true,
+          }),
+        catch: (err: unknown) => err,
+      });
+    }
+    yield* Effect.tryPromise({
+      try: async () => {
+        await vscode.commands.executeCommand(
+          'vscode.openFolder',
+          vscode.Uri.file(dest),
+          { forceNewWindow: false },
+        );
+      },
+      catch: (err: unknown) => err,
+    });
   });
 
   await runtime.runPromise(create.pipe(Effect.catch(reportFailure)));
