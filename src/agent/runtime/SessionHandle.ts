@@ -133,14 +133,16 @@ export class RunArtifactDrainError extends Error {
  * answers for those.
  *
  * A publication that committed is dropped from the tracked set; one that was
- * refused stays, carrying the squashed cause here, until the drain that
- * answers for its run reports it. `undefined` therefore means "still on the
- * publisher", which only a publication enqueued after a drain's barrier can
- * be: the plane's own settle is what waits for the cohort.
+ * refused stays, carrying its squashed cause in `refusal`, until the drain
+ * that answers for its run reports it. An absent `refusal` therefore means
+ * "still on the publisher", which only a publication enqueued after a drain's
+ * barrier can be: the plane's own settle is what waits for the cohort. The
+ * cause is boxed rather than held bare so that a defect whose value is
+ * `undefined` is still a refusal here, never an in-flight publication.
  */
 interface TrackedPublication {
   readonly runId: RunId | null;
-  error?: unknown;
+  refusal?: { readonly cause: unknown };
 }
 
 /** The run one published batch belongs to, read off the aggregates it
@@ -1018,7 +1020,7 @@ export class SessionHandle {
             // stays tracked until a drain that answers for it reports it
             // ({@link settlePublications}).
             if (Exit.isSuccess(exit)) this.publications.delete(publication);
-            else publication.error = Cause.squash(exit.cause);
+            else publication.refusal = { cause: Cause.squash(exit.cause) };
           }),
         ),
         Effect.asVoid,
@@ -1072,19 +1074,20 @@ export class SessionHandle {
       // before this call has run by the time it returns, and each one's
       // refusal is already recorded on its entry.
       yield* this.graph.settle;
-      const reported = [...this.publications].filter(
-        (publication) =>
-          publication.error !== undefined &&
-          publication.runId === (runId ?? null),
+      const reported = [...this.publications].flatMap((publication) =>
+        publication.refusal !== undefined &&
+        publication.runId === (runId ?? null)
+          ? [{ publication, cause: publication.refusal.cause }]
+          : [],
       );
       if (options.consume !== false)
-        for (const publication of reported)
+        for (const { publication } of reported)
           this.publications.delete(publication);
       if (reported.length > 0)
         return yield* Effect.fail(
           ensureError(
             aggregateError(
-              reported.map(({ error }) => error),
+              reported.map(({ cause }) => cause),
               'Session publication failed',
             ),
           ),
