@@ -205,9 +205,10 @@ export function composeProcess(platform: AgentPlatform): ProcessHold {
       initPlatform(platform);
       initProcessWorkspaceRoots(platform.roots);
     }
-    // The identity stays a pending read: the owner's map builds
-    // synchronously over it, so an open registers its root before the
-    // opener's first await and only the entry's build waits. The direct Lean
+    // The identity stays a pending read -- the package's composition root is
+    // synchronous, so it hands the program over rather than a value: the
+    // owner's map builds synchronously over it, so an open registers its
+    // root before the opener's first await and only the entry's build waits. The direct Lean
     // language services are a layer of this runtime, as on the CLI and
     // desktop roots.
     processRuntime = installProcessRuntime({

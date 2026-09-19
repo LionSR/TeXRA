@@ -22,9 +22,13 @@ import * as path from 'node:path';
 
 import which from 'which';
 
+import { isModuleNotFoundError } from '@common/errors';
+import { createLog } from '@logger/logUtils';
 import { nodeHostEnvironment } from '@platform/defaults/nodeHostEnvironment';
 import { executeCommandSync } from '@utils/system/execUtils';
 import { IS_WINDOWS, extendEnvPath } from '@utils/system/platformPaths';
+
+const log = createLog('ExternalBinaryUtils');
 
 // ---------------------------------------------------------------------------
 // SDK export resolution
@@ -90,9 +94,10 @@ export interface ResolveBinaryConfig {
    * Locate the binary inside a resolved platform-package directory, returning
    * its path if present or `undefined`. Codex nests the binary under
    * `vendor/<triple>/bin/` (older packages: `vendor/<triple>/codex/`); Claude
-   * places it directly in the package dir.
+   * places it directly in the package dir. Synchronous, like every other
+   * probe on this path (`existsSync`, `which.sync`, `executeCommandSync`).
    */
-  binaryInPlatformPackage(platformPkgDir: string): Promise<string | undefined>;
+  binaryInPlatformPackage(platformPkgDir: string): string | undefined;
   /**
    * Global npm-prefix package roots to resolve the platform package from,
    * given the detected `npm prefix -g`. Each root is passed to Node module
@@ -107,10 +112,12 @@ export interface ResolveBinaryConfig {
  * Resolve a native CLI binary via the shared 4-stage probe. Returns the
  * resolved path, or `undefined` to let the caller fall back to its own
  * resolution. Caching is handled by {@link createCachedBinaryResolver}.
+ *
+ * Every stage is synchronous — Node module resolution, `existsSync`,
+ * `executeCommandSync` and `which.sync` — so the probe states that rather
+ * than wearing a Promise no caller can ever be off the thread for.
  */
-async function resolveBinary(
-  config: ResolveBinaryConfig,
-): Promise<string | undefined> {
+function resolveBinary(config: ResolveBinaryConfig): string | undefined {
   if (config.platformPackages.length === 0) return undefined;
 
   // Strategy 1: packaged Electron app.asar.unpacked resources
@@ -126,7 +133,7 @@ async function resolveBinary(
           'node_modules',
           ...pkg.split('/'),
         );
-        const binary = await config.binaryInPlatformPackage(platformPkgDir);
+        const binary = config.binaryInPlatformPackage(platformPkgDir);
         if (binary) return binary;
       }
     }
@@ -135,10 +142,7 @@ async function resolveBinary(
   // Strategy 2: resolve from local project's node_modules
   // Preferred in VS Code extension development — matches package.json.
   {
-    const result = await resolveBinaryFromBase(
-      path.join(__dirname, '..'),
-      config,
-    );
+    const result = resolveBinaryFromBase(path.join(__dirname, '..'), config);
     if (result) return result;
   }
 
@@ -157,7 +161,7 @@ async function resolveBinary(
 
     if (prefix) {
       for (const root of config.globalPrefixRoots(prefix)) {
-        const result = await resolveBinaryFromBase(root, config);
+        const result = resolveBinaryFromBase(root, config);
         if (result) return result;
       }
     }
@@ -193,37 +197,57 @@ async function resolveBinary(
  */
 export function createCachedBinaryResolver(
   buildConfig: () => ResolveBinaryConfig | undefined,
-): () => Promise<string | undefined> {
+): () => string | undefined {
   let cached: string | undefined;
-  return async () => {
+  return () => {
     if (cached !== undefined) return cached;
     const config = buildConfig();
     if (!config) return undefined;
-    const result = await resolveBinary(config);
+    const result = resolveBinary(config);
     if (result) cached = result;
     return result;
   };
 }
 
 /**
+ * Directory of `pkg` as Node module resolution finds it from `baseDir`, or
+ * `undefined` when the package is not installed there.
+ *
+ * Node reports "not installed" by throwing `MODULE_NOT_FOUND`, and that throw
+ * is the answer, not a failure — every probe stage asks about packages that
+ * are legitimately absent. Anything else (an unreadable or malformed
+ * `package.json`, a permission error) is a real failure the probe would
+ * otherwise report as a plain "not found", so it is logged before the probe
+ * moves on.
+ */
+export function resolvePackageDir(
+  baseDir: string,
+  pkg: string,
+): string | undefined {
+  try {
+    const req = createRequire(path.join(baseDir, 'package.json'));
+    return path.dirname(req.resolve(`${pkg}/package.json`));
+  } catch (error) {
+    if (!isModuleNotFoundError(error)) {
+      log.warn(`Could not resolve ${pkg} from ${baseDir}`, { data: error });
+    }
+    return undefined;
+  }
+}
+
+/**
  * Resolve the platform package from `baseDir` via Node module resolution, then
  * locate the binary inside it. Returns the binary path if found.
  */
-async function resolveBinaryFromBase(
+function resolveBinaryFromBase(
   baseDir: string,
   config: ResolveBinaryConfig,
-): Promise<string | undefined> {
-  const req = createRequire(path.join(baseDir, 'package.json'));
+): string | undefined {
   for (const pkg of config.platformPackages) {
-    try {
-      const platformPkgJson = req.resolve(`${pkg}/package.json`);
-      const binary = await config.binaryInPlatformPackage(
-        path.dirname(platformPkgJson),
-      );
-      if (binary) return binary;
-    } catch {
-      // Platform package not resolvable
-    }
+    const platformPkgDir = resolvePackageDir(baseDir, pkg);
+    if (platformPkgDir === undefined) continue;
+    const binary = config.binaryInPlatformPackage(platformPkgDir);
+    if (binary) return binary;
   }
   return undefined;
 }

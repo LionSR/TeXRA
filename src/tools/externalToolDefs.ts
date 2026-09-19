@@ -288,26 +288,27 @@ function leanReady(prerequisites: Lean4Prerequisites): boolean {
  * error code rather than off the message text.
  */
 function importProbedSdk(
-  importSdk: () => Promise<unknown>,
+  importSdk: () => Effect.Effect<unknown, Error>,
 ): Effect.Effect<unknown, ToolProbeFailed> {
-  return Effect.tryPromise({
-    try: importSdk,
-    catch: (cause) =>
-      new ToolProbeFailed({
-        reason: causeChain(cause).some(isModuleNotFoundError)
-          ? 'module-not-found'
-          : 'sdk-import-failed',
-        message: toErrorMessage(cause),
-        cause,
-      }),
-  });
+  return Effect.suspend(importSdk).pipe(
+    Effect.mapError(
+      (cause) =>
+        new ToolProbeFailed({
+          reason: causeChain(cause).some(isModuleNotFoundError)
+            ? 'module-not-found'
+            : 'sdk-import-failed',
+          message: toErrorMessage(cause),
+          cause,
+        }),
+    ),
+  );
 }
 
 /** Resolve a CLI's native binary as a classified probe. */
 function findProbedBinary(
-  findBinary: () => Promise<string | undefined>,
+  findBinary: () => string | undefined,
 ): Effect.Effect<string | undefined, ToolProbeFailed> {
-  return Effect.tryPromise({
+  return Effect.try({
     try: findBinary,
     catch: (cause) =>
       new ToolProbeFailed({
@@ -329,8 +330,8 @@ function wslInstallHint(): string {
  * resolves. Any import or resolution failure counts as unavailable.
  */
 function probeSdkBinaryAvailable(
-  importSdk: () => Promise<unknown>,
-  findBinary: () => Promise<string | undefined>,
+  importSdk: () => Effect.Effect<unknown, Error>,
+  findBinary: () => string | undefined,
 ): Effect.Effect<boolean> {
   return Effect.gen(function* () {
     yield* importProbedSdk(importSdk);
@@ -350,8 +351,8 @@ type SdkBinaryStatus =
  * narrative lives in one place instead of once per entry.
  */
 function probeSdkBinaryStatus(config: {
-  importSdk: () => Promise<unknown>;
-  findBinary: () => Promise<string | undefined>;
+  importSdk: () => Effect.Effect<unknown, Error>;
+  findBinary: () => string | undefined;
   missingPackageMessage: string;
   importFailedLabel: string;
   binaryNotFoundMessage: string;

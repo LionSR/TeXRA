@@ -130,10 +130,6 @@ export async function initializeElectronPlatform(
   // own roots (desktopProjects.ts); this pair only backs the window before a
   // folder is open.
   const storage = new WorkspaceStorageProvider(dataRoot, undefined);
-  // The process identity is read before the runtime is installed: an opener
-  // that uses the synchronous `open` would otherwise face an asynchronous
-  // layer build.
-  const processStart = await nodeProcesses.selfIdentity();
   installLongRunningModelDispatcher();
   // The stores this root serves as `Secrets` and `AppState` open before the
   // runtime that serves them, so both are threaded in as values rather than
@@ -144,32 +140,41 @@ export async function initializeElectronPlatform(
   // open path logs or traces through Effect (the session database's one
   // warning goes through the host's own logger), so running it off the
   // process runtime's diagnostics layer changes no output.
-  const { globalStateStore, workspaceStateStore, configStores, secretsStore } =
-    await Effect.runPromise(
-      Effect.gen(function* () {
-        const [globalState, workspaceState, config, secrets] =
-          yield* Effect.all(
-            [
-              // Global state stays in the Electron profile, beside this
-              // profile's update-check records and apart from the shared
-              // `~/.texra` root the workspace scopes use.
-              openAppStateStore(resolveGlobalStoragePath(userDataPath)),
-              openAppStateStore(storage.getStoragePath()),
-              openTexraConfigStores(storage, undefined, (message) =>
-                console.warn(`[desktop] ${message}`),
-              ),
-              JsonStore.open(join(userDataPath, 'secrets.json')),
-            ],
-            { concurrency: 'unbounded' },
-          );
-        return {
-          globalStateStore: globalState,
-          workspaceStateStore: workspaceState,
-          configStores: config,
-          secretsStore: secrets,
-        };
-      }).pipe(Effect.provide(nodeFileServices)),
-    );
+  const {
+    processStart,
+    globalStateStore,
+    workspaceStateStore,
+    configStores,
+    secretsStore,
+  } = await Effect.runPromise(
+    Effect.gen(function* () {
+      // The identity resolves before the runtime is installed, on this same
+      // bootstrap run: an opener that uses the synchronous `open` would
+      // otherwise face an asynchronous layer build.
+      const processStart = yield* nodeProcesses.selfIdentity();
+      const [globalState, workspaceState, config, secrets] = yield* Effect.all(
+        [
+          // Global state stays in the Electron profile, beside this
+          // profile's update-check records and apart from the shared
+          // `~/.texra` root the workspace scopes use.
+          openAppStateStore(resolveGlobalStoragePath(userDataPath)),
+          openAppStateStore(storage.getStoragePath()),
+          openTexraConfigStores(storage, undefined, (message) =>
+            console.warn(`[desktop] ${message}`),
+          ),
+          JsonStore.open(join(userDataPath, 'secrets.json')),
+        ],
+        { concurrency: 'unbounded' },
+      );
+      return {
+        processStart,
+        globalStateStore: globalState,
+        workspaceStateStore: workspaceState,
+        configStores: config,
+        secretsStore: secrets,
+      };
+    }).pipe(Effect.provide(nodeFileServices)),
+  );
   const secrets = new ElectronSecrets(secretsStore, {
     showWarningMessage: (message) =>
       Effect.tryPromise({
@@ -197,7 +202,7 @@ export async function initializeElectronPlatform(
   // settlement and the projects' release of their graphs.
   const setupAuth = createDesktopSetupAuth();
   const runtime = installProcessRuntime({
-    processStart,
+    processStart: Effect.succeed(processStart),
     globalStorage: storage.getGlobalStoragePath(),
     updateCheckStorage: resolveGlobalStoragePath(userDataPath),
     secrets,

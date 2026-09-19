@@ -104,35 +104,39 @@ export function installCliProcessRuntime(
   if (pending) return pending;
   const storage = createNodeStorageProvider({ storageRoot });
   pending = (async () => {
-    const processStart = await nodeProcesses.selfIdentity();
-    // The records layers take the path as a value, so it resolves here, at
-    // install. The default entry already pays the getter's `mkdirSync` opening
-    // the state store below; clone's omit entry must not — its storage root
-    // may be read-only and it runs no records operation — so it resolves the
-    // same path with the pure calculator, as `initCliPlatform` does.
-    const globalStoragePath = omitAppState
-      ? resolveGlobalStoragePath(storageRoot ?? DEFAULT_NODE_STORAGE_ROOT)
-      : storage.getGlobalStoragePath();
-    // Both stores this entry provides exist before the runtime that serves
-    // them. Opening the state store needs the filesystem and nothing else —
-    // it provides its own database layer — so it runs here, on a bootstrap
-    // fiber, rather than on a runtime that does not exist yet. Nothing in
-    // the open path logs or traces through Effect, so running it off the
-    // process runtime's diagnostics layer changes no output.
-    const globalState = omitAppState
-      ? undefined
-      : await Effect.runPromise(
-          openAppStateStore(globalStoragePath).pipe(
-            Effect.provide(nodeFileServices),
-          ),
-        );
+    // The process identity and the state store this entry provides both exist
+    // before the runtime that serves them, so both resolve on one bootstrap
+    // run here rather than on a runtime that does not exist yet. Opening the
+    // store needs the filesystem and nothing else — it provides its own
+    // database layer — and nothing in either path logs or traces through
+    // Effect, so running them off the process runtime's diagnostics layer
+    // changes no output.
+    const { processStart, globalStoragePath, globalState } =
+      await Effect.runPromise(
+        Effect.gen(function* () {
+          const processStart = yield* nodeProcesses.selfIdentity();
+          // The records layers take the path as a value, so it resolves here,
+          // at install. The default entry already pays the getter's `mkdirSync`
+          // opening the state store below; clone's omit entry must not — its
+          // storage root may be read-only and it runs no records operation —
+          // so it resolves the same path with the pure calculator, as
+          // `initCliPlatform` does.
+          const globalStoragePath = omitAppState
+            ? resolveGlobalStoragePath(storageRoot ?? DEFAULT_NODE_STORAGE_ROOT)
+            : storage.getGlobalStoragePath();
+          const globalState = omitAppState
+            ? undefined
+            : yield* openAppStateStore(globalStoragePath);
+          return { processStart, globalStoragePath, globalState };
+        }).pipe(Effect.provide(nodeFileServices)),
+      );
     const secrets = getCliSecrets(storageRoot);
     // The account plane is built beside the runtime that serves it; the CLI's
     // sign-in surfaces settle it through the auth run edge, which
     // `initializeCliSupabaseAuth` installs over this runtime.
     const auth = ensureCliSupabaseAuth(secrets);
     const runtime: ProcessRuntime = installProcessRuntime({
-      processStart,
+      processStart: Effect.succeed(processStart),
       globalStorage: globalStoragePath,
       updateCheckStorage: globalStoragePath,
       secrets,

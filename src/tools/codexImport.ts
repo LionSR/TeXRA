@@ -15,25 +15,19 @@
  */
 
 import { existsSync } from 'node:fs';
-import { createRequire } from 'node:module';
 import * as path from 'node:path';
 
-import { z } from 'zod';
+import { Effect } from 'effect';
 
 import { isModuleNotFoundError } from '@common/errors';
-import { createLog } from '@logger/logUtils';
-import { executeCommand } from '@utils/system/execUtils';
+import { ensureError } from '@utils/errors/errorMessage';
 import { IS_WINDOWS } from '@utils/system/platformPaths';
 
-import { CODEX_CLI_MODEL } from './codexConfig';
 import {
   createCachedBinaryResolver,
+  resolvePackageDir,
   resolveSdkExport,
 } from './support/externalBinaryUtils';
-
-const log = createLog('codexImport');
-const codexXhighSupportByBinary = new Map<string, boolean>();
-const codexXhighProbes = new Map<string, Promise<boolean>>();
 
 // The native `Codex` class value; `typeof` gives its construct signature
 // (`new (options?: CodexOptions) => Codex`) so construction stays type-checked.
@@ -50,26 +44,34 @@ type PlatformInfo = { pkg: string; triple: string };
  * The SDK is ESM-only, but esbuild converts it to CJS at build time (it must
  * NOT be listed in esbuild's `external` array). The dynamic import() here is
  * converted to require() by esbuild, so it works in VS Code's extension host.
+ * That import is this module's one foreign edge and is wrapped exactly once,
+ * here; a missing package is re-stated as install guidance with the original
+ * attached as `cause`, so callers classify it off the cause chain rather than
+ * the message text.
  */
-export async function importCodexClass(): Promise<CodexConstructor> {
-  let mod: Record<string, unknown>;
-  try {
-    mod = await import('@openai/codex-sdk');
-  } catch (err: unknown) {
-    if (isModuleNotFoundError(err)) {
-      throw new Error(
-        '@openai/codex-sdk package not found. Install with: npm install -g @openai/codex',
-        { cause: err },
-      );
-    }
-    throw err;
-  }
-
-  return resolveSdkExport<CodexConstructor>(mod, {
-    exportName: 'Codex',
-    specifier: '@openai/codex-sdk',
-    errorLabel: 'Codex class',
-  });
+export function importCodexClass(): Effect.Effect<CodexConstructor, Error> {
+  return Effect.tryPromise({
+    try: (): Promise<Record<string, unknown>> => import('@openai/codex-sdk'),
+    catch: (err) =>
+      isModuleNotFoundError(err)
+        ? new Error(
+            '@openai/codex-sdk package not found. Install with: npm install -g @openai/codex',
+            { cause: err },
+          )
+        : ensureError(err),
+  }).pipe(
+    Effect.flatMap((mod) =>
+      Effect.try({
+        try: () =>
+          resolveSdkExport<CodexConstructor>(mod, {
+            exportName: 'Codex',
+            specifier: '@openai/codex-sdk',
+            errorLabel: 'Codex class',
+          }),
+        catch: ensureError,
+      }),
+    ),
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -113,13 +115,11 @@ const CODEX_BINARY_NAME = IS_WINDOWS ? 'codex.exe' : 'codex';
  * candidate keeps older installs usable. When `platformPkgDir` is the
  * `@openai/codex` meta-package, follow its nested platform package.
  */
-async function codexBinaryInPlatformPackage(
+function codexBinaryInPlatformPackage(
   platformPkgDir: string,
   platformInfo: PlatformInfo,
-): Promise<string | undefined> {
-  const findInPlatformPackage = async (
-    packageDir: string,
-  ): Promise<string | undefined> => {
+): string | undefined {
+  const findInPlatformPackage = (packageDir: string): string | undefined => {
     const vendorDir = path.join(packageDir, 'vendor', platformInfo.triple);
     const candidates = [
       path.join(vendorDir, 'bin', CODEX_BINARY_NAME),
@@ -135,109 +135,11 @@ async function codexBinaryInPlatformPackage(
     return undefined;
   };
 
-  const direct = await findInPlatformPackage(platformPkgDir);
+  const direct = findInPlatformPackage(platformPkgDir);
   if (direct) return direct;
 
-  try {
-    const nestedPackageJson = createRequire(
-      path.join(platformPkgDir, 'package.json'),
-    ).resolve(`${platformInfo.pkg}/package.json`);
-    return await findInPlatformPackage(path.dirname(nestedPackageJson));
-  } catch {
-    // Platform package not resolvable
-    return undefined;
-  }
-}
-
-type BundledCodexModel = {
-  slug?: string;
-  supported_reasoning_levels?: Array<{ effort?: string }>;
-};
-
-/** Just the shape `catalogSupportsXhigh` depends on — a `models` array. Model
- *  entries stay `unknown` here and are duck-typed below, so one malformed
- *  entry elsewhere in the catalog can't take down a lookup for a model it
- *  doesn't concern. */
-const BundledCodexCatalogSchema = z.object({
-  models: z.array(z.unknown()),
-});
-
-function catalogSupportsXhigh(
-  stdout: string,
-  model: string,
-): boolean | undefined {
-  try {
-    const parsed: unknown = JSON.parse(stdout);
-    const catalog = BundledCodexCatalogSchema.safeParse(parsed);
-    if (!catalog.success) return undefined;
-    const entry = catalog.data.models.find(
-      (item): item is BundledCodexModel =>
-        typeof item === 'object' &&
-        item != null &&
-        (item as BundledCodexModel).slug === model,
-    );
-    if (entry == null) return false;
-    return (entry.supported_reasoning_levels ?? []).some(
-      (level) => level.effort === 'xhigh',
-    );
-  } catch {
-    return undefined;
-  }
-}
-
-/**
- * Probe whether the resolved Codex runtime reports `xhigh` for the pinned
- * CLI model. Timeouts and spawn failures are not cached so a later call
- * retries instead of permanently capping Extra High to High.
- */
-export async function codexBinarySupportsXhigh(
-  binaryPath: string | undefined,
-): Promise<boolean> {
-  if (!binaryPath) return false;
-
-  const cached = codexXhighSupportByBinary.get(binaryPath);
-  if (cached != null) return cached;
-
-  const inflight = codexXhighProbes.get(binaryPath);
-  if (inflight) return inflight;
-
-  const probe = (async (): Promise<boolean> => {
-    const result = await executeCommand(
-      [binaryPath, 'debug', 'models', '--bundled'],
-      // A capability probe of the binary itself: it runs no git command, and
-      // this module holds no workspace whose identity it could carry.
-      { quiet: true, timeout: 5_000, cwd: process.cwd(), settings: undefined },
-    );
-    if (result.timedOut || result.exitCode === 127) {
-      log.warn('Codex xhigh capability probe failed; not caching the result', {
-        data: {
-          binaryPath,
-          timedOut: result.timedOut,
-          exitCode: result.exitCode,
-          stderr: result.stderr,
-        },
-      });
-      return false;
-    }
-    if (!result.success) {
-      codexXhighSupportByBinary.set(binaryPath, false);
-      return false;
-    }
-    const supported = catalogSupportsXhigh(result.stdout, CODEX_CLI_MODEL);
-    if (supported == null) {
-      log.warn('Codex xhigh capability probe returned unreadable catalog', {
-        data: { binaryPath },
-      });
-      return false;
-    }
-    codexXhighSupportByBinary.set(binaryPath, supported);
-    return supported;
-  })().finally(() => {
-    codexXhighProbes.delete(binaryPath);
-  });
-
-  codexXhighProbes.set(binaryPath, probe);
-  return probe;
+  const nested = resolvePackageDir(platformPkgDir, platformInfo.pkg);
+  return nested === undefined ? undefined : findInPlatformPackage(nested);
 }
 
 /**

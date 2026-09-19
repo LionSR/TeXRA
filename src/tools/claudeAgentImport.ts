@@ -18,7 +18,10 @@
 import { existsSync } from 'node:fs';
 import * as path from 'node:path';
 
+import { Effect } from 'effect';
+
 import { isModuleNotFoundError } from '@common/errors';
+import { ensureError } from '@utils/errors/errorMessage';
 import { IS_WINDOWS } from '@utils/system/platformPaths';
 import {
   createCachedBinaryResolver,
@@ -38,30 +41,40 @@ let cachedQuery: QueryFn | undefined;
  *
  * The SDK is ESM-only ("type": "module"). esbuild converts the dynamic import
  * to a CJS require at build time — keep the package OUT of esbuild's
- * `external` array.
+ * `external` array. The dynamic import is this module's one foreign edge and
+ * is wrapped exactly once, here; a missing package is re-stated as install
+ * guidance with the original attached as `cause`, so callers classify it off
+ * the cause chain rather than the message text.
  */
-export async function importClaudeAgentSdk(): Promise<QueryFn> {
-  if (cachedQuery) return cachedQuery;
-
-  let mod: Record<string, unknown>;
-  try {
-    mod = await import('@anthropic-ai/claude-agent-sdk');
-  } catch (err: unknown) {
-    if (isModuleNotFoundError(err)) {
-      throw new Error(
-        '@anthropic-ai/claude-agent-sdk package not found. Reinstall TeXRA or run corepack pnpm install in the TeXRA workspace.',
-        { cause: err },
-      );
-    }
-    throw err;
-  }
-
-  cachedQuery = resolveSdkExport<QueryFn>(mod, {
-    exportName: 'query',
-    specifier: '@anthropic-ai/claude-agent-sdk',
-    errorLabel: 'query()',
-  });
-  return cachedQuery;
+export function importClaudeAgentSdk(): Effect.Effect<QueryFn, Error> {
+  return Effect.suspend(() =>
+    cachedQuery
+      ? Effect.succeed(cachedQuery)
+      : Effect.tryPromise({
+          try: (): Promise<Record<string, unknown>> =>
+            import('@anthropic-ai/claude-agent-sdk'),
+          catch: (err) =>
+            isModuleNotFoundError(err)
+              ? new Error(
+                  '@anthropic-ai/claude-agent-sdk package not found. Reinstall TeXRA or run corepack pnpm install in the TeXRA workspace.',
+                  { cause: err },
+                )
+              : ensureError(err),
+        }).pipe(
+          Effect.flatMap((mod) =>
+            Effect.try({
+              try: () =>
+                resolveSdkExport<QueryFn>(mod, {
+                  exportName: 'query',
+                  specifier: '@anthropic-ai/claude-agent-sdk',
+                  errorLabel: 'query()',
+                }),
+              catch: ensureError,
+            }),
+          ),
+          Effect.map((query) => (cachedQuery = query)),
+        ),
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -103,9 +116,9 @@ const CLAUDE_BINARY_NAME = IS_WINDOWS ? 'claude.exe' : 'claude';
  */
 function claudeBinaryInPlatformPackage(
   platformPkgDir: string,
-): Promise<string | undefined> {
+): string | undefined {
   const binary = path.join(platformPkgDir, CLAUDE_BINARY_NAME);
-  return Promise.resolve(existsSync(binary) ? binary : undefined);
+  return existsSync(binary) ? binary : undefined;
 }
 
 /**

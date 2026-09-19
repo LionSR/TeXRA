@@ -1,3 +1,5 @@
+import { Effect } from 'effect';
+
 import { installProcessRuntime } from '@controllers/session/sessionLayer';
 import { directLeanLanguageServices } from '@tools/lean/direct/directLspAdapter';
 import { initTestProcessRuntime } from './testProcessRuntime';
@@ -41,7 +43,7 @@ const { globalStorage } = createFakeWorkspaceRoots();
 
 initTestProcessRuntime(
   installProcessRuntime({
-    processStart: 'vitest',
+    processStart: Effect.succeed('vitest'),
     globalStorage,
     updateCheckStorage: globalStorage,
     secrets: fakeHostSecrets,

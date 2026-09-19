@@ -32,12 +32,7 @@ export const loadInputHistory = (
   Effect.gen(function* () {
     const access = <A, E>(operation: Effect.Effect<A, E, Database>) =>
       Effect.gen(function* () {
-        const ownerId = processOwnerId(
-          yield* Effect.tryPromise({
-            try: () => nodeProcesses.selfIdentity(),
-            catch: ensureError,
-          }),
-        );
+        const ownerId = processOwnerId(yield* nodeProcesses.selfIdentity());
         const storage = yield* Effect.try({
           try: globalStorage,
           catch: ensureError,

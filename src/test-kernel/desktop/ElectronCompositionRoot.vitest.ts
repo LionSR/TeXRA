@@ -57,9 +57,7 @@ describe('desktop composition root and launch environment', () => {
           const previous = '{"texra.desktop.openPapers":["earlier-project"]}';
           yield* fs.makeDirectory(join(profile, 'state'));
           yield* fs.writeFileString(oldState, previous);
-          const owner = processOwnerId(
-            yield* Effect.promise(() => nodeProcesses.selfIdentity()),
-          );
+          const owner = processOwnerId(yield* nodeProcesses.selfIdentity());
           yield* Effect.scoped(
             Effect.gen(function* () {
               const records = yield* openDesktopProjectRecords(profile, owner);
@@ -106,9 +104,7 @@ describe('desktop composition root and launch environment', () => {
           yield* Effect.addFinalizer(() =>
             Effect.sync(() => opener.mockRestore()),
           );
-          const owner = processOwnerId(
-            yield* Effect.promise(() => nodeProcesses.selfIdentity()),
-          );
+          const owner = processOwnerId(yield* nodeProcesses.selfIdentity());
           const records = yield* openDesktopProjectRecords(profile, owner);
           const config = yield* JsonStore.open(join(profile, 'config.json'));
           const host = createFakeHost({
@@ -177,9 +173,7 @@ describe('desktop composition root and launch environment', () => {
         yield* Effect.addFinalizer(() =>
           Effect.sync(() => opener.mockRestore()),
         );
-        const owner = processOwnerId(
-          yield* Effect.promise(() => nodeProcesses.selfIdentity()),
-        );
+        const owner = processOwnerId(yield* nodeProcesses.selfIdentity());
         const records = yield* openDesktopProjectRecords(profile, owner);
         const config = yield* JsonStore.open(join(profile, 'config.json'));
         const host = createFakeHost({

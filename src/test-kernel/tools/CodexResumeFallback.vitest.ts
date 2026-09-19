@@ -69,11 +69,11 @@ vi.mock('@tools/codexConfig', () => ({
   getCodexSandboxMode: () => 'workspace-write',
   getCodexApprovalPolicy: () => 'on-request',
   getCodexCliReasoningEffort: () => 'high',
+  codexBinarySupportsXhigh: async () => false,
   CODEX_CLI_MODEL: 'gpt-5.2-codex',
 }));
 
 vi.mock('@tools/codexImport', () => ({
-  codexBinarySupportsXhigh: async () => false,
   importCodexClass: mocks.importCodexClass,
   findCodexBinaryPath: mocks.findCodexBinaryPath,
 }));
@@ -119,7 +119,7 @@ describe('codex tool - atomic resume fallback', () => {
     );
 
     mocks.registerRun.mockReturnValue(Effect.void);
-    mocks.findCodexBinaryPath.mockResolvedValue(undefined);
+    mocks.findCodexBinaryPath.mockReturnValue(undefined);
     mocks.createChildRun.mockReturnValue(
       Effect.succeed(createFakeAgentCliChildRun(childRunId)),
     );
@@ -151,12 +151,14 @@ describe('codex tool - atomic resume fallback', () => {
           id: undefined,
           runStreamed: vi.fn(),
         }));
-        mocks.importCodexClass.mockResolvedValue(
-          class MockCodex {
-            startThread(options: unknown) {
-              return startThread(options);
-            }
-          },
+        mocks.importCodexClass.mockReturnValue(
+          Effect.succeed(
+            class MockCodex {
+              startThread(options: unknown) {
+                return startThread(options);
+              }
+            },
+          ),
         );
 
         expect(
@@ -224,13 +226,11 @@ describe('codex tool - atomic resume fallback', () => {
         } as any;
         const getLaunch = captureRunLoopLaunch();
 
-        // importCodexClass is a Promise-shaped collaborator, so the gate is an
-        // Effect run at that edge rather than a hand-rolled deferred promise.
-        mocks.importCodexClass.mockImplementation(() =>
-          Effect.runPromise(
-            Deferred.succeed(sdkImportStarted, undefined).pipe(
-              Effect.andThen(Deferred.await(sdkReady)),
-            ),
+        // The SDK import is the gate: it announces that it started and then
+        // waits for the suite to release it.
+        mocks.importCodexClass.mockReturnValue(
+          Deferred.succeed(sdkImportStarted, undefined).pipe(
+            Effect.andThen(Deferred.await(sdkReady)),
           ),
         );
         // The contention this case claims is a lost claim: dispatch resolves
