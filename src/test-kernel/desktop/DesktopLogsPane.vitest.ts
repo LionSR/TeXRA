@@ -1,21 +1,7 @@
-import { readFileSync } from 'node:fs';
-
 import { describe, expect, it, vi } from 'vitest';
 
-import { DESKTOP_LOCAL_COMMANDS } from '@desktop/shared/desktopCommandSurface';
 import { DESKTOP_LOG_COMMANDS } from '@desktop/shared/desktopLogMessages';
 import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
-import { repoPath } from './desktopTestPaths.ts';
-
-interface DesktopLogEntry {
-  id: string;
-  level: string;
-  message: string;
-  raw: string;
-  summary: string;
-  timestamp?: string;
-  timestampLabel: string;
-}
 
 interface LogsPaneController {
   readonly element: HTMLElement;
@@ -32,7 +18,6 @@ interface LogsPaneModule {
     scheduleRefresh?: (callback: () => void, intervalMs: number) => number;
     refreshIntervalMs?: number;
   }): LogsPaneController;
-  parseDesktopLogEntries(text: string): DesktopLogEntry[];
 }
 
 async function loadLogsPane(): Promise<LogsPaneModule> {
@@ -72,79 +57,83 @@ const MULTILINE_LOG = [
 describe('desktop logs pane', () => {
   useLitComponentTestDom(loadLogsPane);
 
-  it('reads severity and time as fields and keeps a failure whole', async () => {
-    const { parseDesktopLogEntries } = await loadLogsPane();
-
-    const entries = parseDesktopLogEntries(MULTILINE_LOG);
-
-    expect(entries).toHaveLength(3);
-    expect(entries[0]).toMatchObject({
-      level: 'info',
-      message: 'Renderer ready',
-      timestamp: '2026-07-26T02:10:00.123Z',
-      timestampLabel: '2026-07-26 02:10:00',
-    });
-    // The stack rides the entry's own cause, so a multi-line failure is one
-    // row without the viewer stitching continuation lines back together.
-    expect(entries[1]).toMatchObject({
-      level: 'error',
-      message:
-        'Could not open file\nError: permission denied\n    at openFile (desktop.js:10:4)',
-    });
-  });
-
-  it('assigns deterministic IDs that survive later snapshot refreshes', async () => {
-    const { parseDesktopLogEntries } = await loadLogsPane();
-    const before = parseDesktopLogEntries(MULTILINE_LOG);
-    const after = parseDesktopLogEntries(
-      `${MULTILINE_LOG}${logLine('DEBUG', '2026-07-26T02:10:03.000Z', 'Refreshed')}\n`,
-    );
-
-    expect(after.slice(0, before.length).map((entry) => entry.id)).toEqual(
-      before.map((entry) => entry.id),
-    );
-    expect(new Set(after.map((entry) => entry.id)).size).toBe(after.length);
-  });
-
-  it('retains a truncated leading fragment as a partial entry', async () => {
-    const { parseDesktopLogEntries } = await loadLogsPane();
-
-    const entries = parseDesktopLogEntries(
-      `middle of an earlier stack\n${MULTILINE_LOG}`,
-    );
-
-    expect(entries[0]).toMatchObject({
-      level: 'unknown',
-      message: 'middle of an earlier stack',
-      timestampLabel: 'Partial entry',
-    });
-  });
-
-  it('renders one expandable Web Awesome details row per parsed entry', async () => {
+  /** A mounted pane showing `text`, newest entry first. */
+  async function mountWithLog(text: string): Promise<LogsPaneController> {
     const { createLogsPane } = await loadLogsPane();
     const controller = createLogsPane({ sendCommand: vi.fn() });
     document.body.append(controller.element);
-
     controller.applySnapshot({
       command: DESKTOP_LOG_COMMANDS.SET_LOG,
       log: {
         path: '/redacted/texra-desktop.log',
-        text: MULTILINE_LOG,
+        text,
         truncated: false,
       },
     });
+    return controller;
+  }
 
-    const details = controller.element.querySelectorAll(
-      'wa-details.desktop-log-entry',
-    );
+  function logRows(controller: LogsPaneController): Element[] {
+    return [
+      ...controller.element.querySelectorAll('wa-details.desktop-log-entry'),
+    ];
+  }
+
+  it('renders one expandable row per entry, with severity and time as fields', async () => {
+    const controller = await mountWithLog(MULTILINE_LOG);
+
+    const details = logRows(controller);
     expect(details).toHaveLength(3);
+    // Newest first: WARN, ERROR, INFO. Severity and time are the writer's own
+    // fields, so nothing is recovered from formatted text.
     expect(details[0]?.getAttribute('data-level')).toBe('warn');
+    const oldest = details[2];
+    expect(oldest?.getAttribute('data-level')).toBe('info');
+    const time = oldest?.querySelector('.desktop-log-entry-time');
+    expect(time?.getAttribute('datetime')).toBe('2026-07-26T02:10:00.123Z');
+    expect(time?.textContent).toBe('2026-07-26 02:10:00');
+    // The stack rides the entry's own cause, so a multi-line failure is one
+    // row without the viewer stitching continuation lines back together.
     expect(
       details[1]?.querySelector('.desktop-log-entry-content')?.textContent,
     ).toContain('Error: permission denied');
     expect(
       controller.element.querySelector('.desktop-log-viewer-list'),
     ).not.toBeNull();
+  });
+
+  it('keeps a truncated leading fragment as its own partial row', async () => {
+    const controller = await mountWithLog(
+      `middle of an earlier stack\n${MULTILINE_LOG}`,
+    );
+
+    const details = logRows(controller);
+    expect(details).toHaveLength(4);
+    const fragment = details[3];
+    expect(fragment?.getAttribute('data-level')).toBe('unknown');
+    expect(
+      fragment?.querySelector('.desktop-log-entry-time')?.textContent,
+    ).toBe('Partial entry');
+  });
+
+  it('keeps each row keyed across a refresh that appends entries', async () => {
+    const controller = await mountWithLog(MULTILINE_LOG);
+    const before = logRows(controller);
+
+    controller.applySnapshot({
+      command: DESKTOP_LOG_COMMANDS.SET_LOG,
+      log: {
+        path: '/redacted/texra-desktop.log',
+        text: `${MULTILINE_LOG}${logLine('DEBUG', '2026-07-26T02:10:03.000Z', 'Refreshed')}\n`,
+        truncated: false,
+      },
+    });
+
+    // Entry IDs derive from contents, so the already-rendered rows are the
+    // same DOM nodes after the refresh and keep whatever the user expanded.
+    const after = logRows(controller);
+    expect(after).toHaveLength(4);
+    expect(after.slice(1)).toEqual(before);
   });
 
   it('runs one guarded refresh timer only while the Logs tab is active', async () => {
