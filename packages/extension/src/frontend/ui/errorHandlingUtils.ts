@@ -4,16 +4,14 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { formatError } from '@common/errors';
-import { VscodeMessageHost } from '@frontend/hosts/VscodeMessageHost';
-import { VscodePromptHost } from '@frontend/hosts/VscodePromptHost';
+import { VscodeUiHost } from '@frontend/hosts/VscodeUiHost';
 import { createLog, type Log } from '@logger/logUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /** Valid documentation identifiers for error messages. */
 type DocId = 'intelligent-merge' | 'custom-agents' | 'latex-diff';
 
-const messages = new VscodeMessageHost();
-const prompts = new VscodePromptHost();
+const ui = new VscodeUiHost();
 
 /**
  * Present a notice and keep these helpers' own failure channel empty.
@@ -48,7 +46,7 @@ export function showLoggedErrorMessage(
     const log = createLog(channel);
     const message = formatError(prefix, err);
     log.error(message);
-    yield* announce(log, messages.showErrorMessage(message), undefined);
+    yield* announce(log, ui.showErrorMessage(message), undefined);
     return message;
   });
 }
@@ -61,7 +59,7 @@ export function showLoggedMessage(
   return Effect.gen(function* () {
     const log = createLog(channel);
     log.error(message);
-    yield* announce(log, messages.showErrorMessage(message), undefined);
+    yield* announce(log, ui.showErrorMessage(message), undefined);
     return message;
   });
 }
@@ -74,7 +72,7 @@ export function showLoggedInfoMessage(
   return Effect.gen(function* () {
     const log = createLog(channel);
     log.info(message);
-    yield* announce(log, messages.showInfoMessage(message), undefined);
+    yield* announce(log, ui.showInfoMessage(message), undefined);
     return message;
   });
 }
@@ -91,7 +89,7 @@ export function showLoggedMessageWithDocs(
     log.error(message);
     const selection = yield* announce(
       log,
-      prompts.error(message, { items: [actionLabel] }),
+      ui.error(message, { items: [actionLabel] }),
       undefined,
     );
     if (selection !== actionLabel) return;

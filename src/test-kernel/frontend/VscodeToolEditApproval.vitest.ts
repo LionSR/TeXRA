@@ -231,7 +231,7 @@ describe('VS Code tool edit approval', () => {
     await vi.waitFor(() =>
       expect(vscodeMocks.showErrorMessage).toHaveBeenCalledOnce(),
     );
-    expect(vscodeMocks.showErrorMessage).toHaveBeenCalledWith(
+    expect(vscodeMocks.showErrorMessage.mock.calls[0]?.[0]).toEqual(
       expect.stringContaining('edited document could not be read'),
     );
     expect(decide).not.toHaveBeenCalled();

@@ -34,9 +34,8 @@ import {
   isInlineCriticismEnabled,
   setInlineCriticismEnabled,
 } from '@frontend/latex/inlineCriticism';
-import { VscodeMessageHost } from '@frontend/hosts/VscodeMessageHost';
-import { VscodePromptHost } from '@frontend/hosts/VscodePromptHost';
 import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
+import { VscodeUiHost } from '@frontend/hosts/VscodeUiHost';
 import { acquireVscodeLanguageModel } from '@frontend/lm/acquireVscodeLanguageModel';
 import {
   showLoggedErrorMessage,
@@ -152,8 +151,8 @@ export class SettingsViewMessageHandler {
   private readonly modelSelectionController: SettingsModelSelectionController<LanguageModel>;
   private readonly profileController: SettingsProfileController;
   private readonly profileKeyController: SettingsProfileKeyController<ProcessServices>;
-  /** The typed notification surface this view's dispatcher reports on. */
-  private readonly messages = new VscodeMessageHost();
+  /** The typed message and dialog surface this view reports and asks on. */
+  private readonly ui = new VscodeUiHost();
   private readonly subscriptionUsage: SubscriptionUsageService;
 
   constructor(
@@ -166,7 +165,7 @@ export class SettingsViewMessageHandler {
     const ctx: SettingsHandlerContext = this.handlerContext();
 
     this.memoryController = new SettingsMemoryController({
-      prompt: new VscodePromptHost(),
+      prompt: this.ui,
     });
     this.modelSelectionController = new SettingsModelSelectionController({
       stores: session.roots,
@@ -192,7 +191,7 @@ export class SettingsViewMessageHandler {
     });
     this.profileKeyController = new SettingsProfileKeyController({
       secrets,
-      prompt: new VscodePromptHost(),
+      prompt: this.ui,
       externalOpener: new VscodeExternalOpener(),
       getProviderDisplayName: (provider) =>
         this.profileController.getProviderDisplayName(provider),
@@ -643,13 +642,13 @@ export class SettingsViewMessageHandler {
         // feedback (toast), not a silent drop or an error-level log.
         unsupported = true;
         this.log.debug(error.message);
-        this.forkNotice(this.messages.showInfoMessage(error.reason));
+        this.forkNotice(this.ui.showInfoMessage(error.reason));
       } else {
         this.log.error('Error handling message', {
           data: error,
         });
         this.forkNotice(
-          this.messages.showErrorMessage(
+          this.ui.showErrorMessage(
             `TeXRA could not handle a ${this.viewName} message. See the TeXRA output for details.`,
           ),
         );
