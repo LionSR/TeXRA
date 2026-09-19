@@ -13,10 +13,9 @@ export type ResumableCheckpoint = Extract<
 
 /**
  * The one reading of "this decision advertises a resumable run": a checkpoint
- * the command's own refinement agrees to, where no refinement means yes. Every
- * probe of a `deriveResumability` answer on the interrupt path asks exactly
- * this, at its own instant; `refine` may throw, and each caller decides
- * whether that is fatal.
+ * the command's own refinement agrees to, where no refinement means yes. Each
+ * probe on the interrupt path asks this at its own instant, and `refine` may
+ * throw, so its caller decides whether that is fatal.
  */
 export function advertisesInterruptedRun(
   resumability: ResumabilityDecision | undefined,
