@@ -12,6 +12,9 @@ interface DisposableRendererResources {
 }
 
 interface ShutdownLifecycle {
+  /** The platform's drain (`LifecycleHost.runShutdown`): it drains both
+   *  phases once and a later caller joins the drain in flight, so this
+   *  wiring keeps no "shutdown started" flag of its own. */
   readonly runShutdown: Effect.Effect<void>;
 }
 
@@ -69,7 +72,6 @@ export function installDesktopBeforeQuitWiring(options: {
   lifecycle: ShutdownLifecycle;
   continueAfterWindowClose(continueQuit: () => void): void;
 }): void {
-  let shutdownStarted = false;
   let quitting = false;
   options.app.on('before-quit', (event) => {
     if (quitting) return;
@@ -80,10 +82,10 @@ export function installDesktopBeforeQuitWiring(options: {
       window.close();
       return;
     }
-    if (shutdownStarted) return;
-    shutdownStarted = true;
     // Electron's before-quit is this host's R1 entry, so the drain is run
-    // here and the quit follows it however it ends.
+    // here and the quit follows it however it ends. A before-quit arriving
+    // while the drain is in flight joins that same drain, and `quitting`
+    // arbitrates the quit the join lands on.
     void Effect.runPromise(
       options.lifecycle.runShutdown.pipe(
         Effect.ensuring(
