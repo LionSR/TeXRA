@@ -35,14 +35,12 @@ const SendToTerminalInputSchema = z.strictObject({
   label: nullishWithDefault(z.string(), 'setup').describe(
     `Short suffix for the terminal tab name; the tool prepends "${TERMINAL_NAME_PREFIX}".`,
   ),
-  timeout: z
-    .int()
-    .min(1_000)
-    .max(900_000)
-    .nullish()
-    .describe(
-      'Hard cap (ms) on how long to wait for the run. Defaults to 5 min.',
-    ),
+  timeout: nullishWithDefault(
+    z.int().min(1_000).max(900_000),
+    DEFAULT_TIMEOUT_MS,
+  ).describe(
+    'Hard cap (ms) on how long to wait for the run. Defaults to 5 min.',
+  ),
 });
 
 type SendToTerminalInput = z.infer<typeof SendToTerminalInputSchema>;
@@ -66,13 +64,12 @@ const sendToTerminal = Effect.fn('SendToTerminalTool.execute')(function* (
   }
 
   const name = TERMINAL_NAME_PREFIX + input.label.trim();
-  const timeoutMs = input.timeout ?? DEFAULT_TIMEOUT_MS;
 
   const { exitCode, output, timedOut } = yield* terminal
     .runCommand({
       name,
       command,
-      timeoutMs,
+      timeoutMs: input.timeout,
     })
     .pipe(
       // The host's own fault, reported as the tool's error rather than as an
@@ -91,7 +88,7 @@ const sendToTerminal = Effect.fn('SendToTerminalTool.execute')(function* (
 
   const exitLabel = exitCode === undefined ? 'unknown' : String(exitCode);
   const summary = timedOut
-    ? `"${name}" timed out after ${Math.round(timeoutMs / 1000)}s`
+    ? `"${name}" timed out after ${Math.round(input.timeout / 1000)}s`
     : `"${name}" exited ${exitLabel}`;
   const outputText = output.trim() ? `\n\n${output}` : '';
 

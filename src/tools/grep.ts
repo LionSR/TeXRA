@@ -61,7 +61,9 @@ const GrepInputSchema = z.strictObject({
     .string()
     .nullish()
     .describe('Ripgrep file type filter (e.g. "tex", "py").'),
-  offset: z.int().min(0).nullish().describe('Skip first N results.'),
+  offset: nullishWithDefault(z.int().min(0), 0).describe(
+    'Skip first N results.',
+  ),
   head_limit: z.int().min(1).nullish().describe('Limit to first N results.'),
   multiline: z
     .boolean()
@@ -199,7 +201,7 @@ const runGrep = Effect.fn('GrepTool.execute')(function* (
   }
 
   // Apply pagination to filtered lines for consistent offset calculation
-  const offset = input.offset ?? 0;
+  const offset = input.offset;
   const limit = input.head_limit;
   const end = limit ? offset + limit : undefined;
   const paginatedLines = allLines.slice(offset, end);

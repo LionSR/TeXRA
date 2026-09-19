@@ -34,6 +34,7 @@ import {
 
 // Local file imports
 import { defineTool } from '../core/define';
+import { nullishWithDefault } from '../core/inputSchema';
 import {
   recordToolFileRead,
   requireFileReadForEdit,
@@ -61,6 +62,12 @@ const log = createLog('MemoryTool');
 
 const MEMORY_PATH_DESCRIPTION = `Path under ${MEMORY_DISPLAY_ROOT} (e.g. ${MEMORY_DISPLAY_ROOT}/notes.md).`;
 
+// The directory-listing pagination window, stated once: the schema defaults,
+// the advertised descriptions and the tool description all read these.
+const LISTING_DEFAULT_OFFSET = 0;
+const LISTING_DEFAULT_LIMIT = 100;
+const LISTING_MAX_LIMIT = 200;
+
 // Branches use looseObject (not strictObject): provider conversion flattens
 // the union into one advertised object and OpenAI-compatible providers
 // null-fill the properties belonging to the other commands. See AGENTS.md
@@ -76,22 +83,16 @@ const MemoryToolInputSchema = z.discriminatedUnion('command', [
       ),
     view_range: ViewRangeSchema.nullish(),
     /** Zero-based offset for paginating directory listings (path points to a directory). */
-    offset: z
-      .int()
-      .min(0)
-      .nullish()
-      .describe(
-        'Zero-based offset into the directory listing. Use with limit for pagination. Default: 0.',
-      ),
+    offset: nullishWithDefault(z.int().min(0), LISTING_DEFAULT_OFFSET).describe(
+      `Zero-based offset into the directory listing. Use with limit for pagination. Default: ${LISTING_DEFAULT_OFFSET}.`,
+    ),
     /** Maximum entries to return from a directory listing (path points to a directory). */
-    limit: z
-      .int()
-      .min(1)
-      .max(200)
-      .nullish()
-      .describe(
-        'Max entries to return from directory listing. Default: 100, max: 200.',
-      ),
+    limit: nullishWithDefault(
+      z.int().min(1).max(LISTING_MAX_LIMIT),
+      LISTING_DEFAULT_LIMIT,
+    ).describe(
+      `Max entries to return from directory listing. Default: ${LISTING_DEFAULT_LIMIT}, max: ${LISTING_MAX_LIMIT}.`,
+    ),
   }),
   z.looseObject({
     command: z.literal('create'),
@@ -175,7 +176,7 @@ export class MemoryTool extends defineTool({
   description: `Manage persistent memory files under /memories (view, create, str_replace, insert, delete, rename, pin, unpin).
 
 \`view\` with no path defaults to the /memories root listing; \`rename\` uses old_path/new_path instead of path; all other commands require path.
-Directory listings are paginated: use offset/limit to page through results (default: offset 0, limit 100).
+Directory listings are paginated: use offset/limit to page through results (default: offset ${LISTING_DEFAULT_OFFSET}, limit ${LISTING_DEFAULT_LIMIT}).
 
 Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies, pitfalls, best practices). Pinned memories are always loaded at session start. Use \`unpin\` to remove the pinned status. Maximum ${MAX_PINNED_MEMORIES} pinned memories allowed.`,
   schema: MemoryToolInputSchema,
@@ -221,8 +222,8 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
         return yield* this.view(
           yield* locate(input.path ?? MEMORY_DISPLAY_ROOT),
           input.view_range ?? undefined,
-          input.offset ?? 0,
-          input.limit ?? 100,
+          input.offset,
+          input.limit,
         );
       case 'create':
         return yield* this.create(
@@ -318,9 +319,9 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
   private readonly view = Effect.fn('MemoryTool.view')(function* (
     this: MemoryTool,
     loc: MemoryLocation,
-    viewRange?: [number, number],
-    offset = 0,
-    limit = 100,
+    viewRange: [number, number] | undefined,
+    offset: number,
+    limit: number,
   ) {
     const { display: inputPath, storage: resolvedPath } = loc;
     const exists = yield* memoryPathExists(resolvedPath);
