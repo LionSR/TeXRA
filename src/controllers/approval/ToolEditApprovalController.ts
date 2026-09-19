@@ -180,11 +180,10 @@ interface PendingToolEditApproval
    * {@link ToolEditApprovalController.release} runs this set before it
    * disposes the preview or removes the temp files the request staged, so no
    * build is left reading files it deletes. It is the one accounting path for
-   * both kinds of work, written only by {@link ToolEditApprovalController.admit}
-   * and {@link ToolEditApprovalController.buildDisplayFor}. A join never
-   * fails: an action reports its own failure and a failed build is reported
-   * by the program that started it, so this set is ordering, not a second
-   * error channel.
+   * both kinds of work, written only by
+   * {@link ToolEditApprovalController.track}. A join never fails: an action
+   * reports its own failure and a failed build is reported by the program
+   * that started it, so this set is ordering, not a second error channel.
    */
   readonly inFlightActions: Set<Effect.Effect<void>>;
 }
@@ -645,9 +644,7 @@ export class ToolEditApprovalController {
     entry: PendingToolEditApproval,
     action: () => Effect.Effect<void, unknown, PreviewServices>,
   ): Effect.Effect<void, never, PreviewServices> {
-    const settled = Deferred.makeUnsafe<void>();
-    const join = Deferred.await(settled);
-    entry.inFlightActions.add(join);
+    const withdraw = this.track(entry);
     return Effect.suspend(action).pipe(
       Effect.catchCause((cause) =>
         Cause.hasInterruptsOnly(cause)
@@ -660,15 +657,27 @@ export class ToolEditApprovalController {
               }
             }),
       ),
-      // Withdrawn on either outcome, and on an interrupt, so a release can
-      // never be left waiting on a join nothing will fill.
-      Effect.onExit(() =>
-        Effect.sync(() => {
-          entry.inFlightActions.delete(join);
-          Deferred.doneUnsafe(settled, Effect.void);
-        }),
-      ),
+      // Withdrawn from this action's own exit, whichever it is, so a release
+      // can never be left waiting on a join nothing will fill.
+      Effect.onExit(() => withdraw),
     );
+  }
+
+  /**
+   * Register one join on an entry and hand back its withdrawal: registered
+   * synchronously, in the step its caller found the entry in, and withdrawn
+   * by whichever exit that caller decides owns it. A join never fails — the
+   * work behind it reports its own failure — so {@link cleanup} waits on
+   * ordering, not on a second error channel.
+   */
+  private track(entry: PendingToolEditApproval): Effect.Effect<void> {
+    const settled = Deferred.makeUnsafe<void>();
+    const join = Deferred.await(settled);
+    entry.inFlightActions.add(join);
+    return Effect.sync(() => {
+      entry.inFlightActions.delete(join);
+      Deferred.doneUnsafe(settled, Effect.void);
+    });
   }
 
   /**
@@ -701,20 +710,12 @@ export class ToolEditApprovalController {
         // Registered before the fork, in this same step, and withdrawn from
         // the build's own exit rather than from the caller's: an interrupted
         // caller leaves the build running, which is exactly what a release
-        // still has to wait for. A join never fails — a failed build is
-        // reported by the program that started it.
-        const settled = Deferred.makeUnsafe<void>();
-        const join = Deferred.await(settled);
-        entry.inFlightActions.add(join);
+        // still has to wait for.
+        const withdraw = this.track(entry);
         return Effect.forkDetach(
-          this.options.host.openBuildDisplay(location, options).pipe(
-            Effect.onExit(() =>
-              Effect.sync(() => {
-                entry.inFlightActions.delete(join);
-                Deferred.doneUnsafe(settled, Effect.void);
-              }),
-            ),
-          ),
+          this.options.host
+            .openBuildDisplay(location, options)
+            .pipe(Effect.onExit(() => withdraw)),
         ).pipe(Effect.flatMap(Fiber.join));
       });
   }
