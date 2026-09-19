@@ -173,7 +173,9 @@ export interface HostRunActionPorts {
   showWarning: MessageHost['showWarningMessage'];
 }
 
-interface HostRunActions {
+/** What a host's request arms do once {@link createHostRunActions} has bound
+ *  that host's launcher, catalogs, key prompt, and notifications. */
+export interface HostRunActions {
   resume(
     runId: RunId,
   ): Effect.Effect<

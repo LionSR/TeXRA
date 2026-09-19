@@ -8,7 +8,7 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import { Cause, Data, Effect, Exit, FileSystem, SubscriptionRef } from 'effect';
+import { Cause, Effect, Exit, FileSystem, SubscriptionRef } from 'effect';
 import { presentAgentFailure, type SessionHandle } from '@agent/runtime';
 import {
   classifyAgentError,
@@ -21,6 +21,11 @@ import { TranscriptExportFailed } from '@controllers/progressView/transcriptExpo
 import { ApiKeyPromptFailed } from '@controllers/progressView/ProgressApiKeyRetryController';
 import { ProgressWorkflowFileActionsController } from '@controllers/progressView/ProgressWorkflowFileActionsController';
 import {
+  fromHost,
+  HostCallFailed,
+  hostFailure,
+} from '@controllers/session/hostCallFailure';
+import {
   createHostRunActions,
   launchPatchOf,
   RunConfigUnreadable,
@@ -30,6 +35,10 @@ import {
 } from '@controllers/session/hostRunActions';
 import type { HostDraftRequests } from '@controllers/session/hostDraftRequests';
 import type { HostSnapshotSource } from '@controllers/session/hostSnapshotSource';
+import {
+  handleSharedHostRequest,
+  type SharedHostRequestPorts,
+} from '@controllers/session/sharedHostRequests';
 import { listWorkspaceFilesOfType } from '@controllers/session/workspaceFileOptions';
 import { ExternalOpenFailed } from '@hosts/uiHosts';
 import {
@@ -58,7 +67,6 @@ import {
 import type { HostRequest } from '@shared/session/hostRequest';
 import {
   Cancelled,
-  isRequestRefusal,
   Rejected,
   Unavailable,
   type HostRequestFailure,
@@ -149,18 +157,6 @@ export interface DesktopHostRequests {
 
 const LATEXDIFF_CHANNEL = 'DesktopHostRequests';
 
-/**
- * A desktop capability failed on a channel this request has no tag for.
- * `member` names which one; `cause` is the value it failed or rejected with,
- * which the request's dialog classifies and presents as it presented the bare
- * rejection.
- */
-class HostCallFailed extends Data.TaggedError('HostCallFailed')<{
-  readonly member: string;
-  readonly message: string;
-  readonly cause: unknown;
-}> {}
-
 type WorkflowFileOperation = 'pack' | 'clean';
 
 function operationLabel(operation: WorkflowFileOperation): {
@@ -181,28 +177,6 @@ export function createDesktopHostRequests(
    *  lifetime, so the layer is built once from it here, never from an
    *  ambient store. */
   const sessionFiles = sessionFsLayer(session.roots);
-  /** How a host call's failure is worded, whatever shape it arrived in: a
-   *  refusal the callee already worded travels as itself, and every other
-   *  value is tagged with the member it came from. `message` is the failure's
-   *  own text and `cause` the value it carried, so the fold below and the
-   *  bridge's log read exactly what the host handed over. */
-  const hostFailure = (
-    member: string,
-    cause: unknown,
-  ): HostCallFailed | RequestRefusal =>
-    isRequestRefusal(cause)
-      ? cause
-      : new HostCallFailed({ member, message: toErrorMessage(cause), cause });
-  /** A host capability that still answers with a promise, lifted once and
-   *  named through {@link hostFailure}. */
-  const fromHost = <A>(
-    member: string,
-    call: () => Promise<A>,
-  ): Effect.Effect<A, HostCallFailed | RequestRefusal> =>
-    Effect.tryPromise({
-      try: call,
-      catch: (cause) => hostFailure(member, cause),
-    });
   // Shared controllers propagate request failures to the dispatcher: the
   // notice IS the refusal the request answers with, and the request rethrows
   // it unchanged.
@@ -402,6 +376,16 @@ export function createDesktopHostRequests(
     },
     sendFollowUp: (runId, text) => runActions.sendFollowUp(runId, text),
   });
+
+  /** The arms both GUI hosts answer through one body, now that this window's
+   *  ports are bound. */
+  const sharedRequests: SharedHostRequestPorts = {
+    runActions,
+    workflowFileActions,
+    snapshot: options.snapshot,
+    draftRequests,
+    toolEditApprovals: run.toolEditApprovals,
+  };
 
   const runWorkflowDiff = (request: WorkflowDiffRequest) =>
     Effect.gen(function* () {
@@ -763,28 +747,25 @@ export function createDesktopHostRequests(
           }
           return done;
         }
-        case 'openRunStorage': {
-          const { runId } = request;
-          yield* workflowFileActions.openRunStorage(runId);
-          return done;
-        }
+        case 'openRunStorage':
+        case 'resume':
+        case 'runNew':
+        case 'runCompileFixer':
+        case 'useOwnApiKey':
+        case 'record':
+        case 'polish':
+        case 'savePastedImage':
+        case 'refreshCommits':
+        case 'refreshFiles':
+        case 'dismissBanner':
+        case 'toolEdit':
+        case 'fileAction':
+          return yield* handleSharedHostRequest(sharedRequests, request, port);
         case 'exportTranscript':
           yield* exportTranscript(request.runId);
           return done;
         case 'restoreIntoLauncher':
           restoreIntoLauncher(yield* runActions.restoreState(request.runId));
-          return done;
-        case 'resume':
-          yield* runActions.resume(request.runId);
-          return done;
-        case 'runNew':
-          yield* runActions.runNew(request.runId);
-          return done;
-        case 'runCompileFixer':
-          yield* runActions.runCompileFixer(request.runId);
-          return done;
-        case 'useOwnApiKey':
-          yield* runActions.useOwnApiKey(request);
           return done;
         case 'latexdiff': {
           const diff = yield* runActions.workflowDiffRequest(request.runId);
@@ -804,21 +785,11 @@ export function createDesktopHostRequests(
         case 'latexdiffs':
           yield* latexdiffs(request);
           return done;
-        case 'record':
-        case 'polish':
-        case 'savePastedImage':
-          return yield* draftRequests.handle(request, port);
         case 'popOut':
         case 'popBack':
           return yield* Effect.fail(notOnDesktop('Pop-out to editor'));
         case 'openDashboard':
           postDesktopSettingsView(options.postToRenderer);
-          return done;
-        case 'refreshCommits':
-          yield* options.snapshot.refreshCommits;
-          return done;
-        case 'refreshFiles':
-          yield* options.snapshot.refreshFiles;
           return done;
         case 'openSettings':
           postDesktopSettingsView(
@@ -868,19 +839,6 @@ export function createDesktopHostRequests(
         }
         case 'extractFigures':
           return yield* Effect.fail(notOnDesktop('Figure extraction'));
-        case 'toolEdit':
-          yield* run.toolEditApprovals.handleAction({
-            requestId: request.requestId,
-            action: request.action,
-            ...(request.feedback == null ? {} : { feedback: request.feedback }),
-          });
-          return done;
-        case 'fileAction': {
-          const fileAction = request;
-          const config = yield* runActions.readConfig(fileAction.runId);
-          yield* workflowFileActions.handle(fileAction, config);
-          return done;
-        }
         case 'restoreProposalConfig':
           restoreIntoLauncher(runActions.restoreProposal(request.proposal));
           return done;
@@ -906,9 +864,6 @@ export function createDesktopHostRequests(
           yield* options
             .signIn()
             .pipe(Effect.mapError((cause) => hostFailure('signIn', cause)));
-          return done;
-        case 'dismissBanner':
-          yield* options.snapshot.dismissBanner(request.banner);
           return done;
         case 'gettingStarted':
           if (request.action === 'openWalkthrough') {
