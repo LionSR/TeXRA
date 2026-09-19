@@ -1,4 +1,4 @@
-import { Data, Effect, FileSystem } from 'effect';
+import { Data, Effect, FileSystem, type Path } from 'effect';
 
 import { type MessageHost, NotificationFailed } from '@hosts/uiHosts';
 import type { AgentDirectoriesFailed } from '@platform/interfaces';
@@ -30,20 +30,9 @@ class ShellActionFailed extends Data.TaggedError('ShellActionFailed')<{
   readonly cause: unknown;
 }> {}
 
-/** One host call as a program: its rejection becomes the tagged failure. */
-function hostCall<A>(
-  call: () => Promise<A>,
-): Effect.Effect<A, ShellActionFailed> {
-  return Effect.tryPromise({
-    try: call,
-    catch: (cause) => new ShellActionFailed({ cause }),
-  });
-}
-
 /**
- * One host program on the shell's own failure channel. The value the reporter
- * formats stays the one the member failed with, exactly as it was when that
- * member answered with a promise and {@link hostCall} carried the rejection.
+ * One host program on the shell's own failure channel: the value the reporter
+ * formats is the one the member failed with.
  */
 function onShellFailure<A, E, R>(
   program: Effect.Effect<A, E, R>,
@@ -65,7 +54,11 @@ interface DesktopShellActionFactoryOptions extends Pick<
   openExternalUrl(url: string): Effect.Effect<void, PreviewUnavailable>;
   openLogFolder(): Effect.Effect<void, PreviewUnavailable>;
   openPath(filePath: string): Effect.Effect<void, PreviewUnavailable>;
-  openWorkspaceFolder(): Promise<void>;
+  openWorkspaceFolder(): Effect.Effect<
+    void,
+    unknown,
+    FileSystem.FileSystem | Path.Path
+  >;
   signIn(): Effect.Effect<void, unknown>;
   onAsyncError: (error: unknown) => void;
   /** The process runtime the composition root built; every shell action's
@@ -100,7 +93,7 @@ export function createDesktopShellActions(
     program: Effect.Effect<
       void,
       ShellActionFailed | NotificationFailed,
-      GlobalStorageFs | FileSystem.FileSystem
+      GlobalStorageFs | FileSystem.FileSystem | Path.Path
     >,
   ): void {
     options.runtime.runFork(
@@ -167,7 +160,7 @@ export function createDesktopShellActions(
     openLogFolder: () =>
       runShellAction(onShellFailure(options.openLogFolder())),
     openWorkspaceFolder: () =>
-      runShellAction(hostCall(() => options.openWorkspaceFolder())),
+      runShellAction(onShellFailure(options.openWorkspaceFolder())),
     saveFile: () => {
       renderer.postToRenderer({
         command: DESKTOP_SHELL_COMMANDS.SAVE_FILE,

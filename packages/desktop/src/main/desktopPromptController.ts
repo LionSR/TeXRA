@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
+import { Effect } from 'effect';
+
 import {
   DESKTOP_PROMPT_COMMANDS,
   DesktopSettlePromptMessageSchema,
@@ -23,7 +25,7 @@ interface DesktopPromptRenderer {
 type PromptResolver = (value: string | undefined) => void;
 
 interface DesktopPromptIpc extends DesktopMessageHandler {
-  request(input: DesktopPromptInput): Promise<string | undefined>;
+  request(input: DesktopPromptInput): Effect.Effect<string | undefined>;
   dispose(): void;
 }
 
@@ -33,10 +35,16 @@ export class DesktopPromptController implements DesktopPromptIpc {
 
   constructor(private readonly renderer: DesktopPromptRenderer) {}
 
-  request(input: DesktopPromptInput): Promise<string | undefined> {
-    const requestId = randomUUID();
-    return new Promise((resolve) => {
-      this.pending.set(requestId, resolve);
+  /**
+   * Ask the renderer, and settle with what it answers. The request is
+   * registered when the program runs, and its entry leaves `pending` when the
+   * answer arrives or when the asking fiber is interrupted, so an abandoned
+   * prompt no longer waits for `dispose()` to clear it.
+   */
+  request(input: DesktopPromptInput): Effect.Effect<string | undefined> {
+    return Effect.callback<string | undefined>((resume) => {
+      const requestId = randomUUID();
+      this.pending.set(requestId, (value) => resume(Effect.succeed(value)));
       const delivered = this.renderer.postToRenderer({
         command: DESKTOP_PROMPT_COMMANDS.SHOW,
         requestId,
@@ -45,6 +53,9 @@ export class DesktopPromptController implements DesktopPromptIpc {
         password: input.password ?? false,
       } satisfies DesktopShowPromptMessage);
       if (!delivered) this.settle(requestId, undefined);
+      return Effect.sync(() => {
+        this.pending.delete(requestId);
+      });
     });
   }
 

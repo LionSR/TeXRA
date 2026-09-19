@@ -142,12 +142,14 @@ interface DefaultDesktopAgentSettingsControllerOptions extends SettingsStatePort
    * and custom-dir changes), so refreshing one without the other would leave
    * the launcher's team picker stale.
    */
-  readonly onCatalogChanged: (selectedToolUseAgent?: string) => Promise<void>;
+  readonly onCatalogChanged: (
+    selectedToolUseAgent?: string,
+  ) => Effect.Effect<void, never, ProcessServices>;
   readonly prompts: {
     readonly promptText: (input: {
       title: string;
       prompt: string;
-    }) => Promise<string | undefined>;
+    }) => Effect.Effect<string | undefined>;
     /**
      * Confirm a destructive or overwriting action. Used by the custom-agent
      * delete and overwrite paths and by team deletion, which the extension
@@ -367,16 +369,12 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
 
   /**
    * The window's composition root owns what a catalog change means for the
-   * open papers, and answers with a promise; this is the one place that
-   * crosses back into it.
+   * open papers; this is the one place that crosses back into it.
    */
   private catalogChanged(
     selectedToolUseAgent?: string,
-  ): Effect.Effect<void, Error> {
-    return Effect.tryPromise({
-      try: () => this.onCatalogChanged(selectedToolUseAgent),
-      catch: ensureError,
-    });
+  ): Effect.Effect<void, never, ProcessServices> {
+    return this.onCatalogChanged(selectedToolUseAgent);
   }
 
   private postAgentSelectionData(): Effect.Effect<
@@ -519,10 +517,12 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
       return;
     }
 
-    const name = await this.prompts.promptText({
-      title: `New ${templateAgentCategoryLabel(data.category)} agent`,
-      prompt: templateAgentNamePrompt(data.category),
-    });
+    const name = await this.runtime.runPromise(
+      this.prompts.promptText({
+        title: `New ${templateAgentCategoryLabel(data.category)} agent`,
+        prompt: templateAgentNamePrompt(data.category),
+      }),
+    );
     if (!name) return;
 
     const invalid = this.directoryController.validateTemplateName(name);
@@ -686,17 +686,19 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
   }
 
   private async saveAgentModePreset(): Promise<void> {
-    const name = await this.prompts.promptText({
-      title: 'Save agent team',
-      prompt: 'Name for the new team',
-    });
+    const name = await this.runtime.runPromise(
+      this.prompts.promptText({
+        title: 'Save agent team',
+        prompt: 'Name for the new team',
+      }),
+    );
     if (!name?.trim()) return;
     await this.runtime.runPromise(this.registry.loadAgents());
     const preset = await this.runtime.runPromise(
       this.catalogController.saveCurrentPreset(name),
     );
     this.postAgentModePresets();
-    await this.onCatalogChanged();
+    await this.runtime.runPromise(this.onCatalogChanged());
     await this.runtime.runPromise(
       this.notifications.showInfoMessage(`Saved team "${preset.name}"`),
     );
@@ -726,6 +728,6 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
       this.catalogController.deleteCustomPreset(presetId),
     );
     this.postAgentModePresets();
-    await this.onCatalogChanged();
+    await this.runtime.runPromise(this.onCatalogChanged());
   }
 }

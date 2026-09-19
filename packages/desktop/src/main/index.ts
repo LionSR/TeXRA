@@ -840,19 +840,23 @@ function createWindow(options: {
     );
   };
 
-  const openWorkspaceFolder = async () => {
-    const result = await dialog.showOpenDialog(window, {
-      title: 'Open Workspace Folder',
-      defaultPath: folderPickerDefaultPath(),
-      properties: ['openDirectory'],
-    });
-    const selectedPath = result.canceled ? undefined : result.filePaths[0];
-    if (!selectedPath) return;
-    const project = await runtime.runPromise(
-      options.projects.open(selectedPath),
-    );
-    if (project.root !== undefined) selectProject(project.key);
-  };
+  const openWorkspaceFolder = Effect.fn('desktop.openWorkspaceFolder')(
+    function* () {
+      const result = yield* Effect.tryPromise({
+        try: () =>
+          dialog.showOpenDialog(window, {
+            title: 'Open Workspace Folder',
+            defaultPath: folderPickerDefaultPath(),
+            properties: ['openDirectory'],
+          }),
+        catch: (cause) => cause,
+      });
+      const selectedPath = result.canceled ? undefined : result.filePaths[0];
+      if (!selectedPath) return;
+      const project = yield* options.projects.open(selectedPath);
+      if (project.root !== undefined) selectProject(project.key);
+    },
+  );
   attachRendererConsoleLog(window.webContents);
   const desktopDiffHost = createDesktopDiffHost({
     runtime,
@@ -1160,13 +1164,12 @@ function createWindow(options: {
   // Each project's catalogs answer for that project: its snapshot source was
   // built over its own roots, so the presets come from that project's
   // workspace state, not the caller's.
-  const refreshCatalogs = async () => {
-    await Promise.all(
-      [...projectBindings.values()].map((binding) =>
-        runtime.runPromise(binding.snapshot.refreshCatalogs),
-      ),
+  const refreshCatalogs = () =>
+    Effect.forEach(
+      [...projectBindings.values()],
+      (binding) => binding.snapshot.refreshCatalogs,
+      { concurrency: 'unbounded', discard: true },
     );
-  };
   const subscriptionUsage = new SubscriptionUsageService({
     secrets: options.secrets,
     stores: activeProject().session.roots,
@@ -1295,16 +1298,17 @@ function createWindow(options: {
       },
       notifications: { showInfoMessage, showErrorMessage },
       resourcesPath: options.resourcesPath,
-      onCatalogChanged: async (selectedToolUseAgent) => {
-        await refreshCatalogs();
-        if (!selectedToolUseAgent) return;
-        const binding = projectBindings.get(project.key);
-        if (!binding || binding !== documentBinding) return;
-        binding.bridge.surfaceAction({
-          kind: 'launch',
-          patch: { agent: { toolUse: selectedToolUseAgent } },
-        });
-      },
+      onCatalogChanged: (selectedToolUseAgent) =>
+        Effect.gen(function* () {
+          yield* refreshCatalogs();
+          if (!selectedToolUseAgent) return;
+          const binding = projectBindings.get(project.key);
+          if (!binding || binding !== documentBinding) return;
+          binding.bridge.surfaceAction({
+            kind: 'launch',
+            patch: { agent: { toolUse: selectedToolUseAgent } },
+          });
+        }),
     });
     const credentialSettingsController =
       new DefaultDesktopCredentialSettingsController({
@@ -1323,13 +1327,11 @@ function createWindow(options: {
         // reject once the window they anchor to is gone.
         prompt: {
           input: (input) =>
-            Effect.promise(() =>
-              promptController.request({
-                title: input.prompt ?? 'Set API key',
-                prompt: input.prompt ?? 'Enter API key',
-                password: input.password,
-              }),
-            ),
+            promptController.request({
+              title: input.prompt ?? 'Set API key',
+              prompt: input.prompt ?? 'Enter API key',
+              password: input.password,
+            }),
           confirm: (message, promptOptions) =>
             Effect.tryPromise({
               try: () =>
@@ -1962,7 +1964,6 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
                 ...platformInit.processRoots,
                 secrets: platformInit.secrets,
               },
-              runtime,
             }),
           );
           // Reopen every folder left open last time and show the one shown

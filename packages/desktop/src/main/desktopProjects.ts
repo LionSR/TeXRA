@@ -16,7 +16,6 @@ import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
 import { openAppStateStore } from '@controllers/session/appStateStore';
 import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import type { ModelOptionStores } from '@model/computeModelOptions';
-import type { ProcessRuntime } from '@platform/processRuntime';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { ConfigStore } from '@platform/defaults/jsonConfigProvider';
 import { createNodeWorkspaceRoots } from '@platform/defaults/nodeHost';
@@ -65,9 +64,6 @@ interface DesktopProjectRegistryOptions {
    * that opened them.
    */
   readonly stores: ModelOptionStores;
-  /** The process runtime the composition root built; the registry's Promise
-   *  faces (run settlement, artifact flush) settle on it. */
-  readonly runtime: ProcessRuntime;
   warn(message: string): void;
 }
 
@@ -172,22 +168,21 @@ class ProjectRunsNotStopped extends Data.TaggedError('ProjectRunsNotStopped')<{
   readonly cause: unknown;
 }> {}
 
-async function stopProjectRuns(
+const stopProjectRuns = Effect.fn('desktopProjects.stopProjectRuns')(function* (
   session: SessionHandle,
-  runtime: ProcessRuntime,
-): Promise<void> {
+) {
   const { runs } = session;
   const stops = runs.getActiveIds().flatMap((runId) => {
     if (runs.getHandle(runId)?.isChild) return [];
     return [runs.kill(runId, { detachActiveChildren: false }).settlement];
   });
-  await runtime.runPromise(Effect.all(stops, { concurrency: 'unbounded' }));
+  yield* Effect.all(stops, { concurrency: 'unbounded' });
   for (;;) {
     const active = runs.getActiveIds();
     if (active.length === 0) return;
-    await runtime.runPromise(runs.waitForAnyChange(active));
+    yield* runs.waitForAnyChange(active);
   }
-}
+});
 
 /**
  * Open one session over `roots`. Every fact this project's services answer
@@ -317,15 +312,16 @@ export function openDesktopProjectRegistry(
           // persistence operation leaves that owner available to the host.
           yield* Effect.uninterruptible(
             Effect.gen(function* () {
-              yield* Effect.tryPromise({
-                try: () => stopProjectRuns(project.session, options.runtime),
-                catch: (cause) =>
-                  new ProjectRunsNotStopped({
-                    root,
-                    message: `The project's runs could not be stopped: ${toErrorMessage(cause)}`,
-                    cause,
-                  }),
-              });
+              yield* stopProjectRuns(project.session).pipe(
+                Effect.mapError(
+                  (cause) =>
+                    new ProjectRunsNotStopped({
+                      root,
+                      message: `The project's runs could not be stopped: ${toErrorMessage(cause)}`,
+                      cause,
+                    }),
+                ),
+              );
               yield* Effect.gen(function* () {
                 const remembered = yield* options.records.read;
                 const next =
