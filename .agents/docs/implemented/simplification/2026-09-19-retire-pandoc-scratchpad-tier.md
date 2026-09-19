@@ -1,5 +1,7 @@
 # Retire the pandoc scratchpad conversion tier
 
+Status: implemented
+
 Date: 2026-09-19
 Origin: wave-8 simplification survey, utils-common domain (lane "External-binary
 probing and scratchpad conversion"). Implemented in the same PR that carries
@@ -50,9 +52,12 @@ and becomes an ordinary synchronous function; `OutputFormat`,
 
 A user who has pandoc installed _and_ whose model writes a LaTeX or HTML
 scratchpad now sees the Turndown/regex rendering of that scratchpad instead of
-pandoc's. Pandoc's reference rewriting is the concrete loss: `\ref{eq:1}`
-survived a pandoc round trip and is simply left alone by the fallback, which
-does not touch `\ref` at all. No document output, no compile path and no
+pandoc's. The loss is rendering quality on that path: pandoc resolved sections,
+nested lists, links and tables, where the fallback applies a ten-entry
+replacement table and leaves everything else alone. Cross-references are _not_
+part of the loss — `normalizePandocReferences` existed to rewrite pandoc's
+reference output back to the literal `\ref{...}` the fallback never touches, so
+both paths emit the same thing. No document output, no compile path and no
 persisted row is involved — this is the scratchpad panel only. Pandoc was never
 documented as a TeXRA dependency (no occurrence anywhere in `docs/` or
 `packages/extension/resources/`); its one user-facing mention is a 0.x
