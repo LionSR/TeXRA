@@ -36,6 +36,7 @@ import { getRunRecords } from '@agent/storage/runRecords';
 import { createLog } from '@logger/logUtils';
 import { type RunId, type RunOutcome, type RunPhase } from '@shared/schemas';
 import { runHeldClause } from '@shared/runs/runStatusDisplay';
+import { claimStanding } from '@shared/session/database';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const log = createLog('RunLiveness');
@@ -101,15 +102,15 @@ export const resolveRunLiveness = Effect.fn('resolveRunLiveness')(function* (
     if (outcome !== null) {
       return { kind: 'settled', outcome };
     }
-    const claim = yield* session.claimOwner(runId);
-    if (claim.liveness === 'self') {
+    const standing = claimStanding(yield* session.claimOwner(runId));
+    if (standing.kind === 'self') {
       log.warn(
         `Run ${runId} holds this process's claim with no tracked run and no recorded outcome; reporting it as unsettled rather than finished`,
       );
       return { kind: 'unsettled', reason: OWNED_HERE_REASON };
     }
-    if (claim.ownerId !== null && claim.liveness !== 'dead') {
-      return { kind: 'unsettled', reason: runHeldClause(claim.ownerId) };
+    if (standing.kind === 'held') {
+      return { kind: 'unsettled', reason: runHeldClause(standing.owner) };
     }
     // Nobody owns the run and nothing recorded how it ended: it stopped
     // without finishing.

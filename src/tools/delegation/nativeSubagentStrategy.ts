@@ -9,10 +9,10 @@
  * delegation (through `childRunLoop`) and durable in-band workflow calls invoke
  * it, so launch options, progress, stream identity, approval inheritance,
  * cancellation, failure capture, and cost observation cannot drift between
- * those callers. `runTurn` is every following interactive turn: resolve the
- * persisted flow-record cursor for this run
- * (`retrieveSessionResumeData`) and drive it to the next WAITING/terminal
- * boundary via `resumeToolUseTurn`, handing it the batch already
+ * those callers. `runTurn` is every following interactive turn: name the run
+ * and the config it runs under, and let `resumeToolUseTurn` read the
+ * persisted cursor once under the run lease and drive it to the next
+ * WAITING/terminal boundary, with the batch already
  * consumed by `childRunLoop`. `runTurn` is unreachable for a workflow child —
  * a workflow flow never produces a WAITING result, so `isTerminal` is always
  * true on its first (and only) turn, and `childRunLoop.ts`'s loop breaks on a
@@ -34,11 +34,10 @@ import {
   type AgentFlowResult,
   type AgentRuntimeFlowResult,
 } from '@agent/runtime/AgentFlowResult';
-import {
-  retrieveSessionResumeData,
-  type ToolUseResumeData,
-} from '@agent/runtime/SessionResumeRetrieval';
-import type { ResumeToolUseFromResumeDataOptions } from '@agent/runtime/executeAgent';
+import type {
+  ResumeToolUseFromResumeDataOptions,
+  ResumeTurnIdentity,
+} from '@agent/runtime/executeAgent';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { AgentRunServices } from '@agent/runtime/toolInjection';
 import type { AgentRunHandle } from '@agent/runtime/RunHandle';
@@ -82,7 +81,7 @@ export interface AgentEngine {
    * generation.
    */
   readonly resumeToolUseTurn: (
-    resume: ToolUseResumeData,
+    identity: ResumeTurnIdentity,
     options: ResumeToolUseFromResumeDataOptions & { session: SessionHandle },
   ) => Effect.Effect<AgentRuntimeFlowResult, Error, AgentRunServices>;
 }
@@ -328,39 +327,33 @@ export function createNativeSubagentStrategy(
               ),
             );
           }
-          const config = yield* getRunRecords(
+          const agentConfig = yield* getRunRecords(
             params.session,
             params.runId,
           ).readConfig();
-          if (!config)
+          if (!agentConfig)
             return yield* Effect.fail(
               new Error(
                 `Native subagent ${params.runId} has no persisted config to resume.`,
               ),
             );
-          const resume = yield* retrieveSessionResumeData(
-            params.runId,
-            config,
-            params.session,
-          );
-          if (!resume || resume.type !== 'toolUse')
-            return yield* Effect.fail(
-              new Error(
-                `Native subagent ${params.runId} has no resumable tool-use snapshot.`,
-              ),
-            );
-
-          return yield* engine().resumeToolUseTurn(resume, {
-            session: params.session,
-            approvalPromptsUnavailable: params.approvalPromptsUnavailable,
-            onApprovalPolicyDenial: params.onApprovalPolicyDenial,
-            runtimeUnavailableTools: params.runtimeUnavailableTools,
-            onProgress: (update) => ports.notify(update),
-            onRunError: (err) => {
-              lastErr = err;
+          // The snapshot is read once, inside the turn and under its run
+          // lease: a run whose snapshot is gone by then refuses there, with
+          // `ResumeSessionUnavailableError`.
+          return yield* engine().resumeToolUseTurn(
+            { runId: params.runId, agentConfig },
+            {
+              session: params.session,
+              approvalPromptsUnavailable: params.approvalPromptsUnavailable,
+              onApprovalPolicyDenial: params.onApprovalPolicyDenial,
+              runtimeUnavailableTools: params.runtimeUnavailableTools,
+              onProgress: (update) => ports.notify(update),
+              onRunError: (err) => {
+                lastErr = err;
+              },
+              onRun,
             },
-            onRun,
-          });
+          );
         }),
       ),
 

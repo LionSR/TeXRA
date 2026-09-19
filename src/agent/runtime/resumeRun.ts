@@ -31,6 +31,7 @@ import {
 } from '@shared/schemas';
 import { runHeldMessage } from '@shared/runs/runStatusDisplay';
 import {
+  claimStanding,
   DatabaseClaimRefused,
   DatabaseWriteFailed,
 } from '@shared/session/database';
@@ -212,12 +213,13 @@ const resumeRunWithRecoveryProvenance = Effect.fn(
   const session = options.session;
   const runs = yield* Runs;
   const cancelled = () => options.isCancellationRequested?.() === true;
-  const suppliedRecovery = options.recovery
-    ? session.followUps.useRecovery(options.recovery)
-    : undefined;
+  // `releaseUnstartedRecovery` revalidates the continuation against the
+  // boundary itself, so a lease that stopped being the entry's owner while
+  // this program was reading the run gives back nothing, as before.
+  const supplied = options.recovery;
   const abandonSupplied = (provisional = recoveryIsProvisional) =>
-    suppliedRecovery
-      ? releaseUnstartedRecovery(session, suppliedRecovery, provisional)
+    supplied
+      ? releaseUnstartedRecovery(session, supplied, provisional)
       : Effect.void;
   const store = getRunRecords(session, runId);
   const [config, exists] = yield* Effect.all([
@@ -228,7 +230,7 @@ const resumeRunWithRecoveryProvenance = Effect.fn(
     yield* abandonSupplied();
     return REFUSED;
   }
-  if (suppliedRecovery && suppliedRecovery.runId !== runId) {
+  if (supplied && supplied.runId !== runId) {
     yield* abandonSupplied(false);
     return REFUSED;
   }
@@ -266,30 +268,24 @@ const resumeRunWithRecoveryProvenance = Effect.fn(
     const classification = yield* classifyRun(runId, session);
     return { failed: yield* recordRunRefusal(runId, session, classification) };
   }
-  const willLaunch = (resume.type === 'toolUse') === (queueLease !== undefined);
-  const claim =
-    willLaunch && options.onResumeResolved
-      ? yield* session
-          .claimOwner(runId)
-          .pipe(Effect.onError(() => Effect.sync(releaseQueue)))
-      : undefined;
+  const claim = options.onResumeResolved
+    ? yield* session
+        .claimOwner(runId)
+        .pipe(Effect.onError(() => Effect.sync(releaseQueue)))
+    : undefined;
   yield* session.clearUnreadable(runId);
   // A claim whose owner is this process, or provably dead, is one the resume
   // takes over; anything else is another live TeXRA process's run.
-  if (
-    claim !== undefined &&
-    claim.ownerId !== null &&
-    claim.liveness !== 'self' &&
-    claim.liveness !== 'dead'
-  ) {
+  const standing = claim && claimStanding(claim);
+  if (standing?.kind === 'held') {
     releaseQueue();
     yield* session.markUnreadable(
       runId,
-      runHeldMessage(ownerPid(claim.ownerId)),
+      runHeldMessage(ownerPid(standing.owner)),
     );
     return { failed: 'owned_elsewhere' };
   }
-  if (willLaunch && options.onResumeResolved) {
+  if (options.onResumeResolved) {
     yield* options
       .onResumeResolved()
       .pipe(Effect.onError(() => Effect.sync(releaseQueue)));
@@ -298,26 +294,25 @@ const resumeRunWithRecoveryProvenance = Effect.fn(
       return REFUSED;
     }
   }
+  // The lease above and the resume type below are the same fact read twice:
+  // both come from `config.agentCategory`, so a tool-use run always holds a
+  // lease here and the workflow arm is the fallthrough.
   if (resume.type === 'toolUse' && queueLease) {
     return yield* resumeQueuedToolUse(session, resume, queueLease, options);
   }
-  if (resume.type === 'workflow' && !queueLease) {
-    const launched = yield* Effect.result(
-      options.executeWorkflow(
-        resume.agentConfig,
-        resume.runId,
-        resume.modelCompatibilityKey,
-      ),
-    );
-    if (Result.isFailure(launched)) {
-      const refused = yield* refusalFor(launched.failure, session, runId);
-      if (refused) return refused;
-      return yield* Effect.fail(launched.failure);
-    }
-    return WORKFLOW_STARTED;
+  const launched = yield* Effect.result(
+    options.executeWorkflow(
+      resume.agentConfig,
+      resume.runId,
+      resume.modelCompatibilityKey,
+    ),
+  );
+  if (Result.isFailure(launched)) {
+    const refused = yield* refusalFor(launched.failure, session, runId);
+    if (refused) return refused;
+    return yield* Effect.fail(launched.failure);
   }
-  releaseQueue();
-  return REFUSED;
+  return WORKFLOW_STARTED;
 });
 
 /**
@@ -332,7 +327,7 @@ const resumeRunWithRecoveryProvenance = Effect.fn(
 const releaseUnstartedRecovery = Effect.fn('releaseUnstartedRecovery')(
   function* (
     session: SessionHandle,
-    recovery: FollowUpRecoveryLease,
+    recovery: RecoveryContinuation,
     provisional: boolean,
   ) {
     if (!session.followUps.useRecovery(recovery)) return;

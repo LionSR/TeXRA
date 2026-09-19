@@ -617,6 +617,16 @@ export function executeAgent(
   );
 }
 
+/**
+ * What a resumed turn is handed: which run, and the config it runs under.
+ * The snapshot is not part of it — the turn reads it once, under the run
+ * lease it just acquired, so no caller can hand in a stale one.
+ */
+export type ResumeTurnIdentity = Pick<
+  ToolUseResumeData,
+  'runId' | 'agentConfig'
+>;
+
 export interface ResumeToolUseFromResumeDataOptions extends SubagentRunOptions {
   /** Query caller-owned cancellation once the resumed flow is interruptible. */
   readonly isCancellationRequested?: () => boolean;
@@ -732,17 +742,21 @@ const resumeToolUseWithOwnedLease = Effect.fn('resumeToolUseWithOwnedLease')(
  * run lane. Hosts resume through {@link resumeToolUseFromResumeData}.
  */
 const resumeToolUseTurn = Effect.fn('resumeToolUseTurn')(function* (
-  resume: ToolUseResumeData,
+  identity: ResumeTurnIdentity,
   options: ResumeToolUseFromResumeDataOptions & { session: SessionHandle },
 ) {
   const session = options.session;
-  const rollback = yield* acquireResumedRunOwnership(session, resume.runId);
+  const rollback = yield* acquireResumedRunOwnership(session, identity.runId);
   const retrieval = yield* Effect.exit(
-    retrieveSessionResumeData(resume.runId, resume.agentConfig, session).pipe(
+    retrieveSessionResumeData(
+      identity.runId,
+      identity.agentConfig,
+      session,
+    ).pipe(
       Effect.flatMap((retrieved) =>
         retrieved?.type === 'toolUse'
           ? Effect.succeed(retrieved)
-          : Effect.fail(new ResumeSessionUnavailableError(resume.runId)),
+          : Effect.fail(new ResumeSessionUnavailableError(identity.runId)),
       ),
     ),
   );
@@ -752,7 +766,7 @@ const resumeToolUseTurn = Effect.fn('resumeToolUseTurn')(function* (
       Exit.isFailure(released)
         ? new AggregateError(
             [Cause.squash(retrieval.cause), Cause.squash(released.cause)],
-            `Resume retrieval and admission rollback failed for ${resume.runId}`,
+            `Resume retrieval and admission rollback failed for ${identity.runId}`,
           )
         : ensureError(Cause.squash(retrieval.cause)),
     );
@@ -764,12 +778,12 @@ const resumeToolUseTurn = Effect.fn('resumeToolUseTurn')(function* (
 /** Resume after the previous generation and its teardown have settled, on
  *  the `Runs` of `options.session`. */
 export function resumeToolUseFromResumeData(
-  resume: ToolUseResumeData,
+  identity: ResumeTurnIdentity,
   options: ResumeToolUseFromResumeDataOptions & { session: SessionHandle },
 ): Effect.Effect<AgentRuntimeFlowResult, Error, ProcessServices> {
   const { runs } = options.session;
   return runs
-    .launchRun(resume.runId, resumeToolUseTurn(resume, options))
+    .launchRun(identity.runId, resumeToolUseTurn(identity, options))
     .pipe(Effect.provideService(Runs, runs));
 }
 
