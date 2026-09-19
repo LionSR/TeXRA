@@ -47,11 +47,13 @@ All notable changes to this project will be documented in this file.
   `@openai/codex-sdk`, `@google/genai`, `@openrouter/sdk`,
   `@supabase/supabase-js`, `llm-zoo`, plus `@cantoo/pdf-lib`, `ignore`,
   `katex`, `markdown-it`, `pretty-bytes` and `yaml`.
-- `openai` deliberately stays on 7.4.0. Its 7.10+ stream accumulator throws on
-  the `response.metadata` event the ChatGPT-subscription backend sends, and the
-  pinned `patches/openai@7.4.0.patch` that teaches it to ignore that event does
-  not apply to a newer release. `undici` (major) and `effect` (prerelease) are
-  held for the same reason a patch release holds them.
+- `openai` moves from 7.4.0 to 7.10.0, carrying forward the vendored patch
+  that teaches its stream accumulator to ignore the `response.metadata` event
+  the ChatGPT-subscription backend sends. The dependency is pinned exactly:
+  pnpm keys a patch by exact version, so a caret range that floats past
+  7.10.0 leaves the patch unapplied and the accumulator throws mid-stream.
+- `undici` (major) and `effect` (prerelease) are held, as a patch release
+  should.
 
 ## [0.40.10] - 2026-09-06
 
