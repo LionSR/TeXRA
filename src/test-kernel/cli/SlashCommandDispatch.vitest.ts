@@ -56,7 +56,7 @@ import * as modelAccessSelection from '@cli/runtime/modelAccessSelection';
 import * as providerApiKey from '@cli/runtime/providerApiKey';
 import * as supabaseAuth from '@cli/runtime/supabaseAuth';
 import { TuiSession } from '@cli/chat/tui/state/sessionRunState';
-import * as codexPreference from '@model/codex/codexPreference';
+import * as codexSubscription from '@model/codex/codexSubscription';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import {
   AgentCategory,
@@ -552,7 +552,7 @@ describe('handleTuiSlashCommand', () => {
         label: 'person@example.com',
       }),
     );
-    vi.spyOn(codexPreference, 'setPreferCodexSubscription').mockReturnValue(
+    vi.spyOn(codexSubscription, 'setPreferCodexSubscription').mockReturnValue(
       Effect.succeed({ effective: true, target: 'global' }),
     );
 

@@ -11,12 +11,11 @@ import {
   usageWindow,
   type JsonObject,
   type ParsedSubscriptionUsage,
-  type SubscriptionUsageHttp,
 } from './subscriptionUsageParsing';
 
 const CHATGPT_USAGE_URL = 'https://chatgpt.com/backend-api/wham/usage';
 
-export interface ChatGptUsageCredential {
+interface ChatGptUsageCredential {
   readonly accessToken: string;
   readonly accountId?: string;
 }
@@ -124,7 +123,6 @@ export function parseChatGptUsage(
 }
 
 export function fetchChatGptUsage(
-  http: SubscriptionUsageHttp,
   credential: ChatGptUsageCredential,
   signal: AbortSignal,
 ): Effect.Effect<ParsedSubscriptionUsage, unknown> {
@@ -137,7 +135,7 @@ export function fetchChatGptUsage(
     headers['ChatGPT-Account-Id'] = credential.accountId;
   }
   return Effect.map(
-    fetchSubscriptionUsage(http, { url: CHATGPT_USAGE_URL, headers, signal }),
+    fetchSubscriptionUsage({ url: CHATGPT_USAGE_URL, headers, signal }),
     (body) => parseChatGptUsage(body),
   );
 }

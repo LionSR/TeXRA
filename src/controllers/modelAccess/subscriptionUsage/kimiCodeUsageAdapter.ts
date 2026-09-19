@@ -10,7 +10,6 @@ import {
   stringField,
   timestampField,
   type ParsedSubscriptionUsage,
-  type SubscriptionUsageHttp,
 } from './subscriptionUsageParsing';
 
 const KIMI_CODE_USAGE_URL = 'https://api.kimi.com/coding/v1/usages';
@@ -82,12 +81,11 @@ export function parseKimiCodeUsage(body: unknown): ParsedSubscriptionUsage {
 }
 
 export function fetchKimiCodeUsage(
-  http: SubscriptionUsageHttp,
   apiKey: string,
   signal: AbortSignal,
 ): Effect.Effect<ParsedSubscriptionUsage, unknown> {
   return Effect.map(
-    fetchSubscriptionUsage(http, {
+    fetchSubscriptionUsage({
       url: KIMI_CODE_USAGE_URL,
       headers: {
         Accept: 'application/json',

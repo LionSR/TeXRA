@@ -17,10 +17,7 @@ import { SUBSCRIPTION_USAGE_PROVIDERS } from '@shared/schemas';
 import { useChinaRegion } from '@utils/config/providerConfig';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import {
-  fetchChatGptUsage,
-  type ChatGptUsageCredential,
-} from './codexUsageAdapter';
+import { fetchChatGptUsage } from './codexUsageAdapter';
 import {
   fetchGlmCodingPlanUsage,
   GLM_CODING_PLAN_INTERNATIONAL_USAGE_URL,
@@ -30,13 +27,12 @@ import { fetchKimiCodeUsage } from './kimiCodeUsageAdapter';
 import {
   SubscriptionUsageHttpError,
   type ParsedSubscriptionUsage,
-  type SubscriptionUsageHttp,
 } from './subscriptionUsageParsing';
 import type { HttpClient } from 'effect/unstable/http';
 
 const log = createLog('SubscriptionUsage');
 
-const DEFAULT_CACHE_TTL_MS = 30_000;
+const CACHE_TTL_MS = 30_000;
 const DEFAULT_REQUEST_TIMEOUT_MS = 15_000;
 
 type CodingPlanUsageProvider =
@@ -64,46 +60,13 @@ const DEFAULT_PLAN_NAMES: Record<SubscriptionUsageProvider, string> = {
   ...CODING_PLAN_DEFAULT_NAMES,
 };
 
-/**
- * The credential reads this service needs, as programs. Each member is the
- * work itself — the stored session, the API key, the region flag — so the
- * service composes them into its own probe instead of settling each one on a
- * run edge of its own.
- */
-interface SubscriptionUsageCredentials {
-  loadChatGpt(): Effect.Effect<
-    ChatGptUsageCredential | null,
-    unknown,
-    HttpClient.HttpClient
-  >;
-  loadApiKey(
-    provider: 'kimiCode' | 'glm',
-  ): Effect.Effect<string | undefined, unknown>;
-  /** Defaults to the China endpoint when omitted by an injected test/client. */
-  useGlmChina?(): Effect.Effect<boolean, unknown>;
-}
-
-interface SubscriptionUsageServiceOptions {
-  readonly http?: SubscriptionUsageHttp;
+/** The credential stores this service reads, plus the two test-only clocks. */
+interface SubscriptionUsageServiceInit {
+  readonly secrets: PlatformSecrets;
+  readonly stores: SettingsStores;
   readonly now?: () => number;
-  readonly cacheTtlMs?: number;
   readonly requestTimeoutMs?: number;
 }
-
-/**
- * A caller supplies either the secret store and its setting slots — the
- * service then reads credentials through {@link defaultCredentials} — or a
- * credential set of its own. One of the two is required, so there is no
- * secret-store lookup left to fall back to.
- */
-type SubscriptionUsageServiceInit = SubscriptionUsageServiceOptions &
-  (
-    | {
-        readonly secrets: PlatformSecrets;
-        readonly stores: SettingsStores;
-      }
-    | { readonly credentials: SubscriptionUsageCredentials }
-  );
 
 /** Why a usage snapshot carries no data (the `unavailable` variant's reason). */
 type SubscriptionUsageUnavailableReason = Extract<
@@ -123,29 +86,6 @@ interface SubscriptionUsageAdapter {
   >;
 }
 
-/** The credential readers over the stores the caller holds. */
-function defaultCredentials(
-  stores: SettingsStores,
-  secrets: PlatformSecrets,
-): SubscriptionUsageCredentials {
-  return Object.freeze({
-    loadChatGpt: Effect.fn('SubscriptionUsage.loadChatGpt')(function* () {
-      const coordinator = codexCoordinator(secrets);
-      if ((yield* coordinator.loadSession()) === null) return null;
-      const session = yield* coordinator.getFreshSession();
-      return {
-        accessToken: session.accessToken,
-        ...(session.accountId ? { accountId: session.accountId } : {}),
-      };
-    }),
-    loadApiKey: (provider: 'kimiCode' | 'glm') =>
-      Effect.map(lookupApiKey(secrets, provider), (key) =>
-        key === undefined ? undefined : exposeApiKey(key),
-      ),
-    useGlmChina: () => Effect.sync(() => useChinaRegion(stores, 'glm')),
-  });
-}
-
 /**
  * Read-only, host-neutral access to coding-plan usage. Every read is a
  * program: results are short-lived, coalesced per provider, and always
@@ -154,85 +94,68 @@ function defaultCredentials(
  * has no error arm to write.
  */
 export class SubscriptionUsageService {
-  private readonly http: SubscriptionUsageHttp;
-  private readonly credentials: SubscriptionUsageCredentials;
+  private readonly secrets: PlatformSecrets;
+  private readonly stores: SettingsStores;
   private readonly now: () => number;
-  private readonly cacheTtlMs: number;
   private readonly requestTimeoutMs: number;
   private readonly adapters: Readonly<
     Record<SubscriptionUsageProvider, SubscriptionUsageAdapter>
   >;
   private readonly cache: LRUCache<string, SubscriptionUsageSnapshot>;
-  // lru-cache treats ttl:0 as "no expiration", not "always expired" — a
-  // cacheTtlMs of 0 means the opposite (never retain), so route reads/writes
-  // through a stub when disabled instead of trusting LRUCache with ttl:0.
-  private readonly cacheReader: {
-    get(key: string): SubscriptionUsageSnapshot | undefined;
-    set(key: string, value: SubscriptionUsageSnapshot): void;
-  };
   private readonly pending = new Map<
     string,
     Deferred.Deferred<SubscriptionUsageSnapshot>
   >();
 
   constructor(init: SubscriptionUsageServiceInit) {
-    this.http = init.http ?? fetch;
-    this.credentials =
-      'credentials' in init
-        ? init.credentials
-        : defaultCredentials(init.stores, init.secrets);
+    this.secrets = init.secrets;
+    this.stores = init.stores;
     this.now = init.now ?? Date.now;
-    this.cacheTtlMs = init.cacheTtlMs ?? DEFAULT_CACHE_TTL_MS;
     this.requestTimeoutMs = init.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
     this.adapters = this.createAdapters();
     this.cache = new LRUCache({
       max: 64,
-      ttl: this.cacheTtlMs,
+      ttl: CACHE_TTL_MS,
       // The default resolution debounces perf.now() via a real setTimeout,
       // which ignores the injected clock (this.now) entirely in tests.
       ttlResolution: 0,
       perf: { now: this.now },
     });
-    this.cacheReader =
-      this.cacheTtlMs > 0
-        ? this.cache
-        : { get: () => undefined, set: () => {} };
   }
 
   /** Provider transports are adapters; caching and failure policy stay common. */
   private createAdapters(): Readonly<
     Record<SubscriptionUsageProvider, SubscriptionUsageAdapter>
   > {
-    // Each adapter fetch is already a program: `SubscriptionUsageHttp` is the
-    // platform `fetch` and is adapted inside the request that makes it, so the
-    // provider's own rejection reaches the fold below unchanged.
+    // Each adapter fetch is already a program, and reaches the platform
+    // `fetch` through `FetchHttpClient.Fetch` inside the request that makes
+    // it, so the provider's own rejection reaches the fold below unchanged.
     const signal = (): AbortSignal =>
       AbortSignal.timeout(this.requestTimeoutMs);
     return Object.freeze({
       chatgpt: {
         fetch: () =>
-          Effect.flatMap(this.credentials.loadChatGpt(), (credential) =>
+          Effect.flatMap(this.loadChatGptCredential(), (credential) =>
             credential
-              ? fetchChatGptUsage(this.http, credential, signal())
+              ? fetchChatGptUsage(credential, signal())
               : Effect.succeed(null),
           ),
       },
       kimiCode: {
         fetch: () =>
-          Effect.flatMap(this.credentials.loadApiKey('kimiCode'), (apiKey) =>
+          Effect.flatMap(this.loadApiKey('kimiCode'), (apiKey) =>
             apiKey
-              ? fetchKimiCodeUsage(this.http, apiKey, signal())
+              ? fetchKimiCodeUsage(apiKey, signal())
               : Effect.succeed(null),
           ),
       },
       glmCodingPlan: {
         resolveVariant: () =>
-          this.credentials.useGlmChina?.() ?? Effect.succeed(true),
+          Effect.sync(() => useChinaRegion(this.stores, 'glm')),
         fetch: (useChina) =>
-          Effect.flatMap(this.credentials.loadApiKey('glm'), (apiKey) =>
+          Effect.flatMap(this.loadApiKey('glm'), (apiKey) =>
             apiKey
               ? fetchGlmCodingPlanUsage(
-                  this.http,
                   apiKey,
                   signal(),
                   (useChina ?? true)
@@ -243,6 +166,33 @@ export class SubscriptionUsageService {
           ),
       },
     });
+  }
+
+  /**
+   * The stored ChatGPT session's usage credential, or `null` when no session
+   * is stored. Refreshing an expiring session is the coordinator's own job, so
+   * a refresh that fails reaches {@link fetchUsage}'s classification as the
+   * `CodexAuthError` it minted.
+   */
+  private readonly loadChatGptCredential = Effect.fn(
+    'SubscriptionUsage.loadChatGptCredential',
+  )(function* (this: SubscriptionUsageService) {
+    const coordinator = codexCoordinator(this.secrets);
+    if ((yield* coordinator.loadSession()) === null) return null;
+    const session = yield* coordinator.getFreshSession();
+    return {
+      accessToken: session.accessToken,
+      ...(session.accountId ? { accountId: session.accountId } : {}),
+    };
+  });
+
+  /** A coding-plan provider's API key, from secret storage or the environment. */
+  private loadApiKey(
+    provider: 'kimiCode' | 'glm',
+  ): Effect.Effect<string | undefined, unknown> {
+    return Effect.map(lookupApiKey(this.secrets, provider), (key) =>
+      key === undefined ? undefined : exposeApiKey(key),
+    );
   }
 
   /** Drop cached and in-flight work after credentials or accounts change. */
@@ -330,7 +280,7 @@ export class SubscriptionUsageService {
           this.cache.delete(key);
           this.pending.delete(key);
         }
-        const cached = this.cacheReader.get(key);
+        const cached = this.cache.get(key);
         if (cached !== undefined) return Effect.succeed(cached);
         const inFlight = this.pending.get(key);
         if (inFlight !== undefined) return restore(Deferred.await(inFlight));
@@ -345,7 +295,7 @@ export class SubscriptionUsageService {
                   if (this.pending.get(key) === request) {
                     this.pending.delete(key);
                     if (Exit.isSuccess(exit)) {
-                      this.cacheReader.set(key, exit.value);
+                      this.cache.set(key, exit.value);
                     }
                   }
                   Deferred.doneUnsafe(request, exit);

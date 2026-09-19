@@ -6,7 +6,7 @@
  * opt-in, off by default, personal use only.
  *
  * The "prefer my subscription" switches are NOT here: they are model-selection
- * preferences, owned by `@model/codex/codexPreference` so the model layer can
+ * preferences, owned by `@model/codex/codexSubscription` so the model layer can
  * read them without depending on this OAuth machinery.
  */
 export { CODEX_BACKEND_BASE_URL } from './codexConstants';
@@ -14,10 +14,6 @@ export {
   CodexAuthError,
   formatCodexAuthUnavailableMessage,
 } from './codexSessionTypes';
-export {
-  codexCoordinator,
-  getCodexStatus,
-  isCodexSessionRoutable,
-} from './codexAuthAccess';
+export { codexCoordinator, getCodexStatus } from './codexAuthAccess';
 export { loginWithLoopback } from './codexLoopbackLogin';
 export { loginWithDeviceCode } from './codexDeviceLogin';

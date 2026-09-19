@@ -14,8 +14,8 @@ import { getCodexStatus } from '@auth/codex';
 import { getXaiStatus } from '@auth/xai';
 import { createLog } from '@logger/logUtils';
 import { setModelAvailabilityWarningSink } from '@model/modelAvailabilityWarning';
-import { setCodexSignedInProbe } from '@model/codex/codexSignedIn';
-import { setXaiSignedInProbe } from '@model/xai/xaiSignedIn';
+import { setCodexSignedInProbe } from '@model/codex/codexSubscription';
+import { setXaiSignedInProbe } from '@model/xai/xaiSubscription';
 import type { PlatformSecrets } from '@platform/secrets';
 
 const log = createLog('computeModelOptions');

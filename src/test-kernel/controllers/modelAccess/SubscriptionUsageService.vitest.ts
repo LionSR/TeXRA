@@ -1,13 +1,11 @@
 import { Effect } from 'effect';
+import { FetchHttpClient } from 'effect/unstable/http';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import * as codexAuth from '@auth/codex';
 import { CodexAuthError } from '@auth/codex';
 import { parseChatGptUsage } from '@controllers/modelAccess/subscriptionUsage/codexUsageAdapter';
-import {
-  timestampField,
-  type SubscriptionUsageHttp,
-} from '@controllers/modelAccess/subscriptionUsage/subscriptionUsageParsing';
+import { timestampField } from '@controllers/modelAccess/subscriptionUsage/subscriptionUsageParsing';
 import {
   GLM_CODING_PLAN_INTERNATIONAL_USAGE_URL,
   GLM_CODING_PLAN_USAGE_URL,
@@ -15,23 +13,26 @@ import {
 } from '@controllers/modelAccess/subscriptionUsage/glmCodingPlanUsageAdapter';
 import { parseKimiCodeUsage } from '@controllers/modelAccess/subscriptionUsage/kimiCodeUsageAdapter';
 import { SubscriptionUsageService } from '@controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
+import type { PlatformSecrets } from '@platform/secrets';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import {
   SubscriptionUsageSnapshotSchema,
   type SubscriptionUsageSnapshot,
 } from '@shared/schemas';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import { testRuntime } from '@test/support/testProcessRuntime';
-import { FakeSecrets } from '@test/support/FakePlatform';
+import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import type { HttpClient } from 'effect/unstable/http';
 
-/**
- * The credential port is file-local; derive it from the service constructor,
- * whose init is the options bag intersected with one of its two sources.
- */
-type SubscriptionUsageCredentials = Extract<
-  ConstructorParameters<typeof SubscriptionUsageService>[0],
-  { readonly credentials: unknown }
->['credentials'];
+/** The request the adapters make through `FetchHttpClient.Fetch`. */
+type UsageFetch = (url: string, init: RequestInit) => Promise<Response>;
+
+/** The API keys the coding-plan adapters read out of secret storage. */
+const CODING_PLAN_KEYS = {
+  'apiKey.kimiCode': 'kimiCode-secret',
+  'apiKey.glm': 'glm-secret',
+};
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -40,23 +41,74 @@ function jsonResponse(body: unknown, status = 200): Response {
   });
 }
 
-function credentials(
-  overrides: Partial<SubscriptionUsageCredentials> = {},
-): SubscriptionUsageCredentials {
+/**
+ * The stored ChatGPT session the service reads through `codexCoordinator`,
+ * which is the only ChatGPT credential source now that the service builds its
+ * own credential reads over the secret store it was handed.
+ */
+function stubCodexSession(
+  overrides: {
+    readonly loadSession?: () => Effect.Effect<unknown, unknown>;
+    readonly getFreshSession?: () => Effect.Effect<unknown, unknown>;
+  } = {},
+): void {
+  vi.spyOn(codexAuth, 'codexCoordinator').mockReturnValue({
+    loadSession:
+      overrides.loadSession ??
+      (() => Effect.succeed({ accessToken: 'chatgpt-secret' })),
+    getFreshSession:
+      overrides.getFreshSession ??
+      (() =>
+        Effect.succeed({
+          accessToken: 'chatgpt-secret',
+          accountId: 'account-123',
+        })),
+  } as never);
+}
+
+function makeService(
+  options: {
+    readonly secrets?: PlatformSecrets;
+    readonly stores?: SettingsStores;
+    readonly now?: () => number;
+    readonly requestTimeoutMs?: number;
+  } = {},
+): SubscriptionUsageService {
+  return new SubscriptionUsageService({
+    secrets: options.secrets ?? new FakeSecrets(CODING_PLAN_KEYS),
+    stores: options.stores ?? makeFakeSettingsStores().stores,
+    now: options.now ?? (() => 1_800_000_000_000),
+    ...(options.requestTimeoutMs === undefined
+      ? {}
+      : { requestTimeoutMs: options.requestTimeoutMs }),
+  });
+}
+
+/**
+ * Stores over one mutable GLM region flag. The catalog default is the China
+ * endpoint, so a test that wants the international one seeds `false`.
+ */
+function glmRegionStores(useChina?: boolean): {
+  readonly stores: SettingsStores;
+  setRegion(next: boolean): void;
+} {
+  const globalState =
+    useChina === undefined
+      ? new FakeStateStore()
+      : new FakeStateStore({ [GlobalStateKey.GLM_USE_CHINA]: useChina });
   return {
-    loadChatGpt: () =>
-      Effect.succeed({
-        accessToken: 'chatgpt-secret',
-        accountId: 'account-123',
-      }),
-    loadApiKey: (provider) => Effect.succeed(`${provider}-secret`),
-    ...overrides,
+    stores: { ...makeFakeSettingsStores().stores, globalState },
+    setRegion: (next) => {
+      Effect.runSync(globalState.update(GlobalStateKey.GLM_USE_CHINA, next));
+    },
   };
 }
 
 /**
  * The suite's one run edge: `getUsage` is a program, and the kernel's fake
- * host installs the process runtime (and its HTTP client) it settles on.
+ * host installs the process runtime (and its HTTP client) it settles on. The
+ * fake `fetch` is provided as the same reference the adapters read, so nothing
+ * has to be threaded through the service to reach the transport.
  */
 function runUsage(
   program: Effect.Effect<
@@ -64,21 +116,15 @@ function runUsage(
     never,
     HttpClient.HttpClient
   >,
+  http: UsageFetch,
 ): Promise<SubscriptionUsageSnapshot> {
-  return testRuntime().runPromise(program);
-}
-
-function serviceWith(
-  http: SubscriptionUsageHttp,
-  credentialSource = credentials(),
-  options: { readonly now?: () => number; readonly cacheTtlMs?: number } = {},
-): SubscriptionUsageService {
-  return new SubscriptionUsageService({
-    http,
-    credentials: credentialSource,
-    now: options.now ?? (() => 1_800_000_000_000),
-    cacheTtlMs: options.cacheTtlMs,
-  });
+  return testRuntime().runPromise(
+    Effect.provideService(
+      program,
+      FetchHttpClient.Fetch,
+      http as unknown as typeof globalThis.fetch,
+    ),
+  );
 }
 
 describe('subscription usage parsers', () => {
@@ -424,19 +470,10 @@ describe('SubscriptionUsageService', () => {
         new CodexAuthError('Sign in with ChatGPT to continue.', 'expired'),
       ),
     );
-    vi.spyOn(codexAuth, 'codexCoordinator').mockReturnValue({
-      loadSession,
-      getFreshSession,
-    } as never);
-    const http = vi.fn<SubscriptionUsageHttp>();
+    stubCodexSession({ loadSession, getFreshSession });
+    const http = vi.fn<UsageFetch>();
 
-    const snapshot = await runUsage(
-      new SubscriptionUsageService({
-        http,
-        secrets: new FakeSecrets(),
-        stores: makeFakeSettingsStores().stores,
-      }).getUsage('chatgpt'),
-    );
+    const snapshot = await runUsage(makeService().getUsage('chatgpt'), http);
 
     expect(snapshot).toMatchObject({
       state: 'unavailable',
@@ -482,10 +519,9 @@ describe('SubscriptionUsageService', () => {
   ])(
     'sends the required $provider authentication headers',
     async ({ provider, url, response, authorization, extraHeaders }) => {
-      const http = vi.fn<SubscriptionUsageHttp>(async () =>
-        jsonResponse(response),
-      );
-      const snapshot = await runUsage(serviceWith(http).getUsage(provider));
+      stubCodexSession();
+      const http = vi.fn<UsageFetch>(async () => jsonResponse(response));
+      const snapshot = await runUsage(makeService().getUsage(provider), http);
 
       expect(snapshot.state).toBe('available');
       expect(SubscriptionUsageSnapshotSchema.parse(snapshot)).toStrictEqual(
@@ -504,8 +540,7 @@ describe('SubscriptionUsageService', () => {
   );
 
   it('does not reuse GLM usage from the previous region within the TTL', async () => {
-    let useChina = true;
-    const http = vi.fn<SubscriptionUsageHttp>(async (url) =>
+    const http = vi.fn<UsageFetch>(async (url) =>
       jsonResponse({
         success: true,
         data: {
@@ -519,15 +554,15 @@ describe('SubscriptionUsageService', () => {
         },
       }),
     );
-    const service = serviceWith(
-      http,
-      credentials({ useGlmChina: () => Effect.sync(() => useChina) }),
-      { cacheTtlMs: 60_000 },
-    );
+    const region = glmRegionStores(true);
+    const service = makeService({ stores: region.stores });
 
-    const china = await runUsage(service.getUsage('glmCodingPlan'));
-    useChina = false;
-    const international = await runUsage(service.getUsage('glmCodingPlan'));
+    const china = await runUsage(service.getUsage('glmCodingPlan'), http);
+    region.setRegion(false);
+    const international = await runUsage(
+      service.getUsage('glmCodingPlan'),
+      http,
+    );
 
     expect(http.mock.calls.map(([url]) => url)).toStrictEqual([
       GLM_CODING_PLAN_USAGE_URL,
@@ -545,23 +580,20 @@ describe('SubscriptionUsageService', () => {
   ])(
     'serves concurrent GLM region requests from independent cache keys: China=%s',
     async (initialUseChina, olderUrl, newerUrl) => {
-      let useChina = initialUseChina;
       const responses = new Map<string, (response: Response) => void>();
-      const http = vi.fn<SubscriptionUsageHttp>(
+      const http = vi.fn<UsageFetch>(
         (url) =>
           new Promise<Response>((resolve) => {
             responses.set(String(url), resolve);
           }),
       );
-      const service = serviceWith(
-        http,
-        credentials({ useGlmChina: () => Effect.sync(() => useChina) }),
-      );
+      const region = glmRegionStores(initialUseChina);
+      const service = makeService({ stores: region.stores });
 
-      const olderRequest = runUsage(service.getUsage('glmCodingPlan'));
+      const olderRequest = runUsage(service.getUsage('glmCodingPlan'), http);
       await vi.waitFor(() => expect(http).toHaveBeenCalledTimes(1));
-      useChina = !initialUseChina;
-      const newerRequest = runUsage(service.getUsage('glmCodingPlan'));
+      region.setRegion(!initialUseChina);
+      const newerRequest = runUsage(service.getUsage('glmCodingPlan'), http);
       await vi.waitFor(() => expect(http).toHaveBeenCalledTimes(2));
 
       responses.get(newerUrl)?.(
@@ -592,46 +624,39 @@ describe('SubscriptionUsageService', () => {
     },
   );
 
-  it.each([
-    [
-      'a synchronous throw',
-      () => {
+  it('sanitizes a failed GLM region read', async () => {
+    const http = vi.fn<UsageFetch>();
+    const region = glmRegionStores();
+    const read = vi
+      .spyOn(region.stores.globalState, 'get')
+      .mockImplementation(() => {
         throw new Error('secret sync failure');
-      },
-    ],
-    ['a failed program', () => Effect.fail(new Error('secret async failure'))],
-  ])(
-    'sanitizes %s while resolving the GLM region',
-    async (_label, resolveRegion) => {
-      const http = vi.fn<SubscriptionUsageHttp>();
-      const useGlmChina = vi.fn(resolveRegion);
-
-      await expect(
-        runUsage(
-          serviceWith(http, credentials({ useGlmChina })).getUsage(
-            'glmCodingPlan',
-          ),
-        ),
-      ).resolves.toMatchObject({
-        state: 'unavailable',
-        provider: 'glmCodingPlan',
-        reason: 'request_failed',
-        windows: [],
       });
-      expect(useGlmChina).toHaveBeenCalledOnce();
-      expect(http).not.toHaveBeenCalled();
-    },
-  );
+
+    await expect(
+      runUsage(
+        makeService({ stores: region.stores }).getUsage('glmCodingPlan'),
+        http,
+      ),
+    ).resolves.toMatchObject({
+      state: 'unavailable',
+      provider: 'glmCodingPlan',
+      reason: 'request_failed',
+      windows: [],
+    });
+    expect(read).toHaveBeenCalled();
+    expect(http).not.toHaveBeenCalled();
+  });
 
   it('does not fall back across GLM hosts when the selected region fails', async () => {
-    const http = vi.fn<SubscriptionUsageHttp>(async () =>
+    const http = vi.fn<UsageFetch>(async () =>
       jsonResponse({ message: 'unavailable' }, 500),
     );
     const snapshot = await runUsage(
-      serviceWith(
-        http,
-        credentials({ useGlmChina: () => Effect.succeed(false) }),
-      ).getUsage('glmCodingPlan'),
+      makeService({ stores: glmRegionStores(false).stores }).getUsage(
+        'glmCodingPlan',
+      ),
+      http,
     );
 
     expect(http).toHaveBeenCalledExactlyOnceWith(
@@ -645,31 +670,20 @@ describe('SubscriptionUsageService', () => {
   });
 
   it.each([
-    [
-      'chatgpt' as const,
-      credentials({ loadChatGpt: () => Effect.succeed(null) }),
-    ],
-    [
-      'kimiCode' as const,
-      credentials({
-        loadApiKey: (provider) =>
-          Effect.succeed(provider === 'kimiCode' ? undefined : 'glm-secret'),
-      }),
-    ],
-    [
-      'glmCodingPlan' as const,
-      credentials({
-        loadApiKey: (provider) =>
-          Effect.succeed(provider === 'glm' ? undefined : 'kimi-secret'),
-      }),
-    ],
+    ['chatgpt' as const, { 'apiKey.kimiCode': 'k', 'apiKey.glm': 'g' }],
+    ['kimiCode' as const, { 'apiKey.glm': 'glm-secret' }],
+    ['glmCodingPlan' as const, { 'apiKey.kimiCode': 'kimiCode-secret' }],
   ])(
     'returns unavailable when %s credentials are missing',
-    async (provider, source) => {
-      const http = vi.fn<SubscriptionUsageHttp>();
+    async (provider, secrets) => {
+      stubCodexSession({ loadSession: () => Effect.succeed(null) });
+      const http = vi.fn<UsageFetch>();
 
       await expect(
-        runUsage(serviceWith(http, source).getUsage(provider)),
+        runUsage(
+          makeService({ secrets: new FakeSecrets(secrets) }).getUsage(provider),
+          http,
+        ),
       ).resolves.toMatchObject({
         state: 'unavailable',
         provider,
@@ -687,11 +701,12 @@ describe('SubscriptionUsageService', () => {
   ])(
     'maps %s HTTP %s to invalid credentials without exposing details',
     async (provider, status) => {
-      const http = vi.fn<SubscriptionUsageHttp>(async () =>
+      stubCodexSession();
+      const http = vi.fn<UsageFetch>(async () =>
         jsonResponse({ secret: 'must not escape' }, status),
       );
 
-      const snapshot = await runUsage(serviceWith(http).getUsage(provider));
+      const snapshot = await runUsage(makeService().getUsage(provider), http);
       expect(snapshot).toMatchObject({
         state: 'unavailable',
         reason: 'invalid_credentials',
@@ -700,19 +715,21 @@ describe('SubscriptionUsageService', () => {
     },
   );
 
+  // The one reader of CodexAuthError.needsReauth: a ChatGPT session refresh
+  // that needs re-auth is an invalid credential, a transient one is not.
   it.each([
     ['fatal' as const, 'invalid_credentials'],
     ['expired' as const, 'invalid_credentials'],
     ['transient' as const, 'request_failed'],
   ])('maps ChatGPT %s auth failures to %s', async (kind, reason) => {
-    const http = vi.fn<SubscriptionUsageHttp>();
-    const source = credentials({
-      loadChatGpt: () =>
+    stubCodexSession({
+      getFreshSession: () =>
         Effect.fail(new CodexAuthError('refresh failed', kind)),
     });
+    const http = vi.fn<UsageFetch>();
 
     await expect(
-      runUsage(serviceWith(http, source).getUsage('chatgpt')),
+      runUsage(makeService().getUsage('chatgpt'), http),
     ).resolves.toMatchObject({
       state: 'unavailable',
       reason,
@@ -721,31 +738,33 @@ describe('SubscriptionUsageService', () => {
   });
 
   it('normalizes malformed bodies and HTTP failures without exposing details', async () => {
-    const malformed = vi.fn<SubscriptionUsageHttp>(async () =>
+    stubCodexSession();
+    const malformed = vi.fn<UsageFetch>(async () =>
       jsonResponse({ rate_limit: { primary_window: { used_percent: 'bad' } } }),
     );
     await expect(
-      runUsage(serviceWith(malformed).getUsage('chatgpt')),
+      runUsage(makeService().getUsage('chatgpt'), malformed),
     ).resolves.toMatchObject({
       state: 'unavailable',
       reason: 'malformed_response',
     });
 
-    const invalidJson = vi.fn<SubscriptionUsageHttp>(
+    const invalidJson = vi.fn<UsageFetch>(
       async () => new Response('{', { status: 200 }),
     );
     await expect(
-      runUsage(serviceWith(invalidJson).getUsage('kimiCode')),
+      runUsage(makeService().getUsage('kimiCode'), invalidJson),
     ).resolves.toMatchObject({
       state: 'unavailable',
       reason: 'malformed_response',
     });
 
-    const failed = vi.fn<SubscriptionUsageHttp>(async () =>
+    const failed = vi.fn<UsageFetch>(async () =>
       jsonResponse({ secret: 'must not escape' }, 500),
     );
     const snapshot = await runUsage(
-      serviceWith(failed).getUsage('glmCodingPlan'),
+      makeService().getUsage('glmCodingPlan'),
+      failed,
     );
     expect(snapshot).toMatchObject({
       state: 'unavailable',
@@ -755,7 +774,8 @@ describe('SubscriptionUsageService', () => {
   });
 
   it('times out provider requests and returns an unavailable snapshot', async () => {
-    const http = vi.fn<SubscriptionUsageHttp>(
+    stubCodexSession();
+    const http = vi.fn<UsageFetch>(
       (_url, init) =>
         new Promise((_resolve, reject) => {
           init.signal?.addEventListener(
@@ -767,13 +787,10 @@ describe('SubscriptionUsageService', () => {
           );
         }),
     );
-    const service = new SubscriptionUsageService({
-      http,
-      credentials: credentials(),
-      requestTimeoutMs: 1,
-    });
 
-    await expect(runUsage(service.getUsage('chatgpt'))).resolves.toMatchObject({
+    await expect(
+      runUsage(makeService({ requestTimeoutMs: 1 }).getUsage('chatgpt'), http),
+    ).resolves.toMatchObject({
       state: 'unavailable',
       reason: 'request_failed',
     });
@@ -781,59 +798,42 @@ describe('SubscriptionUsageService', () => {
 
   it('uses the TTL cache and forced refresh bypasses it', async () => {
     let now = 1000;
-    const http = vi.fn<SubscriptionUsageHttp>(async () =>
+    const http = vi.fn<UsageFetch>(async () =>
       jsonResponse({ usage: { limit: 100, remaining: 50 } }),
     );
-    const service = serviceWith(http, credentials(), {
-      now: () => now,
-      cacheTtlMs: 100,
-    });
+    const service = makeService({ now: () => now });
 
-    const first = await runUsage(service.getUsage('kimiCode'));
-    expect(await runUsage(service.getUsage('kimiCode'))).toBe(first);
+    const first = await runUsage(service.getUsage('kimiCode'), http);
+    expect(await runUsage(service.getUsage('kimiCode'), http)).toBe(first);
     expect(http).toHaveBeenCalledTimes(1);
 
-    await runUsage(service.getUsage('kimiCode', { forceRefresh: true }));
+    await runUsage(service.getUsage('kimiCode', { forceRefresh: true }), http);
     expect(http).toHaveBeenCalledTimes(2);
 
-    now += 101;
-    await runUsage(service.getUsage('kimiCode'));
+    now += 30_001;
+    await runUsage(service.getUsage('kimiCode'), http);
     expect(http).toHaveBeenCalledTimes(3);
-  });
-
-  // lru-cache treats ttl:0 as "no expiration"; cacheTtlMs:0 must mean the
-  // opposite — never retain a result, so every call refetches.
-  it('never caches when cacheTtlMs is 0', async () => {
-    const http = vi.fn<SubscriptionUsageHttp>(async () =>
-      jsonResponse({ usage: { limit: 100, remaining: 50 } }),
-    );
-    const service = serviceWith(http, credentials(), { cacheTtlMs: 0 });
-
-    await runUsage(service.getUsage('kimiCode'));
-    await runUsage(service.getUsage('kimiCode'));
-
-    expect(http).toHaveBeenCalledTimes(2);
   });
 
   it('invalidates cached provider snapshots after credentials change', async () => {
     let remaining = 50;
-    const http = vi.fn<SubscriptionUsageHttp>(async () =>
+    const http = vi.fn<UsageFetch>(async () =>
       jsonResponse({ usage: { limit: 100, remaining } }),
     );
-    const service = serviceWith(http);
+    const service = makeService();
 
-    await expect(runUsage(service.getUsage('kimiCode'))).resolves.toMatchObject(
-      {
-        windows: [expect.objectContaining({ percentUsed: 50 })],
-      },
-    );
+    await expect(
+      runUsage(service.getUsage('kimiCode'), http),
+    ).resolves.toMatchObject({
+      windows: [expect.objectContaining({ percentUsed: 50 })],
+    });
     remaining = 25;
     service.invalidate('kimiCode');
-    await expect(runUsage(service.getUsage('kimiCode'))).resolves.toMatchObject(
-      {
-        windows: [expect.objectContaining({ percentUsed: 75 })],
-      },
-    );
+    await expect(
+      runUsage(service.getUsage('kimiCode'), http),
+    ).resolves.toMatchObject({
+      windows: [expect.objectContaining({ percentUsed: 75 })],
+    });
     expect(http).toHaveBeenCalledTimes(2);
   });
 
@@ -842,18 +842,18 @@ describe('SubscriptionUsageService', () => {
   // stale result never enters the cache — later callers see new-account usage.
   it('keeps an invalidated in-flight snapshot out of the cache', async () => {
     const responses: Array<(response: Response) => void> = [];
-    const http = vi.fn<SubscriptionUsageHttp>(
+    const http = vi.fn<UsageFetch>(
       () =>
         new Promise<Response>((resolve) => {
           responses.push(resolve);
         }),
     );
-    const service = serviceWith(http);
+    const service = makeService();
 
-    const oldAccountRequest = runUsage(service.getUsage('kimiCode'));
+    const oldAccountRequest = runUsage(service.getUsage('kimiCode'), http);
     await vi.waitFor(() => expect(responses).toHaveLength(1));
     service.invalidate('kimiCode');
-    const newAccountRequest = runUsage(service.getUsage('kimiCode'));
+    const newAccountRequest = runUsage(service.getUsage('kimiCode'), http);
     await vi.waitFor(() => expect(responses).toHaveLength(2));
 
     responses[0]?.(jsonResponse({ usage: { limit: 100, remaining: 90 } }));
@@ -869,22 +869,23 @@ describe('SubscriptionUsageService', () => {
     expect(newCallerSnapshot).toMatchObject({
       windows: [expect.objectContaining({ percentUsed: 80 })],
     });
-    expect(await runUsage(service.getUsage('kimiCode'))).toBe(
+    expect(await runUsage(service.getUsage('kimiCode'), http)).toBe(
       newCallerSnapshot,
     );
     expect(http).toHaveBeenCalledTimes(2);
   });
 
   it('deduplicates concurrent requests for the same provider', async () => {
+    stubCodexSession();
     let resolveResponse: ((response: Response) => void) | undefined;
     const response = new Promise<Response>((resolve) => {
       resolveResponse = resolve;
     });
-    const http = vi.fn<SubscriptionUsageHttp>(() => response);
-    const service = serviceWith(http);
+    const http = vi.fn<UsageFetch>(() => response);
+    const service = makeService();
 
-    const first = runUsage(service.getUsage('chatgpt'));
-    const second = runUsage(service.getUsage('chatgpt'));
+    const first = runUsage(service.getUsage('chatgpt'), http);
+    const second = runUsage(service.getUsage('chatgpt'), http);
     await vi.waitFor(() => expect(http).toHaveBeenCalledTimes(1));
     resolveResponse?.(
       jsonResponse({

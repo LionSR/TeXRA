@@ -2,10 +2,14 @@ import { Effect } from 'effect';
 import { ModelProvider, type ModelConfig } from 'llm-zoo';
 
 import { zeroCostAccessOverrides } from '@model/subscriptionAccessOverrides';
-import { isCodexSignedIn } from '@model/codex/codexSignedIn';
-import { isPreferCodexSubscription } from '@model/codex/codexPreference';
-import { isPreferXaiSubscription } from '@model/xai/xaiPreference';
-import { isXaiSignedIn } from '@model/xai/xaiSignedIn';
+import {
+  isCodexSignedIn,
+  isPreferCodexSubscription,
+} from '@model/codex/codexSubscription';
+import {
+  isPreferXaiSubscription,
+  isXaiSignedIn,
+} from '@model/xai/xaiSubscription';
 import type { LanguageModel } from '@platform/languageModel';
 import {
   CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
