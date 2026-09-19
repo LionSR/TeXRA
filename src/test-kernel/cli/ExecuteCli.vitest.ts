@@ -12,6 +12,7 @@ import type { executeCliRequest } from '@cli/runtime/executeCli';
 import { AgentError } from '@common/errors';
 import { RUN_OUTCOME } from '@shared/schemas';
 import type { AggregateId, FlowSnapshotPayload, RunId } from '@shared/schemas';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import {
   fakeProcessServices,
@@ -58,9 +59,11 @@ async function installFreshDefaultSession(): Promise<void> {
   await installStoragePlatform();
   await import('@test/support/sessionGraphTestSetup');
   const { initializeDefaultSession, teardownDefaultSession } =
-    await import('@agent/runtime/SessionHandle');
+    await import('@agent/runtime/sessionGraph');
   await Effect.runPromise(teardownDefaultSession());
-  await Effect.runPromise(initializeDefaultSession({}));
+  await Effect.runPromise(
+    initializeDefaultSession({ roots: testWorkspaceRoots() }),
+  );
 }
 
 async function installStoragePlatform(): Promise<void> {

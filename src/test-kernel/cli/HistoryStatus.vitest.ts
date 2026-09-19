@@ -12,7 +12,7 @@ import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import {
   initializeDefaultSession,
   teardownDefaultSession,
-} from '@agent/runtime/SessionHandle';
+} from '@agent/runtime/sessionGraph';
 import {
   formatCliHistoryDetailsText,
   listResumableCliHistoryEntries,
@@ -27,6 +27,7 @@ import {
   resolveHistoryRunStatus,
 } from '@shared/schemas';
 import type { FlowSnapshotPayload, RunId } from '@shared/schemas';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { setupPlatform } from '@test/support/setupPlatform';
 import {
@@ -54,7 +55,9 @@ setupPlatform(() => createTempDirPlatform('texra-history-status-', tempDirs));
 
 beforeEach(async () => {
   await Effect.runPromise(teardownDefaultSession());
-  await Effect.runPromise(initializeDefaultSession({}));
+  await Effect.runPromise(
+    initializeDefaultSession({ roots: testWorkspaceRoots() }),
+  );
 });
 
 const SNAPSHOT_RUNTIME = {

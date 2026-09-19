@@ -9,16 +9,17 @@ import {
   type SessionHandleInit,
 } from '@agent/runtime/SessionHandle';
 import { isDebugModeEnabled } from '@logger/logUtils';
-import { processWorkspaceRoots } from '@platform/workspaceRoots';
 import { aggregateId, type RunId, type RunPhase } from '@shared/schemas';
 import { isTranscriptEvent } from '@shared/schemas';
 import type { SessionOpenError } from '@shared/session/database';
 import { createTranscriptFold } from '@shared/session/traceFold';
 import { StreamLog } from '@shared/session/traceEntries';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { createRunTrace } from '@transcript';
 import { generateRunId } from '@utils/core';
 
-type TestSessionInit = SessionHandleInit;
+/** What a test supplies: the isolated roots are this helper's job. */
+type TestSessionInit = Partial<SessionHandleInit>;
 
 let opened = 0;
 
@@ -29,19 +30,19 @@ let opened = 0;
  * process default session.
  */
 export function createTestSession(init: TestSessionInit = {}): SessionHandle {
-  const process = processWorkspaceRoots();
+  const installed = testWorkspaceRoots();
   opened += 1;
   // An ephemeral session's graph builds synchronously.
   return Effect.runSync(
     openSessionEffect({
       ...init,
       roots: init.roots ?? {
-        workspace: process.workspace,
-        storage: `${process.storage}/test-sessions/${opened}`,
-        globalStorage: process.globalStorage,
-        config: process.config,
-        workspaceState: process.workspaceState,
-        globalState: process.globalState,
+        workspace: installed.workspace,
+        storage: `${installed.storage}/test-sessions/${opened}`,
+        globalStorage: installed.globalStorage,
+        config: installed.config,
+        workspaceState: installed.workspaceState,
+        globalState: installed.globalState,
       },
       transcriptMode: init.transcriptMode ?? {
         kind: 'ephemeral',
@@ -63,7 +64,7 @@ export function createProcessSession(
   init: TestSessionInit = {},
 ): Effect.Effect<SessionHandle, SessionOpenError> {
   return Effect.gen(function* () {
-    const roots = processWorkspaceRoots();
+    const roots = testWorkspaceRoots();
     const predecessors: SessionHandle[] = [];
     forEachLiveSession((live) => {
       if (live.roots.storage === roots.storage) predecessors.push(live);

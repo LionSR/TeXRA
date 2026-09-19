@@ -17,7 +17,6 @@ import {
   type ConfigProvider,
   type StateStore,
 } from '@platform/interfaces';
-import { processWorkspaceRoots } from '@platform/workspaceRoots';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   BASH_APPROVAL_CONFIG_KEY,
@@ -30,6 +29,7 @@ import type {
 } from '@shared/schemas';
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import {
   FakeScopedConfigProvider,
@@ -111,7 +111,7 @@ function createSettingsFixture(overrides: SettingsFixtureOverrides = {}) {
     overrides.session ??
     createTestSession({
       roots: {
-        ...processWorkspaceRoots(),
+        ...testWorkspaceRoots(),
         storage: '/workspace/settings-ipc/storage',
         config,
         workspaceState,

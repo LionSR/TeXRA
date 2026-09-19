@@ -32,9 +32,9 @@ import {
   resolveOutputFiles,
 } from '@agent/prompt/userVars';
 import type { ConfigProvider } from '@platform/interfaces';
-import { processWorkspaceRoots } from '@platform/workspaceRoots';
 import { AgentCategory } from '@shared/schemas';
 import { setRuntimeSkillSources } from '@skills/runtimeSkills';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { spiedTrace } from '@test/support/spiedTrace';
@@ -137,9 +137,9 @@ describe('buildUserVars runtime skill diagnostics', () => {
       spiedTrace({ warn, emit }),
       {
         workspacePath: fakePath('workspace'),
-        storageRoot: processWorkspaceRoots().storage,
-        config: processWorkspaceRoots().config,
-        settings: processWorkspaceRoots(),
+        storageRoot: testWorkspaceRoots().storage,
+        config: testWorkspaceRoots().config,
+        settings: testWorkspaceRoots(),
       },
     );
 
@@ -163,9 +163,9 @@ describe('buildUserVars runtime skill diagnostics', () => {
       spiedTrace({ warn, emit }),
       {
         workspacePath: fakePath('workspace'),
-        storageRoot: processWorkspaceRoots().storage,
-        config: processWorkspaceRoots().config,
-        settings: processWorkspaceRoots(),
+        storageRoot: testWorkspaceRoots().storage,
+        config: testWorkspaceRoots().config,
+        settings: testWorkspaceRoots(),
       },
     );
 
@@ -202,9 +202,9 @@ describe('buildUserVars runtime skill diagnostics', () => {
       spiedTrace({ emit }),
       {
         workspacePath: fakePath('workspace'),
-        storageRoot: processWorkspaceRoots().storage,
-        config: processWorkspaceRoots().config,
-        settings: processWorkspaceRoots(),
+        storageRoot: testWorkspaceRoots().storage,
+        config: testWorkspaceRoots().config,
+        settings: testWorkspaceRoots(),
       },
     );
 
@@ -232,9 +232,9 @@ describe('buildUserVars runtime skill diagnostics', () => {
       spiedTrace({ emit }),
       {
         workspacePath: fakePath('workspace'),
-        storageRoot: processWorkspaceRoots().storage,
-        config: processWorkspaceRoots().config,
-        settings: processWorkspaceRoots(),
+        storageRoot: testWorkspaceRoots().storage,
+        config: testWorkspaceRoots().config,
+        settings: testWorkspaceRoots(),
       },
     );
 
@@ -313,9 +313,9 @@ function buildVars(
     noopTrace,
     {
       workspacePath: fakePath('workspace'),
-      storageRoot: processWorkspaceRoots().storage,
-      config: processWorkspaceRoots().config,
-      settings: processWorkspaceRoots(),
+      storageRoot: testWorkspaceRoots().storage,
+      config: testWorkspaceRoots().config,
+      settings: testWorkspaceRoots(),
     },
   );
 }

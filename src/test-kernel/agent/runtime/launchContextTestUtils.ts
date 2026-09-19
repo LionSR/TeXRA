@@ -13,8 +13,8 @@ import {
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { UsageMonitor } from '@agent/runtime/UsageMonitor';
-import { processWorkspaceRoots } from '@platform/workspaceRoots';
 import { AgentCategory, type RunId } from '@shared/schemas';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { fakeStores } from '@test/support/FakePlatform';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
@@ -90,7 +90,7 @@ export function createTestLaunchContext({
         logger,
         runId,
         runStageId: undefined,
-        config: processWorkspaceRoots().config,
+        config: testWorkspaceRoots().config,
       },
       { agentName: config.agent, agentCategory: setting.agentCategory },
     ),

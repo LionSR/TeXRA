@@ -49,6 +49,7 @@ import {
 } from '@cli/runtime/cliConfig';
 import { pickGlobalArgs } from '@cli/runtime/globalArgs';
 import { RUN_OUTCOME, AgentCategory, type RunId } from '@shared/schemas';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 import { createRunCommandCliContext } from '@test/cli/fixtures/cliContext';
 import {
@@ -87,7 +88,9 @@ async function initNodeBackedPlatform(options: {
     storagePath: options.storagePath,
     globalStoragePath: options.globalStoragePath,
   });
-  await Effect.runPromise(initializeDefaultSession({}));
+  await Effect.runPromise(
+    initializeDefaultSession({ roots: testWorkspaceRoots() }),
+  );
 }
 
 async function initDefaultFakePlatform(): Promise<void> {

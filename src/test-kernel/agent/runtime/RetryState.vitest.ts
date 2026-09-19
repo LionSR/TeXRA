@@ -62,7 +62,6 @@ import {
   LanguageModel,
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
 } from '@platform/languageModel';
-import { processWorkspaceRoots } from '@platform/workspaceRoots';
 import {
   AgentCategory,
   AgentRunStateSnapshotSchema,
@@ -76,6 +75,7 @@ import {
 } from '@shared/session/database';
 import { RunLedger, RunLedgerRefused } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
@@ -299,7 +299,7 @@ function agentRun(
         logger,
         runId,
         runStageId: undefined,
-        config: processWorkspaceRoots().config,
+        config: testWorkspaceRoots().config,
       },
       { agentName: CONFIG.agent, agentCategory: SETTING.agentCategory },
     ),

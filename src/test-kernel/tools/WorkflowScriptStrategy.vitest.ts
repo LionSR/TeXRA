@@ -9,10 +9,8 @@ import { Runs } from '@agent/runtime/runRegistry';
 import { deriveWorkflowScriptCheckpointId } from '@agent/workflowScript/checkpoint';
 import { runPersistedWorkflowScript } from '@agent/workflowScript/checkpoint';
 import type { WorkflowAgentInvocation } from '@agent/workflowScript/types';
-import {
-  initializeDefaultSession,
-  type SessionHandle,
-} from '@agent/runtime/SessionHandle';
+import { type SessionHandle } from '@agent/runtime/SessionHandle';
+import { initializeDefaultSession } from '@agent/runtime/sessionGraph';
 import { closeSession } from '@agent/runtime/sessionGraph';
 import { WORKFLOW_SKIPPED_RESULT } from '@agent/workflowScript/types';
 import { WorkflowControlRegistry } from '@agent/runtime/workflowControlRegistry';
@@ -23,6 +21,7 @@ import {
   type RunId,
 } from '@shared/schemas';
 import { DatabaseWriteFailed } from '@shared/session/database';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import {
@@ -143,6 +142,7 @@ beforeEach(async () => {
   // roots on this test's session instead of borrowing the setup file host.
   session = await Effect.runPromise(
     initializeDefaultSession({
+      roots: testWorkspaceRoots(),
       transcriptMode: {
         kind: 'ephemeral',
         reason: 'workflow script strategy test session',

@@ -2,6 +2,7 @@ import { writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
 import { Effect, Layer, Stream } from 'effect';
+
 /**
  * Production-shaped regression for #9531. Agent registration, launch, child
  * looping, persisted resume, result/report writes, parent admission, recovery,
@@ -37,11 +38,11 @@ import type { Message } from '@agent/runtime/loop/rows';
 import { executeAgent } from '@agent/runtime/executeAgent';
 import { resumeRun } from '@agent/runtime/resumeRun';
 import { Runs } from '@agent/runtime/runRegistry';
+import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   initializeDefaultSession,
   teardownDefaultSession,
-  type SessionHandle,
-} from '@agent/runtime/SessionHandle';
+} from '@agent/runtime/sessionGraph';
 
 // Local imports - shared/runtime boundaries
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
@@ -67,6 +68,7 @@ import {
   type RunId,
   AgentCategory,
 } from '@shared/schemas';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
@@ -553,7 +555,9 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     // The process session over a persistent store: one session per root,
     // so the ephemeral default this file's setup installed gives way to it.
     await Effect.runPromise(teardownDefaultSession());
-    session = await Effect.runPromise(initializeDefaultSession({}));
+    session = await Effect.runPromise(
+      initializeDefaultSession({ roots: testWorkspaceRoots() }),
+    );
     publishTestRunStart(session, OUTER_RUN_ID);
     await Effect.runPromise(session.settlePublications());
     childId = undefined;

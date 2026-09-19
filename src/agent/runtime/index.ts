@@ -18,19 +18,18 @@
  */
 
 // SessionHandle
-export {
-  SessionHandle,
-  initializeDefaultSession,
-  teardownDefaultSession,
-} from './SessionHandle';
+export { SessionHandle } from './SessionHandle';
 
 // sessionGraph: the process's session owner, as the hosts and the SDK open
-// and close sessions through it (one session per workspace storage root).
+// and close sessions through it (one session per workspace storage root),
+// and the process-default session that owner holds.
 export {
   closeSession,
+  initializeDefaultSession,
   installedProcessRuntime,
   listSessions,
   openSessionEffect,
+  teardownDefaultSession,
   tryDefaultSession,
 } from './sessionGraph';
 

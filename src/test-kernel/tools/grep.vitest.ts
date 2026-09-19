@@ -2,8 +2,8 @@ import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { afterEach, describe, expect, vi } from 'vitest';
 
-import { processWorkspaceRoots } from '@platform/workspaceRoots';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { setupPlatform } from '@test/support/setupPlatform';
 import * as gitignoreUtils from '@tools/gitignore';
@@ -158,7 +158,7 @@ describe('GrepTool run', () => {
               exitCode: 0,
             }),
           );
-        yield* processWorkspaceRoots().workspaceState.update(
+        yield* testWorkspaceRoots().workspaceState.update(
           WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED,
           false,
         );
@@ -174,7 +174,7 @@ describe('GrepTool run', () => {
           expect(executeSpy).toHaveBeenCalledOnce();
           expect(executeSpy.mock.calls[0]?.[0]).not.toContain('--ignore-file');
         } finally {
-          yield* processWorkspaceRoots().workspaceState.update(
+          yield* testWorkspaceRoots().workspaceState.update(
             WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED,
             true,
           );

@@ -7,6 +7,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 import { Effect } from 'effect';
 import { it as effectIt } from '@effect/vitest';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import {
   createTestSession,
   publishTestRunStart,
@@ -292,9 +293,11 @@ describe('CLI history runtime', () => {
 
   beforeEach(async () => {
     const { initializeDefaultSession, teardownDefaultSession } =
-      await import('@agent/runtime/SessionHandle');
+      await import('@agent/runtime/sessionGraph');
     await Effect.runPromise(teardownDefaultSession());
-    await Effect.runPromise(initializeDefaultSession({}));
+    await Effect.runPromise(
+      initializeDefaultSession({ roots: testWorkspaceRoots() }),
+    );
     vi.clearAllMocks();
     const host = installedHost();
     vi.mocked(initCliPlatform).mockReturnValue(

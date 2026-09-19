@@ -4,9 +4,9 @@ import * as path from 'node:path';
 // Local imports
 import type { runCompileCheck } from '@agent/implementations/flows/reflection/output/compileCheck';
 import type { OutputState } from '@agent/implementations/flows/reflection/output/outputState';
-import { processWorkspaceRoots } from '@platform/workspaceRoots';
 import type { RunId, FileLocation, OutputFileInfo } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { installPlatform } from '@test/support/setupPlatform';
 import { fakePath } from '@test/support/FakePlatform';
 import { rootedFsLayer } from '@test/support/fsTestUtils';
@@ -60,8 +60,8 @@ export function compileContext(
 ): Parameters<typeof runCompileCheck>[0] {
   return {
     // The installed fake host's roots: these suites seed and read one host.
-    roots: processWorkspaceRoots(),
-    fileService: new RunFileService(runId, processWorkspaceRoots()),
+    roots: testWorkspaceRoots(),
+    fileService: new RunFileService(runId, testWorkspaceRoots()),
     outputState,
     logger: spiedTrace(),
     runId,

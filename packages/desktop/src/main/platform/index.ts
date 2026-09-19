@@ -8,15 +8,13 @@ import { installTexraAccountProbes } from '@controllers/modelAccess/installTexra
 import { openAppStateStore } from '@controllers/session/appStateStore';
 import { installProcessRuntime } from '@controllers/session/sessionLayer';
 import { NotificationFailed } from '@hosts/uiHosts';
+import { setDebugModeConfig } from '@logger/logUtils';
 import { initPlatform } from '@platform/platform';
 import {
   withProcessServices,
   type ProcessRuntime,
 } from '@platform/processRuntime';
-import {
-  initProcessWorkspaceRoots,
-  type WorkspaceRoots,
-} from '@platform/workspaceRoots';
+import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { SHUTDOWN_PHASE } from '@platform/interfaces';
 import type {
   AgentDirectoriesPort,
@@ -235,8 +233,9 @@ export async function initializeElectronPlatform(
     workspaceState: workspaceStateStore,
     globalState: globalStateStore,
   });
-  initProcessWorkspaceRoots(processRoots);
   initProcessSettingHost('desktop');
+  // The logger's process-wide debug-mode read, over this host's configuration.
+  setDebugModeConfig(processRoots.config);
   // TeXRA's account plane (ChatGPT / Grok sign-in). Without this
   // the model layer is bring-your-own-key. See installTexraAccountProbes.
   installTexraAccountProbes(secrets);

@@ -2,16 +2,18 @@ import '@test/support/sessionGraphTestSetup';
 
 import { Effect } from 'effect';
 
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   initializeDefaultSession,
-  type SessionHandle,
-} from '@agent/runtime/SessionHandle';
-import { tryDefaultSession } from '@agent/runtime/sessionGraph';
+  tryDefaultSession,
+} from '@agent/runtime/sessionGraph';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 
 // An ephemeral session's graph builds synchronously, so the process default
 // is open before the importing suite's first test.
 Effect.runSync(
   initializeDefaultSession({
+    roots: testWorkspaceRoots(),
     transcriptMode: {
       kind: 'ephemeral',
       reason: 'test process default session',

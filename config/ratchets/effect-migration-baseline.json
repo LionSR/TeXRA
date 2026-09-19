@@ -6,11 +6,6 @@
       "src/tools/github/PollingSourceBase.ts": 1,
       "src/utils/system/toolUtils.ts": 1
     },
-    "ambient:asyncLocalStorage": {
-      "src/agent/runtime/sessionGraph.ts": 2,
-      "src/utils/config/configUtils.ts": 1,
-      "src/utils/config/platformSettings.ts": 1
-    },
     "new AbortController()": {
       "src/agent/runtime/childRunLoop.ts": 1,
       "src/tools/claudeAgent.ts": 1

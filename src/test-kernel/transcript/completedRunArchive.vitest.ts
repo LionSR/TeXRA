@@ -29,10 +29,8 @@ import {
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
 import { loadChatExportInput as loadChatExportInputEffect } from '@agent/export/loadChatExportInput';
-import {
-  initializeDefaultSession,
-  type SessionHandle,
-} from '@agent/runtime/SessionHandle';
+import { type SessionHandle } from '@agent/runtime/SessionHandle';
+import { initializeDefaultSession } from '@agent/runtime/sessionGraph';
 import { resumeRun } from '@agent/runtime/resumeRun';
 import { closeSession } from '@agent/runtime/sessionGraph';
 import {
@@ -52,6 +50,7 @@ import {
 } from '@shared/schemas';
 import type { RunId, TodoItem } from '@shared/schemas';
 import type { StreamLogAppendInput } from '@shared/session/traceEntries';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import {
@@ -462,7 +461,9 @@ describe('completedRunArchive facade', () => {
 
         yield* Effect.promise(() => stampRun(runId));
         yield* closeTestSession(taskSession);
-        const session = yield* initializeDefaultSession({});
+        const session = yield* initializeDefaultSession({
+          roots: testWorkspaceRoots(),
+        });
         taskSession = session;
         publishTestRunStart(session, runId);
         yield* session.settlePublications();

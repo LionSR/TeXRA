@@ -53,11 +53,13 @@ import { RunRegistry, Runs } from '@agent/runtime/runRegistry';
 import { runLedgerLayer } from '@agent/runtime/RunLedger';
 import { sessionEventsLayer, tailFrom } from '@agent/runtime/SessionEvents';
 import { ModelRetryGate } from '@agent/runtime/ModelRetryGate';
-import { SessionHandle } from '@agent/runtime/SessionHandle';
+import {
+  SessionHandle,
+  type SessionHandleInit,
+} from '@agent/runtime/SessionHandle';
 import {
   initSessionOwner,
   type SessionGraph,
-  type SessionOpen,
 } from '@agent/runtime/sessionGraph';
 import { SupabaseAuth, type SupabaseAuthShape } from '@auth/SupabaseAuth';
 import { createLog } from '@logger/logUtils';
@@ -136,7 +138,7 @@ const OWNER_LIVENESS_PROBE_INTERVAL = '5 seconds';
  * proposal, section 3).
  */
 class SessionKey implements Equal.Equal {
-  constructor(readonly open: SessionOpen) {}
+  constructor(readonly open: SessionHandleInit) {}
 
   get storage(): string {
     return this.open.roots.storage;
@@ -766,7 +768,7 @@ class Sessions extends Context.Service<
 /** The session of `open`'s root: built now, or the one already open. A
  *  build that fails leaves no entry behind (the map would otherwise answer
  *  every later open of the root with the cached failure). */
-const openSession = (open: SessionOpen) =>
+const openSession = (open: SessionHandleInit) =>
   Effect.gen(function* () {
     const sessions = yield* Sessions;
     const key = new SessionKey(open);

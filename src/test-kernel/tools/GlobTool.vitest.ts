@@ -6,8 +6,8 @@ import { Effect, FileSystem, Fiber, PlatformError } from 'effect';
 import { describe, expect, vi } from 'vitest';
 import type { ToolServices } from '@agent/runtime/ToolServices';
 
-import { processWorkspaceRoots } from '@platform/workspaceRoots';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { installPlatform } from '@test/support/setupPlatform';
 import { withTempDirEffect } from '@test/support/tempDirPlatform';
@@ -158,7 +158,7 @@ describe('GlobTool match metadata', () => {
                     'external',
                   ),
                 );
-                yield* processWorkspaceRoots().workspaceState.update(
+                yield* testWorkspaceRoots().workspaceState.update(
                   WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED,
                   false,
                 );

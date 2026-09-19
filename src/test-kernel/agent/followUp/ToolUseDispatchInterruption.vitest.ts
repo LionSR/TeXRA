@@ -34,7 +34,6 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { UsageMonitor } from '@agent/runtime/UsageMonitor';
 import { TraceEmitter } from '@agent/trace';
 import type { Model, TurnResult } from '@llm/turn';
-import { processWorkspaceRoots } from '@platform/workspaceRoots';
 import {
   AgentCategory,
   type RequestDecision,
@@ -43,6 +42,7 @@ import {
 } from '@shared/schemas';
 import { RunLedger } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { hostStores } from '@test/support/setupPlatform';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
@@ -254,7 +254,7 @@ function agentRunTestLayer(init: HarnessInit) {
             logger,
             runId: init.runId,
             runStageId: undefined,
-            config: processWorkspaceRoots().config,
+            config: testWorkspaceRoots().config,
           },
           { agentName: 'chat', agentCategory: AgentCategory.ToolUse },
         ),

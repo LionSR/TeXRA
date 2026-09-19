@@ -20,6 +20,7 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { formatError } from '@common/errors';
 import type { RunId } from '@shared/schemas';
 import type { ToolResult } from '@shared/schemas';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import { parseWorkingDirectory } from '@tools/pathResolution';
 import { errorResult } from '@tools/core/result';
 import { displayToStoragePath } from '@tools/memory/memoryUtils';
@@ -28,7 +29,6 @@ import { runStorageLocationUnder } from '@utils/files/runStorageFs';
 import { workspaceAbsolutePath } from '@utils/files/workspaceFS';
 import { entryExists } from '@utils/files/fsEntryExists';
 import { isWorktreeSupportEnabled } from '@utils/config/worktreeConfig';
-import { processSettingsStores } from '@utils/config/platformSettings';
 import {
   ensureError,
   extractErrorMessage,
@@ -111,6 +111,23 @@ export type WorkflowAgentInput = z.infer<typeof WorkflowAgentInputSchema>;
 
 const WORKTREE_DISABLED_MESSAGE =
   "git worktree support is disabled in this workspace. Omit working_directory, or ask the user to turn on `texra.git.worktreeSupport` ('Subagent worktrees' on the Multi-Agent settings tab).";
+
+/**
+ * The `working_directory` opt-in gate, over the settings of the project the
+ * call belongs to. It lives here beside the field it guards, but runs in the
+ * tool's `execute`, where `call.roots` names that project — the schema is
+ * static, parsed once by the tool facade before any call exists, so a gate in
+ * its transform could only ever answer for whichever workspace the process
+ * came up in.
+ */
+export function rejectDisabledWorktreeDirectory(
+  stores: SettingsStores,
+  workingDirectory: string | undefined,
+): Extract<ToolResult, { status: 'error' }> | null {
+  if (!workingDirectory) return null;
+  if (isWorktreeSupportEnabled(stores)) return null;
+  return errorResult(WORKTREE_DISABLED_MESSAGE);
+}
 const TOOL_USE_SUBAGENT_HANDOFF_INSTRUCTION = [
   'The delegated instruction above is your full task contract. This includes any tool, network, file, approval, output-format, or scope constraints it states. If a requested action conflicts with those constraints or needs missing context, report the conflict instead of assuming permission.',
   'Your final response is delivered verbatim to the parent orchestrator. End with the substantive result (answer, findings, evidence, unresolved caveats), never only a status note such as "done".',
@@ -169,19 +186,10 @@ export const workingDirectoryField = z
     if (Result.isFailure(parsed)) return fail(toErrorMessage(parsed.failure));
     const trimmed = parsed.success;
     if (!trimmed) return trimmed;
-    // The one opt-in read with no caller to take slots from: this is a static
-    // Zod transform on the tool's input schema, parsed by the tool facade
-    // before any per-call value reaches it, so the slots can only be the
-    // process's. That is also what it resolved to before the workspace-roots
-    // scope was retired — the facade parses on an Effect fiber, which never
-    // carried the launch's frame — so a multi-session host gates on the
-    // process roots here today. Moving the gate to
-    // `DelegateAgentTool.execute`, where `call.roots` is in hand, is what
-    // makes it answer per project; that turns a schema rejection into a tool
-    // error, so it wants its own change.
-    if (!isWorktreeSupportEnabled(processSettingsStores())) {
-      return fail(WORKTREE_DISABLED_MESSAGE);
-    }
+    // The worktree opt-in is NOT checked here: it belongs to the project the
+    // call is on, and this transform runs on the tool facade's one parse of a
+    // static schema, before any call exists. `rejectDisabledWorktreeDirectory`
+    // applies it in `execute`, where `call.roots` names that project.
     const existing = Result.try(() => ensureWorkingDirectoryExists(trimmed));
     if (Result.isFailure(existing))
       return fail(toErrorMessage(existing.failure));

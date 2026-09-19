@@ -13,13 +13,10 @@ import { beforeEach, describe, expect, vi } from 'vitest';
 import type { ToolServices } from '@agent/runtime/ToolServices';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import {
-  initializeDefaultSession,
-  type SessionHandle,
-} from '@agent/runtime/SessionHandle';
+import { type SessionHandle } from '@agent/runtime/SessionHandle';
+import { initializeDefaultSession } from '@agent/runtime/sessionGraph';
 import { closeSession } from '@agent/runtime/sessionGraph';
 import { resolveRunStoragePath } from '@platform/defaults/workspaceStorage';
-import { processWorkspaceRoots } from '@platform/workspaceRoots';
 import { RUN_PHASE, DEFAULT_TOOL_CONFIG, aggregateId } from '@shared/schemas';
 import {
   RunIdSchema,
@@ -27,6 +24,7 @@ import {
   type RunPhase,
   type TodoItem,
 } from '@shared/schemas';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { createFakeRunRecords } from '@test/support/FakeRunRecords';
 import { testRunHandle } from '@test/support/runHandleFixtures';
@@ -178,6 +176,7 @@ describe('ExecutionsTool', () => {
   beforeEach(async () => {
     await Effect.runPromise(
       initializeDefaultSession({
+        roots: testWorkspaceRoots(),
         transcriptMode: { kind: 'ephemeral', reason: 'executions tool test' },
       }),
     );
@@ -651,7 +650,7 @@ describe('ExecutionsTool', () => {
         Effect.gen(function* () {
           const runId = 'abc123' as RunId;
           const runDir = path.join(
-            processWorkspaceRoots().storage,
+            testWorkspaceRoots().storage,
             resolveRunStoragePath(runId),
           );
           yield* Effect.promise(() => mkdir(runDir, { recursive: true }));

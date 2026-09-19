@@ -42,7 +42,6 @@ import {
   LanguageModel,
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
 } from '@platform/languageModel';
-import { processWorkspaceRoots } from '@platform/workspaceRoots';
 import {
   AgentCategory,
   RUN_OUTCOME,
@@ -56,6 +55,7 @@ import { RunLedger } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
 import { StreamLog } from '@shared/session/traceEntries';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { rootedFsLayer } from '@test/support/fsTestUtils';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
@@ -456,7 +456,7 @@ function agentRunTestLayer(init: LoopInit) {
             logger,
             runId: init.runId,
             runStageId: undefined,
-            config: processWorkspaceRoots().config,
+            config: testWorkspaceRoots().config,
           },
           { agentName: 'correct', agentCategory: AgentCategory.Workflow },
         ),

@@ -48,7 +48,6 @@ const mocks = vi.hoisted(() => ({
   foldDeath: undefined as Deferred.Deferred<never, Error> | undefined,
   eventListener: undefined as ((event: unknown) => void) | undefined,
   initPlatform: vi.fn(),
-  initProcessWorkspaceRoots: vi.fn(),
   /** The process's session owner, as `installProcessRuntime` installs it
    *  and `disposeProcessRuntime` takes it away, carrying the runtime it runs
    *  on: what says whether the package must compose the process. */
@@ -193,10 +192,6 @@ vi.mock('@tools/agentCliSessionStores', () => ({
 vi.mock('@platform/platform', () => ({
   initPlatform: mocks.initPlatform,
   tryPlatform: () => mocks.activePlatform,
-}));
-
-vi.mock('@platform/workspaceRoots', () => ({
-  initProcessWorkspaceRoots: mocks.initProcessWorkspaceRoots,
 }));
 
 vi.mock('@transcript/StreamLogStore', () => ({

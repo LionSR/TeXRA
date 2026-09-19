@@ -4,9 +4,9 @@ import { MODEL_CONFIGS } from 'llm-zoo';
 
 import { resolveChatDefaults } from '@cli/runtime/chatDefaults';
 import { CLI_CHEAP_START_MODEL } from '@cli/runtime/cliConfig';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { FakeConfigProvider } from '@test/support/FakePlatform';
 import { installPlatform } from '@test/support/setupPlatform';
-import { processSettingsStores } from '@utils/config/platformSettings';
 
 type ChatDefaultsInit = Omit<
   Parameters<typeof resolveChatDefaults>[0],
@@ -34,7 +34,7 @@ async function expectChatDefaults(
   expected: Record<string, unknown>,
 ): Promise<void> {
   expect(
-    resolveChatDefaults({ ...init, stores: processSettingsStores() }),
+    resolveChatDefaults({ ...init, stores: testWorkspaceRoots() }),
   ).toMatchObject(expected);
 }
 

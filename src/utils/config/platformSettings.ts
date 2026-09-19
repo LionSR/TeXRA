@@ -1,5 +1,4 @@
 import type { ConfigTarget, ConfigWriteFailed } from '@platform/interfaces';
-import { processWorkspaceRoots } from '@platform/workspaceRoots';
 import { settingByKey, type SettingHost } from '@shared/schemas';
 import {
   readSetting,
@@ -21,7 +20,7 @@ function requireEntry(key: string) {
  * by host (the git identity rows live in worktree-shared workspace state on
  * the extension and desktop and in `.texra/config.json` on the CLI). One
  * process is one host, so the composition root installs it once, beside
- * `initProcessWorkspaceRoots()`.
+ * `initPlatform()`.
  */
 let processSettingHost: SettingHost = 'vscode';
 
@@ -32,30 +31,6 @@ export function initProcessSettingHost(host: SettingHost): void {
 /** The host this process is, as installed by {@link initProcessSettingHost}. */
 export function getProcessSettingHost(): SettingHost {
   return processSettingHost;
-}
-
-/**
- * The three setting slots of the PROCESS: the roots a composition root
- * installed beside `initPlatform()`, never a session's. `settingsAccess`
- * resolves `entry.slots[host]` per row over these, so the git-author keys
- * read `.texra/config.json` (config) on the CLI while other state-backed keys
- * use the state stores.
- *
- * Two callers, both of them outside every session by construction: the CLI
- * composition root resolving the slots it is about to publish, and the
- * delegation tools' `working_directory` Zod transform, which the tool facade
- * parses before any per-call value reaches it. Everything that holds a
- * workspace — a tool call's `call.roots`, a run's `session.roots`, a host
- * command's `session.roots` — reads through {@link readSettingFrom} and gets
- * the answer for its own project.
- */
-export function processSettingsStores(): SettingsStores {
-  const roots = processWorkspaceRoots();
-  return {
-    config: roots.config,
-    workspaceState: roots.workspaceState,
-    globalState: roots.globalState,
-  };
 }
 
 /**

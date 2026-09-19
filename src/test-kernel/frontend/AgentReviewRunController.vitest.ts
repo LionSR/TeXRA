@@ -9,8 +9,8 @@ import {
   AgentReviewRunController,
   type AgentReviewRunToken,
 } from '@frontend/review/AgentReviewRunController';
-import { processWorkspaceRoots } from '@platform/workspaceRoots';
 import type { RunId } from '@shared/schemas';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 
 function createRunHarness() {
   const stopAgentRun = vi.fn(() => Effect.void);
@@ -18,7 +18,7 @@ function createRunHarness() {
   const session = {
     // The setting the controller reads when it stops a run is this session's:
     // the installed fake host's stores, as the real handle would carry them.
-    roots: processWorkspaceRoots(),
+    roots: testWorkspaceRoots(),
     runs: {
       getHandle: () => currentHandle,
       stopAgentRun,

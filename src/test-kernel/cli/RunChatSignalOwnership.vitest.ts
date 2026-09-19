@@ -24,6 +24,7 @@ import {
   USER_FOLLOW_UP_SUPPORT,
   type RunId,
 } from '@shared/schemas';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
@@ -268,7 +269,9 @@ describe('runChat signal ownership wiring', () => {
     // The init opens the process session over the roots it installed; here
     // the suite opens it over the fake host's roots, once per test.
     await Effect.runPromise(teardownDefaultSession());
-    const session = await Effect.runPromise(initializeDefaultSession({}));
+    const session = await Effect.runPromise(
+      initializeDefaultSession({ roots: testWorkspaceRoots() }),
+    );
     // The init hands back the services the composition root holds; the fake
     // host installed above owns those stores here.
     const cliServices = () => ({

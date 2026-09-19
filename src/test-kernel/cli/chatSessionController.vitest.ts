@@ -153,7 +153,6 @@ import {
 } from '@cli/chat/tui/state/sessionRunState';
 import { DisposableStore } from '@platform/disposable';
 import type { RecoveryContinuation } from '@platform/interfaces';
-import { processWorkspaceRoots } from '@platform/workspaceRoots';
 import {
   aggregateId,
   RUN_OUTCOME,
@@ -163,6 +162,7 @@ import {
 import { TEXRA_APPROVAL_POLICY_DEFAULT } from '@shared/approvalPolicy';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
@@ -357,7 +357,7 @@ function installSession(overrides: Record<string, unknown> = {}): void {
     getHandle: mocks.getRunHandle,
   };
   mocks.sessionStub.mockReturnValue({
-    roots: processWorkspaceRoots(),
+    roots: testWorkspaceRoots(),
     approvalPolicy: TEXRA_APPROVAL_POLICY_DEFAULT,
     interactions: {
       use: vi.fn(() => Effect.succeed(mocks.detachHostInteractions)),

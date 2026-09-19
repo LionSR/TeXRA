@@ -4,10 +4,10 @@ import * as path from 'node:path';
 // Third-party imports
 import { Effect, FileSystem, PlatformError } from 'effect';
 import { describe, expect, it } from 'vitest';
-import { processWorkspaceRoots } from '@platform/workspaceRoots';
+import type { RunId } from '@shared/schemas';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 
 // Local imports
-import type { RunId } from '@shared/schemas';
 import { errnoError, nodePlatformLayer } from '@test/support/fsTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 import {
@@ -212,7 +212,7 @@ describe('inspectRunStorageEntryUnder', () => {
   });
 
   it('preserves source provenance instead of treating workspace inputs as outputs', () => {
-    const fileService = new RunFileService(runId, processWorkspaceRoots());
+    const fileService = new RunFileService(runId, testWorkspaceRoots());
 
     expect(fileService.locateSource('draft.tex')).toEqual({
       kind: 'workspace',
