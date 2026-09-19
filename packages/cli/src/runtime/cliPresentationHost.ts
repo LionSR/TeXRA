@@ -18,7 +18,6 @@ import {
   createCliLogSink,
   flushNdjsonStdout,
   type Logger,
-  type LogSink,
 } from './logSinks';
 import { createRunProgressRenderer } from './runProgressRenderer';
 import { missingAgentMessage } from './agents';
@@ -43,15 +42,13 @@ export function createCliRuntimeHost(
   runtime: ProcessRuntime,
   context: CliContext,
 ): CliRuntimeHost {
-  let sink: LogSink | undefined;
   let logger: Logger | undefined;
   let closed = false;
   const ndjson = context.outputFormat === 'ndjson';
   const runProgress = createRunProgressRenderer(runtime, context);
   function ensureLogger(): Logger {
     if (logger) return logger;
-    sink = createCliLogSink(context.outputFormat);
-    logger = createCliLogger(sink);
+    logger = createCliLogger(createCliLogSink(context.outputFormat));
     return logger;
   }
 
@@ -133,9 +130,9 @@ export function createCliRuntimeHost(
       return Effect.gen(function* () {
         closed = true;
         runProgress?.clear();
-        yield* sink?.flush?.() ?? Effect.void;
-        // Other writers put records on the module-level NDJSON queue, which
-        // the lazily created `sink` may never cover.
+        // One flush covers this host's own logger too: in NDJSON mode its
+        // sink IS the module-level queue, and the text sink has nothing
+        // buffered.
         if (ndjson) yield* flushNdjsonStdout();
       });
     },
