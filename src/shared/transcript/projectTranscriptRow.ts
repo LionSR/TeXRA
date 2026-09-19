@@ -52,7 +52,7 @@ import type {
   TranscriptRowBase,
 } from './transcriptRow';
 
-export interface TranscriptRowContext {
+interface TranscriptRowContext {
   /** The row previously projected for this slot. Consulted for exactly one
    *  thing: a phase's `GROUP_END` carries no index/total, so the counts the
    *  `GROUP_START` established are inherited rather than dropped. */

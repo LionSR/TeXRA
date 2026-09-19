@@ -69,7 +69,7 @@ export interface AggregateClaim {
  * classification, and the resume gate all answer the same question of the
  * same two fields, and a run whose owner is provably dead is free.
  */
-export type ClaimStanding =
+type ClaimStanding =
   | { readonly kind: 'self' }
   | { readonly kind: 'held'; readonly owner: OwnerId }
   | { readonly kind: 'free' };
