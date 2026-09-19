@@ -133,12 +133,11 @@ function getExtraDirs(): string[] {
       // Git for Windows. Its installer offers "Use Git from Git Bash only",
       // which installs git and deliberately leaves it off the system PATH —
       // indistinguishable from "git is not installed" to anything that only
-      // consults PATH. `cmd` holds the wrappers meant for callers outside
-      // bash; `bin` is listed after it as the older layout's location.
+      // consults PATH. Only `cmd`: it holds the wrappers meant for callers
+      // outside bash, so it alone resolves `git`, while `bin` would also put
+      // Git's MSYS `bash`/`sh` on every spawned command's PATH.
       'C:\\Program Files\\Git\\cmd',
-      'C:\\Program Files\\Git\\bin',
       'C:\\Program Files (x86)\\Git\\cmd',
-      'C:\\Program Files (x86)\\Git\\bin',
     );
 
     // Ghostscript installs under a version-stamped directory. This was six
@@ -150,11 +149,12 @@ function getExtraDirs(): string[] {
     for (const programFiles of ['C:/Program Files', 'C:/Program Files (x86)']) {
       dirs.push(...globDescending(`${programFiles}/gs/*/bin`));
     }
-    const localAppData =
-      process.env.LOCALAPPDATA ||
-      (process.env.USERPROFILE
-        ? path.join(process.env.USERPROFILE, 'AppData', 'Local')
-        : null);
+    const localAppDataFallback = process.env.USERPROFILE
+      ? path.join(process.env.USERPROFILE, 'AppData', 'Local')
+      : null;
+    const localAppData = process.env.LOCALAPPDATA
+      ? absoluteEnvRoot(process.env.LOCALAPPDATA, 'LOCALAPPDATA')
+      : localAppDataFallback;
     if (localAppData) {
       dirs.push(
         // Modern MiKTeX per-user install
@@ -176,7 +176,6 @@ function getExtraDirs(): string[] {
         // Git for Windows installed per-user (the default when the installer
         // runs without admin rights).
         path.join(localAppData, 'Programs', 'Git', 'cmd'),
-        path.join(localAppData, 'Programs', 'Git', 'bin'),
       );
     }
 
@@ -347,10 +346,23 @@ export function extendEnvPath(
  * Windows the extension silently applied or did not, per spawn. Writing the
  * key that is already present is the whole fix.
  */
-export function withExtendedPath(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
-  const key =
-    Object.keys(env).find((name) => name.toLowerCase() === 'path') ?? 'PATH';
-  return { ...env, [key]: extendEnvPath(env[key]) };
+export function withExtendedPath<T extends NodeJS.ProcessEnv>(env: T): T {
+  // Every spelling present is collapsed into the first one, not just
+  // overwritten: a caller that merges its own `PATH` override onto a Windows
+  // `Path` arrives here already holding two, and writing one of them back
+  // would leave the other beside it — the very state this exists to prevent.
+  // The value taken is the last one merged, which is the override the caller
+  // meant; it is written under the first spelling, which is the platform's.
+  const keys = Object.keys(env).filter((name) => name.toLowerCase() === 'path');
+  const key = keys[0] ?? 'PATH';
+  const extended: Record<string, string | undefined> = {
+    ...env,
+    [key]: extendEnvPath(env[keys.at(-1) ?? key]),
+  };
+  for (const shadowed of keys.slice(1)) delete extended[shadowed];
+  // The computed key defeats inference; every other entry is carried through
+  // unchanged and the one written is a string, so the shape is T's.
+  return extended as T;
 }
 
 /**
