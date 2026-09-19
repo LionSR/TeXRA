@@ -11,10 +11,7 @@
 import { create } from 'mutative';
 
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import {
-  LATEX_CONFIG_FIELD_TO_KEY,
-  type LatexConfigValues,
-} from '@shared/constants/latexConfig';
+import { type LatexConfigValues } from '@shared/constants/latexConfig';
 import { type SettingsViewOutboundHandlerRegistry } from '@shared/schemas';
 
 import {
@@ -128,16 +125,10 @@ export const settingsViewHandlers: SettingsViewOutboundHandlerRegistry = {
   // Catalog-derived settings snapshots.
   [SETTINGS_VIEW_COMMANDS.UPDATE_SETTINGS_SNAPSHOT]: (data) => {
     if (data.snapshot === 'latex') {
-      // The dispatcher already parsed each row against its own catalog
-      // schema, so this only re-keys catalog keys to field names.
-      latexConfigValues.set(
-        Object.fromEntries(
-          Object.entries(LATEX_CONFIG_FIELD_TO_KEY).map(([field, key]) => [
-            field,
-            data.values[key],
-          ]),
-        ) as LatexConfigValues,
-      );
+      // The LaTeX tab renders its own keyed record rather than the catalog
+      // signals, so it takes the payload whole. Every row the snapshot carries
+      // reaches the tab, including one added after this line was written.
+      latexConfigValues.set(data.values as LatexConfigValues);
       return;
     }
     applySettingsSnapshot(data.values);

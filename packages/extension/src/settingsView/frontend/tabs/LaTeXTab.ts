@@ -26,6 +26,7 @@ import {
 } from '@shared/styles';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
   type LatexSettingsStatus,
   DEFAULT_LATEX_SETTINGS_STATUS,
@@ -59,7 +60,6 @@ import {
 } from '@shared/constants/replacementCategories';
 import {
   LATEX_CONFIG_DEFAULTS,
-  LATEX_CONFIG_FIELD_TO_KEY,
   LATEX_CONFIG_RANGES,
   type LatexConfigValues,
 } from '@shared/constants/latexConfig';
@@ -242,7 +242,10 @@ export class LaTeXTab extends LitElement {
 
   @state()
   private replacementJsonErrors: Partial<
-    Record<'customReplacements' | 'customReplacementsRegex', string>
+    Record<
+      'texra.latex.customReplacements' | 'texra.latex.customReplacementsRegex',
+      string
+    >
   > = {};
 
   protected override willUpdate(changed: PropertyValues<this>): void {
@@ -256,8 +259,8 @@ export class LaTeXTab extends LitElement {
     super.updated(changed);
     if (!changed.has('configValues')) return;
 
-    this.syncCustomReplacementControl('customReplacements');
-    this.syncCustomReplacementControl('customReplacementsRegex');
+    this.syncCustomReplacementControl('texra.latex.customReplacements');
+    this.syncCustomReplacementControl('texra.latex.customReplacementsRegex');
   }
 
   private handleApply(field?: SettingInfo['key'], reset = false): void {
@@ -605,51 +608,53 @@ export class LaTeXTab extends LitElement {
           icon: 'wand-magic-sparkles',
         })}
         ${this.renderBooleanSetting({
-          field: 'wrapCritiqueInAlign',
+          field: 'texra.latex.wrapCritiqueInAlign',
           label: 'Protect criticism inside align environments',
           description:
             'Wrap bare \\critique and \\comment commands with \\intertext so align environments remain valid.',
           defaultValue: true,
-          currentValue: cv.wrapCritiqueInAlign,
+          currentValue: cv['texra.latex.wrapCritiqueInAlign'],
         })}
         ${this.renderReplacementCategories({
-          field: 'enabledReplacements',
+          field: 'texra.latex.enabledReplacements',
           label: 'Direct replacement groups',
           description:
             'Cleanup groups that replace exact LaTeX text and characters.',
           categories: NON_REGEX_REPLACEMENT_CATEGORIES,
           defaultValue: DEFAULT_ENABLED_REPLACEMENTS,
-          currentValue: cv.enabledReplacements,
+          currentValue: cv['texra.latex.enabledReplacements'],
         })}
         ${this.renderReplacementCategories({
-          field: 'enabledReplacementsRegex',
+          field: 'texra.latex.enabledReplacementsRegex',
           label: 'Pattern replacement groups',
           description:
             'Cleanup groups that recognize LaTeX structures and surrounding context.',
           categories: REGEX_REPLACEMENT_CATEGORIES,
           defaultValue: DEFAULT_ENABLED_REGEX_REPLACEMENTS,
-          currentValue: cv.enabledReplacementsRegex,
+          currentValue: cv['texra.latex.enabledReplacementsRegex'],
         })}
         ${this.renderCustomReplacementSetting({
-          field: 'customReplacements',
+          field: 'texra.latex.customReplacements',
           label: 'Custom direct replacements',
           description:
             'A JSON object whose keys are exact source text and whose values are replacements.',
-          currentValue: cv.customReplacements,
+          currentValue: cv['texra.latex.customReplacements'],
         })}
         ${this.renderCustomReplacementSetting({
-          field: 'customReplacementsRegex',
+          field: 'texra.latex.customReplacementsRegex',
           label: 'Custom pattern replacements',
           description:
             'A JSON object whose keys are regular expressions and whose values may use $1, $2, and later capture groups.',
-          currentValue: cv.customReplacementsRegex,
+          currentValue: cv['texra.latex.customReplacementsRegex'],
         })}
       </div>
     `;
   }
 
   private renderReplacementCategories<
-    F extends 'enabledReplacements' | 'enabledReplacementsRegex',
+    F extends
+      | 'texra.latex.enabledReplacements'
+      | 'texra.latex.enabledReplacementsRegex',
     C extends NonRegexReplacementCategory | RegexReplacementCategory,
   >(opts: {
     field: F;
@@ -716,7 +721,8 @@ export class LaTeXTab extends LitElement {
   }
 
   private renderCustomReplacementSetting(opts: {
-    field: 'customReplacements' | 'customReplacementsRegex';
+    field:
+      'texra.latex.customReplacements' | 'texra.latex.customReplacementsRegex';
     label: string;
     description: string;
     currentValue: Record<string, string> | undefined;
@@ -782,10 +788,11 @@ export class LaTeXTab extends LitElement {
   }
 
   private syncCustomReplacementControl(
-    field: 'customReplacements' | 'customReplacementsRegex',
+    field:
+      'texra.latex.customReplacements' | 'texra.latex.customReplacementsRegex',
   ): void {
     const control = this.shadowRoot?.querySelector<WaTextarea>(
-      `#latex-setting-${field}`,
+      `[id="latex-setting-${field}"]`,
     );
     if (!control) return;
 
@@ -794,11 +801,12 @@ export class LaTeXTab extends LitElement {
   }
 
   private clearCustomReplacementError(
-    field: 'customReplacements' | 'customReplacementsRegex',
+    field:
+      'texra.latex.customReplacements' | 'texra.latex.customReplacementsRegex',
     source?: string,
   ): void {
     const control = this.shadowRoot?.querySelector<WaTextarea>(
-      `#latex-setting-${field}`,
+      `[id="latex-setting-${field}"]`,
     );
     if (control) {
       if (source !== undefined) control.value = source;
@@ -813,7 +821,8 @@ export class LaTeXTab extends LitElement {
   }
 
   private handleCustomReplacementChange(
-    field: 'customReplacements' | 'customReplacementsRegex',
+    field:
+      'texra.latex.customReplacements' | 'texra.latex.customReplacementsRegex',
     control: WaTextarea,
   ): void {
     const source = control.value ?? '';
@@ -829,12 +838,9 @@ export class LaTeXTab extends LitElement {
       };
       return;
     }
-    const settingKey = LATEX_CONFIG_FIELD_TO_KEY[field];
-    const entry = settingByKey(settingKey);
+    const entry = settingByKey(field);
     if (!entry) {
-      throw new Error(
-        `Missing catalog entry for LaTeX setting "${settingKey}"`,
-      );
+      throw new Error(`Missing catalog entry for LaTeX setting "${field}"`);
     }
     const result = entry.schema.safeParse(parsed);
     if (!result.success) {
@@ -861,7 +867,7 @@ export class LaTeXTab extends LitElement {
     field: F,
     value: LatexConfigValueFor<F> | undefined,
   ): void {
-    postStateSetting(LATEX_CONFIG_FIELD_TO_KEY[field], value ?? null);
+    postStateSetting(field, value ?? null);
   }
 
   private renderCompileDiffSettings(): TemplateResult {
@@ -875,77 +881,78 @@ export class LaTeXTab extends LitElement {
           icon: 'bolt',
         })}
         ${this.renderBooleanSetting({
-          field: 'workflowAutoCompile',
+          field: WorkspaceStateKey.WORKFLOW_AUTO_COMPILE,
           label: 'Auto-compile after each round',
           description:
             'After a workflow writes .tex outputs, attempt to compile each root document (latexmk, falling back to pdflatex) in run storage.',
           defaultValue: LATEX_CONFIG_DEFAULTS.workflowAutoCompile,
-          currentValue: cv.workflowAutoCompile,
+          currentValue: cv[WorkspaceStateKey.WORKFLOW_AUTO_COMPILE],
         })}
         ${this.renderNumberSetting({
-          field: 'workflowAutoCompileTimeoutMs',
+          field: WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS,
           label: 'Auto-compile timeout (ms)',
           description: `Per-file timeout for the post-workflow compile check. Minimum ${LATEX_CONFIG_RANGES.workflowAutoCompileTimeoutMs.min}.`,
           defaultValue: LATEX_CONFIG_DEFAULTS.workflowAutoCompileTimeoutMs,
-          currentValue: cv.workflowAutoCompileTimeoutMs,
+          currentValue: cv[WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS],
           min: LATEX_CONFIG_RANGES.workflowAutoCompileTimeoutMs.min,
         })}
         ${this.renderBooleanSetting({
-          field: 'workflowAutoOpenPdf',
+          field: WorkspaceStateKey.WORKFLOW_AUTO_OPEN_PDF,
           label: 'Open compiled PDF or log',
           description:
             'After auto-compile finishes, open the latest PDF on success or the truncated LaTeX log on failure.',
           defaultValue: LATEX_CONFIG_DEFAULTS.workflowAutoOpenPdf,
-          currentValue: cv.workflowAutoOpenPdf,
+          currentValue: cv[WorkspaceStateKey.WORKFLOW_AUTO_OPEN_PDF],
         })}
         ${this.renderBooleanSetting({
-          field: 'workflowRejectOnCompileFailure',
+          field: WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
           label: 'Reject rounds when compile fails',
           description:
             'When a LaTeX compile check fails, use the next planned round to repair the output with the compile log.',
           defaultValue: LATEX_CONFIG_DEFAULTS.workflowRejectOnCompileFailure,
-          currentValue: cv.workflowRejectOnCompileFailure,
+          currentValue:
+            cv[WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE],
         })}
         ${this.renderBooleanSetting({
-          field: 'latexdiffBetweenRounds',
+          field: WorkspaceStateKey.LATEXDIFF_BETWEEN_ROUNDS,
           label: 'Generate diffs between consecutive rounds',
           description:
             'In addition to comparing each round to the original input, also generate diffs between consecutive agent rounds.',
           defaultValue: LATEX_CONFIG_DEFAULTS.latexdiffBetweenRounds,
-          currentValue: cv.latexdiffBetweenRounds,
+          currentValue: cv[WorkspaceStateKey.LATEXDIFF_BETWEEN_ROUNDS],
         })}
         ${this.renderNumberSetting({
-          field: 'latexdiffTimeoutMs',
+          field: WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS,
           label: 'latexdiff timeout (ms)',
           description: `Timeout for latexdiff invocations. Range ${LATEX_CONFIG_RANGES.latexdiffTimeoutMs.min}–${LATEX_CONFIG_RANGES.latexdiffTimeoutMs.max}.`,
           defaultValue: LATEX_CONFIG_DEFAULTS.latexdiffTimeoutMs,
-          currentValue: cv.latexdiffTimeoutMs,
+          currentValue: cv[WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS],
           min: LATEX_CONFIG_RANGES.latexdiffTimeoutMs.min,
           max: LATEX_CONFIG_RANGES.latexdiffTimeoutMs.max,
         })}
         ${this.renderEnumSetting({
-          field: 'latexdiffMathMarkup',
+          field: WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
           label: 'latexdiff math markup',
           description: 'Granularity of markup in displayed math environments.',
           defaultValue: LATEX_CONFIG_DEFAULTS.latexdiffMathMarkup,
-          currentValue: cv.latexdiffMathMarkup,
+          currentValue: cv[WorkspaceStateKey.LATEXDIFF_MATH_MARKUP],
           withDescription: true,
         })}
         ${this.renderBooleanSetting({
-          field: 'latexdiffChangesOnly',
+          field: WorkspaceStateKey.LATEXDIFF_CHANGES_ONLY,
           label: 'Show only changed pages in latexdiff PDFs',
           description:
             'Pass latexdiff the ONLYCHANGEDPAGE subtype so compiled diff PDFs focus on pages with edits.',
           defaultValue: LATEX_CONFIG_DEFAULTS.latexdiffChangesOnly,
-          currentValue: cv.latexdiffChangesOnly,
+          currentValue: cv[WorkspaceStateKey.LATEXDIFF_CHANGES_ONLY],
         })}
         ${this.renderEnumSetting({
-          field: 'latexFormatter',
+          field: WorkspaceStateKey.LATEX_FORMATTER,
           label: 'LaTeX formatter',
           description:
             '"none" disables formatting; "latexindent" requires Perl; "tex-fmt" is a Rust-based alternative.',
           defaultValue: LATEX_CONFIG_DEFAULTS.latexFormatter,
-          currentValue: cv.latexFormatter,
+          currentValue: cv[WorkspaceStateKey.LATEX_FORMATTER],
           withDescription: false,
         })}
       </div>
@@ -982,12 +989,12 @@ export class LaTeXTab extends LitElement {
 
   private renderBooleanSetting(opts: {
     field:
-      | 'workflowAutoCompile'
-      | 'workflowAutoOpenPdf'
-      | 'workflowRejectOnCompileFailure'
-      | 'latexdiffBetweenRounds'
-      | 'latexdiffChangesOnly'
-      | 'wrapCritiqueInAlign';
+      | WorkspaceStateKey.WORKFLOW_AUTO_COMPILE
+      | WorkspaceStateKey.WORKFLOW_AUTO_OPEN_PDF
+      | WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE
+      | WorkspaceStateKey.LATEXDIFF_BETWEEN_ROUNDS
+      | WorkspaceStateKey.LATEXDIFF_CHANGES_ONLY
+      | 'texra.latex.wrapCritiqueInAlign';
     label: string;
     description: string;
     defaultValue: boolean;
@@ -1059,7 +1066,9 @@ export class LaTeXTab extends LitElement {
   }
 
   private renderNumberSetting(opts: {
-    field: 'workflowAutoCompileTimeoutMs' | 'latexdiffTimeoutMs';
+    field:
+      | WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS
+      | WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS;
     label: string;
     description: string;
     defaultValue: number;
@@ -1114,7 +1123,9 @@ export class LaTeXTab extends LitElement {
    * ` (default)` appended to the default option.
    */
   private renderEnumSetting<
-    F extends 'latexdiffMathMarkup' | 'latexFormatter',
+    F extends
+      | WorkspaceStateKey.LATEXDIFF_MATH_MARKUP
+      | WorkspaceStateKey.LATEX_FORMATTER,
   >(opts: {
     field: F;
     label: string;
@@ -1126,18 +1137,19 @@ export class LaTeXTab extends LitElement {
     const effective = opts.currentValue ?? opts.defaultValue;
     const isCustom = effective !== opts.defaultValue;
     const controlId = `latex-setting-${opts.field}`;
-    const options = catalogEnumChoices<LatexConfigValueFor<F>>(
-      LATEX_CONFIG_FIELD_TO_KEY[opts.field],
-    ).map((choice) => {
-      const base =
-        opts.withDescription && choice.description
-          ? `${choice.value} — ${choice.description}`
-          : choice.value;
-      return {
-        value: choice.value,
-        label: choice.value === opts.defaultValue ? `${base} (default)` : base,
-      };
-    });
+    const options = catalogEnumChoices<LatexConfigValueFor<F>>(opts.field).map(
+      (choice) => {
+        const base =
+          opts.withDescription && choice.description
+            ? `${choice.value} — ${choice.description}`
+            : choice.value;
+        return {
+          value: choice.value,
+          label:
+            choice.value === opts.defaultValue ? `${base} (default)` : base,
+        };
+      },
+    );
     return this.renderConfigRow({
       label: opts.label,
       description: opts.description,
@@ -1168,7 +1180,7 @@ export class LaTeXTab extends LitElement {
   }
 }
 
-type LatexConfigField = keyof typeof LATEX_CONFIG_FIELD_TO_KEY;
+type LatexConfigField = keyof LatexConfigValues;
 type LatexConfigValueFor<F extends LatexConfigField> = NonNullable<
   LatexConfigValues[F]
 >;

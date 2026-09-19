@@ -59,63 +59,37 @@ export const LATEX_CONFIG_RANGES = {
 } as const;
 
 /**
- * The value type each LaTeX field renders, as `LatexConfigValues` below
- * projects it. Restated here rather than derived because the catalog is
- * runtime-typed (`settingSchemaWithoutPrefault` returns `unknown`) — the same
- * bargain the 26 other catalog-backed signals strike in `settingsState.ts`,
- * where `settingSignal<T>` names the value type beside the key. The values
+ * The value type each LaTeX setting renders, keyed by its canonical `texra.*`
+ * catalog key — the same key the snapshot arrives under and the same key a
+ * write posts back, so the tab addresses a setting exactly one way. Restated
+ * here rather than derived because the catalog is runtime-typed
+ * (`settingSchemaWithoutPrefault` returns `unknown`) — the same bargain the 26
+ * other catalog-backed signals strike in `settingsState.ts`, where
+ * `settingSignal<T>` names the value type beside the key. The values
  * themselves are validated by each row's own catalog schema at the snapshot
  * wire boundary (`snapshotMessage` in `@shared/schemas/settingsViewMessages`),
  * so this type describes what already arrived rather than guarding it.
  */
 interface LatexConfigValueTypes {
-  workflowAutoCompile: boolean;
-  workflowAutoCompileTimeoutMs: number;
-  workflowAutoOpenPdf: boolean;
-  workflowRejectOnCompileFailure: boolean;
-  latexdiffBetweenRounds: boolean;
-  latexdiffTimeoutMs: number;
-  latexdiffMathMarkup: LatexdiffMathMarkupValue;
-  latexdiffChangesOnly: boolean;
-  latexFormatter: LatexFormatterValue;
-  wrapCritiqueInAlign: boolean;
-  enabledReplacements: NonRegexReplacementCategory[];
-  enabledReplacementsRegex: RegexReplacementCategory[];
-  customReplacementsRegex: Record<string, string>;
-  customReplacements: Record<string, string>;
+  [WorkspaceStateKey.WORKFLOW_AUTO_COMPILE]: boolean;
+  [WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS]: number;
+  [WorkspaceStateKey.WORKFLOW_AUTO_OPEN_PDF]: boolean;
+  [WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE]: boolean;
+  [WorkspaceStateKey.LATEXDIFF_BETWEEN_ROUNDS]: boolean;
+  [WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS]: number;
+  [WorkspaceStateKey.LATEXDIFF_MATH_MARKUP]: LatexdiffMathMarkupValue;
+  [WorkspaceStateKey.LATEXDIFF_CHANGES_ONLY]: boolean;
+  [WorkspaceStateKey.LATEX_FORMATTER]: LatexFormatterValue;
+  'texra.latex.wrapCritiqueInAlign': boolean;
+  'texra.latex.enabledReplacements': NonRegexReplacementCategory[];
+  'texra.latex.enabledReplacementsRegex': RegexReplacementCategory[];
+  'texra.latex.customReplacementsRegex': Record<string, string>;
+  'texra.latex.customReplacements': Record<string, string>;
 }
 
 /**
- * Frontend field projection of the catalog-derived LaTeX snapshot. Partial
- * because the signal starts empty and fills in when the snapshot lands.
+ * Catalog-keyed projection of the LaTeX snapshot the settings view renders.
+ * Partial because the signal starts empty and fills in when the snapshot
+ * lands.
  */
 export type LatexConfigValues = Partial<LatexConfigValueTypes>;
-
-/**
- * Every frontend-facing LaTeX field → its canonical catalog key. This map is
- * the field set: the `satisfies` below fails to compile if a field is added to
- * (or removed from) {@link LatexConfigValueTypes} without a matching entry
- * here, in either direction. The settings view's message dispatcher uses the
- * map to re-key the snapshot at the wire boundary; `LaTeXTab` uses it for
- * catalog-driven writes
- * and for the `latex-setting-<field>` control ids. `stateSettings.vitest.ts`
- * checks that every key here still names a catalog row.
- */
-export const LATEX_CONFIG_FIELD_TO_KEY = {
-  workflowAutoCompile: WorkspaceStateKey.WORKFLOW_AUTO_COMPILE,
-  workflowAutoCompileTimeoutMs:
-    WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS,
-  workflowAutoOpenPdf: WorkspaceStateKey.WORKFLOW_AUTO_OPEN_PDF,
-  workflowRejectOnCompileFailure:
-    WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
-  latexdiffBetweenRounds: WorkspaceStateKey.LATEXDIFF_BETWEEN_ROUNDS,
-  latexdiffTimeoutMs: WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS,
-  latexdiffMathMarkup: WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
-  latexdiffChangesOnly: WorkspaceStateKey.LATEXDIFF_CHANGES_ONLY,
-  latexFormatter: WorkspaceStateKey.LATEX_FORMATTER,
-  wrapCritiqueInAlign: 'texra.latex.wrapCritiqueInAlign',
-  enabledReplacements: 'texra.latex.enabledReplacements',
-  enabledReplacementsRegex: 'texra.latex.enabledReplacementsRegex',
-  customReplacementsRegex: 'texra.latex.customReplacementsRegex',
-  customReplacements: 'texra.latex.customReplacements',
-} as const satisfies Record<keyof LatexConfigValueTypes, string>;

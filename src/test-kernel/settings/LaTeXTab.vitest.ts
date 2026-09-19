@@ -36,7 +36,7 @@ async function mountLaTeXTab(
 
 function customReplacementsInput(tab: LaTeXTabElement): WaTextareaElement {
   return tab.shadowRoot!.querySelector<WaTextareaElement>(
-    '#latex-setting-customReplacements',
+    '[id="latex-setting-texra.latex.customReplacements"]',
   )!;
 }
 
@@ -62,7 +62,7 @@ describe('LaTeXTab custom replacement validation', () => {
 
   it('clears stale JSON validity immediately when reset is selected', async () => {
     const tab = await mountLaTeXTab({
-      customReplacements: { before: 'after' },
+      'texra.latex.customReplacements': { before: 'after' },
     });
     const setCustomValidity = await enterInvalidJson(tab);
     const input = customReplacementsInput(tab);
@@ -83,7 +83,7 @@ describe('LaTeXTab custom replacement validation', () => {
     const setCustomValidity = await enterInvalidJson(tab);
     const input = customReplacementsInput(tab);
 
-    tab.configValues = { customReplacements: {} };
+    tab.configValues = { 'texra.latex.customReplacements': {} };
     await tab.updateComplete;
 
     expect(input.value).toBe('{}');

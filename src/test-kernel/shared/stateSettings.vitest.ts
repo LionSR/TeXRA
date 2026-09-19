@@ -19,7 +19,6 @@ import {
   DEFAULT_GIT_AUTHOR_NAME,
   DEFAULT_TOOL_PATH_PROTECTION_ENABLED,
   STATE_SETTINGS,
-  settingByKey,
   settingEnumChoices,
   settingEnumOptions,
   modelsTabSettings,
@@ -56,10 +55,7 @@ import {
   settingDefault,
   writeSetting,
 } from '@shared/config/settingsAccess';
-import {
-  LATEX_CONFIG_DEFAULTS,
-  LATEX_CONFIG_FIELD_TO_KEY,
-} from '@shared/constants/latexConfig';
+import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latexConfig';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { REPO_ROOT } from '@test/support/repoScan';
 import { installPlatform } from '@test/support/setupPlatform';
@@ -150,12 +146,6 @@ const STATE_SETTING_KEYS: readonly string[] = STATE_SETTINGS.map(
 describe('state settings catalog', () => {
   it('uses unique canonical keys', () => {
     assert.equal(new Set(STATE_SETTING_KEYS).size, STATE_SETTING_KEYS.length);
-  });
-
-  it('backs every LaTeX config field with a catalog entry', () => {
-    for (const [field, key] of Object.entries(LATEX_CONFIG_FIELD_TO_KEY)) {
-      assert.ok(settingByKey(key), `${field} has no catalog entry: ${key}`);
-    }
   });
 
   it('every honoring host names an existing reader file', () => {
