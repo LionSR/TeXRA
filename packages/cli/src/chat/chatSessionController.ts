@@ -698,6 +698,36 @@ export function createChatSessionController(
   // resume
   // -----------------------------------------------------------------------
 
+  // Deliberately not folded together with `tryResumeRun` below. The two read
+  // as near-duplicates because they call the same helpers in a similar order,
+  // but every step that touches the recovery lease differs, and the
+  // differences are the contracts, not incidental drift:
+  //  - Completion contract. This program forks the run chain and completes at
+  //    rehydration (fire-and-forget, per the interface docstring); the port
+  //    awaits its deferred so its caller reads a boolean, and classifies a
+  //    defect into `AgentResumeFailed` for the caller's retry decision.
+  //  - Recovery transfer. A manual resume supersedes unconditionally in its
+  //    synchronous prologue, seeds the batch into `resumeRun` as
+  //    `extraFollowUps`, and restores it whenever the stream queue never took
+  //    over. A wake supersedes only when the caller passed no queue-ready
+  //    callback, writes the batch through `submitBatch` before resuming, and
+  //    restores only when that one write fails or is refused. Two protocols,
+  //    two restore predicates.
+  //  - Adoption point. Config is adopted inside `onResumeResolved`, which
+  //    `resumeRun` calls after it claims ownership and only once the saved
+  //    state loaded, so a row advertised from its checkpoint `stat` alone can
+  //    still be refused into the chat the user is looking at. A wake adopts
+  //    before the call and leaves the local transcript alone.
+  //  - Refusals. A manual resume names its reason in the transcript (missing
+  //    run, workflow category, lost recovery claim) and leaves the exit code
+  //    untouched; a wake answers `false` silently and has no category check.
+  // Unifying them takes one knob per bullet, and those knobs would sit on the
+  // `handBackUnusedRecovery` / `restoreInterruptedRecovery` pairing, where a
+  // double hand-back or a missed restore silently loses the follow-ups typed
+  // during an interruption. The shared parts are already named helpers
+  // (`setupRunHost`, `toolUseResumeOptions`, `settleResumedTurn`,
+  // `recoverRun`, and the two lease helpers above); what is left here is the
+  // part that genuinely differs. Don't merge these two bodies.
   const resume = (id: RunId): Effect.Effect<void, unknown> =>
     // `Effect.suspend` is what keeps the claim handshake synchronous: its
     // body is this program's first step, so the availability check and the
