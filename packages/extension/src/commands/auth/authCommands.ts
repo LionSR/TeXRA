@@ -6,7 +6,7 @@ import { SupabaseAuth } from '@auth/SupabaseAuth';
 import { type OAuthProvider } from '@auth/config';
 import { AUTH_PROVIDER_ID } from '@auth/constants';
 import { SupabaseAuthProvider } from '@frontend/auth/SupabaseAuthProvider';
-import { confirmModal } from '@frontend/ui/dialogs';
+import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import {
   showLoggedErrorMessage,
   showLoggedMessage,
@@ -200,10 +200,9 @@ export const signOut: Effect.Effect<
     return;
   }
 
-  const confirmed = yield* Effect.tryPromise({
-    try: () => confirmModal('Are you sure you want to sign out?', 'Sign out'),
-    catch: authCommandFailed,
-  });
+  const confirmed = yield* vscodeUi
+    .confirm('Are you sure you want to sign out?', { confirmLabel: 'Sign out' })
+    .pipe(Effect.mapError(authCommandFailed));
   if (!confirmed) return;
 
   const authProvider = SupabaseAuthProvider.getInstance();

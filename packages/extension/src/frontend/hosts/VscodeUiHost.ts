@@ -201,3 +201,10 @@ export class VscodeUiHost implements MessageHost, PromptHost {
     });
   }
 }
+
+/**
+ * The process's one instance. The host holds no state — every member reads
+ * `vscode.window` at call time — so the surfaces that present on it share
+ * this rather than each constructing a copy of the same empty object.
+ */
+export const vscodeUi = new VscodeUiHost();

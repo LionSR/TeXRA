@@ -6,7 +6,7 @@ import * as vscode from 'vscode';
 import { settleQuickInput } from '@commands/_shared/quickInputUtils';
 import { SettingsProfileKeyController } from '@controllers/settingsView/SettingsProfileKeyController';
 import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
-import { VscodeUiHost } from '@frontend/hosts/VscodeUiHost';
+import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import {
   API_PROVIDERS,
@@ -42,7 +42,7 @@ function createProfileKeyController(
 ): SettingsProfileKeyController<ProcessServices> {
   return new SettingsProfileKeyController({
     secrets,
-    prompt: new VscodeUiHost(),
+    prompt: vscodeUi,
     externalOpener: new VscodeExternalOpener(),
     getProviderDisplayName: (provider) =>
       getProviderDisplayName(
