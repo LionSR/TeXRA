@@ -144,16 +144,17 @@ export function extractContentFromXMLbyTagMultiple(
  * @param outputContent The content to extract scratchpad from
  * @param thinkingTag The XML tag name used for the scratchpad content
  */
-export const extractScratchpad = Effect.fn('xml.extractScratchpad')(function* (
+export const extractScratchpad = (
   outputContent: string,
   thinkingTag: string = 'scratchpad',
-): Effect.fn.Return<string | null> {
-  const extractedContent = extractTextFromTag(outputContent, thinkingTag);
-  if (!extractedContent) return null;
-  // Pandoc/Turndown formatting owns its own foreign edge and answers `null`
-  // rather than failing, so this extraction carries no error channel.
-  return yield* formatContent(extractedContent);
-});
+): Effect.Effect<string | null> =>
+  Effect.sync(() => {
+    const extractedContent = extractTextFromTag(outputContent, thinkingTag);
+    if (!extractedContent) return null;
+    // Turndown/regex formatting is deterministic and spawns nothing, so this
+    // extraction carries no error channel.
+    return formatContent(extractedContent);
+  });
 
 export interface MultipleExtractionResult {
   documents: NamedDocument[] | null;

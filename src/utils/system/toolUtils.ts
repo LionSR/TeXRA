@@ -22,14 +22,13 @@ import {
   LATEXMK_INSTALL_GUIDE,
   TEXFMT_INSTALL_GUIDE,
   WOLFRAM_INSTALL_GUIDE,
-  PANDOC_INSTALL_GUIDE,
   getInstallGuide,
 } from '@shared/constants/latexToolchain';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
 import { IS_WINDOWS, extendEnvPath } from './platformPaths';
-import { BinaryResolver } from './binaryResolver';
+import { resolveOptionalCommand } from './binaryResolver';
 import { executeCommandSync } from './execCore';
 import { executeCommand, type ExecuteCommandBaseOptions } from './execUtils';
 
@@ -79,7 +78,6 @@ const GHOSTSCRIPT_INSTRUCTIONS = installGuide(GHOSTSCRIPT_INSTALL_GUIDE);
 const GM_INSTRUCTIONS = installGuide(GRAPHICSMAGICK_INSTALL_GUIDE);
 const MAGICK_INSTRUCTIONS = installGuide(IMAGEMAGICK_INSTALL_GUIDE);
 const WOLFRAM_INSTRUCTIONS = installGuide(WOLFRAM_INSTALL_GUIDE);
-const PANDOC_INSTRUCTIONS = installGuide(PANDOC_INSTALL_GUIDE);
 const PDFLATEX_INSTRUCTIONS = installGuide(PDFLATEX_INSTALL_GUIDE);
 const LATEXMK_INSTRUCTIONS = installGuide(LATEXMK_INSTALL_GUIDE);
 
@@ -150,9 +148,6 @@ const TOOL_CONFIGS: Record<string, ToolConfig> = {
   lualatex: withDocs(texTool('lualatex', PDFLATEX_INSTRUCTIONS)),
   bibtex: withDocs(texTool('bibtex', PDFLATEX_INSTRUCTIONS)),
   biber: withDocs(texTool('biber', PDFLATEX_INSTRUCTIONS)),
-
-  // Document conversion tools
-  pandoc: withDocs(featureTool('pandoc', PANDOC_INSTRUCTIONS), { docs: false }),
 };
 
 /** Whether a probe result carries a version-like pattern (e.g., "3.7.1"). */
@@ -190,7 +185,7 @@ const spawnProbe = (cmd: string, args: string[], execEnv: NodeJS.ProcessEnv) =>
   });
 
 /**
- * Probe one command, falling back to a BinaryResolver-resolved path when the
+ * Probe one command, falling back to a common-paths-resolved path when the
  * direct spawn neither exits 0 nor prints version-like output.
  */
 const executeWithFallback = Effect.fn('toolUtils.executeWithFallback')(
@@ -215,7 +210,7 @@ const executeWithFallback = Effect.fn('toolUtils.executeWithFallback')(
       return true;
     }
 
-    const fallback = BinaryResolver.resolveOptionalCommand(cmd, args);
+    const fallback = resolveOptionalCommand(cmd, args);
     log.debug(
       `Fallback search for '${cmd}': ${fallback?.resolvedPath ?? 'not found'}`,
     );
@@ -322,7 +317,7 @@ export const checkToolInstalled = Effect.fn('toolUtils.checkToolInstalled')(
       });
 
     // Both arms, because the `try`/`catch` this replaces answered a rejected
-    // spawn and a synchronous throw alike — `BinaryResolver` and the PATH
+    // spawn and a synchronous throw alike — the binary resolution and the PATH
     // build sit inside the probe and are ordinary code that can throw, and a
     // throw there means "not detected", not a crashed run. Interruption is
     // neither a failure nor a defect, so it still unwinds the fiber instead of

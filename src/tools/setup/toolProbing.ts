@@ -8,7 +8,7 @@ import {
   LATEX_WORKSHOP_EXT_ID,
 } from '@shared/constants/latexToolchain';
 import { checkToolInstalled } from '@utils/system/toolUtils';
-import { BinaryResolver } from '@utils/system/binaryResolver';
+import { findToolInCommonPaths } from '@utils/system/platformPaths';
 
 import { getSetupAuthStatus, type SetupPlatformShape } from './platform';
 
@@ -43,7 +43,7 @@ export const locateTool = Effect.fn('locateTool')(function* (
   // probe kills the processes — several at once, since the core tools are
   // probed concurrently — instead of leaving them to run out their timeout.
   const knownInstalled = yield* checkToolInstalled(name, false);
-  const resolvedPath = BinaryResolver.findPath(name);
+  const resolvedPath = findToolInCommonPaths(name);
   return {
     name,
     installed: knownInstalled || resolvedPath !== null,

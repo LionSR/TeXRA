@@ -232,13 +232,6 @@ export const IMAGEMAGICK_INSTALL_GUIDE = brewAptUrl(
   'https://imagemagick.org/script/download.php',
 );
 
-export const PANDOC_INSTALL_GUIDE = brewAptUrl(
-  'pandoc',
-  'pandoc',
-  'pandoc',
-  'https://pandoc.org/installing.html',
-);
-
 // ── TeX Live tools (brew + apt + MiKTeX/tlmgr) ────────────
 
 const TEX_EXTRA = 'Part of most TeX Live distributions (texlive-extra-utils).';

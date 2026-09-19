@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
 import { attachSdkUsageRoute } from '@common/errors/sdkError/errorMetadata';
-import { parseKimiCodeSubscriptionLimit } from '@common/errors/sdkError/kimiCodeSubscriptionDetection';
 import { formatProviderHttpError } from '@common/errors/sdkError/providerErrorFormat';
 import { type UsageRoute } from '@shared/schemas';
 
@@ -38,47 +37,6 @@ function kimiCodeError(
   attachSdkUsageRoute(error, usageRoute);
   return error;
 }
-
-describe('parseKimiCodeSubscriptionLimit', () => {
-  it('parses a Kimi Code usage-limit error on the coding endpoint', () => {
-    const limit = parseKimiCodeSubscriptionLimit(
-      kimiCodeError(USAGE_LIMIT_MESSAGE, USAGE_LIMIT_BODY),
-      USAGE_LIMIT_BODY,
-    );
-    expect(limit).not.toBeNull();
-  });
-
-  it('returns null when the attempt was bound to the API-key route', () => {
-    const error = kimiCodeError(
-      USAGE_LIMIT_MESSAGE,
-      USAGE_LIMIT_BODY,
-      403,
-      'api-key',
-    );
-    expect(parseKimiCodeSubscriptionLimit(error, USAGE_LIMIT_BODY)).toBeNull();
-  });
-
-  it('returns null when the body does not carry the distinctive usage-limit message', () => {
-    const rateLimitBody = {
-      error: { message: 'Rate limit reached, slow down', type: 'rate_limit' },
-    };
-    expect(
-      parseKimiCodeSubscriptionLimit(
-        kimiCodeError('Rate limit reached, slow down', rateLimitBody),
-        rateLimitBody,
-      ),
-    ).toBeNull();
-  });
-
-  it('returns null for unrelated bodies', () => {
-    expect(
-      parseKimiCodeSubscriptionLimit(
-        kimiCodeError('nope', { message: 'nope' }),
-        { message: 'nope' },
-      ),
-    ).toBeNull();
-  });
-});
 
 describe('formatProviderHttpError for Kimi Code subscription limits', () => {
   it('classifies a Kimi Code usage-limit error as a switchable credential exhaustion', () => {

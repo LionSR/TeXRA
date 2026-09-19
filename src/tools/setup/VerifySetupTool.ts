@@ -61,7 +61,7 @@ const verify = Effect.fn('VerifySetupTool.execute')(function* (
     }
     // First char must be alphanumeric — rejects punctuation-only
     // tokens like `"."` or `".."`, which would otherwise path-join
-    // through BinaryResolver to existing directories (e.g.
+    // through the common-paths search to existing directories (e.g.
     // `/usr/bin/.`) and produce a false "ok" verification result.
     if (!/^[A-Za-z0-9][A-Za-z0-9._+\-]*$/.test(name)) {
       return yield* Effect.fail(

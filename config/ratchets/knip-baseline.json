@@ -942,12 +942,6 @@
       "category": "production-dead",
       "kind": "exports",
       "name": "countPinnedMemories"
-    },
-    {
-      "file": "src/utils/system/binaryResolver.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "BinaryResolverService"
     }
   ]
 }

@@ -18,57 +18,46 @@ export interface ResolvedBinaryCommand {
   resolvedPath: string;
 }
 
-interface BinaryResolverOptions {
-  findTool(toolName: string): string | null;
-  isWindows: boolean;
-}
-
-interface BinaryCommandOptions {
+interface ResolveCommandOptions {
+  /** Build the command for this path instead of searching for the tool. */
   resolvedPath?: string;
+  /** Windows launcher rules; defaults to the running platform. */
+  isWindows?: boolean;
 }
 
-export class BinaryResolverService {
-  constructor(
-    private readonly options: BinaryResolverOptions = {
-      findTool: findToolInCommonPaths,
-      isWindows: IS_WINDOWS,
-    },
-  ) {}
-
-  /**
-   * Resolve a tool name to an executable path using TeXRA's platform-specific
-   * search locations. Returns null when the tool is not currently discoverable.
-   */
-  findPath(toolName: string): string | null {
-    return this.options.findTool(toolName);
-  }
-
-  /**
-   * Build an executable command for a resolved tool path. TeX Live scripts can
-   * be `.pl` files, or extensionless scripts on Windows, so route them through
-   * Perl when needed.
-   */
-  resolveOptionalCommand(
-    toolName: string,
-    args: string[] = [],
-    commandOptions: BinaryCommandOptions = {},
-  ): ResolvedBinaryCommand | null {
-    const resolvedPath = commandOptions.resolvedPath ?? this.findPath(toolName);
-    if (!resolvedPath) return null;
-    if (this.needsPerlLauncher(toolName, resolvedPath)) {
-      return { command: 'perl', args: [resolvedPath, ...args], resolvedPath };
-    }
-    return { command: resolvedPath, args, resolvedPath };
-  }
-
-  private needsPerlLauncher(toolName: string, resolvedPath: string): boolean {
-    return (
-      hasExtension(resolvedPath, '.pl') ||
-      (this.options.isWindows &&
-        path.extname(resolvedPath) === '' &&
-        WINDOWS_EXTENSIONLESS_PERL_TOOLS.has(toolName))
-    );
-  }
+/**
+ * TeX Live scripts can be `.pl` files, or extensionless scripts on Windows, so
+ * route those through Perl.
+ */
+function needsPerlLauncher(
+  toolName: string,
+  resolvedPath: string,
+  isWindows: boolean,
+): boolean {
+  return (
+    hasExtension(resolvedPath, '.pl') ||
+    (isWindows &&
+      path.extname(resolvedPath) === '' &&
+      WINDOWS_EXTENSIONLESS_PERL_TOOLS.has(toolName))
+  );
 }
 
-export const BinaryResolver = new BinaryResolverService();
+/**
+ * Build an executable command for a tool, resolved through TeXRA's
+ * platform-specific search locations unless the caller already knows the path.
+ * Returns null when the tool is not currently discoverable.
+ */
+export function resolveOptionalCommand(
+  toolName: string,
+  args: string[] = [],
+  options: ResolveCommandOptions = {},
+): ResolvedBinaryCommand | null {
+  const resolvedPath = options.resolvedPath ?? findToolInCommonPaths(toolName);
+  if (!resolvedPath) return null;
+  if (
+    needsPerlLauncher(toolName, resolvedPath, options.isWindows ?? IS_WINDOWS)
+  ) {
+    return { command: 'perl', args: [resolvedPath, ...args], resolvedPath };
+  }
+  return { command: resolvedPath, args, resolvedPath };
+}

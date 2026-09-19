@@ -1,15 +1,5 @@
-import { Effect } from 'effect';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { addCdataToTagsMultiple, removeCDATA } from '@utils/text/xmlCdata';
-import { formatContent } from '@utils/text/xmlConversion';
-
-// Pin the deterministic Turndown/regex fallback path: Pandoc availability is
-// environment-dependent, so the conversion tests below would otherwise assert
-// different output depending on whether `pandoc` happens to be installed.
-vi.mock('@utils/system/toolUtils', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@utils/system/toolUtils')>()),
-  checkToolInstalled: () => Effect.succeed(false),
-}));
 
 describe('xmlUtils CDATA handling', () => {
   it.each([
