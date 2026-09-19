@@ -31,6 +31,9 @@ All notable changes to this project will be documented in this file.
   Every budget in play is a round thousand, and the old unit made an
   off-by-1000 typo land inside the valid range: `872` entered for 872,000 was
   a legal 872-token budget that put every request over the limit.
+- **TeXRA no longer uses Pandoc** — the reasoning scratchpad is rendered by
+  TeXRA's own Markdown conversion on every machine, so installing Pandoc no
+  longer changes how it looks and TeXRA never asks for it.
 
 ### Bug Fixes
 

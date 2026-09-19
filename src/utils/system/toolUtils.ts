@@ -22,7 +22,6 @@ import {
   LATEXMK_INSTALL_GUIDE,
   TEXFMT_INSTALL_GUIDE,
   WOLFRAM_INSTALL_GUIDE,
-  PANDOC_INSTALL_GUIDE,
   getInstallGuide,
 } from '@shared/constants/latexToolchain';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
@@ -79,7 +78,6 @@ const GHOSTSCRIPT_INSTRUCTIONS = installGuide(GHOSTSCRIPT_INSTALL_GUIDE);
 const GM_INSTRUCTIONS = installGuide(GRAPHICSMAGICK_INSTALL_GUIDE);
 const MAGICK_INSTRUCTIONS = installGuide(IMAGEMAGICK_INSTALL_GUIDE);
 const WOLFRAM_INSTRUCTIONS = installGuide(WOLFRAM_INSTALL_GUIDE);
-const PANDOC_INSTRUCTIONS = installGuide(PANDOC_INSTALL_GUIDE);
 const PDFLATEX_INSTRUCTIONS = installGuide(PDFLATEX_INSTALL_GUIDE);
 const LATEXMK_INSTRUCTIONS = installGuide(LATEXMK_INSTALL_GUIDE);
 
@@ -150,9 +148,6 @@ const TOOL_CONFIGS: Record<string, ToolConfig> = {
   lualatex: withDocs(texTool('lualatex', PDFLATEX_INSTRUCTIONS)),
   bibtex: withDocs(texTool('bibtex', PDFLATEX_INSTRUCTIONS)),
   biber: withDocs(texTool('biber', PDFLATEX_INSTRUCTIONS)),
-
-  // Document conversion tools
-  pandoc: withDocs(featureTool('pandoc', PANDOC_INSTRUCTIONS), { docs: false }),
 };
 
 /** Whether a probe result carries a version-like pattern (e.g., "3.7.1"). */
