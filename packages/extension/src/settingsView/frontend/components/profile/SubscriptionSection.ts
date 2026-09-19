@@ -139,7 +139,7 @@ export class SubscriptionSection extends LitElement {
                   value: this.contextWindow,
                   min: contextWindowSetting.min,
                   max: contextWindowSetting.max,
-                  unit: 'tokens',
+                  unit: contextWindowSetting.unitLabel,
                   onChange: (value) =>
                     postStateSetting(contextWindowSetting.configKey, value),
                 })
@@ -204,7 +204,7 @@ export const CHATGPT_SUBSCRIPTION_SECTION: SubscriptionSectionProvider =
     title: CHATGPT_AUTH.subscriptionLabel,
     description:
       'Use OpenAI models through your ChatGPT Plus, Pro, or Team subscription. No OpenAI API key is needed.',
-    note: 'Subscription routing uses a 272,000-token input budget by default. GPT-5.6 models support up to 872,000 input tokens; the displayed context also includes the output budget.',
+    note: 'Subscription routing uses a 272K-token input budget by default. GPT-5.6 models support up to 872K input tokens; the displayed context also includes the output budget.',
     contextWindowSetting: CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
     preferLabel: CHATGPT_AUTH.preferLabel,
     preferDescription: 'Use the subscription for eligible Codex models.',

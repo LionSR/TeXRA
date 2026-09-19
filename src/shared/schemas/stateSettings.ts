@@ -559,10 +559,10 @@ const CORE_SETTING_ROWS: Record<
   'chatgptCodex.preferSubscription': {
     schema: z.boolean().prefault(false),
     description:
-      'Prefer your signed-in ChatGPT subscription for Codex-eligible OpenAI models instead of API-key routing. Experimental. Subscription routing defaults to a 272,000-token input budget; use chatgptCodex.contextWindow to override it.',
+      'Prefer your signed-in ChatGPT subscription for Codex-eligible OpenAI models instead of API-key routing. Experimental. Subscription routing defaults to a 272K-token input budget; use chatgptCodex.contextWindowK to override it.',
     honoredBy: everyHost('src/model/codex/codexPreference.ts'),
   },
-  'chatgptCodex.contextWindow': {
+  'chatgptCodex.contextWindowK': {
     schema: ChatgptCodexContextWindowSchema,
     title: 'Subscription input token budget',
     description: CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.description,

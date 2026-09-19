@@ -240,11 +240,14 @@ export const PROVIDER_ENDPOINT_STATE_ENTRIES: readonly ProviderEndpointStateEntr
 
 /**
  * Default model used for auxiliary/helper tasks (polishing, agent creation,
- * merge, session descriptions). DeepSeek V4 Flash is the cheapest capable
- * option (~$0.14/$0.28 per MTok) and keeps these one-shot, non-streaming
- * helper calls fast.
+ * merge, session descriptions). DeepSeek Flash is the cheapest capable option
+ * and keeps these one-shot, non-streaming helper calls fast.
+ *
+ * `deepseek41`, not `deepseek`: llm-zoo 1.36 marks the latter deprecated, and
+ * a default that names a deprecated model is one the picker warns about
+ * before the user has chosen anything.
  */
-export const DEFAULT_HELPER_MODEL = 'deepseek';
+export const DEFAULT_HELPER_MODEL = 'deepseek41';
 
 /**
  * Default model used when a new agent run / proposal omits one. Single source of

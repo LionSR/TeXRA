@@ -4,8 +4,28 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## [0.40.11] - 2026-09-18
+
 ### Bug Fixes
 
+- **Windows: TeXRA finds git again.** Git installed while TeXRA was running —
+  including from the "Run in Terminal" button on our own "Git not found in
+  PATH" message — is now picked up on the next command instead of only after
+  a restart. Git installed with the "Use Git from Git Bash only" option is
+  found as well. On some machines an unusual `SCOOP` or `MSYS2_HOME` setting
+  could make every external command fail; it no longer does.
+- **The ChatGPT-subscription input budget is now set in thousands of tokens.**
+  The setting is `texra.chatgptCodex.contextWindowK` and takes `272` where it
+  used to take `272000`, up to `872`. Any value set under the old name is not
+  carried over, so the 272K default applies until the new one is set. Typing
+  the budget in thousands was previously accepted as a literal token count,
+  which left every request over the limit and failing.
+- A model call covered by a subscription no longer reports itself as "free" —
+  the run footer and session summary say it was included in the subscription
+  that covered it, because "free" reads as "nothing paid for this" when the
+  user is paying for a plan.
+- The default helper model moved from `deepseek` to `deepseek41`, which the
+  model registry no longer marks deprecated.
 - Generated agent definitions, session titles and helper answers no longer inherit document text-replacement rules.
 - VS Code language-model requests reduce their output allowance when necessary to fit the model context window.
 - API key lookups keep credentials isolated between independently configured stores.

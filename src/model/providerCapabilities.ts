@@ -45,10 +45,11 @@ interface ProviderCapabilityKey {
  * Default ChatGPT-subscription Codex input budget. The 272k default mirrors
  * the Codex CLI default `context_window`; GPT-5.6 supports an 872k
  * `max_context_window`, which users can select with
- * `texra.chatgptCodex.contextWindow`.
+ * `texra.chatgptCodex.contextWindowK` (in thousands of tokens).
  */
 export const CODEX_DEFAULT_SUBSCRIPTION_INPUT_LIMIT =
-  CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.defaultValue;
+  CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.defaultValue *
+  CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.tokensPerUnit;
 
 /** Trailing llm-zoo date pin (`-2026-04-23`) on a model `fullName`. */
 const CODEX_MODEL_DATE_PIN = /-\d{4}-\d{2}-\d{2}$/;
@@ -103,12 +104,14 @@ export function resolveCodexSubscriptionProfile({
   if (model.provider !== ModelProvider.OPENAI) return null;
   if (model.openRouterOnly) return null;
   if (!isCodexSubscriptionEligible(model)) return null;
+  // The setting is stored in thousands of tokens; this is its only reader,
+  // so the unit conversion lives here and nowhere else.
   const inputTokenLimit = Math.min(
     getValidatedConfig(
       CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.configKey,
       ChatgptCodexContextWindowSchema,
       CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.defaultValue,
-    ),
+    ) * CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.tokensPerUnit,
     model.contextWindow,
   );
   const contextWindow = Math.min(

@@ -56,9 +56,17 @@ export function usageRouteBadge(
   }
   switch (route) {
     case 'chatgpt-subscription':
-      return { label: 'ChatGPT', compactLabel: 'ChatGPT', subscription: true };
+      return {
+        label: 'ChatGPT subscription',
+        compactLabel: 'ChatGPT',
+        subscription: true,
+      };
     case 'xai-subscription':
-      return { label: 'Grok', compactLabel: 'Grok', subscription: true };
+      return {
+        label: 'Grok subscription',
+        compactLabel: 'Grok',
+        subscription: true,
+      };
     // LEGACY: usage recorded on the retired relay route (producers removed
     // 2026-08, docs/proposals/2026-08-18-relay-removal-and-recovery.md);
     // kept so historical transcripts render honestly. Delete after 2026-11.
@@ -99,6 +107,8 @@ export function usageCostLabel(
 ): string | undefined {
   const badge = usageRouteBadge(route);
   if (!badge) return cost > 0 ? formatCostUsd(cost) : undefined;
-  if (badge.subscription && cost === 0) return `Free via ${badge.label}`;
+  // Never "free": the user is paying for the plan, and "free" reads as
+  // "nothing paid for this".
+  if (badge.subscription && cost === 0) return `Included in ${badge.label}`;
   return `${formatCostUsd(cost)} via ${badge.label}`;
 }
