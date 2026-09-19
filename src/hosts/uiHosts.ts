@@ -5,16 +5,14 @@ export interface DiffSource {
   filePath: string;
 }
 
-export interface DiffSession {
-  original: DiffSource;
-  proposed: DiffSource;
-  title: string;
-}
-
 /**
- * The host's diff surface.
+ * The host's diff surface: showing a diff, the one verb both hosts answer.
+ * Closing a diff, revealing its first change and reading back its proposed
+ * side are VS Code's alone — its tab model is what they are written against —
+ * so they live on `VscodeDiffViewHost` beside the approval host that calls
+ * them, and the desktop's Review workbench names its own close by preview id.
  *
- * Every member is an `Effect`, so the host's own refusal — VS Code declining
+ * The member is an `Effect`, so the host's own refusal — VS Code declining
  * `vscode.diff`, the desktop failing to read a side or to hand a patch file to
  * the OS editor — reaches the caller through the failure channel instead of as
  * a rejection a lift had to re-tag, and interrupting the fiber that opened a
@@ -30,12 +28,6 @@ export interface DiffViewHost {
     proposed: DiffSource,
     title: string,
   ): Effect.Effect<void, unknown>;
-  closeDiff(session: DiffSession): Effect.Effect<void, unknown>;
-  revealFirstChange(
-    session: DiffSession,
-    line: number,
-  ): Effect.Effect<void, unknown>;
-  readProposedContent(session: DiffSession): Effect.Effect<string, unknown>;
 }
 
 /**

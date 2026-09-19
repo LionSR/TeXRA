@@ -47,7 +47,7 @@ interface DesktopDiffHostOptions extends DesktopOverlayPostOptions {
 }
 
 /** The pair of Review-tab verbs one open project's diffs are shown under. */
-interface ProjectDiffHost extends Pick<DiffViewHost, 'openDiff'> {
+interface ProjectDiffHost extends DiffViewHost {
   /**
    * Show a diff in the Review workbench under `previewId`, the key
    * {@link ProjectDiffHost.closeDiff} closes it by. A caller with nothing to
