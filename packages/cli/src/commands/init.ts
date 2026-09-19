@@ -156,7 +156,7 @@ const runInit = Effect.fn('runInit')(function* (
   );
 
   const filePath = workspaceTexraConfigPath(context.cwd);
-  if (!opts.force && (yield* Effect.promise(() => pathExists(filePath)))) {
+  if (!opts.force && (yield* pathExists(filePath))) {
     writeTextStderr(
       `Refusing to overwrite existing config at ${filePath}. Re-run with --force to replace it.`,
     );
@@ -199,10 +199,10 @@ const runInit = Effect.fn('runInit')(function* (
   }
 
   const config = buildInitConfig(answers);
-  yield* Effect.promise(() => writeInitConfig(filePath, config));
+  yield* writeInitConfig(filePath, config);
 
   const gitignoreOutcome: GitignoreOutcome | undefined = gitignore
-    ? yield* Effect.promise(() => ensureTexraGitignored(context.cwd))
+    ? yield* ensureTexraGitignored(context.cwd)
     : undefined;
 
   emitInitSummary(context, filePath, answers, config, models, gitignoreOutcome);

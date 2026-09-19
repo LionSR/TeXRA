@@ -52,9 +52,7 @@ describe('writeInitConfig', () => {
       );
       const configPath = workspaceTexraConfigPath(workspace);
 
-      yield* Effect.promise(() =>
-        writeInitConfig(configPath, buildInitConfig(ANSWERS)),
-      );
+      yield* writeInitConfig(configPath, buildInitConfig(ANSWERS));
 
       const text = yield* Effect.promise(() =>
         nodeReadFile(configPath, 'utf8'),
@@ -136,9 +134,7 @@ describe('ensureTexraGitignored', () => {
       if (existing !== undefined)
         yield* Effect.promise(() => writeFile(gitignorePath, existing, 'utf8'));
 
-      const result = yield* Effect.promise(() =>
-        ensureTexraGitignored(workspace),
-      );
+      const result = yield* ensureTexraGitignored(workspace);
       expect(result).toBe(outcome);
       const text = yield* Effect.promise(() =>
         nodeReadFile(gitignorePath, 'utf8'),
@@ -167,12 +163,7 @@ describe('ensureTexraGitignored', () => {
         throw eacces;
       });
 
-      const error = yield* Effect.flip(
-        Effect.tryPromise({
-          try: () => ensureTexraGitignored(workspace),
-          catch: (thrown) => thrown,
-        }),
-      );
+      const error = yield* Effect.flip(ensureTexraGitignored(workspace));
       expect(error).toBe(eacces);
 
       // Original content survives — the old bug silently overwrote it with

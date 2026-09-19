@@ -8,13 +8,14 @@ import { constants as fsConstants } from 'node:fs';
 import { access, mkdir, open, readFile } from 'node:fs/promises';
 import path from 'node:path';
 
+import { Effect } from 'effect';
 import writeFileAtomic from 'write-file-atomic';
 
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
 import { TEXRA_STORAGE_DIR_NAME } from '@platform/defaults/nodeStorage';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
-
 import type { CliOutputFormat } from '@shared/schemas';
+import { ensureError } from '@utils/errors/errorMessage';
 
 export interface InitAnswers {
   readonly agent: string;
@@ -42,37 +43,60 @@ export function buildInitConfig(answers: InitAnswers): InitConfigShape {
 }
 
 /** `false` only for a genuinely absent path; any other failure (EACCES, EIO)
- *  propagates instead of being reported as "absent". */
-export async function pathExists(filePath: string): Promise<boolean> {
-  try {
-    await access(filePath);
-    return true;
-  } catch (error: unknown) {
-    if (isFileNotFoundError(error) || isNotADirectoryError(error)) return false;
-    throw error;
-  }
+ *  fails instead of being reported as "absent". */
+export function pathExists(filePath: string): Effect.Effect<boolean, Error> {
+  return Effect.tryPromise({
+    try: () => access(filePath),
+    catch: ensureError,
+  }).pipe(
+    Effect.as(true),
+    Effect.catchIf(
+      (error) => isFileNotFoundError(error) || isNotADirectoryError(error),
+      () => Effect.succeed(false),
+    ),
+  );
 }
 
-async function writeInitFileAtomic(
+/**
+ * Probe for write permission before `write-file-atomic` creates its temp
+ * file, so an unwritable target fails without leaving one behind. An absent
+ * target is the normal case and is not a failure.
+ */
+function writeInitFileAtomic(
   filePath: string,
   data: string,
-): Promise<void> {
-  try {
-    const target = await open(filePath, fsConstants.O_WRONLY);
-    await target.close();
-  } catch (error: unknown) {
-    if (!isFileNotFoundError(error)) throw error;
-  }
-  await writeFileAtomic(filePath, data);
+): Effect.Effect<void, Error> {
+  return Effect.tryPromise({
+    try: async () => {
+      const target = await open(filePath, fsConstants.O_WRONLY);
+      await target.close();
+    },
+    catch: ensureError,
+  }).pipe(
+    Effect.catchIf(isFileNotFoundError, () => Effect.void),
+    Effect.andThen(
+      Effect.tryPromise({
+        try: () => writeFileAtomic(filePath, data),
+        catch: ensureError,
+      }),
+    ),
+  );
 }
 
-export async function writeInitConfig(
+export function writeInitConfig(
   filePath: string,
   config: InitConfigShape,
-): Promise<void> {
-  await mkdir(path.dirname(filePath), { recursive: true });
-  // Stable, pretty JSON with a trailing newline (matches editor/formatter output).
-  await writeInitFileAtomic(filePath, `${JSON.stringify(config, null, 2)}\n`);
+): Effect.Effect<void, Error> {
+  return Effect.tryPromise({
+    try: () => mkdir(path.dirname(filePath), { recursive: true }),
+    catch: ensureError,
+  }).pipe(
+    Effect.andThen(
+      // Stable, pretty JSON with a trailing newline (matches
+      // editor/formatter output).
+      writeInitFileAtomic(filePath, `${JSON.stringify(config, null, 2)}\n`),
+    ),
+  );
 }
 
 /**
@@ -93,24 +117,24 @@ function gitignoreWithTexra(existing: string): string | null {
 
 export type GitignoreOutcome = 'added' | 'present' | 'created';
 
-export async function ensureTexraGitignored(
+export function ensureTexraGitignored(
   cwd: string,
-): Promise<GitignoreOutcome> {
-  const gitignorePath = path.join(cwd, '.gitignore');
-  let existing = '';
-  let existed = true;
-  try {
-    existing = await readFile(gitignorePath, 'utf8');
-  } catch (error: unknown) {
-    // A missing .gitignore is fine — we create one. Anything else (EACCES,
-    // a transient I/O error, ...) must not be treated as "file absent": doing
-    // so would fall through to the write below and overwrite unreadable-but-
-    // present content instead of surfacing the failure.
-    if (!isFileNotFoundError(error)) throw error;
-    existed = false;
-  }
-  const next = gitignoreWithTexra(existing);
-  if (next === null) return 'present';
-  await writeInitFileAtomic(gitignorePath, next);
-  return existed ? 'added' : 'created';
+): Effect.Effect<GitignoreOutcome, Error> {
+  return Effect.gen(function* () {
+    const gitignorePath = path.join(cwd, '.gitignore');
+    const existing = yield* Effect.tryPromise({
+      try: () => readFile(gitignorePath, 'utf8'),
+      catch: ensureError,
+    }).pipe(
+      // A missing .gitignore is fine — we create one. Anything else (EACCES,
+      // a transient I/O error, ...) must not be treated as "file absent":
+      // doing so would fall through to the write below and overwrite
+      // unreadable-but-present content instead of surfacing the failure.
+      Effect.catchIf(isFileNotFoundError, () => Effect.succeed(undefined)),
+    );
+    const next = gitignoreWithTexra(existing ?? '');
+    if (next === null) return 'present';
+    yield* writeInitFileAtomic(gitignorePath, next);
+    return existing === undefined ? 'created' : 'added';
+  });
 }
