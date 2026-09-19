@@ -111,7 +111,6 @@ export class LeanServer extends Context.Service<
     readonly workspaceRoot: string;
     /** Settles once the scope has fully released the process. */
     readonly closed: Deferred.Deferred<void>;
-    readonly isRunning: Effect.Effect<boolean>;
     /**
      * Run the shutdown protocol now, ahead of the scope's release (which
      * then finds nothing left to do). Idempotent; concurrent callers join.
@@ -551,7 +550,6 @@ const make = ({
     return LeanServer.of({
       workspaceRoot: root,
       closed,
-      isRunning: Effect.map(Deferred.isDone(ended), (done) => !done),
       shutdown,
       diagnostics,
       requestSettled,
