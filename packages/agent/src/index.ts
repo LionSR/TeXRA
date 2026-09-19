@@ -204,9 +204,8 @@ function agentServices(
 
 /**
  * Close the session of a workspace's storage root: refuse new runs on it,
- * interrupt the ones it owns and wait for them to settle within `signal`'s
- * budget (the embedder's own shutdown phase) or, without one, the runtime's
- * shutdown budget, flush its artifacts, and release it. The report says
+ * interrupt the ones it owns and wait for them to settle within the
+ * runtime's shutdown-phase budget, flush its artifacts, and release it. The report says
  * whether every run settled; the runs it names as `abandoned` were still
  * live when the budget ran out, and the session stays open, refusing new
  * runs, until they end. A root with no open session reports `settled`, as
@@ -217,9 +216,8 @@ function agentServices(
  */
 export function closeSession(
   roots: WorkspaceRoots,
-  signal?: AbortSignal,
 ): Promise<SessionCloseReport> {
-  return Effect.runPromise(closeOwnedSession(roots.storage, signal));
+  return Effect.runPromise(closeOwnedSession(roots.storage));
 }
 
 /**

@@ -856,16 +856,6 @@ const untilSettled = (runs: RunRegistry): Effect.Effect<void> =>
     }
   });
 
-/** Resolves once `signal` aborts; interrupting it detaches the listener. */
-const aborted = (signal: AbortSignal) =>
-  Effect.callback<void>((resume, interrupt) => {
-    if (signal.aborted) return resume(Effect.void);
-    signal.addEventListener('abort', () => resume(Effect.void), {
-      once: true,
-      signal: interrupt,
-    });
-  });
-
 /**
  * Close the session of one root (PR #11893, agent SDK architecture
  * proposal, section 9): refuse new runs, stop the root runs it
@@ -873,9 +863,8 @@ const aborted = (signal: AbortSignal) =>
  * owns any more (a native subagent detached from a stopped parent, between
  * turns), wait for their drivers to settle them inside one budget,
  * flush the session's artifacts while its stores are still open, and
- * release the entry. The budget is the caller's `signal` when it passes one
- * (the lifecycle's shutdown phase, whose deadline started before this
- * close), the lifecycle's phase deadline otherwise: never both. Executions
+ * release the entry. The budget is the lifecycle's shutdown-phase deadline.
+ * Executions
  * that outlive the budget are reported, and the entry stays, refusing new
  * work, until they actually settle; only then is it released, so no later
  * open builds a second session over a root whose stores a run still
@@ -891,7 +880,7 @@ const aborted = (signal: AbortSignal) =>
  * region around it, so the budget still interrupts the settlement wait and
  * the flush, and the report still returns at the deadline.
  */
-const closeSession = (root: string, signal?: AbortSignal) =>
+const closeSession = (root: string) =>
   Effect.gen(function* () {
     const sessions = yield* Sessions;
     const held = yield* heldSession(root);
@@ -929,10 +918,10 @@ const closeSession = (root: string, signal?: AbortSignal) =>
     const settled = Fiber.join(termination).pipe(
       Effect.andThen(untilSettled(runs)),
     );
-    // One budget for the whole close: the caller's signal, else the phase
-    // deadline, forked once so the flush below shares what settlement left.
+    // One budget for the whole close: the shutdown-phase deadline, forked
+    // once so the flush below shares what settlement left.
     const budget = yield* Effect.forkChild(
-      signal ? aborted(signal) : Effect.sleep(SHUTDOWN_PHASE_DEADLINE_MS),
+      Effect.sleep(SHUTDOWN_PHASE_DEADLINE_MS),
     );
     const didSettle = yield* Effect.raceFirst(
       settled.pipe(Effect.as(true)),
@@ -1171,7 +1160,7 @@ export function installProcessRuntime({
     current: (root) => heldSessionSync(held, root),
     held: () => [...held.values()],
     list: () => onThisRuntime(listSessions),
-    close: (root, signal) => onThisRuntime(closeSession(root, signal)),
+    close: (root) => onThisRuntime(closeSession(root)),
   });
   return runtime;
 }

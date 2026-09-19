@@ -178,9 +178,9 @@ export interface SessionOwner {
    *  session whose handle exists and whose release has not begun. Builds
    *  nothing and waits for nothing, so an entry still building is absent. */
   held(): readonly SessionHandle[];
-  /** Close the session of a storage root, settling what it owns inside
-   *  `signal`'s budget, or the runtime's own when the caller passes none. */
-  close(root: string, signal?: AbortSignal): Effect.Effect<SessionCloseReport>;
+  /** Close the session of a storage root, settling what it owns inside the
+   *  runtime's shutdown-phase budget. */
+  close(root: string): Effect.Effect<SessionCloseReport>;
 }
 
 let owner: SessionOwner | undefined;
@@ -339,9 +339,8 @@ export function teardownDefaultSession(): Effect.Effect<void> {
 /**
  * Close the session of a storage root (PR #11893, agent SDK architecture
  * proposal, section 9): refuse new executions on it, interrupt the ones it
- * owns and wait for them to settle within `signal`'s budget (the caller's
- * shutdown phase) or, without one, the process's shutdown-phase budget,
- * flush its artifacts, and release it from its owner. A root with no open
+ * owns and wait for them to settle within the process's shutdown-phase
+ * budget, flush its artifacts, and release it from its owner. A root with no open
  * session has nothing to close and reports `settled`; so does a process
  * with no owner installed, where no session was ever opened or the owner
  * has gone with its runtime. A session whose executions
@@ -349,13 +348,10 @@ export function teardownDefaultSession(): Effect.Effect<void> {
  * work, until they end; it is released then, never before. This never
  * touches the process lifecycle or another root's session.
  */
-export function closeSession(
-  root: string,
-  signal?: AbortSignal,
-): Effect.Effect<SessionCloseReport> {
+export function closeSession(root: string): Effect.Effect<SessionCloseReport> {
   return Effect.suspend(() =>
     owner
-      ? owner.close(root, signal)
+      ? owner.close(root)
       : Effect.succeed({ settled: true, abandoned: [] }),
   );
 }
