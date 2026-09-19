@@ -42,6 +42,10 @@ import { TranscriptExportFailed } from '@controllers/progressView/transcriptExpo
 import { ProgressWorkflowFileActionsController } from '@controllers/progressView/ProgressWorkflowFileActionsController';
 import { ApiKeyPromptFailed } from '@controllers/progressView/ProgressApiKeyRetryController';
 import {
+  fromHost,
+  type HostCallFailed,
+} from '@controllers/session/hostCallFailure';
+import {
   createHostRunActions,
   type HostRunActionPorts,
   launchPatchOf,
@@ -49,6 +53,10 @@ import {
 } from '@controllers/session/hostRunActions';
 import type { HostDraftRequests } from '@controllers/session/hostDraftRequests';
 import type { HostSnapshotSource } from '@controllers/session/hostSnapshotSource';
+import {
+  handleSharedHostRequest,
+  type SharedHostRequestPorts,
+} from '@controllers/session/sharedHostRequests';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { openFinalOutputIfAvailable } from '@frontend/agents/finalOutputOpener';
 import { runSignInCommand } from '@frontend/auth/signInCommand';
@@ -130,19 +138,6 @@ class DropFileUnreadable extends Data.TaggedError('DropFileUnreadable')<{
   readonly message: string;
 }> {}
 
-/**
- * An extension capability that still answers with a promise rejected — a VS
- * Code command, an editor API, a Promise-faced controller port. `member`
- * names which one; `message` is the rejection's own text and `cause` the
- * value it was thrown with, so the bridge's log reads what `await` handed
- * over.
- */
-class HostCallFailed extends Data.TaggedError('HostCallFailed')<{
-  readonly member: string;
-  readonly message: string;
-  readonly cause: unknown;
-}> {}
-
 interface ExtensionHostRequestsOptions {
   readonly session: SessionHandle;
   readonly extensionPath: string;
@@ -214,26 +209,6 @@ export function createExtensionHostRequests(
   const draftRequests = options.draftRequests.attach(session, (recording) =>
     options.snapshot.setRecording(recording),
   );
-
-  /** A host capability that still answers with a promise - a VS Code command,
-   *  an editor API, a Promise-faced controller port - lifted once and named:
-   *  a refusal the callee already worded travels as itself, and every other
-   *  rejection is tagged with the member it came from. */
-  const fromHost = <A>(
-    member: string,
-    call: () => PromiseLike<A>,
-  ): Effect.Effect<A, HostCallFailed | RequestRefusal> =>
-    Effect.tryPromise({
-      try: call,
-      catch: (cause) =>
-        isRequestRefusal(cause)
-          ? cause
-          : new HostCallFailed({
-              member,
-              message: toErrorMessage(cause),
-              cause,
-            }),
-    });
 
   /** The native picker of each multi-file launcher list. */
   const multipleFilePickers = createFileSelectionPickers(session);
@@ -375,6 +350,16 @@ export function createExtensionHostRequests(
     },
     sendFollowUp: (runId, text) => runActions.sendFollowUp(runId, text),
   });
+
+  /** The arms both GUI hosts answer through one body, now that this host's
+   *  ports are bound. */
+  const sharedRequests: SharedHostRequestPorts = {
+    runActions,
+    workflowFileActions,
+    snapshot,
+    draftRequests,
+    toolEditApprovals,
+  };
 
   let chatExportController: ChatExportController | undefined;
 
@@ -907,8 +892,19 @@ export function createExtensionHostRequests(
           return done;
         }
         case 'openRunStorage':
-          yield* workflowFileActions.openRunStorage(request.runId);
-          return done;
+        case 'resume':
+        case 'runNew':
+        case 'runCompileFixer':
+        case 'useOwnApiKey':
+        case 'record':
+        case 'polish':
+        case 'savePastedImage':
+        case 'refreshCommits':
+        case 'refreshFiles':
+        case 'dismissBanner':
+        case 'toolEdit':
+        case 'fileAction':
+          return yield* handleSharedHostRequest(sharedRequests, request, port);
         case 'exportTranscript':
           yield* exportTranscript(request.runId);
           return done;
@@ -916,18 +912,6 @@ export function createExtensionHostRequests(
           yield* restoreIntoLauncher(
             yield* runActions.restoreState(request.runId),
           );
-          return done;
-        case 'resume':
-          yield* runActions.resume(request.runId);
-          return done;
-        case 'runNew':
-          yield* runActions.runNew(request.runId);
-          return done;
-        case 'runCompileFixer':
-          yield* runActions.runCompileFixer(request.runId);
-          return done;
-        case 'useOwnApiKey':
-          yield* runActions.useOwnApiKey(request);
           return done;
         case 'latexdiff': {
           const diff = yield* runActions.workflowDiffRequest(request.runId);
@@ -953,10 +937,6 @@ export function createExtensionHostRequests(
         case 'latexdiffs':
           yield* latexdiffs(request);
           return done;
-        case 'record':
-        case 'polish':
-        case 'savePastedImage':
-          return yield* draftRequests.handle(request, port);
         case 'popOut':
           yield* options.popOutToEditor();
           return done;
@@ -967,12 +947,6 @@ export function createExtensionHostRequests(
           yield* fromHost('texra.showDashboard', () =>
             runCommand('texra.showDashboard'),
           );
-          return done;
-        case 'refreshCommits':
-          yield* snapshot.refreshCommits;
-          return done;
-        case 'refreshFiles':
-          yield* snapshot.refreshFiles;
           return done;
         case 'openSettings':
           switch (request.section) {
@@ -1028,18 +1002,6 @@ export function createExtensionHostRequests(
             runCommand('texra.extractTikzFigures'),
           );
           return done;
-        case 'toolEdit':
-          yield* toolEditApprovals.handleAction({
-            requestId: request.requestId,
-            action: request.action,
-            ...(request.feedback == null ? {} : { feedback: request.feedback }),
-          });
-          return done;
-        case 'fileAction': {
-          const config = yield* runActions.readConfig(request.runId);
-          yield* workflowFileActions.handle(request, config);
-          return done;
-        }
         case 'restoreProposalConfig':
           yield* restoreIntoLauncher(
             runActions.restoreProposal(request.proposal),
@@ -1090,9 +1052,6 @@ export function createExtensionHostRequests(
           if (authenticated) yield* refreshAfterCredentialChange;
           return done;
         }
-        case 'dismissBanner':
-          yield* snapshot.dismissBanner(request.banner);
-          return done;
         case 'gettingStarted':
           yield* fromHost(GETTING_STARTED_COMMANDS[request.action], () =>
             runCommand(GETTING_STARTED_COMMANDS[request.action]),
