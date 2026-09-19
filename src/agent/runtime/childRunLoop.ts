@@ -826,6 +826,21 @@ const submitPendingDelivery = Effect.fn('submitPendingDelivery')(function* (
   }
 });
 
+/**
+ * The child loop's abort as an Effect: it settles with `outcome()` the moment
+ * `signal` aborts, and never otherwise. Built per race, so the outcome is
+ * constructed only when the abort actually fires.
+ */
+function onceAborted<A, E>(
+  signal: AbortSignal,
+  outcome: () => Effect.Effect<A, E>,
+): Effect.Effect<A, E> {
+  return Effect.callback<A, E>((resume) => {
+    const detach = onAbort(signal, () => resume(outcome()));
+    return Effect.sync(detach);
+  });
+}
+
 /** Race a queue wait against the child loop's interrupt; null when stopped. */
 function untilInterrupted<A>(
   wait: Effect.Effect<A>,
@@ -833,10 +848,7 @@ function untilInterrupted<A>(
 ): Effect.Effect<A | null> {
   return Effect.raceFirst(
     wait,
-    Effect.callback<null>((resume) => {
-      const detach = onAbort(loop.signal, () => resume(Effect.succeed(null)));
-      return Effect.sync(detach);
-    }),
+    onceAborted(loop.signal, () => Effect.succeed(null)),
   ).pipe(Effect.interruptible);
 }
 
@@ -1105,18 +1117,13 @@ export function startChildRunLoop<TTurn, R = never>(
         : (signal) =>
             Effect.raceFirst(
               budget.withPermit(Effect.uninterruptible(base(signal))),
-              Effect.callback<never, Error>((resume) => {
-                const detach = onAbort(signal, () =>
-                  resume(
-                    Effect.fail(
-                      new Error(
-                        'Child run turn cancelled while awaiting a concurrency slot.',
-                      ),
-                    ),
+              onceAborted(signal, () =>
+                Effect.fail(
+                  new Error(
+                    'Child run turn cancelled while awaiting a concurrency slot.',
                   ),
-                );
-                return Effect.sync(detach);
-              }),
+                ),
+              ),
             ).pipe(Effect.interruptible);
 
     let runStarted = false;

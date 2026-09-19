@@ -50,26 +50,19 @@ export const codexThreadsFor = codexThreads.for;
 export const claudeAgentSessionsFor = claudeAgentSessions.for;
 
 /**
- * Register host shutdown handlers that stop agent work at teardown: kill the
+ * Register the host shutdown handler that stops agent work at teardown: kill the
  * background OS processes owned by live runtime sessions and interrupt any
  * agent-CLI codex/claude sessions those sessions still track. Lives here —
  * next to the registries it interrupts — because the hosts import it once
  * during platform startup and the core never depends on tool-layer teardown
  * wiring.
  */
-function registerAgentShutdownHandlers(lifecycle: LifecycleHost): void {
+function registerAgentShutdownHandler(lifecycle: LifecycleHost): void {
   lifecycle.onShutdown(
     SHUTDOWN_PHASE.BEFORE,
     Effect.sync(() => {
       forEachLiveSession((session) => {
         session.runs.killBackgroundProcesses();
-      });
-    }),
-  );
-  lifecycle.onShutdown(
-    SHUTDOWN_PHASE.BEFORE,
-    Effect.sync(() => {
-      forEachLiveSession((session) => {
         codexThreads.registries.get(session.runs)?.interruptAll();
         claudeAgentSessions.registries.get(session.runs)?.interruptAll();
       });
@@ -117,7 +110,7 @@ export function registerRuntimeShutdownHandlers(
   hooks: RuntimeShutdownHooks,
 ): void {
   registerHandlers(lifecycle, SHUTDOWN_PHASE.BEFORE, hooks.beforeAgentShutdown);
-  registerAgentShutdownHandlers(lifecycle);
+  registerAgentShutdownHandler(lifecycle);
   registerHandlers(lifecycle, SHUTDOWN_PHASE.BEFORE, hooks.afterAgentShutdown);
   lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, hooks.flushArtifacts);
   registerHandlers(lifecycle, SHUTDOWN_PHASE.BEFORE, hooks.afterFlushArtifacts);
