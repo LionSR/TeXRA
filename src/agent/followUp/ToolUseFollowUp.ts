@@ -45,7 +45,7 @@ export type FollowUpFailureReason =
  * queued (`wake: 'failed'`): the input belongs to the run, and an
  * explicit Resume delivers it.
  */
-export type SubmitFollowUpResult =
+type SubmitFollowUpResult =
   | { status: 'sent' }
   | { status: 'queued'; wake?: 'failed' }
   | { status: 'failed'; reason: FollowUpFailureReason };

@@ -102,7 +102,7 @@ type FollowUpSubmission =
   | { readonly kind: 'queued'; readonly lease?: FollowUpRecoveryLease }
   | { readonly kind: 'refused'; readonly reason?: 'owned_elsewhere' };
 
-export interface FollowUpSubmitOptions {
+interface FollowUpSubmitOptions {
   /**
    * `deferred` admits the rows without offering them to a live consumer's
    * input: a child loop whose own finalize must land before the parent can
@@ -118,7 +118,7 @@ export interface FollowUpSubmitOptions {
  * The session doors the admission boundary works through, wired by
  * `SessionHandle` over its graph: one serializer, no second append path.
  */
-export interface FollowUpRowPort {
+interface FollowUpRowPort {
   /** One job on the session's publisher: nothing else is written, and no
    *  other job runs, while it does (`SessionGraph.exclusive`). */
   readonly exclusive: <A, E>(

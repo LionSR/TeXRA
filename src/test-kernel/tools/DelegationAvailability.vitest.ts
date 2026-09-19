@@ -52,7 +52,7 @@ const {
 const { resolveAgentTools } =
   await import('@agent/runtime/agentToolResolution');
 const { MapToolRegistry } = await import('@agent/core/tools/ToolTypes');
-const { ToolInjectionRegistry } = await import('@agent/runtime/toolInjection');
+const { NO_TOOL_INJECTIONS } = await import('@agent/runtime/toolInjection');
 
 const DELEGATE_AGENT_DESCRIPTION = [
   'Delegate a task to a tool-use agent.',
@@ -156,7 +156,7 @@ function resolveToolList(
       tools,
       registry: delegationRegistry(tools),
       logger: { warn: () => {} },
-      toolInjections: new ToolInjectionRegistry(),
+      toolInjections: NO_TOOL_INJECTIONS,
       stores,
     });
   }).pipe(

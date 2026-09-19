@@ -30,7 +30,7 @@ function sanitizeDiagnostics(
  * Result from extracting attachments from a tool result.
  * Simple interface - no runtime validation needed for this structure.
  */
-export interface ExtractedToolAttachments {
+interface ExtractedToolAttachments {
   /** Extracted file attachments with binary data. */
   attachments: ToolFileAttachment[];
   /** Sanitized result payload without binary data. */

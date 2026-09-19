@@ -40,7 +40,7 @@ import {
  * cascades. Omitting the field means cascade — the conservative reading, since
  * a child left running has no owner to report to.
  */
-export interface RunStop {
+interface RunStop {
   /** Whether a live interrupt target took the stop, asked rather than read:
    *  the two child policies decide it at different moments. A cascading stop
    *  interrupts at admission and answers straight away. A detaching stop
@@ -69,7 +69,7 @@ interface RunStopOptions {
  * stays recoverable until the last delivery has landed. Child-run loops use
  * their persistent run handle for lineage instead.
  */
-export interface ChildRunActivation {
+interface ChildRunActivation {
   readonly runId: RunId;
   readonly parentRunId: RunId;
   readonly interrupt: () => void;

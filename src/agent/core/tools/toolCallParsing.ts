@@ -12,7 +12,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
  * Map of duplicate callId → index of its primary within this model response
  * (see {@link partitionDuplicateCalls}).
  */
-export type DuplicateCallMap = Map<string, number>;
+type DuplicateCallMap = Map<string, number>;
 
 /**
  * Partition duplicate parallel tool calls (same name + identical arguments).

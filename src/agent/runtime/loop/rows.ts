@@ -144,7 +144,7 @@ interface SnapshotCoordinates {
   readonly intentBindings?: Readonly<Record<string, string>>;
 }
 
-export interface SnapshotPatch extends SnapshotCoordinates {
+interface SnapshotPatch extends SnapshotCoordinates {
   readonly state: ToolUseFlowState;
 }
 

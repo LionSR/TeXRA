@@ -108,7 +108,7 @@ export interface ToolUseStart {
   };
 }
 
-export interface ToolUseResult {
+interface ToolUseResult {
   readonly outcome: RunOutcome | typeof RUN_PHASE.WAITING;
   readonly response: string;
   /** Workspace-relative paths of files edited by tool calls. */

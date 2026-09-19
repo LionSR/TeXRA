@@ -19,32 +19,11 @@ import type { Runs } from './runRegistry';
  * {@link ToolInjections}; core flow code iterates what it is handed and does
  * not know which features exist.
  */
-export interface ConditionalToolInjection {
+interface ConditionalToolInjection {
   readonly toolName: RegisteredToolName;
   /** Whether the run resolving its tools, in the workspace whose settings
    *  slots `settings` are, gets this tool. */
   shouldInject(settings: SettingsStores): boolean;
-}
-
-/**
- * A caller-owned list for a flow or suite that resolves tools with its own
- * injections instead of the process's (the reflection flow injects none).
- */
-export class ToolInjectionRegistry {
-  private readonly injections: ConditionalToolInjection[] = [];
-
-  register(injection: ConditionalToolInjection): void {
-    if (this.injections.some((i) => i.toolName === injection.toolName)) {
-      throw new Error(
-        `Duplicate conditional tool injection: ${injection.toolName}`,
-      );
-    }
-    this.injections.push(injection);
-  }
-
-  list(): readonly ConditionalToolInjection[] {
-    return [...this.injections];
-  }
 }
 
 /**
@@ -90,6 +69,14 @@ export class ToolInjections extends Context.Service<
     return Layer.succeed(ToolInjections)({ list: () => injections });
   }
 }
+
+/**
+ * What a run resolving its tools with no injections of its own is handed
+ * (the reflection family: memory and plan are tool-use infrastructure).
+ */
+export const NO_TOOL_INJECTIONS: ToolInjections['Service'] = Object.freeze({
+  list: () => [],
+});
 
 /**
  * The services every step of an agent run reads on the way down: the process
