@@ -27,7 +27,7 @@ import {
 import type { AuthCallbackUriParts } from '@auth/authCallback';
 import type { MessageHost } from '@hosts/uiHosts';
 import type { StateStore, StateWriteFailed } from '@platform/interfaces';
-import type { ProcessRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { TEXRA_PROTOCOL } from '../shared/desktopProtocol.js';
@@ -78,7 +78,9 @@ export interface DesktopSupabaseAuthHost extends Pick<
   /** The window's `openExternal` with its own "could not open" dialog
    *  suppressed: this flow words a missing browser itself. */
   openExternalUrl(url: string): Effect.Effect<void, unknown>;
-  onSessionChanged(): Promise<void> | void;
+  /** Repaint every surface an account change touches. A program, so the
+   *  callback that commits a session runs it inside its own fiber. */
+  onSessionChanged(): Effect.Effect<void, unknown, ProcessServices>;
 }
 
 interface DesktopSupabaseAuthOptions {
@@ -146,11 +148,11 @@ function runCleanupDetached(
  * error when the dialog host is already gone. `notify` is the Effect-shaped
  * host call (a `MessageHost` member, or a wrapped `onSessionChanged`).
  */
-function warnOnNotificationFailure(
+function warnOnNotificationFailure<R>(
   log: DesktopAuthLog,
-  notify: Effect.Effect<unknown, unknown>,
+  notify: Effect.Effect<unknown, unknown, R>,
   failureMessage: string,
-): Effect.Effect<void> {
+): Effect.Effect<void, never, R> {
   return notify.pipe(
     Effect.catchCause((cause) =>
       Effect.sync(() => {
@@ -328,7 +330,7 @@ export function createDesktopSupabaseAuth(
   const runQueuedCallback = (queued: {
     callback: DesktopProtocolCallback;
     attempt: DesktopAuthAttempt;
-  }): Effect.Effect<void> =>
+  }): Effect.Effect<void, never, ProcessServices> =>
     Effect.gen(function* () {
       const processed = yield* Effect.exit(
         processProtocolCallback(
@@ -489,7 +491,7 @@ export function createDesktopSupabaseAuth(
         }),
       );
       if (Exit.isFailure(cleared)) throw settleFailure(cleared.cause);
-      await host.onSessionChanged();
+      await runtime.runPromise(host.onSessionChanged());
     },
 
     dispose() {
@@ -508,7 +510,7 @@ function processProtocolCallback(
   onCommitLane: <A, E, R>(
     effect: Effect.Effect<A, E, R>,
   ) => Effect.Effect<A, E, R>,
-): Effect.Effect<boolean, unknown> {
+): Effect.Effect<boolean, unknown, ProcessServices> {
   return Effect.gen(function* () {
     const result = yield* coordinator.createSessionFromCallback({
       path: callback.path,
@@ -555,12 +557,7 @@ function processProtocolCallback(
 
         yield* warnOnNotificationFailure(
           log,
-          Effect.tryPromise({
-            try: async () => {
-              await host.onSessionChanged();
-            },
-            catch: (cause) => cause,
-          }),
+          host.onSessionChanged(),
           'Desktop auth surface refresh failed',
         );
         return yield* stillOwned();

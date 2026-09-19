@@ -720,19 +720,20 @@ function createWindow(options: {
     );
   };
   let teamSignInPending = false;
-  const refreshDesktopAuthSurfaces = async () => {
-    await Promise.all(
-      [...projectBindings.values()].map((binding) =>
-        runtime.runPromise(binding.snapshot.refreshAuth),
-      ),
-    );
-    await settingsIpcRef.current?.refreshAuthDependentData({
-      deferAgentCatalogRefresh: teamSignInPending,
+  /** Every surface an account change touches, as one program: the open
+   *  papers' auth snapshots, the settings view, then the onboarding funnel. */
+  const refreshDesktopAuthSurfaces = () =>
+    Effect.gen(function* () {
+      yield* Effect.forEach(
+        [...projectBindings.values()],
+        (binding) => binding.snapshot.refreshAuth,
+        { concurrency: 'unbounded', discard: true },
+      );
+      yield* settingsIpcRef.current?.refreshAuthDependentData({
+        deferAgentCatalogRefresh: teamSignInPending,
+      }) ?? Effect.void;
+      yield* onboardingIpcRef.current?.refreshOnboardingFunnel() ?? Effect.void;
     });
-    await runtime.runPromise(
-      onboardingIpcRef.current?.refreshOnboardingFunnel() ?? Effect.void,
-    );
-  };
   const desktopAuthHost: DesktopSupabaseAuthHost = {
     openExternalUrl: (url) =>
       previewHost.openExternal(url, { reportFailure: false }),

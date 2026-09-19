@@ -81,7 +81,7 @@ function createTestAuth(options: DesktopAuthTestOptions) {
     openExternalUrl = vi.fn(() => Effect.void),
     showInfoMessage = vi.fn(() => Effect.void),
     showErrorMessage = vi.fn(() => Effect.void),
-    onSessionChanged = vi.fn(),
+    onSessionChanged = vi.fn(() => Effect.void),
   } = options;
   const auth = createDesktopSupabaseAuth({
     router,
@@ -293,7 +293,7 @@ describe('desktop Supabase auth', () => {
   });
 
   it('stores routed callback sessions and refreshes settings profile state', async () => {
-    const onSessionChanged = vi.fn(async () => {});
+    const onSessionChanged = vi.fn(() => Effect.void);
     const { router, coordinator, oauthClient, auth } = createAuthSetup({
       onSessionChanged,
     });
@@ -666,7 +666,7 @@ describe('desktop Supabase auth', () => {
   });
 
   it('removes a callback session when sign-out begins during storage', async () => {
-    const onSessionChanged = vi.fn(async () => {});
+    const onSessionChanged = vi.fn(() => Effect.void);
     const showInfoMessage = vi.fn(() => Effect.void);
     const { router, coordinator, oauthClient, auth } = createAuthSetup({
       onSessionChanged,
@@ -696,7 +696,7 @@ describe('desktop Supabase auth', () => {
       testRuntime(),
       createLog(),
     );
-    const onSessionChanged = vi.fn(async () => {});
+    const onSessionChanged = vi.fn(() => Effect.void);
     const { router, coordinator, oauthClient, auth } = createAuthSetup({
       callbackState,
       onSessionChanged,
@@ -737,9 +737,9 @@ describe('desktop Supabase auth', () => {
     'removes a callback session when %s invalidates it during session refresh',
     async (action) => {
       const sessionRefresh = createDeferred<void>();
-      const onSessionChanged = vi.fn(async () => {
-        await sessionRefresh.promise;
-      });
+      const onSessionChanged = vi.fn(() =>
+        Effect.promise(() => sessionRefresh.promise),
+      );
       const { router, coordinator, oauthClient, auth } = createAuthSetup({
         onSessionChanged,
       });
@@ -859,7 +859,7 @@ describe('desktop Supabase auth', () => {
     vi.mocked(
       agentRegistry.invalidateRemoteAgentsAfterSignOut,
     ).mockReturnValueOnce(Effect.die(new Error('local rebuild failed')));
-    const onSessionChanged = vi.fn(async () => {});
+    const onSessionChanged = vi.fn(() => Effect.void);
     const log = createLog();
     const { coordinator, auth } = createAuthSetup({ onSessionChanged, log });
 

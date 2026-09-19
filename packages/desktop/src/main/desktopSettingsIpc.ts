@@ -118,7 +118,7 @@ export interface DesktopSettingsIpcOptions {
 export interface DesktopSettingsIpc extends DesktopMessageHandler {
   refreshAuthDependentData(options?: {
     deferAgentCatalogRefresh?: boolean;
-  }): Promise<void>;
+  }): Effect.Effect<void, Error, ProcessServices>;
   signInChatGpt(): Effect.Effect<void, unknown, ProcessServices>;
   /**
    * Releases the goal and app-signal subscriptions. They are scoped to the
@@ -355,16 +355,14 @@ export function createDesktopSettingsIpc(
     );
   }
 
-  async function refreshAuthDependentData(
+  function refreshAuthDependentData(
     refreshOptions: { deferAgentCatalogRefresh?: boolean } = {},
-  ): Promise<void> {
-    await runtime.runPromise(
-      options.credentialSettingsController.refreshAuthDependentData(),
-    );
-    if (refreshOptions.deferAgentCatalogRefresh) return;
-    await runtime.runPromise(
-      options.agentSettingsController.refreshCatalogData(),
-    );
+  ): Effect.Effect<void, Error, ProcessServices> {
+    return Effect.gen(function* () {
+      yield* options.credentialSettingsController.refreshAuthDependentData();
+      if (refreshOptions.deferAgentCatalogRefresh) return;
+      yield* options.agentSettingsController.refreshCatalogData();
+    });
   }
 
   const stateSettingSnapshotPosters: SettingsSnapshotPosters = {

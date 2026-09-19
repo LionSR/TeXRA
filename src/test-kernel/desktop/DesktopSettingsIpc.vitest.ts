@@ -860,14 +860,16 @@ describe('desktop settings IPC', () => {
       credentialSettingsController,
     });
 
-    await settings.refreshAuthDependentData();
+    await testRuntime().runPromise(settings.refreshAuthDependentData());
 
     expect(events).toEqual(['credentials', 'agents']);
 
     events.length = 0;
-    await settings.refreshAuthDependentData({
-      deferAgentCatalogRefresh: true,
-    });
+    await testRuntime().runPromise(
+      settings.refreshAuthDependentData({
+        deferAgentCatalogRefresh: true,
+      }),
+    );
 
     expect(events).toEqual(['credentials']);
     expect(refreshAuthDependentData).toHaveBeenCalledTimes(2);
