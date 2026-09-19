@@ -47,8 +47,7 @@ import {
 import { SetupPlatform } from '@tools/setup/platform';
 import { ZOTERO_PORT_KEY } from '@tools/zotero/bbtClient';
 import { readConfig } from '@utils/config/configUtils';
-import { findToolInCommonPaths } from '@utils/system/platformPaths';
-import { IS_WINDOWS } from '@utils/system/platformPaths';
+import { IS_WINDOWS, findToolInCommonPaths } from '@utils/system/platformPaths';
 import { isWSL } from '@utils/system/wslDetect';
 import {
   checkToolInstalled,
