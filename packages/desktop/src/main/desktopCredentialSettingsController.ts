@@ -224,7 +224,8 @@ export interface DesktopCredentialSettingsController {
     key: string,
   ): Effect.Effect<void, Error, ProcessServices>;
   refreshAuthDependentData(): Effect.Effect<void, Error, ProcessServices>;
-  signInChatGpt(): Promise<void>;
+  /** Also driven by the desktop welcome card, not just the Settings view. */
+  signInChatGpt(): Effect.Effect<void, unknown, ProcessServices>;
 }
 
 /** Owns desktop credential mutation, authentication, and dependent refreshes. */
@@ -319,7 +320,8 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
     // Each arm is a settings-view message, so the subscription programs settle
     // here exactly as the profile arms above do.
     this.chatGptHandlers = {
-      signInChatGpt: () => this.signInChatGpt(),
+      signInChatGpt: () =>
+        options.runtime.runPromise(this.signInSubscription('chatgpt')),
       signOutChatGpt: () =>
         options.runtime.runPromise(this.signOutSubscription('chatgpt')),
       setChatGptPreferSubscription: (message) =>
@@ -540,9 +542,8 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
     );
   }
 
-  /** Also driven by the desktop welcome card, not just the Settings view. */
-  signInChatGpt(): Promise<void> {
-    return this.options.runtime.runPromise(this.signInSubscription('chatgpt'));
+  signInChatGpt() {
+    return this.signInSubscription('chatgpt');
   }
 
   /**

@@ -1588,7 +1588,10 @@ function createWindow(options: {
             ),
           );
         }),
-      signInWithChatGpt: () => requireSettingsIpc().signInChatGpt(),
+      // Suspended so the "settings IPC not attached" guard raises when the
+      // card's program runs, not when the port is built.
+      signInWithChatGpt: () =>
+        Effect.suspend(() => requireSettingsIpc().signInChatGpt()),
       onAsyncError: reportAsyncError,
       runtime,
     },

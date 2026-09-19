@@ -106,7 +106,7 @@ export function createStubDesktopCredentialSettingsController(
     postSubscriptionUsage: noOpEffect,
     refreshAfterProviderSettingChange: noOpEffect,
     refreshAuthDependentData: noOpEffect,
-    signInChatGpt: noOp,
+    signInChatGpt: noOpEffect,
     ...overrides,
   };
 }

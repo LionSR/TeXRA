@@ -14,7 +14,7 @@ import {
 import { appSignals } from '@eventBus/AppSignals';
 import { PromptFailed, type MessageHost } from '@hosts/uiHosts';
 import type { StateStore } from '@platform/interfaces';
-import type { ProcessRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import { StorageFs, withSessionFs } from '@platform/rootedFs';
 import type { PlatformSecrets } from '@platform/secrets';
 import { resolveMemoryStoragePath } from '@platform/defaults/workspaceStorage';
@@ -119,7 +119,7 @@ export interface DesktopSettingsIpc extends DesktopMessageHandler {
   refreshAuthDependentData(options?: {
     deferAgentCatalogRefresh?: boolean;
   }): Promise<void>;
-  signInChatGpt(): Promise<void>;
+  signInChatGpt(): Effect.Effect<void, unknown, ProcessServices>;
   /**
    * Releases the goal and app-signal subscriptions. They are scoped to the
    * window that built this IPC, not to the process: `createWindow` runs again
