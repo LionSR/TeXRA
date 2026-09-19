@@ -5,13 +5,13 @@
  * `ChatGptAuthStatusSchema` at each host's boundary).
  *
  * This was split from `@auth/codex/codexAuthAccess.ts` so the model layer can
- * read the subscription preferences (`@model/codex/codexPreference`) without
+ * read the subscription preferences (`@model/codex/codexSubscription`) without
  * depending on the Codex OAuth machinery.
  */
 import { Effect } from 'effect';
 
 import { getCodexStatus } from '@auth/codex';
-import { isPreferCodexSubscription } from '@model/codex/codexPreference';
+import { isPreferCodexSubscription } from '@model/codex/codexSubscription';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { ChatGptAuthStatus } from '@shared/schemas';

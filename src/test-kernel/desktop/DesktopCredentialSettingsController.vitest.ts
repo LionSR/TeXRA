@@ -67,7 +67,7 @@ vi.mock('@controllers/modelAccess/chatGptAuthStatus', () => ({
   getChatGptAuthStatus: codexMocks.getStatus,
 }));
 
-vi.mock('@model/codex/codexPreference', () => ({
+vi.mock('@model/codex/codexSubscription', () => ({
   isPreferCodexSubscription: () => false,
   setPreferCodexSubscription: codexMocks.setPreferSubscription,
   CODEX_PREFER_SUBSCRIPTION_KEY: 'texra.chatgptCodex.preferSubscription',

@@ -37,11 +37,11 @@ import type { SubscriptionPreferenceUpdate } from '@model/subscriptionPreference
 import {
   isPreferCodexSubscription,
   setPreferCodexSubscription,
-} from '@model/codex/codexPreference';
+} from '@model/codex/codexSubscription';
 import {
   isPreferXaiSubscription,
   setPreferXaiSubscription,
-} from '@model/xai/xaiPreference';
+} from '@model/xai/xaiSubscription';
 import type { ConfigWriteFailed } from '@platform/interfaces';
 import { Secrets, type PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
@@ -266,7 +266,7 @@ function defineSubscriptionProvider<
  * user's ChatGPT Plus/Pro/Team subscription instead of an OpenAI API key.
  *
  * Each binding calls through rather than capturing the imported function, so
- * a host suite that swaps `@auth/codex` or `@model/codex/codexPreference`
+ * a host suite that swaps `@auth/codex` or `@model/codex/codexSubscription`
  * still intercepts the row — the catalog is built once at module load.
  */
 const CHATGPT_PROVIDER = defineSubscriptionProvider({

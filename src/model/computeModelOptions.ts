@@ -2,10 +2,14 @@ import { Data, Effect } from 'effect';
 import { MODEL_CONFIGS, type ModelConfig, type ReasoningEffort } from 'llm-zoo';
 import { z } from 'zod';
 
-import { isCodexSignedIn } from '@model/codex/codexSignedIn';
-import { isPreferCodexSubscription } from '@model/codex/codexPreference';
-import { isPreferXaiSubscription } from '@model/xai/xaiPreference';
-import { isXaiSignedIn } from '@model/xai/xaiSignedIn';
+import {
+  isCodexSignedIn,
+  isPreferCodexSubscription,
+} from '@model/codex/codexSubscription';
+import {
+  isPreferXaiSubscription,
+  isXaiSignedIn,
+} from '@model/xai/xaiSubscription';
 import { StateWriteFailed } from '@platform/interfaces';
 import type { StateStore } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';

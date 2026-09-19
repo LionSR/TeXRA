@@ -80,12 +80,12 @@ vi.mock('@auth/xai', () => ({
     account?.email ?? 'your Grok account',
 }));
 
-vi.mock('@model/codex/codexPreference', () => ({
+vi.mock('@model/codex/codexSubscription', () => ({
   isPreferCodexSubscription: mocks.isPreferCodexSubscription,
   setPreferCodexSubscription: mocks.setPreferCodexSubscription,
 }));
 
-vi.mock('@model/xai/xaiPreference', () => ({
+vi.mock('@model/xai/xaiSubscription', () => ({
   isPreferXaiSubscription: mocks.isPreferXaiSubscription,
   setPreferXaiSubscription: mocks.setPreferXaiSubscription,
 }));

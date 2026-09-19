@@ -38,8 +38,8 @@ vi.mock('@auth/codex', async (importOriginal) => ({
   loginWithLoopback: mocks.loginWithLoopback,
 }));
 
-vi.mock('@model/codex/codexPreference', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@model/codex/codexPreference')>()),
+vi.mock('@model/codex/codexSubscription', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@model/codex/codexSubscription')>()),
   setPreferCodexSubscription: mocks.setPreferCodexSubscription,
 }));
 

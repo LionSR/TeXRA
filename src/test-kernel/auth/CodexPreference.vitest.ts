@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 import {
   isPreferCodexSubscription,
   setPreferCodexSubscription,
-} from '@model/codex/codexPreference';
+} from '@model/codex/codexSubscription';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { installPlatform } from '@test/support/setupPlatform';
 import { FakeScopedConfigProvider } from '@test/support/FakePlatform';

@@ -22,7 +22,7 @@ const mocks = vi.hoisted(() => ({
   updateGlobalState: vi.fn(),
 }));
 
-vi.mock('@model/codex/codexPreference', () => ({
+vi.mock('@model/codex/codexSubscription', () => ({
   isPreferCodexSubscription: () => mocks.preferSubscription,
 }));
 

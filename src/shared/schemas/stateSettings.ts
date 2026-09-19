@@ -576,7 +576,7 @@ const CORE_SETTING_ROWS: Record<
     schema: z.boolean().prefault(false),
     description:
       'Prefer your signed-in ChatGPT subscription for Codex-eligible OpenAI models instead of API-key routing. Experimental. Subscription routing defaults to a 272K-token input budget; use chatgptCodex.contextWindowK to override it.',
-    honoredBy: everyHost('src/model/codex/codexPreference.ts'),
+    honoredBy: everyHost('src/model/codex/codexSubscription.ts'),
   },
   'chatgptCodex.contextWindowK': {
     schema: ChatgptCodexContextWindowSchema,
@@ -598,7 +598,7 @@ const CORE_SETTING_ROWS: Record<
     schema: z.boolean().prefault(false),
     description:
       'Prefer your signed-in Grok (xAI SuperGrok) account for xAI models instead of API-key routing. Experimental. Uses the public Grok CLI OAuth client; xAI may change or revoke that registration without notice.',
-    honoredBy: everyHost('src/model/xai/xaiPreference.ts'),
+    honoredBy: everyHost('src/model/xai/xaiSubscription.ts'),
   },
   maxImageDimension: {
     schema: z.int().min(100).max(10000).prefault(2000),

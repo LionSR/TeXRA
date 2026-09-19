@@ -27,7 +27,7 @@ import {
   resolveCodexSubscriptionCapabilities,
   resolveXaiSubscriptionCapabilities,
 } from '@model/providerCapabilities';
-import { isXaiSignedIn } from '@model/xai/xaiSignedIn';
+import { isXaiSignedIn } from '@model/xai/xaiSubscription';
 import {
   resolveDirectModelApiKeyProvider,
   shouldRouteModelThroughOpenRouter,
