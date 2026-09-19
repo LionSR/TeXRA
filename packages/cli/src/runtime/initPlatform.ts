@@ -1,5 +1,5 @@
 // Third-party imports
-import { Cause, Data, Effect, Exit } from 'effect';
+import { Cause, Effect, Exit } from 'effect';
 
 // Local imports
 import {
@@ -177,17 +177,6 @@ const cliPlatformLog: SupabaseSessionLog = {
  * before the flushes run, and a teardown path must not depend on the thing
  * it is tearing down.
  */
-/**
- * One teardown step faulted. Every step below is best effort — the sequence
- * ignores each failure so a stuck handler or a closed pipe cannot keep the
- * process alive — so this exists to name which step it was rather than to be
- * matched on.
- */
-class CliShutdownStepFailed extends Data.TaggedError('CliShutdownStepFailed')<{
-  readonly step: 'flushTextStderr' | 'flushNdjsonStdout';
-  readonly cause: unknown;
-}> {}
-
 export async function runCliPlatformShutdownSequence(
   lifecycle: LifecycleHost | undefined,
 ): Promise<void> {
@@ -196,21 +185,9 @@ export async function runCliPlatformShutdownSequence(
       // Signal shutdown is best effort; output still gets one final flush.
       yield* Effect.ignoreCause(lifecycle?.runShutdown ?? Effect.void);
       // A closed stderr pipe must not prevent signal-based termination.
-      yield* Effect.ignoreCause(
-        Effect.tryPromise({
-          try: () => flushTextStderr(),
-          catch: (cause) =>
-            new CliShutdownStepFailed({ step: 'flushTextStderr', cause }),
-        }),
-      );
+      yield* Effect.ignoreCause(flushTextStderr());
       // A closed stdout pipe must not prevent signal-based termination.
-      yield* Effect.ignoreCause(
-        Effect.tryPromise({
-          try: () => flushNdjsonStdout(),
-          catch: (cause) =>
-            new CliShutdownStepFailed({ step: 'flushNdjsonStdout', cause }),
-        }),
-      );
+      yield* Effect.ignoreCause(flushNdjsonStdout());
     }),
   );
 }
@@ -453,7 +430,7 @@ export async function initCliPlatform(
         ],
         afterRunSettlement: [
           teardownDefaultSession(),
-          Effect.promise(() => flushNdjsonStdout()),
+          flushNdjsonStdout(),
           disposeCliProcessRuntime,
         ],
       });

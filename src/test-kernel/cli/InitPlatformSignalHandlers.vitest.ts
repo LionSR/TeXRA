@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { LifecycleHost } from '@platform/interfaces';
 
 const mocks = vi.hoisted(() => ({
-  flushNdjsonStdout: vi.fn<() => Promise<void>>(),
+  flushNdjsonStdout: vi.fn<() => Effect.Effect<void>>(),
 }));
 
 vi.mock('@cli/runtime/logSinks', async (importOriginal) => ({
@@ -61,9 +61,11 @@ describe('CLI platform signal handlers', () => {
     const runShutdown = vi.fn(async () => {
       events.push('shutdown');
     });
-    mocks.flushNdjsonStdout.mockImplementation(async () => {
-      events.push('flush');
-    });
+    mocks.flushNdjsonStdout.mockImplementation(() =>
+      Effect.sync(() => {
+        events.push('flush');
+      }),
+    );
 
     const { installCliShutdownSignalHandlers } =
       await import('@cli/runtime/initPlatform');
@@ -135,9 +137,11 @@ describe('CLI platform signal handlers', () => {
       if (callback) stderrCallbacks.push(callback);
       return true;
     }) as typeof process.stderr.write);
-    mocks.flushNdjsonStdout.mockImplementation(async () => {
-      order.push('ndjson');
-    });
+    mocks.flushNdjsonStdout.mockImplementation(() =>
+      Effect.sync(() => {
+        order.push('ndjson');
+      }),
+    );
     const { runCliPlatformShutdownSequence } =
       await import('@cli/runtime/initPlatform');
     const { writeTextStderr } = await import('@cli/runtime/logSinks');
@@ -175,9 +179,11 @@ describe('CLI platform signal handlers', () => {
   it('runCliPlatformShutdownSequence runs lifecycle shutdown then the NDJSON flush, best-effort', async () => {
     vi.resetModules();
     const order: string[] = [];
-    mocks.flushNdjsonStdout.mockImplementation(async () => {
-      order.push('flush');
-    });
+    mocks.flushNdjsonStdout.mockImplementation(() =>
+      Effect.sync(() => {
+        order.push('flush');
+      }),
+    );
     const { runCliPlatformShutdownSequence } =
       await import('@cli/runtime/initPlatform');
 

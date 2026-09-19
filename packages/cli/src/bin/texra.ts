@@ -40,7 +40,7 @@ await Effect.runPromise(
     Effect.ensuring(
       Effect.suspend(
         () => tryPlatform()?.lifecycle.runShutdown ?? Effect.void,
-      ).pipe(Effect.ensuring(Effect.promise(() => flushNdjsonStdout()))),
+      ).pipe(Effect.ensuring(flushNdjsonStdout())),
     ),
   ),
 );

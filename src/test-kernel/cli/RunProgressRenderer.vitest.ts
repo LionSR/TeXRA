@@ -965,7 +965,7 @@ describe('CLI run progress renderer', () => {
       await settle();
       await publishRun(session, { runId: 'a1a1a1' });
       detach();
-      await host.close();
+      await Effect.runPromise(host.close());
     });
 
     expect(output).toContain('polish paper.tex · 0s');
@@ -999,7 +999,7 @@ describe('CLI run progress renderer', () => {
       await Effect.runPromise(session.settlePublications());
 
       detach();
-      await host.close();
+      await Effect.runPromise(host.close());
     });
 
     expect(
@@ -1023,7 +1023,7 @@ describe('CLI run progress renderer', () => {
       host.prepareInteractivePrompt?.();
       await Promise.resolve();
       detach();
-      await host.close();
+      await Effect.runPromise(host.close());
     });
 
     expect(output).toContain('\r\x1b[2Kpolish paper.tex · 0s\n');
@@ -1045,7 +1045,7 @@ describe('CLI run progress renderer', () => {
         const detach = host.attachRunProgressRenderer(session);
         await publishRun(session, { runId: 'd4d4d4' });
         detach();
-        await host.close();
+        await Effect.runPromise(host.close());
       });
     });
 
@@ -1068,7 +1068,7 @@ describe('CLI run progress renderer', () => {
         showSuppress: false,
       });
 
-      await host.close();
+      await Effect.runPromise(host.close());
     });
 
     // The raw InstructionAction tokens are translated to human phrasing
@@ -1095,7 +1095,7 @@ describe('CLI run progress renderer', () => {
         showSuppress: false,
       });
 
-      await host.close();
+      await Effect.runPromise(host.close());
     });
 
     expect(output).toContain('Something needs attention. (some-future-action)');
@@ -1115,7 +1115,7 @@ describe('CLI run progress renderer', () => {
         }),
       ).toBe(true);
 
-      await host.close();
+      await Effect.runPromise(host.close());
     });
 
     expect(output).toContain('Agent not found: ghost');
@@ -1135,7 +1135,7 @@ describe('CLI run progress renderer', () => {
           'API key not found. Set your API key in Settings and run again.',
       });
 
-      await host.close();
+      await Effect.runPromise(host.close());
     });
 
     expect(output).toContain('API key not found.');
@@ -1208,7 +1208,7 @@ describe('CLI run progress renderer', () => {
         host.emit(event, testCase.payload);
       }
 
-      await host.close();
+      await Effect.runPromise(host.close());
     });
 
     const records = ndjsonRecords(output);

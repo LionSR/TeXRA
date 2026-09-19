@@ -199,10 +199,10 @@ const runInit = Effect.fn('runInit')(function* (
   }
 
   const config = buildInitConfig(answers);
-  yield* Effect.promise(() => writeInitConfig(filePath, config));
+  yield* writeInitConfig(filePath, config);
 
   const gitignoreOutcome: GitignoreOutcome | undefined = gitignore
-    ? yield* Effect.promise(() => ensureTexraGitignored(context.cwd))
+    ? yield* ensureTexraGitignored(context.cwd)
     : undefined;
 
   emitInitSummary(context, filePath, answers, config, models, gitignoreOutcome);
