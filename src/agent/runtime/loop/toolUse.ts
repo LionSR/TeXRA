@@ -722,9 +722,8 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           ),
         );
       }
-      state = loaded;
-      restore(state);
-      yield* Ref.set(latest, state);
+      restore(loaded);
+      state = yield* commit(loaded);
     }
 
     for (;;) {
@@ -736,70 +735,68 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           state.pendingResponse === null &&
           state.step === 'waiting');
       const afterError = lastError !== undefined;
-      if (parked || state.phase === 'initial') {
-        if (state.phase !== 'initial') {
-          // Input for the next turn: what the queue holds (a child's loop
-          // resumes this run once its queue has input), else (root only) a
-          // blocking wait.
-          let batch: FollowUpBatch | null = null;
-          if (isChild) {
-            if (!run.toolPolicy.stopAfterCycle) batch = yield* followUps.drain;
-            if (batch === null) {
-              if (afterError) return finish(state, RUN_OUTCOME.FAILED);
-              // A one-cycle launch stops here rather than suspending: the
-              // headless in-band child has no orchestrator to resume it, so
-              // a WAITING park would leave the run hanging.
-              if (run.toolPolicy.stopAfterCycle) {
-                return finish(state, RUN_OUTCOME.COMPLETED);
-              }
-              return { state, waiting: true } as const satisfies LoopExit;
-            }
-          }
+      if (parked) {
+        // Input for the next turn: what the queue holds (a child's loop
+        // resumes this run once its queue has input), else (root only) a
+        // blocking wait.
+        let batch: FollowUpBatch | null = null;
+        if (isChild) {
+          if (!run.toolPolicy.stopAfterCycle) batch = yield* followUps.drain;
           if (batch === null) {
-            if (afterError) {
-              yield* pauseActiveGoal();
-            } else {
-              run.callbacks.onIdle?.();
-            }
+            if (afterError) return finish(state, RUN_OUTCOME.FAILED);
+            // A one-cycle launch stops here rather than suspending: the
+            // headless in-band child has no orchestrator to resume it, so
+            // a WAITING park would leave the run hanging.
             if (run.toolPolicy.stopAfterCycle) {
-              return finish(
-                state,
-                afterError ? RUN_OUTCOME.FAILED : RUN_OUTCOME.COMPLETED,
-              );
+              return finish(state, RUN_OUTCOME.COMPLETED);
             }
-            if (!afterError && !followUps.hasQueued()) {
-              const continuation = yield* maybeBuildGoalContinuation(
-                session,
-                runId,
-              );
-              if (continuation && !followUps.hasQueued()) {
-                batch = { synthetic: true, text: continuation };
-              }
-            }
+            return { state, waiting: true } as const satisfies LoopExit;
           }
-          if (batch === null) {
-            detach();
-            batch = yield* followUps.wait;
-            if (batch === null) {
-              // The queue was cancelled or disposed under the parked loop:
-              // a cancellation, never a completed turn.
-              return finish(
-                state,
-                afterError ? RUN_OUTCOME.FAILED : RUN_OUTCOME.CANCELLED,
-              );
-            }
-            attach();
-          }
-          const consumed: ConsumedFollowUps = yield* followUps.consume(
-            state,
-            batch,
-          );
-          state = yield* commit(consumed.state);
-          if (consumed.instruction !== undefined) {
-            userChannels[USER_VAR_INSTRUCTION] = consumed.instruction;
-          }
-          lastError = undefined;
         }
+        if (batch === null) {
+          if (afterError) {
+            yield* pauseActiveGoal();
+          } else {
+            run.callbacks.onIdle?.();
+          }
+          if (run.toolPolicy.stopAfterCycle) {
+            return finish(
+              state,
+              afterError ? RUN_OUTCOME.FAILED : RUN_OUTCOME.COMPLETED,
+            );
+          }
+          if (!afterError && !followUps.hasQueued()) {
+            const continuation = yield* maybeBuildGoalContinuation(
+              session,
+              runId,
+            );
+            if (continuation && !followUps.hasQueued()) {
+              batch = { synthetic: true, text: continuation };
+            }
+          }
+        }
+        if (batch === null) {
+          detach();
+          batch = yield* followUps.wait;
+          if (batch === null) {
+            // The queue was cancelled or disposed under the parked loop:
+            // a cancellation, never a completed turn.
+            return finish(
+              state,
+              afterError ? RUN_OUTCOME.FAILED : RUN_OUTCOME.CANCELLED,
+            );
+          }
+          attach();
+        }
+        const consumed: ConsumedFollowUps = yield* followUps.consume(
+          state,
+          batch,
+        );
+        state = yield* commit(consumed.state);
+        if (consumed.instruction !== undefined) {
+          userChannels[USER_VAR_INSTRUCTION] = consumed.instruction;
+        }
+        lastError = undefined;
       }
       const turn: TurnExit = yield* runTurn(state);
       state = turn.state;

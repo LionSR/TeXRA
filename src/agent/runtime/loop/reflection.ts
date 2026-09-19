@@ -1187,9 +1187,8 @@ export const runReflection = Effect.fn('reflection.run')(function* (
           ),
         );
       }
-      state = loaded;
-      yield* restore(state);
-      yield* Ref.set(latest, state);
+      yield* restore(loaded);
+      state = yield* commit(loaded);
     }
     // Run-workspace preparation, before the first round: extraction reads
     // the prepared snapshot, and a failure is a transcript warning, never an
