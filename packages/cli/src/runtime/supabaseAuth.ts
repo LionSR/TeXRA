@@ -132,32 +132,26 @@ export const signInCliSupabase = Effect.fn('supabaseAuth.signInCliSupabase')(
     const authCoordinator = cliSupabaseAuth().coordinator;
     const callbackServer = yield* Effect.acquireRelease(
       startLoopbackCallbackServer(runtime, authCoordinator),
-      closeAfterAnyCommit,
+      // A storage commit that began before cancellation still settles the
+      // sign-in (the historical `commitStarted` contract), so the teardown
+      // waits that commit out instead of closing the server under it: a
+      // release runs uninterruptibly, which is what the old Promise edge
+      // bought by re-awaiting on a fresh fiber. The wait is bounded by the
+      // attempt timeout the server arms in its own scope, so a commit that
+      // never settles cannot hold the teardown open. A close that cannot
+      // complete on a listening server is a defect, not a login failure — by
+      // then the session is already stored.
+      (server) =>
+        Effect.suspend(() =>
+          server.commitStarted
+            ? Effect.ignore(server.waitForSession)
+            : Effect.void,
+        ).pipe(Effect.andThen(Effect.orDie(server.close))),
     );
     return yield* loopbackSignIn(authCoordinator, callbackServer, options);
   },
   Effect.scoped,
 );
-
-/**
- * Retire one login attempt's callback server. A storage commit that began
- * before cancellation still settles the sign-in (the historical
- * `commitStarted` contract), so the teardown waits that commit out instead of
- * closing the server under it: a release runs uninterruptibly, which is what
- * the old Promise edge bought by re-awaiting on a fresh fiber. The wait is
- * bounded by the attempt timeout the server arms in its own scope, so a
- * commit that never settles cannot hold the teardown open. A close that
- * cannot complete on a listening server is a defect, not a login failure —
- * by then the session is already stored.
- */
-const closeAfterAnyCommit = (
-  callbackServer: LoopbackCallbackServer,
-): Effect.Effect<void> =>
-  Effect.suspend(() =>
-    callbackServer.commitStarted
-      ? Effect.ignore(callbackServer.waitForSession)
-      : Effect.void,
-  ).pipe(Effect.andThen(Effect.orDie(callbackServer.close)));
 
 /**
  * The loopback sign-in program: drive the OAuth redirect and browser launch,
