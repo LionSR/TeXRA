@@ -25,19 +25,24 @@ const mocks = vi.hoisted(() => ({
   assertOutputDirAvailable: vi.fn(),
   assertOutputFileAvailable: vi.fn(),
   executeCliWorkflowConfig: vi.fn(),
-  initInteractiveCliPlatform: vi.fn(),
+  initCliPlatform: vi.fn(),
+  installCliProcessRuntime: vi.fn(),
   resolveCliLaunchAgent: vi.fn(),
   retrieveSessionResumeData: vi.fn(),
   runChat: vi.fn(),
   writeTextStderr: vi.fn(),
 }));
 
-// `texra resume` reopens the chat TUI for tool-use sessions, so it must route
-// through initInteractiveCliPlatform — not plain initCliPlatform — to leave
-// the TUI as the sole SIGINT/SIGTERM owner once it mounts (see
-// initPlatform.ts).
+// `texra resume` reopens the chat TUI for tool-use sessions, so it must never
+// pass `installSignalHandlers: false` — that leaves the TUI as the sole
+// SIGINT/SIGTERM owner once it mounts (see initPlatform.ts).
 vi.mock('@cli/runtime/initPlatform', () => ({
-  initInteractiveCliPlatform: mocks.initInteractiveCliPlatform,
+  initCliPlatform: mocks.initCliPlatform,
+}));
+
+vi.mock('@cli/runtime/cliProcessRuntime', () => ({
+  installCliProcessRuntime: mocks.installCliProcessRuntime,
+  disposeCliProcessRuntime: Effect.void,
 }));
 
 vi.mock('@cli/runtime/logSinks', () => ({
@@ -117,10 +122,13 @@ async function seedRunRecord(seed: {
   const session = await Effect.runPromise(createProcessSession());
   seededSession = session;
   // `runResumeCommand` reads the session off the services the init returns.
-  mocks.initInteractiveCliPlatform.mockResolvedValue({
-    runtime: testRuntime(),
-    session: Effect.succeed(session),
-  });
+  mocks.initCliPlatform.mockReturnValue(
+    Effect.succeed({
+      runtime: testRuntime(),
+      session: Effect.succeed(session),
+    }),
+  );
+  mocks.installCliProcessRuntime.mockImplementation(async () => testRuntime());
   await Effect.runPromise(
     session.commit([
       {
@@ -210,13 +218,16 @@ describe('runResumeCommand', () => {
     expect(mocks.writeTextStderr).not.toHaveBeenCalled();
   });
 
-  it('routes platform init through the TUI-owning signal path, not headless init', async () => {
+  it('leaves the platform signal handler installed for the TUI to take over', async () => {
     const context = cliContext();
 
     await run(context);
 
-    expect(mocks.initInteractiveCliPlatform).toHaveBeenCalledWith(
+    expect(mocks.initCliPlatform).toHaveBeenCalledWith(
       expect.objectContaining({ ...context, quietLogs: true }),
+    );
+    expect(mocks.initCliPlatform.mock.calls[0]?.[0]).not.toHaveProperty(
+      'installSignalHandlers',
     );
   });
 

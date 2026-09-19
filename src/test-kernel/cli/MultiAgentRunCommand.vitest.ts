@@ -261,8 +261,9 @@ describe('CLI multi-agent run command', () => {
     // The CLI init hands its caller the platform's stores; the commands
     // under test read `secrets`/`globalState` off what it returns.
     const services = { ...installedHost().platform, runtime: testRuntime() };
-    cliInitPlatformMock.initLocalCliPlatform.mockResolvedValue(services);
-    cliInitPlatformMock.initCliPlatform.mockResolvedValue(services);
+    cliInitPlatformMock.initCliPlatform.mockReturnValue(
+      Effect.succeed(services),
+    );
     mockExpandedRunInputs({
       inputFiles: ['problem.tex'],
       contextFiles: [],

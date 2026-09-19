@@ -7,7 +7,8 @@ import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import { RESEARCHER_ACCESS_AUTH } from '@shared/copy/accountAuth';
 
 import { CliExitCode } from '../runtime/exitCodes';
-import { initInteractiveCliPlatform } from '../runtime/initPlatform';
+import { installCliProcessRuntime } from '../runtime/cliProcessRuntime';
+import { initCliPlatform } from '../runtime/initPlatform';
 import { writeTextStderr } from '../runtime/logSinks';
 import {
   formatInteractiveTerminalFailure,
@@ -40,20 +41,20 @@ export async function runSetup(context: CliContext): Promise<number> {
   }
 
   // Always ends in the chat TUI (setup agent) or returns cleanly before it —
-  // either way the platform's own handler (still installed here) covers
-  // signals until the TUI mounts and takes over (see
-  // initInteractiveCliPlatform).
-  const services = await initInteractiveCliPlatform({
-    ...context,
-    quietLogs: true,
-  });
+  // either way the platform's own handler covers signals until the TUI mounts
+  // and takes over. This entry never passes `installSignalHandlers: false`,
+  // so that handler stays live through the whole window below (see
+  // `initCliPlatform`).
+  //
   // State 0 first (.agents/docs/archived/feature/2026-06-11-agent-native-onboarding.md): a credential is the
   // one step no agent can do for the user. With a credential already in place
   // the picker is skipped — credentials-only (re)configuration is
-  // `texra login`'s job under the new vocabulary. The read and the picker it
-  // may open are one program on the root's runtime.
-  const credentialed = await services.runtime.runPromise(
+  // `texra login`'s job under the new vocabulary. The init, the read and the
+  // picker it may open are one program on the root's runtime.
+  const runtime = await installCliProcessRuntime(context.storageRoot);
+  const credentialed = await runtime.runPromise(
     Effect.gen(function* () {
+      const services = yield* initCliPlatform({ ...context, quietLogs: true });
       if (
         yield* hasUsableSetupCredential(
           services,

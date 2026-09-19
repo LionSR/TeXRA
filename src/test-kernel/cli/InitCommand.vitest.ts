@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   getCliModelAccessList: vi.fn(),
   getVisibleAgents: vi.fn(),
   initCliPlatform: vi.fn(),
+  installCliProcessRuntime: vi.fn(),
   loadAgents: vi.fn(),
 }));
 
@@ -23,6 +24,14 @@ vi.mock('@agent/index', async (importOriginal) => {
 vi.mock('@cli/runtime/initPlatform', () => ({
   initCliPlatform: mocks.initCliPlatform,
 }));
+
+vi.mock('@cli/runtime/cliProcessRuntime', async () => {
+  const { Effect } = await import('effect');
+  return {
+    installCliProcessRuntime: mocks.installCliProcessRuntime,
+    disposeCliProcessRuntime: Effect.void,
+  };
+});
 
 vi.mock('@cli/runtime/modelAccess', async (importOriginal) => {
   const actual =
@@ -94,11 +103,16 @@ describe('CLI init command', () => {
       ]);
     // The command threads the stores this call hands back into the model
     // access list, so the mock returns the pair a real init would.
-    mocks.initCliPlatform.mockReset().mockResolvedValue({
-      secrets: new FakeSecrets(),
-      globalState: new FakeStateStore(),
-      runtime: testRuntime(),
-    });
+    mocks.initCliPlatform.mockReset().mockReturnValue(
+      Effect.succeed({
+        secrets: new FakeSecrets(),
+        globalState: new FakeStateStore(),
+        runtime: testRuntime(),
+      }),
+    );
+    mocks.installCliProcessRuntime
+      .mockReset()
+      .mockImplementation(async () => testRuntime());
     mocks.loadAgents.mockReset().mockReturnValue(Effect.void);
     stdoutSpy = spyOnStreamWrite(process.stdout, (chunk) => {
       stdout += chunk;

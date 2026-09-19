@@ -393,8 +393,9 @@ describe('CLI run command, workflow agents', () => {
       session: Effect.succeed(session),
       runtime: testRuntime(),
     };
-    cliInitPlatformMock.initLocalCliPlatform.mockResolvedValue(platform);
-    cliInitPlatformMock.initCliPlatform.mockResolvedValue(platform);
+    cliInitPlatformMock.initCliPlatform.mockReturnValue(
+      Effect.succeed(platform),
+    );
     mocks.writeResultMeta.mockResolvedValue(undefined);
     mocks.finalizeRun.mockResolvedValue({ ok: true });
     mocks.resolveCliRunAgent.mockReturnValue(
@@ -453,7 +454,7 @@ describe('CLI run command, workflow agents', () => {
           'Use either --output or --output-dir, not both.',
         );
 
-        expect(cliInitPlatformMock.initLocalCliPlatform).not.toHaveBeenCalled();
+        expect(cliInitPlatformMock.initCliPlatform).not.toHaveBeenCalled();
         expect(mocks.resolveCliRunAgent).not.toHaveBeenCalled();
         expectNoModelOrInputWork();
       }),
@@ -479,7 +480,7 @@ describe('CLI run command, workflow agents', () => {
           'Use --output-dir for multi-input workflow runs; --output is only for a single final artifact.',
         );
 
-        expect(cliInitPlatformMock.initLocalCliPlatform).toHaveBeenCalled();
+        expect(cliInitPlatformMock.initCliPlatform).toHaveBeenCalled();
         expect(mocks.resolveCliRunAgent).toHaveBeenCalledWith(
           expect.anything(),
           'polish',
@@ -745,10 +746,12 @@ describe('CLI run command, workflow agents', () => {
         const run = workflowRun(runId);
         if (!run.ok) throw new Error('Expected workflow result.');
         // The command reads the session off the services its init returns.
-        cliInitPlatformMock.initLocalCliPlatform.mockResolvedValueOnce({
-          ...installedHost().platform,
-          session: Effect.succeed(session),
-        });
+        cliInitPlatformMock.initCliPlatform.mockReturnValueOnce(
+          Effect.succeed({
+            ...installedHost().platform,
+            session: Effect.succeed(session),
+          }),
+        );
         const records = storage.getRunRecords(session, runId);
         vi.mocked(mockedStorage.getRunRecords).mockReturnValueOnce(records);
         // The run's first append claims its aggregate for this process; the
@@ -1425,7 +1428,7 @@ describe('CLI run command, workflow agents', () => {
           /--instruction-file: file not found: missing-prompt\.md/,
         );
 
-        expect(cliInitPlatformMock.initLocalCliPlatform).not.toHaveBeenCalled();
+        expect(cliInitPlatformMock.initCliPlatform).not.toHaveBeenCalled();
         expect(mocks.resolveCliRunAgent).not.toHaveBeenCalled();
         expectNoModelOrInputWork();
       }),

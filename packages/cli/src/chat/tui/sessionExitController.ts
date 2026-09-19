@@ -285,7 +285,7 @@ export function createSessionExitController(
 
   const install = (): void => {
     // Ownership transfers right here, not any earlier: everything before this
-    // (initInteractiveCliPlatform, onboarding, model resolution) ran with the
+    // (the platform init, onboarding, model resolution) ran with the
     // platform's own handler still live, so a signal during that window still
     // got a graceful shutdown. This removes it and makes the handlers installed
     // below the sole owner.

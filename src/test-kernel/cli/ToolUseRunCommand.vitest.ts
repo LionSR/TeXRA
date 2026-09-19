@@ -109,8 +109,9 @@ describe('CLI run command, tool-use agents', () => {
     // The CLI init hands its caller the platform's stores; the commands
     // under test read `secrets`/`globalState` off what it returns.
     const platform = { ...installedHost().platform, runtime: testRuntime() };
-    cliInitPlatformMock.initLocalCliPlatform.mockResolvedValue(platform);
-    cliInitPlatformMock.initCliPlatform.mockResolvedValue(platform);
+    cliInitPlatformMock.initCliPlatform.mockReturnValue(
+      Effect.succeed(platform),
+    );
     mocks.withExpandedRunInputs.mockResolvedValue({
       inputFiles: ['problem.md'],
       contextFiles: ['notes.md'],
@@ -157,11 +158,11 @@ describe('CLI run command, tool-use agents', () => {
         });
 
         expect(exitCode).toBe(0);
-        expect(cliInitPlatformMock.initLocalCliPlatform).toHaveBeenCalledWith(
+        expect(cliInitPlatformMock.initCliPlatform).toHaveBeenCalledWith(
           expect.objectContaining({ cwd: '/tmp/project' }),
         );
         expect(
-          cliInitPlatformMock.initLocalCliPlatform.mock.invocationCallOrder[0],
+          cliInitPlatformMock.initCliPlatform.mock.invocationCallOrder[0],
         ).toBeLessThan(mocks.resolveCliRunAgent.mock.invocationCallOrder[0]);
         expect(mocks.resolveCliRunAgent).toHaveBeenCalledWith(
           expect.anything(),
@@ -307,7 +308,7 @@ describe('CLI run command, tool-use agents', () => {
         expect(usageErrorFrom(exit).message).toBe(
           'Provide --instruction or --instruction-file for a tool-use agent, or --input for a workflow agent.',
         );
-        expect(cliInitPlatformMock.initLocalCliPlatform).not.toHaveBeenCalled();
+        expect(cliInitPlatformMock.initCliPlatform).not.toHaveBeenCalled();
         expect(mocks.resolveCliRunAgent).not.toHaveBeenCalled();
       }),
   );

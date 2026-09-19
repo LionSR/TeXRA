@@ -151,9 +151,7 @@ const runInit = Effect.fn('runInit')(function* (
 ) {
   // The init call hands back the stores it just wired, so the model list is
   // computed from the same pair the rest of this command writes through.
-  const services = yield* Effect.promise(() =>
-    initCliPlatform({ ...context, quietLogs: true }),
-  );
+  const services = yield* initCliPlatform({ ...context, quietLogs: true });
 
   const filePath = workspaceTexraConfigPath(context.cwd);
   if (!opts.force && (yield* Effect.promise(() => pathExists(filePath)))) {

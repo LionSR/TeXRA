@@ -9,7 +9,6 @@ import {
 import { type AgentConfigPayload, type SessionHandle } from '@agent/runtime';
 import { RUN_OUTCOME, type RunId, AgentCategory } from '@shared/schemas';
 import type { SessionOpenError } from '@shared/session/database';
-import { ensureError } from '@utils/errors/errorMessage';
 import { snapshotHoldsTerminalCompileRejection } from '../runtime/toolUseResumeData';
 
 import {
@@ -33,7 +32,7 @@ import {
   resolveCliRunAgent,
 } from '../runtime/agents';
 import {
-  initLocalCliPlatform,
+  initCliPlatform,
   type CliPlatformServices,
 } from '../runtime/initPlatform';
 import { installCliProcessRuntime } from '../runtime/cliProcessRuntime';
@@ -122,10 +121,7 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
     );
   }
 
-  const services = yield* Effect.tryPromise({
-    try: () => initLocalCliPlatform(context),
-    catch: ensureError,
-  });
+  const services = yield* initCliPlatform({ ...context, quietLogs: true });
   // Pre-validate the resolved agent so usage errors land before stdin is read
   // or the runtime host starts.
   const agent = yield* resolveCliRunAgent(services, init.agent);

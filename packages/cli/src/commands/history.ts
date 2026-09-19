@@ -9,6 +9,7 @@ import { assembleTrace, injectStandaloneTrace } from '@transcript';
 import { assertNever } from '@utils/core';
 import { formatResultCount } from '@utils/text/stringUtils';
 
+import { installCliProcessRuntime } from '../runtime/cliProcessRuntime';
 import { CliExitCode } from '../runtime/exitCodes';
 import {
   cliHistoryDetailNdjsonRecord,
@@ -25,7 +26,7 @@ import {
   readCliHistoryStandaloneTemplate,
   type CliHistoryDeleteResult,
 } from '../runtime/history';
-import { initLocalCliPlatform } from '../runtime/initPlatform';
+import { initCliPlatform } from '../runtime/initPlatform';
 import {
   writeErrorStderr,
   writeRawStdout,
@@ -49,25 +50,30 @@ async function runHistoryList(
   context: CliContext,
   options: { limit?: number },
 ): Promise<number> {
-  const stores = await initLocalCliPlatform(context);
-  const entries = await stores.runtime.runPromise(
-    listCliHistoryEntries(stores.session),
-  );
-  const visibleEntries =
-    options.limit !== undefined ? entries.slice(0, options.limit) : entries;
+  // The command's one run, on the process runtime this entry installs or
+  // joins: the init and the history read it feeds are one program on it.
+  const runtime = await installCliProcessRuntime(context.storageRoot);
+  return runtime.runPromise(
+    Effect.gen(function* () {
+      const stores = yield* initCliPlatform({ ...context, quietLogs: true });
+      const entries = yield* listCliHistoryEntries(stores.session);
+      const visibleEntries =
+        options.limit !== undefined ? entries.slice(0, options.limit) : entries;
 
-  emitCliResult(
-    context,
-    {
-      json: visibleEntries,
-      ndjson: cliHistoryNdjsonRecords(visibleEntries),
-      text: visibleEntries.length
-        ? formatCliHistoryText(visibleEntries)
-        : 'No history yet. Runs appear here after you start an agent.',
-    },
-    { paged: true },
+      emitCliResult(
+        context,
+        {
+          json: visibleEntries,
+          ndjson: cliHistoryNdjsonRecords(visibleEntries),
+          text: visibleEntries.length
+            ? formatCliHistoryText(visibleEntries)
+            : 'No history yet. Runs appear here after you start an agent.',
+        },
+        { paged: true },
+      );
+      return CliExitCode.Success;
+    }),
   );
-  return CliExitCode.Success;
 }
 
 async function runHistoryShow(
@@ -75,23 +81,26 @@ async function runHistoryShow(
   id: RunId,
   options: { full?: boolean },
 ): Promise<number> {
-  const stores = await initLocalCliPlatform(context);
-  const details = await stores.runtime.runPromise(
-    readCliHistoryDetails(stores.session, id, {
-      includeFullConversation: options.full === true,
+  const runtime = await installCliProcessRuntime(context.storageRoot);
+  return runtime.runPromise(
+    Effect.gen(function* () {
+      const stores = yield* initCliPlatform({ ...context, quietLogs: true });
+      const details = yield* readCliHistoryDetails(stores.session, id, {
+        includeFullConversation: options.full === true,
+      });
+      if (!details) {
+        writeTextStderr(formatCliHistoryNotFoundText(id, context.cwd));
+        return CliExitCode.Usage;
+      }
+
+      emitCliResult(context, {
+        json: details,
+        ndjson: cliHistoryDetailNdjsonRecord(details),
+        text: formatCliHistoryDetailsText(details),
+      });
+      return CliExitCode.Success;
     }),
   );
-  if (!details) {
-    writeTextStderr(formatCliHistoryNotFoundText(id, context.cwd));
-    return CliExitCode.Usage;
-  }
-
-  emitCliResult(context, {
-    json: details,
-    ndjson: cliHistoryDetailNdjsonRecord(details),
-    text: formatCliHistoryDetailsText(details),
-  });
-  return CliExitCode.Success;
 }
 
 /**
@@ -112,9 +121,10 @@ export async function runHistoryExport(
   id: RunId,
   format: 'html' | 'md',
 ): Promise<number> {
-  const stores = await initLocalCliPlatform(context);
-  return stores.runtime.runPromise(
+  const runtime = await installCliProcessRuntime(context.storageRoot);
+  return runtime.runPromise(
     Effect.gen(function* () {
+      const stores = yield* initCliPlatform({ ...context, quietLogs: true });
       if (format === 'md') {
         const exportResult = yield* readCliHistoryExportInput(
           stores.session,
@@ -175,9 +185,10 @@ async function runHistoryDelete(
   context: CliContext,
   options: { id?: RunId; all: boolean; yes: boolean },
 ): Promise<number> {
-  const stores = await initLocalCliPlatform(context);
-  return stores.runtime.runPromise(
+  const runtime = await installCliProcessRuntime(context.storageRoot);
+  return runtime.runPromise(
     Effect.gen(function* () {
+      const stores = yield* initCliPlatform({ ...context, quietLogs: true });
       // Both deletion paths read the same session: opened once here, in the
       // one program the run arm runs.
       const session = yield* stores.session;

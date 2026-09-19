@@ -99,9 +99,9 @@ describe('CLI agents command', () => {
     vi.clearAllMocks();
     // The CLI init hands its caller the composition root's services; these
     // commands read the process runtime off what it returns.
-    cliInitPlatformMock.initLocalCliPlatform.mockResolvedValue({
-      runtime: testRuntime(),
-    });
+    cliInitPlatformMock.initCliPlatform.mockReturnValue(
+      Effect.succeed({ runtime: testRuntime() }),
+    );
     agentCatalogMock.getAgentsByCategory.mockReturnValue([]);
     agentCatalogMock.getVisibleAgents.mockReturnValue([]);
   });
@@ -280,7 +280,7 @@ describe('CLI agents command', () => {
     const exitCode = await showAgent(createRunCommandCliContext(), args);
 
     expect(exitCode).toBe(0);
-    expect(cliInitPlatformMock.initLocalCliPlatform).toHaveBeenCalledTimes(1);
+    expect(cliInitPlatformMock.initCliPlatform).toHaveBeenCalledTimes(1);
     expect(agentCatalogMock.getAgent).not.toHaveBeenCalled();
     expect(mocks.resolveCliAgent).toHaveBeenCalledWith(expect.anything(), args);
     expect(cliOutputMock.emitCliResult).toHaveBeenCalledWith(

@@ -1,4 +1,5 @@
 import { defineCommand } from 'citty';
+import { Effect } from 'effect';
 
 import { getCustomAgentScanIssues } from '@agent/index';
 import { loadAgentSettingAndPrompts } from '@agent/runtime';
@@ -17,7 +18,8 @@ import {
   type CliAgentListOptions,
 } from '../runtime/agents';
 import { CliExitCode } from '../runtime/exitCodes';
-import { initLocalCliPlatform } from '../runtime/initPlatform';
+import { installCliProcessRuntime } from '../runtime/cliProcessRuntime';
+import { initCliPlatform } from '../runtime/initPlatform';
 import { writeTextStderr } from '../runtime/logSinks';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
@@ -29,75 +31,87 @@ export async function listAgents(
   context: CliContext,
   options: CliAgentListOptions = {},
 ): Promise<number> {
-  const services = await initLocalCliPlatform(context);
-  const result = await services.runtime.runPromise(
-    loadCliAgentList(services, options),
-  );
+  // The command's one run, on the process runtime this entry installs or
+  // joins: the platform init and the list read below are one program on it,
+  // not a Promise the init settles into and a second run over the result.
+  const runtime = await installCliProcessRuntime(context.storageRoot);
+  return runtime.runPromise(
+    Effect.gen(function* () {
+      const services = yield* initCliPlatform({ ...context, quietLogs: true });
+      const result = yield* loadCliAgentList(services, options);
 
-  if (!context.quietLogs) {
-    const hiddenNotice = formatCliHiddenAgentsNotice(
-      result.hiddenCount,
-      options.category,
-    );
-    if (hiddenNotice) writeTextStderr(hiddenNotice);
-    for (const issue of getCustomAgentScanIssues()) {
-      writeTextStderr(`Skipped custom agent ${issue.path}: ${issue.message}`);
-    }
-  }
+      if (!context.quietLogs) {
+        const hiddenNotice = formatCliHiddenAgentsNotice(
+          result.hiddenCount,
+          options.category,
+        );
+        if (hiddenNotice) writeTextStderr(hiddenNotice);
+        for (const issue of getCustomAgentScanIssues()) {
+          writeTextStderr(
+            `Skipped custom agent ${issue.path}: ${issue.message}`,
+          );
+        }
+      }
 
-  emitCliResult(
-    context,
-    {
-      json: result.agents,
-      ndjson: result.agents.map((agent) => ({ kind: 'agent', agent })),
-      text: formatCliAgentList(result.agents, {
-        category: options.category,
-        showEmptyState:
-          options.includeHidden !== true &&
-          !context.quietLogs &&
-          context.outputFormat === 'text',
-      }),
-    },
-    { paged: true },
+      emitCliResult(
+        context,
+        {
+          json: result.agents,
+          ndjson: result.agents.map((agent) => ({ kind: 'agent', agent })),
+          text: formatCliAgentList(result.agents, {
+            category: options.category,
+            showEmptyState:
+              options.includeHidden !== true &&
+              !context.quietLogs &&
+              context.outputFormat === 'text',
+          }),
+        },
+        { paged: true },
+      );
+      return CliExitCode.Success;
+    }),
   );
-  return CliExitCode.Success;
 }
 
 export async function showAgent(
   context: CliContext,
   name: string,
 ): Promise<number> {
-  const services = await initLocalCliPlatform(context);
-  const entry = await services.runtime.runPromise(
-    resolveCliAgent(services, name),
+  const runtime = await installCliProcessRuntime(context.storageRoot);
+  return runtime.runPromise(
+    Effect.gen(function* () {
+      const services = yield* initCliPlatform({ ...context, quietLogs: true });
+      const entry = yield* resolveCliAgent(services, name);
+      if (!entry) {
+        writeTextStderr(missingAgentMessage(name));
+        return CliExitCode.Usage;
+      }
+
+      // Everything a listed entry carries is shown as listed. The one
+      // exception is a remote workflow agent's `defaultOutputFiles`: the
+      // catalog listing carries none, so only loading the definition (as its
+      // launch does) shows what a run would write. A tool-use agent declares
+      // none at all, so it is never worth a fetch here.
+      let shown = entry;
+      if (
+        entry.source === 'remote' &&
+        entry.category === AgentCategory.Workflow
+      ) {
+        const [setting] = yield* loadAgentSettingAndPrompts(entry);
+        // A scanned entry omits the field rather than carrying an empty list;
+        // a loaded definition with nothing declared reads the same way.
+        if (setting.defaultOutputFiles.length > 0)
+          shown = { ...entry, defaultOutputFiles: setting.defaultOutputFiles };
+      }
+
+      emitCliResult(context, {
+        json: shown,
+        ndjson: { kind: 'agent', agent: shown },
+        text: formatCliAgentDetails(shown),
+      });
+      return CliExitCode.Success;
+    }),
   );
-  if (!entry) {
-    writeTextStderr(missingAgentMessage(name));
-    return CliExitCode.Usage;
-  }
-
-  // Everything a listed entry carries is shown as listed. The one exception
-  // is a remote workflow agent's `defaultOutputFiles`: the catalog listing
-  // carries none, so only loading the definition (as its launch does) shows
-  // what a run would write. A tool-use agent declares none at all, so it is
-  // never worth a fetch here.
-  let shown = entry;
-  if (entry.source === 'remote' && entry.category === AgentCategory.Workflow) {
-    const [setting] = await services.runtime.runPromise(
-      loadAgentSettingAndPrompts(entry),
-    );
-    // A scanned entry omits the field rather than carrying an empty list;
-    // a loaded definition with nothing declared reads the same way.
-    if (setting.defaultOutputFiles.length > 0)
-      shown = { ...entry, defaultOutputFiles: setting.defaultOutputFiles };
-  }
-
-  emitCliResult(context, {
-    json: shown,
-    ndjson: { kind: 'agent', agent: shown },
-    text: formatCliAgentDetails(shown),
-  });
-  return CliExitCode.Success;
 }
 
 const agentsListCommand = defineCliCommand({

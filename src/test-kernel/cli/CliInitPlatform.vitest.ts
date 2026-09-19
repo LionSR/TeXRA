@@ -259,8 +259,10 @@ describe('CLI platform init', () => {
     mocks.tryPlatform.mockReturnValue({ globalState: stubGlobalState() });
     mocks.tryPlatform.mockReturnValueOnce(undefined);
 
-    await initCliPlatform(
-      cliContext({ version: '1.2.3', installSignalHandlers: false }),
+    await Effect.runPromise(
+      initCliPlatform(
+        cliContext({ version: '1.2.3', installSignalHandlers: false }),
+      ),
     );
 
     expect(vi.mocked(UsageLogService.initialize)).toHaveBeenCalledWith(
@@ -301,7 +303,7 @@ describe('CLI platform init', () => {
 
       // The seed's own typed failure, carrying the store's rejection.
       await expect(
-        initPlatform.initCliPlatform(cliContext()),
+        Effect.runPromise(initPlatform.initCliPlatform(cliContext())),
       ).rejects.toMatchObject({
         _tag: 'StateWriteFailed',
         key: GlobalStateKey.DISABLED_TOOLS,
@@ -313,9 +315,9 @@ describe('CLI platform init', () => {
       expect(tryDefaultSession()).toBeUndefined();
       expect(registered).toEqual([]);
 
-      await expect(initPlatform.initCliPlatform(cliContext())).resolves.toEqual(
-        expect.objectContaining({ roots: expect.anything() }),
-      );
+      await expect(
+        Effect.runPromise(initPlatform.initCliPlatform(cliContext())),
+      ).resolves.toEqual(expect.objectContaining({ roots: expect.anything() }));
       expect(mocks.publishPlatform).toHaveBeenCalledOnce();
       expect(tryDefaultSession()).toBeUndefined();
       expect(registered).toEqual([
@@ -335,7 +337,9 @@ describe('CLI platform init', () => {
     // session is built after it, not on a runtime an earlier case's shutdown
     // disposed.
     mocks.tryPlatform.mockReturnValueOnce(undefined);
-    await initCliPlatform(cliContext({ installSignalHandlers: false }));
+    await Effect.runPromise(
+      initCliPlatform(cliContext({ installSignalHandlers: false })),
+    );
     const session = createTestSession();
     const interruptCodex = vi
       .spyOn(codexThreadsFor(session.runs), 'interruptAll')
@@ -367,7 +371,7 @@ describe('CLI platform init', () => {
 
     // The runtime this root installed, as it hands it back: the root's own
     // local, not a process-wide read.
-    const { runtime } = await initCliPlatform(cliContext());
+    const { runtime } = await Effect.runPromise(initCliPlatform(cliContext()));
 
     const setup = await runtime.runPromise(Effect.service(SetupPlatform));
     expect(setup.host).toBe('cli');
@@ -391,9 +395,9 @@ describe('CLI platform init', () => {
 // independent async shutdown chains reacting to the same signal, racing on
 // whose `process.exit()` wins and leaving teardown order unspecified.
 //
-// `initInteractiveCliPlatform` does NOT suppress the platform handler up
-// front (a signal during onboarding/model-resolution still needs a graceful
-// handler); instead
+// The interactive entries do NOT suppress the platform handler up front (a
+// signal during onboarding/model-resolution still needs a graceful handler):
+// none of them passes `installSignalHandlers: false`. Instead
 // `handOffCliShutdownSignalHandlers()` removes it right at the point the TUI
 // installs its own pair, so the two sets are never simultaneously live.
 describe('CLI platform interactive signal ownership', () => {
@@ -408,14 +412,14 @@ describe('CLI platform interactive signal ownership', () => {
     });
   });
 
-  it('initInteractiveCliPlatform keeps the platform handler live until an explicit handoff', async () => {
+  it('an interactive init keeps the platform handler live until an explicit handoff', async () => {
     await withFreshSignalCapture(async ({ registered, initPlatform }) => {
-      // The await-suspension point from the finding: runChat() awaits this
-      // init call, then onboarding/model resolution, before Ink ever mounts
-      // and installs its own handlers below. Unlike the pre-handoff-design
-      // fix, the platform handler stays registered for that whole window —
-      // a signal there still gets a graceful shutdown.
-      await initPlatform.initInteractiveCliPlatform(cliContext());
+      // The suspension point from the finding: runChat() runs this init, then
+      // onboarding/model resolution, before Ink ever mounts and installs its
+      // own handlers below. Unlike the pre-handoff-design fix, the platform
+      // handler stays registered for that whole window — a signal there still
+      // gets a graceful shutdown.
+      await Effect.runPromise(initPlatform.initCliPlatform(cliContext()));
       expect(registered).toEqual([
         { event: 'SIGINT', kind: 'once' },
         { event: 'SIGTERM', kind: 'once' },
@@ -438,17 +442,6 @@ describe('CLI platform interactive signal ownership', () => {
       expect(registered.slice(-2)).toEqual([
         { event: 'SIGINT', kind: 'on' },
         { event: 'SIGTERM', kind: 'on' },
-      ]);
-    });
-  });
-
-  it('a headless call site (plain initCliPlatform) keeps the platform handler installed', async () => {
-    await withFreshSignalCapture(async ({ registered, initPlatform }) => {
-      await initPlatform.initCliPlatform(cliContext());
-
-      expect(registered).toEqual([
-        { event: 'SIGINT', kind: 'once' },
-        { event: 'SIGTERM', kind: 'once' },
       ]);
     });
   });

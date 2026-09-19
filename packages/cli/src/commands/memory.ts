@@ -1,10 +1,12 @@
 import { defineCommand } from 'citty';
+import { Effect } from 'effect';
 
 import { loadMemoryItems } from '@tools/memory/memoryFileSystem';
 
 import { CliExitCode } from '../runtime/exitCodes';
+import { installCliProcessRuntime } from '../runtime/cliProcessRuntime';
 import {
-  initLocalCliPlatform,
+  initCliPlatform,
   type CliPlatformServices,
 } from '../runtime/initPlatform';
 import {
@@ -36,37 +38,50 @@ function memoryRoots(
 }
 
 async function runMemoryList(context: CliContext): Promise<number> {
-  const services = await initLocalCliPlatform(context);
-  // Pass the full list to `formatCliMemoryList`; it owns truncation (the
-  // `Memories (N):` total and `... N more` overflow line) and JSON/NDJSON
-  // consumers should see every memory, not a capped slice.
-  const items = await services.runtime.runPromise(
-    runCliMemory(memoryRoots(services), loadMemoryItems()),
-  );
+  // The command's one run, on the process runtime this entry installs or
+  // joins: the init and the read it feeds are one program on it.
+  const runtime = await installCliProcessRuntime(context.storageRoot);
+  return runtime.runPromise(
+    Effect.gen(function* () {
+      const services = yield* initCliPlatform({ ...context, quietLogs: true });
+      // Pass the full list to `formatCliMemoryList`; it owns truncation (the
+      // `Memories (N):` total and `... N more` overflow line) and JSON/NDJSON
+      // consumers should see every memory, not a capped slice.
+      const items = yield* runCliMemory(
+        memoryRoots(services),
+        loadMemoryItems(),
+      );
 
-  emitCliResult(context, {
-    json: items,
-    ndjson: items.map((memory) => ({ kind: 'memory', memory })),
-    text: formatCliMemoryList(items),
-  });
-  return CliExitCode.Success;
+      emitCliResult(context, {
+        json: items,
+        ndjson: items.map((memory) => ({ kind: 'memory', memory })),
+        text: formatCliMemoryList(items),
+      });
+      return CliExitCode.Success;
+    }),
+  );
 }
 
 async function runMemoryShow(
   context: CliContext,
   inputPath: string,
 ): Promise<number> {
-  const services = await initLocalCliPlatform(context);
-
-  const record = await services.runtime.runPromise(
-    runCliMemory(memoryRoots(services), loadCliMemoryDetail(inputPath)),
+  const runtime = await installCliProcessRuntime(context.storageRoot);
+  return runtime.runPromise(
+    Effect.gen(function* () {
+      const services = yield* initCliPlatform({ ...context, quietLogs: true });
+      const record = yield* runCliMemory(
+        memoryRoots(services),
+        loadCliMemoryDetail(inputPath),
+      );
+      emitCliResult(context, {
+        json: record,
+        ndjson: { kind: 'memory-detail', ...record },
+        text: formatCliMemoryPreview(record),
+      });
+      return CliExitCode.Success;
+    }),
   );
-  emitCliResult(context, {
-    json: record,
-    ndjson: { kind: 'memory-detail', ...record },
-    text: formatCliMemoryPreview(record),
-  });
-  return CliExitCode.Success;
 }
 
 const memoryListCommand = defineCliCommand({
