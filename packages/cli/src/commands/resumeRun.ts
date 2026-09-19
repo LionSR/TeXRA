@@ -3,6 +3,7 @@ import * as path from 'node:path';
 
 import { Effect, Result } from 'effect';
 
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
   classifyRun,
   describeFollowUpFailure,
@@ -56,6 +57,18 @@ function workflowRecoveryInputsAreDurable(
 }
 
 /**
+ * What the resume program decided. The chat arm carries the persisted record
+ * rather than mounting the TUI itself: `runChat` installs Ink and its own
+ * SIGINT/SIGTERM pair and owns the teardown, so it starts after this program
+ * has settled, not inside a fiber it would outlive.
+ */
+type ResumeDecision =
+  | { readonly kind: 'exit'; readonly code: number }
+  | { readonly kind: 'chat'; readonly config: AgentConfig };
+
+const exitWith = (code: number): ResumeDecision => ({ kind: 'exit', code });
+
+/**
  * Continue a stored session through the shared `resumeRun`: a tool-use
  * session reopens the interactive chat TUI (so a usable terminal is
  * required), whose `/resume` calls it; a workflow run resumes headless under
@@ -70,19 +83,19 @@ export async function runResumeCommand(
     quietLogs: true,
   });
 
-  return stores.runtime.runPromise(
+  const decision = await stores.runtime.runPromise(
     Effect.gen(function* () {
       const session = yield* stores.session;
       const store = getRunRecords(session, id);
       const configResult = yield* Effect.result(store.readConfig());
       if (Result.isFailure(configResult)) {
         writeTextStderr(loadFailureMessage(id, configResult.failure));
-        return CliExitCode.AgentError;
+        return exitWith(CliExitCode.AgentError);
       }
       const config = configResult.success;
       if (!config) {
         writeTextStderr(`Run not found: ${id}`);
-        return CliExitCode.Usage;
+        return exitWith(CliExitCode.Usage);
       }
       // Gate resume on ownership: a run held by any owner that is alive or cannot
       // be proven dead refuses, naming that owner.
@@ -90,10 +103,10 @@ export async function runResumeCommand(
       switch (classification.kind) {
         case 'held_elsewhere':
           writeTextStderr(runHeldByProcessMessage(id, classification.owner));
-          return CliExitCode.Usage;
+          return exitWith(CliExitCode.Usage);
         case 'owned_here':
           writeTextStderr(`Run ${id} is already running in this process.`);
-          return CliExitCode.Usage;
+          return exitWith(CliExitCode.Usage);
         case 'unclassified':
           // `unclassified` names a durable fact that could not be read — the
           // claim, the run metadata, the latest snapshot — and nothing else.
@@ -104,10 +117,10 @@ export async function runResumeCommand(
           writeTextStderr(
             `Could not read the state of run ${id}: ${classification.cause}`,
           );
-          return CliExitCode.AgentError;
+          return exitWith(CliExitCode.AgentError);
         case 'finished':
           writeTextStderr(describeFollowUpFailure('finished'));
-          return CliExitCode.Usage;
+          return exitWith(CliExitCode.Usage);
         case 'resumable':
           break;
       }
@@ -134,16 +147,9 @@ export async function runResumeCommand(
               },
             }),
           );
-          return CliExitCode.Usage;
+          return exitWith(CliExitCode.Usage);
         }
-        return yield* Effect.tryPromise({
-          try: async () => {
-            const { runChat } = await import('../chat/tui/runChatTui');
-            return (await runChat(context, { initialResume: { id, config } }))
-              .exitCode;
-          },
-          catch: ensureError,
-        });
+        return { kind: 'chat', config } as const;
       }
 
       const agent = yield* Effect.result(
@@ -153,10 +159,10 @@ export async function runResumeCommand(
         const error = agent.failure;
         if (error instanceof CliUsageError) {
           writeTextStderr(error.message);
-          return CliExitCode.Usage;
+          return exitWith(CliExitCode.Usage);
         }
         writeTextStderr(loadFailureMessage(id, error));
-        return CliExitCode.AgentError;
+        return exitWith(CliExitCode.AgentError);
       }
 
       let exitCode: number = CliExitCode.Usage;
@@ -202,18 +208,29 @@ export async function runResumeCommand(
         }),
       );
       if (Result.isSuccess(resumed)) {
-        if ('started' in resumed.success) return exitCode;
+        if ('started' in resumed.success) return exitWith(exitCode);
         writeTextStderr(describeFollowUpFailure(resumed.success.failed));
-        return CliExitCode.Usage;
+        return exitWith(CliExitCode.Usage);
       } else {
         const error = resumed.failure;
         if (error instanceof CliUsageError) {
           writeTextStderr(error.message);
-          return CliExitCode.Usage;
+          return exitWith(CliExitCode.Usage);
         }
         writeTextStderr(loadFailureMessage(id, error));
-        return CliExitCode.AgentError;
+        return exitWith(CliExitCode.AgentError);
       }
     }),
   );
+
+  if (decision.kind === 'exit') return decision.code;
+  // The mount happens here, after the resume program has settled: `runChat`
+  // is the interactive host entry and owns Ink, its own signal handlers and
+  // its teardown.
+  const { runChat } = await import('../chat/tui/runChatTui');
+  return (
+    await runChat(context, {
+      initialResume: { id, config: decision.config },
+    })
+  ).exitCode;
 }
