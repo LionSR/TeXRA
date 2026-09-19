@@ -189,21 +189,23 @@ export function createDesktopSettingsIpc(
   const modelSelectionController =
     options.credentialSettingsController.modelSelectionController;
 
-  async function postModelSelectionData(): Promise<void> {
-    options.postToRenderer(
-      await runtime.runPromise(
-        modelSelectionController.buildModelSelectionMessage(),
-      ),
+  function postModelSelectionData() {
+    return Effect.map(
+      modelSelectionController.buildModelSelectionMessage(),
+      (message) => {
+        options.postToRenderer(message);
+      },
     );
   }
 
   // Every memory program runs over this project's storage view, built from
   // the roots this window already holds.
-  async function postMemoryData(): Promise<void> {
-    options.postToRenderer(
-      await runtime.runPromise(
-        withSessionFs(roots, memoryController.getMemoryDataMessage()),
-      ),
+  function postMemoryData() {
+    return Effect.map(
+      withSessionFs(roots, memoryController.getMemoryDataMessage()),
+      (message) => {
+        options.postToRenderer(message);
+      },
     );
   }
 
@@ -212,11 +214,12 @@ export function createDesktopSettingsIpc(
    * cancelled delete, a pin over the cap) — the controller answers those with
    * `null` after prompting.
    */
-  async function postMemoryMutation(
+  function postMemoryMutation(
     mutation: Effect.Effect<unknown, never, StorageFs>,
-  ): Promise<void> {
-    const message = await runtime.runPromise(withSessionFs(roots, mutation));
-    if (message != null) options.postToRenderer(message);
+  ) {
+    return Effect.map(withSessionFs(roots, mutation), (message) => {
+      if (message != null) options.postToRenderer(message);
+    });
   }
 
   /**
@@ -224,23 +227,25 @@ export function createDesktopSettingsIpc(
    * cannot be produced, so the view never waits on a preview that will not
    * arrive.
    */
-  async function postMemoryPreview(storagePath: string): Promise<void> {
-    const previewed = await runtime.runPromise(
+  function postMemoryPreview(storagePath: string) {
+    return Effect.map(
       withSessionFs(
         roots,
         Effect.exit(memoryController.getMemoryPreviewMessage(storagePath)),
       ),
-    );
-    if (Exit.isSuccess(previewed)) {
-      options.postToRenderer(previewed.value);
-      return;
-    }
-    // A disposed runtime interrupts this read; the view it would repaint is
-    // going away with it, so there is no placeholder to post.
-    if (Cause.hasInterrupts(previewed.cause)) return;
-    onError(Cause.squash(previewed.cause));
-    options.postToRenderer(
-      memoryController.getMemoryPreviewErrorMessage(storagePath),
+      (previewed) => {
+        if (Exit.isSuccess(previewed)) {
+          options.postToRenderer(previewed.value);
+          return;
+        }
+        // A disposed runtime interrupts this read; the view it would repaint
+        // is going away with it, so there is no placeholder to post.
+        if (Cause.hasInterrupts(previewed.cause)) return;
+        onError(Cause.squash(previewed.cause));
+        options.postToRenderer(
+          memoryController.getMemoryPreviewErrorMessage(storagePath),
+        );
+      },
     );
   }
 
@@ -257,14 +262,16 @@ export function createDesktopSettingsIpc(
     );
   }
 
-  async function postSkillsList(): Promise<void> {
-    const result = await runtime.runPromise(
+  function postSkillsList() {
+    return Effect.map(
       loadRuntimeSkillDisplay(roots.workspace, roots),
+      (result) => {
+        options.postToRenderer({
+          command: SETTINGS_VIEW_COMMANDS.UPDATE_SKILLS_LIST,
+          ...result,
+        });
+      },
     );
-    options.postToRenderer({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_SKILLS_LIST,
-      ...result,
-    });
   }
 
   // Memory lives under this project's storage root: the paths the OS opens are
@@ -292,67 +299,69 @@ export function createDesktopSettingsIpc(
     );
   }
 
-  async function postGoalList(): Promise<void> {
-    // Settled synchronously, as the `try` it replaces was: the list is read
-    // from memory and the view is repainted on this turn, before any await.
-    const listed = runtime.runSync(
-      Effect.exit(
+  function postGoalList() {
+    return Effect.gen(function* () {
+      // The list is read from memory and the view repainted before this
+      // program suspends, as the synchronous `try` it replaces was.
+      const listed = yield* Effect.exit(
         Effect.try({
           try: () => goalList(options.session),
           catch: (cause) => cause,
         }),
-      ),
-    );
-    if (Exit.isSuccess(listed)) {
-      options.postToRenderer({
-        command: SETTINGS_VIEW_COMMANDS.UPDATE_GOAL_LIST,
-        items: listed.value,
-      });
-      return;
-    }
-    if (Cause.hasInterrupts(listed.cause)) return;
-    const error = Cause.squash(listed.cause);
-    options.ui.onError(error);
-    await runtime.runPromise(
-      options.ui.showErrorMessage(formatError('Failed to load goals', error)),
-    );
+      );
+      if (Exit.isSuccess(listed)) {
+        options.postToRenderer({
+          command: SETTINGS_VIEW_COMMANDS.UPDATE_GOAL_LIST,
+          items: listed.value,
+        });
+        return;
+      }
+      if (Cause.hasInterrupts(listed.cause)) return;
+      const error = Cause.squash(listed.cause);
+      options.ui.onError(error);
+      yield* options.ui.showErrorMessage(
+        formatError('Failed to load goals', error),
+      );
+    });
   }
 
-  async function postInitialSettingsData(): Promise<void> {
-    postSettingsSnapshot('git-author');
-    options.toolingSettingsController.postLatexConfigValues();
-    const goalListPosted = postGoalList();
-    const modelSelectionDataPosted = postModelSelectionData();
-    postSettingsSnapshot('multi-agent');
-    postSettingsSnapshot('approval');
-    postSettingsSnapshot('skills');
-    postSettingsSnapshot('telemetry');
-    postSettingsSnapshot('memory');
-    await Promise.all([
-      goalListPosted,
-      postSkillsList(),
-      postMemoryData(),
-      modelSelectionDataPosted,
-      postGitHubTokenStatus(),
-      postGitHubSubscriptions(),
-      runtime.runPromise(
-        options.credentialSettingsController.postStartupData(),
-      ),
-      options.toolingSettingsController.postStartupData(),
-      options.agentSettingsController.postStartupData(),
-    ]);
+  function postInitialSettingsData() {
+    return Effect.gen(function* () {
+      postSettingsSnapshot('git-author');
+      options.toolingSettingsController.postLatexConfigValues();
+      // Forked, not yielded: `runFork` runs the goal read on this turn, so
+      // the list still repaints ahead of the snapshots below, and the dialog
+      // a failed read raises does not hold them up. Nothing waits on it, as
+      // nothing waited on the eagerly started promise it replaces.
+      runAsync(postGoalList());
+      postSettingsSnapshot('multi-agent');
+      postSettingsSnapshot('approval');
+      postSettingsSnapshot('skills');
+      postSettingsSnapshot('telemetry');
+      postSettingsSnapshot('memory');
+      yield* Effect.all(
+        [
+          postSkillsList(),
+          postMemoryData(),
+          postModelSelectionData(),
+          postGitHubTokenStatus(),
+          Effect.sync(postGitHubSubscriptions),
+          options.credentialSettingsController.postStartupData(),
+          options.toolingSettingsController.postStartupData(),
+          options.agentSettingsController.postStartupData(),
+        ],
+        { concurrency: 'unbounded', discard: true },
+      );
+    });
   }
 
-  async function updateModelEnabled(input: {
-    modelName: string;
-    enabled: boolean;
-  }): Promise<void> {
-    await runtime.runPromise(modelSelectionController.setModelEnabled(input));
-    await postModelSelectionData();
-    // The options cache is invalidated by the writer itself.
-    await runtime.runPromise(
-      options.credentialSettingsController.refreshModelOptions(),
-    );
+  function updateModelEnabled(input: { modelName: string; enabled: boolean }) {
+    return Effect.gen(function* () {
+      yield* modelSelectionController.setModelEnabled(input);
+      yield* postModelSelectionData();
+      // The options cache is invalidated by the writer itself.
+      yield* options.credentialSettingsController.refreshModelOptions();
+    });
   }
 
   function refreshAuthDependentData(
@@ -365,105 +374,101 @@ export function createDesktopSettingsIpc(
     });
   }
 
-  const stateSettingSnapshotPosters: SettingsSnapshotPosters = {
-    approval: () => postSettingsSnapshot('approval'),
-    'git-author': () => postSettingsSnapshot('git-author'),
-    latex: () => options.toolingSettingsController.postLatexConfigValues(),
-    memory: () => postSettingsSnapshot('memory'),
-    models: () => postModelSelectionData(),
-    'multi-agent': () => postSettingsSnapshot('multi-agent'),
-    profile: () =>
-      runtime.runPromise(
-        options.credentialSettingsController.postProfileData(),
+  const stateSettingSnapshotPosters: SettingsSnapshotPosters<
+    Effect.Effect<void, Error, ProcessServices>
+  > = {
+    approval: () => Effect.sync(() => postSettingsSnapshot('approval')),
+    'git-author': () => Effect.sync(() => postSettingsSnapshot('git-author')),
+    latex: () =>
+      Effect.sync(() =>
+        options.toolingSettingsController.postLatexConfigValues(),
       ),
-    skills: async () => {
-      postSettingsSnapshot('skills');
-      await postSkillsList();
-    },
-    telemetry: () => postSettingsSnapshot('telemetry'),
+    memory: () => Effect.sync(() => postSettingsSnapshot('memory')),
+    models: () => postModelSelectionData(),
+    'multi-agent': () => Effect.sync(() => postSettingsSnapshot('multi-agent')),
+    profile: () => options.credentialSettingsController.postProfileData(),
+    skills: () =>
+      Effect.andThen(
+        Effect.sync(() => postSettingsSnapshot('skills')),
+        postSkillsList(),
+      ),
+    telemetry: () => Effect.sync(() => postSettingsSnapshot('telemetry')),
   };
 
   /**
    * Generic write path for catalog-backed settings-view rows.
    */
-  async function updateStateSetting(
-    key: string,
-    value: unknown,
-  ): Promise<void> {
-    const result = await runtime.runPromise(
-      applyStateSettingUpdate(key, value, {
+  function updateStateSetting(key: string, value: unknown) {
+    return Effect.gen(function* () {
+      const result = yield* applyStateSettingUpdate(key, value, {
         host: 'desktop',
         stores: settingsStores,
         onApprovalPolicyChanged: (policy) =>
           options.session.setApprovalPolicy(policy),
-      }),
-    );
-    if (result.kind === 'ignored') return;
-    if (result.kind === 'rejected' || result.kind === 'failed') {
-      options.ui.onError(result.error);
-      const label = result.entry.title ?? result.entry.key;
-      const prefix =
-        result.kind === 'rejected' ? 'Invalid value for' : 'Failed to update';
-      await runtime.runPromise(
-        options.ui.showErrorMessage(
+      });
+      if (result.kind === 'ignored') return;
+      if (result.kind === 'rejected' || result.kind === 'failed') {
+        options.ui.onError(result.error);
+        const label = result.entry.title ?? result.entry.key;
+        const prefix =
+          result.kind === 'rejected' ? 'Invalid value for' : 'Failed to update';
+        yield* options.ui.showErrorMessage(
           formatError(`${prefix} "${label}"`, result.error),
-        ),
-      );
-    }
-    await stateSettingSnapshotPosters[result.entry.surfaces.settingsView]();
-    if (result.kind !== 'applied') return;
-    const invalidatesModelOptions =
-      result.entry.onWrite?.invalidatesModelOptions === true;
-    if (invalidatesModelOptions) {
-      await runtime.runPromise(
-        options.credentialSettingsController.refreshAfterProviderSettingChange(
+        );
+      }
+      yield* stateSettingSnapshotPosters[result.entry.surfaces.settingsView]();
+      if (result.kind !== 'applied') return;
+      const invalidatesModelOptions =
+        result.entry.onWrite?.invalidatesModelOptions === true;
+      if (invalidatesModelOptions) {
+        yield* options.credentialSettingsController.refreshAfterProviderSettingChange(
           key,
-        ),
-      );
-    } else if (codingPlanForUsageSetting(key) !== undefined) {
-      await runtime.runPromise(
-        options.credentialSettingsController.postSubscriptionUsage(),
-      );
-    }
-  }
-
-  function runAsync(work: Promise<void>): void {
-    runtime.runFork(
-      Effect.tryPromise({ try: () => work, catch: (cause) => cause }).pipe(
-        Effect.catch((cause) => Effect.sync(() => onError(cause))),
-      ),
-    );
+        );
+      } else if (codingPlanForUsageSetting(key) !== undefined) {
+        yield* options.credentialSettingsController.postSubscriptionUsage();
+      }
+    });
   }
 
   /**
-   * App signals run their listeners on the emitter's call stack. Every refresh
-   * a signal triggers reads this paper's own session, which each of these
-   * posters takes from `options.session` as data.
+   * The window's own fork point for work nobody awaits: a settled cause is
+   * reported through `onError`, exactly as the rejection of the promise this
+   * replaces was.
    */
-  function runAsyncInPaper(work: () => Promise<void>): void {
-    runAsync(work());
+  function runAsync<E>(work: Effect.Effect<void, E, ProcessServices>): void {
+    runtime.runFork(
+      work.pipe(
+        Effect.catchCause((cause) =>
+          Effect.sync(() => onError(Cause.squash(cause))),
+        ),
+      ),
+    );
   }
 
   // Agent runs execute in this same main process and the settings panel shares
   // the app window with run progress, so a Goals tab left open during a run
   // needs the push. The session outlives the window, so the subscription is
   // window-scoped and released in `dispose` below.
+  //
+  // App signals and goal changes run their listeners on the emitter's call
+  // stack. Every refresh a signal triggers reads this paper's own session,
+  // which each of these posters takes from `options.session` as data.
   const subscriptions = [
     subscribeDesktopGoalChanges(
       options.session,
-      () => runAsyncInPaper(postGoalList),
+      () => runAsync(postGoalList()),
       runtime,
     ),
   ];
 
   // ── GitHub token + PR/repo/issue subscriptions (Git tab) ──
 
-  async function postGitHubTokenStatus(): Promise<void> {
-    options.postToRenderer({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_GITHUB_TOKEN_STATUS,
-      status: await runtime.runPromise(
-        resolveGitHubTokenSource(options.secrets),
-      ),
+  function postGitHubTokenStatus() {
+    return Effect.map(resolveGitHubTokenSource(options.secrets), (status) => {
+      options.postToRenderer({
+        command: SETTINGS_VIEW_COMMANDS.UPDATE_GITHUB_TOKEN_STATUS,
+        status,
+      });
     });
   }
 
@@ -475,48 +480,42 @@ export function createDesktopSettingsIpc(
   // writes the token, so the explicit calls cover the same ground.
   // `refreshToolAvailability` emits `toolAvailabilityChanged`, which is what
   // repaints the dashboard.
-  async function setGitHubToken(): Promise<void> {
-    const token = await runtime.runPromise(
-      options.ui.promptForSecret({
+  function setGitHubToken() {
+    return Effect.gen(function* () {
+      const token = yield* options.ui.promptForSecret({
         title: 'GitHub token',
         prompt: GITHUB_TOKEN_PROMPT,
-      }),
-    );
-    if (token == null) return;
-    await runtime.runPromise(
-      storeCredential(options.secrets, {
+      });
+      if (token == null) return;
+      yield* storeCredential(options.secrets, {
         secretName: GITHUB_TOKEN_STORAGE_KEY,
         value: token,
         kind: 'github',
-      }),
-    );
-    await runtime.runPromise(
-      options.ui.showInfoMessage(GITHUB_TOKEN_SAVED_MESSAGE),
-    );
-    await postGitHubTokenStatus();
-    await runtime.runPromise(
-      refreshToolAvailability({
+      });
+      yield* options.ui.showInfoMessage(GITHUB_TOKEN_SAVED_MESSAGE);
+      yield* postGitHubTokenStatus();
+      yield* refreshToolAvailability({
         workspaceRoot: roots.workspace,
         config: roots.config,
-      }),
-    );
+      });
+    });
   }
 
-  async function removeGitHubToken(): Promise<void> {
-    await runtime.runPromise(options.secrets.delete(GITHUB_TOKEN_STORAGE_KEY));
-    await runtime.runPromise(
-      options.ui.showInfoMessage(GITHUB_TOKEN_REMOVED_MESSAGE),
-    );
-    await postGitHubTokenStatus();
-    await runtime.runPromise(
-      refreshToolAvailability({
+  function removeGitHubToken() {
+    return Effect.gen(function* () {
+      yield* options.secrets.delete(GITHUB_TOKEN_STORAGE_KEY);
+      yield* options.ui.showInfoMessage(GITHUB_TOKEN_REMOVED_MESSAGE);
+      yield* postGitHubTokenStatus();
+      yield* refreshToolAvailability({
         workspaceRoot: roots.workspace,
         config: roots.config,
-      }),
-    );
+      });
+    });
   }
 
-  async function postGitHubSubscriptions(): Promise<void> {
+  // Reads the in-memory subscription registry and repaints; nothing here
+  // awaits, so it stays the plain call its callers make.
+  function postGitHubSubscriptions(): void {
     options.postToRenderer({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_PR_SUBSCRIPTIONS,
       subscriptions: listGitHubSubscriptionEntries((runId) =>
@@ -530,18 +529,14 @@ export function createDesktopSettingsIpc(
   // showing, and until now the desktop only re-read it when the user asked.
   subscriptions.push(
     appSignals.on('githubSubscriptionsChanged', () =>
-      runAsyncInPaper(postGitHubSubscriptions),
+      runAsync(Effect.sync(postGitHubSubscriptions)),
     ),
     // `apply_team` writes the roster straight from the setup agent, so the
     // open view is showing agents and a team it just replaced. The signal
     // comes from whichever paper's run applied the team; the catalog is
     // rebuilt from this paper's presets, not the emitter's.
     appSignals.on('agentRosterChanged', () =>
-      runAsyncInPaper(() =>
-        runtime.runPromise(
-          options.agentSettingsController.refreshCatalogData(),
-        ),
-      ),
+      runAsync(options.agentSettingsController.refreshCatalogData()),
     ),
     // Outside VS Code a rejected token left the pollers failing in silence.
     // The dialog is the whole fix: `resolveGitHubTokenSource` reports only
@@ -550,9 +545,7 @@ export function createDesktopSettingsIpc(
     // Marking a stored token as rejected would need a new status on the wire.
     appSignals.on('githubTokenInvalid', ({ message }) =>
       runAsync(
-        runtime.runPromise(
-          options.ui.showErrorMessage(gitHubTokenRejectedMessage(message)),
-        ),
+        options.ui.showErrorMessage(gitHubTokenRejectedMessage(message)),
       ),
     ),
   );
@@ -579,7 +572,7 @@ export function createDesktopSettingsIpc(
       );
       return;
     }
-    await postGitHubSubscriptions();
+    postGitHubSubscriptions();
   }
 
   const settingsHandlers: SettingsViewInboundHandlerRegistry = {
@@ -587,37 +580,46 @@ export function createDesktopSettingsIpc(
     // the dispatcher, so this entry is never actually invoked — it exists
     // only to satisfy the exhaustive registry type.
     webviewReady: () => {},
-    getMemoryData: postMemoryData,
-    getMemoryPreview: (message) => postMemoryPreview(message.storagePath),
+    getMemoryData: () => runtime.runPromise(postMemoryData()),
+    getMemoryPreview: (message) =>
+      runtime.runPromise(postMemoryPreview(message.storagePath)),
     openMemoryFile,
     openMemoryFolder,
     deleteMemory: (message) =>
-      postMemoryMutation(memoryController.deleteMemory(message)),
+      runtime.runPromise(
+        postMemoryMutation(memoryController.deleteMemory(message)),
+      ),
     pinMemory: (message) =>
-      postMemoryMutation(
-        memoryController.setMemoryPinned(message.storagePath, true),
+      runtime.runPromise(
+        postMemoryMutation(
+          memoryController.setMemoryPinned(message.storagePath, true),
+        ),
       ),
     unpinMemory: (message) =>
-      postMemoryMutation(
-        memoryController.setMemoryPinned(message.storagePath, false),
+      runtime.runPromise(
+        postMemoryMutation(
+          memoryController.setMemoryPinned(message.storagePath, false),
+        ),
       ),
     ...options.credentialSettingsController.profileHandlers,
-    setModelEnabled: updateModelEnabled,
-    setModelReasoningLevel: async (message) => {
-      await runtime.runPromise(
-        modelSelectionController.setReasoningLevel(message),
-      );
-      await postModelSelectionData();
-    },
+    setModelEnabled: (message) =>
+      runtime.runPromise(updateModelEnabled(message)),
+    setModelReasoningLevel: (message) =>
+      runtime.runPromise(
+        Effect.andThen(
+          modelSelectionController.setReasoningLevel(message),
+          postModelSelectionData(),
+        ),
+      ),
     requestModelAccess: unsupported('Copilot models require VS Code.'),
     clearCopilotRoute: unsupported('Copilot models require VS Code.'),
     ...options.agentSettingsController.handlers,
     // Mirrors the extension's `GitHubSubscriptionHandlers`. The token store and
     // the subscription registry are host-agnostic (`@tools/github`); only the
     // secret prompt, the browser hand-off, and the run reveal differ here.
-    getGitHubTokenStatus: postGitHubTokenStatus,
-    setGitHubToken,
-    removeGitHubToken,
+    getGitHubTokenStatus: () => runtime.runPromise(postGitHubTokenStatus()),
+    setGitHubToken: () => runtime.runPromise(setGitHubToken()),
+    removeGitHubToken: () => runtime.runPromise(removeGitHubToken()),
     openGitHubTokenUrl: async () => {
       await options.ui.openExternal(GITHUB_TOKEN_CREATE_URL);
     },
@@ -633,7 +635,7 @@ export function createDesktopSettingsIpc(
         ),
       ),
     updateStateSetting: (message) =>
-      updateStateSetting(message.key, message.value),
+      runtime.runPromise(updateStateSetting(message.key, message.value)),
     ...options.toolingSettingsController.toolHandlers,
     ...options.toolingSettingsController.latexHandlers,
     // Inline criticism renders `\criticize{...}` annotations as editor
@@ -646,7 +648,7 @@ export function createDesktopSettingsIpc(
     setInlineCriticismEnabled: unsupported(
       'Inline criticism needs the VS Code editor and Problems panel.',
     ),
-    getGoalList: postGoalList,
+    getGoalList: () => runtime.runPromise(postGoalList()),
     revealGoalRun: (message) => revealRun(message.runId),
   };
 

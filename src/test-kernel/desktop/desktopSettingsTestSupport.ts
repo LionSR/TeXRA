@@ -60,7 +60,7 @@ export function createStubDesktopAgentSettingsController(): DesktopAgentSettings
       saveAgentModePreset: noOp,
       deleteAgentModePreset: noOp,
     },
-    postStartupData: noOp,
+    postStartupData: noOpEffect,
     refreshCatalogData: () => Effect.void,
   };
 }
@@ -134,7 +134,7 @@ export function createStubDesktopToolingSettingsController(
       runInstallCommand: noOp,
     },
     postLatexConfigValues: () => undefined,
-    postStartupData: noOp,
+    postStartupData: noOpEffect,
     dispose: () => undefined,
     ...overrides,
   };

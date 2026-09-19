@@ -202,12 +202,12 @@ describe('DefaultDesktopToolingSettingsController', () => {
     const { controller, posted } = createFixture();
 
     controller.postLatexConfigValues();
-    await controller.postStartupData();
+    await testRuntime().runPromise(controller.postStartupData());
 
     const startup = posted.map(commandOf);
     expect(startup[0]).toBe(SETTINGS_VIEW_COMMANDS.UPDATE_SETTINGS_SNAPSHOT);
     // `postStartupData` fans the dashboard and LaTeX reads out with
-    // `Promise.all`, so which of the two posts first is not a contract; that
+    // `Effect.all`, so which of the two posts first is not a contract; that
     // both land before the refresh repaint below is.
     expect([...startup.slice(1)].sort()).toEqual(
       [
@@ -234,7 +234,7 @@ describe('DefaultDesktopToolingSettingsController', () => {
     toolData.refreshAvailability.mockRejectedValue(refreshError);
     const { controller, reportedErrors } = createFixture();
 
-    await controller.postStartupData();
+    await testRuntime().runPromise(controller.postStartupData());
 
     await vi.waitFor(() => {
       expect(reportedErrors).toEqual([refreshError]);

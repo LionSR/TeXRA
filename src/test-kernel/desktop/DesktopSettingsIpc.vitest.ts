@@ -667,9 +667,9 @@ describe('desktop settings IPC', () => {
     const config = new FakeScopedConfigProvider();
     config.seedWorkspace('texra.toolUse.requireBashApproval', false);
     const agentSettingsController = createStubDesktopAgentSettingsController();
-    const postAgentStartupData = vi.fn(async () => undefined);
+    const postAgentStartupData = vi.fn(() => Effect.void);
     agentSettingsController.postStartupData = postAgentStartupData;
-    const postToolingStartupData = vi.fn(async () => undefined);
+    const postToolingStartupData = vi.fn(() => Effect.void);
     const postLatexConfigValues = vi.fn();
     const toolingSettingsController =
       createStubDesktopToolingSettingsController({
