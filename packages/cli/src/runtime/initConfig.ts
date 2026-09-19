@@ -42,18 +42,26 @@ export function buildInitConfig(answers: InitAnswers): InitConfigShape {
   };
 }
 
-/** `false` only for a genuinely absent path; any other failure (EACCES, EIO)
- *  fails instead of being reported as "absent". */
-export function pathExists(filePath: string): Effect.Effect<boolean, Error> {
-  return Effect.tryPromise({
-    try: () => access(filePath),
-    catch: ensureError,
-  }).pipe(
-    Effect.as(true),
-    Effect.catchIf(
-      (error) => isFileNotFoundError(error) || isNotADirectoryError(error),
-      () => Effect.succeed(false),
-    ),
+/**
+ * `false` only for a genuinely absent path; any other failure (EACCES, EIO)
+ * propagates instead of being reported as "absent".
+ *
+ * Promise-shaped, unlike its neighbours: its other caller
+ * (`commands/installGithubAction.ts`) is a Promise-native citty action, and
+ * an Effect here would put a bare `Effect.run*` in that action — a site the
+ * run-boundary ratchet freezes. Written with a rejection handler rather than
+ * `try`/`catch` because this module imports `effect`, and such a module
+ * carries no raw catch clause.
+ */
+export async function pathExists(filePath: string): Promise<boolean> {
+  return access(filePath).then(
+    () => true,
+    (error: unknown) => {
+      if (isFileNotFoundError(error) || isNotADirectoryError(error)) {
+        return false;
+      }
+      throw error;
+    },
   );
 }
 

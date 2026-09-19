@@ -1,8 +1,6 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import { Effect, Result } from 'effect';
-
 import { parseGitHubSlug, type GitHubSlug } from '@tools/github/githubSlug';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -169,7 +167,7 @@ async function runInstallGithubAction(
   const root = repoRoot(cwd) ?? cwd;
   const workflowAbsPath = path.join(root, WORKFLOW_RELATIVE_PATH);
 
-  if ((await Effect.runPromise(pathExists(workflowAbsPath))) && !opts.force) {
+  if ((await pathExists(workflowAbsPath)) && !opts.force) {
     writeTextStderr(
       `${WORKFLOW_RELATIVE_PATH} already exists. Re-run with --force to overwrite it.`,
     );
@@ -222,20 +220,12 @@ async function runInstallGithubAction(
     return CliExitCode.AgentError;
   };
 
-  const written = await Effect.runPromise(
-    Effect.result(
-      Effect.tryPromise({
-        try: async () => {
-          await mkdir(path.dirname(workflowAbsPath), { recursive: true });
-          await writeFile(workflowAbsPath, WORKFLOW_TEMPLATE, 'utf8');
-        },
-        catch: (cause: unknown) => cause,
-      }),
-    ),
-  );
-  if (Result.isFailure(written)) {
+  try {
+    await mkdir(path.dirname(workflowAbsPath), { recursive: true });
+    await writeFile(workflowAbsPath, WORKFLOW_TEMPLATE, 'utf8');
+  } catch (error) {
     return abort(
-      `Failed to write ${WORKFLOW_RELATIVE_PATH}: ${toErrorMessage(written.failure)}`,
+      `Failed to write ${WORKFLOW_RELATIVE_PATH}: ${toErrorMessage(error)}`,
     );
   }
 

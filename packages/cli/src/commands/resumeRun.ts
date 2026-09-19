@@ -3,11 +3,11 @@ import * as path from 'node:path';
 
 import { Effect, Result } from 'effect';
 
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
   classifyRun,
   describeFollowUpFailure,
   resumeRun,
+  type AgentConfig,
 } from '@agent/runtime';
 import { getRunRecords } from '@agent/storage';
 import { AgentCategory, type RunId } from '@shared/schemas';

@@ -156,7 +156,7 @@ const runInit = Effect.fn('runInit')(function* (
   );
 
   const filePath = workspaceTexraConfigPath(context.cwd);
-  if (!opts.force && (yield* pathExists(filePath))) {
+  if (!opts.force && (yield* Effect.promise(() => pathExists(filePath)))) {
     writeTextStderr(
       `Refusing to overwrite existing config at ${filePath}. Re-run with --force to replace it.`,
     );
