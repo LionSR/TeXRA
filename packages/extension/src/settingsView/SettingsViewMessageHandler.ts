@@ -18,7 +18,6 @@ import type { SessionHandle } from '@agent/runtime';
 import { AUTH_COMMANDS } from '@auth/constants';
 import { SettingsMemoryController } from '@controllers/settingsView/SettingsMemoryController';
 import { SettingsModelSelectionController } from '@controllers/settingsView/SettingsModelSelectionController';
-import { subscriptionAuthStatus } from '@controllers/modelAccess/subscriptionAuthStatus';
 import { SubscriptionUsageService } from '@controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
 import type { SubscriptionProviderId } from '@controllers/modelAccess/subscriptionProviders';
 import {

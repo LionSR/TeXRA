@@ -22,6 +22,7 @@ import {
   settingEnumChoices,
   settingEnumOptions,
   modelsTabSettings,
+  settingByKey,
   settingsViewSettingByKey,
   settingsViewSnapshotEntries,
   dispatchSettingsViewOutbound,
@@ -55,7 +56,10 @@ import {
   settingDefault,
   writeSetting,
 } from '@shared/config/settingsAccess';
-import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latexConfig';
+import {
+  LATEX_CONFIG_DEFAULTS,
+  LATEX_CONFIG_KEYS,
+} from '@shared/constants/latexConfig';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { REPO_ROOT } from '@test/support/repoScan';
 import { installPlatform } from '@test/support/setupPlatform';
@@ -144,6 +148,15 @@ const STATE_SETTING_KEYS: readonly string[] = STATE_SETTINGS.map(
 );
 
 describe('state settings catalog', () => {
+  it('backs every rendered LaTeX setting with a catalog entry', () => {
+    for (const key of LATEX_CONFIG_KEYS) {
+      assert.ok(
+        settingByKey(key),
+        `the LaTeX tab renders a key with no catalog entry: ${key}`,
+      );
+    }
+  });
+
   it('uses unique canonical keys', () => {
     assert.equal(new Set(STATE_SETTING_KEYS).size, STATE_SETTING_KEYS.length);
   });

@@ -93,3 +93,29 @@ interface LatexConfigValueTypes {
  * lands.
  */
 export type LatexConfigValues = Partial<LatexConfigValueTypes>;
+
+/**
+ * The runtime spelling of {@link LatexConfigValues}' key set — every LaTeX
+ * setting the tab renders, by canonical catalog key. The `satisfies` keeps it
+ * in step with the map above, the message dispatcher reports a snapshot whose
+ * rows disagree with it in either direction, and `stateSettings.vitest.ts`
+ * checks each entry still names a catalog row. The five `texra.latex.*`
+ * literals need that check; the nine `WorkspaceStateKey` members are already
+ * the catalog's own spelling.
+ */
+export const LATEX_CONFIG_KEYS = [
+  WorkspaceStateKey.WORKFLOW_AUTO_COMPILE,
+  WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS,
+  WorkspaceStateKey.WORKFLOW_AUTO_OPEN_PDF,
+  WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
+  WorkspaceStateKey.LATEXDIFF_BETWEEN_ROUNDS,
+  WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS,
+  WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
+  WorkspaceStateKey.LATEXDIFF_CHANGES_ONLY,
+  WorkspaceStateKey.LATEX_FORMATTER,
+  'texra.latex.wrapCritiqueInAlign',
+  'texra.latex.enabledReplacements',
+  'texra.latex.enabledReplacementsRegex',
+  'texra.latex.customReplacementsRegex',
+  'texra.latex.customReplacements',
+] as const satisfies readonly (keyof LatexConfigValueTypes)[];
