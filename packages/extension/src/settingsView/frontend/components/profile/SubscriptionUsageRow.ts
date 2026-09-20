@@ -2,6 +2,7 @@ import { LitElement, css, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 import '@awesome.me/webawesome/dist/components/details/details.js';
+import '@awesome.me/webawesome/dist/components/progress-bar/progress-bar.js';
 
 import { commonViewStyles, designTokens } from '@shared/styles';
 import {
@@ -68,10 +69,10 @@ export class SubscriptionUsageRow extends LitElement {
         font-size: var(--wa-font-size-s, 0.8125rem);
       }
 
-      progress {
+      wa-progress-bar {
+        --track-height: 0.45rem;
+        --indicator-color: var(--wa-color-progress-bg);
         width: 100%;
-        height: 0.45rem;
-        accent-color: var(--wa-color-progress-bg);
       }
 
       .usage-window,
@@ -99,7 +100,7 @@ export class SubscriptionUsageRow extends LitElement {
           grid-row: 1;
         }
 
-        .usage-window progress {
+        .usage-window wa-progress-bar {
           grid-column: 1 / -1;
           grid-row: 2;
         }
@@ -161,11 +162,10 @@ export class SubscriptionUsageRow extends LitElement {
                     ><bdi dir="auto">${label}</bdi>:
                     <bdi dir="auto">${percent}</bdi></span
                   >
-                  <progress
-                    max="100"
+                  <wa-progress-bar
                     value=${window.percentUsed}
-                    aria-label="${snapshot.providerName} ${label} usage"
-                  ></progress>
+                    label="${snapshot.providerName} ${label} usage"
+                  ></wa-progress-bar>
                   <span class="usage-reset"
                     ><bdi dir="auto">${reset ?? ''}</bdi></span
                   >

@@ -126,9 +126,10 @@ describe('subscription usage rendering', () => {
     expect(text).toContain('Kimi Code plan usage');
     expect(text).toMatch(/5-hour\s*:\s*25%/);
     expect(text).toMatch(/7-day\s*:\s*100%/);
-    const meters = kimiRow!.shadowRoot?.querySelectorAll('progress');
+    const meters = kimiRow!.shadowRoot?.querySelectorAll('wa-progress-bar');
     expect(meters).toHaveLength(2);
-    expect(meters?.[0]?.getAttribute('aria-label')).toBe(
+    expect(meters?.[0]?.getAttribute('value')).toBe('25');
+    expect(meters?.[0]?.getAttribute('label')).toBe(
       'Kimi Code 5-hour usage',
     );
     expect(text).toContain('resets in 1d 21h');
@@ -137,8 +138,22 @@ describe('subscription usage rendering', () => {
 
   it('advances one tab clock while connected and stops it after disconnect', async () => {
     const tab = await mountTabWithFakeTimers();
+    // Mounting cascades through several microtask-scheduled updates before
+    // every <wa-progress-bar> below the tab has scheduled its own one-shot
+    // requestAnimationFrame (a 0ms setTimeout under this suite's jsdom
+    // polyfill) to sync its --percentage custom property; drain that
+    // cascade so the count below is the settled total, not a partial one.
+    await vi.advanceTimersByTimeAsync(0);
     expect(tab._ticker.now).toBe(NOW);
-    expect(vi.getTimerCount()).toBe(1);
+    // One recurring interval for the tab's own ticker, plus one settled
+    // one-shot timer per <wa-progress-bar> — one per usage window across
+    // the three snapshot fixtures above.
+    const progressBarCount = Object.values(snapshots).reduce(
+      (total, snapshot) =>
+        total + (snapshot.state === 'available' ? snapshot.windows.length : 0),
+      0,
+    );
+    expect(vi.getTimerCount()).toBe(1 + progressBarCount);
 
     vi.advanceTimersByTime(3 * 60_000);
     await tab.updateComplete;

@@ -14,6 +14,7 @@ import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 import { designTokens, commonViewStyles } from '@shared/styles';
+import { overlaySurfaceStyles } from '@shared/styles/overlaySurfaceStyles';
 import { matchesEditedFile } from '@shared/launcher/editedFileMatch';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import type { Surface } from '@shared/session/surface';
@@ -26,17 +27,13 @@ export class ToolsSheet extends LitElement {
   static override styles = [
     designTokens,
     commonViewStyles,
+    overlaySurfaceStyles,
     css`
       :host {
-        position: absolute;
-        inset: 0;
         z-index: 3;
-        display: block;
       }
 
       .scrim {
-        position: absolute;
-        inset: 0;
         background: color-mix(
           in srgb,
           var(--wa-color-surface-default) 55%,
@@ -55,21 +52,6 @@ export class ToolsSheet extends LitElement {
         color: var(--wa-color-text-normal);
         border-top: var(--border-thin) solid var(--wa-color-surface-border);
         box-shadow: var(--wa-shadow-l);
-      }
-
-      .sheet-header {
-        display: flex;
-        align-items: center;
-        gap: var(--wa-space-3xs);
-        flex: 0 0 auto;
-        min-height: var(--height-header, 38px);
-        padding: 0 var(--wa-space-2xs) 0 var(--wa-space-xs);
-        border-bottom: var(--border-thin) solid var(--wa-color-surface-border);
-      }
-
-      .sheet-title {
-        flex: 1 1 auto;
-        font-weight: var(--font-weight-semibold);
       }
 
       latexdiffs-section {
@@ -107,8 +89,8 @@ export class ToolsSheet extends LitElement {
     return html`
       <div class="scrim" @click=${this.close}></div>
       <div class="sheet" role="dialog" aria-label="LaTeXDiffs">
-        <div class="sheet-header">
-          <span class="sheet-title">LaTeXDiffs</span>
+        <div class="overlay-header">
+          <span class="overlay-title">LaTeXDiffs</span>
           ${renderIconActionButton({
             id: 'tools-sheet-close',
             icon: 'xmark',
