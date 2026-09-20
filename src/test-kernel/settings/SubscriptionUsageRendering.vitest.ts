@@ -136,26 +136,16 @@ describe('subscription usage rendering', () => {
 
   it('advances one tab clock while connected and stops it after disconnect', async () => {
     const tab = await mountTabWithFakeTimers();
-    // Mounting cascades through several microtask-scheduled updates before
-    // every <wa-progress-bar> below the tab has scheduled its own one-shot
-    // requestAnimationFrame (a 0ms setTimeout under this suite's jsdom
-    // polyfill) to sync its --percentage custom property; drain that
-    // cascade so the count below is the settled total, not a partial one.
-    await vi.advanceTimersByTimeAsync(0);
     expect(tab._ticker.now).toBe(NOW);
-    // One recurring interval for the tab's own ticker, plus one settled
-    // one-shot timer per <wa-progress-bar> — one per usage window across
-    // the three snapshot fixtures above.
-    const progressBarCount = Object.values(snapshots).reduce(
-      (total, snapshot) =>
-        total + (snapshot.state === 'available' ? snapshot.windows.length : 0),
-      0,
-    );
-    expect(vi.getTimerCount()).toBe(1 + progressBarCount);
 
-    vi.advanceTimersByTime(3 * 60_000);
-    await tab.updateComplete;
+    // The async variant yields to microtasks between each due timer, which
+    // also drains every <wa-progress-bar>'s one-shot percentage-sync timer
+    // along the way — so only the tab's own recurring ticker interval is
+    // left pending below, without pinning the assertion to how many of
+    // those third-party timers exist.
+    await vi.advanceTimersByTimeAsync(3 * 60_000);
     expect(tab._ticker.now).toBe(NOW + 3 * 60_000);
+    expect(vi.getTimerCount()).toBe(1);
     const kimiRow = getKimiUsageRow(tab);
     await kimiRow?.updateComplete;
     expect(kimiRow?.now).toBe(tab._ticker.now);
