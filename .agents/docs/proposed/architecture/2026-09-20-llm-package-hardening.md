@@ -35,8 +35,12 @@ route, helper, tool-use and reflection call goes through `ModelInvoker`.
 
 ## 3. Changes
 
-1. **A live tier.** One `it.live` suite per protocol, key-gated by
-   environment. The matrix follows each protocol's advertised capabilities:
+1. **A live tier.** One `it.live` suite per HTTP protocol, eleven of the
+   twelve, key-gated by environment. `vscode-lm` is acquired through the
+   extension host's `vscode.lm` API
+   (`packages/extension/src/frontend/lm/acquireVscodeLanguageModel.ts`), so
+   its live check runs in an Extension Development Host job, not in the
+   package's Vitest project. The matrix follows each protocol's advertised capabilities:
    a text turn, a tool call round trip, an abort mid-stream and the usage
    shape everywhere; a successful continuation only where the codec
    supports it, and the explicit unsupported failure where it does not
@@ -63,7 +67,8 @@ route, helper, tool-use and reflection call goes through `ModelInvoker`.
 
 ## 4. Acceptance
 
-- `packages/llm` has a `live` Vitest project with one suite per protocol.
+- `packages/llm` has a `live` Vitest project with one suite per HTTP
+  protocol; `vscode-lm` has a live check in the extension-host job.
 - No `unsupported hosted` failure path remains, or a ruling names it.
 - No file in `packages/llm/src` exceeds 1 500 lines.
 - No `@llm/*` alias in `tsconfig.json`; every consumer imports

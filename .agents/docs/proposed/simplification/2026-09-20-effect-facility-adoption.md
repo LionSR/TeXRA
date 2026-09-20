@@ -68,8 +68,9 @@ them machine-refused.
 
 ## 4. Acceptance
 
-- `grep -r "Config\." src packages/*/src` is non-zero; the three providers
-  are gone.
+- `grep -r "Config\." src packages/*/src` is non-zero; the duplicated read
+  logic in the three providers is gone and the writable `ConfigProvider`
+  objects, with `update()` and `inspect()`, stay.
 - `src/logger/logUtils.ts` does not exist.
 - One `jitter` implementation in production.
 - `src/eventBus/AppSignals.ts` imports no `node:events`.

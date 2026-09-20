@@ -89,7 +89,8 @@ folds.
    bash approval one loop-side guard the tool declares rather than calls.
 7. Move the module-global mutable ownership state into session- or
    process-scoped services, one PR per subsystem: the Lean server map in
-   `leanServerRegistry.ts`, the agent-engine slot, the inline-comment
+   `leanServerRegistry.ts`, the agent-engine slot (only after the #12888
+   ruling admits a tag; not actionable before it), the inline-comment
    provider slot, the Codex config slots and the GitHub subscription
    bindings. The lazy memos of immutable tables (`registry.ts`), the
    class-shaped `toolAvailability` cache, the per-API rate limiters and the

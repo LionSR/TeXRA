@@ -183,8 +183,9 @@ maintainer. The published status page's section 13 is corrected to match.
 - `AgentLaunchContext` has no `resources` array and no `disposeTrace`.
 - `ToolCall` has no `model`, `delegationAgentScope`, `onApprovalPolicyDenial`,
   `trace` or `stopAfterCycle` field.
-- `withScopedDatabase` does not exist; `Database.ts` forks one `data_version`
-  poll per long-lived handle.
+- `withScopedDatabase` is no longer exported; its one file-local use serves
+  the pre-runtime app-state store, and every caller on the process runtime
+  holds the process-scoped handle.
 - `UsageLogService.initialize` and `.dispose` do not exist.
 - `ProcessRuntimeOptions.appState` is required.
 - `packages/agent/src/effect/runtime.ts` declares no `Runtime` tag.
