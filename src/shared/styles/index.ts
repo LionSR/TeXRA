@@ -20,11 +20,14 @@ export { designTokens } from './litStyles';
 // re-exported here. Components that compose a narrower sheet — e.g. a split
 // button without the full common view — import from './controlStyles' directly.
 //
-// Two modules are deliberately NOT re-exported from this barrel:
+// Three modules are deliberately NOT re-exported from this barrel:
 // - './markdownStyles' — renderer-specific sheet; only components that mount
 //   rendered markdown compose it, so it stays a direct import.
 // - './statusIndicatorStyles' — single-purpose 8px status dot with one
 //   consumer (the progress-view stream header).
+// - './overlaySurfaceStyles' — shared chrome for the two full-bleed overlay
+//   surfaces (ToolsSheet, SessionDrawer); a direct import names its callers
+//   plainly enough that the barrel would add nothing.
 
 // Component styles
 export { selectStyles, compactFormControlStyles } from './selectStyles';
