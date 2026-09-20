@@ -7,14 +7,15 @@ status: proposed
 
 Baseline: `main` at `3378a967` on 2026-09-20. Window surveyed: 2026-09-03 to
 2026-09-20, 1 026 commits, 3 075 files, +271k / −354k lines, 852 files deleted.
-Origin: seven independent surveys (Effect migration, `packages/llm`, agent
+Origin: ten independent surveys (Effect migration, `packages/llm`, agent
 runtime and session, SDK tier and hosts, state ownership and race guards, run
-programs and dispatch, tools and shared schemas, apparatus), each spot-checked
+programs and dispatch, Effect leverage, host layer, tools and shared schemas,
+apparatus), each spot-checked
 on the tree. The published status page is
 <https://claude.ai/artifact/9aeiYZmqg1AKX5UTeoK5az>.
 
 This note is the index. Each finding that warrants work has its own proposal,
-listed in section 3, and a tracking issue.
+listed in section 3, and a tracking issue under the umbrella #12880.
 
 ## 1. Verdict
 
@@ -61,13 +62,13 @@ ownership doc prescribed this fix; only its durable-claim quarter landed.
 
 | Proposal | Class | Deletes | Issue |
 | --- | --- | --- | --- |
-| [Single-owner liveness and one fold](./2026-09-20-single-owner-liveness-and-one-fold.md) | architecture | `runLanes.ts`, `waitingTermination.ts`, `holdLive`, the snapshot cross-checks, `StreamLogStore` as a store | see issue list in the tracking umbrella |
-| [Run-program and dispatch dedup](../simplification/2026-09-20-run-program-and-dispatch-dedup.md) | simplification | seven duplicated loop pairs, a second attempt identity, two envelope formatters, one abort bridge, two empty path segments | |
-| [LLM package hardening](./2026-09-20-llm-package-hardening.md) | architecture | nothing; adds the live tier, restores hosted tools, splits `turn.ts` | |
-| [Host-layer collapse](../simplification/2026-09-20-host-layer-collapse.md) | simplification | a duplicated 42-arm switch, two Supabase state machines, two settings registries, two bootstrap bodies | |
-| [Tools and schema-surface collapse](../simplification/2026-09-20-tools-and-schema-surface-collapse.md) | simplification | the non-contract half of the barrel closure, four probe catalogs, eight row arms, two pass-through tool layers | |
-| [Effect facility adoption](../simplification/2026-09-20-effect-facility-adoption.md) | simplification | three config providers, the second logger, two backoff copies, an `EventEmitter` | |
-| [Agent-refactorability gates](../process/2026-09-20-agent-refactorability-gates.md) | process | the fake-platform installer, the host-agent mock ratchet, seven spent runtime proposals, five reverify docs | |
+| [Single-owner liveness and one fold](./2026-09-20-single-owner-liveness-and-one-fold.md) | architecture | `runLanes.ts`, `waitingTermination.ts`, `holdLive`, the snapshot cross-checks, `StreamLogStore` as a store | #12881 |
+| [Run-program and dispatch dedup](../simplification/2026-09-20-run-program-and-dispatch-dedup.md) | simplification | seven duplicated loop pairs, a second attempt identity, two envelope formatters, one abort bridge, two empty path segments | #12882 |
+| [LLM package hardening](./2026-09-20-llm-package-hardening.md) | architecture | nothing; adds the live tier, restores hosted tools, splits `turn.ts` | #12883 |
+| [Host-layer collapse](../simplification/2026-09-20-host-layer-collapse.md) | simplification | a duplicated 42-arm switch, two Supabase state machines, two settings registries, two bootstrap bodies | #12884 |
+| [Tools and schema-surface collapse](../simplification/2026-09-20-tools-and-schema-surface-collapse.md) | simplification | the non-contract half of the barrel closure, four probe catalogs, eight row arms, two pass-through tool layers | #12885 |
+| [Effect facility adoption](../simplification/2026-09-20-effect-facility-adoption.md) | simplification | three config providers, the second logger, two backoff copies, an `EventEmitter` | #12886 |
+| [Agent-refactorability gates](../process/2026-09-20-agent-refactorability-gates.md) | process | the fake-platform installer, the host-agent mock ratchet, seven spent runtime proposals, five reverify docs | #12887 |
 
 ## 4. Numbers the proposals rest on
 
