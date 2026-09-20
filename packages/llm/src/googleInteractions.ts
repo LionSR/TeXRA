@@ -1,6 +1,6 @@
 // Third-party imports
 import { GoogleGenAI, type Interactions } from '@google/genai';
-import { Cause, Clock, Effect, Exit, Stream } from 'effect';
+import { Cause, Clock, Effect, Stream } from 'effect';
 import { z } from 'zod';
 
 // Local imports - canonical model contract
@@ -16,6 +16,7 @@ import {
   ModelError,
   authOrRejectionKind,
   enrichModelError,
+  ownedAbortSafeRequest,
   parseInboundToolArguments,
   parseOutboundToolArguments,
   pullStream,
@@ -317,65 +318,11 @@ function sdkFailure(cause: unknown): ModelError {
   });
 }
 
-/** Join the SDK request after abort; independent cleanup failures remain defects. */
-function ownedRequest<A>(
-  request: (signal: AbortSignal) => Promise<A>,
-  classify: (cause: unknown) => ModelError = sdkFailure,
-  deadline?: { readonly duration: number; readonly error: ModelError },
-): Effect.Effect<A, ModelError> {
-  return Effect.suspend(() => {
-    let pending: Promise<A> | undefined;
-    let requestSignal: AbortSignal | undefined;
-    const wait = Effect.tryPromise({
-      try: (signal) => {
-        requestSignal = signal;
-        pending = request(signal);
-        return pending;
-      },
-      catch: classify,
-    });
-    // Keep joining outside the timeout race: losing fibers' cleanup causes are
-    // otherwise discarded by the pinned Effect race implementation.
-    return (
-      deadline === undefined
-        ? wait
-        : wait.pipe(
-            Effect.timeoutOrElse({
-              duration: deadline.duration,
-              orElse: () => Effect.fail(deadline.error),
-            }),
-          )
-    ).pipe(
-      Effect.onExit((exit) => {
-        if (pending === undefined) return Effect.void;
-        const operation = pending;
-        return Effect.tryPromise({
-          try: () => operation,
-          catch: (cause) => cause,
-        }).pipe(
-          Effect.catch((cause) => {
-            if (
-              Exit.isFailure(exit) &&
-              (exit.cause.reasons.some(
-                (reason) =>
-                  Cause.isFailReason(reason) &&
-                  reason.error instanceof ModelError &&
-                  reason.error.cause === cause,
-              ) ||
-                (requestSignal?.aborted &&
-                  cause instanceof DOMException &&
-                  cause.name === 'AbortError'))
-            ) {
-              return Effect.void;
-            }
-            return Effect.die(classify(cause));
-          }),
-          Effect.asVoid,
-        );
-      }),
-    );
-  });
-}
+/** Google's abort signature: the SDK surfaces cancellation as a bare DOMException. */
+const googleAbortMatch = (cause: unknown, signal: AbortSignal): boolean =>
+  signal.aborted &&
+  cause instanceof DOMException &&
+  cause.name === 'AbortError';
 
 const invocationInput = Effect.fn('llm.google.invocationInput')(function* (
   turn: ResolvedTurn,
@@ -1146,11 +1093,18 @@ export function googleInteractionsModel(
       }
       const turn = parsed.data;
       const inputSteps = yield* invocationInput(turn, origin);
-      const raw = yield* ownedRequest((signal) =>
-        client.interactions.create(
-          { ...createInput(turn, inputSteps), background: true, stream: false },
-          { maxRetries: 0, fetchOptions: { signal } },
-        ),
+      const raw = yield* ownedAbortSafeRequest(
+        (signal) =>
+          client.interactions.create(
+            {
+              ...createInput(turn, inputSteps),
+              background: true,
+              stream: false,
+            },
+            { maxRetries: 0, fetchOptions: { signal } },
+          ),
+        sdkFailure,
+        { isAbortMatch: googleAbortMatch },
       );
       // Retain a real accepted identifier even if later snapshot validation fails.
       const identity = z.object({ id: z.string().min(1) }).safeParse(raw);
@@ -1252,7 +1206,7 @@ export function googleInteractionsModel(
             const remaining =
               parsedPolicy.data.deadlineAtMs - (yield* Clock.currentTimeMillis);
             if (remaining <= 0) return yield* deadline;
-            const raw = yield* ownedRequest(
+            const raw = yield* ownedAbortSafeRequest(
               (signal) =>
                 client.interactions.get(
                   operation.providerResponseId,
@@ -1261,7 +1215,10 @@ export function googleInteractionsModel(
                 ),
               (cause) =>
                 withOperation(operation, sdkFailure(cause), returnedModel),
-              { duration: remaining, error: deadline },
+              {
+                isAbortMatch: googleAbortMatch,
+                deadline: { duration: remaining, error: deadline },
+              },
             );
             const interaction = yield* snapshot(raw, operation);
             if (interaction.model !== undefined) {
@@ -1330,13 +1287,14 @@ export function googleInteractionsModel(
   )(function* (input) {
     const operation = yield* boundOperation(input);
     return yield* Effect.gen(function* () {
-      const raw = yield* ownedRequest(
+      const raw = yield* ownedAbortSafeRequest(
         (signal) =>
           client.interactions.cancel(operation.providerResponseId, undefined, {
             maxRetries: 0,
             fetchOptions: { signal },
           }),
         (cause) => withOperation(operation, sdkFailure(cause)),
+        { isAbortMatch: googleAbortMatch },
       );
       const interaction = yield* snapshot(raw, operation);
       const identity = {
@@ -1410,22 +1368,25 @@ export function googleInteractionsModel(
             'Google counting supports one initial text-only user message and optional system text.',
         });
       const parts = message.content.map((part) => ({ text: part.text }));
-      const response = yield* ownedRequest((signal) =>
-        client.models.countTokens({
-          model: turn.requestedModel,
-          // Preserve the existing converted-content estimate, not a claim
-          // to count the full Interactions request or its thinking controls.
-          contents: [
-            ...(turn.system === undefined
-              ? []
-              : [{ role: 'system', parts: [{ text: turn.system }] }]),
-            { role: 'user', parts },
-          ],
-          config: {
-            abortSignal: signal,
-            httpOptions: { retryOptions: { attempts: 1 } },
-          },
-        }),
+      const response = yield* ownedAbortSafeRequest(
+        (signal) =>
+          client.models.countTokens({
+            model: turn.requestedModel,
+            // Preserve the existing converted-content estimate, not a claim
+            // to count the full Interactions request or its thinking controls.
+            contents: [
+              ...(turn.system === undefined
+                ? []
+                : [{ role: 'system', parts: [{ text: turn.system }] }]),
+              { role: 'user', parts },
+            ],
+            config: {
+              abortSignal: signal,
+              httpOptions: { retryOptions: { attempts: 1 } },
+            },
+          }),
+        sdkFailure,
+        { isAbortMatch: googleAbortMatch },
       );
       const count = z
         .object({ totalTokens: z.int().nonnegative() })

@@ -19,6 +19,7 @@ import {
   authOrRejectionKind,
   enrichModelError,
   FILE_UPLOAD_LIFETIME_SECONDS,
+  ownedAbortSafeRequest,
   parseInboundToolArguments,
   parseOutboundToolArguments,
   pullStream,
@@ -195,6 +196,21 @@ function sdkFailure(cause: unknown): ModelError {
     cause,
   });
 }
+
+/**
+ * Anthropic's abort signature: the pinned SDK replaces caller abort reasons
+ * both before headers and while forwarding abort to the response body, so
+ * the match is only meaningful once Effect itself recorded an interrupt.
+ */
+const anthropicAbortMatch = (
+  cause: unknown,
+  _signal: AbortSignal,
+  exit: Exit.Exit<unknown, ModelError>,
+): boolean =>
+  Exit.isFailure(exit) &&
+  Cause.hasInterrupts(exit.cause) &&
+  (cause instanceof APIUserAbortError ||
+    (cause instanceof DOMException && cause.name === 'AbortError'));
 
 const inputPart = Effect.fn('llm.anthropic.inputPart')(function* (
   part: Extract<
@@ -1050,10 +1066,9 @@ export function anthropicMessagesModel(
           model: origin.requestedModel,
         });
       };
-      let pending: Promise<unknown> | undefined;
-      const response = yield* Effect.tryPromise({
-        try: (signal) => {
-          pending = client.messages
+      const response = yield* ownedAbortSafeRequest(
+        (signal) =>
+          client.messages
             .countTokens(
               {
                 model: body.model,
@@ -1075,41 +1090,9 @@ export function anthropicMessagesModel(
             .then((response) => {
               requestId = response.headers.get('request-id') ?? undefined;
               return response.json() as Promise<unknown>;
-            });
-          return pending;
-        },
-        catch: failure,
-      }).pipe(
-        Effect.onExit((exit) => {
-          const operation = pending;
-          if (operation === undefined) return Effect.void;
-          // On interruption, Effect aborts its signal before this finalizer joins.
-          return Effect.tryPromise({
-            try: () => operation,
-            catch: (cause) => cause,
-          }).pipe(
-            Effect.catch((cause) => {
-              if (
-                Exit.isFailure(exit) &&
-                (exit.cause.reasons.some(
-                  (reason) =>
-                    Cause.isFailReason(reason) &&
-                    reason.error instanceof ModelError &&
-                    reason.error.cause === cause,
-                ) ||
-                  // The pinned SDK replaces caller abort reasons both before
-                  // headers and while forwarding abort to the response body.
-                  (Cause.hasInterrupts(exit.cause) &&
-                    (cause instanceof APIUserAbortError ||
-                      (cause instanceof DOMException &&
-                        cause.name === 'AbortError'))))
-              )
-                return Effect.void;
-              return Effect.die(failure(cause));
             }),
-            Effect.asVoid,
-          );
-        }),
+        failure,
+        { isAbortMatch: anthropicAbortMatch },
       );
       const count = z.object({ input_tokens: CountSchema }).safeParse(response);
       if (!count.success)

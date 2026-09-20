@@ -1877,6 +1877,80 @@ export const readerAbortSignal = (
     return signal;
   });
 
+/**
+ * Run a promise-returning provider request under Effect's own abort signal,
+ * rejoining the pending promise before the effect completes. On rejoin
+ * failure, only the primary failure's own cause, or a caller-recognized
+ * abort (`isAbortMatch`), is dropped; anything else is an independent defect.
+ * `deadline`, when given, races the primary request only — rejoining always
+ * waits out the pending promise so its cleanup cause is not discarded.
+ */
+export function ownedAbortSafeRequest<A>(
+  request: (signal: AbortSignal) => Promise<A>,
+  classify: (cause: unknown) => ModelError,
+  options: {
+    readonly isAbortMatch: (
+      cause: unknown,
+      signal: AbortSignal,
+      exit: Exit.Exit<A, ModelError>,
+    ) => boolean;
+    readonly cleanupFailure?: (cause: unknown) => ModelError;
+    readonly deadline?: {
+      readonly duration: number;
+      readonly error: ModelError;
+    };
+  },
+): Effect.Effect<A, ModelError> {
+  const { isAbortMatch, cleanupFailure = classify, deadline } = options;
+  return Effect.suspend(() => {
+    let started:
+      | { readonly signal: AbortSignal; readonly pending: Promise<A> }
+      | undefined;
+    const wait = Effect.tryPromise({
+      try: (signal) => {
+        const pending = request(signal);
+        started = { signal, pending };
+        return pending;
+      },
+      catch: classify,
+    });
+    return (
+      deadline === undefined
+        ? wait
+        : wait.pipe(
+            Effect.timeoutOrElse({
+              duration: deadline.duration,
+              orElse: () => Effect.fail(deadline.error),
+            }),
+          )
+    ).pipe(
+      Effect.onExit((exit) => {
+        if (started === undefined) return Effect.void;
+        const { signal, pending } = started;
+        return Effect.tryPromise({
+          try: () => pending,
+          catch: (cause) => cause,
+        }).pipe(
+          Effect.catch((cause) => {
+            const repeated =
+              Exit.isFailure(exit) &&
+              exit.cause.reasons.some(
+                (reason) =>
+                  Cause.isFailReason(reason) &&
+                  reason.error instanceof ModelError &&
+                  reason.error.cause === cause,
+              );
+            return repeated || isAbortMatch(cause, signal, exit)
+              ? Effect.void
+              : Effect.die(cleanupFailure(cause));
+          }),
+          Effect.asVoid,
+        );
+      }),
+    );
+  });
+}
+
 /** An input estimate with its counted scope, not generation usage. */
 export const InputTokenEstimateSchema = z
   .strictObject({
