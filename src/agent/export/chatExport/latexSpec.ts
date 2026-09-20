@@ -33,7 +33,8 @@ function latexHeader(meta: DocumentMeta, latexPreamble: string): string {
         '\n\\medskip\\noindent\\textbf{Files:}',
         '\\begin{itemize}',
         ...meta.files.map(
-          ([l, v]) => `  \\item ${esc(l)}: \\texttt{${esc(v)}}`,
+          ({ label, value }) =>
+            `  \\item ${esc(label)}: \\texttt{${esc(value)}}`,
         ),
         '\\end{itemize}',
       ].join('\n')

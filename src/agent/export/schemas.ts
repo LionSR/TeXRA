@@ -85,5 +85,5 @@ export interface DocumentMeta {
   model?: string;
   description?: string;
   instruction?: string;
-  files: Array<[string, string]>;
+  files: Array<{ label: string; value: string }>;
 }
