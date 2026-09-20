@@ -14,19 +14,15 @@ import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports - core
-import { ToolCall } from '@agent/runtime/ToolCall';
-import type { ToolServices } from '@agent/runtime/ToolServices';
-import type { ToolResult } from '@shared/schemas';
 import { defineTool } from '@tools/core/define';
 import { executed } from '@tools/core/result';
 import { filterNotNull } from '@utils/core';
 import { formatResultCount } from '@utils/text/stringUtils';
-import { readConfig } from '@utils/config/configUtils';
 
 // Local imports - zotero
 import {
   callBetterBibTeX,
-  ZOTERO_PORT_KEY,
+  withZoteroPort,
   BbtLibrarySchema,
   type BbtCollection,
 } from './bbtClient';
@@ -221,14 +217,5 @@ export const ZoteroCollectionsTool = defineTool({
     'To see which collections a paper belongs to, use zotero_search with include_collections instead. ' +
     'Requires Better BibTeX plugin to be installed in Zotero.',
   schema: ZoteroCollectionsInputSchema,
-  execute: (
-    input: ZoteroCollectionsInput,
-  ): Effect.Effect<ToolResult, unknown, ToolServices> =>
-    Effect.gen(function* () {
-      const call = yield* ToolCall;
-      return yield* listCollections(
-        input,
-        readConfig<number>(call.roots.config, ZOTERO_PORT_KEY),
-      );
-    }),
+  execute: withZoteroPort(listCollections),
 });

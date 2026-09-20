@@ -10,18 +10,14 @@ import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports - core
-import { ToolCall } from '@agent/runtime/ToolCall';
-import type { ToolServices } from '@agent/runtime/ToolServices';
-import type { ToolResult } from '@shared/schemas';
 import { defineTool } from '@tools/core/define';
 import { executed } from '@tools/core/result';
 import { formatResultCount } from '@utils/text/stringUtils';
-import { readConfig } from '@utils/config/configUtils';
 
 // Local imports - zotero
 import {
   callBetterBibTeX,
-  ZOTERO_PORT_KEY,
+  withZoteroPort,
   BbtCollectionChainSchema,
   BbtSearchResultItemSchema,
   type BbtCollectionChain,
@@ -206,14 +202,5 @@ export const ZoteroSearchTool = defineTool({
     'Prefer the structured title/author/year fields over a single query string. ' +
     'Requires Better BibTeX plugin to be installed in Zotero.',
   schema: ZoteroSearchInputSchema,
-  execute: (
-    input: ZoteroSearchInput,
-  ): Effect.Effect<ToolResult, unknown, ToolServices> =>
-    Effect.gen(function* () {
-      const call = yield* ToolCall;
-      return yield* searchZotero(
-        input,
-        readConfig<number>(call.roots.config, ZOTERO_PORT_KEY),
-      );
-    }),
+  execute: withZoteroPort(searchZotero),
 });
