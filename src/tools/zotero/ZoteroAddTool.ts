@@ -22,23 +22,20 @@ import { Data, Duration, Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports
-import { ToolCall } from '@agent/runtime/ToolCall';
-import type { ToolServices } from '@agent/runtime/ToolServices';
 import { createLog } from '@logger/logUtils';
-import { ToolError, type ToolResult } from '@shared/schemas';
+import { ToolError } from '@shared/schemas';
 import { acquireRateLimitSlot } from '@tools/support/rateLimiter';
 import { CROSSREF_CONSTANTS, CrossrefClient } from '@tools/citation/constants';
 import { defineTool } from '@tools/core/define';
 import { executed } from '@tools/core/result';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { pluralize } from '@utils/text/stringUtils';
-import { readConfig } from '@utils/config/configUtils';
 
 // Local file imports
 import {
   callZoteroConnector,
   checkZoteroRunning,
-  ZOTERO_PORT_KEY,
+  withZoteroPort,
   type ConnectorResult,
 } from './bbtClient';
 
@@ -423,12 +420,5 @@ export const ZoteroAddTool = defineTool({
   description:
     'Add literature items to Zotero library. Requires Zotero to be running with the Connector enabled. Supports adding items by DOI (recommended), URL, or manual metadata entry. When possible, check for duplicates first (via zotero_search or grepping .bib files).',
   schema: ZoteroAddInputSchema,
-  execute: (
-    input: ZoteroAddInput,
-  ): Effect.Effect<ToolResult, unknown, ToolServices> =>
-    Effect.gen(function* () {
-      const call = yield* ToolCall;
-      const port = readConfig<number>(call.roots.config, ZOTERO_PORT_KEY);
-      return yield* addItems(input, port);
-    }),
+  execute: withZoteroPort(addItems),
 });

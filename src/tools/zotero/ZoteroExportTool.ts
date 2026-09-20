@@ -10,16 +10,13 @@ import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports - core
-import { ToolCall } from '@agent/runtime/ToolCall';
-import type { ToolServices } from '@agent/runtime/ToolServices';
-import { ToolError, type ToolResult } from '@shared/schemas';
+import { ToolError } from '@shared/schemas';
 import { defineTool } from '@tools/core/define';
 import { executed } from '@tools/core/result';
 import { pluralize } from '@utils/text/stringUtils';
-import { readConfig } from '@utils/config/configUtils';
 
 // Local imports - zotero
-import { callBetterBibTeX, ZOTERO_PORT_KEY } from './bbtClient';
+import { callBetterBibTeX, withZoteroPort } from './bbtClient';
 
 const ZOTERO_EXPORT_TIMEOUT_MS = 30_000; // 30 s
 
@@ -82,14 +79,5 @@ export const ZoteroExportTool = defineTool({
     'Export BibTeX/BibLaTeX entries from Zotero by citation keys. ' +
     'Requires Better BibTeX plugin to be installed in Zotero.',
   schema: ZoteroExportInputSchema,
-  execute: (
-    input: ZoteroExportInput,
-  ): Effect.Effect<ToolResult, unknown, ToolServices> =>
-    Effect.gen(function* () {
-      const call = yield* ToolCall;
-      return yield* exportEntries(
-        input,
-        readConfig<number>(call.roots.config, ZOTERO_PORT_KEY),
-      );
-    }),
+  execute: withZoteroPort(exportEntries),
 });

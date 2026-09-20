@@ -18,8 +18,11 @@ import { StatusCodes } from 'http-status-codes';
 import { z } from 'zod';
 
 // Local imports
-import { ToolError } from '@shared/schemas';
+import { ToolCall } from '@agent/runtime/ToolCall';
+import type { ToolServices } from '@agent/runtime/ToolServices';
+import { ToolError, type ToolResult } from '@shared/schemas';
 import { withRequestTimeout, type RequestError } from '@tools/timeouts';
+import { readConfig } from '@utils/config/configUtils';
 
 const ZOTERO_BBT_TIMEOUT_MS = 10_000; // 10 s
 const ZOTERO_PING_TIMEOUT_MS = 2_000; // 2 s
@@ -31,6 +34,29 @@ const ZOTERO_CONNECTOR_TIMEOUT_MS = 30_000; // 30 s
  *  (`readConfig(call.roots.config, ZOTERO_PORT_KEY)`), the dashboard's
  *  availability group from its probe inputs. */
 export const ZOTERO_PORT_KEY = 'texra.bib.zoteroPort';
+
+/**
+ * The `execute` every Zotero tool wants: take the call, read the configured
+ * port off its roots, and hand both to the tool's own program. The port is
+ * the only thing these tools need from the call, and every one of them
+ * reached for it the same way, so the read lives here beside the key it
+ * reads rather than once per tool.
+ */
+export const withZoteroPort =
+  <I>(
+    run: (
+      input: I,
+      port: number,
+    ) => Effect.Effect<ToolResult, unknown, ToolServices>,
+  ) =>
+  (input: I): Effect.Effect<ToolResult, unknown, ToolServices> =>
+    Effect.gen(function* () {
+      const call = yield* ToolCall;
+      return yield* run(
+        input,
+        readConfig<number>(call.roots.config, ZOTERO_PORT_KEY),
+      );
+    });
 
 function zoteroUrl(port: number, pathname: string): string {
   return `http://127.0.0.1:${port}${pathname}`;
