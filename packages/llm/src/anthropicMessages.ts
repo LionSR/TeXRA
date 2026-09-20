@@ -36,7 +36,7 @@ import {
   type TurnResult,
   completedTurn,
 } from './turn.js';
-import { uploadCache, type UploadCache } from './uploadCache.js';
+import { filesApiUploads, type UploadCache } from './uploadCache.js';
 import type {
   ContentBlockParam,
   MessageCreateParamsStreaming,
@@ -51,10 +51,15 @@ const CountSchema = z.int().nonnegative();
  * that is not an RFC 3339 time (null means the file does not expire), is a
  * malformed response: the upload counts as failed and the bytes are sent.
  */
-const UploadedFileSchema = z.object({
-  id: z.string().min(1),
-  expires_at: z.iso.datetime({ offset: true }).nullish(),
-});
+const UploadedFileSchema = z
+  .object({
+    id: z.string().min(1),
+    expires_at: z.iso.datetime({ offset: true }).nullish(),
+  })
+  .transform((file) => ({
+    fileId: file.id,
+    expiresAtMs: file.expires_at == null ? null : Date.parse(file.expires_at),
+  }));
 const RefusalSchema = z.strictObject({
   type: z.literal('refusal'),
   category: z
@@ -491,55 +496,25 @@ export function anthropicMessagesModel(
     logLevel: 'off',
     timeout: 600_000,
   });
-  const uploads = uploadCache({
-    send: (upload) =>
-      Effect.gen(function* () {
-        const uploaded = yield* Effect.tryPromise({
-          try: async (signal) =>
-            client.files.upload(
-              {
-                file: await toFile(
-                  Buffer.from(upload.base64, 'base64'),
-                  upload.filename,
-                  { type: upload.mimeType },
-                ),
-                expires_in_seconds: FILE_UPLOAD_LIFETIME_SECONDS,
-              },
-              { signal },
-            ),
-          catch: (cause) =>
-            enrichModelError(sdkFailure(cause), {
-              model: origin.requestedModel,
-            }),
-        });
-        const parsed = UploadedFileSchema.safeParse(uploaded);
-        if (!parsed.success)
-          return yield* new ModelError({
-            kind: 'malformed-output',
-            message: 'Anthropic returned an upload without a usable file id.',
-            model: origin.requestedModel,
-            cause: parsed.error,
-          });
-        return {
-          fileId: parsed.data.id,
-          expiresAtMs:
-            parsed.data.expires_at == null
-              ? null
-              : Date.parse(parsed.data.expires_at),
-        };
-      }),
-    // A 404 means the provider already expired the file: the outcome asked for.
-    remove: (fileId) =>
-      Effect.tryPromise({
-        try: (signal) => client.files.delete(fileId, null, { signal }),
-        catch: (cause) =>
-          enrichModelError(sdkFailure(cause), { model: origin.requestedModel }),
-      }).pipe(
-        Effect.asVoid,
-        Effect.catchTag('ModelError', (error) =>
-          error.status === 404 ? Effect.void : Effect.fail(error),
-        ),
+  const uploads = filesApiUploads({
+    providerName: 'Anthropic',
+    model: origin.requestedModel,
+    failure: (cause) =>
+      enrichModelError(sdkFailure(cause), { model: origin.requestedModel }),
+    parseUploaded: (raw) => UploadedFileSchema.safeParse(raw),
+    create: async (upload, signal) =>
+      client.files.upload(
+        {
+          file: await toFile(
+            Buffer.from(upload.base64, 'base64'),
+            upload.filename,
+            { type: upload.mimeType },
+          ),
+          expires_in_seconds: FILE_UPLOAD_LIFETIME_SECONDS,
+        },
+        { signal },
       ),
+    remove: (fileId, signal) => client.files.delete(fileId, null, { signal }),
   });
   const prepareTurn: Model['prepareTurn'] = Effect.fn(
     'llm.anthropic.prepareTurn',

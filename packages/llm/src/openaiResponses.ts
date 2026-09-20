@@ -44,7 +44,7 @@ import {
   type RemoteOperation,
   completedTurn,
 } from './turn.js';
-import { uploadCache, type UploadCache } from './uploadCache.js';
+import { filesApiUploads, type UploadCache } from './uploadCache.js';
 import type { ResponseCreateParamsBase } from 'openai/resources/responses/responses';
 
 type ResponseOrigin = RemoteOperation['origin'];
@@ -55,10 +55,15 @@ type ResponseOrigin = RemoteOperation['origin'];
  * not expire), is a malformed response: the upload counts as failed and the
  * bytes are sent.
  */
-const UploadedFileSchema = z.object({
-  id: z.string().min(1),
-  expires_at: z.int().nonnegative().nullish(),
-});
+const UploadedFileSchema = z
+  .object({
+    id: z.string().min(1),
+    expires_at: z.int().nonnegative().nullish(),
+  })
+  .transform((file) => ({
+    fileId: file.id,
+    expiresAtMs: file.expires_at == null ? null : file.expires_at * 1000,
+  }));
 type HttpTurnResult = Extract<TurnResult, { providerResponseId: string }>;
 
 const ItemStatusSchema = z.enum(['in_progress', 'completed', 'incomplete']);
@@ -1566,62 +1571,31 @@ export function openaiResponsesModel(
   // A subscription token rotates and its backend serves no files endpoint.
   const uploads =
     transport.authentication.kind === 'api-key'
-      ? uploadCache({
-          send: (upload) =>
-            Effect.gen(function* () {
-              const uploaded = yield* Effect.tryPromise({
-                try: async (signal) =>
-                  client.files.create(
-                    {
-                      file: await OpenAI.toFile(
-                        Buffer.from(upload.base64, 'base64'),
-                        upload.filename,
-                        { type: upload.mimeType },
-                      ),
-                      purpose: 'user_data',
-                      expires_after: {
-                        anchor: 'created_at',
-                        seconds: FILE_UPLOAD_LIFETIME_SECONDS,
-                      },
-                    },
-                    { signal },
-                  ),
-                catch: (cause) =>
-                  enrichModelError(openaiFailure(cause), {
-                    model: origin.requestedModel,
-                  }),
-              });
-              const parsed = UploadedFileSchema.safeParse(uploaded);
-              if (!parsed.success)
-                return yield* new ModelError({
-                  kind: 'malformed-output',
-                  message:
-                    'OpenAI returned an upload without a usable file id.',
-                  model: origin.requestedModel,
-                  cause: parsed.error,
-                });
-              return {
-                fileId: parsed.data.id,
-                expiresAtMs:
-                  parsed.data.expires_at == null
-                    ? null
-                    : parsed.data.expires_at * 1000,
-              };
+      ? filesApiUploads({
+          providerName: 'OpenAI',
+          model: origin.requestedModel,
+          failure: (cause) =>
+            enrichModelError(openaiFailure(cause), {
+              model: origin.requestedModel,
             }),
-          // A 404 means the provider already expired the file.
-          remove: (fileId) =>
-            Effect.tryPromise({
-              try: (signal) => client.files.delete(fileId, { signal }),
-              catch: (cause) =>
-                enrichModelError(openaiFailure(cause), {
-                  model: origin.requestedModel,
-                }),
-            }).pipe(
-              Effect.asVoid,
-              Effect.catchTag('ModelError', (error) =>
-                error.status === 404 ? Effect.void : Effect.fail(error),
-              ),
+          parseUploaded: (raw) => UploadedFileSchema.safeParse(raw),
+          create: async (upload, signal) =>
+            client.files.create(
+              {
+                file: await OpenAI.toFile(
+                  Buffer.from(upload.base64, 'base64'),
+                  upload.filename,
+                  { type: upload.mimeType },
+                ),
+                purpose: 'user_data',
+                expires_after: {
+                  anchor: 'created_at',
+                  seconds: FILE_UPLOAD_LIFETIME_SECONDS,
+                },
+              },
+              { signal },
             ),
+          remove: (fileId, signal) => client.files.delete(fileId, { signal }),
         })
       : null;
   const prepareTurn: Model['prepareTurn'] = (request) =>
