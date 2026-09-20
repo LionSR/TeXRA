@@ -142,7 +142,12 @@ note.
 
 ## 6. Acceptance
 
-- `pure-tier-kernel-suites.json` is empty and deleted.
+- `pure-tier-kernel-suites.json` has an empty `hostReadByModuleUnderTest`
+  list. Its `shareTerminalState` list (`StaticBandResize.vitest.ts`,
+  `ToolRenderers.vitest.ts`) is a different defect, Ink renderer suites
+  leaking process terminal state under a shared module registry; the file
+  is deleted only once those two suites isolate that state, and until then
+  it shrinks to that list.
 - `host-agent-mock-baseline.json` is deleted.
 - `config/ratchets/refuted-candidates.json` exists and a suite enforces it.
 - No doc under `.agents/docs/proposed/` (every class, not only

@@ -48,8 +48,14 @@ held as a value in the owning fiber's scope rather than looked up in maps.
 
 1. **A waiting run stays inside its fiber's scope.** `AgentRunLifecycle`
    returns and stashes a teardown today so the scope can close while the run
-   parks. Keep the fiber alive across the park instead. Deletes `holdLive`
-   and the `live` set in `runLanes.ts` and the sole caller in
+   parks. Keep the fiber alive across the park instead, but not the run's
+   resources: `AgentRun` owns model bindings and uploaded-file releases in
+   a child `Scope` finalized with the run layer (`AgentRun.ts`, the
+   `Scope.fork` under the layer scope), and a park can last arbitrarily
+   long. The turn's resources therefore live in a nested scope that closes
+   at the park boundary and is reacquired for the next turn; across the
+   park only the claim and the routing handle of step 2 stay live. Deletes
+   `holdLive` and the `live` set in `runLanes.ts` and the sole caller in
    `waitingTermination.ts`. This is D3 of the ownership note.
 2. **The DB claim is the only liveness authority, held as a scoped value.**
    Replace `RunRegistry.handles`, `childActivations`, `RunLanes.live` and

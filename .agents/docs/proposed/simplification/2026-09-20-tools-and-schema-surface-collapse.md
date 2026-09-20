@@ -87,7 +87,14 @@ folds.
    `Database.ts`) selects `MAX(seq)` per `(aggregate_id, type)`, so one
    stored `run.fact` type would keep only the most recent fact per run;
    the query groups by the discriminator as well, or each row carries the
-   complete combined fact state, before the distinct types go.
+   complete combined fact state, before the distinct types go. The
+   type-only readers change too, not just the schema: `APP_STATE_ROWS`
+   selects every `state.value.set.1` row keyed by aggregate id alone, and
+   the inquiry listing selects every `inquiry.recorded.1` row the same way
+   (`Database.ts`), so after the collapse each would ingest the other
+   families, colliding with an app-state key or failing inquiry decoding.
+   Each reader filters by aggregate kind or the discriminator before the
+   distinct types are deleted.
 4. `ExecutionsTool` renders text from the fold; keep `wait` and `kill`
    (500 to 700 lines).
 5. Derive the replacement-category universe from the registry; rename the
@@ -99,11 +106,13 @@ folds.
    process-scoped services, one PR per subsystem: the Lean server map in
    `leanServerRegistry.ts`, the agent-engine slot (only after the #12888
    ruling admits a tag; not actionable before it), the inline-comment
-   provider slot, the Codex config slots and the GitHub subscription
-   bindings. The lazy memos of immutable tables (`registry.ts`), the
-   class-shaped `toolAvailability` cache, the per-API rate limiters and the
-   once-warn latches are intentional process caches and stay; the
-   service-scope ledger records them as such.
+   provider slot and the GitHub subscription bindings. The lazy memos of
+   immutable tables (`registry.ts`), the class-shaped `toolAvailability`
+   cache, the per-API rate limiters, the once-warn latches and
+   `codexConfig.ts` (a capability memo keyed by binary plus its
+   self-pruning `PerKeyLane` map, with no installed ownership slot) are
+   intentional process caches and stay; the service-scope ledger records
+   them as such and refutes converting per-key lanes into services.
 
 ## 3. Feature-scope questions, not layering
 

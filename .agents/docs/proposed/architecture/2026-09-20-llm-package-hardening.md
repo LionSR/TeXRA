@@ -55,7 +55,10 @@ route, helper, tool-use and reflection call goes through `ModelInvoker`.
 3. **Split `turn.ts`** along the study's lines: `protocol.ts`, `message.ts`,
    `turn.ts` (request, configuration, result), `errors.ts`, `transport.ts`
    (SSE, pull, the request helper). Mechanical; #12842 and #12874 already
-   started it.
+   started it. `openaiResponses.ts` (2 724 lines) is the other file over the
+   acceptance threshold and splits in the same step, along its own seams
+   (request encoding, stream-event decoding, usage accounting); without it
+   the acceptance line below cannot be met.
 4. **Make the boundary real.** Delete the `@llm/*` alias from
    `tsconfig.json`: `scripts/aliasUtils.mjs` expands every tsconfig alias to
    an absolute filesystem path, so an `exports` map is never consulted while
