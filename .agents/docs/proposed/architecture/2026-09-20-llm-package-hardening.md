@@ -13,7 +13,7 @@ substantially executed and should move to `implemented/` with this note.
 
 ## 1. What is done
 
-`packages/llm` is a pure workspace package (10 files, ~9.4k lines): zero
+`packages/llm` is a pure workspace package (10 files, about 10.5k lines): zero
 `platform()`, zero `Effect.run*`, zero `AbortController`; dependencies are the
 provider SDKs and `effect`/`zod` only. The `Model` contract is
 `prepareTurn`, then `streamTurn` or `generateTurn`, where `generateTurn` is a
@@ -36,8 +36,11 @@ route, helper, tool-use and reflection call goes through `ModelInvoker`.
 ## 3. Changes
 
 1. **A live tier.** One `it.live` suite per protocol, key-gated by
-   environment, exercising: a text turn, a tool call round trip, a
-   continuation, an abort mid-stream, and usage shape. Runs in CI only on a
+   environment. The matrix follows each protocol's advertised capabilities:
+   a text turn, a tool call round trip, an abort mid-stream and the usage
+   shape everywhere; a successful continuation only where the codec
+   supports it, and the explicit unsupported failure where it does not
+   (the OpenAI Chat codec rejects `turn.continuation` by contract). Runs in CI only on a
    labelled job with secrets; runs locally when keys exist. This is the only
    wire evidence the package will have.
 2. **Restore hosted tools or decide explicitly.** Either implement

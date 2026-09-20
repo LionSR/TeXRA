@@ -15,19 +15,21 @@ make an agent waste effort or mislead itself.
 
 ## 1. Test estate
 
-| Measure                                          | Value                                                          |
-| ------------------------------------------------ | -------------------------------------------------------------- |
-| Test lines vs production                         | 170k vs 287k (0.59 : 1)                                        |
-| Suites                                           | 529; 174 pure (40k lines), 355 kernel (121k lines, 75 percent) |
-| Suites using a mock primitive                    | 244 (46 percent); 408 `vi.mock` sites in 137 files             |
-| Suites whose basename matches no production file | 405 of 529 (77 percent)                                        |
-| Support and fixtures                             | ~5 500 lines; `FakePlatform.ts` 510, `setupPlatform.ts` 437    |
+| Measure                                                          | Value                                                                                |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| Test lines vs production (suites + 6.7k support + 3k Playwright) | 170k vs 287k (0.59 : 1)                                                              |
+| Suites                                                           | 529 suites, 161k lines: 174 pure (40k), 355 kernel (121k, 75 percent of suite lines) |
+| Suites using a mock primitive                                    | 244 (46 percent); 408 `vi.mock` sites in 137 files                                   |
+| Suites whose basename matches no production file                 | 405 of 529 (77 percent)                                                              |
+| Support and fixtures                                             | ~5 500 lines; `FakePlatform.ts` 510, `setupPlatform.ts` 437                          |
 
 Findings:
 
-- AGENTS.md says "one suite per module, path-mirrored"; 77 percent of suites
-  are named by scenario. An agent refactoring `RunRegistry` cannot find its
-  tests, and orphans cannot be detected by name.
+- 77 percent of suites carry no production basename. AGENTS.md permits a
+  named cross-module scenario suite beside the path-mirrored module suite,
+  so this is not a count of violations; it is a navigability cost. An agent
+  refactoring `RunRegistry` cannot find its tests from the tree, and orphans
+  cannot be detected by name.
 - `host-agent-mock-baseline.json` freezes 16 places where CLI and desktop
   suites mock `@agent/*` internals, which freezes the SDK's internal layout
   from outside it.
@@ -47,8 +49,10 @@ Changes:
    (`chatSessionController`, `ExecuteCli`, `WorkflowRunCommand`,
    `ResumeCommand`, `History`); delete the host-agent mock ratchet, its suite
    and `support/agentCatalogMock.ts`. Keep the import-specifier ratchet.
-3. Rename suites to their subject, or delete the mirroring rule from
-   AGENTS.md. Renaming is recommended, since AGENTS.md already claims it.
+3. Make every suite name its subject: a module suite mirrors its module's
+   path; a scenario suite keeps its scenario name and declares the modules
+   it covers in its `describe` header. Rename only module suites that
+   mirror one module and do not say so. No mass rename.
 
 ## 2. Rulings and refusals as data
 
@@ -56,8 +60,11 @@ The architecture rulings ledger and the 2026-09-17 refuted list are prose.
 An agent re-proposes `withPerKeyLane` onto `Semaphore` and `ModelRetryGate`
 onto `Schedule` on every pass. Build
 `config/ratchets/refuted-candidates.json` (id, symbols or paths, ruling
-anchor) and a pure-tier suite that fails when a diff touches a refuted
-symbol without citing its ruling id in the PR body or commit.
+anchor). Two enforcement points, because a pure-tier suite has no PR body:
+a pure-tier suite that fails when a refuted symbol changes shape without a
+matching update to the baseline, and a CI workflow step, beside the
+existing review workflows, that fails a PR whose diff touches a refuted
+symbol without citing the ruling id in the PR body.
 
 ## 3. Docs whose status is typed, not derived
 
@@ -76,8 +83,11 @@ Changes:
    `implemented/`.
 2. Add a 40-line index naming the authoritative doc per topic and linking
    the rulings ledger, and amend the README to allow it.
-3. A gate: a `proposed/` doc that cites merged PR numbers or contains a
-   "Landed" section fails; `implemented:` frontmatter is required to move.
+3. A gate keyed on an explicit completion marker, not on citations: a
+   `proposed/` doc whose own status line or a "Landed" section declares its
+   proposal complete fails until it moves; citing a merged PR as evidence or
+   as a prerequisite stays legal, since a proposal can rest on landed work
+   and still be open.
 4. Fix `approval.requested` in CLAUDE.md and AGENTS.md (the row is
    `request.opened`); extend `check-guidance-refs.mjs` to verify cited
    event-type literals, not only paths. Also delete the CLAUDE.md line
@@ -98,13 +108,18 @@ note.
 
 - Collapse the seven desktop artifact verifiers and two smoke runners into
   one `verify-desktop.mjs <stage>` (about 2 000 of 8 571 script lines).
-- Derive `packages/agent`'s 63 redeclared dependencies from the root at
-  build time; it is the largest ungated two-sources-of-truth in the repo.
-- Delete `p-defer` (zero production importers) and the eleven single-site
-  packages (`data-uri-to-buffer`, `deepmerge`, `mutative`,
-  `diff-match-patch`, `fastest-levenshtein`, `perfect-debounce`,
-  `pluralize`, `content-disposition`, `ipaddr.js`, `pretty-bytes`,
-  `serialize-error`).
+- Put the 63 versions `packages/agent` redeclares in a pnpm catalog so
+  install time resolves them from one source; the package keeps its
+  dependency names, since pnpm links a workspace package before any build
+  script runs. It is the largest ungated two-sources-of-truth in the repo.
+- Delete `p-defer` (zero production importers) and the ten single-site
+  packages that a few lines replace (`data-uri-to-buffer`, `deepmerge`,
+  `mutative`, `diff-match-patch`, `fastest-levenshtein`,
+  `perfect-debounce`, `pluralize`, `content-disposition`, `pretty-bytes`,
+  `serialize-error`). `ipaddr.js` stays: its one caller is the SSRF
+  boundary in `WebFetchTool.ts`, which default-denies every non-unicast
+  range and normalizes IPv4-mapped IPv6, and Node's `net.isIP` gives no
+  range classification.
 - Retire `check-effect-migration-ratchet.mjs` (1 519 lines guarding an
   18-line baseline) as its categories reach zero; keep the `Effect.run*`
   boundary check, the only permanent rule in it.

@@ -57,11 +57,22 @@ held as a value in the owning fiber's scope rather than looked up in maps.
    claim. Admission, stop and deletion answer from one place. Deletes
    `runLanes.ts` (199 L), `waitingTermination.ts`, `hasRetainedOwner`, the
    `RunBusy` plumbing in `SessionRequests.ts` and `WorkflowScriptTool.ts`. D2
-   and D4; the `Runs` tag of the runtime design section 2.1.
+   and D4; the `Runs` tag of the runtime design section 2.1. A `FiberMap`
+   entry exists only once a fiber does, and a stop can arrive before that:
+   twelve synchronous host callers reach `interrupt()` and eleven
+   `failIfLaunchStopped` sites race the launch. The `stopped` `Deferred` is
+   therefore installed before admission returns and stays the pre-fiber
+   latch; the map entry adopts it, it does not replace it.
 3. **Derive the snapshot, do not restate.** `flow.snapshot` keeps family
-   state and the message anchor, nothing the rows already carry. Deletes the
-   `stale-snapshot` and `dangling-binding` arms and about 90 lines of
-   cross-checking in `runStateFold.ts`.
+   state and the message anchor, nothing the rows already carry. Three facts
+   the snapshot carries today have no other row: `references.intentBindings`
+   is the one carrier of an intent's `approvalRequestId` (`loop/rows.ts`
+   says so), and `runtime.pendingRetry` and `runtime.declinedRoutes` are
+   restored from it. Each moves to a named row first (a binding row beside
+   `request.opened`, and the retry permit and declined routes as rows the
+   retry owner writes); only then do the `stale-snapshot` and
+   `dangling-binding` arms and about 90 lines of cross-checking in
+   `runStateFold.ts` go.
 4. **One fold.** Extract the row-application both folds share into one
    reducer, and make `sessionFold` a projection of `RunState` plus the
    session-only rows. A new row type then has one place to land.
@@ -69,10 +80,18 @@ held as a value in the owning fiber's scope rather than looked up in maps.
    `Semaphore`, `known` set, `releaseRequests`, `runOwner` tokens and `seq`
    dedup go. Already named in the runtime design ("the view replaces
    `StreamLogStore`").
-6. **Approval policy and app state under the same rule.** `approval.policy`
-   rows become the authority and `SessionHandle`'s field a read of the fold;
-   `SqliteStateStore` reads through the committed `level` stream instead of an
-   open-time snapshot. Deletes the `writeLanes` in `appStateStore.ts`.
+6. **App state reads through the committed level.** `SqliteStateStore`
+   reads through the `level` stream instead of an open-time snapshot, so
+   another process's writes become visible. The per-key `writeLanes` stay:
+   overlapping flip-and-restore writes to one key must commit in invocation
+   order, and a long-lived handle does not give that FIFO on its own. The
+   approval policy is not moved onto rows: `approval.policy` rows are
+   per-run snapshots, published only for runs this process owns, so with no
+   active run there is no row and with two processes the fold can carry the
+   other host's run policy. The host-seeded session policy stays the
+   authority and the rows stay run projections; the restart and second-host
+   reset in section 1 is a property of that design, and a durable
+   session-level record is a separate decision.
 
 With step 1 landed, D26 (`SessionHandle`'s `DisposableStore` onto a `Scope`
 finalizer) is no longer refuted: the synchronous early teardown it preserved

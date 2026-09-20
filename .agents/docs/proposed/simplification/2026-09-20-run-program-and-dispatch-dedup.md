@@ -16,7 +16,7 @@ duplicated is scaffolding, not architecture.
 | Duplication                                                                                                                                                                                | Sites                                                                                                                                          | Lines                                            |
 | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
 | Seven byte-similar pairs across the two loops: `fresh`, `openFresh`, `restore`, `snapshot`, `usageSnapshot`, `finalize`, `failure`, plus the resume-refusal block copied with its comments | `src/agent/runtime/loop/toolUse.ts` / `loop/reflection.ts`                                                                                     | ~180                                             |
-| Two attempt identities for one question                                                                                                                                                    | `childRunLoop.ts` `commitChildTurn` (`child.turn`) / `src/agent/workflowScript/checkpoint.ts` `recordWorkflowCallAttempt` (`workflow.attempt`) | ~120                                             |
+| Two attempt vocabularies that share no schema machinery                                                                                                                                    | `childRunLoop.ts` `commitChildTurn` (`child.turn`) / `src/agent/workflowScript/checkpoint.ts` `recordWorkflowCallAttempt` (`workflow.attempt`) | ~120                                             |
 | Three XML delivery-envelope formatters                                                                                                                                                     | `src/tools/delegation/subagentResults.ts`, `deliveryEnvelope.ts`, `src/tools/bash.ts`                                                          | ~200                                             |
 | Two abort bridges onto one handle                                                                                                                                                          | `childRunLoop.ts` `ChildRunInterruptible` / `nativeSubagentStrategy.ts` `bindAbortSignals`                                                     | the two remaining `AbortController` ratchet rows |
 | Two halt writers in one file                                                                                                                                                               | `reflection.ts` `finish` and `finalize`                                                                                                        | small                                            |
@@ -28,10 +28,15 @@ duplicated is scaffolding, not architecture.
 
 1. Lift the seven pairs into `loop/runProgram.ts` parameterised by family;
    `rows.ts`'s two snapshot constructors collapse to one.
-2. One `child.attempt` row keyed `(runId, key, attempt)` serves both
-   `child.turn` and `workflow.attempt`; delete `ChildTurnState` in
-   `src/agent/storage/runRecords.ts`. This finishes PR 4 of the 2026-09-04
-   runtime note.
+2. Share the attempt schema machinery between `workflow.attempt` and
+   `child.turn` without merging the facts. They answer different questions:
+   `workflow.attempt` is the high-water and supersession authorization on
+   the parent checkpoint aggregate, which survives child deletion;
+   `child.turn` records accepted and settled turns on the child aggregate,
+   and `workflowScriptAgentRunner` refuses replay after an accepted or
+   ambiguously settled turn on that evidence. `ChildTurnState` stays. What
+   PR 4 of the 2026-09-04 runtime note can still finish is one key type and
+   one fold for the two rows.
 3. One envelope builder in `deliveryEnvelope.ts`; the per-driver functions
    become fact selection only.
 4. `ChildRunInterruptible` is the only `AbortController`; strategies take
@@ -54,8 +59,8 @@ boundary and its determinism guards; the external-process strategies
 
 - `toolUse.ts` and `reflection.ts` each lose ~180 lines and import
   `runProgram.ts`.
-- One row type answers "was this attempt already made"; `workflow.attempt`
-  is gone from `sessionEvent.ts`.
+- `workflow.attempt` and `child.turn` share one key type and one fold;
+  both rows remain.
 - One `formatDelivery` XML builder; `effect-migration-baseline.json` has one
   `new AbortController(` row.
 - No production path contains `implementations/flows`.

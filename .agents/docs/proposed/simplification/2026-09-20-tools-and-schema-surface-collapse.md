@@ -60,7 +60,10 @@ folds.
 
 1. Split the non-contract half out of `@shared/schemas` into its own
    surfaces; move the UI toolkit out of `src/shared` or rename the directory's
-   charter. The barrel stays a published surface; it shrinks.
+   charter. The barrel stays a published surface; it shrinks. The settings
+   webview consumes the catalog on purpose (`settingEnumChoices`,
+   `settingsViewSettingByKey` from `stateSettings.ts`) and keeps it; the
+   gain is for the progress, memory and profile views, which do not.
 2. One dependency-probe catalog in `externalToolDefs` plus `toolAvailability`;
    the other four spellings, their sync comments and the completeness test go
    (400 to 600 lines). The per-host Lean capability read and the CLI doctor's
@@ -68,7 +71,10 @@ folds.
 3. One `run.fact` row and one `state.value.set` row; delete eight schema
    arms, four name lists, `runFactEvents.ts`, the `Database.ts` branch chain
    and the five readers (250 to 400 lines). Bump `SESSION_EVENT_FORMAT`; there
-   is no legacy reader to migrate.
+   is no legacy reader to migrate. The collapsed rows keep a discriminator
+   that ties each key family to its existing Zod value schema and aggregate
+   kind, so a desktop-projects value cannot be committed under the inquiry
+   aggregate and corruption is still caught at the database parse boundary.
 4. `ExecutionsTool` renders text from the fold; keep `wait` and `kill`
    (500 to 700 lines).
 5. Derive the replacement-category universe from the registry; rename the
@@ -76,8 +82,14 @@ folds.
    because order is behavior.
 6. Delete `core/define.ts` and inline the `execute` forwarder; make path and
    bash approval one loop-side guard the tool declares rather than calls.
-7. Move the fourteen module-global registries into the services they belong
-   to (session or process scope), one PR per subsystem.
+7. Move the module-global mutable ownership state into session- or
+   process-scoped services, one PR per subsystem: the Lean server map in
+   `leanServerRegistry.ts`, the agent-engine slot, the inline-comment
+   provider slot, the Codex config slots and the GitHub subscription
+   bindings. The lazy memos of immutable tables (`registry.ts`), the
+   class-shaped `toolAvailability` cache, the per-API rate limiters and the
+   once-warn latches are intentional process caches and stay; the
+   service-scope ledger records them as such.
 
 ## 3. Feature-scope questions, not layering
 
@@ -88,9 +100,10 @@ decisions for the owner; neither is fixed by a refactor.
 
 ## 4. Acceptance
 
-- No webview bundle includes `stateSettings.ts`.
+- No webview other than the settings view includes `stateSettings.ts`.
 - One `CORE_LATEX_TOOLS` spelling in the tree; no "kept in sync" comment.
 - `sessionEvent.ts` has no `updateTodos` arm; `runRecords.ts` has one
   latest-row reader.
 - The tool-call path has five layers; `core/define.ts` is gone.
-- `src/tools` has no module-level `Map` or `Set` that outlives a session.
+- `src/tools` has no module-level mutable ownership state; the surviving
+  memo caches are listed by name in the ledger.
