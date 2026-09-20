@@ -29,7 +29,7 @@ const EXPIRY_MARGIN_MS = 60_000;
 const RELEASE_DEADLINE = '10 seconds';
 
 /** What one upload left on the provider. */
-interface Uploaded {
+export interface Uploaded {
   readonly fileId: string;
   /** Epoch milliseconds; `null` when the provider stated no expiry. */
   readonly expiresAtMs: number | null;
