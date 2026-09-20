@@ -20,14 +20,14 @@ every append is stamped with the owner in the same SQL statement
 the rows are interpreted by three independent readers and shadowed by
 in-memory copies that are not derived from them.
 
-| Second copy | Where | Failure it produced |
-| --- | --- | --- |
-| `flow.snapshot` restates `references` and `runtime` already in rows | `src/shared/session/runStateFold.ts` (`stale-snapshot`, `dangling-binding` arms) | a mismatch fails the run `inconsistent`, unresumable |
-| `sessionFold.ts` (1 983 L) beside `runStateFold.ts` (1 085 L), sharing only `traceFold` | `src/shared/session/` | a row type folded into one and not the other is silent; 4 fixes in the window |
-| `RunRegistry.handles`, `childActivations`, `RunLanes.live` | `src/agent/runtime/runRegistry.ts`, `runLanes.ts` | the process believes it owns a run the DB reassigned; 7 fencing fixes |
-| `StreamLogStore` residency | `src/agent/runtime/StreamLogStore.ts` | a third projection; fixed twice |
-| approval-policy field, rows as projection | `src/agent/runtime/SessionHandle.ts` | restart or second host resets it, nothing reconciles |
-| `AppState` per-instance value map | `src/controllers/session/appStateStore.ts` | another process's writes invisible for the instance's life |
+| Second copy                                                                             | Where                                                                            | Failure it produced                                                           |
+| --------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `flow.snapshot` restates `references` and `runtime` already in rows                     | `src/shared/session/runStateFold.ts` (`stale-snapshot`, `dangling-binding` arms) | a mismatch fails the run `inconsistent`, unresumable                          |
+| `sessionFold.ts` (1 983 L) beside `runStateFold.ts` (1 085 L), sharing only `traceFold` | `src/shared/session/`                                                            | a row type folded into one and not the other is silent; 4 fixes in the window |
+| `RunRegistry.handles`, `childActivations`, `RunLanes.live`                              | `src/agent/runtime/runRegistry.ts`, `runLanes.ts`                                | the process believes it owns a run the DB reassigned; 7 fencing fixes         |
+| `StreamLogStore` residency                                                              | `src/agent/runtime/StreamLogStore.ts`                                            | a third projection; fixed twice                                               |
+| approval-policy field, rows as projection                                               | `src/agent/runtime/SessionHandle.ts`                                             | restart or second host resets it, nothing reconciles                          |
+| `AppState` per-instance value map                                                       | `src/controllers/session/appStateStore.ts`                                       | another process's writes invisible for the instance's life                    |
 
 Every race guard in production was classified. Inherent concurrency is small:
 two processes on one root (claims, busy timeout, data-version poll), the

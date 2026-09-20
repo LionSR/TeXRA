@@ -24,14 +24,14 @@ route, helper, tool-use and reflection call goes through `ModelInvoker`.
 
 ## 2. What is not
 
-| Gap | Evidence |
-| --- | --- |
-| Zero live-provider tests across 12 protocols | ~9.7k lines of synthetic-transport fixtures in `src/test-kernel/llm/`; the README disclaims MiniMax parity and bounded stream memory |
-| Hosted tools regressed | OpenAI web search and Anthropic search and fetch worked on the old handlers; the codecs now fail explicitly (`anthropicMessages.ts` "hosted-tool accounting is not supported"). The 2026-09-07 comparison required closing this before retiring the routes |
-| `turn.ts` at 2 063 lines | holds the protocol enum, messages, request, configuration, result, errors, SSE, stream pull, tool-arg parsing, the abort-safe request helper and the `Model` interface; the study's `model.ts`/`message.ts`/`errors.ts` split never happened |
-| The package boundary is nominal | all 46 import sites use the `@llm/*` tsconfig alias, bypassing `exports`; four modules are cross-imported yet unexported |
-| Unimplemented and documented as such | assistant media output, Responses service-tier billing, native provider compaction, OpenRouter continuation and estimate |
-| Stale README | still says configured routes use the old model system, eight days after deletion |
+| Gap                                          | Evidence                                                                                                                                                                                                                                                   |
+| -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Zero live-provider tests across 12 protocols | ~9.7k lines of synthetic-transport fixtures in `src/test-kernel/llm/`; the README disclaims MiniMax parity and bounded stream memory                                                                                                                       |
+| Hosted tools regressed                       | OpenAI web search and Anthropic search and fetch worked on the old handlers; the codecs now fail explicitly (`anthropicMessages.ts` "hosted-tool accounting is not supported"). The 2026-09-07 comparison required closing this before retiring the routes |
+| `turn.ts` at 2 063 lines                     | holds the protocol enum, messages, request, configuration, result, errors, SSE, stream pull, tool-arg parsing, the abort-safe request helper and the `Model` interface; the study's `model.ts`/`message.ts`/`errors.ts` split never happened               |
+| The package boundary is nominal              | all 46 import sites use the `@llm/*` tsconfig alias, bypassing `exports`; four modules are cross-imported yet unexported                                                                                                                                   |
+| Unimplemented and documented as such         | assistant media output, Responses service-tier billing, native provider compaction, OpenRouter continuation and estimate                                                                                                                                   |
+| Stale README                                 | still says configured routes use the old model system, eight days after deletion                                                                                                                                                                           |
 
 ## 3. Changes
 

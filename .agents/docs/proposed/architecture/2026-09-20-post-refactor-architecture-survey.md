@@ -60,27 +60,27 @@ ownership doc prescribed this fix; only its durable-claim quarter landed.
 
 ## 3. Proposals and their tracking issues
 
-| Proposal | Class | Deletes | Issue |
-| --- | --- | --- | --- |
-| [Single-owner liveness and one fold](./2026-09-20-single-owner-liveness-and-one-fold.md) | architecture | `runLanes.ts`, `waitingTermination.ts`, `holdLive`, the snapshot cross-checks, `StreamLogStore` as a store | #12881 |
-| [Run-program and dispatch dedup](../simplification/2026-09-20-run-program-and-dispatch-dedup.md) | simplification | seven duplicated loop pairs, a second attempt identity, two envelope formatters, one abort bridge, two empty path segments | #12882 |
-| [LLM package hardening](./2026-09-20-llm-package-hardening.md) | architecture | nothing; adds the live tier, restores hosted tools, splits `turn.ts` | #12883 |
-| [Host-layer collapse](../simplification/2026-09-20-host-layer-collapse.md) | simplification | a duplicated 42-arm switch, two Supabase state machines, two settings registries, two bootstrap bodies | #12884 |
-| [Tools and schema-surface collapse](../simplification/2026-09-20-tools-and-schema-surface-collapse.md) | simplification | the non-contract half of the barrel closure, four probe catalogs, eight row arms, two pass-through tool layers | #12885 |
-| [Effect facility adoption](../simplification/2026-09-20-effect-facility-adoption.md) | simplification | three config providers, the second logger, two backoff copies, an `EventEmitter` | #12886 |
-| [Agent-refactorability gates](../process/2026-09-20-agent-refactorability-gates.md) | process | the fake-platform installer, the host-agent mock ratchet, seven spent runtime proposals, five reverify docs | #12887 |
+| Proposal                                                                                               | Class          | Deletes                                                                                                                    | Issue  |
+| ------------------------------------------------------------------------------------------------------ | -------------- | -------------------------------------------------------------------------------------------------------------------------- | ------ |
+| [Single-owner liveness and one fold](./2026-09-20-single-owner-liveness-and-one-fold.md)               | architecture   | `runLanes.ts`, `waitingTermination.ts`, `holdLive`, the snapshot cross-checks, `StreamLogStore` as a store                 | #12881 |
+| [Run-program and dispatch dedup](../simplification/2026-09-20-run-program-and-dispatch-dedup.md)       | simplification | seven duplicated loop pairs, a second attempt identity, two envelope formatters, one abort bridge, two empty path segments | #12882 |
+| [LLM package hardening](./2026-09-20-llm-package-hardening.md)                                         | architecture   | nothing; adds the live tier, restores hosted tools, splits `turn.ts`                                                       | #12883 |
+| [Host-layer collapse](../simplification/2026-09-20-host-layer-collapse.md)                             | simplification | a duplicated 42-arm switch, two Supabase state machines, two settings registries, two bootstrap bodies                     | #12884 |
+| [Tools and schema-surface collapse](../simplification/2026-09-20-tools-and-schema-surface-collapse.md) | simplification | the non-contract half of the barrel closure, four probe catalogs, eight row arms, two pass-through tool layers             | #12885 |
+| [Effect facility adoption](../simplification/2026-09-20-effect-facility-adoption.md)                   | simplification | three config providers, the second logger, two backoff copies, an `EventEmitter`                                           | #12886 |
+| [Agent-refactorability gates](../process/2026-09-20-agent-refactorability-gates.md)                    | process        | the fake-platform installer, the host-agent mock ratchet, seven spent runtime proposals, five reverify docs                | #12887 |
 
 ## 4. Numbers the proposals rest on
 
-| Measure | Value |
-| --- | --- |
-| Production TypeScript | 283k lines, 1 402 files; 120 files over 500 lines, 27 over 1 000 |
-| Test estate | 170k lines, 529 suites; 355 in the kernel tier; 244 use a mock primitive |
-| Host packages | 117k lines, of which 29k is one webview UI library the desktop imports |
-| `@shared/schemas` barrel | 60 modules, 9.5k lines, 811 importers |
-| `src/tools` | 36k lines, 53 tools, 14 module-global mutable caches |
-| Planning docs | 269 files, 132k lines; 9 Effect-runtime proposals all marked proposed |
-| Effect facilities with zero uses | `Config`, `Metric`, `Cache`, `PubSub`, `TxRef` |
+| Measure                          | Value                                                                    |
+| -------------------------------- | ------------------------------------------------------------------------ |
+| Production TypeScript            | 283k lines, 1 402 files; 120 files over 500 lines, 27 over 1 000         |
+| Test estate                      | 170k lines, 529 suites; 355 in the kernel tier; 244 use a mock primitive |
+| Host packages                    | 117k lines, of which 29k is one webview UI library the desktop imports   |
+| `@shared/schemas` barrel         | 60 modules, 9.5k lines, 811 importers                                    |
+| `src/tools`                      | 36k lines, 53 tools, 14 module-global mutable caches                     |
+| Planning docs                    | 269 files, 132k lines; 9 Effect-runtime proposals all marked proposed    |
+| Effect facilities with zero uses | `Config`, `Metric`, `Cache`, `PubSub`, `TxRef`                           |
 
 ## 5. Not re-proposed
 

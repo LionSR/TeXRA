@@ -15,13 +15,13 @@ make an agent waste effort or mislead itself.
 
 ## 1. Test estate
 
-| Measure | Value |
-| --- | --- |
-| Test lines vs production | 170k vs 287k (0.59 : 1) |
-| Suites | 529; 174 pure (40k lines), 355 kernel (121k lines, 75 percent) |
-| Suites using a mock primitive | 244 (46 percent); 408 `vi.mock` sites in 137 files |
-| Suites whose basename matches no production file | 405 of 529 (77 percent) |
-| Support and fixtures | ~5 500 lines; `FakePlatform.ts` 510, `setupPlatform.ts` 437 |
+| Measure                                          | Value                                                          |
+| ------------------------------------------------ | -------------------------------------------------------------- |
+| Test lines vs production                         | 170k vs 287k (0.59 : 1)                                        |
+| Suites                                           | 529; 174 pure (40k lines), 355 kernel (121k lines, 75 percent) |
+| Suites using a mock primitive                    | 244 (46 percent); 408 `vi.mock` sites in 137 files             |
+| Suites whose basename matches no production file | 405 of 529 (77 percent)                                        |
+| Support and fixtures                             | ~5 500 lines; `FakePlatform.ts` 510, `setupPlatform.ts` 437    |
 
 Findings:
 

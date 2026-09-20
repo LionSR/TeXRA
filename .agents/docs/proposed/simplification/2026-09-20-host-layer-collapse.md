@@ -15,14 +15,14 @@ The three hosts total 117k lines, but 29k of the extension is the webview UI
 library the desktop imports, so there are two UI implementations, not three.
 Below them, product logic is written more than once:
 
-| Concern | Written | Lines overlapping |
-| --- | --- | --- |
-| `host.request` dispatch | the same 42-arm switch in `extensionHostRequests.ts` and `desktopHostRequests.ts`, same case order; `sharedHostRequests.ts` covers 13 arms | ~700 |
-| Supabase sign-in | three PKCE, pending-state and nonce state machines (`SupabaseAuthProvider.ts` 949, `desktopSupabaseAuth.ts` 569, CLI loopback + device code 915); only the callback transport differs | ~1 500 |
-| Settings registries | ~40 rows of `runtime.runPromise(sharedController.x())` in each of two hosts, although `stateSettings.ts` already declares `hosts`, `slots`, `honoredBy` and `onWrite` | ~1 400 |
-| Bootstrap | three bodies making the same nine post-`initPlatform` calls in three orders, each commented as mirroring another | ~250 |
-| Credential-change fan-out, provider-key entry, API-key retry | four copies, a CLI-only `providerApiKey.ts`, a CLI-only queue in `subscribeApprovals.ts` | ~350 |
-| Onboarding funnel | two identical five-step loops plus a CLI variant | ~70 |
+| Concern                                                      | Written                                                                                                                                                                               | Lines overlapping |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- |
+| `host.request` dispatch                                      | the same 42-arm switch in `extensionHostRequests.ts` and `desktopHostRequests.ts`, same case order; `sharedHostRequests.ts` covers 13 arms                                            | ~700              |
+| Supabase sign-in                                             | three PKCE, pending-state and nonce state machines (`SupabaseAuthProvider.ts` 949, `desktopSupabaseAuth.ts` 569, CLI loopback + device code 915); only the callback transport differs | ~1 500            |
+| Settings registries                                          | ~40 rows of `runtime.runPromise(sharedController.x())` in each of two hosts, although `stateSettings.ts` already declares `hosts`, `slots`, `honoredBy` and `onWrite`                 | ~1 400            |
+| Bootstrap                                                    | three bodies making the same nine post-`initPlatform` calls in three orders, each commented as mirroring another                                                                      | ~250              |
+| Credential-change fan-out, provider-key entry, API-key retry | four copies, a CLI-only `providerApiKey.ts`, a CLI-only queue in `subscribeApprovals.ts`                                                                                              | ~350              |
+| Onboarding funnel                                            | two identical five-step loops plus a CLI variant                                                                                                                                      | ~70               |
 
 The load-bearing fact: `src/hosts/uiHosts.ts` has no CLI implementation at
 all, which is why 10 of 13 controllers in `src/controllers/` serve only two
