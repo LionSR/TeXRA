@@ -129,9 +129,7 @@ describe('subscription usage rendering', () => {
     const meters = kimiRow!.shadowRoot?.querySelectorAll('wa-progress-bar');
     expect(meters).toHaveLength(2);
     expect(meters?.[0]?.getAttribute('value')).toBe('25');
-    expect(meters?.[0]?.getAttribute('label')).toBe(
-      'Kimi Code 5-hour usage',
-    );
+    expect(meters?.[0]?.getAttribute('label')).toBe('Kimi Code 5-hour usage');
     expect(text).toContain('resets in 1d 21h');
     expect(tab.shadowRoot?.textContent).not.toContain('Grok usage unavailable');
   });
