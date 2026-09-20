@@ -38,8 +38,8 @@ export const ZOTERO_PORT_KEY = 'texra.bib.zoteroPort';
 /**
  * The `execute` every Zotero tool wants: take the call, read the configured
  * port off its roots, and hand both to the tool's own program. The port is
- * the only thing these tools need from the call, and reading it was the same
- * three lines in each of them, so the read lives here beside the key it
+ * the only thing these tools need from the call, and every one of them
+ * reached for it the same way, so the read lives here beside the key it
  * reads rather than once per tool.
  */
 export const withZoteroPort =
