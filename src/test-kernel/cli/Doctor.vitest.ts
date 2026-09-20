@@ -1,5 +1,5 @@
 // Node.js imports
-import { readFileSync } from 'node:fs';
+import { constants as fsConstants, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -183,6 +183,22 @@ describe('CLI doctor', () => {
     expect(checkById(report, 'node')?.status).toBe('fail');
     expect(checkById(report, 'latex.latexmk')?.status).toBe('fail');
     expect(doctorExitCode(report)).toBe(CliExitCode.ModelOrNetworkError);
+  });
+
+  it('asks only for read access on the packaged resources directory', async () => {
+    // `sudo npm install -g` leaves the package root-owned and unwritable,
+    // which is the norm on Linux and WSL; the CLI only ever reads from it.
+    const modes = new Map<string, number | undefined>();
+    const report = await buildReport({
+      pathAccess: (filePath, mode) => {
+        modes.set(filePath, mode);
+        return Effect.void;
+      },
+    });
+
+    expect(checkById(report, 'resources')?.status).toBe('pass');
+    expect((modes.get('/resources') ?? 0) & fsConstants.W_OK).toBe(0);
+    expect((modes.get('/workspace') ?? 0) & fsConstants.W_OK).not.toBe(0);
   });
 
   it('matches the published Node engine range', async () => {
