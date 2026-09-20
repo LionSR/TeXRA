@@ -64,9 +64,14 @@ Five ports have exactly one implementation (`TerminalRunner`,
    `...controller.handlers` spread; the two registries become two short
    tables.
 5. **One bootstrap `Effect.fn`** owning the order of the nine post-init
-   calls; one `runPromise` per root. Also fixes the live defect that
-   `UsageLogService.dispose()` runs in a different shutdown phase per host.
-   `initPlatform` itself stays per host (ESLint pins composition roots).
+   calls; one `runPromise` per root. Also fixes the live defect that the
+   usage log is disposed in a different shutdown phase per host: the shared
+   bootstrap disposes the process runtime in one order, and the usage-log
+   drain runs as the `UsageLog` layer's finalizer there (candidate P2 of the
+   [ownership ledger](./2026-09-20-service-scope-ownership-ledger.md)),
+   so no host calls `UsageLogService.dispose()` by hand and no interim
+   unified call is built only to be deleted. `initPlatform` itself stays per
+   host (ESLint pins composition roots).
 6. **Replace the desktop's try-each handler chain with one route table**
    keyed off `desktopCommandSurface.ts`; delete the `WEBVIEW_READY` "return
    false so siblings see it" case.
@@ -85,6 +90,6 @@ decoupling PRD.
 - `extensionHostRequests.ts` and `desktopHostRequests.ts` contain no arm
   whose body also exists in `sharedHostRequests.ts`.
 - One PKCE bind, one pending-state store, one nonce check in the tree.
-- One shutdown order; `UsageLogService.dispose()` runs in the same phase on
-  every host.
+- One shutdown order; the usage-log drain runs in the runtime's finalizer on
+  every host and no host calls `UsageLogService.dispose()`.
 - Net host lines down by at least 2 500.

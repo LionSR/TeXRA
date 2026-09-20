@@ -54,7 +54,14 @@ held as a value in the owning fiber's scope rather than looked up in maps.
 2. **The DB claim is the only liveness authority, held as a scoped value.**
    Replace `RunRegistry.handles`, `childActivations`, `RunLanes.live` and
    `isActiveOrResuming` with one `FiberMap<RunId>` whose entry is the acquired
-   claim. Admission, stop and deletion answer from one place. Deletes
+   claim beside the run's process-local handle. The claim alone decides
+   liveness; the handle keeps the capabilities the two maps carry today and
+   the durable claim cannot: the live tool-use flow context that
+   `getToolUseFlowContext` reads to route follow-ups and manual compaction,
+   the child activation's parent and detach state held through final
+   delivery, and the interrupt that stop and shutdown use on background
+   processes. One entry per run, in one map, so metadata cannot outlive or
+   predate liveness. Admission, stop and deletion answer from one place. Deletes
    `runLanes.ts` (199 L), `waitingTermination.ts`, `hasRetainedOwner`, the
    `RunBusy` plumbing in `SessionRequests.ts` and `WorkflowScriptTool.ts`. D2
    and D4; the `Runs` tag of the runtime design section 2.1. A `FiberMap`
@@ -84,8 +91,20 @@ held as a value in the owning fiber's scope rather than looked up in maps.
    dedup go. Already named in the runtime design ("the view replaces
    `StreamLogStore`").
 6. **App state reads through the committed level.** `SqliteStateStore`
-   reads through the `level` stream instead of an open-time snapshot, so
-   another process's writes become visible. The per-key `writeLanes` stay:
+   refreshes its value map from the `level` stream instead of holding an
+   open-time snapshot, so another process's writes become visible. This is
+   gated on the store having a live owner, which it does not today:
+   `openAppStateStore` runs before the process runtime on the CLI and
+   desktop and keeps operation-scoped database access (the companion
+   [global database note](../simplification/2026-09-20-global-database-process-service.md),
+   blocker 1), so the database layer whose poll advances `Database.level`
+   is closed after each operation, and the synchronous `StateStore` it
+   returns has no scope or close in which a subscriber could live. The
+   prerequisite is the `close` that note names: a host-owned lifetime,
+   ended by the same shutdown hook that disposes the runtime, inside which
+   the store holds one database handle and one `level` subscriber. Until
+   that lands this step is not implementable and the section 1 row stands.
+   The per-key `writeLanes` stay:
    overlapping flip-and-restore writes to one key must commit in invocation
    order, and a long-lived handle does not give that FIFO on its own. The
    approval policy is not moved onto rows: `approval.policy` rows are

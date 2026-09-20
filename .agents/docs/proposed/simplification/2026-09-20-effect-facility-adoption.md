@@ -26,12 +26,25 @@ primitives). Where those families are absent, hand-rolled equivalents live.
 ## 2. Changes
 
 1. Adopt `Config` for the read side of the three providers and the debug
-   port. Settings reads become typed, defaulted and testable without a fake
-   platform, which also moves suites from the kernel tier to the pure tier.
-   Effect's `Config` loads; it does not write. TeXRA's `ConfigProvider`
-   contract includes targeted persistent `update()` and `inspect()` across
-   the workspace and global stores (`src/platform/interfaces.ts`), so the
-   writable store layer and its precedence semantics stay as they are.
+   port, for readers that already run inside an Effect program. Settings
+   reads become typed, defaulted and testable without a fake platform, which
+   also moves suites from the kernel tier to the pure tier. Effect's
+   `Config` loads; it does not write. TeXRA's `ConfigProvider` contract
+   includes targeted persistent `update()` and `inspect()` across the
+   workspace and global stores (`src/platform/interfaces.ts`), so the
+   writable store layer and its precedence semantics stay as they are. Its
+   `get` is synchronous, and plain-TypeScript readers depend on that:
+   `createTexraResponseTextProcessing().postProcessResponse` (installed from
+   the three `initPlatform` roots), `isGoalEnabled`
+   (`src/tools/goal/goalFeatureFlag.ts`, read from `roots.config` by
+   `PlanTool`, `toolInjection` and `maybeBuildGoalContinuation`),
+   `selectAutoOpenFinalOutput` (the extension's `finalOutputOpener.ts` and
+   `desktopAgentLaunch.ts`) and `isTelemetryEnabledBySetting` in
+   `UsageLogService.ts`. Several re-read on every call so that later setting
+   changes are observed. A `Config` value is an Effect, so those sites keep
+   the synchronous `get` facade until each moves behind an execution
+   boundary, the same rule as the `Logger` step below; the enumeration is the
+   first step, and no `Config` value is captured at layer build.
 2. Finish `Logger`: enumerate the 168 `createLog` sites and convert the
    ones inside Effect programs. `Effect.log*` emits only when its Effect
    runs, so the callers that are deliberately synchronous (the extension's
@@ -70,8 +83,11 @@ them machine-refused.
 
 - `grep -r "Config\." src packages/*/src` is non-zero; the duplicated read
   logic in the three providers is gone and the writable `ConfigProvider`
-  objects, with `update()` and `inspect()`, stay.
+  objects, with `update()`, `inspect()` and the synchronous `get` the
+  enumerated plain-TypeScript readers need, stay.
 - `src/logger/logUtils.ts` does not exist.
-- One `jitter` implementation in production.
+- One implementation per documented backoff contract: one shared `[1, 2)`
+  `Schedule` and the ±20 % capped helper in `src/utils/core`; no third
+  spelling.
 - `src/eventBus/AppSignals.ts` imports no `node:events`.
 - `config/ratchets/unknown-error-baseline.json` exists and shrinks.

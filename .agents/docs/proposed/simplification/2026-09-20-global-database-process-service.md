@@ -51,7 +51,9 @@ root, provided beside `lean` rather than among the host-value `services`.
 - `inputHistory`'s `access` wrapper and its own `selfIdentity` read go; it
   yields the tag.
 - `desktopProjectRecords` yields the tag instead of building a layer.
-- `withScopedDatabase` is deleted.
+- `withScopedDatabase` loses its export and its process-runtime call sites;
+  its one file-local use for the pre-runtime app-state store stays (section
+  3, blocker 1).
 
 ## 3. Two blockers, both real
 
@@ -102,7 +104,12 @@ handle. Tests that build a database per operation through
 - `Database.ts` exports no `withScopedDatabase`; its one surviving use is
   file-local to the pre-runtime app-state store.
 - `installProcessRuntime` provides one global-root database; `InquiryRecords`
-  and `UpdateCheckRecords` depend on it and take no path or owner parameter.
+  depends on it and takes no path or owner parameter.
+- `UpdateCheckRecords` follows the recorded blocker-2 decision, taken before
+  implementation: under the single-root option it depends on the same
+  handle; under two tags or a keyed family it depends on the Electron-profile
+  entry. In either case it takes no path or owner parameter and the
+  update-check row does not move roots without that decision.
 - `desktopProjectRecords.ts` contains no `Layer.build`.
 - Opening a session and writing one app-state key forks at most one
   `data_version` poll per long-lived handle (assert by counting forks in the

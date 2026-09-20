@@ -64,10 +64,18 @@ folds.
    webview consumes the catalog on purpose (`settingEnumChoices`,
    `settingsViewSettingByKey` from `stateSettings.ts`) and keeps it; the
    gain is for the progress, memory and profile views, which do not.
-2. One dependency-probe catalog in `externalToolDefs` plus `toolAvailability`;
-   the other four spellings, their sync comments and the completeness test go
-   (400 to 600 lines). The per-host Lean capability read and the CLI doctor's
-   rendering stay.
+2. One dependency-probe catalog in `externalToolDefs` plus `toolAvailability`.
+   The four other spellings are not interchangeable projections of it, so
+   the catalog grows their semantics first: `externalToolDefs` deliberately
+   carries no system LaTeX dependency except `texcount`, so it gains the
+   LaTeX and image entries; each entry records per consumer whether it is
+   required or an alternative, so the doctor keeps its compiler and
+   bibliography alternates (`xelatex`, `lualatex`, `bibtex`, `biber`) and its
+   `latexmk` required row that sets the CLI exit code (the stated residual in
+   `latexToolchain.ts`), and the settings probe keeps Ghostscript plus either
+   image tool as one capability. Only then do the four spellings, their sync
+   comments and the completeness test go (400 to 600 lines). The per-host
+   Lean capability read and the CLI doctor's rendering stay.
 3. One `run.fact` row and one `state.value.set` row; delete eight schema
    arms, four name lists, `runFactEvents.ts`, the `Database.ts` branch chain
    and the five readers (250 to 400 lines). Bump `SESSION_EVENT_FORMAT`; there
@@ -107,7 +115,9 @@ decisions for the owner; neither is fixed by a refactor.
 ## 4. Acceptance
 
 - No webview other than the settings view includes `stateSettings.ts`.
-- One `CORE_LATEX_TOOLS` spelling in the tree; no "kept in sync" comment.
+- One `CORE_LATEX_TOOLS` spelling in the tree; no "kept in sync" comment;
+  `texra doctor`'s exit code and the settings status fields are unchanged on
+  every machine configuration.
 - `sessionEvent.ts` has no `updateTodos` arm; `runRecords.ts` has one
   latest-row reader.
 - The tool-call path has five layers; `core/define.ts` is gone.

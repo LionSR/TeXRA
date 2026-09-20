@@ -116,7 +116,12 @@ note.
   install time resolves them from one source; the package keeps its
   dependency names, since pnpm links a workspace package before any build
   script runs. It is the largest ungated two-sources-of-truth in the repo.
-- Delete `p-defer` (zero production importers) and the eight single-site
+- Delete `p-defer`: zero production importers, but six kernel suites import
+  it (`AgentDirectoryWatchers`, `BashTool`, `hostDraftRequests`,
+  `ToolEditApprovalController`, `chatSessionController`,
+  `CodexSessionCoordinator`), so the same PR converts those six to Effect
+  `Deferred` before the manifest entry goes, or the suites fail at module
+  resolution. Also delete the eight single-site
   packages that a few lines replace (`data-uri-to-buffer`, `deepmerge`,
   `mutative`, `fastest-levenshtein`, `perfect-debounce`, `pluralize`,
   `pretty-bytes`, `serialize-error`). `content-disposition` stays:
@@ -140,6 +145,8 @@ note.
 - `pure-tier-kernel-suites.json` is empty and deleted.
 - `host-agent-mock-baseline.json` is deleted.
 - `config/ratchets/refuted-candidates.json` exists and a suite enforces it.
-- `.agents/docs/proposed/architecture/` holds no doc whose landed section
-  names a merged PR.
+- No doc under `.agents/docs/proposed/` (every class, not only
+  `architecture/`) carries the completion marker of section 3, change 3; a
+  landed section that names a merged PR while open steps remain is not, by
+  itself, a failure.
 - `config/ratchets/file-size-baseline.json` exists and shrinks.

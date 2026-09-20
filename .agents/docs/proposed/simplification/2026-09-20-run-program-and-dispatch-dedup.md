@@ -41,8 +41,18 @@ duplicated is scaffolding, not architecture.
    become fact selection only.
 4. `ChildRunInterruptible` is the only `AbortController`; strategies take
    Effect interruption. Deletes `bindAbortSignals` and shrinks the ratchet.
-5. Reflection output appends an `output.produced` row per round;
-   `flow.snapshot`'s family state drops to scalars. Move the pipeline to
+5. Reflection output appends an `output.produced` row each round that
+   carries the complete round map, not only the round just finished;
+   `flow.snapshot`'s family state drops to scalars. The complete map is
+   required, not a style choice: the cold listing (`READ_LISTING` and the
+   run-record query in `Database.ts`) selects `MAX(seq)` per
+   `(aggregate_id, type)`, so a per-round payload would keep only the
+   newest round when a session is reopened, which is why today's
+   `addOutputFiles` row already carries its whole map. The alternative is
+   the discriminator-aware grouping the
+   [schema-collapse note](./2026-09-20-tools-and-schema-surface-collapse.md)
+   specifies for `run.fact`, applied to a round key; take it only if the map
+   grows past what one row should carry. Move the pipeline to
    `src/agent/output/` and delete the `implementations/flows/` segments.
 6. Agent-CLI children get their own park row; stop borrowing
    `family:'toolUse'`. A dedicated row is required, not optional: the
