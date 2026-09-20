@@ -22,8 +22,12 @@ import {
   type LeanCommandSpec,
   type LeanFileCommand,
   type LeanProjectCommand,
+  type LspResult,
 } from './leanTypes';
-import { LeanLanguageServices } from './leanLanguageServices';
+import {
+  LeanLanguageServices,
+  type LeanLanguageServicesShape,
+} from './leanLanguageServices';
 
 /** `- "name": Description (hint)` — the prose line for one command. */
 function commandLine([name, spec]: [string, LeanCommandSpec]): string {
@@ -329,6 +333,32 @@ In VS Code, this uses the Lean 4 extension. CLI and desktop provide the correspo
     const col0 = column - 1;
     const location = `${file}:${line}:${column}`;
 
+    // The three inspections differ only in which request they make and how
+    // they render an answer that carries data. Resolving the model's file
+    // against the run and ruling on an answer that carries none is the same
+    // for all three, so it is stated here once.
+    const inspect = <T>(
+      request: (
+        services: LeanLanguageServicesShape,
+        filePath: string,
+        call: ToolCallShape,
+      ) => Effect.Effect<LspResult<T>>,
+      empty: { readonly message: string; readonly summary: string },
+      render: (data: T) => ToolResult,
+    ): Effect.Effect<ToolResult, unknown, ToolCall | LeanLanguageServices> =>
+      Effect.gen(function* () {
+        const call = yield* ToolCall;
+        const services = yield* LeanLanguageServices;
+        const { data, error } = yield* request(
+          services,
+          leanFilePath(file, call),
+          call,
+        );
+        if (!data)
+          return noPositionData(empty.message, location, empty.summary, error);
+        return render(data);
+      });
+
     // Each dispatch composes one program, run once below: a failed
     // language-server request settles as this run's Exit and becomes the
     // ToolError carrying the summary that names which inspection failed.
@@ -339,13 +369,44 @@ In VS Code, this uses the Lean 4 extension. CLI and desktop provide the correspo
     >;
     switch (type) {
       case 'goal':
-        program = this.executeGoal(file, line0, col0, location);
+        program = inspect(
+          (services, filePath, call) =>
+            services.getGoalState(filePath, line0, col0, call.run?.runId),
+          { message: 'Could not get goal state', summary: 'No goal state' },
+          (goal) =>
+            goal.goals.length === 0
+              ? executed(
+                  'No goals at this position. The proof may be complete here.',
+                  'No goals',
+                )
+              : executed(
+                  goal.rendered,
+                  formatResultCount(goal.goals.length, 'goal'),
+                ),
+        );
         break;
       case 'term_goal':
-        program = this.executeTermGoal(file, line0, col0, location);
+        program = inspect(
+          (services, filePath, call) =>
+            services.getTermGoal(filePath, line0, col0, call.run?.runId),
+          { message: 'No expected type', summary: 'No term goal' },
+          (termGoal) => executed(termGoal.goal, 'Term goal'),
+        );
         break;
       case 'hover':
-        program = this.executeHover(file, line0, col0, location);
+        program = inspect(
+          (services, filePath, call) =>
+            services.getHoverInfo(filePath, line0, col0, call.run?.runId),
+          { message: 'No information', summary: 'No hover info' },
+          (hover) => {
+            const text = extractHoverText(hover.contents);
+            return text
+              ? executed(text, 'Hover info')
+              : errorResult(`Empty hover response at ${location}`, {
+                  summary: 'No hover info',
+                });
+          },
+        );
         break;
     }
 
@@ -355,110 +416,6 @@ In VS Code, this uses the Lean 4 extension. CLI and desktop provide the correspo
         `Failed to get ${type}`,
       ),
     );
-  }
-
-  private executeGoal(
-    file: string,
-    line: number,
-    column: number,
-    location: string,
-  ): Effect.Effect<ToolResult, unknown, ToolCall | LeanLanguageServices> {
-    return Effect.gen(function* () {
-      const call = yield* ToolCall;
-      const services = yield* LeanLanguageServices;
-      const { data, error } = yield* services.getGoalState(
-        leanFilePath(file, call),
-        line,
-        column,
-        call.run?.runId,
-      );
-
-      if (!data) {
-        return noPositionData(
-          'Could not get goal state',
-          location,
-          'No goal state',
-          error,
-        );
-      }
-
-      if (data.goals.length === 0) {
-        return executed(
-          'No goals at this position. The proof may be complete here.',
-          'No goals',
-        );
-      }
-
-      return executed(
-        data.rendered,
-        formatResultCount(data.goals.length, 'goal'),
-      );
-    });
-  }
-
-  private executeTermGoal(
-    file: string,
-    line: number,
-    column: number,
-    location: string,
-  ): Effect.Effect<ToolResult, unknown, ToolCall | LeanLanguageServices> {
-    return Effect.gen(function* () {
-      const call = yield* ToolCall;
-      const services = yield* LeanLanguageServices;
-      const { data, error } = yield* services.getTermGoal(
-        leanFilePath(file, call),
-        line,
-        column,
-        call.run?.runId,
-      );
-
-      if (!data) {
-        return noPositionData(
-          'No expected type',
-          location,
-          'No term goal',
-          error,
-        );
-      }
-
-      return executed(data.goal, 'Term goal');
-    });
-  }
-
-  private executeHover(
-    file: string,
-    line: number,
-    column: number,
-    location: string,
-  ): Effect.Effect<ToolResult, unknown, ToolCall | LeanLanguageServices> {
-    return Effect.gen(function* () {
-      const call = yield* ToolCall;
-      const services = yield* LeanLanguageServices;
-      const { data, error } = yield* services.getHoverInfo(
-        leanFilePath(file, call),
-        line,
-        column,
-        call.run?.runId,
-      );
-
-      if (!data) {
-        return noPositionData(
-          'No information',
-          location,
-          'No hover info',
-          error,
-        );
-      }
-
-      const text = extractHoverText(data.contents);
-      if (!text) {
-        return errorResult(`Empty hover response at ${location}`, {
-          summary: 'No hover info',
-        });
-      }
-
-      return executed(text, 'Hover info');
-    });
   }
 }
 
