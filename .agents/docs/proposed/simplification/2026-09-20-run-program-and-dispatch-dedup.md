@@ -50,7 +50,10 @@ duplicated is scaffolding, not architecture.
    durable phase off RUNNING before the loop blocks, and
    `getToolUseFollowUpTarget` admits the next turn on that phase, so
    removing the borrowed row without a replacement leaves an idle child
-   looking busy and its follow-ups refused.
+   looking busy and its follow-ups refused. Steps 5 and 6 add durable row
+   types, so both bump `SESSION_EVENT_FORMAT`; without the bump an existing
+   database stays stamped as the current vocabulary instead of being cleared
+   at open, and the format-fingerprint test rejects the change.
 
 ## 3. Genuinely different, stays separate
 

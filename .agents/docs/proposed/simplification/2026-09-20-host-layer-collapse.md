@@ -54,9 +54,15 @@ Five ports have exactly one implementation (`TerminalRunner`,
    `sharedHostRequests.ts` to ~35 arms; each host keeps only the arms it
    truly performs (file pickers, tab pop-out, Copilot access, inline
    criticism).
-4. **Derive the settings registries from the catalog.** Adopt the desktop's
-   `...controller.handlers` spread, generate `unsupported(...)` from a `hosts`
-   field on the command row; the two registries become two ~40-line tables.
+4. **Derive the settings registries from the catalog.** `StateSettingEntry`
+   already declares `slots` and `honoredBy` (the old `hosts` field was
+   replaced by those and `surfaces`), which is enough to generate the
+   setting-row handlers and their per-host `unsupported(...)` arms. The
+   non-setting commands (Copilot model access, extension installation) have
+   no row at all, so they need an explicit command-capability catalog first,
+   or keep their hand-written host bindings. Adopt the desktop's
+   `...controller.handlers` spread; the two registries become two short
+   tables.
 5. **One bootstrap `Effect.fn`** owning the order of the nine post-init
    calls; one `runPromise` per root. Also fixes the live defect that
    `UsageLogService.dispose()` runs in a different shutdown phase per host.

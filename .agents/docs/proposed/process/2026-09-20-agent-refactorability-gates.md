@@ -45,10 +45,14 @@ Changes:
    for the suites that only needed them for that reason. Keep
    `tempDirPlatform.ts` and `fsTestUtils.ts`. Suites move to the tier that
    runs eight times faster.
-2. Inject agent entry points into the five largest CLI suites
-   (`chatSessionController`, `ExecuteCli`, `WorkflowRunCommand`,
-   `ResumeCommand`, `History`); delete the host-agent mock ratchet, its suite
-   and `support/agentCatalogMock.ts`. Keep the import-specifier ratchet.
+2. Inject agent entry points into every suite the host-agent mock baseline
+   names: the five largest (`chatSessionController`, `ExecuteCli`,
+   `WorkflowRunCommand`, `ResumeCommand`, `History`) and the five that mock
+   `@agent/index` (`CliSupabaseAuth`, `ConfigCommand`, `InitCommand`,
+   `RunChatConfig`, `RunProgressRenderer`), plus the shared
+   `support/agentCatalogMock.ts` they reach. The ratchet and its suite are
+   deleted only when the baseline is empty; until then it shrinks. Keep the
+   import-specifier ratchet.
 3. Make every suite name its subject: a module suite mirrors its module's
    path; a scenario suite keeps its scenario name and declares the modules
    it covers in its `describe` header. Rename only module suites that
@@ -112,10 +116,13 @@ note.
   install time resolves them from one source; the package keeps its
   dependency names, since pnpm links a workspace package before any build
   script runs. It is the largest ungated two-sources-of-truth in the repo.
-- Delete `p-defer` (zero production importers) and the nine single-site
+- Delete `p-defer` (zero production importers) and the eight single-site
   packages that a few lines replace (`data-uri-to-buffer`, `deepmerge`,
   `mutative`, `fastest-levenshtein`, `perfect-debounce`, `pluralize`,
-  `content-disposition`, `pretty-bytes`, `serialize-error`).
+  `pretty-bytes`, `serialize-error`). `content-disposition` stays:
+  `src/latex/arxivProcessor.ts:375` relies on it for RFC 6266 and RFC 5987
+  decoding of `filename*=` and quoted parameters, and a hand-rolled parser
+  is the prior behavior that dropped Unicode filenames.
   `diff-match-patch` stays: it has three importers, and
   `src/utils/text/diff.ts` relies on its fuzzy `patch_apply` to transplant
   an approved edit onto a file the user changed meanwhile; without it the

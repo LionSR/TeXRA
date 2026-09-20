@@ -72,7 +72,10 @@ held as a value in the owning fiber's scope rather than looked up in maps.
    `request.opened`, and the retry permit and declined routes as rows the
    retry owner writes); only then do the `stale-snapshot` and
    `dangling-binding` arms and about 90 lines of cross-checking in
-   `runStateFold.ts` go.
+   `runStateFold.ts` go. The new row types bump `SESSION_EVENT_FORMAT`
+   (`src/shared/schemas/sessionEvent.ts`), so an older store is cleared at
+   open rather than read as the current vocabulary, and the pinned
+   format-fingerprint check is updated with it.
 4. **One fold.** Extract the row-application both folds share into one
    reducer, and make `sessionFold` a projection of `RunState` plus the
    session-only rows. A new row type then has one place to land.
