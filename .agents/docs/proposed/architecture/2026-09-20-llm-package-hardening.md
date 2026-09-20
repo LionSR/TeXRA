@@ -52,9 +52,12 @@ route, helper, tool-use and reflection call goes through `ModelInvoker`.
    `turn.ts` (request, configuration, result), `errors.ts`, `transport.ts`
    (SSE, pull, the request helper). Mechanical; #12842 and #12874 already
    started it.
-4. **Make the boundary real.** Route the `@llm/*` alias to the package
-   `exports` map, export the four cross-imported modules or inline them, and
-   add the missing root export the study named.
+4. **Make the boundary real.** Delete the `@llm/*` alias from
+   `tsconfig.json`: `scripts/aliasUtils.mjs` expands every tsconfig alias to
+   an absolute filesystem path, so an `exports` map is never consulted while
+   the alias exists. Callers import `@texra-ai/llm/<subpath>` through the
+   workspace package instead, export the four cross-imported modules or
+   inline them, and add the missing root export the study named.
 5. Rewrite the README against the tree; move the two 09-06 docs to
    `implemented/`.
 
@@ -63,4 +66,5 @@ route, helper, tool-use and reflection call goes through `ModelInvoker`.
 - `packages/llm` has a `live` Vitest project with one suite per protocol.
 - No `unsupported hosted` failure path remains, or a ruling names it.
 - No file in `packages/llm/src` exceeds 1 500 lines.
-- `@llm/*` resolves through `packages/llm/package.json#exports`.
+- No `@llm/*` alias in `tsconfig.json`; every consumer imports
+  `@texra-ai/llm/<subpath>` and the resolver enforces the `exports` map.

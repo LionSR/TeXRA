@@ -58,10 +58,18 @@ root, provided beside `lean` rather than among the host-value `services`.
 1. **`openAppStateStore` runs before the runtime** on the CLI and the desktop
    (`packages/cli/src/runtime/cliProcessRuntime.ts:113-131`,
    `packages/desktop/src/main/platform/index.ts:148`), so it cannot take the
-   tag from a runtime that does not exist yet. It keeps a scoped build, but
-   then it is the only one and should hold one handle for the store's life
-   rather than one per key write. That store is also the value `AppState.layer`
-   wraps (#12553), so this does not reopen the settled construction order.
+   tag from a runtime that does not exist yet, and the `StateStore` it
+   returns (`src/platform/interfaces.ts:107-110`) exposes only `get` and
+   `update`, with no close and no finalizer. A handle held for the store's
+   life would therefore have no owner: a scoped build closes when the
+   bootstrap Effect returns, and an unmanaged scope leaks the connection and
+   its poll through shutdown. So that store keeps operation-scoped access as
+   it is today; only the four callers that run on the process runtime move
+   to the process-scoped handle. If the store later gains a `close` owned by
+   the host shutdown sequence (the same hook that disposes the runtime), its
+   two call sites can move too. That store is also the value
+   `AppState.layer` wraps (#12553), so this does not reopen the settled
+   construction order.
 2. **The desktop has two global roots.** `globalStorage` is the shared
    `~/.texra` and `updateCheckStorage` is the Electron profile
    (`platform/index.ts:203-205`, rationale at `:154-157`). One tag does not
@@ -78,20 +86,21 @@ handle. Tests that build a database per operation through
 
 ## 5. Accounting
 
-| Deleted                                                     | Count                                          |
-| ----------------------------------------------------------- | ---------------------------------------------- |
-| `withScopedDatabase` and its doc                            | 1 export                                       |
-| `withDatabase` (update-check), `inGlobalDatabase` (inquiry) | 2 wrappers                                     |
-| layer parameters on the two record modules                  | 2 params                                       |
-| `inputHistory` `access` wrapper and `selfIdentity` read     | ~10 lines                                      |
-| desktop manual `Layer.build`                                | ~11 lines                                      |
-| per-operation layer builds and poll fibers                  | 6 sites                                        |
-| Net LoC                                                     | about −90                                      |
-| Added                                                       | 1 tag, 1 layer line in `installProcessRuntime` |
+| Deleted                                                     | Count                                             |
+| ----------------------------------------------------------- | ------------------------------------------------- |
+| `withScopedDatabase` as a public helper                     | 1 export, kept file-local for the app-state store |
+| `withDatabase` (update-check), `inGlobalDatabase` (inquiry) | 2 wrappers                                        |
+| layer parameters on the two record modules                  | 2 params                                          |
+| `inputHistory` `access` wrapper and `selfIdentity` read     | ~10 lines                                         |
+| desktop manual `Layer.build`                                | ~11 lines                                         |
+| per-operation layer builds and poll fibers                  | 4 of 6 sites                                      |
+| Net LoC                                                     | about −70                                         |
+| Added                                                       | 1 tag, 1 layer line in `installProcessRuntime`    |
 
 ## 6. Acceptance
 
-- `Database.ts` has no `withScopedDatabase`.
+- `Database.ts` exports no `withScopedDatabase`; its one surviving use is
+  file-local to the pre-runtime app-state store.
 - `installProcessRuntime` provides one global-root database; `InquiryRecords`
   and `UpdateCheckRecords` depend on it and take no path or owner parameter.
 - `desktopProjectRecords.ts` contains no `Layer.build`.

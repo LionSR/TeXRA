@@ -44,8 +44,13 @@ duplicated is scaffolding, not architecture.
 5. Reflection output appends an `output.produced` row per round;
    `flow.snapshot`'s family state drops to scalars. Move the pipeline to
    `src/agent/output/` and delete the `implementations/flows/` segments.
-6. Agent-CLI children get their own park row or none; stop borrowing
-   `family:'toolUse'`.
+6. Agent-CLI children get their own park row; stop borrowing
+   `family:'toolUse'`. A dedicated row is required, not optional: the
+   `waiting` step (`childRunLoop.ts` `commitFlowStep`) is what moves the
+   durable phase off RUNNING before the loop blocks, and
+   `getToolUseFollowUpTarget` admits the next turn on that phase, so
+   removing the borrowed row without a replacement leaves an idle child
+   looking busy and its follow-ups refused.
 
 ## 3. Genuinely different, stays separate
 

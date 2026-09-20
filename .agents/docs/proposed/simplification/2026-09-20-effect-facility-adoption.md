@@ -32,8 +32,13 @@ primitives). Where those families are absent, hand-rolled equivalents live.
    contract includes targeted persistent `update()` and `inspect()` across
    the workspace and global stores (`src/platform/interfaces.ts`), so the
    writable store layer and its precedence semantics stay as they are.
-2. Finish `Logger`: enumerate the 168 `createLog` sites, convert, delete
-   `logUtils.ts`. This is the first step of the still-unstarted
+2. Finish `Logger`: enumerate the 168 `createLog` sites and convert the
+   ones inside Effect programs. `Effect.log*` emits only when its Effect
+   runs, so the callers that are deliberately synchronous (the extension's
+   process-event handlers, plain registry methods) keep a synchronous facade
+   until each moves behind a real execution boundary; `logUtils.ts` deletes
+   itself with its last such caller, as its own header says, not before.
+   This is the first step of the still-unstarted
    [observability plane](../architecture/2026-09-09-observability-plane.md).
 3. One `[1, 2)` backoff `Schedule` in a host-neutral module, replacing the
    two spellings in `tools/timeouts.ts` and `latex/arxivProcessor.ts`. The

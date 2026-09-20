@@ -112,11 +112,14 @@ note.
   install time resolves them from one source; the package keeps its
   dependency names, since pnpm links a workspace package before any build
   script runs. It is the largest ungated two-sources-of-truth in the repo.
-- Delete `p-defer` (zero production importers) and the ten single-site
+- Delete `p-defer` (zero production importers) and the nine single-site
   packages that a few lines replace (`data-uri-to-buffer`, `deepmerge`,
-  `mutative`, `diff-match-patch`, `fastest-levenshtein`,
-  `perfect-debounce`, `pluralize`, `content-disposition`, `pretty-bytes`,
-  `serialize-error`). `ipaddr.js` stays: its one caller is the SSRF
+  `mutative`, `fastest-levenshtein`, `perfect-debounce`, `pluralize`,
+  `content-disposition`, `pretty-bytes`, `serialize-error`).
+  `diff-match-patch` stays: it has three importers, and
+  `src/utils/text/diff.ts` relies on its fuzzy `patch_apply` to transplant
+  an approved edit onto a file the user changed meanwhile; without it the
+  fallback writes the model's content over those edits. `ipaddr.js` stays: its one caller is the SSRF
   boundary in `WebFetchTool.ts`, which default-denies every non-unicast
   range and normalizes IPv4-mapped IPv6, and Node's `net.isIP` gives no
   range classification.

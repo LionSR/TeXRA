@@ -75,6 +75,11 @@ folds.
    that ties each key family to its existing Zod value schema and aggregate
    kind, so a desktop-projects value cannot be committed under the inquiry
    aggregate and corruption is still caught at the database parse boundary.
+   The cold-start listing (`READ_LISTING` and the run-record query in
+   `Database.ts`) selects `MAX(seq)` per `(aggregate_id, type)`, so one
+   stored `run.fact` type would keep only the most recent fact per run;
+   the query groups by the discriminator as well, or each row carries the
+   complete combined fact state, before the distinct types go.
 4. `ExecutionsTool` renders text from the fold; keep `wait` and `kill`
    (500 to 700 lines).
 5. Derive the replacement-category universe from the registry; rename the
