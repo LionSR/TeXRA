@@ -31,7 +31,7 @@ import {
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
 import type { AgentRunServices } from '@agent/runtime/toolInjection';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel, withLogData } from '@logger/effectLog';
 import {
   RUN_OUTCOME,
   AgentCategory,
@@ -54,7 +54,7 @@ import {
   type ChildRunLaunchOptions,
 } from './nativeSubagentStrategy';
 
-const log = createLog('inBandSubagentRun');
+const CHANNEL = 'inBandSubagentRun';
 
 /**
  * A required-result child left no typed result to read back: the
@@ -249,9 +249,10 @@ const executeInBand = Effect.fn('executeInBand')(
         ? Cause.squash(endExit.cause)
         : undefined;
       if (endFailure !== undefined)
-        log.warn('Failed to read the terminal run fact', {
-          data: { runId, error: endFailure },
-        });
+        yield* Effect.logWarning('Failed to read the terminal run fact').pipe(
+          withLogData({ runId, error: endFailure }),
+          withLogChannel(CHANNEL),
+        );
       const childFailed =
         settledTurn.isError || runEnd?.outcome === RUN_OUTCOME.FAILED;
       // The raw application error when the turn threw; otherwise the terminal
@@ -281,9 +282,12 @@ const executeInBand = Effect.fn('executeInBand')(
           ? Cause.squash(persistedExit.cause)
           : undefined;
         if (readFailure !== undefined)
-          log.warn('Failed to read the persisted result manifest', {
-            data: { runId, error: readFailure },
-          });
+          yield* Effect.logWarning(
+            'Failed to read the persisted result manifest',
+          ).pipe(
+            withLogData({ runId, error: readFailure }),
+            withLogChannel(CHANNEL),
+          );
         const persisted = Exit.isSuccess(persistedExit)
           ? persistedExit.value
           : null;

@@ -2,7 +2,7 @@ import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports - agent config
-import { createLog } from '@logger/logUtils';
+import { withLogChannel, withLogData } from '@logger/effectLog';
 import type { StateStore } from '@platform/interfaces';
 import type { CodexReasoningEffort } from '@shared/schemas';
 import {
@@ -33,7 +33,7 @@ import type {
 /** Short model name passed to the Codex CLI via --model. */
 export const CODEX_CLI_MODEL = 'gpt-5.5';
 
-const log = createLog('codexConfig');
+const CHANNEL = 'codexConfig';
 const codexXhighSupportByBinary = new Map<string, boolean>();
 const codexXhighProbeLanes = new Map<string, PerKeyLane>();
 
@@ -160,14 +160,17 @@ const probeXhighSupport = Effect.fn('codexConfig.probeXhighSupport')(function* (
     { quiet: true, timeout: 5_000, cwd: process.cwd(), settings: undefined },
   );
   if (result.timedOut || result.exitCode === 127) {
-    log.warn('Codex xhigh capability probe failed; not caching the result', {
-      data: {
+    yield* Effect.logWarning(
+      'Codex xhigh capability probe failed; not caching the result',
+    ).pipe(
+      withLogData({
         binaryPath,
         timedOut: result.timedOut,
         exitCode: result.exitCode,
         stderr: result.stderr,
-      },
-    });
+      }),
+      withLogChannel(CHANNEL),
+    );
     return false;
   }
   if (!result.success) {
@@ -176,9 +179,9 @@ const probeXhighSupport = Effect.fn('codexConfig.probeXhighSupport')(function* (
   }
   const supported = yield* catalogSupportsXhigh(result.stdout, CODEX_CLI_MODEL);
   if (supported == null) {
-    log.warn('Codex xhigh capability probe returned unreadable catalog', {
-      data: { binaryPath },
-    });
+    yield* Effect.logWarning(
+      'Codex xhigh capability probe returned unreadable catalog',
+    ).pipe(withLogData({ binaryPath }), withLogChannel(CHANNEL));
     return false;
   }
   codexXhighSupportByBinary.set(binaryPath, supported);

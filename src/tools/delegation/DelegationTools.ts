@@ -23,6 +23,7 @@ import {
   FOLLOW_UP_WAKE_FAILED_MESSAGE,
   submitFollowUp,
 } from '@agent/followUp/ToolUseFollowUp';
+import { withLogChannel } from '@logger/effectLog';
 import { createLog } from '@logger/logUtils';
 import { AgentResume } from '@platform/interfaces';
 import type { RunId } from '@shared/schemas';
@@ -63,7 +64,8 @@ import {
   type WorkflowAgentInput,
 } from './inputFields';
 
-const log = createLog('delegation');
+const CHANNEL = 'delegation';
+const log = createLog(CHANNEL);
 
 /**
  * Deliver a terminal error to the orchestrator when a resumed subagent's wake
@@ -80,15 +82,15 @@ const deliverResumeWakeFailure = Effect.fn('deliverResumeWakeFailure')(
     runId: string,
     err: unknown,
   ): Effect.fn.Return<void, Error, AgentResume> {
-    log.warn(
+    yield* Effect.logWarning(
       `Failed to wake resumed subagent '${runId}': ${toErrorMessage(err)}`,
-    );
+    ).pipe(withLogChannel(CHANNEL));
     const msg = formatSubagentError(runId, handle.agentName, err);
     const targetRunId = handle.deliveryTarget;
     if (targetRunId === undefined) {
-      log.warn(
+      yield* Effect.logWarning(
         `The wake-failure error for '${runId}' has no parent to deliver to (detached).`,
-      );
+      ).pipe(withLogChannel(CHANNEL));
       return;
     }
     const delivery = yield* submitFollowUp(
@@ -97,9 +99,9 @@ const deliverResumeWakeFailure = Effect.fn('deliverResumeWakeFailure')(
       { session },
     );
     if (delivery.status === 'failed') {
-      log.warn(
+      yield* Effect.logWarning(
         `Also failed to deliver the wake-failure error for '${runId}' to the parent (${delivery.reason}).`,
-      );
+      ).pipe(withLogChannel(CHANNEL));
     }
   },
 );

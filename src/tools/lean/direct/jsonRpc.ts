@@ -31,10 +31,10 @@ import {
   Stream,
 } from 'effect';
 
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-const log = createLog('JsonRpcConnection');
+const CHANNEL = 'JsonRpcConnection';
 
 const METHOD_NOT_FOUND = -32601;
 
@@ -192,12 +192,16 @@ export const makeJsonRpcConnection = Effect.fn('JsonRpc.make')(function* (
   ) {
     if (message.method === undefined) {
       if (typeof message.id !== 'number') {
-        log.debug(`Ignoring message without method or numeric id`);
+        yield* Effect.logDebug(
+          `Ignoring message without method or numeric id`,
+        ).pipe(withLogChannel(CHANNEL));
         return;
       }
       const entry = yield* takePending(message.id);
       if (!entry) {
-        log.debug(`Response for unknown request id ${message.id}`);
+        yield* Effect.logDebug(
+          `Response for unknown request id ${message.id}`,
+        ).pipe(withLogChannel(CHANNEL));
         return;
       }
       if (message.error) {
@@ -236,7 +240,9 @@ export const makeJsonRpcConnection = Effect.fn('JsonRpc.make')(function* (
       Effect.catch((error) =>
         Effect.gen(function* () {
           if ((yield* Ref.get(closedReason)) === undefined) {
-            log.debug(`stdin write failed: ${toErrorMessage(error)}`);
+            yield* Effect.logDebug(
+              `stdin write failed: ${toErrorMessage(error)}`,
+            ).pipe(withLogChannel(CHANNEL));
           }
           yield* close(`JSON-RPC output failed: ${toErrorMessage(error)}`);
         }),
@@ -253,7 +259,9 @@ export const makeJsonRpcConnection = Effect.fn('JsonRpc.make')(function* (
       Effect.catch((error) =>
         Effect.gen(function* () {
           if ((yield* Ref.get(closedReason)) === undefined) {
-            log.debug(`connection error: ${toErrorMessage(error)}`);
+            yield* Effect.logDebug(
+              `connection error: ${toErrorMessage(error)}`,
+            ).pipe(withLogChannel(CHANNEL));
           }
           yield* close(`JSON-RPC input failed: ${toErrorMessage(error)}`);
         }),

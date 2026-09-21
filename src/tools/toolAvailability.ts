@@ -19,6 +19,7 @@ import { Deferred, Effect } from 'effect';
 
 // Local imports
 import { emitAppSignal } from '@eventBus/AppSignals';
+import { withLogChannel } from '@logger/effectLog';
 import { createLog } from '@logger/logUtils';
 import type { StateStore } from '@platform/interfaces';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -32,7 +33,8 @@ import {
 import { getDisabledToolIds } from '@utils/config/constants';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-const log = createLog('toolAvailability');
+const CHANNEL = 'toolAvailability';
+const log = createLog(CHANNEL);
 
 // ============================================================
 // Result type
@@ -87,9 +89,9 @@ export const seedDisabledToolDefaults = Effect.fn('seedDisabledToolDefaults')(
       (def) => def.id,
     );
     yield* state.update(GlobalStateKey.DISABLED_TOOLS, defaults);
-    log.info(
+    yield* Effect.logInfo(
       `First install: default-disabled toggleable tools: ${defaults.join(', ')}`,
-    );
+    ).pipe(withLogChannel(CHANNEL));
   },
 );
 
