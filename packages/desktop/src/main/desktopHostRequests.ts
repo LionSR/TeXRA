@@ -632,15 +632,7 @@ export function createDesktopHostRequests(
       options.openExternalUrl('https://texra.ai/guide/configuration.html'),
     openAgentSettings: (sessionType) =>
       Effect.sync(() =>
-        postDesktopSettingsView(
-          options.postToRenderer,
-          'agents',
-          sessionType === undefined
-            ? undefined
-            : sessionType === 'toolUse'
-              ? 'toolUse'
-              : 'workflow',
-        ),
+        postDesktopSettingsView(options.postToRenderer, 'agents', sessionType),
       ),
     openCustomAgentDirectory: Effect.gen(function* () {
       const directory = yield* options.getCustomAgentDirectory();

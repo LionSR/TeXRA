@@ -393,11 +393,14 @@ export function createExtensionHostRequests(
       pickFormat: Effect.tryPromise({
         try: async () =>
           (
-            await vscode.window.showQuickPick(TRANSCRIPT_EXPORT_FORMAT_CHOICES, {
-              title: 'Export transcript',
-              placeHolder: 'Choose a format',
-              ignoreFocusOut: true,
-            })
+            await vscode.window.showQuickPick(
+              TRANSCRIPT_EXPORT_FORMAT_CHOICES,
+              {
+                title: 'Export transcript',
+                placeHolder: 'Choose a format',
+                ignoreFocusOut: true,
+              },
+            )
           )?.format,
         catch: (cause) =>
           new TranscriptExportFailed({
@@ -716,15 +719,16 @@ export function createExtensionHostRequests(
     latexdiffFiles: (baseFile, editedFile) =>
       commandVerb('texra.latexdiff', undefined, baseFile, editedFile),
     openDashboard: commandVerb('texra.showDashboard'),
-    openSettings: (section, sessionType) =>
-      section === 'agents'
-        ? commandVerb(
-            'texra.showAgents',
-            sessionType === 'toolUse' ? 'toolUse' : undefined,
-          )
-        : section === 'models'
-          ? commandVerb('texra.showModels')
-          : commandVerb('texra.showMultiAgent'),
+    openSettings: (section, sessionType) => {
+      if (section === 'agents')
+        return commandVerb(
+          'texra.showAgents',
+          sessionType === 'toolUse' ? 'toolUse' : undefined,
+        );
+      return commandVerb(
+        section === 'models' ? 'texra.showModels' : 'texra.showMultiAgent',
+      );
+    },
     setApiKey: (provider) =>
       Effect.gen(function* () {
         yield* commandVerb('texra.setApiKey', provider);

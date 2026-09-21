@@ -136,17 +136,12 @@ export function createDesktopSettingsIpc(
   const { globalState, runtime } = options;
   const { roots } = options.session;
   const { workspaceState, config } = roots;
-  /** A settings program over this project's rooted filesystems: the one
-   *  provision of the IPC surface, taken at the window's edge rather than
-   *  at the depth that reads. */
-  const overSessionFiles = <A, E>(
-    program: Effect.Effect<A, E, StorageFs | ProcessServices>,
-  ) => withSessionFs(roots, program);
-
-  /** Its awaited settle, as an IPC handler answers. */
+  /** A settings program over this project's rooted filesystems, settled as an
+   *  IPC handler answers: the one provision of the IPC surface, taken at the
+   *  window's edge rather than at the depth that reads. */
   const onSessionFiles = <A, E>(
     program: Effect.Effect<A, E, StorageFs | ProcessServices>,
-  ): Promise<A> => runtime.runPromise(overSessionFiles(program));
+  ): Promise<A> => runtime.runPromise(withSessionFs(roots, program));
   // Commands declared `unsupported(...)` in settingsHandlers below surface as
   // a visible info dialog instead of a console-only error log.
   const onError = (error: unknown): void => {
@@ -429,7 +424,7 @@ export function createDesktopSettingsIpc(
     work: Effect.Effect<void, E, StorageFs | ProcessServices>,
   ): void {
     runtime.runFork(
-      overSessionFiles(work).pipe(
+      withSessionFs(roots, work).pipe(
         Effect.catchCause((cause) =>
           Effect.sync(() => onError(Cause.squash(cause))),
         ),
@@ -578,7 +573,9 @@ export function createDesktopSettingsIpc(
     openMemoryFile,
     openMemoryFolder,
     deleteMemory: (message) =>
-      onSessionFiles(postMemoryMutation(memoryController.deleteMemory(message))),
+      onSessionFiles(
+        postMemoryMutation(memoryController.deleteMemory(message)),
+      ),
     pinMemory: (message) =>
       onSessionFiles(
         postMemoryMutation(

@@ -232,7 +232,10 @@ export function handleSharedHostRequest(
       }
       switch (action) {
         case 'compare':
-          yield* ports.workflowFileActions.compareOriginal(editedFile, baseFile);
+          yield* ports.workflowFileActions.compareOriginal(
+            editedFile,
+            baseFile,
+          );
           return;
         case 'accept':
           yield* ports.workflowFileActions.acceptFile(editedFile, baseFile);
@@ -342,9 +345,9 @@ export function handleSharedHostRequest(
         yield* host.openSettings(request.section, request.sessionType);
         return done;
       case 'apiKeyBanner':
-        yield* (request.action === 'set'
+        yield* request.action === 'set'
           ? host.setApiKey(request.provider ?? undefined)
-          : host.openApiKeyGuide(request.provider ?? undefined));
+          : host.openApiKeyGuide(request.provider ?? undefined);
         return done;
       case 'agentConfigBanner':
         switch (request.action) {
@@ -354,9 +357,9 @@ export function handleSharedHostRequest(
           case 'dir':
             // Without a custom directory there is nothing to reveal, so the
             // banner's link is the agent settings instead.
-            yield* (request.customDirSet === true
+            yield* request.customDirSet === true
               ? host.openCustomAgentDirectory
-              : host.openAgentSettings(undefined));
+              : host.openAgentSettings(undefined);
             return done;
           case 'docs':
             yield* host.openAgentDocs;
