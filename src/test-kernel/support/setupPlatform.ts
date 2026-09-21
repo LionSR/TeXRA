@@ -79,6 +79,7 @@ export interface FakeHost {
 type HostBuilder = () => FakeHost | Promise<FakeHost>;
 
 const unavailableLeanLanguageServices: LeanLanguageServicesShape = {
+  listServers: () => [],
   executeFileCommand: () =>
     Effect.die(
       new Error('LeanLanguageServices is not configured in this test'),

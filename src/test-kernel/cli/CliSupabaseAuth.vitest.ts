@@ -28,6 +28,7 @@ const unreadProcessService = (): never => {
   throw new Error('The CLI auth edge reads no process services.');
 };
 const unavailableLeanLanguageServices: LeanLanguageServicesShape = {
+  listServers: () => [],
   executeFileCommand: () =>
     Effect.die(
       new Error('LeanLanguageServices is not configured in this test'),

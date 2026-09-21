@@ -38,6 +38,10 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { runLakeCommand } from './lakeCommands';
 import { LeanServer, type LeanStartError } from './leanServer';
+import {
+  createLeanServerRoster,
+  type LeanServerInfo,
+} from '../leanServerRegistry';
 import type { ChildProcessSpawner } from 'effect/unstable/process';
 import type { LeanLanguageServices } from '../leanLanguageServices';
 import type {
@@ -126,6 +130,8 @@ export class LeanServerPool extends Context.Service<
     ) => Effect.Effect<LspResult<T>>;
     /** See {@link LeanLanguageServices.stopSessionsForRun}. */
     readonly stopSessionsForRun: (runId: RunId) => Effect.Effect<void>;
+    /** See {@link LeanLanguageServices.listServers}. */
+    readonly listServers: () => readonly LeanServerInfo[];
   }
 >()('@texra/lean/LeanServerPool') {
   static readonly layer = (
@@ -141,8 +147,13 @@ const make = Effect.fn('LeanServerPool.make')(function* ({
   lakeCommand,
   idleTimeToLive,
 }: LeanServerPoolOptions) {
+  // This pool's own roster: every server it builds registers here and its
+  // scope's finalizer drops the entry, so the dashboard's list ends when the
+  // pool does.
+  const roster = createLeanServerRoster();
   const servers = yield* LayerMap.make(
-    (root: string) => LeanServer.layer({ workspaceRoot: root, lakeCommand }),
+    (root: string) =>
+      LeanServer.layer({ workspaceRoot: root, lakeCommand, roster }),
     { idleTimeToLive },
   );
   const entries = yield* Ref.make<ReadonlyMap<string, RootEntry>>(new Map());
@@ -578,6 +589,7 @@ const make = Effect.fn('LeanServerPool.make')(function* ({
     executeProjectCommand,
     positionRequest,
     stopSessionsForRun,
+    listServers: () => roster.list(),
   });
 });
 

@@ -73,8 +73,7 @@ import {
 } from '@tools/lean/direct/leanServerPool';
 import {
   isLeanServerActive,
-  listLeanServers,
-  unregisterLeanServer,
+  type LeanServerInfo,
 } from '@tools/lean/leanServerRegistry';
 import { splitOutputLines } from '@utils/text/stringUtils';
 
@@ -190,9 +189,6 @@ afterEach(() => {
   spawnOverride.current = undefined;
   vi.unstubAllEnvs();
   rmSync(tempRoot, { recursive: true, force: true });
-  // The registry is process-global and ids are per server instance: a test
-  // that failed mid-way must not leave its entries for the next one.
-  for (const server of listLeanServers()) unregisterLeanServer(server.id);
 });
 
 async function countStarts(): Promise<number> {
@@ -239,9 +235,9 @@ const settle = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
     return yield* Fiber.join(fiber);
   });
 
-// The process-global registry flips on the real child's handshake and exit
-// (one survivor waits for the server to come up, the others for it to close);
-// no Effect-side settle covers that.
+// The roster flips on the real child's handshake and exit (one survivor waits
+// for the server to come up, the others for it to close); no Effect-side
+// settle covers that.
 const eventually = (assertion: () => void) =>
   Effect.promise(() => vi.waitFor(assertion, { timeout: 3000, interval: 10 }));
 
@@ -274,7 +270,7 @@ describe('LeanServerPool', () => {
       yield* settle(pool.fetchDiagnosticsForFile(second.filePath, NO_RUN));
       yield* settle(pool.fetchDiagnosticsForFile(third.filePath, NO_RUN));
       expect(yield* starts).toBe(3);
-      expect(activeServerRoots()).toEqual([
+      expect(activeServerRoots(pool)).toEqual([
         projectRoot,
         second.projectRoot,
         third.projectRoot,
@@ -287,14 +283,14 @@ describe('LeanServerPool', () => {
       const second = makeLakeProject(tempRoot, 'project-b');
       const { pool } = yield* openPool({ idleTimeToLive: IDLE_HOUR });
       yield* settle(pool.fetchDiagnosticsForFile(filePath, NO_RUN));
-      expect(activeServerRoots()).toEqual([projectRoot]);
+      expect(activeServerRoots(pool)).toEqual([projectRoot]);
 
       yield* TestClock.adjust('2 hours');
-      yield* eventually(() => expect(activeServerRoots()).toEqual([]));
+      yield* eventually(() => expect(activeServerRoots(pool)).toEqual([]));
 
       yield* settle(pool.fetchDiagnosticsForFile(second.filePath, NO_RUN));
       expect(yield* starts).toBe(2);
-      expect(activeServerRoots()).toEqual([second.projectRoot]);
+      expect(activeServerRoots(pool)).toEqual([second.projectRoot]);
     }),
   );
 
@@ -310,20 +306,20 @@ describe('LeanServerPool', () => {
           pool.fetchDiagnosticsForFile(filePath, NO_RUN),
         );
         yield* eventually(() =>
-          expect(runningServerRoots()).toEqual([projectRoot]),
+          expect(runningServerRoots(pool)).toEqual([projectRoot]),
         );
 
         // Well past the idle time, still inside the diagnostics wait: the
         // lease, not the clock, decides.
         yield* TestClock.adjust('5 seconds');
-        expect(activeServerRoots()).toEqual([projectRoot]);
+        expect(activeServerRoots(pool)).toEqual([projectRoot]);
 
         yield* dispose;
         expect(yield* Fiber.join(pending)).toMatchObject({
           ok: false,
           kind: 'toolchain_unavailable',
         });
-        expect(activeServerRoots()).toEqual([]);
+        expect(activeServerRoots(pool)).toEqual([]);
       }),
   );
 
@@ -342,7 +338,7 @@ describe('LeanServerPool', () => {
       );
       yield* dispose;
       yield* Fiber.await(pending);
-      expect(activeServerRoots()).toEqual([]);
+      expect(activeServerRoots(pool)).toEqual([]);
       const started = yield* starts;
       yield* Effect.promise(() => delay(100));
       expect(yield* starts).toBe(started);
@@ -357,7 +353,7 @@ describe('LeanServerPool', () => {
         yield* settle(pool.fetchDiagnosticsForFile(filePath, NO_RUN));
         yield* TestClock.adjust('2200 millis');
         yield* Effect.promise(() => delay(50));
-        expect(activeServerRoots()).toEqual([projectRoot]);
+        expect(activeServerRoots(pool)).toEqual([projectRoot]);
         expect(yield* starts).toBe(1);
         expect(
           yield* settle(pool.fetchDiagnosticsForFile(filePath, NO_RUN)),
@@ -442,7 +438,10 @@ describe('LeanServerPool', () => {
           ok: true,
           diagnostics: [{ message: 'fake diagnostic' }],
         });
-        expect(activeServerRoots()).toEqual([projectRoot, third.projectRoot]);
+        expect(activeServerRoots(pool)).toEqual([
+          projectRoot,
+          third.projectRoot,
+        ]);
         expect(spawnCount).toBe(4);
         yield* dispose;
         yield* Fiber.await(pendingBusy);
@@ -525,9 +524,9 @@ describe('LeanServerPool', () => {
       const { pool } = yield* openPool({ idleTimeToLive: IDLE_HOUR });
       yield* settle(pool.fetchDiagnosticsForFile(filePath, NO_RUN));
       yield* pool.executeProjectCommand('restart_server', NO_RUN);
-      expect(activeServerRoots()).toEqual([projectRoot]);
+      expect(activeServerRoots(pool)).toEqual([projectRoot]);
       yield* TestClock.adjust('2 hours');
-      yield* eventually(() => expect(activeServerRoots()).toEqual([]));
+      yield* eventually(() => expect(activeServerRoots(pool)).toEqual([]));
     }),
   );
 
@@ -540,7 +539,10 @@ describe('LeanServerPool', () => {
       yield* pool.executeProjectCommand('build', NO_RUN);
       yield* TestClock.adjust('45 minutes');
       yield* settle(pool.fetchDiagnosticsForFile(second.filePath, NO_RUN));
-      expect(activeServerRoots()).toEqual([projectRoot, second.projectRoot]);
+      expect(activeServerRoots(pool)).toEqual([
+        projectRoot,
+        second.projectRoot,
+      ]);
     }),
   );
 
@@ -550,11 +552,11 @@ describe('LeanServerPool', () => {
     Effect.gen(function* () {
       const { pool } = yield* openPool();
       yield* pool.fetchDiagnosticsForFile(filePath, run('e00001'));
-      expect(activeServerRoots()).toEqual([projectRoot]);
+      expect(activeServerRoots(pool)).toEqual([projectRoot]);
 
       yield* pool.stopSessionsForRun(run('e00001'));
 
-      expect(activeServerRoots()).toEqual([]);
+      expect(activeServerRoots(pool)).toEqual([]);
       expect(yield* starts).toBe(1);
     }),
   );
@@ -571,7 +573,7 @@ describe('LeanServerPool', () => {
           pool.fetchDiagnosticsForFile(second.filePath, run('e00002')),
         );
         yield* settle(pool.fetchDiagnosticsForFile(third.filePath, NO_RUN));
-        expect(activeServerRoots()).toEqual([
+        expect(activeServerRoots(pool)).toEqual([
           projectRoot,
           second.projectRoot,
           third.projectRoot,
@@ -579,7 +581,7 @@ describe('LeanServerPool', () => {
 
         yield* pool.stopSessionsForRun(run('e00001'));
 
-        expect(activeServerRoots()).toEqual([
+        expect(activeServerRoots(pool)).toEqual([
           second.projectRoot,
           third.projectRoot,
         ]);
@@ -592,7 +594,7 @@ describe('LeanServerPool', () => {
       Effect.gen(function* () {
         const { pool } = yield* openPool();
         yield* settle(pool.fetchDiagnosticsForFile(filePath, run('e00001')));
-        expect(activeServerRoots()).toEqual([projectRoot]);
+        expect(activeServerRoots(pool)).toEqual([projectRoot]);
         vi.stubEnv('TEXRA_FAKE_LEAN_LAKE_DELAY', '1500');
         const build = yield* Effect.forkChild(
           pool.executeProjectCommand('build', run('e00001')),
@@ -604,12 +606,12 @@ describe('LeanServerPool', () => {
         // shared server for e00001; ending the final owner defers the stop
         // until e00001's already-running build releases its lease.
         yield* pool.stopSessionsForRun(run('e00002'));
-        expect(activeServerRoots()).toEqual([projectRoot]);
+        expect(activeServerRoots(pool)).toEqual([projectRoot]);
         yield* pool.stopSessionsForRun(run('e00001'));
-        expect(activeServerRoots()).toEqual([projectRoot]);
+        expect(activeServerRoots(pool)).toEqual([projectRoot]);
 
         yield* Fiber.join(build);
-        expect(activeServerRoots()).toEqual([]);
+        expect(activeServerRoots(pool)).toEqual([]);
       }),
   );
 
@@ -630,10 +632,10 @@ describe('LeanServerPool', () => {
 
         yield* settle(pool.fetchDiagnosticsForFile(filePath, run('e00003')));
         yield* Fiber.join(build);
-        expect(activeServerRoots()).toEqual([projectRoot]);
+        expect(activeServerRoots(pool)).toEqual([projectRoot]);
 
         yield* pool.stopSessionsForRun(run('e00003'));
-        expect(activeServerRoots()).toEqual([]);
+        expect(activeServerRoots(pool)).toEqual([]);
       }),
   );
 
@@ -644,10 +646,10 @@ describe('LeanServerPool', () => {
       yield* pool.executeProjectCommand('build', run('e00002'));
 
       yield* pool.stopSessionsForRun(run('e00001'));
-      expect(activeServerRoots()).toEqual([projectRoot]);
+      expect(activeServerRoots(pool)).toEqual([projectRoot]);
 
       yield* pool.stopSessionsForRun(run('e00002'));
-      expect(activeServerRoots()).toEqual([]);
+      expect(activeServerRoots(pool)).toEqual([]);
     }),
   );
 
@@ -663,10 +665,10 @@ describe('LeanServerPool', () => {
         // A subagent joins the parent as an owner; either run ending alone
         // leaves the shared-worktree server available to the other.
         yield* pool.stopSessionsForRun(run('e00001'));
-        expect(activeServerRoots()).toEqual([projectRoot]);
+        expect(activeServerRoots(pool)).toEqual([projectRoot]);
 
         yield* pool.stopSessionsForRun(run('e00002'));
-        expect(activeServerRoots()).toEqual([]);
+        expect(activeServerRoots(pool)).toEqual([]);
       }),
   );
 
@@ -693,11 +695,11 @@ describe('LeanServerPool', () => {
       yield* Deferred.await(spawned);
       expect(spawnCount).toBe(1);
       yield* pool.stopSessionsForRun(run('e00002'));
-      expect(activeServerRoots()).toEqual([projectRoot]);
+      expect(activeServerRoots(pool)).toEqual([projectRoot]);
 
       releaseInitialize();
       expect(yield* Fiber.join(request)).toMatchObject({ ok: true });
-      expect(activeServerRoots()).toEqual([]);
+      expect(activeServerRoots(pool)).toEqual([]);
     }),
   );
 
@@ -713,10 +715,10 @@ describe('LeanServerPool', () => {
         // The replacement process was started by e00002, so e00001's end must
         // leave it alone and e00002's end must stop it.
         yield* pool.stopSessionsForRun(run('e00001'));
-        expect(activeServerRoots()).toEqual([projectRoot]);
+        expect(activeServerRoots(pool)).toEqual([projectRoot]);
 
         yield* pool.stopSessionsForRun(run('e00002'));
-        expect(activeServerRoots()).toEqual([]);
+        expect(activeServerRoots(pool)).toEqual([]);
       }),
   );
 });
@@ -775,11 +777,11 @@ describe('directLeanLanguageServices', () => {
         idleTimeoutMs: 0,
       });
       yield* adapter.fetchDiagnosticsForFile(filePath, run('e00001'));
-      expect(activeServerRoots()).toEqual([projectRoot]);
+      expect(activeServerRoots(adapter)).toEqual([projectRoot]);
 
       yield* adapter.stopSessionsForRun?.(run('e00001')) ?? Effect.void;
 
-      expect(activeServerRoots()).toEqual([]);
+      expect(activeServerRoots(adapter)).toEqual([]);
     }),
   );
 
@@ -852,10 +854,10 @@ describe('directLeanLanguageServices', () => {
         lakeCommand: fakeLakePath,
       });
       yield* adapter.fetchDiagnosticsForFile(filePath);
-      expect(activeServerRoots()).toEqual([projectRoot]);
+      expect(activeServerRoots(adapter)).toEqual([projectRoot]);
 
       yield* dispose;
-      expect(activeServerRoots()).toEqual([]);
+      expect(activeServerRoots(adapter)).toEqual([]);
 
       yield* dispose;
       const after = yield* adapter.fetchDiagnosticsForFile(filePath);
@@ -884,14 +886,21 @@ function makeLakeProject(
   return { projectRoot, filePath };
 }
 
-function runningServerRoots(): string[] {
-  return listLeanServers()
+/** The roster the pool or the port over it reports. */
+interface ServerRosterReader {
+  listServers(): readonly LeanServerInfo[];
+}
+
+function runningServerRoots(reader: ServerRosterReader): string[] {
+  return reader
+    .listServers()
     .filter((info) => info.status === 'running')
     .map((info) => info.workspaceRoot);
 }
 
-function activeServerRoots(): string[] {
-  return listLeanServers()
+function activeServerRoots(reader: ServerRosterReader): string[] {
+  return reader
+    .listServers()
     .filter(isLeanServerActive)
     .map((info) => info.workspaceRoot)
     .toSorted((a, b) => a.localeCompare(b));

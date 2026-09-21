@@ -39,10 +39,11 @@ import {
   GITHUB_POLL_INTERVAL_MS,
 } from '@tools/github/prSubscriptionConstants';
 import { LEAN4_EXTENSION_ID } from '@tools/lean/leanTypes';
+import { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import {
   isLeanServerActive,
-  listLeanServers,
   summarizeLeanServers,
+  type LeanServerInfo,
 } from '@tools/lean/leanServerRegistry';
 import { SetupPlatform } from '@tools/setup/platform';
 import { ZOTERO_PORT_KEY } from '@tools/zotero/bbtClient';
@@ -109,10 +110,13 @@ class ToolProbeFailed extends Data.TaggedError('ToolProbeFailed')<{
 
 /**
  * The process services a group's availability callbacks read: provider
- * credentials, and the host's setup capabilities for the one group whose
- * availability depends on the editor host (Lean 4's VS Code extension).
+ * credentials, the host's setup capabilities for the one group whose
+ * availability depends on the editor host (Lean 4's VS Code extension), and
+ * that host's Lean port, which owns the roster of running servers the same
+ * group reports. All three are `ProcessServices` arms, so every caller of
+ * the availability surface already holds them.
  */
-export type ToolProbeServices = Secrets | SetupPlatform;
+export type ToolProbeServices = Secrets | SetupPlatform | LeanLanguageServices;
 
 /**
  * The asking workspace, carried into a group's probe as data rather than read
@@ -267,6 +271,13 @@ interface Lean4Prerequisites {
   lakeAvailable: boolean;
   /** The VS Code build drives Lean through the lean4 extension; other hosts spawn `lake` directly. */
   requiresExtension: boolean;
+  /**
+   * The host adapter's roster at probe time. Read here rather than in the
+   * status callbacks so the badge and the detail text describe the same
+   * refresh, and so the roster reaches them through the port instead of
+   * through a module global.
+   */
+  servers: readonly LeanServerInfo[];
 }
 
 /** Lean tools work through the extension in VS Code and through `lake` elsewhere. */
@@ -582,31 +593,44 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
       probe: () =>
         Effect.gen(function* () {
           const setup = yield* SetupPlatform;
+          const lean = yield* LeanLanguageServices;
           const extensionAvailable =
             setup.extensions?.isInstalled(LEAN4_EXTENSION_ID) ?? false;
           const lakeAvailable = findToolInCommonPaths('lake') !== null;
           // The setup port the probe already holds names the running product,
           // and only the VS Code build drives Lean through the extension.
           const requiresExtension = setup.host === 'extension';
-          return { extensionAvailable, lakeAvailable, requiresExtension };
+          return {
+            extensionAvailable,
+            lakeAvailable,
+            requiresExtension,
+            servers: lean.listServers(),
+          };
         }),
       fallback: () =>
-        Effect.succeed({
+        Effect.map(LeanLanguageServices, (lean) => ({
           extensionAvailable: false,
           lakeAvailable: false,
           requiresExtension: false,
-        }),
+          servers: lean.listServers(),
+        })),
       check: leanReady,
       statusLabel: (prerequisites) => {
         if (!leanReady(prerequisites)) return 'Needs setup';
-        const activeCount = listLeanServers().filter(isLeanServerActive).length;
+        const activeCount = prerequisites.servers.filter(
+          isLeanServerActive,
+        ).length;
         return activeCount > 0
           ? `${formatResultCount(activeCount, 'server')} active`
           : undefined;
       },
       detailCheck: (prerequisites) => {
-        const { extensionAvailable, lakeAvailable, requiresExtension } =
-          prerequisites;
+        const {
+          extensionAvailable,
+          lakeAvailable,
+          requiresExtension,
+          servers,
+        } = prerequisites;
         const lines: string[] = [];
         if (extensionAvailable) {
           lines.push('VS Code Lean 4 extension installed.');
@@ -622,7 +646,7 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
           );
         }
         lines.push('');
-        lines.push(summarizeLeanServers());
+        lines.push(summarizeLeanServers(servers));
         return lines.join('\n');
       },
     }),
