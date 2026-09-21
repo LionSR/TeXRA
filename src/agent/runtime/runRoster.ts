@@ -195,10 +195,11 @@ export class RunRoster {
   ): void {
     for (const childRunId of childRunIds) {
       const entry = this.entries.get(childRunId);
-      if (entry?.activation?.parentRunId === parentRunId)
-        entry.activation.detach();
+      const activation = entry?.activation;
+      if (activation?.parentRunId === parentRunId) activation.detach();
       this.approvals.detachRunFromParent(childRunId);
-      if (entry?.handle?.isOwnedBy(parentRunId) === true) entry.handle.detach();
+      const handle = entry?.handle;
+      if (handle?.isOwnedBy(parentRunId) === true) handle.detach();
     }
   }
 
