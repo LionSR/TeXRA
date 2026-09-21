@@ -1,10 +1,6 @@
 // Local imports
-import type {
-  NonRegexReplacementCategory as NonRegexReplacementCategoryName,
-  RegexReplacementCategory as RegexReplacementCategoryName,
-} from '@shared/constants/replacementCategories';
 import { GREEK_LETTERS } from './constants';
-import { NonRegexReplacementCategory, RegexReplacementCategory } from './types';
+import { NonRegexRuleSet, RegexRuleSet } from './types';
 import {
   createPatterns,
   generateDecoratorShortcuts,
@@ -472,8 +468,7 @@ const MAX_MANUAL_PATTERNS: Record<string, string> = {
   antiIto: 'anti-Ito',
 };
 
-export const MAX_STYLE_REPLACEMENTS: NonRegexReplacementCategory = {
-  name: 'max_style' satisfies NonRegexReplacementCategoryName,
+export const MAX_STYLE_REPLACEMENTS: NonRegexRuleSet = {
   patterns: { ...MAX_AUTO_PATTERNS, ...MAX_MANUAL_PATTERNS },
 };
 
@@ -590,8 +585,7 @@ export function restoreLatexSectionSign(text: string): string {
   return text.replaceAll(/([_^])\\sS(?![A-Za-z])/g, '$1\\S');
 }
 
-export const MAX_REGEX_REPLACEMENTS: RegexReplacementCategory = {
-  name: 'max_style_regex' satisfies RegexReplacementCategoryName,
+export const MAX_REGEX_REPLACEMENTS: RegexRuleSet = {
   isRegex: true,
   flags: 'gms',
   patterns: {

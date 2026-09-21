@@ -1,12 +1,10 @@
 // Local imports
-import type { RegexReplacementCategory as RegexReplacementCategoryName } from '@shared/constants/replacementCategories';
-
 import {
   FENCED_LATEX_BLOCK_PATTERN_INLINE,
   FENCED_LATEX_BLOCK_PATTERN_MULTILINE,
 } from './constants';
 import { createPatterns } from './helpers';
-import type { RegexReplacementCategory, ReplacementFunction } from './types';
+import type { RegexRuleSet, ReplacementFunction } from './types';
 
 const EQUATION_ENVIRONMENT_PATTERN =
   '(?:align\\*?|aligned\\*?|alignat\\*?|flalign\\*?|gather\\*?|multline\\*?|equation\\*?|eqnarray\\*?|split\\*?)';
@@ -80,8 +78,7 @@ const expandEquationMacro: ReplacementFunction = (
   return replacement ? `${leading}${replacement}${trailing}` : match;
 };
 
-export const EQUATION_MACRO_REPLACEMENTS: RegexReplacementCategory = {
-  name: 'equation_macros' satisfies RegexReplacementCategoryName,
+export const EQUATION_MACRO_REPLACEMENTS: RegexRuleSet = {
   isRegex: true,
   flags: 'gm',
   patterns: {
@@ -93,8 +90,7 @@ export const EQUATION_MACRO_REPLACEMENTS: RegexReplacementCategory = {
   },
 };
 
-export const FENCED_LATEX_BLOCK_REPLACEMENTS: RegexReplacementCategory = {
-  name: 'fenced_latex_blocks' satisfies RegexReplacementCategoryName,
+export const FENCED_LATEX_BLOCK_REPLACEMENTS: RegexRuleSet = {
   isRegex: true,
   flags: 'g',
   patterns: {
@@ -104,8 +100,7 @@ export const FENCED_LATEX_BLOCK_REPLACEMENTS: RegexReplacementCategory = {
 };
 
 // Parentheses sizing standardization
-export const PARENTHESES_REPLACEMENTS: RegexReplacementCategory = {
-  name: 'parentheses' satisfies RegexReplacementCategoryName,
+export const PARENTHESES_REPLACEMENTS: RegexRuleSet = {
   isRegex: true,
   flags: 'g',
   patterns: {
@@ -143,8 +138,7 @@ export const PARENTHESES_REPLACEMENTS: RegexReplacementCategory = {
 };
 
 // LaTeX inline math formatting fixes
-export const INLINE_MATH_REPLACEMENTS: RegexReplacementCategory = {
-  name: 'inline_math' satisfies RegexReplacementCategoryName,
+export const INLINE_MATH_REPLACEMENTS: RegexRuleSet = {
   isRegex: true,
   flags: 'g',
   patterns: {
@@ -169,26 +163,24 @@ export const INLINE_MATH_REPLACEMENTS: RegexReplacementCategory = {
 };
 
 // Context-aware personal style conversions
-export const PERSONAL_STYLE_CONTEXTUAL_REPLACEMENTS: RegexReplacementCategory =
-  {
-    name: 'personal_style_contextual' satisfies RegexReplacementCategoryName,
-    isRegex: true,
-    flags: 'g',
-    patterns: {
-      // Temporarily protect \mathrm{Tr} inside command definitions
-      '((?:\\\\(?:re)?newcommand|\\\\providecommand|\\\\DeclareMathOperator\\*?)\\{[^}]+\\}(?:\\[[^\\]]*\\])?\\{)\\\\mathrm\\{Tr\\}':
-        '$1__TEXRA_PRESERVE_TR__',
-      // Temporarily protect \mathrm{tr} inside command definitions
-      '((?:\\\\(?:re)?newcommand|\\\\providecommand|\\\\DeclareMathOperator\\*?)\\{[^}]+\\}(?:\\[[^\\]]*\\])?\\{)\\\\mathrm\\{tr\\}':
-        '$1__TEXRA_PRESERVE_tr__',
-      // Apply preferred operator command forms
-      '\\\\mathrm\\{Tr\\}': '\\Tr',
-      '\\\\mathrm\\{tr\\}': '\\tr',
-      // Restore protected command definitions
-      __TEXRA_PRESERVE_TR__: '\\mathrm{Tr}',
-      __TEXRA_PRESERVE_tr__: '\\mathrm{tr}',
-    },
-  };
+export const PERSONAL_STYLE_CONTEXTUAL_REPLACEMENTS: RegexRuleSet = {
+  isRegex: true,
+  flags: 'g',
+  patterns: {
+    // Temporarily protect \mathrm{Tr} inside command definitions
+    '((?:\\\\(?:re)?newcommand|\\\\providecommand|\\\\DeclareMathOperator\\*?)\\{[^}]+\\}(?:\\[[^\\]]*\\])?\\{)\\\\mathrm\\{Tr\\}':
+      '$1__TEXRA_PRESERVE_TR__',
+    // Temporarily protect \mathrm{tr} inside command definitions
+    '((?:\\\\(?:re)?newcommand|\\\\providecommand|\\\\DeclareMathOperator\\*?)\\{[^}]+\\}(?:\\[[^\\]]*\\])?\\{)\\\\mathrm\\{tr\\}':
+      '$1__TEXRA_PRESERVE_tr__',
+    // Apply preferred operator command forms
+    '\\\\mathrm\\{Tr\\}': '\\Tr',
+    '\\\\mathrm\\{tr\\}': '\\tr',
+    // Restore protected command definitions
+    __TEXRA_PRESERVE_TR__: '\\mathrm{Tr}',
+    __TEXRA_PRESERVE_tr__: '\\mathrm{tr}',
+  },
+};
 
 /**
  * LATEXDIFF USAGE NOTE:
@@ -322,8 +314,7 @@ function difCommandMarker(cmd: string): string {
 }
 
 // Latexdiff markup fixes using regex
-export const LATEXDIFF_MARKUP_REPLACEMENTS: RegexReplacementCategory = {
-  name: 'latexdiff_markup' satisfies RegexReplacementCategoryName,
+export const LATEXDIFF_MARKUP_REPLACEMENTS: RegexRuleSet = {
   isRegex: true,
   flags: 'gs',
   patterns: {
@@ -366,8 +357,7 @@ export const LATEXDIFF_MARKUP_REPLACEMENTS: RegexReplacementCategory = {
   },
 };
 
-export const EQUATION_STYLE_REPLACEMENTS: RegexReplacementCategory = {
-  name: 'equation_style' satisfies RegexReplacementCategoryName,
+export const EQUATION_STYLE_REPLACEMENTS: RegexRuleSet = {
   isRegex: true,
   flags: 'g',
   patterns: {

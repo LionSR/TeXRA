@@ -1,12 +1,19 @@
 /**
- * Replacement-category constants and their default-enabled sets.
+ * The universe of replacement-category names the persisted config accepts.
+ *
+ * One declaration, read two ways: `z.enum` validates persisted settings
+ * against it and the LaTeX tab renders its checkboxes in this order, so the
+ * order here is the settings UI's order, not the engine's.
+ * `@replacement/engine` keys its rule tables by these names as a `Record`, so
+ * a name here with no rules, or rules under a name that is not here, fails to
+ * typecheck; the order the engine applies them in is that table's own key
+ * order, and there is no third list to drift from either.
  *
  * Shared by the `replacement` subsystem (category dispatch), the core-settings
  * schema (persisted config validation), the settings-view message schemas, and
  * the LaTeX tab UI. Split out of the old `@shared/constants/latex` dumping
  * ground.
  */
-
 export const NON_REGEX_REPLACEMENT_CATEGORIES = [
   'latex_spacing',
   'equations',

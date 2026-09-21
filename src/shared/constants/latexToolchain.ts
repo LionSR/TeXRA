@@ -1,5 +1,5 @@
 /**
- * LaTeX toolchain constants: the tool name lists, the per-tool install guides
+ * LaTeX toolchain constants: the dependency catalog, the per-tool install guides
  * and structured install commands, and the platform normalization helpers they
  * share. Split out of the old `@shared/constants/latex` dumping ground.
  */
@@ -7,46 +7,194 @@
 /** Extension ID for the LaTeX Workshop VS Code extension. */
 export const LATEX_WORKSHOP_EXT_ID = 'James-Yu.latex-workshop';
 
+// ============================================================
+// Dependency catalog
+// ============================================================
+
 /**
- * Single source of truth for the core LaTeX toolchain name list. `pdflatex,
- * latexmk, latexindent, latexdiff, texcount, perl, gs` are checked directly;
- * the image tool is satisfied by *either* `gm` or `magick` (reported as
- * `gm/magick` in user-facing output), so it lives in its own constant.
+ * What `texra doctor` makes of one dependency. A missing `required` row fails
+ * the report, which is what sets the CLI's nonzero exit code; a missing
+ * `optional` row only warns. `none` means the doctor does not probe the tool
+ * at all, so it renders no row for it.
  *
- * Lives in `shared` rather than `tools` or `latex` because the `tools`
- * subsystem (`probe_environment`/`verify_setup`), the `latex` subsystem
- * (`latexToolchain.ts`'s doctor-specific probe), and `controllers`
- * (`LatexToolingController`, the settings-view status) all consume it —
- * and `tools` already depends on `latex`, so a `latex`-side or `tools`-side
- * home would create a cross-subsystem cycle the LAY-1 edge ratchet forbids.
- * Keep the tool descriptions in `ProbeEnvironmentTool`/`VerifySetupTool`
- * aligned with these lists — they appear verbatim in the LLM prompt.
+ * Known residual, stated rather than hidden: `latexmk` is `required` even
+ * though a pdflatex-only machine counts as having a compiler and
+ * `compileLatex2Pdf` falls back to a single pdflatex pass on it (degraded —
+ * bibliography, cross-references, and index may be incomplete). So such a
+ * machine passes the `latex.compiler` check and still exits nonzero on the
+ * `latex.latexmk` row. Demoting latexmk to a warning changes `doctorExitCode`
+ * for a real machine configuration, which is a product decision, not a
+ * consolidation.
  */
-export const CORE_LATEX_TOOLS = Object.freeze([
-  'pdflatex',
-  'latexmk',
-  'latexindent',
-  'latexdiff',
-  'texcount',
-  'perl',
-  'gs',
-] as const);
-
-export const IMAGE_TOOLS = Object.freeze(['gm', 'magick'] as const);
+type DoctorRole =
+  | { readonly row: 'none' }
+  | { readonly row: 'required' | 'optional'; readonly purpose: string };
 
 /**
- * The LaTeX-to-PDF compilers TeXRA can actually drive: `compileLatex2Pdf` runs
- * `latexmk` and falls back to `pdflatex`. Nothing here can invoke `xelatex` or
- * `lualatex` and no setting selects a compiler, so they must not count as "a
- * compiler is available". Single source for that answer — the doctor probe,
- * the compile-check guard, the compile option enum, and the settings view's
- * TeX-distribution row — so none of them can disagree with the advice text.
- * Lives beside {@link CORE_LATEX_TOOLS} for the same LAY-1 cycle reason.
+ * What the setup assistant (`probe_environment`, `verify_setup`) and the
+ * settings view's LaTeX tab make of one dependency. A `required` tool is
+ * reported missing under its own name; the `image` tools are interchangeable,
+ * so either one alone satisfies the image capability and both absent report a
+ * single `gm/magick` entry; `none` means neither surface probes it.
  */
-export const SUPPORTED_LATEX_COMPILERS = Object.freeze([
-  'latexmk',
-  'pdflatex',
-] as const);
+type ProbeRole = 'required' | 'image' | 'none';
+
+interface LatexToolEntry {
+  /** The binary name, probed as `<name> --version` or on PATH. */
+  readonly name: string;
+  readonly doctor: DoctorRole;
+  readonly probe: ProbeRole;
+  /**
+   * True when `compileLatex2Pdf` can actually drive this compiler: it runs
+   * `latexmk` and falls back to `pdflatex`. Nothing here can invoke `xelatex`
+   * or `lualatex` and no setting selects a compiler, so they must not count
+   * as "a compiler is available".
+   */
+  readonly drivesCompile?: true;
+}
+
+/**
+ * The one catalog of external LaTeX and image dependencies TeXRA probes, and
+ * what each one means to each consumer that probes it. Three surfaces read it
+ * and none restates a name: the doctor probe (`@latex/latexToolchain`), the
+ * setup assistant's probe (`@tools/setup/toolProbing`), and the settings
+ * view's LaTeX status (`@controllers/settingsView/LatexToolingController`).
+ *
+ * The order is the doctor's row order, which is user-visible CLI output.
+ *
+ * Lives in `shared` rather than `tools` or `latex` because all three
+ * subsystems consume it — and `tools` already depends on `latex`, so a
+ * `latex`-side or `tools`-side home would create the cross-subsystem cycle the
+ * LAY-1 edge ratchet forbids. Keep the tool descriptions in
+ * `ProbeEnvironmentTool`/`VerifySetupTool` aligned with the `required` and
+ * `image` entries here — they appear verbatim in the LLM prompt.
+ */
+const LATEX_TOOLS = [
+  {
+    name: 'latexmk',
+    doctor: { row: 'required', purpose: 'LaTeX build orchestration' },
+    probe: 'required',
+    drivesCompile: true,
+  },
+  {
+    name: 'pdflatex',
+    doctor: { row: 'optional', purpose: 'PDFLaTeX compiler' },
+    probe: 'required',
+    drivesCompile: true,
+  },
+  {
+    name: 'xelatex',
+    doctor: { row: 'optional', purpose: 'XeLaTeX compiler' },
+    probe: 'none',
+  },
+  {
+    name: 'lualatex',
+    doctor: { row: 'optional', purpose: 'LuaLaTeX compiler' },
+    probe: 'none',
+  },
+  {
+    name: 'bibtex',
+    doctor: { row: 'optional', purpose: 'BibTeX bibliography processing' },
+    probe: 'none',
+  },
+  {
+    name: 'biber',
+    doctor: { row: 'optional', purpose: 'Biber bibliography processing' },
+    probe: 'none',
+  },
+  {
+    name: 'latexdiff',
+    doctor: { row: 'optional', purpose: 'LaTeX diff generation' },
+    probe: 'required',
+  },
+  {
+    name: 'latexindent',
+    doctor: { row: 'optional', purpose: 'LaTeX formatting' },
+    probe: 'required',
+  },
+  { name: 'texcount', doctor: { row: 'none' }, probe: 'required' },
+  { name: 'perl', doctor: { row: 'none' }, probe: 'required' },
+  { name: 'gs', doctor: { row: 'none' }, probe: 'required' },
+  { name: 'gm', doctor: { row: 'none' }, probe: 'image' },
+  { name: 'magick', doctor: { row: 'none' }, probe: 'image' },
+] as const satisfies readonly LatexToolEntry[];
+
+type CatalogEntry = (typeof LATEX_TOOLS)[number];
+
+type EntryWith<Role extends ProbeRole> = Extract<CatalogEntry, { probe: Role }>;
+
+type CompilerEntry = Extract<CatalogEntry, { drivesCompile: true }>;
+
+type DoctorEntry = Extract<
+  CatalogEntry,
+  { doctor: { row: 'required' | 'optional' } }
+>;
+
+/** A dependency the setup assistant and the settings view both probe. */
+export type ProbedLatexTool = EntryWith<'required' | 'image'>['name'];
+
+/** One of the interchangeable image tools. */
+type ImageLatexTool = EntryWith<'image'>['name'];
+
+/** A compiler `compileLatex2Pdf` can drive. */
+type SupportedLatexCompiler = CompilerEntry['name'];
+
+/**
+ * The dependency set the setup assistant and the settings view probe: the
+ * LaTeX toolchain plus both image-tool candidates. One spelling of that list;
+ * the copies it replaces were kept in step by hand.
+ */
+export const PROBED_LATEX_TOOLS: readonly ProbedLatexTool[] =
+  LATEX_TOOLS.filter(
+    (tool): tool is EntryWith<'required' | 'image'> => tool.probe !== 'none',
+  ).map((tool) => tool.name);
+
+/** The image tools; either one alone satisfies the image capability. */
+export const IMAGE_LATEX_TOOLS: readonly ImageLatexTool[] = LATEX_TOOLS.filter(
+  (tool): tool is EntryWith<'image'> => tool.probe === 'image',
+).map((tool) => tool.name);
+
+/**
+ * How user-facing output names the image capability when neither candidate is
+ * installed: one entry, not two, because either tool satisfies it.
+ */
+export const IMAGE_TOOL_LABEL = 'gm/magick';
+
+/** A dependency `texra doctor` renders a row for. */
+type DoctorLatexToolName = DoctorEntry['name'];
+
+/**
+ * What one dependency means to `texra doctor`, flattened into the row it
+ * renders. The doctor owns the rendering; this is the fact behind it.
+ */
+export interface DoctorLatexTool {
+  /** The binary name; the row's id is `latex.<name>`. */
+  readonly name: DoctorLatexToolName;
+  /** A missing required tool fails the report and sets a nonzero exit code. */
+  readonly required: boolean;
+  readonly purpose: string;
+}
+
+/** The dependencies `texra doctor` renders a row for, in row order. */
+export const DOCTOR_LATEX_TOOLS: readonly DoctorLatexTool[] =
+  LATEX_TOOLS.filter(
+    (tool): tool is DoctorEntry => tool.doctor.row !== 'none',
+  ).map((tool) => ({
+    name: tool.name,
+    required: tool.doctor.row === 'required',
+    purpose: tool.doctor.purpose,
+  }));
+
+/**
+ * The LaTeX-to-PDF compilers TeXRA can actually drive. Single source for that
+ * answer — the doctor probe, the compile-check guard, the compile option enum,
+ * and the settings view's TeX-distribution row — so none of them can disagree
+ * with the advice text.
+ */
+export const SUPPORTED_LATEX_COMPILERS: readonly SupportedLatexCompiler[] =
+  LATEX_TOOLS.filter(
+    (tool): tool is CompilerEntry => 'drivesCompile' in tool,
+  ).map((tool) => tool.name);
 
 /** Supported OS platform keys for install guides. */
 export type OSPlatform = 'darwin' | 'win32' | 'linux';

@@ -16,11 +16,9 @@ import {
   generateSectionSpacingFixes,
   generateXmlLatexConversions,
 } from '@replacement/helpers';
-import type { NonRegexReplacementCategory } from '@replacement/types';
-import type { NonRegexReplacementCategory as NonRegexReplacementCategoryName } from '@shared/constants/replacementCategories';
+import type { NonRegexRuleSet } from '@replacement/types';
 
-export const CHARACTER_REPLACEMENTS: NonRegexReplacementCategory = {
-  name: 'characters' satisfies NonRegexReplacementCategoryName,
+export const CHARACTER_REPLACEMENTS: NonRegexRuleSet = {
   patterns: {
     ansätze: 'ans{\\"a}tze',
     Rényi: "R{\\'e}nyi",
@@ -31,8 +29,7 @@ export const CHARACTER_REPLACEMENTS: NonRegexReplacementCategory = {
 };
 
 // Common LaTeX equation spacing fixes
-export const EQUATION_REPLACEMENTS: NonRegexReplacementCategory = {
-  name: 'equations' satisfies NonRegexReplacementCategoryName,
+export const EQUATION_REPLACEMENTS: NonRegexRuleSet = {
   patterns: (() => {
     // ====================================================================
     // Auto-generated replacements - for easily maintainable pattern groups
@@ -168,8 +165,7 @@ export const EQUATION_REPLACEMENTS: NonRegexReplacementCategory = {
   })(),
 };
 
-export const FONT_COMMAND_REPLACEMENTS: NonRegexReplacementCategory = {
-  name: 'font_commands' satisfies NonRegexReplacementCategoryName,
+export const FONT_COMMAND_REPLACEMENTS: NonRegexRuleSet = {
   patterns: {
     ...createPatterns(
       [...'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'],
@@ -187,13 +183,11 @@ export const FONT_COMMAND_REPLACEMENTS: NonRegexReplacementCategory = {
   },
 };
 
-export const LATEX_FORBIDDEN_REPLACEMENTS: NonRegexReplacementCategory = {
-  name: 'latex_forbidden_commands' satisfies NonRegexReplacementCategoryName,
+export const LATEX_FORBIDDEN_REPLACEMENTS: NonRegexRuleSet = {
   patterns: generateInvalidSectionEndingFixes(SECTION_TYPES),
 };
 
-export const GPTNESS_REPLACEMENTS: NonRegexReplacementCategory = {
-  name: 'gptness' satisfies NonRegexReplacementCategoryName,
+export const GPTNESS_REPLACEMENTS: NonRegexRuleSet = {
   patterns: {
     'delve into': 'discuss',
     'delves into': 'discusses',
@@ -311,8 +305,7 @@ export const GPTNESS_REPLACEMENTS: NonRegexReplacementCategory = {
   },
 };
 
-export const HTML_ENTITY_REPLACEMENTS: NonRegexReplacementCategory = {
-  name: 'html_entities' satisfies NonRegexReplacementCategoryName,
+export const HTML_ENTITY_REPLACEMENTS: NonRegexRuleSet = {
   patterns: {
     // Angle brackets often appear when XML tags are HTML-escaped
     '&lt;': '<',
@@ -433,8 +426,7 @@ export const HTML_ENTITY_REPLACEMENTS: NonRegexReplacementCategory = {
   },
 };
 
-export const LATEX_XML_REPLACEMENTS: NonRegexReplacementCategory = {
-  name: 'latex_xml' satisfies NonRegexReplacementCategoryName,
+export const LATEX_XML_REPLACEMENTS: NonRegexRuleSet = {
   patterns: (() => {
     // ====================================================================
     // Auto-generated replacements - for easily maintainable pattern groups
@@ -510,8 +502,7 @@ export const LATEX_XML_REPLACEMENTS: NonRegexReplacementCategory = {
   })(),
 };
 
-export const LATEXDIFF_REPLACEMENTS: NonRegexReplacementCategory = {
-  name: 'latexdiff' satisfies NonRegexReplacementCategoryName,
+export const LATEXDIFF_REPLACEMENTS: NonRegexRuleSet = {
   patterns: {
     // Fix issues with latexdiff markup and excessive newlines
     '\n\n}\\end{align*}%DIFAUXCMD': '\n}\\end{align*}%DIFAUXCMD',
@@ -523,8 +514,7 @@ export const LATEXDIFF_REPLACEMENTS: NonRegexReplacementCategory = {
   },
 };
 
-export const PERSONAL_STYLE_REPLACEMENTS: NonRegexReplacementCategory = {
-  name: 'personal_style' satisfies NonRegexReplacementCategoryName,
+export const PERSONAL_STYLE_REPLACEMENTS: NonRegexRuleSet = {
   patterns: {
     // ===== Spacing preferences =====
     // Consistent spacing for math mode and delimiters
@@ -590,8 +580,7 @@ export const PERSONAL_STYLE_REPLACEMENTS: NonRegexReplacementCategory = {
   },
 };
 
-export const SECTION_REPLACEMENTS: NonRegexReplacementCategory = {
-  name: 'sections' satisfies NonRegexReplacementCategoryName,
+export const SECTION_REPLACEMENTS: NonRegexRuleSet = {
   // Examples:
   // \end{align}\n\section -> \end{align}\n\n\n\section
   // \end{equation}\n\paragraph -> \end{equation}\n\n\n\paragraph
@@ -602,8 +591,7 @@ export const SECTION_REPLACEMENTS: NonRegexReplacementCategory = {
 };
 
 // LaTeX spacing and punctuation fixes
-export const LATEX_SPACING_REPLACEMENTS: NonRegexReplacementCategory = {
-  name: 'latex_spacing' satisfies NonRegexReplacementCategoryName,
+export const LATEX_SPACING_REPLACEMENTS: NonRegexRuleSet = {
   patterns: {
     // ===== Basic spacing fixes =====
     // Remove unnecessary spacing commands (order matters: longer patterns first)
@@ -719,8 +707,7 @@ export const LATEX_SPACING_REPLACEMENTS: NonRegexReplacementCategory = {
   },
 };
 
-export const UNICODE_REPLACEMENTS: NonRegexReplacementCategory = {
-  name: 'unicode' satisfies NonRegexReplacementCategoryName,
+export const UNICODE_REPLACEMENTS: NonRegexRuleSet = {
   patterns: {
     // ===== Dash and hyphen replacements (globally safe) =====
     '–': '-', // en dash (U+2013) to ASCII hyphen (U+002D)
