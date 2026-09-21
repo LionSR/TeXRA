@@ -606,6 +606,7 @@ const sessionHandleLayer = (
               } else if (
                 event.type === 'run.end' ||
                 event.type === 'run.removed' ||
+                (event.type === 'child.park' && event.phase === 'parked') ||
                 (event.type === 'flow.step' && event.payload.step === 'waiting')
               ) {
                 drop = (key) => key.startsWith(`${runId}/`);

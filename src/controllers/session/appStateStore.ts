@@ -167,7 +167,7 @@ export const openAppStateStore = Effect.fn('appStateStore.openAppStateStore')(
             {
               type: 'state.value.set',
               aggregateId: aggregateId('app-state', key),
-              value,
+              state: { key: 'app-state', value },
             },
           ]),
         ),

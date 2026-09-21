@@ -1150,6 +1150,7 @@ export class SessionHandle {
       const phaseMoved =
         event.type === 'run.activate' ||
         event.type === 'run.end' ||
+        event.type === 'child.park' ||
         (event.type === 'flow.step' &&
           (event.payload.step === 'waiting' ||
             event.payload.step === 'turn.begin'));

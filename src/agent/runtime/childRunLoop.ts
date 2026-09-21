@@ -19,7 +19,6 @@ import type { ChildTurnKey } from '@agent/storage/runRecords';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { finalizeRunTerminal } from '@agent/runtime/AgentRunLifecycle';
 import { childRunBudgetFor } from '@agent/runtime/childRunBudget';
-import { stepRow } from '@agent/runtime/loop/rows';
 import type { RunHandle, RunInterruptHandler } from '@agent/runtime/RunHandle';
 import { Runs } from '@agent/runtime/runRegistry';
 import { RunInput, type QueuedFollowUp } from '@agent/followUp/RunInput';
@@ -556,29 +555,23 @@ function commitChildTurn(
 
 /**
  * Move an agent-CLI child's phase across its park (one run model, 3.3):
- * `waiting` before the loop blocks on its queue, `turn.begin` when the taken
- * batch starts the next turn. Written with the loops' own step-row
- * constructor, so the child protocol carries no second phase vocabulary. A run
- * this loop is the only driver of has no `flow.snapshot` and no rounds: its
- * family is the interactive one its turns are, and the turn index is its one
- * moving coordinate. Without the park row the run stays RUNNING while idle and
- * `getToolUseFollowUpTarget` classifies the next turn's submission as
- * `no_session`; native children park through their own loop's `waiting` row
- * and are never written here, so each park keeps one writer.
+ * `parked` before the loop blocks on its queue, `resumed` when the taken
+ * batch starts the next turn. Its own row: a run this loop is the only
+ * driver of has no ledger, no `flow.snapshot` and no rounds, so a borrowed
+ * `flow.step` had to invent a `toolUse` family, a round 0 and a continuation
+ * index that named nothing. Without the park row the run stays RUNNING while
+ * idle and `getToolUseFollowUpTarget` classifies the next turn's submission
+ * as `no_session`; native children park through their own loop's `waiting`
+ * step and are never written here, so each park keeps one writer.
  */
-function commitFlowStep(
+function commitPark(
   session: SessionHandle,
   runId: RunId,
-  turn: number,
-  step: 'waiting' | 'turn.begin',
+  phase: 'parked' | 'resumed',
 ): Effect.Effect<void, DatabaseNotOwner | DatabaseWriteFailed> {
   return session
     .commit([
-      stepRow(
-        runId,
-        { family: 'toolUse', round: 0, turn, continuationIndex: 0 },
-        step,
-      ),
+      { type: 'child.park', aggregateId: aggregateId('run', runId), phase },
     ])
     .pipe(Effect.asVoid);
 }
@@ -1277,8 +1270,7 @@ export function startChildRunLoop<TTurn, R = never>(
               // The park is durable before the block, so a follow-up arriving
               // while this loop sleeps is admitted onto its queue instead of
               // being refused against a run that only looks busy.
-              if (childRun)
-                yield* commitFlowStep(runSession, runId, turnIndex, 'waiting');
+              if (childRun) yield* commitPark(runSession, runId, 'parked');
               const nextRunTurn = strategy.runTurn;
               if (!childRun) {
                 // The native flow takes and consumes its own batch; this loop
@@ -1293,15 +1285,10 @@ export function startChildRunLoop<TTurn, R = never>(
               }
               const batch = yield* untilInterrupted(input.take, loop);
               if (!batch || loop.isInterrupted()) break;
-              // The batch leaves the park: the next turn's index is the one
-              // the top of the loop is about to accept.
+              // The batch leaves the park: the loop is running again from
+              // here, and the turn it is about to accept is the top's.
               const taken = batch.synthetic ? [] : batch.followUps;
-              yield* commitFlowStep(
-                runSession,
-                runId,
-                turnIndex + 1,
-                'turn.begin',
-              );
+              yield* commitPark(runSession, runId, 'resumed');
               consumed = taken;
               const prompts: readonly FollowUpContent[] = batch.synthetic
                 ? [{ text: batch.text, origin: 'user' }]

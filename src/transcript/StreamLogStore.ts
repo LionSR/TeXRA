@@ -48,6 +48,10 @@ function applyEvent(
   else if (event.type === 'flow.step') {
     if (event.payload.step === 'waiting') fold.status(RUN_PHASE.WAITING);
     else if (event.payload.step !== 'halted') fold.status(RUN_PHASE.RUNNING);
+  } else if (event.type === 'child.park') {
+    fold.status(
+      event.phase === 'parked' ? RUN_PHASE.WAITING : RUN_PHASE.RUNNING,
+    );
   } else if (event.type === 'run.end') fold.status(event.outcome);
   else if (isTranscriptEvent(event))
     fold.record(event, {

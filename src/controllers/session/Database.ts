@@ -58,6 +58,7 @@ import {
   type RunParent,
   type SessionEvent,
   type SessionEventDraft,
+  type StoredValue,
 } from '@shared/schemas';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
 import { redactTraceDraft } from '@shared/session/traceRedaction';
@@ -157,11 +158,20 @@ const LISTING_TYPES = SessionEventDraftSchema.options
       type !== 'followup.consumed',
   )
   .map((type) => `${type}.1`);
+/**
+ * A listing row is the latest of its type per aggregate, and of its
+ * discriminator where the type carries one: `run.fact` holds five families
+ * on one row type, so grouping by the type alone would keep only whichever
+ * family wrote last and a reopened session would lose the other four. The
+ * expression is `NULL` for every other type, which groups each of them
+ * exactly as before.
+ */
+const LISTING_GROUP = `aggregate_id, type, json_extract(data, '$.fact.key')`;
 const READ_LISTING = `
 WITH latest AS (
   SELECT aggregate_id, type, MAX(seq) AS seq FROM event
   WHERE type IN (SELECT value FROM json_each(?))
-  GROUP BY aggregate_id, type
+  GROUP BY ${LISTING_GROUP}
 ), selected AS (
   SELECT ${EVENT_COLUMNS} FROM latest
   JOIN event e ON e.aggregate_id = latest.aggregate_id
@@ -244,7 +254,9 @@ RETURNING seq
  */
 const APP_STATE_ROWS = `SELECT ${EVENT_COLUMNS} FROM event e
 JOIN (SELECT aggregate_id, MAX(seq) AS seq FROM event
-  WHERE type = 'state.value.set.1' GROUP BY aggregate_id)
+  WHERE type = 'state.value.set.1'
+    AND json_extract(data, '$.state.key') = 'app-state'
+  GROUP BY aggregate_id)
   latest USING (aggregate_id, seq)`;
 /** Insert one row and read back the ordinal SQLite assigned it. */
 const INSERT_EVENT = `
@@ -356,7 +368,7 @@ export const databaseLayer = (
             AND EXISTS (SELECT 1 FROM event_sequence s
                         WHERE s.aggregate_id = event.aggregate_id AND s.closed = 0)
             AND type IN (SELECT value FROM json_each(?))
-          GROUP BY aggregate_id, type
+          GROUP BY ${LISTING_GROUP}
         )
         SELECT ${EVENT_COLUMNS} FROM latest JOIN event e USING (aggregate_id,type,seq)
         ORDER BY "commit"
@@ -825,11 +837,24 @@ export const databaseLayer = (
             };
           }),
         );
-      const inquiryRecordFromRow = (row: Readonly<Record<string, unknown>>) => {
+      /**
+       * The stored value one row carries, refused when the row is not that
+       * family's. The schema's own refinement already ties each family to
+       * its aggregate kind, so a row that reaches here under the wrong key
+       * is a corrupt store, and `decodeEvent` is the boundary that says so.
+       */
+      const storedValue = <K extends StoredValue['key']>(
+        row: Readonly<Record<string, unknown>>,
+        key: K,
+      ): Extract<SessionEvent, { type: 'state.value.set' }> & {
+        state: Extract<StoredValue, { key: K }>;
+      } => {
         const event = decodeEvent(row);
-        if (event.type !== 'inquiry.recorded')
-          throw new Error('Invalid global inquiry record');
-        return event.record;
+        if (event.type !== 'state.value.set' || event.state.key !== key)
+          throw new Error(`Stored row is not a ${key} value`);
+        return event as Extract<SessionEvent, { type: 'state.value.set' }> & {
+          state: Extract<StoredValue, { key: K }>;
+        };
       };
       const latestEventRow = (id: AggregateId) =>
         sql
@@ -845,11 +870,12 @@ export const databaseLayer = (
         );
         const values = new Map<string, JsonValue>();
         for (const row of rows) {
-          const event = decodeEvent(row);
-          if (event.type !== 'state.value.set')
-            throw new Error('Invalid application state row');
-          if (event.value.kind === 'undefined') continue;
-          values.set(aggregateTarget(event.aggregateId).id, event.value.value);
+          const event = storedValue(row, 'app-state');
+          if (event.state.value.kind === 'undefined') continue;
+          values.set(
+            aggregateTarget(event.aggregateId).id,
+            event.state.value.value,
+          );
         }
         return values;
       });
@@ -858,18 +884,18 @@ export const databaseLayer = (
           const row = yield* latestEventRow(
             qualifyAggregateId('update-check', host),
           );
-          if (row === undefined) return null;
-          const event = decodeEvent(row);
-          if (event.type !== 'update.check.recorded')
-            throw new Error('Invalid update check record');
-          return event.record;
+          return row === undefined
+            ? null
+            : storedValue(row, 'update-check').state.record;
         });
       const readInquiryRecord = (id: string) =>
         Effect.gen(function* () {
           const row = yield* latestEventRow(
             qualifyAggregateId('global-inquiry', id),
           );
-          return row === undefined ? null : inquiryRecordFromRow(row);
+          return row === undefined
+            ? null
+            : storedValue(row, 'global-inquiry').state.record;
         });
       return {
         observedCommit,
@@ -924,9 +950,9 @@ export const databaseLayer = (
               yield* appendPrepared(
                 [
                   prepareEventDraft({
-                    type: 'update.check.recorded',
+                    type: 'state.value.set',
                     aggregateId: qualifyAggregateId('update-check', host),
-                    record,
+                    state: { key: 'update-check', record },
                   }),
                 ],
                 at,
@@ -938,10 +964,12 @@ export const databaseLayer = (
           query(
             Effect.gen(function* () {
               const rows = yield* sql.unsafe<Record<string, unknown>>(
-                `SELECT ${EVENT_COLUMNS} FROM event e JOIN (SELECT aggregate_id, MAX(seq) AS seq FROM event WHERE type = 'inquiry.recorded.1' GROUP BY aggregate_id) latest USING (aggregate_id, seq) ORDER BY e."commit"`,
+                `SELECT ${EVENT_COLUMNS} FROM event e JOIN (SELECT aggregate_id, MAX(seq) AS seq FROM event WHERE type = 'state.value.set.1' AND json_extract(data, '$.state.key') = 'global-inquiry' GROUP BY aggregate_id) latest USING (aggregate_id, seq) ORDER BY e."commit"`,
                 [],
               );
-              return rows.map(inquiryRecordFromRow);
+              return rows.map(
+                (row) => storedValue(row, 'global-inquiry').state.record,
+              );
             }),
           ),
         updateInquiryRecord: (id, change) =>
@@ -958,9 +986,9 @@ export const databaseLayer = (
                 yield* appendPrepared(
                   [
                     prepareEventDraft({
-                      type: 'inquiry.recorded',
+                      type: 'state.value.set',
                       aggregateId: qualifyAggregateId('global-inquiry', id),
-                      record: result.success,
+                      state: { key: 'global-inquiry', record: result.success },
                     }),
                   ],
                   at,
@@ -1301,12 +1329,7 @@ function prepareEventDraft(input: SessionEventDraft) {
  * that carries them; a run's claim, by contrast, its sequence row keeps.
  */
 function borrowsClaim(draft: SessionEventDraft): boolean {
-  return (
-    draft.type === 'desktop.projects.changed' ||
-    draft.type === 'inquiry.recorded' ||
-    draft.type === 'update.check.recorded' ||
-    draft.type === 'state.value.set'
-  );
+  return draft.type === 'state.value.set';
 }
 /**
  * Serialize the validated draft before opening the transaction. Draft parsing
