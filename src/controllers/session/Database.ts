@@ -864,14 +864,16 @@ export const databaseLayer = (
         }
         return values;
       });
-      /** The latest stored record on one keyed aggregate, or null. */
-      const latestRecord = <K extends 'update-check' | 'global-inquiry'>(
-        key: K,
-        id: string,
-      ) =>
-        latestEventRow(qualifyAggregateId(key, id)).pipe(
-          Effect.map((row) =>
-            row === undefined ? null : storedValue(row, key).state.record,
+      const readUpdateCheck = (host: string) =>
+        latestEventRow(qualifyAggregateId('update-check', host)).pipe(
+          Effect.map((r) =>
+            r ? storedValue(r, 'update-check').state.record : null,
+          ),
+        );
+      const readInquiryRecord = (id: string) =>
+        latestEventRow(qualifyAggregateId('global-inquiry', id)).pipe(
+          Effect.map((r) =>
+            r ? storedValue(r, 'global-inquiry').state.record : null,
           ),
         );
       return {
@@ -908,11 +910,11 @@ export const databaseLayer = (
           ),
         readRunChildren: (id) => query(decodedRows(runChildren, [id, id, id])),
         readAppState: () => query(readAppState),
-        readUpdateCheck: (host) => query(latestRecord('update-check', host)),
+        readUpdateCheck: (host) => query(readUpdateCheck(host)),
         recordUpdateCheck: (host, change) =>
           transact(
             Effect.gen(function* () {
-              const current = yield* latestRecord('update-check', host);
+              const current = yield* readUpdateCheck(host);
               const record = {
                 lastCheckedAt:
                   change.type === 'checked'
@@ -936,7 +938,7 @@ export const databaseLayer = (
               );
             }),
           ),
-        readInquiryRecord: (id) => query(latestRecord('global-inquiry', id)),
+        readInquiryRecord: (id) => query(readInquiryRecord(id)),
         listInquiryRecords: () =>
           query(
             Effect.gen(function* () {
@@ -952,7 +954,7 @@ export const databaseLayer = (
         updateInquiryRecord: (id, change) =>
           transact(
             Effect.gen(function* () {
-              const current = yield* latestRecord('global-inquiry', id);
+              const current = yield* readInquiryRecord(id);
               const result = change(current);
               if (Result.isSuccess(result) && result.success !== null) {
                 if (result.success.threadId !== id)
@@ -995,10 +997,9 @@ export const databaseLayer = (
           ),
         readDesktopProjects: (id) =>
           query(
-            Effect.gen(function* () {
-              const row = yield* latestEventRow(id);
-              return row === undefined ? undefined : decodeEvent(row);
-            }),
+            latestEventRow(id).pipe(
+              Effect.map((row) => (row ? decodeEvent(row) : undefined)),
+            ),
           ),
         readAggregate: (id, fromSeq) =>
           query(decodedRows(aggregate, [id, fromSeq])),
