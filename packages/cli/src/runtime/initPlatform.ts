@@ -116,12 +116,13 @@ export type CliPlatformServices = Pick<Platform, 'lifecycle'> &
     readonly secrets: PlatformSecrets;
     /**
      * The process roots this init installed: one process, one project (the
-     * `--cwd` workspace). Undefined only when another root installed the
-     * platform before this init ran (a test harness's fake host), so the
-     * caller that needs them reports their absence rather than falling back
-     * to a process-wide lookup.
+     * `--cwd` workspace) -- or, when another root installed the platform
+     * before this init ran (a test harness's fake host), the roots that
+     * root's process session was opened over. A process with neither is a
+     * composition defect the init refuses below, so every caller gets roots
+     * rather than branching on their absence.
      */
-    readonly roots?: WorkspaceRoots;
+    readonly roots: WorkspaceRoots;
     /**
      * The process session over the process roots: one CLI process, one
      * project, one persistent session, opened by the first entry point that
@@ -464,7 +465,7 @@ export function initCliPlatform(
               );
         }),
       lifecycle: services.lifecycle,
-      roots: installedRoots,
+      roots: settingSlots,
     };
 
     if (!supabaseAuthInitialized) {

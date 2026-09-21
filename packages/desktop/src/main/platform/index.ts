@@ -144,9 +144,9 @@ export async function initializeElectronPlatform(
       const processStart = yield* nodeProcesses.selfIdentity();
       const [globalState, workspaceState, config, secrets] = yield* Effect.all(
         [
-          // Global state stays in the Electron profile, beside this
-          // profile's update-check records and apart from the shared
-          // `~/.texra` root the workspace scopes use.
+          // Global state stays in the Electron profile, apart from the
+          // shared `~/.texra` root the workspace scopes and this process's
+          // one global database handle -- the update check among them -- use.
           openAppStateStore(resolveGlobalStoragePath(userDataPath)),
           openAppStateStore(storage.getStoragePath()),
           openTexraConfigStores(storage, undefined, (message) =>

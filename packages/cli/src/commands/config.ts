@@ -58,26 +58,11 @@ function asTeamUsageError<E>(error: E): E | CliUsageError {
     : error;
 }
 
-/**
- * The process roots this command's init installed. Absent only when another
- * root installed the platform first, which leaves no workspace to configure.
- */
-function installedRoots(
-  services: CliPlatformServices,
-): NonNullable<CliPlatformServices['roots']> {
-  if (!services.roots) {
-    throw new Error(
-      'texra config needs the workspace roots its platform init installs.',
-    );
-  }
-  return services.roots;
-}
-
 const showConfig = Effect.fn('showConfig')(function* (
   context: CliContext,
   services: CliPlatformServices,
 ) {
-  const stores = installedRoots(services);
+  const stores = services.roots;
   const agents = yield* readCliAgentRoster(stores);
   const settings = Object.fromEntries(
     CLI_STATE_SETTINGS.map((entry) => [
@@ -115,7 +100,7 @@ const configureAgentRoster = Effect.fn('configureAgentRoster')(function* (
     readonly clearDefaultAgent: boolean;
   },
 ) {
-  const roots = installedRoots(services);
+  const roots = services.roots;
   // The controller below resolves agent keys, so the registry must be loaded
   // first; the honest roster read happens once, later, where it is emitted.
   yield* loadAgents({ includeRemote: false });
@@ -301,10 +286,10 @@ const configEditCommand = defineCliCommand({
     const { runConfigTui } = await import('../config/runConfigTui');
     await runtime.runPromise(
       runConfigTui({
-        stores: installedRoots(services),
+        stores: services.roots,
         secrets: services.secrets,
         runtime: services.runtime,
-        workspaceRoot: services.roots?.workspace,
+        workspaceRoot: services.roots.workspace,
         colorEnabled: context.stdoutColorEnabled,
         onError: writeErrorStderr,
       }),

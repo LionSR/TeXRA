@@ -20,7 +20,7 @@
 // in: the composition root and the session factory under it stay internal,
 // because a caller that reached them directly would hold a composed process
 // and an open session with no scope to end either.
-export type { AgentPlatform, AgentRuntime } from './effect/runtime.js';
+export type { AgentPlatform } from './effect/runtime.js';
 export { Sessions } from './effect/sessions.js';
 export type {
   Run,
