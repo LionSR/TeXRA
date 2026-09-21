@@ -74,11 +74,23 @@ export function parseDynamicModuleSpecifiers(loaderSource) {
   return specifiers;
 }
 
-// The names a suite really references, read from its syntax rather than its
-// text. A mention inside a comment, a test title or any other string literal
-// is not a consumer, and exempting an export on one would hold a dead name in
-// place for as long as the prose survived.
-export function referencedIdentifiers(source) {
+const LOADER_FUNCTION = 'loadSourceModule';
+
+/** Whether a call's callee is the loader, under a namespace or bare. */
+function isLoaderCallee(callee) {
+  if (ts.isIdentifier(callee)) return callee.text === LOADER_FUNCTION;
+  return (
+    ts.isPropertyAccessExpression(callee) &&
+    callee.name.text === LOADER_FUNCTION
+  );
+}
+
+// What a suite really loads and really references, read from its syntax rather
+// than its text: the specifiers it passes to the loader, and the identifiers it
+// mentions outside comments and string literals. Prose is not a consumer, and
+// exempting an export on a mention in a comment or a test title would hold a
+// dead name in place for as long as the sentence survived.
+export function suiteReferences(source) {
   const sourceFile = ts.createSourceFile(
     'suite.ts',
     source,
@@ -86,13 +98,20 @@ export function referencedIdentifiers(source) {
     false,
     ts.ScriptKind.TS,
   );
-  const names = new Set();
+  const identifiers = new Set();
+  const loads = new Set();
   const visit = (node) => {
-    if (ts.isIdentifier(node)) names.add(node.text);
+    if (ts.isIdentifier(node)) identifiers.add(node.text);
+    if (ts.isCallExpression(node) && isLoaderCallee(node.expression)) {
+      const [argument] = node.arguments;
+      if (argument != null && ts.isStringLiteralLike(argument)) {
+        loads.add(argument.text);
+      }
+    }
     ts.forEachChild(node, visit);
   };
   visit(sourceFile);
-  return names;
+  return { identifiers, loads };
 }
 
 // Splits findings into the ones the ratchet answers for and the ones a suite

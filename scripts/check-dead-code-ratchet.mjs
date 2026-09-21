@@ -37,7 +37,7 @@ import {
   partitionDynamicConsumers,
   parseKnipIssues,
   readBaseline,
-  referencedIdentifiers,
+  suiteReferences,
 } from './check-dead-code-ratchet-core.mjs';
 import { walkFiles } from './walkFiles.mjs';
 
@@ -89,12 +89,15 @@ function dynamicTestConsumers() {
   const specifiers = parseDynamicModuleSpecifiers(
     readFileSync(loaderPath, 'utf8'),
   );
+  // The text filter only narrows what is worth parsing; which specifiers a
+  // suite loads is decided by the parse below, so a suite that merely names
+  // the loader in prose contributes nothing.
   const suites = walkFiles(path.join(rootDir, 'src', 'test-kernel'), {
     include: (relativePath) => relativePath.endsWith('.vitest.ts'),
   })
     .map(({ absolutePath }) => readFileSync(absolutePath, 'utf8'))
     .filter((source) => source.includes('loadSourceModule'))
-    .map((source) => ({ source, names: referencedIdentifiers(source) }));
+    .map((source) => suiteReferences(source));
 
   const consumers = new Map();
   for (const specifier of specifiers) {
@@ -113,8 +116,8 @@ function dynamicTestConsumers() {
     }
     const referenced = new Set();
     for (const suite of suites) {
-      if (!suite.source.includes(specifier)) continue;
-      for (const name of suite.names) referenced.add(name);
+      if (!suite.loads.has(specifier)) continue;
+      for (const name of suite.identifiers) referenced.add(name);
     }
     if (referenced.size > 0) {
       consumers.set(toRepoPath(modulePath), referenced);

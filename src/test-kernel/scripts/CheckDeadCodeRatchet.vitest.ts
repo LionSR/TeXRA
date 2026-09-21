@@ -14,7 +14,7 @@ const {
   partitionDynamicConsumers,
   parseKnipIssues,
   readBaseline,
-  referencedIdentifiers,
+  suiteReferences,
 } = ratchet;
 type KnipFinding = {
   file: string;
@@ -228,9 +228,9 @@ describe('check-dead-code-ratchet partitionDynamicConsumers', () => {
     const consumers = new Map([
       [
         'packages/desktop/src/main/platform/electronSecrets.ts',
-        referencedIdentifiers(
-          'const { getSecretStorageMode } = await loadSourceModule(spec);',
-        ),
+        suiteReferences(
+          "const { getSecretStorageMode } = await loadSourceModule('@desktop/main/platform/electronSecrets');",
+        ).identifiers,
       ],
     ]);
     const findings: KnipFinding[] = [
@@ -259,22 +259,24 @@ describe('check-dead-code-ratchet partitionDynamicConsumers', () => {
     });
   });
 
-  // A name that survives only in prose is not a consumer: the export is dead
-  // and the ratchet has to say so, however long the comment outlives the use.
-  it('does not read a name out of a comment or a string literal as a use', () => {
-    const names = referencedIdentifiers(
-      `// getSecretStorageMode used to be read here.
+  // Prose is not a consumer, on either side: a name that survives only in a
+  // comment leaves the export dead, and a specifier named only in a comment
+  // does not make that suite's identifiers count for the module.
+  it('reads neither a name nor a loaded specifier out of a comment', () => {
+    const { identifiers, loads } = suiteReferences(
+      `// getSecretStorageMode came from loadSourceModule('@desktop/main/platform/electronSecrets').
        it('covers getSecretStorageMode', () => {
          expect(somethingElse).toBe(true);
        });`,
     );
 
-    expect([...names].toSorted()).toEqual([
-      'expect',
-      'it',
-      'somethingElse',
-      'toBe',
-    ]);
+    expect({
+      identifiers: [...identifiers].toSorted(),
+      loads: [...loads],
+    }).toEqual({
+      identifiers: ['expect', 'it', 'somethingElse', 'toBe'],
+      loads: [],
+    });
   });
 
   it('refuses a loader that declares no modules rather than exempting nothing quietly', () => {
