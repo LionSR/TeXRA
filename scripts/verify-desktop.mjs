@@ -13,11 +13,16 @@
 //                           launch the packaged app and wait for readiness
 //   smoke-webviews          render the extension webviews in Electron
 //
-// A stage returns its failures instead of exiting, so the single reporter at
-// the bottom of this file owns the failure rendering and the exit code. Heavy
-// dependencies (@electron/asar, @playwright/test, the esbuild-backed database
-// fixture) load inside the stage that needs them, so no stage pays for another
-// stage's dependencies.
+// A stage returns its check failures instead of exiting, so the reporter at
+// the bottom of this file renders them and sets the exit code. Two paths keep
+// their own exits, as they did before the collapse: a usage error (unknown
+// stage, unsupported installer platform, missing `signing-env <mac|win>`)
+// exits 1 where it is detected, and the `smoke-webviews` Electron harness
+// throws its own labelled failure.
+//
+// Heavy dependencies (@electron/asar, @playwright/test, the esbuild-backed
+// database fixture) load inside the stage that needs them, so no stage pays
+// for another stage's dependencies.
 
 // Node imports
 import { appendFileSync, statSync } from 'node:fs';
