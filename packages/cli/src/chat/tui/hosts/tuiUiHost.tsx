@@ -64,11 +64,17 @@ function openDialog<T>(
 ): Effect.Effect<T | undefined> {
   return dialogLane.withPermit(
     Effect.callback<T | undefined>((resume) => {
+      // The form is re-rendered on every frame, so its answer callback is
+      // latched: a second keypress landing between the answer and the
+      // unmount must not resume this fiber twice.
+      let settled = false;
       const form = {
         commandName,
         escapeAction,
         render: (onDone: () => void, availableRows: number) =>
           render((value) => {
+            if (settled) return;
+            settled = true;
             onDone();
             resume(Effect.succeed(value));
           }, availableRows),
