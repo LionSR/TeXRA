@@ -20,6 +20,7 @@ import { Cause, Effect } from 'effect';
 import { z } from 'zod';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { ToolCall } from '@agent/runtime/ToolCall';
+import { withLogChannel, withLogData } from '@logger/effectLog';
 import { createLog } from '@logger/logUtils';
 import {
   type InquiryThreadRecord,
@@ -39,7 +40,8 @@ import { formatResultCount } from '@utils/text/stringUtils';
 
 import { collectKnownSessionLinks } from './inquiryRecordFormatting';
 
-const logger = createLog('InquiryTool');
+const CHANNEL = 'InquiryTool';
+const logger = createLog(CHANNEL);
 
 // ============================================================================
 // Schemas
@@ -249,9 +251,12 @@ export class ExternalInquiryTool extends defineTool({
       const suggestSearch = input.suggestSearch ?? undefined;
       const attachFiles = input.attachFiles ?? undefined;
 
-      logger.info(`Inquiry dispatch [${input.thread_id ?? 'new'}]`, {
-        data: input.question.slice(0, 100),
-      });
+      yield* Effect.logInfo(
+        `Inquiry dispatch [${input.thread_id ?? 'new'}]`,
+      ).pipe(
+        withLogData(input.question.slice(0, 100)),
+        withLogChannel(CHANNEL),
+      );
 
       const manifest = yield* records.recordOpenQuestion({
         threadId: input.thread_id ?? undefined,

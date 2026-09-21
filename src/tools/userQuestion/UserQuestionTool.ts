@@ -2,7 +2,7 @@ import { Effect } from 'effect';
 import { z } from 'zod';
 
 import { ToolCall } from '@agent/runtime/ToolCall';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel, withLogData } from '@logger/effectLog';
 import {
   UserQuestionAnswersSchema,
   UserQuestionPromptSchema,
@@ -14,7 +14,7 @@ import { executed } from '@tools/core/result';
 import { requireToolRun } from '@tools/core/toolRun';
 import { generateShortId } from '@utils/core';
 
-const logger = createLog('UserQuestionTool');
+const CHANNEL = 'UserQuestionTool';
 
 /** `"<base>: <detail>"` when a detail exists, else `"<base>."` */
 function withDetail(base: string, detail: string | undefined): string {
@@ -46,9 +46,10 @@ const askUserQuestion = Effect.fn('AskUserQuestionTool.execute')(function* (
   );
   const requestId = `user-question-${generateShortId()}`;
 
-  logger.info('User question requested', {
-    data: input.questions[0]?.question.slice(0, 100) ?? '',
-  });
+  yield* Effect.logInfo('User question requested').pipe(
+    withLogData(input.questions[0]?.question.slice(0, 100) ?? ''),
+    withLogChannel(CHANNEL),
+  );
 
   const permission: UserQuestionPermission = {
     requestId,

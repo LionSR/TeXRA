@@ -6,7 +6,6 @@ import { Effect, FileSystem } from 'effect';
 
 // Local imports - log
 import { withLogChannel, withLogData } from '@logger/effectLog';
-import { createLog } from '@logger/logUtils';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { FileLocation } from '@shared/schemas';
 import { renderPrompt } from '@utils/prompt';
@@ -16,8 +15,6 @@ import { normalizeLineEndings } from '@utils/text/stringUtils';
 // Local imports - latex utils
 import { compileLatex2Pdf } from './texTools';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from './latexLogging';
-
-const log = createLog(CHANNEL);
 
 /**
  * Create a standalone LaTeX file for a TikZ picture
@@ -94,7 +91,9 @@ const extract = Effect.fn('TikzPictureManager.extract')(function* (
 
     if (tikzMatches.length > 0) {
       labeledTikzPictures.push([label, tikzMatches]);
-      log.debug(`Found TikZ picture with label: ${label}`);
+      yield* Effect.logDebug(`Found TikZ picture with label: ${label}`).pipe(
+        withLogChannel(CHANNEL),
+      );
     }
   }
 

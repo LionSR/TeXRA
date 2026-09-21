@@ -27,7 +27,7 @@ import {
   hasErrorPresentationClaimed,
 } from '@common/errors/sdkError/errorMetadata';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel, withLogData } from '@logger/effectLog';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import { resolveRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import { AppState } from '@platform/interfaces';
@@ -57,7 +57,7 @@ import type {
   RuntimePresentationEventPayloads,
 } from './runtimePresentationEvents';
 
-const logger = createLog('AgentLaunchContext');
+const CHANNEL = 'AgentLaunchContext';
 
 /**
  * The run's own facts, declared once on {@link AgentRunShape}: the launch
@@ -619,9 +619,9 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
           // tracked set and warn over them, which is how a lost run fact
           // stops reaching the row that should carry it.
           if (!finalization.ok)
-            logger.warn('Failed to persist the launch failure', {
-              data: finalization.error,
-            });
+            yield* Effect.logWarning(
+              'Failed to persist the launch failure',
+            ).pipe(withLogData(finalization.error), withLogChannel(CHANNEL));
         }),
       ),
     );

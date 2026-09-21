@@ -39,6 +39,7 @@ import type { AgentEvent, AgentTrace, ResultEvent } from '@agent/trace';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import { finalizeRun } from '@agent/storage/runLifecycle';
 import type { ResponseTextProcessing } from '@latex/texraResponseTextProcessing';
+import { withLogChannel, withLogData } from '@logger/effectLog';
 import { createLog, isDebugModeEnabled } from '@logger/logUtils';
 import { redactSecrets } from '@logger/redaction';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
@@ -102,7 +103,8 @@ import type { SessionApprovals } from './runApprovalQueue';
 import type { RunRegistry } from './runRegistry';
 import type { ModelRetryGate } from './ModelRetryGate';
 
-const logger = createLog('sessionHandle');
+const CHANNEL = 'sessionHandle';
+const logger = createLog(CHANNEL);
 
 /**
  * Facts a run had queued did not commit before its lease ended: the artifact
@@ -506,9 +508,9 @@ export class SessionHandle {
       );
       const primary = failures.shift();
       for (const error of failures)
-        logger.warn(`Run ${runId}: claim release also failed`, {
-          data: error,
-        });
+        yield* Effect.logWarning(
+          `Run ${runId}: claim release also failed`,
+        ).pipe(withLogData(error), withLogChannel(CHANNEL));
       if (primary !== undefined)
         return yield* Effect.fail(ensureError(primary));
     });
@@ -1324,9 +1326,9 @@ export const settleLiveSessionRuns: Effect.Effect<void> = Effect.gen(
         ): Effect.Effect<Error | undefined> =>
           Effect.gen(function* () {
             if (!tracked) {
-              logger.warn(
+              yield* Effect.logWarning(
                 `Run ${runId} was untracked while the host exit settled it; any transcript groups it left open stay open`,
-              );
+              ).pipe(withLogChannel(CHANNEL));
               return undefined;
             }
             // A failed read leaves nothing to close; it is reported after the

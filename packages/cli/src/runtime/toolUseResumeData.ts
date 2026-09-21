@@ -3,6 +3,7 @@ import { retrieveSessionResumeData, type AgentConfig } from '@agent/runtime';
 
 import { deriveResumability } from '@agent/storage';
 import type { SessionHandle } from '@agent/runtime';
+import { withLogChannel } from '@logger/effectLog';
 import { createLog } from '@logger/logUtils';
 import {
   AgentCategory,
@@ -13,7 +14,8 @@ import {
 } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-const logger = createLog('CliToolUseResumeData');
+const CHANNEL = 'CliToolUseResumeData';
+const logger = createLog(CHANNEL);
 
 /**
  * The durable facts a run's continuability is decided from. `history list`
@@ -83,9 +85,9 @@ export const isCliRunResumable = Effect.fn('isCliRunResumable')(function* (
   if (decision.kind === 'unreadable') {
     // An unreadable run is advertised here and refused at open time, out loud
     // either way.
-    logger.warn(
+    yield* Effect.logWarning(
       `Advertising workflow ${facts.id} as resumable without reading its persisted state: ${decision.cause}`,
-    );
+    ).pipe(withLogChannel(CHANNEL));
     return true;
   }
   return (

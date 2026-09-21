@@ -12,6 +12,7 @@ import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { helperCompletion, helperModel } from '@agent/runtime/helperModel';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
+import { withLogChannel } from '@logger/effectLog';
 import { createLog } from '@logger/logUtils';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { LanguageModel } from '@platform/languageModel';
@@ -22,7 +23,8 @@ import {
 } from '@utils/text/stringUtils';
 import type { HttpClient } from 'effect/unstable/http';
 
-const log = createLog('SessionDescription');
+const CHANNEL = 'SessionDescription';
+const log = createLog(CHANNEL);
 const MAX_DESCRIPTION_LENGTH = 80;
 const MAX_DESCRIPTION_WORDS = 12;
 
@@ -132,7 +134,9 @@ export const generateSessionDescription = Effect.fn(
         description,
       },
     ]);
-    log.info(`Generated session description for ${runId}`);
+    yield* Effect.logInfo(`Generated session description for ${runId}`).pipe(
+      withLogChannel(CHANNEL),
+    );
   }).pipe(
     Effect.scoped,
     Effect.catch((error) => warnFailure(error)),

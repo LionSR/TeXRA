@@ -11,7 +11,7 @@ import { Effect } from 'effect';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { deriveResumability } from '@agent/storage/resumability';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel, withLogData } from '@logger/effectLog';
 import type {
   FlowSnapshotPayload,
   ModelCompatibilityKey,
@@ -19,7 +19,7 @@ import type {
 } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
 
-const logger = createLog('SessionResumeRetrieval');
+const CHANNEL = 'SessionResumeRetrieval';
 
 interface ResumeIdentity {
   /** The run's configuration, its model being the one the snapshot names. */
@@ -77,9 +77,10 @@ export const retrieveSessionResumeData = Effect.fn('retrieveSessionResumeData')(
       );
     }
     if (resumability.kind === 'none') {
-      logger.warn('Run is not resumable', {
-        data: { agentType: type, runId },
-      });
+      yield* Effect.logWarning('Run is not resumable').pipe(
+        withLogData({ agentType: type, runId }),
+        withLogChannel(CHANNEL),
+      );
       return null;
     }
     const { snapshot } = resumability;
@@ -90,9 +91,15 @@ export const retrieveSessionResumeData = Effect.fn('retrieveSessionResumeData')(
         ),
       );
     }
-    logger.debug(`Retrieved ${type} resume data for run: ${runId}`, {
-      data: { round: snapshot.runtime.round, phase: snapshot.runtime.phase },
-    });
+    yield* Effect.logDebug(
+      `Retrieved ${type} resume data for run: ${runId}`,
+    ).pipe(
+      withLogData({
+        round: snapshot.runtime.round,
+        phase: snapshot.runtime.phase,
+      }),
+      withLogChannel(CHANNEL),
+    );
     return {
       type,
       runId,
