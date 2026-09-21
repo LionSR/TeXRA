@@ -694,7 +694,7 @@ function shouldTraverseStartupImport(output, importedOutput) {
   );
 }
 
-function createAsarAppReader(asarPath, { extractFile, listPackage, statFile }) {
+function createAsarAppReader(asarPath, { extractFile, listPackage }) {
   const entryPathByNormalizedPath = new Map(
     listPackage(asarPath).map((entry) => [normalizeAsarPath(entry), entry]),
   );
@@ -729,19 +729,7 @@ function createAsarAppReader(asarPath, { extractFile, listPackage, statFile }) {
     }
     throw lastError;
   }
-  function isAsarEntryUnpacked(path) {
-    for (const candidate of asarEntryPathCandidates(path)) {
-      try {
-        return statFile(asarPath, candidate).unpacked === true;
-      } catch {
-        // statFile throws when the path is not in the archive; try the next
-        // normalized candidate before giving up.
-      }
-    }
-    return false;
-  }
   return {
-    isAsar: true,
     label: repoRelative(asarPath),
     async exists(path) {
       if (entries.has(normalizeAsarPath(path))) return true;
@@ -769,9 +757,6 @@ function createAsarAppReader(asarPath, { extractFile, listPackage, statFile }) {
       }
       return readFile(join(resourceRoot, path));
     },
-    async isUnpacked(path) {
-      return isAsarEntryUnpacked(path);
-    },
     fsPath(path) {
       return join(resourceRoot, path);
     },
@@ -795,7 +780,6 @@ function createAsarAppReader(asarPath, { extractFile, listPackage, statFile }) {
 
 function createDirectoryAppReader(appRoot) {
   return {
-    isAsar: false,
     label: repoRelative(appRoot),
     exists(path) {
       return exists(join(appRoot, path));
@@ -822,9 +806,6 @@ function createDirectoryAppReader(appRoot) {
         if (error?.code === 'ENOENT') return [];
         throw error;
       }
-    },
-    async isUnpacked() {
-      return false;
     },
     fsPath(path) {
       return join(appRoot, path);
