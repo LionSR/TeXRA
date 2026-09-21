@@ -198,9 +198,6 @@ const BRIDGE_PRELUDE = `
         }
         return payload === undefined ? undefined : parseJson(payload);
       })();
-      // Fork-mark the promise handled so a guest that never awaits it does not
-      // trip the realm's unhandled-rejection tracking; awaiting guests still
-      // see the rejection on the original promise.
       pending.catch(() => {});
       return pending;
     });
