@@ -113,7 +113,7 @@
     "src/tools/codex.ts": 585,
     "src/tools/delegation/workflowScriptAgentRunner.ts": 925,
     "src/tools/delegation/WorkflowScriptTool.ts": 725,
-    "src/tools/ExecutionsTool.ts": 979,
+    "src/tools/ExecutionsTool.ts": 976,
     "src/tools/externalToolDefs.ts": 850,
     "src/tools/github/githubSubscriptionTool.ts": 624,
     "src/tools/github/PollingSourceBase.ts": 777,

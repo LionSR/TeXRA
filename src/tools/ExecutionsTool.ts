@@ -32,12 +32,10 @@ import {
   RunIdSchema,
   ToolError,
   type RunId,
-  type TodoItem,
   type ToolResult,
 } from '@shared/schemas';
 import { BASH_BACKGROUND_LOG_CAP_CHARS } from '@shared/toolUse';
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
-import type { RunView, SessionView } from '@shared/session/sessionView';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { assertNoParentTraversal } from '@tools/pathResolution';
 import { executed } from '@tools/core/result';
@@ -57,12 +55,14 @@ import { formatBytes, splitContentLines } from '@utils/text/stringUtils';
 import {
   buildSummaryLines,
   buildSummaryTailLines,
+  childRunViews,
   formatChildLine,
   formatListingLine,
   formatRunStatus,
   formatTodoHeader,
   formatTodoSection,
   runDisplayCategory,
+  runTodos,
 } from './executionFormatters';
 import { defineTool } from './core/define';
 import {
@@ -144,23 +144,6 @@ const awaitStatusChange = Effect.fn('ExecutionsTool.awaitStatusChange')(
   },
   Effect.scoped,
 );
-
-/**
- * The runs the fold lists under `runId`, in its own child ordering. A
- * detached or deleted child has already left `childIds`, so there is no
- * second parentage rule here.
- */
-function childRunViews(view: SessionView, runId: RunId): RunView[] {
-  return (view.runs.get(runId)?.childIds ?? []).flatMap((id) => {
-    const child = view.runs.get(id);
-    return child === undefined ? [] : [child];
-  });
-}
-
-/** A tool-use run's task list; every other run has none. */
-function runTodos(run: RunView): readonly TodoItem[] {
-  return run.category === AgentCategory.ToolUse ? run.todos : [];
-}
 
 interface SizedEntry {
   readonly path: string;

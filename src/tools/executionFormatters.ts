@@ -9,14 +9,14 @@
  */
 
 import {
+  AgentCategory,
   countByStatus,
   STATUS_DISPLAY,
-  type AgentCategory,
   type RunId,
   type RunIdentity,
   type TodoItem,
 } from '@shared/schemas';
-import type { RunView } from '@shared/session/sessionView';
+import type { RunView, SessionView } from '@shared/session/sessionView';
 import { formatTimestamp } from '@utils/text/stringUtils';
 
 /**
@@ -29,6 +29,23 @@ export type RunDisplayCategory =
 
 export function runDisplayCategory(run: RunView): RunDisplayCategory {
   return run.identity.kind === 'agent' ? run.category : run.identity.kind;
+}
+
+/**
+ * The runs the fold lists under `runId`, in its own child ordering. A
+ * detached or deleted child has already left `childIds`, so there is no
+ * second parentage rule here.
+ */
+export function childRunViews(view: SessionView, runId: RunId): RunView[] {
+  return (view.runs.get(runId)?.childIds ?? []).flatMap((id) => {
+    const child = view.runs.get(id);
+    return child === undefined ? [] : [child];
+  });
+}
+
+/** A tool-use run's task list; every other run has none. */
+export function runTodos(run: RunView): readonly TodoItem[] {
+  return run.category === AgentCategory.ToolUse ? run.todos : [];
 }
 
 /** Return paths available for a given display category. */
