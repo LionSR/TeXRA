@@ -1,7 +1,7 @@
-/** Event-backed transcript reads retain the same fold and ownership rules. */
+/** Event-backed transcript reads fold the same entries the live recorder does. */
 import { it } from '@effect/vitest';
 import { Deferred, Effect, Fiber, Layer } from 'effect';
-import { describe, expect } from 'vitest';
+import { describe, expect, vi } from 'vitest';
 
 import { databaseLayer } from '@controllers/session/Database';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
@@ -9,16 +9,16 @@ import {
   aggregateId,
   isTranscriptEvent,
   type RunId,
+  type SessionEvent,
   type SessionEventDraft,
 } from '@shared/schemas';
-import { Database } from '@shared/session/database';
+import { Database, DatabaseReadFailed } from '@shared/session/database';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
 import { StreamLog } from '@shared/session/traceEntries';
 import { createTranscriptFold } from '@shared/session/traceFold';
 import { StreamLogStore } from '@transcript/StreamLogStore';
 
 const RUN = 'ab12cd' as RunId;
-const OTHER_RUN = 'bb34ef' as RunId;
 const start: SessionEventDraft = {
   type: 'run.start',
   aggregateId: aggregateId('run', RUN),
@@ -72,7 +72,7 @@ describe('StreamLogStore event reads', () => {
       Effect.gen(function* () {
         const database = yield* Database;
         const rows = yield* database.appendAll(history);
-        const store = yield* StreamLogStore.open(database);
+        const store = StreamLogStore.open(database);
         const live = new StreamLog();
         const fold = createTranscriptFold(live);
         for (const row of rows) {
@@ -83,7 +83,6 @@ describe('StreamLogStore event reads', () => {
               debug: row.transcriptDebug ?? false,
             });
         }
-        expect(store.has(RUN)).toBe(true);
         expect(yield* store.readEntries(RUN)).toEqual(live.toJSON());
         expect(store.get(RUN)).toBeUndefined();
         yield* store.ensureLoaded(RUN);
@@ -91,160 +90,134 @@ describe('StreamLogStore event reads', () => {
       }).pipe(Effect.provide(substrate)),
   );
 
+  it.effect('observes committed deletion even when the cache is older', () =>
+    Effect.gen(function* () {
+      const database = yield* Database;
+      yield* database.appendAll(history);
+      const store = StreamLogStore.open(database);
+      yield* database.appendAll([
+        { type: 'run.removed', aggregateId: start.aggregateId },
+      ]);
+      expect(yield* store.readEvents(RUN)).toEqual([]);
+      expect(yield* store.readEntries(RUN)).toEqual([]);
+      yield* store.ensureLoaded(RUN);
+      expect(store.get(RUN)).toBeUndefined();
+    }).pipe(Effect.provide(substrate)),
+  );
+
   it.effect(
-    'observes committed deletion even when the local listing is older',
+    'seeds a retained run from its rows and advances it from the tail',
     () =>
       Effect.gen(function* () {
         const database = yield* Database;
         yield* database.appendAll(history);
-        const store = yield* StreamLogStore.open(database);
-        yield* database.appendAll([
-          { type: 'run.removed', aggregateId: start.aggregateId },
-        ]);
-        expect(yield* store.readEvents(RUN)).toEqual([]);
-        expect(yield* store.readEntries(RUN)).toEqual([]);
-        yield* store.ensureLoaded(RUN);
-        expect(store.has(RUN)).toBe(false);
-      }).pipe(Effect.provide(substrate)),
-  );
+        const store = StreamLogStore.open(database);
+        const lease = yield* store.acquireRunResidency(RUN);
+        expect(store.get(RUN)?.toJSON()).toEqual(yield* store.readEntries(RUN));
 
-  it.effect(
-    'reserves the writer across hydration and concurrent eviction',
-    () =>
-      Effect.gen(function* () {
-        const database = yield* Database;
-        yield* database.appendAll(history);
-        const entered = yield* Deferred.make<void>();
-        const release = yield* Deferred.make<void>();
-        const store = yield* StreamLogStore.open({
-          readListing: database.readListing,
-          readAggregate: (id, seq) =>
-            Effect.gen(function* () {
-              yield* Deferred.succeed(entered, undefined);
-              yield* Deferred.await(release);
-              return yield* database.readAggregate(id, seq);
-            }),
-        });
-        const loading = yield* Effect.forkChild(store.acquireRunResidency(RUN));
-        yield* Deferred.await(entered);
-        store.requestEviction(RUN);
-        yield* Deferred.succeed(release, undefined);
-        const writer = yield* Fiber.join(loading);
-        expect(store.get(RUN)?.toJSON().length).toBeGreaterThan(0);
-        const successor = yield* store.acquireRunResidency(RUN);
-        writer.close();
-        expect(store.get(RUN)).toBeDefined();
-        successor.close();
-        expect(store.get(RUN)).toBeUndefined();
-      }).pipe(Effect.provide(substrate)),
-  );
-
-  it.effect(
-    'serializes tail delivery with a captured cold prefix without losing or duplicating rows',
-    () =>
-      Effect.gen(function* () {
-        const database = yield* Database;
-        const prefix = yield* database.appendAll(history);
-        const entered = yield* Deferred.make<void>();
-        const release = yield* Deferred.make<void>();
-        const store = yield* StreamLogStore.open({
-          readListing: database.readListing,
-          readAggregate: (id, seq) =>
-            Effect.gen(function* () {
-              const captured = yield* database.readAggregate(id, seq);
-              yield* Deferred.succeed(entered, undefined);
-              yield* Deferred.await(release);
-              return captured;
-            }),
-        });
-        const loading = yield* Effect.forkChild(store.acquireRunResidency(RUN));
-        yield* Deferred.await(entered);
-        const suffix = yield* database.appendAll([
+        const appended = yield* database.appendAll([
           {
             type: 'log',
             aggregateId: start.aggregateId,
             level: 'info',
-            message: 'Committed during hydration',
+            message: 'Committed after the seed',
           },
         ]);
-        const tail = yield* Effect.forkChild(
-          Effect.forEach([...prefix, ...suffix], (event) =>
-            store.acceptCommitted(event),
-          ),
-        );
-        yield* Deferred.succeed(release, undefined);
-        const writer = yield* Fiber.join(loading);
-        yield* Fiber.join(tail);
+        for (const row of appended) store.acceptCommitted(row);
         expect(store.get(RUN)?.toJSON()).toEqual(yield* store.readEntries(RUN));
         expect(
           store
             .get(RUN)
             ?.toJSON()
-            .filter((entry) => entry.text === 'Committed during hydration'),
+            .filter((entry) => entry.text === 'Committed after the seed'),
         ).toHaveLength(1);
-        writer.close();
+
+        // A lease outranks an eviction request; the cache goes once it closes
+        // and the next request finds nothing holding the run.
+        store.requestEviction(RUN);
+        expect(store.get(RUN)).toBeDefined();
+        lease.close();
+        store.requestEviction(RUN);
+        expect(store.get(RUN)).toBeUndefined();
       }).pipe(Effect.provide(substrate)),
   );
 
   it.effect(
-    'hydrates the complete prefix when a tail row was queued before writer acquisition',
+    'caches nothing for an unheld run and forgets a removed one through the tail',
+    () =>
+      Effect.gen(function* () {
+        const database = yield* Database;
+        const store = StreamLogStore.open(database);
+        const rows = yield* database.appendAll(history);
+        for (const row of rows) store.acceptCommitted(row);
+        expect(store.get(RUN)).toBeUndefined();
+        yield* store.ensureLoaded(RUN);
+        expect(store.get(RUN)?.toJSON().length).toBeGreaterThan(0);
+        const removed = yield* database.appendAll([
+          { type: 'run.removed', aggregateId: start.aggregateId },
+        ]);
+        for (const row of removed) store.acceptCommitted(row);
+        expect(store.get(RUN)).toBeUndefined();
+      }).pipe(Effect.provide(substrate)),
+  );
+  it.effect(
+    'a failed acquisition leaves no stub behind in ephemeral mode either',
     () =>
       Effect.gen(function* () {
         const database = yield* Database;
         yield* database.appendAll(history);
-        const entered = yield* Deferred.make<void>();
-        const release = yield* Deferred.make<void>();
-        const other = aggregateId('run', OTHER_RUN);
-        const store = yield* StreamLogStore.open({
-          readListing: database.readListing,
-          readAggregate: (id, seq) =>
-            Effect.gen(function* () {
-              if (id === other) {
-                yield* Deferred.succeed(entered, undefined);
-                yield* Deferred.await(release);
-              }
-              return yield* database.readAggregate(id, seq);
-            }),
+        const store = StreamLogStore.open(database, {
+          kind: 'ephemeral',
+          reason: 'test',
         });
-        const blocking = yield* Effect.forkChild(store.ensureLoaded(OTHER_RUN));
-        yield* Deferred.await(entered);
-        const suffix = yield* database.appendAll([
-          {
-            type: 'log',
-            aggregateId: start.aggregateId,
-            level: 'info',
-            message: 'Committed before writer acquisition',
-          },
-        ]);
-        const tail = yield* Effect.forkChild(store.acceptCommitted(suffix[0]!));
-        yield* Effect.yieldNow;
-        const loading = yield* Effect.forkChild(store.acquireRunResidency(RUN));
-        yield* Effect.yieldNow;
-        yield* Deferred.succeed(release, undefined);
-        yield* Fiber.join(blocking);
-        yield* Fiber.join(tail);
-        const writer = yield* Fiber.join(loading);
-        expect(store.get(RUN)?.toJSON()).toEqual(yield* store.readEntries(RUN));
-        writer.close();
+        const failure = new DatabaseReadFailed({
+          path: 'runs/ab12cd',
+          cause: new Error('KV timeout'),
+        });
+        vi.spyOn(database, 'readAggregate').mockReturnValue(
+          Effect.fail(failure),
+        );
+        expect(yield* Effect.flip(store.acquireRunResidency(RUN))).toBe(
+          failure,
+        );
+        expect(store.get(RUN)).toBeUndefined();
       }).pipe(Effect.provide(substrate)),
   );
-
   it.effect(
-    'observes another writer creation and deletion through the committed tail',
+    'defers an eviction that arrives while a lease still holds the run',
     () =>
       Effect.gen(function* () {
         const database = yield* Database;
-        const store = yield* StreamLogStore.open(database);
-        const rows = yield* database.appendAll(history);
-        yield* Effect.forEach(rows, (row) => store.acceptCommitted(row));
-        expect(store.has(RUN)).toBe(true);
-        yield* store.ensureLoaded(RUN);
-        const removed = yield* database.appendAll([
-          { type: 'run.removed', aggregateId: start.aggregateId },
-        ]);
-        yield* Effect.forEach(removed, (row) => store.acceptCommitted(row));
-        expect(store.has(RUN)).toBe(false);
+        yield* database.appendAll(history);
+        const store = StreamLogStore.open(database);
+        const lease = yield* store.acquireRunResidency(RUN);
+        store.requestEviction(RUN);
+        expect(store.get(RUN)).toBeDefined();
+        lease.close();
         expect(store.get(RUN)).toBeUndefined();
       }).pipe(Effect.provide(substrate)),
+  );
+
+  it.effect('honors an eviction requested during a cold seed read', () =>
+    Effect.gen(function* () {
+      const database = yield* Database;
+      yield* database.appendAll(history);
+      const store = StreamLogStore.open(database);
+      // The read announces that it started and then waits to be released, so
+      // the eviction below lands while the seed read is in flight.
+      const reached = yield* Deferred.make<void>();
+      const release = yield* Deferred.make<readonly SessionEvent[]>();
+      vi.spyOn(database, 'readAggregate').mockImplementationOnce(() =>
+        Deferred.succeed(reached, undefined).pipe(
+          Effect.andThen(Deferred.await(release)),
+        ),
+      );
+      const fiber = yield* Effect.forkChild(store.ensureLoaded(RUN));
+      yield* Deferred.await(reached);
+      store.requestEviction(RUN);
+      yield* Deferred.succeed(release, []);
+      yield* Fiber.join(fiber);
+      expect(store.get(RUN)).toBeUndefined();
+    }).pipe(Effect.provide(substrate)),
   );
 });

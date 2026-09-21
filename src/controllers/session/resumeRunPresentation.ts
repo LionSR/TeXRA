@@ -10,9 +10,9 @@ import type { RunId } from '@shared/schemas';
 
 /**
  * The per-attempt monotone cancellation latch every resuming host holds:
- * once this attempt has observed the run's transcript gone, re-creating the
- * same run id cannot make the attempt admissible again — the resumed state is
- * not the state the attempt was admitted against.
+ * once this attempt has observed the run gone from the session's view,
+ * re-creating the same run id cannot make the attempt admissible again — the
+ * resumed state is not the state the attempt was admitted against.
  *
  * `alsoCancelled` carries a host's own reasons to abandon the attempt (a
  * desktop shutting down, a paper the registry has dropped). They are asked
@@ -24,12 +24,12 @@ export function resumeCancellationLatch(
   runId: RunId,
   alsoCancelled?: () => boolean,
 ): () => boolean {
-  let transcriptMissing = false;
+  let runMissing = false;
   return () => {
-    if (!transcriptMissing && !session.transcripts.has(runId)) {
-      transcriptMissing = true;
+    if (!runMissing && session.runView(runId) === undefined) {
+      runMissing = true;
     }
-    return transcriptMissing || alsoCancelled?.() === true;
+    return runMissing || alsoCancelled?.() === true;
   };
 }
 
