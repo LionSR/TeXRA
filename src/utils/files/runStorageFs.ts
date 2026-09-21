@@ -5,7 +5,7 @@ import * as path from 'node:path';
 import { Effect, FileSystem, PlatformError } from 'effect';
 
 // Local imports
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import {
   resolveRunOriginalSnapshotPath,
   resolveRunStoragePath,
@@ -24,7 +24,6 @@ import { createRunStorageLocation } from './fileLocation';
 import { entryExists, entryTypeIn } from './fsEntryExists';
 
 export const CHANNEL = 'runStorage';
-const log = createLog(CHANNEL);
 
 /*
  * Every path helper below takes the storage root as data. A caller holds that
@@ -269,9 +268,9 @@ export const createSymlink = Effect.fn('runStorage.createSymlink')(function* (
         return Effect.fail(error);
       }
       return Effect.gen(function* () {
-        log.warn(
+        yield* Effect.logWarning(
           `Falling back to copy ${sourceAbsolute} -> ${destination} due to ${code}`,
-        );
+        ).pipe(withLogChannel(CHANNEL));
         const sourceType = yield* entryTypeIn(fs, sourceAbsolute);
         yield* sourceType === 'Directory'
           ? fs.copy(sourceAbsolute, destination, { overwrite: true })

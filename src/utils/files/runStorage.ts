@@ -4,6 +4,7 @@ import * as path from 'node:path';
 // Third-party imports
 import { Effect, FileSystem, PlatformError } from 'effect';
 
+import { withLogChannel } from '@logger/effectLog';
 import { createLog } from '@logger/logUtils';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { type RunId, type FileLocation } from '@shared/schemas';
@@ -291,9 +292,9 @@ export class RunFileService {
               depDir === '' &&
               depName === WORKFLOW_OUTPUT_BASENAME
             ) {
-              log.debug(
+              yield* Effect.logDebug(
                 `Skipping run-dir mirror of ${relativePath}: would clobber primary output in ${relativeDirectory}`,
-              );
+              ).pipe(withLogChannel(CHANNEL));
               return;
             }
 
@@ -368,9 +369,9 @@ export class RunFileService {
               ),
             );
             if (destination === 'realFile') {
-              log.debug(
+              yield* Effect.logDebug(
                 `Skipping run-dir mirror of ${relativePath}: destination in ${relativeDirectory} is an existing real file`,
-              );
+              ).pipe(withLogChannel(CHANNEL));
               return;
             }
             if (destination === 'unreadable') return;

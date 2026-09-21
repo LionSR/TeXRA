@@ -3,6 +3,7 @@ import * as path from 'node:path';
 // Third-party imports
 import { Effect, FileSystem } from 'effect';
 
+import { withLogChannel } from '@logger/effectLog';
 import { createLog } from '@logger/logUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { safeHomedir } from '@utils/system/platformPaths';
@@ -10,7 +11,8 @@ import { safeHomedir } from '@utils/system/platformPaths';
 import { readNormalizedFile } from './fsDurability';
 import { entryExists } from './fsEntryExists';
 
-const log = createLog('rulesUtils');
+const CHANNEL = 'rulesUtils';
+const log = createLog(CHANNEL);
 
 const RULES_FILE = '.texrarules';
 
@@ -41,7 +43,9 @@ export const loadTexraRules = (
       if (!(yield* entryExists(fs, file))) continue;
       const trimmed = (yield* readNormalizedFile(fs, file)).trim();
       if (!trimmed) continue;
-      log.debug(`Loaded ${source} ${RULES_FILE}`);
+      yield* Effect.logDebug(`Loaded ${source} ${RULES_FILE}`).pipe(
+        withLogChannel(CHANNEL),
+      );
       return trimmed;
     }
     return '';
