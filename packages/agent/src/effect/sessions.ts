@@ -19,8 +19,11 @@ import type {
   TranscriptView as RuntimeTranscriptView,
 } from '@shared/session/sessionView';
 
-import { PlatformConflict } from './errors.js';
-import type { LaunchError, RunFailure } from './errors.js';
+import {
+  PlatformConflict,
+  type LaunchError,
+  type RunFailure,
+} from './errors.js';
 import { composeProcess, type AgentPlatform } from './runtime.js';
 
 /**
