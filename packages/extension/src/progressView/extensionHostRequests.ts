@@ -1,10 +1,13 @@
 /**
  * The extension's `host.request` handler (PRD one-fold-three-renderers,
- * 8.3): every capability a surface asks its host for, one Zod-narrowed
- * switch over the arms, mapped onto VS Code's commands, editors, pickers,
- * and dialogs. Each arm answers exactly once with an outcome or a request
- * error; an arm the extension does not perform is `Rejected` with its
- * reason, never dropped.
+ * 8.3): the verbs this host performs, bound onto VS Code's commands,
+ * editors, pickers, and dialogs, plus the few arms the extension answers its
+ * own way -- its file pickers, its editor's current file, its tab pop-out,
+ * its launch command. Everything else is the one shared body in
+ * `sharedHostRequests.ts`, which decides the order, the guards, and the
+ * refusal wording for both GUI hosts. Each arm answers exactly once with an
+ * outcome or a request error; an arm the extension does not perform is
+ * `Rejected` with its reason, never dropped.
  */
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -48,13 +51,13 @@ import {
 import {
   createHostRunActions,
   type HostRunActionPorts,
-  launchPatchOf,
   RunLaunchFailed,
 } from '@controllers/session/hostRunActions';
 import type { HostDraftRequests } from '@controllers/session/hostDraftRequests';
 import type { HostSnapshotSource } from '@controllers/session/hostSnapshotSource';
 import {
   handleSharedHostRequest,
+  type SharedHostRequestBindings,
   type SharedHostRequestPorts,
 } from '@controllers/session/sharedHostRequests';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
@@ -63,7 +66,6 @@ import { runSignInCommand } from '@frontend/auth/signInCommand';
 import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { chooseTeamAvailabilityViaDialog } from '@frontend/ui/dialogs';
-import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { ExternalOpenFailed } from '@hosts/uiHosts';
 import { parseVersionControlDiffFilename } from '@latex/latexdiff/diffFileNameManager';
 import { createLog } from '@logger/logUtils';
@@ -71,11 +73,7 @@ import {
   modelOptionsFrom,
   readModelAvailabilityInputs,
 } from '@model/computeModelOptions';
-import type {
-  AgentDirectoriesFailed,
-  StateStore,
-  StateWriteFailed,
-} from '@platform/interfaces';
+import type { StateStore, StateWriteFailed } from '@platform/interfaces';
 import type { LanguageModel } from '@platform/languageModel';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import {
@@ -110,7 +108,7 @@ import {
 } from '@shared/state/onboardingState';
 
 import { getProviderKeyUrl } from '@utils/config/providerConfig';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { pathToLocationIn } from '@utils/files/fileLocation';
 import {
   locateInWorkspace,
@@ -189,6 +187,12 @@ function runCommand<T = void>(
       throw error;
     },
   );
+}
+
+/** A VS Code command as a verb of the shared binding table: lifted once,
+ *  named, and with the command's own result discarded. */
+function commandVerb(command: string, ...args: unknown[]) {
+  return Effect.asVoid(fromHost(command, () => runCommand(command, ...args)));
 }
 
 /** The typed notification surface the run-action ports, the launch host, and
@@ -349,16 +353,6 @@ export function createExtensionHostRequests(
     sendFollowUp: (runId, text) => runActions.sendFollowUp(runId, text),
   });
 
-  /** The arms both GUI hosts answer through one body, now that this host's
-   *  ports are bound. */
-  const sharedRequests: SharedHostRequestPorts = {
-    runActions,
-    workflowFileActions,
-    snapshot,
-    draftRequests,
-    toolEditApprovals,
-  };
-
   let chatExportController: ChatExportController | undefined;
 
   /** The export port's open verb. The editor APIs behind it are thenables, so
@@ -390,115 +384,50 @@ export function createExtensionHostRequests(
         }),
     });
 
+  /** The transcript export, over the session's rooted filesystems the
+   *  dispatch root already provided. */
   function exportTranscript(runId: RunId) {
-    return withSessionFs(
-      session.roots,
-      exportRunTranscript(runId, {
-        // The quick pick is a thenable, so it is lifted here -- once, at the
-        // host boundary -- and its refusal is worded into the export's tag.
-        pickFormat: Effect.tryPromise({
-          try: async () =>
-            (
-              await vscode.window.showQuickPick(
-                TRANSCRIPT_EXPORT_FORMAT_CHOICES,
-                {
-                  title: 'Export transcript',
-                  placeHolder: 'Choose a format',
-                  ignoreFocusOut: true,
-                },
-              )
-            )?.format,
-          catch: (cause) =>
-            new TranscriptExportFailed({
-              step: 'pickFormat',
-              message: toErrorMessage(cause),
-              cause,
-            }),
-        }),
-        openPath: openExportPath,
-        showInfo: (message) => vscodeUi.showInfoMessage(message),
-        showWarning: (message) => vscodeUi.showWarningMessage(message),
-        showError: (message) => vscodeUi.showErrorMessage(message),
-        reportDetail: (message, data) => log.error(message, { data }),
-        getController: Effect.sync(
-          () =>
-            (chatExportController ??= new ChatExportController({
-              session,
-              latexPreamble,
-            })),
-        ),
-        getTraceViewerTemplate: () =>
-          path.join(
-            options.extensionPath,
-            'resources',
-            'traceViewer',
-            'index.html',
-          ),
-      }),
-    );
-  }
-
-  /** A run's saved setup into the launcher, and the launcher into view. */
-  function restoreIntoLauncher(config: Parameters<typeof launchPatchOf>[0]) {
-    return Effect.gen(function* () {
-      options.surfaceAction({ kind: 'launch', patch: launchPatchOf(config) });
-      options.surfaceAction({ kind: 'selectNew' });
-      yield* options.showInSidebar();
-    });
-  }
-
-  /** The Tools sheet's verbs over the launcher's base and edited files. */
-  function latexdiffs(request: Extract<HostRequest, { kind: 'latexdiffs' }>) {
-    return Effect.gen(function* () {
-      const baseFile = request.baseFile ?? '';
-      const editedFile = request.editedFile ?? '';
-      const commit = request.commit ?? 'HEAD';
-      switch (request.action) {
-        case 'latexdiffvc':
-          yield* fromHost('texra.latexdiffvc', () =>
-            runCommand('texra.latexdiffvc', undefined, baseFile, commit),
-          );
-          return;
-        case 'packLatexdiffvc':
-        case 'cleanLatexdiffvc':
-          yield* fromHost(`texra.${request.action}`, () =>
-            runCommand(
-              `texra.${request.action}`,
-              undefined,
-              baseFile,
-              commit,
-              request.action === 'cleanLatexdiffvc',
-            ),
-          );
-          return;
-        default:
-          break;
-      }
-      if (!baseFile || !editedFile) {
-        return yield* Effect.fail(
-          new Rejected({
-            reason: 'Choose a base file and an edited file first.',
+    return exportRunTranscript(runId, {
+      // The quick pick is a thenable, so it is lifted here -- once, at the
+      // host boundary -- and its refusal is worded into the export's tag.
+      pickFormat: Effect.tryPromise({
+        try: async () =>
+          (
+            await vscode.window.showQuickPick(
+              TRANSCRIPT_EXPORT_FORMAT_CHOICES,
+              {
+                title: 'Export transcript',
+                placeHolder: 'Choose a format',
+                ignoreFocusOut: true,
+              },
+            )
+          )?.format,
+        catch: (cause) =>
+          new TranscriptExportFailed({
+            step: 'pickFormat',
+            message: toErrorMessage(cause),
+            cause,
           }),
-        );
-      }
-      switch (request.action) {
-        case 'compare':
-          yield* workflowFileActions.compareOriginal(editedFile, baseFile);
-          return;
-        case 'accept':
-          yield* workflowFileActions.acceptFile(editedFile, baseFile);
-          return;
-        case 'merge':
-          yield* fromHost('texra.merge', () =>
-            runCommand('texra.merge', baseFile, editedFile),
-          );
-          return;
-        case 'latexdiff':
-          yield* fromHost('texra.latexdiff', () =>
-            runCommand('texra.latexdiff', undefined, baseFile, editedFile),
-          );
-          return;
-      }
+      }),
+      openPath: openExportPath,
+      showInfo: (message) => vscodeUi.showInfoMessage(message),
+      showWarning: (message) => vscodeUi.showWarningMessage(message),
+      showError: (message) => vscodeUi.showErrorMessage(message),
+      reportDetail: (message, data) => log.error(message, { data }),
+      getController: Effect.sync(
+        () =>
+          (chatExportController ??= new ChatExportController({
+            session,
+            latexPreamble,
+          })),
+      ),
+      getTraceViewerTemplate: () =>
+        path.join(
+          options.extensionPath,
+          'resources',
+          'traceViewer',
+          'index.html',
+        ),
     });
   }
 
@@ -693,11 +622,8 @@ export function createExtensionHostRequests(
           );
           const sourceExists =
             sourceLocation.kind === 'workspace' &&
-            (yield* withSessionFs(
-              session.roots,
-              Effect.flatMap(Effect.service(WorkspaceFs), (workspaceFs) =>
-                workspaceFs.exists(sourceLocation.relativePath),
-              ),
+            (yield* Effect.flatMap(Effect.service(WorkspaceFs), (workspaceFs) =>
+              workspaceFs.exists(sourceLocation.relativePath),
             ));
           if (sourceExists) {
             yield* snapshot.refreshFiles;
@@ -739,50 +665,6 @@ export function createExtensionHostRequests(
     );
   }
 
-  function agentConfigBanner(
-    request: Extract<HostRequest, { kind: 'agentConfigBanner' }>,
-  ): Effect.Effect<
-    void,
-    AgentDirectoriesFailed | HostCallFailed | RequestRefusal,
-    GlobalStorageFs | FileSystem.FileSystem
-  > {
-    return Effect.gen(function* () {
-      switch (request.action) {
-        case 'edit':
-          yield* fromHost('texra.showAgents', () =>
-            runCommand(
-              'texra.showAgents',
-              request.sessionType === 'toolUse' ? 'toolUse' : undefined,
-            ),
-          );
-          return;
-        case 'dir': {
-          if (!request.customDirSet) {
-            yield* fromHost('texra.showAgents', () =>
-              runCommand('texra.showAgents'),
-            );
-            return;
-          }
-          const dir = yield* agentDirectories.custom();
-          if (dir) {
-            yield* fromHost('revealFileInOS', () =>
-              vscode.commands.executeCommand(
-                'revealFileInOS',
-                vscode.Uri.file(dir),
-              ),
-            );
-          }
-          return;
-        }
-        case 'docs':
-          yield* fromHost('texra.openDoc', () =>
-            runCommand('texra.openDoc', 'custom-agents'),
-          );
-          return;
-      }
-    });
-  }
-
   /** The onboarding funnel recomputed after an action that changed its
    *  inputs. */
   const refreshOnboardingFunnel = Effect.suspend(() =>
@@ -803,50 +685,157 @@ export function createExtensionHostRequests(
     { concurrency: 'unbounded', discard: true },
   );
 
-  function onboarding(
-    action: Extract<HostRequest, { kind: 'onboarding' }>['action'],
-  ) {
-    return Effect.gen(function* () {
-      switch (action) {
-        case 'signInChatGpt':
-          yield* signInWithSubscription(session.roots, CHANNEL, 'chatgpt');
-          yield* refreshAfterCredentialChange;
-          return;
-        case 'setApiKey':
-          yield* fromHost('texra.setApiKey', () =>
-            runCommand('texra.setApiKey'),
-          );
-          // SecretManager has no key-changed event, so the set-key flow's
-          // completion is the explicit refresh point for the funnel.
-          yield* refreshOnboardingFunnel;
-          return;
-        case 'skip':
-          yield* setOnboardingDeclined(options.globalState, true);
-          yield* refreshOnboardingFunnel;
-          return;
-        case 'runSetup':
-          yield* fromHost(GETTING_STARTED_COMMANDS.runSetup, () =>
-            runCommand(GETTING_STARTED_COMMANDS.runSetup),
-          );
-          yield* refreshOnboardingFunnel;
-          return;
-        case 'skipSetup':
-          yield* setFirstRunDone(options.globalState, true);
-          yield* refreshOnboardingFunnel;
-          return;
-        case 'openGettingStarted':
-          yield* fromHost(GETTING_STARTED_COMMANDS.openWalkthrough, () =>
-            runCommand(GETTING_STARTED_COMMANDS.openWalkthrough),
-          );
-          return;
+  /** This host's half of the shared body's binding table: every verb mapped
+   *  onto a VS Code command, an editor API, or the sidebar. */
+  const hostBindings: SharedHostRequestBindings = {
+    openPath: (file, line) => commandVerb('texra.openFile', file, line),
+    openLabel: (label) =>
+      Effect.map(
+        fromHost('texra.openLabel', () =>
+          runCommand<boolean>('texra.openLabel', label, {
+            notifyNotFound: false,
+          }),
+        ),
+        (opened) => opened === true,
+      ),
+    exportTranscript: (runId) => Effect.asVoid(exportTranscript(runId)),
+    surfaceAction: (action) => options.surfaceAction(action),
+    showLauncher: Effect.suspend(() => options.showInSidebar()),
+    runWorkflowDiff: (diff) => commandVerb('texra.runLatexdiff', diff),
+    runWorkflowFileOperation: (operation, request) =>
+      commandVerb(`texra.${operation}`, request),
+    latexdiffAgainstCommit: (action, baseFile, commit) =>
+      action === 'latexdiffvc'
+        ? commandVerb('texra.latexdiffvc', undefined, baseFile, commit)
+        : commandVerb(
+            `texra.${action}`,
+            undefined,
+            baseFile,
+            commit,
+            action === 'cleanLatexdiffvc',
+          ),
+    mergeFiles: (baseFile, editedFile) =>
+      commandVerb('texra.merge', baseFile, editedFile),
+    latexdiffFiles: (baseFile, editedFile) =>
+      commandVerb('texra.latexdiff', undefined, baseFile, editedFile),
+    openDashboard: commandVerb('texra.showDashboard'),
+    openSettings: (section, sessionType) => {
+      if (section === 'agents')
+        return commandVerb(
+          'texra.showAgents',
+          sessionType === 'toolUse' ? 'toolUse' : undefined,
+        );
+      return commandVerb(
+        section === 'models' ? 'texra.showModels' : 'texra.showMultiAgent',
+      );
+    },
+    setApiKey: (provider) =>
+      Effect.gen(function* () {
+        yield* commandVerb('texra.setApiKey', provider);
+        // SecretManager has no key-changed event, so the set-key flow's
+        // completion is the explicit refresh point for the funnel.
+        yield* refreshOnboardingFunnel;
+      }),
+    openApiKeyGuide: (provider) =>
+      Effect.asVoid(
+        fromHost('env.openExternal', () =>
+          vscode.env.openExternal(
+            vscode.Uri.parse(
+              (provider && getProviderKeyUrl(session.roots, provider)) ||
+                'https://texra.ai/guide/installation#setting-up-api-keys',
+            ),
+          ),
+        ),
+      ),
+    openAgentSettings: (sessionType) =>
+      commandVerb(
+        'texra.showAgents',
+        sessionType === 'toolUse' ? 'toolUse' : undefined,
+      ),
+    openCustomAgentDirectory: Effect.gen(function* () {
+      const dir = yield* agentDirectories.custom();
+      if (dir) {
+        yield* fromHost('revealFileInOS', () =>
+          vscode.commands.executeCommand(
+            'revealFileInOS',
+            vscode.Uri.file(dir),
+          ),
+        );
       }
-    });
-  }
+    }),
+    openAgentDocs: commandVerb('texra.openDoc', 'custom-agents'),
+    recheckDependencies: Effect.gen(function* () {
+      yield* checkCoreDependencies(true);
+      yield* snapshot.refreshHostBanners;
+    }),
+    openInstallGuide: (tool) =>
+      Effect.gen(function* () {
+        const docsCommand = getToolDocsCommand(tool);
+        if (!docsCommand) {
+          return yield* Effect.fail(
+            new Rejected({
+              reason: `No install guide is registered for ${tool}.`,
+            }),
+          );
+        }
+        const [command, ...args] = docsCommand.split(',');
+        yield* fromHost(command, () => runCommand(command, ...args));
+      }),
+    signIn: Effect.gen(function* () {
+      const authenticated = yield* fromHost(AUTH_COMMANDS.SIGN_IN, () =>
+        vscode.commands.executeCommand<boolean>(AUTH_COMMANDS.SIGN_IN),
+      );
+      if (authenticated) yield* refreshAfterCredentialChange;
+    }),
+    gettingStarted: (action) =>
+      Effect.gen(function* () {
+        yield* commandVerb(GETTING_STARTED_COMMANDS[action]);
+        if (action === 'runSetup') {
+          yield* refreshOnboardingFunnel;
+        }
+      }),
+    onboarding: {
+      signInChatGpt: Effect.gen(function* () {
+        yield* signInWithSubscription(session.roots, CHANNEL, 'chatgpt');
+        yield* refreshAfterCredentialChange;
+      }),
+      skip: Effect.gen(function* () {
+        yield* setOnboardingDeclined(globalState, true);
+        yield* refreshOnboardingFunnel;
+      }),
+      runSetup: Effect.gen(function* () {
+        yield* commandVerb(GETTING_STARTED_COMMANDS.runSetup);
+        yield* refreshOnboardingFunnel;
+      }),
+      skipSetup: Effect.gen(function* () {
+        yield* setFirstRunDone(globalState, true);
+        yield* refreshOnboardingFunnel;
+      }),
+      openGettingStarted: commandVerb(GETTING_STARTED_COMMANDS.openWalkthrough),
+    },
+    setActiveView: (view, port) => {
+      // Only the sidebar port names the sidebar's state; the editor tab
+      // has no view-title menu of its own.
+      if (port === 'sidebar') setActiveSidebarView(view);
+    },
+  };
+
+  /** The arms both GUI hosts answer through one body, now that this host's
+   *  ports are bound. */
+  const sharedRequests: SharedHostRequestPorts = {
+    runActions,
+    workflowFileActions,
+    snapshot,
+    draftRequests,
+    toolEditApprovals,
+    host: hostBindings,
+  };
 
   /**
-   * One program per request. The arms are Effects; the capabilities that
-   * still answer with a promise - the VS Code commands `runCommand` wraps,
-   * the editor APIs, the Promise-faced controller ports - are lifted once
+   * One program per request. Every arm this host performs its own way is
+   * here; the rest reach the shared body above. The capabilities that still
+   * answer with a promise - the VS Code commands `runCommand` wraps, the
+   * editor APIs, the Promise-faced controller ports - are lifted once
    * through `fromHost`, so no arm re-enters the runtime between here and the
    * bridge that runs this program.
    */
@@ -856,112 +845,48 @@ export function createExtensionHostRequests(
   ): Effect.Effect<
     HostOutcome,
     HostRequestFailure,
-    ProcessServices | StorageFs
+    ProcessServices | StorageFs | WorkspaceFs
   > {
     return Effect.gen(function* () {
       switch (request.kind) {
         case 'openFile':
-          yield* fromHost('texra.openFile', () =>
-            runCommand(
-              'texra.openFile',
-              request.path,
-              request.line ?? undefined,
-            ),
-          );
-          return done;
-        case 'openLabel': {
-          const opened = yield* fromHost('texra.openLabel', () =>
-            runCommand<boolean>('texra.openLabel', request.label, {
-              notifyNotFound: false,
-            }),
-          );
-          if (!opened) {
-            return yield* Effect.fail(
-              new Rejected({
-                reason: `No file defines the label ${request.label}.`,
-              }),
-            );
-          }
-          return done;
-        }
+        case 'openLabel':
         case 'openRunStorage':
+        case 'exportTranscript':
+        case 'restoreIntoLauncher':
         case 'resume':
         case 'runNew':
         case 'runCompileFixer':
         case 'useOwnApiKey':
+        case 'latexdiff':
+        case 'pack':
+        case 'clean':
+        case 'latexdiffs':
         case 'record':
-        case 'polish':
-        case 'savePastedImage':
+        case 'openDashboard':
         case 'refreshCommits':
         case 'refreshFiles':
-        case 'dismissBanner':
+        case 'openSettings':
+        case 'polish':
+        case 'savePastedImage':
         case 'toolEdit':
+        case 'setActiveView':
         case 'fileAction':
+        case 'restoreProposalConfig':
+        case 'apiKeyBanner':
+        case 'agentConfigBanner':
+        case 'recheckDependencies':
+        case 'openInstallGuide':
+        case 'signIn':
+        case 'dismissBanner':
+        case 'gettingStarted':
+        case 'onboarding':
           return yield* handleSharedHostRequest(sharedRequests, request, port);
-        case 'exportTranscript':
-          yield* exportTranscript(request.runId);
-          return done;
-        case 'restoreIntoLauncher':
-          yield* restoreIntoLauncher(
-            yield* runActions.restoreState(request.runId),
-          );
-          return done;
-        case 'latexdiff': {
-          const diff = yield* runActions.workflowDiffRequest(request.runId);
-          if (diff) {
-            yield* fromHost('texra.runLatexdiff', () =>
-              runCommand('texra.runLatexdiff', diff),
-            );
-          }
-          return done;
-        }
-        case 'pack':
-        case 'clean': {
-          const operation = yield* runActions.workflowFileOperationRequest(
-            request.runId,
-          );
-          if (operation) {
-            yield* fromHost(`texra.${request.kind}`, () =>
-              runCommand(`texra.${request.kind}`, operation),
-            );
-          }
-          return done;
-        }
-        case 'latexdiffs':
-          yield* latexdiffs(request);
-          return done;
         case 'popOut':
           yield* options.popOutToEditor();
           return done;
         case 'popBack':
           yield* options.showInSidebar();
-          return done;
-        case 'openDashboard':
-          yield* fromHost('texra.showDashboard', () =>
-            runCommand('texra.showDashboard'),
-          );
-          return done;
-        case 'openSettings':
-          switch (request.section) {
-            case 'agents':
-              yield* fromHost('texra.showAgents', () =>
-                runCommand(
-                  'texra.showAgents',
-                  request.sessionType === 'toolUse' ? 'toolUse' : undefined,
-                ),
-              );
-              return done;
-            case 'models':
-              yield* fromHost('texra.showModels', () =>
-                runCommand('texra.showModels'),
-              );
-              return done;
-            case 'teams':
-              yield* fromHost('texra.showMultiAgent', () =>
-                runCommand('texra.showMultiAgent'),
-              );
-              return done;
-          }
           return done;
         case 'pickFiles':
           return yield* pickFiles(request);
@@ -991,75 +916,7 @@ export function createExtensionHostRequests(
           yield* launch(request);
           return done;
         case 'extractFigures':
-          yield* fromHost('texra.extractTikzFigures', () =>
-            runCommand('texra.extractTikzFigures'),
-          );
-          return done;
-        case 'restoreProposalConfig':
-          yield* restoreIntoLauncher(
-            runActions.restoreProposal(request.proposal),
-          );
-          return done;
-        case 'apiKeyBanner':
-          if (request.action === 'set') {
-            yield* fromHost('texra.setApiKey', () =>
-              runCommand('texra.setApiKey', request.provider ?? undefined),
-            );
-            yield* refreshOnboardingFunnel;
-            return done;
-          }
-          yield* fromHost('env.openExternal', () =>
-            vscode.env.openExternal(
-              vscode.Uri.parse(
-                (request.provider &&
-                  getProviderKeyUrl(session.roots, request.provider)) ||
-                  'https://texra.ai/guide/installation#setting-up-api-keys',
-              ),
-            ),
-          );
-          return done;
-        case 'agentConfigBanner':
-          yield* agentConfigBanner(request);
-          return done;
-        case 'recheckDependencies':
-          yield* checkCoreDependencies(true);
-          yield* snapshot.refreshHostBanners;
-          return done;
-        case 'openInstallGuide': {
-          const docsCommand = getToolDocsCommand(request.tool);
-          if (!docsCommand) {
-            return yield* Effect.fail(
-              new Rejected({
-                reason: `No install guide is registered for ${request.tool}.`,
-              }),
-            );
-          }
-          const [command, ...args] = docsCommand.split(',');
-          yield* fromHost(command, () => runCommand(command, ...args));
-          return done;
-        }
-        case 'signIn': {
-          const authenticated = yield* fromHost(AUTH_COMMANDS.SIGN_IN, () =>
-            vscode.commands.executeCommand<boolean>(AUTH_COMMANDS.SIGN_IN),
-          );
-          if (authenticated) yield* refreshAfterCredentialChange;
-          return done;
-        }
-        case 'gettingStarted':
-          yield* fromHost(GETTING_STARTED_COMMANDS[request.action], () =>
-            runCommand(GETTING_STARTED_COMMANDS[request.action]),
-          );
-          if (request.action === 'runSetup') {
-            yield* refreshOnboardingFunnel;
-          }
-          return done;
-        case 'onboarding':
-          yield* onboarding(request.action);
-          return done;
-        case 'setActiveView':
-          // Only the sidebar port names the sidebar's state; the editor tab
-          // has no view-title menu of its own.
-          if (port === 'sidebar') setActiveSidebarView(request.view);
+          yield* commandVerb('texra.extractTikzFigures');
           return done;
       }
     });
@@ -1070,7 +927,8 @@ export function createExtensionHostRequests(
     // webview's message pump already owns, and its failure reaches the
     // bridge's refusal-versus-defect fold as the value the arm carried. Over
     // this session's rooted filesystems: the root a request writes under is
-    // chosen here, at the host edge, not read at the depth that writes.
+    // chosen here, at the host edge, not read at the depth that writes --
+    // once, for the whole dispatch.
     handleHostRequest: (request, port) =>
       withSessionFs(session.roots, dispatch(request, port)),
     closePort: draftRequests.closePort,

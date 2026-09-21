@@ -95,7 +95,8 @@ export interface DesktopLatexdiffWorkspaceScan {
   outputFiles?: string[];
 }
 
-export interface DesktopLatexdiffRunContext {
+/** Read only by the members below; a caller builds one structurally. */
+interface DesktopLatexdiffRunContext {
   outputsByRound: ReadonlyRoundIndexed<OutputFileInfo>;
   runId?: string;
   workspaceScan?: DesktopLatexdiffWorkspaceScan;

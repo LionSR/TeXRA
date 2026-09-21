@@ -103,9 +103,7 @@ export function createExtensionCommandActions(
       ),
     openGettingStarted: () => sysOpenGettingStarted(context.extension.id),
     createSampleProject: () =>
-      runtime.runPromise(
-        sysCreateSampleProject(context.extensionPath, session),
-      ),
+      onSessionFiles(sysCreateSampleProject(context.extensionPath, session)),
     downloadArXivSource: () =>
       runtime.runPromise(latexDownloadArXivSource(session)),
     openProgressViewInTab: () =>
@@ -121,10 +119,9 @@ export function createExtensionCommandActions(
     getTeXCount: () => runtime.runPromise(latexGetTeXCount(session)),
     extractTikzFigures: () =>
       runtime.runPromise(latexExtractTikzFigures(session)),
-    compileTikzFigures: () =>
-      runtime.runPromise(latexCompileTikzFigures(session)),
+    compileTikzFigures: () => onSessionFiles(latexCompileTikzFigures(session)),
     cloneOverleafProject: () =>
-      runtime.runPromise(gitCloneOverleafProject(session, secrets)),
+      onSessionFiles(gitCloneOverleafProject(session, secrets)),
     removeApiKey: () =>
       runtime.runPromise(
         apiRemoveApiKey(session.roots, secrets, refreshAfterProviderKeyChange),

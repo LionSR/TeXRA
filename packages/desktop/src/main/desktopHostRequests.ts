@@ -27,7 +27,6 @@ import {
 } from '@controllers/session/hostCallFailure';
 import {
   createHostRunActions,
-  launchPatchOf,
   RunConfigUnreadable,
   RunLaunchFailed,
   type WorkflowDiffRequest,
@@ -37,6 +36,7 @@ import type { HostDraftRequests } from '@controllers/session/hostDraftRequests';
 import type { HostSnapshotSource } from '@controllers/session/hostSnapshotSource';
 import {
   handleSharedHostRequest,
+  type SharedHostRequestBindings,
   type SharedHostRequestPorts,
 } from '@controllers/session/sharedHostRequests';
 import { listWorkspaceFilesOfType } from '@controllers/session/workspaceFileOptions';
@@ -57,6 +57,7 @@ import {
   sessionFsLayer,
   type GlobalStorageFs,
   type StorageFs,
+  type WorkspaceFs,
 } from '@platform/rootedFs';
 import type { PlatformSecrets } from '@platform/secrets';
 import {
@@ -91,7 +92,6 @@ import {
 import { toLogData } from './desktopLogUtils.js';
 import {
   DesktopProgressFileActions,
-  type DesktopLatexdiffRunContext,
   type DesktopLatexdiffWorkspaceScan,
 } from './desktopProgressFileActions.js';
 import {
@@ -377,16 +377,6 @@ export function createDesktopHostRequests(
     sendFollowUp: (runId, text) => runActions.sendFollowUp(runId, text),
   });
 
-  /** The arms both GUI hosts answer through one body, now that this window's
-   *  ports are bound. */
-  const sharedRequests: SharedHostRequestPorts = {
-    runActions,
-    workflowFileActions,
-    snapshot: options.snapshot,
-    draftRequests,
-    toolEditApprovals: run.toolEditApprovals,
-  };
-
   const runWorkflowDiff = (request: WorkflowDiffRequest) =>
     Effect.gen(function* () {
       const { agent, model, inputFile } = request;
@@ -462,12 +452,9 @@ export function createDesktopHostRequests(
         );
       }
       const ran = yield* Effect.exit(
-        Effect.provide(
-          operation === 'pack'
-            ? runPackRunDir(runId as RunId, agent, model, inputFile)
-            : runCleanRunDir(runId as RunId),
-          sessionFiles,
-        ),
+        operation === 'pack'
+          ? runPackRunDir(runId as RunId, agent, model, inputFile)
+          : runCleanRunDir(runId as RunId),
       );
       if (Exit.isFailure(ran)) {
         const error = Cause.squash(ran.cause);
@@ -527,43 +514,31 @@ export function createDesktopHostRequests(
           new Unavailable({ runId, reason: 'The run is no longer open.' }),
         );
       }
-      yield* Effect.provide(
-        exportRunTranscript(runId, {
-          pickFormat: host.pickTranscriptExportFormat(),
-          // The preview host has already shown its own notice; the port's
-          // tag carries that refusal and its wording out unchanged.
-          openPath: (filePath) =>
-            host.openPath(filePath).pipe(
-              Effect.mapError(
-                (cause) =>
-                  new ExternalOpenFailed({
-                    kind: 'path',
-                    target: filePath,
-                    message: toErrorMessage(cause),
-                    cause,
-                  }),
-              ),
+      yield* exportRunTranscript(runId, {
+        pickFormat: host.pickTranscriptExportFormat(),
+        // The preview host has already shown its own notice; the port's
+        // tag carries that refusal and its wording out unchanged.
+        openPath: (filePath) =>
+          host.openPath(filePath).pipe(
+            Effect.mapError(
+              (cause) =>
+                new ExternalOpenFailed({
+                  kind: 'path',
+                  target: filePath,
+                  message: toErrorMessage(cause),
+                  cause,
+                }),
             ),
-          showInfo: (message) => host.showInfoMessage(message),
-          showWarning: (message) => host.showWarningMessage(message),
-          showError: rejectRequestEffect,
-          reportDetail: (message) => logger.error(message),
-          getController: getChatExportController,
-          getTraceViewerTemplate: () =>
-            path.join(options.resourcesPath, 'traceViewer', 'index.html'),
-        }),
-        sessionFiles,
-      );
+          ),
+        showInfo: (message) => host.showInfoMessage(message),
+        showWarning: (message) => host.showWarningMessage(message),
+        showError: rejectRequestEffect,
+        reportDetail: (message) => logger.error(message),
+        getController: getChatExportController,
+        getTraceViewerTemplate: () =>
+          path.join(options.resourcesPath, 'traceViewer', 'index.html'),
+      });
     });
-
-  /** A run's saved setup into the launcher (PRD 8.3, 8.5): the launch
-   *  patch rides a surface action, and the launcher comes into view. */
-  function restoreIntoLauncher(
-    config: Parameters<typeof launchPatchOf>[0],
-  ): void {
-    options.postSurfaceAction({ kind: 'launch', patch: launchPatchOf(config) });
-    options.postSurfaceAction({ kind: 'selectNew' });
-  }
 
   /**
    * The sheet's commit verbs, the dock's "latexdiff vs last commit" among
@@ -575,7 +550,7 @@ export function createDesktopHostRequests(
    */
   const latexdiffAgainstCommit = (
     action: 'latexdiffvc' | 'packLatexdiffvc' | 'cleanLatexdiffvc',
-    baseFile: string | undefined,
+    baseFile: string,
     commit: string,
   ) =>
     Effect.gen(function* () {
@@ -602,118 +577,124 @@ export function createDesktopHostRequests(
           );
         return;
       }
-      const packed = yield* Effect.provide(
-        runPackLatexdiffvc(baseFile, commit, action === 'cleanLatexdiffvc'),
-        sessionFiles,
+      const packed = yield* runPackLatexdiffvc(
+        baseFile,
+        commit,
+        action === 'cleanLatexdiffvc',
       );
       const message = latexdiffPackMessage(packed);
       if (message) yield* host.showInfoMessage(message);
     });
 
-  /** The Tools sheet's verbs over the launcher's base and edited files. */
-  const latexdiffs = (request: Extract<HostRequest, { kind: 'latexdiffs' }>) =>
-    Effect.gen(function* () {
-      const { action } = request;
-      const baseFile = request.baseFile ?? undefined;
-      const editedFile = request.editedFile ?? undefined;
-      if (
-        action === 'latexdiffvc' ||
-        action === 'packLatexdiffvc' ||
-        action === 'cleanLatexdiffvc'
-      ) {
-        yield* latexdiffAgainstCommit(
-          action,
-          baseFile,
-          request.commit ?? 'HEAD',
-        );
-        return;
-      }
-      if (!baseFile || !editedFile) {
-        return yield* Effect.fail(
-          new Rejected({
-            reason: 'Choose a base file and an edited file first.',
-          }),
-        );
-      }
-      switch (action) {
-        case 'compare':
-          yield* workflowFileActions.compareOriginal(editedFile, baseFile);
-          return;
-        case 'accept':
-          yield* workflowFileActions.acceptFile(editedFile, baseFile);
-          return;
-        case 'merge':
-          yield* fileActions.runMergeFile(baseFile, editedFile);
-          return;
-        case 'latexdiff':
-          yield* runLatexdiffFile(baseFile, editedFile);
-          return;
-      }
-    });
+  /** This window's half of the shared body's binding table: every verb
+   *  mapped onto the window's dialogs, its preview host, its settings view,
+   *  and the paper's launch path. */
+  const hostBindings: SharedHostRequestBindings = {
+    openPath: (file, line) => host.openPath(file, line),
+    openLabel: (label) =>
+      fileActions
+        .findAndOpenLabel(label)
+        .pipe(
+          Effect.mapError((cause) =>
+            hostFailure('fileActions.findAndOpenLabel', cause),
+          ),
+        ),
+    exportTranscript,
+    surfaceAction: (action) => options.postSurfaceAction(action),
+    // One window per paper: the two surface actions above are the whole
+    // move into the launcher here, so there is no sidebar left to raise.
+    showLauncher: Effect.void,
+    runWorkflowDiff,
+    runWorkflowFileOperation,
+    latexdiffAgainstCommit,
+    mergeFiles: (baseFile, editedFile) =>
+      fileActions.runMergeFile(baseFile, editedFile),
+    latexdiffFiles: (baseFile, editedFile) =>
+      runLatexdiffFile(baseFile, editedFile),
+    openDashboard: Effect.sync(() =>
+      postDesktopSettingsView(options.postToRenderer),
+    ),
+    openSettings: (section, sessionType) =>
+      Effect.sync(() =>
+        postDesktopSettingsView(
+          options.postToRenderer,
+          section === 'teams' ? 'multi-agent' : section,
+          sessionType === 'toolUse' ? 'toolUse' : undefined,
+        ),
+      ),
+    // Only the "ask the user for a key" step is host-specific: on the
+    // desktop that means opening the Models tab rather than a modal prompt.
+    setApiKey: () =>
+      Effect.sync(() =>
+        postDesktopSettingsView(options.postToRenderer, 'models'),
+      ),
+    openApiKeyGuide: () =>
+      options.openExternalUrl('https://texra.ai/guide/configuration.html'),
+    openAgentSettings: (sessionType) =>
+      Effect.sync(() =>
+        postDesktopSettingsView(options.postToRenderer, 'agents', sessionType),
+      ),
+    openCustomAgentDirectory: Effect.gen(function* () {
+      const directory = yield* options.getCustomAgentDirectory();
+      yield* host.openPath(directory);
+    }),
+    openAgentDocs: Effect.suspend(() =>
+      options.openExternalUrl(`${DESKTOP_DOCS_URL}#agents`),
+    ),
+    recheckDependencies: Effect.suspend(() => options.recheckTools()),
+    openInstallGuide: () =>
+      Effect.sync(() =>
+        postDesktopSettingsView(options.postToRenderer, 'tools'),
+      ),
+    signIn: Effect.suspend(() =>
+      options
+        .signIn()
+        .pipe(Effect.mapError((cause) => hostFailure('signIn', cause))),
+    ),
+    gettingStarted: (action) =>
+      action === 'openWalkthrough'
+        ? Effect.sync(() => options.showFirstRunWalkthrough())
+        : Effect.asVoid(
+            host.showInfoMessage(vsCodeOnlyGettingStartedMessage(action)),
+          ),
+    onboarding: {
+      signInChatGpt: Effect.suspend(() =>
+        options.onboarding.signInWithChatGpt(),
+      ),
+      skip: Effect.suspend(() => options.onboarding.skipOnboarding()),
+      runSetup: Effect.suspend(() => options.onboarding.runSetup()),
+      skipSetup: Effect.suspend(() => options.onboarding.skipSetup()),
+      openGettingStarted: Effect.suspend(() =>
+        options.openExternalUrl(DESKTOP_DOCS_URL),
+      ),
+    },
+    // One window per paper and no view-title menu, so nothing reads this.
+    setActiveView: () => {},
+  };
 
-  const agentConfigBanner = (
-    request: Extract<HostRequest, { kind: 'agentConfigBanner' }>,
-  ) =>
-    Effect.gen(function* () {
-      switch (request.action) {
-        case 'edit':
-          postDesktopSettingsView(
-            options.postToRenderer,
-            'agents',
-            request.sessionType === 'toolUse' ? 'toolUse' : 'workflow',
-          );
-          return;
-        case 'dir': {
-          if (request.customDirSet !== true) {
-            postDesktopSettingsView(options.postToRenderer, 'agents');
-            return;
-          }
-          const directory = yield* options.getCustomAgentDirectory();
-          yield* host.openPath(directory);
-          return;
-        }
-        case 'docs':
-          yield* options.openExternalUrl(`${DESKTOP_DOCS_URL}#agents`);
-          return;
-      }
-    });
-
-  const onboarding = (
-    action: Extract<HostRequest, { kind: 'onboarding' }>['action'],
-  ) =>
-    Effect.gen(function* () {
-      switch (action) {
-        case 'signInChatGpt':
-          yield* options.onboarding.signInWithChatGpt();
-          return;
-        case 'setApiKey':
-          postDesktopSettingsView(options.postToRenderer, 'models');
-          return;
-        case 'skip':
-          yield* options.onboarding.skipOnboarding();
-          return;
-        case 'runSetup':
-          yield* options.onboarding.runSetup();
-          return;
-        case 'skipSetup':
-          yield* options.onboarding.skipSetup();
-          return;
-        case 'openGettingStarted':
-          yield* options.openExternalUrl(DESKTOP_DOCS_URL);
-          return;
-      }
-    });
+  /** The arms both GUI hosts answer through one body, now that this window's
+   *  ports are bound. */
+  const sharedRequests: SharedHostRequestPorts = {
+    runActions,
+    workflowFileActions,
+    snapshot: options.snapshot,
+    draftRequests,
+    toolEditApprovals: run.toolEditApprovals,
+    host: hostBindings,
+  };
 
   const notOnDesktop = (what: string) =>
     new Rejected({ reason: `${what} is not available in the desktop app.` });
 
   /**
-   * One program per request. The arms are Effects; the capabilities that
-   * still answer with a promise are lifted once through `fromHost`, so the
-   * failure channel is the value the arm failed or rejected with and no
-   * dispatch arm re-enters the runtime between here and the bridge that runs
-   * this program (a lifted capability may still run its own program behind
-   * its promise face).
+   * One program per request: the arms this window performs its own way. Every
+   * other kind reaches the one shared body, which owns the order, the guards,
+   * and the refusal wording for both GUI hosts. The capabilities that still
+   * answer with a promise are lifted once through `fromHost`, so the failure
+   * channel is the value the arm failed or rejected with and no dispatch arm
+   * re-enters the runtime between here and the bridge that runs this program
+   * (a lifted capability may still run its own program behind its promise
+   * face).
    */
   function dispatch(
     request: HostRequest,
@@ -721,83 +702,47 @@ export function createDesktopHostRequests(
   ): Effect.Effect<
     HostOutcome,
     HostRequestFailure,
-    ProcessServices | StorageFs
+    ProcessServices | StorageFs | WorkspaceFs
   > {
     return Effect.gen(function* () {
       const done: HostOutcome = { kind: 'done' };
       switch (request.kind) {
-        case 'openFile': {
-          const { path: filePath, line } = request;
-          yield* host.openPath(filePath, line ?? undefined);
-          return done;
-        }
-        case 'openLabel': {
-          const { label } = request;
-          const opened = yield* fileActions
-            .findAndOpenLabel(label)
-            .pipe(
-              Effect.mapError((cause) =>
-                hostFailure('fileActions.findAndOpenLabel', cause),
-              ),
-            );
-          if (!opened) {
-            return yield* Effect.fail(
-              new Rejected({ reason: `No file defines the label ${label}.` }),
-            );
-          }
-          return done;
-        }
+        case 'openFile':
+        case 'openLabel':
         case 'openRunStorage':
+        case 'exportTranscript':
+        case 'restoreIntoLauncher':
         case 'resume':
         case 'runNew':
         case 'runCompileFixer':
         case 'useOwnApiKey':
+        case 'latexdiff':
+        case 'pack':
+        case 'clean':
+        case 'latexdiffs':
         case 'record':
-        case 'polish':
-        case 'savePastedImage':
+        case 'openDashboard':
         case 'refreshCommits':
         case 'refreshFiles':
-        case 'dismissBanner':
+        case 'openSettings':
+        case 'polish':
+        case 'savePastedImage':
         case 'toolEdit':
+        case 'setActiveView':
         case 'fileAction':
+        case 'restoreProposalConfig':
+        case 'apiKeyBanner':
+        case 'agentConfigBanner':
+        case 'recheckDependencies':
+        case 'openInstallGuide':
+        case 'signIn':
+        case 'dismissBanner':
+        case 'gettingStarted':
+        case 'onboarding':
           return yield* handleSharedHostRequest(sharedRequests, request, port);
-        case 'exportTranscript':
-          yield* exportTranscript(request.runId);
-          return done;
-        case 'restoreIntoLauncher':
-          restoreIntoLauncher(yield* runActions.restoreState(request.runId));
-          return done;
-        case 'latexdiff': {
-          const diff = yield* runActions.workflowDiffRequest(request.runId);
-          if (diff) yield* runWorkflowDiff(diff);
-          return done;
-        }
-        case 'pack':
-        case 'clean': {
-          const operation = yield* runActions.workflowFileOperationRequest(
-            request.runId,
-          );
-          if (operation) {
-            yield* runWorkflowFileOperation(request.kind, operation);
-          }
-          return done;
-        }
-        case 'latexdiffs':
-          yield* latexdiffs(request);
-          return done;
         case 'popOut':
         case 'popBack':
           return yield* Effect.fail(notOnDesktop('Pop-out to editor'));
-        case 'openDashboard':
-          postDesktopSettingsView(options.postToRenderer);
-          return done;
-        case 'openSettings':
-          postDesktopSettingsView(
-            options.postToRenderer,
-            request.section === 'teams' ? 'multi-agent' : request.section,
-            request.sessionType === 'toolUse' ? 'toolUse' : undefined,
-          );
-          return done;
         case 'pickFiles': {
           const { fileType } = request;
           if (fileType === 'base' || fileType === 'edited') {
@@ -839,47 +784,6 @@ export function createDesktopHostRequests(
         }
         case 'extractFigures':
           return yield* Effect.fail(notOnDesktop('Figure extraction'));
-        case 'restoreProposalConfig':
-          restoreIntoLauncher(runActions.restoreProposal(request.proposal));
-          return done;
-        case 'apiKeyBanner':
-          if (request.action === 'set') {
-            postDesktopSettingsView(options.postToRenderer, 'models');
-          } else {
-            yield* options.openExternalUrl(
-              'https://texra.ai/guide/configuration.html',
-            );
-          }
-          return done;
-        case 'agentConfigBanner':
-          yield* agentConfigBanner(request);
-          return done;
-        case 'recheckDependencies':
-          yield* options.recheckTools();
-          return done;
-        case 'openInstallGuide':
-          postDesktopSettingsView(options.postToRenderer, 'tools');
-          return done;
-        case 'signIn':
-          yield* options
-            .signIn()
-            .pipe(Effect.mapError((cause) => hostFailure('signIn', cause)));
-          return done;
-        case 'gettingStarted':
-          if (request.action === 'openWalkthrough') {
-            options.showFirstRunWalkthrough();
-            return done;
-          }
-          yield* host.showInfoMessage(
-            vsCodeOnlyGettingStartedMessage(request.action),
-          );
-          return done;
-        case 'onboarding':
-          yield* onboarding(request.action);
-          return done;
-        case 'setActiveView':
-          // The desktop has one window per paper and no view-title menu.
-          return done;
       }
     });
   }
