@@ -1,5 +1,6 @@
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect } from 'vitest';
 import { finalizeRun, getRunRecords } from '@agent/storage';
 import { aggregateId, type RunId } from '@shared/schemas';
 import {
@@ -18,48 +19,46 @@ beforeEach(async () => {
 });
 
 describe('run metadata updates', () => {
-  it('preserves description and outcome when independent facts overlap', async () => {
-    await Effect.runPromise(
-      Effect.all(
-        [
-          session.commit([
-            {
-              type: 'run.description',
-              aggregateId: aggregateId('run', id),
-              description: 'A described session',
-            },
-          ]),
-          finalizeRun(session, {
-            runId: id,
-            outcome: 'completed',
-          }),
-        ],
-        { concurrency: 'unbounded' },
-      ),
-    );
-    expect(
-      (await Effect.runPromise(session.readView([id]))).runs.get(id),
-    ).toMatchObject({
-      description: 'A described session',
-      status: 'completed',
-    });
-  });
-  it('keeps a driver outcome when host-exit finalization follows', async () => {
-    await Effect.runPromise(
-      finalizeRun(session, {
+  it.effect(
+    'preserves description and outcome when independent facts overlap',
+    () =>
+      Effect.gen(function* () {
+        yield* Effect.all(
+          [
+            session.commit([
+              {
+                type: 'run.description',
+                aggregateId: aggregateId('run', id),
+                description: 'A described session',
+              },
+            ]),
+            finalizeRun(session, {
+              runId: id,
+              outcome: 'completed',
+            }),
+          ],
+          { concurrency: 'unbounded' },
+        );
+        expect((yield* session.readView([id])).runs.get(id)).toMatchObject({
+          description: 'A described session',
+          status: 'completed',
+        });
+      }),
+  );
+  it.effect('keeps a driver outcome when host-exit finalization follows', () =>
+    Effect.gen(function* () {
+      yield* finalizeRun(session, {
         runId: id,
         outcome: 'completed',
-      }),
-    );
-    await Effect.runPromise(
-      finalizeRun(session, {
+      });
+      yield* finalizeRun(session, {
         runId: id,
         outcome: 'cancelled',
         keepExistingOutcome: true,
-      }),
-    );
-    expect(
-      await Effect.runPromise(getRunRecords(session, id).readRunEnd()),
-    ).toMatchObject({ outcome: 'completed' });
-  });
+      });
+      expect(yield* getRunRecords(session, id).readRunEnd()).toMatchObject({
+        outcome: 'completed',
+      });
+    }),
+  );
 });

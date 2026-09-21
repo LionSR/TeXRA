@@ -122,16 +122,13 @@ describe('AgentLaunchContext', () => {
         // The banner claims the failure, so the launch catch adds no generic toast.
         const explicit = createRecordingHost();
         const session = createTestSession();
-        Effect.runSync(session.interactions.use(explicit.interactions));
+        yield* Effect.addFinalizer(() => session.dispose());
+        yield* session.interactions.use(explicit.interactions);
 
-        try {
-          yield* launchWithMissingAgent(
-            session,
-            '__missing_agent_for_launch_context_test__',
-          );
-        } finally {
-          yield* session.dispose();
-        }
+        yield* launchWithMissingAgent(
+          session,
+          '__missing_agent_for_launch_context_test__',
+        );
 
         expect(explicit.events).toEqual([
           {
@@ -181,22 +178,17 @@ describe('AgentLaunchContext', () => {
         // pre-registration, so no `result` event exists to present it instead.
         const events: string[] = [];
         const session = createTestSession();
-        Effect.runSync(
-          session.interactions.use({
-            emit: (event) => {
-              if (event === 'showAgentConfigBanner') {
-                throw new Error('renderer torn down mid-post');
-              }
-              events.push(event);
-            },
-          }),
-        );
+        yield* Effect.addFinalizer(() => session.dispose());
+        yield* session.interactions.use({
+          emit: (event) => {
+            if (event === 'showAgentConfigBanner') {
+              throw new Error('renderer torn down mid-post');
+            }
+            events.push(event);
+          },
+        });
 
-        try {
-          yield* launchWithMissingAgent(session);
-        } finally {
-          yield* session.dispose();
-        }
+        yield* launchWithMissingAgent(session);
 
         expect(
           events.filter((event) => event === 'requestShowError'),
@@ -213,16 +205,14 @@ describe('AgentLaunchContext', () => {
         const events: string[] = [];
         const session =
           yield* triggerQueuedMissingAgentFailure(createTestSession());
-        Effect.runSync(
-          session.interactions.use({
-            emit: (event) => {
-              if (event === 'showAgentConfigBanner') {
-                throw new Error('renderer torn down mid-post');
-              }
-              events.push(event);
-            },
-          }),
-        );
+        yield* session.interactions.use({
+          emit: (event) => {
+            if (event === 'showAgentConfigBanner') {
+              throw new Error('renderer torn down mid-post');
+            }
+            events.push(event);
+          },
+        });
         yield* settle;
 
         expect(
@@ -238,36 +228,33 @@ describe('AgentLaunchContext', () => {
       Effect.gen(function* () {
         const recording = createRecordingHost();
         const session = createTestSession();
-        Effect.runSync(session.interactions.use(recording.interactions));
+        yield* Effect.addFinalizer(() => session.dispose());
+        yield* session.interactions.use(recording.interactions);
 
         mocks.resolve.mockReturnValueOnce({ path: '/agents/chat.yaml' });
         mocks.load.mockReturnValueOnce(
           Effect.succeed([{ agentCategory: AgentCategory.ToolUse }, {}]),
         );
 
-        try {
-          // Rejected while preparing the definition, before any execution is
-          // registered for the unknown model.
-          const error = yield* Effect.flip(
-            prepareAgentDefinition({
-              config: AgentConfigSchema.parse({
-                agent: 'chat',
-                model: '__unregistered_model_for_launch_context_test__',
-              }),
-              session,
+        // Rejected while preparing the definition, before any execution is
+        // registered for the unknown model.
+        const error = yield* Effect.flip(
+          prepareAgentDefinition({
+            config: AgentConfigSchema.parse({
+              agent: 'chat',
+              model: '__unregistered_model_for_launch_context_test__',
             }),
-          ).pipe(
-            Effect.provide(
-              Layer.merge(
-                LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT),
-                nodePlatformLayer,
-              ),
+            session,
+          }),
+        ).pipe(
+          Effect.provide(
+            Layer.merge(
+              LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT),
+              nodePlatformLayer,
             ),
-          );
-          expect(error.message).toContain('is not registered');
-        } finally {
-          yield* session.dispose();
-        }
+          ),
+        );
+        expect(error.message).toContain('is not registered');
 
         // Only the targeted instruction should fire; the generic `requestShowError`
         // catch-all must not repeat a failure the instruction already presented.
@@ -292,10 +279,13 @@ describe('AgentLaunchContext', () => {
         // the `result` event's own toast, so the user saw the error twice.
         const recording = createRecordingHost();
         const session = createTestSession();
-        Effect.runSync(session.interactions.use(recording.interactions));
+        yield* session.interactions.use(recording.interactions);
         const detachToast = attachTerminalResultToast(
           session,
           session.interactions,
+        );
+        yield* Effect.addFinalizer(() =>
+          Effect.sync(detachToast).pipe(Effect.andThen(session.dispose())),
         );
         publishTestRunStart(session, EXECUTION_ID);
         mocks.resolve.mockReturnValueOnce({ path: '/agents/chat.yaml' });
@@ -306,31 +296,26 @@ describe('AgentLaunchContext', () => {
           throw new Error('trace failed');
         });
 
-        try {
-          const exit = yield* Effect.exit(
-            buildAgentLaunchContext({
-              config: AgentConfigSchema.parse({
-                agent: 'chat',
-                model: 'gpt55',
-                agentCategory: AgentCategory.ToolUse,
-              }),
-              runId: EXECUTION_ID,
-              session,
-              resumed: true,
-              modelCompatibilityKey: 'OpenAIResponse',
+        const exit = yield* Effect.exit(
+          buildAgentLaunchContext({
+            config: AgentConfigSchema.parse({
+              agent: 'chat',
+              model: 'gpt55',
+              agentCategory: AgentCategory.ToolUse,
             }),
-          );
-          assert(Exit.isFailure(exit));
-          expect(String(Cause.squash(exit.cause))).toContain('trace failed');
-          expect(
-            recording.events.filter(
-              (event) => event.event === 'requestShowError',
-            ),
-          ).toHaveLength(1);
-        } finally {
-          detachToast();
-          yield* session.dispose();
-        }
+            runId: EXECUTION_ID,
+            session,
+            resumed: true,
+            modelCompatibilityKey: 'OpenAIResponse',
+          }),
+        );
+        assert(Exit.isFailure(exit));
+        expect(String(Cause.squash(exit.cause))).toContain('trace failed');
+        expect(
+          recording.events.filter(
+            (event) => event.event === 'requestShowError',
+          ),
+        ).toHaveLength(1);
       }),
   );
 
@@ -339,6 +324,7 @@ describe('AgentLaunchContext', () => {
     () =>
       Effect.gen(function* () {
         const session = createTestSession();
+        yield* Effect.addFinalizer(() => session.dispose());
         const batches = vi.spyOn(session, 'commitRegistration');
         const recording = recordSessionEvents(session);
         mocks.resolve.mockReturnValueOnce({ path: '/agents/chat.yaml' });
@@ -358,32 +344,31 @@ describe('AgentLaunchContext', () => {
           model: 'gpt55',
           agentCategory: AgentCategory.ToolUse,
         });
-        try {
-          yield* registerRun(session, EXECUTION_ID, config, 'chat', {
-            identity: { kind: 'agent', agent: 'chat' },
-          });
-          yield* buildAgentLaunchContext({
-            config,
-            runId: EXECUTION_ID,
-            session,
-            modelCompatibilityKey: 'OpenAIResponse',
-          });
-          expect(batches.mock.calls[0]?.[0].map((event) => event.type)).toEqual(
-            ['run.start', 'run.launchLabel', 'run.record', 'run.activate'],
-          );
-          expect(
-            (yield* Effect.promise(() => recording.read()))
-              .slice(0, 2)
-              .map((event) => event.type),
-          ).toEqual(['run.start', 'run.activate']);
-          // One aggregate, one counter: the activation is the fourth durable
-          // row of the creation batch, and the phase the fold reads from it.
-          expect(
-            (yield* Effect.promise(() => recording.read()))[1],
-          ).toMatchObject({ seq: 4 });
-        } finally {
-          yield* session.dispose();
-        }
+        yield* registerRun(session, EXECUTION_ID, config, 'chat', {
+          identity: { kind: 'agent', agent: 'chat' },
+        });
+        yield* buildAgentLaunchContext({
+          config,
+          runId: EXECUTION_ID,
+          session,
+          modelCompatibilityKey: 'OpenAIResponse',
+        });
+        expect(batches.mock.calls[0]?.[0].map((event) => event.type)).toEqual([
+          'run.start',
+          'run.launchLabel',
+          'run.record',
+          'run.activate',
+        ]);
+        expect(
+          (yield* Effect.promise(() => recording.read()))
+            .slice(0, 2)
+            .map((event) => event.type),
+        ).toEqual(['run.start', 'run.activate']);
+        // One aggregate, one counter: the activation is the fourth durable
+        // row of the creation batch, and the phase the fold reads from it.
+        expect(
+          (yield* Effect.promise(() => recording.read()))[1],
+        ).toMatchObject({ seq: 4 });
       }),
   );
 
@@ -402,6 +387,7 @@ describe('AgentLaunchContext', () => {
         const session = createTestSession({
           responseTextProcessing,
         });
+        yield* Effect.addFinalizer(() => session.dispose());
         publishTestRunStart(session, EXECUTION_ID);
         const terminalEvents = recordSessionEvents(session);
         const stage = noopTrace.openStage('Run');
@@ -422,47 +408,43 @@ describe('AgentLaunchContext', () => {
         mocks.createTrace.mockReturnValueOnce({ trace, dispose: rawDispose });
         mocks.buildVars.mockReturnValueOnce(Effect.fail(failure));
 
-        try {
-          const error = yield* Effect.flip(
-            buildAgentLaunchContext({
-              config: AgentConfigSchema.parse({
-                agent: 'chat',
-                model: 'gpt55',
-                agentCategory: AgentCategory.ToolUse,
-              }),
-              runId: EXECUTION_ID,
-              session,
-              resumed: true,
-              suppressErrorNotification: true,
-              modelCompatibilityKey: 'OpenAIResponse',
+        const error = yield* Effect.flip(
+          buildAgentLaunchContext({
+            config: AgentConfigSchema.parse({
+              agent: 'chat',
+              model: 'gpt55',
+              agentCategory: AgentCategory.ToolUse,
             }),
-          );
-          expect(error).toBe(failure);
+            runId: EXECUTION_ID,
+            session,
+            resumed: true,
+            suppressErrorNotification: true,
+            modelCompatibilityKey: 'OpenAIResponse',
+          }),
+        );
+        expect(error).toBe(failure);
 
-          expect(mocks.buildVars.mock.calls.at(-1)?.at(6)).toEqual({
-            workspacePath: session.roots.workspace,
-            storageRoot: session.roots.storage,
-            config: session.roots.config,
-            settings: session.roots,
-            stageId: undefined,
-          });
-          expect(endStage).toHaveBeenCalledExactlyOnceWith(RUN_OUTCOME.FAILED);
-          expect(session.runView(EXECUTION_ID)?.status).toBe(RUN_PHASE.FAILED);
-          expect(detachTrace).toHaveBeenCalledOnce();
-          expect(
-            yield* Effect.promise(() => detachTrace.mock.results[0]!.value),
-          ).toContainEqual(
-            expect.objectContaining({
-              type: 'run.end',
-              outcome: RUN_OUTCOME.FAILED,
-            }),
-          );
-          expect(rawDispose).toHaveBeenCalledOnce();
-          // Terminal compensation is committed before the trace is detached.
-          expect(order).toEqual(['stage', 'detach', 'raw-trace']);
-        } finally {
-          yield* session.dispose();
-        }
+        expect(mocks.buildVars.mock.calls.at(-1)?.at(6)).toEqual({
+          workspacePath: session.roots.workspace,
+          storageRoot: session.roots.storage,
+          config: session.roots.config,
+          settings: session.roots,
+          stageId: undefined,
+        });
+        expect(endStage).toHaveBeenCalledExactlyOnceWith(RUN_OUTCOME.FAILED);
+        expect(session.runView(EXECUTION_ID)?.status).toBe(RUN_PHASE.FAILED);
+        expect(detachTrace).toHaveBeenCalledOnce();
+        expect(
+          yield* Effect.promise(() => detachTrace.mock.results[0]!.value),
+        ).toContainEqual(
+          expect.objectContaining({
+            type: 'run.end',
+            outcome: RUN_OUTCOME.FAILED,
+          }),
+        );
+        expect(rawDispose).toHaveBeenCalledOnce();
+        // Terminal compensation is committed before the trace is detached.
+        expect(order).toEqual(['stage', 'detach', 'raw-trace']);
       }),
   );
 });

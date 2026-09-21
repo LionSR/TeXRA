@@ -1,5 +1,6 @@
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { describe, expect, it } from 'vitest';
+import { describe, expect } from 'vitest';
 
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
 import { DEFAULT_LATEX_SETTINGS_STATUS } from '@shared/schemas';
@@ -59,43 +60,47 @@ function createController(
 }
 
 describe('LatexToolingController', () => {
-  it('keeps compound dependency flags false until every required tool is present', async () => {
-    const status = await Effect.runPromise(
-      createController({
-        installedTools: {
-          pdflatex: true,
-          latexindent: true,
-          gs: true,
-        },
-      }).detectStatus(),
-    );
+  it.effect(
+    'keeps compound dependency flags false until every required tool is present',
+    () =>
+      Effect.gen(function* () {
+        const status = yield* createController({
+          installedTools: {
+            pdflatex: true,
+            latexindent: true,
+            gs: true,
+          },
+        }).detectStatus();
 
-    expect(status.texDistributionInstalled).toBe(true);
-    expect(status.latexindentInstalled).toBe(false);
-    expect(status.imageProcessingInstalled).toBe(false);
-  });
+        expect(status.texDistributionInstalled).toBe(true);
+        expect(status.latexindentInstalled).toBe(false);
+        expect(status.imageProcessingInstalled).toBe(false);
+      }),
+  );
 
-  it('falls back to defaults when detection fails', async () => {
-    const errors: unknown[] = [];
-    const controller = new LatexToolingController({
-      checkToolInstalled: () =>
-        Effect.sync(() => {
-          throw new Error('probe failed');
-        }),
-      findPath: () => null,
-      detectPackageManager: () => 'apt',
-      getPlatform: () => 'win32',
-      isLatexWorkshopInstalled: () => true,
-      getRecommendedStatus: () => ({ outDir: true, autoRevealExclude: true }),
-      onDetectionError: (error) => errors.push(error),
-    });
+  it.effect('falls back to defaults when detection fails', () =>
+    Effect.gen(function* () {
+      const errors: unknown[] = [];
+      const controller = new LatexToolingController({
+        checkToolInstalled: () =>
+          Effect.sync(() => {
+            throw new Error('probe failed');
+          }),
+        findPath: () => null,
+        detectPackageManager: () => 'apt',
+        getPlatform: () => 'win32',
+        isLatexWorkshopInstalled: () => true,
+        getRecommendedStatus: () => ({ outDir: true, autoRevealExclude: true }),
+        onDetectionError: (error) => errors.push(error),
+      });
 
-    expect(await Effect.runPromise(controller.detectStatus())).toStrictEqual({
-      ...DEFAULT_LATEX_SETTINGS_STATUS,
-      platform: 'win32',
-    });
-    expect(errors).toHaveLength(1);
-  });
+      expect(yield* controller.detectStatus()).toStrictEqual({
+        ...DEFAULT_LATEX_SETTINGS_STATUS,
+        platform: 'win32',
+      });
+      expect(errors).toHaveLength(1);
+    }),
+  );
 
   it('allowlists structured install commands only', () => {
     const controller = createController();

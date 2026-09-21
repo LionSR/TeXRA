@@ -1,15 +1,15 @@
 import '@test/support/defaultSessionTestSetup';
 
+import { it } from '@effect/vitest';
+import { Effect } from 'effect';
 import {
   afterEach,
   beforeAll,
   describe,
   expect,
-  it,
   onTestFinished,
   vi,
 } from 'vitest';
-import { Effect } from 'effect';
 import { NotificationFailed } from '@hosts/uiHosts';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import {
@@ -17,6 +17,7 @@ import {
   type ConfigProvider,
   type StateStore,
 } from '@platform/interfaces';
+import { withProcessServices } from '@platform/processRuntime';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   BASH_APPROVAL_CONFIG_KEY,
@@ -471,22 +472,22 @@ describe('desktop settings IPC', () => {
   describe('goal-state pushes', () => {
     setupPlatform();
 
-    it('reposts the goal list when a run mutates a goal', async () => {
-      const runId = 'd5e77190' as RunId;
-      const { posted, session } = createCapturedSettingsFixture();
-      publishTestRunStart(session, runId);
+    it.effect('reposts the goal list when a run mutates a goal', () =>
+      Effect.gen(function* () {
+        const runId = 'd5e77190' as RunId;
+        const { posted, session } = createCapturedSettingsFixture();
+        publishTestRunStart(session, runId);
 
-      // A run mutates goals on its paper's session, as the desktop does.
-      await testRuntime().runPromise(
-        startGoal(session, runId, 'Finish the proof'),
-      );
-      await flushAsyncWork();
+        // A run mutates goals on its paper's session, as the desktop does.
+        yield* startGoal(session, runId, 'Finish the proof');
+        yield* Effect.promise(() => flushAsyncWork());
 
-      expect(posted.at(-1)).toMatchObject({
-        command: SETTINGS_VIEW_COMMANDS.UPDATE_GOAL_LIST,
-        items: [expect.objectContaining({ objective: 'Finish the proof' })],
-      });
-    });
+        expect(posted.at(-1)).toMatchObject({
+          command: SETTINGS_VIEW_COMMANDS.UPDATE_GOAL_LIST,
+          items: [expect.objectContaining({ objective: 'Finish the proof' })],
+        });
+      }),
+    );
   });
 
   it('routes revealGoalRun to the window-owned progress bridge (issue #7751 FS6)', async () => {
@@ -838,46 +839,57 @@ describe('desktop settings IPC', () => {
     });
   });
 
-  it('refreshes credentials before conditionally refreshing the agent catalog', async () => {
-    const state = newStatePorts();
-    const events: string[] = [];
-    const refreshAuthDependentData = vi.fn(() =>
-      Effect.sync(() => {
-        events.push('credentials');
+  it.effect(
+    'refreshes credentials before conditionally refreshing the agent catalog',
+    () =>
+      Effect.gen(function* () {
+        const state = newStatePorts();
+        const events: string[] = [];
+        const refreshAuthDependentData = vi.fn(() =>
+          Effect.sync(() => {
+            events.push('credentials');
+          }),
+        );
+        const credentialSettingsController =
+          createStubDesktopCredentialSettingsController(state, {
+            refreshAuthDependentData,
+          });
+        const agentSettingsController =
+          createStubDesktopAgentSettingsController();
+        agentSettingsController.refreshCatalogData = vi.fn(() =>
+          Effect.sync(() => {
+            events.push('agents');
+          }),
+        );
+        const { settings } = createSettingsFixture({
+          ...state,
+          agentSettingsController,
+          credentialSettingsController,
+        });
+
+        yield* withProcessServices(
+          testRuntime(),
+          settings.refreshAuthDependentData(),
+        );
+
+        expect(events).toEqual(['credentials', 'agents']);
+
+        events.length = 0;
+        yield* withProcessServices(
+          testRuntime(),
+          settings.refreshAuthDependentData({
+            deferAgentCatalogRefresh: true,
+          }),
+        );
+
+        expect(events).toEqual(['credentials']);
+        expect(refreshAuthDependentData).toHaveBeenCalledTimes(2);
+        expect(refreshAuthDependentData).toHaveBeenLastCalledWith();
+        expect(
+          agentSettingsController.refreshCatalogData,
+        ).toHaveBeenCalledOnce();
       }),
-    );
-    const credentialSettingsController =
-      createStubDesktopCredentialSettingsController(state, {
-        refreshAuthDependentData,
-      });
-    const agentSettingsController = createStubDesktopAgentSettingsController();
-    agentSettingsController.refreshCatalogData = vi.fn(() =>
-      Effect.sync(() => {
-        events.push('agents');
-      }),
-    );
-    const { settings } = createSettingsFixture({
-      ...state,
-      agentSettingsController,
-      credentialSettingsController,
-    });
-
-    await testRuntime().runPromise(settings.refreshAuthDependentData());
-
-    expect(events).toEqual(['credentials', 'agents']);
-
-    events.length = 0;
-    await testRuntime().runPromise(
-      settings.refreshAuthDependentData({
-        deferAgentCatalogRefresh: true,
-      }),
-    );
-
-    expect(events).toEqual(['credentials']);
-    expect(refreshAuthDependentData).toHaveBeenCalledTimes(2);
-    expect(refreshAuthDependentData).toHaveBeenLastCalledWith();
-    expect(agentSettingsController.refreshCatalogData).toHaveBeenCalledOnce();
-  });
+  );
 
   it('requires UI confirmation before deleting memory', async () => {
     const confirmAction = vi.fn(async () => false);

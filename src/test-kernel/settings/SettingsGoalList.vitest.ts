@@ -1,6 +1,8 @@
 // Test composition imports
 
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { it } from '@effect/vitest';
+import { Effect } from 'effect';
+import { afterEach, describe, expect, vi } from 'vitest';
 import * as vscode from 'vscode';
 
 import { SettingsViewMessageHandler } from '@settingsView/SettingsViewMessageHandler';
@@ -80,23 +82,27 @@ describe('settings goal list', () => {
 
   afterEach(() => vi.restoreAllMocks());
 
-  it("posts the goal the run's row states", async () => {
-    const session = testDefaultSession();
-    publishTestRunStart(session, RUN_ID);
-    const goal = await testRuntime().runPromise(
-      startGoal(session, RUN_ID, 'Finish the settings fix.'),
-    );
-    const webview = createWebview();
+  it.effect("posts the goal the run's row states", () =>
+    Effect.gen(function* () {
+      const session = testDefaultSession();
+      publishTestRunStart(session, RUN_ID);
+      const goal = yield* startGoal(
+        session,
+        RUN_ID,
+        'Finish the settings fix.',
+      );
+      const webview = createWebview();
 
-    await testRuntime().runPromise(createHandler().sendGoalList(webview));
+      yield* createHandler().sendGoalList(webview);
 
-    // `runLabel` is the fold's `RunView.label` for this run: the fixture's
-    // `run.start` names the `chat` agent, whose display name is `chat`.
-    expect(webview.postMessage).toHaveBeenCalledWith({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_GOAL_LIST,
-      items: [{ ...goal, runLabel: 'chat' }],
-    });
-  });
+      // `runLabel` is the fold's `RunView.label` for this run: the fixture's
+      // `run.start` names the `chat` agent, whose display name is `chat`.
+      expect(webview.postMessage).toHaveBeenCalledWith({
+        command: SETTINGS_VIEW_COMMANDS.UPDATE_GOAL_LIST,
+        items: [{ ...goal, runLabel: 'chat' }],
+      });
+    }),
+  );
 
   it.each([
     {

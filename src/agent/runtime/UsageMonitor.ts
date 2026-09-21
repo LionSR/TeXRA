@@ -207,6 +207,8 @@ export class UsageMonitor {
         model,
       );
     } catch (error) {
+      // Best-effort reporting edge: a usage-stats fault is logged here, never
+      // thrown into the run loop that called recordUsage.
       logger.error(`Error printing ${runKind} statistics`, { data: error });
     }
   }

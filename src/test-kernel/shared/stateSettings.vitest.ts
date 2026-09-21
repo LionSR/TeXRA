@@ -4,8 +4,9 @@ import { resolve } from 'node:path';
 import { strict as assert } from 'node:assert';
 
 // Third-party imports
-import { Effect } from 'effect';
-import { describe, it, vi } from 'vitest';
+import { it } from '@effect/vitest';
+import { Effect, Exit } from 'effect';
+import { describe, vi } from 'vitest';
 
 // Local imports
 import * as logger from '@logger/logUtils';
@@ -324,54 +325,63 @@ describe('catalog-derived settings snapshots', () => {
     }
   });
 
-  it('builds the LaTeX message from validated catalog values and defaults', async () => {
-    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
-    const { stores, workspaceState } = makeFakeSettingsStores();
-    await Effect.runPromise(
-      workspaceState.update(WorkspaceStateKey.WORKFLOW_AUTO_COMPILE, false),
-    );
-    await Effect.runPromise(
-      workspaceState.update(WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS, 25000),
-    );
-    await Effect.runPromise(
-      workspaceState.update(
-        WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
-        'stale-bogus-value',
-      ),
-    );
-    await Effect.runPromise(
-      workspaceState.update(WorkspaceStateKey.LATEX_FORMATTER, 'tex-fmt'),
-    );
+  it.effect(
+    'builds the LaTeX message from validated catalog values and defaults',
+    () =>
+      Effect.gen(function* () {
+        const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+        const { stores, workspaceState } = makeFakeSettingsStores();
+        yield* workspaceState.update(
+          WorkspaceStateKey.WORKFLOW_AUTO_COMPILE,
+          false,
+        );
+        yield* workspaceState.update(
+          WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS,
+          25000,
+        );
+        yield* workspaceState.update(
+          WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
+          'stale-bogus-value',
+        );
+        yield* workspaceState.update(
+          WorkspaceStateKey.LATEX_FORMATTER,
+          'tex-fmt',
+        );
 
-    try {
-      const message = buildSettingsSnapshotMessage('latex', stores, 'desktop');
+        try {
+          const message = buildSettingsSnapshotMessage(
+            'latex',
+            stores,
+            'desktop',
+          );
 
-      assert.equal(message.snapshot, 'latex');
-      assert.equal(
-        message.values[WorkspaceStateKey.WORKFLOW_AUTO_COMPILE],
-        false,
-      );
-      assert.equal(
-        message.values[WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS],
-        LATEX_CONFIG_DEFAULTS.workflowAutoCompileTimeoutMs,
-      );
-      assert.equal(
-        message.values[WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS],
-        25000,
-      );
-      assert.equal(
-        message.values[WorkspaceStateKey.LATEXDIFF_MATH_MARKUP],
-        LATEX_CONFIG_DEFAULTS.latexdiffMathMarkup,
-      );
-      assert.equal(
-        message.values[WorkspaceStateKey.LATEX_FORMATTER],
-        'tex-fmt',
-      );
-      assert.equal(warn.mock.calls.length, 1);
-    } finally {
-      warn.mockRestore();
-    }
-  });
+          assert.equal(message.snapshot, 'latex');
+          assert.equal(
+            message.values[WorkspaceStateKey.WORKFLOW_AUTO_COMPILE],
+            false,
+          );
+          assert.equal(
+            message.values[WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS],
+            LATEX_CONFIG_DEFAULTS.workflowAutoCompileTimeoutMs,
+          );
+          assert.equal(
+            message.values[WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS],
+            25000,
+          );
+          assert.equal(
+            message.values[WorkspaceStateKey.LATEXDIFF_MATH_MARKUP],
+            LATEX_CONFIG_DEFAULTS.latexdiffMathMarkup,
+          );
+          assert.equal(
+            message.values[WorkspaceStateKey.LATEX_FORMATTER],
+            'tex-fmt',
+          );
+          assert.equal(warn.mock.calls.length, 1);
+        } finally {
+          warn.mockRestore();
+        }
+      }),
+  );
 });
 
 /**
@@ -445,83 +455,98 @@ describe('settingsAccess', () => {
     assert.equal(readSetting(entry, stores, 'vscode'), true);
   });
 
-  it('routes extension writes to the canonical store', async () => {
-    const { stores, config, workspaceState } = makeFakeSettingsStores();
-    const entry = entryByKey(WorkspaceStateKey.GIT_MARK_COMMITS);
-    await Effect.runPromise(writeSetting(entry, false, stores, 'vscode'));
-    assert.equal(isStored(workspaceState, entry.key), true);
-    assert.equal(isStored(config, entry.key), false);
-    assert.equal(readSetting(entry, stores, 'vscode'), false);
-  });
+  it.effect('routes extension writes to the canonical store', () =>
+    Effect.gen(function* () {
+      const { stores, config, workspaceState } = makeFakeSettingsStores();
+      const entry = entryByKey(WorkspaceStateKey.GIT_MARK_COMMITS);
+      yield* writeSetting(entry, false, stores, 'vscode');
+      assert.equal(isStored(workspaceState, entry.key), true);
+      assert.equal(isStored(config, entry.key), false);
+      assert.equal(readSetting(entry, stores, 'vscode'), false);
+    }),
+  );
 
-  it('routes CLI writes to the CLI slot (config)', async () => {
-    const { stores, config, workspaceState } = makeFakeSettingsStores();
-    const entry = entryByKey(WorkspaceStateKey.GIT_MARK_COMMITS);
-    await Effect.runPromise(writeSetting(entry, false, stores, 'cli'));
-    assert.equal(isStored(config, entry.key), true);
-    assert.equal(isStored(workspaceState, entry.key), false);
-    // The config write used the default 'workspace' target.
-    assert.deepEqual(config.inspect(entry.key), {
-      globalValue: undefined,
-      workspaceValue: false,
-    });
-    assert.equal(readSetting(entry, stores, 'cli'), false);
-  });
+  it.effect('routes CLI writes to the CLI slot (config)', () =>
+    Effect.gen(function* () {
+      const { stores, config, workspaceState } = makeFakeSettingsStores();
+      const entry = entryByKey(WorkspaceStateKey.GIT_MARK_COMMITS);
+      yield* writeSetting(entry, false, stores, 'cli');
+      assert.equal(isStored(config, entry.key), true);
+      assert.equal(isStored(workspaceState, entry.key), false);
+      // The config write used the default 'workspace' target.
+      assert.deepEqual(config.inspect(entry.key), {
+        globalValue: undefined,
+        workspaceValue: false,
+      });
+      assert.equal(readSetting(entry, stores, 'cli'), false);
+    }),
+  );
 
-  it('routes telemetry writes to global configuration', async () => {
-    const { stores, config } = makeFakeSettingsStores();
-    const entry = settingsViewSettingByKey('texra.telemetry.enabled');
-    assert.ok(entry);
+  it.effect('routes telemetry writes to global configuration', () =>
+    Effect.gen(function* () {
+      const { stores, config } = makeFakeSettingsStores();
+      const entry = settingsViewSettingByKey('texra.telemetry.enabled');
+      assert.ok(entry);
 
-    await Effect.runPromise(writeSetting(entry, false, stores, 'vscode'));
+      yield* writeSetting(entry, false, stores, 'vscode');
 
-    assert.deepEqual(config.inspect(entry.key), {
-      globalValue: false,
-      workspaceValue: undefined,
-    });
-  });
+      assert.deepEqual(config.inspect(entry.key), {
+        globalValue: false,
+        workspaceValue: undefined,
+      });
+    }),
+  );
 
-  it('routes CLI endpoint writes to global state', async () => {
-    const { stores, config, globalState } = makeFakeSettingsStores();
-    const entry = entryByKey(GlobalStateKey.ENDPOINT_GOOGLE);
-    await Effect.runPromise(
-      writeSetting(entry, 'https://example.invalid/v1', stores, 'cli'),
-    );
-    assert.equal(isStored(globalState, entry.key), true);
-    assert.equal(isStored(config, entry.key), false);
-    assert.equal(
-      readSetting(entry, stores, 'cli'),
-      'https://example.invalid/v1',
-    );
-  });
+  it.effect('routes CLI endpoint writes to global state', () =>
+    Effect.gen(function* () {
+      const { stores, config, globalState } = makeFakeSettingsStores();
+      const entry = entryByKey(GlobalStateKey.ENDPOINT_GOOGLE);
+      yield* writeSetting(entry, 'https://example.invalid/v1', stores, 'cli');
+      assert.equal(isStored(globalState, entry.key), true);
+      assert.equal(isStored(config, entry.key), false);
+      assert.equal(
+        readSetting(entry, stores, 'cli'),
+        'https://example.invalid/v1',
+      );
+    }),
+  );
 
-  it('rejects values that fail the entry schema', async () => {
-    const { stores } = makeFakeSettingsStores();
-    const entry = entryByKey(WorkspaceStateKey.LATEX_FORMATTER);
-    await assert.rejects(() =>
-      Effect.runPromise(
+  it.effect('rejects values that fail the entry schema', () =>
+    Effect.gen(function* () {
+      const { stores } = makeFakeSettingsStores();
+      const entry = entryByKey(WorkspaceStateKey.LATEX_FORMATTER);
+      const exit = yield* Effect.exit(
         writeSetting(entry, 'not-a-formatter', stores, 'vscode'),
-      ),
-    );
-  });
+      );
+      assert.ok(Exit.isFailure(exit));
+    }),
+  );
 
-  it('reset deletes the key so the default reappears', async () => {
-    await assertResetRestoresDefault({
-      key: WorkspaceStateKey.LATEXDIFF_CHANGES_ONLY,
-      host: 'vscode',
-      storeName: 'workspaceState',
-      expectedDefault: LATEX_CONFIG_DEFAULTS.latexdiffChangesOnly,
-    });
-  });
+  it.effect('reset deletes the key so the default reappears', () =>
+    Effect.gen(function* () {
+      yield* Effect.promise(() =>
+        assertResetRestoresDefault({
+          key: WorkspaceStateKey.LATEXDIFF_CHANGES_ONLY,
+          host: 'vscode',
+          storeName: 'workspaceState',
+          expectedDefault: LATEX_CONFIG_DEFAULTS.latexdiffChangesOnly,
+        }),
+      );
+    }),
+  );
 
-  it('reset deletes a config-slot (ConfigProvider) key too', async () => {
-    await assertResetRestoresDefault({
-      key: WorkspaceStateKey.GIT_MARK_COMMITS,
-      host: 'cli',
-      storeName: 'config',
-      expectedDefault: true,
-    });
-  });
+  it.effect('reset deletes a config-slot (ConfigProvider) key too', () =>
+    Effect.gen(function* () {
+      yield* Effect.promise(() =>
+        assertResetRestoresDefault({
+          key: WorkspaceStateKey.GIT_MARK_COMMITS,
+          host: 'cli',
+          storeName: 'config',
+          expectedDefault: true,
+        }),
+      );
+    }),
+  );
 
   // Restored from the deleted `SettingsProfileController` suite, whose
   // "does not mask a compaction value that runtime still reads directly" case
@@ -571,27 +596,29 @@ describe('settingsAccess', () => {
     }
   });
 
-  it('falls back to the default for a stored value that no longer validates', async () => {
-    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
-    const { stores, workspaceState } = makeFakeSettingsStores();
-    const entry = entryByKey(WorkspaceStateKey.LATEX_FORMATTER);
-    await Effect.runPromise(
-      workspaceState.update(entry.key, 'stale-bogus-value'),
-    );
-    try {
-      assert.equal(
-        readSetting(entry, stores, 'vscode'),
-        LATEX_CONFIG_DEFAULTS.latexFormatter,
-      );
-      assert.equal(warn.mock.calls.length, 1);
-      assert.equal(warn.mock.calls[0]?.[0], 'settingsAccess');
-      assert.ok(
-        String(warn.mock.calls[0]?.[1]).startsWith(
-          `Ignoring invalid persisted value for setting "${entry.key}"`,
-        ),
-      );
-    } finally {
-      warn.mockRestore();
-    }
-  });
+  it.effect(
+    'falls back to the default for a stored value that no longer validates',
+    () =>
+      Effect.gen(function* () {
+        const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+        const { stores, workspaceState } = makeFakeSettingsStores();
+        const entry = entryByKey(WorkspaceStateKey.LATEX_FORMATTER);
+        yield* workspaceState.update(entry.key, 'stale-bogus-value');
+        try {
+          assert.equal(
+            readSetting(entry, stores, 'vscode'),
+            LATEX_CONFIG_DEFAULTS.latexFormatter,
+          );
+          assert.equal(warn.mock.calls.length, 1);
+          assert.equal(warn.mock.calls[0]?.[0], 'settingsAccess');
+          assert.ok(
+            String(warn.mock.calls[0]?.[1]).startsWith(
+              `Ignoring invalid persisted value for setting "${entry.key}"`,
+            ),
+          );
+        } finally {
+          warn.mockRestore();
+        }
+      }),
+  );
 });

@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "description": "Runs @texra-ai/agent/effect from a packed tarball, as a consumer would",
+  "description": "Runs @texra-ai/agent from a packed tarball, as a consumer would",
   "scripts": {
     "start": "node effectSession.mjs"
   },

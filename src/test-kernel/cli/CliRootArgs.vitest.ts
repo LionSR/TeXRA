@@ -901,10 +901,10 @@ describe('CLI root argument routing', () => {
       ),
   );
 
-  it('keeps a failed workflow with no output in run storage', async () => {
-    await expect(
-      Effect.runPromise(
-        resolveWorkflowOutput(
+  it.effect('keeps a failed workflow with no output in run storage', () =>
+    Effect.gen(function* () {
+      expect(
+        yield* resolveWorkflowOutput(
           'corrected.tex',
           undefined,
           {
@@ -920,13 +920,16 @@ describe('CLI root argument routing', () => {
           createRunCommandCliContext(),
           { storageRoot: '/tmp/storage' },
         ),
-      ),
-    ).resolves.toMatchObject({
-      outcome: RUN_OUTCOME.FAILED,
-      runDirectory: runDirUnder('/tmp/storage', 'run-without-output' as RunId),
-      output: { outputs: [] },
-    });
-  });
+      ).toMatchObject({
+        outcome: RUN_OUTCOME.FAILED,
+        runDirectory: runDirUnder(
+          '/tmp/storage',
+          'run-without-output' as RunId,
+        ),
+        output: { outputs: [] },
+      });
+    }),
+  );
 
   it('restores one requested workflow output path for resume', () => {
     expect(
@@ -1011,57 +1014,65 @@ describe('CLI root argument routing', () => {
     ).toThrow('Stored workflow output directory is not absolute: out/polished');
   });
 
-  it('reports successful stopped workflows with missing requested outputs as failed copies', async () => {
-    await expect(
-      Effect.runPromise(
-        resolveWorkflowOutput(
+  it.effect(
+    'reports successful stopped workflows with missing requested outputs as failed copies',
+    () =>
+      Effect.gen(function* () {
+        const error = yield* Effect.flip(
+          resolveWorkflowOutput(
+            'corrected.tex',
+            undefined,
+            {
+              outcome: RUN_OUTCOME.COMPLETED,
+              output: {
+                category: AgentCategory.Workflow,
+                outputs: [],
+                compileFailures: [],
+                diffs: [],
+              },
+              runId: 'completed-without-output' as RunId,
+            },
+            createRunCommandCliContext(),
+            { storageRoot: '/tmp/storage' },
+          ),
+        );
+
+        expect(error).toEqual(
+          new Error(
+            'Workflow completed without a generated output; corrected.tex was not written.',
+          ),
+        );
+      }),
+  );
+
+  it.effect(
+    'keeps stopped workflows with missing requested outputs interrupted',
+    () =>
+      Effect.gen(function* () {
+        const result = yield* resolveWorkflowOutput(
           'corrected.tex',
           undefined,
           {
-            outcome: RUN_OUTCOME.COMPLETED,
+            outcome: RUN_OUTCOME.CANCELLED,
             output: {
               category: AgentCategory.Workflow,
               outputs: [],
               compileFailures: [],
               diffs: [],
             },
-            runId: 'completed-without-output' as RunId,
+            runId: 'stopped-without-output' as RunId,
           },
           createRunCommandCliContext(),
           { storageRoot: '/tmp/storage' },
-        ),
-      ),
-    ).rejects.toThrow(
-      'Workflow completed without a generated output; corrected.tex was not written.',
-    );
-  });
+        );
 
-  it('keeps stopped workflows with missing requested outputs interrupted', async () => {
-    const result = await Effect.runPromise(
-      resolveWorkflowOutput(
-        'corrected.tex',
-        undefined,
-        {
+        expect(result).toMatchObject({
           outcome: RUN_OUTCOME.CANCELLED,
-          output: {
-            category: AgentCategory.Workflow,
-            outputs: [],
-            compileFailures: [],
-            diffs: [],
-          },
-          runId: 'stopped-without-output' as RunId,
-        },
-        createRunCommandCliContext(),
-        { storageRoot: '/tmp/storage' },
-      ),
-    );
-
-    expect(result).toMatchObject({
-      outcome: RUN_OUTCOME.CANCELLED,
-    });
-    expect(Object.hasOwn(result, 'terminalStatus')).toBe(false);
-    expect(Object.hasOwn(result, 'copiedOutput')).toBe(false);
-  });
+        });
+        expect(Object.hasOwn(result, 'terminalStatus')).toBe(false);
+        expect(Object.hasOwn(result, 'copiedOutput')).toBe(false);
+      }),
+  );
 
   it('formats model list network failures without raw stack traces', () => {
     const error = new Error('fetch failed', {

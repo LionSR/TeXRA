@@ -160,6 +160,10 @@ const queuedTexts = (runId: RunId) =>
     followUps.map((followUp) => followUp.text),
   );
 
+/** Reads a run's queued follow-up texts on the process runtime, for the
+ *  real-timer `vi.waitFor` poll the ownership test runs on. */
+const readQueuedTexts = (runId: RunId) => Effect.runPromise(queuedTexts(runId));
+
 /** Lets a forked loop reach its budget permit wait or its queue block. */
 const settle = Effect.promise(
   () => new Promise<void>((resolve) => setTimeout(resolve, 0)),
@@ -577,7 +581,7 @@ describe('childRunLoop E2E fixtures', () => {
       }),
   );
 
-  it.effect(
+  it.live(
     'keeps follow-up ownership distinct across child-stream and native child lifecycles',
     () =>
       Effect.gen(function* () {
@@ -670,9 +674,7 @@ describe('childRunLoop E2E fixtures', () => {
           // The loop writes progress after the port returns.
           const progressQueue = yield* Effect.promise(() =>
             vi.waitFor(async () => {
-              const queued = await Effect.runPromise(
-                queuedTexts(PARENT_RUN_ID),
-              );
+              const queued = await readQueuedTexts(PARENT_RUN_ID);
               expect(queued).toHaveLength(terminalQueue.length + 1);
               return queued;
             }),

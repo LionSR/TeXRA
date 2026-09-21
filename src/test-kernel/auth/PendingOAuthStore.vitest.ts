@@ -6,8 +6,9 @@
 // what a callback has to carry to claim one.
 
 // Third-party imports
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { describe, expect, it } from 'vitest';
+import { describe, expect } from 'vitest';
 
 // Local imports
 import { AUTH_CALLBACK_TIMEOUT_MS } from '@auth/config';
@@ -48,75 +49,89 @@ describe('callback nonce', () => {
 });
 
 describe('pending OAuth store', () => {
-  it('round-trips the flow a bind pinned to an attempt', async () => {
-    const store = new PendingOAuthStore(memoryPendingOAuthSlots());
-    const attempt = freshAttempt();
+  it.effect('round-trips the flow a bind pinned to an attempt', () =>
+    Effect.gen(function* () {
+      const store = new PendingOAuthStore(memoryPendingOAuthSlots());
+      const attempt = freshAttempt();
 
-    await Effect.runPromise(store.bind(attempt, FLOW_ID));
+      yield* store.bind(attempt, FLOW_ID);
 
-    expect(await Effect.runPromise(store.read(NONCE))).toEqual({
-      ...attempt,
-      flowId: FLOW_ID,
-    });
-  });
+      expect(yield* store.read(NONCE)).toEqual({
+        ...attempt,
+        flowId: FLOW_ID,
+      });
+    }),
+  );
 
-  it.each([
+  it.effect.each([
     { name: 'no flow id', flowId: undefined },
     { name: 'a flow id that is not one auth-js mints', flowId: 'no spaces!' },
-  ])('refuses to bind $name', async ({ flowId }) => {
-    const store = new PendingOAuthStore(memoryPendingOAuthSlots());
+  ])('refuses to bind $name', ({ flowId }) =>
+    Effect.gen(function* () {
+      const store = new PendingOAuthStore(memoryPendingOAuthSlots());
 
-    await expect(
-      Effect.runPromise(store.bind(freshAttempt(), flowId)),
-    ).rejects.toThrow('did not return a valid PKCE flow');
-  });
+      const error = yield* Effect.flip(store.bind(freshAttempt(), flowId));
+      expect(error).toBeInstanceOf(Error);
+      expect(error.message).toContain('did not return a valid PKCE flow');
+    }),
+  );
 
-  it('refuses to bind an attempt that is already past its deadline', async () => {
-    const store = new PendingOAuthStore(memoryPendingOAuthSlots());
-    const stale = {
-      nonce: NONCE,
-      createdAt: Date.now() - AUTH_CALLBACK_TIMEOUT_MS - 1_000,
-    };
+  it.effect(
+    'refuses to bind an attempt that is already past its deadline',
+    () =>
+      Effect.gen(function* () {
+        const store = new PendingOAuthStore(memoryPendingOAuthSlots());
+        const stale = {
+          nonce: NONCE,
+          createdAt: Date.now() - AUTH_CALLBACK_TIMEOUT_MS - 1_000,
+        };
 
-    await expect(Effect.runPromise(store.bind(stale, FLOW_ID))).rejects.toThrow(
-      'no longer pending',
-    );
-  });
+        const error = yield* Effect.flip(store.bind(stale, FLOW_ID));
+        expect(error).toBeInstanceOf(Error);
+        expect(error.message).toContain('no longer pending');
+      }),
+  );
 
-  it('ignores a stored record that is not one of ours', async () => {
-    const slots = memoryPendingOAuthSlots();
-    await Effect.runPromise(slots.write(NONCE, '{"nonce":'));
-    const store = new PendingOAuthStore(slots);
+  it.effect('ignores a stored record that is not one of ours', () =>
+    Effect.gen(function* () {
+      const slots = memoryPendingOAuthSlots();
+      yield* slots.write(NONCE, '{"nonce":');
+      const store = new PendingOAuthStore(slots);
 
-    expect(await Effect.runPromise(store.read(NONCE))).toBeNull();
-  });
+      expect(yield* store.read(NONCE)).toBeNull();
+    }),
+  );
 
-  it('sweeps expired records and keeps the answerable one', async () => {
-    const slots = memoryPendingOAuthSlots();
-    await Effect.runPromise(
-      slots.write(
+  it.effect('sweeps expired records and keeps the answerable one', () =>
+    Effect.gen(function* () {
+      const slots = memoryPendingOAuthSlots();
+      yield* slots.write(
         OTHER_NONCE,
         JSON.stringify({
           nonce: OTHER_NONCE,
           createdAt: Date.now() - AUTH_CALLBACK_TIMEOUT_MS - 1_000,
           flowId: FLOW_ID,
         }),
-      ),
-    );
-    const store = new PendingOAuthStore(slots);
-    await Effect.runPromise(store.bind(freshAttempt(), FLOW_ID));
+      );
+      const store = new PendingOAuthStore(slots);
+      yield* store.bind(freshAttempt(), FLOW_ID);
 
-    await Effect.runPromise(store.sweep());
+      yield* store.sweep();
 
-    expect(await Effect.runPromise(slots.nonces())).toEqual([NONCE]);
-  });
+      expect(yield* slots.nonces()).toEqual([NONCE]);
+    }),
+  );
 
-  it('clears a claimed record so a replayed callback finds nothing', async () => {
-    const store = new PendingOAuthStore(memoryPendingOAuthSlots());
-    await Effect.runPromise(store.bind(freshAttempt(), FLOW_ID));
+  it.effect(
+    'clears a claimed record so a replayed callback finds nothing',
+    () =>
+      Effect.gen(function* () {
+        const store = new PendingOAuthStore(memoryPendingOAuthSlots());
+        yield* store.bind(freshAttempt(), FLOW_ID);
 
-    await Effect.runPromise(store.clear(NONCE));
+        yield* store.clear(NONCE);
 
-    expect(await Effect.runPromise(store.read(NONCE))).toBeNull();
-  });
+        expect(yield* store.read(NONCE)).toBeNull();
+      }),
+  );
 });

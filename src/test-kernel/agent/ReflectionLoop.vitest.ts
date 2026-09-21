@@ -776,23 +776,22 @@ describe('the reflection round loop', () => {
         const prepare = vi
           .spyOn(RunFileService.prototype, 'prepareRunWorkspace')
           .mockReturnValueOnce(Effect.fail(new Error('workspace unavailable')));
+        yield* Effect.addFinalizer(() =>
+          Effect.sync(() => prepare.mockRestore()),
+        );
 
-        try {
-          const { result } = yield* runLoop({
-            runId,
-            session,
-            rounds: 1,
-            logger,
-          });
+        const { result } = yield* runLoop({
+          runId,
+          session,
+          rounds: 1,
+          logger,
+        });
 
-          expect(result.outcome).toBe(RUN_OUTCOME.COMPLETED);
-          expect(warn).toHaveBeenCalledWith(
-            expect.stringContaining('workspace unavailable'),
-            expect.objectContaining({ data: expect.any(Error) }),
-          );
-        } finally {
-          prepare.mockRestore();
-        }
+        expect(result.outcome).toBe(RUN_OUTCOME.COMPLETED);
+        expect(warn).toHaveBeenCalledWith(
+          expect.stringContaining('workspace unavailable'),
+          expect.objectContaining({ data: expect.any(Error) }),
+        );
       }),
   );
 
@@ -815,21 +814,20 @@ describe('the reflection round loop', () => {
       const logger = new TraceEmitter();
       const store = new StreamLog();
       const recorder = attachTestTranscriptFold(logger, runId, store);
+      yield* Effect.addFinalizer(() =>
+        Effect.sync(() => recorder.unsubscribe()),
+      );
 
-      try {
-        const { result } = yield* runLoop({
-          runId,
-          session,
-          rounds: 2,
-          logger,
-          turns: scenario.turns,
-        });
+      const { result } = yield* runLoop({
+        runId,
+        session,
+        rounds: 2,
+        logger,
+        turns: scenario.turns,
+      });
 
-        expect(result.outcome).toBe(scenario.outcomes.at(-1));
-        expect(roundStageOutcomes(store)).toEqual(scenario.outcomes);
-      } finally {
-        recorder.unsubscribe();
-      }
+      expect(result.outcome).toBe(scenario.outcomes.at(-1));
+      expect(roundStageOutcomes(store)).toEqual(scenario.outcomes);
     }),
   );
 });
@@ -989,7 +987,7 @@ describe('the output facts a reflection round publishes', () => {
     Effect.gen(function* () {
       const session = yield* createProcessSession();
       const { events, interactions } = createRecordingHost();
-      Effect.runSync(session.interactions.use(interactions));
+      yield* session.interactions.use(interactions);
       const runId = startedRun(session);
       scripted.openFiles = true;
 
@@ -1151,26 +1149,25 @@ describe('an interrupted reflection run', () => {
         const logger = new TraceEmitter();
         const store = new StreamLog();
         const recorder = attachTestTranscriptFold(logger, runId, store);
+        yield* Effect.addFinalizer(() =>
+          Effect.sync(() => recorder.unsubscribe()),
+        );
 
-        try {
-          const halted = yield* interruptedAt(
-            { runId, session, rounds: 2, logger },
-            1,
-          );
+        const halted = yield* interruptedAt(
+          { runId, session, rounds: 2, logger },
+          1,
+        );
 
-          // The first round's stage closed with its own verdict; only the
-          // interrupted one is cancelled, and its outputs stay on the
-          // snapshot a resume continues from.
-          expect(roundStageOutcomes(store)).toEqual([
-            RUN_OUTCOME.COMPLETED,
-            RUN_OUTCOME.CANCELLED,
-          ]);
-          expect(halted.outcome).toBe(RUN_OUTCOME.CANCELLED);
-          expect(flowOf(halted).currentRound).toBe(1);
-          expect(flowOf(halted).roundOutputs[0]?.outputs).toHaveLength(1);
-        } finally {
-          recorder.unsubscribe();
-        }
+        // The first round's stage closed with its own verdict; only the
+        // interrupted one is cancelled, and its outputs stay on the
+        // snapshot a resume continues from.
+        expect(roundStageOutcomes(store)).toEqual([
+          RUN_OUTCOME.COMPLETED,
+          RUN_OUTCOME.CANCELLED,
+        ]);
+        expect(halted.outcome).toBe(RUN_OUTCOME.CANCELLED);
+        expect(flowOf(halted).currentRound).toBe(1);
+        expect(flowOf(halted).roundOutputs[0]?.outputs).toHaveLength(1);
 
         const resumed = yield* runLoop({
           runId,

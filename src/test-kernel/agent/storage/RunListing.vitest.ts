@@ -1,5 +1,6 @@
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, vi } from 'vitest';
 
 import {
   createLatexRunDiscovery,
@@ -119,225 +120,269 @@ describe('run listing normalization', () => {
     session = await Effect.runPromise(createProcessSession());
   });
 
-  it('sees runs written by another host after an earlier listing', async () => {
-    expect(await Effect.runPromise(listRuns(session))).toEqual([]);
+  it.effect('sees runs written by another host after an earlier listing', () =>
+    Effect.gen(function* () {
+      expect(yield* listRuns(session)).toEqual([]);
 
-    const id = 'eee555' as RunId;
-    await writeRun(id, '2026-07-15T11:00:00.000Z', config('assistant'));
+      const id = 'eee555' as RunId;
+      yield* Effect.promise(() =>
+        writeRun(id, '2026-07-15T11:00:00.000Z', config('assistant')),
+      );
 
-    expect(await Effect.runPromise(listRuns(session))).toEqual([
-      expect.objectContaining({
-        id,
-        kind: 'run',
-        identity: { kind: 'agent', agent: 'assistant' },
-      }),
-    ]);
-  });
+      expect(yield* listRuns(session)).toEqual([
+        expect.objectContaining({
+          id,
+          kind: 'run',
+          identity: { kind: 'agent', agent: 'assistant' },
+        }),
+      ]);
+    }),
+  );
 
   // A row is dropped only when the facts it is built from are unreadable. The
   // checkpoint probe is not one of them: it decides an advertisement, so an
   // unreadable snapshot costs the row its Resume affordance, never its place
   // in history.
-  it('keeps a row whose checkpoint probe fails, without a checkpoint', async () => {
-    const id = 'eee556' as RunId;
-    await writeRun(id, '2026-07-15T11:00:00.000Z', config('assistant'));
-    vi.spyOn(session.ledger, 'latestSnapshot').mockReturnValue(
-      Effect.fail(
-        new DatabaseReadFailed({
-          path: 'session.db',
-          cause: new Error('snapshot read failed'),
-        }),
-      ),
-    );
+  it.effect(
+    'keeps a row whose checkpoint probe fails, without a checkpoint',
+    () =>
+      Effect.gen(function* () {
+        const id = 'eee556' as RunId;
+        yield* Effect.promise(() =>
+          writeRun(id, '2026-07-15T11:00:00.000Z', config('assistant')),
+        );
+        vi.spyOn(session.ledger, 'latestSnapshot').mockReturnValue(
+          Effect.fail(
+            new DatabaseReadFailed({
+              path: 'session.db',
+              cause: new Error('snapshot read failed'),
+            }),
+          ),
+        );
 
-    expect(await Effect.runPromise(listRuns(session))).toEqual([
-      expect.objectContaining({ id, kind: 'run', checkpointPresent: false }),
-    ]);
-  });
-
-  it('sees metadata replaced by another host after an earlier listing', async () => {
-    const id = 'fff666' as RunId;
-    await writeRun(id, '2026-07-15T12:00:00.000Z', config('assistant'));
-    expect(await Effect.runPromise(listRuns(session))).toEqual([
-      expect.not.objectContaining({ description: expect.any(String) }),
-    ]);
-
-    await writeMetadata(id, {
-      timestamp: '2026-07-15T12:00:00.000Z',
-      identity: { kind: 'agent', agent: 'assistant' },
-      description: 'Updated by another host',
-      outcome: 'completed',
-    });
-
-    expect(await Effect.runPromise(listRuns(session))).toEqual([
-      expect.objectContaining({
-        id,
-        description: 'Updated by another host',
-        outcome: 'completed',
+        expect(yield* listRuns(session)).toEqual([
+          expect.objectContaining({
+            id,
+            kind: 'run',
+            checkpointPresent: false,
+          }),
+        ]);
       }),
-    ]);
-  });
+  );
 
-  it('uses the config as the canonical source for visible agent fields', async () => {
-    const id = 'aaa111' as RunId;
-    const agentConfig = config('assistant');
-    await writeRun(id, '2026-07-15T10:00:00.000Z', agentConfig);
+  it.effect(
+    'sees metadata replaced by another host after an earlier listing',
+    () =>
+      Effect.gen(function* () {
+        const id = 'fff666' as RunId;
+        yield* Effect.promise(() =>
+          writeRun(id, '2026-07-15T12:00:00.000Z', config('assistant')),
+        );
+        expect(yield* listRuns(session)).toEqual([
+          expect.not.objectContaining({ description: expect.any(String) }),
+        ]);
 
-    const entries = await Effect.runPromise(listRuns(session));
+        yield* Effect.promise(() =>
+          writeMetadata(id, {
+            timestamp: '2026-07-15T12:00:00.000Z',
+            identity: { kind: 'agent', agent: 'assistant' },
+            description: 'Updated by another host',
+            outcome: 'completed',
+          }),
+        );
 
-    expect(entries).toEqual([
-      {
+        expect(yield* listRuns(session)).toEqual([
+          expect.objectContaining({
+            id,
+            description: 'Updated by another host',
+            outcome: 'completed',
+          }),
+        ]);
+      }),
+  );
+
+  it.effect(
+    'uses the config as the canonical source for visible agent fields',
+    () =>
+      Effect.gen(function* () {
+        const id = 'aaa111' as RunId;
+        const agentConfig = config('assistant');
+        yield* Effect.promise(() =>
+          writeRun(id, '2026-07-15T10:00:00.000Z', agentConfig),
+        );
+
+        const entries = yield* listRuns(session);
+
+        expect(entries).toEqual([
+          {
+            kind: 'run',
+            id,
+            timestamp: '2026-07-15T10:00:00.000Z',
+            identity: { kind: 'agent', agent: 'assistant' },
+            record: agentConfig,
+            checkpointPresent: false,
+          },
+        ]);
+        expect(entries.filter(isUserVisibleRun)).toHaveLength(1);
+        expect(entries[0]).not.toHaveProperty('agent');
+        expect(entries[0]).not.toHaveProperty('model');
+        expect(entries[0]).not.toHaveProperty('category');
+      }),
+  );
+
+  it.effect('classifies process and incomplete storage rows explicitly', () =>
+    Effect.gen(function* () {
+      const processId = 'bbb222' as RunId;
+      const customBashAgentId = 'ccc333' as RunId;
+      const incompleteId = 'ddd444' as RunId;
+      const processStore = getRunRecords(session, processId);
+      yield* Effect.promise(() =>
+        writeMetadata(processId, {
+          timestamp: '2026-07-15T09:00:00.000Z',
+          identity: { kind: 'process', tool: 'assistant' },
+        }),
+      );
+      yield* processStore.writeRunRecord(config('assistant'));
+      yield* Effect.promise(() =>
+        writeRun(customBashAgentId, '2026-07-15T08:00:00.000Z', config('bash')),
+      );
+      yield* Effect.promise(() =>
+        writeRun(incompleteId, '2026-07-15T07:00:00.000Z'),
+      );
+
+      const entries = yield* listRuns(session);
+
+      expect(entries.map(({ kind }) => kind)).toEqual([
+        'run',
+        'run',
+        'incomplete',
+      ]);
+      expect(entries[0]).toMatchObject({
         kind: 'run',
-        id,
-        timestamp: '2026-07-15T10:00:00.000Z',
-        identity: { kind: 'agent', agent: 'assistant' },
-        record: agentConfig,
+        identity: { kind: 'process', tool: 'assistant' },
+        record: { agent: 'assistant' },
+      });
+      expect(entries[1]).toMatchObject({
+        kind: 'run',
+        identity: { kind: 'agent', agent: 'bash' },
+        record: { agent: 'bash' },
+      });
+      expect(entries[2]).toEqual({
+        kind: 'incomplete',
+        id: incompleteId,
+        timestamp: '2026-07-15T07:00:00.000Z',
         checkpointPresent: false,
-      },
-    ]);
-    expect(entries.filter(isUserVisibleRun)).toHaveLength(1);
-    expect(entries[0]).not.toHaveProperty('agent');
-    expect(entries[0]).not.toHaveProperty('model');
-    expect(entries[0]).not.toHaveProperty('category');
-  });
+      });
+      expect(entries.filter(isUserVisibleRun)).toEqual([entries[1]]);
+    }),
+  );
 
-  it('classifies process and incomplete storage rows explicitly', async () => {
-    const processId = 'bbb222' as RunId;
-    const customBashAgentId = 'ccc333' as RunId;
-    const incompleteId = 'ddd444' as RunId;
-    const processStore = getRunRecords(session, processId);
-    await writeMetadata(processId, {
-      timestamp: '2026-07-15T09:00:00.000Z',
-      identity: { kind: 'process', tool: 'assistant' },
-    });
-    await Effect.runPromise(processStore.writeRunRecord(config('assistant')));
-    await writeRun(
-      customBashAgentId,
-      '2026-07-15T08:00:00.000Z',
-      config('bash'),
-    );
-    await writeRun(incompleteId, '2026-07-15T07:00:00.000Z');
+  it.effect(
+    'lists an honest non-agent record as kind run without fabricated fields',
+    () =>
+      Effect.gen(function* () {
+        const id = 'abe001' as RunId;
+        const store = getRunRecords(session, id);
+        yield* Effect.promise(() =>
+          writeMetadata(id, {
+            timestamp: '2026-07-15T04:00:00.000Z',
+            identity: { kind: 'process', tool: 'bash' },
+          }),
+        );
+        yield* store.writeRunRecord({ name: 'bash', instruction: 'ls -la' });
 
-    const entries = await Effect.runPromise(listRuns(session));
+        const entries = yield* listRuns(session);
+        const entry = entries.find((candidate) => candidate.id === id);
+        expect(entry).toMatchObject({
+          kind: 'run',
+          identity: { kind: 'process', tool: 'bash' },
+          record: { name: 'bash', instruction: 'ls -la' },
+        });
+        expect(entry && 'record' in entry && entry.record).not.toHaveProperty(
+          'agentCategory',
+        );
+        expect(entry && 'record' in entry && entry.record).not.toHaveProperty(
+          'model',
+        );
+        expect(entries.filter(isUserVisibleRun)).toHaveLength(0);
+      }),
+  );
 
-    expect(entries.map(({ kind }) => kind)).toEqual([
-      'run',
-      'run',
-      'incomplete',
-    ]);
-    expect(entries[0]).toMatchObject({
-      kind: 'run',
-      identity: { kind: 'process', tool: 'assistant' },
-      record: { agent: 'assistant' },
-    });
-    expect(entries[1]).toMatchObject({
-      kind: 'run',
-      identity: { kind: 'agent', agent: 'bash' },
-      record: { agent: 'bash' },
-    });
-    expect(entries[2]).toEqual({
-      kind: 'incomplete',
-      id: incompleteId,
-      timestamp: '2026-07-15T07:00:00.000Z',
-      checkpointPresent: false,
-    });
-    expect(entries.filter(isUserVisibleRun)).toEqual([entries[1]]);
-  });
+  it.effect('keeps agent-spawned child runs out of history listings', () =>
+    Effect.gen(function* () {
+      const rootId = 'eee111' as RunId;
+      const childId = 'fff222' as RunId;
+      yield* Effect.promise(() =>
+        writeRun(rootId, '2026-07-15T10:00:00.000Z', config('orchestrator')),
+      );
+      yield* Effect.promise(() =>
+        writeRun(childId, '2026-07-15T10:05:00.000Z', config('search'), rootId),
+      );
 
-  it('lists an honest non-agent record as kind run without fabricated fields', async () => {
-    const id = 'abe001' as RunId;
-    const store = getRunRecords(session, id);
-    await writeMetadata(id, {
-      timestamp: '2026-07-15T04:00:00.000Z',
-      identity: { kind: 'process', tool: 'bash' },
-    });
-    await Effect.runPromise(
-      store.writeRunRecord({ name: 'bash', instruction: 'ls -la' }),
-    );
+      const entries = yield* listRuns(session);
 
-    const entries = await Effect.runPromise(listRuns(session));
-    const entry = entries.find((candidate) => candidate.id === id);
-    expect(entry).toMatchObject({
-      kind: 'run',
-      identity: { kind: 'process', tool: 'bash' },
-      record: { name: 'bash', instruction: 'ls -la' },
-    });
-    expect(entry && 'record' in entry && entry.record).not.toHaveProperty(
-      'agentCategory',
-    );
-    expect(entry && 'record' in entry && entry.record).not.toHaveProperty(
-      'model',
-    );
-    expect(entries.filter(isUserVisibleRun)).toHaveLength(0);
-  });
+      // The raw listing still carries the child so tool-facing callers can walk
+      // the lineage; only the history-listing filter drops it.
+      expect(entries.map(({ id }) => id)).toEqual([childId, rootId]);
+      expect(entries.filter(isUserVisibleRun).map(({ id }) => id)).toEqual([
+        rootId,
+      ]);
+    }),
+  );
 
-  it('keeps agent-spawned child runs out of history listings', async () => {
-    const rootId = 'eee111' as RunId;
-    const childId = 'fff222' as RunId;
-    await writeRun(rootId, '2026-07-15T10:00:00.000Z', config('orchestrator'));
-    await writeRun(
-      childId,
-      '2026-07-15T10:05:00.000Z',
-      config('search'),
-      rootId,
-    );
+  it.effect('projects agent runs for latexdiff run discovery', () =>
+    Effect.gen(function* () {
+      const rootId = 'ab1001' as RunId;
+      const childId = 'ab1002' as RunId;
+      const processId = 'ab1003' as RunId;
+      const rootStore = getRunRecords(session, rootId);
+      yield* Effect.promise(() =>
+        writeMetadata(rootId, {
+          timestamp: '2026-07-15T10:00:00.000Z',
+          identity: { kind: 'agent', agent: 'assistant' },
+        }),
+      );
+      yield* rootStore.writeRunRecord(config('assistant', ['main.tex']));
+      yield* Effect.promise(() =>
+        writeRun(
+          childId,
+          '2026-07-15T09:00:00.000Z',
+          config('delegated', ['child.tex']),
+          rootId,
+        ),
+      );
+      const processStore = getRunRecords(session, processId);
+      yield* Effect.promise(() =>
+        writeMetadata(processId, {
+          timestamp: '2026-07-15T08:00:00.000Z',
+          identity: { kind: 'process', tool: 'bash' },
+        }),
+      );
+      yield* processStore.writeRunRecord({
+        name: 'bash',
+        instruction: 'ls -la',
+      });
 
-    const entries = await Effect.runPromise(listRuns(session));
+      const discovery = createLatexRunDiscovery(session);
 
-    // The raw listing still carries the child so tool-facing callers can walk
-    // the lineage; only the history-listing filter drops it.
-    expect(entries.map(({ id }) => id)).toEqual([childId, rootId]);
-    expect(entries.filter(isUserVisibleRun).map(({ id }) => id)).toEqual([
-      rootId,
-    ]);
-  });
-
-  it('projects agent runs for latexdiff run discovery', async () => {
-    const rootId = 'ab1001' as RunId;
-    const childId = 'ab1002' as RunId;
-    const processId = 'ab1003' as RunId;
-    const rootStore = getRunRecords(session, rootId);
-    await writeMetadata(rootId, {
-      timestamp: '2026-07-15T10:00:00.000Z',
-      identity: { kind: 'agent', agent: 'assistant' },
-    });
-    await Effect.runPromise(
-      rootStore.writeRunRecord(config('assistant', ['main.tex'])),
-    );
-    await writeRun(
-      childId,
-      '2026-07-15T09:00:00.000Z',
-      config('delegated', ['child.tex']),
-      rootId,
-    );
-    const processStore = getRunRecords(session, processId);
-    await writeMetadata(processId, {
-      timestamp: '2026-07-15T08:00:00.000Z',
-      identity: { kind: 'process', tool: 'bash' },
-    });
-    await Effect.runPromise(
-      processStore.writeRunRecord({ name: 'bash', instruction: 'ls -la' }),
-    );
-
-    const discovery = createLatexRunDiscovery(session);
-
-    // Unlike a history listing, latexdiff discovery keeps delegated children
-    // and drops non-agent rows.
-    expect(await Effect.runPromise(discovery.listAgentRuns())).toEqual([
-      {
-        id: rootId,
-        timestamp: '2026-07-15T10:00:00.000Z',
-        agent: 'assistant',
-        model: 'deepseekT',
-        inputFiles: ['main.tex'],
-      },
-      {
-        id: childId,
-        timestamp: '2026-07-15T09:00:00.000Z',
-        agent: 'delegated',
-        model: 'deepseekT',
-        inputFiles: ['child.tex'],
-      },
-    ]);
-  });
+      // Unlike a history listing, latexdiff discovery keeps delegated children
+      // and drops non-agent rows.
+      expect(yield* discovery.listAgentRuns()).toEqual([
+        {
+          id: rootId,
+          timestamp: '2026-07-15T10:00:00.000Z',
+          agent: 'assistant',
+          model: 'deepseekT',
+          inputFiles: ['main.tex'],
+        },
+        {
+          id: childId,
+          timestamp: '2026-07-15T09:00:00.000Z',
+          agent: 'delegated',
+          model: 'deepseekT',
+          inputFiles: ['child.tex'],
+        },
+      ]);
+    }),
+  );
 });

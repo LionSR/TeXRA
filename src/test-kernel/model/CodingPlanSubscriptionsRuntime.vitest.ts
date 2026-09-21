@@ -1,7 +1,8 @@
 // Third-party imports
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { MODEL_CONFIGS, ModelProvider } from 'llm-zoo';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect } from 'vitest';
 
 // Local imports
 import { resolveRouteEndpoint } from '@agent/runtime/run/routeEndpoint';
@@ -48,7 +49,7 @@ describe('coding-plan subscription runtime', () => {
     );
   });
 
-  it.each([
+  it.effect.each([
     {
       name: 'China Coding Plan',
       useChina: true,
@@ -87,32 +88,29 @@ describe('coding-plan subscription runtime', () => {
         baseUrl: 'https://api.z.ai/api/paas/v4',
       },
     },
-  ])(
-    'resolves the exact $name route',
-    async ({ useChina, codingPlan, expected }) => {
-      await Effect.runPromise(
-        hostStores().globalState.update(GlobalStateKey.USE_OPENROUTER, false),
+  ])('resolves the exact $name route', ({ useChina, codingPlan, expected }) =>
+    Effect.gen(function* () {
+      yield* hostStores().globalState.update(
+        GlobalStateKey.USE_OPENROUTER,
+        false,
       );
-      await Effect.runPromise(
-        hostStores().globalState.update(GlobalStateKey.ENDPOINT_GLM, ''),
+      yield* hostStores().globalState.update(GlobalStateKey.ENDPOINT_GLM, '');
+      yield* hostStores().globalState.update(
+        GlobalStateKey.GLM_CODING_PLAN,
+        codingPlan,
       );
-      await Effect.runPromise(
-        hostStores().globalState.update(
-          GlobalStateKey.GLM_CODING_PLAN,
-          codingPlan,
-        ),
-      );
-      await Effect.runPromise(
-        hostStores().globalState.update(GlobalStateKey.GLM_USE_CHINA, useChina),
+      yield* hostStores().globalState.update(
+        GlobalStateKey.GLM_USE_CHINA,
+        useChina,
       );
 
       expect(
         resolveGlmRoute({ stores: hostStores(), useOpenRouter: false }),
       ).toEqual(expected);
-    },
+    }),
   );
 
-  it.each([
+  it.effect.each([
     {
       name: 'Coding Plan',
       useOpenRouter: false,
@@ -151,80 +149,85 @@ describe('coding-plan subscription runtime', () => {
     },
   ])(
     'keeps the canonical route, bound endpoint, and subscription usage aligned for $name',
-    async ({
+    ({
       useOpenRouter,
       providerEndpoint,
       modelBaseUrl,
       route,
       baseUrl,
       usageRoute,
-    }) => {
-      await Effect.runPromise(
-        hostStores().globalState.update(
+    }) =>
+      Effect.gen(function* () {
+        yield* hostStores().globalState.update(
           GlobalStateKey.USE_OPENROUTER,
           useOpenRouter,
-        ),
-      );
-      await Effect.runPromise(
-        hostStores().globalState.update(
+        );
+        yield* hostStores().globalState.update(
           GlobalStateKey.ENDPOINT_GLM,
           providerEndpoint,
-        ),
-      );
-      if (modelBaseUrl) MODEL_CONFIGS.glm52.baseUrl = modelBaseUrl;
+        );
+        if (modelBaseUrl) MODEL_CONFIGS.glm52.baseUrl = modelBaseUrl;
 
-      const canonical = resolveGlmRoute({
-        stores: hostStores(),
-        baseUrl: modelBaseUrl,
-        useOpenRouter,
-      });
-      const endpoint = resolveRouteEndpoint(
-        hostStores(),
-        { name: 'glm52', provider: ModelProvider.GLM, baseUrl: modelBaseUrl },
-        useOpenRouter,
-      );
+        const canonical = resolveGlmRoute({
+          stores: hostStores(),
+          baseUrl: modelBaseUrl,
+          useOpenRouter,
+        });
+        const endpoint = resolveRouteEndpoint(
+          hostStores(),
+          {
+            name: 'glm52',
+            provider: ModelProvider.GLM,
+            baseUrl: modelBaseUrl,
+          },
+          useOpenRouter,
+        );
 
-      expect(canonical).toEqual({
-        route,
-        baseUrl,
-        ...(usageRoute && { usageRoute }),
-      });
-      expect(endpoint).toMatchObject({ baseUrl });
-      expect(endpoint.usageRoute).toBe(usageRoute);
-      expect(
-        await Effect.runPromise(
-          activeSubscriptionUsageRoute(hostStores(), 'glm52').pipe(
+        expect(canonical).toEqual({
+          route,
+          baseUrl,
+          ...(usageRoute && { usageRoute }),
+        });
+        expect(endpoint).toMatchObject({ baseUrl });
+        expect(endpoint.usageRoute).toBe(usageRoute);
+        expect(
+          yield* activeSubscriptionUsageRoute(hostStores(), 'glm52').pipe(
             Effect.provide(
               LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT),
             ),
           ),
-        ),
-      ).toBe(usageRoute);
-    },
+        ).toBe(usageRoute);
+      }),
   );
 
-  it('leaves the stored preference alone for a run that declined the plan', async () => {
-    await Effect.runPromise(
-      hostStores().globalState.update(GlobalStateKey.USE_OPENROUTER, false),
-    );
-    await Effect.runPromise(
-      hostStores().globalState.update(GlobalStateKey.GLM_CODING_PLAN, true),
-    );
+  it.effect(
+    'leaves the stored preference alone for a run that declined the plan',
+    () =>
+      Effect.gen(function* () {
+        yield* hostStores().globalState.update(
+          GlobalStateKey.USE_OPENROUTER,
+          false,
+        );
+        yield* hostStores().globalState.update(
+          GlobalStateKey.GLM_CODING_PLAN,
+          true,
+        );
 
-    expect(
-      resolveGlmRoute({ stores: hostStores(), useOpenRouter: false }).route,
-    ).toBe('official-coding-plan');
-    expect(
-      resolveGlmRoute({
-        stores: hostStores(),
-        useOpenRouter: false,
-        declinedRoutes: ['glm-coding-plan-subscription'],
-      }).route,
-    ).toBe('official');
-    // The decline is the asking run's, so the user's switch is untouched and
-    // a concurrent run still routes through the plan.
-    expect(
-      hostStores().globalState.get(GlobalStateKey.GLM_CODING_PLAN, false),
-    ).toBe(true);
-  });
+        expect(
+          resolveGlmRoute({ stores: hostStores(), useOpenRouter: false }).route,
+        ).toBe('official-coding-plan');
+        expect(
+          resolveGlmRoute({
+            stores: hostStores(),
+            useOpenRouter: false,
+            declinedRoutes: ['glm-coding-plan-subscription'],
+          }).route,
+        ).toBe('official');
+        // The decline is the asking run's, so the user's switch is untouched and
+        // a concurrent run still routes through the plan.
+        expect(
+          hostStores().globalState.get(GlobalStateKey.GLM_CODING_PLAN, false),
+        ).toBe(true);
+      }),
+  );
 });

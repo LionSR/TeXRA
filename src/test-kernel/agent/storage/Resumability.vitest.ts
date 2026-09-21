@@ -1,5 +1,6 @@
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, vi } from 'vitest';
 
 import { deriveResumability, finalizeRun } from '@agent/storage';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
@@ -80,96 +81,108 @@ describe('deriveResumability', () => {
     }
   }
 
-  it('keeps a failed run resumable while its snapshot stands', async () => {
-    const runId = 'ac0000' as RunId;
-    await writeMeta(runId, { outcome: RUN_OUTCOME.FAILED });
-    await writeSnapshot(runId);
+  it.effect('keeps a failed run resumable while its snapshot stands', () =>
+    Effect.gen(function* () {
+      const runId = 'ac0000' as RunId;
+      yield* Effect.promise(() =>
+        writeMeta(runId, { outcome: RUN_OUTCOME.FAILED }),
+      );
+      yield* Effect.promise(() => writeSnapshot(runId));
 
-    await expect(
-      Effect.runPromise(deriveResumability(runId, session)),
-    ).resolves.toMatchObject({
-      kind: 'checkpoint',
-      snapshot: OPENING_SNAPSHOT,
-    });
-  });
+      expect(yield* deriveResumability(runId, session)).toMatchObject({
+        kind: 'checkpoint',
+        snapshot: OPENING_SNAPSHOT,
+      });
+    }),
+  );
 
-  it('keeps the snapshot when terminal metadata fails for a failed run', async () => {
-    const runId = 'ac0003' as RunId;
-    await writeMeta(runId, {});
-    await writeSnapshot(runId);
-    vi.spyOn(session, 'updateRecordFacts').mockReturnValueOnce(
-      Effect.die(new Error('metadata disk full')),
-    );
+  it.effect(
+    'keeps the snapshot when terminal metadata fails for a failed run',
+    () =>
+      Effect.gen(function* () {
+        const runId = 'ac0003' as RunId;
+        yield* Effect.promise(() => writeMeta(runId, {}));
+        yield* Effect.promise(() => writeSnapshot(runId));
+        vi.spyOn(session, 'updateRecordFacts').mockReturnValueOnce(
+          Effect.die(new Error('metadata disk full')),
+        );
 
-    await expect(
-      Effect.runPromise(
-        finalizeRun(session, { runId, outcome: RUN_OUTCOME.FAILED }),
-      ),
-    ).resolves.toMatchObject({
-      ok: false,
-      outcomePersisted: false,
-    });
+        expect(
+          yield* finalizeRun(session, { runId, outcome: RUN_OUTCOME.FAILED }),
+        ).toMatchObject({
+          ok: false,
+          outcomePersisted: false,
+        });
 
-    await expect(
-      Effect.runPromise(deriveResumability(runId, session)),
-    ).resolves.toMatchObject({ kind: 'checkpoint' });
-  });
+        expect(yield* deriveResumability(runId, session)).toMatchObject({
+          kind: 'checkpoint',
+        });
+      }),
+  );
 
-  it('does not mark a cancelled run resumable without a snapshot', async () => {
-    const runId = 'ac0005' as RunId;
-    await writeMeta(runId, { outcome: RUN_OUTCOME.CANCELLED });
+  it.effect('does not mark a cancelled run resumable without a snapshot', () =>
+    Effect.gen(function* () {
+      const runId = 'ac0005' as RunId;
+      yield* Effect.promise(() =>
+        writeMeta(runId, { outcome: RUN_OUTCOME.CANCELLED }),
+      );
 
-    await expect(
-      Effect.runPromise(deriveResumability(runId, session)),
-    ).resolves.toEqual({ kind: 'none' });
-  });
+      expect(yield* deriveResumability(runId, session)).toEqual({
+        kind: 'none',
+      });
+    }),
+  );
 
-  it('reports a run with no durable state as not resumable', async () => {
-    const runId = 'ac0008' as RunId;
+  it.effect('reports a run with no durable state as not resumable', () =>
+    Effect.gen(function* () {
+      const runId = 'ac0008' as RunId;
 
-    await expect(
-      Effect.runPromise(deriveResumability(runId, session)),
-    ).resolves.toEqual({ kind: 'none' });
-  });
+      expect(yield* deriveResumability(runId, session)).toEqual({
+        kind: 'none',
+      });
+    }),
+  );
 
-  it('reports unreadable metadata as unreadable even with a snapshot', async () => {
-    const runId = 'ac000a' as RunId;
-    await writeMeta(runId, {});
-    await writeSnapshot(runId);
-    vi.spyOn(session, 'readRunRecords').mockReturnValue(
-      Effect.fail(
-        new DatabaseReadFailed({
-          path: 'session.db',
-          cause: new Error('corrupt run metadata'),
-        }),
-      ),
-    );
+  it.effect(
+    'reports unreadable metadata as unreadable even with a snapshot',
+    () =>
+      Effect.gen(function* () {
+        const runId = 'ac000a' as RunId;
+        yield* Effect.promise(() => writeMeta(runId, {}));
+        yield* Effect.promise(() => writeSnapshot(runId));
+        vi.spyOn(session, 'readRunRecords').mockReturnValue(
+          Effect.fail(
+            new DatabaseReadFailed({
+              path: 'session.db',
+              cause: new Error('corrupt run metadata'),
+            }),
+          ),
+        );
 
-    await expect(
-      Effect.runPromise(deriveResumability(runId, session)),
-    ).resolves.toEqual({
-      kind: 'unreadable',
-      cause: 'run metadata could not be read (corrupt run metadata)',
-    });
-  });
+        expect(yield* deriveResumability(runId, session)).toEqual({
+          kind: 'unreadable',
+          cause: 'run metadata could not be read (corrupt run metadata)',
+        });
+      }),
+  );
 
-  it('reports an unreadable snapshot as unreadable', async () => {
-    const runId = 'ac000b' as RunId;
-    await writeMeta(runId, {});
-    vi.spyOn(session.ledger, 'latestSnapshot').mockReturnValue(
-      Effect.fail(
-        new DatabaseReadFailed({
-          path: 'session.db',
-          cause: new Error('disk offline'),
-        }),
-      ),
-    );
+  it.effect('reports an unreadable snapshot as unreadable', () =>
+    Effect.gen(function* () {
+      const runId = 'ac000b' as RunId;
+      yield* Effect.promise(() => writeMeta(runId, {}));
+      vi.spyOn(session.ledger, 'latestSnapshot').mockReturnValue(
+        Effect.fail(
+          new DatabaseReadFailed({
+            path: 'session.db',
+            cause: new Error('disk offline'),
+          }),
+        ),
+      );
 
-    await expect(
-      Effect.runPromise(deriveResumability(runId, session)),
-    ).resolves.toEqual({
-      kind: 'unreadable',
-      cause: 'checkpoint could not be read (disk offline)',
-    });
-  });
+      expect(yield* deriveResumability(runId, session)).toEqual({
+        kind: 'unreadable',
+        cause: 'checkpoint could not be read (disk offline)',
+      });
+    }),
+  );
 });

@@ -249,68 +249,64 @@ describe('CLI model access routes', () => {
     ).toBe('kimi-code-subscription');
   });
 
-  it('reports the ChatGPT preference independently of sign-in', async () => {
-    mocks.getCodexStatus.mockReturnValue(
-      Effect.succeed({
-        signedIn: true,
-        email: 'user@example.com',
-      }),
-    );
-    mocks.isPreferCodexSubscription.mockReturnValue(true);
+  it.effect('reports the ChatGPT preference independently of sign-in', () =>
+    Effect.gen(function* () {
+      mocks.getCodexStatus.mockReturnValue(
+        Effect.succeed({
+          signedIn: true,
+          email: 'user@example.com',
+        }),
+      );
+      mocks.isPreferCodexSubscription.mockReturnValue(true);
 
-    expect(
-      await Effect.runPromise(readCliModelAccessStatus(stores, secrets)),
-    ).toEqual(
-      expectedAccessStatus({
-        preferences: {
-          chatGpt: 'on',
-          grok: 'off',
-        },
-        chatGptSignedIn: true,
-        chatGptAccountLabel: 'user@example.com',
-      }),
-    );
-
-    mocks.getCodexStatus.mockReturnValue(Effect.succeed({ signedIn: false }));
-    expect(
-      await Effect.runPromise(readCliModelAccessStatus(stores, secrets)),
-    ).toEqual(
-      expectedAccessStatus({
-        preferences: {
-          chatGpt: 'on',
-          grok: 'off',
-        },
-      }),
-    );
-  });
-
-  it('reports the Kimi preference independently of key', async () => {
-    mocks.hasUsableApiKey.mockImplementation((_secrets, provider) =>
-      Effect.succeed(provider === 'kimiCode'),
-    );
-    mocks.getPreferKimiCode.mockReturnValue(true);
-
-    expect(
-      await Effect.runPromise(readCliModelAccessStatus(stores, secrets)),
-    ).toEqual(
-      expectedAccessStatus(
-        {
+      expect(yield* readCliModelAccessStatus(stores, secrets)).toEqual(
+        expectedAccessStatus({
           preferences: {
-            chatGpt: 'off',
+            chatGpt: 'on',
             grok: 'off',
           },
-        },
-        { kimiPreferred: true, kimiKeySet: true },
-      ),
-    );
+          chatGptSignedIn: true,
+          chatGptAccountLabel: 'user@example.com',
+        }),
+      );
 
-    mocks.hasUsableApiKey.mockReturnValue(Effect.succeed(false));
-    expect(
-      await Effect.runPromise(readCliModelAccessStatus(stores, secrets)),
-    ).toMatchObject({
-      codingPlans: { kimiCode: { preferred: true, keySet: false } },
-    });
-  });
+      mocks.getCodexStatus.mockReturnValue(Effect.succeed({ signedIn: false }));
+      expect(yield* readCliModelAccessStatus(stores, secrets)).toEqual(
+        expectedAccessStatus({
+          preferences: {
+            chatGpt: 'on',
+            grok: 'off',
+          },
+        }),
+      );
+    }),
+  );
+
+  it.effect('reports the Kimi preference independently of key', () =>
+    Effect.gen(function* () {
+      mocks.hasUsableApiKey.mockImplementation((_secrets, provider) =>
+        Effect.succeed(provider === 'kimiCode'),
+      );
+      mocks.getPreferKimiCode.mockReturnValue(true);
+
+      expect(yield* readCliModelAccessStatus(stores, secrets)).toEqual(
+        expectedAccessStatus(
+          {
+            preferences: {
+              chatGpt: 'off',
+              grok: 'off',
+            },
+          },
+          { kimiPreferred: true, kimiKeySet: true },
+        ),
+      );
+
+      mocks.hasUsableApiKey.mockReturnValue(Effect.succeed(false));
+      expect(yield* readCliModelAccessStatus(stores, secrets)).toMatchObject({
+        codingPlans: { kimiCode: { preferred: true, keySet: false } },
+      });
+    }),
+  );
 
   it.effect(
     'enables Kimi Code routing on a personal fallback when a key exists',

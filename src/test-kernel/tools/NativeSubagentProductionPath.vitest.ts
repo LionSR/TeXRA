@@ -1,7 +1,7 @@
 import { writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
-import { Effect, Layer, Stream } from 'effect';
+import { Effect, Fiber, Layer, Stream } from 'effect';
 
 /**
  * Production-shaped regression for #9531. Agent registration, launch, child
@@ -14,7 +14,8 @@ import { Effect, Layer, Stream } from 'effect';
 import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { it } from '@effect/vitest';
+import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 import {
   ModelError,
   ResolvedTurnSchema,
@@ -581,382 +582,419 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     vi.restoreAllMocks();
   });
 
-  it('resumes one persisted child through the real queue and archives both turns once', async () => {
-    const parentTurns = [
-      { text: 'Parent ready.' },
-      { text: 'Parent received result A.' },
-      { text: 'Parent received result B.' },
-    ];
-    const childTurns = [{ text: 'Result A.' }, { text: 'Result B.' }];
-    const { runId, parentContext, observedRequests } = await launchWaitingChild(
-      { parentTurns, childTurns },
-    );
+  it.live(
+    'resumes one persisted child through the real queue and archives both turns once',
+    () =>
+      Effect.gen(function* () {
+        const parentTurns = [
+          { text: 'Parent ready.' },
+          { text: 'Parent received result A.' },
+          { text: 'Parent received result B.' },
+        ];
+        const childTurns = [{ text: 'Result A.' }, { text: 'Result B.' }];
+        const { runId, parentContext, observedRequests } =
+          yield* Effect.promise(() =>
+            launchWaitingChild({ parentTurns, childTurns }),
+          );
 
-    await waitForPersistedResult(runId, 'Result A.');
-    await waitForCompletedResumes(1);
+        yield* Effect.promise(() => waitForPersistedResult(runId, 'Result A.'));
+        yield* Effect.promise(() => waitForCompletedResumes(1));
 
-    const resumed = await queueSecondAssertionFollowUp(parentContext, runId);
-    expect(resumed.summary).toContain('Follow-up queued');
-
-    await waitForPersistedResult(runId, 'Result B.');
-    await waitForCompletedResumes(2);
-
-    // The resumed turn asks the model with the follow-up as its last message
-    // and turn 1's answer still in the history it carries.
-    const childResumeRequest = observedRequests.find(({ model, messages }) => {
-      const last = messages.at(-1);
-      return (
-        model === CHILD_MODEL &&
-        last !== undefined &&
-        messageText(last).includes('second assertion')
-      );
-    });
-    expect(childResumeRequest?.messages.map(messageText)).toContain(
-      'Result A.',
-    );
-
-    await Effect.runPromise(session.settlePublications());
-    const archivedChild = await Effect.runPromise(
-      readCompletedRunConversation(runId, session),
-    );
-    expect(archivedChild.conversation).toEqual([
-      expect.objectContaining({ kind: 'user-message' }),
-      { kind: 'assistant-text', text: 'Result A.' },
-      {
-        kind: 'user-message',
-        parts: [
-          { type: 'text', text: expect.stringContaining('second assertion') },
-        ],
-      },
-      { kind: 'assistant-text', text: 'Result B.' },
-    ]);
-
-    const archivedParent = await Effect.runPromise(
-      readCompletedRunConversation(PARENT_RUN_ID, session),
-    );
-    const parentText = JSON.stringify(archivedParent.conversation);
-    expect(parentText.match(/Result A\./g)).toHaveLength(1);
-    expect(parentText.match(/Result B\./g)).toHaveLength(1);
-    expect(archivedParent.conversation).toEqual(
-      expect.arrayContaining([
-        { kind: 'assistant-text', text: 'Parent received result A.' },
-        { kind: 'assistant-text', text: 'Parent received result B.' },
-      ]),
-    );
-    expect(resumedRuns).toEqual([PARENT_RUN_ID, PARENT_RUN_ID]);
-    expect(completedResumes).toEqual([PARENT_RUN_ID, PARENT_RUN_ID]);
-    expect(parentTurns).toHaveLength(0);
-  }, 60_000);
-
-  it('does not redeliver turn 1 when the resumed turn produces no new assistant message', async () => {
-    const parentTurns = [
-      { text: 'Parent ready.' },
-      { text: 'Parent received result A.' },
-      { text: 'Parent closed out an empty second turn.' },
-    ];
-    // Turn 2 is answerless: the scripted transport ends the turn with no text,
-    // so the resumed cycle completes without adding an assistant message.
-    const childTurns = [{ text: 'Result A.' }, { text: '' }];
-    const { runId, parentContext } = await launchWaitingChild({
-      parentTurns,
-      childTurns,
-    });
-
-    await waitForPersistedResult(runId, 'Result A.');
-    await waitForCompletedResumes(1);
-
-    const resumed = await queueSecondAssertionFollowUp(parentContext, runId);
-    expect(resumed.summary).toContain('Follow-up queued');
-
-    // The answerless turn still delivers: its report/result overwrite turn 1's
-    // with an explicitly empty response rather than replaying 'Result A.' — and
-    // the parent is resumed a second time to consume that empty delivery.
-    await vi.waitFor(
-      async () => {
-        await expect(
-          Effect.runPromise(getRunRecords(session, runId).readResultMeta()),
-        ).resolves.toMatchObject({
-          output: { response: '' },
-        });
-        const report = await Effect.runPromise(
-          getRunRecords(session, runId).readReport(),
+        const resumed = yield* Effect.promise(() =>
+          queueSecondAssertionFollowUp(parentContext, runId),
         );
-        expect(report).not.toContain('Result A.');
-        expect(report).not.toContain('<response>');
-      },
-      { timeout: 10_000 },
-    );
-    await waitForCompletedResumes(2);
+        expect(resumed.summary).toContain('Follow-up queued');
 
-    await Effect.runPromise(session.settlePublications());
-    const archivedChild = await Effect.runPromise(
-      readCompletedRunConversation(runId, session),
-    );
-    // Turn 2 added the user instruction but no new assistant row.
-    expect(archivedChild.conversation).toEqual([
-      expect.objectContaining({ kind: 'user-message' }),
-      { kind: 'assistant-text', text: 'Result A.' },
-      {
-        kind: 'user-message',
-        parts: [
-          { type: 'text', text: expect.stringContaining('second assertion') },
-        ],
-      },
-    ]);
+        yield* Effect.promise(() => waitForPersistedResult(runId, 'Result B.'));
+        yield* Effect.promise(() => waitForCompletedResumes(2));
 
-    const archivedParent = await Effect.runPromise(
-      readCompletedRunConversation(PARENT_RUN_ID, session),
-    );
-    const parentText = JSON.stringify(archivedParent.conversation);
-    expect(parentText.match(/Result A\./g)).toHaveLength(1);
-    expect(resumedRuns).toEqual([PARENT_RUN_ID, PARENT_RUN_ID]);
-    expect(completedResumes).toEqual([PARENT_RUN_ID, PARENT_RUN_ID]);
-    expect(parentTurns).toHaveLength(0);
-  }, 60_000);
+        // The resumed turn asks the model with the follow-up as its last message
+        // and turn 1's answer still in the history it carries.
+        const childResumeRequest = observedRequests.find(
+          ({ model, messages }) => {
+            const last = messages.at(-1);
+            return (
+              model === CHILD_MODEL &&
+              last !== undefined &&
+              messageText(last).includes('second assertion')
+            );
+          },
+        );
+        expect(childResumeRequest?.messages.map(messageText)).toContain(
+          'Result A.',
+        );
 
-  it('combines concurrent distinct follow-ups into one ordered batch turn, not an overwritten result', async () => {
-    // Two child turns: the initial launch plus one batch turn that drains both
-    // concurrent follow-ups together.
-    const parentTurns = [
-      { text: 'Parent ready.' },
-      { text: 'Parent received result A.' },
-      { text: 'Parent received result B.' },
-    ];
-    const childTurns = [{ text: 'Result A.' }, { text: 'Result B.' }];
-    const { runId, parentContext } = await launchWaitingChild({
-      parentTurns,
-      childTurns,
-    });
+        yield* session.settlePublications();
+        const archivedChild = yield* readCompletedRunConversation(
+          runId,
+          session,
+        );
+        expect(archivedChild.conversation).toEqual([
+          expect.objectContaining({ kind: 'user-message' }),
+          { kind: 'assistant-text', text: 'Result A.' },
+          {
+            kind: 'user-message',
+            parts: [
+              {
+                type: 'text',
+                text: expect.stringContaining('second assertion'),
+              },
+            ],
+          },
+          { kind: 'assistant-text', text: 'Result B.' },
+        ]);
 
-    await waitForPersistedResult(runId, 'Result A.');
-    await waitForCompletedResumes(1);
+        const archivedParent = yield* readCompletedRunConversation(
+          PARENT_RUN_ID,
+          session,
+        );
+        const parentText = JSON.stringify(archivedParent.conversation);
+        expect(parentText.match(/Result A\./g)).toHaveLength(1);
+        expect(parentText.match(/Result B\./g)).toHaveLength(1);
+        expect(archivedParent.conversation).toEqual(
+          expect.arrayContaining([
+            { kind: 'assistant-text', text: 'Parent received result A.' },
+            { kind: 'assistant-text', text: 'Parent received result B.' },
+          ]),
+        );
+        expect(resumedRuns).toEqual([PARENT_RUN_ID, PARENT_RUN_ID]);
+        expect(completedResumes).toEqual([PARENT_RUN_ID, PARENT_RUN_ID]);
+        expect(parentTurns).toHaveLength(0);
+      }),
+    60_000,
+  );
 
-    // Submit two follow-ups concurrently, before the child drains the queue.
-    // The resumed child takes the whole queued batch and runs one turn
-    // with the combined batch, so both instructions reach the child in one
-    // ordered turn rather than sharing/overwriting one turn result.
-    const [first, second] = await Promise.all([
-      queueSecondAssertionFollowUp(
-        parentContext,
-        runId,
-        'Now prove the second assertion.',
-      ),
-      queueSecondAssertionFollowUp(
-        parentContext,
-        runId,
-        'Now prove the third assertion.',
-      ),
-    ]);
-    expect(first.status).toBe('executed');
-    expect(second.status).toBe('executed');
+  it.live(
+    'does not redeliver turn 1 when the resumed turn produces no new assistant message',
+    () =>
+      Effect.gen(function* () {
+        const parentTurns = [
+          { text: 'Parent ready.' },
+          { text: 'Parent received result A.' },
+          { text: 'Parent closed out an empty second turn.' },
+        ];
+        // Turn 2 is answerless: the scripted transport ends the turn with no text,
+        // so the resumed cycle completes without adding an assistant message.
+        const childTurns = [{ text: 'Result A.' }, { text: '' }];
+        const { runId, parentContext } = yield* Effect.promise(() =>
+          launchWaitingChild({ parentTurns, childTurns }),
+        );
 
-    await waitForPersistedResult(runId, 'Result B.');
-    await waitForCompletedResumes(2);
+        yield* Effect.promise(() => waitForPersistedResult(runId, 'Result A.'));
+        yield* Effect.promise(() => waitForCompletedResumes(1));
 
-    // The child transcript has turn 1 (Result A) and the batch turn (Result B),
-    // with BOTH follow-up instructions recorded as user messages in the batch.
-    await Effect.runPromise(session.settlePublications());
-    const archivedChild = await Effect.runPromise(
-      readCompletedRunConversation(runId, session),
-    );
-    const childText = JSON.stringify(archivedChild.conversation);
-    expect(childText.match(/Result A\./g)).toHaveLength(1);
-    expect(childText.match(/Result B\./g)).toHaveLength(1);
-    expect(childText).toContain('second assertion');
-    expect(childText).toContain('third assertion');
+        const resumed = yield* Effect.promise(() =>
+          queueSecondAssertionFollowUp(parentContext, runId),
+        );
+        expect(resumed.summary).toContain('Follow-up queued');
 
-    // The parent received each distinct result exactly once.
-    const archivedParent = await Effect.runPromise(
-      readCompletedRunConversation(PARENT_RUN_ID, session),
-    );
-    const parentText = JSON.stringify(archivedParent.conversation);
-    expect(parentText.match(/Result A\./g)).toHaveLength(1);
-    expect(parentText.match(/Result B\./g)).toHaveLength(1);
-    expect(resumedRuns).toEqual([PARENT_RUN_ID, PARENT_RUN_ID]);
-    expect(completedResumes).toEqual([PARENT_RUN_ID, PARENT_RUN_ID]);
-    expect(parentTurns).toHaveLength(0);
-  }, 60_000);
+        // The answerless turn still delivers: its report/result overwrite turn 1's
+        // with an explicitly empty response rather than replaying 'Result A.' — and
+        // the parent is resumed a second time to consume that empty delivery.
+        yield* Effect.promise(() =>
+          vi.waitFor(
+            async () => {
+              await expect(
+                Effect.runPromise(
+                  getRunRecords(session, runId).readResultMeta(),
+                ),
+              ).resolves.toMatchObject({
+                output: { response: '' },
+              });
+              const report = await Effect.runPromise(
+                getRunRecords(session, runId).readReport(),
+              );
+              expect(report).not.toContain('Result A.');
+              expect(report).not.toContain('<response>');
+            },
+            { timeout: 10_000 },
+          ),
+        );
+        yield* Effect.promise(() => waitForCompletedResumes(2));
 
-  it('suppresses replays of one logical child delivery at the real admission boundary', async () => {
-    const { runId } = await launchWaitingChild({
-      parentTurns: [
-        { text: 'Parent ready.' },
-        { text: 'Parent received result A.' },
-        { text: 'Parent received a distinct same-text delivery.' },
-      ],
-      childTurns: [{ text: 'Result A.' }],
-    });
-    await waitForPersistedResult(runId, 'Result A.');
-    await waitForCompletedResumes(1);
+        yield* session.settlePublications();
+        const archivedChild = yield* readCompletedRunConversation(
+          runId,
+          session,
+        );
+        // Turn 2 added the user instruction but no new assistant row.
+        expect(archivedChild.conversation).toEqual([
+          expect.objectContaining({ kind: 'user-message' }),
+          { kind: 'assistant-text', text: 'Result A.' },
+          {
+            kind: 'user-message',
+            parts: [
+              {
+                type: 'text',
+                text: expect.stringContaining('second assertion'),
+              },
+            ],
+          },
+        ]);
 
-    // The loop minted a stable logical identity for turn 1's delivery.
-    const turnState = await Effect.runPromise(
-      readChildTurnState(session, runId),
-    );
-    expect(turnState.active).toBeNull();
-    const completed = turnState.lastCompleted;
-    expect(completed).not.toBeNull();
-    // The delivery id the loop derives from that turn's identity.
-    const deliveryId = `${runId}:${completed!.key}:${completed!.index}:delivery`;
+        const archivedParent = yield* readCompletedRunConversation(
+          PARENT_RUN_ID,
+          session,
+        );
+        const parentText = JSON.stringify(archivedParent.conversation);
+        expect(parentText.match(/Result A\./g)).toHaveLength(1);
+        expect(resumedRuns).toEqual([PARENT_RUN_ID, PARENT_RUN_ID]);
+        expect(completedResumes).toEqual([PARENT_RUN_ID, PARENT_RUN_ID]);
+        expect(parentTurns).toHaveLength(0);
+      }),
+    60_000,
+  );
 
-    // Replay the identical logical delivery 100 times through the real
-    // admission path: no additional parent message, no additional wake.
-    const report = await Effect.runPromise(
-      getRunRecords(session, runId).readReport(),
-    );
-    for (let replay = 0; replay < 100; replay++) {
-      await Effect.runPromise(
-        submitFollowUp(
+  it.live(
+    'combines concurrent distinct follow-ups into one ordered batch turn, not an overwritten result',
+    () =>
+      Effect.gen(function* () {
+        // Two child turns: the initial launch plus one batch turn that drains both
+        // concurrent follow-ups together.
+        const parentTurns = [
+          { text: 'Parent ready.' },
+          { text: 'Parent received result A.' },
+          { text: 'Parent received result B.' },
+        ];
+        const childTurns = [{ text: 'Result A.' }, { text: 'Result B.' }];
+        const { runId, parentContext } = yield* Effect.promise(() =>
+          launchWaitingChild({ parentTurns, childTurns }),
+        );
+
+        yield* Effect.promise(() => waitForPersistedResult(runId, 'Result A.'));
+        yield* Effect.promise(() => waitForCompletedResumes(1));
+
+        // Submit two follow-ups concurrently, before the child drains the queue.
+        // The resumed child takes the whole queued batch and runs one turn
+        // with the combined batch, so both instructions reach the child in one
+        // ordered turn rather than sharing/overwriting one turn result.
+        const [first, second] = yield* Effect.promise(() =>
+          Promise.all([
+            queueSecondAssertionFollowUp(
+              parentContext,
+              runId,
+              'Now prove the second assertion.',
+            ),
+            queueSecondAssertionFollowUp(
+              parentContext,
+              runId,
+              'Now prove the third assertion.',
+            ),
+          ]),
+        );
+        expect(first.status).toBe('executed');
+        expect(second.status).toBe('executed');
+
+        yield* Effect.promise(() => waitForPersistedResult(runId, 'Result B.'));
+        yield* Effect.promise(() => waitForCompletedResumes(2));
+
+        // The child transcript has turn 1 (Result A) and the batch turn (Result B),
+        // with BOTH follow-up instructions recorded as user messages in the batch.
+        yield* session.settlePublications();
+        const archivedChild = yield* readCompletedRunConversation(
+          runId,
+          session,
+        );
+        const childText = JSON.stringify(archivedChild.conversation);
+        expect(childText.match(/Result A\./g)).toHaveLength(1);
+        expect(childText.match(/Result B\./g)).toHaveLength(1);
+        expect(childText).toContain('second assertion');
+        expect(childText).toContain('third assertion');
+
+        // The parent received each distinct result exactly once.
+        const archivedParent = yield* readCompletedRunConversation(
+          PARENT_RUN_ID,
+          session,
+        );
+        const parentText = JSON.stringify(archivedParent.conversation);
+        expect(parentText.match(/Result A\./g)).toHaveLength(1);
+        expect(parentText.match(/Result B\./g)).toHaveLength(1);
+        expect(resumedRuns).toEqual([PARENT_RUN_ID, PARENT_RUN_ID]);
+        expect(completedResumes).toEqual([PARENT_RUN_ID, PARENT_RUN_ID]);
+        expect(parentTurns).toHaveLength(0);
+      }),
+    60_000,
+  );
+
+  it.live(
+    'suppresses replays of one logical child delivery at the real admission boundary',
+    () =>
+      Effect.gen(function* () {
+        const { runId } = yield* Effect.promise(() =>
+          launchWaitingChild({
+            parentTurns: [
+              { text: 'Parent ready.' },
+              { text: 'Parent received result A.' },
+              { text: 'Parent received a distinct same-text delivery.' },
+            ],
+            childTurns: [{ text: 'Result A.' }],
+          }),
+        );
+        yield* Effect.promise(() => waitForPersistedResult(runId, 'Result A.'));
+        yield* Effect.promise(() => waitForCompletedResumes(1));
+
+        // The loop minted a stable logical identity for turn 1's delivery.
+        const turnState = yield* readChildTurnState(session, runId);
+        expect(turnState.active).toBeNull();
+        const completed = turnState.lastCompleted;
+        expect(completed).not.toBeNull();
+        // The delivery id the loop derives from that turn's identity.
+        const deliveryId = `${runId}:${completed!.key}:${completed!.index}:delivery`;
+
+        // Replay the identical logical delivery 100 times through the real
+        // admission path: no additional parent message, no additional wake.
+        const report = yield* getRunRecords(session, runId).readReport();
+        for (let replay = 0; replay < 100; replay++) {
+          yield* submitFollowUp(
+            PARENT_RUN_ID,
+            {
+              text: report!,
+              origin: 'subagent_result',
+              deliveryId,
+            },
+            { session },
+          ).pipe(Effect.provideService(AgentResume, fakeHostAgentResume));
+        }
+        yield* session.settlePublications();
+        const afterReplay = JSON.stringify(
+          (yield* readCompletedRunConversation(PARENT_RUN_ID, session))
+            .conversation,
+        );
+        expect(afterReplay.match(/Result A\./g)).toHaveLength(1);
+        expect(resumedRuns).toEqual([PARENT_RUN_ID]);
+        expect(completedResumes).toEqual([PARENT_RUN_ID]);
+
+        // A distinct delivery identity with identical text is a distinct turn.
+        yield* submitFollowUp(
           PARENT_RUN_ID,
           {
             text: report!,
             origin: 'subagent_result',
-            deliveryId,
+            deliveryId: `${deliveryId}:other`,
           },
           { session },
-        ).pipe(Effect.provideService(AgentResume, fakeHostAgentResume)),
-      );
-    }
-    await Effect.runPromise(session.settlePublications());
-    const afterReplay = JSON.stringify(
-      (
-        await Effect.runPromise(
-          readCompletedRunConversation(PARENT_RUN_ID, session),
-        )
-      ).conversation,
-    );
-    expect(afterReplay.match(/Result A\./g)).toHaveLength(1);
-    expect(resumedRuns).toEqual([PARENT_RUN_ID]);
-    expect(completedResumes).toEqual([PARENT_RUN_ID]);
-
-    // A distinct delivery identity with identical text is a distinct turn.
-    await Effect.runPromise(
-      submitFollowUp(
-        PARENT_RUN_ID,
-        {
-          text: report!,
-          origin: 'subagent_result',
-          deliveryId: `${deliveryId}:other`,
-        },
-        { session },
-      ).pipe(Effect.provideService(AgentResume, fakeHostAgentResume)),
-    );
-    await waitForCompletedResumes(2);
-    await Effect.runPromise(session.settlePublications());
-    const afterDistinct = JSON.stringify(
-      (
-        await Effect.runPromise(
-          readCompletedRunConversation(PARENT_RUN_ID, session),
-        )
-      ).conversation,
-    );
-    expect(afterDistinct.match(/Result A\./g)).toHaveLength(2);
-    expect(resumedRuns).toEqual([PARENT_RUN_ID, PARENT_RUN_ID]);
-  }, 30_000);
-
-  it('does not expose turn 1 as current when an accepted turn 2 is interrupted', async () => {
-    let releaseTurn2: (err: unknown) => void = () => {};
-    const turn2Gate = new Promise<never>((_, reject) => {
-      releaseTurn2 = reject;
-    });
-    void turn2Gate.catch(() => {});
-    const { runId, parentContext } = await launchWaitingChild({
-      parentTurns: [
-        { text: 'Parent ready.' },
-        { text: 'Parent received result A.' },
-      ],
-      childTurns: [{ text: 'Result A.' }, 'hang'],
-      childGate: turn2Gate,
-    });
-    await waitForPersistedResult(runId, 'Result A.');
-    await waitForCompletedResumes(1);
-
-    const completed1 = (
-      await Effect.runPromise(readChildTurnState(session, runId))
-    ).lastCompleted;
-    expect(completed1).not.toBeNull();
-
-    // Accept a follow-up: the loop runs turn 2, which hangs mid-model-call.
-    await queueSecondAssertionFollowUp(parentContext, runId);
-
-    // Turn 2 was accepted: a pending-turn record marks it active, while the
-    // persisted result still belongs to the latest completed turn (turn 1).
-    await vi.waitFor(
-      async () => {
-        const state = await Effect.runPromise(
-          readChildTurnState(session, runId),
+        ).pipe(Effect.provideService(AgentResume, fakeHostAgentResume));
+        yield* Effect.promise(() => waitForCompletedResumes(2));
+        yield* session.settlePublications();
+        const afterDistinct = JSON.stringify(
+          (yield* readCompletedRunConversation(PARENT_RUN_ID, session))
+            .conversation,
         );
-        expect(state.active).not.toBeNull();
-        expect(state.active).not.toEqual(completed1);
-        expect(state.lastCompleted).toEqual(completed1);
-      },
-      { timeout: 10_000 },
-    );
-    await expect(
-      Effect.runPromise(getRunRecords(session, runId).readResultMeta()),
-    ).resolves.toMatchObject({
-      output: { response: 'Result A.' },
-    });
+        expect(afterDistinct.match(/Result A\./g)).toHaveLength(2);
+        expect(resumedRuns).toEqual([PARENT_RUN_ID, PARENT_RUN_ID]);
+      }),
+    30_000,
+  );
 
-    // Stop the child before turn 2 persists any result. The registry stop
-    // reaches the loop as well as the turn, so the turn is interrupted rather
-    // than delivered as a cancelled completion.
-    const stopped = session.runs.kill(runId);
-    expect(stopped.accepted()).toBe(true);
-    const stopSettlement = Effect.runPromise(stopped.settlement);
-    releaseTurn2(new Error('interrupted before result persistence'));
-    await stopSettlement;
-    await waitForClaimRelease(runId);
+  it.live(
+    'does not expose turn 1 as current when an accepted turn 2 is interrupted',
+    () =>
+      Effect.gen(function* () {
+        let releaseTurn2: (err: unknown) => void = () => {};
+        const turn2Gate = new Promise<never>((_, reject) => {
+          releaseTurn2 = reject;
+        });
+        void turn2Gate.catch(() => {});
+        const { runId, parentContext } = yield* Effect.promise(() =>
+          launchWaitingChild({
+            parentTurns: [
+              { text: 'Parent ready.' },
+              { text: 'Parent received result A.' },
+            ],
+            childTurns: [{ text: 'Result A.' }, 'hang'],
+            childGate: turn2Gate,
+          }),
+        );
+        yield* Effect.promise(() => waitForPersistedResult(runId, 'Result A.'));
+        yield* Effect.promise(() => waitForCompletedResumes(1));
 
-    // Turn 1 stays the latest completed turn; turn 2 remains on record as
-    // the interrupted active turn instead of turn 1 posing as current.
-    const finalState = await Effect.runPromise(
-      readChildTurnState(session, runId),
-    );
-    expect(finalState.lastCompleted).toEqual(completed1);
-    expect(finalState.active).not.toBeNull();
-    await expect(
-      Effect.runPromise(getRunRecords(session, runId).readResultMeta()),
-    ).resolves.toMatchObject({
-      output: { response: 'Result A.' },
-    });
-    // How the run ended is the `run.end` row's fact, not the manifest's: the
-    // stop cancelled the run while turn 1's output stands as its latest.
-    await expect(
-      Effect.runPromise(getRunRecords(session, runId).readRunEnd()),
-    ).resolves.toMatchObject({ outcome: RUN_OUTCOME.CANCELLED });
+        const completed1 = (yield* readChildTurnState(session, runId))
+          .lastCompleted;
+        expect(completed1).not.toBeNull();
 
-    // /report and /result distinguish the interrupted turn from the latest
-    // completed one.
-    const executionToolLayer = nativeToolTestLayer({
-      run: {
-        runId: PARENT_RUN_ID,
-        session,
-        toolPolicy: {
-          approvalPromptsUnavailable: false,
-          runtimeUnavailableTools: [],
-        },
-      },
-    });
-    const reportView = await Effect.runPromise(
-      new ExecutionsTool()
-        .call({ path: `/executions/${runId}/report` })
-        .pipe(Effect.provide(executionToolLayer)),
-    );
-    expect(reportView.status).toBe('executed');
-    expect(reportView.output).toContain('Result A.');
-    expect(reportView.output).toContain('interrupted');
-    const resultView = await Effect.runPromise(
-      new ExecutionsTool()
-        .call({ path: `/executions/${runId}/result` })
-        .pipe(Effect.provide(executionToolLayer)),
-    );
-    expect(resultView.status).toBe('executed');
-    // /result is the machine-readable chaining endpoint: the attribution
-    // rides inside the JSON, never as prefixed prose.
-    if (!resultView.output) throw new Error('expected /result output');
-    const parsed = JSON.parse(resultView.output);
-    expect(parsed.turnAttribution).toContain('interrupted');
-    expect(parsed.output.response).toBe('Result A.');
-  }, 30_000);
+        // Accept a follow-up: the loop runs turn 2, which hangs mid-model-call.
+        yield* Effect.promise(() =>
+          queueSecondAssertionFollowUp(parentContext, runId),
+        );
+
+        // Turn 2 was accepted: a pending-turn record marks it active, while the
+        // persisted result still belongs to the latest completed turn (turn 1).
+        yield* Effect.promise(() =>
+          vi.waitFor(
+            async () => {
+              const state = await Effect.runPromise(
+                readChildTurnState(session, runId),
+              );
+              expect(state.active).not.toBeNull();
+              expect(state.active).not.toEqual(completed1);
+              expect(state.lastCompleted).toEqual(completed1);
+            },
+            { timeout: 10_000 },
+          ),
+        );
+        expect(
+          yield* getRunRecords(session, runId).readResultMeta(),
+        ).toMatchObject({
+          output: { response: 'Result A.' },
+        });
+
+        // Stop the child before turn 2 persists any result. The registry stop
+        // reaches the loop as well as the turn, so the turn is interrupted rather
+        // than delivered as a cancelled completion.
+        const stopped = session.runs.kill(runId);
+        expect(stopped.accepted()).toBe(true);
+        const stopFiber = yield* Effect.forkChild(stopped.settlement, {
+          startImmediately: true,
+        });
+        releaseTurn2(new Error('interrupted before result persistence'));
+        yield* Fiber.join(stopFiber);
+        yield* Effect.promise(() => waitForClaimRelease(runId));
+
+        // Turn 1 stays the latest completed turn; turn 2 remains on record as
+        // the interrupted active turn instead of turn 1 posing as current.
+        const finalState = yield* readChildTurnState(session, runId);
+        expect(finalState.lastCompleted).toEqual(completed1);
+        expect(finalState.active).not.toBeNull();
+        expect(
+          yield* getRunRecords(session, runId).readResultMeta(),
+        ).toMatchObject({
+          output: { response: 'Result A.' },
+        });
+        // How the run ended is the `run.end` row's fact, not the manifest's: the
+        // stop cancelled the run while turn 1's output stands as its latest.
+        expect(yield* getRunRecords(session, runId).readRunEnd()).toMatchObject(
+          { outcome: RUN_OUTCOME.CANCELLED },
+        );
+
+        // /report and /result distinguish the interrupted turn from the latest
+        // completed one.
+        const executionToolLayer = nativeToolTestLayer({
+          run: {
+            runId: PARENT_RUN_ID,
+            session,
+            toolPolicy: {
+              approvalPromptsUnavailable: false,
+              runtimeUnavailableTools: [],
+            },
+          },
+        });
+        const reportView = yield* new ExecutionsTool()
+          .call({ path: `/executions/${runId}/report` })
+          .pipe(Effect.provide(executionToolLayer));
+        expect(reportView.status).toBe('executed');
+        expect(reportView.output).toContain('Result A.');
+        expect(reportView.output).toContain('interrupted');
+        const resultView = yield* new ExecutionsTool()
+          .call({ path: `/executions/${runId}/result` })
+          .pipe(Effect.provide(executionToolLayer));
+        expect(resultView.status).toBe('executed');
+        // /result is the machine-readable chaining endpoint: the attribution
+        // rides inside the JSON, never as prefixed prose.
+        if (!resultView.output) throw new Error('expected /result output');
+        const parsed = JSON.parse(resultView.output);
+        expect(parsed.turnAttribution).toContain('interrupted');
+        expect(parsed.output.response).toBe('Result A.');
+      }),
+    30_000,
+  );
 });

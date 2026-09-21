@@ -790,75 +790,77 @@ describe('NativeSubagentStrategy', () => {
           agentName: params.agentName,
           strategy,
         }).pipe(Effect.forkChild);
-        try {
-          yield* Queue.take(deliveries);
-          expect(mocks.submitFollowUp).toHaveBeenCalledTimes(1);
+        yield* Effect.addFinalizer(() =>
+          Effect.gen(function* () {
+            // The test handle has no provider. Release it and interrupt the real
+            // child activation, then join the loop before clearing its session.
+            session.runs.untrack(childRunId);
+            yield* session.runs.kill(childRunId).settlement;
+            yield* Fiber.join(completion);
+            session.followUps.terminalize(childRunId);
+          }).pipe(Effect.orDie),
+        );
 
-          expect(
-            yield* session.followUps.submit(
-              childRunId,
-              {
-                text: 'Also state exactly where finiteness is used.',
-                origin: 'user',
-              },
-              'live_owner',
-            ),
-          ).toEqual({ kind: 'queued' });
+        yield* Queue.take(deliveries);
+        expect(mocks.submitFollowUp).toHaveBeenCalledTimes(1);
 
-          yield* Queue.take(deliveries);
-          expect(mocks.resumeToolUseTurn).toHaveBeenCalledTimes(1);
-          expect(mocks.submitFollowUp).toHaveBeenCalledTimes(2);
+        expect(
+          yield* session.followUps.submit(
+            childRunId,
+            {
+              text: 'Also state exactly where finiteness is used.',
+              origin: 'user',
+            },
+            'live_owner',
+          ),
+        ).toEqual({ kind: 'queued' });
 
-          expect(
-            yield* session.followUps.submit(
-              childRunId,
-              {
-                text: 'Now give the shortest equivalent statement.',
-                origin: 'user',
-              },
-              'live_owner',
-            ),
-          ).toEqual({ kind: 'queued' });
+        yield* Queue.take(deliveries);
+        expect(mocks.resumeToolUseTurn).toHaveBeenCalledTimes(1);
+        expect(mocks.submitFollowUp).toHaveBeenCalledTimes(2);
 
-          yield* Queue.take(deliveries);
-          expect(mocks.resumeToolUseTurn).toHaveBeenCalledTimes(2);
-          expect(mocks.submitFollowUp).toHaveBeenCalledTimes(3);
+        expect(
+          yield* session.followUps.submit(
+            childRunId,
+            {
+              text: 'Now give the shortest equivalent statement.',
+              origin: 'user',
+            },
+            'live_owner',
+          ),
+        ).toEqual({ kind: 'queued' });
 
-          expect(mocks.resumeToolUseTurn).toHaveBeenCalledTimes(2);
-          // The turn is handed the run and its persisted config; the
-          // snapshot is read once inside the turn, under its run lease.
-          const identity = { runId: childRunId, agentConfig: config };
-          expect(
-            mocks.resumeToolUseTurn.mock.calls.map((call) => call[0]),
-          ).toEqual([identity, identity]);
-          expect(taken).toEqual([
-            [
-              {
-                text: 'Also state exactly where finiteness is used.',
-                origin: 'user',
-              },
-            ],
-            [
-              {
-                text: 'Now give the shortest equivalent statement.',
-                origin: 'user',
-              },
-            ],
-          ]);
-          yield* session.settlePublications();
-          expect(session.runView(childRunId)?.status).toBe(RUN_PHASE.WAITING);
-          const resumedDeliveries = mocks.submitFollowUp.mock.calls.filter(
-            ([, followUp]) => followUp.text.includes('follow-up response'),
-          );
-          expect(resumedDeliveries).toHaveLength(2);
-        } finally {
-          // The test handle has no provider. Release it and interrupt the real
-          // child activation, then join the loop before clearing its session.
-          session.runs.untrack(childRunId);
-          yield* session.runs.kill(childRunId).settlement;
-          yield* Fiber.join(completion);
-          session.followUps.terminalize(childRunId);
-        }
+        yield* Queue.take(deliveries);
+        expect(mocks.resumeToolUseTurn).toHaveBeenCalledTimes(2);
+        expect(mocks.submitFollowUp).toHaveBeenCalledTimes(3);
+
+        expect(mocks.resumeToolUseTurn).toHaveBeenCalledTimes(2);
+        // The turn is handed the run and its persisted config; the
+        // snapshot is read once inside the turn, under its run lease.
+        const identity = { runId: childRunId, agentConfig: config };
+        expect(
+          mocks.resumeToolUseTurn.mock.calls.map((call) => call[0]),
+        ).toEqual([identity, identity]);
+        expect(taken).toEqual([
+          [
+            {
+              text: 'Also state exactly where finiteness is used.',
+              origin: 'user',
+            },
+          ],
+          [
+            {
+              text: 'Now give the shortest equivalent statement.',
+              origin: 'user',
+            },
+          ],
+        ]);
+        yield* session.settlePublications();
+        expect(session.runView(childRunId)?.status).toBe(RUN_PHASE.WAITING);
+        const resumedDeliveries = mocks.submitFollowUp.mock.calls.filter(
+          ([, followUp]) => followUp.text.includes('follow-up response'),
+        );
+        expect(resumedDeliveries).toHaveLength(2);
       }),
   );
 
@@ -931,22 +933,22 @@ describe('NativeSubagentStrategy', () => {
         // terminal turn before ever consulting `runTurn`.
         expect(strategy.runTurn).toBeDefined();
 
-        try {
-          yield* startChildRunLoop({
-            session: params.session,
-            parentRunId,
-            runId: childRunId,
-            agentName: params.agentName,
-            strategy,
-          });
+        yield* Effect.addFinalizer(() =>
+          Effect.sync(() => session.followUps.terminalize(childRunId)),
+        );
 
-          expect(mocks.submitFollowUp).toHaveBeenCalledTimes(1);
-          expect(session.followUps.hasLiveOwner(childRunId)).toBe(false);
+        yield* startChildRunLoop({
+          session: params.session,
+          parentRunId,
+          runId: childRunId,
+          agentName: params.agentName,
+          strategy,
+        });
 
-          expect(mocks.resumeToolUseTurn).not.toHaveBeenCalled();
-        } finally {
-          session.followUps.terminalize(childRunId);
-        }
+        expect(mocks.submitFollowUp).toHaveBeenCalledTimes(1);
+        expect(session.followUps.hasLiveOwner(childRunId)).toBe(false);
+
+        expect(mocks.resumeToolUseTurn).not.toHaveBeenCalled();
       }),
   );
 });

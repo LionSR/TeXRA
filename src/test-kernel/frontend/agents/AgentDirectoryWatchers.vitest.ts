@@ -1,9 +1,11 @@
 // Third-party imports
-import { Effect } from 'effect';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { it } from '@effect/vitest';
+import { Effect, Fiber } from 'effect';
+import { beforeEach, describe, expect, vi } from 'vitest';
 
 // Type imports
 import type { AgentDirectoryEntry } from '@agent/index';
+import { withProcessServices } from '@platform/processRuntime';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import type * as vscode from 'vscode';
@@ -183,58 +185,89 @@ describe('agent directory watcher rebuilds', () => {
     return firstRead;
   }
 
-  it('builds the watcher set once for rebuilds racing the same directory read', async () => {
-    const firstRead = parkFirstRead(directoryList('/agents/builtin'));
+  it.live(
+    'builds the watcher set once for rebuilds racing the same directory read',
+    () =>
+      Effect.gen(function* () {
+        const firstRead = parkFirstRead(directoryList('/agents/builtin'));
 
-    subscribe();
-    const refreshed = agentDirectories.refreshAfterDirChange();
+        subscribe();
+        const refreshed = yield* Effect.forkChild(
+          withProcessServices(
+            testRuntime(),
+            agentDirectories.refreshAfterDirChange(),
+          ),
+          { startImmediately: true },
+        );
 
-    firstRead.resolve(directoryList('/agents/builtin'));
-    await refreshed;
-    await settle();
+        firstRead.resolve(directoryList('/agents/builtin'));
+        yield* Fiber.join(refreshed);
+        yield* Effect.promise(() => settle());
 
-    expect(mocks.watchedDirectories).toEqual(['/agents/builtin']);
-  });
+        expect(mocks.watchedDirectories).toEqual(['/agents/builtin']);
+      }),
+  );
 
-  it('rebuilds for a directory change raised while a rebuild is already running', async () => {
-    const firstRead = parkFirstRead(directoryList('/agents/custom'));
+  it.live(
+    'rebuilds for a directory change raised while a rebuild is already running',
+    () =>
+      Effect.gen(function* () {
+        const firstRead = parkFirstRead(directoryList('/agents/custom'));
 
-    subscribe();
+        subscribe();
 
-    // The settings view changes the custom agent directory while the first
-    // read is still in flight: the change must not be dropped.
-    const refreshed = agentDirectories.refreshAfterDirChange();
-    firstRead.resolve(directoryList('/agents/builtin'));
-    await refreshed;
-    await settle();
+        // The settings view changes the custom agent directory while the first
+        // read is still in flight: the change must not be dropped.
+        const refreshed = yield* Effect.forkChild(
+          withProcessServices(
+            testRuntime(),
+            agentDirectories.refreshAfterDirChange(),
+          ),
+          { startImmediately: true },
+        );
+        firstRead.resolve(directoryList('/agents/builtin'));
+        yield* Fiber.join(refreshed);
+        yield* Effect.promise(() => settle());
 
-    expect(mocks.watchedDirectories).toEqual([
-      '/agents/builtin',
-      '/agents/custom',
-    ]);
-  });
+        expect(mocks.watchedDirectories).toEqual([
+          '/agents/builtin',
+          '/agents/custom',
+        ]);
+      }),
+  );
 
-  it('settles a queued rebuild when the last subscription is disposed first', async () => {
-    const firstRead = parkFirstRead(directoryList('/agents/custom'));
+  it.live(
+    'settles a queued rebuild when the last subscription is disposed first',
+    () =>
+      Effect.gen(function* () {
+        const firstRead = parkFirstRead(directoryList('/agents/custom'));
 
-    const handle = subscribe();
+        const handle = subscribe();
 
-    // The settings view awaits a rebuild that is still queued behind the
-    // in-flight one when the sidebar drops its last subscription.
-    let refreshSettled = false;
-    const refreshed = agentDirectories.refreshAfterDirChange().then(() => {
-      refreshSettled = true;
-    });
+        // The settings view awaits a rebuild that is still queued behind the
+        // in-flight one when the sidebar drops its last subscription.
+        let refreshSettled = false;
+        const refreshed = yield* Effect.forkChild(
+          withProcessServices(
+            testRuntime(),
+            agentDirectories.refreshAfterDirChange(),
+          ),
+          { startImmediately: true },
+        );
+        refreshed.addObserver(() => {
+          refreshSettled = true;
+        });
 
-    handle.dispose();
-    subscription = undefined;
-    firstRead.resolve(directoryList('/agents/builtin'));
-    await settle();
+        handle.dispose();
+        subscription = undefined;
+        firstRead.resolve(directoryList('/agents/builtin'));
+        yield* Effect.promise(() => settle());
 
-    expect(refreshSettled).toBe(true);
-    await refreshed;
-    expect(mocks.watchedDirectories).toEqual([]);
-  });
+        expect(refreshSettled).toBe(true);
+        yield* Fiber.join(refreshed);
+        expect(mocks.watchedDirectories).toEqual([]);
+      }),
+  );
 
   it('disposes watchers built after the last subscription is removed', async () => {
     const scan = createDeferred<void>();

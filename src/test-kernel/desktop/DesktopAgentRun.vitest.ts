@@ -2,8 +2,9 @@
 import '@test/support/sessionGraphTestSetup';
 
 // Third-party imports
-import { Effect } from 'effect';
-import { describe, expect, it, onTestFinished, vi } from 'vitest';
+import { it } from '@effect/vitest';
+import { Effect, Fiber } from 'effect';
+import { describe, expect, onTestFinished, vi } from 'vitest';
 
 // Local imports
 import { ToolUseAgentConfigSchema } from '@agent/core/definition/AgentConfig';
@@ -42,54 +43,57 @@ describe('desktop agent run completion hook', () => {
   // session.onResult fires at run.end inside finalizeTerminal, before
   // AgentRunLifecycle writes firstRunDone; the hook must wait for the
   // awaited launch to settle.
-  it('fires after the awaited launch settles, not from run.end', async () => {
-    const session = createTestSession();
-    const onRunCompleted = vi.fn();
-    const host = createStubDesktopAgentRunHost();
-    let resolveLaunch!: () => void;
-    const launchSettled = new Promise<void>((resolve) => {
-      resolveLaunch = resolve;
-    });
-    const launch = vi
-      .spyOn(DesktopAgentLaunch, 'launchDesktopAgent')
-      .mockReturnValue(Effect.promise(() => launchSettled));
-    onTestFinished(() => {
-      launch.mockRestore();
-    });
-    const run = createDesktopAgentRun({
-      host,
-      toolEditPreview: {
-        openPath: host.openPath,
-        openBuildDisplay: host.openBuildDisplay,
-        openDiff: host.openDiff,
-        closeDiff: () => Effect.void,
-      },
-      session,
-      runtime: testRuntime(),
-      showAgentConfigBanner: () => undefined,
-      onRunCompleted,
-    });
-    onTestFinished(async () => {
-      run.dispose();
-      await testRuntime().runPromise(session.dispose());
-    });
+  it.effect('fires after the awaited launch settles, not from run.end', () =>
+    Effect.gen(function* () {
+      const session = createTestSession();
+      const onRunCompleted = vi.fn();
+      const host = createStubDesktopAgentRunHost();
+      let resolveLaunch!: () => void;
+      const launchSettled = new Promise<void>((resolve) => {
+        resolveLaunch = resolve;
+      });
+      const launch = vi
+        .spyOn(DesktopAgentLaunch, 'launchDesktopAgent')
+        .mockReturnValue(Effect.promise(() => launchSettled));
+      onTestFinished(() => {
+        launch.mockRestore();
+      });
+      const run = createDesktopAgentRun({
+        host,
+        toolEditPreview: {
+          openPath: host.openPath,
+          openBuildDisplay: host.openBuildDisplay,
+          openDiff: host.openDiff,
+          closeDiff: () => Effect.void,
+        },
+        session,
+        runtime: testRuntime(),
+        showAgentConfigBanner: () => undefined,
+        onRunCompleted,
+      });
+      onTestFinished(async () => {
+        run.dispose();
+        await testRuntime().runPromise(session.dispose());
+      });
 
-    const settled = testRuntime().runPromise(
-      run.runValidated({
-        config: ToolUseAgentConfigSchema.parse({
-          agent: 'proofreader',
-          model: 'deepseekproT',
-          agentCategory: AgentCategory.ToolUse,
+      const fiber = yield* Effect.forkChild(
+        run.runValidated({
+          config: ToolUseAgentConfigSchema.parse({
+            agent: 'proofreader',
+            model: 'deepseekproT',
+            agentCategory: AgentCategory.ToolUse,
+          }),
         }),
-      }),
-    );
-    const completedRun = publishTestRunStart(session, generateRunId());
-    session.publish([completedRunEnd(completedRun)]);
-    await testRuntime().runPromise(session.settlePublications());
-    expect(onRunCompleted).not.toHaveBeenCalled();
+        { startImmediately: true },
+      );
+      const completedRun = publishTestRunStart(session, generateRunId());
+      session.publish([completedRunEnd(completedRun)]);
+      yield* session.settlePublications();
+      expect(onRunCompleted).not.toHaveBeenCalled();
 
-    resolveLaunch();
-    await settled;
-    expect(onRunCompleted).toHaveBeenCalledOnce();
-  });
+      resolveLaunch();
+      yield* Fiber.join(fiber);
+      expect(onRunCompleted).toHaveBeenCalledOnce();
+    }),
+  );
 });

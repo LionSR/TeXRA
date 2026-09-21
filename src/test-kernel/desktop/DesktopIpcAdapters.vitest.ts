@@ -1,6 +1,8 @@
-import { Effect } from 'effect';
-import { describe, expect, it, vi } from 'vitest';
+import { it } from '@effect/vitest';
+import { Effect, Fiber } from 'effect';
+import { describe, expect, vi } from 'vitest';
 
+import { withProcessServices } from '@platform/processRuntime';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { testRuntime } from '@test/support/testProcessRuntime';
@@ -124,147 +126,193 @@ describe('desktop IPC adapters', () => {
     expect(postToRenderer).not.toHaveBeenCalled();
   });
 
-  it('persists first-run walkthrough dismissal in the onboarding adapter', async () => {
-    const { dismissedStateKey, onboarding, postToRenderer, runtime, update } =
-      await createOnboardingHarness();
+  it.effect(
+    'persists first-run walkthrough dismissal in the onboarding adapter',
+    () =>
+      Effect.gen(function* () {
+        const {
+          dismissedStateKey,
+          onboarding,
+          postToRenderer,
+          runtime,
+          update,
+        } = yield* Effect.promise(() => createOnboardingHarness());
 
-    await runtime.runPromise(onboarding.refreshOnboardingFunnel());
-    // The refresh is serialized through a promise chain (concurrency guard), so
-    // drain microtasks before asserting the derived state.
-    await flushAsync();
-    // Fresh install with no credential: State 0 (welcome card).
-    expectFunnelState(onboarding, 'needs-credential');
-    postToRenderer.mockClear();
+        yield* withProcessServices(
+          runtime,
+          onboarding.refreshOnboardingFunnel(),
+        );
+        // The refresh is serialized through a promise chain (concurrency guard), so
+        // drain microtasks before asserting the derived state.
+        yield* Effect.promise(() => flushAsync());
+        // Fresh install with no credential: State 0 (welcome card).
+        expectFunnelState(onboarding, 'needs-credential');
+        postToRenderer.mockClear();
 
-    expect(
-      onboarding.handleMessage({ command: 'desktop:requestOnboarding' }),
-    ).toBe(true);
-    expect(postToRenderer).toHaveBeenLastCalledWith({
-      command: 'desktop:setOnboarding',
-      shouldShow: true,
-    });
+        expect(
+          onboarding.handleMessage({ command: 'desktop:requestOnboarding' }),
+        ).toBe(true);
+        expect(postToRenderer).toHaveBeenLastCalledWith({
+          command: 'desktop:setOnboarding',
+          shouldShow: true,
+        });
 
-    expect(
-      onboarding.handleMessage({ command: 'desktop:dismissOnboarding' }),
-    ).toBe(true);
-    await Promise.resolve();
-    expect(update).toHaveBeenCalledWith(dismissedStateKey, true);
-    expect(postToRenderer).toHaveBeenLastCalledWith({
-      command: 'desktop:setOnboarding',
-      shouldShow: false,
-    });
+        expect(
+          onboarding.handleMessage({ command: 'desktop:dismissOnboarding' }),
+        ).toBe(true);
+        yield* Effect.promise(() => Promise.resolve());
+        expect(update).toHaveBeenCalledWith(dismissedStateKey, true);
+        expect(postToRenderer).toHaveBeenLastCalledWith({
+          command: 'desktop:setOnboarding',
+          shouldShow: false,
+        });
 
-    expect(
-      onboarding.handleMessage({ command: 'desktop:requestOnboarding' }),
-    ).toBe(true);
-    expect(postToRenderer).toHaveBeenLastCalledWith({
-      command: 'desktop:setOnboarding',
-      shouldShow: false,
-    });
+        expect(
+          onboarding.handleMessage({ command: 'desktop:requestOnboarding' }),
+        ).toBe(true);
+        expect(postToRenderer).toHaveBeenLastCalledWith({
+          command: 'desktop:setOnboarding',
+          shouldShow: false,
+        });
 
-    expect(
-      onboarding.handleMessage({ command: 'desktop:showOnboarding' }),
-    ).toBe(false);
+        expect(
+          onboarding.handleMessage({ command: 'desktop:showOnboarding' }),
+        ).toBe(false);
 
-    postToRenderer.mockClear();
-    await runtime.runPromise(onboarding.skipOnboarding());
-    // The skip persists the declined flag then refreshes through the serialized
-    // chain, so drain microtasks before asserting.
-    await flushAsync();
-    expect(update).toHaveBeenLastCalledWith(
-      GlobalStateKey.ONBOARDING_DECLINED,
-      true,
-    );
-    expectFunnelState(onboarding, 'done');
-  });
+        postToRenderer.mockClear();
+        yield* withProcessServices(runtime, onboarding.skipOnboarding());
+        // The skip persists the declined flag then refreshes through the serialized
+        // chain, so drain microtasks before asserting.
+        yield* Effect.promise(() => flushAsync());
+        expect(update).toHaveBeenLastCalledWith(
+          GlobalStateKey.ONBOARDING_DECLINED,
+          true,
+        );
+        expectFunnelState(onboarding, 'done');
+      }),
+  );
 
-  it('derives State 1 (setup) when hasCredential is true on fresh install', async () => {
-    const { onboarding, runtime } = await createOnboardingHarness({
-      hasCredential: () => Effect.succeed(true),
-    });
-
-    await runtime.runPromise(onboarding.refreshOnboardingFunnel());
-    await flushAsync();
-    // Credential present, firstRunDone not set: State 1 (setup card).
-    expectFunnelState(onboarding, 'setup');
-  });
-
-  it('derives State 2 (done) for veterans with firstRunDone set', async () => {
-    const { onboarding, runtime } = await createOnboardingHarness({
-      seed: { [GlobalStateKey.ONBOARDING_FIRST_RUN_DONE]: true },
-      hasCredential: () => Effect.succeed(true),
-    });
-
-    await runtime.runPromise(onboarding.refreshOnboardingFunnel());
-    await flushAsync();
-    // Veteran with firstRunDone set: State 2 (done), no onboarding UI shown.
-    expectFunnelState(onboarding, 'done');
-  });
-
-  it('handles skipSetup by setting firstRunDone and deriving done', async () => {
-    const { onboarding, runtime, update } = await createOnboardingHarness({
-      hasCredential: () => Effect.succeed(true),
-    });
-
-    await runtime.runPromise(onboarding.refreshOnboardingFunnel());
-    await flushAsync();
-    expectFunnelState(onboarding, 'setup');
-    update.mockClear();
-
-    await runtime.runPromise(onboarding.skipSetup());
-    await flushAsync();
-    expect(update).toHaveBeenCalledWith(
-      GlobalStateKey.ONBOARDING_FIRST_RUN_DONE,
-      true,
-    );
-    expectFunnelState(onboarding, 'done');
-  });
-
-  it('runs the real kickoff path on runSetup and refreshes after', async () => {
-    const kickoffSetup = vi.fn(() => Effect.void);
-    const { onboarding, runtime } = await createOnboardingHarness({
-      hasCredential: () => Effect.succeed(true),
-      kickoffSetup,
-    });
-
-    await runtime.runPromise(onboarding.runSetup());
-    await flushAsync();
-
-    // Real run-setup path: `runSetup` kicks off the conversation, then
-    // recomputes the funnel, which enters State 1 (credential present).
-    expect(kickoffSetup).toHaveBeenCalledOnce();
-    expectFunnelState(onboarding, 'setup');
-  });
-
-  it('serializes overlapping funnel refreshes to one consistent terminal state', async () => {
-    // A credential probe that resolves on the next macrotask, so two refreshes
-    // started back-to-back genuinely overlap in flight. Serialized, the
-    // second refresh sees `previous === 'setup'` and reports no change. (The
-    // assertion pins the terminal state; it is not a strict interleave probe.)
-    let credentialPresent = false;
-    const hasCredential = vi.fn(() =>
-      Effect.promise(
-        () =>
-          new Promise<boolean>((resolve) => {
-            setTimeout(() => resolve(credentialPresent), 0);
+  it.effect(
+    'derives State 1 (setup) when hasCredential is true on fresh install',
+    () =>
+      Effect.gen(function* () {
+        const { onboarding, runtime } = yield* Effect.promise(() =>
+          createOnboardingHarness({
+            hasCredential: () => Effect.succeed(true),
           }),
-      ),
-    );
-    const { onboarding, runtime } = await createOnboardingHarness({
-      hasCredential,
-    });
-    const funnelStates: string[] = [];
-    onboarding.onFunnelChange((state) => funnelStates.push(state));
+        );
 
-    // Fire them overlapping (no await between); the credential lands before
-    // either probe resolves.
-    const first = runtime.runPromise(onboarding.refreshOnboardingFunnel());
-    credentialPresent = true;
-    const second = runtime.runPromise(onboarding.refreshOnboardingFunnel());
-    await Promise.all([first, second]);
-    await flushAsync();
+        yield* withProcessServices(
+          runtime,
+          onboarding.refreshOnboardingFunnel(),
+        );
+        yield* Effect.promise(() => flushAsync());
+        // Credential present, firstRunDone not set: State 1 (setup card).
+        expectFunnelState(onboarding, 'setup');
+      }),
+  );
 
-    // One change, to setup.
-    expect(funnelStates).toEqual(['setup']);
-  });
+  it.effect('derives State 2 (done) for veterans with firstRunDone set', () =>
+    Effect.gen(function* () {
+      const { onboarding, runtime } = yield* Effect.promise(() =>
+        createOnboardingHarness({
+          seed: { [GlobalStateKey.ONBOARDING_FIRST_RUN_DONE]: true },
+          hasCredential: () => Effect.succeed(true),
+        }),
+      );
+
+      yield* withProcessServices(runtime, onboarding.refreshOnboardingFunnel());
+      yield* Effect.promise(() => flushAsync());
+      // Veteran with firstRunDone set: State 2 (done), no onboarding UI shown.
+      expectFunnelState(onboarding, 'done');
+    }),
+  );
+
+  it.effect('handles skipSetup by setting firstRunDone and deriving done', () =>
+    Effect.gen(function* () {
+      const { onboarding, runtime, update } = yield* Effect.promise(() =>
+        createOnboardingHarness({
+          hasCredential: () => Effect.succeed(true),
+        }),
+      );
+
+      yield* withProcessServices(runtime, onboarding.refreshOnboardingFunnel());
+      yield* Effect.promise(() => flushAsync());
+      expectFunnelState(onboarding, 'setup');
+      update.mockClear();
+
+      yield* withProcessServices(runtime, onboarding.skipSetup());
+      yield* Effect.promise(() => flushAsync());
+      expect(update).toHaveBeenCalledWith(
+        GlobalStateKey.ONBOARDING_FIRST_RUN_DONE,
+        true,
+      );
+      expectFunnelState(onboarding, 'done');
+    }),
+  );
+
+  it.effect('runs the real kickoff path on runSetup and refreshes after', () =>
+    Effect.gen(function* () {
+      const kickoffSetup = vi.fn(() => Effect.void);
+      const { onboarding, runtime } = yield* Effect.promise(() =>
+        createOnboardingHarness({
+          hasCredential: () => Effect.succeed(true),
+          kickoffSetup,
+        }),
+      );
+
+      yield* withProcessServices(runtime, onboarding.runSetup());
+      yield* Effect.promise(() => flushAsync());
+
+      // Real run-setup path: `runSetup` kicks off the conversation, then
+      // recomputes the funnel, which enters State 1 (credential present).
+      expect(kickoffSetup).toHaveBeenCalledOnce();
+      expectFunnelState(onboarding, 'setup');
+    }),
+  );
+
+  it.effect(
+    'serializes overlapping funnel refreshes to one consistent terminal state',
+    () =>
+      Effect.gen(function* () {
+        // A credential probe that resolves on the next macrotask, so two refreshes
+        // started back-to-back genuinely overlap in flight. Serialized, the
+        // second refresh sees `previous === 'setup'` and reports no change. (The
+        // assertion pins the terminal state; it is not a strict interleave probe.)
+        let credentialPresent = false;
+        const hasCredential = vi.fn(() =>
+          Effect.promise(
+            () =>
+              new Promise<boolean>((resolve) => {
+                setTimeout(() => resolve(credentialPresent), 0);
+              }),
+          ),
+        );
+        const { onboarding, runtime } = yield* Effect.promise(() =>
+          createOnboardingHarness({
+            hasCredential,
+          }),
+        );
+        const funnelStates: string[] = [];
+        onboarding.onFunnelChange((state) => funnelStates.push(state));
+
+        // Fire them overlapping (no await between); the credential lands before
+        // either probe resolves.
+        const first = yield* Effect.forkChild(
+          withProcessServices(runtime, onboarding.refreshOnboardingFunnel()),
+          { startImmediately: true },
+        );
+        credentialPresent = true;
+        const second = yield* Effect.forkChild(
+          withProcessServices(runtime, onboarding.refreshOnboardingFunnel()),
+          { startImmediately: true },
+        );
+        yield* Fiber.join(first);
+        yield* Fiber.join(second);
+        yield* Effect.promise(() => flushAsync());
+
+        // One change, to setup.
+        expect(funnelStates).toEqual(['setup']);
+      }),
+  );
 });

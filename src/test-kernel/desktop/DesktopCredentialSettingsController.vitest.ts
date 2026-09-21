@@ -1,6 +1,7 @@
 // Third-party imports
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports
 import { LoopbackTransportUnavailableError } from '@auth/oauth/loopbackLogin';
@@ -10,6 +11,7 @@ import { ExternalOpenFailed } from '@hosts/uiHosts';
 import * as logger from '@logger/logUtils';
 import { apiKeySecretName } from '@model/apiProviders';
 import type { ModelOptionStores } from '@model/computeModelOptions';
+import { withProcessServices } from '@platform/processRuntime';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { ModelOptionData } from '@shared/schemas';
 import { assertSupported } from '@shared/utils/dispatcher';
@@ -251,88 +253,112 @@ describe('DefaultDesktopCredentialSettingsController', () => {
     vi.clearAllMocks();
   });
 
-  it('preserves a provider key when removal is cancelled', async () => {
-    const secretName = apiKeySecretName('openai');
-    const secrets = new FakeSecrets({ [secretName]: 'sk-test' });
-    const deleteSpy = vi.spyOn(secrets, 'delete');
-    const fixture = await createFixture({ secrets, confirmResult: false });
+  it.effect('preserves a provider key when removal is cancelled', () =>
+    Effect.gen(function* () {
+      const secretName = apiKeySecretName('openai');
+      const secrets = new FakeSecrets({ [secretName]: 'sk-test' });
+      const deleteSpy = vi.spyOn(secrets, 'delete');
+      const fixture = yield* Effect.promise(() =>
+        createFixture({ secrets, confirmResult: false }),
+      );
 
-    await assertSupported(fixture.controller.profileHandlers.removeProviderKey)(
-      {
-        command: SETTINGS_VIEW_COMMANDS.REMOVE_PROVIDER_KEY,
-        provider: 'openai',
-      },
-    );
+      yield* Effect.promise(async () => {
+        await assertSupported(
+          fixture.controller.profileHandlers.removeProviderKey,
+        )({
+          command: SETTINGS_VIEW_COMMANDS.REMOVE_PROVIDER_KEY,
+          provider: 'openai',
+        });
+      });
 
-    expect(fixture.confirms).toEqual([
-      'Remove the OpenAI API key? This cannot be undone.',
-    ]);
-    expect(deleteSpy).not.toHaveBeenCalled();
-    expect(await Effect.runPromise(secrets.get(secretName))).toBe('sk-test');
-    expect(fixture.onCredentialChanged).not.toHaveBeenCalled();
-  });
+      expect(fixture.confirms).toEqual([
+        'Remove the OpenAI API key? This cannot be undone.',
+      ]);
+      expect(deleteSpy).not.toHaveBeenCalled();
+      expect(yield* secrets.get(secretName)).toBe('sk-test');
+      expect(fixture.onCredentialChanged).not.toHaveBeenCalled();
+    }),
+  );
 
-  it('stores prompted keys before refreshing profile and model data', async () => {
-    const fixture = await createFixture({
-      promptInput: '  sk-google-secret  ',
-    });
+  it.effect(
+    'stores prompted keys before refreshing profile and model data',
+    () =>
+      Effect.gen(function* () {
+        const fixture = yield* Effect.promise(() =>
+          createFixture({
+            promptInput: '  sk-google-secret  ',
+          }),
+        );
 
-    await assertSupported(fixture.controller.profileHandlers.setProviderKey)({
-      command: SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY,
-      provider: 'google',
-    });
+        yield* Effect.promise(async () => {
+          await assertSupported(
+            fixture.controller.profileHandlers.setProviderKey,
+          )({
+            command: SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY,
+            provider: 'google',
+          });
+        });
 
-    expect(await Effect.runPromise(fixture.secrets.get('apiKey.google'))).toBe(
-      'sk-google-secret',
-    );
-    expect(fixture.infos).toEqual(['Google API key has been set']);
-    expect(
-      fixture.posted.findLast(
-        (message) =>
-          commandOf(message) === SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE,
-      ),
-    ).toMatchObject({
-      providerKeyStatuses: expect.arrayContaining([
-        expect.objectContaining({ provider: 'google', status: 'set' }),
-      ]),
-    });
-    expect(fixture.events).toEqual([
-      `render:${SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE}`,
-      `render:${SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION}`,
-      'modelOptions',
-      'credential',
-    ]);
-  });
+        expect(yield* fixture.secrets.get('apiKey.google')).toBe(
+          'sk-google-secret',
+        );
+        expect(fixture.infos).toEqual(['Google API key has been set']);
+        expect(
+          fixture.posted.findLast(
+            (message) =>
+              commandOf(message) === SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE,
+          ),
+        ).toMatchObject({
+          providerKeyStatuses: expect.arrayContaining([
+            expect.objectContaining({ provider: 'google', status: 'set' }),
+          ]),
+        });
+        expect(fixture.events).toEqual([
+          `render:${SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE}`,
+          `render:${SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION}`,
+          'modelOptions',
+          'credential',
+        ]);
+      }),
+  );
 
-  it('uses the shared key prompt and removes a confirmed key', async () => {
-    const secretName = apiKeySecretName('openai');
-    const secrets = new FakeSecrets({ [secretName]: 'old-key' });
-    const deleteSpy = vi.spyOn(secrets, 'delete');
-    const fixture = await createFixture({
-      secrets,
-      promptInput: '  replacement  ',
-    });
+  it.effect('uses the shared key prompt and removes a confirmed key', () =>
+    Effect.gen(function* () {
+      const secretName = apiKeySecretName('openai');
+      const secrets = new FakeSecrets({ [secretName]: 'old-key' });
+      const deleteSpy = vi.spyOn(secrets, 'delete');
+      const fixture = yield* Effect.promise(() =>
+        createFixture({
+          secrets,
+          promptInput: '  replacement  ',
+        }),
+      );
 
-    await assertSupported(fixture.controller.profileHandlers.setProviderKey)({
-      command: SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY,
-      provider: 'openai',
-    });
-    expect(await Effect.runPromise(secrets.get(secretName))).toBe(
-      'replacement',
-    );
+      yield* Effect.promise(async () => {
+        await assertSupported(
+          fixture.controller.profileHandlers.setProviderKey,
+        )({
+          command: SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY,
+          provider: 'openai',
+        });
+      });
+      expect(yield* secrets.get(secretName)).toBe('replacement');
 
-    await assertSupported(fixture.controller.profileHandlers.removeProviderKey)(
-      {
-        command: SETTINGS_VIEW_COMMANDS.REMOVE_PROVIDER_KEY,
-        provider: 'openai',
-      },
-    );
-    expect(deleteSpy).toHaveBeenCalledExactlyOnceWith(secretName);
-    expect(await Effect.runPromise(secrets.get(secretName))).toBeUndefined();
-    expect(fixture.confirms).toEqual([
-      'Remove the OpenAI API key? This cannot be undone.',
-    ]);
-  });
+      yield* Effect.promise(async () => {
+        await assertSupported(
+          fixture.controller.profileHandlers.removeProviderKey,
+        )({
+          command: SETTINGS_VIEW_COMMANDS.REMOVE_PROVIDER_KEY,
+          provider: 'openai',
+        });
+      });
+      expect(deleteSpy).toHaveBeenCalledExactlyOnceWith(secretName);
+      expect(yield* secrets.get(secretName)).toBeUndefined();
+      expect(fixture.confirms).toEqual([
+        'Remove the OpenAI API key? This cannot be undone.',
+      ]);
+    }),
+  );
 
   it.each([
     ['kimiCode', 'kimiCode'],
@@ -381,121 +407,146 @@ describe('DefaultDesktopCredentialSettingsController', () => {
     expect(fixture.infos).toEqual([]);
   });
 
-  it('refreshes ChatGPT preferences and reports authentication outcomes', async () => {
-    const fixture = await createFixture();
+  it.effect(
+    'refreshes ChatGPT preferences and reports authentication outcomes',
+    () =>
+      Effect.gen(function* () {
+        const fixture = yield* Effect.promise(() => createFixture());
 
-    await assertSupported(
-      fixture.controller.chatGptHandlers.setChatGptPreferSubscription,
-    )({
-      command: SETTINGS_VIEW_COMMANDS.SET_CHATGPT_PREFER_SUBSCRIPTION,
-      enabled: true,
-    });
-    // The stores travel with the write; the assertion pins the value.
-    expect(codexMocks.setPreferSubscription).toHaveBeenCalledWith(
-      expect.anything(),
-      true,
-    );
-    expect(fixture.onCredentialChanged).toHaveBeenCalledOnce();
-    expect(fixture.events.at(-1)).toBe('credential');
-    expect(fixture.events.slice(0, -1)).toEqual(
-      expect.arrayContaining([
-        `render:${SETTINGS_VIEW_COMMANDS.UPDATE_SUBSCRIPTION_AUTH_STATUS}`,
-        `render:${SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION}`,
-        'modelOptions',
-      ]),
-    );
-
-    await testRuntime().runPromise(fixture.controller.signInChatGpt());
-    expect(codexMocks.login).toHaveBeenCalledOnce();
-    expect(codexMocks.setPreferSubscription).toHaveBeenLastCalledWith(
-      expect.anything(),
-      true,
-    );
-    expect(fixture.infos).toContain(
-      'Signed in with ChatGPT as user@example.com.',
-    );
-
-    await assertSupported(fixture.controller.chatGptHandlers.signOutChatGpt)({
-      command: SETTINGS_VIEW_COMMANDS.SIGN_OUT_CHATGPT,
-    });
-    expect(codexMocks.signOut).toHaveBeenCalledOnce();
-    expect(fixture.infos).toContain('Signed out of ChatGPT.');
-
-    codexMocks.login.mockReturnValueOnce(
-      Effect.fail(new Error('authorization denied')),
-    );
-    await testRuntime().runPromise(fixture.controller.signInChatGpt());
-
-    expect(fixture.errors).toEqual([
-      'ChatGPT sign-in failed: authorization denied',
-    ]);
-    expect(fixture.onCredentialChanged).toHaveBeenCalledTimes(4);
-  });
-
-  it('falls back without reporting the browser-open failure twice and logs its cause', async () => {
-    const browserError = new Error('no browser handler');
-    const openExternal = vi.fn(() => Effect.void);
-    const openSubscriptionSignInUrl = vi.fn((url: string) =>
-      Effect.fail(
-        new ExternalOpenFailed({
-          kind: 'url',
-          target: url,
-          message: `The desktop could not open ${url} in the default browser.`,
-          cause: browserError,
-        }),
-      ),
-    );
-    const presentSubscriptionSignInUrl = vi.fn();
-    const presentSubscriptionDeviceCode = vi.fn();
-    const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {});
-    const fixture = await createFixture({
-      externalOpener: {
-        openExternal,
-        openSubscriptionSignInUrl,
-        presentSubscriptionSignInUrl,
-        presentSubscriptionDeviceCode,
-      },
-    });
-    codexMocks.login.mockImplementationOnce(({ openBrowser }) =>
-      openBrowser('https://auth.openai.com/authorize').pipe(
-        Effect.as({ email: 'loopback@example.com' }),
-      ),
-    );
-    codexMocks.loginWithDeviceCode.mockImplementationOnce(({ onPrompt }) =>
-      Effect.sync(() => {
-        onPrompt({
-          userCode: 'ABCD-EFGH',
-          verificationUrl: 'https://auth.openai.com/device',
+        yield* Effect.promise(async () => {
+          await assertSupported(
+            fixture.controller.chatGptHandlers.setChatGptPreferSubscription,
+          )({
+            command: SETTINGS_VIEW_COMMANDS.SET_CHATGPT_PREFER_SUBSCRIPTION,
+            enabled: true,
+          });
         });
-        return { email: 'device@example.com' };
+        // The stores travel with the write; the assertion pins the value.
+        expect(codexMocks.setPreferSubscription).toHaveBeenCalledWith(
+          expect.anything(),
+          true,
+        );
+        expect(fixture.onCredentialChanged).toHaveBeenCalledOnce();
+        expect(fixture.events.at(-1)).toBe('credential');
+        expect(fixture.events.slice(0, -1)).toEqual(
+          expect.arrayContaining([
+            `render:${SETTINGS_VIEW_COMMANDS.UPDATE_SUBSCRIPTION_AUTH_STATUS}`,
+            `render:${SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION}`,
+            'modelOptions',
+          ]),
+        );
+
+        yield* withProcessServices(
+          testRuntime(),
+          fixture.controller.signInChatGpt(),
+        );
+        expect(codexMocks.login).toHaveBeenCalledOnce();
+        expect(codexMocks.setPreferSubscription).toHaveBeenLastCalledWith(
+          expect.anything(),
+          true,
+        );
+        expect(fixture.infos).toContain(
+          'Signed in with ChatGPT as user@example.com.',
+        );
+
+        yield* Effect.promise(async () => {
+          await assertSupported(
+            fixture.controller.chatGptHandlers.signOutChatGpt,
+          )({
+            command: SETTINGS_VIEW_COMMANDS.SIGN_OUT_CHATGPT,
+          });
+        });
+        expect(codexMocks.signOut).toHaveBeenCalledOnce();
+        expect(fixture.infos).toContain('Signed out of ChatGPT.');
+
+        codexMocks.login.mockReturnValueOnce(
+          Effect.fail(new Error('authorization denied')),
+        );
+        yield* withProcessServices(
+          testRuntime(),
+          fixture.controller.signInChatGpt(),
+        );
+
+        expect(fixture.errors).toEqual([
+          'ChatGPT sign-in failed: authorization denied',
+        ]);
+        expect(fixture.onCredentialChanged).toHaveBeenCalledTimes(4);
       }),
-    );
+  );
 
-    await testRuntime().runPromise(fixture.controller.signInChatGpt());
+  it.effect(
+    'falls back without reporting the browser-open failure twice and logs its cause',
+    () =>
+      Effect.gen(function* () {
+        const browserError = new Error('no browser handler');
+        const openExternal = vi.fn(() => Effect.void);
+        const openSubscriptionSignInUrl = vi.fn((url: string) =>
+          Effect.fail(
+            new ExternalOpenFailed({
+              kind: 'url',
+              target: url,
+              message: `The desktop could not open ${url} in the default browser.`,
+              cause: browserError,
+            }),
+          ),
+        );
+        const presentSubscriptionSignInUrl = vi.fn();
+        const presentSubscriptionDeviceCode = vi.fn();
+        const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+        const fixture = yield* Effect.promise(() =>
+          createFixture({
+            externalOpener: {
+              openExternal,
+              openSubscriptionSignInUrl,
+              presentSubscriptionSignInUrl,
+              presentSubscriptionDeviceCode,
+            },
+          }),
+        );
+        codexMocks.login.mockImplementationOnce(({ openBrowser }) =>
+          openBrowser('https://auth.openai.com/authorize').pipe(
+            Effect.as({ email: 'loopback@example.com' }),
+          ),
+        );
+        codexMocks.loginWithDeviceCode.mockImplementationOnce(({ onPrompt }) =>
+          Effect.sync(() => {
+            onPrompt({
+              userCode: 'ABCD-EFGH',
+              verificationUrl: 'https://auth.openai.com/device',
+            });
+            return { email: 'device@example.com' };
+          }),
+        );
 
-    expect(openSubscriptionSignInUrl).toHaveBeenCalledExactlyOnceWith(
-      'https://auth.openai.com/authorize',
-    );
-    expect(openExternal).not.toHaveBeenCalled();
-    expect(presentSubscriptionSignInUrl).not.toHaveBeenCalled();
-    expect(presentSubscriptionDeviceCode).toHaveBeenCalledExactlyOnceWith(
-      {
-        userCode: 'ABCD-EFGH',
-        verificationUrl: 'https://auth.openai.com/device',
-      },
-      'ChatGPT',
-    );
-    expect(fixture.errors).toEqual([]);
-    expect(fixture.infos).toContain(
-      'Signed in with ChatGPT as device@example.com.',
-    );
-    expect(warnSpy).toHaveBeenCalledExactlyOnceWith(
-      'subscriptionProviders',
-      'ChatGPT browser sign-in is unavailable, falling back to a one-time device code: Could not open a browser for ChatGPT sign-in. Cause: no browser handler',
-      { data: expect.any(LoopbackTransportUnavailableError) },
-    );
-    const loggedError = warnSpy.mock.calls[0]?.[2]?.data;
-    expect(loggedError).toBeInstanceOf(LoopbackTransportUnavailableError);
-    expect((loggedError as Error).cause).toBe(browserError);
-  });
+        yield* withProcessServices(
+          testRuntime(),
+          fixture.controller.signInChatGpt(),
+        );
+
+        expect(openSubscriptionSignInUrl).toHaveBeenCalledExactlyOnceWith(
+          'https://auth.openai.com/authorize',
+        );
+        expect(openExternal).not.toHaveBeenCalled();
+        expect(presentSubscriptionSignInUrl).not.toHaveBeenCalled();
+        expect(presentSubscriptionDeviceCode).toHaveBeenCalledExactlyOnceWith(
+          {
+            userCode: 'ABCD-EFGH',
+            verificationUrl: 'https://auth.openai.com/device',
+          },
+          'ChatGPT',
+        );
+        expect(fixture.errors).toEqual([]);
+        expect(fixture.infos).toContain(
+          'Signed in with ChatGPT as device@example.com.',
+        );
+        expect(warnSpy).toHaveBeenCalledExactlyOnceWith(
+          'subscriptionProviders',
+          'ChatGPT browser sign-in is unavailable, falling back to a one-time device code: Could not open a browser for ChatGPT sign-in. Cause: no browser handler',
+          { data: expect.any(LoopbackTransportUnavailableError) },
+        );
+        const loggedError = warnSpy.mock.calls[0]?.[2]?.data;
+        expect(loggedError).toBeInstanceOf(LoopbackTransportUnavailableError);
+        expect((loggedError as Error).cause).toBe(browserError);
+      }),
+  );
 });

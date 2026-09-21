@@ -1,5 +1,6 @@
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 import { FakeSecrets } from '@test/support/FakePlatform';
 import {
@@ -46,7 +47,7 @@ afterEach(() => {
 });
 
 describe('getGitHubToken', () => {
-  it.each<TokenCase & { expected: string }>([
+  it.effect.each<TokenCase & { expected: string }>([
     {
       name: 'prefers GH_TOKEN over GITHUB_TOKEN from the secrets env port',
       secretsEnv: {
@@ -75,17 +76,19 @@ describe('getGitHubToken', () => {
       secretsEnv: { GH_TOKEN: 'gh-env-token' },
       expected: 'gh-env-token',
     },
-  ])('$name', async (tokenCase) => {
-    stubProcessEnv(tokenCase);
+  ])('$name', (tokenCase) =>
+    Effect.gen(function* () {
+      stubProcessEnv(tokenCase);
 
-    await expect(
-      Effect.runPromise(getGitHubToken(secretsFor(tokenCase))),
-    ).resolves.toBe(tokenCase.expected);
-  });
+      expect(yield* getGitHubToken(secretsFor(tokenCase))).toBe(
+        tokenCase.expected,
+      );
+    }),
+  );
 });
 
 describe('resolveGitHubTokenSource', () => {
-  it.each<TokenCase & { expected: 'secret' | 'env' | 'none' }>([
+  it.effect.each<TokenCase & { expected: 'secret' | 'env' | 'none' }>([
     {
       name: 'reports "secret" when a persisted token exists, even with env vars set',
       secret: 'gh-secret-token',
@@ -110,9 +113,11 @@ describe('resolveGitHubTokenSource', () => {
       secretsEnv: { GH_TOKEN: 'gh-env-token' },
       expected: 'env',
     },
-  ])('$name', async (tokenCase) => {
-    await expect(
-      Effect.runPromise(resolveGitHubTokenSource(secretsFor(tokenCase))),
-    ).resolves.toBe(tokenCase.expected);
-  });
+  ])('$name', (tokenCase) =>
+    Effect.gen(function* () {
+      expect(yield* resolveGitHubTokenSource(secretsFor(tokenCase))).toBe(
+        tokenCase.expected,
+      );
+    }),
+  );
 });

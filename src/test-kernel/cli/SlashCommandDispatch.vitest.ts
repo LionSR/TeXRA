@@ -1,5 +1,6 @@
 // Test composition imports
 
+import { it } from '@effect/vitest';
 import { Effect, Fiber } from 'effect';
 
 // Slash command run dispatch.
@@ -10,7 +11,6 @@ import {
   beforeEach,
   describe,
   expect,
-  it,
   vi,
   type MockInstance,
 } from 'vitest';
@@ -57,6 +57,7 @@ import * as cliProviderKeys from '@cli/chat/tui/hosts/cliProviderKeys';
 import * as supabaseAuth from '@cli/runtime/supabaseAuth';
 import { TuiSession } from '@cli/chat/tui/state/sessionRunState';
 import * as codexSubscription from '@model/codex/codexSubscription';
+import { withProcessServices } from '@platform/processRuntime';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import {
   AgentCategory,
@@ -245,21 +246,27 @@ function transcriptJson(): string {
   return JSON.stringify(notices.get());
 }
 
-async function expectFormOpens(
+function expectFormOpens(
   line: string,
   commandName: string,
   context: SlashCommandContext = createContext(),
-): Promise<void> {
-  expect(await dispatchSlash(line, context)).toBe(true);
-  expect(activeForm.get()?.commandName).toBe(commandName);
+): Effect.Effect<void, unknown> {
+  return Effect.gen(function* () {
+    expect(yield* dispatchSlash(line, context)).toBe(true);
+    expect(activeForm.get()?.commandName).toBe(commandName);
+  });
 }
 
-/** The dispatcher as the composer runs it: one program, one run edge. */
+/** The dispatcher as the composer runs it: one program on the process
+ *  services the composer threads in. */
 function dispatchSlash(
   line: string,
   context: SlashCommandContext = createContext(),
-): Promise<boolean> {
-  return services.runtime.runPromise(handleTuiSlashCommand(line, context));
+): Effect.Effect<boolean, unknown> {
+  return withProcessServices(
+    services.runtime,
+    handleTuiSlashCommand(line, context),
+  );
 }
 
 function silentOutput(): SlashCommandOutput {
@@ -288,6 +295,12 @@ function interruptibleProgram(): {
   };
 }
 
+/** Let a forked sign-in reach its never-ending program before the interrupt
+ *  lands: a few turns of the event loop cover the scheduler. */
+const started = Effect.promise(
+  () => new Promise<void>((resolve) => setTimeout(resolve, 0)),
+);
+
 function mockSignOuts(): {
   signOutSupabase: MockInstance<typeof supabaseAuth.signOutCliSupabase>;
   signOutChatGpt: MockInstance<typeof subscriptionLogin.signOutCliSubscription>;
@@ -314,627 +327,747 @@ function expectAccessStatusText(text: string | undefined): void {
 }
 
 describe('handleTuiSlashCommand', () => {
-  it('opens reference commands without leaving transcript rows', async () => {
-    registerBuiltinSlashCommands({ ...services });
-    const context = createContext();
+  it.effect('opens reference commands without leaving transcript rows', () =>
+    Effect.gen(function* () {
+      registerBuiltinSlashCommands({ ...services });
+      const context = createContext();
 
-    await dispatchSlash('/tools', context);
-    expect(localEntries()).toEqual([]);
+      yield* dispatchSlash('/tools', context);
+      expect(localEntries()).toEqual([]);
 
-    await dispatchSlash('/help', context);
-    expect(infoPane.get()).toMatchObject({ title: '/help' });
-    expect(infoPane.get()?.lines.join('\n')).toContain('**Keyboard**');
-    expect(localEntries()).toEqual([]);
+      yield* dispatchSlash('/help', context);
+      expect(infoPane.get()).toMatchObject({ title: '/help' });
+      expect(infoPane.get()?.lines.join('\n')).toContain('**Keyboard**');
+      expect(localEntries()).toEqual([]);
 
-    closeInfoPane();
-    await dispatchSlash('/goal', context);
-    expect(activeForm.get()).toMatchObject({ commandName: 'goal' });
-    expect(localEntries()).toEqual([]);
-  });
+      closeInfoPane();
+      yield* dispatchSlash('/goal', context);
+      expect(activeForm.get()).toMatchObject({ commandName: 'goal' });
+      expect(localEntries()).toEqual([]);
+    }),
+  );
 
-  it('opens a live work-plan reader for the focused stream', async () => {
-    registerBuiltinSlashCommands({ ...services });
-    const context = createContext();
+  it.effect('opens a live work-plan reader for the focused stream', () =>
+    Effect.gen(function* () {
+      registerBuiltinSlashCommands({ ...services });
+      const context = createContext();
 
-    await dispatchSlash('/plan', context);
-    expect(transientNotice.get()?.text).toBe('No focused session.');
+      yield* dispatchSlash('/plan', context);
+      expect(transientNotice.get()?.text).toBe('No focused session.');
 
-    const runId = 'plan-reader' as RunId;
-    ensureRun(runId);
-    activeRunId.set(runId);
-    await dispatchSlash('/plan', context);
-    expect(transientNotice.get()?.text).toBe(
-      'The focused session has no work plan.',
-    );
-
-    seedWorkPlan(runId, { objective: 'Check every case.' }, [
-      {
-        content: 'Check the base case',
-        activeForm: 'Checking the base case',
-        status: 'in_progress',
-      },
-    ]);
-    await dispatchSlash('/plan', context);
-    expect(foregroundReader.get()).toEqual({ kind: 'workPlan', runId });
-
-    activeRunId.set('another-stream' as RunId);
-    expect(foregroundReader.get()).toEqual({ kind: 'workPlan', runId });
-    expect(localEntries()).toEqual([]);
-    closeForegroundReader();
-  });
-
-  it('opens memory list and preview output in the reference pane', async () => {
-    vi.spyOn(memoryFileSystem, 'loadMemoryItems').mockReturnValue(
-      Effect.succeed([]),
-    );
-    vi.spyOn(memoryFileSystem, 'loadMemoryPreview').mockReturnValue(
-      Effect.succeed({
-        storagePath: 'memory/note.md',
-        lineCount: 1,
-        preview: 'Remember this.',
-      }),
-    );
-
-    const memoryRoots = {
-      workspace: undefined,
-      storage: 'storage',
-      globalStorage: 'globalStorage',
-    };
-    await services.runtime.runPromise(showCliMemoryList(memoryRoots));
-    expect(infoPane.get()).toEqual({
-      title: '/memory list',
-      lines: ['No memory files found.'],
-    });
-
-    await services.runtime.runPromise(
-      showCliMemoryPreview(memoryRoots, 'note.md'),
-    );
-    expect(infoPane.get()?.title).toBe('/memory list');
-    closeInfoPane();
-    expect(infoPane.get()).toMatchObject({ title: '/memory preview' });
-    expect(infoPane.get()?.lines).toContain('Remember this.');
-    expect(localEntries()).toEqual([]);
-  });
-
-  it('adds a lazy command echo before errors even under echo never', async () => {
-    registerSlashCommand({
-      name: 'unavailable',
-      description: 'Unavailable test command',
-      echo: 'never',
-    });
-
-    await dispatchSlash('/unavailable', createContext());
-
-    expect(localEntryPairs()).toEqual([
-      { kind: 'user', text: '/unavailable' },
-      {
-        kind: 'assistant',
-        text: '/unavailable is registered but is not available in this CLI view yet.',
-      },
-    ]);
-  });
-
-  it('threads deferred echo through fallback registered forms', async () => {
-    registerSlashCommand({
-      name: 'custom-form',
-      description: 'Custom form',
-      echo: 'ifPersists',
-      formComponent: () => null,
-    });
-
-    await dispatchSlash('/custom-form', createContext());
-    const form = activeForm.get()?.render(() => undefined, 20) as {
-      props?: { onPersist?: () => void };
-    };
-    expect(localEntries()).toEqual([]);
-
-    form.props?.onPersist?.();
-
-    expect(localEntryPairs()).toEqual([{ kind: 'user', text: '/custom-form' }]);
-  });
-
-  it('opens /models as the enable/disable catalog (not the active-model picker)', async () => {
-    registerBuiltinSlashCommands({ ...services });
-
-    await expectFormOpens('/models', 'models');
-  });
-
-  it('opens /model as the active-model picker', async () => {
-    registerBuiltinSlashCommands({ ...services });
-
-    await expectFormOpens('/model', 'model');
-  });
-
-  it('opens /approval status without an early transcript echo', async () => {
-    registerBuiltinSlashCommands({ ...services });
-
-    await expectFormOpens('/approval status', 'approval');
-
-    expect(localEntries()).toEqual([]);
-  });
-
-  it('opens the masked provider-key form through /key and /keys', async () => {
-    registerBuiltinSlashCommands({ ...services });
-    const context = createContext();
-
-    await expectFormOpens('/key', 'key', context);
-
-    activeForm.set(undefined);
-    await expectFormOpens('/keys', 'key', context);
-  });
-
-  it('discards inline key arguments without recording the secret', async () => {
-    registerBuiltinSlashCommands({ ...services });
-    const secret = 'sk-private-test-value';
-
-    await expectFormOpens(`/keys ${secret}`, 'key');
-
-    expect(JSON.stringify(activeForm.get())).not.toContain(secret);
-    expect(transientNotice.get()?.text).toContain(
-      'does not accept a key as an argument',
-    );
-    expect(transcriptJson()).not.toContain(secret);
-  });
-
-  it('keeps malformed and mistyped key commands out of the transcript', async () => {
-    registerBuiltinSlashCommands({ ...services });
-    const context = createContext();
-    const malformedSecrets = [
-      'sk-equals-private-value',
-      'sk-colon-private-value',
-      'sk-slash-private-value',
-      'sk-concatenated-private-value',
-      'sk-transposed-private-value',
-    ];
-    const typoSecret = 'sk-typo-private-value';
-
-    for (const line of [
-      `/key=${malformedSecrets[0]}`,
-      `/key:${malformedSecrets[1]}`,
-      `/key/${malformedSecrets[2]}`,
-      `/key${malformedSecrets[3]}`,
-      `/kye:${malformedSecrets[4]}`,
-    ]) {
-      await expectFormOpens(line, 'key', context);
-      activeForm.set(undefined);
-    }
-
-    await expectFormOpens(`/ky ${typoSecret}`, 'key', context);
-    const transcript = transcriptJson();
-    for (const secret of [...malformedSecrets, typoSecret]) {
-      expect(transcript).not.toContain(secret);
-    }
-  });
-
-  it('leaves path-like equals input for the agent', async () => {
-    registerBuiltinSlashCommands({ ...services });
-
-    expect(await dispatchSlash('/tmp=backup', createContext())).toBe(false);
-    expect(await dispatchSlash('/keynote.tex', createContext())).toBe(false);
-  });
-
-  it('does not mistake ordinary key-prefixed commands for credential input', async () => {
-    registerBuiltinSlashCommands({ ...services });
-
-    expect(await dispatchSlash('/keyboard shortcuts', createContext())).toBe(
-      true,
-    );
-    expect(activeForm.get()).toBeUndefined();
-    expect(transientNotice.get()?.text).toContain(
-      'Unknown command with protected input',
-    );
-  });
-
-  it('redacts arbitrary concatenated key input without forcing the key form', async () => {
-    registerBuiltinSlashCommands({ ...services });
-    const secret = 'keyArbitraryCredentialValue';
-
-    expect(await dispatchSlash(`/${secret}`, createContext())).toBe(true);
-    expect(activeForm.get()).toBeUndefined();
-    expect(transcriptJson()).not.toContain(secret);
-  });
-
-  it('routes the normalized /apikey spelling to the protected form', async () => {
-    registerBuiltinSlashCommands({ ...services });
-
-    await expectFormOpens('/apikey private-value', 'key');
-
-    expect(transcriptJson()).not.toContain('private-value');
-  });
-
-  it('uses ChatGPT device-code login from a likely remote shell', async () => {
-    registerBuiltinSlashCommands({ ...services });
-    vi.stubEnv('SSH_TTY', '/dev/pts/3');
-    vi.spyOn(subscriptionLogin, 'signInCliSubscription').mockReturnValue(
-      Effect.succeed({
-        signedIn: true,
-        email: 'person@example.com',
-        label: 'person@example.com',
-      }),
-    );
-    vi.spyOn(codexSubscription, 'setPreferCodexSubscription').mockReturnValue(
-      Effect.succeed({ effective: true, target: 'global' }),
-    );
-
-    const handled = await dispatchSlash('/login chatgpt', createContext());
-
-    expect(handled).toBe(true);
-    expect(subscriptionLogin.signInCliSubscription).toHaveBeenCalledWith(
-      'chatgpt',
-      expect.objectContaining({ device: true, noBrowser: false }),
-      expect.any(Object),
-    );
-  });
-
-  it('cancels an interactive sign-in when its fiber is interrupted', async () => {
-    const signIn = interruptibleProgram();
-    vi.spyOn(subscriptionLogin, 'signInCliSubscription').mockReturnValue(
-      signIn.program,
-    );
-
-    const fiber = services.runtime.runFork(
-      loginFromChat(
-        'chatgpt --no-browser',
-        services.stores,
-        testRuntime(),
-        createCliContext(),
-        silentOutput(),
-      ),
-    );
-    await services.runtime.runPromise(Fiber.interrupt(fiber));
-
-    expect(signIn.interrupted()).toBe(true);
-  });
-
-  it('derives /auth and /api status from the same access overview', async () => {
-    registerBuiltinSlashCommands({ ...services });
-    const overview = vi
-      .spyOn(apiStatus, 'loadCliDetailedAccountStatusLines')
-      .mockReturnValue(
-        Effect.succeed([
-          'ChatGPT: preferred · signed in as chatgpt@example.com',
-          'Kimi Code: not preferred · key not configured',
-          'Otherwise: Your own API keys',
-          'Other API keys: DeepSeek',
-        ]),
+      const runId = 'plan-reader' as RunId;
+      ensureRun(runId);
+      activeRunId.set(runId);
+      yield* dispatchSlash('/plan', context);
+      expect(transientNotice.get()?.text).toBe(
+        'The focused session has no work plan.',
       );
-    const context = createContext();
 
-    await dispatchSlash('/auth', context);
-    const authStatusText = lastEntryText();
-    expectAccessStatusText(authStatusText);
+      seedWorkPlan(runId, { objective: 'Check every case.' }, [
+        {
+          content: 'Check the base case',
+          activeForm: 'Checking the base case',
+          status: 'in_progress',
+        },
+      ]);
+      yield* dispatchSlash('/plan', context);
+      expect(foregroundReader.get()).toEqual({ kind: 'workPlan', runId });
 
-    await dispatchSlash('/api status', context);
-    const apiStatusText = lastEntryText();
-    expectAccessStatusText(apiStatusText);
-    expect(apiStatusText).toBe(authStatusText);
-    expect(overview).toHaveBeenCalledTimes(2);
-  });
+      activeRunId.set('another-stream' as RunId);
+      expect(foregroundReader.get()).toEqual({ kind: 'workPlan', runId });
+      expect(localEntries()).toEqual([]);
+      closeForegroundReader();
+    }),
+  );
 
-  it('explains the shared GLM key routes after saving it', async () => {
-    const save = vi
-      .spyOn(cliProviderKeys, 'commitCliProviderApiKey')
-      .mockReturnValue(Effect.void);
+  it.effect('opens memory list and preview output in the reference pane', () =>
+    Effect.gen(function* () {
+      vi.spyOn(memoryFileSystem, 'loadMemoryItems').mockReturnValue(
+        Effect.succeed([]),
+      );
+      vi.spyOn(memoryFileSystem, 'loadMemoryPreview').mockReturnValue(
+        Effect.succeed({
+          storagePath: 'memory/note.md',
+          lineCount: 1,
+          preview: 'Remember this.',
+        }),
+      );
 
-    const notice = await Effect.runPromise(
-      applyCliProviderApiKey(
+      const memoryRoots = {
+        workspace: undefined,
+        storage: 'storage',
+        globalStorage: 'globalStorage',
+      };
+      yield* withProcessServices(
+        services.runtime,
+        showCliMemoryList(memoryRoots),
+      );
+      expect(infoPane.get()).toEqual({
+        title: '/memory list',
+        lines: ['No memory files found.'],
+      });
+
+      yield* withProcessServices(
+        services.runtime,
+        showCliMemoryPreview(memoryRoots, 'note.md'),
+      );
+      expect(infoPane.get()?.title).toBe('/memory list');
+      closeInfoPane();
+      expect(infoPane.get()).toMatchObject({ title: '/memory preview' });
+      expect(infoPane.get()?.lines).toContain('Remember this.');
+      expect(localEntries()).toEqual([]);
+    }),
+  );
+
+  it.effect(
+    'adds a lazy command echo before errors even under echo never',
+    () =>
+      Effect.gen(function* () {
+        registerSlashCommand({
+          name: 'unavailable',
+          description: 'Unavailable test command',
+          echo: 'never',
+        });
+
+        yield* dispatchSlash('/unavailable', createContext());
+
+        expect(localEntryPairs()).toEqual([
+          { kind: 'user', text: '/unavailable' },
+          {
+            kind: 'assistant',
+            text: '/unavailable is registered but is not available in this CLI view yet.',
+          },
+        ]);
+      }),
+  );
+
+  it.effect('threads deferred echo through fallback registered forms', () =>
+    Effect.gen(function* () {
+      registerSlashCommand({
+        name: 'custom-form',
+        description: 'Custom form',
+        echo: 'ifPersists',
+        formComponent: () => null,
+      });
+
+      yield* dispatchSlash('/custom-form', createContext());
+      const form = activeForm.get()?.render(() => undefined, 20) as {
+        props?: { onPersist?: () => void };
+      };
+      expect(localEntries()).toEqual([]);
+
+      form.props?.onPersist?.();
+
+      expect(localEntryPairs()).toEqual([
+        { kind: 'user', text: '/custom-form' },
+      ]);
+    }),
+  );
+
+  it.effect(
+    'opens /models as the enable/disable catalog (not the active-model picker)',
+    () =>
+      Effect.gen(function* () {
+        registerBuiltinSlashCommands({ ...services });
+
+        yield* expectFormOpens('/models', 'models');
+      }),
+  );
+
+  it.effect('opens /model as the active-model picker', () =>
+    Effect.gen(function* () {
+      registerBuiltinSlashCommands({ ...services });
+
+      yield* expectFormOpens('/model', 'model');
+    }),
+  );
+
+  it.effect('opens /approval status without an early transcript echo', () =>
+    Effect.gen(function* () {
+      registerBuiltinSlashCommands({ ...services });
+
+      yield* expectFormOpens('/approval status', 'approval');
+
+      expect(localEntries()).toEqual([]);
+    }),
+  );
+
+  it.effect('opens the masked provider-key form through /key and /keys', () =>
+    Effect.gen(function* () {
+      registerBuiltinSlashCommands({ ...services });
+      const context = createContext();
+
+      yield* expectFormOpens('/key', 'key', context);
+
+      activeForm.set(undefined);
+      yield* expectFormOpens('/keys', 'key', context);
+    }),
+  );
+
+  it.effect('discards inline key arguments without recording the secret', () =>
+    Effect.gen(function* () {
+      registerBuiltinSlashCommands({ ...services });
+      const secret = 'sk-private-test-value';
+
+      yield* expectFormOpens(`/keys ${secret}`, 'key');
+
+      expect(JSON.stringify(activeForm.get())).not.toContain(secret);
+      expect(transientNotice.get()?.text).toContain(
+        'does not accept a key as an argument',
+      );
+      expect(transcriptJson()).not.toContain(secret);
+    }),
+  );
+
+  it.effect(
+    'keeps malformed and mistyped key commands out of the transcript',
+    () =>
+      Effect.gen(function* () {
+        registerBuiltinSlashCommands({ ...services });
+        const context = createContext();
+        const malformedSecrets = [
+          'sk-equals-private-value',
+          'sk-colon-private-value',
+          'sk-slash-private-value',
+          'sk-concatenated-private-value',
+          'sk-transposed-private-value',
+        ];
+        const typoSecret = 'sk-typo-private-value';
+
+        for (const line of [
+          `/key=${malformedSecrets[0]}`,
+          `/key:${malformedSecrets[1]}`,
+          `/key/${malformedSecrets[2]}`,
+          `/key${malformedSecrets[3]}`,
+          `/kye:${malformedSecrets[4]}`,
+        ]) {
+          yield* expectFormOpens(line, 'key', context);
+          activeForm.set(undefined);
+        }
+
+        yield* expectFormOpens(`/ky ${typoSecret}`, 'key', context);
+        const transcript = transcriptJson();
+        for (const secret of [...malformedSecrets, typoSecret]) {
+          expect(transcript).not.toContain(secret);
+        }
+      }),
+  );
+
+  it.effect('leaves path-like equals input for the agent', () =>
+    Effect.gen(function* () {
+      registerBuiltinSlashCommands({ ...services });
+
+      expect(yield* dispatchSlash('/tmp=backup', createContext())).toBe(false);
+      expect(yield* dispatchSlash('/keynote.tex', createContext())).toBe(false);
+    }),
+  );
+
+  it.effect(
+    'does not mistake ordinary key-prefixed commands for credential input',
+    () =>
+      Effect.gen(function* () {
+        registerBuiltinSlashCommands({ ...services });
+
+        expect(
+          yield* dispatchSlash('/keyboard shortcuts', createContext()),
+        ).toBe(true);
+        expect(activeForm.get()).toBeUndefined();
+        expect(transientNotice.get()?.text).toContain(
+          'Unknown command with protected input',
+        );
+      }),
+  );
+
+  it.effect(
+    'redacts arbitrary concatenated key input without forcing the key form',
+    () =>
+      Effect.gen(function* () {
+        registerBuiltinSlashCommands({ ...services });
+        const secret = 'keyArbitraryCredentialValue';
+
+        expect(yield* dispatchSlash(`/${secret}`, createContext())).toBe(true);
+        expect(activeForm.get()).toBeUndefined();
+        expect(transcriptJson()).not.toContain(secret);
+      }),
+  );
+
+  it.effect(
+    'routes the normalized /apikey spelling to the protected form',
+    () =>
+      Effect.gen(function* () {
+        registerBuiltinSlashCommands({ ...services });
+
+        yield* expectFormOpens('/apikey private-value', 'key');
+
+        expect(transcriptJson()).not.toContain('private-value');
+      }),
+  );
+
+  it.effect('uses ChatGPT device-code login from a likely remote shell', () =>
+    Effect.gen(function* () {
+      registerBuiltinSlashCommands({ ...services });
+      vi.stubEnv('SSH_TTY', '/dev/pts/3');
+      vi.spyOn(subscriptionLogin, 'signInCliSubscription').mockReturnValue(
+        Effect.succeed({
+          signedIn: true,
+          email: 'person@example.com',
+          label: 'person@example.com',
+        }),
+      );
+      vi.spyOn(codexSubscription, 'setPreferCodexSubscription').mockReturnValue(
+        Effect.succeed({ effective: true, target: 'global' }),
+      );
+
+      const handled = yield* dispatchSlash('/login chatgpt', createContext());
+
+      expect(handled).toBe(true);
+      expect(subscriptionLogin.signInCliSubscription).toHaveBeenCalledWith(
+        'chatgpt',
+        expect.objectContaining({ device: true, noBrowser: false }),
+        expect.any(Object),
+      );
+    }),
+  );
+
+  it.effect(
+    'cancels an interactive sign-in when its fiber is interrupted',
+    () =>
+      Effect.gen(function* () {
+        const signIn = interruptibleProgram();
+        vi.spyOn(subscriptionLogin, 'signInCliSubscription').mockReturnValue(
+          signIn.program,
+        );
+
+        const fiber = yield* Effect.forkChild(
+          withProcessServices(
+            services.runtime,
+            loginFromChat(
+              'chatgpt --no-browser',
+              services.stores,
+              testRuntime(),
+              createCliContext(),
+              silentOutput(),
+            ),
+          ),
+        );
+        yield* started;
+        yield* Fiber.interrupt(fiber);
+
+        expect(signIn.interrupted()).toBe(true);
+      }),
+  );
+
+  it.effect('derives /auth and /api status from the same access overview', () =>
+    Effect.gen(function* () {
+      registerBuiltinSlashCommands({ ...services });
+      const overview = vi
+        .spyOn(apiStatus, 'loadCliDetailedAccountStatusLines')
+        .mockReturnValue(
+          Effect.succeed([
+            'ChatGPT: preferred · signed in as chatgpt@example.com',
+            'Kimi Code: not preferred · key not configured',
+            'Otherwise: Your own API keys',
+            'Other API keys: DeepSeek',
+          ]),
+        );
+      const context = createContext();
+
+      yield* dispatchSlash('/auth', context);
+      const authStatusText = lastEntryText();
+      expectAccessStatusText(authStatusText);
+
+      yield* dispatchSlash('/api status', context);
+      const apiStatusText = lastEntryText();
+      expectAccessStatusText(apiStatusText);
+      expect(apiStatusText).toBe(authStatusText);
+      expect(overview).toHaveBeenCalledTimes(2);
+    }),
+  );
+
+  it.effect('explains the shared GLM key routes after saving it', () =>
+    Effect.gen(function* () {
+      const save = vi
+        .spyOn(cliProviderKeys, 'commitCliProviderApiKey')
+        .mockReturnValue(Effect.void);
+
+      const notice = yield* applyCliProviderApiKey(
         services.secrets,
         services.stores,
         'glm',
         'glm-secret',
-      ),
-    );
+      );
 
-    expect(save).toHaveBeenCalledWith(
-      services.secrets,
-      services.stores,
-      'glm',
-      'glm-secret',
-    );
-    expect(notice).toBe(
-      "Tip: the regular GLM endpoint is the default; enable 'Prefer GLM Coding Plan' with `/api glm-code` or in `/config` to use GLM Coding Plan.",
-    );
-  });
-
-  it('cancels a model-access sign-in when its fiber is interrupted', async () => {
-    const update = interruptibleProgram();
-    vi.spyOn(modelAccessSelection, 'updateCliModelAccess').mockReturnValue(
-      update.program,
-    );
-    const fiber = services.runtime.runFork(
-      applyCliModelAccessSelection(
+      expect(save).toHaveBeenCalledWith(
+        services.secrets,
         services.stores,
-        {
-          kind: 'subscription-preference',
-          provider: 'chatgpt',
-          state: 'on',
-        },
-        createContext(),
-        silentOutput(),
-      ),
-    );
-    await services.runtime.runPromise(Fiber.interrupt(fiber));
+        'glm',
+        'glm-secret',
+      );
+      expect(notice).toBe(
+        "Tip: the regular GLM endpoint is the default; enable 'Prefer GLM Coding Plan' with `/api glm-code` or in `/config` to use GLM Coding Plan.",
+      );
+    }),
+  );
 
-    expect(update.interrupted()).toBe(true);
-  });
+  it.effect(
+    'cancels a model-access sign-in when its fiber is interrupted',
+    () =>
+      Effect.gen(function* () {
+        const update = interruptibleProgram();
+        vi.spyOn(modelAccessSelection, 'updateCliModelAccess').mockReturnValue(
+          update.program,
+        );
+        const fiber = yield* Effect.forkChild(
+          withProcessServices(
+            services.runtime,
+            applyCliModelAccessSelection(
+              services.stores,
+              {
+                kind: 'subscription-preference',
+                provider: 'chatgpt',
+                state: 'on',
+              },
+              createContext(),
+              silentOutput(),
+            ),
+          ),
+        );
+        yield* started;
+        yield* Fiber.interrupt(fiber);
 
-  it('clears TeXRA and ChatGPT credentials on /logout', async () => {
-    registerBuiltinSlashCommands({ ...services });
-    const { signOutSupabase, signOutChatGpt } = mockSignOuts();
-
-    const handled = await dispatchSlash('/logout all', createContext());
-
-    expect(handled).toBe(true);
-    expect(signOutSupabase).toHaveBeenCalledOnce();
-    // The provider ids only: each call also carries the session's setting
-    // stores, and a `ConfigProvider` in an assertion argument breaks the
-    // formatter's own `inspect` probe.
-    expect(
-      signOutChatGpt.mock.calls.map(([, providerId]) => providerId),
-    ).toEqual(['chatgpt', 'grok']);
-    const entry = lastEntryText();
-    expect(entry).toContain(RESEARCHER_ACCESS_AUTH.signedOut);
-    expect(entry).toContain('Signed out of ChatGPT.');
-    expect(entry).toContain('ChatGPT subscription disabled for Codex models.');
-    expect(entry).not.toContain('\n');
-  });
-
-  it('opens an account-specific sign-out chooser for bare /logout', async () => {
-    registerBuiltinSlashCommands({ ...services });
-
-    await expectFormOpens('/logout', 'logout');
-  });
-
-  it('signs out of only the requested account', async () => {
-    registerBuiltinSlashCommands({ ...services });
-    const { signOutSupabase, signOutChatGpt } = mockSignOuts();
-
-    await dispatchSlash('/logout texra', createContext());
-    expect(signOutSupabase).toHaveBeenCalledOnce();
-    expect(signOutChatGpt).not.toHaveBeenCalled();
-
-    await dispatchSlash('/logout chatgpt', createContext());
-    expect(signOutSupabase).toHaveBeenCalledOnce();
-    expect(signOutChatGpt).toHaveBeenCalledOnce();
-  });
-
-  it('reports successful TeXRA sign-out when ChatGPT logout fails', async () => {
-    registerBuiltinSlashCommands({ ...services });
-    vi.spyOn(supabaseAuth, 'signOutCliSupabase').mockReturnValue(Effect.void);
-    vi.spyOn(subscriptionLogin, 'signOutCliSubscription').mockReturnValue(
-      Effect.fail(new Error('Codex logout failed')),
-    );
-    mockModelAccessOverview();
-
-    const handled = await dispatchSlash('/logout all', createContext());
-
-    expect(handled).toBe(true);
-    const entry = lastEntryText();
-    expect(entry).toContain(RESEARCHER_ACCESS_AUTH.signedOut);
-    expect(entry).toContain('ChatGPT sign-out failed: Codex logout failed');
-  });
-
-  it('reports ChatGPT sign-out success when only preference cleanup fails', async () => {
-    registerBuiltinSlashCommands({ ...services });
-    vi.spyOn(supabaseAuth, 'signOutCliSupabase').mockReturnValue(Effect.void);
-    vi.spyOn(subscriptionLogin, 'signOutCliSubscription').mockReturnValue(
-      Effect.succeed({ preferenceError: 'Config write failed' }),
-    );
-    mockModelAccessOverview();
-
-    const handled = await dispatchSlash('/logout all', createContext());
-
-    expect(handled).toBe(true);
-    const entry = lastEntryText();
-    expect(entry).toContain(RESEARCHER_ACCESS_AUTH.signedOut);
-    expect(entry).toContain('Signed out of ChatGPT.');
-    expect(entry).toContain(
-      'ChatGPT subscription preference could not be disabled: Config write failed',
-    );
-    expect(entry).not.toContain('ChatGPT sign-out failed');
-  });
-
-  it('treats /quit as the canonical exit command without echoing it', async () => {
-    registerBuiltinSlashCommands({ ...services });
-    const session = createSession();
-    const requestInputExit = vi.fn();
-
-    const handled = await dispatchSlash(
-      '/quit',
-      createContext(session, { requestInputExit }),
-    );
-
-    expect(handled).toBe(true);
-    // `stopRequested` is set here and nowhere else on this path: the graceful
-    // teardown's wait on the follow-up queue's `idle` depends on it. The
-    // interrupt is deliberately NOT raised — the teardown owns that policy.
-    expect(session.stopRequested).toBe(true);
-    expect(requestInputExit).toHaveBeenCalledOnce();
-    expect(activeRunId.get()).toBeUndefined();
-  });
-
-  it('uses the provided process cwd when formatting /status resume hints', async () => {
-    registerBuiltinSlashCommands({ ...services });
-    const session = createSession();
-    const runId = 'stream-1' as RunId;
-    session.runId = runId;
-    session.runId = 'exec-1' as RunId;
-    activeRunId.set(runId);
-    ensureRun(runId, { status: RUN_PHASE.WAITING });
-
-    const handled = await dispatchSlash(
-      '/status',
-      createContext(session, { processCwd: '/tmp/workspace' }),
-    );
-
-    expect(handled).toBe(true);
-    const statusText = lastEntryText(runId);
-    expect(statusText).toContain('resume later with: texra resume exec-1');
-    expect(statusText).not.toContain('--cwd');
-  });
-
-  it('reports active children while preserving an idle focused root status', async () => {
-    registerBuiltinSlashCommands({ ...services });
-    const session = createSession();
-    const rootRunId = 'stream-root' as RunId;
-    const childRunId = 'stream-child' as RunId;
-    activeRunId.set(rootRunId);
-    ensureRun(rootRunId, { status: RUN_PHASE.WAITING });
-    ensureRun(childRunId, { status: RUN_PHASE.RUNNING });
-    seedChildRoster(rootRunId, [
-      {
-        identity: { kind: 'agent', agent: 'critic' },
-        agentName: 'critic',
-        status: RUN_PHASE.RUNNING,
-        childRunId,
-      },
-    ]);
-
-    await dispatchSlash('/status', createContext(session));
-
-    const statusText = lastEntryText(rootRunId);
-    expect(statusText).toContain('status: Idle');
-    expect(statusText).toContain('active background tasks: 1');
-  });
-
-  it('counts only running children among mixed direct-children phases', async () => {
-    registerBuiltinSlashCommands({ ...services });
-    const session = createSession();
-    const rootRunId = 'stream-root' as RunId;
-    const parentRunId = 'stream-parent' as RunId;
-    const rootSiblingIds = [
-      'stream-root-sibling-1',
-      'stream-root-sibling-2',
-    ] as RunId[];
-    const runningChildId = 'stream-child-running' as RunId;
-    const waitingChildId = 'stream-child-waiting' as RunId;
-    activeRunId.set(parentRunId);
-    for (const runId of rootSiblingIds) {
-      ensureRun(runId, { status: RUN_PHASE.RUNNING });
-    }
-    ensureRun(parentRunId, { status: RUN_PHASE.WAITING });
-    ensureRun(runningChildId, { status: RUN_PHASE.RUNNING });
-    ensureRun(waitingChildId, { status: RUN_PHASE.WAITING });
-    const rosterRow = (childRunId: RunId, index: number, status: RunPhase) => ({
-      identity: { kind: 'agent' as const, agent: `critic-${index}` },
-      agentName: `critic-${index}`,
-      status,
-      startedAt: index + 1,
-      childRunId,
-    });
-    seedChildRoster(rootRunId, [
-      rosterRow(parentRunId, 0, RUN_PHASE.WAITING),
-      ...rootSiblingIds.map((runId, index) =>
-        rosterRow(runId, index + 1, RUN_PHASE.RUNNING),
-      ),
-    ]);
-    seedChildRoster(parentRunId, [
-      rosterRow(runningChildId, 3, RUN_PHASE.RUNNING),
-      rosterRow(waitingChildId, 4, RUN_PHASE.WAITING),
-    ]);
-
-    await dispatchSlash('/status', createContext(session));
-
-    const statusText = lastEntryText(rootRunId);
-    expect(statusText).toContain('active background tasks: 1');
-    expect(statusText).not.toContain('active background tasks: 2');
-  });
-
-  it('does not count retained idle children as active background tasks', async () => {
-    registerBuiltinSlashCommands({ ...services });
-    const session = createSession();
-    const rootRunId = 'stream-root' as RunId;
-    const childRunIds = ['stream-child-1', 'stream-child-2'] as RunId[];
-    activeRunId.set(rootRunId);
-    ensureRun(rootRunId, { status: RUN_PHASE.WAITING });
-    for (const [index, childRunId] of childRunIds.entries()) {
-      ensureRun(childRunId, {
-        status: index === 0 ? RUN_PHASE.WAITING : RUN_PHASE.COMPLETED,
-      });
-    }
-    seedChildRoster(
-      rootRunId,
-      childRunIds.map((childRunId, index) => ({
-        identity: { kind: 'agent' as const, agent: `critic-${index}` },
-        agentName: `critic-${index}`,
-        status: index === 0 ? RUN_PHASE.WAITING : RUN_PHASE.COMPLETED,
-        startedAt: index + 1,
-        childRunId,
-      })),
-    );
-
-    await dispatchSlash('/status', createContext(session));
-
-    expect(lastEntryText(rootRunId)).not.toContain('active background tasks:');
-  });
-
-  it('reports the owning workflow count while a background task is focused', async () => {
-    registerBuiltinSlashCommands({ ...services });
-    const session = createSession();
-    const rootRunId = 'stream-root' as RunId;
-    const focusedChildId = 'stream-focused-child' as RunId;
-    const siblingChildId = 'stream-sibling-child' as RunId;
-    activeRunId.set(focusedChildId);
-    for (const runId of [focusedChildId, siblingChildId]) {
-      ensureRun(runId, { status: RUN_PHASE.RUNNING });
-    }
-    seedChildRoster(
-      rootRunId,
-      [focusedChildId, siblingChildId].map((childRunId, index) => ({
-        identity: { kind: 'agent' as const, agent: `critic-${index}` },
-        agentName: `critic-${index}`,
-        status: RUN_PHASE.RUNNING,
-        startedAt: index + 1,
-        childRunId,
-      })),
-    );
-
-    await dispatchSlash('/status', createContext(session));
-
-    const statusText = lastEntryText(rootRunId);
-    expect(statusText).toContain('status: Running');
-    expect(statusText).toContain('active background tasks: 2');
-  });
-
-  it('reports the access route that produced the focused stream usage', async () => {
-    registerBuiltinSlashCommands({ ...services });
-    const overview = vi.spyOn(apiStatus, 'loadCliModelAccessOverview');
-    const session = createSession();
-    const runId = 'stream-access' as RunId;
-    activeRunId.set(runId);
-    patchSessionMeta({ model: 'gpt55' });
-    // The access route comes off the fold's cumulative usage for the stream.
-    ensureRun(runId, {
-      status: RUN_PHASE.WAITING,
-      usage: {
-        inputTokens: 1_000,
-        outputTokens: 100,
-        cost: 0,
-        usageRoute: 'api-key',
-      },
-    });
-
-    await dispatchSlash('/status', createContext(session));
-
-    const statusText = lastEntryText(runId);
-    expect(statusText).toContain('model access: Your own API keys');
-    expect(statusText).not.toContain('model access: ChatGPT subscription');
-    expect(overview).not.toHaveBeenCalled();
-  });
-
-  it('surfaces status lookup failures without rejecting', async () => {
-    registerBuiltinSlashCommands({ ...services });
-
-    const handled = await dispatchSlash(
-      '/status',
-      createContext(createSession(), {
-        getApprovalPolicy: () => {
-          throw new Error('Credential store unavailable');
-        },
+        expect(update.interrupted()).toBe(true);
       }),
-    );
+  );
 
-    expect(handled).toBe(true);
-    expect(lastEntryText()).toBe('Credential store unavailable');
-  });
+  it.effect('clears TeXRA and ChatGPT credentials on /logout', () =>
+    Effect.gen(function* () {
+      registerBuiltinSlashCommands({ ...services });
+      const { signOutSupabase, signOutChatGpt } = mockSignOuts();
+
+      const handled = yield* dispatchSlash('/logout all', createContext());
+
+      expect(handled).toBe(true);
+      expect(signOutSupabase).toHaveBeenCalledOnce();
+      // The provider ids only: each call also carries the session's setting
+      // stores, and a `ConfigProvider` in an assertion argument breaks the
+      // formatter's own `inspect` probe.
+      expect(
+        signOutChatGpt.mock.calls.map(([, providerId]) => providerId),
+      ).toEqual(['chatgpt', 'grok']);
+      const entry = lastEntryText();
+      expect(entry).toContain(RESEARCHER_ACCESS_AUTH.signedOut);
+      expect(entry).toContain('Signed out of ChatGPT.');
+      expect(entry).toContain(
+        'ChatGPT subscription disabled for Codex models.',
+      );
+      expect(entry).not.toContain('\n');
+    }),
+  );
+
+  it.effect('opens an account-specific sign-out chooser for bare /logout', () =>
+    Effect.gen(function* () {
+      registerBuiltinSlashCommands({ ...services });
+
+      yield* expectFormOpens('/logout', 'logout');
+    }),
+  );
+
+  it.effect('signs out of only the requested account', () =>
+    Effect.gen(function* () {
+      registerBuiltinSlashCommands({ ...services });
+      const { signOutSupabase, signOutChatGpt } = mockSignOuts();
+
+      yield* dispatchSlash('/logout texra', createContext());
+      expect(signOutSupabase).toHaveBeenCalledOnce();
+      expect(signOutChatGpt).not.toHaveBeenCalled();
+
+      yield* dispatchSlash('/logout chatgpt', createContext());
+      expect(signOutSupabase).toHaveBeenCalledOnce();
+      expect(signOutChatGpt).toHaveBeenCalledOnce();
+    }),
+  );
+
+  it.effect('reports successful TeXRA sign-out when ChatGPT logout fails', () =>
+    Effect.gen(function* () {
+      registerBuiltinSlashCommands({ ...services });
+      vi.spyOn(supabaseAuth, 'signOutCliSupabase').mockReturnValue(Effect.void);
+      vi.spyOn(subscriptionLogin, 'signOutCliSubscription').mockReturnValue(
+        Effect.fail(new Error('Codex logout failed')),
+      );
+      mockModelAccessOverview();
+
+      const handled = yield* dispatchSlash('/logout all', createContext());
+
+      expect(handled).toBe(true);
+      const entry = lastEntryText();
+      expect(entry).toContain(RESEARCHER_ACCESS_AUTH.signedOut);
+      expect(entry).toContain('ChatGPT sign-out failed: Codex logout failed');
+    }),
+  );
+
+  it.effect(
+    'reports ChatGPT sign-out success when only preference cleanup fails',
+    () =>
+      Effect.gen(function* () {
+        registerBuiltinSlashCommands({ ...services });
+        vi.spyOn(supabaseAuth, 'signOutCliSupabase').mockReturnValue(
+          Effect.void,
+        );
+        vi.spyOn(subscriptionLogin, 'signOutCliSubscription').mockReturnValue(
+          Effect.succeed({ preferenceError: 'Config write failed' }),
+        );
+        mockModelAccessOverview();
+
+        const handled = yield* dispatchSlash('/logout all', createContext());
+
+        expect(handled).toBe(true);
+        const entry = lastEntryText();
+        expect(entry).toContain(RESEARCHER_ACCESS_AUTH.signedOut);
+        expect(entry).toContain('Signed out of ChatGPT.');
+        expect(entry).toContain(
+          'ChatGPT subscription preference could not be disabled: Config write failed',
+        );
+        expect(entry).not.toContain('ChatGPT sign-out failed');
+      }),
+  );
+
+  it.effect(
+    'treats /quit as the canonical exit command without echoing it',
+    () =>
+      Effect.gen(function* () {
+        registerBuiltinSlashCommands({ ...services });
+        const session = createSession();
+        const requestInputExit = vi.fn();
+
+        const handled = yield* dispatchSlash(
+          '/quit',
+          createContext(session, { requestInputExit }),
+        );
+
+        expect(handled).toBe(true);
+        // `stopRequested` is set here and nowhere else on this path: the graceful
+        // teardown's wait on the follow-up queue's `idle` depends on it. The
+        // interrupt is deliberately NOT raised — the teardown owns that policy.
+        expect(session.stopRequested).toBe(true);
+        expect(requestInputExit).toHaveBeenCalledOnce();
+        expect(activeRunId.get()).toBeUndefined();
+      }),
+  );
+
+  it.effect(
+    'uses the provided process cwd when formatting /status resume hints',
+    () =>
+      Effect.gen(function* () {
+        registerBuiltinSlashCommands({ ...services });
+        const session = createSession();
+        const runId = 'stream-1' as RunId;
+        session.runId = runId;
+        session.runId = 'exec-1' as RunId;
+        activeRunId.set(runId);
+        ensureRun(runId, { status: RUN_PHASE.WAITING });
+
+        const handled = yield* dispatchSlash(
+          '/status',
+          createContext(session, { processCwd: '/tmp/workspace' }),
+        );
+
+        expect(handled).toBe(true);
+        const statusText = lastEntryText(runId);
+        expect(statusText).toContain('resume later with: texra resume exec-1');
+        expect(statusText).not.toContain('--cwd');
+      }),
+  );
+
+  it.effect(
+    'reports active children while preserving an idle focused root status',
+    () =>
+      Effect.gen(function* () {
+        registerBuiltinSlashCommands({ ...services });
+        const session = createSession();
+        const rootRunId = 'stream-root' as RunId;
+        const childRunId = 'stream-child' as RunId;
+        activeRunId.set(rootRunId);
+        ensureRun(rootRunId, { status: RUN_PHASE.WAITING });
+        ensureRun(childRunId, { status: RUN_PHASE.RUNNING });
+        seedChildRoster(rootRunId, [
+          {
+            identity: { kind: 'agent', agent: 'critic' },
+            agentName: 'critic',
+            status: RUN_PHASE.RUNNING,
+            childRunId,
+          },
+        ]);
+
+        yield* dispatchSlash('/status', createContext(session));
+
+        const statusText = lastEntryText(rootRunId);
+        expect(statusText).toContain('status: Idle');
+        expect(statusText).toContain('active background tasks: 1');
+      }),
+  );
+
+  it.effect(
+    'counts only running children among mixed direct-children phases',
+    () =>
+      Effect.gen(function* () {
+        registerBuiltinSlashCommands({ ...services });
+        const session = createSession();
+        const rootRunId = 'stream-root' as RunId;
+        const parentRunId = 'stream-parent' as RunId;
+        const rootSiblingIds = [
+          'stream-root-sibling-1',
+          'stream-root-sibling-2',
+        ] as RunId[];
+        const runningChildId = 'stream-child-running' as RunId;
+        const waitingChildId = 'stream-child-waiting' as RunId;
+        activeRunId.set(parentRunId);
+        for (const runId of rootSiblingIds) {
+          ensureRun(runId, { status: RUN_PHASE.RUNNING });
+        }
+        ensureRun(parentRunId, { status: RUN_PHASE.WAITING });
+        ensureRun(runningChildId, { status: RUN_PHASE.RUNNING });
+        ensureRun(waitingChildId, { status: RUN_PHASE.WAITING });
+        const rosterRow = (
+          childRunId: RunId,
+          index: number,
+          status: RunPhase,
+        ) => ({
+          identity: { kind: 'agent' as const, agent: `critic-${index}` },
+          agentName: `critic-${index}`,
+          status,
+          startedAt: index + 1,
+          childRunId,
+        });
+        seedChildRoster(rootRunId, [
+          rosterRow(parentRunId, 0, RUN_PHASE.WAITING),
+          ...rootSiblingIds.map((runId, index) =>
+            rosterRow(runId, index + 1, RUN_PHASE.RUNNING),
+          ),
+        ]);
+        seedChildRoster(parentRunId, [
+          rosterRow(runningChildId, 3, RUN_PHASE.RUNNING),
+          rosterRow(waitingChildId, 4, RUN_PHASE.WAITING),
+        ]);
+
+        yield* dispatchSlash('/status', createContext(session));
+
+        const statusText = lastEntryText(rootRunId);
+        expect(statusText).toContain('active background tasks: 1');
+        expect(statusText).not.toContain('active background tasks: 2');
+      }),
+  );
+
+  it.effect(
+    'does not count retained idle children as active background tasks',
+    () =>
+      Effect.gen(function* () {
+        registerBuiltinSlashCommands({ ...services });
+        const session = createSession();
+        const rootRunId = 'stream-root' as RunId;
+        const childRunIds = ['stream-child-1', 'stream-child-2'] as RunId[];
+        activeRunId.set(rootRunId);
+        ensureRun(rootRunId, { status: RUN_PHASE.WAITING });
+        for (const [index, childRunId] of childRunIds.entries()) {
+          ensureRun(childRunId, {
+            status: index === 0 ? RUN_PHASE.WAITING : RUN_PHASE.COMPLETED,
+          });
+        }
+        seedChildRoster(
+          rootRunId,
+          childRunIds.map((childRunId, index) => ({
+            identity: { kind: 'agent' as const, agent: `critic-${index}` },
+            agentName: `critic-${index}`,
+            status: index === 0 ? RUN_PHASE.WAITING : RUN_PHASE.COMPLETED,
+            startedAt: index + 1,
+            childRunId,
+          })),
+        );
+
+        yield* dispatchSlash('/status', createContext(session));
+
+        expect(lastEntryText(rootRunId)).not.toContain(
+          'active background tasks:',
+        );
+      }),
+  );
+
+  it.effect(
+    'reports the owning workflow count while a background task is focused',
+    () =>
+      Effect.gen(function* () {
+        registerBuiltinSlashCommands({ ...services });
+        const session = createSession();
+        const rootRunId = 'stream-root' as RunId;
+        const focusedChildId = 'stream-focused-child' as RunId;
+        const siblingChildId = 'stream-sibling-child' as RunId;
+        activeRunId.set(focusedChildId);
+        for (const runId of [focusedChildId, siblingChildId]) {
+          ensureRun(runId, { status: RUN_PHASE.RUNNING });
+        }
+        seedChildRoster(
+          rootRunId,
+          [focusedChildId, siblingChildId].map((childRunId, index) => ({
+            identity: { kind: 'agent' as const, agent: `critic-${index}` },
+            agentName: `critic-${index}`,
+            status: RUN_PHASE.RUNNING,
+            startedAt: index + 1,
+            childRunId,
+          })),
+        );
+
+        yield* dispatchSlash('/status', createContext(session));
+
+        const statusText = lastEntryText(rootRunId);
+        expect(statusText).toContain('status: Running');
+        expect(statusText).toContain('active background tasks: 2');
+      }),
+  );
+
+  it.effect(
+    'reports the access route that produced the focused stream usage',
+    () =>
+      Effect.gen(function* () {
+        registerBuiltinSlashCommands({ ...services });
+        const overview = vi.spyOn(apiStatus, 'loadCliModelAccessOverview');
+        const session = createSession();
+        const runId = 'stream-access' as RunId;
+        activeRunId.set(runId);
+        patchSessionMeta({ model: 'gpt55' });
+        // The access route comes off the fold's cumulative usage for the stream.
+        ensureRun(runId, {
+          status: RUN_PHASE.WAITING,
+          usage: {
+            inputTokens: 1_000,
+            outputTokens: 100,
+            cost: 0,
+            usageRoute: 'api-key',
+          },
+        });
+
+        yield* dispatchSlash('/status', createContext(session));
+
+        const statusText = lastEntryText(runId);
+        expect(statusText).toContain('model access: Your own API keys');
+        expect(statusText).not.toContain('model access: ChatGPT subscription');
+        expect(overview).not.toHaveBeenCalled();
+      }),
+  );
+
+  it.effect('surfaces status lookup failures without rejecting', () =>
+    Effect.gen(function* () {
+      registerBuiltinSlashCommands({ ...services });
+
+      const handled = yield* dispatchSlash(
+        '/status',
+        createContext(createSession(), {
+          getApprovalPolicy: () => {
+            throw new Error('Credential store unavailable');
+          },
+        }),
+      );
+
+      expect(handled).toBe(true);
+      expect(lastEntryText()).toBe('Credential store unavailable');
+    }),
+  );
 });

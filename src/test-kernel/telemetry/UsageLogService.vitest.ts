@@ -1,13 +1,6 @@
+import { it } from '@effect/vitest';
 import { Effect, Exit, Layer, Scope } from 'effect';
-import {
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  vi,
-  type Mock,
-} from 'vitest';
+import { afterEach, beforeEach, describe, expect, vi, type Mock } from 'vitest';
 
 import * as logger from '@logger/logUtils';
 import { AgentCategory, TELEMETRY_ENABLED_KEY } from '@shared/schemas';
@@ -411,126 +404,121 @@ describe('UsageLogService', () => {
       expect(batches).toEqual([]);
     }
 
-    it('sends nothing while the setting is off', async () => {
-      stubAccessToken();
-      await Effect.runPromise(
-        testWorkspaceRoots().config.update(
+    it.live('sends nothing while the setting is off', () =>
+      Effect.gen(function* () {
+        stubAccessToken();
+        yield* testWorkspaceRoots().config.update(
           TELEMETRY_ENABLED_KEY,
           false,
           'global',
-        ),
-      );
+        );
 
-      await expectNoOptionalUsageSent();
-    });
+        yield* Effect.promise(() => expectNoOptionalUsageSent());
+      }),
+    );
 
-    it('honours a workspace-scoped telemetry opt-out', async () => {
-      stubAccessToken();
-      await Effect.runPromise(
-        testWorkspaceRoots().config.update(
+    it.live('honours a workspace-scoped telemetry opt-out', () =>
+      Effect.gen(function* () {
+        stubAccessToken();
+        yield* testWorkspaceRoots().config.update(
           TELEMETRY_ENABLED_KEY,
           false,
           'workspace',
-        ),
-      );
+        );
 
-      await expectNoOptionalUsageSent();
-    });
+        yield* Effect.promise(() => expectNoOptionalUsageSent());
+      }),
+    );
 
-    it('does not let a project opt in over a user-wide opt-out', async () => {
-      stubAccessToken();
-      await Effect.runPromise(
-        testWorkspaceRoots().config.update(
+    it.live('does not let a project opt in over a user-wide opt-out', () =>
+      Effect.gen(function* () {
+        stubAccessToken();
+        yield* testWorkspaceRoots().config.update(
           TELEMETRY_ENABLED_KEY,
           false,
           'global',
-        ),
-      );
-      await Effect.runPromise(
-        testWorkspaceRoots().config.update(
+        );
+        yield* testWorkspaceRoots().config.update(
           TELEMETRY_ENABLED_KEY,
           true,
           'workspace',
-        ),
-      );
+        );
 
-      await expectNoOptionalUsageSent();
-    });
+        yield* Effect.promise(() => expectNoOptionalUsageSent());
+      }),
+    );
 
     // The setting is read live, so turning it off has to drop rounds already
     // queued under the old value rather than letting the next flush ship them.
-    it('discards entries queued before the setting was turned off', async () => {
-      stubAccessToken();
-      await startUsageLog({ batchSize: 100, flushIntervalMs: 60_000 });
+    it.live('discards entries queued before the setting was turned off', () =>
+      Effect.gen(function* () {
+        stubAccessToken();
+        yield* Effect.promise(() =>
+          startUsageLog({ batchSize: 100, flushIntervalMs: 60_000 }),
+        );
 
-      const { batches, fetchMock } = stubBatchFetch();
+        const { batches, fetchMock } = stubBatchFetch();
 
-      UsageLogService.log(
-        usageEntry('before-opt-out'),
-        testWorkspaceRoots().config,
-      );
-      await Effect.runPromise(
-        testWorkspaceRoots().config.update(
+        UsageLogService.log(
+          usageEntry('before-opt-out'),
+          testWorkspaceRoots().config,
+        );
+        yield* testWorkspaceRoots().config.update(
           TELEMETRY_ENABLED_KEY,
           false,
           'global',
-        ),
-      );
+        );
 
-      await vi.advanceTimersByTimeAsync(60_000);
+        yield* Effect.promise(() => vi.advanceTimersByTimeAsync(60_000));
 
-      expect(fetchMock).not.toHaveBeenCalled();
-      expect(batches).toEqual([]);
-    });
+        expect(fetchMock).not.toHaveBeenCalled();
+        expect(batches).toEqual([]);
+      }),
+    );
 
-    it('resumes sending once the setting is turned back on', async () => {
-      stubAccessToken();
-      await Effect.runPromise(
-        testWorkspaceRoots().config.update(
+    it.live('resumes sending once the setting is turned back on', () =>
+      Effect.gen(function* () {
+        stubAccessToken();
+        yield* testWorkspaceRoots().config.update(
           TELEMETRY_ENABLED_KEY,
           false,
           'global',
-        ),
-      );
+        );
 
-      const { batches, fetchMock } = stubBatchFetch();
+        const { batches, fetchMock } = stubBatchFetch();
 
-      UsageLogService.log(usageEntry('dropped'), testWorkspaceRoots().config);
-      await vi.advanceTimersByTimeAsync(0);
-      expect(fetchMock).not.toHaveBeenCalled();
+        UsageLogService.log(usageEntry('dropped'), testWorkspaceRoots().config);
+        yield* Effect.promise(() => vi.advanceTimersByTimeAsync(0));
+        expect(fetchMock).not.toHaveBeenCalled();
 
-      await Effect.runPromise(
-        testWorkspaceRoots().config.update(
+        yield* testWorkspaceRoots().config.update(
           TELEMETRY_ENABLED_KEY,
           true,
           'global',
-        ),
-      );
-      UsageLogService.log(usageEntry('sent'), testWorkspaceRoots().config);
-      await vi.advanceTimersByTimeAsync(0);
+        );
+        UsageLogService.log(usageEntry('sent'), testWorkspaceRoots().config);
+        yield* Effect.promise(() => vi.advanceTimersByTimeAsync(0));
 
-      expect(fetchMock).toHaveBeenCalledTimes(1);
-      expect(batches.map(batchModels)).toEqual([['sent']]);
-    });
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        expect(batches.map(batchModels)).toEqual([['sent']]);
+      }),
+    );
 
     // Plan accounting is derived from the aggregate that these records
     // populate, so an opt-out that suppressed them would let plan-covered
     // calls run on against a stale total. Only `api-key` rounds are optional.
-    it.each([
+    it.live.each([
       'chatgpt-subscription',
       'xai-subscription',
       'kimi-code-subscription',
       'glm-coding-plan-subscription',
-    ] as const)(
-      'still sends %s usage while the setting is off',
-      async (usageRoute) => {
+    ] as const)('still sends %s usage while the setting is off', (usageRoute) =>
+      Effect.gen(function* () {
         stubAccessToken();
-        await Effect.runPromise(
-          testWorkspaceRoots().config.update(
-            TELEMETRY_ENABLED_KEY,
-            false,
-            'global',
-          ),
+        yield* testWorkspaceRoots().config.update(
+          TELEMETRY_ENABLED_KEY,
+          false,
+          'global',
         );
 
         const { batches, fetchMock } = stubBatchFetch();
@@ -539,103 +527,109 @@ describe('UsageLogService', () => {
           { ...usageEntry('hosted'), usageRoute },
           testWorkspaceRoots().config,
         );
-        await vi.advanceTimersByTimeAsync(0);
+        yield* Effect.promise(() => vi.advanceTimersByTimeAsync(0));
 
         expect(fetchMock).toHaveBeenCalledTimes(1);
         expect(batches.map(batchModels)).toEqual([['hosted']]);
-      },
+      }),
     );
 
-    it('drops optional entries from a batch but keeps the accounted ones', async () => {
-      stubAccessToken();
-      await startUsageLog({ batchSize: 100, flushIntervalMs: 60_000 });
+    it.live(
+      'drops optional entries from a batch but keeps the accounted ones',
+      () =>
+        Effect.gen(function* () {
+          stubAccessToken();
+          yield* Effect.promise(() =>
+            startUsageLog({ batchSize: 100, flushIntervalMs: 60_000 }),
+          );
 
-      const { batches, fetchMock } = stubBatchFetch();
+          const { batches, fetchMock } = stubBatchFetch();
 
-      UsageLogService.log(
-        { ...usageEntry('byok'), usageRoute: 'api-key' },
-        testWorkspaceRoots().config,
-      );
-      UsageLogService.log(
-        { ...usageEntry('hosted'), usageRoute: 'chatgpt-subscription' },
-        testWorkspaceRoots().config,
-      );
-      await Effect.runPromise(
-        testWorkspaceRoots().config.update(
-          TELEMETRY_ENABLED_KEY,
-          false,
-          'global',
-        ),
-      );
+          UsageLogService.log(
+            { ...usageEntry('byok'), usageRoute: 'api-key' },
+            testWorkspaceRoots().config,
+          );
+          UsageLogService.log(
+            { ...usageEntry('hosted'), usageRoute: 'chatgpt-subscription' },
+            testWorkspaceRoots().config,
+          );
+          yield* testWorkspaceRoots().config.update(
+            TELEMETRY_ENABLED_KEY,
+            false,
+            'global',
+          );
 
-      await vi.advanceTimersByTimeAsync(60_000);
+          yield* Effect.promise(() => vi.advanceTimersByTimeAsync(60_000));
 
-      expect(fetchMock).toHaveBeenCalledTimes(1);
-      expect(batches.map(batchModels)).toEqual([['hosted']]);
-    });
+          expect(fetchMock).toHaveBeenCalledTimes(1);
+          expect(batches.map(batchModels)).toEqual([['hosted']]);
+        }),
+    );
 
     // The token probe is awaited before the batch is sent, so an opt-out
     // that lands during that await must still take effect.
-    it('honours an opt-out that lands while the token lookup is in flight', async () => {
-      const { promise: tokenReleased, resolve: releaseToken } =
-        createDeferred();
-      installHostAuth(
-        fakeSupabaseAuth({
-          accessToken: Effect.promise(() => tokenReleased).pipe(
-            Effect.map(() => 'token'),
-          ),
+    it.live(
+      'honours an opt-out that lands while the token lookup is in flight',
+      () =>
+        Effect.gen(function* () {
+          const { promise: tokenReleased, resolve: releaseToken } =
+            createDeferred();
+          installHostAuth(
+            fakeSupabaseAuth({
+              accessToken: Effect.promise(() => tokenReleased).pipe(
+                Effect.map(() => 'token'),
+              ),
+            }),
+          );
+
+          const { batches, fetchMock } = stubBatchFetch();
+
+          UsageLogService.log(
+            usageEntry('optional'),
+            testWorkspaceRoots().config,
+          );
+
+          yield* testWorkspaceRoots().config.update(
+            TELEMETRY_ENABLED_KEY,
+            false,
+            'global',
+          );
+          releaseToken();
+
+          yield* Effect.promise(() => vi.advanceTimersByTimeAsync(0));
+          expect(fetchMock).not.toHaveBeenCalled();
+          expect(batches).toEqual([]);
         }),
-      );
-
-      const { batches, fetchMock } = stubBatchFetch();
-
-      UsageLogService.log(usageEntry('optional'), testWorkspaceRoots().config);
-
-      await Effect.runPromise(
-        testWorkspaceRoots().config.update(
-          TELEMETRY_ENABLED_KEY,
-          false,
-          'global',
-        ),
-      );
-      releaseToken();
-
-      await vi.advanceTimersByTimeAsync(0);
-      expect(fetchMock).not.toHaveBeenCalled();
-      expect(batches).toEqual([]);
-    });
+    );
 
     // The environment kill switch is what a user has when editing settings is
     // awkward: a CI job, a shared machine, or a one-off `TEXRA_NO_TELEMETRY=1
     // texra run`. It overrides a stored `true` and cannot re-enable logging.
-    it.each([
+    it.live.each([
       ['TEXRA_NO_TELEMETRY', '1'],
       ['TEXRA_NO_TELEMETRY', 'true'],
       ['DO_NOT_TRACK', '1'],
-    ])('sends nothing while %s=%s is set', async (name, value) => {
-      stubAccessToken();
-      await Effect.runPromise(
-        testWorkspaceRoots().config.update(
+    ])('sends nothing while %s=%s is set', ([name, value]) =>
+      Effect.gen(function* () {
+        stubAccessToken();
+        yield* testWorkspaceRoots().config.update(
           TELEMETRY_ENABLED_KEY,
           true,
           'global',
-        ),
-      );
-      vi.stubEnv(name, value);
+        );
+        vi.stubEnv(name, value);
 
-      await expectNoOptionalUsageSent();
-    });
+        yield* Effect.promise(() => expectNoOptionalUsageSent());
+      }),
+    );
 
-    it.each(['0', 'false', ''])(
-      'ignores TEXRA_NO_TELEMETRY=%p',
-      async (value) => {
+    it.live.each(['0', 'false', ''])('ignores TEXRA_NO_TELEMETRY=%p', (value) =>
+      Effect.gen(function* () {
         stubAccessToken();
-        await Effect.runPromise(
-          testWorkspaceRoots().config.update(
-            TELEMETRY_ENABLED_KEY,
-            true,
-            'global',
-          ),
+        yield* testWorkspaceRoots().config.update(
+          TELEMETRY_ENABLED_KEY,
+          true,
+          'global',
         );
         vi.stubEnv('TEXRA_NO_TELEMETRY', value);
 
@@ -645,11 +639,11 @@ describe('UsageLogService', () => {
           usageEntry('optional'),
           testWorkspaceRoots().config,
         );
-        await vi.advanceTimersByTimeAsync(0);
+        yield* Effect.promise(() => vi.advanceTimersByTimeAsync(0));
 
         expect(fetchMock).toHaveBeenCalledTimes(1);
         expect(batches.map(batchModels)).toEqual([['optional']]);
-      },
+      }),
     );
 
     // Same carve-out as the setting: plan accounting is derived from these
@@ -672,55 +666,57 @@ describe('UsageLogService', () => {
 
     // JsonConfigProvider returns raw JSON from a hand-edited .texra/config.json,
     // so a mistyped string must not read as truthy and re-enable logging.
-    it.each(['false', '0', 0, null])(
+    it.live.each(['false', '0', 0, null])(
       'treats the non-boolean value %p as opted out',
-      async (value) => {
-        stubAccessToken();
-        await Effect.runPromise(
-          testWorkspaceRoots().config.update(
+      (value) =>
+        Effect.gen(function* () {
+          stubAccessToken();
+          yield* testWorkspaceRoots().config.update(
             TELEMETRY_ENABLED_KEY,
             value,
             'global',
-          ),
-        );
+          );
 
-        const { batches, fetchMock } = stubBatchFetch();
+          const { batches, fetchMock } = stubBatchFetch();
 
-        UsageLogService.log(
-          usageEntry('optional'),
-          testWorkspaceRoots().config,
-        );
-        await vi.advanceTimersByTimeAsync(0);
+          UsageLogService.log(
+            usageEntry('optional'),
+            testWorkspaceRoots().config,
+          );
+          yield* Effect.promise(() => vi.advanceTimersByTimeAsync(0));
 
-        expect(fetchMock).not.toHaveBeenCalled();
-        expect(batches).toEqual([]);
-      },
+          expect(fetchMock).not.toHaveBeenCalled();
+          expect(batches).toEqual([]);
+        }),
     );
 
-    it('fails closed for a malformed workspace value despite a valid global opt-in', async () => {
-      stubAccessToken();
-      await Effect.runPromise(
-        testWorkspaceRoots().config.update(
-          TELEMETRY_ENABLED_KEY,
-          true,
-          'global',
-        ),
-      );
-      await Effect.runPromise(
-        testWorkspaceRoots().config.update(
-          TELEMETRY_ENABLED_KEY,
-          'false',
-          'workspace',
-        ),
-      );
+    it.live(
+      'fails closed for a malformed workspace value despite a valid global opt-in',
+      () =>
+        Effect.gen(function* () {
+          stubAccessToken();
+          yield* testWorkspaceRoots().config.update(
+            TELEMETRY_ENABLED_KEY,
+            true,
+            'global',
+          );
+          yield* testWorkspaceRoots().config.update(
+            TELEMETRY_ENABLED_KEY,
+            'false',
+            'workspace',
+          );
 
-      const { batches, fetchMock } = stubBatchFetch();
+          const { batches, fetchMock } = stubBatchFetch();
 
-      UsageLogService.log(usageEntry('optional'), testWorkspaceRoots().config);
-      await vi.advanceTimersByTimeAsync(0);
+          UsageLogService.log(
+            usageEntry('optional'),
+            testWorkspaceRoots().config,
+          );
+          yield* Effect.promise(() => vi.advanceTimersByTimeAsync(0));
 
-      expect(fetchMock).not.toHaveBeenCalled();
-      expect(batches).toEqual([]);
-    });
+          expect(fetchMock).not.toHaveBeenCalled();
+          expect(batches).toEqual([]);
+        }),
+    );
   });
 });

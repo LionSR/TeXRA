@@ -61,43 +61,44 @@ vi.mock('@agent/storage/runLifecycle', async (importOriginal) => {
 });
 
 describe('session isolation', () => {
-  it('two sessions in one process write under their own roots', async () => {
-    const paperA = createFakeWorkspaceRoots({
-      workspacePath: fakePath('papers/a'),
-      storagePath: fakePath('storage/a'),
-    });
-    const paperB = createFakeWorkspaceRoots({
-      workspacePath: fakePath('papers/b'),
-      storagePath: fakePath('storage/b'),
-    });
-    const sessionA = createTestSession({ roots: paperA });
-    const sessionB = createTestSession({ roots: paperB });
-    try {
-      const writeNote = async (
-        session: typeof sessionA,
-        note: string,
-      ): Promise<void> => {
-        await mkdir(session.roots.storage, { recursive: true });
-        await writeFile(path.join(session.roots.storage, 'note.txt'), note);
-      };
+  it.effect('two sessions in one process write under their own roots', () =>
+    Effect.gen(function* () {
+      const paperA = createFakeWorkspaceRoots({
+        workspacePath: fakePath('papers/a'),
+        storagePath: fakePath('storage/a'),
+      });
+      const paperB = createFakeWorkspaceRoots({
+        workspacePath: fakePath('papers/b'),
+        storagePath: fakePath('storage/b'),
+      });
+      const sessionA = createTestSession({ roots: paperA });
+      const sessionB = createTestSession({ roots: paperB });
+      yield* Effect.addFinalizer(() =>
+        sessionA.dispose().pipe(Effect.andThen(sessionB.dispose())),
+      );
+      // The notes are real files under the fake roots, so the fs calls stay
+      // foreign promises bridged with Effect.promise.
+      const writeNote = (session: typeof sessionA, note: string) =>
+        Effect.promise(async () => {
+          await mkdir(session.roots.storage, { recursive: true });
+          await writeFile(path.join(session.roots.storage, 'note.txt'), note);
+        });
       expect(sessionA.roots.workspace).toBe(fakePath('papers/a'));
-      await writeNote(sessionA, 'from a');
+      yield* writeNote(sessionA, 'from a');
       expect(sessionB.roots.workspace).toBe(fakePath('papers/b'));
-      await writeNote(sessionB, 'from b');
-      const read = (file: string): Promise<string> => readFile(file, 'utf8');
-      expect(await read(fakePath('storage/a/note.txt'))).toBe('from a');
-      expect(await read(fakePath('storage/b/note.txt'))).toBe('from b');
+      yield* writeNote(sessionB, 'from b');
+      const read = (file: string) =>
+        Effect.promise((): Promise<string> => readFile(file, 'utf8'));
+      expect(yield* read(fakePath('storage/a/note.txt'))).toBe('from a');
+      expect(yield* read(fakePath('storage/b/note.txt'))).toBe('from b');
       // Neither paper's roots are the process's: a session answers from the
       // record it holds, and the process roots name only the default session.
       expect(testWorkspaceRoots().workspace).toBe(fakePath('workspace'));
       expect(testWorkspaceRoots().storage).toBe(
         fakePath('workspace/.texra/storage'),
       );
-    } finally {
-      await Effect.runPromise(sessionA.dispose());
-      await Effect.runPromise(sessionB.dispose());
-    }
-  });
+    }),
+  );
 
   it.effect(
     'the host-exit drain settles each session under its own root, outside any scope',
@@ -176,20 +177,22 @@ describe('session isolation', () => {
    * depend on which turn it resumes in. The case was `.fails` until the
    * carrier went; it is green from here.
    */
-  it('a run fiber keeps its session roots across a contended publisher commit', async () => {
-    const project = createFakeWorkspaceRoots({
-      workspacePath: fakePath('papers/contended'),
-      storagePath: fakePath('storage/contended'),
-    });
-    const session = createTestSession({ roots: project });
-    try {
-      // Job 1: enqueued on the session's one publisher from the process
-      // context, the shape the desktop has.
-      publishTestRunStart(session, 'c0c001' as RunId);
-      // Job 2: the run fiber's own awaited commit, enqueued in the same
-      // synchronous turn, so the publisher is already contended when it runs.
-      const seen = await Effect.runPromise(
-        Effect.gen(function* () {
+  it.effect(
+    'a run fiber keeps its session roots across a contended publisher commit',
+    () =>
+      Effect.gen(function* () {
+        const project = createFakeWorkspaceRoots({
+          workspacePath: fakePath('papers/contended'),
+          storagePath: fakePath('storage/contended'),
+        });
+        const session = createTestSession({ roots: project });
+        yield* Effect.addFinalizer(() => session.dispose());
+        // Job 1: enqueued on the session's one publisher from the process
+        // context, the shape the desktop has.
+        publishTestRunStart(session, 'c0c001' as RunId);
+        // Job 2: the run fiber's own awaited commit, enqueued in the same
+        // synchronous turn, so the publisher is already contended when it runs.
+        const seen = yield* Effect.gen(function* () {
           yield* session.commit([
             {
               type: 'run.start',
@@ -205,20 +208,18 @@ describe('session isolation', () => {
             workspace: session.roots.workspace,
             storage: session.roots.storage,
           };
-        }),
-      );
-      expect(seen.workspace).toBe(fakePath('papers/contended'));
-      expect(seen.storage).toBe(fakePath('storage/contended'));
-    } finally {
-      await Effect.runPromise(session.dispose());
-    }
-  });
+        });
+        expect(seen.workspace).toBe(fakePath('papers/contended'));
+        expect(seen.storage).toBe(fakePath('storage/contended'));
+      }),
+  );
 
-  it('a handle interrupt target lands in the run session only', async () => {
-    const sessionB = createTestSession();
-    const runId = generateRunId();
-    const interrupt = vi.fn();
-    try {
+  it.effect('a handle interrupt target lands in the run session only', () =>
+    Effect.gen(function* () {
+      const sessionB = createTestSession();
+      yield* Effect.addFinalizer(() => sessionB.dispose());
+      const runId = generateRunId();
+      const interrupt = vi.fn();
       const handle = testRunHandle({
         runId,
         agent: 'assistant',
@@ -228,28 +229,30 @@ describe('session isolation', () => {
 
       const stop = sessionB.runs.kill(runId);
       expect(stop.accepted()).toBe(true);
-      await Effect.runPromise(stop.settlement);
+      yield* stop.settlement;
       expect(interrupt).toHaveBeenCalledOnce();
       expect(testDefaultSession().runs.getHandle(runId)).toBeUndefined();
-    } finally {
-      await Effect.runPromise(sessionB.dispose());
-    }
-  });
+    }),
+  );
 
-  it('runFlowWithLifecycle tracks the handle in the runs it is provided, not the default', async () => {
-    await installPlatform({
-      globalState: { [GlobalStateKey.ONBOARDING_FIRST_RUN_DONE]: true },
-    });
-    const runId = 'e15001' as RunId;
-    const sessionB = createTestSession();
-    const ctx = createTestLaunchContext({
-      runId,
-      session: sessionB,
-    });
+  it.effect(
+    'runFlowWithLifecycle tracks the handle in the runs it is provided, not the default',
+    () =>
+      Effect.gen(function* () {
+        yield* Effect.promise(() =>
+          installPlatform({
+            globalState: { [GlobalStateKey.ONBOARDING_FIRST_RUN_DONE]: true },
+          }),
+        );
+        const runId = 'e15001' as RunId;
+        const sessionB = createTestSession();
+        yield* Effect.addFinalizer(() => sessionB.dispose());
+        const ctx = createTestLaunchContext({
+          runId,
+          session: sessionB,
+        });
 
-    try {
-      await Effect.runPromise(
-        Effect.provide(
+        yield* Effect.provide(
           runFlowWithLifecycle(ctx, () =>
             Effect.sync(() => {
               // Mid-run: the handle is registered in session B's registry only.
@@ -265,14 +268,11 @@ describe('session isolation', () => {
             }),
           ).pipe(Effect.provideService(Runs, sessionB.runs)),
           fakeProcessServices(),
-        ),
-      );
+        );
 
-      // After completion the run session untracked it; default never saw it.
-      expect(sessionB.runs.getHandle(runId)).toBeUndefined();
-      expect(testDefaultSession().runs.getHandle(runId)).toBeUndefined();
-    } finally {
-      await Effect.runPromise(sessionB.dispose());
-    }
-  });
+        // After completion the run session untracked it; default never saw it.
+        expect(sessionB.runs.getHandle(runId)).toBeUndefined();
+        expect(testDefaultSession().runs.getHandle(runId)).toBeUndefined();
+      }),
+  );
 });

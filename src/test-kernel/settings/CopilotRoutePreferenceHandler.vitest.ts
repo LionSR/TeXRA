@@ -1,6 +1,7 @@
 // Third-party imports
-import { Cause, Effect } from 'effect';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { it } from '@effect/vitest';
+import { Cause, Effect, Fiber } from 'effect';
+import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 import * as vscode from 'vscode';
 
 const mocks = vi.hoisted(() => ({
@@ -80,6 +81,7 @@ import type {
   LanguageModelInfo,
   LanguageModelPort,
 } from '@platform/languageModel';
+import { withProcessServices } from '@platform/processRuntime';
 import { SettingsViewMessageHandler } from '@settingsView/SettingsViewMessageHandler';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { testRuntime } from '@test/support/testProcessRuntime';
@@ -233,136 +235,179 @@ describe('Copilot route preference handler', () => {
     },
   );
 
-  it.each([
+  it.effect.each([
     { access: 'consent-required' as const, sends: true },
     { access: 'unavailable' as const, sends: false },
   ])(
     're-discovers stale allowed access before acting on $access',
-    async ({ access, sends }) => {
-      let models: readonly LanguageModelInfo[] = [GEMINI_PRO];
-      const port = {
-        ...languageModelPort([]),
-        selectModels: vi.fn(() => Effect.succeed(models)),
-      };
-      await installPlatform({}, { languageModel: port });
-      await testRuntime().runPromise(refreshRuntimeModelRegistry());
-      expect(copilotRouteForModel('gemini31p')?.access).toBe('allowed');
-      models = [{ ...GEMINI_PRO, access }];
-      await requestModelAccess();
-      expect(port.selectModels).toHaveBeenCalledTimes(2);
-      expect(mocks.sendRequest).toHaveBeenCalledTimes(sends ? 1 : 0);
-      expect(mocks.setCopilotRoutePreference).toHaveBeenCalledTimes(
-        sends ? 1 : 0,
-      );
-      if (!sends)
-        expect(mocks.showLoggedInfoMessage).toHaveBeenCalledWith(
-          'SettingsViewMessageHandler',
-          'This Copilot model is no longer available in VS Code. Refresh the model list and choose another model.',
+    ({ access, sends }) =>
+      Effect.gen(function* () {
+        let models: readonly LanguageModelInfo[] = [GEMINI_PRO];
+        const port = {
+          ...languageModelPort([]),
+          selectModels: vi.fn(() => Effect.succeed(models)),
+        };
+        yield* Effect.promise(() =>
+          installPlatform({}, { languageModel: port }),
         );
-    },
+        yield* withProcessServices(
+          testRuntime(),
+          refreshRuntimeModelRegistry(),
+        );
+        expect(copilotRouteForModel('gemini31p')?.access).toBe('allowed');
+        models = [{ ...GEMINI_PRO, access }];
+        yield* Effect.promise(() => requestModelAccess());
+        expect(port.selectModels).toHaveBeenCalledTimes(2);
+        expect(mocks.sendRequest).toHaveBeenCalledTimes(sends ? 1 : 0);
+        expect(mocks.setCopilotRoutePreference).toHaveBeenCalledTimes(
+          sends ? 1 : 0,
+        );
+        if (!sends)
+          expect(mocks.showLoggedInfoMessage).toHaveBeenCalledWith(
+            'SettingsViewMessageHandler',
+            'This Copilot model is no longer available in VS Code. Refresh the model list and choose another model.',
+          );
+      }),
   );
 
-  it('retries when invalidation supersedes a forced allowed probe', async () => {
-    const port = await installModels(GEMINI_PRO);
-    await testRuntime().runPromise(refreshRuntimeModelRegistry());
-    const forced = createDeferred<readonly LanguageModelInfo[]>();
-    vi.mocked(port.selectModels)
-      .mockReturnValueOnce(Effect.promise(() => forced.promise))
-      .mockReturnValueOnce(
-        Effect.succeed([{ ...GEMINI_PRO, access: 'unavailable' }]),
+  it.live('retries when invalidation supersedes a forced allowed probe', () =>
+    Effect.gen(function* () {
+      const port = yield* Effect.promise(() => installModels(GEMINI_PRO));
+      yield* withProcessServices(testRuntime(), refreshRuntimeModelRegistry());
+      const forced = createDeferred<readonly LanguageModelInfo[]>();
+      vi.mocked(port.selectModels)
+        .mockReturnValueOnce(Effect.promise(() => forced.promise))
+        .mockReturnValueOnce(
+          Effect.succeed([{ ...GEMINI_PRO, access: 'unavailable' }]),
+        );
+      const request = requestModelAccess();
+      yield* Effect.promise(() =>
+        vi.waitFor(() => expect(port.selectModels).toHaveBeenCalledTimes(2)),
       );
-    const request = requestModelAccess();
-    await vi.waitFor(() => expect(port.selectModels).toHaveBeenCalledTimes(2));
-    invalidateRuntimeModelRegistry();
-    forced.resolve([GEMINI_PRO]);
-    await request;
-    expect(port.selectModels).toHaveBeenCalledTimes(3);
-    expect(mocks.setCopilotRoutePreference).not.toHaveBeenCalled();
-    expect(mocks.sendRequest).not.toHaveBeenCalled();
-  });
+      invalidateRuntimeModelRegistry();
+      forced.resolve([GEMINI_PRO]);
+      yield* Effect.promise(() => request);
+      expect(port.selectModels).toHaveBeenCalledTimes(3);
+      expect(mocks.setCopilotRoutePreference).not.toHaveBeenCalled();
+      expect(mocks.sendRequest).not.toHaveBeenCalled();
+    }),
+  );
 
-  it('fails closed after two superseded forced probes', async () => {
-    const port = await installModels(GEMINI_PRO);
-    await testRuntime().runPromise(refreshRuntimeModelRegistry());
-    const forced = createDeferred<readonly LanguageModelInfo[]>();
-    const retry = createDeferred<readonly LanguageModelInfo[]>();
-    vi.mocked(port.selectModels)
-      .mockReturnValueOnce(Effect.promise(() => forced.promise))
-      .mockReturnValueOnce(Effect.promise(() => retry.promise));
-    const request = requestModelAccess();
-    await vi.waitFor(() => expect(port.selectModels).toHaveBeenCalledTimes(2));
-    invalidateRuntimeModelRegistry();
-    forced.resolve([GEMINI_PRO]);
-    await vi.waitFor(() => expect(port.selectModels).toHaveBeenCalledTimes(3));
-    invalidateRuntimeModelRegistry();
-    retry.resolve([GEMINI_PRO]);
-    await request;
-    expect(port.selectModels).toHaveBeenCalledTimes(3);
-    expect(mocks.setCopilotRoutePreference).not.toHaveBeenCalled();
-    expect(mocks.sendRequest).not.toHaveBeenCalled();
-  });
+  it.live('fails closed after two superseded forced probes', () =>
+    Effect.gen(function* () {
+      const port = yield* Effect.promise(() => installModels(GEMINI_PRO));
+      yield* withProcessServices(testRuntime(), refreshRuntimeModelRegistry());
+      const forced = createDeferred<readonly LanguageModelInfo[]>();
+      const retry = createDeferred<readonly LanguageModelInfo[]>();
+      vi.mocked(port.selectModels)
+        .mockReturnValueOnce(Effect.promise(() => forced.promise))
+        .mockReturnValueOnce(Effect.promise(() => retry.promise));
+      const request = requestModelAccess();
+      yield* Effect.promise(() =>
+        vi.waitFor(() => expect(port.selectModels).toHaveBeenCalledTimes(2)),
+      );
+      invalidateRuntimeModelRegistry();
+      forced.resolve([GEMINI_PRO]);
+      yield* Effect.promise(() =>
+        vi.waitFor(() => expect(port.selectModels).toHaveBeenCalledTimes(3)),
+      );
+      invalidateRuntimeModelRegistry();
+      retry.resolve([GEMINI_PRO]);
+      yield* Effect.promise(() => request);
+      expect(port.selectModels).toHaveBeenCalledTimes(3);
+      expect(mocks.setCopilotRoutePreference).not.toHaveBeenCalled();
+      expect(mocks.sendRequest).not.toHaveBeenCalled();
+    }),
+  );
 
-  it('does not let superseded ordinary discovery authorize a forced opt-in', async () => {
-    const ordinary = createDeferred<readonly LanguageModelInfo[]>();
-    const forced = createDeferred<readonly LanguageModelInfo[]>();
-    const port = {
-      ...languageModelPort([]),
-      selectModels: vi
-        .fn<() => Effect.Effect<readonly LanguageModelInfo[], unknown>>()
-        .mockReturnValueOnce(Effect.promise(() => ordinary.promise))
-        .mockReturnValueOnce(Effect.promise(() => forced.promise)),
-    };
-    await installPlatform({}, { languageModel: port });
-    const stale = testRuntime().runPromise(refreshRuntimeModelRegistry());
-    const request = requestModelAccess();
-    await vi.waitFor(() => expect(port.selectModels).toHaveBeenCalledTimes(2));
-    forced.resolve([{ ...GEMINI_PRO, access: 'unavailable' }]);
-    await request;
-    ordinary.resolve([GEMINI_PRO]);
-    await stale;
-    expect(copilotRouteForModel('gemini31p')?.access).toBe('unavailable');
-    expect(mocks.setCopilotRoutePreference).not.toHaveBeenCalled();
-    expect(mocks.sendRequest).not.toHaveBeenCalled();
-  });
+  it.live(
+    'does not let superseded ordinary discovery authorize a forced opt-in',
+    () =>
+      Effect.gen(function* () {
+        const ordinary = createDeferred<readonly LanguageModelInfo[]>();
+        const forced = createDeferred<readonly LanguageModelInfo[]>();
+        const port = {
+          ...languageModelPort([]),
+          selectModels: vi
+            .fn<() => Effect.Effect<readonly LanguageModelInfo[], unknown>>()
+            .mockReturnValueOnce(Effect.promise(() => ordinary.promise))
+            .mockReturnValueOnce(Effect.promise(() => forced.promise)),
+        };
+        yield* Effect.promise(() =>
+          installPlatform({}, { languageModel: port }),
+        );
+        const stale = yield* Effect.forkChild(
+          withProcessServices(testRuntime(), refreshRuntimeModelRegistry()),
+          { startImmediately: true },
+        );
+        const request = requestModelAccess();
+        yield* Effect.promise(() =>
+          vi.waitFor(() => expect(port.selectModels).toHaveBeenCalledTimes(2)),
+        );
+        forced.resolve([{ ...GEMINI_PRO, access: 'unavailable' }]);
+        yield* Effect.promise(() => request);
+        ordinary.resolve([GEMINI_PRO]);
+        yield* Fiber.join(stale);
+        expect(copilotRouteForModel('gemini31p')?.access).toBe('unavailable');
+        expect(mocks.setCopilotRoutePreference).not.toHaveBeenCalled();
+        expect(mocks.sendRequest).not.toHaveBeenCalled();
+      }),
+  );
 
-  it('coalesces overlapping user-initiated fresh discoveries', async () => {
-    const port = await installModels(GEMINI_PRO);
-    await testRuntime().runPromise(refreshRuntimeModelRegistry());
-    const discovery = createDeferred<readonly LanguageModelInfo[]>();
-    vi.mocked(port.selectModels).mockReturnValueOnce(
-      Effect.promise(() => discovery.promise),
-    );
-    const first = requestModelAccess();
-    const second = requestModelAccess();
-    await vi.waitFor(() => expect(port.selectModels).toHaveBeenCalledTimes(2));
-    discovery.resolve([{ ...GEMINI_PRO, access: 'unavailable' }]);
-    await Promise.all([first, second]);
-    expect(port.selectModels).toHaveBeenCalledTimes(2);
-    expect(mocks.setCopilotRoutePreference).not.toHaveBeenCalled();
-  });
+  it.live('coalesces overlapping user-initiated fresh discoveries', () =>
+    Effect.gen(function* () {
+      const port = yield* Effect.promise(() => installModels(GEMINI_PRO));
+      yield* withProcessServices(testRuntime(), refreshRuntimeModelRegistry());
+      const discovery = createDeferred<readonly LanguageModelInfo[]>();
+      vi.mocked(port.selectModels).mockReturnValueOnce(
+        Effect.promise(() => discovery.promise),
+      );
+      const first = requestModelAccess();
+      const second = requestModelAccess();
+      yield* Effect.promise(() =>
+        vi.waitFor(() => expect(port.selectModels).toHaveBeenCalledTimes(2)),
+      );
+      discovery.resolve([{ ...GEMINI_PRO, access: 'unavailable' }]);
+      yield* Effect.all(
+        [Effect.promise(() => first), Effect.promise(() => second)],
+        { concurrency: 'unbounded' },
+      );
+      expect(port.selectModels).toHaveBeenCalledTimes(2);
+      expect(mocks.setCopilotRoutePreference).not.toHaveBeenCalled();
+    }),
+  );
 
-  it('retains presentation but does not authorize after failed fresh discovery', async () => {
-    const failure = new Error('fresh discovery failed');
-    let fail = false;
-    const port = {
-      ...languageModelPort([]),
-      selectModels: vi.fn(() =>
-        fail ? Effect.fail(failure) : Effect.succeed([GEMINI_PRO]),
-      ),
-    };
-    await installPlatform({}, { languageModel: port });
-    await testRuntime().runPromise(refreshRuntimeModelRegistry());
-    fail = true;
-    await requestModelAccess();
-    expect(mocks.showLoggedErrorMessage).toHaveBeenCalled();
-    expect(mocks.setCopilotRoutePreference).not.toHaveBeenCalled();
-    expect(
-      (await testRuntime().runPromise(discoveredCopilotRoutes())).get(
-        'gemini31p',
-      )?.access,
-    ).toBe('allowed');
-    expect(port.selectModels).toHaveBeenCalledTimes(3);
-  });
+  it.effect(
+    'retains presentation but does not authorize after failed fresh discovery',
+    () =>
+      Effect.gen(function* () {
+        const failure = new Error('fresh discovery failed');
+        let fail = false;
+        const port = {
+          ...languageModelPort([]),
+          selectModels: vi.fn(() =>
+            fail ? Effect.fail(failure) : Effect.succeed([GEMINI_PRO]),
+          ),
+        };
+        yield* Effect.promise(() =>
+          installPlatform({}, { languageModel: port }),
+        );
+        yield* withProcessServices(
+          testRuntime(),
+          refreshRuntimeModelRegistry(),
+        );
+        fail = true;
+        yield* Effect.promise(() => requestModelAccess());
+        expect(mocks.showLoggedErrorMessage).toHaveBeenCalled();
+        expect(mocks.setCopilotRoutePreference).not.toHaveBeenCalled();
+        const routes = yield* withProcessServices(
+          testRuntime(),
+          discoveredCopilotRoutes(),
+        );
+        expect(routes.get('gemini31p')?.access).toBe('allowed');
+        expect(port.selectModels).toHaveBeenCalledTimes(3);
+      }),
+  );
 
   it.each([
     'denied',

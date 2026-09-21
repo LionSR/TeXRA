@@ -2,8 +2,9 @@ import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect } from 'vitest';
 
 import { TraceEmitter } from '@agent/trace';
 import {
@@ -145,7 +146,7 @@ describe('runtime skills', () => {
     ]);
   });
 
-  it.each([
+  it.effect.each([
     {
       label: 'name',
       key: WorkspaceStateKey.DISABLED_SKILLS,
@@ -158,32 +159,35 @@ describe('runtime skills', () => {
       value: ['user'],
       expected: ['project-skill'],
     },
-  ])(
-    'filters runtime skills disabled by $label',
-    async ({ key, value, expected }) => {
-      const projectRoot = await createTempRoot();
-      const userRoot = await createTempRoot();
-      await writeSkill(projectRoot, 'project-skill', {
-        name: 'project-skill',
-        description: 'Project skill.',
-      });
-      await writeSkill(userRoot, 'user-skill', {
-        name: 'user-skill',
-        description: 'User skill.',
-      });
+  ])('filters runtime skills disabled by $label', ({ key, value, expected }) =>
+    Effect.gen(function* () {
+      const projectRoot = yield* Effect.promise(() => createTempRoot());
+      const userRoot = yield* Effect.promise(() => createTempRoot());
+      yield* Effect.promise(() =>
+        writeSkill(projectRoot, 'project-skill', {
+          name: 'project-skill',
+          description: 'Project skill.',
+        }),
+      );
+      yield* Effect.promise(() =>
+        writeSkill(userRoot, 'user-skill', {
+          name: 'user-skill',
+          description: 'User skill.',
+        }),
+      );
       setRuntimeSkillSources([
         { scope: 'project', path: projectRoot },
         { scope: 'user', path: userRoot },
       ]);
-      await Effect.runPromise(testWorkspaceRoots().config.update(key, value));
+      yield* testWorkspaceRoots().config.update(key, value);
 
-      const result = await loadRuntimeSkillCatalog(
+      const result = yield* loadRuntimeSkillCatalogEffect(
         WORKSPACE_ROOT,
         testWorkspaceRoots(),
       );
 
       expect(result.skills.map((skill) => skill.name)).toStrictEqual(expected);
-    },
+    }),
   );
 
   it('bounds the accepted set once before prompt and snapshot projection', async () => {

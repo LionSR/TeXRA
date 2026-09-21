@@ -1,5 +1,6 @@
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { describe, expect, it } from 'vitest';
+import { describe, expect } from 'vitest';
 
 import {
   AgentConfigSchema,
@@ -127,167 +128,181 @@ function createController({
 }
 
 describe('ProgressFollowUpController', () => {
-  it('plans latexFixer with generated output sources before input recovery', async () => {
-    const controller = createController({
-      existingFiles: new Set(['source.tex', 'main.tex']),
-    });
-    const output = createRunStorageOutputFile({ source: 'source.tex' });
-    const plan = await Effect.runPromise(
-      controller.planCompileFixer({
-        runId: RUN,
-        runConfig: createFollowUpWorkflowConfig({
-          inputFiles: ['main.tex', 'source.tex'],
-        }),
-        compileFailures: [createCompileFailure()],
-        runOutputs: { 2: [output] },
-        modelOptions: [{ value: 'other-model' }],
+  it.effect(
+    'plans latexFixer with generated output sources before input recovery',
+    () =>
+      Effect.gen(function* () {
+        const controller = createController({
+          existingFiles: new Set(['source.tex', 'main.tex']),
+        });
+        const output = createRunStorageOutputFile({ source: 'source.tex' });
+        const plan = yield* controller.planCompileFixer({
+          runId: RUN,
+          runConfig: createFollowUpWorkflowConfig({
+            inputFiles: ['main.tex', 'source.tex'],
+          }),
+          compileFailures: [createCompileFailure()],
+          runOutputs: { 2: [output] },
+          modelOptions: [{ value: 'other-model' }],
+        });
+
+        expect(plan.kind).toBe('execute');
+        if (plan.kind !== 'execute') return;
+        const config = plan.request.config;
+        expect(config.agent).toBe('latexFixer');
+        expect(config.model).toBe('other-model');
+        expect(config.inputFiles).toEqual(['source.tex', 'main.tex']);
+        expect(config.instruction ?? '').toMatch(
+          /Editable workspace targets: source\.tex, main\.tex/,
+        );
+        // Addressed through the run that owns the artifact (`OWNING_RUN`, on
+        // the failure's own locations), not the run asking about it.
+        expect(config.instruction ?? '').toMatch(
+          /output \/executions\/ab12c0\/files\/answer\.tex; compile log \/executions\/ab12c0\/files\/answer\.log/,
+        );
       }),
-    );
+  );
 
-    expect(plan.kind).toBe('execute');
-    if (plan.kind !== 'execute') return;
-    const config = plan.request.config;
-    expect(config.agent).toBe('latexFixer');
-    expect(config.model).toBe('other-model');
-    expect(config.inputFiles).toEqual(['source.tex', 'main.tex']);
-    expect(config.instruction ?? '').toMatch(
-      /Editable workspace targets: source\.tex, main\.tex/,
-    );
-    // Addressed through the run that owns the artifact (`OWNING_RUN`, on
-    // the failure's own locations), not the run asking about it.
-    expect(config.instruction ?? '').toMatch(
-      /output \/executions\/ab12c0\/files\/answer\.tex; compile log \/executions\/ab12c0\/files\/answer\.log/,
-    );
-  });
+  it.effect(
+    'uses original workflow inputs as recovery when source metadata is absent',
+    () =>
+      Effect.gen(function* () {
+        const controller = createController({
+          existingFiles: new Set(['main.tex', 'chapter.tex']),
+        });
+        const plan = yield* controller.planCompileFixer({
+          runId: RUN,
+          runConfig: createFollowUpWorkflowConfig({
+            inputFiles: ['main.tex', 'chapter.tex'],
+          }),
+          compileFailures: [createCompileFailure()],
+          runOutputs: {},
+          modelOptions: [{ value: 'gemini31p' }],
+        });
 
-  it('uses original workflow inputs as recovery when source metadata is absent', async () => {
-    const controller = createController({
-      existingFiles: new Set(['main.tex', 'chapter.tex']),
-    });
-    const plan = await Effect.runPromise(
-      controller.planCompileFixer({
-        runId: RUN,
-        runConfig: createFollowUpWorkflowConfig({
-          inputFiles: ['main.tex', 'chapter.tex'],
-        }),
-        compileFailures: [createCompileFailure()],
-        runOutputs: {},
-        modelOptions: [{ value: 'gemini31p' }],
+        expect(plan.kind).toBe('execute');
+        if (plan.kind !== 'execute') return;
+        const config = plan.request.config;
+        expect(config.inputFiles).toEqual(['main.tex', 'chapter.tex']);
+        expect(config.instruction ?? '').toMatch(
+          /Editable workspace targets: main\.tex, chapter\.tex/,
+        );
       }),
-    );
+  );
 
-    expect(plan.kind).toBe('execute');
-    if (plan.kind !== 'execute') return;
-    const config = plan.request.config;
-    expect(config.inputFiles).toEqual(['main.tex', 'chapter.tex']);
-    expect(config.instruction ?? '').toMatch(
-      /Editable workspace targets: main\.tex, chapter\.tex/,
-    );
-  });
+  it.effect(
+    'warns when compile failures have no editable workspace source',
+    () =>
+      Effect.gen(function* () {
+        const plan = yield* createController({
+          existingFiles: new Set(),
+        }).planCompileFixer({
+          runId: RUN,
+          runConfig: createFollowUpWorkflowConfig({
+            inputFiles: ['/external/main.tex'],
+          }),
+          compileFailures: [createCompileFailure()],
+          runOutputs: {
+            2: [createRunStorageOutputFile({ source: '/external/main.tex' })],
+          },
+          modelOptions: [{ value: 'gemini31p' }],
+        });
 
-  it('warns when compile failures have no editable workspace source', async () => {
-    const plan = await Effect.runPromise(
-      createController({
-        existingFiles: new Set(),
-      }).planCompileFixer({
-        runId: RUN,
-        runConfig: createFollowUpWorkflowConfig({
-          inputFiles: ['/external/main.tex'],
-        }),
-        compileFailures: [createCompileFailure()],
-        runOutputs: {
-          2: [createRunStorageOutputFile({ source: '/external/main.tex' })],
-        },
-        modelOptions: [{ value: 'gemini31p' }],
+        expect(plan).toEqual({
+          kind: 'warning',
+          message:
+            'No editable workspace file matched the compile failure. Accept the output into the workspace first, then run latexFixer.',
+        });
       }),
-    );
+  );
 
-    expect(plan).toEqual({
-      kind: 'warning',
-      message:
-        'No editable workspace file matched the compile failure. Accept the output into the workspace first, then run latexFixer.',
-    });
-  });
+  it.effect(
+    'keeps generated latexdiff artifacts and exposes the source as an extra target',
+    () =>
+      Effect.gen(function* () {
+        const plan = yield* createController({
+          existingFiles: new Set(['main.tex', 'main-diffea268c1.tex']),
+        }).planCompileFixer({
+          runId: RUN,
+          runConfig: createExactInputsConfig({
+            inputFiles: ['main-diffea268c1.tex'],
+          }),
+          compileFailures: [createCompileFailure()],
+          runOutputs: {
+            2: [createRunStorageOutputFile({ source: 'main-diffea268c1.tex' })],
+          },
+          modelOptions: [{ value: 'gemini31p' }],
+        });
 
-  it('keeps generated latexdiff artifacts and exposes the source as an extra target', async () => {
-    const plan = await Effect.runPromise(
-      createController({
-        existingFiles: new Set(['main.tex', 'main-diffea268c1.tex']),
-      }).planCompileFixer({
-        runId: RUN,
-        runConfig: createExactInputsConfig({
-          inputFiles: ['main-diffea268c1.tex'],
-        }),
-        compileFailures: [createCompileFailure()],
-        runOutputs: {
-          2: [createRunStorageOutputFile({ source: 'main-diffea268c1.tex' })],
-        },
-        modelOptions: [{ value: 'gemini31p' }],
+        expect(plan.kind).toBe('execute');
+        if (plan.kind !== 'execute') return;
+        expect(plan.request.config.inputFiles).toEqual([
+          'main-diffea268c1.tex',
+          'main.tex',
+        ]);
+        expect(plan.request.config.instruction).toContain(
+          'main-diffea268c1.tex is a latexdiff artifact generated from main.tex',
+        );
+        expect(plan.request.config.instruction).toContain(
+          'repair this artifact in place',
+        );
+        expect(plan.request.config.instruction).toContain(
+          'fix main.tex too so a regenerated diff stays fixed',
+        );
       }),
-    );
+  );
 
-    expect(plan.kind).toBe('execute');
-    if (plan.kind !== 'execute') return;
-    expect(plan.request.config.inputFiles).toEqual([
-      'main-diffea268c1.tex',
-      'main.tex',
-    ]);
-    expect(plan.request.config.instruction).toContain(
-      'main-diffea268c1.tex is a latexdiff artifact generated from main.tex',
-    );
-    expect(plan.request.config.instruction).toContain(
-      'repair this artifact in place',
-    );
-    expect(plan.request.config.instruction).toContain(
-      'fix main.tex too so a regenerated diff stays fixed',
-    );
-  });
+  it.effect(
+    'keeps strong generated latexdiff artifacts when the source is absent',
+    () =>
+      Effect.gen(function* () {
+        const plan = yield* createController({
+          existingFiles: new Set(['main-diffea268c1.tex']),
+        }).planCompileFixer({
+          runId: RUN,
+          runConfig: createExactInputsConfig({
+            inputFiles: ['main-diffea268c1.tex'],
+          }),
+          compileFailures: [createCompileFailure()],
+          runOutputs: {
+            2: [createRunStorageOutputFile({ source: 'main-diffea268c1.tex' })],
+          },
+          modelOptions: [{ value: 'gemini31p' }],
+        });
 
-  it('keeps strong generated latexdiff artifacts when the source is absent', async () => {
-    const plan = await Effect.runPromise(
-      createController({
-        existingFiles: new Set(['main-diffea268c1.tex']),
-      }).planCompileFixer({
-        runId: RUN,
-        runConfig: createExactInputsConfig({
-          inputFiles: ['main-diffea268c1.tex'],
-        }),
-        compileFailures: [createCompileFailure()],
-        runOutputs: {
-          2: [createRunStorageOutputFile({ source: 'main-diffea268c1.tex' })],
-        },
-        modelOptions: [{ value: 'gemini31p' }],
+        expect(plan.kind).toBe('execute');
+        if (plan.kind !== 'execute') return;
+        expect(plan.request.config.inputFiles).toEqual([
+          'main-diffea268c1.tex',
+        ]);
+        expect(plan.request.config.instruction).toContain(
+          'main-diffea268c1.tex is a latexdiff artifact; inferred source main.tex is not present in the workspace',
+        );
       }),
-    );
+  );
 
-    expect(plan.kind).toBe('execute');
-    if (plan.kind !== 'execute') return;
-    expect(plan.request.config.inputFiles).toEqual(['main-diffea268c1.tex']);
-    expect(plan.request.config.instruction).toContain(
-      'main-diffea268c1.tex is a latexdiff artifact; inferred source main.tex is not present in the workspace',
-    );
-  });
+  it.effect(
+    'uses the inferred source when a generated latexdiff artifact is absent',
+    () =>
+      Effect.gen(function* () {
+        const plan = yield* createController().planCompileFixer({
+          runId: RUN,
+          runConfig: createExactInputsConfig({
+            inputFiles: ['main-diffea268c1.tex'],
+          }),
+          compileFailures: [createCompileFailure()],
+          runOutputs: {
+            2: [createRunStorageOutputFile({ source: 'main-diffea268c1.tex' })],
+          },
+          modelOptions: [{ value: 'gemini31p' }],
+        });
 
-  it('uses the inferred source when a generated latexdiff artifact is absent', async () => {
-    const plan = await Effect.runPromise(
-      createController().planCompileFixer({
-        runId: RUN,
-        runConfig: createExactInputsConfig({
-          inputFiles: ['main-diffea268c1.tex'],
-        }),
-        compileFailures: [createCompileFailure()],
-        runOutputs: {
-          2: [createRunStorageOutputFile({ source: 'main-diffea268c1.tex' })],
-        },
-        modelOptions: [{ value: 'gemini31p' }],
+        expect(plan.kind).toBe('execute');
+        if (plan.kind !== 'execute') return;
+        expect(plan.request.config.inputFiles).toEqual(['main.tex']);
+        expect(plan.request.config.instruction).toContain(
+          'main-diffea268c1.tex was a latexdiff artifact candidate, but it is not present in the workspace. main.tex is the inferred source fallback.',
+        );
       }),
-    );
-
-    expect(plan.kind).toBe('execute');
-    if (plan.kind !== 'execute') return;
-    expect(plan.request.config.inputFiles).toEqual(['main.tex']);
-    expect(plan.request.config.instruction).toContain(
-      'main-diffea268c1.tex was a latexdiff artifact candidate, but it is not present in the workspace. main.tex is the inferred source fallback.',
-    );
-  });
+  );
 });

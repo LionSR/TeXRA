@@ -1,8 +1,10 @@
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, vi } from 'vitest';
 
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { FakeSecrets } from '@test/support/FakePlatform';
+import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 
 const mocks = vi.hoisted(() => ({
@@ -198,71 +200,78 @@ describe('CLI model-access status lines', () => {
     expect(mocks.lookupApiKeyOrigin).toHaveBeenCalledTimes(3);
   });
 
-  it('appends normalized usage to configured routes and force-refreshes on open', async () => {
-    mocks.readCliModelAccessStatus.mockReturnValue(
-      Effect.succeed({
-        preferences: {
-          chatGpt: 'off',
-          grok: 'off',
-        },
-        codingPlans: codingPlans(true, true, true, true),
-        chatGptSignedIn: false,
-        grokSignedIn: false,
-      }),
-    );
-    mocks.getSubscriptionUsage.mockImplementation((provider: string) =>
-      Effect.succeed(
-        provider === 'glmCodingPlan'
-          ? {
-              state: 'unavailable',
-              provider,
-              providerName: 'GLM',
-              planName: 'GLM Coding Plan',
-              fetchedAt: 1_800_000_000_000,
-              windows: [],
-              reason: 'request_failed',
-            }
-          : {
-              state: 'available',
-              provider,
-              providerName: 'Kimi Code',
-              planName: 'Kimi Code',
-              fetchedAt: 1_800_000_000_000,
-              windows: [
-                {
-                  name: 'five_hour',
-                  percentUsed: 0,
-                  percentRemaining: 100,
-                  resetAt: 1_800_007_200_000,
-                },
-                {
-                  name: 'seven_day',
-                  percentUsed: 100,
-                  percentRemaining: 0,
-                  resetAt: 1_800_162_000_000,
-                },
-              ],
+  it.effect(
+    'appends normalized usage to configured routes and force-refreshes on open',
+    () =>
+      Effect.gen(function* () {
+        mocks.readCliModelAccessStatus.mockReturnValue(
+          Effect.succeed({
+            preferences: {
+              chatGpt: 'off',
+              grok: 'off',
             },
-      ),
-    );
+            codingPlans: codingPlans(true, true, true, true),
+            chatGptSignedIn: false,
+            grokSignedIn: false,
+          }),
+        );
+        mocks.getSubscriptionUsage.mockImplementation((provider: string) =>
+          Effect.succeed(
+            provider === 'glmCodingPlan'
+              ? {
+                  state: 'unavailable',
+                  provider,
+                  providerName: 'GLM',
+                  planName: 'GLM Coding Plan',
+                  fetchedAt: 1_800_000_000_000,
+                  windows: [],
+                  reason: 'request_failed',
+                }
+              : {
+                  state: 'available',
+                  provider,
+                  providerName: 'Kimi Code',
+                  planName: 'Kimi Code',
+                  fetchedAt: 1_800_000_000_000,
+                  windows: [
+                    {
+                      name: 'five_hour',
+                      percentUsed: 0,
+                      percentRemaining: 100,
+                      resetAt: 1_800_007_200_000,
+                    },
+                    {
+                      name: 'seven_day',
+                      percentUsed: 100,
+                      percentRemaining: 0,
+                      resetAt: 1_800_162_000_000,
+                    },
+                  ],
+                },
+          ),
+        );
 
-    const lines = await testRuntime().runPromise(
-      loadCliDetailedAccountStatusLines(stores, secrets, {
-        now: 1_800_000_000_000,
+        // The usage credential reads carry the process HTTP client in their
+        // type; the mocked reader never touches it, so the test layer stands
+        // in for the kernel runtime's client.
+        const lines = yield* loadCliDetailedAccountStatusLines(
+          stores,
+          secrets,
+          { now: 1_800_000_000_000 },
+        ).pipe(Effect.provide(testHttpClientLayer));
+
+        expect(lineFor(lines, 'Kimi Code')).toBe(
+          'Kimi Code: preferred · key configured · 5-hour: 0% · resets in 2h · 7-day: 100% · resets in 1d 21h',
+        );
+        expect(lineFor(lines, 'GLM Coding Plan')).toBe(
+          'GLM Coding Plan: preferred · key configured · usage unavailable',
+        );
+        expect(mocks.getSubscriptionUsage.mock.calls).toStrictEqual([
+          ['kimiCode', { forceRefresh: true }],
+          ['glmCodingPlan', { forceRefresh: true }],
+        ]);
       }),
-    );
-
-    expect(lineFor(lines, 'Kimi Code')).toBe(
-      'Kimi Code: preferred · key configured · 5-hour: 0% · resets in 2h · 7-day: 100% · resets in 1d 21h',
-    );
-    expect(lineFor(lines, 'GLM Coding Plan')).toBe(
-      'GLM Coding Plan: preferred · key configured · usage unavailable',
-    );
-    expect(mocks.getSubscriptionUsage.mock.calls).toStrictEqual([
-      ['kimiCode', { forceRefresh: true }],
-      ['glmCodingPlan', { forceRefresh: true }],
-    ]);
-  });
+  );
 
   it.each([
     {
@@ -358,55 +367,57 @@ describe('CLI model-access status lines', () => {
     expect(lines.filter((line) => line === profileNote)).toHaveLength(1);
   });
 
-  it('reports the legacy model-access overview without reading key storage', async () => {
-    mocks.readCliModelAccessStatus.mockReturnValue(
-      Effect.succeed({
-        preferences: {
-          chatGpt: 'on',
-          grok: 'off',
-        },
-        codingPlans: codingPlans(),
-        chatGptSignedIn: true,
-        grokSignedIn: false,
-        chatGptAccountLabel: 'chatgpt@example.com',
-      }),
-    );
-    mocks.getCliAuthProfile.mockReturnValue(
-      Effect.succeed({
-        authenticated: true,
-        accountLabel: 'texra@example.com',
-      }),
-    );
-    mocks.lookupApiKeyOrigin.mockReturnValue(
-      Effect.fail(new Error('keychain offline')),
-    );
+  it.effect(
+    'reports the legacy model-access overview without reading key storage',
+    () =>
+      Effect.gen(function* () {
+        mocks.readCliModelAccessStatus.mockReturnValue(
+          Effect.succeed({
+            preferences: {
+              chatGpt: 'on',
+              grok: 'off',
+            },
+            codingPlans: codingPlans(),
+            chatGptSignedIn: true,
+            grokSignedIn: false,
+            chatGptAccountLabel: 'chatgpt@example.com',
+          }),
+        );
+        mocks.getCliAuthProfile.mockReturnValue(
+          Effect.succeed({
+            authenticated: true,
+            accountLabel: 'texra@example.com',
+          }),
+        );
+        mocks.lookupApiKeyOrigin.mockReturnValue(
+          Effect.fail(new Error('keychain offline')),
+        );
 
-    await expect(
-      Effect.runPromise(loadCliModelAccessOverview(stores, secrets)),
-    ).resolves.toEqual({
-      access: {
-        preferences: {
-          chatGpt: 'on',
-          grok: 'off',
-        },
-        codingPlans: codingPlans(),
-        chatGptSignedIn: true,
-        grokSignedIn: false,
-        chatGptAccountLabel: 'chatgpt@example.com',
-        texraSignedIn: true,
-        texraAccountLabel: 'texra@example.com',
-      },
-      lines: [
-        'ChatGPT preference: On · chatgpt@example.com',
-        'Grok preference: Off · sign in required to enable',
-        'Kimi Code preference: Off · key required to enable',
-        'GLM Coding Plan preference: Off · key required to enable',
-        'Otherwise: Your own API keys',
-        'TeXRA account: signed in as texra@example.com',
-      ],
-    });
-    expect(mocks.lookupApiKeyOrigin).not.toHaveBeenCalled();
-    expect(mocks.readCliModelAccessStatus).toHaveBeenCalledOnce();
-    expect(mocks.getCliAuthProfile).toHaveBeenCalledOnce();
-  });
+        expect(yield* loadCliModelAccessOverview(stores, secrets)).toEqual({
+          access: {
+            preferences: {
+              chatGpt: 'on',
+              grok: 'off',
+            },
+            codingPlans: codingPlans(),
+            chatGptSignedIn: true,
+            grokSignedIn: false,
+            chatGptAccountLabel: 'chatgpt@example.com',
+            texraSignedIn: true,
+            texraAccountLabel: 'texra@example.com',
+          },
+          lines: [
+            'ChatGPT preference: On · chatgpt@example.com',
+            'Grok preference: Off · sign in required to enable',
+            'Kimi Code preference: Off · key required to enable',
+            'GLM Coding Plan preference: Off · key required to enable',
+            'Otherwise: Your own API keys',
+            'TeXRA account: signed in as texra@example.com',
+          ],
+        });
+        expect(mocks.lookupApiKeyOrigin).not.toHaveBeenCalled();
+        expect(mocks.readCliModelAccessStatus).toHaveBeenCalledOnce();
+        expect(mocks.getCliAuthProfile).toHaveBeenCalledOnce();
+      }),
+  );
 });

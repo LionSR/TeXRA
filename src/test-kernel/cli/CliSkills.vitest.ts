@@ -2,9 +2,9 @@ import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
-import { afterEach, describe, expect, it, vi } from 'vitest';
-
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
+import { afterEach, describe, expect, vi } from 'vitest';
 
 import {
   formatCliSkillList,
@@ -23,8 +23,6 @@ import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
 const tempRoots = useTempDirs();
 
-const readCliSkills = (...args: Parameters<typeof readCliSkillsEffect>) =>
-  Effect.runPromise(readCliSkillsEffect(...args));
 /** The listing's own setting slots, carried as data by the caller. */
 const settings = makeFakeSettingsStores().stores;
 const disabled = readDisabledSkills(settings);
@@ -85,129 +83,157 @@ describe('CLI skills runtime', () => {
     ]);
   });
 
-  it('lists custom duplicate names before bundled skills', async () => {
-    const resources = await makeTempDir('texra-cli-skills-', tempRoots);
-    const custom = await makeTempDir('texra-cli-skills-', tempRoots);
-    await fs.mkdir(path.join(resources, 'skills'));
-    await writeSkill(
-      path.join(resources, 'skills'),
-      'shared-skill',
-      'The bundled skill.',
-    );
-    await writeSkill(custom, 'shared-skill', 'The custom skill.');
-    await writeSkill(custom, 'custom-only', 'The custom-only skill.');
+  it.effect('lists custom duplicate names before bundled skills', () =>
+    Effect.gen(function* () {
+      const resources = yield* Effect.promise(() =>
+        makeTempDir('texra-cli-skills-', tempRoots),
+      );
+      const custom = yield* Effect.promise(() =>
+        makeTempDir('texra-cli-skills-', tempRoots),
+      );
+      yield* Effect.promise(() => fs.mkdir(path.join(resources, 'skills')));
+      yield* Effect.promise(() =>
+        writeSkill(
+          path.join(resources, 'skills'),
+          'shared-skill',
+          'The bundled skill.',
+        ),
+      );
+      yield* Effect.promise(() =>
+        writeSkill(custom, 'shared-skill', 'The custom skill.'),
+      );
+      yield* Effect.promise(() =>
+        writeSkill(custom, 'custom-only', 'The custom-only skill.'),
+      );
 
-    const result = await readCliSkills(
-      {
-        cwd: resources,
-        resourcesPath: resources,
-      },
-      settings,
-      {
-        additionalPaths: [custom],
-      },
-    );
+      const result = yield* readCliSkillsEffect(
+        {
+          cwd: resources,
+          resourcesPath: resources,
+        },
+        settings,
+        {
+          additionalPaths: [custom],
+        },
+      );
 
-    expect(
-      result.skills.map((entry) => skillDisplayItem(entry, disabled)),
-    ).toMatchObject([
-      {
-        name: 'custom-only',
-        description: 'The custom-only skill.',
-        scope: 'custom',
-      },
-      {
-        name: 'shared-skill',
-        description: 'The custom skill.',
-        scope: 'custom',
-      },
-    ]);
-    const formatted = formatCliSkillList(result.skills);
-    expect(formatted).toContain('custom\tshared-skill\tThe custom skill.');
-    expect(formatted).not.toContain(
-      'bundled\tshared-skill\tThe bundled skill.',
-    );
-    expect(result.errors).toContainEqual(
-      expect.objectContaining({
-        code: 'duplicate_name',
-        name: 'shared-skill',
+      expect(
+        result.skills.map((entry) => skillDisplayItem(entry, disabled)),
+      ).toMatchObject([
+        {
+          name: 'custom-only',
+          description: 'The custom-only skill.',
+          scope: 'custom',
+        },
+        {
+          name: 'shared-skill',
+          description: 'The custom skill.',
+          scope: 'custom',
+        },
+      ]);
+      const formatted = formatCliSkillList(result.skills);
+      expect(formatted).toContain('custom\tshared-skill\tThe custom skill.');
+      expect(formatted).not.toContain(
+        'bundled\tshared-skill\tThe bundled skill.',
+      );
+      expect(result.errors).toContainEqual(
+        expect.objectContaining({
+          code: 'duplicate_name',
+          name: 'shared-skill',
+        }),
+      );
+    }),
+  );
+
+  it.effect('reports missing explicit custom skill sources', () =>
+    Effect.gen(function* () {
+      const result = yield* readCliSkillsEffect(
+        {
+          cwd: path.resolve(path.sep, 'tmp', 'project'),
+          resourcesPath: path.resolve(path.sep, 'tmp', 'resources'),
+        },
+        settings,
+        {
+          additionalPaths: ['missing-skills'],
+        },
+      );
+
+      expect(result.skills).toEqual([]);
+      expect(result.errors).toContainEqual(
+        expect.objectContaining({
+          severity: 'error',
+          code: 'missing_source',
+          path: path.resolve(path.sep, 'tmp', 'project', 'missing-skills'),
+        }),
+      );
+    }),
+  );
+
+  it.effect(
+    'reports explicit custom skill sources that are not directories',
+    () =>
+      Effect.gen(function* () {
+        const root = yield* Effect.promise(() =>
+          makeTempDir('texra-cli-skills-', tempRoots),
+        );
+        const sourceFile = path.join(root, 'skills-file');
+        yield* Effect.promise(() =>
+          fs.writeFile(sourceFile, 'not a directory'),
+        );
+
+        const result = yield* readCliSkillsEffect(
+          {
+            cwd: root,
+            resourcesPath: root,
+          },
+          settings,
+          {
+            additionalPaths: [sourceFile],
+          },
+        );
+
+        expect(result.skills).toEqual([]);
+        expect(result.errors).toContainEqual(
+          expect.objectContaining({
+            severity: 'error',
+            code: 'invalid_source',
+            path: sourceFile,
+          }),
+        );
       }),
-    );
-  });
+  );
 
-  it('reports missing explicit custom skill sources', async () => {
-    const result = await readCliSkills(
-      {
-        cwd: path.resolve(path.sep, 'tmp', 'project'),
-        resourcesPath: path.resolve(path.sep, 'tmp', 'resources'),
-      },
-      settings,
-      {
-        additionalPaths: ['missing-skills'],
-      },
-    );
+  it.effect(
+    'reads the runtime skill source registry used by prompt injection',
+    () =>
+      Effect.gen(function* () {
+        const root = yield* Effect.promise(() =>
+          makeTempDir('texra-cli-skills-', tempRoots),
+        );
+        yield* Effect.promise(() =>
+          writeSkill(root, 'proof-audit', 'Review mathematical proof steps.'),
+        );
+        setRuntimeSkillSources([
+          {
+            scope: 'project',
+            path: root,
+            label: 'project',
+          },
+        ]);
 
-    expect(result.skills).toEqual([]);
-    expect(result.errors).toContainEqual(
-      expect.objectContaining({
-        severity: 'error',
-        code: 'missing_source',
-        path: path.resolve(path.sep, 'tmp', 'project', 'missing-skills'),
+        const result = yield* loadEnabledRuntimeSkills(root, settings);
+
+        expect(
+          result.skills.map((entry) => skillDisplayItem(entry, disabled)),
+        ).toMatchObject([
+          {
+            name: 'proof-audit',
+            description: 'Review mathematical proof steps.',
+            scope: 'project',
+            label: 'project',
+          },
+        ]);
+        expect(result.errors).toEqual([]);
       }),
-    );
-  });
-
-  it('reports explicit custom skill sources that are not directories', async () => {
-    const root = await makeTempDir('texra-cli-skills-', tempRoots);
-    const sourceFile = path.join(root, 'skills-file');
-    await fs.writeFile(sourceFile, 'not a directory');
-
-    const result = await readCliSkills(
-      {
-        cwd: root,
-        resourcesPath: root,
-      },
-      settings,
-      {
-        additionalPaths: [sourceFile],
-      },
-    );
-
-    expect(result.skills).toEqual([]);
-    expect(result.errors).toContainEqual(
-      expect.objectContaining({
-        severity: 'error',
-        code: 'invalid_source',
-        path: sourceFile,
-      }),
-    );
-  });
-
-  it('reads the runtime skill source registry used by prompt injection', async () => {
-    const root = await makeTempDir('texra-cli-skills-', tempRoots);
-    await writeSkill(root, 'proof-audit', 'Review mathematical proof steps.');
-    setRuntimeSkillSources([
-      {
-        scope: 'project',
-        path: root,
-        label: 'project',
-      },
-    ]);
-
-    const result = await Effect.runPromise(
-      loadEnabledRuntimeSkills(root, settings),
-    );
-
-    expect(
-      result.skills.map((entry) => skillDisplayItem(entry, disabled)),
-    ).toMatchObject([
-      {
-        name: 'proof-audit',
-        description: 'Review mathematical proof steps.',
-        scope: 'project',
-        label: 'project',
-      },
-    ]);
-    expect(result.errors).toEqual([]);
-  });
+  );
 });

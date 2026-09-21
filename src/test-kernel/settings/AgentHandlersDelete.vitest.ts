@@ -2,12 +2,14 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 
-import { Effect, FileSystem, Layer, ManagedRuntime } from 'effect';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { it } from '@effect/vitest';
+import { Effect, Fiber, FileSystem, Layer, ManagedRuntime } from 'effect';
+import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 import { globalDatabaseLayer } from '@controllers/session/Database';
 import { inquiryRecordsLayer } from '@controllers/session/inquiryRecords';
 
 import { processOwnerId } from '@platform/defaults/nodeProcesses';
+import { withProcessServices } from '@platform/processRuntime';
 import { AgentHandlers } from '@settingsView/handlers/agentHandlers';
 import type { AgentSource } from '@shared/schemas';
 import { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
@@ -205,52 +207,69 @@ describe('AgentHandlers custom-agent file actions', () => {
     await rm(root, { recursive: true, force: true });
   });
 
-  it('coalesces repeated requests while the host confirmation is pending', async () => {
-    let resolveConfirmation!: (choice: string | undefined) => void;
-    const pendingConfirmation = new Promise<string | undefined>((resolve) => {
-      resolveConfirmation = resolve;
-    });
-    mocks.showWarningMessage.mockReturnValueOnce(pendingConfirmation);
-    const handlers = createHandlers();
+  it.live(
+    'coalesces repeated requests while the host confirmation is pending',
+    () =>
+      Effect.gen(function* () {
+        let resolveConfirmation!: (choice: string | undefined) => void;
+        const pendingConfirmation = new Promise<string | undefined>(
+          (resolve) => {
+            resolveConfirmation = resolve;
+          },
+        );
+        mocks.showWarningMessage.mockReturnValueOnce(pendingConfirmation);
+        const handlers = createHandlers();
 
-    const first = testRuntime().runPromise(
-      handlers.handleDeleteCustomAgent(DELETE_MY_AGENT),
-    );
-    await vi.waitFor(() =>
-      expect(mocks.showWarningMessage).toHaveBeenCalledTimes(1),
-    );
+        const first = yield* Effect.forkChild(
+          withProcessServices(
+            testRuntime(),
+            handlers.handleDeleteCustomAgent(DELETE_MY_AGENT),
+          ),
+          { startImmediately: true },
+        );
+        yield* Effect.promise(() =>
+          vi.waitFor(() =>
+            expect(mocks.showWarningMessage).toHaveBeenCalledTimes(1),
+          ),
+        );
 
-    await testRuntime().runPromise(
-      handlers.handleDeleteCustomAgent(DELETE_MY_AGENT),
-    );
-    expect(mocks.showWarningMessage).toHaveBeenCalledTimes(1);
+        yield* withProcessServices(
+          testRuntime(),
+          handlers.handleDeleteCustomAgent(DELETE_MY_AGENT),
+        );
+        expect(mocks.showWarningMessage).toHaveBeenCalledTimes(1);
 
-    resolveConfirmation(undefined);
-    await first;
+        resolveConfirmation(undefined);
+        yield* Fiber.join(first);
 
-    mocks.showWarningMessage.mockResolvedValueOnce(undefined);
-    await testRuntime().runPromise(
-      handlers.handleDeleteCustomAgent(DELETE_MY_AGENT),
-    );
-    expect(mocks.showWarningMessage).toHaveBeenCalledTimes(2);
-  });
+        mocks.showWarningMessage.mockResolvedValueOnce(undefined);
+        yield* withProcessServices(
+          testRuntime(),
+          handlers.handleDeleteCustomAgent(DELETE_MY_AGENT),
+        );
+        expect(mocks.showWarningMessage).toHaveBeenCalledTimes(2);
+      }),
+  );
 
-  it('rejects deletion outside the configured custom directory', async () => {
-    const outside = path.join(bundledDir, 'my-agent.yaml');
-    await writeFile(outside, AGENT_YAML);
-    mocks.getAgent.mockReturnValueOnce({ path: outside });
+  it.live('rejects deletion outside the configured custom directory', () =>
+    Effect.gen(function* () {
+      const outside = path.join(bundledDir, 'my-agent.yaml');
+      yield* Effect.promise(() => writeFile(outside, AGENT_YAML));
+      mocks.getAgent.mockReturnValueOnce({ path: outside });
 
-    await testRuntime().runPromise(
-      createHandlers().handleDeleteCustomAgent(DELETE_MY_AGENT),
-    );
+      yield* withProcessServices(
+        testRuntime(),
+        createHandlers().handleDeleteCustomAgent(DELETE_MY_AGENT),
+      );
 
-    expect(mocks.showLoggedMessage).toHaveBeenCalledWith(
-      'test',
-      'Refusing to delete: file is not inside the custom agents directory.',
-    );
-    expect(mocks.showWarningMessage).not.toHaveBeenCalled();
-    expect(await onDisk(outside)).toBe(true);
-  });
+      expect(mocks.showLoggedMessage).toHaveBeenCalledWith(
+        'test',
+        'Refusing to delete: file is not inside the custom agents directory.',
+      );
+      expect(mocks.showWarningMessage).not.toHaveBeenCalled();
+      expect(yield* Effect.promise(() => onDisk(outside))).toBe(true);
+    }),
+  );
 
   it('preserves the source-relative path when creating a custom copy', async () => {
     mocks.getAgent.mockReturnValueOnce({

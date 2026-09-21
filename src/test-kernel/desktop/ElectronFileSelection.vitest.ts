@@ -1,9 +1,14 @@
 import { mkdir, symlink, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { it } from '@effect/vitest';
+import { Effect } from 'effect';
+import { beforeEach, describe, expect, vi } from 'vitest';
 
-import type { ProcessRuntime } from '@platform/processRuntime';
+import {
+  withProcessServices,
+  type ProcessRuntime,
+} from '@platform/processRuntime';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
 type DesktopFileSelectionModule =
@@ -73,92 +78,125 @@ describe('desktop file selection', () => {
     });
   }
 
-  it('lists the base and edited candidates of the paper', async () => {
-    const files = await createFileSelection();
+  it.effect('lists the base and edited candidates of the paper', () =>
+    Effect.gen(function* () {
+      const files = yield* Effect.promise(() => createFileSelection());
 
-    const options = await runtime.runPromise(files.fileOptions());
+      const options = yield* withProcessServices(runtime, files.fileOptions());
 
-    expect(options.baseFile).toEqual(BASE_FILE_OPTIONS);
-    expect(options.editedFile).toEqual(
-      expect.arrayContaining([
-        'sections/main_edited.tex',
-        'sections/main_r1.tex',
-      ]),
-    );
-    expect(options.commit).toEqual(['HEAD']);
-  });
+      expect(options.baseFile).toEqual(BASE_FILE_OPTIONS);
+      expect(options.editedFile).toEqual(
+        expect.arrayContaining([
+          'sections/main_edited.tex',
+          'sections/main_r1.tex',
+        ]),
+      );
+      expect(options.commit).toEqual(['HEAD']);
+    }),
+  );
 
-  it('lists nothing without a workspace', async () => {
-    const files = await createFileSelection({ workspacePath: undefined });
+  it.effect('lists nothing without a workspace', () =>
+    Effect.gen(function* () {
+      const files = yield* Effect.promise(() =>
+        createFileSelection({ workspacePath: undefined }),
+      );
 
-    expect(await runtime.runPromise(files.fileOptions())).toEqual({
-      baseFile: [],
-      editedFile: [],
-      commit: ['HEAD'],
-    });
-    expect(await files.pickFiles('input')).toBeNull();
-  });
+      expect(yield* withProcessServices(runtime, files.fileOptions())).toEqual({
+        baseFile: [],
+        editedFile: [],
+        commit: ['HEAD'],
+      });
+      expect(yield* Effect.promise(() => files.pickFiles('input'))).toBeNull();
+    }),
+  );
 
-  it('opens the native picker and returns workspace-relative paths', async () => {
-    const showOpenFileDialog = vi
-      .fn()
-      .mockResolvedValue([
-        join(workspacePath, 'main.tex'),
-        join(workspacePath, 'sections', 'main_r1.tex'),
-      ]);
-    const files = await createFileSelection({ showOpenFileDialog });
+  it.effect(
+    'opens the native picker and returns workspace-relative paths',
+    () =>
+      Effect.gen(function* () {
+        const showOpenFileDialog = vi
+          .fn()
+          .mockResolvedValue([
+            join(workspacePath, 'main.tex'),
+            join(workspacePath, 'sections', 'main_r1.tex'),
+          ]);
+        const files = yield* Effect.promise(() =>
+          createFileSelection({ showOpenFileDialog }),
+        );
 
-    expect(await files.pickFiles('input', 'main.tex')).toEqual([
-      'main.tex',
-      'sections/main_r1.tex',
-    ]);
-    expect(showOpenFileDialog).toHaveBeenCalledWith(
-      expect.objectContaining({
-        title: 'Select input files',
-        allowMultiple: true,
-        defaultPath: join(workspacePath, 'main.tex'),
+        expect(
+          yield* Effect.promise(() => files.pickFiles('input', 'main.tex')),
+        ).toEqual(['main.tex', 'sections/main_r1.tex']);
+        expect(showOpenFileDialog).toHaveBeenCalledWith(
+          expect.objectContaining({
+            title: 'Select input files',
+            allowMultiple: true,
+            defaultPath: join(workspacePath, 'main.tex'),
+          }),
+        );
       }),
-    );
-  });
+  );
 
-  it('reports a cancelled picker as null and attaches only the admitted dropped files', async () => {
-    const files = await createFileSelection();
+  it.effect(
+    'reports a cancelled picker as null and attaches only the admitted dropped files',
+    () =>
+      Effect.gen(function* () {
+        const files = yield* Effect.promise(() => createFileSelection());
 
-    expect(await files.pickFiles('context')).toBeNull();
-    expect(
-      await runtime.runPromise(
-        files.attachDroppedFiles(
-          [
-            join(workspacePath, 'notes.md'),
-            join(workspacePath, 'sections'),
-            '/elsewhere/x.tex',
-          ],
-          'context',
-        ),
-      ),
-    ).toEqual(['notes.md']);
-    await expect(
-      runtime.runPromise(
-        files.attachDroppedFiles([join(workspacePath, 'sections')], 'input'),
-      ),
-    ).rejects.toMatchObject({ _tag: 'Rejected' });
-  });
+        expect(
+          yield* Effect.promise(() => files.pickFiles('context')),
+        ).toBeNull();
+        expect(
+          yield* withProcessServices(
+            runtime,
+            files.attachDroppedFiles(
+              [
+                join(workspacePath, 'notes.md'),
+                join(workspacePath, 'sections'),
+                '/elsewhere/x.tex',
+              ],
+              'context',
+            ),
+          ),
+        ).toEqual(['notes.md']);
 
-  it('skips a circular symlink instead of failing the catalog', async () => {
-    const loop = join(workspacePath, 'loop');
-    await symlink(loop, loop);
-    const files = await createFileSelection();
+        const error = yield* Effect.flip(
+          withProcessServices(
+            runtime,
+            files.attachDroppedFiles(
+              [join(workspacePath, 'sections')],
+              'input',
+            ),
+          ),
+        );
+        expect(error).toMatchObject({ _tag: 'Rejected' });
+      }),
+  );
 
-    expect((await runtime.runPromise(files.fileOptions())).baseFile).toEqual(
-      BASE_FILE_OPTIONS,
-    );
-  });
+  it.effect('skips a circular symlink instead of failing the catalog', () =>
+    Effect.gen(function* () {
+      const loop = join(workspacePath, 'loop');
+      yield* Effect.promise(() => symlink(loop, loop));
+      const files = yield* Effect.promise(() => createFileSelection());
 
-  it('rejects a listing of a missing workspace loudly', async () => {
-    const files = await createFileSelection({
-      workspacePath: join(workspacePath, 'missing'),
-    });
+      expect(
+        (yield* withProcessServices(runtime, files.fileOptions())).baseFile,
+      ).toEqual(BASE_FILE_OPTIONS);
+    }),
+  );
 
-    await expect(runtime.runPromise(files.fileOptions())).rejects.toThrow();
-  });
+  it.effect('rejects a listing of a missing workspace loudly', () =>
+    Effect.gen(function* () {
+      const files = yield* Effect.promise(() =>
+        createFileSelection({
+          workspacePath: join(workspacePath, 'missing'),
+        }),
+      );
+
+      const error = yield* Effect.flip(
+        withProcessServices(runtime, files.fileOptions()),
+      );
+      expect(error).toBeInstanceOf(Error);
+    }),
+  );
 });

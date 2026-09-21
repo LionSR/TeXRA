@@ -1,6 +1,6 @@
 # Packed-tarball example
 
-Runs [`@texra-ai/agent/effect`](../README.md#effect) the way a consumer off the
+Runs [`@texra-ai/agent`](../README.md) the way a consumer off the
 registry would: the package is packed, installed into this folder, and imported
 by package name. No repository path alias appears in `effectSession.mjs`, so a
 resolution the published artifact could not satisfy fails here.

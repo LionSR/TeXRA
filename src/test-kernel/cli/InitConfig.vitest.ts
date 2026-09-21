@@ -63,43 +63,52 @@ describe('writeInitConfig', () => {
 });
 
 describe('setWorkspaceCliChatAgent', () => {
-  it('updates only chat.agent and preserves the other command defaults', async () => {
-    await installPlatform(
-      {},
-      {
-        config: new FakeConfigProvider({
-          'texra.model': 'deepseekT',
-          'texra.chat': { agent: 'chat', model: 'deepseekT' },
-        }),
-      },
-    );
-    const chatSection = () =>
-      readSettingFrom(testWorkspaceRoots(), 'texra.chat');
+  it.effect(
+    'updates only chat.agent and preserves the other command defaults',
+    () =>
+      Effect.gen(function* () {
+        yield* Effect.promise(() =>
+          installPlatform(
+            {},
+            {
+              config: new FakeConfigProvider({
+                'texra.model': 'deepseekT',
+                'texra.chat': { agent: 'chat', model: 'deepseekT' },
+              }),
+            },
+          ),
+        );
+        const chatSection = () =>
+          readSettingFrom(testWorkspaceRoots(), 'texra.chat');
 
-    await Effect.runPromise(
-      setWorkspaceCliChatAgent(testWorkspaceRoots(), 'builtInToolUse:review'),
-    );
-    expect(chatSection()).toEqual({
-      agent: 'builtInToolUse:review',
-      model: 'deepseekT',
-    });
-    expect(readSettingFrom(testWorkspaceRoots(), 'texra.model')).toBe(
-      'deepseekT',
-    );
+        yield* setWorkspaceCliChatAgent(
+          testWorkspaceRoots(),
+          'builtInToolUse:review',
+        );
+        expect(chatSection()).toEqual({
+          agent: 'builtInToolUse:review',
+          model: 'deepseekT',
+        });
+        expect(readSettingFrom(testWorkspaceRoots(), 'texra.model')).toBe(
+          'deepseekT',
+        );
 
-    await Effect.runPromise(
-      setWorkspaceCliChatAgent(testWorkspaceRoots(), undefined),
-    );
-    expect(chatSection()).toEqual({ model: 'deepseekT' });
-  });
+        yield* setWorkspaceCliChatAgent(testWorkspaceRoots(), undefined);
+        expect(chatSection()).toEqual({ model: 'deepseekT' });
+      }),
+  );
 
-  it('refuses an empty agent rather than clearing the default', async () => {
-    await installPlatform({}, { config: new FakeConfigProvider() });
-
-    await expect(
-      Effect.runPromise(setWorkspaceCliChatAgent(testWorkspaceRoots(), '   ')),
-    ).rejects.toThrow('must not be empty');
-  });
+  it.effect('refuses an empty agent rather than clearing the default', () =>
+    Effect.gen(function* () {
+      yield* Effect.promise(() =>
+        installPlatform({}, { config: new FakeConfigProvider() }),
+      );
+      const error = yield* Effect.flip(
+        setWorkspaceCliChatAgent(testWorkspaceRoots(), '   '),
+      );
+      expect(error.message).toContain('must not be empty');
+    }),
+  );
 });
 
 describe('ensureTexraGitignored', () => {

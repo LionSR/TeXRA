@@ -198,22 +198,27 @@ const externalDiffPatchDirs = new Set<string>();
 // Removes every recorded patch directory, reporting each failure instead of
 // swallowing it: a directory that survives is left for OS temp cleanup, and
 // quit must not stall on it.
-const removeExternalDiffPatchDirs = async (): Promise<void> => {
+const removeExternalDiffPatchDirs: Effect.Effect<void> = Effect.suspend(() => {
   const tempDirs = [...externalDiffPatchDirs];
   externalDiffPatchDirs.clear();
-  const results = await Promise.allSettled(
-    tempDirs.map((tempDir) => rm(tempDir, { recursive: true, force: true })),
+  return Effect.forEach(
+    tempDirs,
+    (tempDir) =>
+      Effect.tryPromise({
+        try: () => rm(tempDir, { recursive: true, force: true }),
+        catch: (reason) => reason,
+      }).pipe(
+        Effect.catch((reason: unknown) =>
+          Effect.sync(() => {
+            console.warn(
+              `[desktop] Failed to remove the temporary diff directory ${tempDir}; it is left for OS temp cleanup: ${toErrorMessage(reason)}`,
+            );
+          }),
+        ),
+      ),
+    { concurrency: 'unbounded', discard: true },
   );
-  results.forEach((result, index) => {
-    if (result.status === 'rejected') {
-      console.warn(
-        `[desktop] Failed to remove the temporary diff directory ${tempDirs[index]}; it is left for OS temp cleanup: ${toErrorMessage(
-          result.reason,
-        )}`,
-      );
-    }
-  });
-};
+});
 
 // Playwright tests need a deterministic Electron profile so app-scoped stores
 // survive across launches. Normal desktop launches keep Electron's default
@@ -1897,7 +1902,7 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
         flushArtifacts: Effect.suspend(() => projects.flushArtifacts()),
         // The external-editor patch directories recorded by every window's
         // diff host are removed here, once, while the process is still alive.
-        afterFlushArtifacts: [Effect.promise(removeExternalDiffPatchDirs)],
+        afterFlushArtifacts: [removeExternalDiffPatchDirs],
         afterRunSettlement: [
           Effect.sync(() => processResources.dispose()),
           // The sessions after the process stores above them, settled before
@@ -1911,43 +1916,38 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
       // Until the initial window is fully wired, any startup failure must run
       // the same process-session shutdown used by an ordinary application
       // exit. Once this program completes, the lifecycle owns that cleanup.
-      // The original failure is re-raised, not the fold's envelope: the fatal
-      // reporter below prints `error.stack`, which a wrapper would replace
-      // with the runtime's own trace.
       const startup = await runtime.runPromiseExit(
-        // `Effect.promise`, not a typed failure: a rejection here is a defect,
-        // and `Cause.squash` below hands the original error — with its own
-        // `stack` — to the fatal reporter, which a tagged wrapper would hide.
-        Effect.promise(async () => {
+        // One program on this runtime's context, not nested runs behind a
+        // promise. The original failure is re-raised, not wrapped: the fatal
+        // reporter below prints `error.stack` from the `Cause.squash`'d error.
+        Effect.gen(function* () {
           const warn = (message: string) =>
             console.warn(`[desktop] ${message}`);
-          const projectRecords = await runtime.runPromise(
-            openDesktopProjectRecords,
-          );
-          projects = await runtime.runPromise(
-            openDesktopProjectRegistry({
-              dataRoot: platformInit.dataRoot,
-              processRoots: platformInit.processRoots,
-              globalConfigStore: platformInit.globalConfigStore,
-              records: projectRecords,
-              warn,
-              stores: {
-                ...platformInit.processRoots,
-                secrets: platformInit.secrets,
-              },
-            }),
-          );
+          const projectRecords = yield* openDesktopProjectRecords;
+          projects = yield* openDesktopProjectRegistry({
+            dataRoot: platformInit.dataRoot,
+            processRoots: platformInit.processRoots,
+            globalConfigStore: platformInit.globalConfigStore,
+            records: projectRecords,
+            warn,
+            stores: {
+              ...platformInit.processRoots,
+              secrets: platformInit.secrets,
+            },
+          });
           // Reopen every folder left open last time and show the one shown
           // last. A folder that is gone or no longer opens is reported once the
           // window exists; the others open regardless.
-          const remembered = await runtime.runPromise(
-            readRememberedDesktopProjects(projectRecords, warn),
+          const remembered = yield* readRememberedDesktopProjects(
+            projectRecords,
+            warn,
           );
           const unopenedProjects = remembered.missing.map(
             (root) => `${root} (no such folder; forgotten)`,
           );
-          for (const root of remembered.roots) {
-            await runtime.runPromise(
+          yield* Effect.forEach(
+            remembered.roots,
+            (root) =>
               projects.open(root).pipe(
                 Effect.catch((error) =>
                   Effect.sync(() => {
@@ -1955,71 +1955,71 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
                   }),
                 ),
               ),
-            );
-          }
-          await runtime.runPromise(
-            projects.activate(projects.list().at(-1)?.root),
+            { discard: true },
           );
-          // Ask the renderer to close before draining process services. A dirty
-          // editor can veto that close and remain fully operational. Once the
-          // window really closes, its handler calls app.quit() again and this
-          // listener proceeds with the ordinary shutdown chain.
-          installDesktopBeforeQuitWiring({
-            app,
-            getMainWindow: () => mainWindow,
-            lifecycle,
-            continueAfterWindowClose: (continueQuit) => {
-              continueQuitAfterWindowClose = continueQuit;
-            },
-          });
-
-          const pendingOAuthStore = createDesktopPendingOAuthStore(
-            console,
-            platformInit.globalState,
-          );
-          installContentSecurityPolicy();
-          reopenMainWindow = () =>
-            createWindow({
-              projects,
-              supabaseAuth: platformInit.supabaseAuth,
-              pendingOAuthStore,
-              globalState: platformInit.globalState,
-              secrets: platformInit.secrets,
-              agentDirectories: platformInit.agentDirectories,
-              resourcesPath: platformInit.resourcesPath,
-              runtime,
-              setupAuth: platformInit.setupAuth,
+          yield* projects.activate(projects.list().at(-1)?.root);
+          yield* Effect.sync(() => {
+            // Ask the renderer to close before draining process services. A dirty
+            // editor can veto that close and remain fully operational. Once the
+            // window really closes, its handler calls app.quit() again and this
+            // listener proceeds with the ordinary shutdown chain.
+            installDesktopBeforeQuitWiring({
+              app,
+              getMainWindow: () => mainWindow,
+              lifecycle,
+              continueAfterWindowClose: (continueQuit) => {
+                continueQuitAfterWindowClose = continueQuit;
+              },
             });
-          reopenMainWindow();
-          if (unopenedProjects.length > 0) {
-            runtime.runFork(
-              Effect.tryPromise({
-                try: () =>
-                  showDesktopWarningDialog(
-                    `Some projects could not be reopened:\n${unopenedProjects.join('\n')}`,
-                  ),
-                catch: (cause) =>
-                  new NotificationFailed({
-                    member: 'showWarningMessage',
-                    message:
-                      'The unopened-projects warning could not be shown.',
-                    cause,
-                  }),
-              }).pipe(
-                // The handler's parameter is the whole error type this
-                // expression can carry, so a second failure added to this
-                // channel fails to compile instead of being logged as a
-                // warning that would not show.
-                Effect.catch((error: NotificationFailed) =>
-                  Effect.sync(() => console.error(error)),
-                ),
-              ),
-            );
-          }
 
-          app.on('activate', () => {
-            if (BrowserWindow.getAllWindows().length === 0)
-              reopenMainWindow?.();
+            const pendingOAuthStore = createDesktopPendingOAuthStore(
+              console,
+              platformInit.globalState,
+            );
+            installContentSecurityPolicy();
+            reopenMainWindow = () =>
+              createWindow({
+                projects,
+                supabaseAuth: platformInit.supabaseAuth,
+                pendingOAuthStore,
+                globalState: platformInit.globalState,
+                secrets: platformInit.secrets,
+                agentDirectories: platformInit.agentDirectories,
+                resourcesPath: platformInit.resourcesPath,
+                runtime,
+                setupAuth: platformInit.setupAuth,
+              });
+            reopenMainWindow();
+            if (unopenedProjects.length > 0) {
+              runtime.runFork(
+                Effect.tryPromise({
+                  try: () =>
+                    showDesktopWarningDialog(
+                      `Some projects could not be reopened:\n${unopenedProjects.join('\n')}`,
+                    ),
+                  catch: (cause) =>
+                    new NotificationFailed({
+                      member: 'showWarningMessage',
+                      message:
+                        'The unopened-projects warning could not be shown.',
+                      cause,
+                    }),
+                }).pipe(
+                  // The handler's parameter is the whole error type this
+                  // expression can carry, so a second failure added to this
+                  // channel fails to compile instead of being logged as a
+                  // warning that would not show.
+                  Effect.catch((error: NotificationFailed) =>
+                    Effect.sync(() => console.error(error)),
+                  ),
+                ),
+              );
+            }
+
+            app.on('activate', () => {
+              if (BrowserWindow.getAllWindows().length === 0)
+                reopenMainWindow?.();
+            });
           });
         }),
       );

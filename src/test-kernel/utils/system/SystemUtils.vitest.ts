@@ -7,8 +7,9 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 // Third-party imports
+import { it } from '@effect/vitest';
 import { Effect, Exit, Fiber } from 'effect';
-import { describe, expect, expectTypeOf, it } from 'vitest';
+import { describe, expect, expectTypeOf } from 'vitest';
 
 // Local imports
 import type { ExecResult } from '@shared/schemas';
@@ -100,29 +101,31 @@ describe('executeCommand', () => {
     return { promise, childPid };
   }
 
-  it('keeps stderr empty for ordinary nonzero exits with stdout only', async () => {
-    const result = await Effect.runPromise(
-      executeCommand(
-        [
-          process.execPath,
-          '-e',
-          `process.stdout.write('failure details'); process.exit(7)`,
-        ],
-        { cwd: WORKSPACE, settings: undefined },
-      ),
-    );
+  it.live(
+    'keeps stderr empty for ordinary nonzero exits with stdout only',
+    () =>
+      Effect.gen(function* () {
+        const result = yield* executeCommand(
+          [
+            process.execPath,
+            '-e',
+            `process.stdout.write('failure details'); process.exit(7)`,
+          ],
+          { cwd: WORKSPACE, settings: undefined },
+        );
 
-    assert.equal(result.success, false);
-    assert.equal(result.exitCode, 7);
-    assert.equal(result.stdout, 'failure details');
-    assert.equal(result.stderr, '');
-    assert.equal(result.outputLimitExceeded, undefined);
-  });
+        assert.equal(result.success, false);
+        assert.equal(result.exitCode, 7);
+        assert.equal(result.stdout, 'failure details');
+        assert.equal(result.stderr, '');
+        assert.equal(result.outputLimitExceeded, undefined);
+      }),
+  );
 
-  it('decodes streamed Unicode split across byte chunks', async () => {
-    let streamed = '';
-    const result = await Effect.runPromise(
-      executeCommand(
+  it.live('decodes streamed Unicode split across byte chunks', () =>
+    Effect.gen(function* () {
+      let streamed = '';
+      const result = yield* executeCommand(
         [
           process.execPath,
           '-e',
@@ -137,51 +140,53 @@ describe('executeCommand', () => {
             streamed += chunk;
           },
         },
-      ),
-    );
+      );
 
-    assert.equal(result.success, true);
-    assert.equal(result.stdout, '');
-    assert.equal(streamed, '🙂');
-  });
+      assert.equal(result.success, true);
+      assert.equal(result.stdout, '');
+      assert.equal(streamed, '🙂');
+    }),
+  );
 
-  it('flushes pending multibyte stdout and stderr exactly once on stream close', async () => {
-    let streamedStdout = '';
-    let streamedStderr = '';
-    const result = await Effect.runPromise(
-      executeCommand(
-        [
-          process.execPath,
-          '-e',
-          `const fs = require('node:fs'); ` +
-            `fs.writeSync(1, Buffer.from([0xf0, 0x9f])); ` +
-            `fs.writeSync(2, Buffer.from([0xe2, 0x82])); ` +
-            `process.stdout.destroy(); process.stderr.destroy();`,
-        ],
-        {
-          cwd: WORKSPACE,
-          settings: undefined,
-          buffer: false,
-          onStdout: (chunk) => {
-            streamedStdout += chunk;
+  it.live(
+    'flushes pending multibyte stdout and stderr exactly once on stream close',
+    () =>
+      Effect.gen(function* () {
+        let streamedStdout = '';
+        let streamedStderr = '';
+        const result = yield* executeCommand(
+          [
+            process.execPath,
+            '-e',
+            `const fs = require('node:fs'); ` +
+              `fs.writeSync(1, Buffer.from([0xf0, 0x9f])); ` +
+              `fs.writeSync(2, Buffer.from([0xe2, 0x82])); ` +
+              `process.stdout.destroy(); process.stderr.destroy();`,
+          ],
+          {
+            cwd: WORKSPACE,
+            settings: undefined,
+            buffer: false,
+            onStdout: (chunk) => {
+              streamedStdout += chunk;
+            },
+            onStderr: (chunk) => {
+              streamedStderr += chunk;
+            },
           },
-          onStderr: (chunk) => {
-            streamedStderr += chunk;
-          },
-        },
-      ),
-    );
+        );
 
-    assert.equal(result.success, true);
-    assert.equal(streamedStdout, '\ufffd');
-    assert.equal(streamedStderr, '\ufffd');
-  });
+        assert.equal(result.success, true);
+        assert.equal(streamedStdout, '\ufffd');
+        assert.equal(streamedStderr, '\ufffd');
+      }),
+  );
 
-  it('disables maxBuffer enforcement when buffering is disabled', async () => {
-    const outputChars = 10_000;
-    let streamedChars = 0;
-    const result = await Effect.runPromise(
-      executeCommand(
+  it.live('disables maxBuffer enforcement when buffering is disabled', () =>
+    Effect.gen(function* () {
+      const outputChars = 10_000;
+      let streamedChars = 0;
+      const result = yield* executeCommand(
         [
           process.execPath,
           '-e',
@@ -196,194 +201,215 @@ describe('executeCommand', () => {
             streamedChars += chunk.length;
           },
         },
-      ),
-    );
-
-    assert.equal(result.success, true);
-    assert.equal(result.stdout, '');
-    assert.equal(streamedChars, outputChars);
-    assert.equal(result.outputLimitExceeded, undefined);
-  });
-
-  it('reports maxBuffer overflow as an error instead of partial success', async () => {
-    const result = await Effect.runPromise(
-      executeCommand(
-        [process.execPath, '-e', `process.stdout.write('x'.repeat(10_000))`],
-        { cwd: WORKSPACE, settings: undefined, maxBuffer: 64 },
-      ),
-    );
-
-    assert.equal(result.success, false);
-    assert.equal(result.exitCode, 2);
-    assert.equal(result.outputLimitExceeded, true);
-    assert.ok(result.stdout && result.stdout.length > 0);
-    assert.match(result.stderr ?? '', /maxBuffer exceeded/i);
-  });
-
-  it(
-    'aborts shell command process groups including children',
-    async () => {
-      if (process.platform === 'win32') return;
-
-      const controller = new AbortController();
-      const { promise, childPid } = await startSleeper(SLEEPER_SCRIPT, {
-        signal: controller.signal,
-        timeout: 60_000,
-      });
-
-      controller.abort();
-      const result = await promise;
-
-      assert.equal(result.success, false);
-      assert.equal(result.timedOut, false);
-      assert.equal(result.stderr, 'Command aborted by user');
-      await waitForProcessExit(childPid);
-    },
-    PROCESS_EXIT_TEST_TIMEOUT_MS,
-  );
-
-  it(
-    'tears down shell process groups when the running fiber is interrupted',
-    async () => {
-      if (process.platform === 'win32') return;
-
-      const dir = await makeTempDir('texra-exec-interrupt-', tempDirs);
-      const pidFile = join(dir, 'sleep.pid');
-      const childPid = await Effect.runPromise(
-        Effect.gen(function* () {
-          const fiber = yield* Effect.forkChild(
-            executeCommand(SLEEPER_SCRIPT, {
-              cwd: dir,
-              settings: undefined,
-              timeout: 60_000,
-              env: { PID_FILE: pidFile },
-            }),
-          );
-          yield* Effect.promise(() =>
-            waitForCondition(() => existsSync(pidFile), {
-              timeoutMs: 1000,
-              intervalMs: 20,
-              timeoutMessage: `Timed out waiting for ${pidFile}`,
-            }),
-          );
-          const pid = Number.parseInt(readFileSync(pidFile, 'utf8'), 10);
-          yield* Fiber.interrupt(fiber);
-          expect(Exit.hasInterrupts(yield* Fiber.await(fiber))).toBe(true);
-          return pid;
-        }),
       );
 
-      assert.ok(Number.isInteger(childPid) && childPid > 0);
-      // The interrupt is the only teardown here: no abort signal is threaded
-      // through, so the backgrounded sleep dies because `executeCommand`'s own
-      // finalizer signalled the detached shell's process group.
-      await waitForProcessExit(childPid);
-    },
-    PROCESS_EXIT_TEST_TIMEOUT_MS,
+      assert.equal(result.success, true);
+      assert.equal(result.stdout, '');
+      assert.equal(streamedChars, outputChars);
+      assert.equal(result.outputLimitExceeded, undefined);
+    }),
   );
 
-  it(
-    'aborts array-form commands via execa native cancelSignal',
-    async () => {
-      if (process.platform === 'win32') return;
+  it.live(
+    'reports maxBuffer overflow as an error instead of partial success',
+    () =>
+      Effect.gen(function* () {
+        const result = yield* executeCommand(
+          [process.execPath, '-e', `process.stdout.write('x'.repeat(10_000))`],
+          { cwd: WORKSPACE, settings: undefined, maxBuffer: 64 },
+        );
 
-      const controller = new AbortController();
-      let childPid: number | undefined;
-      const promise = Effect.runPromise(
-        executeCommand(
-          [process.execPath, '-e', 'setTimeout(() => {}, 60000)'],
-          {
-            cwd: WORKSPACE,
-            settings: undefined,
+        assert.equal(result.success, false);
+        assert.equal(result.exitCode, 2);
+        assert.equal(result.outputLimitExceeded, true);
+        assert.ok(result.stdout && result.stdout.length > 0);
+        assert.match(result.stderr ?? '', /maxBuffer exceeded/i);
+      }),
+  );
+
+  it.live(
+    'aborts shell command process groups including children',
+    () =>
+      Effect.gen(function* () {
+        if (process.platform === 'win32') return;
+
+        const controller = new AbortController();
+        const { promise, childPid } = yield* Effect.promise(() =>
+          startSleeper(SLEEPER_SCRIPT, {
             signal: controller.signal,
             timeout: 60_000,
-            onPid: (pid) => {
-              childPid = pid;
-            },
-          },
-        ),
-      );
+          }),
+        );
 
-      await waitForCondition(() => childPid !== undefined, {
-        timeoutMs: 1000,
-        intervalMs: 20,
-        timeoutMessage: 'Timed out waiting for child pid',
-      });
-      assert.ok(childPid && childPid > 0);
+        controller.abort();
+        const result = yield* Effect.promise(() => promise);
 
-      controller.abort();
-      const result = await promise;
-
-      assert.equal(result.success, false);
-      assert.equal(result.timedOut, false);
-      assert.equal(result.exitCode, 130);
-      assert.equal(result.stderr, 'Command aborted by user');
-      await waitForProcessExit(childPid!);
-    },
+        assert.equal(result.success, false);
+        assert.equal(result.timedOut, false);
+        assert.equal(result.stderr, 'Command aborted by user');
+        yield* Effect.promise(() => waitForProcessExit(childPid));
+      }),
     PROCESS_EXIT_TEST_TIMEOUT_MS,
   );
 
-  it('unblocks aborted array-form await when a descendant holds stdio', async () => {
-    if (process.platform === 'win32') return;
+  it.live(
+    'tears down shell process groups when the running fiber is interrupted',
+    () =>
+      Effect.gen(function* () {
+        if (process.platform === 'win32') return;
 
-    const controller = new AbortController();
-    // The backgrounded sleep inherits stdout/stderr; execa's cancelSignal
-    // only kills the tracked bash pid, so without the stream-teardown
-    // backstop this await would hang until the descendant exits.
-    const { promise, childPid } = await startSleeper(
-      ['bash', '-c', SLEEPER_SCRIPT],
-      { signal: controller.signal, timeout: 60_000 },
-    );
+        const dir = yield* Effect.promise(() =>
+          makeTempDir('texra-exec-interrupt-', tempDirs),
+        );
+        const pidFile = join(dir, 'sleep.pid');
+        const fiber = yield* Effect.forkChild(
+          executeCommand(SLEEPER_SCRIPT, {
+            cwd: dir,
+            settings: undefined,
+            timeout: 60_000,
+            env: { PID_FILE: pidFile },
+          }),
+        );
+        yield* Effect.promise(() =>
+          waitForCondition(() => existsSync(pidFile), {
+            timeoutMs: 1000,
+            intervalMs: 20,
+            timeoutMessage: `Timed out waiting for ${pidFile}`,
+          }),
+        );
+        const childPid = Number.parseInt(readFileSync(pidFile, 'utf8'), 10);
+        yield* Fiber.interrupt(fiber);
+        expect(Exit.hasInterrupts(yield* Fiber.await(fiber))).toBe(true);
 
-    controller.abort();
-    const result = await promise;
+        assert.ok(Number.isInteger(childPid) && childPid > 0);
+        // The interrupt is the only teardown here: no abort signal is threaded
+        // through, so the backgrounded sleep dies because `executeCommand`'s own
+        // finalizer signalled the detached shell's process group.
+        yield* Effect.promise(() => waitForProcessExit(childPid));
+      }),
+    PROCESS_EXIT_TEST_TIMEOUT_MS,
+  );
 
-    assert.equal(result.success, false);
-    assert.equal(result.timedOut, false);
-    assert.equal(result.exitCode, 130);
-    assert.equal(result.stderr, 'Command aborted by user');
-    // The default array form has no process-group semantics: the descendant
-    // must survive the abort. Reap it so the test doesn't leak.
-    assert.doesNotThrow(() => process.kill(childPid, 0));
-    process.kill(childPid, 'SIGKILL');
-  }, 20_000);
+  it.live(
+    'aborts array-form commands via execa native cancelSignal',
+    () =>
+      Effect.gen(function* () {
+        if (process.platform === 'win32') return;
 
-  it('unblocks timed-out array-form await when a descendant holds stdio', async () => {
-    if (process.platform === 'win32') return;
+        const controller = new AbortController();
+        let childPid: number | undefined;
+        const fiber = yield* Effect.forkChild(
+          executeCommand(
+            [process.execPath, '-e', 'setTimeout(() => {}, 60000)'],
+            {
+              cwd: WORKSPACE,
+              settings: undefined,
+              signal: controller.signal,
+              timeout: 60_000,
+              onPid: (pid) => {
+                childPid = pid;
+              },
+            },
+          ),
+        );
 
-    const { promise, childPid } = await startSleeper(
-      ['bash', '-c', SLEEPER_SCRIPT],
-      { timeout: 50 },
-    );
+        yield* Effect.promise(() =>
+          waitForCondition(() => childPid !== undefined, {
+            timeoutMs: 1000,
+            intervalMs: 20,
+            timeoutMessage: 'Timed out waiting for child pid',
+          }),
+        );
+        assert.ok(childPid && childPid > 0);
 
-    const result = await promise;
+        controller.abort();
+        const result = yield* Fiber.join(fiber);
 
-    assert.equal(result.success, false);
-    assert.equal(result.timedOut, true);
-    assert.doesNotThrow(() => process.kill(childPid, 0));
-    process.kill(childPid, 'SIGKILL');
-  }, 20_000);
+        assert.equal(result.success, false);
+        assert.equal(result.timedOut, false);
+        assert.equal(result.exitCode, 130);
+        assert.equal(result.stderr, 'Command aborted by user');
+        yield* Effect.promise(() => waitForProcessExit(childPid!));
+      }),
+    PROCESS_EXIT_TEST_TIMEOUT_MS,
+  );
 
-  it(
+  it.live(
+    'unblocks aborted array-form await when a descendant holds stdio',
+    () =>
+      Effect.gen(function* () {
+        if (process.platform === 'win32') return;
+
+        const controller = new AbortController();
+        // The backgrounded sleep inherits stdout/stderr; execa's cancelSignal
+        // only kills the tracked bash pid, so without the stream-teardown
+        // backstop this await would hang until the descendant exits.
+        const { promise, childPid } = yield* Effect.promise(() =>
+          startSleeper(['bash', '-c', SLEEPER_SCRIPT], {
+            signal: controller.signal,
+            timeout: 60_000,
+          }),
+        );
+
+        controller.abort();
+        const result = yield* Effect.promise(() => promise);
+
+        assert.equal(result.success, false);
+        assert.equal(result.timedOut, false);
+        assert.equal(result.exitCode, 130);
+        assert.equal(result.stderr, 'Command aborted by user');
+        // The default array form has no process-group semantics: the descendant
+        // must survive the abort. Reap it so the test doesn't leak.
+        assert.doesNotThrow(() => process.kill(childPid, 0));
+        process.kill(childPid, 'SIGKILL');
+      }),
+    20_000,
+  );
+
+  it.live(
+    'unblocks timed-out array-form await when a descendant holds stdio',
+    () =>
+      Effect.gen(function* () {
+        if (process.platform === 'win32') return;
+
+        const { promise, childPid } = yield* Effect.promise(() =>
+          startSleeper(['bash', '-c', SLEEPER_SCRIPT], { timeout: 50 }),
+        );
+
+        const result = yield* Effect.promise(() => promise);
+
+        assert.equal(result.success, false);
+        assert.equal(result.timedOut, true);
+        assert.doesNotThrow(() => process.kill(childPid, 0));
+        process.kill(childPid, 'SIGKILL');
+      }),
+    20_000,
+  );
+
+  it.live(
     'aborts array-form descendant trees when killProcessTree is set',
-    async () => {
-      if (process.platform === 'win32') return;
+    () =>
+      Effect.gen(function* () {
+        if (process.platform === 'win32') return;
 
-      const controller = new AbortController();
-      const { promise, childPid } = await startSleeper(
-        ['bash', '-c', SLEEPER_SCRIPT],
-        { signal: controller.signal, timeout: 60_000, killProcessTree: true },
-      );
+        const controller = new AbortController();
+        const { promise, childPid } = yield* Effect.promise(() =>
+          startSleeper(['bash', '-c', SLEEPER_SCRIPT], {
+            signal: controller.signal,
+            timeout: 60_000,
+            killProcessTree: true,
+          }),
+        );
 
-      controller.abort();
-      const result = await promise;
+        controller.abort();
+        const result = yield* Effect.promise(() => promise);
 
-      assert.equal(result.success, false);
-      assert.equal(result.timedOut, false);
-      // Inverts the survival assertions above: the backgrounded sleep is
-      // signalled with the tracked process instead of outliving it.
-      await waitForProcessExit(childPid);
-    },
+        assert.equal(result.success, false);
+        assert.equal(result.timedOut, false);
+        // Inverts the survival assertions above: the backgrounded sleep is
+        // signalled with the tracked process instead of outliving it.
+        yield* Effect.promise(() => waitForProcessExit(childPid));
+      }),
     PROCESS_EXIT_TEST_TIMEOUT_MS,
   );
 });

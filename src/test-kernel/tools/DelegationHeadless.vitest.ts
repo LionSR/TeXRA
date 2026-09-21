@@ -739,19 +739,19 @@ describe('headless delegation', () => {
               : settle(runId, options),
           );
 
-        try {
-          expect(
-            yield* Effect.flip(runInBand(delegationOptions())),
-          ).toMatchObject({
-            name: 'SubagentDurabilityError',
-            message: expect.stringContaining(
-              'failed to commit its final artifacts',
-            ),
-            cause: expect.objectContaining({ name: 'RunArtifactDrainError' }),
-          });
-        } finally {
-          drain.mockRestore();
-        }
+        yield* Effect.addFinalizer(() =>
+          Effect.sync(() => drain.mockRestore()),
+        );
+
+        expect(
+          yield* Effect.flip(runInBand(delegationOptions())),
+        ).toMatchObject({
+          name: 'SubagentDurabilityError',
+          message: expect.stringContaining(
+            'failed to commit its final artifacts',
+          ),
+          cause: expect.objectContaining({ name: 'RunArtifactDrainError' }),
+        });
       }),
   );
 
@@ -770,19 +770,19 @@ describe('headless delegation', () => {
               : settle(runId, options),
           );
 
-        try {
-          expect(
-            yield* Effect.flip(runInBand(delegationOptions())),
-          ).toMatchObject({
-            name: 'SubagentDurabilityError',
-            message: expect.stringContaining(
-              'failed to commit its final artifacts',
-            ),
-          });
-          expect(childDrains).toBe(3);
-        } finally {
-          drain.mockRestore();
-        }
+        yield* Effect.addFinalizer(() =>
+          Effect.sync(() => drain.mockRestore()),
+        );
+
+        expect(
+          yield* Effect.flip(runInBand(delegationOptions())),
+        ).toMatchObject({
+          name: 'SubagentDurabilityError',
+          message: expect.stringContaining(
+            'failed to commit its final artifacts',
+          ),
+        });
+        expect(childDrains).toBe(3);
       }),
   );
 

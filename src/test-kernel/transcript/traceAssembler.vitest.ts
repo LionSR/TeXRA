@@ -1,5 +1,6 @@
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 import { getRunRecords } from '@agent/storage';
 import { registerRun } from '@agent/storage/runLifecycle';
@@ -106,90 +107,92 @@ describe('assembleTrace', () => {
     vi.restoreAllMocks();
   });
 
-  it('assembles a registered run from its folded view', async () => {
-    const runId = 'abc900abc900' as RunId;
-    const runConfigRecord = config({ agent: 'review', model: 'sonnet46T' });
-    await Effect.runPromise(
-      registerRun(session, runId, runConfigRecord, 'review', {
+  it.effect('assembles a registered run from its folded view', () =>
+    Effect.gen(function* () {
+      const runId = 'abc900abc900' as RunId;
+      const runConfigRecord = config({ agent: 'review', model: 'sonnet46T' });
+      yield* registerRun(session, runId, runConfigRecord, 'review', {
         identity: { kind: 'agent', agent: 'review' },
-      }),
-    );
-    await appendLogEntry(runId, 'registered row');
+      });
+      yield* Effect.promise(() => appendLogEntry(runId, 'registered row'));
 
-    const { trace } = unwrapOk(
-      await Effect.runPromise(assembleTrace(runId, session)),
-    );
+      const { trace } = unwrapOk(yield* assembleTrace(runId, session));
 
-    expect(trace.runId).toBe(runId);
-  });
+      expect(trace.runId).toBe(runId);
+    }),
+  );
 
-  it('assembles a full trace document for a run', async () => {
-    const runId = 'aa11bb22cc33' as RunId;
-    const runConfigRecord = config({ agent: 'review', model: 'sonnet46T' });
+  it.effect('assembles a full trace document for a run', () =>
+    Effect.gen(function* () {
+      const runId = 'aa11bb22cc33' as RunId;
+      const runConfigRecord = config({ agent: 'review', model: 'sonnet46T' });
 
-    await writeRun(runId, { outcome: 'completed' }, runConfigRecord);
-    await appendLogEntry(runId, 'hello');
-    const todos = [
-      {
-        content: 'Check the argument',
-        activeForm: 'Checking the argument',
-        status: 'pending' as const,
-      },
-    ];
-    session.publish([
-      {
-        type: 'run.fact',
-        aggregateId: aggregateId('run', runId),
-        fact: { key: 'todos', todos },
-      },
-    ]);
-    await settleSessionEvents();
+      yield* Effect.promise(() =>
+        writeRun(runId, { outcome: 'completed' }, runConfigRecord),
+      );
+      yield* Effect.promise(() => appendLogEntry(runId, 'hello'));
+      const todos = [
+        {
+          content: 'Check the argument',
+          activeForm: 'Checking the argument',
+          status: 'pending' as const,
+        },
+      ];
+      session.publish([
+        {
+          type: 'run.fact',
+          aggregateId: aggregateId('run', runId),
+          fact: { key: 'todos', todos },
+        },
+      ]);
+      yield* Effect.promise(() => settleSessionEvents());
 
-    const { trace, record } = unwrapOk(
-      await Effect.runPromise(assembleTrace(runId, session)),
-    );
+      const { trace, record } = unwrapOk(yield* assembleTrace(runId, session));
 
-    expect(trace.runId).toBe(runId);
-    expect(record).toMatchObject({ agent: 'review', model: 'sonnet46T' });
-    // The creation row is authored, not copied: an exported file has no
-    // producer, no siblings and no writable host.
-    expect(trace.events[0]).toMatchObject({
-      type: 'run.start',
-      ownerId: null,
-      parent: null,
-      checkpointId: null,
-      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-    });
-    expect(trace.events).toContainEqual(
-      expect.objectContaining({ type: 'log', message: 'hello' }),
-    );
-    expect(trace.events).toContainEqual(
-      expect.objectContaining({ type: 'run.end', outcome: 'completed' }),
-    );
-    expect(trace.events).toContainEqual(
-      expect.objectContaining({
-        type: 'run.fact',
-        fact: { key: 'todos', todos },
-      }),
-    );
-  });
+      expect(trace.runId).toBe(runId);
+      expect(record).toMatchObject({ agent: 'review', model: 'sonnet46T' });
+      // The creation row is authored, not copied: an exported file has no
+      // producer, no siblings and no writable host.
+      expect(trace.events[0]).toMatchObject({
+        type: 'run.start',
+        ownerId: null,
+        parent: null,
+        checkpointId: null,
+        userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+      });
+      expect(trace.events).toContainEqual(
+        expect.objectContaining({ type: 'log', message: 'hello' }),
+      );
+      expect(trace.events).toContainEqual(
+        expect.objectContaining({ type: 'run.end', outcome: 'completed' }),
+      );
+      expect(trace.events).toContainEqual(
+        expect.objectContaining({
+          type: 'run.fact',
+          fact: { key: 'todos', todos },
+        }),
+      );
+    }),
+  );
 
-  it('returns config_missing when no config was ever written', async () => {
-    const result = await Effect.runPromise(
-      assembleTrace('dec0de000001' as RunId, session),
-    );
-    expect(result).toEqual({ status: 'config_missing' });
-  });
+  it.effect('returns config_missing when no config was ever written', () =>
+    Effect.gen(function* () {
+      const result = yield* assembleTrace('dec0de000001' as RunId, session);
+      expect(result).toEqual({ status: 'config_missing' });
+    }),
+  );
 
-  it('exports a registered run with an empty transcript', async () => {
-    const runId = 'eec000001' as RunId;
-    await writeRun(runId);
+  it.effect('exports a registered run with an empty transcript', () =>
+    Effect.gen(function* () {
+      const runId = 'eec000001' as RunId;
+      yield* Effect.promise(() => writeRun(runId));
 
-    const result = await Effect.runPromise(assembleTrace(runId, session));
+      const result = yield* assembleTrace(runId, session);
 
-    // Only the creation row: a run that recorded nothing still exports.
-    expect(unwrapOk(result).trace.events.map((event) => event.type)).toEqual([
-      'run.start',
-    ]);
-  });
+      // Only the creation row: a run that recorded nothing still exports.
+      expect(unwrapOk(result).trace.events.map((event) => event.type)).toEqual([
+        'run.start',
+      ]);
+    }),
+  );
 });

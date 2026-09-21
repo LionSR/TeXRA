@@ -2,7 +2,6 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { setImmediate } from 'node:timers/promises';
 
 // Third-party imports
 import { it } from '@effect/vitest';
@@ -62,13 +61,6 @@ const mocks = vi.hoisted(() => ({
   /** The current package session's view, advanced independently of run. */
   sessionView: undefined as unknown,
   setTranscriptSubscriptions: vi.fn(),
-  /** What the package registered on the embedder's shutdown path. */
-  shutdownHooks: undefined as
-    | {
-        readonly flushArtifacts: Effect.Effect<void, unknown>;
-        readonly afterRunSettlement?: readonly Effect.Effect<void, unknown>[];
-      }
-    | undefined,
   subscribe: vi.fn((listener: (event: unknown) => void) => {
     mocks.eventListener = listener;
     return mocks.detachEvents;
@@ -180,15 +172,6 @@ vi.mock('@controllers/session/sessionLayer', async () => {
   };
 });
 
-vi.mock('@tools/agentCliSessionStores', () => ({
-  registerRuntimeShutdownHandlers: (
-    _lifecycle: unknown,
-    hooks: typeof mocks.shutdownHooks,
-  ) => {
-    mocks.shutdownHooks = hooks;
-  },
-}));
-
 vi.mock('@platform/platform', () => ({
   initPlatform: mocks.initPlatform,
   tryPlatform: () => mocks.activePlatform,
@@ -204,18 +187,14 @@ import type { RunId } from '@shared/schemas';
 import type { SessionView as RuntimeSessionView } from '@shared/session/sessionView';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import {
-  runAgent,
+  aggregateId,
   type AgentPlatform,
-  type SessionView,
+  Sessions,
 } from '../../../packages/agent/src/index';
-import { aggregateId, Sessions } from '../../../packages/agent/src/effect';
 import { nodePlatform } from '../../../packages/agent/src/node';
 
-/** The embedder's shutdown path, as the package reads it: `shutdownRan`
- *  is what says a composition still has an owner to dispose it. */
-const LIFECYCLE = { onShutdown: vi.fn(), shutdownRan: false };
 const PLATFORM = {
-  lifecycle: LIFECYCLE,
+  lifecycle: { onShutdown: vi.fn(), shutdownRan: false },
   globalState: { get: () => undefined, update: async () => undefined },
   roots: { storage: '/storage' },
   storage: { getGlobalStoragePath: () => '/global-storage' },
@@ -225,12 +204,6 @@ const TRACE = { subscribe: mocks.subscribe };
 /** The run's handle as `onRun` hands it over: the interrupt target. */
 const HANDLE = { runId: mocks.runId, interrupt: vi.fn() };
 const RESULT = { outcome: 'COMPLETED' } as never;
-const EVENT = { type: 'run.start' } as never;
-const INPUT = {
-  agent: 'assistant',
-  instruction: 'Test instruction',
-  platform: PLATFORM,
-};
 
 function sessionView(): SubscriptionRef.SubscriptionRef<FakeSessionView> {
   return mocks.sessionView as SubscriptionRef.SubscriptionRef<FakeSessionView>;
@@ -287,18 +260,13 @@ async function driveRun(options: RunAgentOptions): Promise<typeof RESULT> {
   return RESULT;
 }
 
-describe('agent package run lifecycle', () => {
-  beforeEach(async () => {
-    // The package's session and runtime go on the embedder's shutdown path,
-    // as the package registered it: each test starts with neither.
-    if (mocks.shutdownHooks) {
-      await Effect.runPromise(mocks.shutdownHooks.flushArtifacts);
-      for (const handler of mocks.shutdownHooks.afterRunSettlement ?? []) {
-        await Effect.runPromise(handler);
-      }
-    }
-    mocks.shutdownHooks = undefined;
-    LIFECYCLE.shutdownRan = false;
+/** Runs the run's own lifecycle hook, as the host invokes it. */
+async function runOnRun(options: RunAgentOptions): Promise<void> {
+  await Effect.runPromise(options.onRun?.(HANDLE) ?? Effect.void);
+}
+
+describe('agent package sessions', () => {
+  beforeEach(() => {
     mocks.sessionInits.splice(0);
     vi.clearAllMocks();
     mocks.activePlatform = null;
@@ -324,187 +292,6 @@ describe('agent package run lifecycle', () => {
       (_input: unknown, options: RunAgentOptions) => driveRun(options),
     );
   });
-
-  it('initializes standard runtime features once for concurrent first runs', async () => {
-    await Promise.all([runAgent(INPUT).result, runAgent(INPUT).result]);
-
-    expect(mocks.initPlatform).toHaveBeenCalledWith(PLATFORM);
-    expect(mocks.initPlatform).toHaveBeenCalledTimes(1);
-  });
-
-  it('delivers the launch events: the trace is subscribed when the stream resolves, before the run handle exists', async () => {
-    mocks.runValidatedAgent.mockImplementationOnce(
-      async (_input: unknown, options: RunAgentOptions) => {
-        options.onRunResolved?.('ae0001', TRACE);
-        // The instruction log, the root stage, and the launch warnings fire
-        // here, before `onRun`.
-        mocks.eventListener?.(EVENT);
-        await enterRun('ae0001');
-        await Effect.runPromise(options.onRun?.(HANDLE) ?? Effect.void);
-        await completeRunView();
-        return RESULT;
-      },
-    );
-
-    const run = runAgent(INPUT);
-    const nextEvent = run[Symbol.asyncIterator]().next();
-
-    await expect(nextEvent).resolves.toEqual({ done: false, value: EVENT });
-    await run.result;
-    expect(mocks.subscribe).toHaveBeenCalledOnce();
-  });
-
-  it('discards trace events when the caller only awaits the result', async () => {
-    mocks.runValidatedAgent.mockImplementationOnce(
-      async (_input: unknown, options: RunAgentOptions) => {
-        options.onRunResolved?.('ae0001', TRACE);
-        await enterRun('ae0001');
-        await Effect.runPromise(options.onRun?.(HANDLE) ?? Effect.void);
-        mocks.eventListener?.(EVENT);
-        await completeRunView();
-        return RESULT;
-      },
-    );
-
-    const run = runAgent(INPUT);
-    await run.result;
-
-    expect(mocks.subscribe).toHaveBeenCalledOnce();
-    expect(mocks.detachEvents).toHaveBeenCalledOnce();
-    await expect(run[Symbol.asyncIterator]().next()).resolves.toEqual({
-      done: true,
-      value: undefined,
-    });
-  });
-
-  it('rejects caller tools that require unavailable approval', async () => {
-    const run = runAgent({
-      ...INPUT,
-      tools: [
-        {
-          definition: { name: 'dangerous_tool' },
-          requiresApproval: true,
-        },
-      ] as never,
-    });
-
-    await expect(run.result).rejects.toThrow(
-      'The agent package cannot run approval-requiring tools: dangerous_tool',
-    );
-    expect(mocks.runValidatedAgent).not.toHaveBeenCalled();
-    // The refusal the package states from the input alone precedes the
-    // composition: a caller being refused does not install a platform, a
-    // process runtime or a session owner, and opens no session.
-    expect(mocks.initPlatform).not.toHaveBeenCalled();
-    expect(mocks.installRuntime).not.toHaveBeenCalled();
-    expect(mocks.sessionInits).toHaveLength(0);
-    await expect(run.view[Symbol.asyncIterator]().next()).resolves.toEqual({
-      done: true,
-      value: undefined,
-    });
-  });
-
-  it('rejects custom tools for workflow agents', async () => {
-    mocks.agentCategory = 'workflow';
-    const run = runAgent({
-      ...INPUT,
-      tools: [
-        {
-          definition: { name: 'custom_reader' },
-          requiresApproval: false,
-        },
-      ] as never,
-    });
-
-    await expect(run.result).rejects.toThrow(
-      'Custom tools are supported only for tool-use agents; "assistant" is a workflow agent.',
-    );
-    expect(mocks.runValidatedAgent).not.toHaveBeenCalled();
-    await expect(run.view[Symbol.asyncIterator]().next()).resolves.toEqual({
-      done: true,
-      value: undefined,
-    });
-  });
-
-  it('resolves every run through the runtime session owner: two runs on one root share one session, closed through the owner before the runtime goes', async () => {
-    const first = runAgent(INPUT);
-    // The launch is the owner's before `runAgent` returns: a close or a
-    // shutdown issued now finds this session, not an unopened root.
-    expect(mocks.sessionInits).toHaveLength(1);
-    await first.result;
-    await runAgent(INPUT).result;
-
-    // Both runs resolved the platform's root through the owner, which built
-    // the session once, over the package's roots; the second run found it
-    // open.
-    expect(mocks.sessionInits).toHaveLength(1);
-    expect(mocks.sessionInits[0]).toMatchObject({ roots: PLATFORM.roots });
-    expect(mocks.closeSession).not.toHaveBeenCalled();
-
-    const hooks = mocks.shutdownHooks;
-    expect(hooks).toBeDefined();
-    if (hooks) await Effect.runPromise(hooks.flushArtifacts);
-    expect(mocks.closeSession).toHaveBeenCalledExactlyOnceWith(
-      PLATFORM.roots.storage,
-    );
-    for (const handler of hooks?.afterRunSettlement ?? []) {
-      await Effect.runPromise(handler);
-    }
-    expect(mocks.disposeRuntime).toHaveBeenCalledOnce();
-    const [closeOrder] = mocks.closeSession.mock.invocationCallOrder;
-    const [runtimeOrder] = mocks.disposeRuntime.mock.invocationCallOrder;
-    expect(closeOrder).toBeLessThan(runtimeOrder);
-
-    // Shutdown closed the session through its owner and took the owner with
-    // the runtime it ran on. That path is the entry's only owner for a
-    // composition and a lifecycle drains once, so a later run is refused
-    // rather than composing a runtime and an owner nothing would dispose.
-    LIFECYCLE.shutdownRan = true;
-    await expect(runAgent(INPUT).result).rejects.toThrow(
-      /shutdown has already run/,
-    );
-    expect(mocks.sessionInits).toHaveLength(1);
-    expect(mocks.installRuntime).toHaveBeenCalledTimes(1);
-    expect(mocks.initPlatform).toHaveBeenCalledTimes(1);
-  });
-
-  it.live(
-    'composes into an embedder own runtime: the Effect surface starts a run and lists the one session the Promise entry already opened',
-    () =>
-      Effect.gen(function* () {
-        // The Promise entry composes the process and opens the platform's root.
-        yield* Effect.promise(() => runAgent(INPUT).result);
-        expect(mocks.sessionInits).toHaveLength(1);
-
-        const program = Effect.gen(function* () {
-          const sessions = yield* Sessions;
-          const session = yield* sessions.open();
-          const run = yield* session.start({
-            agent: 'assistant',
-            instruction: 'Test instruction',
-          });
-          const result = yield* run.result;
-          const open = yield* sessions.list;
-          return { open: open.length, result, runId: run.runId };
-        }).pipe(Effect.scoped, Effect.provide(Sessions.layer(PLATFORM)));
-
-        const seen = yield* program;
-        expect(seen.result).toBe(RESULT);
-        expect(seen.runId).toBe('ae0001');
-        // One session per storage root, held by the runtime's own owner: the
-        // Effect surface resolved the session the Promise entry ran on, and the
-        // package built no registry of its own.
-        expect(seen.open).toBe(1);
-        expect(mocks.sessionInits).toHaveLength(1);
-        // The scope composed nothing, so leaving it ended nothing the Promise
-        // entry still uses: no close, no disposal, and the next run finds the
-        // same session rather than building a second one.
-        expect(mocks.closeSession).not.toHaveBeenCalled();
-        expect(mocks.disposeRuntime).not.toHaveBeenCalled();
-        yield* Effect.promise(() => runAgent(INPUT).result);
-        expect(mocks.sessionInits).toHaveLength(1);
-      }),
-  );
 
   it.live(
     'aborts interrupted admission before waiting for the provider cleanup',
@@ -666,7 +453,6 @@ describe('agent package run lifecycle', () => {
     'a scoped reader holds its own transcript interest and clears it at the scope, leaving the run its own',
     () =>
       Effect.gen(function* () {
-        yield* Effect.promise(() => runAgent(INPUT).result);
         const interest = [
           { id: aggregateId('run', 'ae0001' as RunId), fromSeq: 0 },
         ];
@@ -674,6 +460,10 @@ describe('agent package run lifecycle', () => {
         const program = Effect.gen(function* () {
           const sessions = yield* Sessions;
           const session = yield* sessions.open();
+          yield* session.start({
+            agent: 'assistant',
+            instruction: 'Test instruction',
+          });
           yield* Effect.scoped(session.subscribe(interest));
         }).pipe(Effect.scoped, Effect.provide(Sessions.layer(PLATFORM)));
         yield* program;
@@ -700,168 +490,77 @@ describe('agent package run lifecycle', () => {
     'fails the run instead of hanging when the session fold dies before the final view',
     () =>
       Effect.gen(function* () {
+        // The run completes, but its final view never folds: the fold dies
+        // first, and both the run's view and its result fail with that death
+        // rather than wait on a level that never comes.
         mocks.runValidatedAgent.mockImplementationOnce(
           async (_input: unknown, options: RunAgentOptions) => {
             options.onRunResolved?.('ae0001', TRACE);
             await enterRun('ae0001');
-            await Effect.runPromise(options.onRun?.(HANDLE) ?? Effect.void);
+            await runOnRun(options);
             return RESULT;
           },
         );
 
-        const run = runAgent(INPUT);
-        const views = run.view[Symbol.asyncIterator]();
-        yield* Effect.promise(() => views.next());
-        const failed = expect(run.result).rejects.toThrow('fold died');
-        yield* Deferred.fail(
-          mocks.foldDeath as Deferred.Deferred<never, Error>,
-          new Error('fold died'),
-        );
+        yield* Effect.gen(function* () {
+          const sessions = yield* Sessions;
+          const session = yield* sessions.open();
+          const run = yield* session.start({
+            agent: 'assistant',
+            instruction: 'Test instruction',
+          });
+          const pull = yield* Stream.toPull(run.view);
+          yield* pull;
+          yield* Deferred.fail(
+            mocks.foldDeath as Deferred.Deferred<never, Error>,
+            new Error('fold died'),
+          );
 
-        yield* Effect.promise(() =>
-          expect(views.next()).rejects.toThrow('fold died'),
-        );
-        yield* Effect.promise(() => failed);
+          const viewExit = yield* Effect.exit(pull);
+          expect(Exit.isFailure(viewExit)).toBe(true);
+          if (Exit.isFailure(viewExit)) {
+            const failure = Cause.squash(viewExit.cause);
+            expect(failure).toBeInstanceOf(Error);
+            expect((failure as Error).message).toBe('fold died');
+          }
+          const resultExit = yield* Effect.exit(run.result);
+          expect(Exit.isFailure(resultExit)).toBe(true);
+          if (Exit.isFailure(resultExit)) {
+            const failure = Cause.squash(resultExit.cause);
+            expect(failure).toBeInstanceOf(Error);
+            expect((failure as Error).message).toBe('fold died');
+          }
+        }).pipe(Effect.scoped, Effect.provide(Sessions.layer(PLATFORM)));
       }),
   );
-
-  it('detaches the event source when iteration ends early', async () => {
-    let finishRun: ((result: typeof RESULT) => void) | undefined;
-    mocks.runValidatedAgent.mockImplementationOnce(
-      async (_input: unknown, options: RunAgentOptions) => {
-        options.onRunResolved?.('ae0001', TRACE);
-        await enterRun('ae0001');
-        await Effect.runPromise(options.onRun?.(HANDLE) ?? Effect.void);
-        return await new Promise<typeof RESULT>((resolve) => {
-          finishRun = resolve;
-        });
-      },
-    );
-
-    const run = runAgent(INPUT);
-    const iterator = run[Symbol.asyncIterator]();
-    const nextEvent = iterator.next();
-    await vi.waitFor(() => expect(mocks.subscribe).toHaveBeenCalledOnce());
-    mocks.eventListener?.(EVENT);
-
-    await expect(nextEvent).resolves.toEqual({ done: false, value: EVENT });
-    await iterator.return?.();
-    expect(mocks.detachEvents).toHaveBeenCalledOnce();
-
-    const views = run.view[Symbol.asyncIterator]();
-    await views.next();
-    await views.return?.();
-    expect(HANDLE.interrupt).not.toHaveBeenCalled();
-
-    await completeRunView();
-    finishRun?.(RESULT);
-    await expect(run.result).resolves.toBe(RESULT);
-  });
-
-  it('reads the session view: `view` skips the levels before the run, subscribes its transcript, then ends with the view holding its durable outcome', async () => {
-    let finishRun: ((result: typeof RESULT) => void) | undefined;
-    let landRunStart: (() => void) | undefined;
-    mocks.runValidatedAgent.mockImplementationOnce(
-      async (_input: unknown, options: RunAgentOptions) => {
-        options.onRunResolved?.('ae0001', TRACE);
-        // The fold lands the run's `run.start` asynchronously: the session's
-        // current level predates the run until this resolves.
-        await new Promise<void>((resolve) => {
-          landRunStart = resolve;
-        });
-        await enterRun('ae0001');
-        await Effect.runPromise(options.onRun?.(HANDLE) ?? Effect.void);
-        return await new Promise<typeof RESULT>((resolve) => {
-          finishRun = resolve;
-        });
-      },
-    );
-
-    const run = runAgent(INPUT);
-    const views = run.view[Symbol.asyncIterator]();
-    const first = views.next();
-    await vi.waitFor(() => expect(landRunStart).toBeDefined());
-    // The run's transcript is subscribed as soon as it exists in the session.
-    expect(mocks.setTranscriptSubscriptions).toHaveBeenCalledWith(
-      'sdk/ae0001',
-      [{ id: aggregateId('run', 'ae0001' as RunId), fromSeq: 0 }],
-    );
-    landRunStart?.();
-    const view = (await first).value as SessionView;
-    expect([...view.runs.values()].map((run) => run.id)).toContain(
-      HANDLE.runId,
-    );
-
-    // A descendant joining the view joins the run's subscription.
-    await enterRun('ae0002', { ancestors: [{ id: 'ae0001' }] });
-    await views.next();
-    await vi.waitFor(() =>
-      expect(mocks.setTranscriptSubscriptions).toHaveBeenLastCalledWith(
-        'sdk/ae0001',
-        [
-          { id: '["run","ae0001"]', fromSeq: 0 },
-          { id: '["run","ae0002"]', fromSeq: 0 },
-        ],
-      ),
-    );
-
-    // Run can finish before the final view folds. The run's result
-    // waits for that fold, even while the consumer is between reads.
-    finishRun?.(RESULT);
-    await setImmediate();
-    let settled = false;
-    void run.result.then(() => {
-      settled = true;
-    });
-    await setImmediate();
-    expect(settled).toBe(false);
-
-    await completeRunView();
-    const last = (await views.next()).value as SessionView;
-    expect(last.runs.get('ae0001' as RunId)?.durableOutcome).toBe('completed');
-    await expect(views.next()).resolves.toEqual({
-      done: true,
-      value: undefined,
-    });
-    await expect(run.result).resolves.toBe(RESULT);
-
-    // A reader attaching after settlement receives the final state once.
-    const lateViews = run.view[Symbol.asyncIterator]();
-    await expect(lateViews.next()).resolves.toEqual({
-      done: false,
-      value: last,
-    });
-    await expect(lateViews.next()).resolves.toEqual({
-      done: true,
-      value: undefined,
-    });
-  });
 });
 
 describe('agent package Node configuration', () => {
-  it('treats bare and prefixed configuration keys as equivalent', async () => {
-    // The roots pin the workspace storage path at construction, so the
-    // storage root must be a real directory.
-    const storageDir = await mkdtemp(join(tmpdir(), 'texra-agent-package-'));
-    onTestFinished(() => rm(storageDir, { recursive: true, force: true }));
-    const { config } = nodePlatform({
-      agentsDir: '/agents',
-      storageDir,
-      workspaceDir: '/workspace',
-    }).roots;
+  it.effect('treats bare and prefixed configuration keys as equivalent', () =>
+    Effect.gen(function* () {
+      // The roots pin the workspace storage path at construction, so the
+      // storage root must be a real directory.
+      const storageDir = yield* Effect.promise(() =>
+        mkdtemp(join(tmpdir(), 'texra-agent-package-')),
+      );
+      onTestFinished(() => rm(storageDir, { recursive: true, force: true }));
+      const { config } = nodePlatform({
+        agentsDir: '/agents',
+        storageDir,
+        workspaceDir: '/workspace',
+      }).roots;
 
-    await Effect.runPromise(
-      config.update('texra.goal.enabled', true, 'global'),
-    );
-    expect(config.get('goal.enabled')).toBe(true);
-    expect(config.inspect('goal.enabled')?.globalValue).toBe(true);
+      yield* config.update('texra.goal.enabled', true, 'global');
+      expect(config.get('goal.enabled')).toBe(true);
+      expect(config.inspect('goal.enabled')?.globalValue).toBe(true);
 
-    await Effect.runPromise(config.update('goal.enabled', undefined, 'global'));
-    // With no explicit value, resolution matches every host: the core-schema
-    // default (goal.enabled defaults to true) wins over the caller fallback.
-    expect(config.get('texra.goal.enabled', false)).toBe(true);
-    // A key outside the core schema still falls back to the caller default.
-    expect(config.get('custom.nonCoreKey', false)).toBe(false);
-    expect(config.inspect('texra.goal.enabled')?.globalValue).toBeUndefined();
-  });
+      yield* config.update('goal.enabled', undefined, 'global');
+      // With no explicit value, resolution matches every host: the core-schema
+      // default (goal.enabled defaults to true) wins over the caller fallback.
+      expect(config.get('texra.goal.enabled', false)).toBe(true);
+      // A key outside the core schema still falls back to the caller default.
+      expect(config.get('custom.nonCoreKey', false)).toBe(false);
+      expect(config.inspect('texra.goal.enabled')?.globalValue).toBeUndefined();
+    }),
+  );
 });

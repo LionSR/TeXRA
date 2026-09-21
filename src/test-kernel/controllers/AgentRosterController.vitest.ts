@@ -1,5 +1,6 @@
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, vi } from 'vitest';
 
 import {
   AgentRosterController,
@@ -105,125 +106,127 @@ describe('AgentRosterController', () => {
     ).toEqual(['lead']);
   });
 
-  it('persists one canonical team selection', async () => {
-    const workspaceState = new FakeStateStore();
-    const roster = controller(workspaceState);
+  it.effect('persists one canonical team selection', () =>
+    Effect.gen(function* () {
+      const workspaceState = new FakeStateStore();
+      const roster = controller(workspaceState);
 
-    await Effect.runPromise(roster.setTeam('test-team'));
+      yield* roster.setTeam('test-team');
 
-    expect(
-      workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
-    ).toEqual({
-      kind: 'team',
-      teamId: 'test-team',
-    });
-  });
+      expect(
+        workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
+      ).toEqual({
+        kind: 'team',
+        teamId: 'test-team',
+      });
+    }),
+  );
 
-  it('turns an individual toggle into an exact custom roster', async () => {
-    const workspaceState = new FakeStateStore();
-    const roster = controller(workspaceState);
-    await Effect.runPromise(roster.setAll());
+  it.effect('turns an individual toggle into an exact custom roster', () =>
+    Effect.gen(function* () {
+      const workspaceState = new FakeStateStore();
+      const roster = controller(workspaceState);
+      yield* roster.setAll();
 
-    await Effect.runPromise(
-      roster.setAgentEnabled({
+      yield* roster.setAgentEnabled({
         category: 'toolUse',
         source: 'custom',
         name: 'search',
         enabled: false,
+      });
+
+      expect(roster.snapshot().selection).toEqual({
+        kind: 'custom',
+        agentKeys: {
+          workflow: 'all',
+          toolUse: ['builtInToolUse:lead'],
+        },
+      });
+    }),
+  );
+
+  it.effect(
+    'preserves symbolic roster semantics when a toggle changes nothing',
+    () =>
+      Effect.gen(function* () {
+        const inheritedState = new FakeStateStore();
+        const inherited = controller(inheritedState, {
+          globalState: new FakeStateStore({
+            [GlobalStateKey.ONBOARDING_DEFAULT_TEAM_ID]: 'test-team',
+          }),
+        });
+        yield* inherited.setAgentEnabled({
+          category: 'workflow',
+          source: 'builtInWorkflow',
+          name: 'write',
+          enabled: true,
+        });
+        expect(inherited.snapshot().selection).toEqual({ kind: 'inherit' });
+        expect(
+          inheritedState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
+        ).toBeUndefined();
+
+        const team = controller(new FakeStateStore());
+        yield* team.setTeam('test-team');
+        yield* team.setAgentEnabled({
+          category: 'toolUse',
+          source: 'builtInToolUse',
+          name: 'lead',
+          enabled: true,
+        });
+        expect(team.snapshot().selection).toEqual({
+          kind: 'team',
+          teamId: 'test-team',
+        });
+
+        const all = controller(new FakeStateStore());
+        yield* all.setAll();
+        yield* all.setAgentEnabled({
+          category: 'toolUse',
+          source: 'custom',
+          name: 'search',
+          enabled: true,
+        });
+        expect(all.snapshot().selection).toEqual({ kind: 'all' });
       }),
-    );
+  );
 
-    expect(roster.snapshot().selection).toEqual({
-      kind: 'custom',
-      agentKeys: {
-        workflow: 'all',
-        toolUse: ['builtInToolUse:lead'],
-      },
-    });
-  });
+  it.effect(
+    'preserves unresolved team members when another category changes',
+    () =>
+      Effect.gen(function* () {
+        const unavailablePreset: AgentModePreset = {
+          ...preset,
+          id: 'partly-unavailable',
+          agents: { ...preset.agents, workflow: ['write', 'future-reviewer'] },
+        };
+        const workspaceState = new FakeStateStore();
+        const roster = controller(workspaceState, {
+          getPresets: () => [unavailablePreset],
+        });
+        yield* roster.setTeam(unavailablePreset.id);
 
-  it('preserves symbolic roster semantics when a toggle changes nothing', async () => {
-    const inheritedState = new FakeStateStore();
-    const inherited = controller(inheritedState, {
-      globalState: new FakeStateStore({
-        [GlobalStateKey.ONBOARDING_DEFAULT_TEAM_ID]: 'test-team',
+        expect(roster.getEnabledAgentKeys('workflow')).toEqual([
+          'builtInWorkflow:write',
+          'future-reviewer',
+        ]);
+
+        yield* roster.setAgentEnabled({
+          category: 'toolUse',
+          source: 'custom',
+          name: 'search',
+          enabled: true,
+        });
+
+        expect(roster.snapshot().selection).toEqual({
+          kind: 'custom',
+          agentKeys: {
+            workflow: ['builtInWorkflow:write', 'future-reviewer'],
+            toolUse: ['builtInToolUse:lead', 'custom:search'],
+          },
+        });
       }),
-    });
-    await Effect.runPromise(
-      inherited.setAgentEnabled({
-        category: 'workflow',
-        source: 'builtInWorkflow',
-        name: 'write',
-        enabled: true,
-      }),
-    );
-    expect(inherited.snapshot().selection).toEqual({ kind: 'inherit' });
-    expect(
-      inheritedState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
-    ).toBeUndefined();
-
-    const team = controller(new FakeStateStore());
-    await Effect.runPromise(team.setTeam('test-team'));
-    await Effect.runPromise(
-      team.setAgentEnabled({
-        category: 'toolUse',
-        source: 'builtInToolUse',
-        name: 'lead',
-        enabled: true,
-      }),
-    );
-    expect(team.snapshot().selection).toEqual({
-      kind: 'team',
-      teamId: 'test-team',
-    });
-
-    const all = controller(new FakeStateStore());
-    await Effect.runPromise(all.setAll());
-    await Effect.runPromise(
-      all.setAgentEnabled({
-        category: 'toolUse',
-        source: 'custom',
-        name: 'search',
-        enabled: true,
-      }),
-    );
-    expect(all.snapshot().selection).toEqual({ kind: 'all' });
-  });
-
-  it('preserves unresolved team members when another category changes', async () => {
-    const unavailablePreset: AgentModePreset = {
-      ...preset,
-      id: 'partly-unavailable',
-      agents: { ...preset.agents, workflow: ['write', 'future-reviewer'] },
-    };
-    const workspaceState = new FakeStateStore();
-    const roster = controller(workspaceState, {
-      getPresets: () => [unavailablePreset],
-    });
-    await Effect.runPromise(roster.setTeam(unavailablePreset.id));
-
-    expect(roster.getEnabledAgentKeys('workflow')).toEqual([
-      'builtInWorkflow:write',
-      'future-reviewer',
-    ]);
-
-    await Effect.runPromise(
-      roster.setAgentEnabled({
-        category: 'toolUse',
-        source: 'custom',
-        name: 'search',
-        enabled: true,
-      }),
-    );
-
-    expect(roster.snapshot().selection).toEqual({
-      kind: 'custom',
-      agentKeys: {
-        workflow: ['builtInWorkflow:write', 'future-reviewer'],
-        toolUse: ['builtInToolUse:lead', 'custom:search'],
-      },
-    });
-  });
+  );
 
   it('falls back to all agents for a missing symbolic team', () => {
     const workspaceState = new FakeStateStore({
@@ -239,28 +242,32 @@ describe('AgentRosterController', () => {
     expect(roster.snapshot().missingTeamId).toBe('deleted-team');
   });
 
-  it('materializes an active custom team before deleting its preset', async () => {
-    let presets: AgentModePreset[] = [preset];
-    const workspaceState = new FakeStateStore();
-    const roster = controller(workspaceState, { getPresets: () => presets });
-    await Effect.runPromise(roster.setTeam(preset.id));
+  it.effect(
+    'materializes an active custom team before deleting its preset',
+    () =>
+      Effect.gen(function* () {
+        let presets: AgentModePreset[] = [preset];
+        const workspaceState = new FakeStateStore();
+        const roster = controller(workspaceState, {
+          getPresets: () => presets,
+        });
+        yield* roster.setTeam(preset.id);
 
-    await Effect.runPromise(
-      roster.removeTeamPreset(preset.id, () =>
-        Effect.sync(() => {
-          presets = [];
-        }),
-      ),
-    );
+        yield* roster.removeTeamPreset(preset.id, () =>
+          Effect.sync(() => {
+            presets = [];
+          }),
+        );
 
-    expect(roster.snapshot().selection).toEqual({
-      kind: 'custom',
-      agentKeys: {
-        workflow: ['builtInWorkflow:write'],
-        toolUse: ['builtInToolUse:lead'],
-      },
-    });
-  });
+        expect(roster.snapshot().selection).toEqual({
+          kind: 'custom',
+          agentKeys: {
+            workflow: ['builtInWorkflow:write'],
+            toolUse: ['builtInToolUse:lead'],
+          },
+        });
+      }),
+  );
 
   it('matches source-qualified custom selections by exact identity', () => {
     const duplicateAgents: Record<AgentCategory, AgentRosterEntry[]> = {
@@ -288,37 +295,40 @@ describe('AgentRosterController', () => {
     ]);
   });
 
-  it('serializes concurrent category changes through one workspace owner', async () => {
-    const workspaceState = new FakeStateStore();
-    const first = controller(workspaceState);
-    const second = controller(workspaceState);
-    await Effect.runPromise(first.setAll());
+  it.effect(
+    'serializes concurrent category changes through one workspace owner',
+    () =>
+      Effect.gen(function* () {
+        const workspaceState = new FakeStateStore();
+        const first = controller(workspaceState);
+        const second = controller(workspaceState);
+        yield* first.setAll();
 
-    await Promise.all([
-      Effect.runPromise(
-        first.setAgentEnabled({
-          category: 'workflow',
-          source: 'custom',
-          name: 'review',
-          enabled: false,
-        }),
-      ),
-      Effect.runPromise(
-        second.setAgentEnabled({
-          category: 'toolUse',
-          source: 'custom',
-          name: 'search',
-          enabled: false,
-        }),
-      ),
-    ]);
+        yield* Effect.all(
+          [
+            first.setAgentEnabled({
+              category: 'workflow',
+              source: 'custom',
+              name: 'review',
+              enabled: false,
+            }),
+            second.setAgentEnabled({
+              category: 'toolUse',
+              source: 'custom',
+              name: 'search',
+              enabled: false,
+            }),
+          ],
+          { concurrency: 'unbounded' },
+        );
 
-    expect(first.snapshot().selection).toEqual({
-      kind: 'custom',
-      agentKeys: {
-        workflow: ['builtInWorkflow:write'],
-        toolUse: ['builtInToolUse:lead'],
-      },
-    });
-  });
+        expect(first.snapshot().selection).toEqual({
+          kind: 'custom',
+          agentKeys: {
+            workflow: ['builtInWorkflow:write'],
+            toolUse: ['builtInToolUse:lead'],
+          },
+        });
+      }),
+  );
 });

@@ -1,11 +1,13 @@
 // Third-party imports
-import { Effect } from 'effect';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { it } from '@effect/vitest';
+import { Effect, Scope } from 'effect';
+import { beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports
 import { initCliPlatform } from '@cli/runtime/initPlatform';
 import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
 import { StateWriteFailed } from '@platform/interfaces';
+import { withProcessServices } from '@platform/processRuntime';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import {
@@ -206,23 +208,26 @@ function stubGlobalState(
  * `shutdownHandlersInstalled` flag, so the module needs a fresh import
  * (`vi.resetModules()`), and the process-listener spies must be restored
  * afterwards (never `vi.restoreAllMocks()` — see spyOnSignalRegistration).
+ * The restore runs as a finalizer on the test's scope, the same guarantee
+ * the `finally` gave the async shape.
  */
-async function withFreshSignalCapture(
+function withFreshSignalCapture<E>(
   run: (context: {
     registered: SignalRegistration[];
     initPlatform: typeof import('@cli/runtime/initPlatform');
-  }) => Promise<void>,
-): Promise<void> {
-  vi.resetModules();
-  const { registered, restore } = spyOnSignalRegistration();
-  try {
-    await run({
+  }) => Effect.Effect<void, E>,
+): Effect.Effect<void, E, Scope.Scope> {
+  return Effect.gen(function* () {
+    vi.resetModules();
+    const { registered, restore } = spyOnSignalRegistration();
+    yield* Effect.addFinalizer(() => Effect.sync(restore));
+    yield* run({
       registered,
-      initPlatform: await import('@cli/runtime/initPlatform'),
+      initPlatform: yield* Effect.promise(
+        () => import('@cli/runtime/initPlatform'),
+      ),
     });
-  } finally {
-    restore();
-  }
+  });
 }
 
 describe('CLI platform init', () => {
@@ -243,108 +248,123 @@ describe('CLI platform init', () => {
     mocks.authenticated = false;
   });
 
-  it('retries after seed failure without publishing platform, session, or signals', async () => {
-    await withFreshSignalCapture(async ({ registered, initPlatform }) => {
-      mocks.tryPlatform.mockReset();
-      mocks.tryPlatform
-        .mockReturnValueOnce(undefined)
-        .mockReturnValueOnce(undefined)
-        .mockReturnValue({ globalState: stubGlobalState() });
-      const storeFailure = new Error(
-        'disabled-tool defaults could not be seeded',
-      );
-      // The store is the failure's author now, so the double fails with the
-      // store's own tagged error rather than a bare rejection.
-      mocks.cliGlobalState.update.mockReturnValueOnce(
-        Effect.fail(
-          new StateWriteFailed({
+  it.effect(
+    'retries after seed failure without publishing platform, session, or signals',
+    () =>
+      withFreshSignalCapture(({ registered, initPlatform }) =>
+        Effect.gen(function* () {
+          mocks.tryPlatform.mockReset();
+          mocks.tryPlatform
+            .mockReturnValueOnce(undefined)
+            .mockReturnValueOnce(undefined)
+            .mockReturnValue({ globalState: stubGlobalState() });
+          const storeFailure = new Error(
+            'disabled-tool defaults could not be seeded',
+          );
+          // The store is the failure's author now, so the double fails with the
+          // store's own tagged error rather than a bare rejection.
+          mocks.cliGlobalState.update.mockReturnValueOnce(
+            Effect.fail(
+              new StateWriteFailed({
+                key: GlobalStateKey.DISABLED_TOOLS,
+                message: storeFailure.message,
+                cause: storeFailure,
+              }),
+            ),
+          );
+
+          // The seed's own typed failure, carrying the store's rejection.
+          const seedError = yield* Effect.flip(
+            initPlatform.initCliPlatform(cliContext()),
+          );
+          expect(seedError).toMatchObject({
+            _tag: 'StateWriteFailed',
             key: GlobalStateKey.DISABLED_TOOLS,
-            message: storeFailure.message,
             cause: storeFailure,
-          }),
-        ),
+          });
+
+          const { tryDefaultSession } = yield* Effect.promise(
+            () => import('@agent/runtime'),
+          );
+          expect(mocks.publishPlatform).not.toHaveBeenCalled();
+          expect(tryDefaultSession()).toBeUndefined();
+          expect(registered).toEqual([]);
+
+          const services = yield* initPlatform.initCliPlatform(cliContext());
+          expect(services).toEqual(
+            expect.objectContaining({ roots: expect.anything() }),
+          );
+          expect(mocks.publishPlatform).toHaveBeenCalledOnce();
+          expect(tryDefaultSession()).toBeUndefined();
+          expect(registered).toEqual([
+            { event: 'SIGINT', kind: 'once' },
+            { event: 'SIGTERM', kind: 'once' },
+          ]);
+        }),
+      ),
+  );
+
+  it.effect('registers the agent shutdown drain on first platform init', () =>
+    Effect.gen(function* () {
+      // Regression: the CLI was the one host that never registered these, so a
+      // background `bash` run (spawned detached, in its own process group) and
+      // any live codex / claude_agent session outlived `texra` as orphans.
+      // Asserted through the real `registerAgentShutdownHandler` and its
+      // observable effect on shutdown, not by mocking the @agent module. The
+      // init installs the process runtime the session graph runs on, so the
+      // session is built after it, not on a runtime an earlier case's shutdown
+      // disposed.
+      mocks.tryPlatform.mockReturnValueOnce(undefined);
+      yield* initCliPlatform(cliContext({ installSignalHandlers: false }));
+      const session = createTestSession();
+      const interruptCodex = vi
+        .spyOn(codexThreadsFor(session.runs), 'interruptAll')
+        .mockImplementation(() => {});
+      const interruptClaude = vi
+        .spyOn(claudeAgentSessionsFor(session.runs), 'interruptAll')
+        .mockImplementation(() => {});
+      yield* Effect.addFinalizer(() =>
+        Effect.sync(() => {
+          interruptCodex.mockRestore();
+          interruptClaude.mockRestore();
+        }),
       );
 
-      // The seed's own typed failure, carrying the store's rejection.
-      await expect(
-        Effect.runPromise(initPlatform.initCliPlatform(cliContext())),
-      ).rejects.toMatchObject({
-        _tag: 'StateWriteFailed',
-        key: GlobalStateKey.DISABLED_TOOLS,
-        cause: storeFailure,
-      });
-
-      const { tryDefaultSession } = await import('@agent/runtime');
-      expect(mocks.publishPlatform).not.toHaveBeenCalled();
-      expect(tryDefaultSession()).toBeUndefined();
-      expect(registered).toEqual([]);
-
-      await expect(
-        Effect.runPromise(initPlatform.initCliPlatform(cliContext())),
-      ).resolves.toEqual(expect.objectContaining({ roots: expect.anything() }));
-      expect(mocks.publishPlatform).toHaveBeenCalledOnce();
-      expect(tryDefaultSession()).toBeUndefined();
-      expect(registered).toEqual([
-        { event: 'SIGINT', kind: 'once' },
-        { event: 'SIGTERM', kind: 'once' },
-      ]);
-    });
-  });
-
-  it('registers the agent shutdown drain on first platform init', async () => {
-    // Regression: the CLI was the one host that never registered these, so a
-    // background `bash` run (spawned detached, in its own process group) and
-    // any live codex / claude_agent session outlived `texra` as orphans.
-    // Asserted through the real `registerAgentShutdownHandler` and its
-    // observable effect on shutdown, not by mocking the @agent module. The
-    // init installs the process runtime the session graph runs on, so the
-    // session is built after it, not on a runtime an earlier case's shutdown
-    // disposed.
-    mocks.tryPlatform.mockReturnValueOnce(undefined);
-    await Effect.runPromise(
-      initCliPlatform(cliContext({ installSignalHandlers: false })),
-    );
-    const session = createTestSession();
-    const interruptCodex = vi
-      .spyOn(codexThreadsFor(session.runs), 'interruptAll')
-      .mockImplementation(() => {});
-    const interruptClaude = vi
-      .spyOn(claudeAgentSessionsFor(session.runs), 'interruptAll')
-      .mockImplementation(() => {});
-
-    try {
       // Registration alone must not interrupt anything; the drain belongs to
       // the CLI lifecycle host every exit path runs (bin/texra.ts's finally,
       // the signal handlers, the TUI's exitNow).
       expect(interruptCodex).not.toHaveBeenCalled();
-      for (const handler of mocks.shutdownHandlers)
-        await Effect.runPromise(handler);
+      for (const handler of mocks.shutdownHandlers) yield* handler;
       expect(interruptCodex).toHaveBeenCalledOnce();
       expect(interruptClaude).toHaveBeenCalledOnce();
-    } finally {
-      interruptCodex.mockRestore();
-      interruptClaude.mockRestore();
-    }
-  });
+    }),
+  );
 
-  it('wires setup sign-in to the existing CLI login implementation', async () => {
-    mocks.authenticated = true;
-    mocks.signInCliSupabase.mockReturnValue(
-      Effect.succeed({ account: { label: 'User' } }),
-    );
+  it.effect(
+    'wires setup sign-in to the existing CLI login implementation',
+    () =>
+      Effect.gen(function* () {
+        mocks.authenticated = true;
+        mocks.signInCliSupabase.mockReturnValue(
+          Effect.succeed({ account: { label: 'User' } }),
+        );
 
-    // The runtime this root installed, as it hands it back: the root's own
-    // local, not a process-wide read.
-    const { runtime } = await Effect.runPromise(initCliPlatform(cliContext()));
+        // The runtime this root installed, as it hands it back: the root's own
+        // local, not a process-wide read.
+        const { runtime } = yield* initCliPlatform(cliContext());
 
-    const setup = await runtime.runPromise(Effect.service(SetupPlatform));
-    expect(setup.host).toBe('cli');
-    expect(await runtime.runPromise(setup.signIn())).toBe(true);
-    expect(mocks.signInCliSupabase).toHaveBeenCalledOnce();
-    expect(mocks.signInCliSupabase).toHaveBeenCalledWith(runtime, {
-      openBrowser: true,
-    });
-  });
+        const setup = yield* withProcessServices(
+          runtime,
+          Effect.service(SetupPlatform),
+        );
+        expect(setup.host).toBe('cli');
+        expect(yield* withProcessServices(runtime, setup.signIn())).toBe(true);
+        expect(mocks.signInCliSupabase).toHaveBeenCalledOnce();
+        expect(mocks.signInCliSupabase).toHaveBeenCalledWith(runtime, {
+          openBrowser: true,
+        });
+      }),
+  );
 });
 
 // Regression for the HIGH-severity chat TUI signal race: `texra chat`/
@@ -376,37 +396,41 @@ describe('CLI platform interactive signal ownership', () => {
     });
   });
 
-  it('an interactive init keeps the platform handler live until an explicit handoff', async () => {
-    await withFreshSignalCapture(async ({ registered, initPlatform }) => {
-      // The suspension point from the finding: runChat() runs this init, then
-      // onboarding/model resolution, before Ink ever mounts and installs its
-      // own handlers below. Unlike the pre-handoff-design fix, the platform
-      // handler stays registered for that whole window — a signal there still
-      // gets a graceful shutdown.
-      await Effect.runPromise(initPlatform.initCliPlatform(cliContext()));
-      expect(registered).toEqual([
-        { event: 'SIGINT', kind: 'once' },
-        { event: 'SIGTERM', kind: 'once' },
-      ]);
+  it.effect(
+    'an interactive init keeps the platform handler live until an explicit handoff',
+    () =>
+      withFreshSignalCapture(({ registered, initPlatform }) =>
+        Effect.gen(function* () {
+          // The suspension point from the finding: runChat() runs this init, then
+          // onboarding/model resolution, before Ink ever mounts and installs its
+          // own handlers below. Unlike the pre-handoff-design fix, the platform
+          // handler stays registered for that whole window — a signal there still
+          // gets a graceful shutdown.
+          yield* initPlatform.initCliPlatform(cliContext());
+          expect(registered).toEqual([
+            { event: 'SIGINT', kind: 'once' },
+            { event: 'SIGTERM', kind: 'once' },
+          ]);
 
-      // The TUI is about to mount (runChatTui.tsx) — it hands off ownership
-      // immediately before installing its own handlers.
-      initPlatform.handOffCliShutdownSignalHandlers();
-      // Handoff releases the install-order disposers LIFO, so SIGTERM first.
-      expect(registered).toEqual([
-        { event: 'SIGINT', kind: 'once' },
-        { event: 'SIGTERM', kind: 'once' },
-        { event: 'SIGTERM', kind: 'removed' },
-        { event: 'SIGINT', kind: 'removed' },
-      ]);
+          // The TUI is about to mount (runChatTui.tsx) — it hands off ownership
+          // immediately before installing its own handlers.
+          initPlatform.handOffCliShutdownSignalHandlers();
+          // Handoff releases the install-order disposers LIFO, so SIGTERM first.
+          expect(registered).toEqual([
+            { event: 'SIGINT', kind: 'once' },
+            { event: 'SIGTERM', kind: 'once' },
+            { event: 'SIGTERM', kind: 'removed' },
+            { event: 'SIGINT', kind: 'removed' },
+          ]);
 
-      process.on('SIGINT', () => undefined);
-      process.on('SIGTERM', () => undefined);
+          process.on('SIGINT', () => undefined);
+          process.on('SIGTERM', () => undefined);
 
-      expect(registered.slice(-2)).toEqual([
-        { event: 'SIGINT', kind: 'on' },
-        { event: 'SIGTERM', kind: 'on' },
-      ]);
-    });
-  });
+          expect(registered.slice(-2)).toEqual([
+            { event: 'SIGINT', kind: 'on' },
+            { event: 'SIGTERM', kind: 'on' },
+          ]);
+        }),
+      ),
+  );
 });

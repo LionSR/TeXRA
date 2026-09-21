@@ -26,7 +26,7 @@
     "packages/desktop/src/main/desktopToolEditApproval.ts": 9,
     "packages/desktop/src/main/index.ts": 1,
     "packages/extension/src/commands/files/fileSelectionCommands.ts": 1,
-    "packages/extension/src/frontend/agents/AgentDirectoryManager.ts": 3,
+    "packages/extension/src/frontend/agents/AgentDirectoryManager.ts": 1,
     "packages/extension/src/frontend/approval/VscodeDiffViewHost.ts": 5,
     "packages/extension/src/frontend/approval/VscodeToolEditApprovalHost.ts": 9,
     "packages/extension/src/frontend/editor/activeFileGuards.ts": 1,

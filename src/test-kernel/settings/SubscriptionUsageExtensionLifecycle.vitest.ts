@@ -1,5 +1,6 @@
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   // Composed by the refresh tail, so the double answers with an Effect.
@@ -82,60 +83,62 @@ function createHarness(activeView = true) {
 }
 
 describe('extension subscription usage credential lifecycle', () => {
-  it('invalidates only coding-plan providers and replaces visible usage after key changes', async () => {
-    const { handler, posted, usage } = createHarness();
+  it.effect(
+    'invalidates only coding-plan providers and replaces visible usage after key changes',
+    () =>
+      Effect.gen(function* () {
+        const { handler, posted, usage } = createHarness();
 
-    await testRuntime().runPromise(
-      handler.refreshAfterProviderKeyChange('glm'),
-    );
+        yield* handler.refreshAfterProviderKeyChange('glm');
 
-    expect(usage.invalidate).toHaveBeenCalledExactlyOnceWith('glmCodingPlan');
-    expect(usage.getAllUsage).toHaveBeenCalledOnce();
-    expect(posted).toContainEqual(
-      expect.objectContaining({
-        command: SETTINGS_VIEW_COMMANDS.UPDATE_SUBSCRIPTION_USAGE,
+        expect(usage.invalidate).toHaveBeenCalledExactlyOnceWith(
+          'glmCodingPlan',
+        );
+        expect(usage.getAllUsage).toHaveBeenCalledOnce();
+        expect(posted).toContainEqual(
+          expect.objectContaining({
+            command: SETTINGS_VIEW_COMMANDS.UPDATE_SUBSCRIPTION_USAGE,
+          }),
+        );
+
+        usage.invalidate.mockClear();
+        usage.getAllUsage.mockClear();
+        yield* handler.refreshAfterProviderKeyChange('openai');
+        expect(usage.invalidate).not.toHaveBeenCalled();
+        expect(usage.getAllUsage).not.toHaveBeenCalled();
       }),
-    );
+  );
 
-    usage.invalidate.mockClear();
-    usage.getAllUsage.mockClear();
-    await testRuntime().runPromise(
-      handler.refreshAfterProviderKeyChange('openai'),
-    );
-    expect(usage.invalidate).not.toHaveBeenCalled();
-    expect(usage.getAllUsage).not.toHaveBeenCalled();
-  });
+  it.effect(
+    'invalidates coding-plan usage when no Settings view is active',
+    () =>
+      Effect.gen(function* () {
+        const { handler, posted, usage } = createHarness(false);
 
-  it('invalidates coding-plan usage when no Settings view is active', async () => {
-    const { handler, posted, usage } = createHarness(false);
+        yield* handler.refreshAfterProviderKeyChange('kimiCode');
+        yield* handler.refreshAfterProviderKeyChange('glm');
 
-    await testRuntime().runPromise(
-      handler.refreshAfterProviderKeyChange('kimiCode'),
-    );
-    await testRuntime().runPromise(
-      handler.refreshAfterProviderKeyChange('glm'),
-    );
-
-    expect(usage.invalidate.mock.calls).toStrictEqual([
-      ['kimiCode'],
-      ['glmCodingPlan'],
-    ]);
-    expect(usage.getAllUsage).not.toHaveBeenCalled();
-    expect(posted).toStrictEqual([]);
-  });
-
-  it('invalidates ChatGPT usage after account auth changes', async () => {
-    const { handler, posted, usage } = createHarness();
-
-    await testRuntime().runPromise(
-      handler.refreshAfterSubscriptionAuthChange('chatgpt'),
-    );
-
-    expect(usage.invalidate).toHaveBeenCalledExactlyOnceWith('chatgpt');
-    expect(posted).toContainEqual(
-      expect.objectContaining({
-        command: SETTINGS_VIEW_COMMANDS.UPDATE_SUBSCRIPTION_USAGE,
+        expect(usage.invalidate.mock.calls).toStrictEqual([
+          ['kimiCode'],
+          ['glmCodingPlan'],
+        ]);
+        expect(usage.getAllUsage).not.toHaveBeenCalled();
+        expect(posted).toStrictEqual([]);
       }),
-    );
-  });
+  );
+
+  it.effect('invalidates ChatGPT usage after account auth changes', () =>
+    Effect.gen(function* () {
+      const { handler, posted, usage } = createHarness();
+
+      yield* handler.refreshAfterSubscriptionAuthChange('chatgpt');
+
+      expect(usage.invalidate).toHaveBeenCalledExactlyOnceWith('chatgpt');
+      expect(posted).toContainEqual(
+        expect.objectContaining({
+          command: SETTINGS_VIEW_COMMANDS.UPDATE_SUBSCRIPTION_USAGE,
+        }),
+      );
+    }),
+  );
 });

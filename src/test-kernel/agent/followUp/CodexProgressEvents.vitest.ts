@@ -1,6 +1,7 @@
 // Third-party imports
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { describe, expect, it } from 'vitest';
+import { describe, expect } from 'vitest';
 
 // Local imports
 import type { AgentTrace } from '@agent/trace';
@@ -66,172 +67,185 @@ function toolLogs(store: StreamLog): Record<string, unknown>[] {
 }
 
 describe('codex progress events', () => {
-  it('publishes a todo_list item as run facts', async () => {
-    const { logger } = await createLogger();
-    const recorded = recordTraceEvents(logger);
-    const thread = threadOf([
-      {
-        type: 'item.completed',
-        item: {
-          id: 'todo-1',
-          type: 'todo_list',
-          items: [
+  it.effect('publishes a todo_list item as run facts', () =>
+    Effect.gen(function* () {
+      const { logger } = yield* Effect.promise(() => createLogger());
+      const recorded = recordTraceEvents(logger);
+      const thread = threadOf([
+        {
+          type: 'item.completed',
+          item: {
+            id: 'todo-1',
+            type: 'todo_list',
+            items: [
+              {
+                text: 'Route Codex progress through the runtime host',
+                completed: false,
+              },
+            ],
+          },
+        },
+        turnCompleted(1, 1),
+      ]);
+
+      yield* runStreamedTurn(thread, 'Do the thing', logger);
+
+      expect(runFactsOfKey(recorded.events, 'todos')).toMatchObject([
+        {
+          todos: [
             {
-              text: 'Route Codex progress through the runtime host',
-              completed: false,
+              content: 'Route Codex progress through the runtime host',
+              status: 'pending',
+              activeForm: 'Route Codex progress through the runtime host',
             },
           ],
         },
-      },
-      turnCompleted(1, 1),
-    ]);
+      ]);
+    }),
+  );
 
-    await Effect.runPromise(runStreamedTurn(thread, 'Do the thing', logger));
-
-    expect(runFactsOfKey(recorded.events, 'todos')).toMatchObject([
-      {
-        todos: [
-          {
-            content: 'Route Codex progress through the runtime host',
-            status: 'pending',
-            activeForm: 'Route Codex progress through the runtime host',
+  it.effect('updates in-flight Codex command items in place', () =>
+    Effect.gen(function* () {
+      const { store, logger } = yield* Effect.promise(() => createLogger());
+      const startedCommand: CommandExecutionItem = {
+        id: 'cmd-1',
+        type: 'command_execution',
+        command: 'npm run build',
+        aggregated_output: '',
+        status: 'in_progress',
+      };
+      const updatedCommand: CommandExecutionItem = {
+        ...startedCommand,
+        aggregated_output: 'building...',
+      };
+      const completedCommand: CommandExecutionItem = {
+        ...startedCommand,
+        aggregated_output: 'building...\ndone\n',
+        exit_code: 0,
+        status: 'completed',
+      };
+      const thread = threadOf([
+        { type: 'item.started', item: startedCommand },
+        { type: 'item.updated', item: updatedCommand },
+        { type: 'item.completed', item: completedCommand },
+        {
+          type: 'item.completed',
+          item: {
+            id: 'msg-1',
+            type: 'agent_message',
+            text: 'Build succeeded.',
           },
-        ],
-      },
-    ]);
-  });
-
-  it('updates in-flight Codex command items in place', async () => {
-    const { store, logger } = await createLogger();
-    const startedCommand: CommandExecutionItem = {
-      id: 'cmd-1',
-      type: 'command_execution',
-      command: 'npm run build',
-      aggregated_output: '',
-      status: 'in_progress',
-    };
-    const updatedCommand: CommandExecutionItem = {
-      ...startedCommand,
-      aggregated_output: 'building...',
-    };
-    const completedCommand: CommandExecutionItem = {
-      ...startedCommand,
-      aggregated_output: 'building...\ndone\n',
-      exit_code: 0,
-      status: 'completed',
-    };
-    const thread = threadOf([
-      { type: 'item.started', item: startedCommand },
-      { type: 'item.updated', item: updatedCommand },
-      { type: 'item.completed', item: completedCommand },
-      {
-        type: 'item.completed',
-        item: {
-          id: 'msg-1',
-          type: 'agent_message',
-          text: 'Build succeeded.',
         },
-      },
-      turnCompleted(12, 4),
-    ]);
+        turnCompleted(12, 4),
+      ]);
 
-    const result = await Effect.runPromise(
-      runStreamedTurn(thread, 'Build the project', logger),
-    );
+      const result = yield* runStreamedTurn(
+        thread,
+        'Build the project',
+        logger,
+      );
 
-    expect(result.finalResponse).toBe('Build succeeded.');
+      expect(result.finalResponse).toBe('Build succeeded.');
 
-    const logs = toolLogs(store);
+      const logs = toolLogs(store);
 
-    expect(logs).toHaveLength(1);
-    expect(logs[0]).toMatchObject({
-      toolName: 'bash',
-      summary: 'npm run build',
-      input: { command: 'npm run build' },
-      output: 'building...\ndone',
-      status: 'completed',
-    });
-  });
+      expect(logs).toHaveLength(1);
+      expect(logs[0]).toMatchObject({
+        toolName: 'bash',
+        summary: 'npm run build',
+        input: { command: 'npm run build' },
+        output: 'building...\ndone',
+        status: 'completed',
+      });
+    }),
+  );
 
-  it('emits Codex thread and turn cards across the turn lifecycle', async () => {
-    const { store, logger } = await createLogger();
-    const thread = threadOf([
-      { type: 'thread.started', thread_id: 'thread_abc' },
-      { type: 'turn.started' },
-      {
-        type: 'item.completed',
-        item: { id: 'msg-1', type: 'agent_message', text: 'Done.' },
-      },
-      turnCompleted(5, 2),
-    ]);
+  it.effect('emits Codex thread and turn cards across the turn lifecycle', () =>
+    Effect.gen(function* () {
+      const { store, logger } = yield* Effect.promise(() => createLogger());
+      const thread = threadOf([
+        { type: 'thread.started', thread_id: 'thread_abc' },
+        { type: 'turn.started' },
+        {
+          type: 'item.completed',
+          item: { id: 'msg-1', type: 'agent_message', text: 'Done.' },
+        },
+        turnCompleted(5, 2),
+      ]);
 
-    const result = await Effect.runPromise(
-      runStreamedTurn(thread, 'Do the thing', logger),
-    );
+      const result = yield* runStreamedTurn(thread, 'Do the thing', logger);
 
-    expect(result.finalResponse).toBe('Done.');
+      expect(result.finalResponse).toBe('Done.');
 
-    const logs = toolLogs(store);
+      const logs = toolLogs(store);
 
-    // A one-shot thread card, then a running->completed turn card.
-    expect(logs.map((data) => data.toolName)).toEqual([
-      CODEX_THREAD_TOOL,
-      CODEX_TURN_TOOL,
-    ]);
+      // A one-shot thread card, then a running->completed turn card.
+      expect(logs.map((data) => data.toolName)).toEqual([
+        CODEX_THREAD_TOOL,
+        CODEX_TURN_TOOL,
+      ]);
 
-    expect(logs[0]).toMatchObject({
-      toolName: CODEX_THREAD_TOOL,
-      input: { threadId: 'thread_abc' },
-      status: 'completed',
-    });
+      expect(logs[0]).toMatchObject({
+        toolName: CODEX_THREAD_TOOL,
+        input: { threadId: 'thread_abc' },
+        status: 'completed',
+      });
 
-    expect(logs[1]).toMatchObject({
-      toolName: CODEX_TURN_TOOL,
-      input: { state: 'completed' },
-      status: 'completed',
-    });
+      expect(logs[1]).toMatchObject({
+        toolName: CODEX_TURN_TOOL,
+        input: { state: 'completed' },
+        status: 'completed',
+      });
 
-    const turnInput = (logs[1] as { input?: { wallTimeMs?: number } }).input;
-    expect(typeof turnInput?.wallTimeMs).toBe('number');
-  });
+      const turnInput = (logs[1] as { input?: { wallTimeMs?: number } }).input;
+      expect(typeof turnInput?.wallTimeMs).toBe('number');
+    }),
+  );
 
-  it('finalizes the running turn card when the stream errors', async () => {
-    const { store, logger } = await createLogger();
-    const thread = threadOf([
-      { type: 'turn.started' },
-      { type: 'error', message: 'boom' },
-    ]);
+  it.effect('finalizes the running turn card when the stream errors', () =>
+    Effect.gen(function* () {
+      const { store, logger } = yield* Effect.promise(() => createLogger());
+      const thread = threadOf([
+        { type: 'turn.started' },
+        { type: 'error', message: 'boom' },
+      ]);
 
-    await expect(
-      Effect.runPromise(runStreamedTurn(thread, 'Do the thing', logger)),
-    ).rejects.toThrow('boom');
+      const error = yield* Effect.flip(
+        runStreamedTurn(thread, 'Do the thing', logger),
+      );
+      expect(error.message).toContain('boom');
 
-    const turnEntry = findTurnEntry(store);
-    expect(turnEntry).toMatchObject({
-      toolName: CODEX_TURN_TOOL,
-      input: { state: 'failed' },
-      error: 'boom',
-      status: 'failed',
-    });
-  });
+      const turnEntry = findTurnEntry(store);
+      expect(turnEntry).toMatchObject({
+        toolName: CODEX_TURN_TOOL,
+        input: { state: 'failed' },
+        error: 'boom',
+        status: 'failed',
+      });
+    }),
+  );
 
-  it('finalizes the running turn card when the stream ends without a terminal turn event', async () => {
-    const { store, logger } = await createLogger();
-    // No turn.completed / turn.failed — the loop exits with the card open.
-    const thread = threadOf([{ type: 'turn.started' }]);
+  it.effect(
+    'finalizes the running turn card when the stream ends without a terminal turn event',
+    () =>
+      Effect.gen(function* () {
+        const { store, logger } = yield* Effect.promise(() => createLogger());
+        // No turn.completed / turn.failed — the loop exits with the card open.
+        const thread = threadOf([{ type: 'turn.started' }]);
 
-    await Effect.runPromise(runStreamedTurn(thread, 'Do the thing', logger));
+        yield* runStreamedTurn(thread, 'Do the thing', logger);
 
-    const turnEntry = findTurnEntry(store);
-    // Even without an error message the card is failed so the progress view
-    // renders failure chrome instead of a success check.
-    expect(turnEntry).toMatchObject({
-      toolName: CODEX_TURN_TOOL,
-      input: { state: 'failed' },
-      status: 'failed',
-    });
-    expect(turnEntry).not.toHaveProperty('error');
-  });
+        const turnEntry = findTurnEntry(store);
+        // Even without an error message the card is failed so the progress view
+        // renders failure chrome instead of a success check.
+        expect(turnEntry).toMatchObject({
+          toolName: CODEX_TURN_TOOL,
+          input: { state: 'failed' },
+          status: 'failed',
+        });
+        expect(turnEntry).not.toHaveProperty('error');
+      }),
+  );
 });
 
 function findTurnEntry(store: StreamLog): Record<string, unknown> | undefined {

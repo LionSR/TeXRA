@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
+import { describe, expect } from 'vitest';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
 import { SettingsModelSelectionController } from '@controllers/settingsView/SettingsModelSelectionController';
@@ -81,241 +82,280 @@ function sonnet46CopilotRoutes(
 }
 
 describe('SettingsModelSelectionController', () => {
-  it('does not expose a reasoning selector for Kimi K3 fixed max effort', async () => {
-    const controller = createController({
-      stores: {
-        ...makeFakeSettingsStores().stores,
-        globalState: new FakeStateStore({
-          [GlobalStateKey.REASONING_LEVELS]: { kimi3: 'low' },
-        }),
-      },
-    });
+  it.effect(
+    'does not expose a reasoning selector for Kimi K3 fixed max effort',
+    () =>
+      Effect.gen(function* () {
+        const controller = createController({
+          stores: {
+            ...makeFakeSettingsStores().stores,
+            globalState: new FakeStateStore({
+              [GlobalStateKey.REASONING_LEVELS]: { kimi3: 'low' },
+            }),
+          },
+        });
 
-    const { models } = await Effect.runPromise(controller.buildSelectionData());
-    const kimi3 = models.find((model) => model.name === 'kimi3');
+        const { models } = yield* controller.buildSelectionData();
+        const kimi3 = models.find((model) => model.name === 'kimi3');
 
-    expect(MODEL_CONFIGS.kimi3.capabilities).toMatchObject({
-      supportsReasoningEffort: true,
-      reasoningEffort: 'max',
-    });
-    expect(kimi3).not.toHaveProperty('supportsReasoningLevel');
-    expect(kimi3).not.toHaveProperty('reasoningLevel');
-  });
+        expect(MODEL_CONFIGS.kimi3.capabilities).toMatchObject({
+          supportsReasoningEffort: true,
+          reasoningEffort: 'max',
+        });
+        expect(kimi3).not.toHaveProperty('supportsReasoningLevel');
+        expect(kimi3).not.toHaveProperty('reasoningLevel');
+      }),
+  );
 
-  it('groups membership models under Kimi Code rather than Moonshot', async () => {
-    const controller = createController();
+  it.effect(
+    'groups membership models under Kimi Code rather than Moonshot',
+    () =>
+      Effect.gen(function* () {
+        const controller = createController();
 
-    const { models } = await Effect.runPromise(controller.buildSelectionData());
+        const { models } = yield* controller.buildSelectionData();
 
-    expect(models.find((model) => model.name === 'kimiCoding')).toMatchObject({
-      provider: 'kimiCode',
-      label: 'Kimi for Coding',
-    });
-  });
+        expect(
+          models.find((model) => model.name === 'kimiCoding'),
+        ).toMatchObject({
+          provider: 'kimiCode',
+          label: 'Kimi for Coding',
+        });
+      }),
+  );
 
-  it('keeps Kimi K3 under Moonshot while preserving its effective route', async () => {
-    const controller = createController({
-      resolveModelOptions: (_stores, models) =>
-        Effect.succeed(
-          modelOptions(models).map((option) =>
-            option.value === 'kimi3'
-              ? {
-                  ...option,
-                  provider: 'kimiCode',
-                  routeLabel: 'Via Kimi Code',
-                }
-              : option,
+  it.effect(
+    'keeps Kimi K3 under Moonshot while preserving its effective route',
+    () =>
+      Effect.gen(function* () {
+        const controller = createController({
+          resolveModelOptions: (_stores, models) =>
+            Effect.succeed(
+              modelOptions(models).map((option) =>
+                option.value === 'kimi3'
+                  ? {
+                      ...option,
+                      provider: 'kimiCode',
+                      routeLabel: 'Via Kimi Code',
+                    }
+                  : option,
+              ),
+            ),
+        });
+
+        expect(
+          (yield* controller.buildSelectionData()).models.find(
+            (model) => model.name === 'kimi3',
           ),
-        ),
-    });
+        ).toMatchObject({
+          provider: 'moonshot',
+          routeLabel: 'Via Kimi Code',
+        });
+      }),
+  );
 
-    expect(
-      (await Effect.runPromise(controller.buildSelectionData())).models.find(
-        (model) => model.name === 'kimi3',
-      ),
-    ).toMatchObject({
-      provider: 'moonshot',
-      routeLabel: 'Via Kimi Code',
-    });
-  });
+  it.effect('pins a disabled helper to the built-in default', () =>
+    Effect.gen(function* () {
+      const globalState = new FakeStateStore({
+        [GlobalStateKey.MODEL_SELECTION]: {
+          enabledExtras: ['gpt55'],
+          disabledDefaults: [],
+        },
+        [GlobalStateKey.HELPER_MODEL]: 'gpt55',
+      });
+      const controller = createController({
+        stores: { ...makeFakeSettingsStores().stores, globalState },
+      });
 
-  it('pins a disabled helper to the built-in default', async () => {
-    const globalState = new FakeStateStore({
-      [GlobalStateKey.MODEL_SELECTION]: {
-        enabledExtras: ['gpt55'],
+      expect((yield* controller.buildSelectionData()).helperModel).toBe(
+        'gpt55',
+      );
+
+      yield* controller.setModelEnabled({ modelName: 'gpt55', enabled: false });
+
+      expect(globalState.get(GlobalStateKey.MODEL_SELECTION)).toEqual({
+        enabledExtras: [],
         disabledDefaults: [],
-      },
-      [GlobalStateKey.HELPER_MODEL]: 'gpt55',
-    });
-    const controller = createController({
-      stores: { ...makeFakeSettingsStores().stores, globalState },
-    });
+      });
+      expect(globalState.get(GlobalStateKey.HELPER_MODEL)).toBe(
+        DEFAULT_HELPER_MODEL,
+      );
+    }),
+  );
 
-    expect(
-      (await Effect.runPromise(controller.buildSelectionData())).helperModel,
-    ).toBe('gpt55');
-
-    await Effect.runPromise(
-      controller.setModelEnabled({ modelName: 'gpt55', enabled: false }),
-    );
-
-    expect(globalState.get(GlobalStateKey.MODEL_SELECTION)).toEqual({
-      enabledExtras: [],
-      disabledDefaults: [],
-    });
-    expect(globalState.get(GlobalStateKey.HELPER_MODEL)).toBe(
-      DEFAULT_HELPER_MODEL,
-    );
-  });
-
-  it('refuses to disable the last remaining model', async () => {
-    const onlyGpt55 = {
-      enabledExtras: ['gpt55'],
-      disabledDefaults: DEFAULT_MODELS,
-    };
-    const globalState = new FakeStateStore({
-      [GlobalStateKey.MODEL_SELECTION]: onlyGpt55,
-    });
-    const controller = createController({
-      stores: { ...makeFakeSettingsStores().stores, globalState },
-    });
-
-    await expect(
-      Effect.runPromise(
-        controller.setModelEnabled({ modelName: 'gpt55', enabled: false }),
-      ),
-    ).rejects.toThrow(/at least one model/i);
-    expect(globalState.get(GlobalStateKey.MODEL_SELECTION)).toEqual(onlyGpt55);
-  });
-
-  it('falls back to default models when every enabled model has retired', async () => {
-    const globalState = new FakeStateStore({
-      [GlobalStateKey.MODEL_SELECTION]: {
-        enabledExtras: ['grok4'],
+  it.effect('refuses to disable the last remaining model', () =>
+    Effect.gen(function* () {
+      const onlyGpt55 = {
+        enabledExtras: ['gpt55'],
         disabledDefaults: DEFAULT_MODELS,
-      },
-    });
-    const controller = createController({
-      stores: { ...makeFakeSettingsStores().stores, globalState },
-    });
+      };
+      const globalState = new FakeStateStore({
+        [GlobalStateKey.MODEL_SELECTION]: onlyGpt55,
+      });
+      const controller = createController({
+        stores: { ...makeFakeSettingsStores().stores, globalState },
+      });
 
-    const { models } = await Effect.runPromise(controller.buildSelectionData());
-    const enabled = models.filter((model) => model.enabled);
+      const error = yield* Effect.flip(
+        controller.setModelEnabled({ modelName: 'gpt55', enabled: false }),
+      );
+      expect(error).toBeInstanceOf(Error);
+      expect(error.message).toMatch(/at least one model/i);
+      expect(globalState.get(GlobalStateKey.MODEL_SELECTION)).toEqual(
+        onlyGpt55,
+      );
+    }),
+  );
 
-    // A retired-only selection must not blank out the helper-model dropdown.
-    expect(enabled.length).toBeGreaterThan(0);
+  it.effect(
+    'falls back to default models when every enabled model has retired',
+    () =>
+      Effect.gen(function* () {
+        const globalState = new FakeStateStore({
+          [GlobalStateKey.MODEL_SELECTION]: {
+            enabledExtras: ['grok4'],
+            disabledDefaults: DEFAULT_MODELS,
+          },
+        });
+        const controller = createController({
+          stores: { ...makeFakeSettingsStores().stores, globalState },
+        });
 
-    // A toggle edits the fallback the picker shows, not the hidden delta.
-    const [first] = DEFAULT_MODELS;
-    await Effect.runPromise(
-      controller.setModelEnabled({ modelName: first, enabled: false }),
-    );
-    expect(globalState.get(GlobalStateKey.MODEL_SELECTION)).toEqual({
-      enabledExtras: [],
-      disabledDefaults: [first],
-    });
+        const { models } = yield* controller.buildSelectionData();
+        const enabled = models.filter((model) => model.enabled);
 
-    // Turned back on, it stays on even after the curated defaults drop it.
-    await Effect.runPromise(
-      controller.setModelEnabled({ modelName: first, enabled: true }),
-    );
-    expect(globalState.get(GlobalStateKey.MODEL_SELECTION)).toEqual({
-      enabledExtras: [first],
-      disabledDefaults: [],
-    });
-    const defaults = DEFAULT_MODELS as string[];
-    defaults.splice(defaults.indexOf(first), 1);
-    try {
-      expect(getEnabledModels(globalState)).toContain(first);
-    } finally {
-      defaults.unshift(first);
-    }
-  });
+        // A retired-only selection must not blank out the helper-model dropdown.
+        expect(enabled.length).toBeGreaterThan(0);
 
-  it('shows the defaults when the stored selection is malformed', async () => {
-    const enabledNames = async (controller: SettingsModelSelectionController) =>
-      (await Effect.runPromise(controller.buildSelectionData())).models
-        .filter((model) => model.enabled)
-        .map((model) => model.name);
-    const malformed = createController({
-      stores: {
-        ...makeFakeSettingsStores().stores,
-        globalState: new FakeStateStore({
-          [GlobalStateKey.MODEL_SELECTION]: { enabledExtras: null },
-        }),
-      },
-    });
+        // A toggle edits the fallback the picker shows, not the hidden delta.
+        const [first] = DEFAULT_MODELS;
+        yield* controller.setModelEnabled({ modelName: first, enabled: false });
+        expect(globalState.get(GlobalStateKey.MODEL_SELECTION)).toEqual({
+          enabledExtras: [],
+          disabledDefaults: [first],
+        });
 
-    expect(await enabledNames(malformed)).toEqual(
-      await enabledNames(createController()),
-    );
-  });
+        // Turned back on, it stays on even after the curated defaults drop it.
+        yield* controller.setModelEnabled({ modelName: first, enabled: true });
+        expect(globalState.get(GlobalStateKey.MODEL_SELECTION)).toEqual({
+          enabledExtras: [first],
+          disabledDefaults: [],
+        });
+        const defaults = DEFAULT_MODELS as string[];
+        defaults.splice(defaults.indexOf(first), 1);
+        try {
+          expect(getEnabledModels(globalState)).toContain(first);
+        } finally {
+          defaults.unshift(first);
+        }
+      }),
+  );
 
-  it('keeps a preferred undiscovered Copilot route visible for opt-out', async () => {
-    const controller = createController({
-      getPreferredCopilotRouteModels: () => ['sonnet46'],
-    });
+  it.effect('shows the defaults when the stored selection is malformed', () =>
+    Effect.gen(function* () {
+      const enabledNames = (controller: SettingsModelSelectionController) =>
+        controller
+          .buildSelectionData()
+          .pipe(
+            Effect.map(({ models }) =>
+              models
+                .filter((model) => model.enabled)
+                .map((model) => model.name),
+            ),
+          );
+      const malformed = createController({
+        stores: {
+          ...makeFakeSettingsStores().stores,
+          globalState: new FakeStateStore({
+            [GlobalStateKey.MODEL_SELECTION]: { enabledExtras: null },
+          }),
+        },
+      });
 
-    expect(
-      (await Effect.runPromise(controller.buildSelectionData())).copilotModels,
-    ).toEqual([
-      {
-        name: 'sonnet46',
-        label: MODEL_CONFIGS.sonnet46.label,
-        access: 'unavailable',
-        preferred: true,
-      },
-    ]);
-  });
+      expect(yield* enabledNames(malformed)).toEqual(
+        yield* enabledNames(createController()),
+      );
+    }),
+  );
 
-  it('does not expose reasoning controls for a preferred VS Code route', async () => {
-    const controller = createController({
-      getPreferredCopilotRouteModels: () => ['sonnet46'],
-      copilotRoutes: Effect.succeed(
-        sonnet46CopilotRoutes('allowed', {
-          ...MODEL_CONFIGS.sonnet46.capabilities,
-          supportsReasoningEffort: false,
-          maxReasoningEffort: undefined,
-          supportedReasoningEfforts: undefined,
-        }),
-      ),
-    });
+  it.effect(
+    'keeps a preferred undiscovered Copilot route visible for opt-out',
+    () =>
+      Effect.gen(function* () {
+        const controller = createController({
+          getPreferredCopilotRouteModels: () => ['sonnet46'],
+        });
 
-    const sonnet = (
-      await Effect.runPromise(controller.buildSelectionData())
-    ).models.find((model) => model.name === 'sonnet46');
-    expect(MODEL_CONFIGS.sonnet46.capabilities.supportsReasoningEffort).toBe(
-      true,
-    );
-    expect(sonnet).not.toHaveProperty('supportsReasoningLevel');
-    expect(sonnet).not.toHaveProperty('reasoningLevel');
-  });
+        expect((yield* controller.buildSelectionData()).copilotModels).toEqual([
+          {
+            name: 'sonnet46',
+            label: MODEL_CONFIGS.sonnet46.label,
+            access: 'unavailable',
+            preferred: true,
+          },
+        ]);
+      }),
+  );
 
-  it('surfaces discovered Copilot routes as route status, never as picker rows', async () => {
-    const controller = createController({
-      copilotRoutes: Effect.succeed(sonnet46CopilotRoutes('consent-required')),
-    });
+  it.effect(
+    'does not expose reasoning controls for a preferred VS Code route',
+    () =>
+      Effect.gen(function* () {
+        const controller = createController({
+          getPreferredCopilotRouteModels: () => ['sonnet46'],
+          copilotRoutes: Effect.succeed(
+            sonnet46CopilotRoutes('allowed', {
+              ...MODEL_CONFIGS.sonnet46.capabilities,
+              supportsReasoningEffort: false,
+              maxReasoningEffort: undefined,
+              supportedReasoningEfforts: undefined,
+            }),
+          ),
+        });
 
-    const { models, copilotModels } = await Effect.runPromise(
-      controller.buildSelectionData(),
-    );
+        const sonnet = (yield* controller.buildSelectionData()).models.find(
+          (model) => model.name === 'sonnet46',
+        );
+        expect(
+          MODEL_CONFIGS.sonnet46.capabilities.supportsReasoningEffort,
+        ).toBe(true);
+        expect(sonnet).not.toHaveProperty('supportsReasoningLevel');
+        expect(sonnet).not.toHaveProperty('reasoningLevel');
+      }),
+  );
 
-    expect(copilotModels).toEqual([
-      {
-        name: 'sonnet46',
-        label: MODEL_CONFIGS.sonnet46.label,
-        access: 'consent-required',
-        preferred: false,
-      },
-    ]);
-    // The route's base model keeps its own single row; no `copilot:` identity
-    // and no Copilot-provider row ever enters the picker.
-    expect(
-      models.filter(
-        (model) =>
-          model.name.startsWith('copilot:') || model.provider === 'copilot',
-      ),
-    ).toEqual([]);
-    expect(models.filter((model) => model.name === 'sonnet46')).toHaveLength(1);
-  });
+  it.effect(
+    'surfaces discovered Copilot routes as route status, never as picker rows',
+    () =>
+      Effect.gen(function* () {
+        const controller = createController({
+          copilotRoutes: Effect.succeed(
+            sonnet46CopilotRoutes('consent-required'),
+          ),
+        });
+
+        const { models, copilotModels } =
+          yield* controller.buildSelectionData();
+
+        expect(copilotModels).toEqual([
+          {
+            name: 'sonnet46',
+            label: MODEL_CONFIGS.sonnet46.label,
+            access: 'consent-required',
+            preferred: false,
+          },
+        ]);
+        // The route's base model keeps its own single row; no `copilot:` identity
+        // and no Copilot-provider row ever enters the picker.
+        expect(
+          models.filter(
+            (model) =>
+              model.name.startsWith('copilot:') || model.provider === 'copilot',
+          ),
+        ).toEqual([]);
+        expect(
+          models.filter((model) => model.name === 'sonnet46'),
+        ).toHaveLength(1);
+      }),
+  );
 });

@@ -1,6 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-
+import { it } from '@effect/vitest';
 import { Effect, SubscriptionRef } from 'effect';
+import { beforeEach, describe, expect, vi } from 'vitest';
 import type {
   RuntimePresentationEvent,
   RuntimePresentationEventPayloads,
@@ -292,10 +292,10 @@ async function handleActiveSubagents(
 }
 /** A run on a real session: its `run.start`, the config the fold reads the
  *  inputs from, and the RUNNING transition, then the fold's own settle. */
-async function publishRun(
+function publishRun(
   session: SessionHandle,
   overrides: RunConfigOverrides = {},
-): Promise<void> {
+): Effect.Effect<void> {
   const runId = (overrides.runId ?? 'e5e5e5') as RunId;
   const agent = overrides.agent ?? 'polish';
   session.publish([
@@ -351,7 +351,7 @@ async function publishRun(
       payload: { family: 'toolUse', step: 'turn.begin' },
     },
   ]);
-  await settle();
+  return Effect.promise(() => settle());
 }
 function outputBuffer(): { write: (chunk: string) => void; text: string } {
   const buffer = {
@@ -415,28 +415,30 @@ function fakeTimers() {
   return timers;
 }
 
-async function captureStreamWrites(
+function captureStreamWrites<E, R>(
   stream: NodeJS.WriteStream,
-  action: () => Promise<void>,
-): Promise<string> {
-  let output = '';
+  action: Effect.Effect<unknown, E, R>,
+): Effect.Effect<string, E, R> {
+  const capture = { output: '' };
   const originalWrite = stream.write;
-  stream.write = ((chunk: string | Uint8Array, ...args: unknown[]) => {
-    output += decodeStreamChunk(chunk, args);
-    const callback = args.find(
-      (arg): arg is (error?: Error | null) => void => typeof arg === 'function',
-    );
-    callback?.();
-    return true;
-  }) as typeof stream.write;
-
-  try {
-    await action();
-  } finally {
-    stream.write = originalWrite;
-  }
-
-  return output;
+  return Effect.acquireUseRelease(
+    Effect.sync(() => {
+      stream.write = ((chunk: string | Uint8Array, ...args: unknown[]) => {
+        capture.output += decodeStreamChunk(chunk, args);
+        const callback = args.find(
+          (arg): arg is (error?: Error | null) => void =>
+            typeof arg === 'function',
+        );
+        callback?.();
+        return true;
+      }) as typeof stream.write;
+    }),
+    () => action,
+    () =>
+      Effect.sync(() => {
+        stream.write = originalWrite;
+      }),
+  ).pipe(Effect.map(() => capture.output));
 }
 
 function ndjsonRecords(output: string): Record<string, unknown>[] {
@@ -936,279 +938,349 @@ describe('CLI run progress renderer', () => {
     expect(shouldRenderRunProgress(context({ stderrIsTty: false }))).toBe(true);
   });
 
-  it('uses the stderr color gate when stdout alone allows color', async () => {
-    const output = await captureStreamWrites(process.stderr, async () => {
-      const session = createTestSession();
-      const host = createCliRuntimeHost(
-        testRuntime(),
-        context({
-          quietLogs: true,
-          renderRunProgress: true,
-          stdoutColorEnabled: true,
-          stderrColorEnabled: false,
-        }),
-      );
-      const detach = host.attachRunProgressRenderer(session);
-      // The session's graph is fresh: let its fold subscribe before the
-      // facts land, so each fact paints as its own level.
-      await settle();
-      await publishRun(session, { runId: 'a1a1a1' });
-      detach();
-      await Effect.runPromise(host.close());
-    });
-
-    expect(output).toContain('polish paper.tex · 0s');
-    expect(output).not.toContain('\r\x1b[2K');
-  });
-
-  it('writes one status line for a committed completion', async () => {
-    const output = await captureStreamWrites(process.stderr, async () => {
-      const session = createTestSession();
-      const host = createCliRuntimeHost(
-        testRuntime(),
-        context({
-          stderrColorEnabled: false,
-          quietLogs: true,
-          renderRunProgress: true,
-        }),
-      );
-      const detach = host.attachRunProgressRenderer(session);
-      await publishRun(session, { runId: 'b2b2b2' });
-      await Effect.runPromise(session.settlePublications());
-      // The terminal phase is the `run.end` row's fact and nothing else, so
-      // exactly one line renders for the transition.
-      session.publish([
-        {
-          type: 'run.end',
-          aggregateId: qualifyAggregateId('run', 'b2b2b2' as RunId),
-          outcome: 'completed',
-          output: emptyRunEndOutput(AgentCategory.Workflow),
-        },
-      ]);
-      await Effect.runPromise(session.settlePublications());
-
-      detach();
-      await Effect.runPromise(host.close());
-    });
-
-    expect(
-      output.split('\n').filter((line) => line.includes('Completed')),
-    ).toEqual(['polish paper.tex · Completed · 0s']);
-  });
-
-  it('preserves the live progress line before interactive prompts', async () => {
-    const output = await captureStreamWrites(process.stderr, async () => {
-      const session = createTestSession();
-      const host = createCliRuntimeHost(
-        testRuntime(),
-        context({
-          approvalPolicy: 'ask',
-          approvalPrompt: async () => 'n no review needed',
+  it.live('uses the stderr color gate when stdout alone allows color', () =>
+    Effect.gen(function* () {
+      const output = yield* captureStreamWrites(
+        process.stderr,
+        Effect.gen(function* () {
+          const session = createTestSession();
+          const host = createCliRuntimeHost(
+            testRuntime(),
+            context({
+              quietLogs: true,
+              renderRunProgress: true,
+              stdoutColorEnabled: true,
+              stderrColorEnabled: false,
+            }),
+          );
+          const detach = host.attachRunProgressRenderer(session);
+          // The session's graph is fresh: let its fold subscribe before the
+          // facts land, so each fact paints as its own level.
+          yield* Effect.promise(() => settle());
+          yield* publishRun(session, { runId: 'a1a1a1' });
+          detach();
+          yield* host.close();
         }),
       );
 
-      const detach = host.attachRunProgressRenderer(session);
-      await publishRun(session, { runId: 'c3c3c3' });
-      host.prepareInteractivePrompt?.();
-      await Promise.resolve();
-      detach();
-      await Effect.runPromise(host.close());
-    });
+      expect(output).toContain('polish paper.tex · 0s');
+      expect(output).not.toContain('\r\x1b[2K');
+    }),
+  );
 
-    expect(output).toContain('\r\x1b[2Kpolish paper.tex · 0s\n');
-  });
+  it.live('writes one status line for a committed completion', () =>
+    Effect.gen(function* () {
+      const output = yield* captureStreamWrites(
+        process.stderr,
+        Effect.gen(function* () {
+          const session = createTestSession();
+          const host = createCliRuntimeHost(
+            testRuntime(),
+            context({
+              stderrColorEnabled: false,
+              quietLogs: true,
+              renderRunProgress: true,
+            }),
+          );
+          const detach = host.attachRunProgressRenderer(session);
+          yield* publishRun(session, { runId: 'b2b2b2' });
+          yield* session.settlePublications();
+          // The terminal phase is the `run.end` row's fact and nothing else, so
+          // exactly one line renders for the transition.
+          session.publish([
+            {
+              type: 'run.end',
+              aggregateId: qualifyAggregateId('run', 'b2b2b2' as RunId),
+              outcome: 'completed',
+              output: emptyRunEndOutput(AgentCategory.Workflow),
+            },
+          ]);
+          yield* session.settlePublications();
 
-  it('writes human progress to stderr without polluting json stdout', async () => {
-    let stderr = '';
-    const stdout = await captureStreamWrites(process.stdout, async () => {
-      stderr = await captureStreamWrites(process.stderr, async () => {
-        const session = createTestSession();
-        const host = createCliRuntimeHost(
-          testRuntime(),
-          context({
-            outputFormat: 'json',
-            stderrColorEnabled: false,
-            renderRunProgress: true,
-          }),
-        );
-        const detach = host.attachRunProgressRenderer(session);
-        await publishRun(session, { runId: 'd4d4d4' });
-        detach();
-        await Effect.runPromise(host.close());
-      });
-    });
-
-    expect(stderr).toContain('polish paper.tex · 0s');
-    expect(stdout).toBe('');
-  });
-
-  it('prints requestShowInstruction text and a human-readable action hint to stderr in text mode', async () => {
-    const output = await captureStreamWrites(process.stderr, async () => {
-      const host = createCliRuntimeHost(
-        testRuntime(),
-        context({ outputFormat: 'text' }),
-      );
-
-      host.emit('requestShowInstruction', {
-        key: 'missingApiKey',
-        message:
-          'API key not found. Set your API key in Settings and run again.',
-        actions: ['set-api-key', 'open-configuration-guide'],
-        showSuppress: false,
-      });
-
-      await Effect.runPromise(host.close());
-    });
-
-    // The raw InstructionAction tokens are translated to human phrasing
-    // (mirroring the extension's INSTRUCTION_ACTION_VIEW), not printed
-    // verbatim.
-    expect(output).toContain(
-      'API key not found. Set your API key in Settings and run again. (set your API key (texra setup), see the configuration guide)',
-    );
-    expect(output).not.toContain('set-api-key');
-    expect(output).not.toContain('open-configuration-guide');
-  });
-
-  it('falls back to the raw token for an unrecognized action in the instruction hint', async () => {
-    const output = await captureStreamWrites(process.stderr, async () => {
-      const host = createCliRuntimeHost(
-        testRuntime(),
-        context({ outputFormat: 'text' }),
-      );
-
-      host.emit('requestShowInstruction', {
-        key: 'futureInstruction',
-        message: 'Something needs attention.',
-        actions: ['some-future-action' as InstructionAction],
-        showSuppress: false,
-      });
-
-      await Effect.runPromise(host.close());
-    });
-
-    expect(output).toContain('Something needs attention. (some-future-action)');
-  });
-
-  it('prints a visible agent-not-found error for showAgentConfigBanner in text mode', async () => {
-    const output = await captureStreamWrites(process.stderr, async () => {
-      const host = createCliRuntimeHost(
-        testRuntime(),
-        context({ outputFormat: 'text' }),
+          detach();
+          yield* host.close();
+        }),
       );
 
       expect(
-        host.emit('showAgentConfigBanner', {
-          agentName: 'ghost',
-          category: AgentCategory.ToolUse,
+        output.split('\n').filter((line) => line.includes('Completed')),
+      ).toEqual(['polish paper.tex · Completed · 0s']);
+    }),
+  );
+
+  it.live('preserves the live progress line before interactive prompts', () =>
+    Effect.gen(function* () {
+      const output = yield* captureStreamWrites(
+        process.stderr,
+        Effect.gen(function* () {
+          const session = createTestSession();
+          const host = createCliRuntimeHost(
+            testRuntime(),
+            context({
+              approvalPolicy: 'ask',
+              approvalPrompt: async () => 'n no review needed',
+            }),
+          );
+
+          const detach = host.attachRunProgressRenderer(session);
+          yield* publishRun(session, { runId: 'c3c3c3' });
+          host.prepareInteractivePrompt?.();
+          yield* Effect.promise(() => Promise.resolve());
+          detach();
+          yield* host.close();
         }),
-      ).toBe(true);
-
-      await Effect.runPromise(host.close());
-    });
-
-    expect(output).toContain('Agent not found: ghost');
-    expect(output).toContain('texra agents list');
-  });
-
-  it('does not gate requestShowInstruction behind quietLogs in text mode', async () => {
-    const output = await captureStreamWrites(process.stderr, async () => {
-      const host = createCliRuntimeHost(
-        testRuntime(),
-        context({ outputFormat: 'text', quietLogs: true }),
       );
 
-      host.emit('requestShowInstruction', {
-        key: 'missingApiKey',
-        message:
-          'API key not found. Set your API key in Settings and run again.',
-      });
+      expect(output).toContain('\r\x1b[2Kpolish paper.tex · 0s\n');
+    }),
+  );
 
-      await Effect.runPromise(host.close());
-    });
+  it.live('writes human progress to stderr without polluting json stdout', () =>
+    Effect.gen(function* () {
+      let stderr = '';
+      const stdout = yield* captureStreamWrites(
+        process.stdout,
+        Effect.gen(function* () {
+          stderr = yield* captureStreamWrites(
+            process.stderr,
+            Effect.gen(function* () {
+              const session = createTestSession();
+              const host = createCliRuntimeHost(
+                testRuntime(),
+                context({
+                  outputFormat: 'json',
+                  stderrColorEnabled: false,
+                  renderRunProgress: true,
+                }),
+              );
+              const detach = host.attachRunProgressRenderer(session);
+              yield* publishRun(session, { runId: 'd4d4d4' });
+              detach();
+              yield* host.close();
+            }),
+          );
+        }),
+      );
 
-    expect(output).toContain('API key not found.');
-  });
+      expect(stderr).toContain('polish paper.tex · 0s');
+      expect(stdout).toBe('');
+    }),
+  );
 
-  it('writes projected subagent progress records to stdout in ndjson mode', async () => {
-    const parentRunId = 'a1a1a1' as RunId;
-    const childRunId = 'b1b1b1' as RunId;
-    const output = await captureStreamWrites(process.stdout, async () => {
-      const session = createTestSession();
-      publishTestRunStart(session, parentRunId);
-      await settle();
-      // The roster is the fold's: the parent's `childIds` and the child's own
-      // row, derived beside the line that folded them.
-      const detach = attachCliSessionProgressProjection(testRuntime(), session);
-      session.publish([
-        {
-          type: 'run.start',
-          aggregateId: qualifyAggregateId('run', childRunId),
-          identity: { kind: 'agent', agent: 'review' },
-          userFollowUpSupport: 'unsupported',
-          category: AgentCategory.ToolUse,
-          isRemote: false,
-          parent: { id: parentRunId },
-        },
-      ]);
-      await settle();
-      await Effect.runPromise(detach());
-    });
+  it.live(
+    'prints requestShowInstruction text and a human-readable action hint to stderr in text mode',
+    () =>
+      Effect.gen(function* () {
+        const output = yield* captureStreamWrites(
+          process.stderr,
+          Effect.gen(function* () {
+            const host = createCliRuntimeHost(
+              testRuntime(),
+              context({ outputFormat: 'text' }),
+            );
 
-    const records = ndjsonRecords(output).filter(
-      (record) => record.event === 'run.children',
-    );
+            host.emit('requestShowInstruction', {
+              key: 'missingApiKey',
+              message:
+                'API key not found. Set your API key in Settings and run again.',
+              actions: ['set-api-key', 'open-configuration-guide'],
+              showSuppress: false,
+            });
 
-    expect(records).toEqual([
-      expect.objectContaining({
-        kind: 'progress',
-        event: 'run.children',
-        // The row carries the child's run id and identity under their own
-        // names; `ready` is the fold's phase before the activation lands.
-        payload: {
-          runId: parentRunId,
-          children: [
-            {
-              childRunId,
-              agentName: 'review',
-              identity: { kind: 'agent', agent: 'review' },
-              status: 'ready',
-            },
-          ],
-        },
-        contract: 2,
+            yield* host.close();
+          }),
+        );
+
+        // The raw InstructionAction tokens are translated to human phrasing
+        // (mirroring the extension's INSTRUCTION_ACTION_VIEW), not printed
+        // verbatim.
+        expect(output).toContain(
+          'API key not found. Set your API key in Settings and run again. (set your API key (texra setup), see the configuration guide)',
+        );
+        expect(output).not.toContain('set-api-key');
+        expect(output).not.toContain('open-configuration-guide');
       }),
-    ]);
-  });
+  );
 
-  it('applies an explicit ndjson policy to every runtime presentation request', async () => {
-    const output = await captureStreamWrites(process.stdout, async () => {
-      const host = createCliRuntimeHost(
-        testRuntime(),
-        context({ mode: 'headless', outputFormat: 'ndjson' }),
-      );
+  it.live(
+    'falls back to the raw token for an unrecognized action in the instruction hint',
+    () =>
+      Effect.gen(function* () {
+        const output = yield* captureStreamWrites(
+          process.stderr,
+          Effect.gen(function* () {
+            const host = createCliRuntimeHost(
+              testRuntime(),
+              context({ outputFormat: 'text' }),
+            );
 
-      for (const [event, testCase] of Object.entries(
-        RUNTIME_PRESENTATION_NDJSON_CASES,
-      ) as [
-        RuntimePresentationEvent,
-        RuntimePresentationNdjsonCases[RuntimePresentationEvent],
-      ][]) {
-        host.emit(event, testCase.payload);
-      }
+            host.emit('requestShowInstruction', {
+              key: 'futureInstruction',
+              message: 'Something needs attention.',
+              actions: ['some-future-action' as InstructionAction],
+              showSuppress: false,
+            });
 
-      await Effect.runPromise(host.close());
-    });
+            yield* host.close();
+          }),
+        );
 
-    const records = ndjsonRecords(output);
+        expect(output).toContain(
+          'Something needs attention. (some-future-action)',
+        );
+      }),
+  );
 
-    const expectedRecords = Object.values(
-      RUNTIME_PRESENTATION_NDJSON_CASES,
-    ).flatMap(({ policy }) =>
-      policy.kind === 'log'
-        ? [expect.objectContaining({ ...policy, ts: expect.any(String) })]
-        : [],
-    );
-    expect(records).toEqual(expectedRecords);
-  });
+  it.live(
+    'prints a visible agent-not-found error for showAgentConfigBanner in text mode',
+    () =>
+      Effect.gen(function* () {
+        const output = yield* captureStreamWrites(
+          process.stderr,
+          Effect.gen(function* () {
+            const host = createCliRuntimeHost(
+              testRuntime(),
+              context({ outputFormat: 'text' }),
+            );
+
+            expect(
+              host.emit('showAgentConfigBanner', {
+                agentName: 'ghost',
+                category: AgentCategory.ToolUse,
+              }),
+            ).toBe(true);
+
+            yield* host.close();
+          }),
+        );
+
+        expect(output).toContain('Agent not found: ghost');
+        expect(output).toContain('texra agents list');
+      }),
+  );
+
+  it.live(
+    'does not gate requestShowInstruction behind quietLogs in text mode',
+    () =>
+      Effect.gen(function* () {
+        const output = yield* captureStreamWrites(
+          process.stderr,
+          Effect.gen(function* () {
+            const host = createCliRuntimeHost(
+              testRuntime(),
+              context({ outputFormat: 'text', quietLogs: true }),
+            );
+
+            host.emit('requestShowInstruction', {
+              key: 'missingApiKey',
+              message:
+                'API key not found. Set your API key in Settings and run again.',
+            });
+
+            yield* host.close();
+          }),
+        );
+
+        expect(output).toContain('API key not found.');
+      }),
+  );
+
+  it.live(
+    'writes projected subagent progress records to stdout in ndjson mode',
+    () =>
+      Effect.gen(function* () {
+        const parentRunId = 'a1a1a1' as RunId;
+        const childRunId = 'b1b1b1' as RunId;
+        const output = yield* captureStreamWrites(
+          process.stdout,
+          Effect.gen(function* () {
+            const session = createTestSession();
+            publishTestRunStart(session, parentRunId);
+            yield* Effect.promise(() => settle());
+            // The roster is the fold's: the parent's `childIds` and the child's own
+            // row, derived beside the line that folded them.
+            const detach = attachCliSessionProgressProjection(
+              testRuntime(),
+              session,
+            );
+            session.publish([
+              {
+                type: 'run.start',
+                aggregateId: qualifyAggregateId('run', childRunId),
+                identity: { kind: 'agent', agent: 'review' },
+                userFollowUpSupport: 'unsupported',
+                category: AgentCategory.ToolUse,
+                isRemote: false,
+                parent: { id: parentRunId },
+              },
+            ]);
+            yield* Effect.promise(() => settle());
+            yield* detach();
+          }),
+        );
+
+        const records = ndjsonRecords(output).filter(
+          (record) => record.event === 'run.children',
+        );
+
+        expect(records).toEqual([
+          expect.objectContaining({
+            kind: 'progress',
+            event: 'run.children',
+            // The row carries the child's run id and identity under their own
+            // names; `ready` is the fold's phase before the activation lands.
+            payload: {
+              runId: parentRunId,
+              children: [
+                {
+                  childRunId,
+                  agentName: 'review',
+                  identity: { kind: 'agent', agent: 'review' },
+                  status: 'ready',
+                },
+              ],
+            },
+            contract: 2,
+          }),
+        ]);
+      }),
+  );
+
+  it.live(
+    'applies an explicit ndjson policy to every runtime presentation request',
+    () =>
+      Effect.gen(function* () {
+        const output = yield* captureStreamWrites(
+          process.stdout,
+          Effect.gen(function* () {
+            const host = createCliRuntimeHost(
+              testRuntime(),
+              context({ mode: 'headless', outputFormat: 'ndjson' }),
+            );
+
+            for (const [event, testCase] of Object.entries(
+              RUNTIME_PRESENTATION_NDJSON_CASES,
+            ) as [
+              RuntimePresentationEvent,
+              RuntimePresentationNdjsonCases[RuntimePresentationEvent],
+            ][]) {
+              host.emit(event, testCase.payload);
+            }
+
+            yield* host.close();
+          }),
+        );
+
+        const records = ndjsonRecords(output);
+
+        const expectedRecords = Object.values(
+          RUNTIME_PRESENTATION_NDJSON_CASES,
+        ).flatMap(({ policy }) =>
+          policy.kind === 'log'
+            ? [expect.objectContaining({ ...policy, ts: expect.any(String) })]
+            : [],
+        );
+        expect(records).toEqual(expectedRecords);
+      }),
+  );
 });

@@ -54,7 +54,7 @@ describe('DelegationTools', () => {
     await truncate(target, size);
   }
 
-  it.each([
+  it.effect.each([
     {
       name: 'rejects context .bib files larger than 100KB',
       sizeBytes: 100 * 1024 + 1,
@@ -69,40 +69,44 @@ describe('DelegationTools', () => {
       rejectedPath: 'bibliography/main.bib',
       formattedSize: '150 KiB',
     },
-  ])('$name', async ({ sizeBytes, paths, rejectedPath, formattedSize }) => {
-    await bibFile(rejectedPath, sizeBytes);
+  ])('$name', ({ sizeBytes, paths, rejectedPath, formattedSize }) =>
+    Effect.gen(function* () {
+      yield* Effect.promise(() => bibFile(rejectedPath, sizeBytes));
 
-    const result = await Effect.runPromise(
-      rejectOversizedBibAttachments(workspaceRoot, paths).pipe(
-        Effect.provide(nodePlatformLayer),
-      ),
-    );
+      const result = yield* rejectOversizedBibAttachments(
+        workspaceRoot,
+        paths,
+      ).pipe(Effect.provide(nodePlatformLayer));
 
-    assert.strictEqual(result?.status, 'error');
-    assert.strictEqual(result?.summary, 'Rejected oversized BibTeX attachment');
-    assert.strictEqual(
-      result?.error,
-      `${rejectedPath} is ${sizeBytes} bytes (${formattedSize}), over the 102400 byte (100 KiB) limit. Call extract_bib_entries first if citations are needed, then re-propose without the full .bib file.`,
-    );
-    assert.deepStrictEqual(result?.diagnostics, {
-      type: 'oversized_bib_attachment',
-      path: rejectedPath,
-      sizeBytes,
-      limitBytes: 102400,
-    });
-  });
+      assert.strictEqual(result?.status, 'error');
+      assert.strictEqual(
+        result?.summary,
+        'Rejected oversized BibTeX attachment',
+      );
+      assert.strictEqual(
+        result?.error,
+        `${rejectedPath} is ${sizeBytes} bytes (${formattedSize}), over the 102400 byte (100 KiB) limit. Call extract_bib_entries first if citations are needed, then re-propose without the full .bib file.`,
+      );
+      assert.deepStrictEqual(result?.diagnostics, {
+        type: 'oversized_bib_attachment',
+        path: rejectedPath,
+        sizeBytes,
+        limitBytes: 102400,
+      });
+    }),
+  );
 
-  it('allows .bib files at the 100KB limit', async () => {
-    await bibFile('library.bib', 100 * 1024);
+  it.effect('allows .bib files at the 100KB limit', () =>
+    Effect.gen(function* () {
+      yield* Effect.promise(() => bibFile('library.bib', 100 * 1024));
 
-    const result = await Effect.runPromise(
-      rejectOversizedBibAttachments(workspaceRoot, ['library.bib']).pipe(
-        Effect.provide(nodePlatformLayer),
-      ),
-    );
+      const result = yield* rejectOversizedBibAttachments(workspaceRoot, [
+        'library.bib',
+      ]).pipe(Effect.provide(nodePlatformLayer));
 
-    assert.strictEqual(result, null);
-  });
+      assert.strictEqual(result, null);
+    }),
+  );
 });
 
 describe('DelegateAgentTool resume ownership', () => {

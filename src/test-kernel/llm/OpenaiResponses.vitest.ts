@@ -254,37 +254,41 @@ describe('native OpenAI Responses protocol', () => {
     vi.restoreAllMocks();
   });
 
-  it.each(['http', 'websocket'] as const)(
+  it.live.each(['http', 'websocket'] as const)(
     'counts selected cold input over HTTP for the %s factory without generating or changing its binding',
-    async (transport) => {
-      const frames: object[] = [];
-      const configuration = {
-        ...(transport === 'websocket'
-          ? await socketServer((socket) => {
-              socket.on('message', (raw) => {
-                frames.push(JSON.parse(raw.toString()));
-                for (const [sequence_number, event] of events([
-                  MESSAGE,
-                ]).entries())
-                  socket.send(JSON.stringify({ ...event, sequence_number }));
-              });
-            })
-          : CONFIG),
-        supportsInputTokenEstimation: true,
-      };
-      const fetch = vi
-        .fn<typeof globalThis.fetch>()
-        .mockImplementation(async (url) =>
-          String(url).endsWith('/input_tokens')
-            ? Response.json({
-                object: 'response.input_tokens',
-                input_tokens: 0,
-              })
-            : response(events([MESSAGE])),
-        );
-      vi.stubGlobal('fetch', fetch);
-      await Effect.runPromise(
-        Effect.scoped(
+    (transport) =>
+      Effect.gen(function* () {
+        const frames: object[] = [];
+        const configuration = {
+          ...(transport === 'websocket'
+            ? yield* Effect.promise(() =>
+                socketServer((socket) => {
+                  socket.on('message', (raw) => {
+                    frames.push(JSON.parse(raw.toString()));
+                    for (const [sequence_number, event] of events([
+                      MESSAGE,
+                    ]).entries())
+                      socket.send(
+                        JSON.stringify({ ...event, sequence_number }),
+                      );
+                  });
+                }),
+              )
+            : CONFIG),
+          supportsInputTokenEstimation: true,
+        };
+        const fetch = vi
+          .fn<typeof globalThis.fetch>()
+          .mockImplementation(async (url) =>
+            String(url).endsWith('/input_tokens')
+              ? Response.json({
+                  object: 'response.input_tokens',
+                  input_tokens: 0,
+                })
+              : response(events([MESSAGE])),
+          );
+        vi.stubGlobal('fetch', fetch);
+        yield* Effect.scoped(
           Effect.gen(function* () {
             const model =
               transport === 'websocket'
@@ -407,16 +411,15 @@ describe('native OpenAI Responses protocol', () => {
             expect(fetch).toHaveBeenCalledTimes(transport === 'http' ? 3 : 2);
             expect(frames).toHaveLength(transport === 'http' ? 0 : 1);
           }),
-        ),
-      );
-      expect(modelWith(fetch).estimateInputTokens).toBeUndefined();
-      expect(
-        modelWith(fetch, SUBSCRIPTION_CONFIG).estimateInputTokens,
-      ).toBeUndefined();
-    },
+        );
+        expect(modelWith(fetch).estimateInputTokens).toBeUndefined();
+        expect(
+          modelWith(fetch, SUBSCRIPTION_CONFIG).estimateInputTokens,
+        ).toBeUndefined();
+      }),
   );
 
-  it.each([
+  it.effect.each([
     {
       name: 'missing receipt',
       body: '{}',
@@ -455,37 +458,36 @@ describe('native OpenAI Responses protocol', () => {
     },
   ])(
     'reports $name during counting without a retry or a false zero',
-    async ({ body, status, kind }) => {
-      const fetch = vi.fn<typeof globalThis.fetch>().mockImplementation(
-        async () =>
-          new Response(body, {
-            status,
-            headers: {
-              'content-type': 'application/json',
-              'x-request-id': 'count-request',
-            },
-          }),
-      );
-      const model = modelWith(fetch, {
-        ...CONFIG,
-        supportsInputTokenEstimation: true,
-      });
-      assert(model.estimateInputTokens);
-      const turn = await Effect.runPromise(
-        model.prepareTurn({ messages: REQUEST.messages }),
-      );
-      assert(turn.mode === 'foreground');
-      const error = await Effect.runPromise(
-        Effect.flip(model.estimateInputTokens(turn)),
-      );
-      expect(error).toMatchObject({
-        kind,
-        requestId: 'count-request',
-        model: CONFIG.requestedModel,
-      });
-      expect(error.cause).toBeDefined();
-      expect(fetch).toHaveBeenCalledTimes(1);
-    },
+    ({ body, status, kind }) =>
+      Effect.gen(function* () {
+        const fetch = vi.fn<typeof globalThis.fetch>().mockImplementation(
+          async () =>
+            new Response(body, {
+              status,
+              headers: {
+                'content-type': 'application/json',
+                'x-request-id': 'count-request',
+              },
+            }),
+        );
+        const model = modelWith(fetch, {
+          ...CONFIG,
+          supportsInputTokenEstimation: true,
+        });
+        assert(model.estimateInputTokens);
+        const turn = yield* model.prepareTurn({
+          messages: REQUEST.messages,
+        });
+        assert(turn.mode === 'foreground');
+        const error = yield* Effect.flip(model.estimateInputTokens(turn));
+        expect(error).toMatchObject({
+          kind,
+          requestId: 'count-request',
+          model: CONFIG.requestedModel,
+        });
+        expect(error.cause).toBeDefined();
+        expect(fetch).toHaveBeenCalledTimes(1);
+      }),
   );
 
   it.effect.each([
@@ -574,68 +576,78 @@ describe('native OpenAI Responses protocol', () => {
       }),
   );
 
-  it.each(['stop', 'length'] as const)(
+  it.live.each(['stop', 'length'] as const)(
     'owns one WebSocket reader across a second %s turn without a chaining anchor',
-    async (outcome) => {
-      const requests: Record<string, unknown>[] = [];
-      const countFetch = vi
-        .fn<typeof globalThis.fetch>()
-        .mockImplementation(async () =>
-          Response.json(
-            {
-              error: { message: 'Counting is temporarily unavailable.' },
-            },
-            { status: 503 },
-          ),
+    (outcome) =>
+      Effect.gen(function* () {
+        const requests: Record<string, unknown>[] = [];
+        const countFetch = vi
+          .fn<typeof globalThis.fetch>()
+          .mockImplementation(async () =>
+            Response.json(
+              {
+                error: { message: 'Counting is temporarily unavailable.' },
+              },
+              { status: 503 },
+            ),
+          );
+        vi.stubGlobal('fetch', countFetch);
+        let connections = 0;
+        let closes = 0;
+        const configuration = yield* Effect.promise(() =>
+          socketServer((socket) => {
+            connections += 1;
+            socket.once('close', () => {
+              closes += 1;
+            });
+            socket.on('message', (data) => {
+              requests.push(JSON.parse(data.toString()));
+              const id = `resp_${requests.length}`;
+              const limited = requests.length === 2 && outcome === 'length';
+              const output =
+                requests.length === 1
+                  ? OUTPUT
+                  : [
+                      {
+                        ...MESSAGE,
+                        status: limited ? 'incomplete' : 'completed',
+                      },
+                    ];
+              for (const [sequence_number, event] of events(
+                output,
+                snapshot(output, {
+                  id,
+                  ...(limited
+                    ? {
+                        status: 'incomplete',
+                        incomplete_details: { reason: 'max_output_tokens' },
+                      }
+                    : {}),
+                }),
+              ).entries()) {
+                const value =
+                  'response' in event
+                    ? {
+                        ...event,
+                        response: { ...(event.response as object), id },
+                      }
+                    : event;
+                socket.send(
+                  JSON.stringify({
+                    ...value,
+                    sequence_number,
+                    ...(limited &&
+                    'type' in event &&
+                    event.type === 'response.completed'
+                      ? { type: 'response.incomplete' }
+                      : {}),
+                  }),
+                );
+              }
+            });
+          }),
         );
-      vi.stubGlobal('fetch', countFetch);
-      let connections = 0;
-      let closes = 0;
-      const configuration = await socketServer((socket) => {
-        connections += 1;
-        socket.once('close', () => {
-          closes += 1;
-        });
-        socket.on('message', (data) => {
-          requests.push(JSON.parse(data.toString()));
-          const id = `resp_${requests.length}`;
-          const limited = requests.length === 2 && outcome === 'length';
-          const output =
-            requests.length === 1
-              ? OUTPUT
-              : [{ ...MESSAGE, status: limited ? 'incomplete' : 'completed' }];
-          for (const [sequence_number, event] of events(
-            output,
-            snapshot(output, {
-              id,
-              ...(limited
-                ? {
-                    status: 'incomplete',
-                    incomplete_details: { reason: 'max_output_tokens' },
-                  }
-                : {}),
-            }),
-          ).entries()) {
-            const value =
-              'response' in event
-                ? { ...event, response: { ...(event.response as object), id } }
-                : event;
-            socket.send(
-              JSON.stringify({
-                ...value,
-                sequence_number,
-                ...(limited &&
-                'type' in event &&
-                event.type === 'response.completed'
-                  ? { type: 'response.incomplete' }
-                  : {}),
-              }),
-            );
-          }
-        });
-      });
-      await Effect.runPromise(
-        Effect.scoped(
+        yield* Effect.scoped(
           Effect.gen(function* () {
             const model = yield* openaiResponsesWebSocketModel(
               { ...configuration, supportsInputTokenEstimation: true },
@@ -705,119 +717,126 @@ describe('native OpenAI Responses protocol', () => {
             });
             expect(connections).toBe(1);
           }),
-        ),
-      );
-      await vi.waitFor(() => expect(closes).toBe(1));
-      expect(requests).toHaveLength(2);
-      expect(requests[0]).toMatchObject({
-        type: 'response.create',
-        store: false,
-      });
-      expect(requests[0]).not.toHaveProperty('stream');
-      expect(requests[0]).not.toHaveProperty('background');
-      // The websocket lane carries no chaining anchor, so the second turn
-      // replays the whole prefix. The lowered calls must carry the provider's
-      // own argument bytes, not a re-encoding of their parse.
-      expect(requests[1]).not.toHaveProperty('previous_response_id');
-      expect(
-        (requests[1] as { input: Record<string, unknown>[] }).input.slice(-4),
-      ).toEqual([
-        {
-          type: 'function_call',
-          call_id: 'call_1',
-          name: 'read_file',
-          arguments: '{"path":"a"}',
-          id: 'fc_1',
-          status: 'completed',
-        },
-        {
-          type: 'function_call',
-          call_id: 'call_2',
-          name: 'read_file',
-          arguments: '{"path":"b"}',
-          id: 'fc_2',
-          status: 'completed',
-        },
-        { type: 'function_call_output', call_id: 'call_1', output: 'a' },
-        {
-          type: 'function_call_output',
-          call_id: 'call_2',
-          output: 'Error: b',
-        },
-      ]);
-    },
+        );
+        yield* Effect.promise(() => vi.waitFor(() => expect(closes).toBe(1)));
+        expect(requests).toHaveLength(2);
+        expect(requests[0]).toMatchObject({
+          type: 'response.create',
+          store: false,
+        });
+        expect(requests[0]).not.toHaveProperty('stream');
+        expect(requests[0]).not.toHaveProperty('background');
+        // The websocket lane carries no chaining anchor, so the second turn
+        // replays the whole prefix. The lowered calls must carry the provider's
+        // own argument bytes, not a re-encoding of their parse.
+        expect(requests[1]).not.toHaveProperty('previous_response_id');
+        expect(
+          (requests[1] as { input: Record<string, unknown>[] }).input.slice(-4),
+        ).toEqual([
+          {
+            type: 'function_call',
+            call_id: 'call_1',
+            name: 'read_file',
+            arguments: '{"path":"a"}',
+            id: 'fc_1',
+            status: 'completed',
+          },
+          {
+            type: 'function_call',
+            call_id: 'call_2',
+            name: 'read_file',
+            arguments: '{"path":"b"}',
+            id: 'fc_2',
+            status: 'completed',
+          },
+          { type: 'function_call_output', call_id: 'call_1', output: 'a' },
+          {
+            type: 'function_call_output',
+            call_id: 'call_2',
+            output: 'Error: b',
+          },
+        ]);
+      }),
   );
 
-  it('invalidates and joins an interrupted WebSocket before explicit reacquisition', async () => {
-    let connections = 0;
-    let requests = 0;
-    let closes = 0;
-    const configuration = await socketServer((socket) => {
-      connections += 1;
-      socket.once('close', () => {
-        closes += 1;
-      });
-      socket.on('message', () => {
-        requests += 1;
-        const frames =
-          connections === 1
-            ? [
-                {
-                  type: 'response.created',
-                  response: snapshot([], { status: 'in_progress' }),
-                },
-              ]
-            : events([MESSAGE]);
-        for (const [sequence_number, frame] of frames.entries())
-          socket.send(JSON.stringify({ ...frame, sequence_number }));
-      });
-    });
-    await Effect.runPromise(
-      Effect.scoped(
-        Effect.gen(function* () {
-          const model = yield* openaiResponsesWebSocketModel(configuration, {
-            kind: 'api-key',
-            apiKey: 'synthetic-not-a-secret',
-          });
-          const turn = yield* model.prepareTurn(REQUEST);
-          assert(turn.mode === 'foreground');
-          const fiber = yield* model.generateTurn(turn).pipe(Effect.forkChild);
-          yield* Effect.promise(() =>
-            vi.waitFor(() => expect(requests).toBe(1)),
-          );
-          expect(yield* Effect.flip(model.generateTurn(turn))).toMatchObject({
-            kind: 'unsupported',
-          });
-          yield* Fiber.interrupt(fiber);
-          const exit = yield* Fiber.await(fiber);
-          assert(exit._tag === 'Failure');
-          expect(Cause.hasInterrupts(exit.cause)).toBe(true);
-          yield* Effect.promise(() => vi.waitFor(() => expect(closes).toBe(1)));
-          expect(yield* Effect.flip(model.generateTurn(turn))).toMatchObject({
-            kind: 'transport',
-          });
-          expect(connections).toBe(1);
-          const fresh = yield* openaiResponsesWebSocketModel(configuration, {
-            kind: 'api-key',
-            apiKey: 'synthetic-not-a-secret',
-          });
-          expect(yield* Effect.flip(fresh.generateTurn(turn))).toMatchObject({
-            kind: 'unsupported',
-          });
-          const admitted = yield* fresh.prepareTurn(REQUEST);
-          assert(admitted.mode === 'foreground');
-          expect((yield* fresh.generateTurn(admitted)).finishReason).toBe(
-            'stop',
-          );
-          expect(connections).toBe(2);
-          expect(requests).toBe(2);
-        }),
-      ),
-    );
-    await vi.waitFor(() => expect(closes).toBe(2));
-  });
+  it.live(
+    'invalidates and joins an interrupted WebSocket before explicit reacquisition',
+    () =>
+      Effect.gen(function* () {
+        let connections = 0;
+        let requests = 0;
+        let closes = 0;
+        const configuration = yield* Effect.promise(() =>
+          socketServer((socket) => {
+            connections += 1;
+            socket.once('close', () => {
+              closes += 1;
+            });
+            socket.on('message', () => {
+              requests += 1;
+              const frames =
+                connections === 1
+                  ? [
+                      {
+                        type: 'response.created',
+                        response: snapshot([], { status: 'in_progress' }),
+                      },
+                    ]
+                  : events([MESSAGE]);
+              for (const [sequence_number, frame] of frames.entries())
+                socket.send(JSON.stringify({ ...frame, sequence_number }));
+            });
+          }),
+        );
+        yield* Effect.scoped(
+          Effect.gen(function* () {
+            const model = yield* openaiResponsesWebSocketModel(configuration, {
+              kind: 'api-key',
+              apiKey: 'synthetic-not-a-secret',
+            });
+            const turn = yield* model.prepareTurn(REQUEST);
+            assert(turn.mode === 'foreground');
+            const fiber = yield* model
+              .generateTurn(turn)
+              .pipe(Effect.forkChild);
+            yield* Effect.promise(() =>
+              vi.waitFor(() => expect(requests).toBe(1)),
+            );
+            expect(yield* Effect.flip(model.generateTurn(turn))).toMatchObject({
+              kind: 'unsupported',
+            });
+            yield* Fiber.interrupt(fiber);
+            const exit = yield* Fiber.await(fiber);
+            assert(exit._tag === 'Failure');
+            expect(Cause.hasInterrupts(exit.cause)).toBe(true);
+            yield* Effect.promise(() =>
+              vi.waitFor(() => expect(closes).toBe(1)),
+            );
+            expect(yield* Effect.flip(model.generateTurn(turn))).toMatchObject({
+              kind: 'transport',
+            });
+            expect(connections).toBe(1);
+            const fresh = yield* openaiResponsesWebSocketModel(configuration, {
+              kind: 'api-key',
+              apiKey: 'synthetic-not-a-secret',
+            });
+            expect(yield* Effect.flip(fresh.generateTurn(turn))).toMatchObject({
+              kind: 'unsupported',
+            });
+            const admitted = yield* fresh.prepareTurn(REQUEST);
+            assert(admitted.mode === 'foreground');
+            expect((yield* fresh.generateTurn(admitted)).finishReason).toBe(
+              'stop',
+            );
+            expect(connections).toBe(2);
+            expect(requests).toBe(2);
+          }),
+        );
+        yield* Effect.promise(() => vi.waitFor(() => expect(closes).toBe(2)));
+      }),
+  );
 
-  it.each([
+  it.live.each([
     'binary',
     'malformed-json',
     'foreign-lane',
@@ -827,80 +846,84 @@ describe('native OpenAI Responses protocol', () => {
     'connection-limit',
   ] as const)(
     'rejects %s WebSocket traffic and does not reuse that connection',
-    async (variant) => {
-      let requests = 0;
-      let closed = false;
-      const configuration = await socketServer((socket) => {
-        socket.once('close', () => {
-          closed = true;
-        });
-        socket.on('message', () => {
-          requests += 1;
-          if (variant === 'binary') socket.send(Buffer.from('{}'));
-          else if (variant === 'malformed-json') socket.send('{');
-          else if (variant === 'foreign-lane')
-            socket.send(
-              JSON.stringify({
-                type: 'response.created',
-                stream_id: 'other',
-                sequence_number: 0,
-                response: snapshot([], { status: 'in_progress' }),
-              }),
-            );
-          else if (variant === 'connection-limit')
-            socket.send(
-              JSON.stringify({
-                type: 'error',
-                status: 400,
-                error: {
-                  type: 'invalid_request_error',
-                  code: 'websocket_connection_limit_reached',
-                  message:
-                    'Responses websocket connection limit reached (60 minutes). Create a new websocket connection to continue.',
-                },
-              }),
-            );
-          else if (variant === 'streaming-rejection')
-            socket.send(
-              JSON.stringify({
-                type: 'error',
-                sequence_number: 0,
-                code: 'server_error',
-                message: 'Synthetic streaming rejection',
-                param: null,
-              }),
-            );
-          else if (variant === 'rejection')
-            socket.send(
-              JSON.stringify({
-                type: 'error',
-                status: 429,
-                error: {
-                  type: 'rate_limit_error',
-                  code: 'rate_limit_exceeded',
-                  message: 'Synthetic request rejection',
-                  param: null,
-                },
-              }),
-            );
-          else {
-            for (const [sequence_number, frame] of events([MESSAGE]).entries())
-              socket.send(JSON.stringify({ ...frame, sequence_number }));
-            socket.send(
-              JSON.stringify({
-                type: 'response.created',
-                sequence_number: 0,
-                response: snapshot([], {
-                  id: 'unrequested',
-                  status: 'in_progress',
-                }),
-              }),
-            );
-          }
-        });
-      });
-      await Effect.runPromise(
-        Effect.scoped(
+    (variant) =>
+      Effect.gen(function* () {
+        let requests = 0;
+        let closed = false;
+        const configuration = yield* Effect.promise(() =>
+          socketServer((socket) => {
+            socket.once('close', () => {
+              closed = true;
+            });
+            socket.on('message', () => {
+              requests += 1;
+              if (variant === 'binary') socket.send(Buffer.from('{}'));
+              else if (variant === 'malformed-json') socket.send('{');
+              else if (variant === 'foreign-lane')
+                socket.send(
+                  JSON.stringify({
+                    type: 'response.created',
+                    stream_id: 'other',
+                    sequence_number: 0,
+                    response: snapshot([], { status: 'in_progress' }),
+                  }),
+                );
+              else if (variant === 'connection-limit')
+                socket.send(
+                  JSON.stringify({
+                    type: 'error',
+                    status: 400,
+                    error: {
+                      type: 'invalid_request_error',
+                      code: 'websocket_connection_limit_reached',
+                      message:
+                        'Responses websocket connection limit reached (60 minutes). Create a new websocket connection to continue.',
+                    },
+                  }),
+                );
+              else if (variant === 'streaming-rejection')
+                socket.send(
+                  JSON.stringify({
+                    type: 'error',
+                    sequence_number: 0,
+                    code: 'server_error',
+                    message: 'Synthetic streaming rejection',
+                    param: null,
+                  }),
+                );
+              else if (variant === 'rejection')
+                socket.send(
+                  JSON.stringify({
+                    type: 'error',
+                    status: 429,
+                    error: {
+                      type: 'rate_limit_error',
+                      code: 'rate_limit_exceeded',
+                      message: 'Synthetic request rejection',
+                      param: null,
+                    },
+                  }),
+                );
+              else {
+                for (const [sequence_number, frame] of events([
+                  MESSAGE,
+                ]).entries())
+                  socket.send(JSON.stringify({ ...frame, sequence_number }));
+                socket.send(
+                  JSON.stringify({
+                    type: 'response.created',
+                    sequence_number: 0,
+                    response: snapshot([], {
+                      id: 'unrequested',
+                      status: 'in_progress',
+                    }),
+                  }),
+                );
+              }
+            });
+          }),
+        );
+        yield* Effect.scoped(
           Effect.gen(function* () {
             const model = yield* openaiResponsesWebSocketModel(configuration, {
               kind: 'api-key',
@@ -945,23 +968,40 @@ describe('native OpenAI Responses protocol', () => {
             yield* Effect.flip(model.generateTurn(turn));
             expect(requests).toBe(1);
           }),
-        ),
-      );
-    },
+        );
+      }),
   );
 
-  it('retains handshake rejection evidence and sends the selected Codex account headers', async () => {
-    let headers: import('node:http').IncomingHttpHeaders | undefined;
-    const configuration = await socketServer(() => {}, {
-      verifyClient(info, done) {
-        headers = info.req.headers;
-        done(false, 401, 'Unauthorized', { 'x-request-id': 'handshake_1' });
-      },
-    });
-    vi.stubEnv('OPENAI_CUSTOM_HEADERS', 'X-Synthetic: ambient');
-    expect(
-      await Effect.runPromise(
-        Effect.scoped(
+  it.live(
+    'retains handshake rejection evidence and sends the selected Codex account headers',
+    () =>
+      Effect.gen(function* () {
+        let headers: import('node:http').IncomingHttpHeaders | undefined;
+        const configuration = yield* Effect.promise(() =>
+          socketServer(() => {}, {
+            verifyClient(info, done) {
+              headers = info.req.headers;
+              done(false, 401, 'Unauthorized', {
+                'x-request-id': 'handshake_1',
+              });
+            },
+          }),
+        );
+        vi.stubEnv('OPENAI_CUSTOM_HEADERS', 'X-Synthetic: ambient');
+        expect(
+          yield* Effect.scoped(
+            Effect.flip(
+              openaiResponsesWebSocketModel(configuration, {
+                kind: 'codex',
+                accessToken: 'selected-token',
+                accountId: 'selected-account',
+              }),
+            ),
+          ),
+        ).toMatchObject({ kind: 'unsupported' });
+        expect(headers).toBeUndefined();
+        vi.stubEnv('OPENAI_CUSTOM_HEADERS', '');
+        const error = yield* Effect.scoped(
           Effect.flip(
             openaiResponsesWebSocketModel(configuration, {
               kind: 'codex',
@@ -969,220 +1009,226 @@ describe('native OpenAI Responses protocol', () => {
               accountId: 'selected-account',
             }),
           ),
-        ),
-      ),
-    ).toMatchObject({ kind: 'unsupported' });
-    expect(headers).toBeUndefined();
-    vi.stubEnv('OPENAI_CUSTOM_HEADERS', '');
-    const error = await Effect.runPromise(
-      Effect.scoped(
-        Effect.flip(
-          openaiResponsesWebSocketModel(configuration, {
-            kind: 'codex',
-            accessToken: 'selected-token',
-            accountId: 'selected-account',
+        );
+        expect(error).toMatchObject({
+          kind: 'authentication',
+          status: 401,
+          requestId: 'handshake_1',
+        });
+        expect(headers).toMatchObject({
+          authorization: 'Bearer selected-token',
+          'chatgpt-account-id': 'selected-account',
+          originator: 'texra',
+          'openai-beta': 'responses=experimental',
+        });
+      }),
+  );
+
+  it.live(
+    'sends the selected subscription WebSocket policy without rewriting admitted controls',
+    () =>
+      Effect.gen(function* () {
+        const requests: Record<string, unknown>[] = [];
+        let headers: import('node:http').IncomingHttpHeaders | undefined;
+        const local = yield* Effect.promise(() =>
+          socketServer((socket, request) => {
+            headers = request.headers;
+            socket.on('message', (data) => {
+              requests.push(JSON.parse(data.toString()));
+              for (const [sequence_number, frame] of events([
+                MESSAGE,
+              ]).entries())
+                socket.send(JSON.stringify({ ...frame, sequence_number }));
+            });
           }),
-        ),
-      ),
-    );
-    expect(error).toMatchObject({
-      kind: 'authentication',
-      status: 401,
-      requestId: 'handshake_1',
-    });
-    expect(headers).toMatchObject({
-      authorization: 'Bearer selected-token',
-      'chatgpt-account-id': 'selected-account',
-      originator: 'texra',
-      'openai-beta': 'responses=experimental',
-    });
-  });
+        );
+        const selected = {
+          ...SUBSCRIPTION_CONFIG,
+          deployment: local.deployment,
+        };
+        yield* Effect.scoped(
+          Effect.gen(function* () {
+            const model = yield* openaiResponsesWebSocketModel(selected, {
+              kind: 'codex',
+              accessToken: 'selected-token',
+              accountId: 'selected-account',
+            });
+            const turn = yield* model.prepareTurn({ ...REQUEST, system: ' ' });
+            assert(turn.mode === 'foreground');
+            const result = yield* model.generateTurn(turn);
+            assert(result.providerResponseId !== null);
+            expect(result.continuation).toBeUndefined();
+            expect(
+              yield* Effect.flip(
+                model.prepareTurn({ ...REQUEST, mode: 'background' }),
+              ),
+            ).toMatchObject({ kind: 'unsupported' });
+            expect(model.background).toBeUndefined();
+            expect(model.estimateInputTokens).toBeUndefined();
+          }),
+        );
+        expect(headers).toMatchObject({
+          authorization: 'Bearer selected-token',
+          'chatgpt-account-id': 'selected-account',
+          originator: 'texra',
+          'openai-beta': 'responses=experimental',
+        });
+        expect(requests).toHaveLength(1);
+        expect(requests[0]).toMatchObject({
+          type: 'response.create',
+          stream: true,
+          store: false,
+          instructions: "Follow the user's instructions.",
+          reasoning: { effort: 'medium' },
+        });
+        expect(requests[0]).not.toHaveProperty('background');
+        expect(requests[0]).not.toHaveProperty('max_output_tokens');
+        expect(requests[0]).not.toHaveProperty('temperature');
+      }),
+  );
 
-  it('sends the selected subscription WebSocket policy without rewriting admitted controls', async () => {
-    const requests: Record<string, unknown>[] = [];
-    let headers: import('node:http').IncomingHttpHeaders | undefined;
-    const local = await socketServer((socket, request) => {
-      headers = request.headers;
-      socket.on('message', (data) => {
-        requests.push(JSON.parse(data.toString()));
-        for (const [sequence_number, frame] of events([MESSAGE]).entries())
-          socket.send(JSON.stringify({ ...frame, sequence_number }));
-      });
-    });
-    const selected = { ...SUBSCRIPTION_CONFIG, deployment: local.deployment };
-    await Effect.runPromise(
-      Effect.scoped(
-        Effect.gen(function* () {
-          const model = yield* openaiResponsesWebSocketModel(selected, {
-            kind: 'codex',
-            accessToken: 'selected-token',
-            accountId: 'selected-account',
-          });
-          const turn = yield* model.prepareTurn({ ...REQUEST, system: ' ' });
-          assert(turn.mode === 'foreground');
-          const result = yield* model.generateTurn(turn);
-          assert(result.providerResponseId !== null);
-          expect(result.continuation).toBeUndefined();
-          expect(
-            yield* Effect.flip(
-              model.prepareTurn({ ...REQUEST, mode: 'background' }),
-            ),
-          ).toMatchObject({ kind: 'unsupported' });
-          expect(model.background).toBeUndefined();
-          expect(model.estimateInputTokens).toBeUndefined();
-        }),
-      ),
-    );
-    expect(headers).toMatchObject({
-      authorization: 'Bearer selected-token',
-      'chatgpt-account-id': 'selected-account',
-      originator: 'texra',
-      'openai-beta': 'responses=experimental',
-    });
-    expect(requests).toHaveLength(1);
-    expect(requests[0]).toMatchObject({
-      type: 'response.create',
-      stream: true,
-      store: false,
-      instructions: "Follow the user's instructions.",
-      reasoning: { effort: 'medium' },
-    });
-    expect(requests[0]).not.toHaveProperty('background');
-    expect(requests[0]).not.toHaveProperty('max_output_tokens');
-    expect(requests[0]).not.toHaveProperty('temperature');
-  });
-
-  it('invalidates genuinely idle traffic before another turn can be sent', async () => {
-    let requests = 0;
-    let peer: WebSocket | undefined;
-    let closed = false;
-    const configuration = await socketServer((socket) => {
-      peer = socket;
-      socket.once('close', () => {
-        closed = true;
-      });
-      socket.on('message', () => {
-        requests += 1;
-        for (const [sequence_number, frame] of events([MESSAGE]).entries())
-          socket.send(JSON.stringify({ ...frame, sequence_number }));
-      });
-    });
-    await Effect.runPromise(
-      Effect.scoped(
-        Effect.gen(function* () {
-          const model = yield* openaiResponsesWebSocketModel(configuration, {
-            kind: 'api-key',
-            apiKey: 'synthetic-not-a-secret',
-          });
-          const turn = yield* model.prepareTurn(REQUEST);
-          assert(turn.mode === 'foreground');
-          yield* model.generateTurn(turn);
-          peer!.send(
-            JSON.stringify({
-              type: 'response.created',
-              sequence_number: 0,
-              response: snapshot([], {
-                id: 'unrequested',
-                status: 'in_progress',
+  it.live(
+    'invalidates genuinely idle traffic before another turn can be sent',
+    () =>
+      Effect.gen(function* () {
+        let requests = 0;
+        let peer: WebSocket | undefined;
+        let closed = false;
+        const configuration = yield* Effect.promise(() =>
+          socketServer((socket) => {
+            peer = socket;
+            socket.once('close', () => {
+              closed = true;
+            });
+            socket.on('message', () => {
+              requests += 1;
+              for (const [sequence_number, frame] of events([
+                MESSAGE,
+              ]).entries())
+                socket.send(JSON.stringify({ ...frame, sequence_number }));
+            });
+          }),
+        );
+        yield* Effect.scoped(
+          Effect.gen(function* () {
+            const model = yield* openaiResponsesWebSocketModel(configuration, {
+              kind: 'api-key',
+              apiKey: 'synthetic-not-a-secret',
+            });
+            const turn = yield* model.prepareTurn(REQUEST);
+            assert(turn.mode === 'foreground');
+            yield* model.generateTurn(turn);
+            peer!.send(
+              JSON.stringify({
+                type: 'response.created',
+                sequence_number: 0,
+                response: snapshot([], {
+                  id: 'unrequested',
+                  status: 'in_progress',
+                }),
               }),
-            }),
-          );
-          yield* Effect.promise(() =>
-            vi.waitFor(() => expect(closed).toBe(true)),
-          );
-          expect(yield* Effect.flip(model.generateTurn(turn))).toMatchObject({
-            kind: 'malformed-output',
-          });
-          expect(requests).toBe(1);
-        }),
-      ),
-    );
-  });
-
-  it('owns keepalive timing and rejects an expired connection without reconnecting', async () => {
-    let pings = 0;
-    let connections = 0;
-    let requests = 0;
-    const configuration = await socketServer((socket) => {
-      connections += 1;
-      socket.on('ping', () => {
-        pings += 1;
-      });
-      socket.on('message', () => {
-        requests += 1;
-      });
-    });
-    await Effect.runPromise(
-      Effect.scoped(
-        Effect.gen(function* () {
-          const model = yield* openaiResponsesWebSocketModel(configuration, {
-            kind: 'api-key',
-            apiKey: 'synthetic-not-a-secret',
-          });
-          const turn = yield* model.prepareTurn(REQUEST);
-          assert(turn.mode === 'foreground');
-          yield* TestClock.adjust(30_000);
-          yield* Effect.promise(() =>
-            vi.waitFor(() => expect(pings).toBeGreaterThan(0)),
-          );
-          yield* TestClock.adjust(55 * 60_000 - 30_000);
-          expect(yield* Effect.flip(model.generateTurn(turn))).toMatchObject({
-            kind: 'transport',
-          });
-          expect(connections).toBe(1);
-          expect(requests).toBe(0);
-        }),
-      ).pipe(Effect.provide(TestClock.layer())),
-    );
-  });
-
-  it.each(['Chat', 'Responses'] as const)(
-    '%s rejects ambient header overrides and disables SDK diagnostic logging',
-    async (protocol) => {
-      const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(
-        new Response('data: malformed-provider-data\n\n', {
-          headers: { 'content-type': 'text/event-stream' },
-        }),
-      );
-      const construct = () =>
-        protocol === 'Responses'
-          ? modelWith(fetch)
-          : openaiChatModel(
-              {
-                protocol: 'openai-chat',
-                requestedModel: CONFIG.requestedModel,
-                deployment: CONFIG.deployment,
-                supportsTemperature: true,
-                supportedEfforts: [],
-                defaults: {
-                  temperature: 0,
-                  effort: null,
-                  maxOutputTokens: 100,
-                  parallelToolCalls: true,
-                },
-              },
-              { apiKey: 'synthetic-not-a-secret', fetch },
             );
-      vi.stubEnv(
-        'OPENAI_CUSTOM_HEADERS',
-        'Authorization: Bearer other-account',
-      );
-      expect(construct).toThrow('Ambient OpenAI');
-      expect(fetch).not.toHaveBeenCalled();
-      vi.stubEnv('OPENAI_CUSTOM_HEADERS', '');
-      vi.stubEnv('OPENAI_LOG', 'debug');
-      const logs = (['debug', 'log', 'info', 'warn', 'error'] as const).map(
-        (method) => vi.spyOn(console, method).mockImplementation(() => {}),
-      );
-      const model = construct();
-      const turn = await Effect.runPromise(model.prepareTurn(REQUEST));
-      assert(turn.mode === 'foreground');
-      expect(
-        await Effect.runPromise(Effect.flip(model.generateTurn(turn))),
-      ).toMatchObject({ kind: 'malformed-output' });
-      expect(fetch).toHaveBeenCalledTimes(1);
-      for (const log of logs) expect(log).not.toHaveBeenCalled();
-    },
+            yield* Effect.promise(() =>
+              vi.waitFor(() => expect(closed).toBe(true)),
+            );
+            expect(yield* Effect.flip(model.generateTurn(turn))).toMatchObject({
+              kind: 'malformed-output',
+            });
+            expect(requests).toBe(1);
+          }),
+        );
+      }),
+  );
+
+  it.live(
+    'owns keepalive timing and rejects an expired connection without reconnecting',
+    () =>
+      Effect.gen(function* () {
+        let pings = 0;
+        let connections = 0;
+        let requests = 0;
+        const configuration = yield* Effect.promise(() =>
+          socketServer((socket) => {
+            connections += 1;
+            socket.on('ping', () => {
+              pings += 1;
+            });
+            socket.on('message', () => {
+              requests += 1;
+            });
+          }),
+        );
+        yield* Effect.scoped(
+          Effect.gen(function* () {
+            const model = yield* openaiResponsesWebSocketModel(configuration, {
+              kind: 'api-key',
+              apiKey: 'synthetic-not-a-secret',
+            });
+            const turn = yield* model.prepareTurn(REQUEST);
+            assert(turn.mode === 'foreground');
+            yield* TestClock.adjust(30_000);
+            yield* Effect.promise(() =>
+              vi.waitFor(() => expect(pings).toBeGreaterThan(0)),
+            );
+            yield* TestClock.adjust(55 * 60_000 - 30_000);
+            expect(yield* Effect.flip(model.generateTurn(turn))).toMatchObject({
+              kind: 'transport',
+            });
+            expect(connections).toBe(1);
+            expect(requests).toBe(0);
+          }),
+        ).pipe(Effect.provide(TestClock.layer()));
+      }),
+  );
+
+  it.effect.each(['Chat', 'Responses'] as const)(
+    '%s rejects ambient header overrides and disables SDK diagnostic logging',
+    (protocol) =>
+      Effect.gen(function* () {
+        const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(
+          new Response('data: malformed-provider-data\n\n', {
+            headers: { 'content-type': 'text/event-stream' },
+          }),
+        );
+        const construct = () =>
+          protocol === 'Responses'
+            ? modelWith(fetch)
+            : openaiChatModel(
+                {
+                  protocol: 'openai-chat',
+                  requestedModel: CONFIG.requestedModel,
+                  deployment: CONFIG.deployment,
+                  supportsTemperature: true,
+                  supportedEfforts: [],
+                  defaults: {
+                    temperature: 0,
+                    effort: null,
+                    maxOutputTokens: 100,
+                    parallelToolCalls: true,
+                  },
+                },
+                { apiKey: 'synthetic-not-a-secret', fetch },
+              );
+        vi.stubEnv(
+          'OPENAI_CUSTOM_HEADERS',
+          'Authorization: Bearer other-account',
+        );
+        expect(construct).toThrow('Ambient OpenAI');
+        expect(fetch).not.toHaveBeenCalled();
+        vi.stubEnv('OPENAI_CUSTOM_HEADERS', '');
+        vi.stubEnv('OPENAI_LOG', 'debug');
+        const logs = (['debug', 'log', 'info', 'warn', 'error'] as const).map(
+          (method) => vi.spyOn(console, method).mockImplementation(() => {}),
+        );
+        const model = construct();
+        const turn = yield* model.prepareTurn(REQUEST);
+        assert(turn.mode === 'foreground');
+        expect(yield* Effect.flip(model.generateTurn(turn))).toMatchObject({
+          kind: 'malformed-output',
+        });
+        expect(fetch).toHaveBeenCalledTimes(1);
+        for (const log of logs) expect(log).not.toHaveBeenCalled();
+      }),
   );
 
   it.effect(
@@ -1573,87 +1619,93 @@ describe('native OpenAI Responses protocol', () => {
       }),
   );
 
-  it('retains learned acceptance in an unexpected cleanup defect', async () => {
-    const cleanupFailure = new Error('cancel rejected');
-    const body = new ReadableStream<Uint8Array>({
-      start(controller) {
-        controller.enqueue(
-          new TextEncoder().encode(
-            sse([
-              {
-                type: 'response.created',
-                response: snapshot([], { status: 'in_progress' }),
-              },
-            ]),
-          ),
-        );
-      },
-      cancel() {
-        return Promise.reject(cleanupFailure);
-      },
-    });
-    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(
-      new Response(body, {
-        headers: { 'content-type': 'text/event-stream' },
-      }),
-    );
-    const model = modelWith(fetch, { ...CONFIG, background: 'supported' });
-    assert(model.background);
-    const turn = await Effect.runPromise(
-      model.prepareTurn({ ...REQUEST, mode: 'background' }),
-    );
-    assert(turn.mode === 'background');
-    const exit = await Effect.runPromise(
-      Effect.exit(model.background.submit(turn)),
-    );
-    assert(exit._tag === 'Failure');
-    const defect = exit.cause.reasons.find(Cause.isDieReason);
-    expect(defect?.defect).toMatchObject({
-      operation: { providerResponseId: 'resp_1', afterSequence: 0 },
-      cause: cleanupFailure,
-    });
-    expect(fetch).toHaveBeenCalledTimes(1);
-  });
+  it.effect('retains learned acceptance in an unexpected cleanup defect', () =>
+    Effect.gen(function* () {
+      const cleanupFailure = new Error('cancel rejected');
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(
+            new TextEncoder().encode(
+              sse([
+                {
+                  type: 'response.created',
+                  response: snapshot([], { status: 'in_progress' }),
+                },
+              ]),
+            ),
+          );
+        },
+        cancel() {
+          return Promise.reject(cleanupFailure);
+        },
+      });
+      const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(
+        new Response(body, {
+          headers: { 'content-type': 'text/event-stream' },
+        }),
+      );
+      const model = modelWith(fetch, { ...CONFIG, background: 'supported' });
+      assert(model.background);
+      const turn = yield* model.prepareTurn({
+        ...REQUEST,
+        mode: 'background',
+      });
+      assert(turn.mode === 'background');
+      const exit = yield* Effect.exit(model.background.submit(turn));
+      assert(exit._tag === 'Failure');
+      const defect = exit.cause.reasons.find(Cause.isDieReason);
+      expect(defect?.defect).toMatchObject({
+        operation: { providerResponseId: 'resp_1', afterSequence: 0 },
+        cause: cleanupFailure,
+      });
+      expect(fetch).toHaveBeenCalledTimes(1);
+    }),
+  );
 
-  it.each([
+  it.effect.each([
     ['completed', 'stop'],
     ['incomplete', 'length'],
   ])(
     'returns immediate %s output without requiring stored history',
-    async (status, finishReason) => {
-      const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(
-        response([
-          {
-            type: `response.${status}`,
-            response: snapshot([{ ...MESSAGE, status }], {
-              status,
-              ...(status === 'incomplete'
-                ? { incomplete_details: { reason: 'max_output_tokens' } }
-                : {}),
-            }),
-          },
-        ]),
-      );
-      const model = modelWith(fetch, { ...CONFIG, background: 'supported' });
-      assert(model.background);
-      const turn = await Effect.runPromise(
-        model.prepareTurn({ ...REQUEST, mode: 'background', store: false }),
-      );
-      assert(turn.mode === 'background');
-      const submitted = await Effect.runPromise(model.background.submit(turn));
-      assert(submitted.kind === 'completed');
-      expect(submitted.result).toMatchObject({
-        finishReason,
-        providerResponseId: 'resp_1',
-      });
-      expect(submitted.result).not.toHaveProperty('continuation');
-      expect(fetch).toHaveBeenCalledTimes(1);
-      expect(JSON.parse(String(fetch.mock.calls[0]?.[1]?.body))).toMatchObject({
-        background: true,
-        stream: true,
-        store: false,
-      });
-    },
+    ([status, finishReason]) =>
+      Effect.gen(function* () {
+        const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(
+          response([
+            {
+              type: `response.${status}`,
+              response: snapshot([{ ...MESSAGE, status }], {
+                status,
+                ...(status === 'incomplete'
+                  ? { incomplete_details: { reason: 'max_output_tokens' } }
+                  : {}),
+              }),
+            },
+          ]),
+        );
+        const model = modelWith(fetch, { ...CONFIG, background: 'supported' });
+        assert(model.background);
+        const turn = yield* model.prepareTurn({
+          ...REQUEST,
+          mode: 'background',
+          store: false,
+        });
+        assert(turn.mode === 'background');
+        const submitted = yield* model.background.submit(turn);
+        assert(submitted.kind === 'completed');
+        expect(submitted.result).toMatchObject({
+          finishReason,
+          providerResponseId: 'resp_1',
+        });
+        expect(submitted.result).not.toHaveProperty('continuation');
+        expect(fetch).toHaveBeenCalledTimes(1);
+        expect(
+          JSON.parse(String(fetch.mock.calls[0]?.[1]?.body)),
+        ).toMatchObject({
+          background: true,
+          stream: true,
+          store: false,
+        });
+      }),
   );
 
   it.effect.each(['submit', 'cancel'] as const)(
@@ -1724,44 +1776,42 @@ describe('native OpenAI Responses protocol', () => {
       }),
   );
 
-  it.each(['missing', 'failed', 'not-found'] as const)(
+  it.effect.each(['missing', 'failed', 'not-found'] as const)(
     'does not recreate work or advance a terminal cursor after %s observation',
-    async (outcome) => {
-      const frames = [
-        {
-          type: 'response.created',
-          response: snapshot([], { status: 'in_progress' }),
-        },
-      ];
-      if (outcome === 'failed')
-        frames.push({
-          type: 'response.failed',
-          response: snapshot([], {
-            status: 'failed',
-            error: { code: 'server_error', message: 'Original job failure' },
-          }),
-        });
-      const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(
-        outcome === 'not-found'
-          ? new Response(
-              JSON.stringify({
-                error: { message: 'Job no longer retrievable' },
-              }),
-              {
-                status: 404,
-                headers: { 'content-type': 'application/json' },
-              },
-            )
-          : response(frames),
-      );
-      const model = modelWith(fetch, { ...CONFIG, background: 'supported' });
-      assert(model.background);
-      const { admitted, operation } = await Effect.runPromise(
-        backgroundTurn(model),
-      );
-      const observed: BackgroundEvent[] = [];
-      const failure = await Effect.runPromise(
-        Effect.flip(
+    (outcome) =>
+      Effect.gen(function* () {
+        const frames = [
+          {
+            type: 'response.created',
+            response: snapshot([], { status: 'in_progress' }),
+          },
+        ];
+        if (outcome === 'failed')
+          frames.push({
+            type: 'response.failed',
+            response: snapshot([], {
+              status: 'failed',
+              error: { code: 'server_error', message: 'Original job failure' },
+            }),
+          });
+        const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(
+          outcome === 'not-found'
+            ? new Response(
+                JSON.stringify({
+                  error: { message: 'Job no longer retrievable' },
+                }),
+                {
+                  status: 404,
+                  headers: { 'content-type': 'application/json' },
+                },
+              )
+            : response(frames),
+        );
+        const model = modelWith(fetch, { ...CONFIG, background: 'supported' });
+        assert(model.background);
+        const { admitted, operation } = yield* backgroundTurn(model);
+        const observed: BackgroundEvent[] = [];
+        const failure = yield* Effect.flip(
           Stream.runForEach(
             model.background.observe(admitted, operation, {
               deadlineAtMs: Date.now() + 60_000,
@@ -1771,61 +1821,61 @@ describe('native OpenAI Responses protocol', () => {
                 observed.push(event);
               }),
           ),
-        ),
-      );
-      expect(failure).toMatchObject({
-        kind: outcome === 'missing' ? 'malformed-output' : 'provider-rejection',
-        operation,
-        responseId: 'resp_1',
-      });
-      if (outcome === 'failed')
-        expect(failure.message).toBe('Original job failure');
-      expect(observed.map((event) => event.afterSequence)).toEqual(
-        outcome === 'not-found' ? [] : [0],
-      );
-      expect(fetch).toHaveBeenCalledTimes(1);
-      expect(fetch.mock.calls[0]?.[1]?.method).toBe('GET');
-    },
+        );
+        expect(failure).toMatchObject({
+          kind:
+            outcome === 'missing' ? 'malformed-output' : 'provider-rejection',
+          operation,
+          responseId: 'resp_1',
+        });
+        if (outcome === 'failed')
+          expect(failure.message).toBe('Original job failure');
+        expect(observed.map((event) => event.afterSequence)).toEqual(
+          outcome === 'not-found' ? [] : [0],
+        );
+        expect(fetch).toHaveBeenCalledTimes(1);
+        expect(fetch.mock.calls[0]?.[1]?.method).toBe('GET');
+      }),
   );
 
-  it.each(['same', 'omitted', 'changed', 'sparse'] as const)(
+  it.effect.each(['same', 'omitted', 'changed', 'sparse'] as const)(
     'preserves observed completed evidence against a %s terminal snapshot',
-    async (variant) => {
-      let output: object[] = [REASONING];
-      if (variant === 'omitted')
-        output = [
-          {
-            type: REASONING.type,
-            id: REASONING.id,
-            summary: REASONING.summary,
-            content: REASONING.content,
-          },
-        ];
-      if (variant === 'changed')
-        output = [{ ...REASONING, encrypted_content: 'contradictory_opaque' }];
-      if (variant === 'sparse') output = [];
-      const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(
-        response([
-          {
-            type: 'response.in_progress',
-            response: snapshot([], { status: 'in_progress' }),
-          },
-          {
-            type: 'response.output_item.done',
-            output_index: 0,
-            item: REASONING,
-          },
-          { type: 'response.completed', response: snapshot(output) },
-        ]),
-      );
-      const model = modelWith(fetch, { ...CONFIG, background: 'supported' });
-      assert(model.background);
-      const { admitted, operation } = await Effect.runPromise(
-        backgroundTurn(model),
-      );
-      const seen: BackgroundEvent[] = [];
-      const exit = await Effect.runPromise(
-        Effect.exit(
+    (variant) =>
+      Effect.gen(function* () {
+        let output: object[] = [REASONING];
+        if (variant === 'omitted')
+          output = [
+            {
+              type: REASONING.type,
+              id: REASONING.id,
+              summary: REASONING.summary,
+              content: REASONING.content,
+            },
+          ];
+        if (variant === 'changed')
+          output = [
+            { ...REASONING, encrypted_content: 'contradictory_opaque' },
+          ];
+        if (variant === 'sparse') output = [];
+        const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(
+          response([
+            {
+              type: 'response.in_progress',
+              response: snapshot([], { status: 'in_progress' }),
+            },
+            {
+              type: 'response.output_item.done',
+              output_index: 0,
+              item: REASONING,
+            },
+            { type: 'response.completed', response: snapshot(output) },
+          ]),
+        );
+        const model = modelWith(fetch, { ...CONFIG, background: 'supported' });
+        assert(model.background);
+        const { admitted, operation } = yield* backgroundTurn(model);
+        const seen: BackgroundEvent[] = [];
+        const exit = yield* Effect.exit(
           Stream.runForEach(
             model.background.observe(admitted, operation, {
               deadlineAtMs: Date.now() + 60_000,
@@ -1835,90 +1885,88 @@ describe('native OpenAI Responses protocol', () => {
                 seen.push(event);
               }),
           ),
-        ),
-      );
-      if (variant === 'changed' || variant === 'sparse') {
-        assert(exit._tag === 'Failure');
-        expect(
-          exit.cause.reasons.find(Cause.isFailReason)?.error,
-        ).toMatchObject({ kind: 'malformed-output' });
-        expect(seen.map((event) => event.afterSequence)).toEqual([0, 1]);
-      } else {
-        expect(exit._tag).toBe('Success');
-        expect(seen.at(-1)).toMatchObject({
-          kind: 'completed',
-          afterSequence: 2,
-          result: {
-            content: [
-              {
-                kind: 'reasoning',
-                evidence: {
-                  encryptedContent: 'enc_complete',
-                  status: 'completed',
-                  itemId: 'rs_1',
+        );
+        if (variant === 'changed' || variant === 'sparse') {
+          assert(exit._tag === 'Failure');
+          expect(
+            exit.cause.reasons.find(Cause.isFailReason)?.error,
+          ).toMatchObject({ kind: 'malformed-output' });
+          expect(seen.map((event) => event.afterSequence)).toEqual([0, 1]);
+        } else {
+          expect(exit._tag).toBe('Success');
+          expect(seen.at(-1)).toMatchObject({
+            kind: 'completed',
+            afterSequence: 2,
+            result: {
+              content: [
+                {
+                  kind: 'reasoning',
+                  evidence: {
+                    encryptedContent: 'enc_complete',
+                    status: 'completed',
+                    itemId: 'rs_1',
+                  },
                 },
-              },
-            ],
-          },
-        });
-      }
-      expect(fetch).toHaveBeenCalledTimes(1);
-    },
+              ],
+            },
+          });
+        }
+        expect(fetch).toHaveBeenCalledTimes(1);
+      }),
   );
 
-  it.each(['foreground', 'observation'] as const)(
+  it.effect.each(['foreground', 'observation'] as const)(
     'settles %s at the semantic terminal event while the HTTP body remains open',
-    async (mode) => {
-      const cancelBody = vi.fn();
-      const body = new ReadableStream<Uint8Array>({
-        start(controller) {
-          controller.enqueue(
-            new TextEncoder().encode(
-              sse([
-                {
-                  type: 'response.completed',
-                  response: snapshot([MESSAGE]),
-                },
-              ]),
-            ),
-          );
-        },
-        cancel: cancelBody,
-      });
-      const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(
-        new Response(body, {
-          headers: { 'content-type': 'text/event-stream' },
-        }),
-      );
-      const model = modelWith(fetch, { ...CONFIG, background: 'supported' });
-      assert(model.background);
-      const turn = await Effect.runPromise(model.prepareTurn(REQUEST));
-      assert(turn.mode === 'foreground');
-      const { admitted, operation } = await Effect.runPromise(
-        backgroundTurn(model),
-      );
-      const stream: Stream.Stream<TurnEvent | BackgroundEvent, ModelError> =
-        mode === 'foreground'
-          ? model.streamTurn(turn)
-          : model.background.observe(admitted, operation, {
-              deadlineAtMs: Date.now() + 60_000,
-            });
-      const seen = await Effect.runPromise(Stream.runCollect(stream));
-      const completed = seen.at(-1);
-      expect(seen.some((event) => event.kind === 'phase')).toBe(false);
-      assert(completed?.kind === 'completed');
-      expect(completed).toMatchObject({
-        kind: 'completed',
-        result: { providerResponseId: 'resp_1', finishReason: 'stop' },
-      });
-      // Admitted unstored, either way: a temporary response is not there for
-      // a next round to chain on, so neither completion leaves an anchor.
-      expect(completed.result).not.toHaveProperty('continuation');
-      if (mode === 'observation')
-        expect(completed).toHaveProperty('afterSequence', 0);
-      expect(cancelBody).toHaveBeenCalledTimes(1);
-      expect(fetch).toHaveBeenCalledTimes(1);
-    },
+    (mode) =>
+      Effect.gen(function* () {
+        const cancelBody = vi.fn();
+        const body = new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(
+              new TextEncoder().encode(
+                sse([
+                  {
+                    type: 'response.completed',
+                    response: snapshot([MESSAGE]),
+                  },
+                ]),
+              ),
+            );
+          },
+          cancel: cancelBody,
+        });
+        const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(
+          new Response(body, {
+            headers: { 'content-type': 'text/event-stream' },
+          }),
+        );
+        const model = modelWith(fetch, { ...CONFIG, background: 'supported' });
+        assert(model.background);
+        const turn = yield* model.prepareTurn(REQUEST);
+        assert(turn.mode === 'foreground');
+        const { admitted, operation } = yield* backgroundTurn(model);
+        const stream: Stream.Stream<TurnEvent | BackgroundEvent, ModelError> =
+          mode === 'foreground'
+            ? model.streamTurn(turn)
+            : model.background.observe(admitted, operation, {
+                deadlineAtMs: Date.now() + 60_000,
+              });
+        const seen = yield* Stream.runCollect(stream);
+        const completed = seen.at(-1);
+        expect(seen.some((event) => event.kind === 'phase')).toBe(false);
+        assert(completed?.kind === 'completed');
+        expect(completed).toMatchObject({
+          kind: 'completed',
+          result: { providerResponseId: 'resp_1', finishReason: 'stop' },
+        });
+        // Admitted unstored, either way: a temporary response is not there for
+        // a next round to chain on, so neither completion leaves an anchor.
+        expect(completed.result).not.toHaveProperty('continuation');
+        if (mode === 'observation')
+          expect(completed).toHaveProperty('afterSequence', 0);
+        expect(cancelBody).toHaveBeenCalledTimes(1);
+        expect(fetch).toHaveBeenCalledTimes(1);
+      }),
   );
 
   it.effect.each(['headers', 'body'] as const)(
@@ -2065,7 +2113,7 @@ describe('native OpenAI Responses protocol', () => {
       }),
   );
 
-  it.each([
+  it.effect.each([
     ['cancelled', 'confirmed-cancelled'],
     ['completed', 'observed-terminal'],
     ['failed', 'observed-terminal'],
@@ -2074,445 +2122,465 @@ describe('native OpenAI Responses protocol', () => {
     ['in_progress', 'unconfirmed'],
   ])(
     'reports cancellation status %s as %s without claiming ordering',
-    async (status, kind) => {
-      const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(
-        new Response(JSON.stringify(snapshot([], { status })), {
-          headers: { 'content-type': 'application/json' },
-        }),
-      );
-      const model = modelWith(fetch, { ...CONFIG, background: 'supported' });
-      assert(model.background);
-      const result = await Effect.runPromise(
-        model.background.cancel({ ...OPERATION, afterSequence: 0 }),
-      );
-      expect(result).toMatchObject({
-        kind,
-        providerResponseId: 'resp_1',
-        returnedModel: 'returned-model',
-      });
-      expect(result).not.toHaveProperty('result');
-      expect(fetch).toHaveBeenCalledTimes(1);
-      expect(String(fetch.mock.calls[0]?.[0])).toContain(
-        '/responses/resp_1/cancel',
-      );
-    },
+    ([status, kind]) =>
+      Effect.gen(function* () {
+        const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(
+          new Response(JSON.stringify(snapshot([], { status })), {
+            headers: { 'content-type': 'application/json' },
+          }),
+        );
+        const model = modelWith(fetch, { ...CONFIG, background: 'supported' });
+        assert(model.background);
+        const result = yield* model.background.cancel({
+          ...OPERATION,
+          afterSequence: 0,
+        });
+        expect(result).toMatchObject({
+          kind,
+          providerResponseId: 'resp_1',
+          returnedModel: 'returned-model',
+        });
+        expect(result).not.toHaveProperty('result');
+        expect(fetch).toHaveBeenCalledTimes(1);
+        expect(String(fetch.mock.calls[0]?.[0])).toContain(
+          '/responses/resp_1/cancel',
+        );
+      }),
   );
 
-  it('preserves grouped completed items, encrypted evidence and original tool IDs through a sparse terminal snapshot', async () => {
-    const laterReasoning = {
-      type: 'reasoning',
-      id: 'rs_2',
-      status: 'completed',
-      summary: [],
-      encrypted_content: 'enc_later',
-    };
-    const output = [...OUTPUT, laterReasoning];
-    const frames = events(
-      output,
-      snapshot(
-        [
-          {
-            type: REASONING.type,
-            id: REASONING.id,
-            summary: REASONING.summary,
-            content: REASONING.content,
-          },
-          CALLS[0]!,
-        ],
-        {
-          usage: { input_tokens: 12, output_tokens: 3, total_tokens: 15 },
-        },
-      ),
-    );
-    frames[1] = {
-      type: 'response.output_item.added',
-      output_index: 0,
-      item: {
-        ...REASONING,
-        status: 'in_progress',
-        summary: [],
-        content: [],
-        encrypted_content: 'enc_partial',
-      },
-    };
-    frames.splice(4, 0, {
-      type: 'response.output_text.delta',
-      output_index: 1,
-      item_id: 'msg_1',
-      delta: 'I will check.',
-    });
-    const fetch = vi
-      .fn<typeof globalThis.fetch>()
-      .mockResolvedValueOnce(response(frames))
-      .mockResolvedValueOnce(
-        response(events([{ ...MESSAGE, id: 'msg_2', phase: 'final_answer' }])),
-      );
-    const model = modelWith(fetch);
-    const turn = await Effect.runPromise(model.prepareTurn(REQUEST));
-    assert(turn.mode === 'foreground');
-    const collected = await Effect.runPromise(
-      Stream.runCollect(model.streamTurn(turn)),
-    );
-    expect(collected[0]).toMatchObject({
-      kind: 'identified',
-      providerResponseId: 'resp_1',
-      returnedModel: 'returned-model',
-    });
-    expect(collected.slice(1, -1)).toEqual([
-      {
-        kind: 'phase',
-        part: 'reasoning',
-        boundary: 'start',
-        providerItemIndex: 0,
-      },
-      {
-        kind: 'phase',
-        part: 'reasoning',
-        boundary: 'end',
-        providerItemIndex: 0,
-      },
-      { kind: 'phase', part: 'text', boundary: 'start', providerItemIndex: 1 },
-      {
-        kind: 'delta',
-        part: 'text',
-        text: 'I will check.',
-        providerItemIndex: 1,
-      },
-      { kind: 'phase', part: 'text', boundary: 'end', providerItemIndex: 1 },
-      {
-        kind: 'phase',
-        part: 'reasoning',
-        boundary: 'start',
-        providerItemIndex: 4,
-      },
-      {
-        kind: 'phase',
-        part: 'reasoning',
-        boundary: 'end',
-        providerItemIndex: 4,
-      },
-    ]);
-    const terminal = collected.at(-1);
-    if (terminal?.kind !== 'completed')
-      throw new Error('Missing completed response');
-    expect(terminal.result).toMatchObject({
-      finishReason: 'tool-calls',
-      usage: { totalTokens: 15 },
-      content: [
-        {
-          kind: 'reasoning',
-          summary: [
-            { kind: 'text', text: 'plan A' },
-            { kind: 'text', text: 'plan B' },
-          ],
-          content: [{ kind: 'text', text: 'reported reasoning' }],
-          evidence: { itemId: 'rs_1', encryptedContent: 'enc_complete' },
-        },
-        {
-          kind: 'message',
-          content: [
-            { kind: 'text', text: 'I will check.' },
-            { kind: 'text', text: 'Then compare.' },
-          ],
-          evidence: { itemId: 'msg_1', phase: 'commentary' },
-        },
-        {
-          kind: 'local-call',
-          providerCallId: 'call_1',
-          argumentsText: '{"path":"a"}',
-          evidence: { itemId: 'fc_1' },
-        },
-        {
-          kind: 'local-call',
-          providerCallId: 'call_2',
-          argumentsText: '{"path":"b"}',
-          evidence: { itemId: 'fc_2' },
-        },
-        {
-          kind: 'reasoning',
+  it.effect(
+    'preserves grouped completed items, encrypted evidence and original tool IDs through a sparse terminal snapshot',
+    () =>
+      Effect.gen(function* () {
+        const laterReasoning = {
+          type: 'reasoning',
+          id: 'rs_2',
+          status: 'completed',
           summary: [],
-          evidence: { itemId: 'rs_2', encryptedContent: 'enc_later' },
-        },
-      ],
-    });
-    const next = await Effect.runPromise(
-      model
-        .prepareTurn({
-          ...REQUEST,
-          messages: [
-            ...REQUEST.messages,
+          encrypted_content: 'enc_later',
+        };
+        const output = [...OUTPUT, laterReasoning];
+        const frames = events(
+          output,
+          snapshot(
+            [
+              {
+                type: REASONING.type,
+                id: REASONING.id,
+                summary: REASONING.summary,
+                content: REASONING.content,
+              },
+              CALLS[0]!,
+            ],
             {
-              role: 'assistant',
-              origin: terminal.result.requestedOrigin,
-              content: terminal.result.content,
+              usage: { input_tokens: 12, output_tokens: 3, total_tokens: 15 },
+            },
+          ),
+        );
+        frames[1] = {
+          type: 'response.output_item.added',
+          output_index: 0,
+          item: {
+            ...REASONING,
+            status: 'in_progress',
+            summary: [],
+            content: [],
+            encrypted_content: 'enc_partial',
+          },
+        };
+        frames.splice(4, 0, {
+          type: 'response.output_text.delta',
+          output_index: 1,
+          item_id: 'msg_1',
+          delta: 'I will check.',
+        });
+        const fetch = vi
+          .fn<typeof globalThis.fetch>()
+          .mockResolvedValueOnce(response(frames))
+          .mockResolvedValueOnce(
+            response(
+              events([{ ...MESSAGE, id: 'msg_2', phase: 'final_answer' }]),
+            ),
+          );
+        const model = modelWith(fetch);
+        const turn = yield* model.prepareTurn(REQUEST);
+        assert(turn.mode === 'foreground');
+        const collected = yield* Stream.runCollect(model.streamTurn(turn));
+        expect(collected[0]).toMatchObject({
+          kind: 'identified',
+          providerResponseId: 'resp_1',
+          returnedModel: 'returned-model',
+        });
+        expect(collected.slice(1, -1)).toEqual([
+          {
+            kind: 'phase',
+            part: 'reasoning',
+            boundary: 'start',
+            providerItemIndex: 0,
+          },
+          {
+            kind: 'phase',
+            part: 'reasoning',
+            boundary: 'end',
+            providerItemIndex: 0,
+          },
+          {
+            kind: 'phase',
+            part: 'text',
+            boundary: 'start',
+            providerItemIndex: 1,
+          },
+          {
+            kind: 'delta',
+            part: 'text',
+            text: 'I will check.',
+            providerItemIndex: 1,
+          },
+          {
+            kind: 'phase',
+            part: 'text',
+            boundary: 'end',
+            providerItemIndex: 1,
+          },
+          {
+            kind: 'phase',
+            part: 'reasoning',
+            boundary: 'start',
+            providerItemIndex: 4,
+          },
+          {
+            kind: 'phase',
+            part: 'reasoning',
+            boundary: 'end',
+            providerItemIndex: 4,
+          },
+        ]);
+        const terminal = collected.at(-1);
+        if (terminal?.kind !== 'completed')
+          throw new Error('Missing completed response');
+        expect(terminal.result).toMatchObject({
+          finishReason: 'tool-calls',
+          usage: { totalTokens: 15 },
+          content: [
+            {
+              kind: 'reasoning',
+              summary: [
+                { kind: 'text', text: 'plan A' },
+                { kind: 'text', text: 'plan B' },
+              ],
+              content: [{ kind: 'text', text: 'reported reasoning' }],
+              evidence: { itemId: 'rs_1', encryptedContent: 'enc_complete' },
             },
             {
-              role: 'tool',
-              results: [
-                {
-                  callOrdinal: 0,
-                  status: 'success',
-                  content: [{ kind: 'text', text: 'file text' }],
-                },
-                {
-                  callOrdinal: 1,
-                  status: 'error',
-                  content: [{ kind: 'text', text: 'missing' }],
-                },
+              kind: 'message',
+              content: [
+                { kind: 'text', text: 'I will check.' },
+                { kind: 'text', text: 'Then compare.' },
               ],
+              evidence: { itemId: 'msg_1', phase: 'commentary' },
+            },
+            {
+              kind: 'local-call',
+              providerCallId: 'call_1',
+              argumentsText: '{"path":"a"}',
+              evidence: { itemId: 'fc_1' },
+            },
+            {
+              kind: 'local-call',
+              providerCallId: 'call_2',
+              argumentsText: '{"path":"b"}',
+              evidence: { itemId: 'fc_2' },
+            },
+            {
+              kind: 'reasoning',
+              summary: [],
+              evidence: { itemId: 'rs_2', encryptedContent: 'enc_later' },
             },
           ],
-        })
-        .pipe(
-          Effect.flatMap((turn) => {
-            assert(turn.mode === 'foreground');
-            return model.generateTurn(turn);
-          }),
-        ),
-    );
-    expect(next.content[0]).toMatchObject({
-      kind: 'message',
-      evidence: { itemId: 'msg_2', phase: 'final_answer' },
-    });
-    expect(fetch).toHaveBeenCalledTimes(2);
-    expect(JSON.parse(String(fetch.mock.calls[1]?.[1]?.body)).input).toEqual([
-      {
-        role: 'user',
-        content: [{ type: 'input_text', text: 'Compare two files.' }],
-      },
-      ...output,
-      { type: 'function_call_output', call_id: 'call_1', output: 'file text' },
-      {
-        type: 'function_call_output',
-        call_id: 'call_2',
-        output: 'Error: missing',
-      },
-    ]);
-  });
-
-  it('freezes selected controls and distinguishes absent controls, explicit null and numeric zero', async () => {
-    const fetch = vi
-      .fn<typeof globalThis.fetch>()
-      .mockImplementation(async () => response(events([MESSAGE])));
-    const config = { ...CONFIG, defaults: { ...CONFIG.defaults } };
-    const model = modelWith(fetch, config);
-    const turn = await Effect.runPromise(
-      model.prepareTurn({
-        ...REQUEST,
-        temperature: 0,
-        parallelToolCalls: false,
-        toolChoice: { name: 'read_file' },
+        });
+        const next = yield* model
+          .prepareTurn({
+            ...REQUEST,
+            messages: [
+              ...REQUEST.messages,
+              {
+                role: 'assistant',
+                origin: terminal.result.requestedOrigin,
+                content: terminal.result.content,
+              },
+              {
+                role: 'tool',
+                results: [
+                  {
+                    callOrdinal: 0,
+                    status: 'success',
+                    content: [{ kind: 'text', text: 'file text' }],
+                  },
+                  {
+                    callOrdinal: 1,
+                    status: 'error',
+                    content: [{ kind: 'text', text: 'missing' }],
+                  },
+                ],
+              },
+            ],
+          })
+          .pipe(
+            Effect.flatMap((turn) => {
+              assert(turn.mode === 'foreground');
+              return model.generateTurn(turn);
+            }),
+          );
+        expect(next.content[0]).toMatchObject({
+          kind: 'message',
+          evidence: { itemId: 'msg_2', phase: 'final_answer' },
+        });
+        expect(fetch).toHaveBeenCalledTimes(2);
+        expect(
+          JSON.parse(String(fetch.mock.calls[1]?.[1]?.body)).input,
+        ).toEqual([
+          {
+            role: 'user',
+            content: [{ type: 'input_text', text: 'Compare two files.' }],
+          },
+          ...output,
+          {
+            type: 'function_call_output',
+            call_id: 'call_1',
+            output: 'file text',
+          },
+          {
+            type: 'function_call_output',
+            call_id: 'call_2',
+            output: 'Error: missing',
+          },
+        ]);
       }),
-    );
-    config.defaults.reasoning = null;
-    config.defaults.serviceTier = null;
-    assert(turn.mode === 'foreground');
-    await Effect.runPromise(model.generateTurn(turn));
-    expect(JSON.parse(String(fetch.mock.calls[0]?.[1]?.body))).toMatchObject({
-      temperature: 0,
-      parallel_tool_calls: false,
-      tool_choice: { type: 'function', name: 'read_file' },
-      reasoning: { effort: 'high', mode: 'pro', summary: 'auto' },
-      service_tier: 'fast',
-      store: false,
-      include: ['reasoning.encrypted_content'],
-    });
-    await Effect.runPromise(
-      model
-        .prepareTurn({ ...REQUEST, reasoning: null, serviceTier: null })
-        .pipe(
+  );
+
+  it.effect(
+    'freezes selected controls and distinguishes absent controls, explicit null and numeric zero',
+    () =>
+      Effect.gen(function* () {
+        const fetch = vi
+          .fn<typeof globalThis.fetch>()
+          .mockImplementation(async () => response(events([MESSAGE])));
+        const config = { ...CONFIG, defaults: { ...CONFIG.defaults } };
+        const model = modelWith(fetch, config);
+        const turn = yield* model.prepareTurn({
+          ...REQUEST,
+          temperature: 0,
+          parallelToolCalls: false,
+          toolChoice: { name: 'read_file' },
+        });
+        config.defaults.reasoning = null;
+        config.defaults.serviceTier = null;
+        assert(turn.mode === 'foreground');
+        yield* model.generateTurn(turn);
+        expect(
+          JSON.parse(String(fetch.mock.calls[0]?.[1]?.body)),
+        ).toMatchObject({
+          temperature: 0,
+          parallel_tool_calls: false,
+          tool_choice: { type: 'function', name: 'read_file' },
+          reasoning: { effort: 'high', mode: 'pro', summary: 'auto' },
+          service_tier: 'fast',
+          store: false,
+          include: ['reasoning.encrypted_content'],
+        });
+        yield* model
+          .prepareTurn({ ...REQUEST, reasoning: null, serviceTier: null })
+          .pipe(
+            Effect.flatMap((turn) => {
+              assert(turn.mode === 'foreground');
+              return model.generateTurn(turn);
+            }),
+          );
+        const omitted = JSON.parse(String(fetch.mock.calls[1]?.[1]?.body));
+        expect(omitted.reasoning).toBeUndefined();
+        expect(omitted.service_tier).toBeUndefined();
+        const withoutTemperature = modelWith(fetch, {
+          ...CONFIG,
+          supportsTemperature: false,
+          defaults: { ...CONFIG.defaults, temperature: null },
+        });
+        expect(
+          (yield* Effect.flip(
+            withoutTemperature.prepareTurn({ ...REQUEST, temperature: 0 }),
+          )).kind,
+        ).toBe('unsupported');
+        yield* withoutTemperature.prepareTurn(REQUEST).pipe(
+          Effect.flatMap((turn) => {
+            assert(turn.mode === 'foreground');
+            return withoutTemperature.generateTurn(turn);
+          }),
+        );
+        expect(
+          JSON.parse(String(fetch.mock.calls[2]?.[1]?.body)).temperature,
+        ).toBeUndefined();
+        expect(fetch).toHaveBeenCalledTimes(3);
+        for (const request of [
+          {
+            ...REQUEST,
+            continuation: {
+              origin: { ...OPERATION.origin, protocol: 'google-interactions' },
+              coveredMessages: 1,
+              prefixFingerprint: 'a'.repeat(64),
+              anchor: { interactionId: 'int_1', coveredSteps: 1 },
+            },
+          },
+          ...(
+            [
+              {
+                kind: 'reasoning',
+                summary: [],
+                evidence: { kind: 'openrouter-reasoning', details: [] },
+              },
+              {
+                kind: 'file-annotation',
+                hash: 'provider-file',
+                evidence: { kind: 'openrouter-file-annotation' },
+              },
+              {
+                kind: 'url-citation',
+                url: 'https://example.org/source',
+                evidence: { kind: 'openrouter-url-citation' },
+              },
+            ] as const
+          ).map((part) => ({
+            ...REQUEST,
+            messages: [
+              ...REQUEST.messages,
+              {
+                role: 'assistant' as const,
+                origin: {
+                  ...OPERATION.origin,
+                  protocol: 'openrouter-chat' as const,
+                },
+                content: [part],
+              },
+            ],
+          })),
+        ] satisfies readonly TurnRequest[])
+          expect(yield* Effect.flip(model.prepareTurn(request))).toMatchObject({
+            kind: 'unsupported',
+          });
+        expect(fetch).toHaveBeenCalledTimes(3);
+      }),
+  );
+
+  it.effect(
+    'resolves selected subscription request policy before admission and rejects altered bindings',
+    () =>
+      Effect.gen(function* () {
+        const fetch = vi
+          .fn<typeof globalThis.fetch>()
+          .mockImplementation(async () => response(events([MESSAGE])));
+        const configuration = SUBSCRIPTION_CONFIG;
+        const authentication = {
+          kind: 'codex' as const,
+          accessToken: 'selected-token',
+          accountId: 'selected-account',
+        };
+        const model = openaiResponsesModel(configuration, {
+          authentication,
+          fetch,
+        });
+        authentication.accessToken = 'later-token';
+        authentication.accountId = 'later-account';
+        const turn = yield* model.prepareTurn({
+          ...REQUEST,
+          system: '  selected instructions  ',
+        });
+        assert(
+          turn.protocol === 'openai-responses' && turn.mode === 'foreground',
+        );
+        expect(turn.system).toBe('selected instructions');
+        expect(turn.transport).toEqual({ kind: 'http' });
+        expect(turn.controls.maxOutputTokens).toBeNull();
+        const result = yield* model.generateTurn(turn);
+        const body = JSON.parse(String(fetch.mock.calls[0]?.[1]?.body));
+        const headers = new Headers(fetch.mock.calls[0]?.[1]?.headers);
+        expect(headers.get('authorization')).toBe('Bearer selected-token');
+        expect(headers.get('chatgpt-account-id')).toBe('selected-account');
+        expect(headers.get('originator')).toBe('texra');
+        expect(headers.get('openai-beta')).toBe('responses=experimental');
+        expect(body.instructions).toBe('selected instructions');
+        expect(body.reasoning.effort).toBe('medium');
+        expect(body.stream).toBe(true);
+        expect(body.store).toBe(false);
+        expect(body).not.toHaveProperty('background');
+        expect(body).not.toHaveProperty('max_output_tokens');
+        expect(body).not.toHaveProperty('temperature');
+        assert(result.providerResponseId !== null);
+        expect(result.continuation).toBeUndefined();
+        expect(
+          yield* openaiResponsesContinuation(configuration, turn, result),
+        ).toBeUndefined();
+        expect(
+          (yield* model.prepareTurn({ ...REQUEST, system: '  ' })).system,
+        ).toBe("Follow the user's instructions.");
+        for (const control of [
+          { maxOutputTokens: 100 },
+          { store: true },
+          { temperature: 0 },
+          { reasoning: { effort: 'high', mode: null, summary: null } },
+        ] satisfies readonly Partial<TurnRequest>[])
+          expect(
+            yield* Effect.flip(model.prepareTurn({ ...REQUEST, ...control })),
+          ).toMatchObject({ kind: 'unsupported' });
+        for (const altered of [
+          { ...turn, controls: { ...turn.controls, maxOutputTokens: 100 } },
+          { ...turn, controls: { ...turn.controls, store: true } },
+          { ...turn, system: '  ' },
+          {
+            ...turn,
+            transport: {
+              kind: 'websocket' as const,
+              connectionId: '7bdca3ee-ae2a-4551-a7a5-4895b613b40b',
+            },
+          },
+        ])
+          expect(yield* Effect.flip(model.generateTurn(altered))).toMatchObject(
+            { kind: 'unsupported' },
+          );
+        expect(fetch).toHaveBeenCalledTimes(1);
+      }),
+  );
+
+  it.effect(
+    'returns explicit length-limited text without dispatchable unfinished calls',
+    () =>
+      Effect.gen(function* () {
+        const final = snapshot([{ ...MESSAGE, status: 'incomplete' }], {
+          status: 'incomplete',
+          incomplete_details: { reason: 'max_output_tokens' },
+        });
+        const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(
+          response([
+            {
+              type: 'response.created',
+              response: snapshot([], { status: 'in_progress' }),
+            },
+            { type: 'response.incomplete', response: final },
+          ]),
+        );
+        const model = modelWith(fetch);
+        const result = yield* model.prepareTurn(REQUEST).pipe(
           Effect.flatMap((turn) => {
             assert(turn.mode === 'foreground');
             return model.generateTurn(turn);
           }),
-        ),
-    );
-    const omitted = JSON.parse(String(fetch.mock.calls[1]?.[1]?.body));
-    expect(omitted.reasoning).toBeUndefined();
-    expect(omitted.service_tier).toBeUndefined();
-    const withoutTemperature = modelWith(fetch, {
-      ...CONFIG,
-      supportsTemperature: false,
-      defaults: { ...CONFIG.defaults, temperature: null },
-    });
-    expect(
-      (
-        await Effect.runPromise(
-          Effect.flip(
-            withoutTemperature.prepareTurn({ ...REQUEST, temperature: 0 }),
-          ),
-        )
-      ).kind,
-    ).toBe('unsupported');
-    await Effect.runPromise(
-      withoutTemperature.prepareTurn(REQUEST).pipe(
-        Effect.flatMap((turn) => {
-          assert(turn.mode === 'foreground');
-          return withoutTemperature.generateTurn(turn);
-        }),
-      ),
-    );
-    expect(
-      JSON.parse(String(fetch.mock.calls[2]?.[1]?.body)).temperature,
-    ).toBeUndefined();
-    expect(fetch).toHaveBeenCalledTimes(3);
-    for (const request of [
-      {
-        ...REQUEST,
-        continuation: {
-          origin: { ...OPERATION.origin, protocol: 'google-interactions' },
-          coveredMessages: 1,
-          prefixFingerprint: 'a'.repeat(64),
-          anchor: { interactionId: 'int_1', coveredSteps: 1 },
-        },
-      },
-      ...(
-        [
-          {
-            kind: 'reasoning',
-            summary: [],
-            evidence: { kind: 'openrouter-reasoning', details: [] },
-          },
-          {
-            kind: 'file-annotation',
-            hash: 'provider-file',
-            evidence: { kind: 'openrouter-file-annotation' },
-          },
-          {
-            kind: 'url-citation',
-            url: 'https://example.org/source',
-            evidence: { kind: 'openrouter-url-citation' },
-          },
-        ] as const
-      ).map((part) => ({
-        ...REQUEST,
-        messages: [
-          ...REQUEST.messages,
-          {
-            role: 'assistant' as const,
-            origin: {
-              ...OPERATION.origin,
-              protocol: 'openrouter-chat' as const,
-            },
-            content: [part],
-          },
-        ],
-      })),
-    ] satisfies readonly TurnRequest[])
-      expect(
-        await Effect.runPromise(Effect.flip(model.prepareTurn(request))),
-      ).toMatchObject({ kind: 'unsupported' });
-    expect(fetch).toHaveBeenCalledTimes(3);
-  });
+        );
+        expect(result).toMatchObject({
+          finishReason: 'length',
+          usage: null,
+          content: [{ kind: 'message', evidence: { status: 'incomplete' } }],
+        });
+      }),
+  );
 
-  it('resolves selected subscription request policy before admission and rejects altered bindings', async () => {
-    const fetch = vi
-      .fn<typeof globalThis.fetch>()
-      .mockImplementation(async () => response(events([MESSAGE])));
-    const configuration = SUBSCRIPTION_CONFIG;
-    const authentication = {
-      kind: 'codex' as const,
-      accessToken: 'selected-token',
-      accountId: 'selected-account',
-    };
-    const model = openaiResponsesModel(configuration, {
-      authentication,
-      fetch,
-    });
-    authentication.accessToken = 'later-token';
-    authentication.accountId = 'later-account';
-    const turn = await Effect.runPromise(
-      model.prepareTurn({ ...REQUEST, system: '  selected instructions  ' }),
-    );
-    assert(turn.protocol === 'openai-responses' && turn.mode === 'foreground');
-    expect(turn.system).toBe('selected instructions');
-    expect(turn.transport).toEqual({ kind: 'http' });
-    expect(turn.controls.maxOutputTokens).toBeNull();
-    const result = await Effect.runPromise(model.generateTurn(turn));
-    const body = JSON.parse(String(fetch.mock.calls[0]?.[1]?.body));
-    const headers = new Headers(fetch.mock.calls[0]?.[1]?.headers);
-    expect(headers.get('authorization')).toBe('Bearer selected-token');
-    expect(headers.get('chatgpt-account-id')).toBe('selected-account');
-    expect(headers.get('originator')).toBe('texra');
-    expect(headers.get('openai-beta')).toBe('responses=experimental');
-    expect(body.instructions).toBe('selected instructions');
-    expect(body.reasoning.effort).toBe('medium');
-    expect(body.stream).toBe(true);
-    expect(body.store).toBe(false);
-    expect(body).not.toHaveProperty('background');
-    expect(body).not.toHaveProperty('max_output_tokens');
-    expect(body).not.toHaveProperty('temperature');
-    assert(result.providerResponseId !== null);
-    expect(result.continuation).toBeUndefined();
-    expect(
-      await Effect.runPromise(
-        openaiResponsesContinuation(configuration, turn, result),
-      ),
-    ).toBeUndefined();
-    expect(
-      (await Effect.runPromise(model.prepareTurn({ ...REQUEST, system: '  ' })))
-        .system,
-    ).toBe("Follow the user's instructions.");
-    for (const control of [
-      { maxOutputTokens: 100 },
-      { store: true },
-      { temperature: 0 },
-      { reasoning: { effort: 'high', mode: null, summary: null } },
-    ] satisfies readonly Partial<TurnRequest>[])
-      expect(
-        await Effect.runPromise(
-          Effect.flip(model.prepareTurn({ ...REQUEST, ...control })),
-        ),
-      ).toMatchObject({ kind: 'unsupported' });
-    for (const altered of [
-      { ...turn, controls: { ...turn.controls, maxOutputTokens: 100 } },
-      { ...turn, controls: { ...turn.controls, store: true } },
-      { ...turn, system: '  ' },
-      {
-        ...turn,
-        transport: {
-          kind: 'websocket' as const,
-          connectionId: '7bdca3ee-ae2a-4551-a7a5-4895b613b40b',
-        },
-      },
-    ])
-      expect(
-        await Effect.runPromise(Effect.flip(model.generateTurn(altered))),
-      ).toMatchObject({ kind: 'unsupported' });
-    expect(fetch).toHaveBeenCalledTimes(1);
-  });
-
-  it('returns explicit length-limited text without dispatchable unfinished calls', async () => {
-    const final = snapshot([{ ...MESSAGE, status: 'incomplete' }], {
-      status: 'incomplete',
-      incomplete_details: { reason: 'max_output_tokens' },
-    });
-    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(
-      response([
-        {
-          type: 'response.created',
-          response: snapshot([], { status: 'in_progress' }),
-        },
-        { type: 'response.incomplete', response: final },
-      ]),
-    );
-    const model = modelWith(fetch);
-    const result = await Effect.runPromise(
-      model.prepareTurn(REQUEST).pipe(
-        Effect.flatMap((turn) => {
-          assert(turn.mode === 'foreground');
-          return model.generateTurn(turn);
-        }),
-      ),
-    );
-    expect(result).toMatchObject({
-      finishReason: 'length',
-      usage: null,
-      content: [{ kind: 'message', evidence: { status: 'incomplete' } }],
-    });
-  });
-
-  it.each([
+  it.effect.each([
     {
       name: 'changed encrypted content',
       final: snapshot([{ ...REASONING, encrypted_content: 'changed' }]),
@@ -2585,23 +2653,23 @@ describe('native OpenAI Responses protocol', () => {
     },
   ])(
     'rejects $name without a completed result',
-    async ({ final, output, added, progress }) => {
-      const frames = events(output ?? OUTPUT, final);
-      if (added)
-        frames[1] = {
-          type: 'response.output_item.added',
-          output_index: 0,
-          item: added,
-        };
-      if (progress) frames.splice(2, 0, progress);
-      const fetch = vi
-        .fn<typeof globalThis.fetch>()
-        .mockResolvedValue(response(frames));
-      const model = modelWith(fetch);
-      const completed = vi.fn();
-      const delta = vi.fn();
-      const failure = await Effect.runPromise(
-        Effect.flip(
+    ({ final, output, added, progress }) =>
+      Effect.gen(function* () {
+        const frames = events(output ?? OUTPUT, final);
+        if (added)
+          frames[1] = {
+            type: 'response.output_item.added',
+            output_index: 0,
+            item: added,
+          };
+        if (progress) frames.splice(2, 0, progress);
+        const fetch = vi
+          .fn<typeof globalThis.fetch>()
+          .mockResolvedValue(response(frames));
+        const model = modelWith(fetch);
+        const completed = vi.fn();
+        const delta = vi.fn();
+        const failure = yield* Effect.flip(
           model.prepareTurn(REQUEST).pipe(
             Effect.flatMap((turn) => {
               assert(turn.mode === 'foreground');
@@ -2613,63 +2681,64 @@ describe('native OpenAI Responses protocol', () => {
               );
             }),
           ),
-        ),
-      );
-      expect(failure).toMatchObject({
-        kind: 'malformed-output',
-        responseId: 'resp_1',
-        requestId: 'request_1',
-      });
-      expect(completed).not.toHaveBeenCalled();
-      expect(delta).not.toHaveBeenCalled();
-      expect(fetch).toHaveBeenCalledTimes(1);
-    },
+        );
+        expect(failure).toMatchObject({
+          kind: 'malformed-output',
+          responseId: 'resp_1',
+          requestId: 'request_1',
+        });
+        expect(completed).not.toHaveBeenCalled();
+        expect(delta).not.toHaveBeenCalled();
+        expect(fetch).toHaveBeenCalledTimes(1);
+      }),
   );
 
-  it('preserves a terminal provider failure even when output remains unfinished', async () => {
-    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(
-      response([
-        {
-          type: 'response.created',
-          response: snapshot([], { status: 'in_progress' }),
-        },
-        {
-          type: 'response.output_item.added',
-          output_index: 0,
-          item: { ...MESSAGE, status: 'in_progress' },
-        },
-        {
-          type: 'response.failed',
-          response: snapshot([], {
-            status: 'failed',
-            error: {
-              code: 'server_error',
-              message: 'Original provider failure',
+  it.effect(
+    'preserves a terminal provider failure even when output remains unfinished',
+    () =>
+      Effect.gen(function* () {
+        const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(
+          response([
+            {
+              type: 'response.created',
+              response: snapshot([], { status: 'in_progress' }),
             },
-          }),
-        },
-      ]),
-    );
-    const model = modelWith(fetch);
-    const failure = await Effect.runPromise(
-      Effect.flip(
-        model.prepareTurn(REQUEST).pipe(
-          Effect.flatMap((turn) => {
-            assert(turn.mode === 'foreground');
-            return model.generateTurn(turn);
-          }),
-        ),
-      ),
-    );
-    expect(failure).toMatchObject({
-      kind: 'provider-rejection',
-      message: 'Original provider failure',
-      responseId: 'resp_1',
-      requestId: 'request_1',
-      model: 'returned-model',
-    });
-    expect(fetch).toHaveBeenCalledTimes(1);
-  });
+            {
+              type: 'response.output_item.added',
+              output_index: 0,
+              item: { ...MESSAGE, status: 'in_progress' },
+            },
+            {
+              type: 'response.failed',
+              response: snapshot([], {
+                status: 'failed',
+                error: {
+                  code: 'server_error',
+                  message: 'Original provider failure',
+                },
+              }),
+            },
+          ]),
+        );
+        const model = modelWith(fetch);
+        const failure = yield* Effect.flip(
+          model.prepareTurn(REQUEST).pipe(
+            Effect.flatMap((turn) => {
+              assert(turn.mode === 'foreground');
+              return model.generateTurn(turn);
+            }),
+          ),
+        );
+        expect(failure).toMatchObject({
+          kind: 'provider-rejection',
+          message: 'Original provider failure',
+          responseId: 'resp_1',
+          requestId: 'request_1',
+          model: 'returned-model',
+        });
+        expect(fetch).toHaveBeenCalledTimes(1);
+      }),
+  );
 
   it.effect(
     'interrupts a pending body read after publishing identity and joins cleanup',

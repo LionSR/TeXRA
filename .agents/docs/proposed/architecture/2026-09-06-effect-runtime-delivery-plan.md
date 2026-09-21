@@ -324,6 +324,11 @@ Promises/async iterables. Preserve that completed boundary and finish the remain
 internal runtime work. Refresh ownership before changing their files and integrate
 this latest-main work explicitly; do not base it silently on one of those older lane branches.
 
+_Superseded 2026-09-21:_ the boundary this paragraph says to preserve is retired.
+The root entry is now the Effect surface itself, the Promise rendering and the
+`/effect` subpath are deleted, and the rulings ledger's 2026-09-21 entry records
+the supersession of R1 boundary kind (c).
+
 | Package                                               | Concrete work                                                                                                                                                                          | Must disappear or become true before completion                                                                                                                                                        |
 | ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | A. Joint runtime/LLM contract                         | Incorporate current-main rulings and review R1–R4; specify prepared invocation, remote acceptance, continuation validity and tool settlement together                                  | One common specification for both programs and helpers; current-main census and consumer/ownership inventory; existing ratchet violations tracked without widening                                     |

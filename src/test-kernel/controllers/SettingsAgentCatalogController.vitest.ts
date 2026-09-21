@@ -1,8 +1,9 @@
 import { strict as assert } from 'node:assert';
 
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect } from 'vitest';
 
 import {
   findTeamPreset,
@@ -176,53 +177,59 @@ describe('SettingsAgentCatalogController', () => {
     });
   });
 
-  it('resolves preset members to canonical keys and commits the team symbolically', async () => {
-    const persistedPreset = {
-      id: 'custom-team',
-      name: 'Custom Team',
-      description: 'test',
-      icon: 'bookmark',
-      agents: {
-        workflow: ['writer'],
-        toolUse: ['review', 'missing'],
-      },
-      texraHostedAgents: [],
-    };
-    const { controller, enabled, committedTeams } = createController({
-      customPresets: [persistedPreset],
-    });
+  it.effect(
+    'resolves preset members to canonical keys and commits the team symbolically',
+    () =>
+      Effect.gen(function* () {
+        const persistedPreset = {
+          id: 'custom-team',
+          name: 'Custom Team',
+          description: 'test',
+          icon: 'bookmark',
+          agents: {
+            workflow: ['writer'],
+            toolUse: ['review', 'missing'],
+          },
+          texraHostedAgents: [],
+        };
+        const { controller, enabled, committedTeams } = createController({
+          customPresets: [persistedPreset],
+        });
 
-    const resolved = controller.resolvePreset('custom-team');
-    expect(resolved.ok).toBe(true);
-    if (!resolved.ok) throw new Error('expected the preset to resolve');
-    expect(resolved.preset).toStrictEqual({
-      ...persistedPreset,
-      icon: 'bookmark',
-    });
-    expect(resolved.resolution.unresolvedNames).toStrictEqual(['missing']);
-    assert.deepEqual(resolved.resolution.keys.workflow, ['remote:writer']);
-    assert.deepEqual(resolved.resolution.keys.toolUse, [
-      'builtInToolUse:review',
-    ]);
+        const resolved = controller.resolvePreset('custom-team');
+        expect(resolved.ok).toBe(true);
+        if (!resolved.ok) throw new Error('expected the preset to resolve');
+        expect(resolved.preset).toStrictEqual({
+          ...persistedPreset,
+          icon: 'bookmark',
+        });
+        expect(resolved.resolution.unresolvedNames).toStrictEqual(['missing']);
+        assert.deepEqual(resolved.resolution.keys.workflow, ['remote:writer']);
+        assert.deepEqual(resolved.resolution.keys.toolUse, [
+          'builtInToolUse:review',
+        ]);
 
-    await Effect.runPromise(controller.commitPreset(resolved.preset));
+        yield* controller.commitPreset(resolved.preset);
 
-    // The commit stores the team reference, not a frozen key snapshot: the
-    // roster re-resolves it against the catalog on every read.
-    assert.deepEqual(committedTeams, ['custom-team']);
-    assert.deepEqual(enabled.workflow, undefined);
-    assert.deepEqual(enabled.toolUse, undefined);
-  });
+        // The commit stores the team reference, not a frozen key snapshot: the
+        // roster re-resolves it against the catalog on every read.
+        assert.deepEqual(committedTeams, ['custom-team']);
+        assert.deepEqual(enabled.workflow, undefined);
+        assert.deepEqual(enabled.toolUse, undefined);
+      }),
+  );
 
-  it('records hosted-definition ownership when saving a custom team', async () => {
-    const { controller } = createController();
+  it.effect(
+    'records hosted-definition ownership when saving a custom team',
+    () =>
+      Effect.gen(function* () {
+        const { controller } = createController();
 
-    const preset = await Effect.runPromise(
-      controller.saveCurrentPreset('Current Team'),
-    );
+        const preset = yield* controller.saveCurrentPreset('Current Team');
 
-    assert.deepEqual(preset.texraHostedAgents, ['writer']);
-  });
+        assert.deepEqual(preset.texraHostedAgents, ['writer']);
+      }),
+  );
 
   it('collects built-in and capability-based orchestrator agent names', () => {
     const { controller } = createController({
@@ -386,101 +393,104 @@ describe('SettingsAgentCatalogController', () => {
     ]);
   });
 
-  it('saves the currently visible agents as a custom preset', async () => {
-    const state = createController({
-      now: 456,
-      visible: {
-        workflow: [AGENTS.workflow[1]],
-        toolUse: [AGENTS.toolUse[0]],
-      },
-    });
+  it.effect('saves the currently visible agents as a custom preset', () =>
+    Effect.gen(function* () {
+      const state = createController({
+        now: 456,
+        visible: {
+          workflow: [AGENTS.workflow[1]],
+          toolUse: [AGENTS.toolUse[0]],
+        },
+      });
 
-    assert.deepEqual(
-      await Effect.runPromise(
-        state.controller.saveCurrentPreset('  My Team  '),
-      ),
-      {
-        id: 'custom-456',
-        name: 'My Team',
-        description: 'Custom team: review, correct',
+      assert.deepEqual(
+        yield* state.controller.saveCurrentPreset('  My Team  '),
+        {
+          id: 'custom-456',
+          name: 'My Team',
+          description: 'Custom team: review, correct',
+          icon: 'bookmark',
+          agents: {
+            workflow: ['correct'],
+            toolUse: ['review'],
+          },
+          texraHostedAgents: [],
+        },
+      );
+      assert.equal(state.customPresets.length, 1);
+    }),
+  );
+
+  it.effect(
+    'preserves unrecognized persisted records when saving a preset',
+    () =>
+      Effect.gen(function* () {
+        const state = createController({
+          customPresets: [LEGACY_ICON_PRESET, MALFORMED_PRESET],
+        });
+
+        yield* state.controller.saveCurrentPreset('New Team');
+
+        assert.deepEqual(state.customPresets.slice(0, 2), [
+          LEGACY_ICON_PRESET,
+          MALFORMED_PRESET,
+        ]);
+        assert.equal(
+          (state.customPresets[2] as AgentModePreset | undefined)?.id,
+          'custom-123',
+        );
+      }),
+  );
+
+  it.effect('deletes existing custom presets and ignores missing ones', () =>
+    Effect.gen(function* () {
+      const preset: AgentModePreset = {
+        id: 'custom-team',
+        name: 'Custom Team',
+        description: 'test',
         icon: 'bookmark',
         agents: {
-          workflow: ['correct'],
-          toolUse: ['review'],
+          workflow: [],
+          toolUse: [],
         },
         texraHostedAgents: [],
-      },
-    );
-    assert.equal(state.customPresets.length, 1);
-  });
+      };
+      const state = createController({ customPresets: [preset] });
 
-  it('preserves unrecognized persisted records when saving a preset', async () => {
-    const state = createController({
-      customPresets: [LEGACY_ICON_PRESET, MALFORMED_PRESET],
-    });
+      assert.deepEqual(
+        yield* state.controller.deleteCustomPreset('custom-team'),
+        preset,
+      );
+      assert.deepEqual(state.customPresets, []);
+      assert.equal(yield* state.controller.deleteCustomPreset('missing'), null);
+    }),
+  );
 
-    await Effect.runPromise(state.controller.saveCurrentPreset('New Team'));
+  it.effect('preserves other raw records when deleting a preset', () =>
+    Effect.gen(function* () {
+      const target: AgentModePreset = {
+        id: 'target',
+        name: 'Target',
+        description: 'test',
+        icon: 'bookmark',
+        agents: {
+          workflow: [],
+          toolUse: [],
+        },
+        texraHostedAgents: [],
+      };
+      const state = createController({
+        customPresets: [target, LEGACY_ICON_PRESET, MALFORMED_PRESET],
+      });
 
-    assert.deepEqual(state.customPresets.slice(0, 2), [
-      LEGACY_ICON_PRESET,
-      MALFORMED_PRESET,
-    ]);
-    assert.equal(
-      (state.customPresets[2] as AgentModePreset | undefined)?.id,
-      'custom-123',
-    );
-  });
-
-  it('deletes existing custom presets and ignores missing ones', async () => {
-    const preset: AgentModePreset = {
-      id: 'custom-team',
-      name: 'Custom Team',
-      description: 'test',
-      icon: 'bookmark',
-      agents: {
-        workflow: [],
-        toolUse: [],
-      },
-      texraHostedAgents: [],
-    };
-    const state = createController({ customPresets: [preset] });
-
-    assert.deepEqual(
-      await Effect.runPromise(
-        state.controller.deleteCustomPreset('custom-team'),
-      ),
-      preset,
-    );
-    assert.deepEqual(state.customPresets, []);
-    assert.equal(
-      await Effect.runPromise(state.controller.deleteCustomPreset('missing')),
-      null,
-    );
-  });
-
-  it('preserves other raw records when deleting a preset', async () => {
-    const target: AgentModePreset = {
-      id: 'target',
-      name: 'Target',
-      description: 'test',
-      icon: 'bookmark',
-      agents: {
-        workflow: [],
-        toolUse: [],
-      },
-      texraHostedAgents: [],
-    };
-    const state = createController({
-      customPresets: [target, LEGACY_ICON_PRESET, MALFORMED_PRESET],
-    });
-
-    assert.deepEqual(
-      await Effect.runPromise(state.controller.deleteCustomPreset(target.id)),
-      target,
-    );
-    assert.deepEqual(state.customPresets, [
-      LEGACY_ICON_PRESET,
-      MALFORMED_PRESET,
-    ]);
-  });
+      assert.deepEqual(
+        yield* state.controller.deleteCustomPreset(target.id),
+        target,
+      );
+      assert.deepEqual(state.customPresets, [
+        LEGACY_ICON_PRESET,
+        MALFORMED_PRESET,
+      ]);
+    }),
+  );
 });

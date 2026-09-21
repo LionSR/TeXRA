@@ -139,57 +139,58 @@ describe('createLanguageModelPort', () => {
     mocks.canSendRequest.mockReturnValue(undefined);
   });
 
-  it.each([
+  it.effect.each([
     [true, 'allowed'],
     [undefined, 'consent-required'],
     [false, 'unavailable'],
   ] as const)(
     'maps native access %s to %s on the discovered model',
-    async (nativeAccess, access) => {
-      mocks.canSendRequest.mockReturnValue(nativeAccess);
-      mocks.selectChatModels.mockResolvedValue([fakeModel()]);
-      const port = createPort();
+    ([nativeAccess, access]) =>
+      Effect.gen(function* () {
+        mocks.canSendRequest.mockReturnValue(nativeAccess);
+        mocks.selectChatModels.mockResolvedValue([fakeModel()]);
+        const port = createPort();
 
-      expect(port.isAvailable()).toBe(true);
-      await expect(
-        Effect.runPromise(
-          port.selectModels({ vendor: 'copilot', version: '2026-07' }),
-        ),
-      ).resolves.toEqual([
-        {
-          id: 'copilot-gpt-4o',
-          name: 'GPT-4o',
-          family: 'gpt-4o',
+        expect(port.isAvailable()).toBe(true);
+        expect(
+          yield* port.selectModels({ vendor: 'copilot', version: '2026-07' }),
+        ).toEqual([
+          {
+            id: 'copilot-gpt-4o',
+            name: 'GPT-4o',
+            family: 'gpt-4o',
+            vendor: 'copilot',
+            version: '2026-07',
+            maxInputTokens: 128_000,
+            access,
+          },
+        ]);
+        expect(mocks.selectChatModels).toHaveBeenCalledWith({
           vendor: 'copilot',
           version: '2026-07',
-          maxInputTokens: 128_000,
-          access,
-        },
-      ]);
-      expect(mocks.selectChatModels).toHaveBeenCalledWith({
-        vendor: 'copilot',
-        version: '2026-07',
-      });
-      expect(mocks.canSendRequest).toHaveBeenCalledWith(
-        expect.objectContaining({ id: 'copilot-gpt-4o' }),
-      );
-    },
+        });
+        expect(mocks.canSendRequest).toHaveBeenCalledWith(
+          expect.objectContaining({ id: 'copilot-gpt-4o' }),
+        );
+      }),
   );
 
-  it('logs discovery failures at the VS Code language-model adapter boundary', async () => {
-    const nativeError = new Error('discovery failed');
-    mocks.selectChatModels.mockRejectedValue(nativeError);
+  it.effect(
+    'logs discovery failures at the VS Code language-model adapter boundary',
+    () =>
+      Effect.gen(function* () {
+        const nativeError = new Error('discovery failed');
+        mocks.selectChatModels.mockRejectedValue(nativeError);
 
-    expect(
-      await Effect.runPromise(
-        Effect.flip(createPort().selectModels({ vendor: 'copilot' })),
-      ),
-    ).toBe(nativeError);
-    expect(mocks.warn).toHaveBeenCalledWith(
-      'LanguageModelPort',
-      'Could not discover editor-supplied language models: discovery failed',
-    );
-  });
+        expect(
+          yield* Effect.flip(createPort().selectModels({ vendor: 'copilot' })),
+        ).toBe(nativeError);
+        expect(mocks.warn).toHaveBeenCalledWith(
+          'LanguageModelPort',
+          'Could not discover editor-supplied language models: discovery failed',
+        );
+      }),
+  );
 });
 
 function nativeConfiguration(): VscodeLanguageModelConfiguration {

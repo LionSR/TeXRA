@@ -2,8 +2,9 @@
 
 // Test composition imports
 
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect } from 'vitest';
 
 import {
   findSlashCommand,
@@ -367,38 +368,39 @@ describe('slashRegistry', () => {
     await settleFormSelection();
   });
 
-  it('keeps provider API keys inside the masked local form', async () => {
-    resetCliState(CHAT_SESSION);
-    const saves: Array<{ provider: string; key: string }> = [];
-    registerBuiltins({
-      onApiKeySave: (provider, key) =>
-        Effect.sync(() => {
-          saves.push({ provider, key });
-        }),
-    });
-    const keyCommand = requireSlashCommand('keys');
-    expect(keyCommand.formEscapeAction).toBe('close');
+  it.effect('keeps provider API keys inside the masked local form', () =>
+    Effect.gen(function* () {
+      resetCliState(CHAT_SESSION);
+      const saves: Array<{ provider: string; key: string }> = [];
+      registerBuiltins({
+        onApiKeySave: (provider, key) =>
+          Effect.sync(() => {
+            saves.push({ provider, key });
+          }),
+      });
+      const keyCommand = requireSlashCommand('keys');
+      expect(keyCommand.formEscapeAction).toBe('close');
 
-    expect(openRegisteredCliSlashForm(keyCommand, '')).toBe(true);
-    const keyNode = renderOpenForm<{
-      onSave?: (
-        provider: 'moonshot',
-        key: string,
-      ) => Effect.Effect<string | void, unknown>;
-      onCancel?: () => void;
-    }>();
+      expect(openRegisteredCliSlashForm(keyCommand, '')).toBe(true);
+      const keyNode = renderOpenForm<{
+        onSave?: (
+          provider: 'moonshot',
+          key: string,
+        ) => Effect.Effect<string | void, unknown>;
+        onCancel?: () => void;
+      }>();
 
-    await Effect.runPromise(
-      keyNode.props?.onSave?.('moonshot', 'private-test-value') ?? Effect.void,
-    );
-    expect(saves).toEqual([
-      { provider: 'moonshot', key: 'private-test-value' },
-    ]);
-    expect(keyNode.isClosed()).toBe(false);
+      yield* keyNode.props?.onSave?.('moonshot', 'private-test-value') ??
+        Effect.void;
+      expect(saves).toEqual([
+        { provider: 'moonshot', key: 'private-test-value' },
+      ]);
+      expect(keyNode.isClosed()).toBe(false);
 
-    keyNode.props?.onCancel?.();
-    expect(keyNode.isClosed()).toBe(true);
-  });
+      keyNode.props?.onCancel?.();
+      expect(keyNode.isClosed()).toBe(true);
+    }),
+  );
 
   it('closes the login form after the selected login path settles', async () => {
     const selected: string[] = [];

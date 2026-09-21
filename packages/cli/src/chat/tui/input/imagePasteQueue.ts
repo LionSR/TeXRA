@@ -22,6 +22,8 @@ export class ImagePasteQueue {
 
   track(work: Promise<void>): void {
     this.pending.add(work);
+    // The catch silences only this bookkeeping chain; whoever created `work`
+    // owns its rejection.
     void work
       .finally(() => {
         this.pending.delete(work);

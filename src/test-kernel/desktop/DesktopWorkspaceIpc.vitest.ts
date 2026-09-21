@@ -8,8 +8,9 @@ import {
 } from 'node:fs';
 import { join } from 'node:path';
 
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 import {
   DESKTOP_WORKSPACE_COMMANDS,
@@ -116,29 +117,36 @@ describe('desktop workspace IPC', () => {
 
   // The file tree caches its listing and there is no filesystem watcher, so a
   // run that accepts output files would leave it stale without this notice.
-  it('tells the renderer to re-list only when a write lands inside the workspace', async () => {
-    const postToRenderer = vi.fn();
-    createIpc(postToRenderer);
-    // The IPC's subscription registers on its own fiber of this runtime; let
-    // it reach the hub before publishing, or the writes below reach nobody.
-    await testRuntime().runPromise(Effect.void);
+  it.live(
+    'tells the renderer to re-list only when a write lands inside the workspace',
+    () =>
+      Effect.gen(function* () {
+        const postToRenderer = vi.fn();
+        createIpc(postToRenderer);
+        // The IPC's subscription registers on its own fiber of this runtime;
+        // let it reach the hub before publishing, or the writes below reach
+        // nobody.
+        yield* Effect.yieldNow;
 
-    // Both writes are published before either is delivered, and one
-    // subscriber sees them in publication order — so the single call below is
-    // what proves the outside-the-workspace write was ignored.
-    emitAppSignal('workspaceFilesWritten', {
-      absolutePaths: [externalPath],
-    });
-    emitAppSignal('workspaceFilesWritten', {
-      absolutePaths: [externalPath, join(workspacePath, 'paper.tex')],
-    });
+        // Both writes are published before either is delivered, and one
+        // subscriber sees them in publication order — so the single call
+        // below is what proves the outside-the-workspace write was ignored.
+        emitAppSignal('workspaceFilesWritten', {
+          absolutePaths: [externalPath],
+        });
+        emitAppSignal('workspaceFilesWritten', {
+          absolutePaths: [externalPath, join(workspacePath, 'paper.tex')],
+        });
 
-    await vi.waitFor(() =>
-      expect(postToRenderer).toHaveBeenCalledExactlyOnceWith({
-        command: DESKTOP_WORKSPACE_COMMANDS.FILES_CHANGED,
+        yield* Effect.promise(() =>
+          vi.waitFor(() =>
+            expect(postToRenderer).toHaveBeenCalledExactlyOnceWith({
+              command: DESKTOP_WORKSPACE_COMMANDS.FILES_CHANGED,
+            }),
+          ),
+        );
       }),
-    );
-  });
+  );
 
   it('lists only direct children and loads nested directories on demand', async () => {
     const postToRenderer = vi.fn();

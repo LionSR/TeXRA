@@ -1,10 +1,12 @@
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
 import type { ToolTerminalAction } from '@controllers/settingsView/ToolDashboardData';
 import { DefaultDesktopToolingSettingsController } from '@desktop/main/desktopToolingSettingsController';
 import { emitAppSignal } from '@eventBus/AppSignals';
+import { withProcessServices } from '@platform/processRuntime';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { ToolCommandKind, ToolDashboardItem } from '@shared/schemas';
 import { HOMEBREW_INSTALL_COMMAND } from '@shared/constants/latexToolchain';
@@ -184,62 +186,72 @@ describe('DefaultDesktopToolingSettingsController', () => {
     for (const controller of liveControllers.splice(0)) controller.dispose();
   });
 
-  it('posts cached startup data before refreshing external tools', async () => {
-    let finishRefresh: (() => void) | undefined;
-    const refreshPending = new Promise<void>((resolve) => {
-      finishRefresh = resolve;
-    });
-    const buildInputs: (ExternalToolCheckResult[] | undefined)[] = [];
-    toolData.buildItems.mockImplementation(async (_host, results) => {
-      buildInputs.push(results);
-      return [DASHBOARD_ITEM];
-    });
-    toolData.lastCheckResults.mockReturnValue(null);
-    toolData.refreshAvailability.mockImplementation(async () => {
-      await refreshPending;
-      emitAppSignal('toolAvailabilityChanged', undefined);
-    });
-    const { controller, posted } = createFixture();
+  it.live('posts cached startup data before refreshing external tools', () =>
+    Effect.gen(function* () {
+      let finishRefresh: (() => void) | undefined;
+      const refreshPending = new Promise<void>((resolve) => {
+        finishRefresh = resolve;
+      });
+      const buildInputs: (ExternalToolCheckResult[] | undefined)[] = [];
+      toolData.buildItems.mockImplementation(async (_host, results) => {
+        buildInputs.push(results);
+        return [DASHBOARD_ITEM];
+      });
+      toolData.lastCheckResults.mockReturnValue(null);
+      toolData.refreshAvailability.mockImplementation(async () => {
+        await refreshPending;
+        emitAppSignal('toolAvailabilityChanged', undefined);
+      });
+      const { controller, posted } = createFixture();
 
-    controller.postLatexConfigValues();
-    await testRuntime().runPromise(controller.postStartupData());
+      controller.postLatexConfigValues();
+      yield* withProcessServices(testRuntime(), controller.postStartupData());
 
-    const startup = posted.map(commandOf);
-    expect(startup[0]).toBe(SETTINGS_VIEW_COMMANDS.UPDATE_SETTINGS_SNAPSHOT);
-    // `postStartupData` fans the dashboard and LaTeX reads out with
-    // `Effect.all`, so which of the two posts first is not a contract; that
-    // both land before the refresh repaint below is.
-    expect([...startup.slice(1)].sort()).toEqual(
-      [
-        SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD,
-        SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_SETTINGS_STATUS,
-      ].sort(),
-    );
-    // A cold probe cache stays `undefined` so the dashboard build runs the
-    // probes; coercing it to `[]` would render "zero external tools".
-    expect(buildInputs).toEqual([undefined]);
-
-    finishRefresh?.();
-    await vi.waitFor(() => {
-      const repainted = posted.map(commandOf);
-      expect(repainted).toHaveLength(4);
-      expect(repainted.at(-1)).toBe(
-        SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD,
+      const startup = posted.map(commandOf);
+      expect(startup[0]).toBe(SETTINGS_VIEW_COMMANDS.UPDATE_SETTINGS_SNAPSHOT);
+      // `postStartupData` fans the dashboard and LaTeX reads out with
+      // `Effect.all`, so which of the two posts first is not a contract; that
+      // both land before the refresh repaint below is.
+      expect([...startup.slice(1)].sort()).toEqual(
+        [
+          SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD,
+          SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_SETTINGS_STATUS,
+        ].sort(),
       );
-    });
-  });
+      // A cold probe cache stays `undefined` so the dashboard build runs the
+      // probes; coercing it to `[]` would render "zero external tools".
+      expect(buildInputs).toEqual([undefined]);
 
-  it('reports a background tool refresh failure without blocking startup', async () => {
-    const refreshError = new Error('tool probe failed');
-    toolData.refreshAvailability.mockRejectedValue(refreshError);
-    const { controller, reportedErrors } = createFixture();
+      finishRefresh?.();
+      yield* Effect.promise(() =>
+        vi.waitFor(() => {
+          const repainted = posted.map(commandOf);
+          expect(repainted).toHaveLength(4);
+          expect(repainted.at(-1)).toBe(
+            SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD,
+          );
+        }),
+      );
+    }),
+  );
 
-    await testRuntime().runPromise(controller.postStartupData());
+  it.live(
+    'reports a background tool refresh failure without blocking startup',
+    () =>
+      Effect.gen(function* () {
+        const refreshError = new Error('tool probe failed');
+        toolData.refreshAvailability.mockRejectedValue(refreshError);
+        const { controller, reportedErrors } = createFixture();
 
-    await vi.waitFor(() => {
-      expect(reportedErrors).toEqual([refreshError]);
-    });
-  });
+        yield* withProcessServices(testRuntime(), controller.postStartupData());
+
+        yield* Effect.promise(() =>
+          vi.waitFor(() => {
+            expect(reportedErrors).toEqual([refreshError]);
+          }),
+        );
+      }),
+  );
 
   it('persists a toggle before refreshing caches and posting cached data', async () => {
     const events: string[] = [];

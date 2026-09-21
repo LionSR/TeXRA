@@ -1,5 +1,6 @@
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { describe, expect, it } from 'vitest';
+import { describe, expect } from 'vitest';
 
 import { getRunRecords } from '@agent/storage';
 import {
@@ -44,53 +45,53 @@ function config(overrides: Partial<AgentConfig> = {}): AgentConfig {
 describe('trace-viewer TraceDocumentSchema', () => {
   setupPlatform(() => createTempDirPlatform('texra-trace-viewer-', tempDirs));
 
-  it('accepts a real trace document produced by assembleTrace', async () => {
-    const runId = 'abc12345' as RunId;
-    const runConfigRecord = config({ agent: 'review', model: 'sonnet46T' });
+  it.effect('accepts a real trace document produced by assembleTrace', () =>
+    Effect.gen(function* () {
+      const runId = 'abc12345' as RunId;
+      const runConfigRecord = config({ agent: 'review', model: 'sonnet46T' });
 
-    const session = createTestSession();
-    publishTestRunStart(session, runId);
-    await Effect.runPromise(session.settlePublications());
-    await Effect.runPromise(
-      getRunRecords(session, runId).writeRunRecord(runConfigRecord),
-    );
-    session.publish([
-      {
-        type: 'log',
-        aggregateId: aggregateId('run', runId),
-        message: 'hello',
-        level: LOG_LEVELS.INFO,
-        messageType: MESSAGE_TYPES.DEFAULT,
-      },
-      {
-        type: 'run.end',
-        aggregateId: aggregateId('run', runId),
-        outcome: RUN_OUTCOME.COMPLETED,
-        output: emptyRunEndOutput(AgentCategory.ToolUse),
-      },
-    ]);
-    await Effect.runPromise(session.settlePublications());
-    const result = await Effect.runPromise(assembleTrace(runId, session));
-    await Effect.runPromise(session.dispose());
-    expect(result.status).toBe('ok');
-    if (result.status !== 'ok') return;
+      const session = createTestSession();
+      publishTestRunStart(session, runId);
+      yield* session.settlePublications();
+      yield* getRunRecords(session, runId).writeRunRecord(runConfigRecord);
+      session.publish([
+        {
+          type: 'log',
+          aggregateId: aggregateId('run', runId),
+          message: 'hello',
+          level: LOG_LEVELS.INFO,
+          messageType: MESSAGE_TYPES.DEFAULT,
+        },
+        {
+          type: 'run.end',
+          aggregateId: aggregateId('run', runId),
+          outcome: RUN_OUTCOME.COMPLETED,
+          output: emptyRunEndOutput(AgentCategory.ToolUse),
+        },
+      ]);
+      yield* session.settlePublications();
+      const result = yield* assembleTrace(runId, session);
+      yield* session.dispose();
+      expect(result.status).toBe('ok');
+      if (result.status !== 'ok') return;
 
-    const parsed = TraceDocumentSchema.safeParse(result.trace);
-    expect(parsed.success).toBe(true);
-    if (!parsed.success) return;
-    expect(parsed.data.runId).toBe(runId);
-    expect(parsed.data.events[0]?.type).toBe('run.start');
-    expect(parsed.data.events.some((event) => event.type === 'run.end')).toBe(
-      true,
-    );
-    // An export has no producer, so no row names one.
-    expect(parsed.data.events.every((event) => event.ownerId === null)).toBe(
-      true,
-    );
+      const parsed = TraceDocumentSchema.safeParse(result.trace);
+      expect(parsed.success).toBe(true);
+      if (!parsed.success) return;
+      expect(parsed.data.runId).toBe(runId);
+      expect(parsed.data.events[0]?.type).toBe('run.start');
+      expect(parsed.data.events.some((event) => event.type === 'run.end')).toBe(
+        true,
+      );
+      // An export has no producer, so no row names one.
+      expect(parsed.data.events.every((event) => event.ownerId === null)).toBe(
+        true,
+      );
 
-    // parseTraceData must accept the same real document without throwing.
-    expect(() => parseTraceData(result.trace)).not.toThrow();
-  });
+      // parseTraceData must accept the same real document without throwing.
+      expect(() => parseTraceData(result.trace)).not.toThrow();
+    }),
+  );
 
   it('throws a clear, identifying error via parseTraceData for a malformed trace', () => {
     const malformed = { totally: 'not a trace' };

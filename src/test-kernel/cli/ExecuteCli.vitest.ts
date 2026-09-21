@@ -795,7 +795,10 @@ describe('executeCliRequest', () => {
         // rest of the stub (the tracked launch handle) run first.
         yield* settle;
         expect(leaseOptions.onRunLeaseAcquired).toBeDefined();
-        const shutdown = Effect.runPromise(platform.lifecycle.runShutdown);
+        const shutdown = yield* Effect.forkChild(
+          platform.lifecycle.runShutdown,
+          { startImmediately: true },
+        );
         yield* settle;
         expect(mocks.finalizeRun).not.toHaveBeenCalled();
         leaseOptions.onRunLeaseAcquired?.('exec-1' as RunId);
@@ -811,13 +814,13 @@ describe('executeCliRequest', () => {
         yield* settle;
         expect(onInterruptedRunFinalized).toHaveBeenCalledOnce();
         let shutdownResolved = false;
-        void shutdown.then(() => {
+        shutdown.addObserver(() => {
           shutdownResolved = true;
         });
         yield* settle;
         expect(shutdownResolved).toBe(false);
         settleRecoveryWrite();
-        yield* Effect.promise(() => shutdown);
+        yield* Fiber.join(shutdown);
         expect(mocks.releaseRunLeaseAfterArtifacts).toHaveBeenCalledOnce();
         expect(flushSpy).toHaveBeenCalled();
         expect(mocks.finalizeRun).toHaveBeenCalledWith(
@@ -875,12 +878,15 @@ describe('executeCliRequest', () => {
         const leaseOptions = yield* Deferred.await(published);
         yield* settle;
         expect(leaseOptions.onRunLeaseAcquired).toBeDefined();
-        const shutdown = Effect.runPromise(platform.lifecycle.runShutdown);
+        const shutdown = yield* Effect.forkChild(
+          platform.lifecycle.runShutdown,
+          { startImmediately: true },
+        );
         leaseOptions.onRunLeaseAcquired?.('exec-1' as RunId);
         mockCancelledOutcome();
         hangingRun.resolve(COMPLETED_RUN);
 
-        yield* Effect.promise(() => shutdown);
+        yield* Fiber.join(shutdown);
         yield* Fiber.join(run);
 
         expect(mocks.deriveResumability).toHaveBeenCalledExactlyOnceWith(
@@ -911,13 +917,15 @@ describe('executeCliRequest', () => {
       yield* settle;
       expect(leaseOptions).toBeDefined();
       leaseOptions.onRunLeaseAcquired?.('exec-1' as RunId);
-      const shutdown = Effect.runPromise(platform.lifecycle.runShutdown);
+      const shutdown = yield* Effect.forkChild(platform.lifecycle.runShutdown, {
+        startImmediately: true,
+      });
 
       expect(
         yield* Effect.flip(leaseOptions.beforeLeaseRelease?.() ?? Effect.void),
       ).toBe(drainError);
       hangingRun.resolve(COMPLETED_RUN);
-      yield* Effect.promise(() => shutdown);
+      yield* Fiber.join(shutdown);
       yield* Fiber.join(run);
     }),
   );
@@ -997,9 +1005,12 @@ describe('executeCliRequest', () => {
         expect(leaseOptions).toBeDefined();
         leaseOptions.onRunLeaseAcquired?.('exec-1' as RunId);
 
-        const shutdown = Effect.runPromise(platform.lifecycle.runShutdown);
+        const shutdown = yield* Effect.forkChild(
+          platform.lifecycle.runShutdown,
+          { startImmediately: true },
+        );
         hangingRun.resolve(COMPLETED_RUN);
-        yield* Effect.promise(() => shutdown);
+        yield* Fiber.join(shutdown);
         yield* Fiber.join(run);
 
         expect(mocks.finalizeRun).not.toHaveBeenCalled();
@@ -1033,7 +1044,10 @@ describe('executeCliRequest', () => {
         yield* settle;
         expect(leaseOptions).toBeDefined();
 
-        const shutdown = Effect.runPromise(platform.lifecycle.runShutdown);
+        const shutdown = yield* Effect.forkChild(
+          platform.lifecycle.runShutdown,
+          { startImmediately: true },
+        );
         leaseOptions.onRunLeaseAcquired?.('exec-1' as RunId);
         yield* settle;
         yield* leaseOptions.openWorkflowOutput?.(COMPLETED_WORKFLOW_RUN, []) ??
@@ -1041,7 +1055,7 @@ describe('executeCliRequest', () => {
         mockCancelledOutcome();
         hangingRun.resolve(COMPLETED_WORKFLOW_RUN);
 
-        yield* Effect.promise(() => shutdown);
+        yield* Fiber.join(shutdown);
         expect(yield* Fiber.join(run)).toMatchObject({
           ok: true,
           result: { outcome: RUN_OUTCOME.CANCELLED },
@@ -1087,10 +1101,13 @@ describe('executeCliRequest', () => {
         yield* leaseOptions.openWorkflowOutput?.(COMPLETED_WORKFLOW_RUN, []) ??
           Effect.void;
 
-        const shutdown = Effect.runPromise(platform.lifecycle.runShutdown);
+        const shutdown = yield* Effect.forkChild(
+          platform.lifecycle.runShutdown,
+          { startImmediately: true },
+        );
         hangingRun.resolve(COMPLETED_WORKFLOW_RUN);
 
-        yield* Effect.promise(() => shutdown);
+        yield* Fiber.join(shutdown);
         expect(yield* Fiber.join(run)).toMatchObject({
           ok: true,
           result: { outcome: RUN_OUTCOME.COMPLETED },
@@ -1164,12 +1181,15 @@ describe('executeCliRequest', () => {
         yield* Deferred.await(outputFailed);
         yield* settle;
         expect(outputResolutionFailed).toBe(true);
-        const shutdown = Effect.runPromise(platform.lifecycle.runShutdown);
+        const shutdown = yield* Effect.forkChild(
+          platform.lifecycle.runShutdown,
+          { startImmediately: true },
+        );
         yield* settle;
         expect(killSpy).not.toHaveBeenCalled();
 
         releaseRun();
-        yield* Effect.promise(() => shutdown);
+        yield* Fiber.join(shutdown);
         expect(yield* Fiber.join(run)).toEqual({
           ok: false,
           exitCode: CliExitCode.AgentError,
@@ -1214,13 +1234,16 @@ describe('executeCliRequest', () => {
         yield* settle;
         expect(leaseOptions).toBeDefined();
         leaseOptions.onRunLeaseAcquired?.('exec-1' as RunId);
-        const shutdown = Effect.runPromise(platform.lifecycle.runShutdown);
+        const shutdown = yield* Effect.forkChild(
+          platform.lifecycle.runShutdown,
+          { startImmediately: true },
+        );
 
         expect(yield* leaseOptions.beforeLeaseRelease?.() ?? Effect.void).toBe(
           false,
         );
         hangingRun.resolve(COMPLETED_RUN);
-        yield* Effect.promise(() => shutdown);
+        yield* Fiber.join(shutdown);
         yield* Fiber.join(run);
       }),
   );
@@ -1253,12 +1276,14 @@ describe('executeCliRequest', () => {
       yield* settle;
       expect(mocks.runAgent).toHaveBeenCalledOnce();
       leaseOptions.onRunLeaseAcquired?.('exec-1' as RunId);
-      const shutdown = Effect.runPromise(platform.lifecycle.runShutdown);
+      const shutdown = yield* Effect.forkChild(platform.lifecycle.runShutdown, {
+        startImmediately: true,
+      });
       yield* settle;
       expect(mocks.emit).not.toHaveBeenCalled();
       mockCancelledOutcome();
       hangingRun.resolve(COMPLETED_RUN);
-      yield* Effect.promise(() => shutdown);
+      yield* Fiber.join(shutdown);
       expect(mocks.emit).toHaveBeenCalledExactlyOnceWith('requestShowError', {
         message:
           'Failed to persist cancelled terminal state for run exec-1: terminal metadata disk full',
@@ -1315,7 +1340,10 @@ describe('executeCliRequest', () => {
         const leaseOptions = yield* Deferred.await(published);
         yield* settle;
         leaseOptions.onRunLeaseAcquired?.('exec-1' as RunId);
-        const shutdown = Effect.runPromise(platform.lifecycle.runShutdown);
+        const shutdown = yield* Effect.forkChild(
+          platform.lifecycle.runShutdown,
+          { startImmediately: true },
+        );
         yield* settle;
         // The drain runs under the lease, before the launch settles: this is
         // the instant at which its failure notice used to claim the run's own
@@ -1326,7 +1354,7 @@ describe('executeCliRequest', () => {
         hangingRun.reject(
           new RuntimeAgentError('Error executing agent chat: boom'),
         );
-        yield* Effect.promise(() => shutdown);
+        yield* Fiber.join(shutdown);
 
         expect(yield* Fiber.join(run)).toEqual({
           ok: false,
@@ -1429,7 +1457,10 @@ describe('executeCliConfig', () => {
         const leaseOptions = yield* Deferred.await(published);
         yield* settle;
         expect(leaseOptions.onRunLeaseAcquired).toBeDefined();
-        const shutdown = Effect.runPromise(platform.lifecycle.runShutdown);
+        const shutdown = yield* Effect.forkChild(
+          platform.lifecycle.runShutdown,
+          { startImmediately: true },
+        );
         leaseOptions.onRunLeaseAcquired?.('exec-1' as RunId);
         mockCancelledOutcome();
         hangingRun.resolve(COMPLETED_RUN);
@@ -1438,13 +1469,13 @@ describe('executeCliConfig', () => {
         yield* settle;
         expect(mocks.writeTextStderrAndWait).toHaveBeenCalledOnce();
         let shutdownResolved = false;
-        void shutdown.then(() => {
+        shutdown.addObserver(() => {
           shutdownResolved = true;
         });
         yield* settle;
         expect(shutdownResolved).toBe(false);
         settleRecoveryWrite();
-        yield* Effect.promise(() => shutdown);
+        yield* Fiber.join(shutdown);
         expect(yield* Fiber.join(run)).toMatchObject({
           ok: true,
           exitCode: CliExitCode.Interrupted,
@@ -1475,12 +1506,15 @@ describe('executeCliConfig', () => {
         const leaseOptions = yield* Deferred.await(published);
         yield* settle;
         expect(leaseOptions.onRunLeaseAcquired).toBeDefined();
-        const shutdown = Effect.runPromise(platform.lifecycle.runShutdown);
+        const shutdown = yield* Effect.forkChild(
+          platform.lifecycle.runShutdown,
+          { startImmediately: true },
+        );
         leaseOptions.onRunLeaseAcquired?.('exec-1' as RunId);
         mockCancelledOutcome();
         hangingRun.resolve(COMPLETED_RUN);
 
-        yield* Effect.promise(() => shutdown);
+        yield* Fiber.join(shutdown);
         yield* Fiber.join(run);
         expect(mocks.writeTextStderrAndWait).not.toHaveBeenCalled();
       }),
