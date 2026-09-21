@@ -345,7 +345,7 @@
 
   /* ==========================================================================
      Shared control layer — the extension's density for the tokens declared in
-     src/shared/styles/litStyles.ts.
+     src/ui/styles/litStyles.ts.
      --------------------------------------------------------------------------
      These are the `--wa-*` bridge names, not the shared names themselves. All
      three webviews are a single Lit root, so `litStyles`' `:host` block wins
@@ -415,7 +415,7 @@ body {
 }
 
 /* Option-row height for light DOM. The rule itself lives once in
-   `formControlStyles` (src/shared/styles/controlStyles.ts) and reads this
+   `formControlStyles` (src/ui/styles/controlStyles.ts) and reads this
    token; it was previously declared three times at three different heights. */
 wa-option::part(base),
 wa-dropdown-item::part(base) {

@@ -288,7 +288,7 @@
 
   /* ==========================================================================
      Shared control layer — the desktop's values for the tokens declared in
-     src/shared/styles/litStyles.ts.
+     src/ui/styles/litStyles.ts.
      --------------------------------------------------------------------------
      These are :root duplicates of the shared :host declarations on purpose:
      light DOM (styles.css, and every imperatively-built overlay) cannot adopt

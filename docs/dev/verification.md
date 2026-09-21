@@ -87,12 +87,12 @@ the changed automation or prompt files directly.
 
 These have been consolidated and must stay shared. If you find yourself
 re-implementing one of these per host, push the new code into
-`src/shared/wa/` instead.
+`src/ui/wa/` instead.
 
-- Theme body classes + WA color scheme: `src/shared/wa/hostTheme.ts`
-- WA color scheme observer: `src/shared/wa/waColorScheme.ts`
-- Action button helper: `src/shared/wa/actionButtons.ts`
-- Empty state helper: `src/shared/wa/emptyState.ts`
+- Theme body classes + WA color scheme: `src/ui/wa/hostTheme.ts`
+- WA color scheme observer: `src/ui/wa/waColorScheme.ts`
+- Action button helper: `src/ui/wa/actionButtons.ts`
+- Empty state helper: `src/ui/wa/emptyState.ts`
 - Persisted state: `src/shared/state/PersistedState.ts`
 - Host bridge: `src/shared/hostBridge.ts`
 - Settings tabs: `src/shared/settingsView/settingsViewMessages.ts` (`SETTINGS_TAB_ORDER`)
