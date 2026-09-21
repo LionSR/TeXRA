@@ -41,10 +41,13 @@ Stable releases follow the steps below; a preview (`X.Y.Z-preview.N`) follows
 4. **Desktop.** `.github/workflows/desktop-package.yml` is
    `workflow_dispatch`-only (**not** release-triggered). Build signed
    macOS/Linux/Windows installers and publish them to the public
-   `texra-ai/texra-desktop-releases` repo by dispatching it with
-   `run_desktop_installers`, `run_windows_desktop`,
+   `texra-ai/texra-desktop-releases` repo by dispatching it on the tagged
+   commit with `run_desktop_installers`, `run_windows_desktop`,
    `require_desktop_signing`, and `publish_desktop_release_artifacts` all
-   `true`.
+   `true`, **and `release_tag` = `vX.Y.Z`**. The publish step fails closed on
+   an empty `release_tag`, and on one that does not match
+   `packages/desktop/package.json`, for every dispatch, stable as well as
+   preview.
 
 5. **`llm-zoo` pin.** If the release changes `llm-zoo`, also update the exact
    pin in `supabase/functions/log-usage/deno.json`, then refresh its adjacent
@@ -128,6 +131,14 @@ Verify on a throwaway tag before the first real preview of a train:
 - **Both publish jobs assert the release tag matches the corresponding
   `package.json` version and fail closed if it doesn't.** Cut the tags only
   after that manifest version is actually on `main`.
+- **At the end of a 1.x patch train, do not take the version
+  `version-bump.yml` proposes.** `nextWorkspaceVersion` in
+  `scripts/bump-workspace-version.mjs` rolls `X.Y.10` to `X.(Y+1).0`, which
+  from 1.0 on is the odd-minor stable version `publish-extension` refuses.
+  The automatic bump after a `1.Y.10` release therefore opens a PR for
+  `1.(Y+1).0`; set the manifests to `1.(Y+2).0` by hand
+  (`node scripts/bump-workspace-version.mjs --version 1.(Y+2).0`) before
+  cutting the next release.
 
 - **`version-bump.yml` is gated to the plain `vX.Y.Z` tag only**, so it doesn't
   double-fire off the `cli-` tag, and it skips pre-releases entirely. It opens
