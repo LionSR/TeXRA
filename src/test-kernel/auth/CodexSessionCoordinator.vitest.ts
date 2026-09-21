@@ -4,7 +4,6 @@ import { setTimeout as delay } from 'node:timers/promises';
 // Third-party imports
 import { it } from '@effect/vitest';
 import { Deferred, Effect, Exit, Fiber } from 'effect';
-import pDefer from 'p-defer';
 import { describe, expect, vi } from 'vitest';
 
 // Local imports
@@ -54,18 +53,18 @@ function gatedStorage(
   initial?: CodexSession,
 ): CodexSessionStorage & {
   peek: () => CodexSession | undefined;
-  gateReached: Promise<void>;
+  gateReached: Effect.Effect<void>;
   release: () => void;
 } {
   let value = initial ? JSON.stringify(initial) : undefined;
-  const reached = pDefer<void>();
-  const released = pDefer<void>();
+  const reached = Deferred.makeUnsafe<void>();
+  const released = Deferred.makeUnsafe<void>();
   let gated = true;
   const gate = Effect.suspend(() => {
     if (!gated) return Effect.void;
     gated = false;
-    reached.resolve();
-    return Effect.promise(() => released.promise);
+    Deferred.doneUnsafe(reached, Effect.void);
+    return Deferred.await(released);
   });
   return {
     get: () =>
@@ -85,8 +84,10 @@ function gatedStorage(
         value = undefined;
       }),
     peek: () => (value ? (JSON.parse(value) as CodexSession) : undefined),
-    gateReached: reached.promise,
-    release: () => released.resolve(),
+    gateReached: Deferred.await(reached),
+    release: () => {
+      Deferred.doneUnsafe(released, Effect.void);
+    },
   };
 }
 
@@ -252,7 +253,7 @@ describe('CodexSessionCoordinator', () => {
         const coordinator = makeCoordinator(storage, { refreshTokens });
 
         const token = yield* forkNow(coordinator.getFreshAccessToken());
-        yield* Effect.promise(() => storage.gateReached);
+        yield* storage.gateReached;
         const signOut = yield* forkNow(coordinator.signOut());
         storage.release();
 
@@ -284,7 +285,7 @@ describe('CodexSessionCoordinator', () => {
 
         const token = yield* forkNow(coordinator.getFreshAccessToken());
         // The fatal refresh has started its delete (blocked); a login lands now.
-        yield* Effect.promise(() => storage.gateReached);
+        yield* storage.gateReached;
         const login = yield* forkNow(loginWithCode(coordinator));
         // Let the login run as far as it can before the delete unblocks, so an
         // unserialized store would land first and be erased by the stale delete.
@@ -309,7 +310,7 @@ describe('CodexSessionCoordinator', () => {
 
         const signOut = yield* forkNow(coordinator.signOut());
         // The sign-out delete is blocked mid-write; a caller enters now.
-        yield* Effect.promise(() => storage.gateReached);
+        yield* storage.gateReached;
         const token = yield* forkNow(coordinator.getFreshAccessToken());
         storage.release();
 
@@ -340,7 +341,7 @@ describe('CodexSessionCoordinator', () => {
 
         const login = yield* forkNow(loginWithCode(coordinator));
         // The login store is blocked mid-write; a caller enters now.
-        yield* Effect.promise(() => storage.gateReached);
+        yield* storage.gateReached;
         const token = yield* forkNow(coordinator.getFreshAccessToken());
         storage.release();
 
@@ -388,7 +389,7 @@ describe('CodexSessionCoordinator', () => {
           }),
           { signal: controller.signal },
         );
-        yield* Effect.promise(() => gated.gateReached);
+        yield* gated.gateReached;
         controller.abort();
         const signOut = yield* forkNow(coordinator.signOut());
         yield* Effect.promise(() => delay(0));
@@ -417,7 +418,7 @@ describe('CodexSessionCoordinator', () => {
       });
 
       const token = yield* forkNow(coordinator.getFreshAccessToken());
-      yield* Effect.promise(() => storage.gateReached);
+      yield* storage.gateReached;
       yield* loginWithCode(coordinator);
       storage.release();
 

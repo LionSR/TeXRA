@@ -1,7 +1,6 @@
 // Third-party imports
 import { it } from '@effect/vitest';
 import { Deferred, Effect, Fiber, FileSystem, Layer } from 'effect';
-import pDefer from 'p-defer';
 import { expect, vi } from 'vitest';
 
 // Local imports
@@ -68,10 +67,8 @@ it.effect(
   'returns transcription to Start when another paper stops the process recorder',
   () =>
     Effect.gen(function* () {
-      const startup = pDefer<string>();
-      audio.startRecording.mockReturnValue(
-        Effect.promise(() => startup.promise),
-      );
+      const startup = yield* Deferred.make<string>();
+      audio.startRecording.mockReturnValue(Deferred.await(startup));
       audio.stopRecording.mockReturnValue(
         Effect.succeed('/papers/first/recordings/take.wav'),
       );
@@ -127,7 +124,7 @@ it.effect(
         ),
       ).toEqual({ kind: 'done' });
       expect(audio.transcribeRecording).not.toHaveBeenCalled();
-      startup.resolve('/papers/first/recordings/take.wav');
+      yield* Deferred.succeed(startup, '/papers/first/recordings/take.wav');
       expect(yield* Fiber.join(started)).toEqual({
         kind: 'text',
         text: 'A conserved quantity.',
@@ -142,10 +139,8 @@ it.effect(
           Deferred.doneUnsafe(killed, Effect.void);
         }),
       );
-      const nextStartup = pDefer<string>();
-      audio.startRecording.mockReturnValueOnce(
-        Effect.promise(() => nextStartup.promise),
-      );
+      const nextStartup = yield* Deferred.make<string>();
+      audio.startRecording.mockReturnValueOnce(Deferred.await(nextStartup));
       const nextTake = yield* Effect.forkChild(
         requests.handle(
           first,
@@ -163,7 +158,10 @@ it.effect(
         target: 'launch',
       });
       requests.cancel(first, 'origin');
-      nextStartup.resolve('/papers/first/recordings/take.wav');
+      yield* Deferred.succeed(
+        nextStartup,
+        '/papers/first/recordings/take.wav',
+      );
       const cancelled = yield* Effect.flip(Fiber.join(nextTake));
       expect(cancelled).toMatchObject({ _tag: 'Cancelled' });
       // The cancelled take's kill runs on the detached take fiber.

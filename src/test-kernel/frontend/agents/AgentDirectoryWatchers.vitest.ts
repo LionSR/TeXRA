@@ -1,10 +1,10 @@
 // Third-party imports
 import { Effect } from 'effect';
-import pDefer from 'p-defer';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Type imports
 import type { AgentDirectoryEntry } from '@agent/index';
+import { createDeferred } from '@test/support/asyncTestUtils';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import type * as vscode from 'vscode';
 
@@ -175,8 +175,8 @@ describe('agent directory watcher rebuilds', () => {
   /** Parks the first directory read; later reads return `subsequent`. */
   function parkFirstRead(
     subsequent: AgentDirectoryEntry[],
-  ): ReturnType<typeof pDefer<AgentDirectoryEntry[]>> {
-    const firstRead = pDefer<AgentDirectoryEntry[]>();
+  ): ReturnType<typeof createDeferred<AgentDirectoryEntry[]>> {
+    const firstRead = createDeferred<AgentDirectoryEntry[]>();
     mocks.getAllLocal
       .mockReturnValueOnce(firstRead.promise)
       .mockResolvedValue(subsequent);
@@ -237,7 +237,7 @@ describe('agent directory watcher rebuilds', () => {
   });
 
   it('disposes watchers built after the last subscription is removed', async () => {
-    const scan = pDefer<void>();
+    const scan = createDeferred<void>();
     mocks.getAllLocal.mockResolvedValue([
       { directory: EXTERNAL_FIRST, source: 'custom' },
     ]);
@@ -271,7 +271,7 @@ describe('agent directory watcher rebuilds', () => {
     // Park the rebuild that `one` triggers on the scan of the second
     // directory, leaving the watchers it just created for the first directory
     // live while it runs.
-    const secondScan = pDefer<void>();
+    const secondScan = createDeferred<void>();
     mocks.heldReads.set(EXTERNAL_SECOND, secondScan);
     mocks.tree.set(EXTERNAL_FIRST, [['one', 2]]);
     mocks.tree.set(`${EXTERNAL_FIRST}/one`, []);
