@@ -631,7 +631,8 @@ Delegated subagent and workflow results are delivered automatically as follow-up
 
   private readonly showConfig = Effect.fn('ExecutionsTool.showConfig')(
     function* (context: RunToolContext, runId: RunId) {
-      const record = yield* getRunRecords(context.session, runId).readRunRecord();
+      const records = getRunRecords(context.session, runId);
+      const record = yield* records.readRunRecord();
 
       if (!record) {
         return yield* Effect.fail(

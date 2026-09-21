@@ -207,17 +207,13 @@ function registerProcessRun(instruction: string) {
 }
 
 /** Register a multi-agent-workflow run and return its id. */
-function registerWorkflowRun(name: string, model?: string) {
+function registerWorkflowRun(name: string) {
   return Effect.gen(function* () {
     const runId = generateRunId();
     yield* registerRun(
       testDefaultSession(),
       runId,
-      {
-        name,
-        instruction: `Workflow script ${name}`,
-        ...(model ? { model } : {}),
-      },
+      { name, instruction: `Workflow script ${name}` },
       name,
       { identity: { kind: 'multiAgentWorkflow', workflowName: name } },
     );
@@ -740,13 +736,10 @@ describe('ExecutionsTool /executions/{id}/output', () => {
   );
 
   it.live(
-    'shows one model for a workflow run in both the listing and its summary',
+    'shows one category for a workflow run in both the listing and its summary',
     () =>
       Effect.gen(function* () {
-        const runId = yield* registerWorkflowRun(
-          'model-parity',
-          'parity-model-1',
-        );
+        const runId = yield* registerWorkflowRun('category-parity');
 
         const summary = yield* new ExecutionsTool().call({
           path: `/executions/${runId}`,
@@ -759,11 +752,11 @@ describe('ExecutionsTool /executions/{id}/output', () => {
 
         assert.equal(summary.status, 'executed');
         assert.equal(listing.status, 'executed');
-        // One model rule: the record's model is real, so both surfaces show it.
-        assert.ok(listingOutput.includes('parity-model-1'));
-        assert.ok(summaryOutput.includes('Model: parity-model-1'));
+        // Both surfaces read the same fold, so neither can disagree about
+        // what the run is or invent a model a non-agent identity suppresses.
         assert.ok(summaryOutput.includes('Category: multiAgentWorkflow'));
         assert.ok(listingOutput.includes('multiAgentWorkflow'));
+        assert.ok(!summaryOutput.includes('Model:'));
       }).pipe(
         Effect.provide(
           nativeToolTestLayer({

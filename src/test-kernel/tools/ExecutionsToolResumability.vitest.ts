@@ -36,7 +36,7 @@ function openingSnapshot(runId: RunId): RunLedgerDraft {
   };
 }
 
-describe('ExecutionsTool resumability fallback', () => {
+describe('ExecutionsTool metadata-free run summary', () => {
   setupPlatform({ workspacePath: '/workspace' });
 
   beforeEach(() => {});
@@ -56,8 +56,11 @@ describe('ExecutionsTool resumability fallback', () => {
           path: `/executions/${runId}`,
         });
 
+        // The fold knows the run from its `run.start` row alone, so the
+        // summary reports the phase it actually reached — never a terminal
+        // outcome invented from the missing metadata.
         expect(result.status).toBe('executed');
-        expect(result.output).toContain('Status: resumable');
+        expect(result.output).toContain('Status: ready');
         expect(result.output).not.toContain('Status: completed');
       }).pipe(
         Effect.provide(
