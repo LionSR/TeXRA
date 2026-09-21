@@ -9,7 +9,9 @@ import {
   type XaiSessionStorage,
 } from '@auth/xai/XaiSessionCoordinator';
 import type { XaiSession, XaiTokenResponse } from '@auth/xai/xaiSessionTypes';
-import * as logger from '@logger/logUtils';
+import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
+import { setLogSink } from '@logger/logSink';
+import { captureLogEntries } from '@test/support/logSinkCapture';
 
 const NOW = 1_900_000_000_000;
 const FIVE_MIN = 5 * 60 * 1000;
@@ -68,6 +70,7 @@ function makeClient(overrides: Partial<XaiOAuthClient> = {}): XaiOAuthClient {
 
 describe('XaiSessionCoordinator', () => {
   afterEach(() => {
+    setLogSink(null);
     vi.restoreAllMocks();
   });
 
@@ -99,7 +102,7 @@ describe('XaiSessionCoordinator', () => {
     'warns and treats an unreadable stored session ($warning) as signed out',
     ({ stored, warning }) =>
       Effect.gen(function* () {
-        const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+        const logs = captureLogEntries();
         const storage: XaiSessionStorage = {
           get: () => Effect.succeed(stored),
           store: () => Effect.void,
@@ -108,10 +111,7 @@ describe('XaiSessionCoordinator', () => {
         const coordinator = makeCoordinator({ storage });
         expect(yield* coordinator.loadSession()).toBeNull();
         expect(yield* coordinator.getStatus()).toEqual({ signedIn: false });
-        expect(warn).toHaveBeenCalledWith(
-          'SubscriptionOAuth',
-          expect.stringContaining(warning),
-        );
-      }),
+        expect(logs.has('WARN', 'SubscriptionOAuth', warning)).toBe(true);
+      }).pipe(Effect.provide(effectDiagnosticsLayer)),
   );
 });
