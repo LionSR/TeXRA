@@ -183,8 +183,12 @@ export const setWorkspaceCliChatAgent = Effect.fn(
     );
   }
   const sectionKey = canonicalConfigKey('chat');
+  // The workspace file's own section, not the merged read: the write below
+  // lands in the workspace target, so seeding from `workspace over user` would
+  // copy a user-level `texra.chat.model` into the project file and pin it
+  // above every later user-level edit.
   const existing =
-    readSettingFrom<CliCommandDefaults | undefined>(stores, sectionKey) ?? {};
+    stores.config.inspect<CliCommandDefaults>(sectionKey)?.workspaceValue ?? {};
   const next: { agent?: string; model?: string } = { ...existing };
   if (trimmed) next.agent = trimmed;
   else delete next.agent;

@@ -98,6 +98,23 @@ describe('setWorkspaceCliChatAgent', () => {
       }),
   );
 
+  it.effect('leaves a user-level model out of the workspace section', () =>
+    Effect.gen(function* () {
+      const config = new FakeConfigProvider();
+      yield* Effect.promise(() => installPlatform({}, { config }));
+      yield* config.update('texra.chat', { model: 'deepseekT' }, 'global');
+
+      yield* setWorkspaceCliChatAgent(
+        testWorkspaceRoots(),
+        'builtInToolUse:review',
+      );
+
+      expect(config.inspect('texra.chat')?.workspaceValue).toEqual({
+        agent: 'builtInToolUse:review',
+      });
+    }),
+  );
+
   it.effect('refuses an empty agent rather than clearing the default', () =>
     Effect.gen(function* () {
       yield* Effect.promise(() =>
