@@ -30,10 +30,7 @@ import {
 } from '@platform/processRuntime';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { createNodeWorkspaceRoots } from '@platform/defaults/nodeHost';
-import {
-  createNodeStorageProvider,
-  DEFAULT_NODE_STORAGE_ROOT,
-} from '@platform/defaults/nodeStorage';
+import { DEFAULT_NODE_STORAGE_ROOT } from '@platform/defaults/nodeStorage';
 import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { sessionStoreClearedMessage } from '@shared/copy/sessionStore';
