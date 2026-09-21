@@ -53,13 +53,39 @@ if (allFiles.some((file) => file.endsWith('.map'))) {
 const moduleSpecifier =
   /(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s+)(?<quote>['"])(?<specifier>[^'"]+)\k<quote>/gu;
 
+function packageName(specifier) {
+  if (specifier.startsWith('@'))
+    return specifier.split('/').slice(0, 2).join('/');
+  return specifier.split('/')[0];
+}
+
+const declaredPackages = new Set([
+  ...Object.keys(manifest.dependencies ?? {}),
+  ...Object.keys(manifest.peerDependencies ?? {}),
+]);
+
 for (const declaration of declarationFiles) {
   const source = await readFile(declaration, 'utf8');
   for (const match of source.matchAll(moduleSpecifier)) {
     const specifier = match.groups?.specifier;
-    if (specifier?.startsWith('.') && !/\.m?js$/u.test(specifier)) {
+    if (!specifier) continue;
+    if (specifier.startsWith('.')) {
+      if (!/\.m?js$/u.test(specifier)) {
+        throw new Error(
+          `NodeNext declaration specifier lacks a .js extension: ${declaration}: ${specifier}`,
+        );
+      }
+      continue;
+    }
+    // A bare specifier in a shipped declaration has to resolve from the
+    // installed tarball. A workspace package that is private, or simply not a
+    // dependency, resolves in this repository and nowhere else, so the types
+    // break on arrival rather than here. The tsconfig alias check above cannot
+    // see these: they are package names, not `paths` entries.
+    if (specifier.startsWith('node:')) continue;
+    if (!declaredPackages.has(packageName(specifier))) {
       throw new Error(
-        `NodeNext declaration specifier lacks a .js extension: ${declaration}: ${specifier}`,
+        `Declaration imports an undeclared package: ${declaration}: ${specifier}`,
       );
     }
   }
@@ -120,12 +146,6 @@ for (const [entry, target] of Object.entries(manifest.exports)) {
   }
 }
 
-function packageName(specifier) {
-  if (specifier.startsWith('@'))
-    return specifier.split('/').slice(0, 2).join('/');
-  return specifier.split('/')[0];
-}
-
 const externalPackages = new Set();
 const javascriptImport =
   /(?:^\s*import(?:[^'"]*?\bfrom\s*)?|\bimport\s*\(\s*)(?<quote>['"])(?<specifier>[^'"]+)\k<quote>/gmu;
@@ -143,10 +163,6 @@ for (const javascript of allFiles.filter((file) => file.endsWith('.js'))) {
     externalPackages.add(packageName(specifier));
   }
 }
-const declaredPackages = new Set([
-  ...Object.keys(manifest.dependencies ?? {}),
-  ...Object.keys(manifest.peerDependencies ?? {}),
-]);
 const missingPackages = [...externalPackages]
   .filter((dependency) => !declaredPackages.has(dependency))
   .toSorted();

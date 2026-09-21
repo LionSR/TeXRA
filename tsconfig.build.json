@@ -8,6 +8,10 @@
     "removeComments": true,
     "types": ["node"]
   },
-  "include": ["packages/agent/src/**/*.ts", "src/types/ambient.d.ts"],
+  "include": [
+    "packages/agent/src/**/*.ts",
+    "packages/llm/src/**/*.ts",
+    "src/types/ambient.d.ts"
+  ],
   "exclude": ["node_modules", "src/test-kernel"]
 }
