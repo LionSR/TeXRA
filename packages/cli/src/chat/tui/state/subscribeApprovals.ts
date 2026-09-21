@@ -5,9 +5,10 @@
 // that list (`approvalQueue.ts`). This module owns only what a request needs
 // before it can be shown or answered on this host: the CLI policy's own
 // answer for the kinds it settles with nobody to ask, a retry's personal-key
-// lookup and the unattended switch that lookup enables, and the credential
-// work behind a retry on the user's own key — the `useOwnApiKey` capability a
-// decision names instead of answering itself.
+// lookup and the unattended switch that lookup enables, and the decision it
+// lands for the `useOwnApiKey` capability. The credential rules behind that
+// capability are not here — they are `ProgressApiKeyRetryController`'s, the
+// same ones the extension and the desktop switch on.
 //
 // The attached host answers nothing: it stages a tool edit's preview,
 // mirrors bypass state onto its wire, and presents events.
@@ -25,19 +26,25 @@ import {
   settleHumanInputDenial,
   settleRetry,
 } from '@cli/runtime/approval/settleApprovals';
+import { promptForCliProviderApiKey } from '@cli/chat/tui/hosts/cliProviderKeys';
 import type { CliContext } from '@cli/runtime/cliContext';
 import type { CliRuntimeHost } from '@cli/runtime/cliPresentationHost';
 import { missingApiKeyRetryMessage } from '@cli/tui/ui/retryCopy';
+import {
+  ApiKeyPromptFailed,
+  ProgressApiKeyRetryController,
+} from '@controllers/progressView/ProgressApiKeyRetryController';
 import { warn as logWarning } from '@logger/logUtils';
 import {
-  apiKeyExistsUncached,
+  API_PROVIDERS,
   hasUsableApiKey,
-  invalidateApiKeyCache,
   isApiProvider,
+  lookupApiKeyUncached,
 } from '@model/apiProviders';
 import type { ProcessRuntime } from '@platform/processRuntime';
-import type { PlatformSecrets, SecretsFailed } from '@platform/secrets';
-import type { RequestDecision, RetryPermission } from '@shared/schemas';
+import type { PlatformSecrets } from '@platform/secrets';
+import { getExhaustionReason, type RetryPermission } from '@shared/schemas';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import { isCodingPlanQuotaRoute } from '@shared/quotaFallbackRoutes';
 import type { HostRequest } from '@shared/session/hostRequest';
 import { subscribeToSignalChanges } from '@shared/signals';
@@ -58,9 +65,10 @@ import { currentView } from './sessionView';
 
 /**
  * What this host holds for its lifetime: the session its policy settlements
- * read and its decisions land on, the secret store a retry's key checks go
- * through, and the runtime its decisions are issued on. All three come from
- * the chat session's caller, which holds them already.
+ * read and its decisions land on, the secret store and settings slots a
+ * retry's credential switch goes through, and the runtime its decisions are
+ * issued on. All four come from the chat session's caller, which holds them
+ * already.
  */
 interface TuiApprovalStores {
   /** The chat's session: `/approval` writes land here between turns, so a
@@ -68,6 +76,10 @@ interface TuiApprovalStores {
    *  CliContext value. */
   readonly session: SessionHandle;
   readonly secrets: PlatformSecrets;
+  /** The settings slots a key prompt reads a provider's display name and key
+   *  URL from, so a retry that has to ask for a credential words the ask the
+   *  same way `/key` does. */
+  readonly settings: SettingsStores;
   /** The process runtime this attachment's decisions are issued on, held for
    *  the host's lifetime rather than looked up per decision. */
   readonly runtime: ProcessRuntime;
@@ -90,6 +102,10 @@ export function createTuiHostInteractions(
   let disposed = false;
   /** Requests this attachment has already acted on, pruned as they settle. */
   const acted = new Set<string>();
+  /** Retries this host has already landed a personal-credential decision
+   *  for. The fold lags the decision, so this is what tells the switch's own
+   *  program that it landed rather than fell through to a denial. */
+  const switched = new Set<string>();
   /** The undo this guard hands every decision it sends: a refused
    *  `request.decide` answered nothing, and the queue drops its own decided
    *  entry, so this entry must go too or no later level acts on the request
@@ -97,6 +113,7 @@ export function createTuiHostInteractions(
    *  staged modal the user could answer it through. */
   const actAgainOnRefusal = (requestId: string) => (): void => {
     acted.delete(requestId);
+    switched.delete(requestId);
   };
   /** Retries this host switched without asking, which get the notification. */
   const automaticSwitches = new Set<string>();
@@ -109,10 +126,70 @@ export function createTuiHostInteractions(
   };
 
   /**
-   * A retry on the user's own key: check the stored credential, then decide
-   * the retry on personal credentials. The run rebuilds its binding when it
-   * reads that decision and declines the exhausted subscription route for
-   * itself, so nothing here writes the user's access settings.
+   * The shared credential-switch policy, bound to this host's stores: which
+   * provider a quota-exhausted route falls back to, whether the user already
+   * has a usable key for it, and the prompt that asks for one when they do
+   * not. Only the decision this host lands on the request is its own — the
+   * rules above it are the same three ways on every host.
+   */
+  const apiKeyRetry = new ProgressApiKeyRetryController({
+    providers: API_PROVIDERS,
+    readKey: (provider) => lookupApiKeyUncached(stores.secrets, provider),
+    hasUsableKey: (provider) => hasUsableApiKey(stores.secrets, provider),
+    promptForApiKey: (provider) =>
+      provider
+        ? promptForCliProviderApiKey(
+            stores.secrets,
+            stores.settings,
+            provider,
+          ).pipe(
+            Effect.mapError(
+              (cause) =>
+                new ApiKeyPromptFailed({
+                  provider,
+                  message: toErrorMessage(cause),
+                  cause,
+                }),
+            ),
+          )
+        : Effect.fail(
+            new ApiKeyPromptFailed({
+              provider: undefined,
+              message:
+                'The failed API provider could not be identified, so TeXRA did not ask for a key.',
+            }),
+          ),
+    isRetryPending: (_stream, requestId) =>
+      !disposed && pendingRetry(requestId) !== undefined,
+    triggerRetry: (runId, requestId) =>
+      Effect.sync(() => {
+        switched.add(requestId);
+        // The notice belongs to the switch itself, not to the program that
+        // asked for it: the controller only reaches here on a live
+        // attachment (`isRetryPending`), and saying it here cannot race the
+        // fold dropping the request.
+        if (automaticSwitches.has(requestId)) notify('credentialSwitched');
+        // This capability already selected the credential route; decomposing
+        // the decision again would call the capability recursively.
+        landRequestDecision(
+          stores.session,
+          stores.runtime,
+          runId,
+          requestId,
+          { action: 'retry', credentials: 'personal' },
+          actAgainOnRefusal(requestId),
+        );
+        return true;
+      }),
+  });
+
+  /**
+   * A retry on the user's own key: the shared controller resolves the
+   * credential owner, checks the store, asks for a key when there is none,
+   * and lands the retry through `triggerRetry`. What stays here is the
+   * answer a switch that did not happen still owes the run: the request is
+   * durable and nobody else re-asks it, so it leaves as a denial worded for
+   * this surface rather than as a card the user can no longer see.
    */
   const useOwnApiKey = (requestId: string): void => {
     const permission = pendingRetry(requestId);
@@ -123,40 +200,44 @@ export function createTuiHostInteractions(
       );
       return;
     }
+    const requestedProvider = permission.errorDetails?.provider;
+    const provider =
+      requestedProvider && isApiProvider(requestedProvider)
+        ? requestedProvider
+        : undefined;
     stores.runtime.runFork(
       Effect.gen(function* () {
-        const decision = yield* Effect.match(
-          ensurePersonalApiKey(permission, stores),
+        const failure = yield* Effect.match(
+          apiKeyRetry.useOwnApiKey({
+            stream: permission.runId,
+            requestId,
+            provider,
+            model: permission.model,
+            exhaustionReason: getExhaustionReason(permission.errorDetails),
+          }),
           {
-            onSuccess: (): RequestDecision => ({
-              action: 'retry',
-              credentials: 'personal',
-            }),
-            onFailure: (error): RequestDecision => ({
-              action: 'deny',
-              reason: toErrorMessage(error),
-            }),
+            onSuccess: () => undefined,
+            onFailure: (error) => toErrorMessage(error),
           },
         );
+        // Read the local fact, not the fold: `triggerRetry` lands its
+        // decision on the session's own queue, so the request can still be
+        // listed here for a moment after the switch committed.
+        if (switched.has(requestId)) return;
         // Success and failure have the same lifetime: a lookup that finishes
         // after this attachment leaves must not answer for its next owner.
         if (disposed || pendingRetry(requestId) === undefined) return;
-        if (decision.action === 'deny') {
-          logWarning(
-            'cli.tui',
-            `The retry could not switch to your own API key: ${decision.reason}`,
-          );
-        } else if (automaticSwitches.has(requestId)) {
-          notify('credentialSwitched');
-        }
-        // This capability already selected the credential route; decomposing
-        // the decision again would call the capability recursively.
+        const reason = failure ?? missingApiKeyRetryMessage(provider);
+        logWarning(
+          'cli.tui',
+          `The retry could not switch to your own API key: ${reason}`,
+        );
         landRequestDecision(
           stores.session,
           stores.runtime,
           permission.runId,
           requestId,
-          decision,
+          { action: 'deny', reason },
           actAgainOnRefusal(requestId),
         );
       }),
@@ -265,6 +346,7 @@ export function createTuiHostInteractions(
     for (const id of automaticSwitches) {
       if (!live.has(id)) automaticSwitches.delete(id);
     }
+    for (const id of switched) if (!live.has(id)) switched.delete(id);
     for (const request of pending) {
       if (acted.has(request.requestId)) continue;
       const payload = request.payload;
@@ -385,40 +467,4 @@ export function announceForegroundApprovals(): () => void {
   };
   check();
   return subscribeToSignalChanges([currentApproval], check);
-}
-
-/**
- * Put the user's own credential in place for one retry: verify that a usable
- * key for the failed provider is stored, so the caller can decide the retry
- * on personal credentials instead of retrying onto a route that has not
- * changed. Nothing is written: the run declines the exhausted subscription
- * route for itself when it reads the decision, and the user's access
- * settings stay theirs.
- */
-function ensurePersonalApiKey(
-  permission: RetryPermission,
-  stores: TuiApprovalStores,
-): Effect.Effect<void, Error | SecretsFailed> {
-  return Effect.gen(function* () {
-    const requestedProvider = permission.errorDetails?.provider;
-    if (!requestedProvider || !isApiProvider(requestedProvider)) {
-      return yield* Effect.fail(
-        new Error(
-          'The failed API provider could not be identified, so TeXRA did not switch this retry to your own key.',
-        ),
-      );
-    }
-    const keyExists = yield* apiKeyExistsUncached(
-      stores.secrets,
-      requestedProvider,
-    );
-    if (!keyExists) {
-      return yield* Effect.fail(
-        new Error(missingApiKeyRetryMessage(requestedProvider)),
-      );
-    }
-    // The presentation check is deliberately cached. Drop that cache after the
-    // uncached check so the next binding reads the current key.
-    invalidateApiKeyCache();
-  });
 }

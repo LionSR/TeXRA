@@ -2,7 +2,7 @@ import { Effect } from 'effect';
 
 import { loadCliDetailedAccountStatusLines } from '@cli/runtime/apiStatus';
 import { bumpCodexPreferenceVersion } from '@cli/chat/tui/state/cliState';
-import { saveProviderApiKey } from '@cli/runtime/providerApiKey';
+import { commitCliProviderApiKey } from '@cli/chat/tui/hosts/cliProviderKeys';
 import {
   parseCliModelAccessSelection,
   type CliModelAccessSelection,
@@ -24,14 +24,19 @@ const MODEL_ACCESS_USAGE =
   'Usage: /api chatgpt | grok | kimi-code | glm-code | status';
 
 /**
- * Save a provider key and refresh access-dependent TUI views. Returns only the
- * extra notice a provider needs, if any — the caller owns the
- * "Saved the <provider> API key." confirmation line.
+ * Save a provider key through the shared key controller and answer the extra
+ * notice a provider needs, if any. The controller owns the write, the
+ * "<provider> API key has been set" confirmation and the post-write refresh
+ * on every host, so only the coding-plan tip is worded here.
  */
 export const applyCliProviderApiKey = Effect.fn('applyCliProviderApiKey')(
-  function* (secrets: PlatformSecrets, provider: ApiProvider, key: string) {
-    yield* saveProviderApiKey(secrets, provider, key);
-    bumpCodexPreferenceVersion();
+  function* (
+    secrets: PlatformSecrets,
+    stores: SettingsStores,
+    provider: ApiProvider,
+    key: string,
+  ) {
+    yield* commitCliProviderApiKey(secrets, stores, provider, key);
     const codingPlan = codingPlanForApiProvider(provider);
     if (!codingPlan) return undefined;
     if (!codingPlan.exclusiveCredential) {

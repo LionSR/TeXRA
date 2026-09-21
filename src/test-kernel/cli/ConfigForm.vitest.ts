@@ -66,9 +66,12 @@ const providerApiKeyRuntime = vi.hoisted(() => ({
   save: vi.fn(),
 }));
 
-vi.mock('@cli/runtime/providerApiKey', () => ({
-  loadProviderApiKeyStatuses: providerApiKeyRuntime.load,
-  saveProviderApiKey: providerApiKeyRuntime.save,
+vi.mock('@model/apiProviders', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@model/apiProviders')>();
+  return { ...actual, loadApiKeyStatusMap: providerApiKeyRuntime.load };
+});
+vi.mock('@cli/chat/tui/hosts/cliProviderKeys', () => ({
+  commitCliProviderApiKey: providerApiKeyRuntime.save,
 }));
 
 type ConfigFormProps = Parameters<
@@ -342,6 +345,7 @@ describe('CliConfigForm API-key status lifecycle', () => {
       await waitFor(() => providerApiKeyRuntime.load.mock.calls.length === 2);
       expect(providerApiKeyRuntime.save).toHaveBeenCalledWith(
         formSecrets,
+        expect.anything(),
         'openai',
         'sk-private-test-key',
       );

@@ -24,6 +24,7 @@ import { loadAgents } from '@agent/index';
 import { tryDefaultSession } from '@agent/runtime';
 import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
 import { DEFAULT_MODELS } from '@model/modelOptionsBasic';
+import { apiKeySecretName } from '@model/apiProviders';
 import { platform } from '@platform/platform';
 import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
 import { MEMORY_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
@@ -135,7 +136,6 @@ import { resolveCliModelAccessRoute } from '../src/runtime/modelAccessRoute';
 import { updateCliModelAccess } from '../src/runtime/modelAccessSelection';
 import { installCliProcessRuntime } from '../src/runtime/cliProcessRuntime';
 import { initCliPlatform } from '../src/runtime/initPlatform';
-import { saveProviderApiKey } from '../src/runtime/providerApiKey';
 import { resolveCliResourcesPath } from '../src/runtime/resourcesPath';
 import {
   createCliRuntimeHost,
@@ -461,6 +461,7 @@ HARNESS_DISPOSERS.push(
       createTuiHostInteractions(harnessRuntimeHost, HARNESS_CLI_CONTEXT, {
         session: session(),
         secrets: HARNESS_PLATFORM_SERVICES.secrets,
+        settings: HARNESS_PLATFORM_SERVICES,
         runtime: harnessRuntime,
       }),
     ),
@@ -1429,9 +1430,15 @@ if (SHOW_BASH_APPROVAL) {
 
 if (SHOW_RETRY_APPROVAL) {
   await harnessRuntime.runPromise(
-    saveProviderApiKey(
-      HARNESS_PLATFORM_SERVICES.secrets,
-      'openai',
+    // A fixture seed, not a product write: the harness only needs the key in
+    // its fake store, with none of the notice or refresh a real key write
+    // carries. Dropping the API-key lookup cache is part of that refresh, and
+    // the seed does not need it: this store is created by this script, and
+    // every read of it (`prepareRetry`'s card lookup, the retry gate,
+    // `/model`'s access rows) is driven by the approval requested below or by
+    // a keypress after it, so nothing can have cached `openai` as absent.
+    HARNESS_PLATFORM_SERVICES.secrets.set(
+      apiKeySecretName('openai'),
       'sk-harness-openai-key',
     ),
   );

@@ -32,7 +32,13 @@ function resolveBrowserLaunch(
   }
 }
 
-async function launchBrowser(url: string): Promise<void> {
+/**
+ * Hand one URL to the OS browser, or fail with what the launch faulted with.
+ * Exported for `CliExternalOpener`, which words the failure as the
+ * host-neutral `ExternalOpenFailed` the {@link ExternalOpener} port carries;
+ * the two sign-in callers below keep their own manual-URL wording.
+ */
+export async function launchBrowser(url: string): Promise<void> {
   const launch = resolveBrowserLaunch(url);
   // reject: false — a spawn failure (no `xdg-open` on a headless box) and a
   // non-zero exit are the same "could not open a browser" outcome here.

@@ -1,12 +1,14 @@
 import { Cause, Effect } from 'effect';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import {
-  loadProviderApiKeyStatuses,
-  saveProviderApiKey,
-} from '@cli/runtime/providerApiKey';
+import { commitCliProviderApiKey } from '@cli/chat/tui/hosts/cliProviderKeys';
 import { storeCredential } from '@common/secrets/storeCredential';
-import type { ApiKeyStatus, ApiProvider } from '@model/apiProviders';
+import {
+  API_PROVIDERS,
+  loadApiKeyStatusMap,
+  type ApiKeyStatus,
+  type ApiProvider,
+} from '@model/apiProviders';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
@@ -177,7 +179,7 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
   const { secrets } = props;
   const { runtime } = props;
   const loadApiKeyStatuses = useCallback(
-    () => loadProviderApiKeyStatuses(secrets),
+    () => loadApiKeyStatusMap(secrets, API_PROVIDERS),
     [secrets],
   );
   // The status read is a program like the save and remove rows below it, so
@@ -303,7 +305,7 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
             // form settles it on the runtime this surface handed it.
             onSave={(provider, key) =>
               Effect.gen(function* () {
-                yield* saveProviderApiKey(secrets, provider, key);
+                yield* commitCliProviderApiKey(secrets, stores, provider, key);
                 markApiKey((current) => ({
                   statuses: { ...current.statuses, [provider]: 'set' },
                 }));

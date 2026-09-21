@@ -340,7 +340,14 @@ export function App(props: AppProps): React.JSX.Element {
       case 'form':
         return activeForm?.render(() => {
           formProgressSignal.set(undefined);
-          activeFormSignal.set(undefined);
+          // Only the occupant releases the one foreground slot, exactly as
+          // the host dialog's finalizer in `tuiUiHost` does. A form that was
+          // displaced from the slot can still run this from an in-flight
+          // operation, and clearing the slot from there would unmount
+          // whatever took its place — leaving a host dialog's fiber with no
+          // form to answer it and its lane permit held for the session.
+          if (activeFormSignal.get() === activeForm)
+            activeFormSignal.set(undefined);
         }, availableRows);
       case 'infoPane':
         return infoPane ? (

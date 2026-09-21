@@ -6,7 +6,10 @@ export interface DiffSource {
 }
 
 /**
- * The host's diff surface: showing a diff, the one verb both hosts answer.
+ * The host's diff surface: showing a diff, the one verb the two windowed
+ * hosts answer. The terminal has no second surface to show one in — its
+ * tool-edit modal renders the diff inline, and no CLI action names the
+ * `openDiff` host arm — so this port stays at two implementations.
  * Closing a diff, revealing its first change and reading back its proposed
  * side are VS Code's alone — its tab model is what they are written against —
  * so they live on `VscodeDiffViewHost` beside the approval host that calls
@@ -32,7 +35,10 @@ export interface DiffViewHost {
 
 /**
  * The operating system would not open what it was handed: no handler for the
- * URL's scheme or the file's type, or the shell refusing the request.
+ * URL's scheme or the file's type, or the shell refusing the request. All
+ * three hosts raise it — VS Code's `env.openExternal`, Electron's
+ * `shell.openExternal`, and the CLI's platform opener (`open`, `rundll32`,
+ * `xdg-open`).
  *
  * This is the tag {@link ExternalOpener.openExternal} fails with. The
  * desktop's sibling `openPath` is an Effect as well (owner ruling 2026-09-18,
@@ -68,7 +74,12 @@ export interface ExternalOpener {
  * Read off what the implementations raise, and nothing else: the desktop's
  * `dialog.showMessageBox(window, …)` rejects once the window it anchors to is
  * gone (`host-unavailable`), and VS Code's `showInputBox` rejects when the
- * host's own dialog machinery faults (`presentation-failed`).
+ * host's own dialog machinery faults (`presentation-failed`). The CLI's Ink
+ * dialog raises neither: it is a form in the app's own foreground slot, so
+ * there is no foreign dialog to fault. Its onboarding wizard, which renders
+ * no such slot, raises `host-unavailable` for the two members it has no
+ * surface for, so a caller that reached them there sees the fault rather than
+ * a dismissal the user never made.
  *
  * The message members answer to {@link NotificationFailed} instead: a message
  * the host would not show is the same fault whether or not it carried buttons,
@@ -94,8 +105,11 @@ export class PromptFailed extends Data.TaggedError('PromptFailed')<{
  * A message never reached the user: VS Code's `window.show*Message` or the
  * desktop's `dialog.showMessageBox` rejected, which they do only when the
  * host's own dialog machinery faults or the window a box is anchored to is
- * already gone. A user who ignores a message, or dismisses one that offered
- * buttons, is not a failure — that is an answer, or the absence of one.
+ * already gone. The CLI writes a local transcript notice, which cannot fail,
+ * so it never raises this tag — the failure channel is what the two windowed
+ * hosts need, not a cost the terminal pays. A user who ignores a message, or
+ * dismisses one that offered buttons, is not a failure — that is an answer,
+ * or the absence of one.
  *
  * This is the one tag both message surfaces fail with: every
  * {@link MessageHost} member and {@link PromptHost}'s `info`/`warning`/

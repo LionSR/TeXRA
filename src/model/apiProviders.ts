@@ -278,9 +278,9 @@ export function getApiKey(
 /**
  * Check whether a usable API key is resolved for a provider (secret storage,
  * then environment, both already trimmed and blank-filtered by
- * {@link resolveApiKeyUncached}). This is the single cached existence check;
- * `apiKeyExistsUncached` below is the uncached variant for call sites that
- * must bypass the process-wide provider cache.
+ * {@link resolveApiKeyUncached}). This is the existence check every host
+ * shares; a call site that must bypass the process-wide provider cache reads
+ * {@link lookupApiKeyUncached} instead.
  */
 export function hasUsableApiKey(
   secrets: PlatformSecrets,
@@ -304,16 +304,5 @@ export function lookupApiKeyUncached(
   return Effect.map(
     resolveApiKeyUncached(secrets, provider),
     (resolved) => resolved.value,
-  );
-}
-
-/** Check if an API key exists without using the process-wide provider cache. */
-export function apiKeyExistsUncached(
-  secrets: PlatformSecrets,
-  provider: ApiProvider,
-): Effect.Effect<boolean, SecretsFailed> {
-  return Effect.map(
-    resolveApiKeyUncached(secrets, provider),
-    (resolved) => resolved.value !== undefined,
   );
 }

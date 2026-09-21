@@ -17,7 +17,6 @@ import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import { type RunId } from '@shared/schemas';
-import { providerDisplayName } from '@shared/constants/providers';
 import { OWN_API_KEYS } from '@shared/copy/modelAccess';
 import { RESEARCHER_ACCESS_AUTH } from '@shared/copy/accountAuth';
 import type { SettingsStores } from '@shared/config/settingsAccess';
@@ -316,7 +315,7 @@ export function registerBuiltinSlashCommands(options: {
       applyCliModelAccessSelection(stores, selection, undefined, output));
   const onApiKeySave: ApiKeySaveHandler =
     options.onApiKeySave ??
-    ((provider, key) => applyCliProviderApiKey(secrets, provider, key));
+    ((provider, key) => applyCliProviderApiKey(secrets, stores, provider, key));
   const onLoginSelect: FormActionHandler<LoginFormValue> =
     options.onLoginSelect ??
     ((value, output) =>
@@ -443,13 +442,9 @@ export function registerBuiltinSlashCommands(options: {
         runtime={runtime}
         onSave={onApiKeySave}
         onDone={(provider, modelNotice) => {
-          const label = providerDisplayName(provider);
-          appendLocalAssistantTranscript(
-            [
-              `Saved the ${label} API key.`,
-              ...(modelNotice ? [modelNotice] : []),
-            ].join('\n'),
-          );
+          // The shared key controller posts the "key has been set" notice on
+          // every host; only the coding-plan tip is this surface's to write.
+          if (modelNotice) appendLocalAssistantTranscript(modelNotice);
           props.onDone(provider);
         }}
         onCancel={() => props.onDone(undefined)}

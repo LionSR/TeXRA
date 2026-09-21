@@ -8,9 +8,7 @@ import { Effect, Fiber, SubscriptionRef } from 'effect';
 import { afterEach, beforeAll, beforeEach, describe, expect, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  apiKeyExistsUncached: vi.fn(),
   hasUsableApiKey: vi.fn(),
-  invalidateApiKeyCache: vi.fn(),
   preferSubscription: true,
   preferKimiCode: false,
   glmCodingPlan: false,
@@ -49,9 +47,7 @@ vi.mock('@model/apiProviders', async (importActual) => {
   const actual = await importActual<typeof import('@model/apiProviders')>();
   return {
     ...actual,
-    apiKeyExistsUncached: mocks.apiKeyExistsUncached,
     hasUsableApiKey: mocks.hasUsableApiKey,
-    invalidateApiKeyCache: mocks.invalidateApiKeyCache,
   };
 });
 
@@ -99,6 +95,7 @@ import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { createTuiCliContext } from '@test/cli/fixtures/cliContext';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { installedHost } from '@test/support/setupPlatform';
+import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 import { setGoalSessionAutoApproval } from '@tools/goal';
@@ -135,6 +132,7 @@ function tui(
       createTuiHostInteractions(presentationHost, cliContext, {
         session: testDefaultSession(),
         secrets,
+        settings: makeFakeSettingsStores().stores,
         runtime: testRuntime(),
       }),
     ),
@@ -330,8 +328,12 @@ function expectNoPreferenceWrites(): void {
   expect(mocks.setGLMCodingPlan).not.toHaveBeenCalled();
 }
 
+/** A retry that never switched: no switch was announced and no access
+ *  setting was rewritten. Reading the key store is not a change - the card's
+ *  own lookup decides whether to offer the switch at all - so the cases that
+ *  also mean "nothing read the store" say so themselves. */
 function expectNoCredentialChange(): void {
-  expect(mocks.invalidateApiKeyCache).not.toHaveBeenCalled();
+  expect(mocks.notify).not.toHaveBeenCalledWith('credentialSwitched');
   expectNoPreferenceWrites();
 }
 
@@ -375,7 +377,6 @@ beforeAll(() => {
 beforeEach(() => {
   mocks.preferSubscription = true;
   mocks.openRouter = false;
-  mocks.apiKeyExistsUncached.mockReturnValue(Effect.succeed(true));
   mocks.hasUsableApiKey.mockReturnValue(Effect.succeed(false));
   mocks.updateGlobalState.mockImplementation(
     async (key: string, value: unknown) => {
@@ -418,9 +419,7 @@ afterEach(async () => {
   await Effect.runPromise(session.settlePublications());
   session.approvals.clearAll();
   resetCliState();
-  mocks.apiKeyExistsUncached.mockReset();
   mocks.hasUsableApiKey.mockReset();
-  mocks.invalidateApiKeyCache.mockReset();
   mocks.notify.mockReset();
   mocks.setCliSubscriptionPreference.mockReset();
   mocks.setCliCodingPlanSubscription.mockReset();
@@ -775,13 +774,14 @@ describe('TUI request decisions', () => {
         // route on its own ledger, so the user's stored preference is not
         // rewritten on their behalf.
         expectNoPreferenceWrites();
-        expect(mocks.hasUsableApiKey).toHaveBeenCalledTimes(1);
-        expect(mocks.apiKeyExistsUncached).toHaveBeenCalledWith(
+        // The card's own lookup, then the shared controller's gate before
+        // the switch: the same store, read through the one credential policy
+        // every host shares.
+        expect(mocks.hasUsableApiKey).toHaveBeenCalledTimes(2);
+        expect(mocks.hasUsableApiKey).toHaveBeenLastCalledWith(
           installedHost().secrets,
           'openai',
         );
-        expect(mocks.apiKeyExistsUncached).toHaveBeenCalledOnce();
-        expect(mocks.invalidateApiKeyCache).toHaveBeenCalledOnce();
         yield* waitForNoApproval();
       }),
   );
@@ -792,16 +792,19 @@ describe('TUI request decisions', () => {
       Effect.gen(function* () {
         let finishLookup: (() => void) | undefined;
         if (stage === 'decision') {
-          mocks.hasUsableApiKey.mockReturnValue(Effect.succeed(true));
-          mocks.apiKeyExistsUncached.mockImplementation(() =>
-            Effect.tryPromise(
-              () =>
-                new Promise<boolean>((_resolve, reject) => {
-                  finishLookup = () =>
-                    reject(new Error('Keychain unavailable'));
-                }),
-            ),
-          );
+          // The card's lookup answers at once; the switch's own gate is what
+          // this case holds open past the host's disposal.
+          mocks.hasUsableApiKey
+            .mockReturnValueOnce(Effect.succeed(true))
+            .mockImplementation(() =>
+              Effect.tryPromise(
+                () =>
+                  new Promise<boolean>((_resolve, reject) => {
+                    finishLookup = () =>
+                      reject(new Error('Keychain unavailable'));
+                  }),
+              ),
+            );
         } else {
           mocks.hasUsableApiKey.mockImplementationOnce(() =>
             Effect.promise(
@@ -915,7 +918,6 @@ describe('TUI request decisions', () => {
 
         expect(yield* Fiber.join(pending)).toEqual({ action: 'reject' });
         expectNoCredentialChange();
-        expect(mocks.notify).not.toHaveBeenCalledWith('credentialSwitched');
       }),
   );
 
