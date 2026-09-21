@@ -96,11 +96,9 @@ export class RunFileService {
         (candidate) =>
           this.mirrorWorkspaceFile(candidate).pipe(
             Effect.catch((error) =>
-              Effect.sync(() => {
-                log.warn(
-                  `Failed to mirror workspace dependency ${candidate.absolutePath}: ${toErrorMessage(error)}`,
-                );
-              }),
+              Effect.logWarning(
+                `Failed to mirror workspace dependency ${candidate.absolutePath}: ${toErrorMessage(error)}`,
+              ).pipe(withLogChannel(CHANNEL)),
             ),
           ),
         { concurrency: 'unbounded', discard: true },
@@ -360,12 +358,12 @@ export class RunFileService {
                   : ('realFile' as const);
               }),
               Effect.catch((error) =>
-                Effect.sync(() => {
-                  log.warn(
-                    `Skipping run-dir mirror of ${relativePath}: cannot stat the destination in ${relativeDirectory}: ${toErrorMessage(error)}`,
-                  );
-                  return 'unreadable' as const;
-                }),
+                Effect.logWarning(
+                  `Skipping run-dir mirror of ${relativePath}: cannot stat the destination in ${relativeDirectory}: ${toErrorMessage(error)}`,
+                ).pipe(
+                  withLogChannel(CHANNEL),
+                  Effect.as('unreadable' as const),
+                ),
               ),
             );
             if (destination === 'realFile') {
@@ -378,11 +376,9 @@ export class RunFileService {
 
             yield* createSymlink(sourceAbsolute, destinationAbsolute).pipe(
               Effect.catch((error) =>
-                Effect.sync(() => {
-                  log.warn(
-                    `Unable to mirror ${relativePath} into ${relativeDirectory}: ${toErrorMessage(error)}`,
-                  );
-                }),
+                Effect.logWarning(
+                  `Unable to mirror ${relativePath} into ${relativeDirectory}: ${toErrorMessage(error)}`,
+                ).pipe(withLogChannel(CHANNEL)),
               ),
             );
           }),

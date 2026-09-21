@@ -21,7 +21,6 @@ import { z } from 'zod';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { ToolCall } from '@agent/runtime/ToolCall';
 import { withLogChannel, withLogData } from '@logger/effectLog';
-import { createLog } from '@logger/logUtils';
 import {
   type InquiryThreadRecord,
   aggregateId as qualifyAggregateId,
@@ -41,7 +40,6 @@ import { formatResultCount } from '@utils/text/stringUtils';
 import { collectKnownSessionLinks } from './inquiryRecordFormatting';
 
 const CHANNEL = 'InquiryTool';
-const logger = createLog(CHANNEL);
 
 // ============================================================================
 // Schemas
@@ -335,12 +333,12 @@ export class ExternalInquiryTool extends defineTool({
               // the thread stays open, which the warning says, and the
               // original failure is what the tool reports.
               Effect.catchCause((cause) =>
-                Effect.sync(() => {
-                  logger.warn(
-                    `Inquiry thread ${manifest.threadId} stays open after its request failed to open`,
-                    { data: Cause.squash(cause) },
-                  );
-                }),
+                Effect.logWarning(
+                  `Inquiry thread ${manifest.threadId} stays open after its request failed to open`,
+                ).pipe(
+                  withLogData(Cause.squash(cause)),
+                  withLogChannel(CHANNEL),
+                ),
               ),
             ),
           ),

@@ -211,10 +211,10 @@ export const countPdfPages = Effect.fn('img.countPdfPages')(
     return yield* conversionStep(() => countPdfPagesInBuffer(bytes));
   },
   Effect.catchTag(['PlatformError', 'MediaConversionFailed'], (error) =>
-    Effect.sync(() => {
-      log.error(`Error counting PDF pages: ${error.message}`);
-      return 0;
-    }),
+    Effect.logError(`Error counting PDF pages: ${error.message}`).pipe(
+      withLogChannel(CHANNEL),
+      Effect.as(0),
+    ),
   ),
 );
 
@@ -334,9 +334,9 @@ export const processPdf2Png = Effect.fn('img.processPdf2Png')(
     );
   },
   Effect.catchTag(['PlatformError', 'MediaConversionFailed'], (error) =>
-    Effect.sync(() => {
-      log.error(`Error processing PDF input: ${error.message}`);
-      return null;
-    }),
+    Effect.logError(`Error processing PDF input: ${error.message}`).pipe(
+      withLogChannel(CHANNEL),
+      Effect.as(null),
+    ),
   ),
 );

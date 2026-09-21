@@ -23,8 +23,7 @@ import {
   FOLLOW_UP_WAKE_FAILED_MESSAGE,
   submitFollowUp,
 } from '@agent/followUp/ToolUseFollowUp';
-import { withLogChannel } from '@logger/effectLog';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel, withLogData } from '@logger/effectLog';
 import { AgentResume } from '@platform/interfaces';
 import type { RunId } from '@shared/schemas';
 import {
@@ -65,7 +64,6 @@ import {
 } from './inputFields';
 
 const CHANNEL = 'delegation';
-const log = createLog(CHANNEL);
 
 /**
  * Deliver a terminal error to the orchestrator when a resumed subagent's wake
@@ -386,11 +384,9 @@ Git worktree support: resolved from the active workspace at runtime.`,
             ),
           ).pipe(
             Effect.catch((error) =>
-              Effect.sync(() => {
-                log.warn('Could not deliver the subagent wake failure.', {
-                  data: error,
-                });
-              }),
+              Effect.logWarning(
+                'Could not deliver the subagent wake failure.',
+              ).pipe(withLogData(error), withLogChannel(CHANNEL)),
             ),
           ),
         );

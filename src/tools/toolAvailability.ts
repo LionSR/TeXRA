@@ -19,8 +19,7 @@ import { Deferred, Effect } from 'effect';
 
 // Local imports
 import { emitAppSignal } from '@eventBus/AppSignals';
-import { withLogChannel } from '@logger/effectLog';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel, withLogData } from '@logger/effectLog';
 import type { StateStore } from '@platform/interfaces';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { RegisteredToolName } from '@tools/registry';
@@ -34,7 +33,6 @@ import { getDisabledToolIds } from '@utils/config/constants';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'toolAvailability';
-const log = createLog(CHANNEL);
 
 // ============================================================
 // Result type
@@ -217,10 +215,15 @@ const probeToolGroup = Effect.fn('probeToolGroup')(function* (
     return { failure: undefined, probeResult, available };
   }).pipe(
     Effect.catch((error) =>
-      Effect.sync(() => {
-        log.warn(`Availability probe failed for ${name}`, { data: error });
-        return { failure: { error }, probeResult: undefined, available: false };
-      }),
+      Effect.logWarning(`Availability probe failed for ${name}`).pipe(
+        withLogData(error),
+        withLogChannel(CHANNEL),
+        Effect.as({
+          failure: { error },
+          probeResult: undefined,
+          available: false,
+        }),
+      ),
     ),
   );
   const detectedStatus = probed.available ? 'available' : 'not-found';
@@ -266,10 +269,11 @@ function resolveOptionalStatus(
   if (!getStatus) return Effect.succeed(undefined);
   return getStatus(probeResult).pipe(
     Effect.catch((error) =>
-      Effect.sync(() => {
-        log.warn(`Failed to resolve ${field} for ${toolName}`, { data: error });
-        return undefined;
-      }),
+      Effect.logWarning(`Failed to resolve ${field} for ${toolName}`).pipe(
+        withLogData(error),
+        withLogChannel(CHANNEL),
+        Effect.as(undefined),
+      ),
     ),
   );
 }

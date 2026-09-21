@@ -7,7 +7,7 @@ import { z } from 'zod';
 
 // Local imports
 import { ToolCall } from '@agent/runtime/ToolCall';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import { API_PROVIDERS, lookupApiKeyOrigin } from '@model/apiProviders';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import { Secrets } from '@platform/secrets';
@@ -26,7 +26,7 @@ import { defineTool } from '../core/define';
 import { getChatGptSubscriptionStatus, SetupPlatform } from './platform';
 import { collectCoreSetupStatus, locateTool } from './toolProbing';
 
-const credentialLog = createLog('Setup Credentials');
+const CHANNEL = 'Setup Credentials';
 
 const ProbeEnvironmentInputSchema = z
   .strictObject({})
@@ -80,24 +80,21 @@ const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* () {
         // A store the host cannot read is not a token; say so in the log
         // rather than reporting "no token" as if it were an answer.
         Effect.catch((failure) =>
-          Effect.sync(() => {
-            credentialLog.warn(
-              `GitHub token check failed; reporting no token: ${failure.message}`,
-            );
-            return 'none' as const;
-          }),
+          Effect.logWarning(
+            `GitHub token check failed; reporting no token: ${failure.message}`,
+          ).pipe(withLogChannel(CHANNEL), Effect.as('none' as const)),
         ),
       ),
       getChatGptSubscriptionStatus(roots).pipe(
         // A probe that fails is not the fact "signed out"; setup advice built
         // on it would tell a signed-in user to sign in.
         Effect.catch((failure) =>
-          Effect.sync(() => {
-            credentialLog.warn(
-              `ChatGPT subscription probe failed; reporting signed-out: ${failure.message}`,
-            );
-            return { signedIn: false, enabled: false };
-          }),
+          Effect.logWarning(
+            `ChatGPT subscription probe failed; reporting signed-out: ${failure.message}`,
+          ).pipe(
+            withLogChannel(CHANNEL),
+            Effect.as({ signedIn: false, enabled: false }),
+          ),
         ),
       ),
     ],

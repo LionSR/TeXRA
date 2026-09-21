@@ -3,13 +3,10 @@ import { Effect } from 'effect';
 
 // Local imports - log
 import { withLogChannel } from '@logger/effectLog';
-import { createLog } from '@logger/logUtils';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { runToolWithCheck } from '@utils/system/toolUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '../latexLogging';
-
-const log = createLog(CHANNEL);
 
 export const TEXFMT_CONFIG_KEY = 'texra.latex.texfmtConfig';
 
@@ -42,9 +39,9 @@ export const runTexFmt = Effect.fn('latex.runTexFmt')(
     return true;
   },
   Effect.catch((err) =>
-    Effect.sync(() => {
-      log.error(`Error running tex-fmt: ${toErrorMessage(err)}`);
-      return false;
-    }),
+    Effect.logError(`Error running tex-fmt: ${toErrorMessage(err)}`).pipe(
+      withLogChannel(CHANNEL),
+      Effect.as(false),
+    ),
   ),
 );

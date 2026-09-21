@@ -4,7 +4,6 @@ import * as path from 'node:path';
 import { Effect, FileSystem } from 'effect';
 
 import { withLogChannel } from '@logger/effectLog';
-import { createLog } from '@logger/logUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { safeHomedir } from '@utils/system/platformPaths';
 
@@ -12,7 +11,6 @@ import { readNormalizedFile } from './fsDurability';
 import { entryExists } from './fsEntryExists';
 
 const CHANNEL = 'rulesUtils';
-const log = createLog(CHANNEL);
 
 const RULES_FILE = '.texrarules';
 
@@ -55,9 +53,8 @@ export const loadTexraRules = (
       () => Effect.succeed(''),
     ),
     Effect.catch((error) =>
-      Effect.sync(() => {
-        log.warn(`Failed to load ${RULES_FILE}: ${toErrorMessage(error)}`);
-        return '';
-      }),
+      Effect.logWarning(
+        `Failed to load ${RULES_FILE}: ${toErrorMessage(error)}`,
+      ).pipe(withLogChannel(CHANNEL), Effect.as('')),
     ),
   );

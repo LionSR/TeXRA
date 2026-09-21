@@ -5,6 +5,7 @@ import {
   type SupportedStorage,
 } from '@supabase/supabase-js';
 import { Context, Effect, Layer } from 'effect';
+import { withLogChannel } from '@logger/effectLog';
 import { createLog } from '@logger/logUtils';
 import type { SecretsFailed } from '@platform/secrets';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
@@ -25,7 +26,8 @@ import {
 } from './SupabaseSession';
 import type { StoredSessionState } from './TokenProvider';
 
-const log = createLog('SupabaseAuth');
+const CHANNEL = 'SupabaseAuth';
+const log = createLog(CHANNEL);
 
 /**
  * GoTrue storage for the host's client.
@@ -83,14 +85,11 @@ function gotrueStorage(
     return onCapturedServices(
       program.pipe(
         Effect.catchCause((cause) =>
-          Effect.sync(() => {
-            log.warn(
-              `Could not ${action} PKCE flow state (${key}); sign-in will ` +
-                `only be completable in this window: ` +
-                `${toErrorMessage(settleFailure(cause))}`,
-            );
-            return undefined;
-          }),
+          Effect.logWarning(
+            `Could not ${action} PKCE flow state (${key}); sign-in will ` +
+              `only be completable in this window: ` +
+              `${toErrorMessage(settleFailure(cause))}`,
+          ).pipe(withLogChannel(CHANNEL), Effect.as(undefined)),
         ),
       ),
     );
@@ -256,13 +255,10 @@ export function createSupabaseAuth(
       .ensureFreshToken()
       .pipe(
         Effect.catchCause((cause) =>
-          Effect.sync(() => {
-            log.error(
-              `Error getting access token: ` +
-                `${toErrorMessage(settleFailure(cause))}`,
-            );
-            return null;
-          }),
+          Effect.logError(
+            `Error getting access token: ` +
+              `${toErrorMessage(settleFailure(cause))}`,
+          ).pipe(withLogChannel(CHANNEL), Effect.as(null)),
         ),
       );
 
@@ -295,12 +291,9 @@ export function createSupabaseAuth(
                 error || !data.user ? null : data.user,
               ),
               Effect.catchCause((cause) =>
-                Effect.sync(() => {
-                  log.error(
-                    `Error getting user: ${toErrorMessage(settleFailure(cause))}`,
-                  );
-                  return null;
-                }),
+                Effect.logError(
+                  `Error getting user: ${toErrorMessage(settleFailure(cause))}`,
+                ).pipe(withLogChannel(CHANNEL), Effect.as(null)),
               ),
             ),
       ),

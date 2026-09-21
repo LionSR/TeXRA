@@ -8,7 +8,7 @@ import { Effect } from 'effect';
 import ky from 'ky';
 import { z } from 'zod';
 
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import { ToolResult } from '@shared/schemas';
 import { retryTransientFetch } from '@tools/timeouts';
 import { defineTool } from '@tools/core/define';
@@ -22,7 +22,6 @@ import {
 
 const LOOGLE_TIMEOUT_MS = 10_000; // 10 s
 const LOOGLE_CHANNEL = 'lean_loogle';
-const log = createLog(LOOGLE_CHANNEL);
 /** Retry transient Loogle failures (timeouts, 5xx, dropped connections). */
 const LOOGLE_RETRIES = 2;
 
@@ -145,11 +144,9 @@ const fetchLoogle = Effect.fn('LoogleTool.fetchLoogle')((query: string) =>
       minTimeout: 1000,
       timeoutMs: LOOGLE_TIMEOUT_MS,
       onFailedAttempt: (error, retriesLeft) =>
-        Effect.sync(() => {
-          log.debug(
-            `Loogle query "${query}" failed (${retriesLeft} retries left): ${error.message}`,
-          );
-        }),
+        Effect.logDebug(
+          `Loogle query "${query}" failed (${retriesLeft} retries left): ${error.message}`,
+        ).pipe(withLogChannel(LOOGLE_CHANNEL)),
     },
   ),
 );

@@ -25,10 +25,10 @@ import { Effect, FileSystem, Path, PlatformError } from 'effect';
 import writeFileAtomicLib from 'write-file-atomic';
 
 import { isNotADirectoryError } from '@common/errors';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 
-const log = createLog('fsDurability');
+const CHANNEL = 'fsDurability';
 
 const MODULE = 'FsDurability';
 
@@ -245,12 +245,9 @@ export const readDirectoryTypedTolerant = Effect.fn(
           systemErrorFrom('readDirectoryTypedTolerant', entry, cause),
       }).pipe(
         Effect.catch((error) =>
-          Effect.sync(() => {
-            log.warn(
-              `Skipping ${entry}: its entry type could not be read (${error.reason._tag}).`,
-            );
-            return undefined;
-          }),
+          Effect.logWarning(
+            `Skipping ${entry}: its entry type could not be read (${error.reason._tag}).`,
+          ).pipe(withLogChannel(CHANNEL), Effect.as(undefined)),
         ),
       );
     },

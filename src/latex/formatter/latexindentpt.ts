@@ -5,13 +5,10 @@ import { Effect, FileSystem } from 'effect';
 import { sync as globSync } from 'glob';
 
 import { withLogChannel } from '@logger/effectLog';
-import { createLog } from '@logger/logUtils';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { runToolWithCheck } from '@utils/system/toolUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '../latexLogging';
-
-const log = createLog(CHANNEL);
 
 export const LATEXINDENT_CONFIG_KEY = 'texra.latex.latexindentConfig';
 
@@ -33,10 +30,9 @@ const cleanupIndentLog = Effect.fn('latex.cleanupIndentLog')(function* (
   const removed = yield* fs.remove(logPath, { force: true }).pipe(
     Effect.as(true),
     Effect.catch((err) =>
-      Effect.sync(() => {
-        log.warn(`Error removing indent.log: ${toErrorMessage(err)}`);
-        return false;
-      }),
+      Effect.logWarning(
+        `Error removing indent.log: ${toErrorMessage(err)}`,
+      ).pipe(withLogChannel(CHANNEL), Effect.as(false)),
     ),
   );
   if (removed) {
@@ -63,12 +59,9 @@ const cleanupBackupFiles = Effect.fn('latex.cleanupBackupFiles')(function* (
     const removed = yield* fs.remove(backupFile, { force: true }).pipe(
       Effect.as(true),
       Effect.catch((err) =>
-        Effect.sync(() => {
-          log.warn(
-            `Error removing backup file ${backupFile}: ${toErrorMessage(err)}`,
-          );
-          return false;
-        }),
+        Effect.logWarning(
+          `Error removing backup file ${backupFile}: ${toErrorMessage(err)}`,
+        ).pipe(withLogChannel(CHANNEL), Effect.as(false)),
       ),
     );
     if (removed) {
@@ -139,9 +132,9 @@ export const runLatexIndent = Effect.fn('latex.runLatexIndent')(
     return success;
   },
   Effect.catch((err) =>
-    Effect.sync(() => {
-      log.error(`Error running LaTeX indent: ${toErrorMessage(err)}`);
-      return false;
-    }),
+    Effect.logError(`Error running LaTeX indent: ${toErrorMessage(err)}`).pipe(
+      withLogChannel(CHANNEL),
+      Effect.as(false),
+    ),
   ),
 );
