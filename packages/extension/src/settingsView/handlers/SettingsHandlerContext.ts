@@ -14,11 +14,13 @@ import type { ExtensionContext, Webview } from 'vscode';
  * Both are programs, not promises: `vscode.Webview.postMessage` is the one
  * foreign edge behind them and {@link postToWebview} lifts it, so everything
  * above — builders, refresh fan-outs, delegate handlers — composes and is
- * settled once per inbound message arm, at this host's single R1 boundary:
- * {@link SettingsHandlerContext.run} for the arms a delegate owns, the
- * dispatcher's own local `run` for the arms still spelled out beside it.
- * Both are the same runtime. A post still completes before a mutation's
- * follow-up, because the program sequences them.
+ * settled at this host's R1 boundary: {@link SettingsHandlerContext.run} for
+ * the arms a delegate owns, the dispatcher's own local `run` for the arms
+ * still spelled out beside it. Both are the same runtime. Three arms sit
+ * outside it: the Copilot access request settles its own runs because the
+ * consent call carries a host deadline, and the tool-command and unsubscribe
+ * arms are synchronous. A post still completes before a mutation's follow-up,
+ * because the program sequences them.
  *
  * `withActiveWebview` is the shared "run with the active webview" accessor
  * (`vscode.Webview`). View-wrapper access (`vscode.WebviewView`) stays
