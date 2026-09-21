@@ -29,6 +29,7 @@ import {
   type AuthCallbackTransport,
   type SignInCallbackOutcome,
 } from '@controllers/auth/supabaseSignIn';
+import { withLogChannel } from '@logger/effectLog';
 import * as logger from '@logger/logUtils';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { GlobalStorageFs } from '@platform/rootedFs';
@@ -506,7 +507,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   ): Effect.Effect<void, never, GlobalStorageFs | FileSystem.FileSystem> {
     return refreshRemoteAgentCatalogAfterSignOut(
       invalidateRemoteAgentsAfterSignOut(),
-      (message) => Effect.sync(() => log.warn(message)),
+      (message) => Effect.logWarning(message).pipe(withLogChannel(CHANNEL)),
     ).pipe(
       Effect.andThen(
         Effect.sync(() => {

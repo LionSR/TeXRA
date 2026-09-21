@@ -69,6 +69,7 @@ import {
 import { createVsCodeLogSink } from '@frontend/vscode/vscodeLogSink';
 import { VscodeSecrets } from '@frontend/vscode/vscodeSecrets';
 import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
+import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import { withLogChannel, withLogData } from '@logger/effectLog';
 import * as logger from '@logger/logUtils';
 import { setLogSink } from '@logger/logSink';
@@ -534,6 +535,9 @@ export async function activate(context: vscode.ExtensionContext) {
                 ).pipe(
                   withLogData(Cause.squash(cause)),
                   withLogChannel(EXTENSION_CHANNEL),
+                  // No runtime exists to hold the diagnostics layer yet, so
+                  // the entry needs it provided to reach the host's sink.
+                  Effect.provide(effectDiagnosticsLayer),
                 ),
               ),
             ),

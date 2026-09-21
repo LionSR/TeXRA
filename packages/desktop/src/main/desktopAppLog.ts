@@ -155,7 +155,6 @@ function appendDesktopLogLine(level: ConsoleLevel, ...args: unknown[]): void {
   });
 }
 
-/** One entry, one JSON line. */
 /** Shape one entry for the file. The `data` payload arrives raw: it stays
  * debug-mode-only, and is flattened here so an `Error` inside it survives the
  * line's `JSON.stringify`. Every other annotation keeps the value it carried. */
@@ -172,6 +171,7 @@ function entryForFile(entry: LogEntry): LogEntry {
   return { ...entry, annotations };
 }
 
+/** One entry, one JSON line. */
 function appendDesktopLogEntry(entry: LogEntry): void {
   const path = resolveActiveLogFilePath();
   if (path == null) return;
