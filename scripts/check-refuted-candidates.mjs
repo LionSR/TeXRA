@@ -109,7 +109,7 @@ function checkPullRequestDiff(base) {
 
   console.error(
     `\nThis pull request changes declarations that a ruling already refused, ` +
-      `and its body cites neither ruling id:\n\n` +
+      `and its body cites no ruling id for them:\n\n` +
       uncited
         .map((id) => {
           const candidate = byId.get(id);
