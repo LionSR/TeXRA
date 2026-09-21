@@ -14,13 +14,13 @@ import {
   FileSystem,
   Path,
   PlatformError,
-  Random,
   Schedule,
 } from 'effect';
 import { StatusCodes } from 'http-status-codes';
 import * as tar from 'tar';
 
 import { withLogChannel, withLogData } from '@logger/effectLog';
+import { randomizedExponentialBackoff } from '@utils/core/backoffSchedule';
 import { isTransientHttpStatus } from '@utils/core/httpStatus';
 import {
   pathExists,
@@ -75,20 +75,6 @@ class ArxivSourceTransientError extends Data.TaggedError(
 /** The typed failures of an arXiv source download. */
 export type ArxivSourceError =
   ArxivSourcePermanentError | ArxivSourceTransientError;
-
-/**
- * Backoff before retry `n` (1-based): 1 s doubling, scaled by a uniform
- * factor in [1, 2) so concurrent clients don't retry in lockstep — the window
- * the download had under p-retry's `minTimeout: 1000, randomize: true`, the
- * same tuning the tool fetch retry in `@tools/timeouts` uses.
- */
-const downloadBackoff = Schedule.exponential(Duration.seconds(1)).pipe(
-  Schedule.modifyDelay(({ duration }) =>
-    Effect.map(Random.next, (random) =>
-      Duration.millis(Duration.toMillis(duration) * (1 + random)),
-    ),
-  ),
-);
 
 /**
  * Classify a step outside the download attempt as a permanent failure: only
@@ -316,7 +302,10 @@ class ArxivSourceProcessor {
         }),
       ),
       Effect.retry({
-        schedule: downloadBackoff,
+        // 1 s doubling, scaled by a uniform factor in [1, 2) so concurrent
+        // clients don't retry in lockstep: the window the download had under
+        // p-retry's `minTimeout: 1000, randomize: true`.
+        schedule: randomizedExponentialBackoff(Duration.seconds(1)),
         times: DOWNLOAD_RETRIES,
         while: (cause) =>
           cause.reasons.length === 1 &&

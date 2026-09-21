@@ -12,9 +12,10 @@
 // commit instead of a wrong answer months later.
 //
 // Scope note: it checks that backticked repo paths and local Markdown link
-// destinations resolve (the latter relative to their guidance file). It cannot
-// check that the
-// surrounding claim is still true — that still needs a human.
+// destinations resolve (the latter relative to their guidance file), and that a
+// backticked event-type literal names a real arm of the run vocabulary. It
+// cannot check that the surrounding claim is still true — that still needs a
+// human.
 //
 // Dependency-free (bare Node) so it runs without installing anything.
 
@@ -24,11 +25,14 @@ import { fileURLToPath } from 'node:url';
 
 import { walkFiles } from './walkFiles.mjs';
 
+// Where this script lives: always the real checkout, even when a fixture root
+// is passed. The run vocabulary is production source, not fixture input, so it
+// is read from here rather than from the scanned root.
+const sourceRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
+
 // The optional root argument keeps fixture tests hermetic without duplicating
 // the production path-prefix configuration.
-const repoRoot = process.argv[2]
-  ? resolve(process.argv[2])
-  : join(dirname(fileURLToPath(import.meta.url)), '..');
+const repoRoot = process.argv[2] ? resolve(process.argv[2]) : sourceRoot;
 
 // Files whose prose is read as instructions by an agent or contributor. The
 // nested module READMEs are here for the same reason as the root ones: they
@@ -115,6 +119,69 @@ const PATH_PREFIXES = [
 
 // Generated or installed at build time, so absent in a clean checkout.
 const BUILD_OUTPUT = /(^|\/)(dist|out|releases|node_modules)(\/|$)/;
+
+// The run vocabulary, declared once as Zod and spliced into the trace union.
+// Guidance names these rows constantly ("a `tool.result` before the loop
+// continues"), and a wrong one is the same confidently-wrong answer as a dead
+// path: CLAUDE.md and AGENTS.md both cited an `approval.requested` row that has
+// never existed — the row is `request.opened`.
+const EVENT_VOCABULARY_SOURCES = [
+  'src/shared/schemas/sessionEvent.ts',
+  'src/shared/schemas/traceEvent.ts',
+  // `stream.chunk` is transient, so it has no session arm and is declared only
+  // on the trace union.
+  'src/agent/trace/events.ts',
+];
+
+/**
+ * Every event-type literal the vocabulary declares: the first argument of the
+ * `durable(...)` / `trace(...)` arm builders, plus the `type: '...'` literals
+ * of the hand-written trace arms.
+ */
+function readEventTypes() {
+  const types = new Set();
+  for (const source of EVENT_VOCABULARY_SOURCES) {
+    const absolute = join(sourceRoot, source);
+    if (!existsSync(absolute)) {
+      // Skipping here would silently narrow the checked vocabulary: a rename of
+      // sessionEvent.ts would drop every `run.*`/`tool.*`/`request.*` namespace
+      // and the gate would still exit 0, which is the exact silent drift it
+      // exists to catch.
+      throw new Error(`event vocabulary source not found: ${source}`);
+    }
+    const text = readFileSync(absolute, 'utf8');
+    for (const [, name] of text.matchAll(
+      /\b(?:durable|trace)\(\s*'([^']+)'/g,
+    )) {
+      types.add(name);
+    }
+    for (const [, name] of text.matchAll(/\btype:\s*'([^']+)'/g)) {
+      types.add(name);
+    }
+  }
+  return types;
+}
+
+const EVENT_TYPES = readEventTypes();
+// The namespaces the vocabulary owns (`run`, `tool`, `request`, ...). A
+// backticked dotted token under one of them is read as a citation of a row and
+// must name a real arm; anything else (`process.env`, `docs/`-prefixed paths,
+// camelCase members) is left alone. Prose that names a retired row on purpose
+// uses the same `<!-- guidance-refs-ignore -->` block marker as a dead path.
+const EVENT_NAMESPACES = new Set(
+  [...EVENT_TYPES]
+    .filter((type) => type.includes('.'))
+    .map((type) => type.split('.')[0]),
+);
+const EVENT_TYPE_SHAPE = /^[a-z][a-z0-9]*(?:\.[a-z][a-zA-Z0-9]*)+$/u;
+
+/** Whether a backticked token is read as naming a row of the run vocabulary. */
+function citesEventType(candidate) {
+  return (
+    EVENT_TYPE_SHAPE.test(candidate) &&
+    EVENT_NAMESPACES.has(candidate.split('.')[0])
+  );
+}
 
 /**
  * Collect .md files under a directory, recursively.
@@ -310,6 +377,7 @@ const targets = [
 ];
 
 const failures = [];
+const eventFailures = [];
 
 for (const file of targets) {
   const body = stripFencedBlocks(readFileSync(join(repoRoot, file), 'utf8'));
@@ -361,6 +429,12 @@ for (const file of targets) {
         .trim()
         .replace(/:(?:\d+(?:-\d+)?)(?:,\d+(?:-\d+)?)*$/, '')
         .replace(/[.,;:)]+$/, '');
+      if (citesEventType(candidate)) {
+        if (!EVENT_TYPES.has(candidate)) {
+          eventFailures.push({ file, line: index + 1, candidate });
+        }
+        continue;
+      }
       if (!PATH_PREFIXES.some((prefix) => candidate.startsWith(prefix)))
         continue;
       // Must look like a path or directory, not prose that happens to have a slash.
@@ -376,6 +450,21 @@ for (const file of targets) {
       }
     }
   }
+}
+
+if (eventFailures.length > 0) {
+  console.error(
+    'Guidance cites event types the run vocabulary does not declare:\n',
+  );
+  for (const { file, line, candidate } of eventFailures) {
+    console.error(`  ${file}:${line}  ${candidate}`);
+  }
+  console.error(
+    `\n${eventFailures.length} unknown event type(s). The vocabulary is declared in ${EVENT_VOCABULARY_SOURCES.join(', ')};`,
+  );
+  console.error(
+    'name the row that exists, or mark the block with <!-- guidance-refs-ignore --> if it names a retired one on purpose.',
+  );
 }
 
 if (failures.length > 0) {
@@ -396,6 +485,9 @@ if (failures.length > 0) {
   console.error(
     'from a clean checkout, widen BUILD_OUTPUT in scripts/check-guidance-refs.mjs.',
   );
+}
+
+if (failures.length > 0 || eventFailures.length > 0) {
   process.exit(1);
 }
 
@@ -403,5 +495,5 @@ if (failures.length > 0) {
 // process cwd would both depend on where the hook was invoked from and
 // reintroduce backslashes on Windows.
 console.log(
-  `Guidance references OK — checked ${targets.length} file(s): ${targets.join(', ')}`,
+  `Guidance references OK — checked ${targets.length} file(s) against ${EVENT_TYPES.size} event type(s): ${targets.join(', ')}`,
 );
