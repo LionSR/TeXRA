@@ -20,6 +20,7 @@ import type {
   DatabaseReadFailed,
   DatabaseWriteFailed,
 } from '@shared/session/database';
+import { foldAttempts, type AttemptKey } from '@shared/session/attemptFold';
 import {
   ResultMetaSchema,
   aggregateId,
@@ -32,37 +33,26 @@ import {
 } from '@shared/schemas';
 
 /**
- * The structural identity of one child turn (#9531): the run is the
- * aggregate, `attemptId` the child-run attempt that accepted it, `turnIndex`
- * its position in that attempt. Minted by the child-run loop per accepted
- * turn, so the same logical delivery always carries the same identity and
- * distinct turns never share one.
- */
-export interface ChildTurnKey {
-  readonly attemptId: string;
-  readonly turnIndex: number;
-}
-
-/**
  * Turn attribution for a child run's single latest-value report/result
  * slots: the turn currently running (or interrupted mid-flight before its
  * delivery ran) versus the latest turn whose delivery ran. Both null on a
  * run that never had turns (a run recorded before the run ledger, or one
- * whose loop never accepted a turn).
+ * whose loop never accepted a turn). Its keys are the shared
+ * {@link AttemptKey}: `key` is the child-run attempt that accepted the turn,
+ * `index` the turn's position in that attempt.
  */
 interface ChildTurnState {
-  readonly active: ChildTurnKey | null;
-  readonly lastCompleted: ChildTurnKey | null;
+  readonly active: AttemptKey | null;
+  readonly lastCompleted: AttemptKey | null;
 }
 
-const sameTurn = (a: ChildTurnKey, b: ChildTurnKey): boolean =>
-  a.attemptId === b.attemptId && a.turnIndex === b.turnIndex;
-
 /**
- * Fold the run's `child.turn` rows: `accepted` opens the active turn,
- * `settled` closes it and becomes the last completed one. Reads the whole
- * aggregate, because the last completed turn can belong to an earlier
- * attempt than the active one.
+ * Fold the run's `child.turn` rows through the shared attempt fold:
+ * `accepted` opens the turn, `settled` closes it and becomes the last
+ * completed one. Reads the whole aggregate, because the last completed turn
+ * can belong to an earlier attempt than the active one — which is also why
+ * it reads the fold's open/settled pair rather than its high-water mark: a
+ * child's series restarts with every attempt.
  */
 export function readChildTurnState(
   session: SessionHandle,
@@ -70,19 +60,15 @@ export function readChildTurnState(
 ): Effect.Effect<ChildTurnState, DatabaseReadFailed> {
   return session.readAggregate(aggregateId('run', runId)).pipe(
     Effect.map((rows) => {
-      let active: ChildTurnKey | null = null;
-      let lastCompleted: ChildTurnKey | null = null;
-      for (const row of rows) {
-        if (row.type !== 'child.turn') continue;
-        const key = { attemptId: row.attemptId, turnIndex: row.turnIndex };
-        if (row.phase === 'accepted') {
-          active = key;
-        } else {
-          lastCompleted = key;
-          if (active !== null && sameTurn(active, key)) active = null;
-        }
-      }
-      return { active, lastCompleted };
+      const turns = foldAttempts(rows, (row) =>
+        row.type === 'child.turn'
+          ? {
+              attempt: { key: row.attemptId, index: row.turnIndex },
+              settled: row.phase === 'settled',
+            }
+          : null,
+      );
+      return { active: turns.open, lastCompleted: turns.settled };
     }),
   );
 }

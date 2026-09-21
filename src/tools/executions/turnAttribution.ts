@@ -1,11 +1,9 @@
 import { Effect } from 'effect';
-import {
-  readChildTurnState,
-  type ChildTurnKey,
-} from '@agent/storage/runRecords';
+import { readChildTurnState } from '@agent/storage/runRecords';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { isInFlightPhase } from '@shared/runs/runStatus';
 import type { RunId } from '@shared/schemas';
+import type { AttemptKey } from '@shared/session/attemptFold';
 /**
  * Turn attribution for the executions tool's single latest-value slots.
  */
@@ -15,11 +13,11 @@ import type { RunId } from '@shared/schemas';
 import { resolveRunLiveness, type RunLiveness } from './runLiveness';
 
 /** How a turn is named in the note: its index within its attempt. */
-const turnLabel = (turn: ChildTurnKey): string =>
-  `turn ${turn.turnIndex} of attempt ${turn.attemptId}`;
+const turnLabel = (turn: AttemptKey): string =>
+  `turn ${turn.index} of attempt ${turn.key}`;
 
 /** How the accepted turn's fate reads, given what owns the run. */
-function turnFate(turn: ChildTurnKey, liveness: RunLiveness): string {
+function turnFate(turn: AttemptKey, liveness: RunLiveness): string {
   const label = turnLabel(turn);
   switch (liveness.kind) {
     case 'live':

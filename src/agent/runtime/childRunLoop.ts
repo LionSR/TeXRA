@@ -15,7 +15,6 @@ import { Cause, Deferred, Effect, Exit, Fiber, Queue, Result } from 'effect';
 import { finalizeRun } from '@agent/storage';
 import type { AgentTrace, StageHandle } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
-import type { ChildTurnKey } from '@agent/storage/runRecords';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { finalizeRunTerminal } from '@agent/runtime/AgentRunLifecycle';
 import { childRunBudgetFor } from '@agent/runtime/childRunBudget';
@@ -44,6 +43,7 @@ import {
   type RunOutcome,
   type SubagentProgressUpdate,
 } from '@shared/schemas';
+import type { AttemptKey } from '@shared/session/attemptFold';
 import {
   DatabaseNotOwner,
   type DatabaseWriteFailed,
@@ -465,12 +465,12 @@ function attemptTurn<TTurn, R>(
  */
 function turnDeliveryId(
   runId: RunId,
-  turn: ChildTurnKey,
+  turn: AttemptKey,
   consumed: readonly QueuedFollowUp[],
 ): string {
   const prompt = consumed[0]?.followUpId;
   if (prompt !== undefined) return `${runId}:${prompt}:delivery`;
-  return `${runId}:${turn.attemptId}:${turn.turnIndex}:delivery`;
+  return `${runId}:${turn.key}:${turn.index}:delivery`;
 }
 
 /**
@@ -495,7 +495,7 @@ function emitTurnDiagnostic(
   event: 'turn.accepted' | 'turn.delivered' | 'loop.terminated',
   params: {
     runId: RunId;
-    turn?: ChildTurnKey;
+    turn?: AttemptKey;
     queueOwner?: FollowUpConsumerLease;
     interruptionCause?: ChildLoopTerminationCause;
   },
@@ -504,7 +504,7 @@ function emitTurnDiagnostic(
   logger.debug(`childRunLoop ${event}`, {
     data: {
       runId,
-      ...(turn ? { attemptId: turn.attemptId, turnIndex: turn.turnIndex } : {}),
+      ...(turn ? { attemptId: turn.key, turnIndex: turn.index } : {}),
       ...(queueOwner ? { queueOwner: queueOwner.kind } : {}),
       ...(interruptionCause ? { interruptionCause } : {}),
     },
@@ -531,7 +531,7 @@ function emitTurnDiagnostic(
 function commitChildTurn(
   session: SessionHandle,
   runId: RunId,
-  turn: ChildTurnKey,
+  turn: AttemptKey,
   phase: 'accepted' | 'settled',
   consumed: readonly QueuedFollowUp[] = [],
 ): Effect.Effect<void, DatabaseNotOwner | DatabaseWriteFailed> {
@@ -545,8 +545,8 @@ function commitChildTurn(
       {
         type: 'child.turn',
         aggregateId: aggregateId('run', runId),
-        attemptId: turn.attemptId,
-        turnIndex: turn.turnIndex,
+        attemptId: turn.key,
+        turnIndex: turn.index,
         phase,
       },
     ])
@@ -643,7 +643,7 @@ const deliverTurn = Effect.fn('childRunLoop.deliverTurn')(function* <
   runId: RunId;
   logger: AgentTrace;
   turn: TTurn | null;
-  turnKey: ChildTurnKey;
+  turnKey: AttemptKey;
   /** The queued follow-ups this turn ran as its prompt. */
   consumed: readonly QueuedFollowUp[];
   err: unknown;
@@ -1168,7 +1168,7 @@ export function startChildRunLoop<TTurn, R = never>(
             let consumed: readonly QueuedFollowUp[] = [];
             while (!loop.isInterrupted()) {
               turnIndex += 1;
-              const turnKey: ChildTurnKey = { attemptId, turnIndex };
+              const turnKey: AttemptKey = { key: attemptId, index: turnIndex };
               emitTurnDiagnostic(logger, 'turn.accepted', {
                 runId,
                 turn: turnKey,

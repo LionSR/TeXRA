@@ -548,7 +548,7 @@ describe('childRunLoop E2E fixtures', () => {
         // Acceptance is committed before the turn is dispatched, so the run's
         // report/result slots are attributable while the turn is still running.
         expect(yield* readChildTurnState(session, runId)).toEqual({
-          active: { attemptId: expect.any(String), turnIndex: 1 },
+          active: { key: expect.any(String), index: 1 },
           lastCompleted: null,
         });
         expect(mocks.releaseRunLeaseAfterArtifacts).not.toHaveBeenCalled();
@@ -567,7 +567,7 @@ describe('childRunLoop E2E fixtures', () => {
         // An interrupted turn never settles, so the acceptance row stands and
         // the lease is released only once the loop is done with it.
         expect(yield* readChildTurnState(session, runId)).toEqual({
-          active: { attemptId: expect.any(String), turnIndex: 1 },
+          active: { key: expect.any(String), index: 1 },
           lastCompleted: null,
         });
         expect(mocks.releaseRunLeaseAfterArtifacts).toHaveBeenCalledWith(
