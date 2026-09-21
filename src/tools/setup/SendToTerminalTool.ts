@@ -55,26 +55,24 @@ const sendToTerminal = Effect.fn('SendToTerminalTool.execute')(function* (
   const command = input.command.trim();
   const name = TERMINAL_NAME_PREFIX + input.label.trim();
 
-  const { exitCode, output, timedOut } = yield* terminal
-    .runCommand({
-      name,
-      command,
-      timeoutMs: input.timeout,
-    })
-    .pipe(
-      // The host's own fault, reported as the tool's error rather than as an
-      // `unknown` the run loop has to guess at. `terminal-unavailable` means
-      // no command ran; `execution-failed` means one may have.
-      Effect.catchTag('TerminalRunFailed', (failure) =>
-        Effect.fail(
-          new ToolError(
-            failure.reason === 'terminal-unavailable'
-              ? `${failure.message} The command was not run; retry, or run it yourself in a terminal.`
-              : `${failure.message} Re-probe with \`verify_setup\` to see whether it took effect.`,
-          ),
+  const { exitCode, output, timedOut } = yield* terminal({
+    name,
+    command,
+    timeoutMs: input.timeout,
+  }).pipe(
+    // The host's own fault, reported as the tool's error rather than as an
+    // `unknown` the run loop has to guess at. `terminal-unavailable` means
+    // no command ran; `execution-failed` means one may have.
+    Effect.catchTag('TerminalRunFailed', (failure) =>
+      Effect.fail(
+        new ToolError(
+          failure.reason === 'terminal-unavailable'
+            ? `${failure.message} The command was not run; retry, or run it yourself in a terminal.`
+            : `${failure.message} Re-probe with \`verify_setup\` to see whether it took effect.`,
         ),
       ),
-    );
+    ),
+  );
 
   const exitLabel = exitCode === undefined ? 'unknown' : String(exitCode);
   const summary = timedOut

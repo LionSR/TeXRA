@@ -16,7 +16,11 @@ import type { ToolHost } from '@agent/core/tools/ToolTypes';
 import { getCodexStatus } from '@auth/codex';
 import { SupabaseAuth } from '@auth/SupabaseAuth';
 import type { SignInFailed } from '@common/errors/signInFailed';
-import type { TerminalRunner } from '@hosts/uiHosts';
+import type {
+  TerminalRunFailed,
+  TerminalRunRequest,
+  TerminalRunResult,
+} from '@hosts/uiHosts';
 import { isCodexSubscriptionActive } from '@model/providerCapabilities';
 import { CHATGPT_SETUP_MODEL } from '@model/setupModelDefaults';
 import type { LanguageModel } from '@platform/languageModel';
@@ -93,8 +97,22 @@ export interface SetupPlatformShape {
   commands?: SetupCommandAdapter;
   /** VS Code extension inspection and installation. */
   extensions?: SetupExtensionAdapter;
-  /** VS Code integrated-terminal execution. */
-  terminal?: TerminalRunner;
+  /**
+   * VS Code integrated-terminal execution: the surface the setup agent uses
+   * for commands the captured-stdio `bash` tool cannot handle (`sudo`
+   * password prompts, other interactive TTY prompts, anything the user must
+   * type into). An implementation should prefer VS Code's stable
+   * `Terminal.shellIntegration` API (since 1.93) so the agent reads back an
+   * exit code and output; without it the run may answer an `undefined` exit
+   * code and empty output, which the caller treats as "user interrupted".
+   *
+   * The member is an `Effect`: a host fault reaches the setup tool as
+   * {@link TerminalRunFailed} rather than as `unknown`, and interrupting the
+   * fiber abandons the wait instead of holding it open.
+   */
+  terminal?: (
+    request: TerminalRunRequest,
+  ) => Effect.Effect<TerminalRunResult, TerminalRunFailed>;
 }
 
 /**

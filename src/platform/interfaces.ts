@@ -171,19 +171,6 @@ export interface LifecycleHost {
 }
 
 // ---------------------------------------------------------------------------
-// Tool notifications
-// ---------------------------------------------------------------------------
-
-/**
- * Pluggable handler for surfacing tool-missing errors to the user. Hosts
- * without a UI for this (CLI, desktop) no-op.
- */
-export type ToolMissingHandler = (
-  message: string,
-  openDocsCommand?: string,
-) => void | Promise<void>;
-
-// ---------------------------------------------------------------------------
 // Agent directories
 // ---------------------------------------------------------------------------
 

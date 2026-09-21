@@ -27,15 +27,13 @@ export function createFakeSetupPlatform(
       install: () => Effect.void,
       ...overrides.extensions,
     },
-    terminal: {
-      runCommand(): Effect.Effect<TerminalRunResult> {
-        return Effect.succeed({
+    terminal:
+      overrides.terminal ??
+      ((): Effect.Effect<TerminalRunResult> =>
+        Effect.succeed({
           exitCode: undefined,
           output: '',
           timedOut: false,
-        });
-      },
-      ...overrides.terminal,
-    },
+        })),
   };
 }
