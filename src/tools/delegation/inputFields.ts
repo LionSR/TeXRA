@@ -328,43 +328,36 @@ export const resolveInvocationFileList = Effect.fn('resolveInvocationFileList')(
       });
       const references = yield* Effect.forEach(
         files,
-        (file) => {
-          const absolutePath = workspaceAbsolutePath(workspace, file);
-          return Effect.tryPromise({
-            try: () => realpath(absolutePath),
-            catch: ensureError,
-          }).pipe(
-            Effect.flatMap((canonicalPath) => {
-              const relative = path.relative(storageRoot, canonicalPath);
-              const storagePath =
-                !path.isAbsolute(relative) &&
-                relative.split(path.sep)[0] !== '..'
-                  ? path.join(storage, relative)
-                  : undefined;
-              if (
-                storagePath !== undefined &&
-                runStorageLocationUnder(storage, storagePath) === undefined
-              ) {
-                return Effect.fail(
-                  new Error(
-                    `${file}; workspace-storage files must be declared outputs of a completed child run.`,
-                  ),
-                );
-              }
-              // Explicit run paths still pass the resolver's symlink rejection,
-              // even when a workspace mirror points outside storage.
-              const runStoragePath =
-                runStorageLocationUnder(storage, absolutePath) !== undefined
-                  ? absolutePath
-                  : storagePath;
-              return Effect.succeed({
-                file,
-                absolutePath: canonicalPath,
-                runStoragePath,
-              });
-            }),
-          );
-        },
+        (file) =>
+          Effect.gen(function* () {
+            const absolutePath = yield* absoluteWorkspacePath(workspace, file);
+            const canonicalPath = yield* Effect.tryPromise({
+              try: () => realpath(absolutePath),
+              catch: ensureError,
+            });
+            const relative = path.relative(storageRoot, canonicalPath);
+            const storagePath =
+              !path.isAbsolute(relative) && relative.split(path.sep)[0] !== '..'
+                ? path.join(storage, relative)
+                : undefined;
+            if (
+              storagePath !== undefined &&
+              runStorageLocationUnder(storage, storagePath) === undefined
+            ) {
+              return yield* Effect.fail(
+                new Error(
+                  `${file}; workspace-storage files must be declared outputs of a completed child run.`,
+                ),
+              );
+            }
+            // Explicit run paths still pass the resolver's symlink rejection,
+            // even when a workspace mirror points outside storage.
+            const runStoragePath =
+              runStorageLocationUnder(storage, absolutePath) !== undefined
+                ? absolutePath
+                : storagePath;
+            return { file, absolutePath: canonicalPath, runStoragePath };
+          }),
         { concurrency: 'unbounded' },
       );
       // After the paths resolve, as it ran before: a reference this run does
