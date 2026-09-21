@@ -8,12 +8,8 @@
  * `launch` is the standard native child-run primitive. Both detached
  * delegation (through `childRunLoop`) and durable in-band workflow calls invoke
  * it, so launch options, progress, stream identity, approval inheritance,
- * failure capture, and cost observation cannot drift between those callers.
- * Cancellation is not one of them, and no longer reaches a turn from here:
- * the child loop owns the child's one stop and delivers it into the turn in
- * flight through the run's own handle.
- *
- * `runTurn` is every following interactive turn: name the run
+ * cancellation, failure capture, and cost observation cannot drift between
+ * those callers. `runTurn` is every following interactive turn: name the run
  * and the config it runs under, and let `resumeToolUseTurn` read the
  * persisted cursor once under the run lease and drive it to the next
  * WAITING/terminal boundary, with the batch already
@@ -57,6 +53,7 @@ import {
   type RunId,
   type UserFollowUpSupport,
 } from '@shared/schemas';
+import { onAbort, unique } from '@utils/core';
 import { ensureError } from '@utils/errors/errorMessage';
 import {
   buildSubagentResult,
@@ -168,6 +165,23 @@ function toDeliveryResult(
   return { ...turn, outcome: RUN_OUTCOME.COMPLETED, runId };
 }
 
+/** Bind every distinct caller/turn cancellation source to one live run handle. */
+function bindAbortSignals(
+  signals: readonly (AbortSignal | undefined)[],
+  handle: AgentRunHandle,
+): () => void {
+  // One listener per source, no `AbortSignal.any`: a composite built on the
+  // parent run's signal stays reachable from it (listener and all) until it
+  // aborts, which for a long-lived parent is never — one retained turn per
+  // subagent (see `linkAbortSignals`).
+  const detachers = unique(
+    signals.filter((signal): signal is AbortSignal => signal !== undefined),
+  ).map((signal) => onAbort(signal, () => handle.interrupt()));
+  return () => {
+    for (const detach of detachers) detach();
+  };
+}
+
 export function createNativeSubagentStrategy(
   params: NativeSubagentStrategyParams,
 ): ChildRunStrategy<AgentRuntimeFlowResult, AgentRunServices> {
@@ -188,12 +202,9 @@ export function createNativeSubagentStrategy(
   const resolveDeliveryTarget = (): RunId | undefined =>
     runHandle ? runHandle.deliveryTarget : params.parentRunId;
 
-  // The turn's handle is retained for delivery routing and for the resume
-  // below, not as a cancellation target: a stop of this child reaches the
-  // turn through that same handle, from the child loop that owns the stop
-  // (`ChildRunInterruptible`), so this strategy binds no signals of its own.
   const runNative = Effect.fn('nativeSubagent.runTurn')(function* (
     ports: ChildRunPorts,
+    signal: AbortSignal,
     call: (
       onRun: (handle: AgentRunHandle) => Effect.Effect<void>,
     ) => Effect.Effect<AgentRuntimeFlowResult, Error, AgentRunServices>,
@@ -202,9 +213,12 @@ export function createNativeSubagentStrategy(
     lastResult = undefined;
     cachedBuilt = undefined;
     cachedDelivery = undefined;
+    let detachAbort = (): void => {};
     return yield* call((handle) =>
       Effect.sync(() => {
+        detachAbort();
         runHandle = handle;
+        detachAbort = bindAbortSignals([params.signal, signal], handle);
       }),
     ).pipe(
       Effect.tap((result) =>
@@ -213,6 +227,7 @@ export function createNativeSubagentStrategy(
           ports.recordCost(result.usage?.totalCost);
         }),
       ),
+      Effect.ensuring(Effect.sync(() => detachAbort())),
     );
   });
 
@@ -252,8 +267,8 @@ export function createNativeSubagentStrategy(
       deliveryMode: 'persistOnly' as const,
     }),
 
-    launch: (ports) =>
-      runNative(ports, (onRun) =>
+    launch: (ports, signal) =>
+      runNative(ports, signal, (onRun) =>
         Effect.gen(function* () {
           const executeOptions = {
             session: params.session,
@@ -301,8 +316,8 @@ export function createNativeSubagentStrategy(
 
     // The resumed flow takes and consumes the queued batch itself, from the
     // queue this child's loop owns; the loop hands a native child none.
-    runTurn: (_followUps, ports) =>
-      runNative(ports, (onRun) =>
+    runTurn: (_followUps, ports, signal) =>
+      runNative(ports, signal, (onRun) =>
         Effect.gen(function* () {
           const runId = runHandle?.runId;
           if (!runId) {

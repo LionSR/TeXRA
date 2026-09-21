@@ -161,6 +161,23 @@ function turnUsage(totalCost: number): Record<string, unknown> {
   return RunUsageTotalsSchema.parse({ totalCost });
 }
 
+/**
+ * Stubs the next `executeAgent` so it publishes `handle` through `onRun` and
+ * settles with a terminal tool-use turn. `afterRun` runs while the launch is
+ * still in flight.
+ */
+function mockLaunchPublishing(
+  handle: unknown,
+  outcome: 'cancelled' | 'completed',
+  afterRun?: () => void,
+): void {
+  mocks.executeAgent.mockImplementationOnce(async (_config, _id, options) => {
+    Effect.runSync(options.onRun?.(handle) ?? Effect.void);
+    afterRun?.();
+    return toolUseTurnResult(outcome, CHILD_RUN_ID);
+  });
+}
+
 function baseParams(
   parentSession = createTestSession(),
   agentCategory: 'toolUse' | 'workflow' = 'toolUse',
@@ -416,7 +433,76 @@ describe('NativeSubagentStrategy', () => {
   );
 
   it.effect(
-    'binds the resumed turn and its policy options to the replacement run',
+    'interrupts when the turn aborts before launch publishes its handle',
+    () =>
+      Effect.gen(function* () {
+        const turn = new AbortController();
+        turn.abort();
+        const interrupt = vi.fn();
+        const strategy = createNativeSubagentStrategy(baseParams());
+        mockLaunchPublishing({ interrupt }, 'cancelled');
+
+        yield* runOnFakeHost(strategy.launch(fakePorts(), turn.signal));
+
+        expect(interrupt).toHaveBeenCalledOnce();
+      }),
+  );
+
+  it.effect('interrupts once for an already-aborted external signal', () =>
+    Effect.gen(function* () {
+      const external = new AbortController();
+      external.abort();
+      const interrupt = vi.fn();
+      const strategy = createNativeSubagentStrategy({
+        ...baseParams(),
+        signal: external.signal,
+      });
+      mockLaunchPublishing({ interrupt }, 'cancelled');
+
+      yield* runOnFakeHost(
+        strategy.launch(fakePorts(), new AbortController().signal),
+      );
+
+      expect(interrupt).toHaveBeenCalledOnce();
+    }),
+  );
+
+  it.effect('deduplicates the same external and per-turn abort signal', () =>
+    Effect.gen(function* () {
+      const controller = new AbortController();
+      const interrupt = vi.fn();
+      const strategy = createNativeSubagentStrategy({
+        ...baseParams(),
+        signal: controller.signal,
+      });
+      mockLaunchPublishing({ interrupt }, 'cancelled', () =>
+        controller.abort(),
+      );
+
+      yield* runOnFakeHost(strategy.launch(fakePorts(), controller.signal));
+
+      expect(interrupt).toHaveBeenCalledOnce();
+    }),
+  );
+
+  it.effect(
+    'detaches from the run signal after launch and ignores later aborts',
+    () =>
+      Effect.gen(function* () {
+        const controller = new AbortController();
+        const interrupt = vi.fn();
+        const strategy = createNativeSubagentStrategy(baseParams());
+        mockLaunchPublishing({ interrupt }, 'completed');
+
+        yield* runOnFakeHost(strategy.launch(fakePorts(), controller.signal));
+        controller.abort();
+
+        expect(interrupt).not.toHaveBeenCalled();
+      }),
+  );
+
+  it.effect(
+    'binds resumed-turn cancellation and policy options to the replacement run',
     () =>
       Effect.gen(function* () {
         const params = {
@@ -484,10 +570,8 @@ describe('NativeSubagentStrategy', () => {
         turn.abort();
         yield* Fiber.join(resumed);
 
-        // The strategy binds no cancellation of its own: a stop reaches the
-        // turn through the run's handle, from the loop that owns the stop.
         expect(initialHandle.interrupt).not.toHaveBeenCalled();
-        expect(replacementInterrupt).not.toHaveBeenCalled();
+        expect(replacementInterrupt).toHaveBeenCalledOnce();
       }),
   );
 
