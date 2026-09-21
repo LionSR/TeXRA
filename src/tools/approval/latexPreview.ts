@@ -15,7 +15,7 @@ import { sync as globSync } from 'glob';
 import { TEMP_EXTENSIONS } from '@housekeeping/constants';
 import { LaTeXdiffService } from '@latex/latexdiff';
 import { generateDiffFileName } from '@latex/latexdiff/diffFileNameManager';
-import { debug, warn } from '@logger/logUtils';
+import { withLogChannel, withLogData } from '@logger/effectLog';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
   LATEXDIFF_TEMP_FILE_LOCATIONS,
@@ -29,6 +29,8 @@ import {
 } from '@utils/files/fileLocation';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { isStrictlyWithin } from '@utils/core/pathCore';
+
+const CHANNEL = 'latexPreview';
 
 /**
  * The host's build-and-show display, as the program it is: the preview
@@ -100,11 +102,10 @@ const silentDelete = (
     yield* fs.remove(targetPath, { force: true }).pipe(
       // Best-effort temp cleanup; the target may already be gone.
       Effect.catch((error) =>
-        Effect.sync(() => {
-          debug('latexPreview', `Failed to delete temp ${kind} ${targetPath}`, {
-            data: error,
-          });
-        }),
+        Effect.logDebug(`Failed to delete temp ${kind} ${targetPath}`).pipe(
+          withLogChannel(CHANNEL),
+          withLogData(error),
+        ),
       ),
     );
   });
@@ -191,16 +192,15 @@ const readFileWithFallback = (
     return yield* fs.readFile(uri.fsPath).pipe(
       Effect.map((bytes) => Buffer.from(bytes).toString('utf8')),
       Effect.catch((error) =>
-        Effect.sync(() => {
-          if (error.reason._tag !== 'NotFound') {
-            warn(
-              'latexPreview',
+        error.reason._tag === 'NotFound'
+          ? Effect.succeed(fallback)
+          : Effect.logWarning(
               `Failed to read ${uri.fsPath}; previewing held content (saved hand edits may be missing): ${toErrorMessage(error)}`,
-              { data: error },
-            );
-          }
-          return fallback;
-        }),
+            ).pipe(
+              withLogChannel(CHANNEL),
+              withLogData(error),
+              Effect.as(fallback),
+            ),
       ),
     );
   });

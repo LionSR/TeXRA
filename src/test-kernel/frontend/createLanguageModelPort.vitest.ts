@@ -1,8 +1,11 @@
 // Third-party imports
 import { it } from '@effect/vitest';
 import { Cause, Deferred, Effect, Exit, Fiber, Scope, Stream } from 'effect';
-import { beforeEach, describe, expect, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
+import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
+import { setLogSink } from '@logger/logSink';
+import { captureLogEntries } from '@test/support/logSinkCapture';
 import type {
   TurnRequest,
   VscodeLanguageModelConfiguration,
@@ -95,10 +98,7 @@ const mocks = vi.hoisted(() => ({
   onDidChangeChatModels: vi.fn(() => ({ dispose: vi.fn() })),
   canSendRequest: vi.fn(),
   onDidChangeAccess: vi.fn(() => ({ dispose: vi.fn() })),
-  warn: vi.fn(),
 }));
-
-vi.mock('@logger/logUtils', () => ({ warn: mocks.warn }));
 
 vi.mock('vscode', () => ({
   lm: {
@@ -137,6 +137,10 @@ describe('createLanguageModelPort', () => {
     vi.clearAllMocks();
     cancellationSources.length = 0;
     mocks.canSendRequest.mockReturnValue(undefined);
+  });
+
+  afterEach(() => {
+    setLogSink(null);
   });
 
   it.effect.each([
@@ -179,16 +183,24 @@ describe('createLanguageModelPort', () => {
     'logs discovery failures at the VS Code language-model adapter boundary',
     () =>
       Effect.gen(function* () {
+        const logs = captureLogEntries();
         const nativeError = new Error('discovery failed');
         mocks.selectChatModels.mockRejectedValue(nativeError);
 
         expect(
-          yield* Effect.flip(createPort().selectModels({ vendor: 'copilot' })),
+          yield* Effect.flip(
+            createPort()
+              .selectModels({ vendor: 'copilot' })
+              .pipe(Effect.provide(effectDiagnosticsLayer)),
+          ),
         ).toBe(nativeError);
-        expect(mocks.warn).toHaveBeenCalledWith(
-          'LanguageModelPort',
-          'Could not discover editor-supplied language models: discovery failed',
-        );
+        expect(
+          logs.has(
+            'WARN',
+            'LanguageModelPort',
+            'Could not discover editor-supplied language models: discovery failed',
+          ),
+        ).toBe(true);
       }),
   );
 });

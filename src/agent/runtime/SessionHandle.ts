@@ -40,7 +40,7 @@ import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManage
 import { finalizeRun } from '@agent/storage/runLifecycle';
 import type { ResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { withLogChannel, withLogData } from '@logger/effectLog';
-import { createLog, isDebugModeEnabled } from '@logger/logUtils';
+import { isDebugModeEnabled } from '@logger/logUtils';
 import { redactSecrets } from '@logger/redaction';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
@@ -104,7 +104,6 @@ import type { RunRegistry } from './runRegistry';
 import type { ModelRetryGate } from './ModelRetryGate';
 
 const CHANNEL = 'sessionHandle';
-const logger = createLog(CHANNEL);
 
 /**
  * Facts a run had queued did not commit before its lease ended: the artifact
@@ -762,12 +761,13 @@ export class SessionHandle {
       return yield* this.decisionFor(runId, requestId, from).pipe(
         Effect.map((row) => row.decision),
         Effect.catch((cause) =>
-          Effect.sync((): RequestDecision => {
-            logger.warn(`Request ${requestId} closed without a decision`, {
-              data: cause,
-            });
-            return { action: 'cancel', cause: cause.message };
-          }),
+          Effect.logWarning(
+            `Request ${requestId} closed without a decision`,
+          ).pipe(
+            withLogData(cause),
+            withLogChannel(CHANNEL),
+            Effect.as({ action: 'cancel', cause: cause.message }),
+          ),
         ),
       );
     }).pipe(

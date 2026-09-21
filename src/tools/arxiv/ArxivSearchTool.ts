@@ -12,7 +12,7 @@ import { z } from 'zod';
 
 // Local imports
 import { normaliseArxivIdentifier } from '@latex/arxivIdentifier';
-import { warn } from '@logger/logUtils';
+import { withLogChannel, withLogData } from '@logger/effectLog';
 import { requireNonEmptyString } from '@tools/utils';
 import { ARXIV_CONSTANTS } from '@tools/citation/constants';
 import { rateLimitedApiCall } from '@tools/support/rateLimiter';
@@ -27,6 +27,8 @@ import { executed } from '@tools/core/result';
 import { pluralize } from '@utils/text/stringUtils';
 
 type Category = Parameters<typeof catQuery>[0];
+
+const CHANNEL = 'arxiv.search';
 
 const SortBySchema = z.enum(['relevance', 'lastUpdatedDate', 'submittedDate']);
 const SortOrderSchema = z.enum(['ascending', 'descending']);
@@ -94,14 +96,9 @@ const searchArxiv = Effect.fn('ArxivSearchTool.execute')(function* (
       // Skip invalid categories — log so a silently-dropped filter is
       // traceable rather than mysteriously absent from the query.
       Effect.catch((error) =>
-        Effect.sync(() => {
-          warn(
-            'arxiv.search',
-            `Ignoring invalid arxiv category filter "${trimmed}"`,
-            { data: error },
-          );
-          return null;
-        }),
+        Effect.logWarning(
+          `Ignoring invalid arxiv category filter "${trimmed}"`,
+        ).pipe(withLogChannel(CHANNEL), withLogData(error), Effect.as(null)),
       ),
     );
     if (filter != null) categoryFilters.push(filter);

@@ -42,7 +42,8 @@ import {
   type ChildProcessSpawner,
 } from 'effect/unstable/process';
 
-import { debug, info, warn } from '@logger/logUtils';
+import { withLogChannel, withLogData } from '@logger/effectLog';
+import { info, warn } from '@logger/logUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { DiagnosticSeverity } from '@utils/diagnostics/diagnosticFormatting';
 import {
@@ -202,7 +203,9 @@ const stopProcess = Effect.fn('LeanServer.stopProcess')(function* (
     .kill({ forceKillAfter: SHUTDOWN_TIMEOUT })
     .pipe(
       Effect.catch((error) =>
-        Effect.sync(() => debug(LOG_CHANNEL, `kill failed: ${error.message}`)),
+        Effect.logDebug(`kill failed: ${error.message}`).pipe(
+          withLogChannel(LOG_CHANNEL),
+        ),
       ),
     );
   yield* Effect.ignore(handle.exitCode).pipe(
@@ -256,8 +259,8 @@ const make = ({
           }),
         ),
         Effect.catch((error) =>
-          Effect.sync(() =>
-            debug(LOG_CHANNEL, `[${root}] stderr ended: ${error.message}`),
+          Effect.logDebug(`[${root}] stderr ended: ${error.message}`).pipe(
+            withLogChannel(LOG_CHANNEL),
           ),
         ),
       ),
@@ -295,12 +298,12 @@ const make = ({
               params as LspPublishDiagnosticsParams,
             );
           case 'window/logMessage':
-            return Effect.sync(() =>
-              debug(LOG_CHANNEL, `[${root}] ${JSON.stringify(params)}`),
+            return Effect.logDebug(`[${root}] ${JSON.stringify(params)}`).pipe(
+              withLogChannel(LOG_CHANNEL),
             );
           case 'window/showMessage':
-            return Effect.sync(() =>
-              info(LOG_CHANNEL, `[${root}] ${JSON.stringify(params)}`),
+            return Effect.logInfo(`[${root}] ${JSON.stringify(params)}`).pipe(
+              withLogChannel(LOG_CHANNEL),
             );
           default:
             return Effect.void;
@@ -379,20 +382,14 @@ const make = ({
           Effect.timeoutOrElse({
             duration: SHUTDOWN_TIMEOUT,
             orElse: () =>
-              Effect.sync(() =>
-                debug(
-                  LOG_CHANNEL,
-                  `[${root}] shutdown request timed out after ${Duration.toMillis(SHUTDOWN_TIMEOUT)}ms`,
-                ),
-              ),
+              Effect.logDebug(
+                `[${root}] shutdown request timed out after ${Duration.toMillis(SHUTDOWN_TIMEOUT)}ms`,
+              ).pipe(withLogChannel(LOG_CHANNEL)),
           }),
           Effect.catch((error) =>
-            Effect.sync(() =>
-              debug(
-                LOG_CHANNEL,
-                `[${root}] shutdown request failed: ${toErrorMessage(error)}`,
-              ),
-            ),
+            Effect.logDebug(
+              `[${root}] shutdown request failed: ${toErrorMessage(error)}`,
+            ).pipe(withLogChannel(LOG_CHANNEL)),
           ),
         );
         yield* rpc.notify('exit');
@@ -597,12 +594,11 @@ function fileUriToPath(uri: string): Effect.Effect<string | null> {
     catch: (error) => error,
   }).pipe(
     Effect.catch((error) =>
-      Effect.sync(() => {
-        debug(LOG_CHANNEL, `Ignoring unmappable file URI ${uri}`, {
-          data: error,
-        });
-        return null;
-      }),
+      Effect.logDebug(`Ignoring unmappable file URI ${uri}`).pipe(
+        withLogChannel(LOG_CHANNEL),
+        withLogData(error),
+        Effect.as(null),
+      ),
     ),
   );
 }

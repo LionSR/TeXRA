@@ -3,7 +3,7 @@ import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
-import { warn } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import {
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
   type LanguageModelAccessState,
@@ -11,6 +11,8 @@ import {
   type LanguageModelPort,
 } from '@platform/languageModel';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+
+const CHANNEL = 'LanguageModelPort';
 
 function toAccessState(access: boolean | undefined): LanguageModelAccessState {
   if (access === true) return 'allowed';
@@ -64,12 +66,9 @@ export function createLanguageModelPort(
         catch: (cause) => cause,
       }).pipe(
         Effect.tapError((error) =>
-          Effect.sync(() =>
-            warn(
-              'LanguageModelPort',
-              `Could not discover editor-supplied language models: ${toErrorMessage(error)}`,
-            ),
-          ),
+          Effect.logWarning(
+            `Could not discover editor-supplied language models: ${toErrorMessage(error)}`,
+          ).pipe(withLogChannel(CHANNEL)),
         ),
       ),
 

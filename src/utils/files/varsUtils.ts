@@ -1,6 +1,6 @@
 import { Effect, FileSystem } from 'effect';
 
-import { createLog } from '@logger/logUtils';
+import { withLogChannel, withLogData } from '@logger/effectLog';
 import { filterNotNull } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getPromptFileName } from '@utils/prompt';
@@ -8,7 +8,7 @@ import { getPromptFileName } from '@utils/prompt';
 import { readNormalizedFile } from './fsDurability';
 import { workspaceAbsolutePath } from './workspaceFS';
 
-const log = createLog('VarsUtils');
+const CHANNEL = 'VarsUtils';
 
 /** A file successfully read for the `${varName}_FILE`/`${varName}_CONTENT` variable pair. */
 export interface FileVarValue {
@@ -39,16 +39,12 @@ export const setVarFromFile = Effect.fn('varsUtils.setVarFromFile')(function* (
   ).pipe(
     Effect.map((content) => ({ file: filePath, content })),
     Effect.catch((error) =>
-      Effect.sync(() => {
-        // The variable is simply absent from the prompt after this, so a
-        // mistyped path and a permission error must not read like a real
-        // absence.
-        log.warn(
-          `Failed to read ${varName} from file ${filePath}: ${toErrorMessage(error)}`,
-          { data: error },
-        );
-        return null;
-      }),
+      // The variable is simply absent from the prompt after this, so a
+      // mistyped path and a permission error must not read like a real
+      // absence.
+      Effect.logWarning(
+        `Failed to read ${varName} from file ${filePath}: ${toErrorMessage(error)}`,
+      ).pipe(withLogChannel(CHANNEL), withLogData(error), Effect.as(null)),
     ),
   );
 });

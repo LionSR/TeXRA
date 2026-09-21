@@ -5,7 +5,6 @@ import * as path from 'node:path';
 import { Effect, FileSystem, PlatformError } from 'effect';
 
 import { withLogChannel } from '@logger/effectLog';
-import { createLog } from '@logger/logUtils';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { type RunId, type FileLocation } from '@shared/schemas';
 import {
@@ -32,8 +31,6 @@ import {
   snapshotExists,
 } from './runStorageFs';
 import { locateInWorkspace } from './workspaceFS';
-
-const log = createLog(CHANNEL);
 
 /** `isFileNotFoundError` over the standard library's errors: the one reading
  *  of "nothing is there" the guards below branch on. */
@@ -319,14 +316,11 @@ export class RunFileService {
             const hasSnapshot = yield* fs.stat(snapshotAbsolute).pipe(
               Effect.as(true),
               Effect.catch((error) =>
-                Effect.sync(() => {
-                  if (!isAbsent(error)) {
-                    log.warn(
+                isAbsent(error)
+                  ? Effect.succeed(false)
+                  : Effect.logWarning(
                       `Unable to stat snapshot ${snapshotAbsolute}; linking the workspace mirror instead: ${toErrorMessage(error)}`,
-                    );
-                  }
-                  return false;
-                }),
+                    ).pipe(withLogChannel(CHANNEL), Effect.as(false)),
               ),
             );
             const sourceAbsolute = hasSnapshot

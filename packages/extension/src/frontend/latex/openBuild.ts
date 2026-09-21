@@ -23,7 +23,6 @@ import { pathToLocationIn } from '@utils/files/fileLocation';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'OpenBuildUtils';
-const log = createLog(CHANNEL);
 
 /**
  * A VS Code editor call as an Effect. The editor's promises reject with an
@@ -325,10 +324,10 @@ export const scheduleViewerDisplay: Effect.Effect<boolean> = Effect.gen(
       ),
       Effect.as(true),
       Effect.catch((err) =>
-        Effect.sync((): boolean => {
-          log.warn(`Viewer display failed: ${toErrorMessage(err)}`);
-          return false;
-        }),
+        Effect.logWarning(`Viewer display failed: ${toErrorMessage(err)}`).pipe(
+          withLogChannel(CHANNEL),
+          Effect.as(false),
+        ),
       ),
     );
   },
