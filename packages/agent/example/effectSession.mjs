@@ -13,7 +13,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { Effect, Stream } from 'effect';
-import { Runtime, Sessions } from '@texra-ai/agent/effect';
+import { Sessions } from '@texra-ai/agent/effect';
 import { nodePlatform } from '@texra-ai/agent/node';
 
 const workspace = await mkdtemp(join(tmpdir(), 'texra-agent-example-'));
@@ -43,7 +43,7 @@ const program = Effect.gen(function* () {
 }).pipe(
   Effect.scoped,
   Effect.provide(
-    Runtime.layer(
+    Sessions.layer(
       nodePlatform({
         agentsDir,
         storageDir: join(workspace, 'storage'),

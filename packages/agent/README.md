@@ -161,7 +161,7 @@ files.
 | `@texra-ai/agent`         | `runAgent`, `closeSession`, `AgentRun`, `defineTool`, `MapToolRegistry`, and the `AgentEvent` / `ITool` / `AgentFlowResult` / `SessionCloseReport` types |
 | `@texra-ai/agent/schemas` | Zod schemas + inferred types for agent definitions, configs, and run results                                                                             |
 | `@texra-ai/agent/node`    | `nodePlatform(options)`, a ready-made Node `Platform` with its workspace roots                                                                           |
-| `@texra-ai/agent/effect`  | `Runtime`, `Sessions`, `Session`, `Run` and the tagged errors: the services the entry above renders                                                      |
+| `@texra-ai/agent/effect`  | `Sessions`, `Session`, `Run` and the tagged errors: the services the entry above renders                                                        |
 
 Every entry needs the `effect` and `zod` peers installed, the root one
 included: `@texra-ai/agent` is the Effect surface rendered as Promises, and
@@ -184,7 +184,7 @@ everything below them is Effect-typed.
 
 ```ts
 import { Effect, Stream } from 'effect';
-import { Runtime, Sessions } from '@texra-ai/agent/effect';
+import { Sessions } from '@texra-ai/agent/effect';
 import { nodePlatform } from '@texra-ai/agent/node';
 
 const program = Effect.gen(function* () {
@@ -199,13 +199,12 @@ const program = Effect.gen(function* () {
     text: 'Keep the theorem statements unchanged.',
   });
   return yield* run.result;
-}).pipe(Effect.scoped, Effect.provide(Runtime.layer(nodePlatform(options))));
+}).pipe(Effect.scoped, Effect.provide(Sessions.layer(nodePlatform(options))));
 ```
 
-| Service    | What it is                                                                                                                                                                                  |
+| Service    | What it is                                                                                                                                                                                      |
 | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Runtime`  | The composed process: the platform and its workspace roots. `Runtime.layer(platform)` provides it and `Sessions`, with this scope as the lifetime of the hold it takes on that composition. |
-| `Sessions` | The process's one session owner: `open(roots?)`, `close(roots?)`, `list`. One session per workspace storage root, the same owner every TeXRA host opens through.                            |
+| `Sessions` | The process's one session owner: `open(roots?)`, `close(roots?)`, `list`. One session per workspace storage root, the same owner every TeXRA host opens through. `Sessions.layer(platform)` composes the process and provides it, with this scope as the lifetime of the hold it takes on that composition. |
 | `Session`  | `start`, `request`, `view.changes`, and `subscribe`, whose transcript interest is held for a `Scope` and cleared when it closes. A value, one per root, not a tag.                          |
 | `Run`      | `runId`, `result`, `view`, `events`, `interrupt`. `start` succeeds at admission: the run exists in the session, its row published and its trace live.                                       |
 
@@ -213,7 +212,7 @@ const program = Effect.gen(function* () {
 immutable, an older level stays exactly what it was for as long as it is held,
 and a branch the later level did not touch is the same object in both.
 
-The composition is held, not owned: each `Runtime.layer` scope takes a hold on
+The composition is held, not owned: each `Sessions.layer` scope takes a hold on
 it, and the last hold to end is what closes every session the owner holds,
 each settling its runs and flushing its artifacts, and then disposes the
 runtime they ran on. So two overlapping scopes over one platform are safe, the

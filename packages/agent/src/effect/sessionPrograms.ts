@@ -67,12 +67,7 @@ import {
   ToolsRefused,
   type LaunchError,
 } from './errors.js';
-import {
-  Sessions,
-  type Session,
-  type Run,
-  type StartInput,
-} from './sessions.js';
+import type { Sessions, Session, Run, StartInput } from './sessions.js';
 import type { AgentRuntime } from './runtime.js';
 
 /** A run that returned without ever publishing its stream: the launcher's
