@@ -356,9 +356,9 @@ describe('CLI platform init', () => {
           runtime.runPromise(Effect.service(SetupPlatform)),
         );
         expect(setup.host).toBe('cli');
-        expect(yield* Effect.promise(() => runtime.runPromise(setup.signIn()))).toBe(
-          true,
-        );
+        expect(
+          yield* Effect.promise(() => runtime.runPromise(setup.signIn())),
+        ).toBe(true);
         expect(mocks.signInCliSupabase).toHaveBeenCalledOnce();
         expect(mocks.signInCliSupabase).toHaveBeenCalledWith(runtime, {
           openBrowser: true,

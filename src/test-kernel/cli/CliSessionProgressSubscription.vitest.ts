@@ -468,15 +468,20 @@ describe('attachCliSessionProgressProjection', () => {
               draft: {
                 type: 'flow.step',
                 aggregateId: runAggregate,
-                payload: { family: 'toolUse', step: 'turn.begin', round: 1, turn },
+                payload: {
+                  family: 'toolUse',
+                  step: 'turn.begin',
+                  round: 1,
+                  turn,
+                },
               },
             }),
           );
         }
 
-        expect(records().map((record) => rowFields(record).fields)).toMatchObject(
-          [{ payload: { turn: 1 } }, { payload: { turn: 2 } }],
-        );
+        expect(
+          records().map((record) => rowFields(record).fields),
+        ).toMatchObject([{ payload: { turn: 1 } }, { payload: { turn: 2 } }]);
       }),
   );
 });
