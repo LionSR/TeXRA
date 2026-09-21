@@ -24,9 +24,13 @@ import { Effect, PubSub } from 'effect';
  *   view that failed to repaint could fail the tool call that wrote the
  *   file. Nothing depended on that throw; every caller emitted as a
  *   statement.
- * - A subscriber is live from the moment its fiber has registered, which is
- *   the synchronous prelude of the `runFork` at the host's run edge, not the
- *   end of the program it forked.
+ * - A subscriber is live once its forked fiber has reached the `subscribe`
+ *   below, which is a later scheduler turn than the `runFork` at the host's
+ *   run edge: `runFork` schedules the fiber and returns, it does not run it.
+ *   So a signal published in the same synchronous turn that subscribed
+ *   reaches nobody — the ordinary `PubSub` rule that a subscription only
+ *   receives what is published after it exists, and the reason the suites
+ *   here yield once before they publish.
  *
  * Every signal below records which hosts consume it and — where a host does
  * not — why not. A signal with no such note is the ambiguous middle this file
