@@ -133,7 +133,7 @@ export const executeSubagent = Effect.fn('executeSubagent')(function* (
     const parentTrace = parent.run.logger;
     const notifyParentTrace = (update: SubagentProgressUpdate): void => {
       const line = describeSubagentProgress(agentName, update);
-      if (line) parentTrace?.info(line);
+      if (line) parentTrace.info(line);
     };
     const deliveryExit = yield* Effect.exit(
       executeSubagentForDeliveryInBand({
