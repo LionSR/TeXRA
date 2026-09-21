@@ -68,6 +68,7 @@ import {
   formatAttachmentSummary,
   formatToolResultAsText,
 } from '../run/toolResultText';
+import { guardedToolCall } from './toolGuard';
 import {
   appendRow,
   displayRow,
@@ -431,9 +432,11 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     if (!tool) {
       result = { status: 'error', error: `Unknown tool ${fact.toolName}` };
     } else {
+      // Guard first, in the same call context: a refused path or an
+      // unapproved command settles the call without the body running.
       const invoked = yield* Effect.exit(
         Effect.scoped(
-          tool.call(parsedInput).pipe(
+          guardedToolCall(tool, parsedInput).pipe(
             Effect.provideService(ToolCall, {
               roots: run.session.roots,
               run,
@@ -443,10 +446,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
               userInstruction:
                 run.config.rootUserInstruction ?? turn.userInstruction,
               toolCallId: fact.callId,
-              hooks: {
-                onToolOutput,
-                recordSubagentCost,
-              },
+              hooks: { onToolOutput, recordSubagentCost },
             }),
           ),
         ),

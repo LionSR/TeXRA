@@ -54,7 +54,6 @@ import type {
 import { DELIVERY_TAG } from '@shared/deliveryTags';
 import { buildSyntheticToolUseConfig } from '@tools/core/syntheticAgentConfig';
 import { parseWorkingDirectory } from '@tools/pathResolution';
-import { requestBashApproval } from '@tools/approval/bashApproval';
 import { linkAbortSignals } from '@utils/core';
 import {
   formatWallTimeSeconds,
@@ -68,12 +67,15 @@ import { defineTool } from './core/define';
 import { buildAgentWorkspaceOptions } from './agentWorkspaceOptions';
 import { ClaudeBackgroundTaskTracker } from './claudeAgentBackgroundTasks';
 import {
+  claudeAgentPermissionMode,
+  getClaudeAgentConfig,
   importClaudeAgentSdk,
   findClaudeBinaryPath,
 } from './claudeAgentImport';
 import { type ChildRun } from './delegation/childRun';
 import { claudeAgentSessionsFor } from './agentCliSessionStores';
 import {
+  agentCliApprovalCommand,
   agentCliCall,
   type AgentCliToolFailure,
   buildAgentCliLaunch,
@@ -97,12 +99,6 @@ import type {
   SDKAssistantMessage,
   SDKUserMessage,
 } from '@anthropic-ai/claude-agent-sdk';
-
-/** Lazy accessor for claudeAgentConfig.ts exports (loaded once, cached). */
-let _configModule: typeof import('./claudeAgentConfig.js') | null = null;
-const getClaudeAgentConfig = Effect.promise(
-  async () => (_configModule ??= await import('./claudeAgentConfig.js')),
-);
 
 // ============================================================================
 // Schema
@@ -546,11 +542,17 @@ export class ClaudeAgentTool extends defineTool({
     'Pass session_id on a later call to send a follow-up to an existing session, like delegate_agent(execution_id=…). ' +
     'Set fork_session to branch from that session while leaving the original unchanged.',
   schema: ClaudeAgentInputSchema,
+  guard: {
+    bash: (input: ClaudeAgentInput) =>
+      agentCliApprovalCommand(CLAUDE_AGENT_NAME, input.prompt, (state) =>
+        claudeAgentPermissionMode(input, state),
+      ),
+  },
 }) {
   protected execute(input: ClaudeAgentInput) {
     return Effect.gen({ self: this }, function* () {
       return yield* reraiseAgentCliCallFailure(
-        this.run(input, yield* ToolCall, requestBashApproval),
+        this.run(input, yield* ToolCall),
       );
     });
   }
@@ -559,7 +561,6 @@ export class ClaudeAgentTool extends defineTool({
     this: ClaudeAgentTool,
     input: ClaudeAgentInput,
     toolCall: ToolCallShape,
-    requestApproval: typeof requestBashApproval,
   ): Effect.fn.Return<
     ToolResult,
     AgentCliToolFailure,
@@ -567,9 +568,10 @@ export class ClaudeAgentTool extends defineTool({
   > {
     const config = yield* getClaudeAgentConfig;
     const { workspaceState } = toolCall.roots;
-    const permissionMode =
-      input.permission_mode ??
-      config.getClaudeAgentPermissionMode(workspaceState);
+    const permissionMode = yield* claudeAgentPermissionMode(
+      input,
+      workspaceState,
+    );
     const model = input.model ?? config.getClaudeAgentModel(workspaceState);
     const effort = input.effort ?? config.getClaudeAgentEffort(workspaceState);
     const sessionId = input.session_id ?? undefined;
@@ -577,9 +579,7 @@ export class ClaudeAgentTool extends defineTool({
 
     return yield* dispatchAgentCliTool({
       toolCall,
-      requestApproval,
       agentName: CLAUDE_AGENT_NAME,
-      approvalLabel: `[${CLAUDE_AGENT_NAME} ${permissionMode}] ${input.prompt}`,
       store: claudeAgentSessionsFor,
       // A fork always launches a distinct TeXRA child. Queueing onto the
       // source session would mutate the original instead of branching it.
