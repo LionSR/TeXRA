@@ -1,6 +1,6 @@
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
+import { Cause, Effect, Exit } from 'effect';
 import { describe, expect, vi } from 'vitest';
 
 // Local imports
@@ -74,6 +74,31 @@ describe('recordHalt', () => {
       expect(yield* Effect.flip(halt(openedState, RUN_OUTCOME.FAILED))).toBe(
         failure,
       );
+      expect(appendBatch).toHaveBeenCalledOnce();
+      expect(warn).not.toHaveBeenCalled();
+    }),
+  );
+
+  it.effect('dies on defects that are not typed halt-write failures', () =>
+    Effect.gen(function* () {
+      const defect = new Error('unexpected halt defect');
+      const appendBatch = vi.fn(() => Effect.die(defect));
+      const warn = vi.fn();
+
+      const halt = recordHalt(
+        {
+          ledger: { appendBatch } as never,
+          logger: { warn } as never,
+          runId,
+        },
+        (state) => state,
+      );
+
+      const exit = yield* Effect.exit(halt(openedState, RUN_OUTCOME.FAILED));
+      expect(Exit.isFailure(exit)).toBe(true);
+      if (!Exit.isFailure(exit)) return;
+      expect(Cause.hasDies(exit.cause)).toBe(true);
+      expect(Cause.squash(exit.cause)).toBe(defect);
       expect(appendBatch).toHaveBeenCalledOnce();
       expect(warn).not.toHaveBeenCalled();
     }),
