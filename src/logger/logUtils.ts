@@ -71,15 +71,17 @@ export function isDebugModeEnabled(): boolean {
  * non-enumerable when set through the constructor option), and its own
  * enumerable properties (e.g. `statusCode`, `requestId`). A nested `cause`
  * that is itself an `Error` reaches this function again through the replacer
- * below, so a cause chain flattens whole.
+ * below, so a cause chain flattens whole. The spread comes first so the named
+ * fields are not reported as overwritten; the values are identical either way,
+ * since reading `error.name` returns an own enumerable `name` when one exists.
  */
 function serializeError(error: Error): Record<string, unknown> {
   return {
+    ...error,
     name: error.name,
     message: error.message,
     stack: error.stack,
     ...(error.cause === undefined ? {} : { cause: error.cause }),
-    ...error,
   };
 }
 
