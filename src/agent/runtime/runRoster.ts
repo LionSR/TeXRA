@@ -295,9 +295,7 @@ export class RunRoster {
    *  beforehand. `refuseWhenLive` marks the caller an inactive-run step rather
    *  than a generation: it widens the refusal to the retained owners and to
    *  whoever else holds the lane, and keeps the step out of {@link isLive}, so
-   *  the run's next generation queues behind it. A generation's successful
-   *  claim lifts the run's stop marks ({@link clearStops}); a refused claim
-   *  leaves them standing.
+   *  the run's next generation queues behind it.
    *
    *  A step is refusable from admission until it starts, and {@link waiting}
    *  holds its refusal for exactly that window. The race is therefore around
@@ -311,11 +309,7 @@ export class RunRoster {
     return Effect.suspend(() => {
       const refusal = Deferred.makeUnsafe<never, Error>();
       this.waiting.add(refusal);
-      // A generation counts itself in where it claims the lane and out where
-      // the step leaves, so the entry reports it for exactly as long as it
-      // holds the run. The entry is captured at the claim, so a leave
-      // unwinding after `clear` dropped the map decrements the entry it
-      // incremented, never a fresh one a later path recreated.
+      // Counted in where the generation claims the lane, out where the step leaves; the entry is captured at the claim, so a stale leave unwinding after `clear` decrements its own entry.
       let counted: RunEntry | undefined;
       const refuseClaim = (): RunLive | undefined => {
         const held =
@@ -323,18 +317,9 @@ export class RunRoster {
           (this.isRetained(runId) || this.isLaneOccupied(runId));
         if (this.isLive(runId) || held) return new RunLive({ runId });
         if (refuseWhenLive) return undefined;
-        // A generation admitted through the lane is this run starting again:
-        // whatever stop the run was marked for belongs to the generation it
-        // ended, and the one taking the lane admits children of its own. The
-        // clear rides the claim, so a launch refused here leaves the stop's
-        // child-admission gate exactly as it found it. The lane is what makes
-        // this a separate admission rather than the same stop's own
-        // bookkeeping — a turn handle the stopping generation replaces takes
-        // no lane, so it no longer reopens a window the stop is still closing.
         this.clearStops(runId);
-        const entry = this.entryFor(runId);
-        entry.launches += 1;
-        counted = entry;
+        counted = this.entryFor(runId);
+        counted.launches += 1;
         return undefined;
       };
       const leave = (): void => {
