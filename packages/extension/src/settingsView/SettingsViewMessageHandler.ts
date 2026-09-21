@@ -311,10 +311,10 @@ export class SettingsViewMessageHandler {
    *
    * A tab whose arms all belong to one delegate contributes them as a table it
    * owns (`...delegate.handlers`), as the desktop's controllers do; what is
-   * spelled out here is what this host performs itself — the profile and model
-   * commands, the Tools dashboard, the generic catalog write, and the two
-   * VS Code-only surfaces (Copilot access, extension installation) that have
-   * no catalog row to derive an arm from.
+   * spelled out here is what this host performs itself: the profile and
+   * model commands, the Tools dashboard, the generic catalog write, and the
+   * two VS Code-only surfaces (Copilot access, extension installation) that
+   * have no catalog row to derive an arm from.
    */
   private createHandlerRegistry(
     context: vscode.ExtensionContext,
