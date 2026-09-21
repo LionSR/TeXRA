@@ -323,9 +323,9 @@ export class RunStopper {
       return true;
     }
     // The loop's own interrupt already carried the stop into the turn: the
-    // native-subagent strategy links the loop signal to this handle, so
-    // aborting the loop spends the handle's interrupt target before we reach
-    // it. The delivered stop is the admission, exactly as the handle-less
+    // child loop reaches the run's current handle when its activation is
+    // interrupted, so that handle's interrupt target is spent before we get
+    // here. The delivered stop is the admission, exactly as the handle-less
     // branch of `kill` reports an activation-only stop.
     if (interrupted || activationInterrupted) return true;
     return false;

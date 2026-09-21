@@ -199,6 +199,10 @@ const executeInBand = Effect.fn('executeInBand')(
         // The parent is blocked awaiting this child, so it rides the parent's
         // budget slot (child-run budget design note).
         budgeted: false,
+        // This caller's own cancellation is the child's stop: the loop holds
+        // it on the child's one controller and carries it into the turn in
+        // flight, so an aborted in-band call does not wait out the child.
+        ...(options.signal !== undefined && { signal: options.signal }),
         ...(options.notify !== undefined && { notify: options.notify }),
         onTurnSettled: (settled) => {
           settledTurn = settled;

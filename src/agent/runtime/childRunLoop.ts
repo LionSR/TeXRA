@@ -20,6 +20,12 @@ import { finalizeRunTerminal } from '@agent/runtime/AgentRunLifecycle';
 import { childRunBudgetFor } from '@agent/runtime/childRunBudget';
 import type { RunHandle, RunInterruptHandler } from '@agent/runtime/RunHandle';
 import { Runs } from '@agent/runtime/runRegistry';
+import {
+  attemptTurn,
+  onceAborted,
+  untilInterrupted,
+  type TurnUsage,
+} from '@agent/runtime/childRunStop';
 import { RunInput, type QueuedFollowUp } from '@agent/followUp/RunInput';
 import type {
   FollowUpConsumerLease,
@@ -32,7 +38,6 @@ import {
 } from '@agent/followUp/ToolUseFollowUp';
 import { persistChildRunDelivery } from '@agent/storage/childRunDeliveryPersistence';
 import { classifyAgentError } from '@common/errors';
-import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
 import { AgentResume } from '@platform/interfaces';
 import {
   RUN_OUTCOME,
@@ -52,11 +57,7 @@ import { foldRunState } from '@shared/session/runStateFold';
 import { formatSubagentProgress } from '@shared/subagentFollowup';
 import { deriveRunOutcome } from '@shared/runs/runStatus';
 import { aggregateError, onAbort } from '@utils/core';
-import { formatDuration } from '@utils/text/stringUtils';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
-
-/** Minimal token usage shape consumed by the loop's turn summary. */
-type TurnUsage = { input_tokens?: number; output_tokens?: number };
 
 /**
  * Capabilities the loop provides to a strategy for the duration of one child
@@ -343,25 +344,33 @@ export interface ChildRunLoopParams<TTurn, R = never> {
     readonly isError: boolean;
     readonly error?: unknown;
   }) => void;
+  /** The launching caller's own cancellation, for a durable in-band child it
+   *  blocks on. It is this child's stop like any other: one listener for the
+   *  child's life, on the child's one controller. */
+  readonly signal?: AbortSignal;
 }
 
 /**
- * Interrupt handler attached to the child's run handle for the child's
- * whole lifetime, so the stop button always finds a live target; including
- * the inter-turn WAITING gap, when no flow-owned context is attached.
+ * The child's one cancellation owner: the controller every turn of this child
+ * runs under, attached to its run handle for the child's whole lifetime so a
+ * stop always finds a live target, the inter-turn WAITING gap included.
  *
  * Carries no flow-owned session view, so flow-only commands such as context
  * compaction ignore it. Follow-ups route through the queue-owned submission
  * path, which joins this loop's live lease instead of creating a competing
  * continuation.
  *
- * A running turn and the between-turn wait are reached through `signal`
- * alone: every strategy binds the turn it launches to it, a native turn's
- * flow subscribes to its own run signal downstream of that binding, and the
- * loop races its queue wait against it.
+ * The between-turn wait is reached through `signal`, which the loop races its
+ * queue wait against, and an external-process turn through the same signal,
+ * which its strategy binds the process to. A turn that is a TeXRA run of its
+ * own is reached through {@link reachTurn}: the run's current handle carries
+ * the interrupt target of whatever runs under it, so this loop's stop travels
+ * into the turn through the roster entry, rather than through listeners a
+ * strategy installs on this signal per turn to reach that same handle.
  */
 class ChildRunInterruptible implements RunInterruptHandler {
   private readonly controller = new AbortController();
+  private readonly detachCallerStop: () => void;
 
   constructor(
     /**
@@ -370,10 +379,29 @@ class ChildRunInterruptible implements RunInterruptHandler {
      * drain so restart recovery still finds it (#8155).
      */
     readonly ownsBackgroundProcess: boolean,
-  ) {}
+    /** Reach the run handle of the turn in flight, if there is one. */
+    private readonly reachTurn: () => void,
+    /** The launching caller's own stop, for a durable in-band child. */
+    callerStop?: AbortSignal,
+  ) {
+    this.detachCallerStop = callerStop
+      ? onAbort(callerStop, () => this.interrupt())
+      : () => {};
+  }
 
+  /** Stop this child: the loop's signal first, then the turn in flight. The
+   *  early return makes it re-entrant, which it must be — between turns the
+   *  handle {@link reachTurn} interrupts has this object as its handler. */
   interrupt(): void {
+    if (this.controller.signal.aborted) return;
     this.controller.abort();
+    this.reachTurn();
+  }
+
+  /** Let go of the caller's stop: a long-lived parent's signal must not
+   *  retain a finished child's listener. */
+  detach(): void {
+    this.detachCallerStop();
   }
 
   isInterrupted(): boolean {
@@ -388,65 +416,6 @@ class ChildRunInterruptible implements RunInterruptHandler {
   get signal(): AbortSignal {
     return this.controller.signal;
   }
-}
-
-/** Log a turn summary (duration + token usage) to the child stream. */
-function logTurnSummary(
-  logger: AgentTrace,
-  wallTimeMs: number,
-  usage: TurnUsage | null | undefined,
-): void {
-  logger.info(`Turn completed in ${formatDuration(wallTimeMs)}`);
-  if (usage) {
-    logger.info('Tokens', {
-      data: {
-        input: usage.input_tokens ?? 0,
-        output: usage.output_tokens ?? 0,
-      },
-    });
-  }
-}
-
-/** Outcome of a single turn attempt, flattening the loop's inner try/catch. */
-type TurnAttempt<TTurn> =
-  | { kind: 'completed'; turn: TTurn; turnIsError: boolean }
-  | { kind: 'failed'; err: unknown }
-  | { kind: 'interrupted' };
-
-/**
- * Run one turn (via `runner`) and classify the outcome. A clean interruption
- * maps to `interrupted` (the caller breaks), a thrown call to `failed`, and a
- * returned turn to `completed` (carrying its application-level error flag).
- */
-function attemptTurn<TTurn, R>(
-  strategy: ChildRunStrategy<TTurn, R>,
-  runner: (signal: AbortSignal) => Effect.Effect<TTurn, Error, R>,
-  loop: ChildRunInterruptible,
-  logger: AgentTrace,
-  startedAt: number,
-): Effect.Effect<TurnAttempt<TTurn>, never, R> {
-  return Effect.gen(function* () {
-    const attempt = yield* Effect.exit(
-      Effect.gen(function* () {
-        const turn = yield* runner(loop.signal);
-        logTurnSummary(
-          logger,
-          Date.now() - startedAt,
-          strategy.getUsage?.(turn),
-        );
-        const turnIsError = strategy.isTurnError?.(turn) === true;
-        if (turnIsError) strategy.onTurnError?.(turn, logger);
-        return { kind: 'completed' as const, turn, turnIsError };
-      }),
-    );
-    if (Exit.isSuccess(attempt)) return attempt.value;
-    const caught = Cause.squash(attempt.cause);
-    if (loop.isInterrupted() || isUserAbort(caught)) {
-      return { kind: 'interrupted' as const };
-    }
-    logger.error(toErrorMessage(caught));
-    return { kind: 'failed' as const, err: caught };
-  });
 }
 
 /**
@@ -820,32 +789,6 @@ const submitPendingDelivery = Effect.fn('submitPendingDelivery')(function* (
 });
 
 /**
- * The child loop's abort as an Effect: it settles with `outcome()` the moment
- * `signal` aborts, and never otherwise. Built per race, so the outcome is
- * constructed only when the abort actually fires.
- */
-function onceAborted<A, E>(
-  signal: AbortSignal,
-  outcome: () => Effect.Effect<A, E>,
-): Effect.Effect<A, E> {
-  return Effect.callback<A, E>((resume) => {
-    const detach = onAbort(signal, () => resume(outcome()));
-    return Effect.sync(detach);
-  });
-}
-
-/** Race a queue wait against the child loop's interrupt; null when stopped. */
-function untilInterrupted<A>(
-  wait: Effect.Effect<A>,
-  loop: ChildRunInterruptible,
-): Effect.Effect<A | null> {
-  return Effect.raceFirst(
-    wait,
-    onceAborted(loop.signal, () => Effect.succeed(null)),
-  ).pipe(Effect.interruptible);
-}
-
-/**
  * Own admitted run cleanup until the child loop takes over. Failure or
  * interruption records the terminal outcome and releases the run's claim
  * before propagating the original cause. Post-handoff work stays outside
@@ -910,6 +853,8 @@ export function startChildRunLoop<TTurn, R = never>(
     const logger = childRun?.logger ?? createChannelTrace('childRunLoop');
     const loop = new ChildRunInterruptible(
       strategy.ownsBackgroundProcess === true,
+      () => runs.getHandle(runId)?.interrupt(),
+      params.signal,
     );
     // Native children have no persistent child-stream handle between turns, so
     // retain their parent lineage until final delivery. Child-stream loops own
@@ -956,6 +901,7 @@ export function startChildRunLoop<TTurn, R = never>(
         const cleanups = [
           () => sessionStage?.end(RUN_OUTCOME.FAILED),
           () => detachLoopInterrupt?.(),
+          () => loop.detach(),
           () => {
             if (queueLease)
               runSession.followUps.release(queueLease, 'terminal');
@@ -1181,7 +1127,7 @@ export function startChildRunLoop<TTurn, R = never>(
               const attempt = yield* attemptTurn(
                 strategy,
                 gateTurn(runner),
-                loop,
+                loop.signal,
                 logger,
                 startedAt,
               );
@@ -1278,12 +1224,12 @@ export function startChildRunLoop<TTurn, R = never>(
                 // queue from the run's rows; one that never reached that load
                 // leaves nothing older than what this loop was handed.
                 input.seed([]);
-                const ready = yield* untilInterrupted(input.ready, loop);
+                const ready = yield* untilInterrupted(input.ready, loop.signal);
                 if (!ready || loop.isInterrupted()) break;
                 runner = (signal) => nextRunTurn([], ports, signal);
                 continue;
               }
-              const batch = yield* untilInterrupted(input.take, loop);
+              const batch = yield* untilInterrupted(input.take, loop.signal);
               if (!batch || loop.isInterrupted()) break;
               // The batch leaves the park: the loop is running again from
               // here, and the turn it is about to accept is the top's.
@@ -1310,6 +1256,7 @@ export function startChildRunLoop<TTurn, R = never>(
       const terminal = yield* Effect.exit(
         Effect.gen(function* () {
           detachLoopInterrupt?.();
+          loop.detach();
           let terminationCause: ChildLoopTerminationCause = 'terminal';
           if (loop.isInterrupted()) terminationCause = 'interrupted';
           else if (sawTurnFailure) terminationCause = 'turn_failed';
