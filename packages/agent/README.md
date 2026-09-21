@@ -174,10 +174,15 @@ stated once there, in Effect: which level is a run's first, when its transcript
 interest changes, when its drain ends, which failure wins. `@texra-ai/agent`
 above is that surface rendered as Promises and AsyncIterables, and holds no
 logic of its own. It stays the Promise entry because the published SDK is one
-of the three boundary kinds rule R1 of TeXRA's Effect migration names
-(`.agents/docs/archived/architecture/2026-08-26-effect-4-runtime-migration.md`, §7): host entries, the
-tool `execute()` contract, and this package's public API speak Promises;
-everything below them is Effect-typed.
+of the boundary kinds rule R1 of TeXRA's Effect migration names, as the
+architecture rulings ledger states them
+(`.agents/docs/implemented/architecture/2026-08-01-architecture-rulings-ledger.md`):
+host entries under `packages/{extension,desktop,cli,agent}/src/**`, the webview
+runtime entries admitted there by name, and this package's public API speak
+Promises; everything below them is Effect-typed. The rule was first written up
+in the 2026-08-26 Effect 4 runtime migration note, now archived and superseded
+on this point: the tool `execute()` contract it listed as a third kind is
+Effect-typed today.
 
 `effect` is a peer dependency of every entry, not only this one. See
 [Install](#install).
