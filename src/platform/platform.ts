@@ -8,11 +8,7 @@
  *
  * Pattern: Composition Root (Mark Seemann) + Frozen Object.
  */
-import type {
-  AgentDirectoriesPort,
-  ToolMissingHandler,
-  LifecycleHost,
-} from './interfaces';
+import type { AgentDirectoriesPort, LifecycleHost } from './interfaces';
 
 /**
  * The process-true platform services a host must provide.
@@ -44,11 +40,15 @@ export interface Platform {
   readonly lifecycle: LifecycleHost;
   readonly agentDirectories: AgentDirectoriesPort;
   /**
-   * Surfaces a tool-missing error to the user. Single-implementer (VS Code) —
-   * hosts without a UI for this omit it; callers treat an absent port as a
-   * no-op.
+   * Surfaces a tool-missing error to the user. The VS Code host is the only
+   * one with a UI for it; the others omit it, and callers treat an absent
+   * port as a no-op. Declared here rather than behind a name of its own: the
+   * type said nothing the one field does not.
    */
-  readonly toolMissingHandler?: ToolMissingHandler;
+  readonly toolMissingHandler?: (
+    message: string,
+    openDocsCommand?: string,
+  ) => void | Promise<void>;
 }
 
 let _platform: Readonly<Platform> | null = null;

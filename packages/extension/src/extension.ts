@@ -33,7 +33,7 @@ import {
   installProcessRuntime,
 } from '@controllers/session/sessionLayer';
 import { globalDatabaseLayer } from '@controllers/session/Database';
-import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
+import { bootstrapHost } from '@controllers/hostBootstrap';
 import { appSignals } from '@eventBus/AppSignals';
 import { refreshApiKeyStatusBar } from '@frontend/statusBar/apiKeyStatusBar';
 import { acquireVscodeLanguageModel } from '@frontend/lm/acquireVscodeLanguageModel';
@@ -73,7 +73,6 @@ import { setLogSink } from '@logger/logSink';
 import { formatFatalErrorDetail } from '@logger/redaction';
 import { invalidateRuntimeModelRegistry } from '@model/runtimeModelRegistry';
 import type { AgentResumePort, LifecycleHost } from '@platform/interfaces';
-import { installLongRunningModelDispatcher } from '@platform/defaults/longRunningModelTransport';
 import { initPlatform, type Platform } from '@platform/platform';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import {
@@ -84,7 +83,6 @@ import type { PlatformSecrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
   createNodeWorkspaceRoots,
-  initializeNodeRuntimeSkills,
   type NodeWorkspaceRootsInit,
 } from '@platform/defaults/nodeHost';
 import { nodeProcesses } from '@platform/defaults/nodeProcesses';
@@ -106,20 +104,14 @@ import {
 import type { CommandId } from '@shared/commands/catalog';
 import { usageLogLayer } from '@telemetry/UsageLogService';
 import { registerRuntimeShutdownHandlers } from '@tools/agentCliSessionStores';
-import {
-  refreshToolAvailability,
-  seedDisabledToolDefaults,
-} from '@tools/toolAvailability';
+import { refreshToolAvailability } from '@tools/toolAvailability';
 import {
   GITHUB_TOKEN_STORAGE_KEY,
   gitHubTokenRejectedMessage,
 } from '@tools/github/githubAuth';
 import { killActiveRecording } from '@tools/media/audio';
 import { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
-import {
-  initProcessSettingHost,
-  readSettingFrom,
-} from '@utils/config/platformSettings';
+import { readSettingFrom } from '@utils/config/platformSettings';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { mementoStateStore } from './frontend/vscodeStateStore';
@@ -201,7 +193,6 @@ async function initVscodePlatform(
   // The process runtime comes first: the config stores below are opened as
   // Effect programs, so it must exist before the platform this host wires.
   const storage = createNodeStorageProvider({ workspacePath: workspaceRoot });
-  installLongRunningModelDispatcher();
   // Both process stores exist before the runtime here: VS Code hands the
   // extension its SecretStorage and Memento at activation.
   const secrets = new VscodeSecrets(context);
@@ -281,6 +272,9 @@ async function initVscodePlatform(
     // through it for as long as this runtime lives.
     globalDatabase: globalDatabaseLayer(storage.getGlobalStoragePath()),
   });
+  // Recorded the moment it exists: every step below runs on it and can fail,
+  // and `shutdownExtension` is what disposes it when activation does.
+  processRuntime = runtime;
   // VS Code restarts the extension host when the first workspace folder
   // changes, so the configuration stores stay pinned for this process.
   const config = new JsonConfigProvider(
@@ -303,9 +297,16 @@ async function initVscodePlatform(
     workspaceState,
     globalState,
   });
-  // The logger's process-wide debug-mode read, over this host's configuration.
-  logger.setDebugModeConfig(roots.config);
-  processRuntime = runtime;
+  // Everything this process installs once after its platform exists, in the
+  // order the shared bootstrap owns for all three hosts.
+  await runtime.runPromise(
+    bootstrapHost({
+      host: 'vscode',
+      roots,
+      secrets,
+      skills: { resourcesPath: path.join(context.extensionPath, 'resources') },
+    }),
+  );
   return { secrets, runtime, auth, authReadiness, roots };
 }
 
@@ -321,8 +322,9 @@ function shutdownExtension(): Promise<void> {
       Effect.ensuring(
         Effect.suspend(() => {
           if (lifecycleHost === host) lifecycleHost = undefined;
-          // No runtime, no session was ever opened: an activation that failed
-          // before installing one has nothing to tear down here.
+          // No runtime: activation failed before building one, so there is
+          // nothing here to tear down. A runtime with no session behind it
+          // still gets disposed; the session teardown is a no-op then.
           const runtime = processRuntime;
           if (!runtime) return Effect.void;
           return teardownDefaultSession().pipe(
@@ -542,9 +544,6 @@ export async function activate(context: vscode.ExtensionContext) {
 
 async function activateExtension(context: vscode.ExtensionContext) {
   installUnhandledRejectionSurface(context.subscriptions);
-  // Which catalog slot the host-divergent setting rows resolve to; the same
-  // for both platform shapes below.
-  initProcessSettingHost('vscode');
   const workspaceFolders = vscode.workspace.workspaceFolders;
   const hasSingleWorkspace = workspaceFolders?.length === 1;
 
@@ -692,9 +691,6 @@ async function activateExtension(context: vscode.ExtensionContext) {
   // which reads the account plane's access token: with the provider in place
   // the refresh fetches the real catalog instead of short-circuiting on a null
   // token, so activation now performs that one background fetch.
-  // TeXRA's account probes (Codex/xAI subscription eligibility). Without this
-  // the model layer is bring-your-own-key. See installTexraAccountProbes.
-  installTexraAccountProbes(secrets);
   const invalidateLanguageModels = () => {
     invalidateRuntimeModelRegistry();
     appSignals.emit('languageModelsChanged', undefined);
@@ -732,13 +728,6 @@ async function activateExtension(context: vscode.ExtensionContext) {
       TEXRA_APPROVAL_POLICY_CONFIG_KEY,
     ),
   );
-  // The same Node-host skill wiring the CLI and desktop use, so
-  // `AVAILABLE_SKILLS` is actually populated for tool-use agents in VS Code —
-  // without this call `loadRuntimeSkillCatalog` always sees zero sources and
-  // `texra.skills.enabled` has no observable effect (issue #7751 FS5).
-  initializeNodeRuntimeSkills({
-    resourcesPath: path.join(context.extensionPath, 'resources'),
-  });
   // The run-storage directory of the session just initialized, through that
   // session's own storage view rather than a static that re-reads the root.
   await runtime.runPromise(
@@ -750,10 +739,6 @@ async function activateExtension(context: vscode.ExtensionContext) {
     ),
   );
   FileLister.initialize(context, runtimeSession);
-
-  // Seed first-install defaults (e.g. disabled tools). No-ops once
-  // DISABLED_TOOLS exists, so upgrading users keep the tools they enabled.
-  await runtime.runPromise(seedDisabledToolDefaults(globalState));
 
   // Order matters: registerAgentDirectoryRoots exposes the packaged built-in
   // directories, and loadAgents scans them.

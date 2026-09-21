@@ -43,11 +43,9 @@ async function setupTool(
     {},
     {
       setup: createFakeSetupPlatform({
-        terminal: {
-          runCommand(args) {
-            runs.push(args);
-            return Effect.succeed(result);
-          },
+        terminal: (args) => {
+          runs.push(args);
+          return Effect.succeed(result);
         },
       }),
     },
