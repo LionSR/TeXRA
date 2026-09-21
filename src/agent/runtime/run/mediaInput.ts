@@ -13,7 +13,6 @@
 import { Effect, FileSystem } from 'effect';
 
 import type { AgentTrace } from '@agent/trace';
-import type { MessageSchema } from '@llm/turn';
 import type { ConfigProvider } from '@platform/interfaces';
 import {
   fileLocationDisplayPath,
@@ -27,6 +26,7 @@ import {
   getBase64EncodedMedia,
   processPdf2Png,
 } from '@utils/media/img';
+import type { MessageSchema } from '@texra-ai/llm/turn';
 import type { z } from 'zod';
 
 /** One element of a canonical user or tool-result message. */

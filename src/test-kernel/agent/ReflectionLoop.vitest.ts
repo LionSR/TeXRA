@@ -37,7 +37,6 @@ import { turnText } from '@agent/runtime/run/turnText';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { UsageMonitor } from '@agent/runtime/UsageMonitor';
 import { TraceEmitter } from '@agent/trace';
-import type { Model, TurnResult } from '@llm/turn';
 import {
   LanguageModel,
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
@@ -80,6 +79,8 @@ import {
   recordTraceEvents,
   runFactsOfKey,
 } from './progressTestUtils';
+
+import type { Model, TurnResult } from '@texra-ai/llm/turn';
 
 /**
  * The reflection loop over a real session ledger: the round loop, the

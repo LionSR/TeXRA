@@ -18,6 +18,22 @@ import {
   ReasoningEffort,
   type ModelConfig,
 } from 'llm-zoo';
+import { anthropicMessagesModel } from '@texra-ai/llm/anthropic-messages';
+import { googleInteractionsModel } from '@texra-ai/llm/google-interactions';
+import { openaiChatModel } from '@texra-ai/llm/openai-chat';
+import {
+  openaiResponsesModel,
+  openaiResponsesWebSocketModel,
+} from '@texra-ai/llm/openai-responses';
+import { openrouterChatModel } from '@texra-ai/llm/openrouter-chat';
+import {
+  type ChatConfiguration,
+  type Model,
+  type ModelConfiguration,
+  type ModelError,
+  type ModelOrigin,
+  type VscodeLanguageModelConfiguration,
+} from '@texra-ai/llm/turn';
 
 import {
   resolveModelCompatibilityKey,
@@ -28,22 +44,6 @@ import {
   type RouteCredential,
 } from '@agent/runtime/modelRoutes';
 import { OPENAI_DEFAULT_ENDPOINT } from '@agent/runtime/run/routeEndpoint';
-import { anthropicMessagesModel } from '@llm/anthropicMessages';
-import { googleInteractionsModel } from '@llm/googleInteractions';
-import { openaiChatModel } from '@llm/openaiChat';
-import {
-  openaiResponsesModel,
-  openaiResponsesWebSocketModel,
-} from '@llm/openaiResponses';
-import { openrouterChatModel } from '@llm/openrouterChat';
-import {
-  type ChatConfiguration,
-  type Model,
-  type ModelConfiguration,
-  type ModelError,
-  type ModelOrigin,
-  type VscodeLanguageModelConfiguration,
-} from '@llm/turn';
 import { type ModelOptionStores } from '@model/computeModelOptions';
 import {
   reasoningEffortOverrides,

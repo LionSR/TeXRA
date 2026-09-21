@@ -14,7 +14,49 @@ const aliases = Object.entries(tsconfig.compilerOptions.paths).toSorted(
   ([left], [right]) => right.length - left.length,
 );
 
+// Workspace packages whose sources this build compiles into dist/types, read
+// from the declaration build's own `include` so the two cannot drift. Their
+// bare specifiers need rewriting for the same reason a tsconfig alias does:
+// `@texra-ai/llm` is private and undeclared, so nothing resolves it from an
+// installed tarball. The exports map is the only way in, so it is what we
+// resolve through.
+const buildTsconfig = JSON.parse(
+  await readFile(path.join(repositoryRoot, 'tsconfig.build.json'), 'utf8'),
+);
+const workspacePackages = await Promise.all(
+  buildTsconfig.include
+    .map((pattern) => /^(?<directory>packages\/[^/*]+)\/src\//u.exec(pattern))
+    .filter((match) => match !== null)
+    .map((match) => match.groups.directory)
+    .filter((directory) => directory !== 'packages/agent')
+    .map(async (directory) => {
+      const root = path.join(repositoryRoot, directory);
+      const manifest = JSON.parse(
+        await readFile(path.join(root, 'package.json'), 'utf8'),
+      );
+      return { name: manifest.name, root, exports: manifest.exports ?? {} };
+    }),
+);
+
+function resolveWorkspaceExport(specifier) {
+  for (const { name, root, exports } of workspacePackages) {
+    if (specifier !== name && !specifier.startsWith(`${name}/`)) continue;
+    const subpath =
+      specifier === name ? '.' : `.${specifier.slice(name.length)}`;
+    const target = exports[subpath];
+    if (typeof target !== 'string') {
+      throw new Error(
+        `Declaration specifier ${specifier} has no ${name} exports entry.`,
+      );
+    }
+    return path.resolve(root, target);
+  }
+  return undefined;
+}
+
 async function resolveSource(specifier) {
+  const workspaceSource = resolveWorkspaceExport(specifier);
+  if (workspaceSource) return workspaceSource;
   for (const [pattern, targets] of aliases) {
     const wildcard = pattern.endsWith('/*');
     const prefix = wildcard ? pattern.slice(0, -1) : pattern;

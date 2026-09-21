@@ -11,8 +11,8 @@ import {
   type OpenRouterConfiguration,
   type TurnEvent,
   type TurnRequest,
-} from '@llm/turn';
-import { openrouterChatModel } from '@llm/openrouterChat';
+} from '@texra-ai/llm/turn';
+import { openrouterChatModel } from '@texra-ai/llm/openrouter-chat';
 
 const CONFIG = {
   protocol: 'openrouter-chat',

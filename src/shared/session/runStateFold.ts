@@ -24,7 +24,7 @@ import {
   type ModelOrigin,
   type RemoteOperation,
   type TurnResult,
-} from '@llm/turn';
+} from '@texra-ai/llm/turn';
 import {
   EMPTY_RUN_USAGE_TOTALS,
   FlowSnapshotPayloadSchema,

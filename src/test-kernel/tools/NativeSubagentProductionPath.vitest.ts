@@ -15,6 +15,16 @@ import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  ModelError,
+  ResolvedTurnSchema,
+  TurnResultSchema,
+  type Model,
+  type ModelOrigin,
+  type ResolvedTurn,
+  type TurnEvent,
+  type TurnResult,
+} from '@texra-ai/llm/turn';
 
 const modelBindingMocks = vi.hoisted(() => ({
   bindModel: vi.fn(),
@@ -47,16 +57,6 @@ import {
 
 // Local imports - shared/runtime boundaries
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
-import {
-  ModelError,
-  ResolvedTurnSchema,
-  TurnResultSchema,
-  type Model,
-  type ModelOrigin,
-  type ResolvedTurn,
-  type TurnEvent,
-  type TurnResult,
-} from '@llm/turn';
 import {
   AgentResume,
   AgentResumeFailed,

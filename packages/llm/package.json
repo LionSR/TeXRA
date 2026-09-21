@@ -10,7 +10,8 @@
     "./openai-chat": "./src/openaiChat.ts",
     "./openai-responses": "./src/openaiResponses.ts",
     "./anthropic-messages": "./src/anthropicMessages.ts",
-    "./google-interactions": "./src/googleInteractions.ts"
+    "./google-interactions": "./src/googleInteractions.ts",
+    "./prefix-fingerprint": "./src/prefixFingerprint.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json"

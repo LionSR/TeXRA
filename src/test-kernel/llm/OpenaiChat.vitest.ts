@@ -5,14 +5,14 @@ import assert from 'node:assert/strict';
 import { it } from '@effect/vitest';
 import { Cause, Deferred, Effect, Exit, Fiber, Stream } from 'effect';
 import { afterEach, describe, expect, vi } from 'vitest';
-import { openaiChatModel } from '@llm/openaiChat';
+import { openaiChatModel } from '@texra-ai/llm/openai-chat';
 import {
   ModelError,
   type ChatConfiguration,
   type Model,
   type TurnEvent,
   type TurnRequest,
-} from '@llm/turn';
+} from '@texra-ai/llm/turn';
 
 const BASE_CONFIG = {
   protocol: 'openai-chat' as const,

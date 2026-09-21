@@ -23,7 +23,7 @@ import {
   ModelOriginSchema,
   RemoteOperationSchema,
   TurnResultSchema,
-} from '@llm/turn';
+} from '@texra-ai/llm/turn';
 
 import { RetryErrorInfoSchema } from './errors';
 import { JsonValueSchema } from './jsonValue';

@@ -8,15 +8,15 @@ import { Cause, Deferred, Effect, Fiber, Stream } from 'effect';
 import { TestClock } from 'effect/testing';
 import { afterEach, describe, expect, vi } from 'vitest';
 import { WebSocketServer, type WebSocket } from 'ws';
-import { ContinuationSchema, RemoteOperationSchema } from '@llm/turn';
+import { ContinuationSchema, RemoteOperationSchema } from '@texra-ai/llm/turn';
 import {
   RESPONSES_PREFIX_DOMAIN,
   openaiResponsesContinuation,
   openaiResponsesModel,
   openaiResponsesWebSocketModel,
-} from '@llm/openaiResponses';
-import { admittedFingerprint } from '@llm/prefixFingerprint';
-import { openaiChatModel } from '@llm/openaiChat';
+} from '@texra-ai/llm/openai-responses';
+import { admittedFingerprint } from '@texra-ai/llm/prefix-fingerprint';
+import { openaiChatModel } from '@texra-ai/llm/openai-chat';
 import type {
   BackgroundEvent,
   ModelError,
@@ -24,7 +24,7 @@ import type {
   RemoteOperation,
   TurnEvent,
   TurnRequest,
-} from '@llm/turn';
+} from '@texra-ai/llm/turn';
 
 const CONFIG: OpenAIResponsesConfiguration = {
   protocol: 'openai-responses',
