@@ -5,10 +5,7 @@ import { loadMemoryItems } from '@tools/memory/memoryFileSystem';
 
 import { CliExitCode } from '../runtime/exitCodes';
 import { installCliProcessRuntime } from '../runtime/cliProcessRuntime';
-import {
-  initCliPlatform,
-  type CliPlatformServices,
-} from '../runtime/initPlatform';
+import { initCliPlatform } from '../runtime/initPlatform';
 import {
   formatCliMemoryList,
   formatCliMemoryPreview,
@@ -21,22 +18,6 @@ import { GLOBAL_ARGS } from './_helpers/globalArgs';
 import { emitCliResult } from './_helpers/output';
 import type { CliContext } from '../runtime/cliContext';
 
-/**
- * The process roots this command's init installed, which the memory reads run
- * their storage view over. Absent only when another root installed the
- * platform first, and then there is no root here to name.
- */
-function memoryRoots(
-  services: CliPlatformServices,
-): NonNullable<CliPlatformServices['roots']> {
-  if (!services.roots) {
-    throw new Error(
-      'texra memory needs the workspace roots its platform init installs.',
-    );
-  }
-  return services.roots;
-}
-
 async function runMemoryList(context: CliContext): Promise<number> {
   // The command's one run, on the process runtime this entry installs or
   // joins: the init and the read it feeds are one program on it.
@@ -47,10 +28,7 @@ async function runMemoryList(context: CliContext): Promise<number> {
       // Pass the full list to `formatCliMemoryList`; it owns truncation (the
       // `Memories (N):` total and `... N more` overflow line) and JSON/NDJSON
       // consumers should see every memory, not a capped slice.
-      const items = yield* runCliMemory(
-        memoryRoots(services),
-        loadMemoryItems(),
-      );
+      const items = yield* runCliMemory(services.roots, loadMemoryItems());
 
       emitCliResult(context, {
         json: items,
@@ -71,7 +49,7 @@ async function runMemoryShow(
     Effect.gen(function* () {
       const services = yield* initCliPlatform({ ...context, quietLogs: true });
       const record = yield* runCliMemory(
-        memoryRoots(services),
+        services.roots,
         loadCliMemoryDetail(inputPath),
       );
       emitCliResult(context, {

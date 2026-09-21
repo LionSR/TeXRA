@@ -57,12 +57,11 @@ interface CliToolGuideResult {
 
 /**
  * The workspace this command's init opened, as the probes read it: the
- * configuration slot the init always publishes, and its folder, which is
- * undefined when the process opened none.
+ * configuration slot and the folder the init always publishes.
  */
 function toolProbeInputs(services: CliPlatformServices): ToolProbeInputs {
   return {
-    workspaceRoot: services.roots?.workspace,
+    workspaceRoot: services.roots.workspace,
     config: services.config,
   };
 }

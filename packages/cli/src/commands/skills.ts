@@ -5,10 +5,7 @@ import { readDisabledSkills, skillDisplayItem } from '@skills/runtimeSkills';
 
 import { CliExitCode } from '../runtime/exitCodes';
 import { installCliProcessRuntime } from '../runtime/cliProcessRuntime';
-import {
-  initCliPlatform,
-  type CliPlatformServices,
-} from '../runtime/initPlatform';
+import { initCliPlatform } from '../runtime/initPlatform';
 import { writeTextStderr } from '../runtime/logSinks';
 import {
   formatCliSkillIssue,
@@ -25,22 +22,6 @@ import {
 import { emitCliResult } from './_helpers/output';
 import type { CliContext } from '../runtime/cliContext';
 
-/**
- * The process roots this command's init installed, which the skill lists are
- * read for. Absent only when another root installed the platform first, and
- * then there is no workspace here to name.
- */
-function skillsRoots(
-  services: CliPlatformServices,
-): NonNullable<CliPlatformServices['roots']> {
-  if (!services.roots) {
-    throw new Error(
-      'texra skills needs the workspace roots its platform init installs.',
-    );
-  }
-  return services.roots;
-}
-
 async function listSkills(
   context: CliContext,
   options: {
@@ -54,7 +35,7 @@ async function listSkills(
   return runtime.runPromise(
     Effect.gen(function* () {
       const services = yield* initCliPlatform({ ...context, quietLogs: true });
-      const roots = skillsRoots(services);
+      const roots = services.roots;
       const result = yield* readCliSkills(context, roots, options);
       const exitCode = result.errors.some(
         (issue) =>
