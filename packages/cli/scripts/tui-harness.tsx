@@ -135,7 +135,7 @@ import { resolveCliModelAccessRoute } from '../src/runtime/modelAccessRoute';
 import { updateCliModelAccess } from '../src/runtime/modelAccessSelection';
 import { installCliProcessRuntime } from '../src/runtime/cliProcessRuntime';
 import { initCliPlatform } from '../src/runtime/initPlatform';
-import { saveProviderApiKey } from '../src/runtime/providerApiKey';
+import { apiKeySecretName } from '@model/apiProviders';
 import { resolveCliResourcesPath } from '../src/runtime/resourcesPath';
 import {
   createCliRuntimeHost,
@@ -1429,9 +1429,11 @@ if (SHOW_BASH_APPROVAL) {
 
 if (SHOW_RETRY_APPROVAL) {
   await harnessRuntime.runPromise(
-    saveProviderApiKey(
-      HARNESS_PLATFORM_SERVICES.secrets,
-      'openai',
+    // A fixture seed, not a product write: the harness only needs the key in
+    // its fake store, with none of the notice or refresh a real key write
+    // carries.
+    HARNESS_PLATFORM_SERVICES.secrets.set(
+      apiKeySecretName('openai'),
       'sk-harness-openai-key',
     ),
   );

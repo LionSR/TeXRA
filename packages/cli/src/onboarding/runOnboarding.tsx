@@ -57,7 +57,7 @@ import { ensureError } from '@utils/errors/errorMessage';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { ApiKeyEntryForm } from '../chat/tui/forms/ApiKeyEntryForm';
 import { signInCliSubscription } from '../runtime/subscriptionLogin';
-import { saveProviderApiKey } from '../runtime/providerApiKey';
+import { commitCliProviderApiKey } from '../chat/tui/hosts/cliProviderKeys';
 import { writeTextStderr, writeTextStdout } from '../runtime/logSinks';
 import { isLikelyRemoteSession } from '../runtime/remoteSession';
 import { interactiveTerminalFailure } from '../runtime/terminalRequirements';
@@ -382,7 +382,12 @@ function OnboardingApp(props: OnboardingAppProps): React.JSX.Element {
         onSubmit={(key) => {
           setSaving(true);
           void props.runtime.runPromise(
-            saveProviderApiKey(props.secrets, keyProvider, key).pipe(
+            commitCliProviderApiKey(
+              props.secrets,
+              props.stores,
+              keyProvider,
+              key,
+            ).pipe(
               Effect.tap(() =>
                 Effect.sync(() =>
                   finish({
