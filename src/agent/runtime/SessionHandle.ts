@@ -40,7 +40,6 @@ import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManage
 import { finalizeRun } from '@agent/storage/runLifecycle';
 import type { ResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { withLogChannel, withLogData } from '@logger/effectLog';
-import { isDebugModeEnabled } from '@logger/logUtils';
 import { redactSecrets } from '@logger/redaction';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
@@ -50,8 +49,8 @@ import {
 import {
   aggregateId as qualifyAggregateId,
   aggregateTarget,
+  DEBUG_MODE_KEY,
   interruptedWorkflowCall,
-  isTranscriptEvent,
   RUN_OUTCOME,
   type AggregateId,
   type ApprovalPolicySnapshot,
@@ -647,11 +646,7 @@ export class SessionHandle {
         : event,
     );
     if (draft === null) return Effect.void;
-    return append([
-      isTranscriptEvent(draft)
-        ? { ...draft, transcriptDebug: isDebugModeEnabled() }
-        : draft,
-    ]);
+    return append([draft]);
   }
 
   /**
@@ -951,7 +946,14 @@ export class SessionHandle {
               Effect.die(new Error('Session input read produced no replay')),
             onSome: (replay) =>
               Effect.succeed(
-                fold(emptySessionView(this.roots.storage), replay),
+                fold(
+                  emptySessionView(
+                    this.roots.storage,
+                    0,
+                    this.roots.config.get(DEBUG_MODE_KEY, false),
+                  ),
+                  replay,
+                ),
               ),
           }),
         ),

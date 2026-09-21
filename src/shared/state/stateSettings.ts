@@ -682,8 +682,9 @@ const CORE_SETTING_ROWS: Record<
   },
   'logger.debugMode': {
     schema: z.boolean().prefault(false),
-    description: 'Whether to show verbose debug messages in the logger view',
-    honoredBy: everyHost('src/logger/logUtils.ts'),
+    description:
+      'Show the transcript\'s verbose tier: debug-level rows and their payload detail. The log surfaces filter themselves (the Output view\'s own level filter, the desktop log file, the CLI\'s --verbose/--quiet).',
+    honoredBy: everyHost('src/shared/session/sessionFold.ts'),
   },
   'telemetry.enabled': {
     schema: z.boolean().prefault(TELEMETRY_ENABLED_DEFAULT),

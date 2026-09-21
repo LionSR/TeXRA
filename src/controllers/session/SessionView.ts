@@ -33,6 +33,7 @@ import {
   emptySessionView,
   type SessionView,
 } from '@shared/session/sessionView';
+import { DEBUG_MODE_KEY } from '@shared/schemas';
 import { TranscriptSubscriptions } from './sessionSources';
 import { WorkspaceRoots } from './WorkspaceRoots';
 
@@ -55,7 +56,17 @@ export class SessionViewService extends Context.Service<
       const inputs = yield* SessionInputs;
       const subscriptions = yield* TranscriptSubscriptions;
       const roots = yield* WorkspaceRoots;
-      const ref = yield* SubscriptionRef.make(emptySessionView(roots.storage));
+      // Transcript verbosity is the view's, read once from the config
+      // authority the graph was opened over. A webview's roots carry no
+      // provider (its process has none), so its view folds without the debug
+      // tier rather than reaching for an ambient record.
+      const ref = yield* SubscriptionRef.make(
+        emptySessionView(
+          roots.storage,
+          0,
+          roots.config?.get(DEBUG_MODE_KEY, false) ?? false,
+        ),
+      );
       const folding = yield* Effect.forkScoped(
         SubscriptionRef.changes(subscriptions.ref).pipe(
           Stream.switchMap((set) =>

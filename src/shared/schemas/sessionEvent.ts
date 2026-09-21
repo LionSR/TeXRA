@@ -427,9 +427,6 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
   durable('flow.step', { payload: FlowStepPayloadSchema }),
   ...Object.values(TranscriptEventSchemas).map((schema) =>
     schema.extend({
-      /** Stamped at publication (`SessionHandle.publish`), so a draft does
-       * not carry it. */
-      transcriptDebug: z.boolean().optional(),
       aggregateId: AggregateIdSchema.refine(
         (key) => aggregateTarget(key).kind === 'run',
         `Expected a run aggregate for ${schema.shape.type.value}`,
@@ -589,7 +586,7 @@ export type DisplaySessionEvent = z.infer<typeof DisplaySessionEventSchema>;
  * with any change to the stored shape of `SessionEventSchema`, which
  * `sessionEventFormat.vitest.ts` pins.
  */
-export const SESSION_EVENT_FORMAT = 8;
+export const SESSION_EVENT_FORMAT = 9;
 
 export const SessionEventSchema = z.discriminatedUnion('type', [
   ...DisplaySessionEventSchema.options,

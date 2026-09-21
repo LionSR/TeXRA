@@ -85,6 +85,7 @@ import { RunLedger } from '@shared/session/runLedger';
 import {
   aggregateId as qualifyAggregateId,
   aggregateTarget,
+  DEBUG_MODE_KEY,
   isDisplaySessionEvent,
   ownerIdentity,
   TOOL_CALL_STATUS,
@@ -523,6 +524,7 @@ const sessionHandleLayer = (
       const transcripts = StreamLogStore.open(
         eventLog,
         key.open.transcriptMode,
+        key.open.roots.config.get(DEBUG_MODE_KEY, false),
       );
       // The gate's probe fibers and waiting calls end with this scope, after
       // the handle below has unwound its runs.

@@ -1825,7 +1825,7 @@ function foldTraceEvent(
     indexes.trace.record(event, {
       at: event.at,
       id: JSON.stringify([event.aggregateId, event.seq]),
-      debug: event.transcriptDebug ?? false,
+      debug: view.debug,
     });
   const change = indexes.source.drainEmission();
   for (const entry of [...change.appended, ...change.dirtied]) {
