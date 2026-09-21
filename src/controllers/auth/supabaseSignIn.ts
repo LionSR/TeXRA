@@ -107,6 +107,7 @@ export interface AuthCallbackTransport {
  */
 interface SignInAttempt {
   readonly nonce: string;
+  readonly createdAt: number;
   /**
    * Settled once: the committed session, `null` when the attempt was
    * superseded or cancelled, or the callback's failure.
@@ -448,6 +449,7 @@ export class SupabaseSignInCoordinator {
     this.invalidate();
     const attempt: SignInAttempt = {
       nonce: mintCallbackNonce(),
+      createdAt: Date.now(),
       outcome: Deferred.makeUnsafe<SupabaseSession | null, Error>(),
     };
     this.minted.add(attempt.nonce);

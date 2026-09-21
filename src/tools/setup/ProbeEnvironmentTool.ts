@@ -8,6 +8,7 @@ import { z } from 'zod';
 // Local imports
 import { ToolCall } from '@agent/runtime/ToolCall';
 import { withLogChannel } from '@logger/effectLog';
+import { createLog } from '@logger/logUtils';
 import { API_PROVIDERS, lookupApiKeyOrigin } from '@model/apiProviders';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import { Secrets } from '@platform/secrets';
@@ -27,6 +28,7 @@ import { getChatGptSubscriptionStatus, SetupPlatform } from './platform';
 import { collectCoreSetupStatus, locateTool } from './toolProbing';
 
 const CHANNEL = 'Setup Credentials';
+const credentialLog = createLog('Setup Credentials');
 
 const ProbeEnvironmentInputSchema = z
   .strictObject({})
