@@ -10,6 +10,7 @@
 import { Effect } from 'effect';
 import type { AgentTrace } from '@agent/trace';
 import type { RunId, RunOutcome } from '@shared/schemas';
+import type { DatabaseWriteFailed } from '@shared/session/database';
 import { RunLedger, RunLedgerRefused } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
 import { ensureError } from '@utils/errors/errorMessage';
@@ -36,7 +37,7 @@ export const recordHalt =
     state: RunState | null,
     toCoordinates: (state: RunState) => StepCoordinates,
   ) =>
-  (outcome: RunOutcome): Effect.Effect<void> =>
+  (outcome: RunOutcome): Effect.Effect<void, DatabaseWriteFailed> =>
     state === null || state.phase === null
       ? Effect.void
       : deps.ledger
@@ -44,12 +45,15 @@ export const recordHalt =
             haltedStepRow(deps.runId, toCoordinates(state), outcome),
           ])
           .pipe(
-            Effect.catch((error) =>
-              Effect.sync(() =>
-                deps.logger.warn('Failed to record the run halt', {
-                  data: error,
-                }),
-              ),
+            Effect.asVoid,
+            Effect.catchIf(
+              (error) => error instanceof RunLedgerRefused,
+              (error) =>
+                Effect.sync(() =>
+                  deps.logger.warn('Failed to record the run halt', {
+                    data: error,
+                  }),
+                ),
             ),
           );
 
