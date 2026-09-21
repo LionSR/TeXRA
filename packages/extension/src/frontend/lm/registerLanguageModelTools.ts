@@ -89,7 +89,12 @@ export function registerLanguageModelTools(
                 command: 'search',
               }
             : options.input;
-        const invocation = runtime.runFork(
+        // Run the invocation directly on the process runtime rather than
+        // forking and joining it: the effect's failure is delivered to the
+        // awaited `runPromise` caller only, never to the fork-failure
+        // reporting seam (#12663). Cancellation interrupts the in-flight
+        // effect through the token's own handler.
+        const result = await runtime.runPromise(
           Effect.scoped(
             Effect.gen(function* () {
               const fiber = yield* Effect.fiber;
@@ -116,7 +121,6 @@ export function registerLanguageModelTools(
             }),
           ),
         );
-        const result = await runtime.runPromise(Fiber.join(invocation));
         return new vscode.LanguageModelToolResult([
           new vscode.LanguageModelTextPart(toResultText(result)),
         ]);
