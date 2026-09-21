@@ -32,10 +32,6 @@ import {
   formatBashError,
   type BashDeliveryStreamExcerpt,
 } from '@tools/delegation/bashDelivery';
-import {
-  buildBashApprovalRejectedResult,
-  requestBashApproval,
-} from '@tools/approval/bashApproval';
 import { executed } from '@tools/core/result';
 import { buildSyntheticToolUseConfig } from '@tools/core/syntheticAgentConfig';
 import { generateRunId } from '@utils/core';
@@ -358,6 +354,8 @@ export class BashTool extends defineTool({
   description:
     'Execute shell commands directly in the workspace directory. Commands run from the project root automatically. Available environment variables: $PROJECT_DIR (workspace path), $PROJECT_NAME (project name). Returns stdout on success, throws error with stderr on failure. Use run_in_background for long-running commands.',
   schema: BashInputSchema,
+  // The command this call runs; the loop gets it approved before the body.
+  guard: { bash: (input: BashInput) => Effect.succeed(input.command) },
 }) {
   protected execute(input: BashInput) {
     return Effect.gen({ self: this }, function* () {
@@ -374,10 +372,10 @@ export class BashTool extends defineTool({
       // it. Every other child type already answers this case — agent-CLI
       // refuses, native subagents degrade to the parent trace, workflow-script
       // awaits — and a background shell cannot degrade, because the follow-up
-      // IS its delivery. Refuse before requesting approval: in the SDK path
-      // (`packages/agent/src/index.ts`) the `finally` kills the process group,
-      // so launching here would run the user's command and then discard its
-      // result with nothing reported.
+      // IS its delivery. The approval the loop already took is spent by the
+      // time this refuses: in the SDK path (`packages/agent/src/index.ts`) the
+      // `finally` kills the process group, so launching here would run the
+      // user's command and then discard its result with nothing reported.
       if (input.run_in_background && toolCall.run?.toolPolicy.stopAfterCycle) {
         return yield* Effect.fail(
           new ToolError(
@@ -389,15 +387,6 @@ export class BashTool extends defineTool({
       const cwd =
         parseWorkingDirectory(toolCall.workingDirectory) ??
         toolCall.roots.workspace;
-
-      const approval = yield* requestBashApproval({
-        command: input.command,
-        cwd,
-      });
-
-      if (approval.action !== 'approve') {
-        return buildBashApprovalRejectedResult(input.command, approval);
-      }
 
       if (input.run_in_background) {
         const run = yield* requireToolRun('bash run_in_background', toolCall);

@@ -32,10 +32,6 @@ import {
   type ToolResult,
   USER_FOLLOW_UP_SUPPORT,
 } from '@shared/schemas';
-import {
-  type requestBashApproval,
-  buildBashApprovalRejectedResult,
-} from '@tools/approval/bashApproval';
 import { executed } from '@tools/core/result';
 import { requireToolRun, type ToolRun } from '@tools/core/toolRun';
 import { generateRunId } from '@utils/core';
@@ -345,48 +341,38 @@ export const launchAgentCliSession = Effect.fn(
 
 /**
  * Run the shared agent-CLI execute() prelude: refuse a call that has no run to
- * launch under or cannot collect the result, request bash approval for the
- * labelled command, fire the post-approval in-progress hook, then dispatch to
- * the resume/launch branch with the active run.
+ * launch under or cannot collect the result, then dispatch to the
+ * resume/launch branch with the active run.
  *
  * The run check is the one place either tool asks it: an agent-CLI child is
  * registered under its parent run and delivers every turn as a follow-up to
  * it, so a standalone host invocation has nowhere to put the child. Failing
  * here hands the whole chain a `NonNullable` run instead of re-asking at each
- * step, and refuses before the approval prompt rather than after it.
+ * step.
  *
  * Both agent-CLI tools deliver every turn as a follow-up message. A run with
  * `stopAfterCycle` ends after the current cycle, so that follow-up would land
- * in a turn that never happens and the child's result is stranded. Fail before
- * prompting for approval rather than launching work nobody collects.
+ * in a turn that never happens and the child's result is stranded. Refuse
+ * rather than launch work nobody collects.
  */
-const withAgentCliApproval = Effect.fn('agentCliShared.withAgentCliApproval')(
-  function* <R>(
-    toolName: string,
-    approvalLabel: string,
-    toolCall: ToolCallShape,
-    requestApproval: typeof requestBashApproval,
-    run: (run: ToolRun) => Effect.Effect<ToolResult, AgentCliToolFailure, R>,
-  ): Effect.fn.Return<ToolResult, AgentCliToolFailure, R | ToolCall> {
-    const activeRun = yield* requireToolRun(toolName, toolCall);
-    if (activeRun.toolPolicy.stopAfterCycle) {
-      return yield* Effect.fail(
-        new ToolError(
-          `${toolName} is unavailable in one-shot runs: it delivers its result as a follow-up message, and this run ends after the current cycle so no follow-up can be collected. Delegate with delegate_agent, which returns the child's result directly.`,
-        ),
-      );
-    }
-
-    const approval = yield* requestApproval({ command: approvalLabel }).pipe(
-      Effect.mapError((cause) => new AgentCliCallFailed({ cause })),
+const withAgentCliRun = Effect.fn('agentCliShared.withAgentCliRun')(function* <
+  R,
+>(
+  toolName: string,
+  toolCall: ToolCallShape,
+  run: (run: ToolRun) => Effect.Effect<ToolResult, AgentCliToolFailure, R>,
+): Effect.fn.Return<ToolResult, AgentCliToolFailure, R | ToolCall> {
+  const activeRun = yield* requireToolRun(toolName, toolCall);
+  if (activeRun.toolPolicy.stopAfterCycle) {
+    return yield* Effect.fail(
+      new ToolError(
+        `${toolName} is unavailable in one-shot runs: it delivers its result as a follow-up message, and this run ends after the current cycle so no follow-up can be collected. Delegate with delegate_agent, which returns the child's result directly.`,
+      ),
     );
-    if (approval.action !== 'approve') {
-      return buildBashApprovalRejectedResult(approvalLabel, approval);
-    }
+  }
 
-    return yield* run(activeRun);
-  },
-);
+  return yield* run(activeRun);
+});
 
 /** Run context resolved for an agent-CLI launch, handed to the provider's
  * `launch` callback by {@link dispatchAgentCliTool}. */
@@ -402,24 +388,21 @@ interface AgentCliLaunchContext {
 
 /**
  * The shared execute() dispatch skeleton for an agent-CLI tool. Wraps the
- * boilerplate-identical chain both providers (codex, claudeAgent) run: request
- * approval for the labelled command, choose atomically between queueing onto an
- * owned session and launching a disk-based fallback, and resolve the run context
- * a launch needs (parent stream/run/working-directory). A missing
- * in-memory entry denotes a disk-based SDK fallback, so `launch` receives the
- * `releaseFallbackClaim` it must promote or release. Callers supply only their
- * approval label, session store, resume id, resume labels, and the
- * provider-specific launch.
+ * boilerplate-identical chain both providers (codex, claudeAgent) run: choose
+ * atomically between queueing onto an owned session and launching a disk-based
+ * fallback, and resolve the run context a launch needs (parent
+ * stream/run/working-directory). A missing in-memory entry denotes a
+ * disk-based SDK fallback, so `launch` receives the `releaseFallbackClaim` it
+ * must promote or release. Callers supply only their session store, resume id,
+ * resume labels, and the provider-specific launch. The command each tool gets
+ * approved is the loop-side guard each declares, not a step in here.
  *
  * The returned Effect is the tool's whole dispatch: the tool's `execute()`
  * runs it at its own edge with {@link reraiseAgentCliCallFailure} piped in.
  */
 export function dispatchAgentCliTool<R = never>(params: {
   toolCall: ToolCallShape;
-  /** Bound at the tool entry so approval retains the parent run's policy. */
-  requestApproval: typeof requestBashApproval;
   agentName: string;
-  approvalLabel: string;
   store: AgentCliSessionStoreAccessor;
   resumeId: string | undefined;
   /** Existing live session read by a fresh launch, such as a fork source. */
@@ -434,21 +417,11 @@ export function dispatchAgentCliTool<R = never>(params: {
   AgentCliToolFailure,
   R | ToolCall | Runs | AgentResume
 > {
-  const {
+  const { agentName, store, resumeId, sourceId, prompt, labels, launch } =
+    params;
+  return withAgentCliRun(
     agentName,
-    approvalLabel,
-    store,
-    resumeId,
-    sourceId,
-    prompt,
-    labels,
-    launch,
-  } = params;
-  return withAgentCliApproval(
-    agentName,
-    approvalLabel,
     params.toolCall,
-    params.requestApproval,
     (run) =>
       Effect.gen(function* () {
         const registry = store(yield* Runs);

@@ -9,10 +9,6 @@ import { ToolCall } from '@agent/runtime/ToolCall';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { ToolError } from '@shared/schemas';
 import { defineTool } from '@tools/core/define';
-import {
-  buildBashApprovalRejectedResult,
-  requestBashApproval,
-} from '@tools/approval/bashApproval';
 import { nullishWithDefault } from '@tools/core/inputSchema';
 import { executed } from '@tools/core/result';
 import { runToolWithCheck } from '@utils/system/toolUtils';
@@ -55,11 +51,10 @@ type WolframInput = z.infer<typeof WolframInputSchema>;
 
 /**
  * The calling turn's ambient collaborators, taken in `execute` rather than
- * read from the program's fiber: the approval prompt and the command runner
- * both resolve the session and its bypass state from process-wide storage.
+ * read from the program's fiber: the command runner resolves the session from
+ * process-wide storage.
  */
 interface WolframPorts {
-  readonly requestApproval: typeof requestBashApproval;
   readonly runTool: typeof runToolWithCheck;
   /** The run's workspace root, passed as the command's cwd, which
    *  `executeCommand` requires every caller to name. */
@@ -72,12 +67,6 @@ const runWolfram = Effect.fn('WolframTool.execute')(function* (
   ports: WolframPorts,
   input: WolframInput,
 ) {
-  const command = wolframApprovalCommand(input.code);
-  const approval = yield* ports.requestApproval({ command });
-  if (approval.action !== 'approve') {
-    return buildBashApprovalRejectedResult(command, approval);
-  }
-
   // `runToolWithCheck` answers `false` for a missing `wolframscript` and
   // reports a failed run in its `ExecResult`. Interrupting the tool kills the
   // process: the interruption is what aborts the spawn.
@@ -119,10 +108,14 @@ export const WolframTool = defineTool({
   slow: true,
   description: `Execute approval-gated Wolfram Language code. Use this tool for quick calculations, symbolic math, and one-off evaluations only when Wolfram/external computation is allowed by the user. Do not use it when the user requested a specific verification method or prohibited external computation. Sessions do NOT persist between calls - each run starts fresh with no memory of previous variables or definitions. For complex scripts requiring session persistence, iterative development, or saving intermediate results, write to a .wl file and run via bash instead. Compute and print actual results: do not hardcode expected values in Print statements; use VerificationTest or assertions so output reflects real computation.`,
   schema: WolframInputSchema,
+  // The shell line the run would be, gated by the loop before the body runs.
+  guard: {
+    bash: (input: WolframInput) =>
+      Effect.succeed(wolframApprovalCommand(input.code)),
+  },
   execute: Effect.fn('WolframTool.call')(function* (input: WolframInput) {
     const call = yield* ToolCall;
     const ports: WolframPorts = {
-      requestApproval: requestBashApproval,
       runTool: runToolWithCheck,
       cwd: call.roots.workspace,
       settings: call.roots,

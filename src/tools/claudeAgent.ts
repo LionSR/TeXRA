@@ -54,7 +54,6 @@ import type {
 import { DELIVERY_TAG } from '@shared/deliveryTags';
 import { buildSyntheticToolUseConfig } from '@tools/core/syntheticAgentConfig';
 import { parseWorkingDirectory } from '@tools/pathResolution';
-import { requestBashApproval } from '@tools/approval/bashApproval';
 import { linkAbortSignals } from '@utils/core';
 import {
   formatWallTimeSeconds,
@@ -102,6 +101,23 @@ import type {
 let _configModule: typeof import('./claudeAgentConfig.js') | null = null;
 const getClaudeAgentConfig = Effect.promise(
   async () => (_configModule ??= await import('./claudeAgentConfig.js')),
+);
+
+/**
+ * The permission mode this call runs under: its own override, else the
+ * workspace default. The approval prompt and the launch must name the same
+ * one, so the declared guard and the body both read it here.
+ */
+const claudeAgentPermissionMode = Effect.fn('claudeAgent.permissionMode')(
+  function* (input: ClaudeAgentInput) {
+    const { roots } = yield* ToolCall;
+    return (
+      input.permission_mode ??
+      (yield* getClaudeAgentConfig).getClaudeAgentPermissionMode(
+        roots.workspaceState,
+      )
+    );
+  },
 );
 
 // ============================================================================
@@ -546,11 +562,21 @@ export class ClaudeAgentTool extends defineTool({
     'Pass session_id on a later call to send a follow-up to an existing session, like delegate_agent(execution_id=…). ' +
     'Set fork_session to branch from that session while leaving the original unchanged.',
   schema: ClaudeAgentInputSchema,
+  // What the approval prompt names: the effective permission mode and the
+  // prompt this child would be launched with.
+  guard: {
+    bash: (input: ClaudeAgentInput) =>
+      claudeAgentPermissionMode(input).pipe(
+        Effect.map(
+          (mode) => `[${CLAUDE_AGENT_NAME} ${mode}] ${input.prompt}`,
+        ),
+      ),
+  },
 }) {
   protected execute(input: ClaudeAgentInput) {
     return Effect.gen({ self: this }, function* () {
       return yield* reraiseAgentCliCallFailure(
-        this.run(input, yield* ToolCall, requestBashApproval),
+        this.run(input, yield* ToolCall),
       );
     });
   }
@@ -559,7 +585,6 @@ export class ClaudeAgentTool extends defineTool({
     this: ClaudeAgentTool,
     input: ClaudeAgentInput,
     toolCall: ToolCallShape,
-    requestApproval: typeof requestBashApproval,
   ): Effect.fn.Return<
     ToolResult,
     AgentCliToolFailure,
@@ -567,9 +592,7 @@ export class ClaudeAgentTool extends defineTool({
   > {
     const config = yield* getClaudeAgentConfig;
     const { workspaceState } = toolCall.roots;
-    const permissionMode =
-      input.permission_mode ??
-      config.getClaudeAgentPermissionMode(workspaceState);
+    const permissionMode = yield* claudeAgentPermissionMode(input);
     const model = input.model ?? config.getClaudeAgentModel(workspaceState);
     const effort = input.effort ?? config.getClaudeAgentEffort(workspaceState);
     const sessionId = input.session_id ?? undefined;
@@ -577,9 +600,7 @@ export class ClaudeAgentTool extends defineTool({
 
     return yield* dispatchAgentCliTool({
       toolCall,
-      requestApproval,
       agentName: CLAUDE_AGENT_NAME,
-      approvalLabel: `[${CLAUDE_AGENT_NAME} ${permissionMode}] ${input.prompt}`,
       store: claudeAgentSessionsFor,
       // A fork always launches a distinct TeXRA child. Queueing onto the
       // source session would mutate the original instead of branching it.

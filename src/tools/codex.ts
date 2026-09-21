@@ -51,7 +51,6 @@ import {
 import { DELIVERY_TAG } from '@shared/deliveryTags';
 import { buildSyntheticToolUseConfig } from '@tools/core/syntheticAgentConfig';
 import { parseWorkingDirectory } from '@tools/pathResolution';
-import { requestBashApproval } from '@tools/approval/bashApproval';
 import { formatWallTimeSeconds, previewLabel } from '@utils/text/stringUtils';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -107,6 +106,21 @@ let _configModule: typeof import('./codexConfig.js') | null = null;
 const getCodexConfig = Effect.promise(
   async () => (_configModule ??= await import('./codexConfig.js')),
 );
+
+/**
+ * The sandbox mode this call runs under: its own override, else the
+ * user-configured default. The approval prompt and the launch must name the
+ * same one, so the declared guard and the body both read it here.
+ */
+const codexSandboxMode = Effect.fn('codex.sandboxMode')(function* (
+  input: CodexInput,
+) {
+  const { roots } = yield* ToolCall;
+  return (
+    input.sandbox_mode ??
+    (yield* getCodexConfig).getCodexSandboxMode(roots.workspaceState)
+  );
+});
 
 // ============================================================================
 // Schema
@@ -480,11 +494,19 @@ export class CodexTool extends defineTool({
     'Always async: returns immediately with a run ID; each turn is delivered back as a follow-up message (including the thread_id). ' +
     'Pass thread_id on a later call to send a follow-up instruction to an existing session, like delegate_agent(execution_id=…).',
   schema: CodexInputSchema,
+  // What the approval prompt names: the effective sandbox mode and the prompt
+  // this child would be launched with.
+  guard: {
+    bash: (input: CodexInput) =>
+      codexSandboxMode(input).pipe(
+        Effect.map((mode) => `[codex ${mode}] ${input.prompt}`),
+      ),
+  },
 }) {
   protected execute(input: CodexInput) {
     return Effect.gen({ self: this }, function* () {
       return yield* reraiseAgentCliCallFailure(
-        this.run(input, yield* ToolCall, requestBashApproval),
+        this.run(input, yield* ToolCall),
       );
     });
   }
@@ -493,25 +515,16 @@ export class CodexTool extends defineTool({
     this: CodexTool,
     input: CodexInput,
     toolCall: ToolCallShape,
-    requestApproval: typeof requestBashApproval,
   ): Effect.fn.Return<
     ToolResult,
     AgentCliToolFailure,
     ToolCall | Runs | AgentResume
   > {
-    // Resolve the effective sandbox mode once (per-call override, else the
-    // user-configured default) rather than mutating the parsed input object.
-    const sandboxMode =
-      input.sandbox_mode ??
-      (yield* getCodexConfig).getCodexSandboxMode(
-        toolCall.roots.workspaceState,
-      );
+    const sandboxMode = yield* codexSandboxMode(input);
 
     return yield* dispatchAgentCliTool({
       toolCall,
-      requestApproval,
       agentName: 'codex',
-      approvalLabel: `[codex ${sandboxMode}] ${input.prompt}`,
       store: codexThreadsFor,
       resumeId: input.thread_id ?? undefined,
       prompt: input.prompt,
