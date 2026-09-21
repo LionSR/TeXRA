@@ -27,9 +27,10 @@ interface HaltDeps {
 /**
  * Appends the run's `halted` step for `outcome`. A run whose state never
  * opened (`null`, or a null `phase`) has no step to halt, so it writes
- * nothing. Recording the halt is best-effort by design: the run is already
+ * nothing. A refused ledger write is best-effort by design: the run is already
  * ending, and raising here would replace its real outcome with a bookkeeping
- * failure, so a refused write is warned about instead.
+ * failure, so `RunLedgerRefused` is warned about instead. Other ledger write
+ * failures still fail normally.
  */
 export const recordHalt =
   (
