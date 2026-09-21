@@ -10,13 +10,13 @@ import {
   type SessionHandle,
 } from '@agent/runtime';
 import { openFinalOutputIfAvailable } from '@frontend/agents/finalOutputOpener';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel, withLogData } from '@logger/effectLog';
 import type { ProcessServices } from '@platform/processRuntime';
 import { presentLaunchedProgressRun } from '@progressView/progressNavigation';
 import { ModelCompatibilityKeySchema, RunIdSchema } from '@shared/schemas';
 import { ensureError } from '@utils/errors/errorMessage';
 
-const log = createLog('ExecuteCommand');
+const CHANNEL = 'ExecuteCommand';
 
 /**
  * The "wrapped" launch shape — `{ config, runId?, ... }` — as opposed to
@@ -68,7 +68,10 @@ export const runExecuteCommand = Effect.fn('runExecuteCommand')(function* (
     const error = parsed.failure;
     if (error instanceof ZodError) {
       const message = `Invalid agent configuration. ${z.prettifyError(error)}`;
-      log.warn(message, { data: error });
+      yield* Effect.logWarning(message).pipe(
+        withLogData(error),
+        withLogChannel(CHANNEL),
+      );
       void vscode.window.showErrorMessage(message);
       return;
     }

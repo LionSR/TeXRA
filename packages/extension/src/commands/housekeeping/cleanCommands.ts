@@ -5,13 +5,12 @@ import * as vscode from 'vscode';
 // Local imports
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import { runCleanRunDir } from '@housekeeping/runDirOps';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 
 import type { FileOpResult } from '@shared/schemas';
 import { type CleanConfig } from './fileOpSchemas';
 
 const CHANNEL = 'cleanCommands';
-const log = createLog(CHANNEL);
 
 const showCleanResult = (
   result: FileOpResult,
@@ -46,7 +45,9 @@ const showCleanResult = (
 export const handleClean = Effect.fn('cleanCommands.handleClean')(function* (
   config: CleanConfig,
 ) {
-  log.debug(`Clean command called with config: ${JSON.stringify(config)}`);
+  yield* Effect.logDebug(
+    `Clean command called with config: ${JSON.stringify(config)}`,
+  ).pipe(withLogChannel(CHANNEL));
   const result: FileOpResult = config.runId
     ? yield* runCleanRunDir(config.runId)
     : { status: 'noFiles' };

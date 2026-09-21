@@ -8,6 +8,7 @@ import type { SessionHandle } from '@agent/runtime';
 import { isLatexFile } from '@common/files/fileTypeUtils';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import { compileLatex2Pdf } from '@latex/texTools';
+import { withLogChannel, withLogData } from '@logger/effectLog';
 import { createLog } from '@logger/logUtils';
 import { withSessionFs } from '@platform/rootedFs';
 import type { FileLocation } from '@shared/schemas';
@@ -269,9 +270,11 @@ const prepareLatexBuild = (
       // writeLine only shows `data` when texra.logger.debugMode is on
       // (default off), and this failure's whole point is to be visible
       // without needing to enable debug logging.
-      log.warn(
+      yield* Effect.logWarning(
         `Internal LaTeX compilation failed for ${uri.fsPath}:\n${compiled.logTail}`,
-        { data: { sourceFile: uri.fsPath, logTail: compiled.logTail } },
+      ).pipe(
+        withLogData({ sourceFile: uri.fsPath, logTail: compiled.logTail }),
+        withLogChannel(CHANNEL),
       );
       return false;
     }

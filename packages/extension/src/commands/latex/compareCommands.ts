@@ -20,6 +20,7 @@ import {
   siblingLocation,
   type CommitAcceptedFilePorts,
 } from '@latex/acceptedFileTarget';
+import { withLogChannel } from '@logger/effectLog';
 import { createLog } from '@logger/logUtils';
 import type { AcceptCopyMeta, FileLocation } from '@shared/schemas';
 import { DIFF_REGISTRATION_DELAY_MS } from '@shared/constants/latexTiming';
@@ -177,9 +178,9 @@ export const handleCompare = Effect.fn('compareCommands.handleCompare')(
       ),
     );
 
-    log.info(
+    yield* Effect.logInfo(
       `Opened diff comparison between ${baseFileName} and ${editedFileName}`,
-    );
+    ).pipe(withLogChannel(CHANNEL));
   },
   Effect.catchCause((cause) =>
     showLoggedErrorMessage(

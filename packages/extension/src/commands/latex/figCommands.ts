@@ -11,14 +11,13 @@ import { runGuardedLatexCommand } from '@frontend/editor/activeFileGuards';
 import { showLoggedInfoMessage } from '@frontend/ui/errorHandlingUtils';
 import { withVSCodeProgress } from '@frontend/ui/progress';
 import { TikzPictureManager } from '@latex/TikzPictureManager';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import type { ProcessServices } from '@platform/processRuntime';
 import type { StorageFs, WorkspaceFs } from '@platform/rootedFs';
 import { pathToLocationIn } from '@utils/files/fileLocation';
 import { pluralize, truncateWithEllipsis } from '@utils/text/stringUtils';
 
 const CHANNEL = 'FigCommands';
-const log = createLog(CHANNEL);
 
 export function handleExtractTikzFigures(
   session: SessionHandle,
@@ -32,7 +31,9 @@ export function handleExtractTikzFigures(
     },
     ({ relativePath: filePath }) =>
       Effect.gen(function* () {
-        log.debug(`Processing LaTeX file for TikZ figures: ${filePath}`);
+        yield* Effect.logDebug(
+          `Processing LaTeX file for TikZ figures: ${filePath}`,
+        ).pipe(withLogChannel(CHANNEL));
 
         const labeledTikzPictures = yield* TikzPictureManager.extract(
           pathToLocationIn(session.roots.workspace, filePath),
@@ -80,7 +81,9 @@ export function handleCompileTikzFigures(
     },
     ({ relativePath: filePath }) =>
       Effect.gen(function* () {
-        log.debug(`Processing LaTeX file for TikZ compilation: ${filePath}`);
+        yield* Effect.logDebug(
+          `Processing LaTeX file for TikZ compilation: ${filePath}`,
+        ).pipe(withLogChannel(CHANNEL));
 
         // The notification lives for exactly as long as the body below, which
         // is a step of this program rather than a nested settle.

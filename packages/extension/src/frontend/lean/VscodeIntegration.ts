@@ -19,7 +19,7 @@ import {
   openFileInEditor,
 } from '@frontend/vscode/vscodeEditor';
 import { waitForDiagnosticsChange } from '@frontend/vscode/vscodeDiagnostics';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import type { StateStore } from '@platform/interfaces';
 import {
   LEAN4_EXTENSION_ID,
@@ -40,7 +40,7 @@ import type { LeanLanguageServicesShape } from '@tools/lean/leanLanguageServices
 import { isStrictlyWithin } from '@utils/core/pathCore';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-const log = createLog('VscodeLeanIntegration');
+const CHANNEL = 'VscodeLeanIntegration';
 
 /**
  * A Lean 4 command VS Code dispatched and rejected. There is no
@@ -282,12 +282,9 @@ function executeFileCommand(
     // saying once — in the log, rather than nowhere as it was before the
     // failures were typed.
     Effect.catch((failure) =>
-      Effect.sync(() => {
-        log.warn(
-          `Lean "${command}" on ${filePath} did not run: ${failure.message}`,
-        );
-        return false;
-      }),
+      Effect.logWarning(
+        `Lean "${command}" on ${filePath} did not run: ${failure.message}`,
+      ).pipe(withLogChannel(CHANNEL), Effect.as(false)),
     ),
   );
 }
@@ -312,11 +309,9 @@ function getClientProvider(
         channel: 'lean',
       }).pipe(
         Effect.catchCause((cause) =>
-          Effect.sync(() =>
-            log.warn(
-              `Could not offer the Lean 4 install prompt: ${toErrorMessage(Cause.squash(cause))}`,
-            ),
-          ),
+          Effect.logWarning(
+            `Could not offer the Lean 4 install prompt: ${toErrorMessage(Cause.squash(cause))}`,
+          ).pipe(withLogChannel(CHANNEL)),
         ),
       );
       return yield* Effect.fail(
@@ -472,7 +467,9 @@ function navigateToFirstError(
   return openFileInEditor(filePath, {
     line: firstError.range.start.line + 1,
   }).pipe(
-    Effect.catch((failure) => Effect.sync(() => log.warn(failure.message))),
+    Effect.catch((failure) =>
+      Effect.logWarning(failure.message).pipe(withLogChannel(CHANNEL)),
+    ),
     Effect.asVoid,
   );
 }

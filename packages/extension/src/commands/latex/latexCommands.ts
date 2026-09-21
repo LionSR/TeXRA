@@ -20,11 +20,9 @@ import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '@latex/latexLogging';
 import { resolveLatexFormatter } from '@latex/formatter/texFormatter';
 import { indentLatexFilesInDirectory } from '@latex/formatter/indentDirectory';
 import { buildLatexdiffAwareFixInstruction } from '@latex/latexdiff/diffFileNameManager';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import type { ProcessServices } from '@platform/processRuntime';
 import { AgentCategory } from '@shared/schemas';
-
-const log = createLog(CHANNEL);
 
 export function handleIndentTeX(
   session: SessionHandle,
@@ -76,9 +74,9 @@ export function handleFixCompilation(
     },
     ({ editor, relativePath }) =>
       Effect.gen(function* () {
-        log.info(
+        yield* Effect.logInfo(
           `Launching tool-use agent to fix compilation for: ${relativePath}`,
-        );
+        ).pipe(withLogChannel(CHANNEL));
 
         const instruction = yield* buildLatexdiffAwareFixInstruction(
           `Fix the LaTeX compilation errors in ${relativePath}.`,
@@ -117,7 +115,9 @@ export function handleIndentCurrentTeX(
     },
     ({ relativePath }) =>
       Effect.gen(function* () {
-        log.debug(`Indenting LaTeX file: ${relativePath}`);
+        yield* Effect.logDebug(`Indenting LaTeX file: ${relativePath}`).pipe(
+          withLogChannel(CHANNEL),
+        );
 
         // The directory indent command treats a disabled formatter as a silent
         // no-op (`case 'disabled': break`). The single-file command is an
@@ -163,7 +163,9 @@ export function handleGetTeXCount(
     },
     ({ relativePath }) =>
       Effect.gen(function* () {
-        log.debug(`Getting tex count for: ${relativePath}`);
+        yield* Effect.logDebug(`Getting tex count for: ${relativePath}`).pipe(
+          withLogChannel(CHANNEL),
+        );
 
         const countingMode = yield* Effect.promise(() =>
           vscode.window.showQuickPick<

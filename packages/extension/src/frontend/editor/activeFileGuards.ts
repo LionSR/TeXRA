@@ -8,7 +8,7 @@ import {
   showLoggedErrorMessage,
   showLoggedMessage,
 } from '@frontend/ui/errorHandlingUtils';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import { workspaceRelativePath } from '@utils/files/workspaceFS';
 
 const CHANNEL = 'ActiveFileGuards';
@@ -128,19 +128,16 @@ export function runGuardedLatexCommand<R = never>(
 ): Effect.Effect<void, never, R> {
   const { channel, action, saveDocument = false, errorMessage } = options;
 
-  const log = createLog(channel);
-
   return Effect.gen(function* () {
     const guardResult = yield* getActiveLatexEditor(session, saveDocument);
 
     if (guardResult.status !== 'ok') {
       const failure = GUARD_FAILURE_MESSAGES[guardResult.status];
       const logLine = `Cannot ${action}: ${failure.logTail}`;
-      if (failure.level === 'error') {
-        log.error(logLine);
-      } else {
-        log.warn(logLine);
-      }
+      yield* (failure.level === 'error'
+        ? Effect.logError(logLine)
+        : Effect.logWarning(logLine)
+      ).pipe(withLogChannel(channel));
       return;
     }
 
