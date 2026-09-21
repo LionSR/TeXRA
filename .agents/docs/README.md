@@ -40,6 +40,14 @@ Every note carries a status marker. Files with YAML frontmatter use a
 first heading. Rejected notes record the reason on that line
 (`Status: rejected — <reason>`).
 
+The status is typed, not derived, so `scripts/check-proposal-status.mjs` (CI,
+in the ungated `guidance references` job) fails when a note under `proposed/`
+declares itself done and has not moved: its status line names a settled
+lifecycle (`implemented`, `landed`, `superseded`, `rejected`, …), or it has a
+`Landed` section and no section saying what is still open. Citing a merged PR
+as evidence or as a prerequisite is not a completion marker — a proposal may
+rest on landed work and stay open.
+
 ## Archive policy
 
 `archived/{class}/` holds frozen, settled records. Each carries an
@@ -53,7 +61,11 @@ When an active note is superseded or settles, move it to `archived/` with
 
 ## Conventions
 
-- There is no centralized INDEX file; the directory tree and git history are
+- [`INDEX.md`](./INDEX.md) is the one allowed index, and it indexes owners,
+  not files: one row per topic naming the note that owns it. It exists because
+  a tree of 29 dated notes cannot say which of six notes on a topic is the
+  current one. Do not add a second index, a per-class index, or a file listing
+  — for everything without an owner, the directory tree and git history remain
   the index.
 - Cross-references between notes use relative markdown links.
 - Shared binary/figure assets live in `.agents/docs/figures/`; measurement and
