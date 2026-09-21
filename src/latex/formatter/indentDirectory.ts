@@ -169,7 +169,12 @@ export const indentLatexFilesInDirectory = Effect.fn(
         `Error during indentation process: ${toErrorMessage(err)}`,
       ).pipe(
         withLogChannel(CHANNEL),
-        Effect.as({ status: 'error', directory, count: 0, error: err }),
+        Effect.as({
+          status: 'error',
+          directory,
+          count: 0,
+          error: err,
+        } satisfies IndentLatexResult),
       ),
     ),
   );

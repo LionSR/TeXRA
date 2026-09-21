@@ -766,7 +766,10 @@ export class SessionHandle {
           ).pipe(
             withLogData(cause),
             withLogChannel(CHANNEL),
-            Effect.as({ action: 'cancel', cause: cause.message }),
+            Effect.as({
+              action: 'cancel',
+              cause: cause.message,
+            } satisfies RequestDecision),
           ),
         ),
       );
