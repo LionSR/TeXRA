@@ -42,10 +42,19 @@ jobs:
           node-version: '22'
           package-manager-cache: false
 
-      # Both the body and the base sha go through the environment rather than
+      # The base is the base BRANCH as it stands now, not
+      # `pull_request.base.sha`, which is the branch tip when the pull request
+      # was opened. Checkout gives us the merge ref, so a three-dot diff
+      # against a stale base sha would hand the gate every commit the base
+      # branch has landed since — and fail the PR over someone else's edit to
+      # a refused declaration.
+      #
+      # Both the body and the base ref go through the environment rather than
       # into the command line, so neither can be read as shell.
       - name: Check refused refactor candidates
         env:
           PR_BODY: ${{ github.event.pull_request.body }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        run: node scripts/check-refuted-candidates.mjs --base "$BASE_SHA"
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+          git fetch --no-tags origin "$BASE_REF"
+          node scripts/check-refuted-candidates.mjs --base "$(git rev-parse FETCH_HEAD)"

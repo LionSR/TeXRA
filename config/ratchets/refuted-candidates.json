@@ -75,7 +75,7 @@
         {
           "file": "packages/cli/src/runtime/cliProcessRuntime.ts",
           "symbol": "installCliProcessRuntime",
-          "signature": "export function installCliProcessRuntime( storageRoot?: string, options?: { readonly appState: StateStore }, ): Promise<ProcessRuntime> {…}"
+          "signature": "export function installCliProcessRuntime( storageRoot?: string, options?: { readonly appState: StateStore; readonly globalDatabase: Layer.Layer<GlobalDatabase>; }, ): Promise<ProcessRuntime> {…}"
         }
       ]
     },
