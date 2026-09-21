@@ -32,13 +32,15 @@ import type {
   SupabaseSession,
   SupabaseSessionCoordinator,
 } from '@auth/SupabaseSession';
+import { withLogChannel } from '@logger/effectLog';
 import { createLog } from '@logger/logUtils';
 import type { ProcessServices } from '@platform/processRuntime';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 import { callbackNonce, type PendingOAuthStore } from './pendingOAuthStore';
 
-const log = createLog('supabaseSignIn');
+const CHANNEL = 'supabaseSignIn';
+const log = createLog(CHANNEL);
 
 /**
  * The user declined consent in the browser. `signIn` fails with this rather
@@ -187,7 +189,9 @@ export class SupabaseSignInCoordinator {
       Effect.catchCause((cause) =>
         Effect.gen({ self: this }, function* () {
           const error = ensureError(settleFailure(cause));
-          log.error(`Error processing OAuth callback: ${error.message}`);
+          yield* Effect.logError(
+            `Error processing OAuth callback: ${error.message}`,
+          ).pipe(withLogChannel(CHANNEL));
           const outcome = { kind: 'failed', message: error.message } as const;
           const attempt = this.attemptFor(nonce);
           // An attempt words the failure for its own caller; a callback with
@@ -317,7 +321,9 @@ export class SupabaseSignInCoordinator {
 
       const attempt = this.attemptFor(claimed.nonce);
       if (!attempt && this.minted.has(claimed.nonce)) {
-        log.debug('OAuth callback ignored: attempt superseded');
+        yield* Effect.logDebug(
+          'OAuth callback ignored: attempt superseded',
+        ).pipe(withLogChannel(CHANNEL));
         return { kind: 'ignored', reason: 'superseded' } as const;
       }
       if (!attempt && (yield* this.session.loadSession())) {
@@ -344,7 +350,9 @@ export class SupabaseSignInCoordinator {
         }),
       );
       if (!stored) {
-        log.debug('OAuth callback dropped: attempt superseded before commit');
+        yield* Effect.logDebug(
+          'OAuth callback dropped: attempt superseded before commit',
+        ).pipe(withLogChannel(CHANNEL));
         return { kind: 'ignored', reason: 'superseded' } as const;
       }
 
@@ -358,7 +366,9 @@ export class SupabaseSignInCoordinator {
           Effect.succeed(this.active === attempt ? result.session : null),
         );
       } else {
-        log.info(`Sign-in completed for ${result.session.account.label}`);
+        yield* Effect.logInfo(
+          `Sign-in completed for ${result.session.account.label}`,
+        ).pipe(withLogChannel(CHANNEL));
         yield* this.options.transport.announce(committed);
       }
       return committed;
@@ -385,8 +395,11 @@ export class SupabaseSignInCoordinator {
         ? Effect.fail(new SignInCancelled())
         : Effect.fail(new Error(`OAuth error: ${result.error}. Try again.`));
     return Effect.gen({ self: this }, function* () {
-      if (result.cancelled) log.info('Sign-in was cancelled in the browser');
-      else log.error(`Sign-in failed: ${result.error}`);
+      yield* (
+        result.cancelled
+          ? Effect.logInfo('Sign-in was cancelled in the browser')
+          : Effect.logError(`Sign-in failed: ${result.error}`)
+      ).pipe(withLogChannel(CHANNEL));
       if (attempt) Deferred.doneUnsafe(attempt.outcome, settlement);
       else yield* this.options.transport.announce(outcome);
       return outcome;
@@ -405,7 +418,9 @@ export class SupabaseSignInCoordinator {
     return this.claims.run(
       Effect.gen({ self: this }, function* () {
         if (!nonce) {
-          log.warn('OAuth callback rejected: invalid or stale attempt binding');
+          yield* Effect.logWarning(
+            'OAuth callback rejected: invalid or stale attempt binding',
+          ).pipe(withLogChannel(CHANNEL));
           return null;
         }
         const pending = yield* this.options.store.read(nonce);
@@ -415,7 +430,9 @@ export class SupabaseSignInCoordinator {
           !isPendingOAuthStateFresh(pending)
         ) {
           if (pending) yield* this.options.store.clear(nonce);
-          log.warn('OAuth callback rejected: invalid or stale attempt binding');
+          yield* Effect.logWarning(
+            'OAuth callback rejected: invalid or stale attempt binding',
+          ).pipe(withLogChannel(CHANNEL));
           return null;
         }
         yield* this.options.store.clear(nonce);
@@ -479,11 +496,9 @@ export class SupabaseSignInCoordinator {
 
   private clearRecord(nonce: string): Effect.Effect<void> {
     return Effect.catch(this.options.store.clear(nonce), (error) =>
-      Effect.sync(() => {
-        log.warn(
-          `Unable to clean up stored OAuth callback state: ${toErrorMessage(error)}`,
-        );
-      }),
+      Effect.logWarning(
+        `Unable to clean up stored OAuth callback state: ${toErrorMessage(error)}`,
+      ).pipe(withLogChannel(CHANNEL)),
     );
   }
 }
