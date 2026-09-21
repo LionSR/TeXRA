@@ -17,6 +17,7 @@ import {
   parseLatexGitUrl,
   type OverleafRemote,
 } from '@latex/overleafProject';
+import { withLogChannel } from '@logger/effectLog';
 import { createLog } from '@logger/logUtils';
 import { WorkspaceFs } from '@platform/rootedFs';
 import type { ProcessRuntime } from '@platform/processRuntime';
@@ -342,9 +343,7 @@ function buildOverleafClonePorts(
         void vscode.window.showErrorMessage(message);
       }),
     logCloneError: (message) =>
-      Effect.sync(() => {
-        log.error(`Clone failed: ${message}`);
-      }),
+      Effect.logError(`Clone failed: ${message}`).pipe(withLogChannel(CHANNEL)),
   };
 }
 

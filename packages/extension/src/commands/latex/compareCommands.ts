@@ -155,12 +155,9 @@ export const handleCompare = Effect.fn('compareCommands.handleCompare')(
       Effect.catchIf(
         (error) => error.reason === 'not-registered',
         () =>
-          Effect.sync(() => {
-            log.warn(
-              `Could not check Progress view location: command '${contextKeyCommandId}' not found`,
-            );
-            return undefined;
-          }),
+          Effect.logWarning(
+            `Could not check Progress view location: command '${contextKeyCommandId}' not found`,
+          ).pipe(withLogChannel(CHANNEL), Effect.as(undefined)),
       ),
     );
 

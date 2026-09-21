@@ -4,7 +4,6 @@ import { retrieveSessionResumeData, type AgentConfig } from '@agent/runtime';
 import { deriveResumability } from '@agent/storage';
 import type { SessionHandle } from '@agent/runtime';
 import { withLogChannel } from '@logger/effectLog';
-import { createLog } from '@logger/logUtils';
 import {
   AgentCategory,
   RUN_OUTCOME,
@@ -15,7 +14,6 @@ import {
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'CliToolUseResumeData';
-const logger = createLog(CHANNEL);
 
 /**
  * The durable facts a run's continuability is decided from. `history list`
@@ -115,12 +113,9 @@ export const readCliResumedModel = Effect.fn('readCliResumedModel')(function* (
       resume?.type === 'toolUse' ? resume.agentConfig.model : undefined,
     ),
     Effect.catch((error) =>
-      Effect.sync(() => {
-        logger.debug(
-          `No resumed model for history entry ${id}: ${toErrorMessage(error)}`,
-        );
-        return undefined;
-      }),
+      Effect.logDebug(
+        `No resumed model for history entry ${id}: ${toErrorMessage(error)}`,
+      ).pipe(withLogChannel(CHANNEL), Effect.as(undefined)),
     ),
   );
 });

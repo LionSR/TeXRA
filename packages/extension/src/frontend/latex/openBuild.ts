@@ -293,9 +293,9 @@ const scheduleViewerRefresh: Effect.Effect<void> = Effect.gen(function* () {
     vscode.commands.executeCommand('latex-workshop.refresh-viewer'),
   ).pipe(
     Effect.catch((err) =>
-      Effect.sync(() => {
-        log.warn(`Viewer refresh failed: ${toErrorMessage(err)}`);
-      }),
+      Effect.logWarning(`Viewer refresh failed: ${toErrorMessage(err)}`).pipe(
+        withLogChannel(CHANNEL),
+      ),
     ),
   );
 });

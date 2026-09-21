@@ -86,11 +86,9 @@ export function registerAgentDirectoryRoots(
     (register) =>
       register.pipe(
         Effect.catchCause((cause) =>
-          Effect.sync(() => {
-            log.error(
-              `Failed to register agent directory root: ${toErrorMessage(Cause.squash(cause))}`,
-            );
-          }),
+          Effect.logError(
+            `Failed to register agent directory root: ${toErrorMessage(Cause.squash(cause))}`,
+          ).pipe(withLogChannel(CHANNEL)),
         ),
       ),
     { discard: true },
@@ -114,11 +112,9 @@ export function refreshCustomAgentRoot(): Effect.Effect<
       ),
     ),
     Effect.catchCause((cause) =>
-      Effect.sync(() => {
-        log.error(
-          `Failed to refresh custom agents root: ${toErrorMessage(Cause.squash(cause))}`,
-        );
-      }),
+      Effect.logError(
+        `Failed to refresh custom agents root: ${toErrorMessage(Cause.squash(cause))}`,
+      ).pipe(withLogChannel(CHANNEL)),
     ),
   );
 }
@@ -143,11 +139,9 @@ export async function initializeLatexSupport(
       }
     }).pipe(
       Effect.catchCause((cause) =>
-        Effect.sync(() => {
-          log.warn(
-            `Failed to extend PATH with TeX directories: ${toErrorMessage(Cause.squash(cause))}`,
-          );
-        }),
+        Effect.logWarning(
+          `Failed to extend PATH with TeX directories: ${toErrorMessage(Cause.squash(cause))}`,
+        ).pipe(withLogChannel(CHANNEL)),
       ),
     ),
   );
@@ -179,11 +173,9 @@ export async function initializeLatexSupport(
       }
     }).pipe(
       Effect.catchCause((cause) =>
-        Effect.sync(() => {
-          log.error(
-            `Error initializing LaTeX support: ${toErrorMessage(Cause.squash(cause))}`,
-          );
-        }),
+        Effect.logError(
+          `Error initializing LaTeX support: ${toErrorMessage(Cause.squash(cause))}`,
+        ).pipe(withLogChannel(CHANNEL)),
       ),
     ),
   );

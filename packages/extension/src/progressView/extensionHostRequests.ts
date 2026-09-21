@@ -68,6 +68,7 @@ import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { chooseTeamAvailabilityViaDialog } from '@frontend/ui/dialogs';
 import { ExternalOpenFailed } from '@hosts/uiHosts';
 import { parseVersionControlDiffFilename } from '@latex/latexdiff/diffFileNameManager';
+import { withLogChannel } from '@logger/effectLog';
 import { createLog } from '@logger/logUtils';
 import {
   modelOptionsFrom,
@@ -519,12 +520,9 @@ export function createExtensionHostRequests(
               new DropPathUndecodable({ message: toErrorMessage(cause) }),
           }).pipe(
             Effect.catchTag('DropPathUndecodable', (error) =>
-              Effect.sync(() => {
-                log.debug(
-                  `Dropped path is not a file URL: ${trimmed}: ${error.message}`,
-                );
-                return trimmed;
-              }),
+              Effect.logDebug(
+                `Dropped path is not a file URL: ${trimmed}: ${error.message}`,
+              ).pipe(withLogChannel(CHANNEL), Effect.as(trimmed)),
             ),
           )
         : trimmed;
@@ -542,12 +540,9 @@ export function createExtensionHostRequests(
             : resolved.relativePath,
         ),
         Effect.catchTag('DropFileUnreadable', (error) =>
-          Effect.sync(() => {
-            log.debug(
-              `Dropped file could not be read: ${decodedPath}: ${error.message}`,
-            );
-            return null;
-          }),
+          Effect.logDebug(
+            `Dropped file could not be read: ${decodedPath}: ${error.message}`,
+          ).pipe(withLogChannel(CHANNEL), Effect.as(null)),
         ),
       );
     });

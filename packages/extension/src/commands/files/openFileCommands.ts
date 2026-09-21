@@ -7,13 +7,13 @@ import type { SessionHandle } from '@agent/runtime';
 import { registerCommandEntries } from '@commands/_shared/registerCommands';
 import { getFileLister } from '@frontend/files/fileLister';
 import { openFirstLabelMatch } from '@latex/labelSearch';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import { withSessionFs, WorkspaceFs } from '@platform/rootedFs';
 import { workspaceAbsolutePath } from '@utils/files/workspaceFS';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 
-const log = createLog('openFileCommands');
+const CHANNEL = 'openFileCommands';
 
 function revealPosition(editor: vscode.TextEditor, pos: vscode.Position): void {
   const range = new vscode.Range(pos, pos);
@@ -66,9 +66,9 @@ function openLabel(session: SessionHandle, label: string) {
         workspaceFs.readFileString(file).pipe(
           Effect.map(normalizeLineEndings),
           Effect.tapError((error) =>
-            Effect.sync(() => {
-              log.debug(`Could not read file ${file}: ${error.message}`);
-            }),
+            Effect.logDebug(
+              `Could not read file ${file}: ${error.message}`,
+            ).pipe(withLogChannel(CHANNEL)),
           ),
         ),
       (file, index) =>

@@ -24,6 +24,7 @@ import { type ManualCriticismEntry, type SessionHandle } from '@agent/runtime';
 import { subscribeAddOutputFilesRunFact } from '@frontend/events/runFactSubscriptions';
 import { lineToRange } from '@frontend/vscode/vscodeEditor';
 import { parseCriticismAnnotations } from '@latex/criticismParser';
+import { withLogChannel } from '@logger/effectLog';
 import { createLog } from '@logger/logUtils';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { AddOutputFilesPayload, OutputFileInfo } from '@shared/schemas';
@@ -32,7 +33,8 @@ import { hasExtension } from '@utils/core/pathCore';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 
-const log = createLog('InlineCriticism');
+const CHANNEL = 'InlineCriticism';
+const log = createLog(CHANNEL);
 const COLLECTION_NAME = 'texra-criticism';
 const SOURCE_LABEL = 'TeXRA';
 const CODE_PARSED = 'criticize';
@@ -102,10 +104,10 @@ const refreshFileDiagnostics = Effect.fnUntraced(function* (
   const text = yield* fs.readFileString(absolutePath).pipe(
     Effect.map(normalizeLineEndings),
     Effect.catch((error) =>
-      Effect.sync(() => {
-        log.error(`Failed to read ${absolutePath}: ${error.message}`);
-        return undefined;
-      }),
+      Effect.logError(`Failed to read ${absolutePath}: ${error.message}`).pipe(
+        withLogChannel(CHANNEL),
+        Effect.as(undefined),
+      ),
     ),
   );
   if (text === undefined) return;
@@ -153,11 +155,9 @@ function handleAddOutputFiles(
       discard: true,
     }).pipe(
       Effect.catchCause((cause) =>
-        Effect.sync(() => {
-          log.error(
-            `Failed to refresh criticism diagnostics: ${toErrorMessage(Cause.squash(cause))}`,
-          );
-        }),
+        Effect.logError(
+          `Failed to refresh criticism diagnostics: ${toErrorMessage(Cause.squash(cause))}`,
+        ).pipe(withLogChannel(CHANNEL)),
       ),
     ),
   );
