@@ -13,16 +13,16 @@ passes through it. Workflow scripts are not a second orchestrator; they are a
 second journal and attempt identity layered on the same driver. What is
 duplicated is scaffolding, not architecture.
 
-| Duplication                                                                                                                                                                                | Sites                                                                                                                                          | Lines                                            |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
-| Seven byte-similar pairs across the two loops: `fresh`, `openFresh`, `restore`, `snapshot`, `usageSnapshot`, `finalize`, `failure`, plus the resume-refusal block copied with its comments | `src/agent/runtime/loop/toolUse.ts` / `loop/reflection.ts`                                                                                     | ~180                                             |
-| Two attempt vocabularies that share no schema machinery                                                                                                                                    | `childRunLoop.ts` `commitChildTurn` (`child.turn`) / `src/agent/workflowScript/checkpoint.ts` `recordWorkflowCallAttempt` (`workflow.attempt`) | ~120                                             |
-| Three XML delivery-envelope formatters                                                                                                                                                     | `src/tools/delegation/subagentResults.ts`, `deliveryEnvelope.ts`, `src/tools/bash.ts`                                                          | ~200                                             |
-| Two abort bridges onto one handle                                                                                                                                                          | `childRunLoop.ts` `ChildRunInterruptible` / `nativeSubagentStrategy.ts` `bindAbortSignals`                                                     | the two remaining `AbortController` ratchet rows |
-| Two halt writers in one file                                                                                                                                                               | `reflection.ts` `finish` and `finalize`                                                                                                        | small                                            |
-| A synthesized `flow.step` under a fake `family:'toolUse'` for agent-CLI children with no ledger                                                                                            | `childRunLoop.ts`                                                                                                                              | small                                            |
-| Reflection output written to no row; results survive only inside the snapshot's family state                                                                                               | `reflection.ts` `roundsToPersisted`; `src/agent/implementations/flows/reflection/output/`                                                      | violates one-run-model R1                        |
-| Two empty path segments                                                                                                                                                                    | `src/agent/implementations/flows/` holds only `reflection/`; there is no flow engine                                                           | 0                                                |
+| Duplication                                                                                                                                                                                | Sites                                                                                                                                                                                | Lines                     |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------- |
+| Seven byte-similar pairs across the two loops: `fresh`, `openFresh`, `restore`, `snapshot`, `usageSnapshot`, `finalize`, `failure`, plus the resume-refusal block copied with its comments | `src/agent/runtime/loop/toolUse.ts` / `loop/reflection.ts`                                                                                                                           | ~180                      |
+| Two attempt vocabularies that share no schema machinery                                                                                                                                    | `childRunLoop.ts` `commitChildTurn` (`child.turn`) / `src/agent/workflowScript/checkpoint.ts` `recordWorkflowCallAttempt` (`workflow.attempt`)                                       | ~120                      |
+| One envelope module with a result/error builder pair, and five drivers that each re-select the same facts                                                                                  | `src/tools/delegation/deliveryEnvelope.ts`, `subagentResults.ts`, `bashDelivery.ts` (not `bash.ts`, which only delegates), `codex.ts`, `claudeAgent.ts`, `workflowScriptStrategy.ts` | ~70                       |
+| Two cancellation bridges onto one handle: one controller, one signal-to-`interrupt()` listener set                                                                                         | `childRunLoop.ts` `ChildRunInterruptible` / `nativeSubagentStrategy.ts` `bindAbortSignals`                                                                                           | blocked, see 2.4          |
+| Two halt writers in one file                                                                                                                                                               | `reflection.ts` `finish` and `finalize`                                                                                                                                              | small                     |
+| A synthesized `flow.step` under a fake `family:'toolUse'` for agent-CLI children with no ledger                                                                                            | `childRunLoop.ts`                                                                                                                                                                    | small                     |
+| Reflection output written to no row; results survive only inside the snapshot's family state                                                                                               | `reflection.ts` `roundsToPersisted`; `src/agent/implementations/flows/reflection/output/`                                                                                            | violates one-run-model R1 |
+| Two empty path segments                                                                                                                                                                    | `src/agent/implementations/flows/` holds only `reflection/`; there is no flow engine                                                                                                 | 0                         |
 
 ## 2. Changes
 
@@ -39,8 +39,40 @@ duplicated is scaffolding, not architecture.
    one fold for the two rows.
 3. One envelope builder in `deliveryEnvelope.ts`; the per-driver functions
    become fact selection only.
-4. `ChildRunInterruptible` is the only `AbortController`; strategies take
-   Effect interruption. Deletes `bindAbortSignals` and shrinks the ratchet.
+4. `bindAbortSignals` (`nativeSubagentStrategy.ts`) goes away once strategies
+   take Effect interruption, but not before, and not as a ratchet win. Two
+   premises in the first draft of this step were wrong on the tree, so it is
+   restated here rather than attempted.
+
+   It is not an `AbortController` row. `nativeSubagentStrategy.ts` constructs
+   no controller at all; it maps each distinct source through
+   `onAbort(signal, () => handle.interrupt())`. The two production
+   `new AbortController(` rows are `ChildRunInterruptible`
+   (`childRunLoop.ts`), which this step keeps, and `claudeAgent.ts`, where the
+   Claude Agent SDK's options take a controller rather than a signal and the
+   one constructed there exists only at that foreign boundary. Removing the
+   latter would mean handing the child loop's own controller out to a
+   strategy, widening the loop's interrupt authority instead of shrinking it.
+   The row count therefore stays at two, and the ratchet is not a signal for
+   this step.
+
+   Fiber interruption cannot stand in for the bridge today.
+   `RunHandle.attachInterruptHandler` stores exactly one handler and
+   overwrites it, and `runFlowWithLifecycle` (`AgentRunLifecycle.ts`) builds a
+   fresh `RunHandle` per run and attaches its own `ctx.interrupt()` to it, so
+   the handle a strategy captures in `onRun` is never the one any loop-level
+   bind touched. The turn itself is wrapped in `Effect.uninterruptible`
+   (`gateTurn` in `childRunLoop.ts`, `executeInBand` in
+   `inBandSubagentRun.ts`), so no fiber interruption reaches it. That makes
+   `bindAbortSignals` the only path from a caller's `params.signal` or a turn
+   signal into an in-flight native turn: deleting it now would silently break
+   the stop button for every native subagent.
+
+   Sequencing: this step belongs to whoever makes the turn interruptible,
+   which reaches `executeAgent.ts`, `AgentRun.ts` and `childRunLoop.ts`. Once
+   one fiber interruption carries a stop into an in-flight turn,
+   `bindAbortSignals` and its `onAbort` listener bookkeeping delete together.
+
 5. Reflection output appends an `output.produced` row each round that
    carries the complete round map, not only the round just finished;
    `flow.snapshot`'s family state drops to scalars. The complete map is
@@ -79,6 +111,8 @@ boundary and its determinism guards; the external-process strategies
   `runProgram.ts`.
 - `workflow.attempt` and `child.turn` share one key type and one fold;
   both rows remain.
-- One `formatDelivery` XML builder; `effect-migration-baseline.json` has one
-  `new AbortController(` row.
+- One `formatDelivery` XML builder; every driver is fact selection only.
+- `bindAbortSignals` is gone and a native subagent's stop travels as one fiber
+  interruption. `effect-migration-baseline.json` is unchanged by that step:
+  both `new AbortController(` rows are load-bearing (see 2.4).
 - No production path contains `implementations/flows`.
