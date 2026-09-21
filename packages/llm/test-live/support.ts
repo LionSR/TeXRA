@@ -43,17 +43,7 @@ import type {
   TurnResult,
 } from '../src/turn.js';
 
-const TOOL = {
-  name: 'lookup_capital',
-  description: 'Return the capital city of one country.',
-  parameters: {
-    type: 'object',
-    properties: {
-      country: { type: 'string', description: 'The country to look up.' },
-    },
-    required: ['country'],
-  },
-};
+const TOOL_NAME = 'lookup_capital';
 
 const TEXT_REQUEST: TurnRequest = {
   system: 'Answer in one short sentence.',
@@ -78,7 +68,19 @@ const TOOL_REQUEST: TurnRequest = {
       ],
     },
   ],
-  tools: [TOOL],
+  tools: [
+    {
+      name: TOOL_NAME,
+      description: 'Return the capital city of one country.',
+      parameters: {
+        type: 'object',
+        properties: {
+          country: { type: 'string', description: 'The country to look up.' },
+        },
+        required: ['country'],
+      },
+    },
+  ],
 };
 
 /**
@@ -206,7 +208,7 @@ export function liveProtocol(spec: LiveProtocol): void {
           const called = yield* completeTurn(configured, TOOL_REQUEST);
           expect(called.finishReason).toBe('tool-calls');
           expect(localCalls(called).map((call) => call.name)).toContain(
-            TOOL.name,
+            TOOL_NAME,
           );
           const answer = yield* completeTurn(configured, answered(called));
           expect(answer.finishReason).toBe('stop');
@@ -216,17 +218,22 @@ export function liveProtocol(spec: LiveProtocol): void {
     });
 
     describe('an abort mid-stream', () => {
-      it.live('interrupts the reader once the stream is producing', () =>
+      it.live('interrupts the reader while the response is still open', () =>
         Effect.gen(function* () {
           const configured = model();
           const turn = yield* configured.prepareTurn(TEXT_REQUEST);
           assert(turn.mode === 'foreground');
           const producing = yield* Deferred.make<void>();
           const completed = yield* Deferred.make<void>();
+          // The reader parks on the first delta rather than racing the rest of
+          // the response: the interrupt then always lands mid-stream, with the
+          // body still open, which is the thing under test.
           const fiber = yield* configured.streamTurn(turn).pipe(
             Stream.runForEach((event) => {
               if (event.kind === 'delta')
-                return Deferred.succeed(producing, undefined);
+                return Deferred.succeed(producing, undefined).pipe(
+                  Effect.andThen(Effect.never),
+                );
               if (event.kind === 'completed')
                 return Deferred.succeed(completed, undefined);
               return Effect.void;
@@ -255,7 +262,7 @@ export function liveProtocol(spec: LiveProtocol): void {
     });
 
     describe('a continuation', () => {
-      if (spec.continuation === 'supported')
+      if (spec.continuation === 'supported') {
         it.live('chains the next turn on the anchor the first left', () =>
           Effect.gen(function* () {
             const configured = model();
@@ -270,7 +277,7 @@ export function liveProtocol(spec: LiveProtocol): void {
             expect(assistantText(second).length).toBeGreaterThan(0);
           }),
         );
-      else
+      } else {
         it.live('refuses an authored continuation', () =>
           Effect.gen(function* () {
             const error = yield* Effect.flip(
@@ -282,6 +289,7 @@ export function liveProtocol(spec: LiveProtocol): void {
             expect(error.kind).toBe('unsupported');
           }),
         );
+      }
     });
   });
 }
