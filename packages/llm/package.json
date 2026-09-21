@@ -13,7 +13,7 @@
     "./google-interactions": "./src/googleInteractions.ts"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test-live.json"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.125.0",

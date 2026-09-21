@@ -1,0 +1,54 @@
+name: Live LLM
+
+# The only wire evidence `packages/llm` has: one suite per HTTP protocol, run
+# against the real provider. It spends money and depends on eleven third-party
+# services, so it is never part of PR validation — `ci.yml` stays hermetic and
+# free. It runs when someone asks for it: the `live-llm` label on a PR, or a
+# manual dispatch.
+#
+# A suite whose key is not configured skips itself, so the job is still useful
+# with a subset of the secrets present.
+on:
+  pull_request:
+    types: [labeled]
+  workflow_dispatch:
+
+concurrency:
+  group: live-llm-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  live:
+    name: live provider suites
+    # `labeled` fires for every label; only ours starts a paid run. Secrets are
+    # not exposed to pull_request runs from forks, so a fork PR carrying the
+    # label skips every suite rather than leaking anything.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.label.name == 'live-llm'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup workspace
+        uses: ./.github/actions/setup-workspace
+
+      - name: Run the live LLM suites
+        run: pnpm run test:live
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          GLM_API_KEY: ${{ secrets.GLM_API_KEY }}
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
+          MOONSHOT_API_KEY: ${{ secrets.MOONSHOT_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          XAI_API_KEY: ${{ secrets.XAI_API_KEY }}

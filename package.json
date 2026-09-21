@@ -11,6 +11,7 @@
     "test": "vitest run --config vitest.config.mjs",
     "test:changed": "vitest run --config vitest.config.mjs --changed",
     "test:pure": "vitest run --config vitest.config.mjs --project pure",
+    "test:live": "vitest run --config packages/llm/vitest.live.config.mjs",
     "test:watch": "vitest --config vitest.config.mjs",
     "desktop:build": "corepack pnpm --filter @texra/trace-viewer run build && corepack pnpm --filter @texra/desktop build",
     "desktop:dev": "corepack pnpm --filter @texra/desktop dev",
