@@ -422,8 +422,7 @@ export const checkCoreDependencies = Effect.fn(
   );
   const missingBasicTools = basicTools.filter((_, i) => !basicResults[i]);
 
-  // Check for either GraphicsMagick or ImageMagick, and add the image tool
-  // to the missing list only if neither is installed.
+  // One entry for the image capability, and only if neither tool is there.
   if (!(yield* detectImageTool())) {
     missingBasicTools.push(IMAGE_TOOL_LABEL);
     if (showError) {
