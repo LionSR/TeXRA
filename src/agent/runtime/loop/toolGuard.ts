@@ -72,20 +72,19 @@ const guardRefusal = Effect.fn('toolUse.guard')(function* (
 
   if (!guard.bash) return undefined;
   const command = yield* guard.bash(input);
-  // The directory the approved command runs in, as the tool declared it: the
-  // call's working directory when it named one and the session's workspace
-  // otherwise, or the workspace whatever the call named when that is where
-  // the executor runs.
-  const executorCwd =
-    guard.cwd === 'workspace'
-      ? call.roots.workspace
-      : (parseWorkingDirectory(call.workingDirectory) ?? call.roots.workspace);
-  const decision = yield* requestBashApproval({
-    command,
-    // A tool whose executor can name no directory names none here, rather
-    // than a directory the approved command may not run in.
-    cwd: guard.cwd === 'unknown' ? null : executorCwd,
-  });
+  // The directory the approved command runs in, as the tool declared it.
+  // `'unknown'`: the executor can name none, so the prompt names none rather
+  // than a directory the approved command may not run in, and the call's own
+  // directory is not read at all. `'workspace'`: the executor runs there
+  // whatever working directory the call was given. Otherwise the call's
+  // working directory when it named one and the workspace otherwise, which is
+  // what a shell-shaped tool runs in.
+  let cwd: string | undefined;
+  if (guard.cwd === 'workspace') cwd = call.roots.workspace;
+  else if (guard.cwd !== 'unknown')
+    cwd = parseWorkingDirectory(call.workingDirectory) ?? call.roots.workspace;
+
+  const decision = yield* requestBashApproval({ command, cwd });
   return decision.action === 'approve'
     ? undefined
     : buildBashApprovalRejectedResult(command, decision);
