@@ -7,7 +7,7 @@ import '@awesome.me/webawesome/dist/components/dropdown/dropdown.js';
 import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
-import { designTokens } from '@shared/styles';
+import { designTokens } from '@ui/styles';
 import {
   AgentCategory,
   ToolConfigFieldsSchema,
@@ -16,13 +16,13 @@ import {
   type FileSelectConfig,
   type SessionType,
 } from '@shared/schemas';
-import { dropCueStyles } from '@shared/styles/commonViewStyles';
+import { dropCueStyles } from '@ui/styles/commonViewStyles';
 import { SortableController } from '@shared/litControllers/SortableController';
 import type { SurfaceAction } from '@shared/session/surface';
 import { SessionUiEvents } from '@shared/session/uiEvents';
-import { renderIconActionButton } from '@shared/wa/actionButtons';
-import type { TeXRAIconName } from '@shared/wa/iconNames';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { renderIconActionButton } from '@ui/wa/actionButtons';
+import type { TeXRAIconName } from '@ui/wa/iconNames';
+import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { getBasename, normalizeFilePath } from '@utils/core';
 import { capitalize, formatResultCount } from '@utils/text/stringUtils';
 import { FileDropController, postDroppedFiles } from '../fileDropHandler';

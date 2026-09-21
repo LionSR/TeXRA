@@ -60,7 +60,7 @@ import {
   type UserQuestionPermission,
 } from '@shared/schemas';
 import { subscribeToSignalChanges } from '@shared/signals';
-import { FOCUSED_BACKGROUND_TASK } from '@shared/copy/nestedRuns';
+import { FOCUSED_BACKGROUND_TASK } from '@ui/copy/nestedRuns';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
   isInFlightPhase,

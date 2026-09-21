@@ -4,7 +4,7 @@ import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 
 // Local imports - shared styles
-import { commonViewStyles, designTokens } from '@shared/styles';
+import { commonViewStyles, designTokens } from '@ui/styles';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import { MODEL_AVAILABILITY_STATUS } from '@shared/schemas';
@@ -14,12 +14,12 @@ import {
   type ModelSelectionItem,
   type ProviderKeyStatus,
 } from '@shared/settingsView/settingsViewMessages';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { waIcon } from '@ui/wa/webAwesomeIcons';
 import {
   renderKeyStatusIcon,
   statusCheckIconStyles,
-} from '@shared/wa/statusIcons';
-import { renderSettingsSectionHeading } from '@shared/wa/settingsSection';
+} from '@ui/wa/statusIcons';
+import { renderSettingsSectionHeading } from '@ui/wa/settingsSection';
 
 // Side-effect imports - register WA icon component
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
@@ -37,7 +37,7 @@ import {
 } from '@shared/constants/providers';
 
 // Local imports - profile view styles and events
-import { readSelectValue } from '@shared/wa/selectTemplates';
+import { readSelectValue } from '@ui/wa/selectTemplates';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { groupBy } from '@utils/core';
 import { pluralize } from '@utils/text/stringUtils';

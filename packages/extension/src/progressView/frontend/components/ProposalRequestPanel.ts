@@ -21,7 +21,7 @@ import {
   designTokens,
   requestPanelSharedStyles,
   selectStyles,
-} from '@shared/styles';
+} from '@ui/styles';
 
 // Local imports - shared utils
 import type {
@@ -35,18 +35,18 @@ import { workflowRunModel } from '@shared/runs/workflowRunModel';
 import {
   WORKFLOW_SCRIPT_PROPOSAL_COPY,
   workflowScriptPlanSummary,
-} from '@shared/copy/workflowScriptProposal';
-import { markdownStyles } from '@shared/styles/markdownStyles';
+} from '@ui/copy/workflowScriptProposal';
+import { markdownStyles } from '@ui/styles/markdownStyles';
 import { getModelLabel } from '@shared/model/modelLabel';
 import {
   readSelectValue,
   renderAgentOptions,
   renderModelOptions,
-} from '@shared/wa/selectTemplates';
+} from '@ui/wa/selectTemplates';
 
 // Local imports - shared utilities
-import { renderLabeledActionButton } from '@shared/wa/actionButtons';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { renderLabeledActionButton } from '@ui/wa/actionButtons';
+import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { APPROVE_ALL_DELEGATED_WORK_ACTION } from '@shared/session/approvalDecision';
 import { getBasename } from '@utils/core';
 

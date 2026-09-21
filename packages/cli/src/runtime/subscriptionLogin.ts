@@ -14,7 +14,7 @@ import {
 import type { ConfigTarget } from '@platform/interfaces';
 import { Secrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import { ACCOUNT_OUTCOME } from '@shared/copy/accountAuth';
+import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 import { tryOpenBrowser } from './browser';

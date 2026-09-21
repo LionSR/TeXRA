@@ -14,7 +14,7 @@ import {
   commonViewStyles,
   designTokens,
   requestPanelSharedStyles,
-} from '@shared/styles';
+} from '@ui/styles';
 
 // Local imports - shared schemas
 import {
@@ -23,8 +23,8 @@ import {
   type ProviderErrorPartial,
 } from '@shared/schemas';
 import { isKimiCodeSubscriptionRetryBlocked } from '@shared/model/kimiCodeRetryGate';
-import { renderLabeledActionButton } from '@shared/wa/actionButtons';
-import { renderDotMeta, type MetaPart } from '@shared/wa/metaStrip';
+import { renderLabeledActionButton } from '@ui/wa/actionButtons';
+import { renderDotMeta, type MetaPart } from '@ui/wa/metaStrip';
 import { tailWithEllipsis, toGraphemes } from '@utils/text/stringUtils';
 
 // Local imports - base class

@@ -4,7 +4,7 @@
  */
 import { z } from 'zod';
 
-import { GROK_AUTH } from '@shared/copy/accountAuth';
+import { GROK_AUTH } from '@ui/copy/accountAuth';
 
 import { XAI_DEFAULT_EXPIRES_IN_SEC } from './xaiConstants';
 import {

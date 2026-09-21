@@ -4,7 +4,7 @@ import { ANSI_ESCAPE_START, ansiEscapeEnd } from '@cli/runtime/ansiEscapes';
 import { safeTerminalText } from '@cli/runtime/terminalText';
 import { redactSecrets } from '@logger/redaction';
 import { type RunPhase } from '@shared/schemas';
-import { type TranscriptRow, type TranscriptRowKind } from '@shared/transcript';
+import { type TranscriptRow, type TranscriptRowKind } from '@ui/transcript';
 import { isActivePhase } from '@shared/runs/runStatus';
 
 import { normalizeKnownHtmlForCliMarkdown } from '../render/htmlMarkdownNormalize';

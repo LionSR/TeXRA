@@ -4,7 +4,7 @@ import { LitElement, html, css, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles
-import { commonViewStyles, designTokens } from '@shared/styles';
+import { commonViewStyles, designTokens } from '@ui/styles';
 
 // Local imports - shared schemas
 import type {

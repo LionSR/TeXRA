@@ -15,7 +15,7 @@ import {
 } from '@common/teams/TeamPlan';
 import type { StateStore } from '@platform/interfaces';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
-import { RESEARCHER_ACCESS } from '@shared/copy/onboarding';
+import { RESEARCHER_ACCESS } from '@ui/copy/onboarding';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { filterNotNullish } from '@utils/core';
 import { formatResultCount } from '@utils/text/stringUtils';

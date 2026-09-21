@@ -16,7 +16,7 @@ import {
   type WorkflowCallProgress,
   type WorkflowPlanMarker,
 } from '@shared/schemas';
-import type { WorkflowTaskRow } from '@shared/transcript';
+import type { WorkflowTaskRow } from '@ui/transcript';
 import {
   formatWorkflowCallLiveParts,
   workflowMarkerOf,

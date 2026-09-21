@@ -12,8 +12,8 @@ import {
   type DesktopPlatform,
 } from '@shared/commands/accelerators';
 import type { DesktopShortcutEntry } from '@shared/commands/shortcutPreferences';
-import type { TeXRAIconName } from '@shared/wa/iconNames';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import type { TeXRAIconName } from '@ui/wa/iconNames';
+import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { groupBy, isThenable } from '@utils/core';
 import {
   dispatchDesktopCommand,

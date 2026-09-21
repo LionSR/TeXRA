@@ -22,7 +22,7 @@ import {
 } from '@shared/session/sessionView';
 import type { Shell } from '@shared/session/shell';
 import { emptySurface, type Surface } from '@shared/session/surface';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { waIcon } from '@ui/wa/webAwesomeIcons';
 import {
   BOARD_NOW,
   buildScenario,

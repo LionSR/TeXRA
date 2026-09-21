@@ -29,7 +29,7 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports
 import type { InquiryThreadUpdatedEvent, RunId } from '@shared/schemas';
-import { designTokens, commonViewStyles } from '@shared/styles';
+import { designTokens, commonViewStyles } from '@ui/styles';
 import {
   descendantRuns,
   type SessionView,
@@ -38,9 +38,9 @@ import {
 import type { Surface } from '@shared/session/surface';
 import { SessionUiEvents } from '@shared/session/uiEvents';
 import { TickerController } from '@shared/litControllers/TickerController';
-import type { TeXRAIconName } from '@shared/wa/iconNames';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
-import { BACKGROUND_TASK } from '@shared/copy/nestedRuns';
+import type { TeXRAIconName } from '@ui/wa/iconNames';
+import { waIcon } from '@ui/wa/webAwesomeIcons';
+import { BACKGROUND_TASK } from '@ui/copy/nestedRuns';
 import {
   formatCompactDuration,
   formatResultCount,

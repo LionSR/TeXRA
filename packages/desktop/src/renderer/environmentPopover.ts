@@ -1,6 +1,6 @@
 import { html, nothing, type TemplateResult } from 'lit';
 
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 import { workspaceName, type WorkbenchTab } from '../shared/desktopShellState';
 import {

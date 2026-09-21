@@ -26,7 +26,7 @@ import {
   type SessionView,
   type RunView,
 } from '@shared/session/sessionView';
-import { formatWorkflowPhaseHeading } from '@shared/copy/workflowCall';
+import { formatWorkflowPhaseHeading } from '@ui/copy/workflowCall';
 import { isInFlightPhase } from '@shared/runs/runStatus';
 import {
   flowPosition,

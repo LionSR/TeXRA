@@ -296,6 +296,7 @@ Three of those baselines budget the code itself rather than an import edge, and 
 - `packages/extension/resources/` - Packaged agents, tool-use agents, docs, templates, examples, and extension assets
 - `src/platform/` - Platform abstraction layer (composition root). Hosts call `initPlatform()` once at startup; agnostic code uses `platform()` from `@platform/platform`.
 - `src/hosts/` - Host capability interfaces for clipboard, prompts, terminals, diff views, and openers.
+- `src/ui/` (`@ui/*`) - The host-neutral UI toolkit all three hosts render from: `ui/wa/` (Web Awesome and Lit building blocks, `waIcon()`), `ui/styles/` (shared `css` blocks), `ui/transcript/` (the transcript row model), `ui/markdown/` (the markdown/KaTeX pipeline) and `ui/copy/` (user-facing copy tables). It is a VS Code-free zone and takes no `@agent/*` imports. `src/shared/` keeps the wire contracts and UI-shared message types only; `src/transcript/` (`@transcript`) is the unrelated run-transcript persistence layer.
 - `src/test-kernel/` - Centralized Vitest suites for shared and host-specific behavior, including extension, desktop, and CLI code.
 
 ### Pragmatic implementations
@@ -553,7 +554,7 @@ Aim for code that looks like it was designed correctly from the start:
 
 For good separation of concerns and platform independence, core business logic should stay free of host-specific imports. This improves testability and keeps the door open for future reuse outside VS Code.
 
-1. **Never import `vscode` in VS Code-free zones.** See CLAUDE.md "Separation of concerns: VS Code coupling" for the full list. The key ones: `src/agent/`, `src/model/`, `src/latex/`, `src/tools/`, `src/controllers/`, `src/shared/`. Do not add new `@agent/*` imports under `src/shared/`; host-neutral orchestration belongs under `src/controllers/`.
+1. **Never import `vscode` in VS Code-free zones.** See CLAUDE.md "Separation of concerns: VS Code coupling" for the full list. The key ones: `src/agent/`, `src/model/`, `src/latex/`, `src/tools/`, `src/controllers/`, `src/shared/`, `src/ui/`. Do not add new `@agent/*` imports under `src/shared/` or `src/ui/`; host-neutral orchestration belongs under `src/controllers/`.
 
 2. **Use platform-agnostic helpers instead of VS Code types:**
    - `isFile(type)` / `isDirectory(type)` from `@utils/files/fsEntryType` — not `vscode.FileType.File` / `vscode.FileType.Directory`
@@ -606,7 +607,7 @@ A run is one Effect program in `src/agent/runtime/loop/`, no cursor and no graph
 **Webviews and UI**
 
 - Generate HTML through `BundledViewContentProvider` (`packages/extension/src/common/webview/BundledViewContentProvider.ts`) and its `buildWebviewHtml` helper. There is no shared message-handler base class: `settingsView` owns its inbound dispatch inside `SettingsViewMessageHandler` and `progressView` routes through typed host requests, so follow the pattern of the view you are touching (see "Webview Consistency Patterns").
-- Use Web Awesome (`<wa-icon>` via `waIcon()` from `@shared/wa/webAwesomeIcons`) and shared utilities from `@utils/text/stringUtils` and `@utils/core` (path basics: `normalizeFilePath`, `getBasename`, `getFileStem`) for consistent interactions.
+- Use Web Awesome (`<wa-icon>` via `waIcon()` from `@ui/wa/webAwesomeIcons`) and shared utilities from `@utils/text/stringUtils` and `@utils/core` (path basics: `normalizeFilePath`, `getBasename`, `getFileStem`) for consistent interactions.
 - Keep CSS modular (per-component styles as TypeScript in each view's `frontend/` directory, shared tokens in `packages/extension/src/common/styles/common.css`) and use Web Awesome icons (e.g., `${waIcon('chevron-down')}`) for toggle affordances.
 
 **Progress view**

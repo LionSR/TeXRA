@@ -23,7 +23,7 @@ import {
   commonViewStyles,
   designTokens,
   settingsBannerStyles,
-} from '@shared/styles';
+} from '@ui/styles';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
@@ -32,18 +32,18 @@ import {
   type LatexSettingsStatus,
   DEFAULT_LATEX_SETTINGS_STATUS,
 } from '@shared/settingsView/settingsViewMessages';
-import { renderLabeledActionButton } from '@shared/wa/actionButtons';
-import { renderLoadingState } from '@shared/wa/loadingState';
-import { renderSettingsBanner } from '@shared/wa/settingsBanner';
+import { renderLabeledActionButton } from '@ui/wa/actionButtons';
+import { renderLoadingState } from '@ui/wa/loadingState';
+import { renderSettingsBanner } from '@ui/wa/settingsBanner';
 import {
   renderSettingsSectionHeading,
   renderSettingsToggleRow,
-} from '@shared/wa/settingsSection';
+} from '@ui/wa/settingsSection';
 import {
   renderSetStatusIcon,
   statusCheckIconStyles,
-} from '@shared/wa/statusIcons';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+} from '@ui/wa/statusIcons';
+import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 // Web Awesome button + icon bundles (side-effect imports)
 import '@awesome.me/webawesome/dist/components/button/button.js';

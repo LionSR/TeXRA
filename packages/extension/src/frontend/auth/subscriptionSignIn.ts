@@ -13,7 +13,7 @@ import {
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { withVSCodeProgress } from '@frontend/ui/progress';
 import type { Secrets } from '@platform/secrets';
-import { ACCOUNT_OUTCOME } from '@shared/copy/accountAuth';
+import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { HttpClient } from 'effect/unstable/http';
 

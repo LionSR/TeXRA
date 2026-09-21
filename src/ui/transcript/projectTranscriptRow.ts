@@ -28,7 +28,7 @@ import {
   formatWorkflowCallMetadataParts,
   formatWorkflowPhaseHeading,
   workflowCallDetail,
-} from '@shared/copy/workflowCall';
+} from '@ui/copy/workflowCall';
 import { assertNever, isObject } from '@utils/core';
 import {
   formatCompactTokenCount,

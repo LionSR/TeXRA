@@ -14,7 +14,7 @@ import {
   commonViewStyles,
   designTokens,
   requestPanelSharedStyles,
-} from '@shared/styles';
+} from '@ui/styles';
 
 // Local imports - shared schemas
 import type {
@@ -24,7 +24,7 @@ import type {
 } from '@shared/schemas';
 
 // Local imports - shared utilities
-import { renderLabeledActionButton } from '@shared/wa/actionButtons';
+import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 
 // Local imports - base class
 import {

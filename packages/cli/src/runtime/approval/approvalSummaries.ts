@@ -11,7 +11,7 @@ import { getModelLabel } from '@shared/model/modelLabel';
 import {
   WORKFLOW_SCRIPT_PROPOSAL_COPY,
   workflowScriptPlanSummary,
-} from '@shared/copy/workflowScriptProposal';
+} from '@ui/copy/workflowScriptProposal';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import { buildDiffHunks, formatHunkLines } from '@utils/text/unifiedDiff';
 

@@ -2,7 +2,7 @@
 
 import { css, type CSSResult } from 'lit';
 
-import { visuallyHiddenDeclarations } from '@shared/styles';
+import { visuallyHiddenDeclarations } from '@ui/styles';
 
 export const latexTabStyles: CSSResult = css`
   :host {

@@ -7,7 +7,7 @@ import { html, type TemplateResult } from 'lit';
 
 import type { SessionView } from '@shared/session/sessionView';
 import { applySurfaceAction, emptySurface } from '@shared/session/surface';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { waIcon } from '@ui/wa/webAwesomeIcons';
 import {
   ROOT,
   withForeignOwner,

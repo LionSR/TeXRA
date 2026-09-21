@@ -22,7 +22,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { TuiRepaintOptions } from '@cli/chat/tui/render/tuiViewportController';
 import type { SessionMeta } from '@cli/chat/tui/state/cliState';
 import type { RunId } from '@shared/schemas';
-import type { TranscriptRow } from '@shared/transcript';
+import type { TranscriptRow } from '@ui/transcript';
 import {
   FakeStdin,
   FakeStdout,

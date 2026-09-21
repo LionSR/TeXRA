@@ -17,13 +17,13 @@ import {
   type RunId,
   type TaskGroup,
 } from '@shared/schemas';
-import type { TranscriptRow } from '@shared/transcript';
-import { designTokens } from '@shared/styles';
+import type { TranscriptRow } from '@ui/transcript';
+import { designTokens } from '@ui/styles';
 import type { TranscriptView } from '@shared/session/sessionView';
 import {
   formatWorkflowPhaseHeading,
   workflowPhaseHeadingOfGroup,
-} from '@shared/copy/workflowCall';
+} from '@ui/copy/workflowCall';
 
 // Side-effect imports - register Web Awesome components
 import '@awesome.me/webawesome/dist/components/button/button.js';
@@ -37,9 +37,9 @@ import {
   formatRunStatusLabel,
 } from '@shared/runs/runStatusDisplay';
 import { SessionUiEvents } from '@shared/session/uiEvents';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
-import { renderEmptyState } from '@shared/wa/emptyState';
-import { terminalStatusIcon } from '@shared/wa/statusIcons';
+import { waIcon } from '@ui/wa/webAwesomeIcons';
+import { renderEmptyState } from '@ui/wa/emptyState';
+import { terminalStatusIcon } from '@ui/wa/statusIcons';
 import { compareBySeqNo } from '@shared/runs/runOrdering';
 import { groupBy } from '@utils/core';
 import { formatDuration, pluralize } from '@utils/text/stringUtils';

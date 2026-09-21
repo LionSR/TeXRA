@@ -12,7 +12,7 @@ import { Cause } from 'effect';
 
 import { createLog } from '@logger/logUtils';
 import type { RunId } from '@shared/schemas';
-import { transcriptText, type TranscriptRow } from '@shared/transcript';
+import { transcriptText, type TranscriptRow } from '@ui/transcript';
 import type { RequestError } from '@shared/session/requestErrors';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {

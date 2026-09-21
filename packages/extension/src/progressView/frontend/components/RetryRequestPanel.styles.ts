@@ -2,7 +2,7 @@
 
 import { css, type CSSResult } from 'lit';
 
-import { sp } from '@shared/styles';
+import { sp } from '@ui/styles';
 
 export const retryRequestPanelStyles: CSSResult = css`
   .retry-request__operation {

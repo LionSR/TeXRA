@@ -28,7 +28,7 @@ import {
   type WorkflowDeclaredPlan,
   type WorkflowPlanMarker,
 } from '@shared/schemas';
-import type { TranscriptRow, WorkflowTaskRow } from '@shared/transcript';
+import type { TranscriptRow, WorkflowTaskRow } from '@ui/transcript';
 import { compareBySeqNo } from '@shared/runs/runOrdering';
 import { workflowRunSettled } from '@shared/runs/runStatus';
 import {
@@ -39,7 +39,7 @@ import {
   workflowPhaseHeadingOfGroup,
   type WorkflowPhaseHeading,
   type WorkflowTally,
-} from '@shared/copy/workflowCall';
+} from '@ui/copy/workflowCall';
 import { filterNotNullish } from '@utils/core';
 import {
   formatCompactDuration,

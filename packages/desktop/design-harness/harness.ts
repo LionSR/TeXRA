@@ -6,7 +6,7 @@ import '@fontsource-variable/jetbrains-mono';
 import '../src/renderer/styles.css';
 import '../src/renderer/themeTokens.css';
 import '../src/renderer/desktopShell.css';
-import '@shared/wa';
+import '@ui/wa';
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/badge/badge.js';
@@ -23,7 +23,7 @@ import '@awesome.me/webawesome/dist/components/divider/divider.js';
 import '@progressView/frontend/ProgressApp';
 import { html, render, type TemplateResult } from 'lit';
 
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { desktopScenes } from './scenes/desktop';
 import { extensionScenes } from './scenes/extension';
 import { RUN_BOARD_FIXTURES, runBoardScene } from './scenes/runBoard';

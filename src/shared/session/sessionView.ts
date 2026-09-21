@@ -39,7 +39,7 @@ import {
   WorktreeInfoSchema,
   type RunId,
 } from '@shared/schemas';
-import type { TranscriptRow } from '@shared/transcript';
+import type { TranscriptRow } from '@ui/transcript';
 import { RUN_STATUS_TONE } from '@shared/runs/runStatusDisplay';
 import type { WorkflowRunModel } from '@shared/runs/workflowRunModel';
 

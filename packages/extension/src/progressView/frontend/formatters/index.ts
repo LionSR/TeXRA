@@ -3,7 +3,7 @@
  * kind.
  *
  * Membership — which rows exist at all — is decided once by
- * `projectTranscriptRow` (`@shared/transcript`). This map is exhaustive over
+ * `projectTranscriptRow` (`@ui/transcript`). This map is exhaustive over
  * `TranscriptRowKind`, so a new row kind is a compile error here rather than a
  * row that silently never paints.
  */
@@ -12,8 +12,8 @@
 import { html, nothing, type TemplateResult } from 'lit';
 
 // Local imports - shared transcript model
-import type { TranscriptRow, TranscriptRowKind } from '@shared/transcript';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import type { TranscriptRow, TranscriptRowKind } from '@ui/transcript';
+import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local imports - formatter helpers

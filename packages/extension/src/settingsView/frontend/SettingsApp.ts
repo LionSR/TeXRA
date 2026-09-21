@@ -12,7 +12,7 @@ import { SignalWatcher } from '@shared/signals';
 import { installToolbarTooltips } from '@shared/litControllers/TooltipController';
 
 // Local imports - shared styles
-import { commonViewStyles, designTokens } from '@shared/styles';
+import { commonViewStyles, designTokens } from '@ui/styles';
 
 // Local imports - shared schemas and constants
 import {
@@ -23,7 +23,7 @@ import { isKnownUnsupported } from '@shared/utils/dispatcher';
 import {
   registerTeXRAWebAwesomeIcons,
   waIcon,
-} from '@shared/wa/webAwesomeIcons';
+} from '@ui/wa/webAwesomeIcons';
 
 // Local imports - settings view
 import {

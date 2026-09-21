@@ -4,7 +4,7 @@ import { Effect } from 'effect';
 import { createLog } from '@logger/logUtils';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
-import { RESEARCHER_ACCESS_AUTH } from '@shared/copy/accountAuth';
+import { RESEARCHER_ACCESS_AUTH } from '@ui/copy/accountAuth';
 
 import { CliExitCode } from '../runtime/exitCodes';
 import { installCliProcessRuntime } from '../runtime/cliProcessRuntime';

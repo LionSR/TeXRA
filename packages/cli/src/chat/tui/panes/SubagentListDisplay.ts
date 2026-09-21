@@ -8,7 +8,7 @@ import {
 } from '@cli/tui/ui/colors';
 import { STATUS_DOT } from '@cli/tui/ui/glyphs';
 import type { RunView } from '@shared/session/sessionView';
-import { TOKENS_GENERATED } from '@shared/copy/workflowCall';
+import { TOKENS_GENERATED } from '@ui/copy/workflowCall';
 import {
   formatCompactTokenCount,
   formatResultCount,

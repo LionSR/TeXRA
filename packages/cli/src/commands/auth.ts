@@ -3,7 +3,7 @@ import { Effect } from 'effect';
 
 import { DEFAULT_OAUTH_PROVIDER, isOAuthProvider } from '@auth/config';
 import type { SupabaseSession } from '@auth/SupabaseSession';
-import { RESEARCHER_ACCESS_AUTH } from '@shared/copy/accountAuth';
+import { RESEARCHER_ACCESS_AUTH } from '@ui/copy/accountAuth';
 import { isNonEmptyString } from '@utils/text/stringUtils';
 
 import { CliUsageError, type CliContext } from '../runtime/cliContext';

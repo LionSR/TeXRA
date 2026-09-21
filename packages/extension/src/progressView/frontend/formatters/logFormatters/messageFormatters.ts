@@ -30,8 +30,8 @@ import type {
   ProgressStatusRow,
   UserRow,
   WorkflowTaskRow,
-} from '@shared/transcript';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+} from '@ui/transcript';
+import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 // Local imports - formatter helpers
 import { formatDisplayTimestamp } from '../timestampUtils';
@@ -79,7 +79,7 @@ export function formatProgressStatusTemplate(
 
 /**
  * Format error message as TemplateResult. The detail field set and its display
- * order are the row's — see `ERROR_DETAIL_FIELDS` in `@shared/transcript`.
+ * order are the row's — see `ERROR_DETAIL_FIELDS` in `@ui/transcript`.
  */
 export function formatErrorTemplate(row: ErrorRow): FormatResult {
   const { id, groupId, timestamp } = row;

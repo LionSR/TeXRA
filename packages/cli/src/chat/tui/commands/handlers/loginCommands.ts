@@ -38,7 +38,7 @@ import {
   CHATGPT_AUTH,
   GROK_AUTH,
   RESEARCHER_ACCESS_AUTH,
-} from '@shared/copy/accountAuth';
+} from '@ui/copy/accountAuth';
 import { collapseWhitespace } from '@utils/text/stringUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 

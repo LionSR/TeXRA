@@ -21,7 +21,7 @@ import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
 import type { ProcessServices } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import { ACCOUNT_OUTCOME } from '@shared/copy/accountAuth';
+import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { allSettledVoid } from '@utils/core/allSettledVoid';
 

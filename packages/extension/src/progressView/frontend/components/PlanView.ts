@@ -8,7 +8,7 @@ import { html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles
-import { designTokens, commonViewStyles } from '@shared/styles';
+import { designTokens, commonViewStyles } from '@ui/styles';
 import type { Plan } from '@shared/schemas';
 
 // Local imports - base class

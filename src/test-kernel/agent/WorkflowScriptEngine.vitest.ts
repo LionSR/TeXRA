@@ -15,7 +15,7 @@ import { runWorkflowScript } from '@agent/workflowScript/runWorkflowScript';
 import { WORKFLOW_SKIPPED_RESULT } from '@agent/workflowScript/types';
 import { runScriptInSandbox } from '@agent/workflowScript/sandbox';
 import type { RunId, WorkflowCallProgress } from '@shared/schemas';
-import { WORKFLOW_CALL_UNFINISHED_NOTE } from '@shared/copy/workflowCall';
+import { WORKFLOW_CALL_UNFINISHED_NOTE } from '@ui/copy/workflowCall';
 import { ensureError } from '@utils/errors/errorMessage';
 
 const META = `export const meta = {

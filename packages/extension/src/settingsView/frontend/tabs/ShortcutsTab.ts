@@ -7,7 +7,7 @@ import {
   commonViewStyles,
   designTokens,
   settingsBannerStyles,
-} from '@shared/styles';
+} from '@ui/styles';
 import {
   detectBrowserPlatform,
   formatDesktopAccelerator,
@@ -20,11 +20,11 @@ import {
 import {
   renderIconActionButton,
   renderLabeledActionButton,
-} from '@shared/wa/actionButtons';
-import { renderEmptyState } from '@shared/wa/emptyState';
-import { renderSettingsBanner } from '@shared/wa/settingsBanner';
-import { renderSettingsSectionHeading } from '@shared/wa/settingsSection';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+} from '@ui/wa/actionButtons';
+import { renderEmptyState } from '@ui/wa/emptyState';
+import { renderSettingsBanner } from '@ui/wa/settingsBanner';
+import { renderSettingsSectionHeading } from '@ui/wa/settingsSection';
+import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { groupBy } from '@utils/core';
 import { pluralize } from '@utils/text/stringUtils';
 

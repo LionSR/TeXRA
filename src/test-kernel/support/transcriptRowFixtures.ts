@@ -1,6 +1,6 @@
 // Test-only builders for stream-log projections the suites replay.
 //
-// The CLI paints `@shared/transcript` rows directly, so a tool row is a
+// The CLI paints `@ui/transcript` rows directly, so a tool row is a
 // normalized payload plus the shared fold over it — exactly what
 // `projectTranscriptRow` hands the painter. Suites that hand-build rows
 // (ToolRenderers, ConversationTranscript, SubagentListDisplay,
@@ -32,8 +32,8 @@ import {
   type CompactionActivityRow,
   type FileListRow,
   type PhaseRow,
-} from '@shared/transcript';
-import { toolRowModel } from '@shared/transcript/toolRowModel';
+} from '@ui/transcript';
+import { toolRowModel } from '@ui/transcript/toolRowModel';
 import { upsertTaskGroupFromStreamLog } from '@shared/runs/taskGroupProjection';
 import type { CompactionActivityStatus } from '@shared/runs/compactionActivityProjection';
 import { COMPACTION_ACTIVITY_LABEL } from '@shared/runs/compactionActivityProjection';

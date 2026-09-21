@@ -4,16 +4,16 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import { LitElement, html, css, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
 
-import { designTokens, commonViewStyles } from '@shared/styles';
+import { designTokens, commonViewStyles } from '@ui/styles';
 import { GETTING_STARTED_ACTION_PRESENTATION } from '@shared/schemas';
 import { SessionUiEvents } from '@shared/session/uiEvents';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { waIcon } from '@ui/wa/webAwesomeIcons';
 import {
   ONBOARDING_CARD_TITLE,
   ONBOARDING_CHOICE_API_KEY,
   ONBOARDING_CHOICE_CHATGPT,
   ONBOARDING_CHOICE_SKIP_LABEL,
-} from '@shared/copy/onboarding';
+} from '@ui/copy/onboarding';
 
 const { openWalkthrough: OPEN_WALKTHROUGH } =
   GETTING_STARTED_ACTION_PRESENTATION;

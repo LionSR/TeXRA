@@ -9,7 +9,7 @@ import {
   type WorkflowCallProgress,
   type WorkflowCallStatus,
 } from '@shared/schemas';
-import { WORKFLOW_CALL_UNFINISHED_NOTE } from '@shared/copy/workflowCall';
+import { WORKFLOW_CALL_UNFINISHED_NOTE } from '@ui/copy/workflowCall';
 
 import type { WorkflowAttemptFacts, WorkflowScriptEvent } from './types';
 

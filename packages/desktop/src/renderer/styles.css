@@ -65,7 +65,7 @@ wa-button[hidden] {
 /* Named `spin` so a caller can override just the duration, as desktopShell.css's
    .shell-environment-refresh does. This shell chrome sits outside the Lit
    component tree, so it defines its own keyframe rather than sharing one
-   from @shared/styles. */
+   from @ui/styles. */
 @keyframes spin {
   from {
     transform: rotate(0deg);
@@ -1569,7 +1569,7 @@ wa-card.desktop-onboarding::part(footer) {
   --dot-color: var(--wa-color-brand-fill-loud, currentColor);
 }
 
-/* Structure owned by the shared renderLoadingState helper (@shared/wa) — light-DOM
+/* Structure owned by the shared renderLoadingState helper (@ui/wa) — light-DOM
    mirror of the `.loading-state` rule in src/shared/styles/commonViewStyles.ts,
    since this tree can't adopt that shadow-DOM stylesheet. Same tokens as the
    canonical rule (padding: --wa-space-l, no font-size override) so it doesn't
@@ -1602,7 +1602,7 @@ wa-card.desktop-onboarding::part(footer) {
   font-size: var(--font-size-sm);
 }
 
-/* Class hook consumed by the shared renderEmptyState() helper (@shared/wa/emptyState).
+/* Class hook consumed by the shared renderEmptyState() helper (@ui/wa/emptyState).
    Neutralizes the UA heading chrome so it reads like the plain text this panel used
    before adopting the helper. */
 .desktop-editor-tree-empty .empty-state-title {

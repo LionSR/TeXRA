@@ -1,4 +1,4 @@
-// Renders a markdown body through the shared `@shared/markdown` factory +
+// Renders a markdown body through the shared `@ui/markdown` factory +
 // ANSI rule overrides, then ships the result through an Ink `<Text>`. The
 // renderer cache (per-host LRU) lives in `ansiMarkdown.ts` so re-renders of
 // the same content during streaming reuse the cached ANSI string.

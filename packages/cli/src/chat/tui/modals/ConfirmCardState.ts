@@ -9,7 +9,7 @@ import {
   firstFittingCandidate,
   textDisplayWidth,
 } from '@cli/runtime/terminalText';
-import { DELEGATION_APPROVAL_COPY } from '@shared/copy/delegationApproval';
+import { DELEGATION_APPROVAL_COPY } from '@ui/copy/delegationApproval';
 
 const APPROVAL_PULSE_FRAMES = ['●', '○'] as const;
 

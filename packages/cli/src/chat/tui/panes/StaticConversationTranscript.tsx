@@ -12,7 +12,7 @@ import { Box, Static, Text } from 'ink';
 
 import { COLOR_HINT } from '@cli/tui/ui/colors';
 import type { RunId } from '@shared/schemas';
-import type { TranscriptRow } from '@shared/transcript';
+import type { TranscriptRow } from '@ui/transcript';
 import type { SessionView } from '@shared/session/sessionView';
 import type { RunLabels } from '@shared/tools/executionsDisplay';
 import { safeHomedir } from '@utils/system/platformPaths';

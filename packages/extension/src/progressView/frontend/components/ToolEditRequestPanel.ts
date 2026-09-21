@@ -15,18 +15,18 @@ import {
   commonViewStyles,
   designTokens,
   requestPanelSharedStyles,
-} from '@shared/styles';
+} from '@ui/styles';
 
 // Local imports - shared helpers
 import {
   renderLabeledActionButton,
   renderLabeledActionButtonParts,
-} from '@shared/wa/actionButtons';
-import { renderDotMeta, type MetaPart } from '@shared/wa/metaStrip';
+} from '@ui/wa/actionButtons';
+import { renderDotMeta, type MetaPart } from '@ui/wa/metaStrip';
 import {
   renderSplitButtonMenuParts,
   splitButtonTriggerStyles,
-} from '@shared/wa/splitButton';
+} from '@ui/wa/splitButton';
 import { SessionUiEvents } from '@shared/session/uiEvents';
 import type { RuntimeRequest } from '@shared/session/runtimeRequest';
 import { pluralize } from '@utils/text/stringUtils';

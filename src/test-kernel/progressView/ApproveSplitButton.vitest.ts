@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import type { ApproveSplitButton } from '@progressView/frontend/components/ApproveSplitButton';
 
 // Local imports - shared copy
-import { DELEGATION_APPROVAL_COPY } from '@shared/copy/delegationApproval';
+import { DELEGATION_APPROVAL_COPY } from '@ui/copy/delegationApproval';
 
 // Local imports - test utilities
 import {

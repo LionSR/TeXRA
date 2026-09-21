@@ -12,7 +12,7 @@ import {
   commonViewStyles,
   designTokens,
   requestPanelSharedStyles,
-} from '@shared/styles';
+} from '@ui/styles';
 
 // Local imports - progress view styles
 import { codeBlockStyles } from '../styles/codeBlockStyles';

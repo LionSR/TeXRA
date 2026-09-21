@@ -7,8 +7,8 @@ import { css } from 'lit';
 import katexStyles from 'katex/dist/katex.min.css?inline';
 
 // Shared styles
-import { commonViewStyles } from '@shared/styles';
-import { markdownStyles } from '@shared/styles/markdownStyles';
+import { commonViewStyles } from '@ui/styles';
+import { markdownStyles } from '@ui/styles/markdownStyles';
 
 // Import individual style modules
 import { logEntryStyles } from './logEntryStyles';
@@ -52,7 +52,7 @@ export const layoutStyles = css`
   }
 
   /* Class hooks consumed by the shared renderEmptyState() helper
-     (@shared/wa/emptyState) when it renders into a .log-placeholder. */
+     (@ui/wa/emptyState) when it renders into a .log-placeholder. */
   .log-placeholder .empty-state-icon {
     font-size: calc(var(--font-size) * 1.5);
     opacity: var(--opacity-disabled);

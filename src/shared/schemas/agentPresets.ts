@@ -9,7 +9,7 @@
 
 import { z } from 'zod';
 
-import type { TeXRAIconName } from '@shared/wa/iconNames';
+import type { TeXRAIconName } from '@ui/wa/iconNames';
 
 import { AgentCategorySchema } from './agent';
 

@@ -6,9 +6,9 @@
  * exposed as options.
  *
  * Like `texmathPlugin`, this module is intentionally NOT re-exported from the
- * `@shared/markdown` barrel — it would pin katex and the side-effecting
+ * `@ui/markdown` barrel — it would pin katex and the side-effecting
  * `markdown-it-texmath` import into the module graph for hosts that never
- * render math. Import directly from `@shared/markdown/katexHtmlProcessor`.
+ * render math. Import directly from `@ui/markdown/katexHtmlProcessor`.
  */
 
 import katex from 'katex';

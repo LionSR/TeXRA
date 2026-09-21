@@ -16,7 +16,7 @@ import {
   commonViewStyles,
   designTokens,
   settingsBannerStyles,
-} from '@shared/styles';
+} from '@ui/styles';
 
 // Local imports - shared schemas
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
@@ -35,14 +35,14 @@ import {
 import {
   renderIconActionButton,
   renderLabeledActionButton,
-} from '@shared/wa/actionButtons';
-import { renderSettingsBanner } from '@shared/wa/settingsBanner';
+} from '@ui/wa/actionButtons';
+import { renderSettingsBanner } from '@ui/wa/settingsBanner';
 import {
   renderSettingsNumberRow,
   renderSettingsSectionHeading,
-} from '@shared/wa/settingsSection';
-import type { TeXRAIconName } from '@shared/wa/iconNames';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+} from '@ui/wa/settingsSection';
+import type { TeXRAIconName } from '@ui/wa/iconNames';
+import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { pluralize } from '@utils/text/stringUtils';
 import { postStateSetting } from '../components/shared/stateSettingRows';
 

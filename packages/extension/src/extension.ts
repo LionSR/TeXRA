@@ -97,7 +97,7 @@ import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
 import { WorktreeStateStore } from '@platform/defaults/worktreeStateStore';
 import { StorageFs, withSessionFs } from '@platform/rootedFs';
-import { sessionStoreClearedMessage } from '@shared/copy/sessionStore';
+import { sessionStoreClearedMessage } from '@ui/copy/sessionStore';
 import {
   formatTexraApprovalPolicy,
   TEXRA_APPROVAL_POLICY_CONFIG_KEY,

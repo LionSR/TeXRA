@@ -46,8 +46,8 @@ import {
   type RunPhase,
   type WorkflowCallProgress,
 } from '@shared/schemas';
-import type { WorkflowTaskRow } from '@shared/transcript';
-import type { TranscriptRow } from '@shared/transcript';
+import type { WorkflowTaskRow } from '@ui/transcript';
+import type { TranscriptRow } from '@ui/transcript';
 import { runUnreadableMessage } from '@shared/runs/runStatusDisplay';
 import type { SessionView, RunView } from '@shared/session/sessionView';
 import { workflowRunModel } from '@shared/runs/workflowRunModel';

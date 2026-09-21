@@ -5,7 +5,7 @@
  * the webview-specific error colour lives here.
  */
 
-import { createKatexHtmlProcessor } from '@shared/markdown/katexHtmlProcessor';
+import { createKatexHtmlProcessor } from '@ui/markdown/katexHtmlProcessor';
 
 let cachedProcess: ((content: string) => string) | null = null;
 

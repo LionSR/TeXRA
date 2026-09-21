@@ -24,7 +24,7 @@ import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { type RunId, type WorkflowControlAction } from '@shared/schemas';
-import { SESSION_LIST } from '@shared/copy/nestedRuns';
+import { SESSION_LIST } from '@ui/copy/nestedRuns';
 import type { SessionView } from '@shared/session/sessionView';
 import type { RunLabels } from '@shared/tools/executionsDisplay';
 import {

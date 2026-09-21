@@ -5,7 +5,7 @@ import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles
-import { commonViewStyles, designTokens } from '@shared/styles';
+import { commonViewStyles, designTokens } from '@ui/styles';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import {
@@ -18,9 +18,9 @@ import {
 import {
   renderSetStatusIcon,
   statusCheckIconStyles,
-} from '@shared/wa/statusIcons';
-import { renderLabeledActionButton } from '@shared/wa/actionButtons';
-import { renderSettingsSectionHeading } from '@shared/wa/settingsSection';
+} from '@ui/wa/statusIcons';
+import { renderLabeledActionButton } from '@ui/wa/actionButtons';
+import { renderSettingsSectionHeading } from '@ui/wa/settingsSection';
 
 // Web Awesome icon bundle (side-effect import)
 import '@awesome.me/webawesome/dist/components/button/button.js';

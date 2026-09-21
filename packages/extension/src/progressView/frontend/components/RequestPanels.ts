@@ -36,7 +36,7 @@ import {
   commonViewStyles,
   designTokens,
   requestPanelSharedStyles,
-} from '@shared/styles';
+} from '@ui/styles';
 
 // Local imports - shared schemas
 import type { PermissionPayload, RunId } from '@shared/schemas';
@@ -44,8 +44,8 @@ import type { SessionView } from '@shared/session/sessionView';
 import type { Surface } from '@shared/session/surface';
 
 // Local imports - progress view helpers
-import type { TeXRAIconName } from '@shared/wa/iconNames';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import type { TeXRAIconName } from '@ui/wa/iconNames';
+import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { groupBy } from '@utils/core';
 import { isTextInput, selectExternalInquiryKey } from './RequestPanelsState';
 

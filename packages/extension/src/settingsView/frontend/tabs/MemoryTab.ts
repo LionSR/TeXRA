@@ -6,9 +6,9 @@ import { customElement, property } from 'lit/decorators.js';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import type { MemoryViewItem } from '@shared/settingsView/settingsViewMessages';
-import { commonViewStyles, designTokens } from '@shared/styles';
+import { commonViewStyles, designTokens } from '@ui/styles';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { renderLabeledActionButton } from '@shared/wa/actionButtons';
+import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 
 import { renderStateSettingToggleRow } from '../components/shared/stateSettingRows';
 

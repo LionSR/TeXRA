@@ -11,10 +11,10 @@ import {
   type SkillDisplayIssue,
   type SkillDisplayItem,
 } from '@shared/schemas';
-import { commonViewStyles, designTokens } from '@shared/styles';
+import { commonViewStyles, designTokens } from '@ui/styles';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import { renderEmptyState } from '@shared/wa/emptyState';
-import { renderSettingsSectionHeading } from '@shared/wa/settingsSection';
+import { renderEmptyState } from '@ui/wa/emptyState';
+import { renderSettingsSectionHeading } from '@ui/wa/settingsSection';
 import { groupBy } from '@utils/core';
 import { pluralize } from '@utils/text/stringUtils';
 

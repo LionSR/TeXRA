@@ -18,7 +18,7 @@ import {
 import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles
-import { commonViewStyles, designTokens } from '@shared/styles';
+import { commonViewStyles, designTokens } from '@ui/styles';
 
 // Local imports - shared webview
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
@@ -29,9 +29,9 @@ import type {
   ToolInstallAction,
 } from '@shared/settingsView/settingsViewMessages';
 import { DetailsOpenController } from '@shared/litControllers/DetailsOpenController';
-import type { TeXRAIconName } from '@shared/wa/iconNames';
-import { renderStatusBadge } from '@shared/wa/statusIcons';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import type { TeXRAIconName } from '@ui/wa/iconNames';
+import { renderStatusBadge } from '@ui/wa/statusIcons';
+import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 // Local imports - shared schemas
 import { toolDependencyStatusLabel } from '@shared/tools/toolDependencyStatusLabels';

@@ -4,7 +4,7 @@
  * Everything this card says about a call — its header label and preview, the
  * structured sections, whether the output block is shown at all, the error
  * text and the user instruction — comes from `ToolRow.model`
- * (`toolRowModel` in `@shared/transcript`). This file paints that model with
+ * (`toolRowModel` in `@ui/transcript`). This file paints that model with
  * Lit and applies the webview's own widths, icons, and live controls.
  *
  * IMPORTANT: Lit templates preserve whitespace literally. Multi-line templates
@@ -16,15 +16,15 @@
 import { html, nothing, type TemplateResult } from 'lit';
 
 // Local imports - shared utilities
-import type { ToolRow } from '@shared/transcript';
+import type { ToolRow } from '@ui/transcript';
 import { parseDelegationToolInput, TOOL_CALL_STATUS } from '@shared/schemas';
 import { SessionUiEvents } from '@shared/session/uiEvents';
 import {
   DELEGATE_MULTI_AGENTS_TOOL_NAME,
   DELEGATION_TOOL_CATEGORY,
 } from '@shared/constants/delegationTools';
-import type { TeXRAIconName } from '@shared/wa/iconNames';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import type { TeXRAIconName } from '@ui/wa/iconNames';
+import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { toolDisplayKind } from '@shared/tools/toolKind';
 import {
   isMcpToolName,

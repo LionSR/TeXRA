@@ -34,11 +34,11 @@ import {
   commonViewStyles,
   designTokens,
   requestPanelSharedStyles,
-} from '@shared/styles';
+} from '@ui/styles';
 import { CopyButtonController } from '@shared/litControllers/CopyButtonController';
-import { renderLabeledActionButton } from '@shared/wa/actionButtons';
-import { renderDotMeta } from '@shared/wa/metaStrip';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { renderLabeledActionButton } from '@ui/wa/actionButtons';
+import { renderDotMeta } from '@ui/wa/metaStrip';
+import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 import type { SurfaceDecision } from '@shared/session/approvalDecision';
 import type { Surface } from '@shared/session/surface';

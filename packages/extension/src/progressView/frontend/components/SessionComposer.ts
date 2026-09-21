@@ -30,7 +30,7 @@ import {
   type SessionType,
   type RunId,
 } from '@shared/schemas';
-import { designTokens, commonViewStyles } from '@shared/styles';
+import { designTokens, commonViewStyles } from '@ui/styles';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import type { SessionView, RunView } from '@shared/session/sessionView';
 import {
@@ -47,9 +47,9 @@ import {
   readFileAsBase64,
   type ExtractedClipboardImage,
 } from '@shared/utils/clipboardImages';
-import { renderIconActionButton } from '@shared/wa/actionButtons';
-import type { TeXRAIconName } from '@shared/wa/iconNames';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { renderIconActionButton } from '@ui/wa/actionButtons';
+import type { TeXRAIconName } from '@ui/wa/iconNames';
+import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { filterNotNullish } from '@utils/core';
 import { generatePastedImageName } from '@utils/files/pastedImageName';
 import './QueuedFollowUps';

@@ -11,7 +11,7 @@ import {
   isSettledRow,
   projectTranscriptRow,
   transcriptText,
-} from '@shared/transcript';
+} from '@ui/transcript';
 
 const base = {
   type: STREAM_LOG_ENTRY_TYPES.LOG,

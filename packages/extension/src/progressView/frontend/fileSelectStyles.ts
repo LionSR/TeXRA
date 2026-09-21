@@ -9,8 +9,8 @@
  */
 
 import { css } from 'lit';
-import { compactFormControlStyles } from '@shared/styles';
-import { buttonStyles } from '@shared/styles/controlStyles';
+import { compactFormControlStyles } from '@ui/styles';
+import { buttonStyles } from '@ui/styles/controlStyles';
 
 /** Core file-select layout styles. */
 export const fileSelectLayoutStyles = css`

@@ -2,7 +2,7 @@
 
 import { css, type CSSResult } from 'lit';
 
-import { sp } from '@shared/styles';
+import { sp } from '@ui/styles';
 
 export const toolEditRequestPanelStyles: CSSResult = css`
   .approval-request__path {

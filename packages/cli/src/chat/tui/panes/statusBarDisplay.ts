@@ -24,13 +24,13 @@ import {
   type TokenUsageStats,
   type UsageRoute,
 } from '@shared/schemas';
-import { APPROVAL_BYPASS_BADGE } from '@shared/copy/approvalBypass';
+import { APPROVAL_BYPASS_BADGE } from '@ui/copy/approvalBypass';
 import {
   FOREGROUND_OWNERSHIP,
   RUNNING_SESSION,
   SESSION_LIST,
   SUBAGENT,
-} from '@shared/copy/nestedRuns';
+} from '@ui/copy/nestedRuns';
 import { isActivePhase } from '@shared/runs/runStatus';
 import {
   flowPosition,

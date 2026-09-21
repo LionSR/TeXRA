@@ -15,7 +15,7 @@ import {
   type SubscriptionAccount,
   type SubscriptionProviderId,
 } from '@controllers/modelAccess/subscriptionProviders';
-import { ACCOUNT_OUTCOME } from '@shared/copy/accountAuth';
+import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
 
 import { withCliAuthError } from './cliAuthError';
 import { defineCliCommand } from './defineCliCommand';

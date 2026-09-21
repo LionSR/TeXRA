@@ -2,7 +2,7 @@
 
 import { css, type CSSResult } from 'lit';
 
-import { sp, visuallyHiddenDeclarations } from '@shared/styles';
+import { sp, visuallyHiddenDeclarations } from '@ui/styles';
 
 export const userQuestionPanelStyles: CSSResult = css`
   .user-question-request__questions {

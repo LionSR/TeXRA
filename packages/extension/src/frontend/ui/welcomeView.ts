@@ -2,13 +2,13 @@ import * as vscode from 'vscode';
 
 import { AUTH_COMMANDS } from '@auth/constants';
 import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
-import { CHATGPT_AUTH } from '@shared/copy/accountAuth';
+import { CHATGPT_AUTH } from '@ui/copy/accountAuth';
 import {
   ONBOARDING_CHOICE_API_KEY,
   ONBOARDING_CHOICE_CHATGPT,
   ONBOARDING_NARRATIVE,
   RESEARCHER_ACCESS,
-} from '@shared/copy/onboarding';
+} from '@ui/copy/onboarding';
 
 /**
  * No-workspace provider for `texra.mainView`. Keeping the same view id across

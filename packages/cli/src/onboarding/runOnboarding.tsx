@@ -51,7 +51,7 @@ import {
   ONBOARDING_CHOICE_API_KEY,
   ONBOARDING_CHOICE_CHATGPT,
   ONBOARDING_CHOICE_SKIP_LABEL,
-} from '@shared/copy/onboarding';
+} from '@ui/copy/onboarding';
 import { assertNever } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { ApiKeyEntryForm } from '../chat/tui/forms/ApiKeyEntryForm';

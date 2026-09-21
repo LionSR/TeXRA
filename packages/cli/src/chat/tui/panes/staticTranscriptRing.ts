@@ -9,7 +9,7 @@ import { randomUUID } from 'node:crypto';
 
 import { createLog } from '@logger/logUtils';
 import type { RunPhase } from '@shared/schemas';
-import { transcriptText, type TranscriptRow } from '@shared/transcript';
+import { transcriptText, type TranscriptRow } from '@ui/transcript';
 import { getModelLabel } from '@shared/model/modelLabel';
 import type { RunLabels } from '@shared/tools/executionsDisplay';
 import { createBoundedIdSet } from '@utils/core/boundedIdSet';

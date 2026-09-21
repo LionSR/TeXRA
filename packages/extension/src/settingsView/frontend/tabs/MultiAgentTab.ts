@@ -6,7 +6,7 @@ import { customElement, property } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 
 // Local imports - shared styles
-import { designTokens, commonViewStyles } from '@shared/styles';
+import { designTokens, commonViewStyles } from '@ui/styles';
 
 // Web Awesome icon bundle (side-effect import)
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
@@ -21,12 +21,12 @@ import {
   type AgentModePreset,
 } from '@shared/schemas';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
-import { renderIconActionButton } from '@shared/wa/actionButtons';
+import { renderIconActionButton } from '@ui/wa/actionButtons';
 import {
   renderSettingsNumberRow,
   renderSettingsSectionHeading,
-} from '@shared/wa/settingsSection';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+} from '@ui/wa/settingsSection';
+import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 // Local imports - catalog-driven settings rows
 import {

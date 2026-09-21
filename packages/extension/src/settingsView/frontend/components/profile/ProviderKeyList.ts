@@ -3,7 +3,7 @@
 import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 // Local imports - shared styles
-import { commonViewStyles, designTokens } from '@shared/styles';
+import { commonViewStyles, designTokens } from '@ui/styles';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import type {
@@ -11,13 +11,13 @@ import type {
   ProviderSetting,
 } from '@shared/settingsView/settingsViewMessages';
 import { PROVIDER_STATE_ENTRIES } from '@shared/constants/providers';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
-import { renderIconActionButton } from '@shared/wa/actionButtons';
-import { renderSettingsSectionHeading } from '@shared/wa/settingsSection';
+import { waIcon } from '@ui/wa/webAwesomeIcons';
+import { renderIconActionButton } from '@ui/wa/actionButtons';
+import { renderSettingsSectionHeading } from '@ui/wa/settingsSection';
 import {
   renderKeyStatusIcon,
   statusCheckIconStyles,
-} from '@shared/wa/statusIcons';
+} from '@ui/wa/statusIcons';
 
 // Side-effect imports - register WA icon component
 import '@awesome.me/webawesome/dist/components/icon/icon.js';

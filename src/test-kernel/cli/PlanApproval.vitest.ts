@@ -9,7 +9,7 @@ import {
 } from '@cli/chat/tui/modals/PlanApproval';
 import { confirmCardFeedbackRows } from '@cli/chat/tui/modals/confirmCardRowsBudget';
 import { textDisplayWidth } from '@cli/runtime/terminalText';
-import { PLAN_GOAL_COPY } from '@shared/copy/delegationApproval';
+import { PLAN_GOAL_COPY } from '@ui/copy/delegationApproval';
 
 function compactBudget(
   availableRows: number,

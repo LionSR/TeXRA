@@ -2,10 +2,10 @@ import '@awesome.me/webawesome/dist/components/button/button.js';
 import { html, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
-import { designTokens, commonViewStyles, bannerStyles } from '@shared/styles';
+import { designTokens, commonViewStyles, bannerStyles } from '@ui/styles';
 import type { ApiKeyBannerState } from '@shared/schemas';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
-import { renderWarningBanner } from '@shared/wa/bannerFrame';
+import { waIcon } from '@ui/wa/webAwesomeIcons';
+import { renderWarningBanner } from '@ui/wa/bannerFrame';
 import { SessionUiEvents } from '@shared/session/uiEvents';
 import { capitalize } from '@utils/text/stringUtils';
 import { StateVisibleBanner } from './StateVisibleBanner';

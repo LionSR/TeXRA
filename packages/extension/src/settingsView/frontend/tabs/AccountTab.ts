@@ -13,12 +13,12 @@ import {
   commonViewStyles,
   designTokens,
   settingsBannerStyles,
-} from '@shared/styles';
+} from '@ui/styles';
 import { TELEMETRY_ENABLED_KEY } from '@shared/schemas';
 import { type SessionProblem } from '@shared/settingsView/settingsViewMessages';
-import { renderLabeledActionButton } from '@shared/wa/actionButtons';
-import { renderSettingsBanner } from '@shared/wa/settingsBanner';
-import { renderSettingsSectionHeading } from '@shared/wa/settingsSection';
+import { renderLabeledActionButton } from '@ui/wa/actionButtons';
+import { renderSettingsBanner } from '@ui/wa/settingsBanner';
+import { renderSettingsSectionHeading } from '@ui/wa/settingsSection';
 import { createEvent } from '@shared/utils/events';
 
 // Local imports - catalog-driven settings rows

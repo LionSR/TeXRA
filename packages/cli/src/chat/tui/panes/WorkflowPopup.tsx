@@ -33,14 +33,14 @@ import {
   type WorkflowCallProgress,
   type WorkflowControlAction,
 } from '@shared/schemas';
-import type { WorkflowTaskRow as WorkflowTaskRowModel } from '@shared/transcript';
+import type { WorkflowTaskRow as WorkflowTaskRowModel } from '@ui/transcript';
 import {
   WORKFLOW_CALL_STATUS_GLYPH,
   WORKFLOW_PHASE_GLYPH,
   formatWorkflowPhaseHeading,
   formatWorkflowPhaseTally,
   formatWorkflowTally,
-} from '@shared/copy/workflowCall';
+} from '@ui/copy/workflowCall';
 import {
   formatWorkflowCallLiveParts,
   formatWorkflowRowGroup,

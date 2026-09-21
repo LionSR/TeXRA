@@ -13,7 +13,7 @@ import { FitAddon } from '@xterm/addon-fit';
 import { Terminal } from '@xterm/xterm';
 import xtermStyles from '@xterm/xterm/css/xterm.css?inline';
 
-import { resolveXtermTheme } from '@shared/wa/xtermTheme';
+import { resolveXtermTheme } from '@ui/wa/xtermTheme';
 
 import { getDesktopChromeFontSize } from './desktopTypography';
 

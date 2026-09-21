@@ -93,13 +93,13 @@ import {
   projectTranscriptRow,
   type TranscriptRow,
   type TranscriptRowKind,
-} from '@shared/transcript';
+} from '@ui/transcript';
 import { hasIncompleteEmbeddedSubagentFollowup } from '@shared/subagentFollowup';
 import {
   appendTranscriptText,
   transcriptText,
   type TranscriptText,
-} from '@shared/transcript/transcriptText';
+} from '@ui/transcript/transcriptText';
 import { getModelLabel } from '@shared/model/modelLabel';
 import {
   applyCompactionActivityEntry,

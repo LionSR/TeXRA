@@ -68,7 +68,7 @@ import {
   type RunId,
   AgentCategory,
 } from '@shared/schemas';
-import { FOCUSED_BACKGROUND_TASK } from '@shared/copy/nestedRuns';
+import { FOCUSED_BACKGROUND_TASK } from '@ui/copy/nestedRuns';
 import {
   DatabaseClaimRefused,
   DatabaseWriteFailed,

@@ -20,7 +20,7 @@ import {
   settingEnumChoices,
   settingsViewSettingByKey,
 } from '@shared/state/stateSettings';
-import { renderSettingsToggleRow } from '@shared/wa/settingsSection';
+import { renderSettingsToggleRow } from '@ui/wa/settingsSection';
 
 // Third-party imports
 import type { TemplateResult } from 'lit';

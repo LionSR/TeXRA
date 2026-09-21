@@ -96,6 +96,15 @@ Things the tree won't tell you:
   `packages/extension/src/common/webview/`. <!-- guidance-refs-ignore -->
 - **No convenience barrels.** A barrel exists only for a documented public
   surface. Import the file that defines the symbol.
+- **`src/ui/` is the host-neutral UI toolkit** (`@ui/*`): the Web Awesome and
+  Lit building blocks (`wa/`), the shared `css` tag blocks (`styles/`), the
+  transcript row model (`transcript/`), the markdown/KaTeX pipeline
+  (`markdown/`) and the user-facing copy tables (`copy/`). All three hosts
+  render from it. It moved out of `src/shared/` because that directory is wire
+  contracts and UI-shared message types, which ~9k lines of rendering code is
+  not. It is a VS Code-free zone and, like `src/shared/`, takes no
+  `@agent/*` imports. Do not confuse it with `src/transcript/` (`@transcript`),
+  the run-transcript persistence layer.
 
 Two wiring points fail silently if you forget them: a new VS Code command must
 be registered through `packages/extension/src/commands.ts`, and a new setting
@@ -111,7 +120,7 @@ repo and the first thing to check on any diff.
 
 **VS Code-free zones** — must NOT import `vscode`:
 `src/agent/`, `src/model/`, `src/latex/`, `src/tools/`, `src/controllers/`,
-`src/shared/`, `src/replacement/`, `src/eventBus/`, `src/hosts/`,
+`src/shared/`, `src/ui/`, `src/replacement/`, `src/eventBus/`, `src/hosts/`,
 `src/common/`, `src/utils/`, `src/logger/`, `packages/agent/src/`, `packages/llm/src/`,
 `packages/desktop/src/`, and the webview
 frontends — `packages/extension/src/progressView/frontend/` and
@@ -140,9 +149,9 @@ host-only capability, add a typed `Platform` port rather than an import.
 Substitutions and the push-UI-to-the-caller rule: AGENTS.md "Platform
 decoupling rules".
 
-Also: `src/shared/` is for wire contracts and UI-shared message types — don't
-add new `@agent/*` imports there; host-neutral orchestration goes in
-`src/controllers/`.
+Also: `src/shared/` is for wire contracts and UI-shared message types, and
+`src/ui/` for the rendering toolkit over them — don't add new `@agent/*`
+imports to either; host-neutral orchestration goes in `src/controllers/`.
 
 **Event channels.** New facts a run's trace emits extend `AgentEvent`
 (trace) and reach the plane through `runEventDraft`; facts the session itself

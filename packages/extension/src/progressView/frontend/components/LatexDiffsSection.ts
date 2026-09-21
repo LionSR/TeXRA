@@ -15,17 +15,17 @@ import { customElement, property } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - main view
-import { compactFormControlStyles, designTokens } from '@shared/styles';
-import { buttonStyles } from '@shared/styles/controlStyles';
+import { compactFormControlStyles, designTokens } from '@ui/styles';
+import { buttonStyles } from '@ui/styles/controlStyles';
 import type { HostRequest } from '@shared/session/hostRequest';
 import type { SurfaceAction } from '@shared/session/surface';
 import { SessionUiEvents } from '@shared/session/uiEvents';
-import { readSelectValue } from '@shared/wa/selectTemplates';
+import { readSelectValue } from '@ui/wa/selectTemplates';
 import {
   renderIconActionButton,
   renderLabeledActionButtonParts,
-} from '@shared/wa/actionButtons';
-import type { TeXRAIconName } from '@shared/wa/iconNames';
+} from '@ui/wa/actionButtons';
+import type { TeXRAIconName } from '@ui/wa/iconNames';
 import { fileSelectLayoutStyles } from '../fileSelectStyles';
 
 type LatexDiffsAction = Extract<HostRequest, { kind: 'latexdiffs' }>['action'];

@@ -2,15 +2,15 @@ import '@awesome.me/webawesome/dist/components/button/button.js';
 import { html, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
-import { designTokens, commonViewStyles, bannerStyles } from '@shared/styles';
+import { designTokens, commonViewStyles, bannerStyles } from '@ui/styles';
 import {
   AgentCategory,
   type AgentConfigBannerState,
   type SessionType,
 } from '@shared/schemas';
 import { SessionUiEvents } from '@shared/session/uiEvents';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
-import { renderWarningBanner } from '@shared/wa/bannerFrame';
+import { waIcon } from '@ui/wa/webAwesomeIcons';
+import { renderWarningBanner } from '@ui/wa/bannerFrame';
 import { StateVisibleBanner } from './StateVisibleBanner';
 
 @customElement('agent-config-banner')

@@ -8,7 +8,7 @@ import {
   type MockInstance,
 } from 'vitest';
 
-import { resolveXtermTheme } from '@shared/wa/xtermTheme';
+import { resolveXtermTheme } from '@ui/wa/xtermTheme';
 
 import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
 

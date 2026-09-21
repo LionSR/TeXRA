@@ -4,11 +4,11 @@ import { repeat } from 'lit/directives/repeat.js';
 import { Result } from 'effect';
 import { parseJsonWith } from '@common/parsing/safeParseJson';
 import { postMessage } from '@shared/hostBridge';
-import { renderLabeledActionButton } from '@shared/wa/actionButtons';
-import { renderEmptyState } from '@shared/wa/emptyState';
-import type { TeXRAIconName } from '@shared/wa/iconNames';
-import { renderLoadingState } from '@shared/wa/loadingState';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { renderLabeledActionButton } from '@ui/wa/actionButtons';
+import { renderEmptyState } from '@ui/wa/emptyState';
+import type { TeXRAIconName } from '@ui/wa/iconNames';
+import { renderLoadingState } from '@ui/wa/loadingState';
+import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { formatTimestamp, truncateSummary } from '@utils/text/stringUtils';
 import { DESKTOP_LOCAL_COMMANDS } from '../shared/desktopCommandSurface';
 import {

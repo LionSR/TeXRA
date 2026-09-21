@@ -12,8 +12,8 @@ import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - shared
 import type { MemoryViewItem } from '@shared/settingsView/settingsViewMessages';
-import { designTokens, commonViewStyles } from '@shared/styles';
-import { renderEmptyState } from '@shared/wa/emptyState';
+import { designTokens, commonViewStyles } from '@ui/styles';
+import { renderEmptyState } from '@ui/wa/emptyState';
 
 // Local imports - memory view components (side-effect: register)
 import './MemoryItem';

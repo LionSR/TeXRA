@@ -29,7 +29,7 @@ import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import {
   ONBOARDING_CHOICE_API_KEY,
   ONBOARDING_CHOICE_CHATGPT,
-} from '@shared/copy/onboarding';
+} from '@ui/copy/onboarding';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 

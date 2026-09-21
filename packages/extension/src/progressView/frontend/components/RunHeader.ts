@@ -4,20 +4,20 @@ import { customElement, property } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { repeat } from 'lit/directives/repeat.js';
 
-import { designTokens, commonViewStyles } from '@shared/styles';
+import { designTokens, commonViewStyles } from '@ui/styles';
 import type { ConversationProgress, GoalState, RunId } from '@shared/schemas';
 import { isPlainAgentIdentity, RUN_PHASE, RUN_SUBSTATE } from '@shared/schemas';
 import type { SessionView, RunView } from '@shared/session/sessionView';
 import { SessionUiEvents } from '@shared/session/uiEvents';
-import { formatWorkflowRunContext } from '@shared/copy/workflowRunContext';
+import { formatWorkflowRunContext } from '@ui/copy/workflowRunContext';
 import { CopyButtonController } from '@shared/litControllers/CopyButtonController';
 import {
   runStatusDisplayKey,
   type RunStatusDisplayKey,
 } from '@shared/runs/runStatusDisplay';
-import { statusIndicatorStyles } from '@shared/styles/statusIndicatorStyles';
-import { renderIconActionButtonParts } from '@shared/wa/actionButtons';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { statusIndicatorStyles } from '@ui/styles/statusIndicatorStyles';
+import { renderIconActionButtonParts } from '@ui/wa/actionButtons';
+import { waIcon } from '@ui/wa/webAwesomeIcons';
 import '@progressView/frontend/components/ToolTimer';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';

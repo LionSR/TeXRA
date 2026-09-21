@@ -68,8 +68,8 @@ import {
   type RunPhase,
   type TodoItem,
 } from '@shared/schemas';
-import type { TranscriptRow } from '@shared/transcript';
-import { RESEARCHER_ACCESS_AUTH } from '@shared/copy/accountAuth';
+import type { TranscriptRow } from '@ui/transcript';
+import { RESEARCHER_ACCESS_AUTH } from '@ui/copy/accountAuth';
 import type { RunView } from '@shared/session/sessionView';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';

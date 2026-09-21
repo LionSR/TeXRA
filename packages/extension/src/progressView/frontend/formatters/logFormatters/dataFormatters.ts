@@ -25,9 +25,9 @@ import type {
   LatexdiffRow,
   MissingOutputsRow,
   StatisticsRow,
-} from '@shared/transcript';
-import type { TeXRAIconName } from '@shared/wa/iconNames';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+} from '@ui/transcript';
+import type { TeXRAIconName } from '@ui/wa/iconNames';
+import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { getBasename } from '@utils/core';
 
 // Local imports - formatter helpers

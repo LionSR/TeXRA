@@ -8,7 +8,7 @@ import {
   SETTINGS_TAB_GROUPS,
   type SettingsTabPanelName,
 } from '@shared/settingsView/settingsViewMessages';
-import type { TeXRAIconName } from '@shared/wa/iconNames';
+import type { TeXRAIconName } from '@ui/wa/iconNames';
 
 export interface SettingsNavEntry {
   /** `wa-tab-panel` name — the addressing key the nav and e2e selectors share. */

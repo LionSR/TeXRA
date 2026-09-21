@@ -10,7 +10,7 @@
 
 import { z } from 'zod';
 
-import type { TeXRAIconName } from '@shared/wa/iconNames';
+import type { TeXRAIconName } from '@ui/wa/iconNames';
 import { clamp, getBasename } from '@utils/core';
 
 export const WORKBENCH_PLACEMENTS = ['right', 'bottom'] as const;

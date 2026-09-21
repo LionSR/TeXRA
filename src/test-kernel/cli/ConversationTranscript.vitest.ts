@@ -54,8 +54,8 @@ import {
   isSettledRow,
   type ToolRow,
   type TranscriptRow,
-} from '@shared/transcript';
-import { formatWorkflowPhaseHeading } from '@shared/copy/workflowCall';
+} from '@ui/transcript';
+import { formatWorkflowPhaseHeading } from '@ui/copy/workflowCall';
 import {
   loadInk,
   renderOutputAtTerminalSize,

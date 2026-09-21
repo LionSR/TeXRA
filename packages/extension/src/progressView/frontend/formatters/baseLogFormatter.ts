@@ -1,7 +1,7 @@
 /**
  * The one result type every transcript-row formatter returns.
  *
- * Formatters paint a `TranscriptRow` (`@shared/transcript`); they never derive
+ * Formatters paint a `TranscriptRow` (`@ui/transcript`); they never derive
  * membership, streaming state, or output policy themselves — those already
  * live on the row.
  */

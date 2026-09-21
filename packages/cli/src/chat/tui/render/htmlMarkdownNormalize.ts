@@ -2,8 +2,8 @@ import { summarizeEmbeddedSubagentFollowups } from '@shared/subagentFollowup';
 import {
   MATH_SPAN_PATTERNS,
   protectByPatterns,
-} from '@shared/markdown/latexPlaceholders';
-import { protectLatexMathSpansForNormalize } from '@shared/markdown/latexMathShield';
+} from '@ui/markdown/latexPlaceholders';
+import { protectLatexMathSpansForNormalize } from '@ui/markdown/latexMathShield';
 import { clamp } from '@utils/core';
 
 // Only exact supported tag names enter the presentation grammar. Suffixes such

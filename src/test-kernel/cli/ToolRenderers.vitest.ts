@@ -11,7 +11,7 @@ import { textDisplayWidth } from '@cli/runtime/terminalText';
 
 // Local imports - shared schemas
 import type { NormalizedToolUse } from '@shared/schemas';
-import type { ToolRow } from '@shared/transcript';
+import type { ToolRow } from '@ui/transcript';
 
 // Local imports - test support
 import { loadInk } from '@test/support/inkTestHarness.ts';

@@ -1,11 +1,11 @@
 import { render, type TemplateResult } from 'lit';
-import { renderIconActionButton } from '@shared/wa/actionButtons';
+import { renderIconActionButton } from '@ui/wa/actionButtons';
 import type WaDialog from '@awesome.me/webawesome/dist/components/dialog/dialog.js';
 
 /**
  * Renders a Lit template into a detached element for the desktop's
  * imperative (non-Lit-component) DOM overlays — shared so the overlay
- * chrome can build its buttons through the same `@shared/wa` helpers as the
+ * chrome can build its buttons through the same `@ui/wa` helpers as the
  * Lit-based renderer surfaces instead of hand-assembling `wa-button`
  * attributes.
  */
