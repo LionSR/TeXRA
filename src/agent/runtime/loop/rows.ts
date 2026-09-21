@@ -3,10 +3,6 @@
  * the folded `RunState` and nothing else. A `flow.snapshot`'s references are
  * derived from the state the ledger returned, which is what lets the fold's
  * reconcile-never-overwrite check hold on every write.
- *
- * The two ledger answers both run programs give their caller in the same
- * words — the resume refusal and the exit failure — live here too, so
- * neither program keeps a private copy of one.
  */
 
 import { redactSecrets } from '@logger/redaction';
@@ -21,9 +17,7 @@ import {
   type SessionEventDraft,
   type SnapshotRuntime,
 } from '@shared/schemas';
-import { RunLedgerRefused } from '@shared/session/runLedger';
 import type { RunLedgerDraft, RunState } from '@shared/session/runStateFold';
-import { ensureError } from '@utils/errors/errorMessage';
 import type { MessageSchema } from '@texra-ai/llm/turn';
 import type { z } from 'zod';
 
@@ -33,21 +27,6 @@ export type Message = z.infer<typeof MessageSchema>;
  *  programs refuse a resume with it. */
 export const NOT_RESUMABLE_MESSAGE =
   'This run was recorded before the run ledger and is not resumable under this release, and a request it left pending (an approval, a retry, a question) is not resumable either. Start a new run instead.';
-
-/**
- * The caller's error for a run that ended in a failure cause. Both run
- * programs map a refused ledger write to its reason and detail here rather
- * than each keeping its own copy of the wording.
- */
-export function runExitFailure(error: unknown): Error {
-  if (error instanceof RunLedgerRefused) {
-    return new Error(
-      `The run ledger refused a write (${error.reason}): ${error.detail}`,
-      { cause: error },
-    );
-  }
-  return ensureError(error);
-}
 
 type ToolUseSnapshot = Extract<FlowSnapshotPayload, { family: 'toolUse' }>;
 type ReflectionSnapshot = Extract<
@@ -78,7 +57,8 @@ export function rowAggregate(runId: RunId) {
   return qualifyAggregateId('run', runId);
 }
 
-type StepCoordinates = Pick<
+/** The coordinates a `flow.step` row is stamped with. */
+export type StepCoordinates = Pick<
   RunState,
   'family' | 'round' | 'turn' | 'continuationIndex'
 >;

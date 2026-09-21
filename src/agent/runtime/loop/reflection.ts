@@ -119,16 +119,15 @@ import { turnText } from '../run/turnText';
 import { ModelInvoker } from '../ModelInvoker';
 import {
   appendRow,
-  haltedStepRow,
   NOT_RESUMABLE_MESSAGE,
   reflectionFlowState,
   reflectionSnapshotRow,
-  runExitFailure,
   runtimeSnapshotRow,
   stepRow,
   type ReflectionFlowState,
   type ReflectionSnapshotPatch,
 } from './rows';
+import { recordHalt, runStopError } from './runExit';
 import type { HttpClient } from 'effect/unstable/http';
 import type { BoundModel } from '../run/modelBinding';
 
@@ -1317,22 +1316,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     Effect.uninterruptible(
       Effect.gen(function* () {
         const state = yield* Ref.get(latest);
-        const halt = (outcome: RunOutcome) =>
-          state === null || state.phase === null
-            ? Effect.void
-            : ledger
-                .appendBatch(runId, state, [
-                  haltedStepRow(runId, coordinates(state), outcome),
-                ])
-                .pipe(
-                  Effect.catch((error) =>
-                    Effect.sync(() =>
-                      logger.warn('Failed to record the run halt', {
-                        data: error,
-                      }),
-                    ),
-                  ),
-                );
+        const halt = recordHalt({ ledger, logger, runId }, state, coordinates);
         if (Exit.isSuccess(exit)) return yield* halt(exit.value.outcome);
         // Only a cause that is nothing but interrupts is a stop; a run that
         // failed and was then interrupted halts as the failure it was.
@@ -1348,7 +1332,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     Effect.map((loop) => result(loop.outcome, loop.state)),
     Effect.catchCause((cause) => {
       if (Cause.hasInterrupts(cause)) return Effect.failCause(cause);
-      const stopped = runExitFailure(Cause.squash(cause));
+      const stopped = runStopError(Cause.squash(cause));
       logger.warn(`Reflection run ${runId} stopped: ${stopped.message}`);
       return Effect.fail(stopped);
     }),

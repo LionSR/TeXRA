@@ -34,7 +34,7 @@ import {
 
 // Local file imports
 import { defineTool } from '../core/define';
-import { nullishWithDefault } from '../core/inputSchema';
+import { commandUnion, nullishWithDefault } from '../core/inputSchema';
 import {
   recordToolFileRead,
   requireFileReadForEdit,
@@ -68,12 +68,8 @@ const LISTING_DEFAULT_OFFSET = 0;
 const LISTING_DEFAULT_LIMIT = 100;
 const LISTING_MAX_LIMIT = 200;
 
-// Branches use looseObject (not strictObject): provider conversion flattens
-// the union into one advertised object and OpenAI-compatible providers
-// null-fill the properties belonging to the other commands. See AGENTS.md
-// "Tool input schemas".
-const MemoryToolInputSchema = z.discriminatedUnion('command', [
-  z.looseObject({
+const MemoryToolInputSchema = commandUnion([
+  {
     command: z.literal('view'),
     path: z
       .string()
@@ -93,18 +89,20 @@ const MemoryToolInputSchema = z.discriminatedUnion('command', [
     ).describe(
       `Max entries to return from directory listing. Default: ${LISTING_DEFAULT_LIMIT}, max: ${LISTING_MAX_LIMIT}.`,
     ),
-  }),
-  z.looseObject({
+  },
+  {
     command: z.literal('create'),
     path: z.string().describe(MEMORY_PATH_DESCRIPTION),
     file_text: z.string(),
-  }),
-  z.looseObject({
+  },
+  {
     command: z.literal('str_replace'),
     path: z.string().describe(MEMORY_PATH_DESCRIPTION),
     old_str: z.string(),
     new_str: z.string(),
-  }),
+  },
+  // Built here rather than passed as a shape: the branch carries a
+  // cross-field check.
   z
     .looseObject({
       command: z.literal('insert'),
@@ -120,23 +118,23 @@ const MemoryToolInputSchema = z.discriminatedUnion('command', [
       message: 'insert_text is required for command="insert".',
       path: ['insert_text'],
     }),
-  z.looseObject({
+  {
     command: z.literal('delete'),
     path: z.string().describe(MEMORY_PATH_DESCRIPTION),
-  }),
-  z.looseObject({
+  },
+  {
     command: z.literal('rename'),
     old_path: z.string().describe(MEMORY_PATH_DESCRIPTION),
     new_path: z.string().describe(MEMORY_PATH_DESCRIPTION),
-  }),
-  z.looseObject({
+  },
+  {
     command: z.literal('pin'),
     path: z.string().describe(MEMORY_PATH_DESCRIPTION),
-  }),
-  z.looseObject({
+  },
+  {
     command: z.literal('unpin'),
     path: z.string().describe(MEMORY_PATH_DESCRIPTION),
-  }),
+  },
 ]);
 
 /** Derived from MemoryToolInputSchema - single source of truth */

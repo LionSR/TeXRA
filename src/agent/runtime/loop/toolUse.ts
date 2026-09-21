@@ -65,15 +65,14 @@ import { ModelInvoker } from '../ModelInvoker';
 import { Runs } from '../runRegistry';
 import {
   appendRow,
-  haltedStepRow,
   NOT_RESUMABLE_MESSAGE,
   rowAggregate,
-  runExitFailure,
   snapshotRow,
   stepRow,
   toolUseFlowState,
   type ToolUseFlowState,
 } from './rows';
+import { recordHalt, runStopError } from './runExit';
 import { dispatchPendingResponse, type TurnContext } from './toolUseDispatch';
 import type { HttpClient } from 'effect/unstable/http';
 import type { SessionHandle } from '../SessionHandle';
@@ -890,22 +889,8 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         // Every exit that ends the run writes its `halted` step; the state a
         // stop interrupted stays at the phase its rows left, so resume
         // continues it.
-        const halt = (outcome: RunOutcome) =>
-          state === null || state.phase === null
-            ? Effect.void
-            : ledger
-                .appendBatch(runId, state, [
-                  haltedStepRow(runId, state, outcome),
-                ])
-                .pipe(
-                  Effect.catch((error) =>
-                    Effect.sync(() =>
-                      logger.warn('Failed to record the run halt', {
-                        data: error,
-                      }),
-                    ),
-                  ),
-                );
+        // A tool-use step is stamped with the run state as folded.
+        const halt = recordHalt({ ledger, logger, runId }, state, (s) => s);
         const release = (next: 'recoverable' | 'terminal') =>
           Effect.sync(() => {
             detach();
@@ -943,7 +928,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     ),
     Effect.catchCause((cause) => {
       if (Cause.hasInterrupts(cause)) return Effect.failCause(cause);
-      const stopped = runExitFailure(Cause.squash(cause));
+      const stopped = runStopError(Cause.squash(cause));
       logger.warn(`Tool-use run ${runId} stopped: ${stopped.message}`);
       return Effect.fail(stopped);
     }),

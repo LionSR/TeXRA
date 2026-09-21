@@ -7,6 +7,7 @@ import { ToolCall } from '@agent/runtime/ToolCall';
 import { createLog } from '@logger/logUtils';
 import { ToolError, type ToolResult } from '@shared/schemas';
 import { resolveWorkspaceRelativePath } from '@tools/pathResolution';
+import { commandUnion } from '@tools/core/inputSchema';
 import { executed } from '@tools/core/result';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { formatResultCount } from '@utils/text/stringUtils';
@@ -90,11 +91,9 @@ const requireProvider = Effect.gen(function* () {
 const THREAD_ID_DESCRIPTION = 'The thread id returned by "add" or "list".';
 const COMMENT_BODY_DESCRIPTION = 'The comment text (Markdown supported).';
 
-// Branches use looseObject (not strictObject): provider conversion flattens the
-// discriminated union into one advertised object and OpenAI-compatible providers
-// null-fill the properties belonging to the other commands. See AGENTS.md
-// "Tool input schemas".
-const InlineCommentInputSchema = z.discriminatedUnion('command', [
+const InlineCommentInputSchema = commandUnion([
+  // Built here rather than passed as a shape: the branch carries a
+  // cross-field check.
   z
     .looseObject({
       command: z
@@ -121,22 +120,22 @@ const InlineCommentInputSchema = z.discriminatedUnion('command', [
       message: 'endLine must be greater than or equal to line.',
       path: ['endLine'],
     }),
-  z.looseObject({
+  {
     command: z
       .literal('reply')
       .describe('Append a comment to an existing thread.'),
     threadId: z.string().min(1).describe(THREAD_ID_DESCRIPTION),
     body: z.string().min(1).describe(COMMENT_BODY_DESCRIPTION),
-  }),
-  z.looseObject({
+  },
+  {
     command: z.literal('resolve').describe('Mark a thread resolved.'),
     threadId: z.string().min(1).describe(THREAD_ID_DESCRIPTION),
-  }),
-  z.looseObject({
+  },
+  {
     command: z.literal('unresolve').describe('Reopen a resolved thread.'),
     threadId: z.string().min(1).describe(THREAD_ID_DESCRIPTION),
-  }),
-  z.looseObject({
+  },
+  {
     command: z
       .literal('list')
       .describe(
@@ -150,7 +149,7 @@ const InlineCommentInputSchema = z.discriminatedUnion('command', [
       .describe(
         'Restrict to one file (omit for all threads). Workspace-relative or absolute.',
       ),
-  }),
+  },
 ]);
 
 type InlineCommentInput = z.infer<typeof InlineCommentInputSchema>;
