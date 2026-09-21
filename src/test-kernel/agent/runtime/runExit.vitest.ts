@@ -56,32 +56,34 @@ describe('recordHalt', () => {
     }),
   );
 
-  it.effect('fails on database write errors without downgrading them to warnings', () =>
-    Effect.gen(function* () {
-      const runId = makeRunId();
-      const openedState = makeOpenedState();
-      const failure = new DatabaseWriteFailed({
-        path: 'session.db',
-        cause: new Error('disk full'),
-      });
-      const appendBatch = vi.fn(() => Effect.fail(failure));
-      const warn = vi.fn();
+  it.effect(
+    'fails on database write errors without downgrading them to warnings',
+    () =>
+      Effect.gen(function* () {
+        const runId = makeRunId();
+        const openedState = makeOpenedState();
+        const failure = new DatabaseWriteFailed({
+          path: 'session.db',
+          cause: new Error('disk full'),
+        });
+        const appendBatch = vi.fn(() => Effect.fail(failure));
+        const warn = vi.fn();
 
-      const halt = recordHalt(
-        {
-          ledger: { appendBatch } as never,
-          logger: { warn } as never,
-          runId,
-        },
-        (state) => state,
-      );
+        const halt = recordHalt(
+          {
+            ledger: { appendBatch } as never,
+            logger: { warn } as never,
+            runId,
+          },
+          (state) => state,
+        );
 
-      expect(yield* Effect.flip(halt(openedState, RUN_OUTCOME.FAILED))).toBe(
-        failure,
-      );
-      expect(appendBatch).toHaveBeenCalledOnce();
-      expect(warn).not.toHaveBeenCalled();
-    }),
+        expect(yield* Effect.flip(halt(openedState, RUN_OUTCOME.FAILED))).toBe(
+          failure,
+        );
+        expect(appendBatch).toHaveBeenCalledOnce();
+        expect(warn).not.toHaveBeenCalled();
+      }),
   );
 
   it.effect('dies on defects that are not typed halt-write failures', () =>

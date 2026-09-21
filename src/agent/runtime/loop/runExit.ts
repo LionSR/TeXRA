@@ -30,7 +30,9 @@ type HaltWriteResolution =
   | { readonly kind: 'fail'; readonly error: DatabaseWriteFailed }
   | { readonly kind: 'die'; readonly defect: unknown };
 
-function classifyHaltWriteCause(cause: Cause.Cause<unknown>): HaltWriteResolution {
+function classifyHaltWriteCause(
+  cause: Cause.Cause<unknown>,
+): HaltWriteResolution {
   const failure = Cause.findErrorOption(cause);
   if (Option.isSome(failure)) {
     if (failure.value instanceof RunLedgerRefused) {
@@ -64,10 +66,7 @@ function classifyHaltWriteCause(cause: Cause.Cause<unknown>): HaltWriteResolutio
  * failures still fail normally.
  */
 export const recordHalt =
-  (
-    deps: HaltDeps,
-    toCoordinates: (state: RunState) => StepCoordinates,
-  ) =>
+  (deps: HaltDeps, toCoordinates: (state: RunState) => StepCoordinates) =>
   (
     state: RunState | null,
     outcome: RunOutcome,
@@ -82,15 +81,17 @@ export const recordHalt =
             Effect.asVoid,
             Effect.catchCause((cause) => {
               const resolution = classifyHaltWriteCause(cause);
-              return resolution.kind === 'warn'
-                ? Effect.sync(() =>
-                    deps.logger.warn('Failed to record the run halt', {
-                      data: resolution.error,
-                    }),
-                  )
-                : resolution.kind === 'fail'
-                  ? Effect.fail(resolution.error)
-                  : Effect.die(resolution.defect);
+              if (resolution.kind === 'warn') {
+                return Effect.sync(() =>
+                  deps.logger.warn('Failed to record the run halt', {
+                    data: resolution.error,
+                  }),
+                );
+              }
+              if (resolution.kind === 'fail') {
+                return Effect.fail(resolution.error);
+              }
+              return Effect.die(resolution.defect);
             }),
           );
 
