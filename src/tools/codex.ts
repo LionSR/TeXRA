@@ -479,7 +479,12 @@ export class CodexTool extends defineTool({
     'Always async: returns immediately with a run ID; each turn is delivered back as a follow-up message (including the thread_id). ' +
     'Pass thread_id on a later call to send a follow-up instruction to an existing session, like delegate_agent(execution_id=…).',
   schema: CodexInputSchema,
-  guard: { bash: agentCliApprovalCommand(CODEX_AGENT_NAME, codexSandboxMode) },
+  guard: {
+    bash: (input: CodexInput) =>
+      agentCliApprovalCommand(CODEX_AGENT_NAME, input.prompt, (state) =>
+        codexSandboxMode(input, state),
+      ),
+  },
 }) {
   protected execute(input: CodexInput) {
     return Effect.gen({ self: this }, function* () {

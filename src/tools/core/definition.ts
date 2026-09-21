@@ -23,7 +23,7 @@ type DefinedToolFlags = {
  * interface would have to be exported to be referenced there (TS4058); an
  * anonymous type is inlined and needs no name.
  */
-type DefinedToolHosts<T, R> = {
+type DefinedToolDeclarations<T, R> = {
   readonly unavailableHosts: readonly ToolHost[] | undefined;
   readonly guard: ToolGuard<T, R> | undefined;
 };
@@ -43,7 +43,7 @@ type DefinedToolHosts<T, R> = {
  */
 export type DefinedToolClass<T, R = never> = abstract new () => BaseTool<T, R> &
   DefinedToolFlags &
-  DefinedToolHosts<T, R>;
+  DefinedToolDeclarations<T, R>;
 
 /**
  * The concrete counterpart, returned when the definition supplies `execute`:
@@ -52,7 +52,7 @@ export type DefinedToolClass<T, R = never> = abstract new () => BaseTool<T, R> &
  */
 export type ConcreteToolClass<T, R = never> = new () => BaseTool<T, R> &
   DefinedToolFlags &
-  DefinedToolHosts<T, R>;
+  DefinedToolDeclarations<T, R>;
 
 /** The run body a tool definition may carry inline. */
 export type ToolExecute<T, R> = (

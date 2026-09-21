@@ -543,7 +543,10 @@ export class ClaudeAgentTool extends defineTool({
     'Set fork_session to branch from that session while leaving the original unchanged.',
   schema: ClaudeAgentInputSchema,
   guard: {
-    bash: agentCliApprovalCommand(CLAUDE_AGENT_NAME, claudeAgentPermissionMode),
+    bash: (input: ClaudeAgentInput) =>
+      agentCliApprovalCommand(CLAUDE_AGENT_NAME, input.prompt, (state) =>
+        claudeAgentPermissionMode(input, state),
+      ),
   },
 }) {
   protected execute(input: ClaudeAgentInput) {
