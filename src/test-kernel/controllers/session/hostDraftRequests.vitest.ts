@@ -158,10 +158,7 @@ it.effect(
         target: 'launch',
       });
       requests.cancel(first, 'origin');
-      yield* Deferred.succeed(
-        nextStartup,
-        '/papers/first/recordings/take.wav',
-      );
+      yield* Deferred.succeed(nextStartup, '/papers/first/recordings/take.wav');
       const cancelled = yield* Effect.flip(Fiber.join(nextTake));
       expect(cancelled).toMatchObject({ _tag: 'Cancelled' });
       // The cancelled take's kill runs on the detached take fiber.
