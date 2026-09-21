@@ -1,7 +1,6 @@
 # Agent-SDK readiness — re-verification pass (2026-09-21)
 
-Status: archived — recorded, not acted on (scheduled firing, no maintainer request)
-Archived: 2026-09-21
+Status: implemented — findings acted on at maintainer request
 
 > **Written 2026-09-21 by the scheduled audit routine.** It re-ran the standing
 > question — "review the agent core, model handler, logger, and surface for
@@ -12,11 +11,24 @@ Archived: 2026-09-21
 > [post-refactor architecture survey](../../proposed/architecture/2026-09-20-post-refactor-architecture-survey.md)
 > (2026-09-20, umbrella #12880), which now owns the "what is left" enumeration.
 > This is the **fourteenth consecutive green pass** (`-08-19` → `-09-21`).
-> Facts below are re-derived by direct inspection at `7543bdc` (#12912), the
-> branch tip when this pass ran — 50 commits ahead of `origin/main` (`3d5fbda`),
-> carrying the survey record (#12889) and the refactors landing its proposals
-> (#12899, #12902–#12912). Each finding carries a `file:line`, config path, or
-> count.
+> The audits ran at `7543bdc` (#12912); by the time this note was acted on,
+> that entire campaign (#12889, #12899, #12902–#12912) had **merged to `main`**,
+> and the branch was rebased onto the latest `main` (`0412f2d8`, #12920), where
+> every §1 fact and the §3.1 finding were re-verified before acting. Each
+> finding carries a `file:line`, config path, or count.
+
+> **Disposition note.** First filed under the routine's standing default
+> ("recorded, not acted on": a scheduled firing carries no maintainer request).
+> The maintainer then asked, in session, to refactor from the latest `main` as
+> far as possible. That lifts the default. The one net-new item that was a
+> concrete, safe, non-colliding change — the §3.1 `CLAUDE.md` accuracy fix — is
+> **landed in this PR**. The §3.3 model-layer candidate was re-examined against
+> the layering and **withdrawn as a false positive** (see below). The larger
+> tracked refactors were deliberately left untouched: they are in flight on
+> dedicated branches (`prd/effect-logger-0921d`, `prd/effect-config-0921d`,
+> `prd/barrel-split-0921d`, `prd/liveness-interruption-residue-0921d`), and
+> duplicating them here would collide. §§0–2 and §4 are unchanged by the act
+> request.
 
 ## 0. Verdict
 
@@ -39,11 +51,15 @@ What is new this pass is **not the verdict** but a confirmation that the wider
 in passing" the 2026-09-20 survey §6 recorded are **already closed on this tree**
 (§2), and the surface audit independently re-derived the Tier-1 manifest's own
 open ratification questions rather than anything new (§3.2). The single net-new
-item is a documentation-accuracy drift in `CLAUDE.md`, not a code defect (§3.1).
+item is a documentation-accuracy drift in `CLAUDE.md` (and the same list in
+`src/README.md`), not a code defect (§3.1).
 
-Per the routine's standing default, a scheduled firing carries no maintainer
-request and none of the items below is a defect, so this pass is **recorded, not
-acted on**. No files were edited.
+The structural verdict is unaffected by the act request that followed (see the
+disposition note above): the one concrete, safe, non-colliding item — the §3.1
+`CLAUDE.md` accuracy fix — is landed in this PR; the §3.3 candidate is withdrawn
+as a false positive; the large tracked refactors are left to their in-flight
+branches. None of this touches the run loop, the model stack, the public
+surface, or any baseline in the widening direction.
 
 ## 1. Per-area re-verification at `7543bdc`
 
@@ -102,16 +118,22 @@ list here mis-teaches where host services live. This is the same
 guidance-vs-code drift class the logger area also surfaced (guidance implying a
 `platform().log` port that does not exist).
 
-Recommended fix (a maintainer-authorized, one-line doc change; **not made this
-pass**): replace the parenthetical so it names what `platform()` actually
-exposes (`lifecycle`, `agentDirectories`, `toolMissingHandler?`) and points
-config/state/workspace/storage to `WorkspaceRoots`, with logging noted as its
-own subsystem. The prose immediately after it ("add a typed `Platform` port
-rather than an import") stays correct.
-
-Disposition: recorded, not acted on. `CLAUDE.md` is the repo's primary
-governance file; correcting it precisely is a small deliberate edit for a
-maintainer-authorized pass, not a scheduled firing's to make unilaterally.
+**Landed in this PR.** The parenthetical now names what `platform()` actually
+carries (`lifecycle`, `agentDirectories`, and the optional `toolMissingHandler`)
+and routes the rest to its real owner, verbatim from `platform.ts:13-52`:
+per-workspace `workspace`/`storage`/`config`/`workspaceState` to the
+`WorkspaceRoots` each `SessionHandle` carries; the filesystem, secrets,
+application state, resume, and the editor language-model bridge to the
+`FileSystem`/`Secrets`/`AppState`/`AgentResume`/`LanguageModel` Effect services
+`installProcessRuntime` provides; and diagnostics to the `logSink.setLogSink`
+subsystem. The "add a typed port … rather than an import" guidance after it is
+kept (re-worded to "at the owning seam"). Re-verified present on latest `main`
+(`0412f2d8`) before editing. The same stale list also appeared in
+`src/README.md:27` (the `src/platform/` row), corrected in this PR to name the
+`Platform` / `WorkspaceRoots` / `installProcessRuntime`-service split; the two
+`2026-05-02-prd-electron-app.md` occurrences are archived history and correctly
+left frozen. `AGENTS.md` was already accurate (it states "there is no
+`platform().config`", `AGENTS.md:573`).
 
 ### 3.2 (Not new) The surface audit re-derived the Tier-1 manifest's open ratification questions
 
@@ -135,14 +157,23 @@ frozen lists"):
 These are confirmation that the manifest's open half (its "what Tier-1 keeps or
 seals" decisions) is still the right next design step, not new findings.
 
-### 3.3 (Cosmetic) `src/model/openRouterEndpoint.ts` is a one-line constant module
+### 3.3 (Withdrawn — false positive) `src/model/openRouterEndpoint.ts`
 
-The whole file is `export const OPENROUTER_BASE_URL = '…'` (4 importers), while
-sibling route base URLs live in `routeEndpoint.ts`, `modelRoutes.ts`, and
-`@shared/constants/providers`. Not a single-caller extraction (4 callers) and it
-trips no ratchet, so it violates no rule — it is the weakest seam in the model
-layer. Endorse folding it into `routeEndpoint.ts` **only** if someone is already
-touching endpoint resolution; not worth a standalone PR.
+The model-area audit flagged this one-line module (`export const
+OPENROUTER_BASE_URL = '…'`) and suggested folding it into `routeEndpoint.ts`
+alongside `OPENAI_DEFAULT_ENDPOINT`. On acting, that fold is **wrong-direction**
+and was not made: the two production importers are `src/model/glmRouting.ts:3`
+(model layer) and `src/agent/runtime/run/routeEndpoint.ts:12` (agent layer),
+and `routeEndpoint.ts` imports the constant **downward** from `@model`
+(agent → model, the correct direction). Moving it into `routeEndpoint.ts` would
+force `glmRouting.ts` to import it back **upward** (`src/model → src/agent`),
+inverting the dependency direction the ratchets protect. The constant is shared
+by a model-layer and an agent-layer module, so its home must be in the lower
+(model) layer — where it already is. The one-line file is the correct price of
+that layering, not a seam to collapse. The only sound consolidation (a single
+provider-endpoint home under `@shared/constants/providers`, joining
+`KIMI_CODE_BASE_URL`) is the "larger" option the audit itself said is not worth
+a standalone PR. Withdrawn.
 
 ## 4. Subagent boundaries — unchanged from `-09-17`
 
@@ -172,8 +203,9 @@ logger with one redaction boundary and no silent degradation, and a clean,
 provider-type-guarded SDK surface. The subagent SPI is a real four-implementor
 contract; `agentCreator` is the single, correctly-open boundary. The wider 1.0
 cleanup is executing (the survey's two passing-defects are already closed here).
-The one net-new item is a stale `platform()` capability list in `CLAUDE.md`
-(§3.1) — recorded for a maintainer-authorized fix, not acted on under a
-scheduled firing. Standing open work is unchanged: **ratifying the Tier-1 public
-manifest** (keep-or-seal the registry/`ToolHost`/`AgentPlatform` surface) and
-**shrinking the frozen deep-import lists**.
+The one net-new item was a stale `platform()` capability list in `CLAUDE.md`
+(§3.1), now corrected in this PR at the maintainer's request; the §3.3 model
+candidate was withdrawn as a false positive. Standing open work is unchanged:
+**ratifying the Tier-1 public manifest** (keep-or-seal the
+registry/`ToolHost`/`AgentPlatform` surface) and **shrinking the frozen
+deep-import lists** — both being advanced on their own in-flight branches.

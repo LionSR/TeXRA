@@ -134,10 +134,18 @@ stays free of Node built-ins — see the browser-safe note above; that is a
 stricter constraint layered on top of the VS Code-free rule, not a
 substitute for it.
 
-Reach host services through `platform()` from `@platform/platform` (config,
-state, log, fs, workspace, storage, secrets). When agnostic code needs a
-host-only capability, add a typed `Platform` port rather than an import.
-Substitutions and the push-UI-to-the-caller rule: AGENTS.md "Platform
+Reach the process-true host ports through `platform()` from
+`@platform/platform` — `lifecycle`, `agentDirectories`, and the optional
+`toolMissingHandler`; that is all it carries. Everything else lives at its own
+seam: per-workspace services (`workspace`, `storage`, `config`,
+`workspaceState`) come from the `WorkspaceRoots` each `SessionHandle` carries,
+not from `platform()`; the filesystem, secrets, application state, resume, and
+the editor language-model bridge are Effect services provided once by
+`installProcessRuntime` (`FileSystem`, `Secrets`, `AppState`, `AgentResume`,
+`LanguageModel`); and diagnostics are their own subsystem
+(`logSink.setLogSink`), not a platform port. When agnostic code needs a
+host-only capability, add a typed port at the owning seam rather than an
+import. Substitutions and the push-UI-to-the-caller rule: AGENTS.md "Platform
 decoupling rules".
 
 Also: `src/shared/` is for wire contracts and UI-shared message types — don't
