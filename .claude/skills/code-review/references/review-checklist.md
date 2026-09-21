@@ -10,7 +10,7 @@ The full zone list lives in `CLAUDE.md` → "Separation of concerns: VS Code cou
 
 - **`grep -nE "from ['\"]vscode['\"]"`** in every directory of `VSCODE_FREE_ZONE_DIRS` (`eslint.config.mjs`). Any hit is a finding.
 - **New `from '@agent/*'` imports in `src/shared/`** → finding. `src/shared/` is for wire contracts and UI-shared message types; host-neutral orchestration belongs under `src/controllers/`.
-- **Direct `vscode.workspace.getConfiguration` / `workspace.fs` / `secrets`** in agnostic code → use `platform().config`, `platform().fs`, `platform().secrets` (see `src/platform/platform.ts`). Note: `src/utils/config/configUtils.ts` and `src/utils/config/platformSettings.ts` are host-neutral (VS Code-free) and are called directly from agnostic code too, not only VS Code-allowed code.
+- **Direct `vscode.workspace.getConfiguration` / `workspace.fs` / `secrets`** in agnostic code → finding. `Platform` carries none of these any more (`src/platform/platform.ts`): configuration is the `ConfigProvider` on the `WorkspaceRoots` the caller holds, files are Effect's own `FileSystem` through the rooted `WorkspaceFs`/`StorageFs`/`GlobalStorageFs` views (`@platform/rootedFs`), and secrets are the `Secrets` service. There is no `platform().config`, `platform().fs` or `platform().secrets` to reach for. Note: `src/utils/config/configUtils.ts` and `src/utils/config/platformSettings.ts` are host-neutral (VS Code-free) and are called directly from agnostic code too, not only VS Code-allowed code.
 - **`instanceof vscode.FileSystemError`** → `isFileNotFoundError(err)` from `@common/errors`.
 - **`vscode.FileType.File` / `.Directory`** → `isFile()` / `isDirectory()` from `@utils/files/fsEntryType`.
 - **`vscode.window.show*Message()` in business logic** → return error results; let the command/frontend layer handle UI.
@@ -41,9 +41,8 @@ Design rules in `AGENTS.md` → "Zod v4 Schema Patterns" (including "Schemas as 
 ## 4. Configuration, storage, files
 
 - **Inline config strings** sprinkled across modules → use the typed accessors over the stores the caller already holds: `readConfig(config, path)` (`src/utils/config/configUtils.ts`) for a raw path, `readSettingFrom(stores, key)`/`writeSettingTo(stores, key, value)` (`src/utils/config/platformSettings.ts`) for a setting modeled in the Zod catalog, or the `ConfigProvider` itself when you need `update`/`inspect` (there is no `platform().config`). The catalog helpers default to the `vscode` host slot and read global scope only for `configTarget: 'global'` rows — see AGENTS.md's settings note before swapping one accessor for the other on an existing call site, and prefer `applyStateSettingUpdate` (`src/shared/settingsView/handlers/stateSettingWrite.ts`) over a bare `writeSettingTo` for any write a settings UI can reach. Verify a catalog key exists via `settingByKey` against `src/shared/schemas/coreSettings.ts`/`stateSettings.ts`, not `package.json`'s `contributes.configuration` — the extension manifest intentionally contributes no configuration block (see CLAUDE.md's "Layout" section and `scripts/sync-package-contributes.mjs`).
-- **Manual workspace path joining** → `WorkspaceFS.getPath()` and the helpers in `@utils/files`.
+- **Manual workspace path joining** → `workspaceAbsolutePath` / `workspaceRelativePath` / `locateInWorkspace` in `@utils/files/workspaceFS`, each a pure function of the root the caller passes.
 - **Pasted-image paths** generated/resolved manually → `pastedImageUtils`.
-- **Long-running writers without retention** → `RelativeFS.cleanupOldFiles` (or equivalent).
 
 ## 5. Webview / render-time
 
@@ -67,7 +66,7 @@ Design rules in `AGENTS.md` → "Zod v4 Schema Patterns" (including "Schemas as 
 
 - **`child_process.exec` direct calls** → `executeCommand` from `@utils/system/execUtils`.
 - **String-interpolated shell commands** → arg arrays; flag command-injection risk on any user/LLM-derived data.
-- **`path.join(workspaceRoot, userInput)`** without canonicalization → path-traversal risk; use `WorkspaceFS` / `RelativeFS`. Workspace contents are LLM-influenced; treat as untrusted.
+- **`path.join(workspaceRoot, userInput)`** without canonicalization → path-traversal risk; go through the rooted `WorkspaceFs` view, which refuses a path that escapes its root. Workspace contents are LLM-influenced; treat as untrusted.
 
 ## 8. Build, lint, dead code
 

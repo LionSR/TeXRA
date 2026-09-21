@@ -146,12 +146,12 @@ Specialist research agents are tuned for different stages of the work. Pick one 
       { text: 'crossref_search', variant: 'neutral' },
       { text: 'web_search', variant: 'neutral' },
       { text: 'web_fetch', variant: 'neutral' },
-      { text: 'zotero', variant: 'neutral' },
+      { text: 'zotero_search', variant: 'neutral' },
     ] },
     { icon: 'symbol-operator', title: 'research', desc: 'Computational verification, plus bash, file edits, and local LaTeX analysis.', chips: [
       { text: 'wolfram', variant: 'info' },
       { text: 'bash', variant: 'neutral' },
-      { text: 'file-edit', variant: 'neutral' },
+      { text: 'edit_file', variant: 'neutral' },
       { text: 'texcount', variant: 'neutral' },
       { text: 'extract_figures', variant: 'neutral' },
     ] },
@@ -159,7 +159,7 @@ Specialist research agents are tuned for different stages of the work. Pick one 
       { text: 'lean_diagnostics', variant: 'info' },
       { text: 'lean_inspect', variant: 'info' },
       { text: 'lean_loogle', variant: 'neutral' },
-      { text: 'lake build', variant: 'neutral' },
+      { text: 'lean_project', variant: 'neutral' },
     ] },
   ]"
 />
