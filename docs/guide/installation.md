@@ -49,6 +49,21 @@ Node.js 22.19.0 or later in 22.x, or Node.js 24 or later):
 npm install -g @texra-ai/cli
 ```
 
+On Linux and WSL a system-wide Node.js puts global packages under
+`/usr/local/lib/node_modules`, which your user cannot write to, so the install
+fails with `EACCES`. Install Node.js through a version manager such as
+[nvm](https://github.com/nvm-sh/nvm) or [fnm](https://github.com/Schniz/fnm), or
+point npm at a directory you own, and then reinstall without `sudo`:
+
+```bash
+npm config set prefix ~/.npm-global
+export PATH="$HOME/.npm-global/bin:$PATH"   # add this to ~/.bashrc or ~/.zshrc
+npm install -g @texra-ai/cli
+```
+
+A `sudo` install still works — the packaged files only need to be readable — but
+upgrades then also need `sudo`.
+
 Or with [Homebrew](https://github.com/texra-ai/homebrew-tap) on macOS and Linux:
 
 ```bash

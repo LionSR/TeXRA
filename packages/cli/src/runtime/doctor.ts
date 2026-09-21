@@ -193,18 +193,32 @@ function checkNode(version: string): DoctorCheck {
   );
 }
 
+/**
+ * `read` is for directories the CLI only ever loads from — the packaged
+ * resources root is root-owned whenever the global install went through
+ * `sudo npm install -g`, which is the norm on Linux and WSL with a
+ * system-wide Node prefix, and demanding write access there fails a healthy
+ * install.
+ */
+type DirectoryAccess = 'read' | 'readwrite';
+
 function checkDirectory(
   id: string,
   name: string,
   dir: string,
+  access: DirectoryAccess,
   deps: ResolvedDoctorDependencies,
 ): Effect.Effect<DoctorCheck> {
+  const mode =
+    access === 'readwrite'
+      ? fsConstants.R_OK | fsConstants.W_OK
+      : fsConstants.R_OK;
   return Effect.gen(function* () {
     const info = yield* deps.pathStat(dir);
     if (!info.isDirectory()) {
       return fail(id, name, `${dir} exists but is not a directory.`);
     }
-    yield* deps.pathAccess(dir, fsConstants.R_OK | fsConstants.W_OK);
+    yield* deps.pathAccess(dir, mode);
     return pass(id, name, dir);
   }).pipe(
     Effect.catch((failure) =>
@@ -212,7 +226,9 @@ function checkDirectory(
         failFromError(
           id,
           name,
-          `${dir} is not readable and writable.`,
+          access === 'readwrite'
+            ? `${dir} is not readable and writable.`
+            : `${dir} is not readable.`,
           failure.cause,
         ),
       ),
@@ -517,11 +533,18 @@ export function buildDoctorReport(
           ];
     const checks: DoctorCheck[] = [
       checkNode(resolved.nodeVersion),
-      yield* checkDirectory('workspace', 'Workspace', context.cwd, resolved),
+      yield* checkDirectory(
+        'workspace',
+        'Workspace',
+        context.cwd,
+        'readwrite',
+        resolved,
+      ),
       yield* checkDirectory(
         'resources',
         'Packaged resources',
         context.resourcesPath,
+        'read',
         resolved,
       ),
       ...sessionDependentChecks,
