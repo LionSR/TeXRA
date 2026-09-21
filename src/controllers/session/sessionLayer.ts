@@ -58,7 +58,7 @@ import {
   type SessionGraph,
 } from '@agent/runtime/sessionGraph';
 import { SupabaseAuth, type SupabaseAuthShape } from '@auth/SupabaseAuth';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel, withLogData } from '@logger/effectLog';
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import {
   withForkFailureReporting,
@@ -123,7 +123,7 @@ import { SessionViewService } from './SessionView';
 import { sessionInputsLayer } from './sessionInputs';
 import { WorkspaceRoots } from './WorkspaceRoots';
 
-const log = createLog('sessionLayer');
+const CHANNEL = 'sessionLayer';
 
 /** How often the owners the view names are re-probed (PRD 5.2). */
 const OWNER_LIVENESS_PROBE_INTERVAL = '5 seconds';
@@ -442,12 +442,9 @@ const sessionHandleLayer = (
                     // that also failed leaves the claims to the next process's
                     // liveness proof, and says so.
                     Effect.catch((error) =>
-                      Effect.sync(() =>
-                        log.warn(
-                          'Registration claims were not released after its settle failed.',
-                          { data: error },
-                        ),
-                      ),
+                      Effect.logWarning(
+                        'Registration claims were not released after its settle failed.',
+                      ).pipe(withLogData(error), withLogChannel(CHANNEL)),
                     ),
                   ),
                 ),
@@ -549,12 +546,9 @@ const sessionHandleLayer = (
             Effect.ensuring(
               session.settlePublications().pipe(
                 Effect.catch((error) =>
-                  Effect.sync(() => {
-                    log.warn(
-                      `Session ${key.storage} left a failed publication behind as it closed.`,
-                      { data: error },
-                    );
-                  }),
+                  Effect.logWarning(
+                    `Session ${key.storage} left a failed publication behind as it closed.`,
+                  ).pipe(withLogData(error), withLogChannel(CHANNEL)),
                 ),
               ),
             ),
@@ -623,12 +617,9 @@ const sessionHandleLayer = (
           ),
         ),
         Effect.tapError((error) =>
-          Effect.sync(() =>
-            log.error(
-              `Session ${key.storage} stopped delivering committed rows: the log could not be read.`,
-              { data: error },
-            ),
-          ),
+          Effect.logError(
+            `Session ${key.storage} stopped delivering committed rows: the log could not be read.`,
+          ).pipe(withLogData(error), withLogChannel(CHANNEL)),
         ),
         Effect.onExit((exit) => Deferred.done(tailEnded, exit)),
         Effect.forkIn(consumerScope),
@@ -641,21 +632,17 @@ const sessionHandleLayer = (
         session.receiveFoldedEvent(event),
       ).pipe(
         Effect.tapError((error) =>
-          Effect.sync(() =>
-            log.error(
-              `Session ${key.storage} stopped delivering folded rows: the log could not be read.`,
-              { data: error },
-            ),
-          ),
+          Effect.logError(
+            `Session ${key.storage} stopped delivering folded rows: the log could not be read.`,
+          ).pipe(withLogData(error), withLogChannel(CHANNEL)),
         ),
         Effect.forkIn(consumerScope),
       );
       yield* sweepLeftoverRuns(session, initialListing).pipe(
         Effect.catch((error) =>
-          Effect.sync(() =>
-            log.warn('Background-shell cleanup failed.', {
-              data: error,
-            }),
+          Effect.logWarning('Background-shell cleanup failed.').pipe(
+            withLogData(error),
+            withLogChannel(CHANNEL),
           ),
         ),
         Effect.forkScoped,
@@ -663,12 +650,9 @@ const sessionHandleLayer = (
       // The session owns retries and waits for in-flight removal on close.
       yield* collectPendingDeletions(eventLog, key.storage).pipe(
         Effect.catch((error) =>
-          Effect.sync(() => {
-            log.warn(
-              'Deletion records could not be read; cleanup remains pending.',
-              { data: error },
-            );
-          }),
+          Effect.logWarning(
+            'Deletion records could not be read; cleanup remains pending.',
+          ).pipe(withLogData(error), withLogChannel(CHANNEL)),
         ),
         Effect.repeat({ schedule: Schedule.spaced('30 seconds') }),
         Effect.forkScoped,
@@ -784,12 +768,13 @@ const listSessions = Effect.gen(function* () {
 const unopenedEntry =
   (key: SessionKey) =>
   (error: SessionOpenError): Effect.Effect<Option.Option<never>> =>
-    Effect.sync(() => {
-      log.warn(`Session ${key.storage} failed to open; it holds no session.`, {
-        data: error,
-      });
-      return Option.none();
-    });
+    Effect.logWarning(
+      `Session ${key.storage} failed to open; it holds no session.`,
+    ).pipe(
+      withLogData(error),
+      withLogChannel(CHANNEL),
+      Effect.as(Option.none()),
+    );
 
 /** The session held for `root`, if the map holds one: an entry still building
  *  is waited for, never skipped, which is what lets a close issued right after
@@ -899,11 +884,10 @@ const closeSession = (root: string) =>
     const abandoned = runs.getActiveIds();
     const release = didSettle
       ? sessions.invalidate(key)
-      : Effect.sync(() =>
-          log.warn(
-            `Session ${root} is closing with runs still live past its budget: ${abandoned.join(', ')}; it stays open, refusing new work, until they settle`,
-          ),
+      : Effect.logWarning(
+          `Session ${root} is closing with runs still live past its budget: ${abandoned.join(', ')}; it stays open, refusing new work, until they settle`,
         ).pipe(
+          withLogChannel(CHANNEL),
           // Started now, so the wait holds its listener before this close
           // returns and no timer stands between the report and the release.
           Effect.andThen(
@@ -927,11 +911,9 @@ const closeSession = (root: string) =>
       flushArtifacts,
       Fiber.join(budget).pipe(
         Effect.andThen(
-          Effect.sync(() =>
-            log.warn(
-              `Session ${root}: the artifact flush ran past the close budget and was left to the process teardown`,
-            ),
-          ),
+          Effect.logWarning(
+            `Session ${root}: the artifact flush ran past the close budget and was left to the process teardown`,
+          ).pipe(withLogChannel(CHANNEL)),
         ),
       ),
     ).pipe(Effect.ensuring(release));
