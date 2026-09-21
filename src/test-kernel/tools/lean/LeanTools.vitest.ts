@@ -75,7 +75,9 @@ describe('resolveWorkspaceRoot', () => {
       yield* Effect.promise(() =>
         writeFile(path.join(scratch, 'lakefile.lean'), ''),
       );
-      yield* Effect.promise(() => writeFile(path.join(scratch, 'Foo.lean'), ''));
+      yield* Effect.promise(() =>
+        writeFile(path.join(scratch, 'Foo.lean'), ''),
+      );
       const root = yield* resolve(path.join(scratch, 'Foo.lean'));
       expect(root).toBe(scratch);
     }),

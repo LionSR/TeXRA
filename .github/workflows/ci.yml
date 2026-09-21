@@ -169,6 +169,9 @@ jobs:
       - name: Check unexecuted Effects
         run: pnpm run check:unexecuted-effects
 
+      - name: Check Effect-native test bodies
+        run: pnpm run check:effect-test-runs
+
       - name: Check extension package invariants
         run: pnpm run check:extension-package-invariants
 
