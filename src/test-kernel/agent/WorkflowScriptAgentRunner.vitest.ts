@@ -237,6 +237,9 @@ const runs = {
 // point them at a real temporary tree.
 let sessionRoots = { workspace: WORKSPACE_PATH, storage: STORAGE_PATH };
 
+/** The model the dispatching call pins and hands the runner. */
+const PARENT_MODEL = 'parent-model';
+
 function parentContext(): DelegationParent {
   // The probe fences an interrupted attempt on its run lane and its run claim
   // before it may advance past it, so the stub session answers both.
@@ -255,7 +258,7 @@ function parentContext(): DelegationParent {
       session,
       config: AgentConfigSchema.parse({
         agent: 'chat',
-        model: 'parent-model',
+        model: PARENT_MODEL,
       }),
       logger: noopTrace,
       delegationAgentScope: {
@@ -271,10 +274,11 @@ function parentContext(): DelegationParent {
 }
 
 function defaultRunner(
-  hooks?: Parameters<typeof createWorkflowScriptAgentRunner>[4],
+  hooks?: Parameters<typeof createWorkflowScriptAgentRunner>[5],
 ): ReturnType<typeof createWorkflowScriptAgentRunner> {
   return createWorkflowScriptAgentRunner(
     parentContext(),
+    PARENT_MODEL,
     defaultAgent,
     'tool-call-7',
     run,
@@ -1083,6 +1087,7 @@ describe('createWorkflowScriptAgentRunner', () => {
     Effect.gen(function* () {
       const runner = createWorkflowScriptAgentRunner(
         parentContext(),
+        PARENT_MODEL,
         { ...defaultAgent, category: 'toolUse', source: 'builtInToolUse' },
         'tool-call-8',
         run,

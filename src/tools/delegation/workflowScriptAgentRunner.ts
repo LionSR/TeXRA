@@ -57,13 +57,7 @@ function workflowRunnerError(error: unknown): Error {
 function workflowScriptModelSelection(
   invocation: Pick<WorkflowAgentInvocation, 'options'>,
   parent: DelegationParent,
-  /**
-   * The model the workflow was dispatched under, pinned by its runner.
-   * `parent.run.config.model` is the live cell a parent model switch
-   * mutates, and a detached workflow resolves its later `agent()` calls
-   * long after the tool call that proposed it settled: reading it here
-   * would run the tail of one workflow under a model it never declared.
-   */
+  /** The model the dispatching call pinned; never the live cell. */
   parentModel: string,
 ): Effect.Effect<string, Error, Secrets | AppState | LanguageModel> {
   const requestedModel = invocation.options.model;
@@ -796,6 +790,15 @@ const recoverOrLaunchWorkflowChild = Effect.fn('recoverOrLaunchWorkflowChild')(
  */
 export function createWorkflowScriptAgentRunner(
   parent: DelegationParent,
+  /**
+   * The model the parent was running when `delegate_multi_agents` was
+   * dispatched, read by the dispatching call itself. It cannot be read
+   * here: a detached workflow builds this runner on the forked child-loop
+   * fiber, after its tool call settled and after the child-run permit
+   * wait, by which point a pending parent model switch may have applied
+   * to the live `run.config.model` cell.
+   */
+  parentModel: string,
   defaultAgent: AgentEntry,
   checkpointId: string,
   run: WorkflowRunIdentity,
@@ -810,10 +813,6 @@ export function createWorkflowScriptAgentRunner(
   invocation: WorkflowAgentInvocation,
 ) => Effect.Effect<RunEnd, Error, AgentRunServices | Scope.Scope> {
   const { session } = parent.run;
-  // Pinned once, where the dispatched call read it: a detached workflow
-  // outlives its tool call, and `run.config.model` moves under a parent
-  // model switch.
-  const parentModel = parent.run.config.model;
 
   return Effect.fn('workflowScriptAgent')(
     function* (

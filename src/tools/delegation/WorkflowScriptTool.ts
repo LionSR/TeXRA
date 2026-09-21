@@ -415,11 +415,17 @@ Durability: the journal is keyed by meta.name and the agent field within this se
         if (totalCost !== undefined) recordSubagentCost?.(totalCost);
       };
 
+      // The parent's model at the instant of dispatch. `run.config.model` is
+      // the live cell a parent model switch mutates, and a detached workflow
+      // resolves its `agent()` calls on a forked fiber after this call has
+      // settled, so the value is read once, here, and threaded through.
+      const parentModel = parent.run.config.model;
+
       // Same availability gate as delegate_agent/delegate_workflow: a run model
       // the active credentials cannot serve fails here, with the available list,
       // instead of mid-run on the first provider call.
       const runModel = yield* selectAvailableDelegationModel({
-        parentModel: parent.run.config.model,
+        parentModel,
         settings: parent.roots,
       }).pipe(
         // Same annotation `runPhase` puts on every other phase failure.
@@ -635,6 +641,7 @@ Durability: the journal is keyed by meta.name and the agent field within this se
                           createRunAgent: (hooks) => {
                             const runAgent = createWorkflowScriptAgentRunner(
                               parent,
+                              parentModel,
                               defaultAgent,
                               checkpointId,
                               {
