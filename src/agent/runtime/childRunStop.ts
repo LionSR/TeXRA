@@ -14,11 +14,11 @@
 import { Cause, Effect, Exit } from 'effect';
 
 import type { AgentTrace } from '@agent/trace';
+import type { ChildRunStrategy } from '@agent/runtime/childRunLoop';
 import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
 import { onAbort } from '@utils/core';
 import { formatDuration } from '@utils/text/stringUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import type { ChildRunStrategy } from '@agent/runtime/childRunLoop';
 
 /** Minimal token usage shape consumed by the loop's turn summary. */
 export type TurnUsage = { input_tokens?: number; output_tokens?: number };
@@ -107,4 +107,3 @@ export function attemptTurn<TTurn, R>(
     return { kind: 'failed' as const, err: caught };
   });
 }
-
