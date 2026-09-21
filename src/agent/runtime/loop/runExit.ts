@@ -24,6 +24,39 @@ interface HaltDeps {
   readonly runId: RunId;
 }
 
+type HaltWriteFailure = RunLedgerRefused | DatabaseWriteFailed;
+type HaltWriteResolution =
+  | { readonly kind: 'warn'; readonly error: RunLedgerRefused }
+  | { readonly kind: 'fail'; readonly error: DatabaseWriteFailed }
+  | { readonly kind: 'die'; readonly defect: unknown };
+
+function classifyHaltWriteCause(
+  cause: Cause.Cause<HaltWriteFailure>,
+): HaltWriteResolution {
+  const failure = Cause.findErrorOption(cause);
+  if (Option.isSome(failure)) {
+    if (failure.value instanceof RunLedgerRefused) {
+      return { kind: 'warn', error: failure.value };
+    }
+    if (failure.value instanceof DatabaseWriteFailed) {
+      return { kind: 'fail', error: failure.value };
+    }
+  }
+
+  const defect = Cause.findDefect(cause);
+  if (Result.isSuccess(defect)) {
+    if (defect.success instanceof RunLedgerRefused) {
+      return { kind: 'warn', error: defect.success };
+    }
+    if (defect.success instanceof DatabaseWriteFailed) {
+      return { kind: 'fail', error: defect.success };
+    }
+    return { kind: 'die', defect: defect.success };
+  }
+
+  return { kind: 'die', defect: Cause.squash(cause) };
+}
+
 /**
  * Appends the run's `halted` step for `outcome`. A run whose state never
  * opened (`null`, or a null `phase`) has no step to halt, so it writes
@@ -50,31 +83,16 @@ export const recordHalt =
           .pipe(
             Effect.asVoid,
             Effect.catchCause((cause) => {
-              const failure = Cause.findErrorOption(cause);
-              if (Option.isSome(failure)) {
-                if (failure.value instanceof RunLedgerRefused) {
-                  return Effect.sync(() =>
-                    deps.logger.warn('Failed to record the run halt', {
-                      data: failure.value,
-                    }),
-                  );
-                }
-                if (failure.value instanceof DatabaseWriteFailed) {
-                  return Effect.fail(failure.value);
-                }
-              }
-              const defect = Cause.findDefect(cause);
-              return Result.isSuccess(defect) &&
-                defect.success instanceof DatabaseWriteFailed
-                ? Effect.fail(defect.success)
-                : Result.isSuccess(defect) &&
-                    defect.success instanceof RunLedgerRefused
+              const resolution = classifyHaltWriteCause(cause);
+              return resolution.kind === 'warn'
                 ? Effect.sync(() =>
                     deps.logger.warn('Failed to record the run halt', {
-                      data: defect.success,
+                      data: resolution.error,
                     }),
                   )
-                : Effect.die(Cause.squash(cause));
+                : resolution.kind === 'fail'
+                  ? Effect.fail(resolution.error)
+                  : Effect.die(resolution.defect);
             }),
           );
 
