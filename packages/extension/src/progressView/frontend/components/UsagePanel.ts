@@ -15,10 +15,10 @@ import {
   type ContextStateData,
   type TokenUsageStats,
 } from '@shared/schemas';
+import { contextGaugeBand, roundedContextPercent } from '@shared/contextGauge';
 import { designTokens } from '@ui/styles';
 import { usageCostLabel, usageRouteBadge } from '@ui/copy/modelAccess';
 import { focusRingStyles } from '@ui/styles/controlStyles';
-import { contextGaugeBand, roundedContextPercent } from '@shared/contextGauge';
 
 // Local imports - shared icons and utils
 import type { TeXRAIconName } from '@ui/wa/iconNames';
