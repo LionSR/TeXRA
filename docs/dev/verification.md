@@ -95,4 +95,4 @@ re-implementing one of these per host, push the new code into
 - Empty state helper: `src/shared/wa/emptyState.ts`
 - Persisted state: `src/shared/state/PersistedState.ts`
 - Host bridge: `src/shared/hostBridge.ts`
-- Settings tabs: `src/shared/schemas/settingsViewMessages.ts` (`SETTINGS_TAB_ORDER`)
+- Settings tabs: `src/shared/settingsView/settingsViewMessages.ts` (`SETTINGS_TAB_ORDER`)

@@ -14,9 +14,16 @@
 // only under a `scripts` root (`src` and `packages/*/src` stay TS-only, the
 // convention every production root already follows). test-kernel files are
 // ratcheted like production.
+//
+// Because every importer takes the whole barrel, what the surface CONTAINS is
+// as load-bearing as how it is imported: the settings catalog and the
+// settings-view wire protocol used to ride into all 800-odd closures, the
+// progress webview among them. They now live beside the code whose charter
+// fits them, and the second test below pins that so the barrel cannot quietly
+// re-absorb one.
 
 // Node imports
-import { readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 // Third-party imports
@@ -32,6 +39,21 @@ import {
 
 const SURFACE_INTERIOR = 'src/shared/schemas/';
 const DEEP_IMPORT_PREFIX = '@shared/schemas/';
+
+// Modules the 2026-09-20 tools-and-schema note moved off this surface, each
+// with the home it now has. They are not wire contracts: the catalog belongs
+// with the state keys it is built from, and the settings-view protocol with
+// the settings-view wiring that speaks it.
+const MOVED_OUT: ReadonlyArray<readonly [string, string]> = [
+  ['stateSettings.ts', 'src/shared/state/stateSettings.ts'],
+  [
+    'settingsViewMessages.ts',
+    'src/shared/settingsView/settingsViewMessages.ts',
+  ],
+  ['memoryViewMessages.ts', 'src/shared/settingsView/memoryViewMessages.ts'],
+  ['profileViewMessages.ts', 'src/shared/settingsView/profileViewMessages.ts'],
+  ['messageFactories.ts', 'src/shared/settingsView/messageFactories.ts'],
+];
 
 function scanRoots(): string[] {
   const packagesRoot = resolve(REPO_ROOT, 'packages');
@@ -107,6 +129,22 @@ describe('@shared/schemas deep-import ratchet', () => {
         deepImports.map((entry) => `  ${entry}`).join('\n') +
         `\n\nIf a name is missing from the barrel, publish it there.`,
     ).toEqual([]);
+  });
+
+  it('keeps the settings catalog and the view protocols off the surface', () => {
+    for (const [leaf, home] of MOVED_OUT) {
+      expect(
+        existsSync(resolve(REPO_ROOT, `${SURFACE_INTERIOR}${leaf}`)),
+        `${SURFACE_INTERIOR}${leaf} is not a wire contract; it lives at ${home}. ` +
+          `Every importer of this surface takes the whole barrel, so putting it ` +
+          `back ships it to the progress, memory and profile views too.`,
+      ).toBe(false);
+      expect(
+        existsSync(resolve(REPO_ROOT, home)),
+        `${home} is missing; this list names where each module moved, so update ` +
+          `it in the same change that moves one again.`,
+      ).toBe(true);
+    }
   });
 
   // The forms the shared scanner covers. `module.require(...)`,
