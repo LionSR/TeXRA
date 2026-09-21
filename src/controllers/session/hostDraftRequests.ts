@@ -8,7 +8,7 @@ import { MODEL_CONFIGS } from 'llm-zoo';
 import { resolveRouteCredential } from '@agent/runtime/modelRoutes';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { polishTextWithAI } from '@agent/runtime/textEnhancement';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import { AppState } from '@platform/interfaces';
 import type { LanguageModel } from '@platform/languageModel';
 import type { StorageFs } from '@platform/rootedFs';
@@ -33,7 +33,7 @@ import {
 } from '@utils/files/pastedImageUtils';
 import type { HttpClient } from 'effect/unstable/http';
 
-const log = createLog('HostDraftRequests');
+const CHANNEL = 'HostDraftRequests';
 
 /**
  * Delete recordings older than three days under the session's recordings
@@ -49,10 +49,9 @@ function cleanupOldRecordings(
     const cutoff = Date.now() - THREE_DAYS_MS;
     const names = yield* fs.readDirectory(directory).pipe(
       Effect.catch((error) =>
-        Effect.sync(() => {
-          log.warn(`Skipped cleanup of ${directory}: ${toErrorMessage(error)}`);
-          return [] as string[];
-        }),
+        Effect.logWarning(
+          `Skipped cleanup of ${directory}: ${toErrorMessage(error)}`,
+        ).pipe(withLogChannel(CHANNEL), Effect.as([] as string[])),
       ),
     );
     yield* Effect.forEach(
@@ -74,11 +73,9 @@ function cleanupOldRecordings(
             return mtime <= cutoff ? fs.remove(filePath) : Effect.void;
           }),
           Effect.catch((error) =>
-            Effect.sync(() => {
-              log.warn(
-                `Could not remove stale recording ${filePath}: ${toErrorMessage(error)}`,
-              );
-            }),
+            Effect.logWarning(
+              `Could not remove stale recording ${filePath}: ${toErrorMessage(error)}`,
+            ).pipe(withLogChannel(CHANNEL)),
           ),
         );
       },

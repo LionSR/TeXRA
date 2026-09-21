@@ -159,10 +159,11 @@ export const sessionEventsLayer = Layer.effect(
         Effect.catchCause((cause) =>
           Cause.hasInterruptsOnly(cause)
             ? Effect.void
-            : Effect.sync(() =>
-                logger.warn('Session publisher ended abnormally on close', {
-                  data: Cause.squash(cause),
-                }),
+            : Effect.logWarning(
+                'Session publisher ended abnormally on close',
+              ).pipe(
+                withLogData(Cause.squash(cause)),
+                withLogChannel(CHANNEL),
               ),
         ),
       ),

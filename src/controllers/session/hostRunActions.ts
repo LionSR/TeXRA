@@ -26,6 +26,7 @@ import {
 } from '@agent/core/definition/AgentConfig';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { MessageHost, NotificationFailed } from '@hosts/uiHosts';
+import { withLogChannel, withLogData } from '@logger/effectLog';
 import { createLog } from '@logger/logUtils';
 import type { ApiProvider } from '@model/apiProviders';
 import {
@@ -79,7 +80,8 @@ import {
   type ProgressFollowUpState,
 } from '../progressView/ProgressFollowUpController';
 
-const log = createLog('HostRunActions');
+const CHANNEL = 'HostRunActions';
+const log = createLog(CHANNEL);
 
 /** The workflow toolbar's latexdiff over a run's outputs, as each host's
  *  diff command takes it. */
@@ -302,9 +304,9 @@ export const createHostRunActions = (
         if (!config) {
           // No messaging port here, so the refusal is at least recorded
           // rather than dropped: the toolbar action does nothing.
-          log.warn(
+          yield* Effect.logWarning(
             `Workflow action skipped for stream ${runId}: the run has no persisted config.`,
-          );
+          ).pipe(withLogChannel(CHANNEL));
           return undefined;
         }
         return config.agentCategory === AgentCategory.Workflow
@@ -355,13 +357,9 @@ export const createHostRunActions = (
     const retryNotSettled =
       (runId: RunId, requestId: string) =>
       (cause: unknown): Effect.Effect<boolean> =>
-        Effect.sync(() => {
-          log.warn(
-            `Retry request ${requestId} of run ${runId} could not be settled`,
-            { data: cause },
-          );
-          return false;
-        });
+        Effect.logWarning(
+          `Retry request ${requestId} of run ${runId} could not be settled`,
+        ).pipe(withLogData(cause), withLogChannel(CHANNEL), Effect.as(false));
 
     const settleRetry = (
       runId: RunId,
@@ -564,9 +562,11 @@ export const createHostRunActions = (
             Effect.catch((error) =>
               Effect.gen(function* () {
                 const message = toErrorMessage(error);
-                log.warn(
+                yield* Effect.logWarning(
                   `Failed to submit follow-up for stream ${runId}: ${message}`,
-                  { data: { runId, error: message } },
+                ).pipe(
+                  withLogData({ runId, error: message }),
+                  withLogChannel(CHANNEL),
                 );
                 yield* present(`Could not send the follow-up: ${message}`);
                 return undefined;
@@ -579,11 +579,9 @@ export const createHostRunActions = (
             yield* present(presentation.message);
         }).pipe(
           Effect.catchCause((cause) =>
-            Effect.sync(() => {
-              log.warn(
-                `Follow-up presentation failed for stream ${runId}: ${String(cause)}`,
-              );
-            }),
+            Effect.logWarning(
+              `Follow-up presentation failed for stream ${runId}: ${String(cause)}`,
+            ).pipe(withLogChannel(CHANNEL)),
           ),
         );
         // Detached: a recovery resume can run a whole model turn, so no host

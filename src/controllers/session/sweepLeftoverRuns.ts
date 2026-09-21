@@ -1,6 +1,6 @@
 import { Effect, SubscriptionRef } from 'effect';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel, withLogData } from '@logger/effectLog';
 import {
   aggregateTarget,
   type SessionEvent,
@@ -8,7 +8,7 @@ import {
 } from '@shared/schemas';
 import { isInFlightPhase } from '@shared/runs/runStatus';
 
-const log = createLog('LeftoverRunSweep');
+const CHANNEL = 'LeftoverRunSweep';
 
 /** Runs this process is running right now, by handle or by in-flight phase. */
 function runningRuns(session: SessionHandle): Set<RunId> {
@@ -45,12 +45,9 @@ export const sweepLeftoverRuns = Effect.fn('sweepLeftoverRuns')(function* (
     if (running.has(runId)) continue;
     yield* session.requests.removeRun(runId, 'automatic', row.commit).pipe(
       Effect.catch((error) =>
-        Effect.sync(() => {
-          log.warn(
-            'A background shell was retained because automatic deletion was refused.',
-            { data: { runId, error } },
-          );
-        }),
+        Effect.logWarning(
+          'A background shell was retained because automatic deletion was refused.',
+        ).pipe(withLogData({ runId, error }), withLogChannel(CHANNEL)),
       ),
     );
   }
