@@ -7,7 +7,6 @@
  * Delivery and failure order belong to `AppSignals` itself.
  */
 import { Fiber } from 'effect';
-import type * as vscode from 'vscode';
 
 import {
   onAppSignal,
@@ -15,6 +14,7 @@ import {
   type AppSignalPayloads,
 } from '@eventBus/AppSignals';
 import type { ProcessRuntime } from '@platform/processRuntime';
+import type * as vscode from 'vscode';
 
 /** Read one app signal from now on. */
 export function subscribeAppSignal<K extends AppSignal>(
