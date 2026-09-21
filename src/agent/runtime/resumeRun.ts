@@ -20,7 +20,6 @@ import type {
 } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import { getRunRecords } from '@agent/storage/runRecords';
 import { withLogChannel, withLogData } from '@logger/effectLog';
-import { createLog } from '@logger/logUtils';
 import type { RecoveryContinuation } from '@platform/interfaces';
 import type { ProcessServices } from '@platform/processRuntime';
 import {
@@ -161,7 +160,6 @@ export const resumeClaimedRun = Effect.fn('resumeClaimedRun')(function* (
 }, Effect.uninterruptible);
 
 const CHANNEL = 'ResumeRun';
-const log = createLog(CHANNEL);
 
 const REFUSED: ResumeRunResult = { failed: 'not_resumable' };
 /** A workflow run carries no follow-up batch, so nothing awaits delivery. */
@@ -329,24 +327,23 @@ const releaseUnstartedRecovery = Effect.fn('releaseUnstartedRecovery')(
     provisional: boolean,
   ) {
     if (!session.followUps.useRecovery(recovery)) return;
-    const warnUnreadable = (failure: unknown): void =>
-      log.warn(
+    const warnUnreadable = (failure: unknown): Effect.Effect<void> =>
+      Effect.logWarning(
         `Run ${recovery.runId}: its queued follow-ups could not be read; keeping it recoverable`,
-        { data: failure },
-      );
+      ).pipe(withLogData(failure), withLogChannel(CHANNEL));
     let queued = true;
     if (provisional) {
       const rows = yield* Effect.result(
         session.readAggregate(aggregateId('run', recovery.runId)),
       );
       if (Result.isFailure(rows)) {
-        warnUnreadable(rows.failure);
+        yield* warnUnreadable(rows.failure);
       } else {
         const folded = foldRunState(null, rows.success);
         if (Result.isSuccess(folded)) {
           queued = (folded.success?.followUps.length ?? 0) > 0;
         } else {
-          warnUnreadable(folded.failure);
+          yield* warnUnreadable(folded.failure);
         }
       }
     }

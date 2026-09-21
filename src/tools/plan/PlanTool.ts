@@ -20,7 +20,7 @@ import { z } from 'zod';
 // Local imports
 import type { WorkPlanState } from '@agent/core/state/AgentWorkspaceState';
 import { ToolCall, type ToolCallShape } from '@agent/runtime/ToolCall';
-import { withLogChannel } from '@logger/effectLog';
+import { withLogChannel, withLogData } from '@logger/effectLog';
 import { createLog } from '@logger/logUtils';
 import type { Goal, Plan, RunId, ToolResult } from '@shared/schemas';
 import { goalElapsedMs, ToolError } from '@shared/schemas';
@@ -290,9 +290,9 @@ const requestApproval = Effect.fn('PlanTool.requestApproval')(function* (
         ? `\nUser feedback: ${feedback}`
         : '\nNo specific feedback was provided.';
 
-      logger.info(
-        'Plan rejected by user',
-        feedback ? { data: feedback } : undefined,
+      yield* Effect.logInfo('Plan rejected by user').pipe(
+        withLogData(feedback),
+        withLogChannel(CHANNEL),
       );
 
       return errorResult(
