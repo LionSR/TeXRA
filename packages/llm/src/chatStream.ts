@@ -1,8 +1,11 @@
 // Third-party imports
 import { Effect } from 'effect';
 
+// Local imports - canonical model errors
+import { ModelError } from './errors.js';
+
 // Local imports - canonical model contract
-import { ModelError, type TurnEvent, type TurnResult } from './turn.js';
+import type { TurnEvent, TurnResult } from './turn.js';
 
 /**
  * The canonical counts a Chat completion receipt reports under the documented

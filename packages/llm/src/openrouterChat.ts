@@ -9,20 +9,9 @@ import { z } from 'zod';
 import { chatDeltaAccumulator, chatUsageCounts } from './chatStream.js';
 import {
   ModelConfigurationSchema,
-  ModelError,
-  authOrRejectionKind,
-  chatToolResultMessages,
-  enrichModelError,
-  hasErrorField,
-  parseInboundToolArguments,
-  parseJsonOrModelError,
-  pullStream,
-  sseEvents,
-  readerAbortSignal,
   ResolvedTurnSchema,
   TurnRequestSchema,
   TurnResultSchema,
-  sameModelOrigin,
   type Model,
   type OpenRouterConfiguration,
   type ResolvedTurn,
@@ -30,6 +19,16 @@ import {
   type TurnResult,
   completedTurn,
 } from './turn.js';
+import { sameModelOrigin } from './protocol.js';
+import { ModelError, enrichModelError, hasErrorField } from './errors.js';
+import { authOrRejectionKind, parseJsonOrModelError } from './errors.js';
+import {
+  chatToolResultMessages,
+  parseInboundToolArguments,
+  pullStream,
+  sseEvents,
+  readerAbortSignal,
+} from './transport.js';
 
 type OpenRouterTurn = Extract<ResolvedTurn, { protocol: 'openrouter-chat' }>;
 type Part = TurnResult['content'][number];

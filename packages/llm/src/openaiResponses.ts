@@ -15,23 +15,13 @@ import { admittedFingerprint, prefixFingerprint } from './prefixFingerprint.js';
 import {
   BackgroundSubmissionSchema,
   CancellationEvidenceSchema,
-  ContinuationSchema,
   InputTokenEstimateSchema,
   ModelConfigurationSchema,
-  ModelError,
-  authOrRejectionKind,
-  enrichModelError,
   FILE_UPLOAD_LIFETIME_SECONDS,
-  ownedAbortSafeRequest,
-  pullStream,
   ObservationPolicySchema,
-  parseInboundToolArguments,
-  parseJsonOrModelError,
-  RemoteOperationSchema,
   ResolvedTurnSchema,
   TurnRequestSchema,
   TurnResultSchema,
-  sameModelOrigin,
   type Model,
   type OpenAIResponsesConfiguration,
   type ResolvedTurn,
@@ -40,10 +30,18 @@ import {
   type TurnResult,
   type BackgroundEvent,
   type BackgroundSubmission,
-  type Continuation,
-  type RemoteOperation,
   completedTurn,
 } from './turn.js';
+import { ContinuationSchema, type Continuation } from './message.js';
+import { sameModelOrigin } from './protocol.js';
+import { ModelError, enrichModelError } from './errors.js';
+import { authOrRejectionKind, parseJsonOrModelError } from './errors.js';
+import { RemoteOperationSchema, type RemoteOperation } from './errors.js';
+import {
+  ownedAbortSafeRequest,
+  parseInboundToolArguments,
+  pullStream,
+} from './transport.js';
 import { filesApiUploads, type UploadCache } from './uploadCache.js';
 import type { ResponseCreateParamsBase } from 'openai/resources/responses/responses';
 

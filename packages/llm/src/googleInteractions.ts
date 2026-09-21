@@ -10,30 +10,29 @@ import {
   BackgroundSubmissionSchema,
   CancellationEvidenceSchema,
   ObservationPolicySchema,
-  RemoteOperationSchema,
-  JsonObjectSchema,
   ModelConfigurationSchema,
-  ModelError,
-  authOrRejectionKind,
-  enrichModelError,
-  ownedAbortSafeRequest,
-  parseInboundToolArguments,
-  parseOutboundToolArguments,
-  pullStream,
-  readerAbortSignal,
   ResolvedTurnSchema,
-  sameModelOrigin,
   TurnRequestSchema,
   TurnResultSchema,
   type GoogleInteractionsConfiguration,
   type Model,
-  type ModelOrigin,
-  type RemoteOperation,
   type ResolvedTurn,
   type TurnEvent,
   type TurnResult,
   completedTurn,
 } from './turn.js';
+import { JsonObjectSchema, sameModelOrigin } from './protocol.js';
+import { ModelError, enrichModelError } from './errors.js';
+import { authOrRejectionKind } from './errors.js';
+import { RemoteOperationSchema, type RemoteOperation } from './errors.js';
+import {
+  ownedAbortSafeRequest,
+  parseInboundToolArguments,
+  parseOutboundToolArguments,
+  pullStream,
+  readerAbortSignal,
+} from './transport.js';
+import type { ModelOrigin } from './protocol.js';
 
 export const GOOGLE_PREFIX_DOMAIN = 'texra-google-interactions-prefix-v1';
 

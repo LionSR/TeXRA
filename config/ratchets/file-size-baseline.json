@@ -56,7 +56,7 @@
     "packages/llm/src/openaiChat.ts": 1630,
     "packages/llm/src/openaiResponses.ts": 2698,
     "packages/llm/src/openrouterChat.ts": 1105,
-    "packages/llm/src/turn.ts": 2063,
+    "packages/llm/src/turn.ts": 1089,
     "src/agent/followUp/ToolUseFollowUpQueueManager.ts": 741,
     "src/agent/implementations/agentCreator/agentCreatorFlow.ts": 532,
     "src/agent/implementations/flows/reflection/output/compileCheck.ts": 562,

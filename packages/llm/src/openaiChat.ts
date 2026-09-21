@@ -9,28 +9,27 @@ import { openaiFailure } from './openaiError.js';
 import {
   InputTokenEstimateSchema,
   ModelConfigurationSchema,
-  ModelError,
-  chatToolResultMessages,
-  enrichModelError,
-  hasErrorField,
-  parseInboundToolArguments,
-  parseJsonOrModelError,
-  pullStream,
-  sseEvents,
-  readerAbortSignal,
   ResolvedTurnSchema,
   TurnRequestSchema,
   TurnResultSchema,
-  sameModelOrigin,
   type ChatConfiguration,
   type Model,
-  type ModelOrigin,
   type ResolvedTurn,
   type TurnEvent,
   type TurnRequest,
   type TurnResult,
   completedTurn,
 } from './turn.js';
+import { sameModelOrigin, type ModelOrigin } from './protocol.js';
+import { ModelError, enrichModelError } from './errors.js';
+import { hasErrorField, parseJsonOrModelError } from './errors.js';
+import {
+  chatToolResultMessages,
+  parseInboundToolArguments,
+  pullStream,
+  sseEvents,
+  readerAbortSignal,
+} from './transport.js';
 
 type ChatTurn = Extract<
   ResolvedTurn,

@@ -2,7 +2,8 @@
 import { createHash } from 'node:crypto';
 
 // Local imports - canonical model contract
-import type { ModelOrigin, ResolvedTurn } from './turn.js';
+import type { ResolvedTurn } from './turn.js';
+import type { ModelOrigin } from './protocol.js';
 
 /** Turn protocols a provider origin can name; an editor binding names none. */
 type OriginProtocol = Exclude<ModelOrigin['protocol'], 'vscode-lm'>;
