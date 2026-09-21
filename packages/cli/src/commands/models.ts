@@ -37,7 +37,10 @@ import type { CliContext } from '../runtime/cliContext';
 
 /**
  * The report every model command gives when its platform cannot come up: one
- * stderr line and `ModelOrNetworkError`.
+ * stderr line and `ModelOrNetworkError`. Each command hands it to
+ * `defineCliCommand` as its `catchExitCode`, so a failure of the process
+ * runtime install — which happens before any program below can fold it —
+ * reads the same way an init failure inside one does.
  */
 function reportModelPlatformFailure(cause: unknown): number {
   writeTextStderr(formatCliModelListError(cause));
@@ -143,6 +146,7 @@ const modelsListCommand = defineCliCommand({
   },
   run: (context, ctx) =>
     listModels(context, { includeUnavailable: ctx.args.all === true }),
+  catchExitCode: reportModelPlatformFailure,
 });
 
 const modelsShowCommand = defineCliCommand({
@@ -156,6 +160,7 @@ const modelsShowCommand = defineCliCommand({
     },
   },
   run: (context, ctx) => showModel(context, ctx.args.id),
+  catchExitCode: reportModelPlatformFailure,
 });
 
 /**
@@ -246,6 +251,7 @@ const modelsEnabledCommand = defineCliCommand({
   },
   args: { ...GLOBAL_ARGS },
   run: listEnabledModels,
+  catchExitCode: reportModelPlatformFailure,
 });
 
 const modelsEnableCommand = defineCliCommand({
@@ -262,6 +268,7 @@ const modelsEnableCommand = defineCliCommand({
     },
   },
   run: (context, ctx) => setModelEnabled(context, ctx.args.id, true),
+  catchExitCode: reportModelPlatformFailure,
 });
 
 const modelsDisableCommand = defineCliCommand({
@@ -278,6 +285,7 @@ const modelsDisableCommand = defineCliCommand({
     },
   },
   run: (context, ctx) => setModelEnabled(context, ctx.args.id, false),
+  catchExitCode: reportModelPlatformFailure,
 });
 
 export const modelsCommand = defineCommand({

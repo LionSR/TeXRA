@@ -60,13 +60,20 @@ interface DefineCliCommandOptions<A extends ArgsDef, E> {
    */
   readonly install?: 'noPlatform';
   /**
-   * When set, the handler is wrapped in a try/catch that writes the error
-   * message to stderr and assigns this exit code — replacing the per-command
+   * How this command reports a failure of its own — the program's, and the
+   * runtime install that precedes it. A number writes the error message to
+   * stderr and becomes the exit code, replacing the per-command
    * `catch (error) { writeTextStderr(toErrorMessage(error)); setExitCode(...) }`
-   * boilerplate. Omit it for commands that rely on `runCli`'s top-level
-   * `CliUsageError` handling instead.
+   * boilerplate. A function reports the failure itself and returns the code,
+   * which is what a command whose failures have their own wording needs: the
+   * `models` group hands its `reportModelPlatformFailure` here, so an install
+   * that cannot open the storage root still reads as "could not list models"
+   * rather than as a TeXRA crash.
+   *
+   * Omit it for commands that rely on `runCli`'s top-level `CliUsageError`
+   * handling instead.
    */
-  readonly catchExitCode?: number;
+  readonly catchExitCode?: number | ((error: unknown) => number);
 }
 
 /**
@@ -124,6 +131,10 @@ export function defineCliCommand<const A extends ArgsDef, E>(
       try {
         setExitCode(await exitCode());
       } catch (error) {
+        if (typeof options.catchExitCode === 'function') {
+          setExitCode(options.catchExitCode(error));
+          return;
+        }
         writeErrorStderr(error);
         setExitCode(options.catchExitCode);
       }
