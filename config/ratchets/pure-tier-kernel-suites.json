@@ -1,19 +1,5 @@
 {
-  "semantics": "Suites under a pure-tier directory (see PURE_DIRS in vitest.config.mjs) whose source shows no mock or host import, but which the pure project cannot run. `hostReadByModuleUnderTest`: the production module under test reads the host itself (platform(), workspace roots, the process runtime, the auth program edge) \u2014 each fails alone with no fake host installed, deterministically. `shareTerminalState`: Ink renderer suites that leak process terminal state into each other under a shared module registry. Both lists are shrink-only: a module that takes its host as a layer, or a suite that stops sharing process state, leaves the list and its suite runs in `pure` on its own. A listed file that no longer exists fails config load.",
-  "hostReadByModuleUnderTest": [
-    "src/test-kernel/agent/followUp/ToolUseDispatchInterruption.vitest.ts",
-    "src/test-kernel/agent/prompt/PromptBuilder.vitest.ts",
-    "src/test-kernel/auth/SessionAccess.vitest.ts",
-    "src/test-kernel/auth/SupabaseSessionLifecycle.vitest.ts",
-    "src/test-kernel/auth/XaiSessionCoordinator.vitest.ts",
-    "src/test-kernel/cli/Doctor.vitest.ts",
-    "src/test-kernel/cli/LogSinks.vitest.ts",
-    "src/test-kernel/controllers/ProgressWorkflowFileActionsController.vitest.ts",
-    "src/test-kernel/model/KimiCodeModels.vitest.ts",
-    "src/test-kernel/replacement/ReplacementRules.vitest.ts",
-    "src/test-kernel/tools/LeanInspectTool.vitest.ts",
-    "src/test-kernel/tools/setup/InvokeCommandTool.vitest.ts"
-  ],
+  "semantics": "Ink renderer suites under a pure-tier directory (see PURE_DIRS in vitest.config.mjs) whose source shows no mock or host import, but which the pure project cannot run because they leak process terminal state into each other under a shared module registry. Found by file-order shuffles, not by a source scan. Shrink-only: a suite that stops sharing process state leaves the list and runs in `pure` on its own. A listed file that no longer exists fails config load, and a listed file the source scan already sends to `kernel` does not belong here. The former `hostReadByModuleUnderTest` list is gone — a module that reads the host itself is a production defect to fix, not an entry to add here.",
   "shareTerminalState": [
     "src/test-kernel/cli/StaticBandResize.vitest.ts",
     "src/test-kernel/cli/ToolRenderers.vitest.ts"

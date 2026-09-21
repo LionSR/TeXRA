@@ -75,22 +75,21 @@ const REACHES_A_HOST = [
   /from\s+['"](?:lit|lit-html|lit\/|@lit\/|jsdom)/,
   /@vitest-environment\s+jsdom|new JSDOM\s*\(/,
   /from\s+['"]@platform\//,
-  /from\s+['"]@test\/support\/(?:setupPlatform|setupFakePlatform|FakePlatform|FakeHosts|tempDirPlatform|sessionTestUtils|defaultSessionTestSetup|sessionGraphTestSetup|testProcessRuntime|testWorkspaceRoots)['"]/,
+  /from\s+['"]@test\/support\/(?:setupPlatform|setupFakePlatform|FakePlatform|FakeHosts|tempDirPlatform|nativeToolTestLayer|sessionTestUtils|defaultSessionTestSetup|sessionGraphTestSetup|testProcessRuntime|testWorkspaceRoots)['"]/,
   /import\s+['"]@test\/support\/(?:defaultSessionTestSetup|sessionGraphTestSetup)['"]/,
 ];
-// What the scan cannot see: a module under test that reads the host itself,
-// or a pair of suites sharing process terminal state. Those are found by
-// running each suite alone with no host (a deterministic fail) and by file-
-// order shuffles, and kept by name in the ratchet baseline — shrink-only, a
-// stale entry fails config load.
+// What the scan cannot see: a pair of suites sharing process terminal state.
+// Those are found by file-order shuffles and kept by name in the ratchet
+// baseline — shrink-only, a stale entry fails config load. The companion
+// `hostReadByModuleUnderTest` list is gone: every module those suites drove
+// now takes its host as a layer or a value, and the one suite left reached
+// the harness's installed host through `nativeToolTestLayer`, which the scan
+// above now names like the other support modules that read one.
 const KERNEL_BASELINE = 'config/ratchets/pure-tier-kernel-suites.json';
 const kernelBaseline = JSON.parse(
   readFileSync(resolve(rootDir, KERNEL_BASELINE), 'utf8'),
 );
-const keptInKernel = new Set([
-  ...kernelBaseline.hostReadByModuleUnderTest,
-  ...kernelBaseline.shareTerminalState,
-]);
+const keptInKernel = new Set(kernelBaseline.shareTerminalState);
 const stale = [...keptInKernel].filter(
   (file) => !existsSync(resolve(rootDir, file)),
 );

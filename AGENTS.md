@@ -140,12 +140,14 @@ by what it reaches, not by how many tests it has:
 
 Membership is computed from the suite's source, not declared. A suite under a
 `pure` directory is `pure` unless it calls `vi.mock` / `vi.doMock` on a
-repository module, imports `@platform/*` or a support module that installs a
-host, or brings its own DOM (`lit`, `jsdom`) — then it is `kernel`. What a
-source scan cannot see — a module under test that reads `platform()` or the
-workspace roots itself, a pair of suites sharing terminal state — is found by
-running the suite alone with no host and kept by name in
-`config/ratchets/pure-tier-kernel-suites.json`, shrink-only. So the practical
+repository module, imports `@platform/*` or a support module that installs or
+reads a host, or brings its own DOM (`lit`, `jsdom`) — then it is `kernel`. What
+a source scan cannot see — a pair of suites sharing terminal state — is found by
+file-order shuffles and kept by name in
+`config/ratchets/pure-tier-kernel-suites.json`, shrink-only. A module under test
+that reads `platform()` or the workspace roots itself is not an entry there: it
+is a production defect, and the fix is to make it take its host as a layer or a
+value. So the practical
 rule for a new suite: test the module directly, provide dependencies as values
 or layers, and do not mock repository modules. A `vi.mock` is what moves your
 suite to the slow tier; removing it moves it back. The tier is not a target to
