@@ -388,29 +388,31 @@ describe('CLI multi-agent run command', () => {
     });
   });
 
-  it('marks run-plan resolution when authenticated gaps triggered a remote load', async () => {
-    mocks.teamPlanHasGaps.mockReturnValueOnce(true);
-    authProbes.push(true);
+  it.effect(
+    'marks run-plan resolution when authenticated gaps triggered a remote load',
+    () =>
+      Effect.gen(function* () {
+        mocks.teamPlanHasGaps.mockReturnValueOnce(true);
+        authProbes.push(true);
 
-    const result = await testRuntime().runPromise(
-      loadCliMultiAgentRunPlan(
-        { preset: 'mathematician' },
-        installedHost().roots.workspaceState,
-      ),
-    );
+        const result = yield* loadCliMultiAgentRunPlan(
+          { preset: 'mathematician' },
+          installedHost().roots.workspaceState,
+        ).pipe(Effect.provide(fakeProcessServices()));
 
-    expect(result.remoteCatalogRefreshAttempted).toBe(true);
-    expect(result.plan.rootAgent?.name).toBe('orchestrator');
-    expect(agentCatalogMock.loadAgents).toHaveBeenNthCalledWith(1, {
-      includeRemote: false,
-    });
-    // The remote-inclusive reload goes through `refresh()`, not a second
-    // `loadAgents()`.
-    expect(agentCatalogMock.refresh).toHaveBeenCalledWith({
-      includeRemote: true,
-    });
-    expect(mocks.planTeamRun).toHaveBeenCalledTimes(2);
-  });
+        expect(result.remoteCatalogRefreshAttempted).toBe(true);
+        expect(result.plan.rootAgent?.name).toBe('orchestrator');
+        expect(agentCatalogMock.loadAgents).toHaveBeenNthCalledWith(1, {
+          includeRemote: false,
+        });
+        // The remote-inclusive reload goes through `refresh()`, not a second
+        // `loadAgents()`.
+        expect(agentCatalogMock.refresh).toHaveBeenCalledWith({
+          includeRemote: true,
+        });
+        expect(mocks.planTeamRun).toHaveBeenCalledTimes(2);
+      }),
+  );
 
   it('reports resolved remote agent loads without implying final missing agents', async () => {
     const remoteLoadMessage =

@@ -1,9 +1,13 @@
 // Third-party imports
-import { describe, expect, it } from 'vitest';
+import { it } from '@effect/vitest';
+import { Effect } from 'effect';
+import { describe, expect } from 'vitest';
 
 // Local imports
-import { setupPlatform } from '@test/support/setupPlatform';
-import { testRuntime } from '@test/support/testProcessRuntime';
+import {
+  setupPlatform,
+  fakeProcessServices,
+} from '@test/support/setupPlatform';
 import { fakePath } from '@test/support/FakePlatform';
 import { getListOfFiles, getPromptFileName } from '@utils/prompt';
 import { getXmlFormatFromReadableFiles } from '@utils/files/varsUtils';
@@ -23,33 +27,35 @@ describe('workflow prompt file names', () => {
 
   const root = fakePath('workspace');
 
-  it('uses workspace-relative names and external basenames in prompt variables', async () => {
-    expect(
-      getPromptFileName(root, fakePath('workspace/chapter/main.tex')),
-    ).toBe('chapter/main.tex');
-    expect(getPromptFileName(root, fakePath('outside/absolute.tex'))).toBe(
-      'absolute.tex',
-    );
-    expect(getPromptFileName(root, 'local.tex')).toBe('local.tex');
+  it.effect(
+    'uses workspace-relative names and external basenames in prompt variables',
+    () =>
+      Effect.gen(function* () {
+        expect(
+          getPromptFileName(root, fakePath('workspace/chapter/main.tex')),
+        ).toBe('chapter/main.tex');
+        expect(getPromptFileName(root, fakePath('outside/absolute.tex'))).toBe(
+          'absolute.tex',
+        );
+        expect(getPromptFileName(root, 'local.tex')).toBe('local.tex');
 
-    expect(
-      getListOfFiles(root, [
-        fakePath('workspace/chapter/main.tex'),
-        fakePath('outside/absolute.tex'),
-      ]),
-    ).toBe('chapter/main.tex, absolute.tex');
+        expect(
+          getListOfFiles(root, [
+            fakePath('workspace/chapter/main.tex'),
+            fakePath('outside/absolute.tex'),
+          ]),
+        ).toBe('chapter/main.tex, absolute.tex');
 
-    const { xml } = await testRuntime().runPromise(
-      getXmlFormatFromReadableFiles(root, [
-        fakePath('workspace/chapter/main.tex'),
-        fakePath('outside/absolute.tex'),
-      ]),
-    );
+        const { xml } = yield* getXmlFormatFromReadableFiles(root, [
+          fakePath('workspace/chapter/main.tex'),
+          fakePath('outside/absolute.tex'),
+        ]);
 
-    expect(xml).toContain('<document name="chapter/main.tex">');
-    expect(xml).toContain('<document name="absolute.tex">');
-    expect(xml).not.toContain(`name="${fakePath('outside/absolute.tex')}"`);
-  });
+        expect(xml).toContain('<document name="chapter/main.tex">');
+        expect(xml).toContain('<document name="absolute.tex">');
+        expect(xml).not.toContain(`name="${fakePath('outside/absolute.tex')}"`);
+      }).pipe(Effect.provide(fakeProcessServices())),
+  );
 
   it('keeps extracted outputs inside the round directory for absolute document names', () => {
     expect(getExtractedDocOutputFileName('chapter/main.tex', 'r0')).toBe(

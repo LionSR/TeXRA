@@ -3,8 +3,9 @@ import { strict as assert } from 'node:assert';
 import * as path from 'node:path';
 
 // Third-party imports
+import { it } from '@effect/vitest';
 import { Effect, FileSystem, Layer } from 'effect';
-import { describe, it } from 'vitest';
+import { describe } from 'vitest';
 
 // Local imports
 import { AgentDirectoryService, agentSourceDirectory } from '@agent/index';
@@ -76,20 +77,27 @@ describe('AgentDirectoryService', () => {
     );
   }
 
-  it('resolves built-in directories inside the packaged resources', async () => {
-    const { service } = createService();
+  it.effect('resolves built-in directories inside the packaged resources', () =>
+    Effect.gen(function* () {
+      const { service } = createService();
 
-    assert.equal(
-      await Effect.runPromise(service.builtIn()),
-      path.join(RESOURCES_PATH, 'agents'),
-    );
-    assert.equal(
-      await Effect.runPromise(service.builtInToolUse()),
-      path.join(RESOURCES_PATH, 'tool_use_agents'),
-    );
-    // Packaged content is read in place: nothing is created under storage.
-    assert.equal(await pathExists(path.join(storageBase(), 'agents')), false);
-  });
+      assert.equal(
+        yield* service.builtIn(),
+        path.join(RESOURCES_PATH, 'agents'),
+      );
+      assert.equal(
+        yield* service.builtInToolUse(),
+        path.join(RESOURCES_PATH, 'tool_use_agents'),
+      );
+      // Packaged content is read in place: nothing is created under storage.
+      assert.equal(
+        yield* Effect.promise(() =>
+          pathExists(path.join(storageBase(), 'agents')),
+        ),
+        false,
+      );
+    }),
+  );
 
   it('uses the default custom directory when no custom path is configured', async () => {
     const { service } = createService('   ');

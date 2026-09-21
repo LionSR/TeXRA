@@ -312,35 +312,36 @@ function stopRegistry(
 }
 
 describe('runRegistry', () => {
-  it('retains and detaches a parent whose child is still activating', () => {
-    const { registry } = createRegistry();
-    const runId = generateRunId();
-    const parentRunId = generateRunId();
-    let detached = false;
+  it.effect(
+    'retains and detaches a parent whose child is still activating',
+    () =>
+      Effect.gen(function* () {
+        const { registry } = createRegistry();
+        yield* Effect.addFinalizer(() => Effect.sync(() => registry.dispose()));
+        const runId = generateRunId();
+        const parentRunId = generateRunId();
+        let detached = false;
 
-    try {
-      registry.reserveChildActivation({
-        runId,
-        parentRunId,
-        interrupt: vi.fn(),
-        detach: () => {
-          detached = true;
-        },
-        isDetached: () => detached,
-      });
+        registry.reserveChildActivation({
+          runId,
+          parentRunId,
+          interrupt: vi.fn(),
+          detach: () => {
+            detached = true;
+          },
+          isDetached: () => detached,
+        });
 
-      expect(registry.hasActiveChildren(parentRunId)).toBe(true);
-      Effect.runSync(registry.detachActiveChildren(parentRunId));
-      expect(registry.hasActiveChildren(parentRunId)).toBe(false);
+        expect(registry.hasActiveChildren(parentRunId)).toBe(true);
+        yield* registry.detachActiveChildren(parentRunId);
+        expect(registry.hasActiveChildren(parentRunId)).toBe(false);
 
-      const handle = createHandle(runId, parentRunId);
-      registry.track(handle);
-      expect(handle.parent).toBeNull();
-      expect(handle.deliveryTarget).toBeUndefined();
-    } finally {
-      registry.dispose();
-    }
-  });
+        const handle = createHandle(runId, parentRunId);
+        registry.track(handle);
+        expect(handle.parent).toBeNull();
+        expect(handle.deliveryTarget).toBeUndefined();
+      }),
+  );
 
   // The drain's re-check arm, which is the whole of `awaitDrained` that a
   // bare wait loop lacks: `waitForAnyChange` registers its listeners a step
@@ -1358,19 +1359,20 @@ describe('runRegistry', () => {
     }
   });
 
-  it('projects detach updates from session events', () => {
-    const { events, registry } = createRegistry();
-    const recorded = recordSessionEvents(events);
-    const parentRunId = generateRunId();
-    const runId = generateRunId();
+  it.effect('projects detach updates from session events', () =>
+    Effect.gen(function* () {
+      const { events, registry } = createRegistry();
+      yield* Effect.addFinalizer(() => Effect.sync(() => registry.dispose()));
+      const recorded = recordSessionEvents(events);
+      const parentRunId = generateRunId();
+      const runId = generateRunId();
 
-    try {
       const handle = createHandle(runId, parentRunId);
 
       registry.track(handle);
       expect(handle.deliveryTarget).toBe(parentRunId);
       const sinceTrack = recordSessionEvents(events);
-      Effect.runSync(registry.detachActiveChildren(parentRunId));
+      yield* registry.detachActiveChildren(parentRunId);
       expect(handle.deliveryTarget).toBeUndefined();
 
       expect(sinceTrack.events.map((event) => event.type)).toEqual([
@@ -1382,22 +1384,21 @@ describe('runRegistry', () => {
         aggregateId: qualifyAggregateId('run', runId),
       });
       expect(registry.hasActiveChildren(parentRunId)).toBe(false);
-    } finally {
-      registry.dispose();
-    }
-  });
+    }),
+  );
 
-  it('keeps a handle replacing a detached registration a root run', () => {
-    const { registry } = createRegistry();
-    const parentRunId = generateRunId();
-    const runId = generateRunId();
+  it.effect('keeps a handle replacing a detached registration a root run', () =>
+    Effect.gen(function* () {
+      const { registry } = createRegistry();
+      yield* Effect.addFinalizer(() => Effect.sync(() => registry.dispose()));
+      const parentRunId = generateRunId();
+      const runId = generateRunId();
 
-    try {
       // The provisional registration a launch makes before it prepares, and
       // the parent's detaching stop landing while that preparation runs.
       const provisional = createHandle(runId, parentRunId);
       registry.track(provisional);
-      Effect.runSync(registry.detachActiveChildren(parentRunId));
+      yield* registry.detachActiveChildren(parentRunId);
 
       // The lifecycle's handle, built from the edge the launch started with.
       const lifecycle = createHandle(runId, parentRunId);
@@ -1405,32 +1406,29 @@ describe('runRegistry', () => {
 
       expect(lifecycle.deliveryTarget).toBeUndefined();
       expect(registry.hasActiveChildren(parentRunId)).toBe(false);
-    } finally {
-      registry.dispose();
-    }
-  });
+    }),
+  );
 
-  it('preserves child approvals when detaching it from its parent', () => {
-    const approvals = createSessionApprovals();
-    const { registry } = createRegistry({ approvals });
-    const parentRunId = generateRunId();
-    const childRunId = generateRunId();
-    const handle = createHandle(childRunId, parentRunId);
+  it.effect('preserves child approvals when detaching it from its parent', () =>
+    Effect.gen(function* () {
+      const approvals = createSessionApprovals();
+      const { registry } = createRegistry({ approvals });
+      yield* Effect.addFinalizer(() => Effect.sync(() => registry.dispose()));
+      const parentRunId = generateRunId();
+      const childRunId = generateRunId();
+      const handle = createHandle(childRunId, parentRunId);
 
-    try {
       approvals.toolEdit.bypass.setBypass(parentRunId, true);
       approvals.registerRunParent(childRunId, parentRunId);
       registry.track(handle);
 
-      Effect.runSync(registry.detachActiveChildren(parentRunId));
+      yield* registry.detachActiveChildren(parentRunId);
       approvals.toolEdit.bypass.setBypass(parentRunId, false);
 
       expect(approvals.toolEdit.bypass.isBypassed(childRunId)).toBe(true);
       expect(handle.deliveryTarget).toBeUndefined();
-    } finally {
-      registry.dispose();
-    }
-  });
+    }),
+  );
 });
 
 it.effect(

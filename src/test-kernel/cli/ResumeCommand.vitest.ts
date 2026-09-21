@@ -1,9 +1,10 @@
 import '@test/support/sessionGraphTestSetup';
 import * as path from 'node:path';
 
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, vi } from 'vitest';
 
 import {
   AgentConfigSchema,
@@ -375,23 +376,27 @@ describe('runResumeCommand', () => {
     expect(mocks.runChat).not.toHaveBeenCalled();
   });
 
-  it('reports a live run instead of failing silently', async () => {
-    await Effect.runPromise(
-      seededSession.acquireClaims(aggregateId('run', RUN_ID)),
-    );
-    try {
-      await expect(run(cliContext())).resolves.toBe(2);
+  it.effect('reports a live run instead of failing silently', () =>
+    Effect.gen(function* () {
+      yield* seededSession.acquireClaims(aggregateId('run', RUN_ID));
+      // The claim is handed back whatever the resume probe does below: the
+      // scope close is the `finally` the async body used.
+      yield* Effect.addFinalizer(() =>
+        seededSession
+          .releaseClaims(aggregateId('run', RUN_ID))
+          .pipe(Effect.orDie),
+      );
+
+      // `runResumeCommand` is the CLI's Promise-facing entry; the test awaits
+      // its facade the way the process entry does.
+      expect(yield* Effect.promise(() => run(cliContext()))).toBe(2);
 
       expect(mocks.writeTextStderr).toHaveBeenCalledWith(
         `Run ${RUN_ID} is already running in this process.`,
       );
       expect(mocks.retrieveSessionResumeData).not.toHaveBeenCalled();
-    } finally {
-      await Effect.runPromise(
-        seededSession.releaseClaims(aggregateId('run', RUN_ID)),
-      );
-    }
-  });
+    }),
+  );
 
   it('refuses a run another live TeXRA process holds, naming its pid', async () => {
     vi.spyOn(seededSession, 'claimOwner').mockReturnValue(

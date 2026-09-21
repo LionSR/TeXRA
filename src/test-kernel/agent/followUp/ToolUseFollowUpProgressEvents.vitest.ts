@@ -1,6 +1,7 @@
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, vi } from 'vitest';
 
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import { RunInput } from '@agent/followUp/RunInput';
@@ -91,35 +92,37 @@ describe('tool-use follow-up progress events', () => {
     trackedRuns.push({ session: owner, runId });
   }
 
-  it('publishes sent follow-up events through the owning session fact hub', async () => {
-    const run = createRecordingHost();
-    const session = trackSession();
-    publishTestRunStart(session, runId);
-    await Effect.runPromise(session.settlePublications());
-    const sent = recordFollowUpsSent(session);
-    const lease = session.followUps.claimLive(runId, 'flow')!;
+  it.effect(
+    'publishes sent follow-up events through the owning session fact hub',
+    () =>
+      Effect.gen(function* () {
+        const run = createRecordingHost();
+        const session = trackSession();
+        publishTestRunStart(session, runId);
+        yield* session.settlePublications();
+        const sent = recordFollowUpsSent(session);
+        const lease = session.followUps.claimLive(runId, 'flow')!;
 
-    trackToolUseFlow({ session });
+        trackToolUseFlow({ session });
 
-    const result = await Effect.runPromise(
-      submitFollowUp(runId, 'please continue', {
-        session,
-      }).pipe(Effect.provideService(AgentResume, fakeHostAgentResume)),
-    );
+        const result = yield* submitFollowUp(runId, 'please continue', {
+          session,
+        }).pipe(Effect.provideService(AgentResume, fakeHostAgentResume));
 
-    expect(result).toEqual({ status: 'sent' });
-    const input = session.followUps.attachInput(
-      runId,
-      await Effect.runPromise(RunInput.make),
-      lease,
-    )!;
-    input.seed([]);
-    expect(await Effect.runPromise(input.poll)).toMatchObject({
-      followUps: [{ content: { text: 'please continue', origin: 'user' } }],
-    });
-    expect(sent.sent).toEqual([runId]);
-    expect(run.events).toEqual([]);
-  });
+        expect(result).toEqual({ status: 'sent' });
+        const input = session.followUps.attachInput(
+          runId,
+          yield* RunInput.make,
+          lease,
+        )!;
+        input.seed([]);
+        expect(yield* input.poll).toMatchObject({
+          followUps: [{ content: { text: 'please continue', origin: 'user' } }],
+        });
+        expect(sent.sent).toEqual([runId]);
+        expect(run.events).toEqual([]);
+      }),
+  );
 
   it('breaks a blocking wait when the owning session emits followUpSent', () => {
     const session = trackSession();
@@ -136,53 +139,62 @@ describe('tool-use follow-up progress events', () => {
     expect(onFollowUp).toHaveBeenCalledOnce();
   });
 
-  it('does not append through stale active contexts after final status', async () => {
-    await seedTerminalRun(testDefaultSession(), runId, RUN_OUTCOME.COMPLETED);
-    // A finished run's driver gave its claim back with its last drain; these
-    // rows stand in for that driver, so the claim goes back here too.
-    await Effect.runPromise(
-      testDefaultSession().releaseClaims(qualifyAggregateId('run', runId)),
-    );
-    trackToolUseFlow();
+  it.effect(
+    'does not append through stale active contexts after final status',
+    () =>
+      Effect.gen(function* () {
+        yield* Effect.promise(() =>
+          seedTerminalRun(testDefaultSession(), runId, RUN_OUTCOME.COMPLETED),
+        );
+        // A finished run's driver gave its claim back with its last drain; these
+        // rows stand in for that driver, so the claim goes back here too.
+        yield* testDefaultSession().releaseClaims(
+          qualifyAggregateId('run', runId),
+        );
+        trackToolUseFlow();
 
-    const result = await Effect.runPromise(
-      submitFollowUp(runId, 'late follow-up', {
-        session: testDefaultSession(),
-      }).pipe(Effect.provideService(AgentResume, fakeHostAgentResume)),
-    );
-
-    // The run's own terminal row is the refusal: it finished.
-    expect(result).toEqual({ status: 'failed', reason: 'finished' });
-    expect(
-      await Effect.runPromise(queuedFollowUps(testDefaultSession(), runId)),
-    ).toEqual([]);
-  });
-
-  it('queues follow-ups for resuming runs through registry admission', async () => {
-    const resumingRunId = 'fa0002' as RunId;
-
-    // A second activation is the resume the registry admits a follow-up for.
-    await seedActiveRun(testDefaultSession(), resumingRunId, {
-      resuming: true,
-    });
-
-    try {
-      const result = await Effect.runPromise(
-        submitFollowUp(resumingRunId, 'queued while resuming', {
+        const result = yield* submitFollowUp(runId, 'late follow-up', {
           session: testDefaultSession(),
-        }).pipe(Effect.provideService(AgentResume, fakeHostAgentResume)),
-      );
+        }).pipe(Effect.provideService(AgentResume, fakeHostAgentResume));
 
-      // The fake platform's resume port refuses, so the input stays queued
-      // behind a failed wake.
-      expect(result).toEqual({ status: 'queued', wake: 'failed' });
-      expect(
-        await Effect.runPromise(
-          queuedFollowUps(testDefaultSession(), resumingRunId),
-        ),
-      ).toMatchObject([{ text: 'queued while resuming' }]);
-    } finally {
-      testDefaultSession().followUps.terminalize(resumingRunId);
-    }
-  });
+        // The run's own terminal row is the refusal: it finished.
+        expect(result).toEqual({ status: 'failed', reason: 'finished' });
+        expect(yield* queuedFollowUps(testDefaultSession(), runId)).toEqual([]);
+      }),
+  );
+
+  it.effect(
+    'queues follow-ups for resuming runs through registry admission',
+    () =>
+      Effect.gen(function* () {
+        const resumingRunId = 'fa0002' as RunId;
+
+        // A second activation is the resume the registry admits a follow-up for.
+        yield* Effect.promise(() =>
+          seedActiveRun(testDefaultSession(), resumingRunId, {
+            resuming: true,
+          }),
+        );
+        yield* Effect.addFinalizer(() =>
+          Effect.sync(() =>
+            testDefaultSession().followUps.terminalize(resumingRunId),
+          ),
+        );
+
+        const result = yield* submitFollowUp(
+          resumingRunId,
+          'queued while resuming',
+          {
+            session: testDefaultSession(),
+          },
+        ).pipe(Effect.provideService(AgentResume, fakeHostAgentResume));
+
+        // The fake platform's resume port refuses, so the input stays queued
+        // behind a failed wake.
+        expect(result).toEqual({ status: 'queued', wake: 'failed' });
+        expect(
+          yield* queuedFollowUps(testDefaultSession(), resumingRunId),
+        ).toMatchObject([{ text: 'queued while resuming' }]);
+      }),
+  );
 });

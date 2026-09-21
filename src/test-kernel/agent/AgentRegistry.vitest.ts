@@ -152,49 +152,53 @@ describe('agent registry', () => {
     await Effect.runPromise(onGlobalStorage(refresh({ includeRemote: false })));
   });
 
-  it('skips root registration when called before agent directory initialization', async () => {
-    await expect(
-      Effect.runPromise(
-        onGlobalStorage(
-          registerAgentDirectoryRoots({
-            extensionPath,
-          } as vscode.ExtensionContext),
-        ),
-      ),
-    ).resolves.toBeUndefined();
+  it.effect(
+    'skips root registration when called before agent directory initialization',
+    () =>
+      Effect.gen(function* () {
+        expect(
+          yield* onGlobalStorage(
+            registerAgentDirectoryRoots({
+              extensionPath,
+            } as vscode.ExtensionContext),
+          ),
+        ).toBeUndefined();
 
-    expect(registerExternalRoot).toHaveBeenCalledTimes(1);
-    expect(registerExternalRoot).toHaveBeenCalledWith(
-      resolve(resourcesPath, 'docs', 'agent-creation'),
-      expect.objectContaining({ kind: 'agentDocs', writable: false }),
-    );
-  });
+        expect(registerExternalRoot).toHaveBeenCalledTimes(1);
+        expect(registerExternalRoot).toHaveBeenCalledWith(
+          resolve(resourcesPath, 'docs', 'agent-creation'),
+          expect.objectContaining({ kind: 'agentDocs', writable: false }),
+        );
+      }),
+  );
 
-  it('registers packaged roots and loads the local catalog in startup order', async () => {
-    agentDirectories.initialize(globalState, resourcesPath, testRuntime());
+  it.effect(
+    'registers packaged roots and loads the local catalog in startup order',
+    () =>
+      Effect.gen(function* () {
+        agentDirectories.initialize(globalState, resourcesPath, testRuntime());
 
-    await expect(
-      Effect.runPromise(
-        onGlobalStorage(
-          registerAgentDirectoryRoots({
-            extensionPath,
-          } as vscode.ExtensionContext),
-        ),
-      ),
-    ).resolves.toBeUndefined();
-    await expect(
-      Effect.runPromise(onGlobalStorage(loadAgents({ includeRemote: false }))),
-    ).resolves.toBeUndefined();
+        expect(
+          yield* onGlobalStorage(
+            registerAgentDirectoryRoots({
+              extensionPath,
+            } as vscode.ExtensionContext),
+          ),
+        ).toBeUndefined();
+        expect(
+          yield* onGlobalStorage(loadAgents({ includeRemote: false })),
+        ).toBeUndefined();
 
-    expect(registerExternalRoot).toHaveBeenCalledWith(
-      resolve(resourcesPath, 'agents'),
-      expect.objectContaining({ kind: 'builtInWorkflow', writable: false }),
-    );
-    expect(registerExternalRoot).toHaveBeenCalledWith(
-      resolve(resourcesPath, 'tool_use_agents'),
-      expect.objectContaining({ kind: 'builtInToolUse', writable: false }),
-    );
-  });
+        expect(registerExternalRoot).toHaveBeenCalledWith(
+          resolve(resourcesPath, 'agents'),
+          expect.objectContaining({ kind: 'builtInWorkflow', writable: false }),
+        );
+        expect(registerExternalRoot).toHaveBeenCalledWith(
+          resolve(resourcesPath, 'tool_use_agents'),
+          expect.objectContaining({ kind: 'builtInToolUse', writable: false }),
+        );
+      }),
+  );
 
   it('treats lookup category as priority, not a filter', () => {
     const workflow = getAgent('builtInWorkflow:polish', AgentCategory.ToolUse);
@@ -435,14 +439,14 @@ describe('agent registry', () => {
           ),
       });
 
-      try {
-        const failure = yield* Effect.flip(onGlobalStorage(loadAgents()));
-        expect(String(failure)).toContain('refresh failed');
+      yield* Effect.addFinalizer(() =>
+        Effect.sync(() => useAgentDirectories()),
+      );
 
-        expect(getAgent('assistant')?.name).toBe('assistant');
-      } finally {
-        useAgentDirectories();
-      }
+      const failure = yield* Effect.flip(onGlobalStorage(loadAgents()));
+      expect(String(failure)).toContain('refresh failed');
+
+      expect(getAgent('assistant')?.name).toBe('assistant');
     }),
   );
 

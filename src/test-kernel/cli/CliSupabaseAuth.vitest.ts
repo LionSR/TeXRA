@@ -5,7 +5,10 @@ import { beforeEach, describe, expect, vi } from 'vitest';
 import { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
 
 // Local imports
-import { FakeSecrets } from '@test/support/FakePlatform';
+import {
+  createFakeWorkspaceRoots,
+  FakeSecrets,
+} from '@test/support/FakePlatform';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import {
   globalStorageFsTestLayer,
@@ -282,16 +285,27 @@ describe('CLI Supabase auth', () => {
       }),
   );
 
-  it('removes cached remote agents after sign-out', async () => {
-    const { runtime, signOutCliSupabase } = await loadSupabaseAuth();
+  it.effect('removes cached remote agents after sign-out', () =>
+    Effect.gen(function* () {
+      const { signOutCliSupabase } = yield* Effect.promise(() =>
+        loadSupabaseAuth(),
+      );
+      // The sign-out program's type carries the catalog invalidation's fs
+      // services; the mocked invalidation never touches them, so the test
+      // layers stand in for the composition root's.
+      const { globalStorage } = createFakeWorkspaceRoots();
 
-    await runtime.runPromise(signOutCliSupabase());
+      yield* signOutCliSupabase().pipe(
+        Effect.provide(globalStorageFsTestLayer(globalStorage)),
+        Effect.provide(nodePlatformLayer),
+      );
 
-    expect(mocks.authCoordinator.clearSession).toHaveBeenCalledOnce();
-    expect(mocks.invalidateRemoteAgentsAfterSignOut).toHaveBeenCalledOnce();
-  });
+      expect(mocks.authCoordinator.clearSession).toHaveBeenCalledOnce();
+      expect(mocks.invalidateRemoteAgentsAfterSignOut).toHaveBeenCalledOnce();
+    }),
+  );
 
-  it.each([
+  it.effect.each([
     {
       name: 'reports a service outage instead of a signed-out session',
       sessionState: 'transient',
@@ -300,40 +314,50 @@ describe('CLI Supabase auth', () => {
       name: 'reports a rejected refresh credential as signed out',
       sessionState: 'invalid',
     },
-  ])('$name', async ({ sessionState }) => {
-    mocks.authCoordinator.getStoredSessionState.mockReturnValue(
-      Effect.succeed(sessionState),
-    );
-    const { getCliAuthProfile } = await loadSupabaseAuth();
+  ])('$name', ({ sessionState }) =>
+    Effect.gen(function* () {
+      mocks.authCoordinator.getStoredSessionState.mockReturnValue(
+        Effect.succeed(sessionState),
+      );
+      const { getCliAuthProfile } = yield* Effect.promise(() =>
+        loadSupabaseAuth(),
+      );
 
-    await expect(Effect.runPromise(getCliAuthProfile())).resolves.toEqual({
-      authenticated: false,
-      sessionState,
-    });
-  });
+      expect(yield* getCliAuthProfile()).toEqual({
+        authenticated: false,
+        sessionState,
+      });
+    }),
+  );
 
-  it('completes sign-out when the local catalog rebuild fails', async () => {
-    mocks.invalidateRemoteAgentsAfterSignOut.mockReturnValueOnce(
-      Effect.fail(new Error('local rebuild failed')),
-    );
-    const warn = vi.fn();
-    const { initializeCliSupabaseAuth, runtime, signOutCliSupabase } =
-      await loadSupabaseAuth();
-    initializeCliSupabaseAuth(cliSecrets, {
-      debug: vi.fn(),
-      info: vi.fn(),
-      warn,
-      error: vi.fn(),
-    });
+  it.effect('completes sign-out when the local catalog rebuild fails', () =>
+    Effect.gen(function* () {
+      mocks.invalidateRemoteAgentsAfterSignOut.mockReturnValueOnce(
+        Effect.fail(new Error('local rebuild failed')),
+      );
+      const warn = vi.fn();
+      const { initializeCliSupabaseAuth, signOutCliSupabase } =
+        yield* Effect.promise(() => loadSupabaseAuth());
+      initializeCliSupabaseAuth(cliSecrets, {
+        debug: vi.fn(),
+        info: vi.fn(),
+        warn,
+        error: vi.fn(),
+      });
+      const { globalStorage } = createFakeWorkspaceRoots();
 
-    await expect(
-      runtime.runPromise(signOutCliSupabase()),
-    ).resolves.toBeUndefined();
+      expect(
+        yield* signOutCliSupabase().pipe(
+          Effect.provide(globalStorageFsTestLayer(globalStorage)),
+          Effect.provide(nodePlatformLayer),
+        ),
+      ).toBeUndefined();
 
-    expect(mocks.authCoordinator.clearSession).toHaveBeenCalledOnce();
-    expect(warn).toHaveBeenCalledWith(
-      'cli-auth',
-      'Local agent catalog refresh failed after sign-out: local rebuild failed',
-    );
-  });
+      expect(mocks.authCoordinator.clearSession).toHaveBeenCalledOnce();
+      expect(warn).toHaveBeenCalledWith(
+        'cli-auth',
+        'Local agent catalog refresh failed after sign-out: local rebuild failed',
+      );
+    }),
+  );
 });

@@ -38,7 +38,7 @@ import {
   installedHost,
 } from '@test/support/setupPlatform';
 import { createTestSession } from '@test/support/sessionTestUtils';
-import { withTempDir, withTempDirEffect } from '@test/support/tempDirPlatform';
+import { withTempDirEffect } from '@test/support/tempDirPlatform';
 
 const mocks = vi.hoisted(() => {
   return {
@@ -171,14 +171,6 @@ function workflowProgram(
     }),
     fakeProcessServices(),
   );
-}
-
-/** Runs the workflow command with the shared happy-path inputs. */
-async function runWorkflow(
-  init: Partial<WorkflowRunInit> = {},
-  context: CliContext = createRunCommandCliContext(),
-): Promise<number> {
-  return Effect.runPromise(workflowProgram(init, context));
 }
 
 function runOutputSummary(absolutePath: string, originalPath: string) {
@@ -530,197 +522,230 @@ describe('CLI run command, workflow agents', () => {
       ),
   );
 
-  it('passes instruction file contents before inline workflow instructions', async () => {
-    await withTempDir('texra-workflow-', async (root) => {
-      await fs.writeFile(
-        path.join(root, 'prompt.md'),
-        'Read this prompt from disk.\n',
-      );
+  it.effect(
+    'passes instruction file contents before inline workflow instructions',
+    () =>
+      withTempDirEffect('texra-workflow-', (root) =>
+        Effect.gen(function* () {
+          yield* Effect.promise(() =>
+            fs.writeFile(
+              path.join(root, 'prompt.md'),
+              'Read this prompt from disk.\n',
+            ),
+          );
 
-      const exitCode = await runWorkflow(
-        {
-          model: 'deepseekT',
-          instruction: 'Then keep the final response concise.',
-          instructionFile: 'prompt.md',
-        },
-        createRunCommandCliContext({ cwd: root }),
-      );
+          const exitCode = yield* workflowProgram(
+            {
+              model: 'deepseekT',
+              instruction: 'Then keep the final response concise.',
+              instructionFile: 'prompt.md',
+            },
+            createRunCommandCliContext({ cwd: root }),
+          );
+
+          expect(exitCode).toBe(0);
+          expect(mocks.withExpandedRunInputs).toHaveBeenCalledWith(
+            ['paper.tex'],
+            [],
+            root,
+            { readStdinText: expect.any(Function) },
+            expect.any(Function),
+          );
+          const config = mocks.executeCliConfig.mock.calls[0]?.[0];
+          expect(config?.instruction).toBe(
+            'Read this prompt from disk.\n\nThen keep the final response concise.',
+          );
+        }),
+      ),
+  );
+
+  it.effect('enforces workflow results at the shared run boundary', () =>
+    Effect.gen(function* () {
+      const exitCode = yield* workflowProgram();
 
       expect(exitCode).toBe(0);
-      expect(mocks.withExpandedRunInputs).toHaveBeenCalledWith(
-        ['paper.tex'],
-        [],
-        root,
-        { readStdinText: expect.any(Function) },
-        expect.any(Function),
-      );
-      const config = mocks.executeCliConfig.mock.calls[0]?.[0];
-      expect(config?.instruction).toBe(
-        'Read this prompt from disk.\n\nThen keep the final response concise.',
-      );
-    });
-  });
+      expect(mocks.executeCliConfig.mock.calls[0]?.[2]).toMatchObject({
+        expectedCategory: AgentCategory.Workflow,
+      });
+    }),
+  );
 
-  it('enforces workflow results at the shared run boundary', async () => {
-    const exitCode = await runWorkflow();
+  it.effect(
+    'keeps the single-output copy target separate from workflow output names',
+    () =>
+      withTempDirEffect('texra-workflow-', (root) =>
+        Effect.gen(function* () {
+          const generated = yield* Effect.promise(() =>
+            writeGeneratedOutput(root),
+          );
+          const outputSummary = runOutputSummary(
+            generated,
+            path.join(root, 'paper.tex'),
+          );
+          const compileFailure = {
+            round: 1,
+            displayName: 'paper.tex',
+            outputPath: 'r1/paper.tex',
+            logPath: 'compile/r1_paper.tex.log',
+            logAbsolutePath: path.join(
+              root,
+              'run',
+              'compile',
+              'r1_paper.tex.log',
+            ),
+          };
+          mockWorkflowRun(
+            workflowRun('exec-output', {
+              outputs: [outputSummary],
+              compileFailures: [compileFailure],
+            }),
+            true,
+          );
 
-    expect(exitCode).toBe(0);
-    expect(mocks.executeCliConfig.mock.calls[0]?.[2]).toMatchObject({
-      expectedCategory: AgentCategory.Workflow,
-    });
-  });
+          const exitCode = yield* workflowProgram(
+            { output: 'polished.tex' },
+            createRunCommandCliContext({ cwd: root }),
+          );
 
-  it('keeps the single-output copy target separate from workflow output names', async () => {
-    await withTempDir('texra-workflow-', async (root) => {
-      const generated = await writeGeneratedOutput(root);
-      const outputSummary = runOutputSummary(
-        generated,
-        path.join(root, 'paper.tex'),
-      );
-      const compileFailure = {
-        round: 1,
-        displayName: 'paper.tex',
-        outputPath: 'r1/paper.tex',
-        logPath: 'compile/r1_paper.tex.log',
-        logAbsolutePath: path.join(root, 'run', 'compile', 'r1_paper.tex.log'),
-      };
-      mockWorkflowRun(
-        workflowRun('exec-output', {
-          outputs: [outputSummary],
-          compileFailures: [compileFailure],
+          expect(exitCode).toBe(0);
+          const config = mocks.executeCliConfig.mock.calls[0]?.[0];
+          expect(config).toMatchObject({
+            inputFiles: ['paper.tex'],
+            outputFiles: [],
+            cli: {
+              outputFile: path.join(root, 'polished.tex'),
+              outputDirectory: undefined,
+              expectedOutputFiles: undefined,
+            },
+          });
+          expect(
+            yield* Effect.promise(() =>
+              fs.readFile(path.join(root, 'polished.tex'), 'utf8'),
+            ),
+          ).toBe('polished');
+          expect(mocks.writeResultMeta).toHaveBeenCalledWith(
+            expectedResultMeta({
+              copiedOutput: path.join(root, 'polished.tex'),
+              outputs: [outputSummary],
+              compileFailures: [compileFailure],
+            }),
+          );
+          const emission = mocks.emitCliResult.mock.calls[0]?.[1];
+          expect(emission?.json).toMatchObject({
+            outcome: RUN_OUTCOME.COMPLETED,
+            workingDirectory: root,
+            runDirectory: '/tmp/runs/exec-output',
+            copiedOutput: path.join(root, 'polished.tex'),
+          });
+          // The emitted object is the run result plus its filesystem metadata, in
+          // the order `resolveWorkflowOutput` builds it; the run id is `runId`.
+          expect(Object.keys(emission?.json ?? {})).toEqual([
+            'outcome',
+            'output',
+            'runId',
+            'workingDirectory',
+            'runDirectory',
+            'copiedOutput',
+          ]);
+          expect(emission?.ndjson).toEqual({
+            kind: 'result',
+            result: emission.json,
+          });
         }),
-        true,
-      );
+      ),
+  );
 
-      const exitCode = await runWorkflow(
-        { output: 'polished.tex' },
-        createRunCommandCliContext({ cwd: root }),
-      );
+  it.effect('persists copied output-dir paths for history details', () =>
+    withTempDirEffect('texra-workflow-', (root) =>
+      Effect.gen(function* () {
+        const workspace = path.join(root, 'workspace ');
+        const generated = yield* Effect.promise(() =>
+          writeGeneratedOutput(workspace),
+        );
+        const outputSummary = runOutputSummary(
+          generated,
+          path.join(workspace, 'paper.tex'),
+        );
+        mockWorkflowRun(
+          workflowRun('exec-output-dir', { outputs: [outputSummary] }),
+          true,
+        );
 
-      expect(exitCode).toBe(0);
-      const config = mocks.executeCliConfig.mock.calls[0]?.[0];
-      expect(config).toMatchObject({
-        inputFiles: ['paper.tex'],
-        outputFiles: [],
-        cli: {
-          outputFile: path.join(root, 'polished.tex'),
-          outputDirectory: undefined,
-          expectedOutputFiles: undefined,
-        },
-      });
-      await expect(
-        fs.readFile(path.join(root, 'polished.tex'), 'utf8'),
-      ).resolves.toBe('polished');
-      expect(mocks.writeResultMeta).toHaveBeenCalledWith(
-        expectedResultMeta({
-          copiedOutput: path.join(root, 'polished.tex'),
-          outputs: [outputSummary],
-          compileFailures: [compileFailure],
-        }),
-      );
-      const emission = mocks.emitCliResult.mock.calls[0]?.[1];
-      expect(emission?.json).toMatchObject({
-        outcome: RUN_OUTCOME.COMPLETED,
-        workingDirectory: root,
-        runDirectory: '/tmp/runs/exec-output',
-        copiedOutput: path.join(root, 'polished.tex'),
-      });
-      // The emitted object is the run result plus its filesystem metadata, in
-      // the order `resolveWorkflowOutput` builds it; the run id is `runId`.
-      expect(Object.keys(emission?.json ?? {})).toEqual([
-        'outcome',
-        'output',
-        'runId',
-        'workingDirectory',
-        'runDirectory',
-        'copiedOutput',
-      ]);
-      expect(emission?.ndjson).toEqual({
-        kind: 'result',
-        result: emission.json,
-      });
-    });
-  });
+        const exitCode = yield* workflowProgram(
+          { outputDir: 'out' },
+          createRunCommandCliContext({ cwd: workspace }),
+        );
 
-  it('persists copied output-dir paths for history details', async () => {
-    await withTempDir('texra-workflow-', async (root) => {
-      const workspace = path.join(root, 'workspace ');
-      const generated = await writeGeneratedOutput(workspace);
-      const outputSummary = runOutputSummary(
-        generated,
-        path.join(workspace, 'paper.tex'),
-      );
-      mockWorkflowRun(
-        workflowRun('exec-output-dir', { outputs: [outputSummary] }),
-        true,
-      );
-
-      const exitCode = await runWorkflow(
-        { outputDir: 'out' },
-        createRunCommandCliContext({ cwd: workspace }),
-      );
-
-      expect(exitCode).toBe(0);
-      expect(mocks.executeCliConfig.mock.calls[0]?.[0]).toMatchObject({
-        cli: {
-          outputFile: undefined,
-          outputDirectory: path.join(workspace, 'out'),
-          expectedOutputFiles: ['paper.tex'],
-        },
-      });
-      await expect(
-        fs.readFile(path.join(workspace, 'out', 'paper.tex'), 'utf8'),
-      ).resolves.toBe('polished');
-      expect(mocks.writeResultMeta).toHaveBeenCalledWith(
-        expectedResultMeta({
-          copiedOutputs: [path.join(workspace, 'out', 'paper.tex')],
-          outputs: [outputSummary],
-          compileFailures: [],
-        }),
-      );
-    });
-  });
+        expect(exitCode).toBe(0);
+        expect(mocks.executeCliConfig.mock.calls[0]?.[0]).toMatchObject({
+          cli: {
+            outputFile: undefined,
+            outputDirectory: path.join(workspace, 'out'),
+            expectedOutputFiles: ['paper.tex'],
+          },
+        });
+        expect(
+          yield* Effect.promise(() =>
+            fs.readFile(path.join(workspace, 'out', 'paper.tex'), 'utf8'),
+          ),
+        ).toBe('polished');
+        expect(mocks.writeResultMeta).toHaveBeenCalledWith(
+          expectedResultMeta({
+            copiedOutputs: [path.join(workspace, 'out', 'paper.tex')],
+            outputs: [outputSummary],
+            compileFailures: [],
+          }),
+        );
+      }),
+    ),
+  );
 
   // Issue #12162: a remote agent's catalog listing carries no
   // `defaultOutputFiles`, so only the definition the launch loads declares
   // them — and the launch hands them to output finalization. The catalog
   // entry here is the listing a refresh between launch and finalization would
   // leave behind: the declared name still decides.
-  it('expects the output files the launched definition declares', async () => {
-    await withTempDir('texra-workflow-', async (root) => {
-      const generated = await writeGeneratedOutput(root);
-      mockWorkflowRun(
-        workflowRun('exec-declared-outputs', {
-          outputs: [runOutputSummary(generated, path.join(root, 'paper.tex'))],
-        }),
-        true,
-        ['slides.tex'],
-      );
-      agentCatalogMock.resolveAgentForLaunch.mockReturnValue({
-        name: 'polish',
-        source: 'remote',
-        path: '',
-        category: AgentCategory.Workflow,
-      });
+  it.effect('expects the output files the launched definition declares', () =>
+    withTempDirEffect('texra-workflow-', (root) =>
+      Effect.gen(function* () {
+        const generated = yield* Effect.promise(() =>
+          writeGeneratedOutput(root),
+        );
+        mockWorkflowRun(
+          workflowRun('exec-declared-outputs', {
+            outputs: [
+              runOutputSummary(generated, path.join(root, 'paper.tex')),
+            ],
+          }),
+          true,
+          ['slides.tex'],
+        );
+        agentCatalogMock.resolveAgentForLaunch.mockReturnValue({
+          name: 'polish',
+          source: 'remote',
+          path: '',
+          category: AgentCategory.Workflow,
+        });
 
-      const exitCode = await runWorkflow(
-        { outputDir: 'out' },
-        createRunCommandCliContext({ cwd: root }),
-      );
+        const exitCode = yield* workflowProgram(
+          { outputDir: 'out' },
+          createRunCommandCliContext({ cwd: root }),
+        );
 
-      expect(exitCode).toBe(CliExitCode.AgentError);
-      // The launch persisted only the input-derived names; the declared
-      // `slides.tex` is what the copy is held to.
-      expect(mocks.executeCliConfig.mock.calls[0]?.[0]).toMatchObject({
-        cli: { expectedOutputFiles: ['paper.tex'] },
-      });
-      expect(cliLogSinksMock.writeErrorStderr).toHaveBeenCalledWith(
-        expect.objectContaining({
-          message: expect.stringContaining('slides.tex'),
-        }),
-      );
-    });
-  });
+        expect(exitCode).toBe(CliExitCode.AgentError);
+        // The launch persisted only the input-derived names; the declared
+        // `slides.tex` is what the copy is held to.
+        expect(mocks.executeCliConfig.mock.calls[0]?.[0]).toMatchObject({
+          cli: { expectedOutputFiles: ['paper.tex'] },
+        });
+        expect(cliLogSinksMock.writeErrorStderr).toHaveBeenCalledWith(
+          expect.objectContaining({
+            message: expect.stringContaining('slides.tex'),
+          }),
+        );
+      }),
+    ),
+  );
 
   // it.live: the body drives a real session through the process runtime.
   it.live('persists workflow metadata before the run claim is released', () =>
@@ -838,141 +863,194 @@ describe('CLI run command, workflow agents', () => {
       ),
   );
 
-  it('persists a failed runtime envelope when copying the requested output fails', async () => {
-    const outputSummary = runOutputSummary(
-      '/missing/run/r1/paper.tex',
-      '/workspace/paper.tex',
-    );
-    mockWorkflowRun(
-      workflowRun('exec-copy-fail', { outputs: [outputSummary] }),
-      true,
-    );
+  it.effect(
+    'persists a failed runtime envelope when copying the requested output fails',
+    () =>
+      Effect.gen(function* () {
+        const outputSummary = runOutputSummary(
+          '/missing/run/r1/paper.tex',
+          '/workspace/paper.tex',
+        );
+        mockWorkflowRun(
+          workflowRun('exec-copy-fail', { outputs: [outputSummary] }),
+          true,
+        );
 
-    const exitCode = await runWorkflow({ output: 'polished.tex' });
+        const exitCode = yield* workflowProgram({ output: 'polished.tex' });
 
-    expect(exitCode).toBe(CliExitCode.AgentError);
-    expect(mocks.writeResultMeta).toHaveBeenCalledWith(
-      expectedResultMeta({
-        outputs: [outputSummary],
-        compileFailures: [],
+        expect(exitCode).toBe(CliExitCode.AgentError);
+        expect(mocks.writeResultMeta).toHaveBeenCalledWith(
+          expectedResultMeta({
+            outputs: [outputSummary],
+            compileFailures: [],
+          }),
+        );
+        expect(mocks.finalizeRun).not.toHaveBeenCalled();
       }),
-    );
-    expect(mocks.finalizeRun).not.toHaveBeenCalled();
-  });
+  );
 
-  it('prints a resumable recovery command after persisting a cancelled workflow', async () => {
-    await withTempDir('texra-workflow-', async (root) => {
-      mockWorkflowRun(
-        workflowRun('exec-interrupted', {
-          outcome: RUN_OUTCOME.CANCELLED,
+  it.effect(
+    'prints a resumable recovery command after persisting a cancelled workflow',
+    () =>
+      withTempDirEffect('texra-workflow-', (root) =>
+        Effect.gen(function* () {
+          mockWorkflowRun(
+            workflowRun('exec-interrupted', {
+              outcome: RUN_OUTCOME.CANCELLED,
+            }),
+            true,
+          );
+
+          const context = createRunCommandCliContext({
+            cwd: root,
+            commandName: 'texra-local',
+            approvalPolicy: 'never',
+          });
+          const exitCode = yield* workflowProgram(
+            { output: 'polished.tex' },
+            context,
+          );
+
+          expect(exitCode).toBe(CliExitCode.Interrupted);
+          expect(
+            Exit.isFailure(
+              yield* Effect.exit(
+                Effect.tryPromise(() =>
+                  fs.stat(path.join(root, 'polished.tex')),
+                ),
+              ),
+            ),
+          ).toBe(true);
+          expect(mocks.writeResultMeta).toHaveBeenCalledWith(
+            expectedResultMeta({
+              outputs: [],
+              compileFailures: [],
+            }),
+          );
+          expect(
+            cliLogSinksMock.writeTextStderr,
+          ).toHaveBeenCalledExactlyOnceWith(
+            expectedRecoveryHint(context, 'exec-interrupted'),
+          );
+          expect(
+            mocks.writeResultMeta.mock.invocationCallOrder[0],
+          ).toBeLessThan(
+            cliLogSinksMock.writeTextStderr.mock.invocationCallOrder[0],
+          );
         }),
-        true,
-      );
+      ),
+  );
 
-      const context = createRunCommandCliContext({
-        cwd: root,
-        commandName: 'texra-local',
-        approvalPolicy: 'never',
-      });
-      const exitCode = await runWorkflow({ output: 'polished.tex' }, context);
+  it.effect(
+    'keeps non-empty cancelled outputs in run storage without copying to --output',
+    () =>
+      withTempDirEffect('texra-workflow-', (root) =>
+        Effect.gen(function* () {
+          const outputSummary = yield* Effect.promise(() =>
+            setupCancelledOutput(root, 'exec-cancelled-output'),
+          );
 
-      expect(exitCode).toBe(CliExitCode.Interrupted);
-      await expect(fs.stat(path.join(root, 'polished.tex'))).rejects.toThrow();
-      expect(mocks.writeResultMeta).toHaveBeenCalledWith(
-        expectedResultMeta({
-          outputs: [],
-          compileFailures: [],
+          const context = createRunCommandCliContext({
+            cwd: root,
+            commandName: 'texra-local',
+            approvalPolicy: 'never',
+          });
+          const exitCode = yield* workflowProgram(
+            { output: 'polished.tex' },
+            context,
+          );
+
+          expect(exitCode).toBe(CliExitCode.Interrupted);
+          // The destination did not previously exist and must stay absent.
+          expect(
+            Exit.isFailure(
+              yield* Effect.exit(
+                Effect.tryPromise(() =>
+                  fs.stat(path.join(root, 'polished.tex')),
+                ),
+              ),
+            ),
+          ).toBe(true);
+          expect(mocks.writeResultMeta).toHaveBeenCalledWith(
+            expectedResultMeta({
+              outputs: [outputSummary],
+              compileFailures: [],
+            }),
+          );
+          const emission = mocks.emitCliResult.mock.calls[0]?.[1];
+          expect(emission?.json).toMatchObject({
+            outcome: RUN_OUTCOME.CANCELLED,
+            workingDirectory: root,
+            runDirectory: '/tmp/runs/exec-cancelled-output',
+          });
+          expect(emission?.json).not.toHaveProperty('copiedOutput');
+          expect(emission?.json).not.toHaveProperty('copiedOutputs');
+          expect(emission?.text).toBe('/tmp/runs/exec-cancelled-output');
+          expect(
+            cliLogSinksMock.writeTextStderr,
+          ).toHaveBeenCalledExactlyOnceWith(
+            expectedRecoveryHint(context, 'exec-cancelled-output'),
+          );
         }),
-      );
-      expect(cliLogSinksMock.writeTextStderr).toHaveBeenCalledExactlyOnceWith(
-        expectedRecoveryHint(context, 'exec-interrupted'),
-      );
-      expect(mocks.writeResultMeta.mock.invocationCallOrder[0]).toBeLessThan(
-        cliLogSinksMock.writeTextStderr.mock.invocationCallOrder[0],
-      );
-    });
-  });
+      ),
+  );
 
-  it('keeps non-empty cancelled outputs in run storage without copying to --output', async () => {
-    await withTempDir('texra-workflow-', async (root) => {
-      const outputSummary = await setupCancelledOutput(
-        root,
-        'exec-cancelled-output',
-      );
+  it.effect(
+    'keeps non-empty cancelled outputs in run storage without copying to --output-dir',
+    () =>
+      withTempDirEffect('texra-workflow-', (root) =>
+        Effect.gen(function* () {
+          const outputSummary = yield* Effect.promise(() =>
+            setupCancelledOutput(root, 'exec-cancelled-output-dir'),
+          );
 
-      const context = createRunCommandCliContext({
-        cwd: root,
-        commandName: 'texra-local',
-        approvalPolicy: 'never',
-      });
-      const exitCode = await runWorkflow({ output: 'polished.tex' }, context);
+          const context = createRunCommandCliContext({
+            cwd: root,
+            commandName: 'texra-local',
+            approvalPolicy: 'never',
+          });
+          const exitCode = yield* workflowProgram(
+            { outputDir: 'out' },
+            context,
+          );
 
-      expect(exitCode).toBe(CliExitCode.Interrupted);
-      // The destination did not previously exist and must stay absent.
-      await expect(fs.stat(path.join(root, 'polished.tex'))).rejects.toThrow();
-      expect(mocks.writeResultMeta).toHaveBeenCalledWith(
-        expectedResultMeta({
-          outputs: [outputSummary],
-          compileFailures: [],
+          expect(exitCode).toBe(CliExitCode.Interrupted);
+          // The pre-flight probe may create the directory itself, but no output
+          // file may be copied into it.
+          expect(
+            Exit.isFailure(
+              yield* Effect.exit(
+                Effect.tryPromise(() =>
+                  fs.stat(path.join(root, 'out', 'paper.tex')),
+                ),
+              ),
+            ),
+          ).toBe(true);
+          expect(mocks.writeResultMeta).toHaveBeenCalledWith(
+            expectedResultMeta({
+              outputs: [outputSummary],
+              compileFailures: [],
+            }),
+          );
+          const emission = mocks.emitCliResult.mock.calls[0]?.[1];
+          expect(emission?.json).toMatchObject({
+            outcome: RUN_OUTCOME.CANCELLED,
+            workingDirectory: root,
+            runDirectory: '/tmp/runs/exec-cancelled-output-dir',
+          });
+          expect(emission?.json).not.toHaveProperty('copiedOutput');
+          expect(emission?.json).not.toHaveProperty('copiedOutputs');
+          expect(emission?.text).toBe('/tmp/runs/exec-cancelled-output-dir');
+          expect(
+            cliLogSinksMock.writeTextStderr,
+          ).toHaveBeenCalledExactlyOnceWith(
+            expectedRecoveryHint(context, 'exec-cancelled-output-dir'),
+          );
         }),
-      );
-      const emission = mocks.emitCliResult.mock.calls[0]?.[1];
-      expect(emission?.json).toMatchObject({
-        outcome: RUN_OUTCOME.CANCELLED,
-        workingDirectory: root,
-        runDirectory: '/tmp/runs/exec-cancelled-output',
-      });
-      expect(emission?.json).not.toHaveProperty('copiedOutput');
-      expect(emission?.json).not.toHaveProperty('copiedOutputs');
-      expect(emission?.text).toBe('/tmp/runs/exec-cancelled-output');
-      expect(cliLogSinksMock.writeTextStderr).toHaveBeenCalledExactlyOnceWith(
-        expectedRecoveryHint(context, 'exec-cancelled-output'),
-      );
-    });
-  });
+      ),
+  );
 
-  it('keeps non-empty cancelled outputs in run storage without copying to --output-dir', async () => {
-    await withTempDir('texra-workflow-', async (root) => {
-      const outputSummary = await setupCancelledOutput(
-        root,
-        'exec-cancelled-output-dir',
-      );
-
-      const context = createRunCommandCliContext({
-        cwd: root,
-        commandName: 'texra-local',
-        approvalPolicy: 'never',
-      });
-      const exitCode = await runWorkflow({ outputDir: 'out' }, context);
-
-      expect(exitCode).toBe(CliExitCode.Interrupted);
-      // The pre-flight probe may create the directory itself, but no output
-      // file may be copied into it.
-      await expect(
-        fs.stat(path.join(root, 'out', 'paper.tex')),
-      ).rejects.toThrow();
-      expect(mocks.writeResultMeta).toHaveBeenCalledWith(
-        expectedResultMeta({
-          outputs: [outputSummary],
-          compileFailures: [],
-        }),
-      );
-      const emission = mocks.emitCliResult.mock.calls[0]?.[1];
-      expect(emission?.json).toMatchObject({
-        outcome: RUN_OUTCOME.CANCELLED,
-        workingDirectory: root,
-        runDirectory: '/tmp/runs/exec-cancelled-output-dir',
-      });
-      expect(emission?.json).not.toHaveProperty('copiedOutput');
-      expect(emission?.json).not.toHaveProperty('copiedOutputs');
-      expect(emission?.text).toBe('/tmp/runs/exec-cancelled-output-dir');
-      expect(cliLogSinksMock.writeTextStderr).toHaveBeenCalledExactlyOnceWith(
-        expectedRecoveryHint(context, 'exec-cancelled-output-dir'),
-      );
-    });
-  });
-
-  it.each([
+  it.effect.each([
     {
       label: '--output',
       init: { output: 'polished.tex' },
@@ -985,85 +1063,104 @@ describe('CLI run command, workflow agents', () => {
     },
   ])(
     'keeps failed output in run storage and preserves the requested $label destination',
-    async ({ init, destination }) => {
-      await withTempDir('texra-workflow-', async (root) => {
-        const generated = await writeGeneratedOutput(root);
-        const outputSummary = runOutputSummary(
-          generated,
-          path.join(root, 'paper.tex'),
-        );
-        mockWorkflowRun(
-          workflowRun('exec-failed-output', {
+    ({ init, destination }) =>
+      withTempDirEffect('texra-workflow-', (root) =>
+        Effect.gen(function* () {
+          const generated = yield* Effect.promise(() =>
+            writeGeneratedOutput(root),
+          );
+          const outputSummary = runOutputSummary(
+            generated,
+            path.join(root, 'paper.tex'),
+          );
+          mockWorkflowRun(
+            workflowRun('exec-failed-output', {
+              outcome: RUN_OUTCOME.FAILED,
+              outputs: [outputSummary],
+            }),
+            true,
+          );
+          const target = destination(root);
+          yield* Effect.promise(() =>
+            fs.mkdir(path.dirname(target), { recursive: true }),
+          );
+          yield* Effect.promise(() => fs.writeFile(target, 'keep-me'));
+
+          const exitCode = yield* workflowProgram(
+            init,
+            createRunCommandCliContext({ cwd: root }),
+          );
+
+          expect(exitCode).toBe(CliExitCode.AgentError);
+          expect(yield* Effect.promise(() => fs.readFile(target, 'utf8'))).toBe(
+            'keep-me',
+          );
+          const emission = mocks.emitCliResult.mock.calls[0]?.[1];
+          expect(emission?.json).toMatchObject({
             outcome: RUN_OUTCOME.FAILED,
-            outputs: [outputSummary],
-          }),
-          true,
-        );
-        const target = destination(root);
-        await fs.mkdir(path.dirname(target), { recursive: true });
-        await fs.writeFile(target, 'keep-me');
-
-        const exitCode = await runWorkflow(
-          init,
-          createRunCommandCliContext({ cwd: root }),
-        );
-
-        expect(exitCode).toBe(CliExitCode.AgentError);
-        await expect(fs.readFile(target, 'utf8')).resolves.toBe('keep-me');
-        const emission = mocks.emitCliResult.mock.calls[0]?.[1];
-        expect(emission?.json).toMatchObject({
-          outcome: RUN_OUTCOME.FAILED,
-          output: { outputs: [outputSummary] },
-          runDirectory: '/tmp/runs/exec-failed-output',
-        });
-        expect(emission?.json).not.toHaveProperty('copiedOutput');
-        expect(emission?.json).not.toHaveProperty('copiedOutputs');
-        expect(emission?.text).toContain('FAILED');
-        expect(emission?.text).toContain('/tmp/runs/exec-failed-output');
-      });
-    },
+            output: { outputs: [outputSummary] },
+            runDirectory: '/tmp/runs/exec-failed-output',
+          });
+          expect(emission?.json).not.toHaveProperty('copiedOutput');
+          expect(emission?.json).not.toHaveProperty('copiedOutputs');
+          expect(emission?.text).toContain('FAILED');
+          expect(emission?.text).toContain('/tmp/runs/exec-failed-output');
+        }),
+      ),
   );
 
-  it('leaves a pre-existing --output destination untouched for a cancelled run', async () => {
-    await withTempDir('texra-workflow-', async (root) => {
-      const destination = path.join(root, 'polished.tex');
-      await fs.writeFile(destination, 'keep-me');
-      await setupCancelledOutput(root, 'exec-cancelled-existing-output');
+  it.effect(
+    'leaves a pre-existing --output destination untouched for a cancelled run',
+    () =>
+      withTempDirEffect('texra-workflow-', (root) =>
+        Effect.gen(function* () {
+          const destination = path.join(root, 'polished.tex');
+          yield* Effect.promise(() => fs.writeFile(destination, 'keep-me'));
+          yield* Effect.promise(() =>
+            setupCancelledOutput(root, 'exec-cancelled-existing-output'),
+          );
 
-      const exitCode = await runWorkflow(
-        { output: 'polished.tex' },
-        createRunCommandCliContext({ cwd: root }),
-      );
+          const exitCode = yield* workflowProgram(
+            { output: 'polished.tex' },
+            createRunCommandCliContext({ cwd: root }),
+          );
 
-      expect(exitCode).toBe(CliExitCode.Interrupted);
-      await expect(fs.readFile(destination, 'utf8')).resolves.toBe('keep-me');
-    });
-  });
+          expect(exitCode).toBe(CliExitCode.Interrupted);
+          expect(
+            yield* Effect.promise(() => fs.readFile(destination, 'utf8')),
+          ).toBe('keep-me');
+        }),
+      ),
+  );
 
-  it('presents the lifecycle verdict when cancellation lands during output finalization', async () => {
-    mockCancellationDuringOutputFinalization(
-      workflowRun('exec-output-interrupted'),
-      () => true,
-    );
+  it.effect(
+    'presents the lifecycle verdict when cancellation lands during output finalization',
+    () =>
+      Effect.gen(function* () {
+        mockCancellationDuringOutputFinalization(
+          workflowRun('exec-output-interrupted'),
+          () => true,
+        );
 
-    const exitCode = await runWorkflow();
+        const exitCode = yield* workflowProgram();
 
-    expect(exitCode).toBe(CliExitCode.Interrupted);
-    expect(mocks.writeResultMeta).toHaveBeenCalledWith(
-      expectedResultMeta({
-        outputs: [],
-        compileFailures: [],
+        expect(exitCode).toBe(CliExitCode.Interrupted);
+        expect(mocks.writeResultMeta).toHaveBeenCalledWith(
+          expectedResultMeta({
+            outputs: [],
+            compileFailures: [],
+          }),
+        );
+        expect(mocks.emitCliResult).toHaveBeenCalledWith(
+          expect.any(Object),
+          expect.objectContaining({
+            json: expect.objectContaining({ outcome: RUN_OUTCOME.CANCELLED }),
+          }),
+        );
       }),
-    );
-    expect(mocks.emitCliResult).toHaveBeenCalledWith(
-      expect.any(Object),
-      expect.objectContaining({
-        json: expect.objectContaining({ outcome: RUN_OUTCOME.CANCELLED }),
-      }),
-    );
-  });
+  );
 
-  it.each([
+  it.effect.each([
     {
       label: '--output',
       state: 'missing',
@@ -1094,325 +1191,369 @@ describe('CLI run command, workflow agents', () => {
     },
   ])(
     'leaves a $state $label destination untouched when cancellation commits first',
-    async ({ init, destination, existing }) => {
-      await withTempDir('texra-workflow-', async (root) => {
-        const generated = await writeGeneratedOutput(root);
-        const outputSummary = runOutputSummary(
-          generated,
-          path.join(root, 'paper.tex'),
-        );
-        mockCancellationDuringOutputFinalization(
-          workflowRun('exec-output-interrupted', {
-            outputs: [outputSummary],
-          }),
-          () => false,
-        );
-        const target = destination(root);
-        if (existing) {
-          await fs.mkdir(path.dirname(target), { recursive: true });
-          await fs.writeFile(target, 'existing');
-        }
+    ({ init, destination, existing }) =>
+      withTempDirEffect('texra-workflow-', (root) =>
+        Effect.gen(function* () {
+          const generated = yield* Effect.promise(() =>
+            writeGeneratedOutput(root),
+          );
+          const outputSummary = runOutputSummary(
+            generated,
+            path.join(root, 'paper.tex'),
+          );
+          mockCancellationDuringOutputFinalization(
+            workflowRun('exec-output-interrupted', {
+              outputs: [outputSummary],
+            }),
+            () => false,
+          );
+          const target = destination(root);
+          if (existing) {
+            yield* Effect.promise(() =>
+              fs.mkdir(path.dirname(target), { recursive: true }),
+            );
+            yield* Effect.promise(() => fs.writeFile(target, 'existing'));
+          }
 
-        const exitCode = await runWorkflow(
-          init,
-          createRunCommandCliContext({ cwd: root }),
-        );
+          const exitCode = yield* workflowProgram(
+            init,
+            createRunCommandCliContext({ cwd: root }),
+          );
 
-        expect(exitCode).toBe(CliExitCode.Interrupted);
-        if (existing) {
-          await expect(fs.readFile(target, 'utf8')).resolves.toBe('existing');
-        } else {
-          await expect(fs.stat(target)).rejects.toThrow();
-        }
-        expect(mocks.writeResultMeta).toHaveBeenCalledWith(
-          expectedResultMeta({
-            outputs: [outputSummary],
-            compileFailures: [],
-          }),
-        );
-        const emitted = mocks.emitCliResult.mock.calls[0]?.[1]?.json;
-        expect(emitted).toMatchObject({
-          outcome: RUN_OUTCOME.CANCELLED,
-          runDirectory: '/tmp/runs/exec-output-interrupted',
-        });
-        expect(emitted).not.toHaveProperty('copiedOutput');
-        expect(emitted).not.toHaveProperty('copiedOutputs');
-      });
-    },
+          expect(exitCode).toBe(CliExitCode.Interrupted);
+          if (existing) {
+            expect(
+              yield* Effect.promise(() => fs.readFile(target, 'utf8')),
+            ).toBe('existing');
+          } else {
+            expect(
+              Exit.isFailure(
+                yield* Effect.exit(Effect.tryPromise(() => fs.stat(target))),
+              ),
+            ).toBe(true);
+          }
+          expect(mocks.writeResultMeta).toHaveBeenCalledWith(
+            expectedResultMeta({
+              outputs: [outputSummary],
+              compileFailures: [],
+            }),
+          );
+          const emitted = mocks.emitCliResult.mock.calls[0]?.[1]?.json;
+          expect(emitted).toMatchObject({
+            outcome: RUN_OUTCOME.CANCELLED,
+            runDirectory: '/tmp/runs/exec-output-interrupted',
+          });
+          expect(emitted).not.toHaveProperty('copiedOutput');
+          expect(emitted).not.toHaveProperty('copiedOutputs');
+        }),
+      ),
   );
 
-  it('does not advertise resume when cancelled status is not durable', async () => {
-    const durableRun = workflowRun('exec-undurable', {
-      outcome: RUN_OUTCOME.CANCELLED,
-    });
-    if (!durableRun.ok) throw new Error('Expected a workflow result.');
-    mockWorkflowRun({ ...durableRun, outcomePersisted: false }, true);
+  it.effect(
+    'does not advertise resume when cancelled status is not durable',
+    () =>
+      Effect.gen(function* () {
+        const durableRun = workflowRun('exec-undurable', {
+          outcome: RUN_OUTCOME.CANCELLED,
+        });
+        if (!durableRun.ok) throw new Error('Expected a workflow result.');
+        mockWorkflowRun({ ...durableRun, outcomePersisted: false }, true);
 
-    await expect(runWorkflow()).resolves.toBe(CliExitCode.Interrupted);
+        expect(yield* workflowProgram()).toBe(CliExitCode.Interrupted);
 
-    expect(cliLogSinksMock.writeTextStdout).not.toHaveBeenCalled();
-    expect(cliLogSinksMock.writeTextStderr).not.toHaveBeenCalled();
-  });
-
-  it('does not advertise resume for temporary materialized stdin', async () => {
-    const root = path.join(path.sep, 'tmp', 'workspace');
-    const stdinPath = path.join(root, 'texra-stdin-123-abc123', 'stdin.tex');
-    mocks.withExpandedRunInputs.mockImplementationOnce(
-      (_inputs, _contexts, _cwd, _options, run) =>
-        run({
-          inputFiles: [stdinPath],
-          contextFiles: [],
-          stdinInputPath: stdinPath,
-        }),
-    );
-    mockWorkflowRun(
-      workflowRun('exec-stdin-interrupted', {
-        outcome: RUN_OUTCOME.CANCELLED,
+        expect(cliLogSinksMock.writeTextStdout).not.toHaveBeenCalled();
+        expect(cliLogSinksMock.writeTextStderr).not.toHaveBeenCalled();
       }),
-      true,
-    );
+  );
 
-    await expect(
-      runWorkflow(
-        { inputFiles: ['-'] },
-        createRunCommandCliContext({ cwd: root }),
-      ),
-    ).resolves.toBe(CliExitCode.Interrupted);
-
-    expect(
-      mocks.executeCliConfig.mock.calls[0]?.[2].onInterruptedRunFinalized,
-    ).toBeUndefined();
-    expect(cliLogSinksMock.writeTextStdout).not.toHaveBeenCalled();
-    expect(cliLogSinksMock.writeTextStderr).not.toHaveBeenCalled();
-  });
-
-  it('keeps recovery for a durable file whose name resembles stdin materialization', async () => {
-    const lookalike = path.join(
-      path.sep,
-      'tmp',
-      'workspace',
-      'texra-stdin-123-abc123',
-      'stdin.tex',
-    );
-    mocks.withExpandedRunInputs.mockImplementationOnce(
-      (_inputs, _contexts, _cwd, _options, run) =>
-        run({ inputFiles: [lookalike], contextFiles: [] }),
-    );
-    mockWorkflowRun(
-      workflowRun('exec-stdin-lookalike', {
-        outcome: RUN_OUTCOME.CANCELLED,
-      }),
-      true,
-    );
-
-    await expect(runWorkflow()).resolves.toBe(CliExitCode.Interrupted);
-
-    expect(
-      mocks.executeCliConfig.mock.calls[0]?.[2].onInterruptedRunFinalized,
-    ).toBeTypeOf('function');
-    expect(cliLogSinksMock.writeTextStderr).toHaveBeenCalledOnce();
-  });
-
-  it('rejects recovery advertising for a snapshot carrying a round failure', async () => {
-    await runWorkflow();
-    const canAdvertise =
-      mocks.executeCliConfig.mock.calls[0]?.[2].canAdvertiseInterruptedRun;
-
-    expect(
-      canAdvertise?.({
-        kind: 'checkpoint',
-        snapshot: reflectionSnapshot(
-          {},
-          { lastError: { message: 'provider failed', userRetryable: true } },
-        ),
-      }),
-    ).toBe(false);
-  });
-
-  it('rejects recovery advertising for terminal unresolved compile rejection', async () => {
-    await runWorkflow();
-    const canAdvertise =
-      mocks.executeCliConfig.mock.calls[0]?.[2].canAdvertiseInterruptedRun;
-
-    expect(
-      canAdvertise?.({
-        kind: 'checkpoint',
-        snapshot: reflectionSnapshot({
-          currentRound: 1,
-          totalRounds: 2,
-          unresolvedCompileRejection: true,
-        }),
-      }),
-    ).toBe(false);
-    expect(
-      canAdvertise?.({
-        kind: 'checkpoint',
-        snapshot: reflectionSnapshot({
-          currentRound: 0,
-          totalRounds: 2,
-          unresolvedCompileRejection: true,
-        }),
-      }),
-    ).toBe(true);
-  });
-
-  it('prints the durable shutdown hint once with the persisted workspace', async () => {
-    const run = workflowRun('exec-signal', {
-      outcome: RUN_OUTCOME.CANCELLED,
-    });
-    mocks.executeCliConfig.mockImplementationOnce(
-      (_config, _context, options) =>
-        Effect.gen(function* () {
-          if (!run.ok) return run;
-          if (options.openWorkflowOutput)
-            yield* options.openWorkflowOutput(run.result, [], () => true);
-          options.onInterruptedRunFinalized?.('exec-signal');
-          return run;
-        }),
-    );
-    const resumeInvocation = path.join(path.sep, 'tmp', 'resume-invocation');
-    const persistedWorkspace = path.join(
-      path.sep,
-      'tmp',
-      'persisted-workspace',
-    );
-    const context = createRunCommandCliContext({ cwd: resumeInvocation });
-    const { executeCliWorkflowConfig: nativeExecute } =
-      await import('@cli/commands/workflow');
-    const executeCliWorkflowConfig = (
-      ...args: Parameters<typeof nativeExecute>
-    ) =>
-      Effect.runPromise(
-        Effect.provide(nativeExecute(...args), fakeProcessServices()),
+  it.effect('does not advertise resume for temporary materialized stdin', () =>
+    Effect.gen(function* () {
+      const root = path.join(path.sep, 'tmp', 'workspace');
+      const stdinPath = path.join(root, 'texra-stdin-123-abc123', 'stdin.tex');
+      mocks.withExpandedRunInputs.mockImplementationOnce(
+        (_inputs, _contexts, _cwd, _options, run) =>
+          run({
+            inputFiles: [stdinPath],
+            contextFiles: [],
+            stdinInputPath: stdinPath,
+          }),
       );
-
-    const { createTestSession } =
-      await import('@test/support/sessionTestUtils');
-    const session = createTestSession();
-    const exitCode = await executeCliWorkflowConfig(
-      {
-        agent: 'polish',
-        model: 'deepseekT',
-        workingDirectory: persistedWorkspace,
-        agentCategory: AgentCategory.Workflow,
-      },
-      context,
-      {
-        session: Effect.succeed(session),
-        runtime: testRuntime(),
-        lifecycle: installedHost().platform.lifecycle,
-      },
-    ).finally(() => Effect.runPromise(session.dispose()));
-
-    expect(exitCode).toBe(CliExitCode.Interrupted);
-    expect(cliLogSinksMock.writeTextStdout).not.toHaveBeenCalled();
-    expect(
-      cliLogSinksMock.writeTextStderrAndWait,
-    ).toHaveBeenCalledExactlyOnceWith(
-      expectedRecoveryHint(context, 'exec-signal', persistedWorkspace),
-    );
-  });
-
-  it('prints recovery when the original process directory is unavailable', async () => {
-    const run = workflowRun('exec-deleted-cwd', {
-      outcome: RUN_OUTCOME.CANCELLED,
-    });
-    mockWorkflowRun(run, true);
-    const stableWorkspace = path.join(path.sep, 'tmp', 'stable-workspace');
-    const context = createRunCommandCliContext({ cwd: stableWorkspace });
-    const cwdSpy = vi.spyOn(process, 'cwd').mockImplementation(() => {
-      throw new Error('launch directory was deleted');
-    });
-    const { executeCliWorkflowConfig: nativeExecute } =
-      await import('@cli/commands/workflow');
-    const executeCliWorkflowConfig = (
-      ...args: Parameters<typeof nativeExecute>
-    ) =>
-      Effect.runPromise(
-        Effect.provide(nativeExecute(...args), fakeProcessServices()),
-      );
-
-    const { createTestSession } =
-      await import('@test/support/sessionTestUtils');
-    const session = createTestSession();
-    const result = executeCliWorkflowConfig(
-      {
-        agent: 'polish',
-        model: 'deepseekT',
-        workingDirectory: stableWorkspace,
-        agentCategory: AgentCategory.Workflow,
-      },
-      context,
-      {
-        session: Effect.succeed(session),
-        runtime: testRuntime(),
-        lifecycle: installedHost().platform.lifecycle,
-      },
-    ).finally(() => Effect.runPromise(session.dispose()));
-    await expect(result).resolves.toBe(CliExitCode.Interrupted);
-    expect(cwdSpy).toHaveBeenCalledOnce();
-    cwdSpy.mockRestore();
-    expect(cliLogSinksMock.writeTextStderr).toHaveBeenCalledExactlyOnceWith(
-      `Resume this workflow with: ${formatResumeCommand(
-        context.commandName,
-        'exec-deleted-cwd',
-        {
-          cwd: stableWorkspace,
-          processCwd: undefined,
-          approvalPolicy: context.approvalPolicy,
-          outputFormat: context.outputFormat,
-          print: true,
-        },
-      )}`,
-    );
-  });
-
-  it('does not print a recovery command for completed workflows', async () => {
-    const exitCode = await runWorkflow();
-
-    expect(exitCode).toBe(CliExitCode.Success);
-    expect(cliLogSinksMock.writeTextStdout).not.toHaveBeenCalled();
-    expect(cliLogSinksMock.writeTextStderr).not.toHaveBeenCalled();
-  });
-
-  it.each(['json', 'ndjson'] as const)(
-    'keeps %s stdout free of the cancellation recovery hint',
-    async (outputFormat) => {
       mockWorkflowRun(
-        workflowRun('exec-interrupted', {
+        workflowRun('exec-stdin-interrupted', {
           outcome: RUN_OUTCOME.CANCELLED,
         }),
         true,
       );
 
-      const exitCode = await runWorkflow(
-        {},
-        createRunCommandCliContext({ outputFormat }),
-      );
-
-      expect(exitCode).toBe(CliExitCode.Interrupted);
-      expect(cliLogSinksMock.writeTextStdout).not.toHaveBeenCalled();
-      expect(cliLogSinksMock.writeTextStderr).toHaveBeenCalledExactlyOnceWith(
-        expectedRecoveryHint(
-          createRunCommandCliContext({ outputFormat }),
-          'exec-interrupted',
+      expect(
+        yield* workflowProgram(
+          { inputFiles: ['-'] },
+          createRunCommandCliContext({ cwd: root }),
         ),
-      );
-    },
+      ).toBe(CliExitCode.Interrupted);
+
+      expect(
+        mocks.executeCliConfig.mock.calls[0]?.[2].onInterruptedRunFinalized,
+      ).toBeUndefined();
+      expect(cliLogSinksMock.writeTextStdout).not.toHaveBeenCalled();
+      expect(cliLogSinksMock.writeTextStderr).not.toHaveBeenCalled();
+    }),
   );
 
-  it('does not print a recovery command for failed workflows', async () => {
-    mockWorkflowRun(
-      workflowRun('exec-failed', { outcome: RUN_OUTCOME.FAILED }),
-      true,
-    );
+  it.effect(
+    'keeps recovery for a durable file whose name resembles stdin materialization',
+    () =>
+      Effect.gen(function* () {
+        const lookalike = path.join(
+          path.sep,
+          'tmp',
+          'workspace',
+          'texra-stdin-123-abc123',
+          'stdin.tex',
+        );
+        mocks.withExpandedRunInputs.mockImplementationOnce(
+          (_inputs, _contexts, _cwd, _options, run) =>
+            run({ inputFiles: [lookalike], contextFiles: [] }),
+        );
+        mockWorkflowRun(
+          workflowRun('exec-stdin-lookalike', {
+            outcome: RUN_OUTCOME.CANCELLED,
+          }),
+          true,
+        );
 
-    const exitCode = await runWorkflow();
+        expect(yield* workflowProgram()).toBe(CliExitCode.Interrupted);
 
-    expect(exitCode).toBe(CliExitCode.AgentError);
-    expect(cliLogSinksMock.writeTextStdout).not.toHaveBeenCalled();
-    expect(cliLogSinksMock.writeTextStderr).not.toHaveBeenCalled();
-  });
+        expect(
+          mocks.executeCliConfig.mock.calls[0]?.[2].onInterruptedRunFinalized,
+        ).toBeTypeOf('function');
+        expect(cliLogSinksMock.writeTextStderr).toHaveBeenCalledOnce();
+      }),
+  );
+
+  it.effect(
+    'rejects recovery advertising for a snapshot carrying a round failure',
+    () =>
+      Effect.gen(function* () {
+        yield* workflowProgram();
+        const canAdvertise =
+          mocks.executeCliConfig.mock.calls[0]?.[2].canAdvertiseInterruptedRun;
+
+        expect(
+          canAdvertise?.({
+            kind: 'checkpoint',
+            snapshot: reflectionSnapshot(
+              {},
+              {
+                lastError: { message: 'provider failed', userRetryable: true },
+              },
+            ),
+          }),
+        ).toBe(false);
+      }),
+  );
+
+  it.effect(
+    'rejects recovery advertising for terminal unresolved compile rejection',
+    () =>
+      Effect.gen(function* () {
+        yield* workflowProgram();
+        const canAdvertise =
+          mocks.executeCliConfig.mock.calls[0]?.[2].canAdvertiseInterruptedRun;
+
+        expect(
+          canAdvertise?.({
+            kind: 'checkpoint',
+            snapshot: reflectionSnapshot({
+              currentRound: 1,
+              totalRounds: 2,
+              unresolvedCompileRejection: true,
+            }),
+          }),
+        ).toBe(false);
+        expect(
+          canAdvertise?.({
+            kind: 'checkpoint',
+            snapshot: reflectionSnapshot({
+              currentRound: 0,
+              totalRounds: 2,
+              unresolvedCompileRejection: true,
+            }),
+          }),
+        ).toBe(true);
+      }),
+  );
+
+  it.effect(
+    'prints the durable shutdown hint once with the persisted workspace',
+    () =>
+      Effect.gen(function* () {
+        const run = workflowRun('exec-signal', {
+          outcome: RUN_OUTCOME.CANCELLED,
+        });
+        mocks.executeCliConfig.mockImplementationOnce(
+          (_config, _context, options) =>
+            Effect.gen(function* () {
+              if (!run.ok) return run;
+              if (options.openWorkflowOutput)
+                yield* options.openWorkflowOutput(run.result, [], () => true);
+              options.onInterruptedRunFinalized?.('exec-signal');
+              return run;
+            }),
+        );
+        const resumeInvocation = path.join(
+          path.sep,
+          'tmp',
+          'resume-invocation',
+        );
+        const persistedWorkspace = path.join(
+          path.sep,
+          'tmp',
+          'persisted-workspace',
+        );
+        const context = createRunCommandCliContext({ cwd: resumeInvocation });
+        const { executeCliWorkflowConfig: nativeExecute } =
+          yield* Effect.promise(() => import('@cli/commands/workflow'));
+        const executeCliWorkflowConfig = (
+          ...args: Parameters<typeof nativeExecute>
+        ) => Effect.provide(nativeExecute(...args), fakeProcessServices());
+
+        const { createTestSession } = yield* Effect.promise(
+          () => import('@test/support/sessionTestUtils'),
+        );
+        const session = createTestSession();
+        const exitCode = yield* executeCliWorkflowConfig(
+          {
+            agent: 'polish',
+            model: 'deepseekT',
+            workingDirectory: persistedWorkspace,
+            agentCategory: AgentCategory.Workflow,
+          },
+          context,
+          {
+            session: Effect.succeed(session),
+            runtime: testRuntime(),
+            lifecycle: installedHost().platform.lifecycle,
+          },
+        ).pipe(Effect.ensuring(session.dispose()));
+
+        expect(exitCode).toBe(CliExitCode.Interrupted);
+        expect(cliLogSinksMock.writeTextStdout).not.toHaveBeenCalled();
+        expect(
+          cliLogSinksMock.writeTextStderrAndWait,
+        ).toHaveBeenCalledExactlyOnceWith(
+          expectedRecoveryHint(context, 'exec-signal', persistedWorkspace),
+        );
+      }),
+  );
+
+  it.effect(
+    'prints recovery when the original process directory is unavailable',
+    () =>
+      Effect.gen(function* () {
+        const run = workflowRun('exec-deleted-cwd', {
+          outcome: RUN_OUTCOME.CANCELLED,
+        });
+        mockWorkflowRun(run, true);
+        const stableWorkspace = path.join(path.sep, 'tmp', 'stable-workspace');
+        const context = createRunCommandCliContext({ cwd: stableWorkspace });
+        const cwdSpy = vi.spyOn(process, 'cwd').mockImplementation(() => {
+          throw new Error('launch directory was deleted');
+        });
+        const { executeCliWorkflowConfig: nativeExecute } =
+          yield* Effect.promise(() => import('@cli/commands/workflow'));
+        const executeCliWorkflowConfig = (
+          ...args: Parameters<typeof nativeExecute>
+        ) => Effect.provide(nativeExecute(...args), fakeProcessServices());
+
+        const { createTestSession } = yield* Effect.promise(
+          () => import('@test/support/sessionTestUtils'),
+        );
+        const session = createTestSession();
+        const exitCode = yield* executeCliWorkflowConfig(
+          {
+            agent: 'polish',
+            model: 'deepseekT',
+            workingDirectory: stableWorkspace,
+            agentCategory: AgentCategory.Workflow,
+          },
+          context,
+          {
+            session: Effect.succeed(session),
+            runtime: testRuntime(),
+            lifecycle: installedHost().platform.lifecycle,
+          },
+        ).pipe(Effect.ensuring(session.dispose()));
+        expect(exitCode).toBe(CliExitCode.Interrupted);
+        expect(cwdSpy).toHaveBeenCalledOnce();
+        cwdSpy.mockRestore();
+        expect(cliLogSinksMock.writeTextStderr).toHaveBeenCalledExactlyOnceWith(
+          `Resume this workflow with: ${formatResumeCommand(
+            context.commandName,
+            'exec-deleted-cwd',
+            {
+              cwd: stableWorkspace,
+              processCwd: undefined,
+              approvalPolicy: context.approvalPolicy,
+              outputFormat: context.outputFormat,
+              print: true,
+            },
+          )}`,
+        );
+      }),
+  );
+
+  it.effect('does not print a recovery command for completed workflows', () =>
+    Effect.gen(function* () {
+      const exitCode = yield* workflowProgram();
+
+      expect(exitCode).toBe(CliExitCode.Success);
+      expect(cliLogSinksMock.writeTextStdout).not.toHaveBeenCalled();
+      expect(cliLogSinksMock.writeTextStderr).not.toHaveBeenCalled();
+    }),
+  );
+
+  it.effect.each(['json', 'ndjson'] as const)(
+    'keeps %s stdout free of the cancellation recovery hint',
+    (outputFormat) =>
+      Effect.gen(function* () {
+        mockWorkflowRun(
+          workflowRun('exec-interrupted', {
+            outcome: RUN_OUTCOME.CANCELLED,
+          }),
+          true,
+        );
+
+        const exitCode = yield* workflowProgram(
+          {},
+          createRunCommandCliContext({ outputFormat }),
+        );
+
+        expect(exitCode).toBe(CliExitCode.Interrupted);
+        expect(cliLogSinksMock.writeTextStdout).not.toHaveBeenCalled();
+        expect(cliLogSinksMock.writeTextStderr).toHaveBeenCalledExactlyOnceWith(
+          expectedRecoveryHint(
+            createRunCommandCliContext({ outputFormat }),
+            'exec-interrupted',
+          ),
+        );
+      }),
+  );
+
+  it.effect('does not print a recovery command for failed workflows', () =>
+    Effect.gen(function* () {
+      mockWorkflowRun(
+        workflowRun('exec-failed', { outcome: RUN_OUTCOME.FAILED }),
+        true,
+      );
+
+      const exitCode = yield* workflowProgram();
+
+      expect(exitCode).toBe(CliExitCode.AgentError);
+      expect(cliLogSinksMock.writeTextStdout).not.toHaveBeenCalled();
+      expect(cliLogSinksMock.writeTextStderr).not.toHaveBeenCalled();
+    }),
+  );
 
   it.effect(
     'reports missing instruction files before starting platform or input work',

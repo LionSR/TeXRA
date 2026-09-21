@@ -128,65 +128,92 @@ describe('child run progress events', () => {
     await Effect.runPromise(session.settlePublications());
   });
 
-  it('publishes child run lifecycle events through the session hub', async () => {
-    const recorded = recordSessionEvents(testDefaultSession());
+  it.effect(
+    'publishes child run lifecycle events through the session hub',
+    () =>
+      Effect.gen(function* () {
+        const recorded = recordSessionEvents(testDefaultSession());
 
-    const childRun = await startBashChild(runId);
+        const childRun = yield* Effect.promise(() => startBashChild(runId));
 
-    expect(childRun.childRunId).toBe(runId);
+        expect(childRun.childRunId).toBe(runId);
 
-    await Effect.runPromise(
-      childRun.finalize({
-        outcome: RUN_OUTCOME.COMPLETED,
-        autoClose: true,
-      }),
-    );
+        yield* childRun.finalize({
+          outcome: RUN_OUTCOME.COMPLETED,
+          autoClose: true,
+        });
 
-    expect(eventsOfType(await recorded.read(), 'run.start')).toContainEqual(
-      expect.objectContaining({
-        aggregateId: qualifyAggregateId('run', runId),
-        identity: { kind: 'process', tool: 'bash' },
-        category: AgentCategory.ToolUse,
-        isRemote: false,
-        // The whole parent edge, stamped on the birth fact.
-        parent: expect.objectContaining({ id: parentRunId }),
+        expect(
+          eventsOfType(
+            yield* Effect.promise(() => recorded.read()),
+            'run.start',
+          ),
+        ).toContainEqual(
+          expect.objectContaining({
+            aggregateId: qualifyAggregateId('run', runId),
+            identity: { kind: 'process', tool: 'bash' },
+            category: AgentCategory.ToolUse,
+            isRemote: false,
+            // The whole parent edge, stamped on the birth fact.
+            parent: expect.objectContaining({ id: parentRunId }),
+          }),
+        );
+        // The activation beside the existence fact, with no `isRemote`: the
+        // frozen NDJSON line for a child never carried one.
+        expect(
+          eventsOfType(
+            yield* Effect.promise(() => recorded.read()),
+            'run.activate',
+          ),
+        ).toMatchObject([
+          {
+            type: 'run.activate',
+            aggregateId: qualifyAggregateId('run', runId),
+            category: AgentCategory.ToolUse,
+          },
+        ]);
+        expect(
+          eventsOfType(
+            yield* Effect.promise(() => recorded.read()),
+            'run.config',
+          ),
+        ).toContainEqual(
+          expect.objectContaining({
+            aggregateId: qualifyAggregateId('run', runId),
+          }),
+        );
+        expect(
+          eventsOfType(
+            yield* Effect.promise(() => recorded.read()),
+            'run.description',
+          ),
+        ).toContainEqual(
+          expect.objectContaining({
+            aggregateId: qualifyAggregateId('run', runId),
+            description: 'Run a background bash command',
+          }),
+        );
+        // The terminal phase is `run.end`'s alone.
+        expect(
+          eventsOfType(yield* Effect.promise(() => recorded.read()), 'run.end'),
+        ).toEqual([
+          expect.objectContaining({
+            aggregateId: qualifyAggregateId('run', runId),
+            outcome: RUN_OUTCOME.COMPLETED,
+          }),
+        ]);
+        expect(
+          eventsOfType(
+            yield* Effect.promise(() => recorded.read()),
+            'run.removed',
+          ),
+        ).toEqual([]);
       }),
-    );
-    // The activation beside the existence fact, with no `isRemote`: the
-    // frozen NDJSON line for a child never carried one.
-    expect(eventsOfType(await recorded.read(), 'run.activate')).toMatchObject([
-      {
-        type: 'run.activate',
-        aggregateId: qualifyAggregateId('run', runId),
-        category: AgentCategory.ToolUse,
-      },
-    ]);
-    expect(eventsOfType(await recorded.read(), 'run.config')).toContainEqual(
-      expect.objectContaining({
-        aggregateId: qualifyAggregateId('run', runId),
-      }),
-    );
-    expect(
-      eventsOfType(await recorded.read(), 'run.description'),
-    ).toContainEqual(
-      expect.objectContaining({
-        aggregateId: qualifyAggregateId('run', runId),
-        description: 'Run a background bash command',
-      }),
-    );
-    // The terminal phase is `run.end`'s alone.
-    expect(eventsOfType(await recorded.read(), 'run.end')).toEqual([
-      expect.objectContaining({
-        aggregateId: qualifyAggregateId('run', runId),
-        outcome: RUN_OUTCOME.COMPLETED,
-      }),
-    ]);
-    expect(eventsOfType(await recorded.read(), 'run.removed')).toEqual([]);
-  });
+  );
 
-  it('marks a deterministic child-run relaunch as running', async () => {
-    const firstRun = await Effect.runPromise(
-      createRegisteredChildRun(
+  it.effect('marks a deterministic child-run relaunch as running', () =>
+    Effect.gen(function* () {
+      const firstRun = yield* createRegisteredChildRun(
         testDefaultSession(),
         workflowRelaunchRunId,
         parentRunId,
@@ -196,18 +223,14 @@ describe('child run progress events', () => {
           description: 'Run a named child task',
           config,
         },
-      ),
-    );
-    await Effect.runPromise(
-      firstRun.finalize({ outcome: RUN_OUTCOME.COMPLETED }),
-    );
-    expect(testDefaultSession().runView(workflowRelaunchRunId)?.status).toBe(
-      RUN_PHASE.COMPLETED,
-    );
+      );
+      yield* firstRun.finalize({ outcome: RUN_OUTCOME.COMPLETED });
+      expect(testDefaultSession().runView(workflowRelaunchRunId)?.status).toBe(
+        RUN_PHASE.COMPLETED,
+      );
 
-    const recorded = recordSessionEvents(testDefaultSession());
-    const relaunched = await Effect.runPromise(
-      createRegisteredChildRun(
+      const recorded = recordSessionEvents(testDefaultSession());
+      const relaunched = yield* createRegisteredChildRun(
         testDefaultSession(),
         workflowRelaunchRunId,
         parentRunId,
@@ -217,10 +240,13 @@ describe('child run progress events', () => {
           description: 'Resume the named child task',
           config,
         },
-      ),
-    );
+      );
+      yield* Effect.addFinalizer(() =>
+        relaunched
+          .finalize({ outcome: RUN_OUTCOME.COMPLETED })
+          .pipe(Effect.orDie),
+      );
 
-    try {
       expect(testDefaultSession().runView(workflowRelaunchRunId)?.status).toBe(
         RUN_PHASE.RUNNING,
       );
@@ -229,17 +255,18 @@ describe('child run progress events', () => {
       );
       // The relaunch is a second activation on the same run: that row is
       // what carries the run out of its terminal phase.
-      expect(eventsOfType(await recorded.read(), 'run.activate')).toEqual([
+      expect(
+        eventsOfType(
+          yield* Effect.promise(() => recorded.read()),
+          'run.activate',
+        ),
+      ).toEqual([
         expect.objectContaining({
           aggregateId: qualifyAggregateId('run', workflowRelaunchRunId),
         }),
       ]);
-    } finally {
-      await Effect.runPromise(
-        relaunched.finalize({ outcome: RUN_OUTCOME.COMPLETED }),
-      );
-    }
-  });
+    }),
+  );
 
   it.effect(
     'rolls back a failed rehydrated setup so the same run can retry',
@@ -317,93 +344,111 @@ describe('child run progress events', () => {
     },
   );
 
-  it('emits workflow-script identity independently of its worker config', async () => {
-    const recorded = recordSessionEvents(testDefaultSession());
-    const workerConfig = {
-      ...config,
-      agent: 'generic',
-      agentCategory: AgentCategory.Workflow,
-    };
+  it.effect(
+    'emits workflow-script identity independently of its worker config',
+    () =>
+      Effect.gen(function* () {
+        const recorded = recordSessionEvents(testDefaultSession());
+        const workerConfig = {
+          ...config,
+          agent: 'generic',
+          agentCategory: AgentCategory.Workflow,
+        };
 
-    const childRun = await Effect.runPromise(
-      createRegisteredChildRun(
-        testDefaultSession(),
-        workflowRelaunchRunId,
-        parentRunId,
-        {
-          run: {
-            kind: 'multiAgentWorkflow',
-            workflowName: 'repo-cleanup-readonly-pilot-2026-07-24',
+        const childRun = yield* createRegisteredChildRun(
+          testDefaultSession(),
+          workflowRelaunchRunId,
+          parentRunId,
+          {
+            run: {
+              kind: 'multiAgentWorkflow',
+              workflowName: 'repo-cleanup-readonly-pilot-2026-07-24',
+            },
+            userFollowUpSupport: 'unsupported',
+            description: 'Audit the repository without editing',
+            config: workerConfig,
           },
-          userFollowUpSupport: 'unsupported',
-          description: 'Audit the repository without editing',
-          config: workerConfig,
-        },
-      ),
-    );
+        );
 
-    expect(eventsOfType(await recorded.read(), 'run.start')).toContainEqual(
-      expect.objectContaining({
-        identity: {
-          kind: 'multiAgentWorkflow',
-          workflowName: 'repo-cleanup-readonly-pilot-2026-07-24',
-        },
+        expect(
+          eventsOfType(
+            yield* Effect.promise(() => recorded.read()),
+            'run.start',
+          ),
+        ).toContainEqual(
+          expect.objectContaining({
+            identity: {
+              kind: 'multiAgentWorkflow',
+              workflowName: 'repo-cleanup-readonly-pilot-2026-07-24',
+            },
+          }),
+        );
+        expect(
+          testDefaultSession().runs.getHandle(workflowRelaunchRunId),
+        ).toMatchObject({
+          agentName: 'repo-cleanup-readonly-pilot-2026-07-24',
+          category: AgentCategory.Workflow,
+        });
+
+        yield* childRun.finalize({ outcome: RUN_OUTCOME.COMPLETED });
       }),
-    );
-    expect(
-      testDefaultSession().runs.getHandle(workflowRelaunchRunId),
-    ).toMatchObject({
-      agentName: 'repo-cleanup-readonly-pilot-2026-07-24',
-      category: AgentCategory.Workflow,
-    });
+  );
 
-    await Effect.runPromise(
-      childRun.finalize({ outcome: RUN_OUTCOME.COMPLETED }),
-    );
-  });
+  it.effect(
+    'publishes child run existence as a run fact without direct host emission',
+    () =>
+      Effect.gen(function* () {
+        const active = createRecordingHost();
+        const recorded = recordSessionEvents(testDefaultSession());
 
-  it('publishes child run existence as a run fact without direct host emission', async () => {
-    const active = createRecordingHost();
-    const recorded = recordSessionEvents(testDefaultSession());
+        const childRun = yield* Effect.promise(() => startBashChild(runId));
 
-    const childRun = await startBashChild(runId);
+        expect(active.events).toEqual([]);
+        expect(
+          eventsOfType(
+            yield* Effect.promise(() => recorded.read()),
+            'run.start',
+          ),
+        ).toEqual([
+          expect.objectContaining({
+            type: 'run.start',
+            aggregateId: qualifyAggregateId('run', runId),
+            category: AgentCategory.ToolUse,
+            parent: expect.objectContaining({ id: parentRunId }),
+          }),
+        ]);
 
-    expect(active.events).toEqual([]);
-    expect(eventsOfType(await recorded.read(), 'run.start')).toEqual([
-      expect.objectContaining({
-        type: 'run.start',
-        aggregateId: qualifyAggregateId('run', runId),
-        category: AgentCategory.ToolUse,
-        parent: expect.objectContaining({ id: parentRunId }),
+        yield* childRun.finalize({ outcome: RUN_OUTCOME.COMPLETED });
       }),
-    ]);
+  );
 
-    await Effect.runPromise(
-      childRun.finalize({ outcome: RUN_OUTCOME.COMPLETED }),
-    );
-  });
+  it.effect(
+    'retains completed command history after automatic presentation release',
+    () =>
+      Effect.gen(function* () {
+        const recorded = recordSessionEvents(testDefaultSession());
 
-  it('retains completed command history after automatic presentation release', async () => {
-    const recorded = recordSessionEvents(testDefaultSession());
+        const childRun = yield* Effect.promise(() => startBashChild(runId));
+        childRun.logger.info('retained command output');
 
-    const childRun = await startBashChild(runId);
-    childRun.logger.info('retained command output');
+        yield* childRun.finalize({
+          outcome: RUN_OUTCOME.COMPLETED,
+          autoClose: true,
+        });
 
-    await Effect.runPromise(
-      childRun.finalize({
-        outcome: RUN_OUTCOME.COMPLETED,
-        autoClose: true,
+        expect(
+          eventsOfType(
+            yield* Effect.promise(() => recorded.read()),
+            'run.removed',
+          ),
+        ).toEqual([]);
+        const entries =
+          yield* testDefaultSession().transcripts.readEntries(runId);
+        expect(
+          entries.some((entry) => entry.text === 'retained command output'),
+        ).toBe(true);
       }),
-    );
-
-    expect(eventsOfType(await recorded.read(), 'run.removed')).toEqual([]);
-    const entries = await Effect.runPromise(
-      testDefaultSession().transcripts.readEntries(runId),
-    );
-    expect(
-      entries.some((entry) => entry.text === 'retained command output'),
-    ).toBe(true);
-  });
+  );
 
   it.effect(
     'cancels committed admission before launching detached work and releases both claims',
@@ -431,50 +476,51 @@ describe('child run progress events', () => {
               Effect.tap(() => Deferred.await(releasePublication)),
             ),
           );
+        yield* Effect.addFinalizer(() =>
+          Effect.sync(() => publication.mockRestore()),
+        );
         const buildLaunch = vi.fn(() =>
           Effect.succeed({ strategy: neverRunStrategy }),
         );
-        try {
-          const launching = yield* Effect.forkChild(
-            launchAgentCliSession({
-              session,
-              parentRunId,
-              agentName: 'codex',
-              description: 'Cancelled admission',
-              config,
-              registerFailedMessage: 'registration failed',
-              buildLaunch,
-              summary: 'unreachable',
-              launchedLine: 'unreachable',
-              followUpLine: 'unreachable',
-            }).pipe(Effect.provideService(Runs, session.runs)),
-          );
-          const id = yield* Deferred.await(committed);
-          const interrupting = yield* Effect.forkChild(
-            Fiber.interrupt(launching),
-            { startImmediately: true },
-          );
-          yield* Deferred.succeed(releasePublication, undefined);
-          yield* Fiber.join(interrupting);
-          const stopped = yield* Fiber.await(launching);
-          expect(
-            Exit.isFailure(stopped) && Cause.hasInterrupts(stopped.cause),
-          ).toBe(true);
-          expect(buildLaunch).not.toHaveBeenCalled();
-          expect(
-            (yield* getRunRecords(session, id).readRunEnd())?.outcome,
-          ).toBe(RUN_OUTCOME.CANCELLED);
-          expect(yield* session.ownsRun(id)).toBe(false);
-          expect(
-            Exit.isFailure(
-              yield* Effect.exit(
-                getRunRecords(session, id).writeReport('unowned'),
-              ),
+        const launching = yield* Effect.forkChild(
+          launchAgentCliSession({
+            session,
+            parentRunId,
+            agentName: 'codex',
+            description: 'Cancelled admission',
+            config,
+            registerFailedMessage: 'registration failed',
+            buildLaunch,
+            summary: 'unreachable',
+            launchedLine: 'unreachable',
+            followUpLine: 'unreachable',
+          }).pipe(Effect.provideService(Runs, session.runs)),
+        );
+        const id = yield* Deferred.await(committed);
+        const interrupting = yield* Effect.forkChild(
+          Fiber.interrupt(launching),
+          {
+            startImmediately: true,
+          },
+        );
+        yield* Deferred.succeed(releasePublication, undefined);
+        yield* Fiber.join(interrupting);
+        const stopped = yield* Fiber.await(launching);
+        expect(
+          Exit.isFailure(stopped) && Cause.hasInterrupts(stopped.cause),
+        ).toBe(true);
+        expect(buildLaunch).not.toHaveBeenCalled();
+        expect((yield* getRunRecords(session, id).readRunEnd())?.outcome).toBe(
+          RUN_OUTCOME.CANCELLED,
+        );
+        expect(yield* session.ownsRun(id)).toBe(false);
+        expect(
+          Exit.isFailure(
+            yield* Effect.exit(
+              getRunRecords(session, id).writeReport('unowned'),
             ),
-          ).toBe(true);
-        } finally {
-          publication.mockRestore();
-        }
+          ),
+        ).toBe(true);
       }).pipe(Effect.provideService(AgentResume, fakeHostAgentResume)),
   );
 
@@ -531,54 +577,52 @@ describe('child run progress events', () => {
   // reached the handle outranks it, and `finalizeRunTerminal` resolves the
   // run's terminal outcome from that stop rather than from the failure the
   // child reports.
-  it('settles a stopped child loop as cancelled from the stop that landed', async () => {
-    const childRun = await startCodexChild(
-      stoppedRunId,
-      'Run a stopped Codex child loop',
-    );
-    const handle = testDefaultSession().runs.getHandle(stoppedRunId);
-    expect(handle).toBeDefined();
-    handle?.interrupt();
+  it.effect(
+    'settles a stopped child loop as cancelled from the stop that landed',
+    () =>
+      Effect.gen(function* () {
+        const childRun = yield* Effect.promise(() =>
+          startCodexChild(stoppedRunId, 'Run a stopped Codex child loop'),
+        );
+        const handle = testDefaultSession().runs.getHandle(stoppedRunId);
+        expect(handle).toBeDefined();
+        handle?.interrupt();
 
-    await Effect.runPromise(childRun.finalize({ outcome: RUN_OUTCOME.FAILED }));
+        yield* childRun.finalize({ outcome: RUN_OUTCOME.FAILED });
 
-    expect(testDefaultSession().runView(stoppedRunId)?.status).toBe(
-      RUN_PHASE.CANCELLED,
-    );
-    await expect(
-      Effect.runPromise(
-        getRunRecords(testDefaultSession(), stoppedRunId).readRunEnd(),
-      ),
-    ).resolves.toMatchObject({ outcome: 'cancelled' });
-  });
+        expect(testDefaultSession().runView(stoppedRunId)?.status).toBe(
+          RUN_PHASE.CANCELLED,
+        );
+        expect(
+          yield* getRunRecords(testDefaultSession(), stoppedRunId).readRunEnd(),
+        ).toMatchObject({ outcome: 'cancelled' });
+      }),
+  );
 
-  it('settles failed child handle results with error details', async () => {
-    const childRun = await startCodexChild(
-      failedRunId,
-      'Run a failing Codex child loop',
-    );
-    expect(testDefaultSession().runs.getHandle(failedRunId)).toBeDefined();
+  it.effect('settles failed child handle results with error details', () =>
+    Effect.gen(function* () {
+      const childRun = yield* Effect.promise(() =>
+        startCodexChild(failedRunId, 'Run a failing Codex child loop'),
+      );
+      expect(testDefaultSession().runs.getHandle(failedRunId)).toBeDefined();
 
-    await Effect.runPromise(
-      childRun.finalize({
+      yield* childRun.finalize({
         outcome: RUN_OUTCOME.FAILED,
         error: new Error('child process exited 1'),
-      }),
-    );
+      });
 
-    expect(testDefaultSession().runView(failedRunId)?.status).toBe(
-      RUN_PHASE.FAILED,
-    );
-    await expect(
-      Effect.runPromise(
-        getRunRecords(testDefaultSession(), failedRunId).readRunEnd(),
-      ),
-    ).resolves.toMatchObject({
-      outcome: 'failed',
-      error: {
-        kind: 'unexpected',
-        message: 'child process exited 1',
-      },
-    });
-  });
+      expect(testDefaultSession().runView(failedRunId)?.status).toBe(
+        RUN_PHASE.FAILED,
+      );
+      expect(
+        yield* getRunRecords(testDefaultSession(), failedRunId).readRunEnd(),
+      ).toMatchObject({
+        outcome: 'failed',
+        error: {
+          kind: 'unexpected',
+          message: 'child process exited 1',
+        },
+      });
+    }),
+  );
 });

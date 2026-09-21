@@ -1,6 +1,6 @@
-import { describe, expect, it, vi } from 'vitest';
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { it as effectIt } from '@effect/vitest';
+import { describe, expect, vi } from 'vitest';
 
 import { maskDisplayValue } from '@cli/chat/tui/input/textInputEditing';
 import { formatPersonalApiKeysLine } from '@cli/runtime/apiStatus';
@@ -32,12 +32,14 @@ const maybeOnboarding = (...args: Parameters<typeof maybeRunCliOnboarding>) =>
 const ONBOARDING_DECLINED_KEY = GlobalStateKey.ONBOARDING_DECLINED;
 
 describe('onboarding decline flag', () => {
-  it('treats a non-boolean stored value as not-declined', async () => {
-    const state = new MemoryStateStore();
-    await Effect.runPromise(state.update(ONBOARDING_DECLINED_KEY, 'yes'));
+  it.effect('treats a non-boolean stored value as not-declined', () =>
+    Effect.gen(function* () {
+      const state = new MemoryStateStore();
+      yield* state.update(ONBOARDING_DECLINED_KEY, 'yes');
 
-    expect(readOnboardingFlags(state).declined).toBe(false);
-  });
+      expect(readOnboardingFlags(state).declined).toBe(false);
+    }),
+  );
 });
 
 describe('maskDisplayValue', () => {
@@ -52,7 +54,7 @@ describe('maskDisplayValue', () => {
 });
 
 describe('maybeRunCliOnboarding headless parity', () => {
-  effectIt.effect(
+  it.effect(
     'returns configured:false on a non-TTY stdout even when marked interactive',
     () =>
       Effect.gen(function* () {
@@ -64,28 +66,29 @@ describe('maybeRunCliOnboarding headless parity', () => {
           value: false,
           configurable: true,
         });
-        try {
-          expect(
-            yield* maybeOnboarding(
-              {
-                ...createFakePlatform(),
-                ...createFakeWorkspaceRoots(),
-                secrets: new FakeSecrets(),
-                runtime: testRuntime(),
-              },
-              {
-                mode: 'interactive',
-                stdoutIsTty: true,
-                termIsDumb: false,
-              },
-            ),
-          ).toEqual({ configured: false, declined: false });
-        } finally {
-          Object.defineProperty(process.stdout, 'isTTY', {
-            value: original,
-            configurable: true,
-          });
-        }
+        yield* Effect.addFinalizer(() =>
+          Effect.sync(() => {
+            Object.defineProperty(process.stdout, 'isTTY', {
+              value: original,
+              configurable: true,
+            });
+          }),
+        );
+        expect(
+          yield* maybeOnboarding(
+            {
+              ...createFakePlatform(),
+              ...createFakeWorkspaceRoots(),
+              secrets: new FakeSecrets(),
+              runtime: testRuntime(),
+            },
+            {
+              mode: 'interactive',
+              stdoutIsTty: true,
+              termIsDumb: false,
+            },
+          ),
+        ).toEqual({ configured: false, declined: false });
       }),
   );
 });

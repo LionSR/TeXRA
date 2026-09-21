@@ -1,5 +1,6 @@
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, vi } from 'vitest';
 
 import type { AgentEvent } from '@agent/trace';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
@@ -195,260 +196,287 @@ function projectionOver(session: SessionHandle) {
 }
 
 describe('attachCliSessionProgressProjection', () => {
-  it('writes every display row as a progress record carrying the row verbatim', async () => {
-    const session = createTestSession();
-    publishTestRunStart(session, runId);
-    publishTestRunStart(session, childRunId, { parent: runId });
-    // The projection attaches at the current ordinal: settle the seeded
-    // existence facts first so only what the test publishes is projected.
-    await Effect.runPromise(session.settlePublications());
-    const { records, publish, detach } = projectionOver(session);
-    try {
-      for (const { source } of PASS_THROUGH_CASES) {
-        await publish(source);
-      }
+  it.effect(
+    'writes every display row as a progress record carrying the row verbatim',
+    () =>
+      Effect.gen(function* () {
+        const session = createTestSession();
+        publishTestRunStart(session, runId);
+        publishTestRunStart(session, childRunId, { parent: runId });
+        // The projection attaches at the current ordinal: settle the seeded
+        // existence facts first so only what the test publishes is projected.
+        yield* session.settlePublications();
+        const { records, publish, detach } = projectionOver(session);
+        yield* Effect.addFinalizer(() => Effect.promise(() => detach()));
+        for (const { source } of PASS_THROUGH_CASES) {
+          yield* Effect.promise(() => publish(source));
+        }
 
-      expect(records().map(rowFields)).toMatchObject(
-        PASS_THROUGH_CASES.map(({ event, payload }) => ({
-          event,
-          fields: payload,
-        })),
-      );
-    } finally {
-      detach();
-    }
-  });
+        expect(records().map(rowFields)).toMatchObject(
+          PASS_THROUGH_CASES.map(({ event, payload }) => ({
+            event,
+            fields: payload,
+          })),
+        );
+      }),
+  );
 
-  it('carries the parent edge on run.start and the terminal fact on run.end', async () => {
-    const session = createTestSession();
-    publishTestRunStart(session, runId);
-    await Effect.runPromise(session.settlePublications());
-    const { records, publish, detach } = projectionOver(session);
-    try {
-      await publish({
-        draft: {
-          type: 'run.start',
-          aggregateId: childAggregate,
-          identity: { kind: 'process', tool: 'bash' },
-          category: AgentCategory.ToolUse,
-          isRemote: false,
-          userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-          parent: { id: runId },
-        },
-      });
-      await publish({
-        draft: {
-          type: 'run.end',
-          aggregateId: childAggregate,
-          outcome: 'completed',
-          output: { category: 'toolUse', response: '', files: [] },
-        },
-      });
+  it.effect(
+    'carries the parent edge on run.start and the terminal fact on run.end',
+    () =>
+      Effect.gen(function* () {
+        const session = createTestSession();
+        publishTestRunStart(session, runId);
+        yield* session.settlePublications();
+        const { records, publish, detach } = projectionOver(session);
+        yield* Effect.addFinalizer(() => Effect.promise(() => detach()));
+        yield* Effect.promise(() =>
+          publish({
+            draft: {
+              type: 'run.start',
+              aggregateId: childAggregate,
+              identity: { kind: 'process', tool: 'bash' },
+              category: AgentCategory.ToolUse,
+              isRemote: false,
+              userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+              parent: { id: runId },
+            },
+          }),
+        );
+        yield* Effect.promise(() =>
+          publish({
+            draft: {
+              type: 'run.end',
+              aggregateId: childAggregate,
+              outcome: 'completed',
+              output: { category: 'toolUse', response: '', files: [] },
+            },
+          }),
+        );
 
-      const [start, end] = records().map(rowFields);
-      expect(start).toEqual({
-        event: 'run.start',
-        fields: expect.objectContaining({
-          aggregateId: childAggregate,
-          identity: { kind: 'process', tool: 'bash' },
-          parent: expect.objectContaining({ id: runId }),
-        }),
-      });
-      expect(end).toEqual({
-        event: 'run.end',
-        fields: expect.objectContaining({
-          aggregateId: childAggregate,
-          outcome: 'completed',
-        }),
-      });
-    } finally {
-      detach();
-    }
-  });
+        const [start, end] = records().map(rowFields);
+        expect(start).toEqual({
+          event: 'run.start',
+          fields: expect.objectContaining({
+            aggregateId: childAggregate,
+            identity: { kind: 'process', tool: 'bash' },
+            parent: expect.objectContaining({ id: runId }),
+          }),
+        });
+        expect(end).toEqual({
+          event: 'run.end',
+          fields: expect.objectContaining({
+            aggregateId: childAggregate,
+            outcome: 'completed',
+          }),
+        });
+      }),
+  );
 
-  it('attaches at the current ordinal: a recorded session resumes with one activation line and no replayed history', async () => {
-    const session = createTestSession();
-    // The recorded history: a launch that ran and stopped before this
-    // process attached its projection.
-    session.publish([
-      {
-        type: 'run.start',
-        aggregateId: runAggregate,
-        identity: { kind: 'agent', agent: 'polish' },
-        category: AgentCategory.ToolUse,
-        isRemote: false,
-        userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
-        parent: null,
-      },
-      {
-        type: 'run.activate',
-        aggregateId: runAggregate,
-        category: AgentCategory.ToolUse,
-        isRemote: false,
-      },
-      {
-        type: 'run.description',
-        aggregateId: runAggregate,
-        description: 'Recorded before the resume',
-      },
-    ]);
-    await Effect.runPromise(session.settlePublications());
-
-    const { records, publish, detach } = projectionOver(session);
-    try {
-      // A resume mints no run.start: the activation is its only new fact.
-      await publish({
-        draft: {
-          type: 'run.activate',
-          aggregateId: runAggregate,
-          category: AgentCategory.ToolUse,
-          isRemote: false,
-        },
-      });
-
-      expect(records().map(rowFields)).toEqual([
-        {
-          event: 'run.activate',
-          fields: {
+  it.effect(
+    'attaches at the current ordinal: a recorded session resumes with one activation line and no replayed history',
+    () =>
+      Effect.gen(function* () {
+        const session = createTestSession();
+        // The recorded history: a launch that ran and stopped before this
+        // process attached its projection.
+        session.publish([
+          {
+            type: 'run.start',
+            aggregateId: runAggregate,
+            identity: { kind: 'agent', agent: 'polish' },
+            category: AgentCategory.ToolUse,
+            isRemote: false,
+            userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
+            parent: null,
+          },
+          {
+            type: 'run.activate',
             aggregateId: runAggregate,
             category: AgentCategory.ToolUse,
             isRemote: false,
           },
-        },
-      ]);
-    } finally {
-      detach();
-    }
-  });
-
-  it('derives the child roster from the fold, one run.children record per change', async () => {
-    const session = createTestSession();
-    publishTestRunStart(session, runId);
-    await Effect.runPromise(session.settlePublications());
-    const { all, publish, detach } = projectionOver(session);
-    const rosters = () => all().filter((r) => r.event === 'run.children');
-    try {
-      await publish({
-        draft: {
-          type: 'run.start',
-          aggregateId: childAggregate,
-          identity: { kind: 'agent', agent: 'review' },
-          category: AgentCategory.ToolUse,
-          isRemote: false,
-          userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-          parent: { id: runId },
-        },
-      });
-      // The child's own row, under its own names, with the fold's phase:
-      // `ready` until its `run.activate` folds.
-      expect(rosters()).toEqual([
-        {
-          kind: 'progress',
-          event: 'run.children',
-          ts: expect.any(String),
-          payload: {
-            runId,
-            children: [
-              {
-                childRunId,
-                agentName: 'review',
-                identity: { kind: 'agent', agent: 'review' },
-                status: 'ready',
-              },
-            ],
-          },
-        },
-      ]);
-
-      // A row that moves the child's phase rewrites the roster once.
-      await publish({
-        draft: {
-          type: 'run.activate',
-          aggregateId: childAggregate,
-          category: AgentCategory.ToolUse,
-          isRemote: false,
-        },
-      });
-      expect(rosters()).toHaveLength(2);
-      expect(rosters()[1]?.payload).toMatchObject({
-        runId,
-        children: [{ childRunId, status: 'running' }],
-      });
-
-      // A row that moves nothing on the roster writes no second copy.
-      await publish({
-        draft: {
-          type: 'run.description',
-          aggregateId: runAggregate,
-          description: 'Checking the compactness lemma',
-        },
-      });
-      expect(rosters()).toHaveLength(2);
-
-      // The ended child leaves the live roster; its own `run.end` line
-      // carries the outcome.
-      await publish({
-        draft: {
-          type: 'run.end',
-          aggregateId: childAggregate,
-          outcome: 'completed',
-          output: { category: 'toolUse', response: '', files: [] },
-        },
-      });
-      expect(rosters()).toHaveLength(3);
-      expect(rosters()[2]?.payload).toEqual({ runId, children: [] });
-    } finally {
-      await detach();
-    }
-  });
-
-  it('writes nothing after detach', async () => {
-    const session = createTestSession();
-    publishTestRunStart(session, runId);
-    await Effect.runPromise(session.settlePublications());
-    const { writeRecord, publish, detach } = projectionOver(session);
-    await publish({
-      draft: {
-        type: 'run.description',
-        aggregateId: runAggregate,
-        description: 'Proofread the introduction',
-      },
-    });
-    expect(writeRecord).toHaveBeenCalledTimes(1);
-
-    detach();
-    await Effect.runPromise(session.settlePublications());
-    await publish({
-      draft: {
-        type: 'run.description',
-        aggregateId: runAggregate,
-        description: 'after detach',
-      },
-    });
-    expect(writeRecord).toHaveBeenCalledTimes(1);
-  });
-
-  it('writes one record per published flow step without renderer dedup', async () => {
-    const session = createTestSession();
-    publishTestRunStart(session, runId);
-    await Effect.runPromise(session.settlePublications());
-    const { records, publish, detach } = projectionOver(session);
-    try {
-      for (const turn of [1, 2]) {
-        await publish({
-          draft: {
-            type: 'flow.step',
+          {
+            type: 'run.description',
             aggregateId: runAggregate,
-            payload: { family: 'toolUse', step: 'turn.begin', round: 1, turn },
+            description: 'Recorded before the resume',
           },
-        });
-      }
+        ]);
+        yield* session.settlePublications();
 
-      expect(records().map((record) => rowFields(record).fields)).toMatchObject(
-        [{ payload: { turn: 1 } }, { payload: { turn: 2 } }],
+        const { records, publish, detach } = projectionOver(session);
+        yield* Effect.addFinalizer(() => Effect.promise(() => detach()));
+        // A resume mints no run.start: the activation is its only new fact.
+        yield* Effect.promise(() =>
+          publish({
+            draft: {
+              type: 'run.activate',
+              aggregateId: runAggregate,
+              category: AgentCategory.ToolUse,
+              isRemote: false,
+            },
+          }),
+        );
+
+        expect(records().map(rowFields)).toEqual([
+          {
+            event: 'run.activate',
+            fields: {
+              aggregateId: runAggregate,
+              category: AgentCategory.ToolUse,
+              isRemote: false,
+            },
+          },
+        ]);
+      }),
+  );
+
+  it.effect(
+    'derives the child roster from the fold, one run.children record per change',
+    () =>
+      Effect.gen(function* () {
+        const session = createTestSession();
+        publishTestRunStart(session, runId);
+        yield* session.settlePublications();
+        const { all, publish, detach } = projectionOver(session);
+        yield* Effect.addFinalizer(() => Effect.promise(() => detach()));
+        const rosters = () => all().filter((r) => r.event === 'run.children');
+        yield* Effect.promise(() =>
+          publish({
+            draft: {
+              type: 'run.start',
+              aggregateId: childAggregate,
+              identity: { kind: 'agent', agent: 'review' },
+              category: AgentCategory.ToolUse,
+              isRemote: false,
+              userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+              parent: { id: runId },
+            },
+          }),
+        );
+        // The child's own row, under its own names, with the fold's phase:
+        // `ready` until its `run.activate` folds.
+        expect(rosters()).toEqual([
+          {
+            kind: 'progress',
+            event: 'run.children',
+            ts: expect.any(String),
+            payload: {
+              runId,
+              children: [
+                {
+                  childRunId,
+                  agentName: 'review',
+                  identity: { kind: 'agent', agent: 'review' },
+                  status: 'ready',
+                },
+              ],
+            },
+          },
+        ]);
+
+        // A row that moves the child's phase rewrites the roster once.
+        yield* Effect.promise(() =>
+          publish({
+            draft: {
+              type: 'run.activate',
+              aggregateId: childAggregate,
+              category: AgentCategory.ToolUse,
+              isRemote: false,
+            },
+          }),
+        );
+        expect(rosters()).toHaveLength(2);
+        expect(rosters()[1]?.payload).toMatchObject({
+          runId,
+          children: [{ childRunId, status: 'running' }],
+        });
+
+        // A row that moves nothing on the roster writes no second copy.
+        yield* Effect.promise(() =>
+          publish({
+            draft: {
+              type: 'run.description',
+              aggregateId: runAggregate,
+              description: 'Checking the compactness lemma',
+            },
+          }),
+        );
+        expect(rosters()).toHaveLength(2);
+
+        // The ended child leaves the live roster; its own `run.end` line
+        // carries the outcome.
+        yield* Effect.promise(() =>
+          publish({
+            draft: {
+              type: 'run.end',
+              aggregateId: childAggregate,
+              outcome: 'completed',
+              output: { category: 'toolUse', response: '', files: [] },
+            },
+          }),
+        );
+        expect(rosters()).toHaveLength(3);
+        expect(rosters()[2]?.payload).toEqual({ runId, children: [] });
+      }),
+  );
+
+  it.effect('writes nothing after detach', () =>
+    Effect.gen(function* () {
+      const session = createTestSession();
+      publishTestRunStart(session, runId);
+      yield* session.settlePublications();
+      const { writeRecord, publish, detach } = projectionOver(session);
+      yield* Effect.promise(() =>
+        publish({
+          draft: {
+            type: 'run.description',
+            aggregateId: runAggregate,
+            description: 'Proofread the introduction',
+          },
+        }),
       );
-    } finally {
-      detach();
-    }
-  });
+      expect(writeRecord).toHaveBeenCalledTimes(1);
+
+      yield* Effect.promise(() => detach());
+      yield* session.settlePublications();
+      yield* Effect.promise(() =>
+        publish({
+          draft: {
+            type: 'run.description',
+            aggregateId: runAggregate,
+            description: 'after detach',
+          },
+        }),
+      );
+      expect(writeRecord).toHaveBeenCalledTimes(1);
+    }),
+  );
+
+  it.effect(
+    'writes one record per published flow step without renderer dedup',
+    () =>
+      Effect.gen(function* () {
+        const session = createTestSession();
+        publishTestRunStart(session, runId);
+        yield* session.settlePublications();
+        const { records, publish, detach } = projectionOver(session);
+        yield* Effect.addFinalizer(() => Effect.promise(() => detach()));
+        for (const turn of [1, 2]) {
+          yield* Effect.promise(() =>
+            publish({
+              draft: {
+                type: 'flow.step',
+                aggregateId: runAggregate,
+                payload: { family: 'toolUse', step: 'turn.begin', round: 1, turn },
+              },
+            }),
+          );
+        }
+
+        expect(records().map((record) => rowFields(record).fields)).toMatchObject(
+          [{ payload: { turn: 1 } }, { payload: { turn: 2 } }],
+        );
+      }),
+  );
 });

@@ -20,7 +20,13 @@ import {
   type AppSignal,
   type AppSignalPayloads,
 } from '@eventBus/AppSignals';
+import { AgentResume } from '@platform/interfaces';
+import { Secrets } from '@platform/secrets';
 import type { RunId } from '@shared/schemas';
+import {
+  fakeHostAgentResume,
+  fakeHostSecrets,
+} from '@test/support/setupPlatform';
 import { testRuntime } from '@test/support/testProcessRuntime';
 
 // Test support imports
@@ -181,37 +187,45 @@ describe('GitHub subscription app signals and follow-ups', () => {
     );
   });
 
-  it('publishes githubSubscriptionsChanged through app signals', async () => {
-    const signal = await recordAppSignal('githubSubscriptionsChanged');
-    const source = new RegistryTestSource();
-    const session = createTestSession();
-    const registry = createTestRegistry(source);
-
-    try {
-      await testRuntime().runPromise(
-        registry.bind('stream-a' as RunId, 'owner/repo', session),
+  it.live('publishes githubSubscriptionsChanged through app signals', () =>
+    Effect.gen(function* () {
+      const signal = yield* Effect.promise(() =>
+        recordAppSignal('githubSubscriptionsChanged'),
       );
+      const source = new RegistryTestSource();
+      const session = createTestSession();
+      const registry = createTestRegistry(source);
+      yield* Effect.addFinalizer(() => session.dispose());
+      yield* Effect.addFinalizer(() => Effect.sync(() => signal.dispose()));
+
+      yield* registry
+        .bind('stream-a' as RunId, 'owner/repo', session)
+        .pipe(
+          Effect.provideService(Secrets, fakeHostSecrets),
+          Effect.provideService(AgentResume, fakeHostAgentResume),
+        );
       // Delivery runs on the subscriber's fiber, so each publication lands a
       // turn after the call that made it.
-      await vi.waitFor(() =>
-        expect(signal.events).toEqual([
-          { event: 'githubSubscriptionsChanged', payload: undefined },
-        ]),
+      yield* Effect.promise(() =>
+        vi.waitFor(() =>
+          expect(signal.events).toEqual([
+            { event: 'githubSubscriptionsChanged', payload: undefined },
+          ]),
+        ),
       );
 
       registry.unbind('stream-a' as RunId, 'owner/repo');
 
-      await vi.waitFor(() =>
-        expect(signal.events).toEqual([
-          { event: 'githubSubscriptionsChanged', payload: undefined },
-          { event: 'githubSubscriptionsChanged', payload: undefined },
-        ]),
+      yield* Effect.promise(() =>
+        vi.waitFor(() =>
+          expect(signal.events).toEqual([
+            { event: 'githubSubscriptionsChanged', payload: undefined },
+            { event: 'githubSubscriptionsChanged', payload: undefined },
+          ]),
+        ),
       );
-    } finally {
-      signal.dispose();
-      await Effect.runPromise(session.dispose());
-    }
-  });
+    }),
+  );
 
   it.effect('reports token invalid events through app signals', () =>
     Effect.gen(function* () {
@@ -219,6 +233,7 @@ describe('GitHub subscription app signals and follow-ups', () => {
       const signal = yield* Effect.promise(() =>
         recordAppSignal('githubTokenInvalid'),
       );
+      yield* Effect.addFinalizer(() => Effect.sync(() => signal.dispose()));
       const listener = (): Effect.Effect<void> => Effect.void;
       const state: BasePollSubscriptionState = {
         listeners: new Set([listener]),
@@ -227,115 +242,136 @@ describe('GitHub subscription app signals and follow-ups', () => {
         skipPollUntilMs: 0,
       };
 
-      try {
-        yield* new TestPollingSource().failWithAuthError(state);
+      yield* new TestPollingSource().failWithAuthError(state);
 
-        yield* Effect.promise(() =>
-          vi.waitFor(() =>
-            expect(signal.events).toContainEqual({
-              event: 'githubTokenInvalid',
-              payload: { message: 'bad token' },
-            }),
-          ),
-        );
-        expect(host.events).toEqual([]);
-      } finally {
-        signal.dispose();
-      }
+      yield* Effect.promise(() =>
+        vi.waitFor(() =>
+          expect(signal.events).toContainEqual({
+            event: 'githubTokenInvalid',
+            payload: { message: 'bad token' },
+          }),
+        ),
+      );
+      expect(host.events).toEqual([]);
     }),
   );
 
-  it('passes the bind-time session to detached subscription follow-ups', async () => {
-    const runId = 'stream-a' as RunId;
-    const source = new RegistryTestSource();
-    const session = createTestSession();
-    session.followUps.claimLive(runId, 'flow');
-    const registry = createTestRegistry(source);
+  it.effect(
+    'passes the bind-time session to detached subscription follow-ups',
+    () =>
+      Effect.gen(function* () {
+        const runId = 'stream-a' as RunId;
+        const source = new RegistryTestSource();
+        const session = createTestSession();
+        session.followUps.claimLive(runId, 'flow');
+        const registry = createTestRegistry(source);
+        yield* Effect.addFinalizer(() => session.dispose());
 
-    try {
-      await testRuntime().runPromise(
-        registry.bind(runId, 'owner/repo', session),
-      );
+        yield* registry
+          .bind(runId, 'owner/repo', session)
+          .pipe(
+            Effect.provideService(Secrets, fakeHostSecrets),
+            Effect.provideService(AgentResume, fakeHostAgentResume),
+          );
 
-      await source.emit('owner/repo', 'new github event');
+        yield* Effect.promise(() =>
+          source.emit('owner/repo', 'new github event'),
+        );
 
-      expect(submitFollowUpMock).toHaveBeenCalledWith(
-        runId,
-        'new github event',
-        { session, mode: 'live_notification' },
-      );
-    } finally {
-      await Effect.runPromise(session.dispose());
-    }
-  });
+        expect(submitFollowUpMock).toHaveBeenCalledWith(
+          runId,
+          'new github event',
+          { session, mode: 'live_notification' },
+        );
+      }),
+  );
 
-  it('rebinds an existing subscription to the session that rebound it', async () => {
-    const runId = 'stream-a' as RunId;
-    const source = new RegistryTestSource();
-    const firstSession = createTestSession();
-    firstSession.followUps.claimLive(runId, 'flow');
-    const secondSession = createTestSession();
-    secondSession.followUps.claimLive(runId, 'flow');
-    const registry = createTestRegistry(source);
+  it.effect(
+    'rebinds an existing subscription to the session that rebound it',
+    () =>
+      Effect.gen(function* () {
+        const runId = 'stream-a' as RunId;
+        const source = new RegistryTestSource();
+        const firstSession = createTestSession();
+        firstSession.followUps.claimLive(runId, 'flow');
+        const secondSession = createTestSession();
+        secondSession.followUps.claimLive(runId, 'flow');
+        const registry = createTestRegistry(source);
+        yield* Effect.addFinalizer(() => secondSession.dispose());
+        yield* Effect.addFinalizer(() => firstSession.dispose());
 
-    try {
-      await testRuntime().runPromise(
-        registry.bind(runId, 'owner/repo', firstSession),
-      );
-      await testRuntime().runPromise(
-        registry.bind(runId, 'owner/repo', secondSession),
-      );
+        yield* registry
+          .bind(runId, 'owner/repo', firstSession)
+          .pipe(
+            Effect.provideService(Secrets, fakeHostSecrets),
+            Effect.provideService(AgentResume, fakeHostAgentResume),
+          );
+        yield* registry
+          .bind(runId, 'owner/repo', secondSession)
+          .pipe(
+            Effect.provideService(Secrets, fakeHostSecrets),
+            Effect.provideService(AgentResume, fakeHostAgentResume),
+          );
 
-      await source.emit('owner/repo', 'new github event');
+        yield* Effect.promise(() =>
+          source.emit('owner/repo', 'new github event'),
+        );
 
-      expect(submitFollowUpMock).toHaveBeenCalledWith(
-        runId,
-        'new github event',
-        { session: secondSession, mode: 'live_notification' },
-      );
-    } finally {
-      await Effect.runPromise(firstSession.dispose());
-      await Effect.runPromise(secondSession.dispose());
-    }
-  });
+        expect(submitFollowUpMock).toHaveBeenCalledWith(
+          runId,
+          'new github event',
+          { session: secondSession, mode: 'live_notification' },
+        );
+      }),
+  );
 
-  it('warns instead of leaking an unhandled rejection when delivery fails', async () => {
-    const runId = 'stream-a' as RunId;
-    const source = new RegistryTestSource();
-    const session = createTestSession();
-    const logger = {
-      info: vi.fn(),
-      warn: vi.fn(),
-    };
-    const registry = createTestRegistry(source, { logger });
-    const unhandledRejection = vi.fn();
-    submitFollowUpMock.mockReturnValueOnce(
-      Effect.fail(new Error('delivery failed')),
-    );
+  it.effect(
+    'warns instead of leaking an unhandled rejection when delivery fails',
+    () =>
+      Effect.gen(function* () {
+        const runId = 'stream-a' as RunId;
+        const source = new RegistryTestSource();
+        const session = createTestSession();
+        const logger = {
+          info: vi.fn(),
+          warn: vi.fn(),
+        };
+        const registry = createTestRegistry(source, { logger });
+        const unhandledRejection = vi.fn();
+        submitFollowUpMock.mockReturnValueOnce(
+          Effect.fail(new Error('delivery failed')),
+        );
+        yield* Effect.addFinalizer(() => session.dispose());
+        yield* Effect.addFinalizer(() =>
+          Effect.sync(() =>
+            process.off('unhandledRejection', unhandledRejection),
+          ),
+        );
 
-    try {
-      process.once('unhandledRejection', unhandledRejection);
-      await testRuntime().runPromise(
-        registry.bind(runId, 'owner/repo', session),
-      );
+        process.once('unhandledRejection', unhandledRejection);
+        yield* registry
+          .bind(runId, 'owner/repo', session)
+          .pipe(
+            Effect.provideService(Secrets, fakeHostSecrets),
+            Effect.provideService(AgentResume, fakeHostAgentResume),
+          );
 
-      // emit() awaits the delivery program, so the recovery has run by the
-      // time it resolves — no settle-and-hope.
-      await source.emit('owner/repo', 'new github event');
+        // emit() awaits the delivery program, so the recovery has run by the
+        // time it resolves — no settle-and-hope.
+        yield* Effect.promise(() =>
+          source.emit('owner/repo', 'new github event'),
+        );
 
-      expect(unhandledRejection).not.toHaveBeenCalled();
-      expect(logger.warn).toHaveBeenCalledWith(
-        'Failed to deliver subscription follow-up',
-        expect.objectContaining({
-          data: expect.objectContaining({
-            key: 'owner/repo',
-            runId,
+        expect(unhandledRejection).not.toHaveBeenCalled();
+        expect(logger.warn).toHaveBeenCalledWith(
+          'Failed to deliver subscription follow-up',
+          expect.objectContaining({
+            data: expect.objectContaining({
+              key: 'owner/repo',
+              runId,
+            }),
           }),
-        }),
-      );
-    } finally {
-      process.off('unhandledRejection', unhandledRejection);
-      await Effect.runPromise(session.dispose());
-    }
-  });
+        );
+      }),
+  );
 });

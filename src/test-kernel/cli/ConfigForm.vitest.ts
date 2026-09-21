@@ -1,8 +1,9 @@
 import { setTimeout as sleep } from 'node:timers/promises';
 
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import stripAnsi from 'strip-ansi';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 import { z } from 'zod';
 
 import {
@@ -440,22 +441,35 @@ describe('CliConfigForm API-key status lifecycle', () => {
     expect(onError).not.toHaveBeenCalled();
   });
 
-  it('saves a GitHub token from /config without rendering the secret', async () => {
-    const rendered = await renderCliConfigForm();
+  // `it.live`, not `it.effect`: the body polls the rendered Ink output with
+  // `waitFor`, which needs a clock that actually advances.
+  it.live(
+    'saves a GitHub token from /config without rendering the secret',
+    () =>
+      Effect.gen(function* () {
+        const rendered = yield* Effect.promise(() => renderCliConfigForm());
+        yield* Effect.addFinalizer(() =>
+          Effect.sync(() => {
+            rendered.instance.unmount();
+          }),
+        );
 
-    try {
-      await waitFor(() => rendered.stdout.output.includes('GitHub token'));
-      rendered.stdout.output = '';
-      await submitGitHubToken(rendered.stdin, rendered.stdout);
-      await waitFor(() => rendered.stdout.output.includes('Token set'));
-      await expect(
-        Effect.runPromise(formSecrets.getStored(GITHUB_TOKEN_STORAGE_KEY)),
-      ).resolves.toBe('ghp_private-test-token');
-      expect(rendered.stdout.output).not.toContain('ghp_private-test-token');
-    } finally {
-      rendered.instance.unmount();
-    }
-  });
+        yield* Effect.promise(() =>
+          waitFor(() => rendered.stdout.output.includes('GitHub token')),
+        );
+        rendered.stdout.output = '';
+        yield* Effect.promise(() =>
+          submitGitHubToken(rendered.stdin, rendered.stdout),
+        );
+        yield* Effect.promise(() =>
+          waitFor(() => rendered.stdout.output.includes('Token set')),
+        );
+        expect(yield* formSecrets.getStored(GITHUB_TOKEN_STORAGE_KEY)).toBe(
+          'ghp_private-test-token',
+        );
+        expect(rendered.stdout.output).not.toContain('ghp_private-test-token');
+      }),
+  );
 
   it('uses the same status-aware form in standalone config and /config', async () => {
     providerApiKeyRuntime.load.mockReturnValue(
@@ -499,70 +513,81 @@ describe('CliConfigForm API-key status lifecycle', () => {
   });
 });
 
+// `it.live`, not `it.effect`: mounting the slash-command form polls Ink's
+// stdin listeners with `waitFor`, which needs a clock that actually advances.
 describe('/config slash command wiring', () => {
-  it('wires the roster and reads through the injected CLI stores', async () => {
-    const { stores, config } = makeFakeSettingsStores();
-    // Seed the git-author config slot the CLI reads from. Awaited, so the
-    // read below cannot race the write.
-    await Effect.runPromise(
-      config.update(WorkspaceStateKey.GIT_MARK_COMMITS, false),
-    );
+  it.live('wires the roster and reads through the injected CLI stores', () =>
+    Effect.gen(function* () {
+      const { stores, config } = makeFakeSettingsStores();
+      // Seed the git-author config slot the CLI reads from. Awaited, so the
+      // read below cannot race the write.
+      yield* config.update(WorkspaceStateKey.GIT_MARK_COMMITS, false);
 
-    registerBuiltinSlashCommands({
-      secrets: new FakeSecrets(),
-      stores,
-      runtime: testRuntime(),
-      runtimeSession: testDefaultSession(),
-      configStores: stores,
-    });
-    expect(openCliSlashCommandForm('config', '')).toBe(true);
-    expect(activeForm.get()?.commandName).toBe('config');
+      registerBuiltinSlashCommands({
+        secrets: new FakeSecrets(),
+        stores,
+        runtime: testRuntime(),
+        runtimeSession: testDefaultSession(),
+        configStores: stores,
+      });
+      expect(openCliSlashCommandForm('config', '')).toBe(true);
+      expect(activeForm.get()?.commandName).toBe('config');
 
-    const props = await renderConfigFormProps();
-    expect(props.entries.map((entry) => entry.key)).toEqual(
-      CLI_STATE_SETTINGS.map((entry) => entry.key),
-    );
+      const props = yield* Effect.promise(() => renderConfigFormProps());
+      expect(props.entries.map((entry) => entry.key)).toEqual(
+        CLI_STATE_SETTINGS.map((entry) => entry.key),
+      );
 
-    const markCommits = entryByKey(WorkspaceStateKey.GIT_MARK_COMMITS);
-    expect(props.readValue(markCommits)).toBe(false);
-  });
+      const markCommits = entryByKey(WorkspaceStateKey.GIT_MARK_COMMITS);
+      expect(props.readValue(markCommits)).toBe(false);
+    }),
+  );
 
   // Regression: `/config` used to persist `texra.approvalPolicy` with a bare
   // `writeSetting`, so the stored value changed while the running session and
   // the status bar kept enforcing the old policy.
-  it('applies an approval-policy write to the live session, not just the store', async () => {
-    const { stores, config } = makeFakeSettingsStores();
-    const applied: TexraApprovalPolicy[] = [];
-    registerBuiltinSlashCommands({
-      secrets: new FakeSecrets(),
-      stores,
-      runtime: testRuntime(),
-      runtimeSession: testDefaultSession(),
-      configStores: stores,
-      onApprovalPolicySelect: (policy) => {
-        applied.push(policy);
-      },
-    });
-    openCliSlashCommandForm('config', '');
-    const props = await renderConfigFormProps();
+  it.live(
+    'applies an approval-policy write to the live session, not just the store',
+    () =>
+      Effect.gen(function* () {
+        const { stores, config } = makeFakeSettingsStores();
+        const applied: TexraApprovalPolicy[] = [];
+        registerBuiltinSlashCommands({
+          secrets: new FakeSecrets(),
+          stores,
+          runtime: testRuntime(),
+          runtimeSession: testDefaultSession(),
+          configStores: stores,
+          onApprovalPolicySelect: (policy) => {
+            applied.push(policy);
+          },
+        });
+        openCliSlashCommandForm('config', '');
+        const props = yield* Effect.promise(() => renderConfigFormProps());
 
-    await Effect.runPromise(
-      props.writeValue(entryByKey(TEXRA_APPROVAL_POLICY_CONFIG_KEY), 'yolo'),
-    );
+        yield* props.writeValue(
+          entryByKey(TEXRA_APPROVAL_POLICY_CONFIG_KEY),
+          'yolo',
+        );
 
-    expect(config.get(TEXRA_APPROVAL_POLICY_CONFIG_KEY, 'ask')).toBe('yolo');
-    expect(applied).toEqual(['yolo']);
-  });
+        expect(config.get(TEXRA_APPROVAL_POLICY_CONFIG_KEY, 'ask')).toBe(
+          'yolo',
+        );
+        expect(applied).toEqual(['yolo']);
+      }),
+  );
 
-  it('persists writes through the accessor to the CLI store', async () => {
-    const { stores, config } = makeFakeSettingsStores();
-    const props = await openConfigFormProps(stores);
-    const markCommits = entryByKey(WorkspaceStateKey.GIT_MARK_COMMITS);
-    await Effect.runPromise(props.writeValue(markCommits, false));
+  it.live('persists writes through the accessor to the CLI store', () =>
+    Effect.gen(function* () {
+      const { stores, config } = makeFakeSettingsStores();
+      const props = yield* Effect.promise(() => openConfigFormProps(stores));
+      const markCommits = entryByKey(WorkspaceStateKey.GIT_MARK_COMMITS);
+      yield* props.writeValue(markCommits, false);
 
-    expect(isStored(config, WorkspaceStateKey.GIT_MARK_COMMITS)).toBe(true);
-    expect(props.readValue(markCommits)).toBe(false);
-  });
+      expect(isStored(config, WorkspaceStateKey.GIT_MARK_COMMITS)).toBe(true);
+      expect(props.readValue(markCommits)).toBe(false);
+    }),
+  );
 
   it('emits a deferred command echo before a configuration error', async () => {
     const { stores } = makeFakeSettingsStores();
@@ -587,39 +612,39 @@ describe('/config slash command wiring', () => {
     expect(events).toEqual(['echo', 'error', 'error']);
   });
 
-  it('resets a git setting by deleting the stored key', async () => {
-    const { stores, config } = makeFakeSettingsStores();
-    const props = await openConfigFormProps(stores);
-    const authorName = entryByKey(WorkspaceStateKey.GIT_AUTHOR_NAME);
+  it.live('resets a git setting by deleting the stored key', () =>
+    Effect.gen(function* () {
+      const { stores, config } = makeFakeSettingsStores();
+      const props = yield* Effect.promise(() => openConfigFormProps(stores));
+      const authorName = entryByKey(WorkspaceStateKey.GIT_AUTHOR_NAME);
 
-    await Effect.runPromise(props.writeValue(authorName, 'someone-else'));
-    expect(isStored(config, WorkspaceStateKey.GIT_AUTHOR_NAME)).toBe(true);
+      yield* props.writeValue(authorName, 'someone-else');
+      expect(isStored(config, WorkspaceStateKey.GIT_AUTHOR_NAME)).toBe(true);
 
-    await Effect.runPromise(props.resetValue(authorName));
-    // The key is deleted, so reads fall back to the default identity.
-    expect(isStored(config, WorkspaceStateKey.GIT_AUTHOR_NAME)).toBe(false);
-    expect(props.readValue(authorName)).toBe(DEFAULT_GIT_AUTHOR_NAME);
-  });
+      yield* props.resetValue(authorName);
+      // The key is deleted, so reads fall back to the default identity.
+      expect(isStored(config, WorkspaceStateKey.GIT_AUTHOR_NAME)).toBe(false);
+      expect(props.readValue(authorName)).toBe(DEFAULT_GIT_AUTHOR_NAME);
+    }),
+  );
 
-  it('turns OpenRouter off when Prefer Kimi Code is enabled', async () => {
-    const { stores, globalState } = makeFakeSettingsStores();
-    await Effect.runPromise(
-      globalState.update(GlobalStateKey.USE_OPENROUTER, true),
-    );
-    const props = await openConfigFormProps(stores);
-    const preferKimiCode = entryByKey(GlobalStateKey.KIMI_CODE_PREFER);
-    await Effect.runPromise(props.writeValue(preferKimiCode, true));
+  it.live('turns OpenRouter off when Prefer Kimi Code is enabled', () =>
+    Effect.gen(function* () {
+      const { stores, globalState } = makeFakeSettingsStores();
+      yield* globalState.update(GlobalStateKey.USE_OPENROUTER, true);
+      const props = yield* Effect.promise(() => openConfigFormProps(stores));
+      const preferKimiCode = entryByKey(GlobalStateKey.KIMI_CODE_PREFER);
+      yield* props.writeValue(preferKimiCode, true);
 
-    expect(globalState.get(GlobalStateKey.KIMI_CODE_PREFER)).toBe(true);
-    expect(props.readValue(entryByKey(GlobalStateKey.USE_OPENROUTER))).toBe(
-      false,
-    );
+      expect(globalState.get(GlobalStateKey.KIMI_CODE_PREFER)).toBe(true);
+      expect(props.readValue(entryByKey(GlobalStateKey.USE_OPENROUTER))).toBe(
+        false,
+      );
 
-    // Disabling the preference leaves the OpenRouter toggle untouched.
-    await Effect.runPromise(
-      globalState.update(GlobalStateKey.USE_OPENROUTER, true),
-    );
-    await Effect.runPromise(props.writeValue(preferKimiCode, false));
-    expect(globalState.get(GlobalStateKey.USE_OPENROUTER)).toBe(true);
-  });
+      // Disabling the preference leaves the OpenRouter toggle untouched.
+      yield* globalState.update(GlobalStateKey.USE_OPENROUTER, true);
+      yield* props.writeValue(preferKimiCode, false);
+      expect(globalState.get(GlobalStateKey.USE_OPENROUTER)).toBe(true);
+    }),
+  );
 });

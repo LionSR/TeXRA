@@ -1,13 +1,13 @@
 import '@test/support/defaultSessionTestSetup';
 
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 import { maybeBuildGoalContinuation } from '@agent/goal/maybeBuildGoalContinuation';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { GOAL_FEATURE_FLAG_KEY, type Goal } from '@shared/schemas';
+import { GOAL_FEATURE_FLAG_KEY } from '@shared/schemas';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
-import { testRuntime } from '@test/support/testProcessRuntime';
 import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
 import { FakeConfigProvider } from '@test/support/FakePlatform';
 import {
@@ -62,98 +62,102 @@ describe('maybeBuildGoalContinuation', () => {
     await Effect.runPromise(session.dispose());
   });
 
-  /** Commit the goal row, which lands its fold, before the read. */
-  function goalOnTheRun(objective: string): Promise<Goal> {
-    return testRuntime().runPromise(startGoal(session, RUN_ID, objective));
-  }
+  it.effect('returns a rendered prompt when an active goal is present', () =>
+    Effect.gen(function* () {
+      yield* startGoal(
+        session,
+        RUN_ID,
+        'Complete the refactor until pnpm test passes',
+      );
+      const out = yield* maybeBuildGoalContinuation(session, RUN_ID);
+      expect(out).toMatch(/<goal_context>/);
+      expect(out).toContain('Complete the refactor until pnpm test passes');
+      expect(out).toContain('Autonomous objective active');
+      // The continuation no longer advertises the model-callable exit verbs;
+      // it steers toward persistence instead.
+      expect(out).not.toContain('plan(command="complete")');
+      expect(out).not.toContain('plan(command="pause")');
+    }),
+  );
 
-  it('returns a rendered prompt when an active goal is present', async () => {
-    await goalOnTheRun('Complete the refactor until pnpm test passes');
-    const out = await Effect.runPromise(
-      maybeBuildGoalContinuation(session, RUN_ID),
-    );
-    expect(out).toMatch(/<goal_context>/);
-    expect(out).toContain('Complete the refactor until pnpm test passes');
-    expect(out).toContain('Autonomous objective active');
-    // The continuation no longer advertises the model-callable exit verbs;
-    // it steers toward persistence instead.
-    expect(out).not.toContain('plan(command="complete")');
-    expect(out).not.toContain('plan(command="pause")');
-  });
+  it.effect(
+    'renders an objective containing nunjucks-significant syntax as literal text',
+    () =>
+      Effect.gen(function* () {
+        // The objective is a context *value* substituted into the template, not
+        // concatenated into the template source — nunjucks must not re-parse it
+        // as template syntax (no injection, no `{{ 1 + 1 }}` evaluating to `2`).
+        const objective =
+          'Finish {% for x in y %}{{ 1 + 1 }}{# comment #}{% endfor %} the "quoted" \\task\\.';
+        yield* startGoal(session, RUN_ID, objective);
+        const out = yield* maybeBuildGoalContinuation(session, RUN_ID);
+        expect(out).toContain(objective);
+      }),
+  );
 
-  it('renders an objective containing nunjucks-significant syntax as literal text', async () => {
-    // The objective is a context *value* substituted into the template, not
-    // concatenated into the template source — nunjucks must not re-parse it
-    // as template syntax (no injection, no `{{ 1 + 1 }}` evaluating to `2`).
-    const objective =
-      'Finish {% for x in y %}{{ 1 + 1 }}{# comment #}{% endfor %} the "quoted" \\task\\.';
-    await goalOnTheRun(objective);
-    const out = await Effect.runPromise(
-      maybeBuildGoalContinuation(session, RUN_ID),
-    );
-    expect(out).toContain(objective);
-  });
+  it.live('continues rendering after more than two hours elapsed', () =>
+    Effect.gen(function* () {
+      const goal = yield* startGoal(
+        session,
+        RUN_ID,
+        'Keep solving the hard problem until verification is complete.',
+      );
+      // The row's own start time, so the elapsed span is exact.
+      const startedAt = Date.parse(goal.startedAt);
 
-  it('continues rendering after more than two hours elapsed', async () => {
-    const goal = await goalOnTheRun(
-      'Keep solving the hard problem until verification is complete.',
-    );
-    // The row's own start time, so the elapsed span is exact.
-    const startedAt = Date.parse(goal.startedAt);
-
-    vi.useFakeTimers();
-    try {
+      vi.useFakeTimers();
+      yield* Effect.addFinalizer(() => Effect.sync(() => vi.useRealTimers()));
       vi.setSystemTime(
         new Date(startedAt + 2 * 60 * 60 * 1000 + 5 * 60 * 1000 + 1234),
       );
-      const out = await Effect.runPromise(
-        maybeBuildGoalContinuation(session, RUN_ID),
-      );
+      const out = yield* maybeBuildGoalContinuation(session, RUN_ID);
 
       expect(out).toContain('<goal_context>');
       expect(out).toContain(
         'Keep solving the hard problem until verification is complete.',
       );
       expect(out).toContain('Time elapsed: 2h 5m');
-    } finally {
-      vi.useRealTimers();
-    }
-  });
+    }),
+  );
 
-  it('returns null when the feature flag is off (with an active goal present)', async () => {
-    await goalOnTheRun('objective');
-    // Flip just the flag — the goal row is untouched, so the test does not
-    // pass trivially.
-    (testWorkspaceRoots().config as FakeConfigProvider).set(
-      GOAL_FEATURE_FLAG_KEY,
-      false,
-    );
-    expect(
-      await Effect.runPromise(maybeBuildGoalContinuation(session, RUN_ID)),
-    ).toBeNull();
-  });
+  it.effect(
+    'returns null when the feature flag is off (with an active goal present)',
+    () =>
+      Effect.gen(function* () {
+        yield* startGoal(session, RUN_ID, 'objective');
+        // Flip just the flag — the goal row is untouched, so the test does not
+        // pass trivially.
+        (testWorkspaceRoots().config as FakeConfigProvider).set(
+          GOAL_FEATURE_FLAG_KEY,
+          false,
+        );
+        expect(yield* maybeBuildGoalContinuation(session, RUN_ID)).toBeNull();
+      }),
+  );
 
-  it('returns null when no goal exists for the stream', async () => {
-    await expect(
-      Effect.runPromise(maybeBuildGoalContinuation(session, RUN_ID)),
-    ).resolves.toBeNull();
-  });
+  it.effect('returns null when no goal exists for the stream', () =>
+    Effect.gen(function* () {
+      expect(yield* maybeBuildGoalContinuation(session, RUN_ID)).toBeNull();
+    }),
+  );
 
-  it('returns null when the goal is paused', async () => {
-    await goalOnTheRun('objective');
-    await testRuntime().runPromise(pauseGoal(session, RUN_ID));
+  it.effect('returns null when the goal is paused', () =>
+    Effect.gen(function* () {
+      yield* startGoal(session, RUN_ID, 'objective');
+      yield* pauseGoal(session, RUN_ID);
 
-    await expect(
-      Effect.runPromise(maybeBuildGoalContinuation(session, RUN_ID)),
-    ).resolves.toBeNull();
-  });
+      expect(yield* maybeBuildGoalContinuation(session, RUN_ID)).toBeNull();
+    }),
+  );
 
-  it('is a pure read — leaves the goal untouched', async () => {
-    const before = await goalOnTheRun('objective');
-    await Effect.runPromise(maybeBuildGoalContinuation(session, RUN_ID));
-    await Effect.runPromise(session.settlePublications());
-    // No counter, no audit log: the helper only reads. The loop runs until
-    // the model completes or the user stops it.
-    expect(goalOf(session, RUN_ID)).toEqual(before);
-  });
+  it.effect('is a pure read — leaves the goal untouched', () =>
+    Effect.gen(function* () {
+      const before = yield* startGoal(session, RUN_ID, 'objective');
+      yield* maybeBuildGoalContinuation(session, RUN_ID);
+      yield* session.settlePublications();
+      // No counter, no audit log: the helper only reads. The loop runs until
+      // the model completes or the user stops it.
+      expect(goalOf(session, RUN_ID)).toEqual(before);
+    }),
+  );
 });

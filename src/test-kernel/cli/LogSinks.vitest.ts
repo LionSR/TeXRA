@@ -2,8 +2,9 @@
 import { PassThrough } from 'node:stream';
 
 // Third-party imports
-import { Effect } from 'effect';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { it } from '@effect/vitest';
+import { Effect, Fiber } from 'effect';
+import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports
 import {
@@ -50,121 +51,141 @@ function createStdoutStub(writeResults: boolean[] = [true]) {
 }
 
 describe('NdjsonStdoutSink', () => {
-  it('flushes consecutive synchronous writes without stranding the queue', async () => {
-    const { lines, stdout } = createStdoutStub();
-    const sink = new NdjsonStdoutSink(stdout);
-    const records: readonly CliNdjsonRecord[] = [
-      { kind: 'version', version: '1.0.0' },
-      { kind: 'doctor-summary', ok: true },
-    ];
+  it.effect(
+    'flushes consecutive synchronous writes without stranding the queue',
+    () =>
+      Effect.gen(function* () {
+        const { lines, stdout } = createStdoutStub();
+        const sink = new NdjsonStdoutSink(stdout);
+        const records: readonly CliNdjsonRecord[] = [
+          { kind: 'version', version: '1.0.0' },
+          { kind: 'doctor-summary', ok: true },
+        ];
 
-    sink.writeRecord(records[0]);
-    sink.writeRecord(records[1]);
-    await Effect.runPromise(sink.flush());
+        sink.writeRecord(records[0]);
+        sink.writeRecord(records[1]);
+        yield* sink.flush();
 
-    // The sink stamps the contract version last, so `kind` stays the first key.
-    expect(lines.map((line) => JSON.parse(line))).toEqual(
-      records.map((record) => ({ ...record, contract: 2 })),
-    );
-  });
+        // The sink stamps the contract version last, so `kind` stays the first key.
+        expect(lines.map((line) => JSON.parse(line))).toEqual(
+          records.map((record) => ({ ...record, contract: 2 })),
+        );
+      }),
+  );
 
-  it('preserves order across logger and public-record writes', async () => {
-    const { emit, lines, stdout } = createStdoutStub([false, true]);
-    const sink = new NdjsonStdoutSink(stdout);
+  it.effect('preserves order across logger and public-record writes', () =>
+    Effect.gen(function* () {
+      const { emit, lines, stdout } = createStdoutStub([false, true]);
+      const sink = new NdjsonStdoutSink(stdout);
 
-    sink.write({
-      ts: '2026-07-10T00:00:00.000Z',
-      level: 'error',
-      message: 'first',
-      fields: {},
-    });
-    sink.writeRecord({
-      kind: 'progress',
-      event: 'status',
-      payload: { aggregateId: '["run","run-1"]', phase: 'running' },
-    });
-    emit('drain');
-    await Effect.runPromise(sink.flush());
+      sink.write({
+        ts: '2026-07-10T00:00:00.000Z',
+        level: 'error',
+        message: 'first',
+        fields: {},
+      });
+      sink.writeRecord({
+        kind: 'progress',
+        event: 'status',
+        payload: { aggregateId: '["run","run-1"]', phase: 'running' },
+      });
+      emit('drain');
+      yield* sink.flush();
 
-    expect(lines.map((line) => JSON.parse(line).kind)).toEqual([
-      'log',
-      'progress',
-    ]);
-  });
+      expect(lines.map((line) => JSON.parse(line).kind)).toEqual([
+        'log',
+        'progress',
+      ]);
+    }),
+  );
 
-  it('preserves records added while stdout is backpressured', async () => {
-    const { emit, lines, stdout } = createStdoutStub([false, true]);
-    const sink = new NdjsonStdoutSink(stdout);
-
-    sink.writeRecord({ kind: 'version', version: '1.0.0' });
-    sink.writeRecord({ kind: 'doctor-summary', ok: true });
-    emit('drain');
-    await Effect.runPromise(sink.flush());
-
-    expect(lines.map((line) => JSON.parse(line).kind)).toEqual([
-      'version',
-      'doctor-summary',
-    ]);
-  });
-
-  it.each(['error', 'close'] as const)(
-    'discards queued and later records after stdout %s',
-    async (event) => {
-      const { emit, lines, stdout } = createStdoutStub([false]);
+  it.effect('preserves records added while stdout is backpressured', () =>
+    Effect.gen(function* () {
+      const { emit, lines, stdout } = createStdoutStub([false, true]);
       const sink = new NdjsonStdoutSink(stdout);
 
       sink.writeRecord({ kind: 'version', version: '1.0.0' });
       sink.writeRecord({ kind: 'doctor-summary', ok: true });
-      emit(event);
-      sink.writeRecord({ kind: 'auth-status', authenticated: false });
-      await Effect.runPromise(sink.flush());
+      emit('drain');
+      yield* sink.flush();
 
-      expect(lines.map((line) => JSON.parse(line).kind)).toEqual(['version']);
-    },
+      expect(lines.map((line) => JSON.parse(line).kind)).toEqual([
+        'version',
+        'doctor-summary',
+      ]);
+    }),
   );
 
-  it('writes nothing once the target reports itself unusable', async () => {
-    const { lines, stdout } = createStdoutStub();
-    stdout.usable = false;
-    const sink = new NdjsonStdoutSink(stdout);
+  it.effect.each(['error', 'close'] as const)(
+    'discards queued and later records after stdout %s',
+    (event) =>
+      Effect.gen(function* () {
+        const { emit, lines, stdout } = createStdoutStub([false]);
+        const sink = new NdjsonStdoutSink(stdout);
 
-    sink.writeRecord({ kind: 'version', version: '1.0.0' });
-    await Effect.runPromise(sink.flush());
+        sink.writeRecord({ kind: 'version', version: '1.0.0' });
+        sink.writeRecord({ kind: 'doctor-summary', ok: true });
+        emit(event);
+        sink.writeRecord({ kind: 'auth-status', authenticated: false });
+        yield* sink.flush();
 
-    expect(lines).toEqual([]);
-    expect(stdout.write).not.toHaveBeenCalled();
-  });
-
-  it('resolves flush when a write throws instead of waiting for drain', async () => {
-    const stdout = {
-      usable: true,
-      write: vi.fn((): boolean => {
-        throw new Error('write failed');
+        expect(lines.map((line) => JSON.parse(line).kind)).toEqual(['version']);
       }),
-      once: vi.fn(),
-      off: vi.fn(),
-    };
-    const sink = new NdjsonStdoutSink(stdout);
+  );
 
-    sink.writeRecord({ kind: 'version', version: '1.0.0' });
-    await expect(Effect.runPromise(sink.flush())).resolves.toBeUndefined();
-    expect(stdout.once).not.toHaveBeenCalled();
-  });
+  it.effect('writes nothing once the target reports itself unusable', () =>
+    Effect.gen(function* () {
+      const { lines, stdout } = createStdoutStub();
+      stdout.usable = false;
+      const sink = new NdjsonStdoutSink(stdout);
+
+      sink.writeRecord({ kind: 'version', version: '1.0.0' });
+      yield* sink.flush();
+
+      expect(lines).toEqual([]);
+      expect(stdout.write).not.toHaveBeenCalled();
+    }),
+  );
+
+  it.effect(
+    'resolves flush when a write throws instead of waiting for drain',
+    () =>
+      Effect.gen(function* () {
+        const stdout = {
+          usable: true,
+          write: vi.fn((): boolean => {
+            throw new Error('write failed');
+          }),
+          once: vi.fn(),
+          off: vi.fn(),
+        };
+        const sink = new NdjsonStdoutSink(stdout);
+
+        sink.writeRecord({ kind: 'version', version: '1.0.0' });
+        expect(yield* sink.flush()).toBeUndefined();
+        expect(stdout.once).not.toHaveBeenCalled();
+      }),
+  );
 });
 
 describe('CLI questions', () => {
-  it('acquires stdin ownership before waiting for an answer', async () => {
-    const input = Object.assign(new PassThrough(), { ref: vi.fn() });
-    const output = new PassThrough();
+  it.effect('acquires stdin ownership before waiting for an answer', () =>
+    Effect.gen(function* () {
+      const input = Object.assign(new PassThrough(), { ref: vi.fn() });
+      const output = new PassThrough();
 
-    // `runPromise` starts the fiber synchronously, so the readline interface
-    // the acquire opens is listening before the input ends.
-    const answer = Effect.runPromise(
-      askCliQuestion('Choose: ', { input, output }),
-    );
-    input.end('continue\n');
+      // Forked, the prompt's acquire opens the readline interface and its
+      // listener is attached before this fiber ends the input.
+      const asking = yield* Effect.forkChild(
+        askCliQuestion('Choose: ', { input, output }),
+      );
+      yield* Effect.promise(
+        () => new Promise<void>((resolve) => setTimeout(resolve, 0)),
+      );
+      input.end('continue\n');
 
-    await expect(answer).resolves.toBe('continue');
-    expect(input.ref).toHaveBeenCalledOnce();
-  });
+      expect(yield* Fiber.join(asking)).toBe('continue');
+      expect(input.ref).toHaveBeenCalledOnce();
+    }),
+  );
 });

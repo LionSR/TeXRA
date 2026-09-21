@@ -1,5 +1,6 @@
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, vi } from 'vitest';
 
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import type { BoundModel } from '@agent/runtime/run/modelBinding';
@@ -102,56 +103,66 @@ describe('session description helpers', () => {
     ).toBe('Summarize the paper.');
   });
 
-  it('uses the exact workflow-agent description carried by launch context', async () => {
-    const session = createTestSession();
-    publishTestRunStart(session, 'a0b0c1' as RunId);
-    await Effect.runPromise(session.settlePublications());
-    const recorded = recordSessionEvents(session);
-    mockToolUseAnswer('Correcting derivation signs');
+  it.effect(
+    'uses the exact workflow-agent description carried by launch context',
+    () =>
+      Effect.gen(function* () {
+        const session = createTestSession();
+        publishTestRunStart(session, 'a0b0c1' as RunId);
+        yield* session.settlePublications();
+        const recorded = recordSessionEvents(session);
+        mockToolUseAnswer('Correcting derivation signs');
 
-    await runDescription(
-      'a0b0c1' as RunId,
-      session,
-      AgentCategory.Workflow,
-      'Corrects a draft',
-    );
+        yield* Effect.promise(() =>
+          runDescription(
+            'a0b0c1' as RunId,
+            session,
+            AgentCategory.Workflow,
+            'Corrects a draft',
+          ),
+        );
 
-    expect(mocks.helperCompletion.mock.calls[0]?.[1]).toEqual(
-      expect.objectContaining({
-        userPrompt: expect.stringContaining(
-          '<agent-purpose>Corrects a draft</agent-purpose>',
-        ),
+        expect(mocks.helperCompletion.mock.calls[0]?.[1]).toEqual(
+          expect.objectContaining({
+            userPrompt: expect.stringContaining(
+              '<agent-purpose>Corrects a draft</agent-purpose>',
+            ),
+          }),
+        );
+        expect(
+          (yield* session.readView(['a0b0c1' as RunId])).runs.get(
+            'a0b0c1' as RunId,
+          )?.description,
+        ).toBe('Correcting derivation signs');
+        yield* session.settlePublications();
+        expect(yield* Effect.promise(() => recorded.read())).toMatchObject([
+          {
+            type: 'run.description',
+            aggregateId: qualifyAggregateId('run', 'a0b0c1' as RunId),
+            description: 'Correcting derivation signs',
+          },
+        ]);
       }),
-    );
-    expect(
-      (await Effect.runPromise(session.readView(['a0b0c1' as RunId]))).runs.get(
-        'a0b0c1' as RunId,
-      )?.description,
-    ).toBe('Correcting derivation signs');
-    await Effect.runPromise(session.settlePublications());
-    expect(await recorded.read()).toMatchObject([
-      {
-        type: 'run.description',
-        aggregateId: qualifyAggregateId('run', 'a0b0c1' as RunId),
-        description: 'Correcting derivation signs',
-      },
-    ]);
-  });
+  );
 
-  it('logs helper-model failures without rejecting the fire-and-forget call', async () => {
-    const session = createTestSession();
-    const helperError = new Error('helper unavailable');
-    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
-    mocks.helperModel.mockReturnValueOnce(Effect.fail(helperError));
+  it.effect(
+    'logs helper-model failures without rejecting the fire-and-forget call',
+    () =>
+      Effect.gen(function* () {
+        const session = createTestSession();
+        const helperError = new Error('helper unavailable');
+        const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+        mocks.helperModel.mockReturnValueOnce(Effect.fail(helperError));
 
-    await expect(
-      runDescription(generateRunId(), session),
-    ).resolves.toBeUndefined();
+        expect(
+          yield* Effect.promise(() => runDescription(generateRunId(), session)),
+        ).toBeUndefined();
 
-    expect(warn).toHaveBeenCalledOnce();
-    expect(warn).toHaveBeenCalledWith(
-      'SessionDescription',
-      expect.stringContaining('helper unavailable'),
-    );
-  });
+        expect(warn).toHaveBeenCalledOnce();
+        expect(warn).toHaveBeenCalledWith(
+          'SessionDescription',
+          expect.stringContaining('helper unavailable'),
+        );
+      }),
+  );
 });

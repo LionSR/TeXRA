@@ -1,7 +1,8 @@
 import * as path from 'node:path';
 
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 import { noopTrace } from '@agent/trace';
 import {
@@ -112,35 +113,37 @@ describe('buildUserVars runtime skill diagnostics', () => {
     );
   });
 
-  it('keeps skills off until the master switch is enabled', async () => {
-    await Effect.runPromise(
-      fakeConfig.update('texra.skills.enabled', undefined),
-    );
-    const warn = vi.fn();
-    const emit = vi.fn();
+  it.effect('keeps skills off until the master switch is enabled', () =>
+    Effect.gen(function* () {
+      yield* fakeConfig.update('texra.skills.enabled', undefined);
+      const warn = vi.fn();
+      const emit = vi.fn();
 
-    const vars = await buildUserVars(
-      baseConfig,
-      { ...baseSetting, agentCategory: AgentCategory.ToolUse },
-      basePrompt,
-      fakePath('agents/generic'),
-      false,
-      spiedTrace({ warn, emit }),
-      {
-        workspacePath: fakePath('workspace'),
-        storageRoot: testWorkspaceRoots().storage,
-        config: testWorkspaceRoots().config,
-        settings: testWorkspaceRoots(),
-      },
-    );
+      const vars = yield* Effect.promise(() =>
+        buildUserVars(
+          baseConfig,
+          { ...baseSetting, agentCategory: AgentCategory.ToolUse },
+          basePrompt,
+          fakePath('agents/generic'),
+          false,
+          spiedTrace({ warn, emit }),
+          {
+            workspacePath: fakePath('workspace'),
+            storageRoot: testWorkspaceRoots().storage,
+            config: testWorkspaceRoots().config,
+            settings: testWorkspaceRoots(),
+          },
+        ),
+      );
 
-    expect(vars.AVAILABLE_SKILLS).toBe('');
-    expect(warn).not.toHaveBeenCalled();
-    expect(emit).toHaveBeenCalledExactlyOnceWith({
-      type: 'skills.snapshot',
-      skills: [],
-    });
-  });
+      expect(vars.AVAILABLE_SKILLS).toBe('');
+      expect(warn).not.toHaveBeenCalled();
+      expect(emit).toHaveBeenCalledExactlyOnceWith({
+        type: 'skills.snapshot',
+        skills: [],
+      });
+    }),
+  );
 
   it('emits catalog load issues and the exact accepted snapshot through the agent trace', async () => {
     const warn = vi.fn();

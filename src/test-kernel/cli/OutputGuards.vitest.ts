@@ -2,8 +2,9 @@ import { mkdir, stat, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, win32 } from 'node:path';
 
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { describe, expect, it } from 'vitest';
+import { describe, expect } from 'vitest';
 
 import { CliUsageError } from '@cli/runtime/cliContext';
 import {
@@ -47,12 +48,12 @@ describe('probeOutputPath', () => {
     ['ENOTDIR', 'EEXIST'].map((mkdirCode) => ({ ...testCase, mkdirCode })),
   );
 
-  it.each(windowsBlockedCases)(
+  it.effect.each(windowsBlockedCases)(
     'maps native $mkdirCode after Windows-shaped ENOENT for a $label output path',
-    async ({ target, outputParent, mkdirCode }) => {
-      const mkdirVisited: string[] = [];
-      await expect(
-        Effect.runPromise(
+    ({ target, outputParent, mkdirCode }) =>
+      Effect.gen(function* () {
+        const mkdirVisited: string[] = [];
+        const error = yield* Effect.flip(
           probeOutputPathForTests(
             target,
             '--output',
@@ -61,33 +62,32 @@ describe('probeOutputPath', () => {
               throw errnoError(mkdirCode);
             }),
           ),
-        ),
-      ).rejects.toThrow(
-        `--output: a parent path component is a file: ${target}`,
-      );
-      expect(mkdirVisited).toEqual([outputParent]);
-    },
+        );
+        expect(error.message).toContain(
+          `--output: a parent path component is a file: ${target}`,
+        );
+        expect(mkdirVisited).toEqual([outputParent]);
+      }),
   );
 
-  it('materializes the complete --output-dir path after ENOENT', async () => {
-    const target = String.raw`C:\workspace\missing\output`;
-    const mkdirVisited: string[] = [];
-    await expect(
-      Effect.runPromise(
-        probeOutputPathForTests(
-          target,
-          '--output-dir',
-          probeDeps(async (candidate) => {
-            mkdirVisited.push(candidate);
-            return candidate;
-          }),
-        ),
-      ),
-    ).resolves.toBeNull();
-    expect(mkdirVisited).toEqual([target]);
-  });
+  it.effect('materializes the complete --output-dir path after ENOENT', () =>
+    Effect.gen(function* () {
+      const target = String.raw`C:\workspace\missing\output`;
+      const mkdirVisited: string[] = [];
+      const result = yield* probeOutputPathForTests(
+        target,
+        '--output-dir',
+        probeDeps(async (candidate) => {
+          mkdirVisited.push(candidate);
+          return candidate;
+        }),
+      );
+      expect(result).toBeNull();
+      expect(mkdirVisited).toEqual([target]);
+    }),
+  );
 
-  it.each([
+  it.effect.each([
     {
       flagLabel: '--output' as const,
       expectedDirectory: '/missing',
@@ -101,10 +101,10 @@ describe('probeOutputPath', () => {
     },
   ])(
     'reports mkdir ENOENT before run for $flagLabel',
-    async ({ flagLabel, expectedDirectory, expectedMessage }) => {
-      const mkdirVisited: string[] = [];
-      await expect(
-        Effect.runPromise(
+    ({ flagLabel, expectedDirectory, expectedMessage }) =>
+      Effect.gen(function* () {
+        const mkdirVisited: string[] = [];
+        const error = yield* Effect.flip(
           probeOutputPathForTests(
             '/missing/output.tex',
             flagLabel,
@@ -113,16 +113,16 @@ describe('probeOutputPath', () => {
               throw errnoError('ENOENT');
             }),
           ),
-        ),
-      ).rejects.toThrow(expectedMessage);
-      expect(mkdirVisited).toEqual([expectedDirectory]);
-    },
+        );
+        expect(error.message).toContain(expectedMessage);
+        expect(mkdirVisited).toEqual([expectedDirectory]);
+      }),
   );
 
-  it('preserves unexpected mkdir failures', async () => {
-    const denied = errnoError('EACCES', 'denied');
-    await expect(
-      Effect.runPromise(
+  it.effect('preserves unexpected mkdir failures', () =>
+    Effect.gen(function* () {
+      const denied = errnoError('EACCES', 'denied');
+      const error = yield* Effect.flip(
         probeOutputPathForTests(
           '/missing/output.tex',
           '--output',
@@ -130,152 +130,216 @@ describe('probeOutputPath', () => {
             throw denied;
           }),
         ),
-      ),
-    ).rejects.toBe(denied);
-  });
+      );
+      expect(error).toBe(denied);
+    }),
+  );
 });
 
+// `it.live`, not `it.effect`, for the suites below: they probe the real
+// filesystem, so a TestContext clock starting at 0 would be a trap rather
+// than a help.
 describe('dangling output symlinks', () => {
-  it('keeps a dangling --output symlink writable and rejects a dangling --output-dir before run', async (context) => {
-    const root = await makeTempDir('texra-cli-dangling-output-', tempDirs);
-    const fileReferent = join(root, 'absent.tex');
-    const fileLink = join(root, 'file-link.tex');
-    const directoryReferent = join(root, 'absent-directory');
-    const directoryLink = join(root, 'directory-link');
-    try {
-      await symlink(fileReferent, fileLink, 'file');
-      await symlink(
-        directoryReferent,
-        directoryLink,
-        process.platform === 'win32' ? 'junction' : 'dir',
-      );
-    } catch (error: unknown) {
-      const code = (error as NodeJS.ErrnoException | undefined)?.code;
-      if (
-        typeof code === 'string' &&
-        ['EACCES', 'EINVAL', 'ENOSYS', 'ENOTSUP', 'EPERM'].includes(code)
-      ) {
-        context.skip();
-        return;
-      }
-      throw error;
-    }
+  it.live(
+    'keeps a dangling --output symlink writable and rejects a dangling --output-dir before run',
+    (context) =>
+      Effect.gen(function* () {
+        const root = yield* Effect.promise(() =>
+          makeTempDir('texra-cli-dangling-output-', tempDirs),
+        );
+        const fileReferent = join(root, 'absent.tex');
+        const fileLink = join(root, 'file-link.tex');
+        const directoryReferent = join(root, 'absent-directory');
+        const directoryLink = join(root, 'directory-link');
+        const linkError = yield* Effect.match(
+          Effect.tryPromise({
+            try: async () => {
+              await symlink(fileReferent, fileLink, 'file');
+              await symlink(
+                directoryReferent,
+                directoryLink,
+                process.platform === 'win32' ? 'junction' : 'dir',
+              );
+            },
+            catch: (error: unknown) => error,
+          }),
+          {
+            onSuccess: () => undefined,
+            onFailure: (error: unknown) => error,
+          },
+        );
+        if (linkError !== undefined) {
+          const code = (linkError as NodeJS.ErrnoException | undefined)?.code;
+          if (
+            typeof code === 'string' &&
+            ['EACCES', 'EINVAL', 'ENOSYS', 'ENOTSUP', 'EPERM'].includes(code)
+          ) {
+            context.skip();
+            return;
+          }
+          throw linkError;
+        }
 
-    await expect(
-      Effect.runPromise(assertOutputFileAvailable(fileLink, root)),
-    ).resolves.toBeUndefined();
-    await expect(
-      Effect.runPromise(assertOutputDirAvailable(directoryLink, root)),
-    ).rejects.toBeInstanceOf(CliUsageError);
-    await expect(stat(directoryReferent)).rejects.toMatchObject({
-      code: 'ENOENT',
-    });
-  });
+        expect(
+          yield* assertOutputFileAvailable(fileLink, root),
+        ).toBeUndefined();
+
+        const dirError = yield* Effect.flip(
+          assertOutputDirAvailable(directoryLink, root),
+        );
+        expect(dirError).toBeInstanceOf(CliUsageError);
+
+        const statError = yield* Effect.flip(
+          Effect.tryPromise({
+            try: () => stat(directoryReferent),
+            catch: (error: unknown) => error,
+          }),
+        );
+        expect(statError).toMatchObject({ code: 'ENOENT' });
+      }),
+  );
 });
 
 describe('assertOutputDirAvailable', () => {
-  it('accepts a directory that already exists', async () => {
-    const root = await makeTempDir('texra-cli-outdir-', tempDirs);
-    const target = join(root, 'flagged');
-    await mkdir(target);
-    await expect(
-      Effect.runPromise(assertOutputDirAvailable(target, root)),
-    ).resolves.toBeUndefined();
-  });
+  it.live('accepts a directory that already exists', () =>
+    Effect.gen(function* () {
+      const root = yield* Effect.promise(() =>
+        makeTempDir('texra-cli-outdir-', tempDirs),
+      );
+      const target = join(root, 'flagged');
+      yield* Effect.promise(() => mkdir(target));
+      expect(yield* assertOutputDirAvailable(target, root)).toBeUndefined();
+    }),
+  );
 
-  it('creates and accepts a path that does not exist yet', async () => {
-    const root = await makeTempDir('texra-cli-outdir-', tempDirs);
-    const target = join(root, 'no-such-yet');
-    await expect(
-      Effect.runPromise(assertOutputDirAvailable(target, root)),
-    ).resolves.toBeUndefined();
-    expect((await stat(target)).isDirectory()).toBe(true);
-  });
+  it.live('creates and accepts a path that does not exist yet', () =>
+    Effect.gen(function* () {
+      const root = yield* Effect.promise(() =>
+        makeTempDir('texra-cli-outdir-', tempDirs),
+      );
+      const target = join(root, 'no-such-yet');
+      expect(yield* assertOutputDirAvailable(target, root)).toBeUndefined();
+      expect((yield* Effect.promise(() => stat(target))).isDirectory()).toBe(
+        true,
+      );
+    }),
+  );
 
-  it('rejects a --output-dir that points at a file', async () => {
-    // Previously: the workflow ran for ~38s and EEXIST'd on mkdir at the end
-    // (exit 1). The fast path now refuses with a Usage error (exit 2).
-    const root = await makeTempDir('texra-cli-outdir-', tempDirs);
-    const filePath = join(root, 'oops.txt');
-    await writeFile(filePath, 'not a directory');
-    await expect(
-      Effect.runPromise(assertOutputDirAvailable(filePath, root)),
-    ).rejects.toBeInstanceOf(CliUsageError);
-    await expect(
-      Effect.runPromise(assertOutputDirAvailable(filePath, root)),
-    ).rejects.toThrow(/--output-dir is not a directory/);
-  });
+  it.live('rejects a --output-dir that points at a file', () =>
+    Effect.gen(function* () {
+      // Previously: the workflow ran for ~38s and EEXIST'd on mkdir at the end
+      // (exit 1). The fast path now refuses with a Usage error (exit 2).
+      const root = yield* Effect.promise(() =>
+        makeTempDir('texra-cli-outdir-', tempDirs),
+      );
+      const filePath = join(root, 'oops.txt');
+      yield* Effect.promise(() => writeFile(filePath, 'not a directory'));
+      const error = yield* Effect.flip(
+        assertOutputDirAvailable(filePath, root),
+      );
+      expect(error).toBeInstanceOf(CliUsageError);
+      expect(error.message).toMatch(/--output-dir is not a directory/);
+    }),
+  );
 
-  it('rejects an --output-dir whose parent path component is a file (ENOTDIR)', async () => {
-    // `mkdir -p` can't fix this — `/tmp/file/sub` where `/tmp/file` is a
-    // regular file — so previously the fast path treated the stat ENOTDIR as
-    // "doesn't exist yet" and we paid the full agent run before mkdir failed.
-    const root = await makeTempDir('texra-cli-outdir-enotdir-', tempDirs);
-    const filePath = join(root, 'not-a-dir');
-    await writeFile(filePath, 'just a file');
-    const through = join(filePath, 'subdir');
-    await expect(
-      Effect.runPromise(assertOutputDirAvailable(through, root)),
-    ).rejects.toBeInstanceOf(CliUsageError);
-    await expect(
-      Effect.runPromise(assertOutputDirAvailable(through, root)),
-    ).rejects.toThrow(/is not a directory/);
-  });
+  it.live(
+    'rejects an --output-dir whose parent path component is a file (ENOTDIR)',
+    () =>
+      Effect.gen(function* () {
+        // `mkdir -p` can't fix this — `/tmp/file/sub` where `/tmp/file` is a
+        // regular file — so previously the fast path treated the stat ENOTDIR as
+        // "doesn't exist yet" and we paid the full agent run before mkdir failed.
+        const root = yield* Effect.promise(() =>
+          makeTempDir('texra-cli-outdir-enotdir-', tempDirs),
+        );
+        const filePath = join(root, 'not-a-dir');
+        yield* Effect.promise(() => writeFile(filePath, 'just a file'));
+        const through = join(filePath, 'subdir');
+        const error = yield* Effect.flip(
+          assertOutputDirAvailable(through, root),
+        );
+        expect(error).toBeInstanceOf(CliUsageError);
+        expect(error.message).toMatch(/is not a directory/);
+      }),
+  );
 });
 
 describe('assertOutputFileAvailable', () => {
-  it('accepts a path that does not exist yet (writer creates the file)', async () => {
-    const root = await makeTempDir('texra-cli-outfile-', tempDirs);
-    await expect(
-      Effect.runPromise(assertOutputFileAvailable(join(root, 'out.tex'), root)),
-    ).resolves.toBeUndefined();
-  });
+  it.live(
+    'accepts a path that does not exist yet (writer creates the file)',
+    () =>
+      Effect.gen(function* () {
+        const root = yield* Effect.promise(() =>
+          makeTempDir('texra-cli-outfile-', tempDirs),
+        );
+        expect(
+          yield* assertOutputFileAvailable(join(root, 'out.tex'), root),
+        ).toBeUndefined();
+      }),
+  );
 
-  it('accepts an existing file (the writer overwrites)', async () => {
-    const root = await makeTempDir('texra-cli-outfile-', tempDirs);
-    const target = join(root, 'existing.tex');
-    await writeFile(target, 'old content');
-    await expect(
-      Effect.runPromise(assertOutputFileAvailable(target, root)),
-    ).resolves.toBeUndefined();
-  });
+  it.live('accepts an existing file (the writer overwrites)', () =>
+    Effect.gen(function* () {
+      const root = yield* Effect.promise(() =>
+        makeTempDir('texra-cli-outfile-', tempDirs),
+      );
+      const target = join(root, 'existing.tex');
+      yield* Effect.promise(() => writeFile(target, 'old content'));
+      expect(yield* assertOutputFileAvailable(target, root)).toBeUndefined();
+    }),
+  );
 
-  it('rejects --output pointing at an existing directory', async () => {
-    // Previously: workflow ran ~19s, then EISDIR on copyfile at the end
-    // (exit 1). The fast path now refuses with a Usage error (exit 2) and
-    // hints at --output-dir.
-    const root = await makeTempDir('texra-cli-outfile-', tempDirs);
-    const dirPath = join(root, 'sub');
-    await mkdir(dirPath);
-    await expect(
-      Effect.runPromise(assertOutputFileAvailable(dirPath, root)),
-    ).rejects.toBeInstanceOf(CliUsageError);
-    await expect(
-      Effect.runPromise(assertOutputFileAvailable(dirPath, root)),
-    ).rejects.toThrow(/--output is a directory.*use --output-dir/);
-  });
+  it.live('rejects --output pointing at an existing directory', () =>
+    Effect.gen(function* () {
+      // Previously: workflow ran ~19s, then EISDIR on copyfile at the end
+      // (exit 1). The fast path now refuses with a Usage error (exit 2) and
+      // hints at --output-dir.
+      const root = yield* Effect.promise(() =>
+        makeTempDir('texra-cli-outfile-', tempDirs),
+      );
+      const dirPath = join(root, 'sub');
+      yield* Effect.promise(() => mkdir(dirPath));
+      const error = yield* Effect.flip(
+        assertOutputFileAvailable(dirPath, root),
+      );
+      expect(error).toBeInstanceOf(CliUsageError);
+      expect(error.message).toMatch(
+        /--output is a directory.*use --output-dir/,
+      );
+    }),
+  );
 
-  it('rejects --output whose parent path component is a file (ENOTDIR)', async () => {
-    // Previously: workflow ran ~40s, then EEXIST on mkdir of the parent
-    // (exit 1). `mkdir -p` can't recover this — the parent IS a file.
-    const root = await makeTempDir('texra-cli-outfile-', tempDirs);
-    const filePath = join(root, 'not-a-dir');
-    await writeFile(filePath, 'just a file');
-    const through = join(filePath, 'out.tex');
-    await expect(
-      Effect.runPromise(assertOutputFileAvailable(through, root)),
-    ).rejects.toBeInstanceOf(CliUsageError);
-    await expect(
-      Effect.runPromise(assertOutputFileAvailable(through, root)),
-    ).rejects.toThrow(/parent path component is a file/);
-  });
+  it.live(
+    'rejects --output whose parent path component is a file (ENOTDIR)',
+    () =>
+      Effect.gen(function* () {
+        // Previously: workflow ran ~40s, then EEXIST on mkdir of the parent
+        // (exit 1). `mkdir -p` can't recover this — the parent IS a file.
+        const root = yield* Effect.promise(() =>
+          makeTempDir('texra-cli-outfile-', tempDirs),
+        );
+        const filePath = join(root, 'not-a-dir');
+        yield* Effect.promise(() => writeFile(filePath, 'just a file'));
+        const through = join(filePath, 'out.tex');
+        const error = yield* Effect.flip(
+          assertOutputFileAvailable(through, root),
+        );
+        expect(error).toBeInstanceOf(CliUsageError);
+        expect(error.message).toMatch(/parent path component is a file/);
+      }),
+  );
 
-  it('resolves a relative --output against cwd before stat-ing', async () => {
-    const root = await makeTempDir('texra-cli-outfile-', tempDirs);
-    const dirPath = join(root, 'rel-dir');
-    await mkdir(dirPath);
-    await expect(
-      Effect.runPromise(assertOutputFileAvailable('rel-dir', root)),
-    ).rejects.toThrow(/--output is a directory/);
-  });
+  it.live('resolves a relative --output against cwd before stat-ing', () =>
+    Effect.gen(function* () {
+      const root = yield* Effect.promise(() =>
+        makeTempDir('texra-cli-outfile-', tempDirs),
+      );
+      const dirPath = join(root, 'rel-dir');
+      yield* Effect.promise(() => mkdir(dirPath));
+      const error = yield* Effect.flip(
+        assertOutputFileAvailable('rel-dir', root),
+      );
+      expect(error.message).toMatch(/--output is a directory/);
+    }),
+  );
 });
