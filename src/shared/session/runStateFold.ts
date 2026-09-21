@@ -250,11 +250,8 @@ const IGNORED_ROW_TYPES: Readonly<
   'run.removed': true,
   'run.description': true,
   'conversation.progress': true,
-  updateTodos: true,
-  updatePlan: true,
-  addOutputFiles: true,
-  updateMissingOutputs: true,
-  updateCompileFailures: true,
+  'run.fact': true,
+  'child.park': true,
   goalStateChanged: true,
   inquiryThreadUpdated: true,
   'approval.policy': true,
@@ -280,9 +277,6 @@ const IGNORED_ROW_TYPES: Readonly<
   'workflow.script': true,
   'workflow.journal': true,
   'workflow.attempt': true,
-  'desktop.projects.changed': true,
-  'inquiry.recorded': true,
-  'update.check.recorded': true,
   'state.value.set': true,
 };
 const IGNORED = new Set<string>(Object.keys(IGNORED_ROW_TYPES));

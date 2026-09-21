@@ -15,7 +15,7 @@ import { createTestRunTrace } from '@test/support/sessionTestUtils';
 import { runStreamedTurn } from '@tools/codex';
 
 // Local file imports
-import { recordTraceEvents, traceEventsOfType } from '../progressTestUtils';
+import { recordTraceEvents, runFactsOfKey } from '../progressTestUtils';
 import type {
   CommandExecutionItem,
   Thread,
@@ -88,7 +88,7 @@ describe('codex progress events', () => {
 
     await Effect.runPromise(runStreamedTurn(thread, 'Do the thing', logger));
 
-    expect(traceEventsOfType(recorded.events, 'updateTodos')).toMatchObject([
+    expect(runFactsOfKey(recorded.events, 'todos')).toMatchObject([
       {
         todos: [
           {

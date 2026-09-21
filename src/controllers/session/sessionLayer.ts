@@ -590,9 +590,8 @@ const sessionHandleLayer = (
             Effect.andThen(() => {
               // A row that closes live text drops the held chunks: a
               // stream's final text or a card's terminal result drop their
-              // own; the run's transcript boundary (the park, the end, the
-              // removal) drops every chunk of the run, the same rule the
-              // fold applies to its in-flight text, so a card an
+              // own; the run's transcript boundary (either park, the end,
+              // the removal) drops every chunk of the run, so a card an
               // interrupted run closed without a terminal row holds nothing.
               const runId = aggregateTarget(event.aggregateId).id;
               let drop: ((key: string) => boolean) | null = null;
@@ -606,6 +605,7 @@ const sessionHandleLayer = (
               } else if (
                 event.type === 'run.end' ||
                 event.type === 'run.removed' ||
+                (event.type === 'child.park' && event.phase === 'parked') ||
                 (event.type === 'flow.step' && event.payload.step === 'waiting')
               ) {
                 drop = (key) => key.startsWith(`${runId}/`);

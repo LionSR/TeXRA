@@ -1337,14 +1337,14 @@ if (SHOW_TODOS) {
   };
   publish(
     {
-      type: 'updateTodos',
+      type: 'run.fact',
       aggregateId: qualifyAggregateId('run', HARNESS_RUN_ID),
-      todos: [...workPlan.todos],
+      fact: { key: 'todos', todos: [...workPlan.todos] },
     },
     {
-      type: 'updatePlan',
+      type: 'run.fact',
       aggregateId: qualifyAggregateId('run', HARNESS_RUN_ID),
-      plan: workPlan.plan,
+      fact: { key: 'plan', plan: workPlan.plan },
     },
   );
 }

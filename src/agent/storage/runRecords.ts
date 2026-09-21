@@ -23,6 +23,7 @@ import type {
 import {
   ResultMetaSchema,
   aggregateId,
+  type AggregateId,
   type ResultMeta,
   type RunEnd,
   type SessionEvent,
@@ -136,6 +137,27 @@ export const persistedParentRunId = Effect.fn('persistedParentRunId')(
   },
 );
 
+/**
+ * The run's latest row of one type, or null. The one latest-row reader every
+ * named record goes through: the read already keeps only the newest row of
+ * each type per aggregate, so "latest" is `findLast` over what it returned,
+ * and the row's own fields need no parse of their own — `SessionEventSchema`
+ * carries them, so the database's decode already refused a row that does not
+ * match, as `DatabaseReadFailed`.
+ */
+function latestOfType<T extends SessionEvent['type']>(
+  rows: readonly SessionEvent[],
+  id: AggregateId,
+  type: T,
+): Extract<SessionEvent, { type: T }> | null {
+  return (
+    rows.findLast(
+      (row): row is Extract<SessionEvent, { type: T }> =>
+        row.aggregateId === id && row.type === type,
+    ) ?? null
+  );
+}
+
 /** Native access to named run metadata, with no file-backed read arm. */
 export function getRunRecords(session: SessionHandle, runId: RunId) {
   const id = aggregateId('run', runId);
@@ -147,19 +169,9 @@ export function getRunRecords(session: SessionHandle, runId: RunId) {
     draft: SessionEventDraft,
   ): Effect.Effect<void, DatabaseNotOwner | DatabaseWriteFailed> =>
     session.commit([draft]).pipe(Effect.asVoid);
-  /**
-   * The latest `run.record` row; the database reads a closed run as absent.
-   * The row's record needs no parse of its own: `SessionEventSchema` carries
-   * this field as `RunRecordFieldsSchema`, so the database's own decode
-   * already refused a row that does not match it, as `DatabaseReadFailed`.
-   */
+  /** The latest `run.record` row; the database reads a closed run as absent. */
   const readRecord = (): Effect.Effect<RunRecord | null, DatabaseReadFailed> =>
-    read((rows) => {
-      const event = rows.findLast(
-        (row) => row.aggregateId === id && row.type === 'run.record',
-      );
-      return event?.type === 'run.record' ? event.record : null;
-    });
+    read((rows) => latestOfType(rows, id, 'run.record')?.record ?? null);
   return {
     /** The run has a `run.start` the database still lists: absent, or
      *  closed by its tombstone, reads false. */
@@ -207,26 +219,11 @@ export function getRunRecords(session: SessionHandle, runId: RunId) {
         ),
       ),
     readReport: (): Effect.Effect<string | null, DatabaseReadFailed> =>
-      read((rows) => {
-        const event = rows.findLast(
-          (row) => row.aggregateId === id && row.type === 'run.report',
-        );
-        return event?.type === 'run.report' ? event.report : null;
-      }),
+      read((rows) => latestOfType(rows, id, 'run.report')?.report ?? null),
     readWorkspaceFiles: (): Effect.Effect<string[], DatabaseReadFailed> =>
-      read((rows) => {
-        const event = rows.findLast(
-          (row) => row.aggregateId === id && row.type === 'run.workspaceFiles',
-        );
-        return event?.type === 'run.workspaceFiles' ? event.paths : [];
-      }),
+      read((rows) => latestOfType(rows, id, 'run.workspaceFiles')?.paths ?? []),
     readResultMeta: (): Effect.Effect<ResultMeta | null, DatabaseReadFailed> =>
-      read((rows) => {
-        const event = rows.findLast(
-          (row) => row.aggregateId === id && row.type === 'run.result',
-        );
-        return event?.type === 'run.result' ? event.result : null;
-      }),
+      read((rows) => latestOfType(rows, id, 'run.result')?.result ?? null),
     /** The run's terminal fact: outcome, error, usage and the flow's output. */
     readRunEnd: (): Effect.Effect<RunEnd | null, DatabaseReadFailed> =>
       read((rows) => {

@@ -26,7 +26,6 @@ import { z } from 'zod';
 import { parseJsonWith } from '@common/parsing/safeParseJson';
 
 import { TexraApprovalPolicySchema } from '@shared/approvalPolicy';
-import { UpdateCheckRecordSchema } from './updateCheck';
 import { AgentCategorySchema } from './agent';
 import { AgentConfigFieldsSchema } from './agentConfig';
 import { GoalStateSchema } from './goal';
@@ -37,14 +36,14 @@ import {
   ResultMetaSchema,
 } from './runRecords';
 import { RunIdSchema, type RunId } from './identifiers';
-import { JsonValueSchema } from './jsonValue';
 import { WorkflowScriptFilesSchema } from './workflowScriptFiles';
-import {
-  InquiryThreadRecordSchema,
-  InquiryThreadUpdatedEventSchema,
-} from './inquiry';
-import { PlanSchema } from './plan';
+import { InquiryThreadUpdatedEventSchema } from './inquiry';
 import { PermissionPayloadSchema } from './progressView/data';
+import {
+  PersistedJsonValueSchema,
+  RunFactSchema,
+  StoredValueSchema,
+} from './rowValues';
 import { RequestDecisionSchema } from './request';
 import { RunIdentitySchema } from './runIdentity';
 import {
@@ -56,12 +55,7 @@ import {
   ToolResultPayloadSchema,
 } from './runLedgerEvent';
 import { UserFollowUpSupportSchema, WorktreeInfoSchema } from './run';
-import {
-  ApprovalBypassesSchema,
-  ConversationProgressSchema,
-  RoundKeyedOutputSidecarValueSchemas,
-} from './runState';
-import { TodoItemSchema } from './todo';
+import { ApprovalBypassesSchema, ConversationProgressSchema } from './runState';
 import { TranscriptEventSchemas } from './traceEvent';
 
 /**
@@ -351,17 +345,21 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
    */
   durable('run.end', RunEndSchema.shape),
   durable('conversation.progress', { progress: ConversationProgressSchema }),
-  durable('updateTodos', { todos: z.array(TodoItemSchema) }),
-  durable('updatePlan', { plan: PlanSchema.nullable() }),
-  durable('addOutputFiles', {
-    filesByRound: RoundKeyedOutputSidecarValueSchemas.outputFiles,
-  }),
-  durable('updateMissingOutputs', {
-    filesByRound: RoundKeyedOutputSidecarValueSchemas.missingOutputs,
-  }),
-  durable('updateCompileFailures', {
-    filesByRound: RoundKeyedOutputSidecarValueSchemas.compileFailures,
-  }),
+  durable('run.fact', { fact: RunFactSchema }),
+  /**
+   * An agent-CLI child's park across its turns (one run model, 3.3):
+   * `parked` before the loop blocks on its queue, `resumed` when the taken
+   * batch starts the next turn. Its own row, because a run this loop is the
+   * only driver of has no ledger, no family and no rounds: borrowing
+   * `flow.step` meant inventing a `toolUse` family and a round that never
+   * existed. The phase is the whole of it — the fold parks the run on
+   * `parked` and runs it on `resumed`, which is what
+   * `getToolUseFollowUpTarget` reads to admit the next turn. A listing key
+   * of its own (`listingTypeOf`'s default), for the same reason `flow.step`
+   * is one: a cold listing that dropped it would paint every parked child
+   * as busy.
+   */
+  durable('child.park', { phase: z.enum(['parked', 'resumed']) }),
   RunRemovedDraftSchema,
   /** The AI-generated summary of what the run set out to do. */
   durable('run.description', { description: z.string() }),
@@ -476,13 +474,6 @@ const RunLedgerEventDraftSchema = z.discriminatedUnion('type', [
     phase: z.enum(['accepted', 'settled']),
   }),
 ]);
-/** A stored value as the journal and the state store keep it: `undefined` is
- *  not JSON, so absence is an arm rather than a missing field. */
-const PersistedJsonValueSchema = z.discriminatedUnion('kind', [
-  z.strictObject({ kind: z.literal('undefined') }),
-  z.strictObject({ kind: z.literal('json'), value: JsonValueSchema }),
-]);
-export type PersistedJsonValue = z.infer<typeof PersistedJsonValueSchema>;
 /**
  * A workflow script's durable journal (runtime on Effect, section 5, PR 4):
  * one row per completed `agent()` call on the checkpoint aggregate a
@@ -542,41 +533,30 @@ const WorkflowCheckpointDraftSchema = z.discriminatedUnion('type', [
     'workflow-checkpoint',
   ),
 ]);
-const DesktopProjectsDraftSchema = durable(
-  'desktop.projects.changed',
-  { roots: z.array(z.string().min(1)) },
-  'desktop-projects',
-);
-const GlobalInquiryDraftSchema = durable(
-  'inquiry.recorded',
-  { record: InquiryThreadRecordSchema },
-  'global-inquiry',
-);
-const UpdateCheckDraftSchema = durable(
-  'update.check.recorded',
-  { record: UpdateCheckRecordSchema },
-  'update-check',
-);
 /**
- * One host or application state key's latest value: the row behind every
- * `StateStore`, one aggregate per key so latest-per-key is latest-per-
- * aggregate. `{ kind: 'undefined' }` is the delete, the `vscode.Memento`
- * contract every host's store mirrors.
+ * The latest value of one stored key: one aggregate per value, so
+ * latest-per-key is latest-per-aggregate and no listing needs to group by
+ * anything but the aggregate.
  */
-const AppStateDraftSchema = durable(
-  'state.value.set',
-  { value: PersistedJsonValueSchema },
-  'app-state',
-);
+const StateValueSetDraftSchema = z
+  .object({
+    aggregateId: AggregateIdSchema,
+    stageId: z.string().optional(),
+    type: z.literal('state.value.set'),
+    state: StoredValueSchema,
+  })
+  .refine((row) => aggregateTarget(row.aggregateId).kind === row.state.key, {
+    error: 'A stored value lives on the aggregate kind its key names',
+    // A cross-field rule reads both fields, so it applies only once both
+    // parsed: a corrupt `state` is already refused on its own terms.
+    when: (payload) => payload.issues.length === 0,
+  });
 export const SessionEventDraftSchema = z.discriminatedUnion('type', [
   ...DisplaySessionEventDraftSchema.options,
   ...RunRecordEventDraftSchema.options,
   ...RunLedgerEventDraftSchema.options,
   ...WorkflowCheckpointDraftSchema.options,
-  DesktopProjectsDraftSchema,
-  GlobalInquiryDraftSchema,
-  UpdateCheckDraftSchema,
-  AppStateDraftSchema,
+  StateValueSetDraftSchema,
 ]);
 export const DisplaySessionEventSchema = z.discriminatedUnion('type', [
   RunStartEventSchema.extend(envelope),
@@ -605,7 +585,7 @@ export type DisplaySessionEvent = z.infer<typeof DisplaySessionEventSchema>;
  * to the stored shape of `SessionEventSchema`; `sessionEventFormat.vitest.ts`
  * pins that shape and fails a change that leaves the version alone.
  */
-export const SESSION_EVENT_FORMAT = 6;
+export const SESSION_EVENT_FORMAT = 7;
 
 export const SessionEventSchema = z.discriminatedUnion('type', [
   ...DisplaySessionEventSchema.options,
@@ -614,10 +594,7 @@ export const SessionEventSchema = z.discriminatedUnion('type', [
   ...WorkflowCheckpointDraftSchema.options.map((schema) =>
     schema.extend(envelope),
   ),
-  DesktopProjectsDraftSchema.extend(envelope),
-  GlobalInquiryDraftSchema.extend(envelope),
-  UpdateCheckDraftSchema.extend(envelope),
-  AppStateDraftSchema.extend(envelope),
+  StateValueSetDraftSchema.extend(envelope),
 ]);
 export type SessionEvent = z.infer<typeof SessionEventSchema>;
 
@@ -655,6 +632,10 @@ export function referencedAggregates(event: SessionEvent): AggregateId[] {
  * transcript tier alone: its display arm is a no-op and only the transcript
  * fold reads it over the whole aggregate, so listing it would pull the latest
  * one of every run into every renderer for no reader.
+ *
+ * A listing key is "latest per aggregate and type", so `run.fact`, which
+ * holds five families on one type, is read grouped by its `key` as well
+ * ({@link listingKeyOf} and `Database`'s listing queries).
  */
 export function listingTypeOf(
   event: Pick<SessionEvent, 'type'>,
@@ -701,6 +682,19 @@ export function listingTypeOf(
     default:
       return event.type;
   }
+}
+
+/**
+ * The `latest` key one row folds under: its listing type, qualified by the
+ * row's own discriminator where it carries one. The mirror of the listing
+ * query's `GROUP BY`, so "the newest row the fold holds" means the same
+ * thing on a cold read and on a replay: one `run.fact` family's newest row
+ * never suppresses another's.
+ */
+export function listingKeyOf(event: SessionEvent): string | null {
+  const type = listingTypeOf(event);
+  if (type === null) return null;
+  return event.type === 'run.fact' ? `${type}/${event.fact.key}` : type;
 }
 
 /**

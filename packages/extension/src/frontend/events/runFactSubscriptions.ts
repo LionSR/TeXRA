@@ -6,7 +6,7 @@ import type { ProcessRuntime } from '@platform/processRuntime';
 import { aggregateTarget, type AddOutputFilesPayload } from '@shared/schemas';
 import { goalStateChanges, type GoalStateChange } from '@tools/goal';
 
-/** Read a session's `addOutputFiles` facts from now on. */
+/** Read a session's `outputFiles` run facts from now on. */
 export function subscribeAddOutputFilesRunFact(
   session: Pick<SessionHandle, 'events' | 'now'>,
   listener: (payload: AddOutputFilesPayload) => void,
@@ -15,10 +15,11 @@ export function subscribeAddOutputFilesRunFact(
   const fiber = runtime.runFork(
     Stream.runForEach(session.events.all(session.now()), (event) =>
       Effect.sync(() => {
-        if (event.type !== 'addOutputFiles') return;
+        if (event.type !== 'run.fact' || event.fact.key !== 'outputFiles')
+          return;
         const target = aggregateTarget(event.aggregateId);
         if (target.kind !== 'run') return;
-        listener({ runId: target.id, filesByRound: event.filesByRound });
+        listener({ runId: target.id, filesByRound: event.fact.filesByRound });
       }),
     ),
   );

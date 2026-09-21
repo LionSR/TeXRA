@@ -138,9 +138,9 @@ describe('assembleTrace', () => {
     ];
     session.publish([
       {
-        type: 'updateTodos',
+        type: 'run.fact',
         aggregateId: aggregateId('run', runId),
-        todos,
+        fact: { key: 'todos', todos },
       },
     ]);
     await settleSessionEvents();
@@ -167,7 +167,10 @@ describe('assembleTrace', () => {
       expect.objectContaining({ type: 'run.end', outcome: 'completed' }),
     );
     expect(trace.events).toContainEqual(
-      expect.objectContaining({ type: 'updateTodos', todos }),
+      expect.objectContaining({
+        type: 'run.fact',
+        fact: { key: 'todos', todos },
+      }),
     );
   });
 

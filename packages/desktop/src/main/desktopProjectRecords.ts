@@ -26,10 +26,13 @@ export const openDesktopProjectRecords = Effect.gen(function* () {
   const read = Effect.gen(function* () {
     const latest = yield* database.readDesktopProjects(id);
     if (latest === undefined) return [] as string[];
-    if (latest.type !== 'desktop.projects.changed') {
+    if (
+      latest.type !== 'state.value.set' ||
+      latest.state.key !== 'desktop-projects'
+    ) {
       return yield* Effect.fail(new Error('Invalid desktop project record'));
     }
-    return latest.roots;
+    return latest.state.roots;
   });
   const update = (change: (roots: readonly string[]) => readonly string[]) =>
     Effect.gen(function* () {
@@ -42,9 +45,9 @@ export const openDesktopProjectRecords = Effect.gen(function* () {
         return;
       yield* database.appendAll([
         {
-          type: 'desktop.projects.changed',
+          type: 'state.value.set',
           aggregateId: id,
-          roots: [...roots],
+          state: { key: 'desktop-projects', roots: [...roots] },
         },
       ]);
     }).pipe(withPerKeyLane(lanes, 'remembered'));

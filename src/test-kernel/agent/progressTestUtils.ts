@@ -122,6 +122,19 @@ export function traceEventsOfType<T extends AgentEvent['type']>(
   );
 }
 
+/** The value a `run.fact` row carries, read off the trace arm itself. */
+type RunFact = Extract<AgentEvent, { type: 'run.fact' }>['fact'];
+
+/** The `run.fact` values of one key family, in emission order. */
+export function runFactsOfKey<K extends RunFact['key']>(
+  events: readonly AgentEvent[],
+  key: K,
+): Array<Extract<RunFact, { key: K }>> {
+  return traceEventsOfType(events, 'run.fact')
+    .map((event) => event.fact)
+    .filter((fact): fact is Extract<RunFact, { key: K }> => fact.key === key);
+}
+
 /**
  * Let every reader of a session's plane (`events.all`, the fold fiber)
  * deliver what was published before this call: the readers run on the

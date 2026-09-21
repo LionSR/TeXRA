@@ -14,7 +14,6 @@
 import type { AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { AgentWorkflowSetting } from '@agent/core/definition/AgentDataclass';
-import { emitRunFact } from '@agent/runtime/runFactEvents';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
   type CompileFailure,
@@ -143,14 +142,18 @@ export function publishMissingOutputs(
   missing: string[],
 ): void {
   ensureRoundData(state, round).missingOutputs = missing;
-  emitRunFact(trace, 'updateMissingOutputs', {
-    filesByRound: roundIndexedBy(state, (data) => data.missingOutputs),
+  trace.emit({
+    type: 'run.fact',
+    fact: {
+      key: 'missingOutputs',
+      filesByRound: roundIndexedBy(state, (data) => data.missingOutputs),
+    },
   });
 }
 
 /**
  * One report, two artifacts: the human-facing transcript row and the
- * `updateMissingOutputs` run fact always travel together, so the round map
+ * `missingOutputs` run fact always travel together, so the round map
  * and the transcript can never diverge.
  *
  * The `missingOutputs` domain row is the human-facing transcript log and is

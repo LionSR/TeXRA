@@ -25,7 +25,6 @@ import type { FollowUpBatch } from '@agent/followUp/RunInput';
 import { maybeBuildGoalContinuation } from '@agent/goal/maybeBuildGoalContinuation';
 import { buildInitialToolUsePrompts } from '@agent/prompt/PromptBuilder';
 import { USER_VAR_INSTRUCTION, USER_VAR_MODEL } from '@agent/prompt/userVars';
-import { emitRunFact } from '@agent/runtime/runFactEvents';
 import { resolveModelCompatibilityKey } from '@agent/runtime/modelRoutes';
 import { logUserMessage } from '@agent/trace';
 import {
@@ -473,11 +472,11 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     let finalToolAttempted = false;
     workspace.workPlan.setOnUpdate({
       onTodosUpdate: (todos) => {
-        emitRunFact(logger, 'updateTodos', { todos });
+        logger.emit({ type: 'run.fact', fact: { key: 'todos', todos } });
         run.callbacks.onProgress?.({ kind: 'todos', todos });
       },
       onPlanUpdate: (plan) => {
-        emitRunFact(logger, 'updatePlan', { plan });
+        logger.emit({ type: 'run.fact', fact: { key: 'plan', plan } });
         run.callbacks.onProgress?.({ kind: 'plan', plan });
       },
     });

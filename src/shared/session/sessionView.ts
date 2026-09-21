@@ -102,8 +102,9 @@ const RunViewCommonSchema = z.object({
   inputFiles: z.array(z.string()),
   worktree: WorktreeInfoSchema.nullable(),
   /** The durable phase, folded from `run.activate` (running), `flow.step`
-   *  (`waiting` parks, any other step runs), and `run.end` (the outcome);
-   *  `ready` before the first activation folds (one run model, 3.3). An
+   *  (`waiting` parks, any other step runs), `child.park` (an agent-CLI
+   *  child's own park row, which has no loop to step), and `run.end` (the
+   *  outcome); `ready` before the first activation folds (3.3). An
    *  interrupted run keeps it and reads as interrupted through the copy;
    *  unavailability is `readOnly`, never a status (5.2). */
   status: z.union([RunPhaseSchema, z.literal(RUN_LIFECYCLE_READY)]),
@@ -137,7 +138,9 @@ const RunViewCommonSchema = z.object({
   lastTimestamp: z.number().nullable(),
   conversationProgress: ConversationProgressSchema,
   /** The loop's latest `flow.step`: family, step, and coordinates. Null
-   *  before the first step and after every activation. */
+   *  before the first step and after every activation, and null for the
+   *  whole life of a run with no loop of its own — an agent-CLI child
+   *  parks through `child.park`, which carries a phase and no position. */
   flow: RunFlowSchema.nullable(),
   followUpSupport: UserFollowUpSupportSchema,
   /** A native tool-use resume can target this run: a plain agent identity in
@@ -177,11 +180,11 @@ const RunViewCommonSchema = z.object({
    *  any other run's newest user instruction or settled model reply. */
   latestLine: z.string().nullable(),
   transcript: TranscriptViewSchema,
-  // Shared by both categories: `updateMissingOutputs` and
-  // `updateCompileFailures` apply to either arm alike (sessionFold.ts).
-  // Each row of those facts carries the run's whole round map, so a cold
-  // listing read — which delivers only the newest row per run — leaves the
-  // same rounds here as a full aggregate replay.
+  // Shared by both categories: the `missingOutputs` and `compileFailures`
+  // run facts apply to either arm alike (sessionFold.ts). Each row of those
+  // facts carries the run's whole round map, so a cold listing read — which
+  // delivers only the newest row per run and fact key — leaves the same
+  // rounds here as a full aggregate replay.
 
   missingOutputs: RoundKeyedOutputSidecarValueSchemas.missingOutputs,
   compileFailures: RoundKeyedOutputSidecarValueSchemas.compileFailures,

@@ -23,7 +23,7 @@ import { spiedTrace } from '@test/support/spiedTrace';
 import { createExternalLocation } from '@utils/files/fileLocation';
 import { RunFileService } from '@utils/files/runStorage';
 
-import { recordTraceEvents, traceEventsOfType } from '../progressTestUtils';
+import { recordTraceEvents, runFactsOfKey } from '../progressTestUtils';
 
 const RUN_ID = 'xml-output-manager-test' as RunId;
 
@@ -1689,9 +1689,9 @@ describe('extractFilesFromXml', () => {
           round,
         );
 
-        expect(traceEventsOfType(events, 'updateMissingOutputs')).toMatchObject(
-          [{ filesByRound: { [round - 1]: ['earlier.tex'], [round]: [] } }],
-        );
+        expect(runFactsOfKey(events, 'missingOutputs')).toMatchObject([
+          { filesByRound: { [round - 1]: ['earlier.tex'], [round]: [] } },
+        ]);
         expect(state.rounds.get(round)?.outputs).toEqual([]);
       }).pipe(Effect.provide(nodePlatformLayer)),
     );

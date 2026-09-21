@@ -29,7 +29,6 @@ import {
   type AgentTrace,
   type ToolUseCardRef,
 } from '@agent/trace';
-import { emitRunFact } from '@agent/runtime/runFactEvents';
 import type { Runs } from '@agent/runtime/runRegistry';
 import { ToolCall, type ToolCallShape } from '@agent/runtime/ToolCall';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
@@ -221,7 +220,8 @@ function publishCodexItemProgress(params: {
   const { item, status, logger, refs } = params;
 
   if (item.type === 'todo_list') {
-    emitRunFact(logger, 'updateTodos', { todos: toProgressTodos(item) });
+    const todos = toProgressTodos(item);
+    logger.emit({ type: 'run.fact', fact: { key: 'todos', todos } });
   }
 
   const toolLog = buildCodexLiveToolLog(item, status);
