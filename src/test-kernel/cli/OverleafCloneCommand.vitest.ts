@@ -31,8 +31,8 @@ vi.mock('execa', () => ({ execa: mocks.execa }));
 vi.mock('@cli/runtime/cliProcessRuntime', async (importOriginal) => {
   const { testRuntime } = await import('@test/support/testProcessRuntime');
   const { Effect: EffectModule } = await import('effect');
-  // `refusingStateStore` is the real one: what clone hands the install is
-  // part of what this suite covers.
+  // `NO_PLATFORM_INSTALL` is the real one: what clone's entry hands the
+  // install is part of what this suite covers.
   const actual =
     await importOriginal<typeof import('@cli/runtime/cliProcessRuntime')>();
   return {
