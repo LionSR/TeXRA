@@ -3,7 +3,7 @@
  */
 
 // Third-party imports
-import { z } from 'zod';
+import type { z } from 'zod';
 
 /**
  * An optional tool-input field whose absence resolves to `fallback` before
