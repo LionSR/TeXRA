@@ -102,6 +102,10 @@ import {
   type SessionOpenError,
 } from '@shared/session/database';
 import { releaseRunResources } from '@tools/approval';
+import {
+  InlineComments,
+  type InlineCommentProvider,
+} from '@tools/comment/InlineCommentTool';
 import type { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import { SetupPlatform, type SetupPlatformShape } from '@tools/setup/platform';
 import { StreamLogStore } from '@transcript/StreamLogStore';
@@ -1017,6 +1021,13 @@ interface ProcessRuntimeOptions {
    */
   readonly editorModel?: EditorModel['Service'];
   /**
+   * The host's inline-comment provider, for the one host with a Comments UI:
+   * the `inline_comment` tool reads it from here. Absent on a host without
+   * one, where the tool is already off the agent roster and a call that
+   * reached it anyway fails naming the missing host wiring.
+   */
+  readonly inlineComments?: InlineCommentProvider;
+  /**
    * The host's Lean language services: the VS Code extension's bridge to the
    * Lean 4 extension, or the direct `lake env lean --server` pool on a Node
    * host, over the `FileSystem`/`Path` this install provides. Built with the
@@ -1067,6 +1078,7 @@ export function installProcessRuntime({
   agentResume,
   setup,
   editorModel,
+  inlineComments,
   lean,
   usageLog,
   globalDatabase: globalDatabaseOption,
@@ -1100,6 +1112,9 @@ export function installProcessRuntime({
     editorModel === undefined
       ? Layer.empty
       : Layer.succeed(EditorModel)(editorModel),
+    inlineComments === undefined
+      ? Layer.empty
+      : Layer.succeed(InlineComments)(inlineComments),
   ).pipe(Layer.provideMerge(identity));
   // The map's services on the caller's own fiber: an Effect-native opener
   // (the SDK) runs these where it stands, so the owner adds no run site of

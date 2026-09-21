@@ -116,7 +116,6 @@ import {
 } from '@tools/github/githubAuth';
 import { killActiveRecording } from '@tools/media/audio';
 import { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
-import { setInlineCommentProvider } from '@tools/comment/InlineCommentTool';
 import {
   initProcessSettingHost,
   readSettingFrom,
@@ -265,6 +264,10 @@ async function initVscodePlatform(
       acquire: (configuration) =>
         acquireVscodeLanguageModel(context, configuration),
     },
+    // The Comments UI behind the `inline_comment` tool. The provider reads
+    // the controller this host registers at activation, so it is a value
+    // from module load; nothing about it waits on that registration.
+    inlineComments: getInlineCommentProvider(),
     // Lean through the Lean 4 extension, not a direct `lake` pool.
     lean: LeanLanguageServices.layer(
       createVscodeLeanLanguageServices(globalState),
@@ -860,7 +863,6 @@ async function activateExtension(context: vscode.ExtensionContext) {
   context.subscriptions.push({ dispose: disposeGitHubAuthListener });
   registerInlineCriticism(context, runtime, runtimeSession);
   registerInlineComments(context);
-  setInlineCommentProvider(getInlineCommentProvider());
 
   statusBarItem = vscode.window.createStatusBarItem(
     'texra.taskStatus',
