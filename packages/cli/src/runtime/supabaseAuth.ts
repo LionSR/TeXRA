@@ -10,8 +10,8 @@ import { createSupabaseAuth, type SupabaseAuthShape } from '@auth/SupabaseAuth';
 import {
   memoryPendingOAuthSlots,
   PendingOAuthStore,
-  SupabaseSignInCoordinator,
-} from '@controllers/auth/supabaseSignIn';
+} from '@controllers/auth/pendingOAuthStore';
+import { SupabaseSignInCoordinator } from '@controllers/auth/supabaseSignIn';
 import {
   toStorableSupabaseSession,
   type SupabaseSession,

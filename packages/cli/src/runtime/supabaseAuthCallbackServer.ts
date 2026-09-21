@@ -21,11 +21,11 @@ import { Cause, Effect, Result } from 'effect';
 import { z } from 'zod';
 
 // Local imports
-import {
-  withCallbackNonce,
-  type AuthCallbackRoute,
-  type AuthCallbackTransport,
-  type SignInCallbackOutcome,
+import { withCallbackNonce } from '@controllers/auth/pendingOAuthStore';
+import type {
+  AuthCallbackRoute,
+  AuthCallbackTransport,
+  SignInCallbackOutcome,
 } from '@controllers/auth/supabaseSignIn';
 import { parseJsonWith } from '@common/parsing/safeParseJson';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
@@ -37,11 +37,11 @@ const CALLBACK_PATH = '/auth-callback';
 const MAX_CALLBACK_BODY_BYTES = 8 * 1024;
 
 /** How the CLI shows the consent URL and reports an unattended callback. */
-export interface LoopbackTransportOptions {
+interface LoopbackTransportOptions {
   /** The process runtime each inbound request's program is forked on. */
   readonly runtime: ProcessRuntime;
   /** Launch the browser; `false` prints the URL and waits. */
-  readonly openBrowser: (url: string) => Effect.Effect<void, unknown>;
+  readonly openBrowser: (url: string) => Effect.Effect<void, Error>;
   readonly log: (message: string) => void;
 }
 

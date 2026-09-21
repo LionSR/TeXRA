@@ -2,35 +2,20 @@
  * The one Supabase (TeXRA account) sign-in state machine, shared by all three
  * hosts.
  *
- * Every host used to carry its own copy: a nonce mint, a pending-record
- * store, a login-CSRF nonce check, an attempt-supersession token, a commit
- * lane and a callback timeout — 1 500 lines of the same machine written three
- * ways, with only the callback transport genuinely differing. This is that
+ * Every host used to carry its own copy: an attempt nonce, an ownership
+ * token, a claim lane, a commit lane and a callback deadline, written three
+ * ways although only the callback transport genuinely differs. This is that
  * machine, written once; a host supplies an {@link AuthCallbackTransport} and
- * nothing else.
+ * nothing else. The record store and the login-CSRF nonce check it composes
+ * live beside it in `pendingOAuthStore.ts`.
  *
  * Lives in `src/controllers/` rather than `src/auth/` for the same reason
- * `subscriptionProviders.ts` beside it does: it composes the auth subsystem
- * with the agent catalog's sign-out invalidation, and `src/auth/**` is fenced
- * off from those. It is the account-plane twin of
- * `SubscriptionSignInPresenter`, which already collapsed the ChatGPT and Grok
- * flow across the same three hosts.
- *
- * The three invariants this file is the single home of:
- *
- * - **One PKCE bind.** {@link PendingOAuthStore.bind} pins the flow the GoTrue
- *   client just minted to the attempt's nonce, and the exchange selects that
- *   flow's verifier slot. Every host binds now; the extension was the only one
- *   that did, and the other two rode auth-js's fixed-verifier fallback.
- * - **One pending-state store.** {@link PendingOAuthStore} over a
- *   {@link PendingOAuthSlots} port — a secret store, a state store, or memory.
- * - **One nonce check.** {@link callbackNonce} plus the claim lane in
- *   {@link SupabaseSignInCoordinator}: a callback completes the attempt whose
- *   nonce it carries, or nothing.
+ * `subscriptionProviders.ts` does: it composes the auth subsystem with the
+ * agent catalog's sign-out invalidation, and `src/auth/**` is fenced off from
+ * that. It is the account-plane twin of `SubscriptionSignInPresenter`, which
+ * already collapsed the ChatGPT and Grok flow across the same three hosts.
  */
-import { randomBytes } from 'node:crypto';
-
-import { Deferred, Effect, Option, Result, type Scope } from 'effect';
+import { Deferred, Effect, Option, type Scope } from 'effect';
 
 import { invalidateRemoteAgentsAfterSignOut } from '@agent/index';
 import type { AuthCallbackUriParts } from '@auth/authCallback';
@@ -39,9 +24,6 @@ import { callPort, SerializedWrites, settleFailure } from '@auth/authProgram';
 import { AUTH_CALLBACK_TIMEOUT_MS, type OAuthProvider } from '@auth/config';
 import {
   isPendingOAuthStateFresh,
-  OAUTH_NONCE_PATTERN,
-  PendingOAuthStateSchema,
-  PKCE_FLOW_ID_PATTERN,
   type PendingOAuthState,
 } from '@auth/pendingOAuthState';
 import { withPkcePermit } from '@auth/pkcePermit';
@@ -50,136 +32,13 @@ import type {
   SupabaseSession,
   SupabaseSessionCoordinator,
 } from '@auth/SupabaseSession';
-import { parseJsonWith } from '@common/parsing/safeParseJson';
 import { createLog } from '@logger/logUtils';
 import type { ProcessServices } from '@platform/processRuntime';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+
+import { callbackNonce, type PendingOAuthStore } from './pendingOAuthStore';
 
 const log = createLog('supabaseSignIn');
-
-/**
- * Key prefix a durable {@link PendingOAuthSlots} implementation puts its
- * records under, so a store shared with other data can tell them apart and
- * enumerate only its own.
- */
-export const PENDING_OAUTH_STATE_PREFIX = 'texra.auth.pendingOAuthState.';
-
-/** The query parameter every host's callback URL carries its nonce in. */
-const CALLBACK_NONCE_PARAM = 'app_nonce';
-
-/**
- * Where one host durably keeps its pending sign-in records, keyed by nonce.
- * A record per nonce rather than one blob: on the VS Code host two windows
- * write the same secret store, and a read-modify-write of a shared blob would
- * lose the other window's attempt.
- */
-export interface PendingOAuthSlots {
-  read(nonce: string): Effect.Effect<string | undefined, unknown>;
-  write(nonce: string, value: string): Effect.Effect<void, unknown>;
-  erase(nonce: string): Effect.Effect<void, unknown>;
-  /** Nonces this host currently holds a record for, for the stale sweep. */
-  nonces(): Effect.Effect<readonly string[], unknown>;
-}
-
-/** The pending-record store: one implementation, three backing slots. */
-export class PendingOAuthStore {
-  constructor(private readonly slots: PendingOAuthSlots) {}
-
-  /** The record for `nonce`, or null when there is none worth trusting. */
-  read(nonce: string): Effect.Effect<PendingOAuthState | null, unknown> {
-    return Effect.map(this.slots.read(nonce), (stored) => {
-      if (stored === undefined) return null;
-      const parsed = parseJsonWith(stored, PendingOAuthStateSchema);
-      if (Result.isFailure(parsed)) {
-        // The fixed diagnostic deliberately excludes stored secret content.
-        log.warn(
-          'Stored OAuth callback state is malformed and will be ignored',
-        );
-        return null;
-      }
-      return parsed.success;
-    });
-  }
-
-  /**
-   * The one PKCE bind in the tree: pin the flow the client just minted to this
-   * attempt's nonce, so the callback carrying the nonce — in this window, this
-   * process, or the next one — exchanges against that flow's verifier slot.
-   */
-  bind(
-    attempt: Pick<PendingOAuthState, 'nonce' | 'createdAt'>,
-    flowId: string | null | undefined,
-  ): Effect.Effect<void, unknown> {
-    if (!flowId || !PKCE_FLOW_ID_PATTERN.test(flowId)) {
-      return Effect.fail(
-        new Error('OAuth initialization did not return a valid PKCE flow.'),
-      );
-    }
-    if (!isPendingOAuthStateFresh(attempt)) {
-      return Effect.fail(
-        new Error('Authentication attempt is no longer pending. Try again.'),
-      );
-    }
-    return this.slots.write(
-      attempt.nonce,
-      JSON.stringify({
-        nonce: attempt.nonce,
-        createdAt: attempt.createdAt,
-        flowId,
-      } satisfies PendingOAuthState),
-    );
-  }
-
-  clear(nonce: string): Effect.Effect<void, unknown> {
-    return this.slots.erase(nonce);
-  }
-
-  /**
-   * Drop records no callback can complete any more. Best effort: a store that
-   * cannot be inspected or cleaned says so and the sign-in continues, because
-   * a leftover record only expires again on the next sweep.
-   */
-  sweep(): Effect.Effect<void> {
-    return Effect.gen({ self: this }, function* () {
-      const nonces = yield* Effect.catchCause(this.slots.nonces(), () =>
-        Effect.sync(() => {
-          log.warn('Unable to inspect stored OAuth callback state for cleanup');
-          return [] as readonly string[];
-        }),
-      );
-      for (const nonce of nonces) {
-        yield* Effect.catchCause(
-          Effect.gen({ self: this }, function* () {
-            const state = yield* this.read(nonce);
-            if (!state || !isPendingOAuthStateFresh(state)) {
-              yield* this.clear(nonce);
-            }
-          }),
-          () =>
-            Effect.sync(() => {
-              log.warn('Unable to clean up stored OAuth callback state');
-            }),
-        );
-      }
-    });
-  }
-}
-
-/**
- * The one nonce check. A callback carries exactly one `app_nonce`, shaped like
- * the nonce this process mints; anything else is not ours.
- */
-export function callbackNonce(query: string): string | null {
-  const values = new URLSearchParams(query).getAll(CALLBACK_NONCE_PARAM);
-  if (values.length !== 1 || !OAUTH_NONCE_PATTERN.test(values[0])) return null;
-  return values[0];
-}
-
-/** Append this attempt's nonce to a host's callback URL. */
-export function withCallbackNonce(callbackUrl: string, nonce: string): string {
-  const separator = callbackUrl.includes('?') ? '&' : '?';
-  return `${callbackUrl}${separator}${CALLBACK_NONCE_PARAM}=${nonce}`;
-}
 
 /** What one inbound callback did. */
 export type SignInCallbackOutcome =
@@ -212,15 +71,13 @@ export interface AuthCallbackTransport {
    * attempt runs — a browser redirect cannot outrun it — and torn down when
    * the attempt's scope closes.
    */
-  open(
-    route: AuthCallbackRoute,
-  ): Effect.Effect<string, unknown, Scope.Scope>;
+  open(route: AuthCallbackRoute): Effect.Effect<string, Error, Scope.Scope>;
   /**
    * Show (and normally open) the consent URL. Raced against the callback, so
-   * a host may block on a browser-choice dialog without stalling a sign-in
+   * a host may block on a browser-choice dialog without stranding a sign-in
    * that has already completed.
    */
-  presentSignInUrl(url: string): Effect.Effect<void, unknown>;
+  presentSignInUrl(url: string): Effect.Effect<void, Error>;
   /**
    * Word a callback that completed with no attempt of this process waiting on
    * it: a deep link claimed by another window, or one delivered to a process
@@ -243,19 +100,19 @@ interface SignInAttempt {
    * Settled once: the committed session, `null` when the attempt was
    * superseded or cancelled, or the callback's failure.
    */
-  readonly outcome: Deferred.Deferred<SupabaseSession | null, unknown>;
+  readonly outcome: Deferred.Deferred<SupabaseSession | null, Error>;
 }
 
 /** What a host asks for when it starts one interactive sign-in. */
-export interface SupabaseSignInRequest {
+interface SupabaseSignInRequest {
   readonly provider: OAuthProvider;
   /** Extra `/authorize` parameters (account selection, login hint). */
   readonly queryParams?: Record<string, string>;
-  /** Override the shared callback deadline; the CLI's `--timeout` uses it. */
+  /** Override the shared callback deadline. */
   readonly timeoutMs?: number;
 }
 
-export interface SupabaseSignInCoordinatorOptions {
+interface SupabaseSignInCoordinatorOptions {
   /** The account plane the composition root built. */
   readonly auth: SupabaseAuthShape;
   readonly store: PendingOAuthStore;
@@ -280,20 +137,15 @@ export class SupabaseSignInCoordinator {
     return this.options.auth.coordinator;
   }
 
-  /** Whether an attempt of this process is still awaiting its callback. */
-  get hasPendingSignIn(): boolean {
-    return this.active !== undefined && isPendingOAuthStateFresh(this.active);
-  }
-
   /**
    * One interactive sign-in: arm the callback route, initialize the PKCE
-   * flow, bind it, show the consent URL, and wait for the callback that
-   * carries this attempt's nonce. Fails with the attempt's own error, whose
-   * `message` is the user-facing text.
+   * flow, bind it, show the consent URL, and wait for the callback carrying
+   * this attempt's nonce. Fails with the attempt's own error, whose `message`
+   * is the user-facing text.
    */
   signIn(
     request: SupabaseSignInRequest,
-  ): Effect.Effect<SupabaseSession, unknown, ProcessServices> {
+  ): Effect.Effect<SupabaseSession, Error, ProcessServices> {
     return Effect.scoped(
       Effect.gen({ self: this }, function* () {
         const attempt = this.claim();
@@ -315,23 +167,22 @@ export class SupabaseSignInCoordinator {
     return this.processCallback(uri, nonce).pipe(
       Effect.catchCause((cause) =>
         Effect.sync(() => {
-          const error = settleFailure(cause);
-          const message = toErrorMessage(error);
-          log.error(`Error processing OAuth callback: ${message}`);
+          const error = ensureError(settleFailure(cause));
+          log.error(`Error processing OAuth callback: ${error.message}`);
           const attempt = this.attemptFor(nonce);
           if (attempt) {
             Deferred.doneUnsafe(attempt.outcome, Effect.fail(error));
           }
-          return { kind: 'failed', message } as const;
+          return { kind: 'failed', message: error.message } as const;
         }),
       ),
     );
   }
 
   /**
-   * Abandon the outstanding attempt, if any. Synchronous invalidation (so it
-   * cannot slip behind a caller's fiber scheduling) plus the program that
-   * clears its record.
+   * Abandon the outstanding attempt, if any. The invalidation is synchronous,
+   * so it cannot slip behind a caller's fiber scheduling; the program that
+   * comes back clears the record.
    */
   cancel(): Effect.Effect<void> {
     const abandoned = this.active;
@@ -341,9 +192,9 @@ export class SupabaseSignInCoordinator {
 
   /**
    * Clear the stored session and refresh the local agent catalog. Answers
-   * whether a session was actually signed out. Host UI is the caller's.
+   * whether a session was actually signed out; host UI is the caller's.
    */
-  signOut(): Effect.Effect<boolean, unknown, ProcessServices> {
+  signOut(): Effect.Effect<boolean, Error, ProcessServices> {
     return Effect.gen({ self: this }, function* () {
       yield* this.cancel();
       const signedIn = yield* this.commits.run(
@@ -365,7 +216,7 @@ export class SupabaseSignInCoordinator {
   private runAttempt(
     attempt: SignInAttempt,
     request: SupabaseSignInRequest,
-  ): Effect.Effect<SupabaseSession, unknown, ProcessServices | Scope.Scope> {
+  ): Effect.Effect<SupabaseSession, Error, ProcessServices | Scope.Scope> {
     return Effect.gen({ self: this }, function* () {
       const callbackUrl = yield* this.options.transport.open({
         nonce: attempt.nonce,
@@ -428,7 +279,7 @@ export class SupabaseSignInCoordinator {
   private processCallback(
     uri: AuthCallbackUriParts,
     nonce: string | null,
-  ): Effect.Effect<SignInCallbackOutcome, unknown, ProcessServices> {
+  ): Effect.Effect<SignInCallbackOutcome, Error, ProcessServices> {
     return Effect.gen({ self: this }, function* () {
       const claimed = yield* this.claimCallback(nonce);
       if (!claimed) {
@@ -453,48 +304,28 @@ export class SupabaseSignInCoordinator {
         this.session.createSessionFromCallback(uri, claimed.flowId),
       );
       if (!result.success) {
-        const outcome: SignInCallbackOutcome = result.isAuthError
-          ? { kind: 'failed', message: result.error }
-          : { kind: 'ignored', reason: result.error };
-        if (result.isAuthError) {
-          log.error(`Sign-in failed: ${result.error}`);
-        } else {
-          log.debug(`Auth callback ignored: ${result.error}`);
-        }
-        if (attempt) {
-          Deferred.doneUnsafe(
-            attempt.outcome,
-            result.isAuthError
-              ? Effect.fail(new Error(`OAuth error: ${result.error}. Try again.`))
-              : Effect.succeed(null),
-          );
-        } else {
-          yield* this.options.transport.announce(outcome);
-        }
-        return outcome;
+        return yield* this.refuse(attempt, result);
       }
 
       yield* this.commits.run(
         Effect.gen({ self: this }, function* () {
           yield* this.session.storeSession(result.session);
           // The attempt can be superseded at any suspension point. Once it is,
-          // the session it just stored must not stay.
+          // the session just stored must not stay.
           if (attempt && this.active !== attempt) {
             yield* this.session.clearSessionIfCurrent(result.session);
           }
         }),
       );
 
-      const committed: SignInCallbackOutcome = {
+      const committed = {
         kind: 'committed',
         session: result.session,
-      };
+      } as const;
       if (attempt) {
         Deferred.doneUnsafe(
           attempt.outcome,
-          this.active === attempt
-            ? Effect.succeed(result.session)
-            : Effect.succeed(null),
+          Effect.succeed(this.active === attempt ? result.session : null),
         );
       } else {
         log.info(`Sign-in completed for ${result.session.account.label}`);
@@ -504,15 +335,40 @@ export class SupabaseSignInCoordinator {
     });
   }
 
+  /** A callback whose code exchange did not yield a session. */
+  private refuse(
+    attempt: SignInAttempt | undefined,
+    result: { readonly error: string; readonly isAuthError?: boolean },
+  ): Effect.Effect<SignInCallbackOutcome, never, ProcessServices> {
+    const outcome: SignInCallbackOutcome = result.isAuthError
+      ? { kind: 'failed', message: result.error }
+      : { kind: 'ignored', reason: result.error };
+    return Effect.gen({ self: this }, function* () {
+      if (result.isAuthError) log.error(`Sign-in failed: ${result.error}`);
+      else log.debug(`Auth callback ignored: ${result.error}`);
+      if (attempt) {
+        Deferred.doneUnsafe(
+          attempt.outcome,
+          result.isAuthError
+            ? Effect.fail(new Error(`OAuth error: ${result.error}. Try again.`))
+            : Effect.succeed(null),
+        );
+      } else {
+        yield* this.options.transport.announce(outcome);
+      }
+      return outcome;
+    });
+  }
+
   /**
-   * Claim one callback: the nonce is ours, its record is fresh, and no other
-   * delivery of the same callback got there first. Serialized, so two windows
-   * cannot both commit one attempt. A store that cannot answer means the
-   * callback's ownership is unverifiable, which is the attempt's failure.
+   * Claim one callback: the nonce is ours, its record is fresh and bound to a
+   * PKCE flow, and no other delivery got there first. Serialized, so two
+   * windows cannot both commit one attempt. A store that cannot answer means
+   * the callback's ownership is unverifiable, which is the attempt's failure.
    */
   private claimCallback(
     nonce: string | null,
-  ): Effect.Effect<PendingOAuthState | null, unknown> {
+  ): Effect.Effect<PendingOAuthState | null, Error> {
     return this.claims.run(
       Effect.gen({ self: this }, function* () {
         if (!nonce) {
@@ -532,9 +388,11 @@ export class SupabaseSignInCoordinator {
         yield* this.options.store.clear(nonce);
         return pending;
       }).pipe(
-        Effect.catch(() =>
+        Effect.catch((error) =>
           Effect.fail(
-            new Error('OAuth callback state could not be verified. Try again.'),
+            new Error(
+              `OAuth callback state could not be verified (${toErrorMessage(error)}). Try again.`,
+            ),
           ),
         ),
       ),
@@ -549,9 +407,9 @@ export class SupabaseSignInCoordinator {
   private claim(): SignInAttempt {
     this.invalidate();
     const attempt: SignInAttempt = {
-      nonce: randomBytes(16).toString('hex'),
+      nonce: mintCallbackNonce(),
       createdAt: Date.now(),
-      outcome: Deferred.makeUnsafe<SupabaseSession | null, unknown>(),
+      outcome: Deferred.makeUnsafe<SupabaseSession | null, Error>(),
     };
     this.active = attempt;
     return attempt;
@@ -586,29 +444,19 @@ export class SupabaseSignInCoordinator {
   }
 
   private clearRecord(nonce: string): Effect.Effect<void> {
-    return Effect.catchCause(this.options.store.clear(nonce), (cause) =>
+    return Effect.catch(this.options.store.clear(nonce), (error) =>
       Effect.sync(() => {
         log.warn(
-          `Unable to clean up stored OAuth callback state: ${toErrorMessage(settleFailure(cause))}`,
+          `Unable to clean up stored OAuth callback state: ${toErrorMessage(error)}`,
         );
       }),
     );
   }
 }
 
-/** Pending records held for the life of one process (the CLI's sign-in). */
-export function memoryPendingOAuthSlots(): PendingOAuthSlots {
-  const records = new Map<string, string>();
-  return {
-    read: (nonce) => Effect.sync(() => records.get(nonce)),
-    write: (nonce, value) =>
-      Effect.sync(() => {
-        records.set(nonce, value);
-      }),
-    erase: (nonce) =>
-      Effect.sync(() => {
-        records.delete(nonce);
-      }),
-    nonces: () => Effect.sync(() => [...records.keys()]),
-  };
+/** A sign-in nonce: 16 random bytes, hex, as `OAUTH_NONCE_PATTERN` spells it. */
+function mintCallbackNonce(): string {
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  return [...bytes].map((byte) => byte.toString(16).padStart(2, '0')).join('');
 }

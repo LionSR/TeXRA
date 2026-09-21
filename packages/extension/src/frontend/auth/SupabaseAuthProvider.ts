@@ -21,10 +21,12 @@ import { classifyAuthFailureStatus } from '@auth/TokenProvider';
 import {
   PENDING_OAUTH_STATE_PREFIX,
   PendingOAuthStore,
-  SupabaseSignInCoordinator,
   withCallbackNonce,
-  type AuthCallbackTransport,
   type PendingOAuthSlots,
+} from '@controllers/auth/pendingOAuthStore';
+import {
+  SupabaseSignInCoordinator,
+  type AuthCallbackTransport,
   type SignInCallbackOutcome,
 } from '@controllers/auth/supabaseSignIn';
 import * as logger from '@logger/logUtils';
@@ -38,7 +40,7 @@ import type { SupabaseUriHandler } from './UriHandler';
 const CHANNEL = 'SupabaseAuthProvider';
 const log = logger.createLog(CHANNEL);
 
-export const AUTH_URI_HANDLER_NOT_INITIALIZED =
+const AUTH_URI_HANDLER_NOT_INITIALIZED =
   'OAuth handler not initialized. Restart the extension.';
 
 /** Notification operations injected at construction so tests can stub them. */

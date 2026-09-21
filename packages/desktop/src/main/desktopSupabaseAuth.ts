@@ -14,19 +14,21 @@ import type {
 } from '@auth/SupabaseSession';
 import {
   PendingOAuthStore,
-  SupabaseSignInCoordinator,
   withCallbackNonce,
+} from '@controllers/auth/pendingOAuthStore';
+import {
+  SupabaseSignInCoordinator,
   type AuthCallbackTransport,
   type SignInCallbackOutcome,
 } from '@controllers/auth/supabaseSignIn';
 import type { MessageHost } from '@hosts/uiHosts';
-import type { StateStore } from '@platform/interfaces';
+import type { StateStore, StateWriteFailed } from '@platform/interfaces';
 import {
   withProcessServices,
   type ProcessRuntime,
   type ProcessServices,
 } from '@platform/processRuntime';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { TEXRA_PROTOCOL } from '../shared/desktopProtocol.js';
 import type { DesktopProtocolCallbackRouter } from './desktopProtocolCallbacks.js';
 
@@ -49,7 +51,7 @@ interface DesktopSupabaseAuth {
   dispose(): void;
 }
 
-export type DesktopAuthLog = Pick<Console, 'debug' | 'info' | 'warn' | 'error'>;
+type DesktopAuthLog = Pick<Console, 'debug' | 'info' | 'warn' | 'error'>;
 
 export interface DesktopSupabaseAuthHost extends Pick<
   MessageHost,
@@ -93,7 +95,7 @@ export function createDesktopPendingOAuthStore(
   const writes = new SerializedWrites();
   // With no store handed down there is nothing to persist, and the store's
   // own refusal is the caller's failure.
-  const persist = (): Effect.Effect<void, unknown> =>
+  const persist = (): Effect.Effect<void, StateWriteFailed> =>
     writes.run(
       store
         ? Effect.suspend(() =>
@@ -141,8 +143,8 @@ export function createDesktopSupabaseAuth(
 ): DesktopSupabaseAuth {
   const { auth, host, log, router, runtime, store } = options;
 
-  const warnOnNotificationFailure = <R>(
-    notify: Effect.Effect<unknown, unknown, R>,
+  const warnOnNotificationFailure = <A, E, R>(
+    notify: Effect.Effect<A, E, R>,
     failureMessage: string,
   ): Effect.Effect<void, never, R> =>
     notify.pipe(
@@ -201,7 +203,7 @@ export function createDesktopSupabaseAuth(
         host.showInfoMessage(
           'Complete sign-in in your browser. TeXRA updates automatically when it finishes.',
         ),
-      ),
+      ).pipe(Effect.mapError(ensureError)),
     announce,
   };
 
