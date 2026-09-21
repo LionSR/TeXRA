@@ -18,7 +18,7 @@ ruling and argues against it explicitly.
 | Errors, failure ownership, event channels | [error pipeline and ownership](./implemented/architecture/2026-06-10-error-pipeline-and-ownership.md)              |
 | Liveness and single ownership of a run    | [single owner liveness and one fold](./proposed/architecture/2026-09-20-single-owner-liveness-and-one-fold.md)     |
 | The `@texra-ai/agent` public surface      | [agent SDK tier-1 manifest](./proposed/architecture/2026-09-10-agent-sdk-tier-1-manifest.md)                       |
-| Standing SDK-readiness re-verification    | [2026-09-17 re-verification](./implemented/simplification/2026-09-17-agent-sdk-readiness-reverify.md)              |
+| Standing SDK-readiness re-verification    | [2026-09-21 re-verification](./archived/simplification/2026-09-21-agent-sdk-readiness-reverify.md)                 |
 | `packages/llm`                            | [LLM package hardening](./proposed/architecture/2026-09-20-llm-package-hardening.md)                               |
 | Observability and the trace plane         | [observability plane](./proposed/architecture/2026-09-09-observability-plane.md)                                   |
 | Host layers and cross-host duplication    | [host layer collapse](./proposed/simplification/2026-09-20-host-layer-collapse.md)                                 |
