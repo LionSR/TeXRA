@@ -8,8 +8,15 @@
  * because nothing publishes a run's rows before its residency exists: a launch
  * retains the run before it attaches its trace (`AgentLaunchContext`,
  * `createChildRun`), and a host focuses a run before the resume that revives it
- * (`chatSessionController`). So the seed is a prefix of what the tail delivers,
- * and no permit or sequence comparison decides where the two meet.
+ * (`chatSessionController`).
+ *
+ * The invariant that makes a missing sequence comparison safe is therefore
+ * disjointness, not prefixing: every seed row was either delivered and dropped
+ * before the run had a cache entry (a fresh run) or predates the tail's anchor
+ * and is never delivered at all (a run resumed across a session boundary,
+ * whose seed is a superset of what the tail carries), and every row the tail
+ * applies after hydration postdates the seed read. So no permit or sequence
+ * comparison decides where the two meet.
  */
 import { Effect, type Context } from 'effect';
 
@@ -144,14 +151,20 @@ export class StreamLogStore {
     return Effect.gen({ self: this }, function* () {
       const lease = this.retain(runId);
       yield* this.hydrate(runId).pipe(
-        Effect.onError(() => Effect.sync(() => lease.close())),
+        Effect.onError(() =>
+          Effect.sync(() => {
+            lease.close();
+            // A residency the caller never acquired leaves no entry behind.
+            this.requestEviction(runId);
+          }),
+        ),
       );
       return lease;
     });
   }
 
-  /** Hold a run's transcript for the host displaying it, until that host asks
-   *  for its eviction. */
+  /** Cache a run's transcript for the host about to display it. The entry
+   *  carries no lease, so `requestEviction` drops it. */
   ensureLoaded(runId: RunId): Effect.Effect<void, Error> {
     return this.hydrate(runId);
   }
