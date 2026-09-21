@@ -68,7 +68,7 @@
     "src/tools/approval/latexPreview.ts": 2,
     "src/tools/citation/CrossrefSearchTool.ts": 1,
     "src/tools/core/base.ts": 2,
-    "src/tools/core/definition.ts": 2,
+    "src/tools/core/definition.ts": 1,
     "src/tools/delegation/DelegationTools.ts": 2,
     "src/tools/delegation/WorkflowScriptTool.ts": 1,
     "src/tools/executions/runGeneratedFiles.ts": 1,
