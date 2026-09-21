@@ -310,11 +310,11 @@ export class SettingsViewMessageHandler {
    * the delegates reach the same boundary through `SettingsHandlerContext.run`.
    *
    * A tab whose arms all belong to one delegate contributes them as a table it
-   * owns (`...delegate.handlers`), as the desktop's controllers do; what is
-   * spelled out here is what this host performs itself: the profile and
-   * model commands, the Tools dashboard, the generic catalog write, and the
-   * two VS Code-only surfaces (Copilot access, extension installation) that
-   * have no catalog row to derive an arm from.
+   * owns (`...delegate.handlers`), as the desktop's controllers do. Spelled
+   * out here is the rest: what this host performs itself (profile and model
+   * commands, the Tools dashboard, the catalog write, and the VS Code-only
+   * Copilot and extension-install surfaces), plus the tab arms whose delegates
+   * own no table yet — agent, ChatGPT/Grok, inline-criticism and goal arms.
    */
   private createHandlerRegistry(
     context: vscode.ExtensionContext,
