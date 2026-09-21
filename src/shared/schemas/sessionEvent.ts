@@ -548,10 +548,12 @@ const StateValueSetDraftSchema = z
     type: z.literal('state.value.set'),
     state: StoredValueSchema,
   })
-  .refine(
-    (row) => aggregateTarget(row.aggregateId).kind === row.state.key,
-    'A stored value lives on the aggregate kind its key names',
-  );
+  .refine((row) => aggregateTarget(row.aggregateId).kind === row.state.key, {
+    error: 'A stored value lives on the aggregate kind its key names',
+    // A cross-field rule reads both fields, so it applies only once both
+    // parsed: a corrupt `state` is already refused on its own terms.
+    when: (payload) => payload.issues.length === 0,
+  });
 export const SessionEventDraftSchema = z.discriminatedUnion('type', [
   ...DisplaySessionEventDraftSchema.options,
   ...RunRecordEventDraftSchema.options,
