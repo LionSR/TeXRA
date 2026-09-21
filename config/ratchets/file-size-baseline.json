@@ -107,7 +107,7 @@
     "src/shared/transcript/projectTranscriptRow.ts": 549,
     "src/shared/transcript/toolRowSections.ts": 723,
     "src/telemetry/UsageLogService.ts": 571,
-    "src/tools/agentCliShared.ts": 644,
+    "src/tools/agentCliShared.ts": 641,
     "src/tools/bash.ts": 578,
     "src/tools/claudeAgent.ts": 681,
     "src/tools/codex.ts": 584,

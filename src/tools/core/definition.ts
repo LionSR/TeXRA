@@ -72,8 +72,14 @@ export type DefineToolOptions<T, R = never> = {
    * What the run loop checks before this tool's body runs: the paths the call
    * writes and the command it must get approved. Declared here, applied once
    * in `agent/runtime/loop/toolGuard.ts`.
+   *
+   * `NoInfer<R>`: the guard is checked against the requirement channel the
+   * tool already has, it never sets it. Without that, a definition that
+   * carries a guard would infer `R` from the guard's own (narrow) needs and
+   * every such tool's `execute` would be checked against a channel far
+   * smaller than the runtime actually provides.
    */
-  guard?: ToolGuard<T, R>;
+  guard?: ToolGuard<T, NoInfer<R>>;
   /**
    * The tool's run body. Supply it when the body needs nothing from the
    * instance; omit it to get an abstract class and implement `execute` in a
