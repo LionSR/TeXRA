@@ -214,7 +214,7 @@ reading the same rows. Every wait writes a `flow.step`; a response row is
 committed before its tools dispatch and a `tool.result` before the loop
 continues. Retry has two owners inside `ModelInvoker`: an automatic
 route-scoped batch under the session's `ModelRetryGate`, and a durable human
-permit (`approval.requested` + the snapshot's `pendingRetry`). Do not add a
+permit (`request.opened` + the snapshot's `pendingRetry`). Do not add a
 node, a cursor, a services bag, or a second writer of the ledger.
 
 ## Design guardrails
@@ -247,8 +247,8 @@ node, a cursor, a services bag, or a second writer of the ledger.
   beyond this bar. Full rules: AGENTS.md "Testing discipline".
 - **Serialize async work through Effect** (concurrency primitives, or
   `withPerKeyLane` in `src/utils/core/perKeyQueue.ts` when operations must run
-  one at a time per key), never `p-queue`, `async-mutex` or a hand-rolled
-  promise chain; see AGENTS.md "Code quality rules".
+  one at a time per key), never a hand-rolled promise chain; see AGENTS.md
+  "Code quality rules".
 
 Full rationale and the evidence behind each: AGENTS.md "Design and
 refactoring" and "Code quality rules".
