@@ -49,6 +49,12 @@ All notable changes to this project will be documented in this file.
   that the model "is not supported when using Codex with a ChatGPT account" —
   which reads as a problem with your plan rather than with the name. The full
   model name is sent now.
+- **Windows: TeXRA finds git again.** Git installed while TeXRA was running —
+  including from the "Run in Terminal" button on our own "Git not found in
+  PATH" message — is now picked up on the next command instead of only after
+  a restart. Git installed with the "Use Git from Git Bash only" option is
+  found as well. On some machines an unusual `SCOOP` or `MSYS2_HOME` setting
+  could make every external command fail; it no longer does.
 - A model call covered by a subscription no longer reports itself as "free" —
   the run footer and session summary name the plan that covered it
   (**ChatGPT Pro**, **ChatGPT Plus**), falling back to **ChatGPT

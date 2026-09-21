@@ -27,7 +27,7 @@ import {
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
-import { IS_WINDOWS, extendEnvPath } from './platformPaths';
+import { IS_WINDOWS, extendEnvPath, withExtendedPath } from './platformPaths';
 import { resolveOptionalCommand } from './binaryResolver';
 import { executeCommandSync } from './execCore';
 import { executeCommand, type ExecuteCommandBaseOptions } from './execUtils';
@@ -278,8 +278,8 @@ export const checkToolInstalled = Effect.fn('toolUtils.checkToolInstalled')(
     const command = config.command || `${toolName} --version`;
 
     const probe = Effect.gen(function* () {
+      const execEnv = withExtendedPath(process.env);
       const extendedPath = extendEnvPath();
-      const execEnv = { ...process.env, PATH: extendedPath };
 
       // Log PATH info once (not per-command)
       log.debug(

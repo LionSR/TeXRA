@@ -14,7 +14,7 @@ import {
   resolveOptionalCommand,
   type ResolvedBinaryCommand,
 } from '@utils/system/binaryResolver';
-import { extendEnvPath } from '@utils/system/platformPaths';
+import { withExtendedPath } from '@utils/system/platformPaths';
 
 const log = createLog('AudioUtils');
 
@@ -180,7 +180,7 @@ export function startRecording(
           soxCommand.command,
           [...soxCommand.args, ...soxArgs],
           {
-            env: { ...process.env, PATH: extendEnvPath() },
+            env: withExtendedPath(process.env),
             reject: false,
           },
         );
