@@ -40,7 +40,7 @@ import type { SupabaseUriHandler } from './UriHandler';
 const CHANNEL = 'SupabaseAuthProvider';
 const log = logger.createLog(CHANNEL);
 
-const AUTH_URI_HANDLER_NOT_INITIALIZED =
+export const AUTH_URI_HANDLER_NOT_INITIALIZED =
   'OAuth handler not initialized. Restart the extension.';
 
 /** Notification operations injected at construction so tests can stub them. */
