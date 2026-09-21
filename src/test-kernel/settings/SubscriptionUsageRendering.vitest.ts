@@ -126,11 +126,10 @@ describe('subscription usage rendering', () => {
     expect(text).toContain('Kimi Code plan usage');
     expect(text).toMatch(/5-hour\s*:\s*25%/);
     expect(text).toMatch(/7-day\s*:\s*100%/);
-    const meters = kimiRow!.shadowRoot?.querySelectorAll('progress');
+    const meters = kimiRow!.shadowRoot?.querySelectorAll('wa-progress-bar');
     expect(meters).toHaveLength(2);
-    expect(meters?.[0]?.getAttribute('aria-label')).toBe(
-      'Kimi Code 5-hour usage',
-    );
+    expect(meters?.[0]?.getAttribute('value')).toBe('25');
+    expect(meters?.[0]?.getAttribute('label')).toBe('Kimi Code 5-hour usage');
     expect(text).toContain('resets in 1d 21h');
     expect(tab.shadowRoot?.textContent).not.toContain('Grok usage unavailable');
   });
@@ -138,11 +137,15 @@ describe('subscription usage rendering', () => {
   it('advances one tab clock while connected and stops it after disconnect', async () => {
     const tab = await mountTabWithFakeTimers();
     expect(tab._ticker.now).toBe(NOW);
-    expect(vi.getTimerCount()).toBe(1);
 
-    vi.advanceTimersByTime(3 * 60_000);
-    await tab.updateComplete;
+    // The async variant yields to microtasks between each due timer, which
+    // also drains every <wa-progress-bar>'s one-shot percentage-sync timer
+    // along the way — so only the tab's own recurring ticker interval is
+    // left pending below, without pinning the assertion to how many of
+    // those third-party timers exist.
+    await vi.advanceTimersByTimeAsync(3 * 60_000);
     expect(tab._ticker.now).toBe(NOW + 3 * 60_000);
+    expect(vi.getTimerCount()).toBe(1);
     const kimiRow = getKimiUsageRow(tab);
     await kimiRow?.updateComplete;
     expect(kimiRow?.now).toBe(tab._ticker.now);

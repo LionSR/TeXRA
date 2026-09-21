@@ -18,6 +18,7 @@ import '@awesome.me/webawesome/dist/components/input/input.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 import { designTokens, commonViewStyles } from '@shared/styles';
+import { overlaySurfaceStyles } from '@shared/styles/overlaySurfaceStyles';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import type { SessionView } from '@shared/session/sessionView';
 import type { Surface } from '@shared/session/surface';
@@ -31,17 +32,13 @@ export class SessionDrawer extends LitElement {
   static override styles = [
     designTokens,
     commonViewStyles,
+    overlaySurfaceStyles,
     css`
       :host {
-        position: absolute;
-        inset: 0;
         z-index: 4;
-        display: block;
       }
 
       .scrim {
-        position: absolute;
-        inset: 0;
         background: var(--wa-color-overlay-modal);
       }
 
@@ -60,23 +57,11 @@ export class SessionDrawer extends LitElement {
         box-shadow: var(--wa-shadow-l);
       }
 
-      .drawer-header {
-        display: flex;
-        align-items: center;
-        gap: var(--wa-space-3xs);
-        flex: 0 0 auto;
-        min-height: var(--height-header, 38px);
-        padding: 0 var(--wa-space-2xs) 0 var(--wa-space-xs);
-        border-bottom: var(--border-thin) solid var(--wa-color-surface-border);
-      }
-
-      .drawer-title {
-        flex: 1 1 auto;
+      .overlay-title {
         min-width: 0;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
-        font-weight: var(--font-weight-semibold);
       }
 
       .drawer-search {
@@ -143,8 +128,8 @@ export class SessionDrawer extends LitElement {
     return html`
       <div class="scrim" @click=${this.close}></div>
       <div class="panel" role="dialog" aria-label="Sessions">
-        <div class="drawer-header">
-          <span class="drawer-title">${this.host?.project.name ?? ''}</span>
+        <div class="overlay-header">
+          <span class="overlay-title">${this.host?.project.name ?? ''}</span>
           ${renderIconActionButton({
             id: 'drawer-close',
             icon: 'xmark',
