@@ -39,14 +39,13 @@ export interface TranscriptResidencyLease {
 }
 
 /** One run's cached transcript: the fold of the rows this process has seen,
- *  how many leases retain it, and whether a host holds it in focus. */
+ *  and how many leases retain it. */
 interface CachedRun {
   log: StreamLog;
   fold: ReturnType<typeof createTranscriptFold>;
   /** The committed prefix has been folded in; the tail advances it from here. */
   hydrated: boolean;
   leases: number;
-  focused: boolean;
 }
 
 /** Apply one event with the same projection used by the live recorder. */
@@ -136,10 +135,7 @@ export class StreamLogStore {
    *  no durable rows to re-read, so it is never dropped. */
   requestEviction(runId: RunId): void {
     if (this.mode.kind === 'ephemeral') return;
-    const cached = this.runs.get(runId);
-    if (cached === undefined) return;
-    cached.focused = false;
-    if (cached.leases === 0) this.runs.delete(runId);
+    if (this.runs.get(runId)?.leases === 0) this.runs.delete(runId);
   }
 
   /** Retain a run's transcript for the run itself, seeded from the rows it has
@@ -157,11 +153,7 @@ export class StreamLogStore {
   /** Hold a run's transcript for the host displaying it, until that host asks
    *  for its eviction. */
   ensureLoaded(runId: RunId): Effect.Effect<void, Error> {
-    return Effect.gen({ self: this }, function* () {
-      yield* this.hydrate(runId);
-      const cached = this.runs.get(runId);
-      if (cached !== undefined) cached.focused = true;
-    });
+    return this.hydrate(runId);
   }
 
   /** Advance the cache with one committed row, in commit order. A run nothing
@@ -193,12 +185,7 @@ export class StreamLogStore {
         // A run nothing retains enters the cache only when it has rows: an
         // absent or removed run leaves nothing behind.
         if (seed !== undefined) {
-          this.runs.set(runId, {
-            ...seed,
-            hydrated: true,
-            leases: 0,
-            focused: false,
-          });
+          this.runs.set(runId, { ...seed, hydrated: true, leases: 0 });
         }
         return;
       }
@@ -219,7 +206,6 @@ export class StreamLogStore {
         fold: createTranscriptFold(log),
         hydrated: false,
         leases: 0,
-        focused: false,
       };
       this.runs.set(runId, cached);
     }
