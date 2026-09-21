@@ -187,7 +187,9 @@ describe('agent directory watcher rebuilds', () => {
     const firstRead = parkFirstRead(directoryList('/agents/builtin'));
 
     subscribe();
-    const refreshed = agentDirectories.refreshAfterDirChange();
+    const refreshed = testRuntime().runPromise(
+      agentDirectories.refreshAfterDirChange(),
+    );
 
     firstRead.resolve(directoryList('/agents/builtin'));
     await refreshed;
@@ -203,7 +205,9 @@ describe('agent directory watcher rebuilds', () => {
 
     // The settings view changes the custom agent directory while the first
     // read is still in flight: the change must not be dropped.
-    const refreshed = agentDirectories.refreshAfterDirChange();
+    const refreshed = testRuntime().runPromise(
+      agentDirectories.refreshAfterDirChange(),
+    );
     firstRead.resolve(directoryList('/agents/builtin'));
     await refreshed;
     await settle();
@@ -222,9 +226,11 @@ describe('agent directory watcher rebuilds', () => {
     // The settings view awaits a rebuild that is still queued behind the
     // in-flight one when the sidebar drops its last subscription.
     let refreshSettled = false;
-    const refreshed = agentDirectories.refreshAfterDirChange().then(() => {
-      refreshSettled = true;
-    });
+    const refreshed = testRuntime()
+      .runPromise(agentDirectories.refreshAfterDirChange())
+      .then(() => {
+        refreshSettled = true;
+      });
 
     handle.dispose();
     subscription = undefined;

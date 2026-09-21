@@ -1013,16 +1013,16 @@ export class SettingsViewMessageHandler {
       // This arm keeps its own runs: the consent request carries a host
       // deadline as an `AbortSignal`, so it is settled at the boundary above
       // rather than composed into the dispatcher's single run.
-      await Promise.all([
-        this.runtime.runPromise(
-          safeExecuteCommand('texra.refreshAllOptions', [], this.viewName),
-        ),
-        this.runtime.runPromise(
+      await this.runtime.runPromise(
+        allSettledVoid([
+          safeExecuteCommand('texra.refreshAllOptions', [], this.viewName).pipe(
+            Effect.asVoid,
+          ),
           this.withActiveWebview((webview) =>
             this.sendModelSelectionData(webview),
           ),
-        ),
-      ]);
+        ]),
+      );
     }
   }
 
