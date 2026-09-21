@@ -149,7 +149,9 @@ export class RunRegistry {
    * ({@link RunRoster.isLive}). The refusal is taken in the same synchronous
    * step as the lane claim, so it is the whole duplicate-launch answer: a
    * resume that would otherwise start a second generation over a live one is
-   * refused here rather than by a caller's earlier read of the same fact.
+   * refused here rather than by a caller's earlier read of the same fact. The
+   * claim that survives it lifts the run's stop marks ({@link
+   * RunRoster.clearStops}); a refused launch leaves the stop's gate intact.
    */
   launchRun<A, E, R>(
     runId: RunId,
@@ -157,14 +159,6 @@ export class RunRegistry {
   ): Effect.Effect<A, E | Error, R> {
     return Effect.suspend(() => {
       this.assertActive();
-      // A generation admitted through the lane is this run starting again:
-      // whatever stop the run was marked for belongs to the generation it
-      // ended, and the one taking the lane admits children of its own. The
-      // lane is what makes this a separate admission rather than the same
-      // stop's own bookkeeping — a turn handle the stopping generation
-      // replaces takes no lane, so it no longer reopens a window the stop is
-      // still closing.
-      this.roster.clearStops(runId);
       return this.roster.launch(runId, operation);
     });
   }
