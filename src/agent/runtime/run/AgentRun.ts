@@ -20,7 +20,10 @@ import type {
 } from '@agent/runtime/ToolServices';
 import type { AgentTrace, StageHandle } from '@agent/trace';
 import { resolveAgentTools } from '@agent/runtime/agentToolResolution';
-import type { ToolInjections } from '@agent/runtime/toolInjection';
+import {
+  NO_TOOL_INJECTIONS,
+  ToolInjections,
+} from '@agent/runtime/toolInjection';
 import type { UsageMonitor } from '@agent/runtime/UsageMonitor';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import { resolveRuntimeModelConfig } from '@model/runtimeModelRegistry';
@@ -159,8 +162,6 @@ interface AgentRunLayerInput {
   readonly parentRunId: RunId | null;
   /** Caller-supplied tools available only to this run. */
   readonly tools?: readonly ITool[];
-  /** The conditional tool injections this run resolves its tools with. */
-  readonly toolInjections: ToolInjections['Service'];
   readonly callbacks: RunCallbacks;
   readonly onApprovalPolicyDenial?: () => void;
 }
@@ -177,7 +178,7 @@ export const agentRunLayer = (
 ): Layer.Layer<
   AgentRun,
   Error,
-  RunLedger | LanguageModel | HttpClient.HttpClient
+  RunLedger | LanguageModel | HttpClient.HttpClient | ToolInjections
 > =>
   Layer.effect(
     AgentRun,
@@ -193,13 +194,22 @@ export const agentRunLayer = (
 
       const baseRegistry = getDefaultToolRegistry();
       const { setting } = ctx;
+      // The process's conditional injections, read here rather than threaded
+      // through the launch. The reflection family injects none (memory and
+      // plan are tool-use infrastructure), so its run resolves tools from an
+      // empty list.
+      const injected = yield* ToolInjections;
+      const toolInjections =
+        setting.agentCategory === AgentCategory.ToolUse
+          ? injected
+          : NO_TOOL_INJECTIONS;
       const resolvedTools = yield* resolveAgentTools({
         tools: setting.tools,
         registry: baseRegistry,
         logger,
         approvalPromptsUnavailable: ctx.toolPolicy.approvalPromptsUnavailable,
         runtimeUnavailableTools: ctx.toolPolicy.runtimeUnavailableTools,
-        toolInjections: input.toolInjections,
+        toolInjections,
         stores: ctx.stores,
         delegationScope: ctx.delegationAgentScope ?? undefined,
       });

@@ -1,7 +1,6 @@
 // Third-party imports
 import { Deferred, Effect } from 'effect';
 import { ModelProvider } from 'llm-zoo';
-import { vi } from 'vitest';
 
 // Local imports
 import { noopTrace } from '@agent/trace';
@@ -100,6 +99,5 @@ export function createTestLaunchContext({
       Deferred.doneUnsafe(stopped, Effect.void);
     },
     stopped,
-    disposeTrace: vi.fn(),
   };
 }

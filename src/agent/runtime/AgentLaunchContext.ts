@@ -1,6 +1,6 @@
 import * as path from 'node:path';
 
-import { Cause, Deferred, Effect, Exit, FileSystem } from 'effect';
+import { Cause, Deferred, Effect, Exit, FileSystem, Scope } from 'effect';
 import { ZodError } from 'zod';
 import { ModelProvider, type ModelConfig } from 'llm-zoo';
 
@@ -116,13 +116,6 @@ export interface AgentLaunchContext extends LaunchResolvedRunFacts {
    * Nothing else stops a run.
    */
   readonly stopped: Deferred.Deferred<void>;
-  /**
-   * Dispose the run-trace subscribers (channel sink + transcript recorder)
-   * registered by {@link createRunTrace}. Must be called once at end-of-run
-   * to avoid leaking entries in the module-global `activeFlushers` set and
-   * keeping subscribers attached to the trace emitter.
-   */
-  disposeTrace: () => void;
 }
 
 interface AgentLaunchInput {
@@ -393,11 +386,10 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
   function* (
     input: AgentLaunchInput & { session: SessionHandle },
     runId: RunId,
-    resources: Array<() => void>,
   ): Effect.fn.Return<
     AgentLaunchContext,
     Error,
-    Secrets | AppState | FileSystem.FileSystem
+    Secrets | AppState | FileSystem.FileSystem | Scope.Scope
   > {
     yield* failIfLaunchStopped(input.stopped);
     const { config, setting, prompt, agentEntry, modelConfig } =
@@ -435,7 +427,10 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
         }
       },
     };
-    resources.push(() => runTrace.dispose());
+    // The run's scope owns the trace: its subscribers (channel sink +
+    // transcript recorder) are dropped when the run ends, and when a launch
+    // that never became a run unwinds.
+    yield* Effect.addFinalizer(() => Effect.sync(() => runTrace.dispose()));
     yield* failIfLaunchStopped(input.stopped);
     attachment.detach = session.attachRunTrace(rawRunTrace.trace, runId);
 
@@ -480,7 +475,14 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
       `Run: ${config.agent}`,
       initialMediaMayBeInserted ? undefined : initialInstruction,
     );
-    resources.push(() => parentStage.end(RUN_OUTCOME.FAILED));
+    // A scope that closes in failure before the run's terminal row closed
+    // this stage leaves it open in the transcript; `end` is idempotent, so a
+    // run that already published its verdict keeps it.
+    yield* Effect.addFinalizer((exit) =>
+      Exit.isSuccess(exit)
+        ? Effect.void
+        : Effect.sync(() => parentStage.end(RUN_OUTCOME.FAILED)),
+    );
 
     // Tell the user when attached images will be dropped because the chosen model
     // lacks vision. The loop's media input skips them with a per-file warning
@@ -585,7 +587,6 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
       initialUserMessageForTranscript: initialMediaMayBeInserted
         ? initialInstruction
         : undefined,
-      disposeTrace: () => runTrace.dispose(),
     };
     // Frozen at the run's one real construction site: a run's identity, its
     // owning session, and the rest of what the launch resolved must not change
@@ -602,12 +603,7 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
     const { session: launchSession, runId } = input;
     const { config } = input.definition;
 
-    // The runtime takes these resources only after assembly succeeds. Failure
-    // unwinds them in reverse order while preserving the original cause. A
-    // disposer is synchronous by contract: the unwind is `Effect.try`, which
-    // folds a throw and would take a returned promise for the result.
-    const resources: Array<() => void> = [];
-    return yield* assembleAgentLaunchContext(input, runId, resources).pipe(
+    return yield* assembleAgentLaunchContext(input, runId).pipe(
       Effect.onError((cause) =>
         Effect.gen(function* () {
           const err = Cause.squash(cause);
@@ -626,24 +622,6 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
             logger.warn('Failed to persist the launch failure', {
               data: finalization.error,
             });
-          const disposals = yield* Effect.forEach(
-            resources.toReversed(),
-            (dispose) =>
-              Effect.exit(Effect.try({ try: dispose, catch: ensureError })),
-          );
-          const failures = disposals.flatMap((disposed) =>
-            Exit.isFailure(disposed) ? [Cause.squash(disposed.cause)] : [],
-          );
-          if (failures.length) {
-            logger.warn(
-              'Failed to release launch resources after a failed launch',
-              {
-                data: {
-                  error: new AggregateError(failures, 'Launch cleanup failed'),
-                },
-              },
-            );
-          }
         }),
       ),
     );

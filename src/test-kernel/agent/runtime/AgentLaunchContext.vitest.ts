@@ -62,6 +62,9 @@ const buildAgentLaunchContext = (
     Effect.flatMap((definition) =>
       buildAgentLaunchContextEffect({ ...input, definition }),
     ),
+    // The launch's scope stands in for the run's: closing it here retires
+    // the trace the way the end of a run does.
+    Effect.scoped,
     Effect.provide(fakeProcessServices()),
   );
 
@@ -359,34 +362,30 @@ describe('AgentLaunchContext', () => {
           yield* registerRun(session, EXECUTION_ID, config, 'chat', {
             identity: { kind: 'agent', agent: 'chat' },
           });
-          const context = yield* buildAgentLaunchContext({
+          yield* buildAgentLaunchContext({
             config,
             runId: EXECUTION_ID,
             session,
             modelCompatibilityKey: 'OpenAIResponse',
           });
-          try {
-            expect(
-              batches.mock.calls[0]?.[0].map((event) => event.type),
-            ).toEqual([
-              'run.start',
-              'run.launchLabel',
-              'run.record',
-              'run.activate',
-            ]);
-            expect(
-              (yield* Effect.promise(() => recording.read()))
-                .slice(0, 2)
-                .map((event) => event.type),
-            ).toEqual(['run.start', 'run.activate']);
-            // One aggregate, one counter: the activation is the fourth durable
-            // row of the creation batch, and the phase the fold reads from it.
-            expect(
-              (yield* Effect.promise(() => recording.read()))[1],
-            ).toMatchObject({ seq: 4 });
-          } finally {
-            context.disposeTrace();
-          }
+          expect(
+            batches.mock.calls[0]?.[0].map((event) => event.type),
+          ).toEqual([
+            'run.start',
+            'run.launchLabel',
+            'run.record',
+            'run.activate',
+          ]);
+          expect(
+            (yield* Effect.promise(() => recording.read()))
+              .slice(0, 2)
+              .map((event) => event.type),
+          ).toEqual(['run.start', 'run.activate']);
+          // One aggregate, one counter: the activation is the fourth durable
+          // row of the creation batch, and the phase the fold reads from it.
+          expect(
+            (yield* Effect.promise(() => recording.read()))[1],
+          ).toMatchObject({ seq: 4 });
         } finally {
           yield* session.dispose();
         }

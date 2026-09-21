@@ -58,11 +58,7 @@ import { modelInvokerLayer } from './ModelInvoker';
 import { agentRunLayer } from './run/AgentRun';
 import { runReflection } from './loop/reflection';
 import { runToolUse } from './loop/toolUse';
-import {
-  NO_TOOL_INJECTIONS,
-  ToolInjections,
-  type AgentRunServices,
-} from './toolInjection';
+import type { AgentRunServices } from './toolInjection';
 import { Runs } from './runRegistry';
 import type { SessionHandle } from './SessionHandle';
 import type { RunHandle, AgentRunHandle } from './RunHandle';
@@ -110,7 +106,6 @@ type ToolUseLaunchVariant =
 function runLayerFor(
   ctx: AgentLaunchContext,
   shared: SubagentRunOptions,
-  toolInjections: ToolInjections['Service'],
   onIdle: (() => void) | undefined,
 ) {
   const runSession = ctx.session;
@@ -119,7 +114,6 @@ function runLayerFor(
       agentRunLayer(ctx, {
         parentRunId: shared.parentRunId ?? null,
         tools: shared.tools,
-        toolInjections,
         onApprovalPolicyDenial: shared.onApprovalPolicyDenial,
         callbacks: {
           onProgress: (update) => {
@@ -192,10 +186,7 @@ function runUntilStopped<R>(
 function launchToolUseRun(
   ctx: AgentLaunchContext,
   handle: RunHandle,
-  shared: SubagentRunOptions & {
-    /** The process injections the Effect-typed caller read for this run. */
-    readonly toolInjections: ToolInjections['Service'];
-  },
+  shared: SubagentRunOptions,
   variant: ToolUseLaunchVariant,
 ): Effect.Effect<AgentRuntimeFlowResult, Error, AgentRunServices> {
   const { runId } = ctx;
@@ -220,7 +211,6 @@ function launchToolUseRun(
           runLayerFor(
             ctx,
             shared,
-            shared.toolInjections,
             variant.kind === 'fresh' ? variant.onIdle : undefined,
           ),
         ),
@@ -258,9 +248,7 @@ function launchReflectionRun(
 ): Effect.Effect<AgentRuntimeFlowResult, Error, AgentRunServices> {
   const { runId } = ctx;
   const program = runReflection({ resume: options.resumed === true }).pipe(
-    // The reflection family injects no conditional tools (memory and plan are
-    // tool-use infrastructure), so its run resolves tools from an empty list.
-    Effect.provide(runLayerFor(ctx, options, NO_TOOL_INJECTIONS, undefined)),
+    Effect.provide(runLayerFor(ctx, options, undefined)),
     Effect.flatMap((result) =>
       Effect.gen(function* () {
         const flowResult: WorkflowFlowResult = {
@@ -476,9 +464,6 @@ export function executeAgent(
   options: ExecuteAgentOptions & { session: SessionHandle },
 ): Effect.Effect<AgentRuntimeFlowResult, Error, ProcessServices> {
   return Effect.gen(function* () {
-    // Read here, on the Effect side of the lifecycle's Promise seam: the
-    // flow drivers below resolve the run's tools from it.
-    const toolInjections = yield* ToolInjections;
     // A resumed run's parentage is its handle's, never the caller's word: no
     // resume caller can name one (`RunAgentOptions` has no parent field), so
     // reading the caller's option here would relaunch a resumed child as a
@@ -577,7 +562,7 @@ export function executeAgent(
                 return yield* launchToolUseRun(
                   ctx,
                   handle,
-                  { ...options, parentRunId, toolInjections },
+                  { ...options, parentRunId },
                   { kind: 'fresh', onIdle: options.onIdle },
                 );
               }
@@ -610,6 +595,9 @@ export function executeAgent(
       }
     });
   }).pipe(
+    // The run's scope: the launch acquires the run trace into it and the
+    // finalizer drops its subscribers once the run has ended.
+    Effect.scoped,
     Effect.uninterruptible,
     Effect.provideService(Runs, options.session.runs),
   );
@@ -644,7 +632,6 @@ const resumeToolUseWithOwnedLease = Effect.fn('resumeToolUseWithOwnedLease')(
     options: ResumeToolUseFromResumeDataOptions & { session: SessionHandle },
   ) {
     const runSession = options.session;
-    const toolInjections = yield* ToolInjections;
     const setup = yield* Effect.exit(
       Effect.gen(function* () {
         const parentRunId = yield* persistedParentRunId(
@@ -694,7 +681,7 @@ const resumeToolUseWithOwnedLease = Effect.fn('resumeToolUseWithOwnedLease')(
             : launchToolUseRun(
                 ctx,
                 handle,
-                { ...options, parentRunId, toolInjections },
+                { ...options, parentRunId },
                 {
                   kind: 'resume',
                   resume,
@@ -726,6 +713,8 @@ const resumeToolUseWithOwnedLease = Effect.fn('resumeToolUseWithOwnedLease')(
     }
     return result.value;
   },
+  // The resumed turn's scope: the launch's run trace retires with it.
+  Effect.scoped,
   Effect.uninterruptible,
 );
 

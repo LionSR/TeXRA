@@ -694,9 +694,6 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
           if (!suspended) {
             yield* runOnRunEnd;
           }
-          // Drop the run-trace subscribers (channel sink + transcript recorder) so
-          // they don't pile up across many agent runs.
-          ctx.disposeTrace();
         }),
       ),
     );
