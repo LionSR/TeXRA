@@ -16,12 +16,13 @@ is eliminated, not ledgered, and every dual system collapses to one mechanism.
 ## Status (2026-09-19)
 
 Written back against `origin/main` at `b133beba3c`, two days after the ledger
-merged (#12681), and extended at `ca4e74a597` with wave 5. The clean-up ran as
-five waves: this ledger's own R and D lanes, three censuses of what they left,
-and the final re-survey. 116 PRs merged between #12693 and #12828, three of
-them dependency bumps. Each row names the PR that carried the lane; "thin
-folds" are the single-file items section 3.1 said would ride whichever lane
-opened the file.
+merged (#12681), extended at `ca4e74a597` with wave 5, and closed at
+`aa79915095` with wave 6. The clean-up ran as six waves: this ledger's own R
+and D lanes, three censuses of what they left, the final re-survey, and the
+four host-side ports that re-survey named. 121 PRs merged between #12693 and
+#12836, three of them dependency bumps. Each row names the PR that carried the
+lane; "thin folds" are the single-file items section 3.1 said would ride
+whichever lane opened the file.
 
 ### Landed
 
@@ -211,6 +212,45 @@ PRs closed it.
   every command entry installs or joins the process runtime once and runs one
   program on it.
 
+#### Wave 6: the four host-side ports, roots required, and the two rulings
+
+The four lanes the wave-5 write-back listed as in flight, plus the docs PR that
+closed the two gating rulings. Five PRs.
+
+- #12832, docs: record the dispatcher and loopback sign-in rulings. Both move
+  out of `### Open` into section 2 and into the architecture rulings ledger, so
+  neither is re-mined.
+- #12833, refactor: close three sibling Promise ports beside Effect-typed
+  siblings. `DesktopCredentialSettingsControllerOptions.onCredentialChanged`,
+  `ProviderApiKeyForm.onSave` with `ApiKeySaveHandler`, and `ErrorHandler`'s
+  `void | Promise<void>` arm each become Effect-typed; every implementer of
+  `ErrorHandler` was already synchronous, so it narrows to `void`.
+- #12834, refactor(hosts): one wrap and one tag for the host message surfaces.
+  `VscodeMessageHost` and `VscodePromptHost` collapse into `VscodeUiHost` over
+  one `Effect.tryPromise` of `vscode.window.show*Message`, `PromptFailed`'s
+  `member` union falls from five arms to two, and the desktop's two re-tag
+  blocks go.
+- #12835, refactor(extension): make VS Code progress bodies Effects, not nested
+  settles. `withVSCodeProgress` is the extension's one wrap of
+  `vscode.window.withProgress` and takes its body as an Effect, so the eight
+  runs inside progress bodies go to zero and eight `runtime` carrier parameters
+  go with them. It adds no bare run site; a first pass that did was backed out
+  rather than widening the allowlist.
+- #12836, refactor(agent): require `SessionHandleInit.roots` and retire the
+  process-roots holder. The holder's three readers each get an owner rather
+  than a fallback, `getConfigBeforePlatformInit` and `processSettingsStores`
+  are deleted, the `working_directory` worktree gate moves into
+  `DelegateAgentTool.execute`, and the `ambient:asyncLocalStorage` ratchet row
+  is deleted rather than zeroed.
+
+Waves 7 and 8 ran after this one and are recorded separately, in
+[`2026-09-19-drain-and-recovery-one-owner.md`](../../implemented/simplification/2026-09-19-drain-and-recovery-one-owner.md)
+and
+[`2026-09-19-broad-survey-wave-8.md`](../../implemented/simplification/2026-09-19-broad-survey-wave-8.md).
+They are not round-trip waves: wave 7 gave the drain and recovery paths one
+owner each, and wave 8 was a broad find-simplification survey over the whole
+tree.
+
 ### Refuted or declined at implementation
 
 - **D5** (`SessionOwner` onto the `Sessions` tag): refuted by the call-site
@@ -373,67 +413,76 @@ PRs closed it.
 
 ### Open
 
-Both owner rulings that gated this list were taken on 2026-09-19 and are
-recorded in section 2 and in the architecture rulings ledger: the shared
-`MessageHandler` dispatcher contract stays Promise-shaped and is not a round
-trip, and a cancelled CLI loopback sign-in reports as interruption. Neither is
-re-mined.
+Waves 6, 7 and 8 closed every lane this section listed as in flight: the four
+sibling Promise ports, the two `show*Message` wraps, the progress bodies, the
+process-roots holder and the `working_directory` gate are all landed and
+recorded above. What is left is a short list, and none of it is a round trip.
 
-Wave 6 is in flight. These four lanes have owners, so they are not free to
-claim.
-
-- **The sibling Promise ports**: `onCredentialChanged`
-  (`desktopCredentialSettingsController.ts:125`, lifted at `:372`), the real
-  round trip that fell between wave 5's two desktop lanes because each left it
-  to the other; `ProviderApiKeyForm.onSave` with `ApiKeySaveHandler`, which
-  leaves one `runtime.runPromise` in `registerBuiltins.tsx`; and `ErrorHandler`'s
-  `void | Promise<void>`, which ripples into `CliConfigForm`.
-- **One `window.showErrorMessage` wrap instead of two**:
-  `VscodeMessageHost.notify` takes the action-less toast and
-  `VscodePromptHost.showMessage` the answerable one, under different failure
-  tags and return types. Collapsing them merges the two ports, which is a
-  `src/hosts/uiHosts.ts` decision with desktop and CLI implementations behind
-  it.
-- **`runGuardedLatexCommand`'s `operation` becomes an Effect**, deleting the
-  one lift and the eight `runtime.runPromise` calls inside the
-  `vscode.window.withProgress` bodies it serves.
-- **`SessionHandleInit.roots` becomes required**, which removes the last
-  fallback read of the process-roots holder (`processWorkspaceRoots` and
-  `tryProcessWorkspaceRoots` in `src/platform/workspaceRoots.ts`, four sites in
-  three files: `sessionGraph.ts`, `configUtils.ts`'s
-  `getConfigBeforePlatformInit` and `platformSettings.ts`'s
-  `processSettingsStores`) and retires the last ambient ratchet row, deleted
-  rather than zeroed. Ruled and recorded in the architecture rulings ledger.
-
-The rest are unclaimed lanes.
-
+- **The experimental OpenAI Responses WebSocket transport**, about 411 lines
+  plus the `ws` dependency, off by default, one caller. Filed as issue #12869;
+  it is an owner product decision, and the recommendation on file is to retire
+  it. Beside it: `isCodexSignedIn` reports signed-out on an unreadable secret
+  store with a loud warn, and turning that into a hard failure belongs in
+  `getSubscriptionSessionStatus` for both providers, not in the probe.
+- **`extractScratchpad`'s `Effect` wrapper.** The function is pure since the
+  pandoc tier was retired (#12863), so the wrapper buys nothing. Unwrapping it
+  is a one-line edit in `src/agent/runtime/loop/reflection.ts`, deferred only
+  so that file had one owner during wave 8.
+- **Seven stale `createNodePlatform` references** in
+  `docs/architecture/2026-07-26-embedding-the-agent-runtime.md`. The export is
+  gone; the published embedding recipe still names it. It needs its own PR
+  because that file sits behind the `docs/` root-boundary gate.
+- **Six provider-keyed inbound subscription commands.** `SIGN_IN_CHATGPT`,
+  `SIGN_OUT_*` and `SET_*_PREFER_SUBSCRIPTION` stay as six registry keys after
+  #12868 unified the outbound status fact. Collapsing them into one
+  provider-parameterized command is a settings-pass change with its own
+  command-registry blast radius.
 - **`shellRun`'s quiet parse failure** (`packages/cli/src/commands/tools.ts`):
   `Effect.orElseSucceed(() => null)` preserves the old `catch {}` exactly.
   Making it loud is a behavior change and needs its own PR.
-- **`packages/cli/src/runtime/browser.ts`** (`tryOpenBrowser`) is deferred and
-  spans five callers across the CLI commands and the GitHub token form.
-- **The remaining desktop host ports**: `confirmAcceptFile`,
+- **The host-package Promise-native leaves.** `tryOpenBrowser`
+  (`packages/cli/src/runtime/browser.ts`, five callers); `confirmAcceptFile`,
   `showInstructionDialog` and `showErrorDialog` on `DesktopAgentRunHost`, and
-  `DesktopSettingsUiHost`'s `revealRun`, `openExternal` and `confirmAction`,
-  which are Promise-native rather than round trips. `getEnvironmentSummary`
-  keeps one run behind the Promise-shaped workspace IPC port.
-- **The progress view's catalog-refresh callback**:
-  `runAfterAgentCatalogAuthRefresh` still keeps a `() => Promise<void>` queue
-  fed by two view providers, and `ProgressViewProvider.ts:470` settles three
-  programs in one `Promise.all` inside it. #12823 closed the sibling
-  `refreshAfterCredentialChange` and left this one, because nothing lifts it
-  and its signature belongs to the catalog module.
-- ~~**The process-roots holder**~~ and ~~**the `working_directory` worktree
-  gate**~~: done. `SessionHandleInit.roots` is required, the holder and its
-  three readers (`sessionGraph.ts`, `getConfigBeforePlatformInit`,
-  `processSettingsStores`) are deleted, the gate moved into
-  `DelegateAgentTool.execute`, and the `ambient:asyncLocalStorage` ratchet row
-  is retired. Recorded in the architecture rulings ledger.
+  `DesktopSettingsUiHost`'s `revealRun`, `openExternal` and `confirmAction`;
+  and the progress view's `runAfterAgentCatalogAuthRefresh` queue. Nothing
+  lifts any of them, so they are Promise-native leaves at host boundaries
+  rather than round trips, and they sit outside the acceptance criterion.
 - **D35b and D35c**: a durable owner for run-directory removal, and the
   reflection recovery digest. Design, unstarted.
-- **No re-survey since wave 5.** The final re-survey at `b133beba3c` is what
-  produced wave 5; the tree at `ca4e74a597` has not been measured again, and
-  the acceptance criterion below asks for exactly that.
+
+**The acceptance criterion is met.** At `aa79915095` the round-trip campaign's
+criterion holds: zero Effect-to-Promise-to-Effect round trips in host-neutral
+`src`, no ambient `AsyncLocalStorage`, no Promise filesystem, and one config
+reader. What can be verified by command:
+
+- `rg -c "new AsyncLocalStorage" src packages` reports no match, and the
+  `ambient:asyncLocalStorage` ratchet row is deleted rather than zeroed, so a
+  reintroduced carrier fails as a new file.
+- `FileSystemProvider` and `nodeFilesystem` have zero occurrences in `src` and
+  `packages`; `Platform` declares `lifecycle`, `agentDirectories` and the
+  optional `toolMissingHandler` and nothing else. The surviving `AbsoluteFS`
+  hits are comments recording what the retired facade used to do.
+- `getConfigBeforePlatformInit` and `processSettingsStores` have zero
+  occurrences, so each composition root's config funnel has one reader.
+- `node scripts/check-effect-migration-ratchet.mjs`, over 1,402 production
+  files, reports every tracked pattern at its baseline with no headroom:
+
+```
+platform()                3 files / 3 sites (baseline 3 files / 3 sites)
+ambient:asyncLocalStorage 0 files / 0 sites (baseline 0 files / 0 sites)
+new AbortController()     2 files / 2 sites (baseline 2 files / 2 sites)
+import:p-queue            0 files / 0 sites (baseline 0 files / 0 sites)
+import:p-defer            0 files / 0 sites (baseline 0 files / 0 sites)
+import:async-mutex        0 files / 0 sites (baseline 0 files / 0 sites)
+Effect.run*               0 files / 0 sites (baseline 0 files / 0 sites)
+catch:effect-importer     2 files / 2 sites (baseline 2 files / 2 sites)
+```
+
+- `git diff --shortstat 0bfb72448c..origin/main -- src packages` reports 895
+  files changed, 36,748 insertions and 34,844 deletions, a net of +1,904 lines
+  over the whole campaign. The net fell from the +2,725 recorded after wave 5
+  because waves 6 to 8 deleted more than they wrote, which is the pattern
+  section 6 predicted: lines were never the win, elements were.
 
 ## 1. What the surveys measured
 
