@@ -1,5 +1,5 @@
 /**
- * The failures the Effect surface names (`@texra-ai/agent/effect`). Four
+ * The failures the Effect surface names (`@texra-ai/agent`). Four
  * tagged errors, no more: the process the package refuses to compose, the
  * two launch refusals an embedder branches on, and the run's own failure.
  *
@@ -36,7 +36,7 @@ export class ToolsRefused extends Data.TaggedError('ToolsRefused')<{
 }> {}
 
 /** A run that failed on its own. `cause` is exactly what the launch path
- *  threw, which is what the Promise entry rejects with. */
+ *  threw. */
 export class RunFailure extends Data.TaggedError('RunFailure')<{
   readonly cause: unknown;
   readonly message: string;

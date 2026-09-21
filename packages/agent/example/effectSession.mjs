@@ -1,5 +1,5 @@
 /**
- * A tiny embedder of `@texra-ai/agent/effect`, installed from a packed
+ * A tiny embedder of `@texra-ai/agent`, installed from a packed
  * tarball exactly as a consumer off the registry would get it: the import
  * specifiers below are package names, never this repository's path aliases.
  *
@@ -13,7 +13,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { Effect, Stream } from 'effect';
-import { Sessions } from '@texra-ai/agent/effect';
+import { Sessions } from '@texra-ai/agent';
 import { nodePlatform } from '@texra-ai/agent/node';
 
 const workspace = await mkdtemp(join(tmpdir(), 'texra-agent-example-'));

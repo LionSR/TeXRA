@@ -373,8 +373,8 @@ export class BashTool extends defineTool({
       // refuses, native subagents degrade to the parent trace, workflow-script
       // awaits — and a background shell cannot degrade, because the follow-up
       // IS its delivery. The approval the loop already took is spent by the
-      // time this refuses: in the SDK path (`packages/agent/src/index.ts`) the
-      // `finally` kills the process group, so launching here would run the
+      // time this refuses: in the SDK path (`packages/agent/src/effect/sessionPrograms.ts`)
+      // the `finally` kills the process group, so launching here would run the
       // user's command and then discard its result with nothing reported.
       if (input.run_in_background && toolCall.run?.toolPolicy.stopAfterCycle) {
         return yield* Effect.fail(

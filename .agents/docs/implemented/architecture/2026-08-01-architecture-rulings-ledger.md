@@ -672,3 +672,42 @@ one of them.
 **Forbids.** Re-adding an `AbortSignal` parameter anywhere on the session close
 chain, on any host or on the SDK surface. Cancelling a drain by any mechanism
 other than interrupting the fiber that awaits it.
+
+---
+
+## The agent SDK's public surface is Effect; R1 boundary kind (c) is retired (ruled 2026-09-21)
+
+**Question.** Rule R1 of the Effect migration
+(`.agents/docs/archived/architecture/2026-08-26-effect-4-runtime-migration.md`
+§7) admitted three boundary kinds; kind (c) was "the SDK's public Promise API
+in `packages/agent/src`": the root entry `packages/agent/src/index.ts`
+rendered the package's Effect services as `runAgent` / `closeSession` /
+`AgentRun` Promises and AsyncIterables, and `/effect` carried the services.
+With kind (b) already retired (#12337), does kind (c) still stand?
+
+**Ruling.** No. The root entry **is** the Effect surface: `Sessions`,
+`Session`, `Run`, the tagged errors and the tool-definition helpers, with the
+`/effect` subpath deleted. The Promise rendering — `runAgent`,
+`closeSession`, `AgentRun`, `RunAgentInput`, the module-level composition
+cache and the shutdown-hook wiring — is deleted, not relocated. Nothing in
+the package calls `Effect.runPromise` / `runSync` / `runFork`; a Promise-land
+embedder runs `Effect.runPromise(program)` at its own entry point.
+
+**Evidence.** (1) `effect` was already a mandatory exact-pin peer dependency
+of the **whole** package — the root bundle imported `effect` at runtime — so
+the Promise entry spared no consumer the Effect install it existed to hide.
+(2) The package is unpublished and the Promise entry had zero consumers: only
+the README and an archived doc imported `runAgent` from `@texra-ai/agent`,
+and the one consumer-shaped artifact (`packages/agent/example/`) already used
+`/effect`. (3) TeXRA 1.0 keeps no parallel or compatibility surfaces, and a
+Promise rendering beside the Effect surface is exactly one. `Sessions.layer`
+
+- `Effect.scoped` already implement everything the composition cache did
+  (per-scope hold, `PlatformConflict`, finalizer release), so the change is
+  deletion plus repointing, with the `AgentPackage.vitest.ts` Promise-surface
+  cases retired with the implementation.
+
+**Forbids.** Reintroducing a Promise-shaped entry, a dual root/`/effect`
+split, or a `runAgent`-style wrapper whose body only runs the Effect
+services. The SDK is no longer an R1 boundary: `packages/agent/src/**` runs
+no `Effect.run*` at all.

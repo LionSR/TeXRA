@@ -9,7 +9,6 @@ await build({
   bundle: true,
   entryPoints: {
     index: 'src/index.ts',
-    effect: 'src/effect.ts',
     schemas: 'src/schemas.ts',
     node: 'src/node.ts',
   },

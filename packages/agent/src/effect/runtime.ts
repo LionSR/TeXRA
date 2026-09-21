@@ -13,10 +13,10 @@
  * {@link ProcessHold} on it, and the last hold to be released is what closes
  * the owner's sessions and disposes the runtime under them.
  *
- * `Sessions.layer` is the Effect embedder's entry: it composes the process
- * once per scope and provides `Sessions` over it, with the scope as the
- * lifetime of its hold. A Promise embedder's hold is the one
- * `packages/agent/src/index.ts` takes, released by `lifecycle.runShutdown`.
+ * `Sessions.layer` is the embedder's entry: it composes the process once
+ * per scope and provides `Sessions` over it, with the scope as the lifetime
+ * of its hold. The root entry (`packages/agent/src/index.ts`) re-exports
+ * these services as the package's surface.
  */
 import { Effect, Layer, type Context } from 'effect';
 
@@ -146,9 +146,9 @@ export interface ProcessHold {
  * session owner and the runtime under it are one installation shared by
  * every composition that found it already there, so they end when the last
  * hold ends and not before: a scope that disposed them at its own exit
- * would tear them out from under an overlapping scope, or from under the
- * Promise entry's runs, which is precisely what a borrowing composition has
- * no standing to do.
+ * would tear them out from under an overlapping scope still working on
+ * them, which is precisely what a borrowing composition has no standing to
+ * do.
  */
 let holds = 0;
 

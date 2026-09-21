@@ -548,10 +548,16 @@ there is no Promise-returning tool contract left to admit; and
 [#12337](https://github.com/LionSR/TeXRA/pull/12337), which executes tools and
 workflow scripts with Effect. The condition the 2026-09-06 review finding set
 ("retires when `Tools`, the dispatcher that calls it, is itself Effect-typed")
-was met. R1 now names **two** boundary kinds, (a) and (c), plus the webview
-runtime entries admitted by name in the rulings ledger. A tool that returns a
-Promise today is an adapter, not boundary kind (b). (c) The SDK's
-public Promise API in `packages/agent/src`. Everything below those three is
+was met. ~~(c) The SDK's
+public Promise API in `packages/agent/src`.~~ **(c) is retired.**
+_Amended 2026-09-21:_ the SDK's root entry is the Effect surface itself and
+the Promise rendering is deleted (`effect` was already a mandatory exact-pin
+peer of the whole package, the package has no external consumers, and TeXRA
+1.0 keeps no parallel surfaces); the rulings ledger's 2026-09-21 entry
+records the supersession. R1 now names **one** boundary kind, (a), plus the
+webview runtime entries admitted by name in the rulings ledger. A tool that
+returns a Promise today is an adapter, not boundary kind (b). Everything
+below the boundary is
 Effect-typed: exported functions return `Effect` or `Stream`, stateful
 objects are `Context.Service` classes with layers, and no class below the
 boundary exposes a Promise method. A Promise-returning function whose body

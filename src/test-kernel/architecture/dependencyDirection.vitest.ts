@@ -109,13 +109,6 @@ const BARE_EFFECT_RUN_SITES: Readonly<Record<string, number>> = {
   // than on a process-global run edge. The program is service-free and
   // recovers every failure to `undefined`.
   'src/auth/SupabaseAuth.ts': 1,
-  // The published SDK's Promise entry, which is rule R1's third boundary
-  // kind and the one module in `packages/agent` allowed to run an Effect at
-  // all. It cannot be handed a runtime: the process runtime does not
-  // exist until this entry's own composition installs it, and `closeSession`
-  // has to answer for a process no run initialized and for one whose
-  // shutdown already disposed that runtime.
-  'packages/agent/src/index.ts': 4,
   // The CLI platform shutdown sequence, which cannot run on the process
   // runtime for the same reason the SDK entry cannot: `lifecycle.runShutdown`
   // disposes it (`disposeCliProcessRuntime`) before the stderr/stdout flushes

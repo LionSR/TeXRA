@@ -1,5 +1,5 @@
 /**
- * The sessions of `@texra-ai/agent/effect` and the runs on them.
+ * The sessions of `@texra-ai/agent` and the runs on them.
  *
  * `Sessions` is the process's one session owner as an Effect service: it
  * opens, lists and closes through `@agent/runtime`'s owner port, so a root
@@ -11,8 +11,8 @@
  *
  * Every decision a run makes is stated once, here, in Effect: which level
  * is the run's first, when its transcript interest changes, when the drain
- * ends, and which failure wins. `packages/agent/src/index.ts` renders this
- * as Promises and adds nothing of its own.
+ * ends, and which failure wins. The root entry (`packages/agent/src/index.ts`)
+ * re-exports these services as the package's surface.
  */
 import {
   Context,
@@ -148,11 +148,9 @@ function denyRetryRequests(handle: RuntimeSessionHandle): Effect.Effect<void> {
  * The refusal the package states from the caller's own input, before
  * anything of the process is touched: it has no approval channel, so a tool
  * that requires one cannot run here whatever the agent turns out to be.
- * {@link admitInput} states it in its own order; the Promise entry states
- * it first, because there a composition is a side effect of the call and a
- * caller being refused must not pay for one (`../index.ts`).
+ * {@link admitInput} states it in its own order, before the agent scan.
  */
-export function admitTools(
+function admitTools(
   tools: readonly ITool[] | undefined,
 ): Effect.Effect<void, ToolsRefused> {
   const needApproval = (tools ?? [])
@@ -223,9 +221,8 @@ function admitInput(
 
 /**
  * Start one run on `session` and hand back the {@link Run} once it exists
- * there. The launch itself is the one foreign boundary this subpath wraps
- * (`runAgent` is Promise-native until lane D converts the run loops): its
- * abort signal is what an interruption before admission reaches.
+ * there. The launch is the runtime's `runAgent`: an interruption before
+ * admission ends it through the live handle's `interrupt`.
  *
  * The handoff is all-or-nothing, which is what lets a caller treat the
  * `Run` as the only handle on the run: this either returns one, or it ends

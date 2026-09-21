@@ -1,7 +1,7 @@
 # `@texra-ai/agent`
 
 The embeddable [TeXRA](https://texra.ai) agent runtime: run a TeXRA agent from a
-Node program and consume its trace as an async stream.
+Node program and consume its trace as a stream.
 
 > **Not published to npm.** This package builds and is consumed inside the
 > repository; the publish job is deliberately disabled until a named external
@@ -19,9 +19,8 @@ Not on the registry yet. Inside this workspace, depend on it by name:
 { "dependencies": { "@texra-ai/agent": "workspace:*" } }
 ```
 
-`effect` and `zod` (v4) are peer dependencies, and they are peers of the
-**whole package**, not only of the `@texra-ai/agent/effect` subpath: the root
-entry's bundle imports `effect` at runtime too (`dist/index.js` opens with
+`effect` and `zod` (v4) are peer dependencies of the whole package: the bundle
+imports `effect` at runtime (`dist/index.js` opens with
 `import ... from 'effect'`). Install both alongside it, `effect` at the exact
 version the package pins (`4.0.0-rc.115`). Two copies of `effect` in one
 process do not work at all: Streams, Fibers and Context built by one copy do
@@ -34,67 +33,80 @@ one copy rather than a second nested one.
 
 ## Usage
 
+The package's surface is Effect: `Sessions.layer(platform)` composes the
+process and provides the session owner for one `Scope`, and the embedder runs
+the program at its own entry point.
+
 ```ts
-import { runAgent } from '@texra-ai/agent';
+import { Effect, Stream } from 'effect';
+import { Sessions } from '@texra-ai/agent';
 import { nodePlatform } from '@texra-ai/agent/node';
 
 const platform = nodePlatform({ agentsDir: './agents' });
 
-const run = runAgent({
-  platform,
-  agent: 'polish',
-  instruction: 'Tighten the abstract in paper.tex.',
-});
+const program = Effect.gen(function* () {
+  const sessions = yield* Sessions;
+  const session = yield* sessions.open();
+  const run = yield* session.start({
+    agent: 'polish',
+    instruction: 'Tighten the abstract in paper.tex.',
+  });
+  yield* Effect.forkScoped(
+    Stream.runForEach(run.events, (event) =>
+      Effect.sync(() => {
+        if (event.type === 'stream.chunk') process.stdout.write(event.text);
+      }),
+    ),
+  );
+  return yield* run.result;
+}).pipe(Effect.scoped, Effect.provide(Sessions.layer(platform)));
 
-for await (const event of run) {
-  if (event.type === 'stream.chunk') process.stdout.write(event.text);
-}
-
-const result = await run.result;
+const result = await Effect.runPromise(program);
 console.log(result.outcome);
 ```
 
-`runAgent` returns an `AgentRun`:
+Nothing in the package calls `Effect.runPromise` itself: the
+`Effect.runPromise` above is the embedder's own boundary, as is any host
+entry that runs the program.
 
-```ts
-interface AgentRun extends AsyncIterable<AgentEvent> {
-  readonly result: Promise<AgentFlowResult>;
-  readonly view: AsyncIterable<SessionView>;
-  interrupt(): void;
-}
-```
+| Service    | What it is                                                                                                                                                                                                                                                                                                  |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Sessions` | The process's one session owner: `open(roots?)`, `close(roots?)`, `list`. One session per workspace storage root, the same owner every TeXRA host opens through. `Sessions.layer(platform)` composes the process and provides it, with this scope as the lifetime of the hold it takes on that composition. |
+| `Session`  | `start`, `request`, `view.changes`, and `subscribe`, whose transcript interest is held for a `Scope` and cleared when it closes. A value, one per root, not a tag.                                                                                                                                          |
+| `Run`      | `runId`, `result`, `view`, `events`, `interrupt`. `start` succeeds at admission: the run exists in the session, its row published and its trace live.                                                                                                                                                       |
 
-Trace events are buffered from the moment the run enters its session, so an
-iteration begun right after `runAgent()` misses none of the launch events.
-Ending the iteration detaches the event source while the run itself continues,
-and a run that settles without ever being iterated discards what it buffered.
-That buffer is only the handover to the first reader, and it is bounded: a run
-whose events pass the handover window with nobody reading has no reader, so it
-logs a warning naming the run and detaches its trace. Awaiting only `result`
-therefore never retains a long run's whole trace. A reader that did attach is
-never dropped: past its first pull the buffer is that reader's, and nothing
-discards what it has yet to read.
+`run.events` is the run's trace as a `Stream`. Trace events are buffered from
+the moment the run enters its session, so a reader begun right after `start`
+misses none of the launch events. Ending the stream's consumption detaches
+the event source while the run itself continues, and a run that settles
+without ever being read discards what it buffered. That buffer is only the
+handover to the first reader, and it is bounded: a run whose events pass the
+handover window with nobody reading has no reader, so it logs a warning
+naming the run and detaches its trace. Taking only `result` therefore never
+retains a long run's whole trace. A reader that did attach is never dropped:
+past its first pull the buffer is that reader's, and nothing discards what it
+has yet to read.
 
-Every failure reaches the caller on `result`; `runAgent()` itself does not
-throw. A refusal before any model work is one of the tagged errors the Effect
-surface names below (`AgentNotFound`, `ToolsRefused`, and `PlatformConflict`
-for a second, different platform); a run that fails after entering its session
-rejects with exactly what the launch path threw.
+Every failure is a typed error on the effect that owns it. A refusal before
+any model work fails `session.start` with one of the tagged errors the
+surface names (`AgentNotFound`, `ToolsRefused`, and `PlatformConflict` for a
+second, different platform); a run that fails after entering its session
+fails `run.result` and `run.events` with `RunFailure`, whose `cause` is
+exactly what the launch path threw.
 
-`view` is the folded session state every TeXRA host renders, so run
+`run.view` is the folded session state every TeXRA host renders, so run
 status, transcript rows, and pending approvals are read from it rather than
-re-folded from the trace. Each `for await` over it yields the current view
-first, then subsequent changes through the first view containing the run's
-durable outcome. That final view is included even when iteration starts after
-`result` settles, and the first view yielded always holds the run's row.
-`result` settles only once the final view has folded, independently of whether
-the caller reads it; if the session's fold dies first, `result` and every
-`view` iteration fail with its defect instead of waiting. A run that fails on
-its own settles `result` with its own error without waiting for the fold; the
-fold's defect then reaches `view` iterations only. Breaking the loop
-stops that reader while the run continues. If launch fails before the run
-enters the session, `view` ends without a value and `result` carries the
-failure.
+re-folded from the trace. It yields the current view first, then subsequent
+changes through the first view containing the run's durable outcome. That
+final view is included even when consumption starts after `result` completes,
+and the first view yielded always holds the run's row. `result` completes
+only once the final view has folded, independently of whether the caller
+reads it; if the session's fold dies first, `result` and every `view`
+consumer die with its defect instead of waiting. A run that fails on its own
+fails `result` with its own error without waiting for the fold; the fold's
+defect then reaches `view` consumers only. Ending consumption stops that
+reader while the run continues. If launch fails before the run enters the
+session, there is no `view` at all: `start` itself carries the failure.
 
 Every yielded view is a value: the fold publishes immutable levels with
 copy-on-touch structural sharing, so an older view stays exactly what it was
@@ -112,22 +124,25 @@ Runs share one session per workspace storage root. The runtime's session
 owner holds it, the same owner every TeXRA host opens its sessions through, so
 opening a root twice (two runs, or a run beside a host in the same process)
 resolves the one session already open there; a second root gets its own. When the session was opened by a host (the extension, the desktop, or the CLI in the same process), that host's decision delivery applies to every run on it: retries and approvals prompt in the host's UI and the run waits there, as PR #11893 section 8 rules; the package's inline retry denial applies only to sessions the package opened itself. A
-session ends only through `closeSession(roots)`: it refuses new runs on the
+session ends through `sessions.close(roots)`: it refuses new runs on the
 root, interrupts the runs it owns and waits for them to settle within the
 runtime's shutdown budget, flushes its artifacts, and releases the session,
 returning `{ settled, abandoned }`. `settled` is true when every run ended in
 time; otherwise `abandoned` names the runs still live, and the session stays
-open, refusing new runs, until they end. The platform's shutdown path
-(`lifecycle.runShutdown`, the drain program an embedder runs with
-`Effect.runPromise` before it exits), closes
-the platform's session this way after the runs it owns have settled, and then
-disposes the runtime the session owner ran on.
+open, refusing new runs, until they end. Leaving the `Sessions.layer` scope
+closes every session the owner holds this way and then disposes the runtime
+they ran on — the scope is the lifetime of the composition's hold, so an
+embedder that drains its scopes on shutdown needs no separate close call.
 
-That path runs once, so `runAgent` composes once per process: a run started
-after the platform's shutdown has run is refused, because the session it would
-open has no shutdown left to close and flush it. An embedder that needs more
-than one composition in a process takes the Effect surface below, where each
-scope owns the composition it made.
+The composition is held, not owned: each `Sessions.layer` scope takes a hold
+on it, and the last hold to end is what closes every session the owner holds,
+each settling its runs and flushing its artifacts, and then disposes the
+runtime they ran on. So two overlapping scopes over one platform are safe,
+the first one out ends nothing the second is still using, and a later program
+in the same process composes again over the platform already installed. A
+composition that found a host's own installation ends nothing however its
+holds end: those sessions are the host's, and killing its live runs is not
+this package's to do.
 
 ## Run results
 
@@ -142,10 +157,10 @@ carries `response` and `files`, and either carries the `structured` value of a
 `run.result` is terminal-only. Internally a tool-use flow also has a
 non-terminal `WAITING` state — the run is parked mid-session waiting on the
 user rather than finished — and the runtime carries a separate waiting shape
-for it. That shape is deliberately not exported and never resolves `result`: a
-parked run has no outcome to report, and this surface has no interactive
-channel to un-park it (see [Current limits](#current-limits)). Watch the trace
-stream if you need to observe a run reaching that state.
+for it. That shape is deliberately not exported and never completes
+`run.result`: a parked run has no outcome to report, and this surface has no
+interactive channel to un-park it (see [Current limits](#current-limits)).
+Watch the trace stream if you need to observe a run reaching that state.
 
 Accounting is `usage`, present once a round recorded any: one totals record
 covering the run and its subagents, whose `usage.totalCost` is the run's cost
@@ -156,84 +171,37 @@ files.
 
 ## Entry points
 
-| Entry                     | Contents                                                                                                                                                 |
-| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@texra-ai/agent`         | `runAgent`, `closeSession`, `AgentRun`, `defineTool`, `MapToolRegistry`, and the `AgentEvent` / `ITool` / `AgentFlowResult` / `SessionCloseReport` types |
-| `@texra-ai/agent/schemas` | Zod schemas + inferred types for agent definitions, configs, and run results                                                                             |
-| `@texra-ai/agent/node`    | `nodePlatform(options)`, a ready-made Node `Platform` with its workspace roots                                                                           |
-| `@texra-ai/agent/effect`  | `Sessions`, `Session`, `Run` and the tagged errors: the services the entry above renders                                                                 |
+| Entry                     | Contents                                                                                                                            |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `@texra-ai/agent`         | `Sessions`, `Session`, `Run`, the tagged errors, and the tool-definition helpers (`defineTool`, `MapToolRegistry`) with their types |
+| `@texra-ai/agent/schemas` | Zod schemas + inferred types for agent definitions, configs, and run results                                                        |
+| `@texra-ai/agent/node`    | `nodePlatform(options)`, a ready-made Node `Platform` with its workspace roots                                                      |
 
-Every entry needs the `effect` and `zod` peers installed, the root one
-included: `@texra-ai/agent` is the Effect surface rendered as Promises, and
-its bundle imports `effect` at runtime like the subpath does.
+Every entry needs the `effect` and `zod` peers installed. See
+[Install](#install).
 
 ## Effect
 
-`@texra-ai/agent/effect` is the surface. Everything this package decides is
-stated once there, in Effect: which level is a run's first, when its transcript
-interest changes, when its drain ends, which failure wins. `@texra-ai/agent`
-above is that surface rendered as Promises and AsyncIterables, and holds no
-logic of its own. It stays the Promise entry because the published SDK is one
-of the boundary kinds rule R1 of TeXRA's Effect migration names, as the
-architecture rulings ledger states them
-(`.agents/docs/implemented/architecture/2026-08-01-architecture-rulings-ledger.md`):
-host entries under `packages/{extension,desktop,cli,agent}/src/**`, the webview
-runtime entries admitted there by name, and this package's public API speak
-Promises; everything below them is Effect-typed. The rule was first written up
-in the 2026-08-26 Effect 4 runtime migration note, now archived and superseded
-on this point: the tool `execute()` contract it listed as a third kind is
-Effect-typed today.
+The package's surface is Effect, in full: every decision the package makes is
+stated once, in Effect, on the services above, and nothing in the package
+calls `Effect.runPromise`, `runSync`, or `runFork`.
 
-`effect` is a peer dependency of every entry, not only this one. See
-[Install](#install).
-
-```ts
-import { Effect, Stream } from 'effect';
-import { Sessions } from '@texra-ai/agent/effect';
-import { nodePlatform } from '@texra-ai/agent/node';
-
-const program = Effect.gen(function* () {
-  const sessions = yield* Sessions;
-  const session = yield* sessions.open();
-  yield* Effect.forkScoped(Stream.runForEach(session.view.changes, render));
-  const run = yield* session.start({ agent: 'polish', instruction });
-  yield* session.subscribe([{ id: run.runId, fromSeq: 0 }]);
-  yield* session.request({
-    kind: 'followUp.send',
-    runId: run.runId,
-    text: 'Keep the theorem statements unchanged.',
-  });
-  return yield* run.result;
-}).pipe(Effect.scoped, Effect.provide(Sessions.layer(nodePlatform(options))));
-```
-
-| Service    | What it is                                                                                                                                                                                                                                                                                                  |
-| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Sessions` | The process's one session owner: `open(roots?)`, `close(roots?)`, `list`. One session per workspace storage root, the same owner every TeXRA host opens through. `Sessions.layer(platform)` composes the process and provides it, with this scope as the lifetime of the hold it takes on that composition. |
-| `Session`  | `start`, `request`, `view.changes`, and `subscribe`, whose transcript interest is held for a `Scope` and cleared when it closes. A value, one per root, not a tag.                                                                                                                                          |
-| `Run`      | `runId`, `result`, `view`, `events`, `interrupt`. `start` succeeds at admission: the run exists in the session, its row published and its trace live.                                                                                                                                                       |
-
-`session.view.changes` publishes the fold's levels as values: each is
-immutable, an older level stays exactly what it was for as long as it is held,
-and a branch the later level did not touch is the same object in both.
-
-The composition is held, not owned: each `Sessions.layer` scope takes a hold on
-it, and the last hold to end is what closes every session the owner holds,
-each settling its runs and flushing its artifacts, and then disposes the
-runtime they ran on. So two overlapping scopes over one platform are safe, the
-first one out ends nothing the second is still using, and a later program in
-the same process composes again over the platform already installed. That is
-what the Promise entry cannot do, and why it composes once: its owner is the
-embedder's shutdown path, which runs once. A composition that found a host's
-own installation ends nothing however its holds end: those sessions are the
-host's, and killing its live runs is not this package's to do.
+Until 2026-09-21 the root entry rendered these services as Promises and
+AsyncIterables, the boundary kind rule R1 of TeXRA's Effect migration names
+for the published SDK (`.agents/docs/archived/architecture/2026-08-26-effect-4-runtime-migration.md`
+§7 R1; supersession recorded in the architecture rulings ledger,
+`.agents/docs/implemented/architecture/2026-08-01-architecture-rulings-ledger.md`).
+That ruling is superseded: `effect` was already a mandatory exact-pin peer of
+the whole package, so no consumer was spared installing Effect; the package
+is unpublished and the Promise entry had no consumers; and TeXRA 1.0 keeps no
+parallel surfaces. The composition-once-per-process limit went with the
+Promise entry: each `Sessions.layer` scope owns the composition it made.
 
 Failures are `Data.TaggedError`s: `PlatformConflict`, `AgentNotFound`,
-`ToolsRefused`, and `RunFailure`, whose `cause` is exactly what the launch path
-threw, which is what the Promise entry rejects with. A `session.request`
-answers with the runtime's own `Outcome` or its `RequestError` union, the same
-values every TeXRA host reads. Nothing else is exported: no store, no fold
-internals, no host widgets.
+`ToolsRefused`, and `RunFailure`, whose `cause` is exactly what the launch
+path threw. A `session.request` answers with the runtime's own `Outcome` or
+its `RequestError` union, the same values every TeXRA host reads. Nothing
+else is exported: no store, no fold internals, no host widgets.
 
 A runnable version of this program against a packed tarball is in
 [`example/`](./example).
@@ -247,8 +215,9 @@ state). `nodePlatform()` supplies both: process-local config and state,
 TeXRA's ordinary storage layout, and environment-variable secrets (so provider
 API keys are read from `process.env`; nothing is persisted).
 
-The platform is **process-wide**. Create one and reuse it for every run; passing
-a second, different platform in the same process throws.
+The platform is **process-wide**. Create one and reuse it for every run;
+passing a second, different platform in the same process fails the layer with
+`PlatformConflict`.
 
 Implement the `Platform` ports and the `roots` yourself when embedding in a
 host that already owns those services. For TeXRA 1.0, supply a fresh,
@@ -282,18 +251,20 @@ class EchoTool extends defineTool({
 const tools = [new EchoTool()];
 ```
 
-Pass `tools` to `runAgent`. Custom tools are accepted for **tool-use** agents
-only; passing them to a workflow agent throws. A directly implemented `ITool`
-also returns an Effect from `call`; asynchronous operations compose inside that
-program. Execute programs only at the embedding application's host boundary.
+Pass `tools` to `session.start`. Custom tools are accepted for **tool-use**
+agents only; passing them to a workflow agent fails the launch with
+`ToolsRefused`. A directly implemented `ITool` also returns an Effect from
+`call`; asynchronous operations compose inside that program. Execute programs
+only at the embedding application's host boundary.
 
 ## Current limits
 
-These are enforced, not undocumented — each throws or degrades loudly rather
+These are enforced, not undocumented — each fails or degrades loudly rather
 than failing quietly:
 
-- **Approval-requiring tools are refused.** A tool with `requiresApproval` throws
-  at launch. There is no interactive approval channel yet.
+- **Approval-requiring tools are refused.** A tool with `requiresApproval`
+  fails the launch with `ToolsRefused`. There is no interactive approval
+  channel yet.
 - **Interactive retry always denies.** A run that would prompt to retry gets a
   denial with a reason instead: on each session the package opens it answers
   every retry request with `request.decide`, the same door a host answers

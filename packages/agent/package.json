@@ -33,10 +33,6 @@
       "types": "./dist/types/packages/agent/src/schemas.d.ts",
       "import": "./dist/schemas.js"
     },
-    "./effect": {
-      "types": "./dist/types/packages/agent/src/effect.d.ts",
-      "import": "./dist/effect.js"
-    },
     "./node": {
       "types": "./dist/types/packages/agent/src/node.d.ts",
       "import": "./dist/node.js"
