@@ -45,8 +45,8 @@ import {
 } from '@tools/setup/platform';
 
 import { PlatformConflict } from './errors.js';
-import type { Sessions } from './sessions.js';
 import { makeSessions } from './sessionPrograms.js';
+import type { Sessions } from './sessions.js';
 
 /**
  * The process platform together with the workspace roots the package's runs
@@ -257,4 +257,3 @@ function closeOwnedSessions(): Effect.Effect<void> {
     ),
   );
 }
-

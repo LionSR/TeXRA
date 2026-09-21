@@ -384,4 +384,3 @@ export interface SessionRequests {
     expectedStartCommit: CommitOrdinal,
   ) => Effect.Effect<Outcome, RequestError>;
 }
-

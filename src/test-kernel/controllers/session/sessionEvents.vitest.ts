@@ -11,8 +11,6 @@
  * process holds (`self`) or whose owner is alive (`heldBy`) folds to
  * `waiting`; the same log with the owner gone folds to `interrupted`.
  */
-import { identityReads } from '@test/support/sessionGraphTestSetup';
-
 // Node imports
 import * as childProcess from 'node:child_process';
 import {
@@ -102,6 +100,7 @@ import { DownMessageSchema } from '@shared/session/sessionFrames';
 import type { SessionView } from '@shared/session/sessionView';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
+import { identityReads } from '@test/support/sessionGraphTestSetup';
 import type { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import { StreamLogStore } from '@transcript/StreamLogStore';
 
