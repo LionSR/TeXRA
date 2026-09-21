@@ -27,6 +27,12 @@ import { it } from '@effect/vitest';
 import { MODEL_CONFIGS } from 'llm-zoo';
 import { TestClock } from 'effect/testing';
 import { describe, expect } from 'vitest';
+import {
+  TurnResultSchema,
+  type Model,
+  type ModelOrigin,
+  type TurnResult,
+} from '@texra-ai/llm/turn';
 
 // Local imports
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
@@ -61,12 +67,6 @@ import {
   type AgentEvent,
   type AgentTrace,
 } from '@agent/trace';
-import {
-  TurnResultSchema,
-  type Model,
-  type ModelOrigin,
-  type TurnResult,
-} from '@texra-ai/llm/turn';
 import { DatabaseWriteFailed } from '@shared/session/database';
 import {
   AgentCategory,

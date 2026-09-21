@@ -4,6 +4,8 @@
  * route gate and the manual-retry prompt keep reading the runtime's own
  * taxonomy (D3), computed here from the SDK cause the package carried.
  */
+import { ModelError } from '@texra-ai/llm/turn';
+
 import { isContextWindowError } from '@common/errors/sdkError/errorPatterns';
 import {
   attachContextWindowError,
@@ -16,7 +18,6 @@ import {
   normalizeProviderError,
   type ModelRouteVerdict,
 } from '@common/errors/sdkError/providerErrorFormat';
-import { ModelError } from '@texra-ai/llm/turn';
 import {
   toRetryErrorInfo,
   type ProviderError,

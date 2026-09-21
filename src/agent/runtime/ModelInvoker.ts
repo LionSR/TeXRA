@@ -30,6 +30,14 @@ import {
   Stream,
   SynchronizedRef,
 } from 'effect';
+import {
+  ModelError,
+  type BackgroundEvent,
+  type ResolvedTurn,
+  type TurnEvent,
+  type TurnRequest,
+  type TurnResult,
+} from '@texra-ai/llm/turn';
 
 import { maybeSaveDebugObject } from '@agent/debug/debugMessageSaver';
 import { isRemoteAgent } from '@agent/index/agentRegistry';
@@ -41,14 +49,6 @@ import {
 } from '@agent/trace';
 import { hasMissingApiKeyErrorMarker } from '@common/errors/sdkError/errorMetadata';
 import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
-import {
-  ModelError,
-  type BackgroundEvent,
-  type ResolvedTurn,
-  type TurnEvent,
-  type TurnRequest,
-  type TurnResult,
-} from '@texra-ai/llm/turn';
 import { resolveRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import type { LanguageModel } from '@platform/languageModel';
 import { roundedUtilizationPercent } from '@shared/runs/contextUtilization';

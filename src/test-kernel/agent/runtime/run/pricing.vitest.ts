@@ -11,8 +11,9 @@ import { describe, expect, it } from 'vitest';
 import { noopTrace } from '@agent/trace';
 import type { BoundModel } from '@agent/runtime/run/modelBinding';
 import { priceTurnUsage } from '@agent/runtime/run/pricing';
-import type { Model, TurnResult } from '@texra-ai/llm/turn';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
+
+import type { Model, TurnResult } from '@texra-ai/llm/turn';
 
 /** Per-million rates the fixture bills at; cache writes are 1.25x and 2x. */
 const INPUT_PRICE = 3;

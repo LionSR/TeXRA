@@ -18,16 +18,6 @@ import {
   ReasoningEffort,
   type ModelConfig,
 } from 'llm-zoo';
-
-import {
-  resolveModelCompatibilityKey,
-  resolveRouteCredential,
-  resolveSubscriptionCredential,
-  routeBearer,
-  withShortModelName,
-  type RouteCredential,
-} from '@agent/runtime/modelRoutes';
-import { OPENAI_DEFAULT_ENDPOINT } from '@agent/runtime/run/routeEndpoint';
 import { anthropicMessagesModel } from '@texra-ai/llm/anthropic-messages';
 import { googleInteractionsModel } from '@texra-ai/llm/google-interactions';
 import { openaiChatModel } from '@texra-ai/llm/openai-chat';
@@ -44,6 +34,16 @@ import {
   type ModelOrigin,
   type VscodeLanguageModelConfiguration,
 } from '@texra-ai/llm/turn';
+
+import {
+  resolveModelCompatibilityKey,
+  resolveRouteCredential,
+  resolveSubscriptionCredential,
+  routeBearer,
+  withShortModelName,
+  type RouteCredential,
+} from '@agent/runtime/modelRoutes';
+import { OPENAI_DEFAULT_ENDPOINT } from '@agent/runtime/run/routeEndpoint';
 import { type ModelOptionStores } from '@model/computeModelOptions';
 import {
   reasoningEffortOverrides,

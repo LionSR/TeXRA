@@ -25,7 +25,6 @@ import { turnText } from '@agent/runtime/run/turnText';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { UsageMonitor } from '@agent/runtime/UsageMonitor';
 import { TraceEmitter } from '@agent/trace';
-import type { Model, TurnResult } from '@texra-ai/llm/turn';
 import {
   AgentCategory,
   RUN_OUTCOME,
@@ -50,6 +49,8 @@ import { generateRunId, generateShortId } from '@utils/core';
 import { RunFileService } from '@utils/files/runStorage';
 
 import { sessionWithInteractions } from '../progressTestUtils';
+
+import type { Model, TurnResult } from '@texra-ai/llm/turn';
 
 // ---------------------------------------------------------------------------
 // The loop harness: the run's own services over a real session ledger, with

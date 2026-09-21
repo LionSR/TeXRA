@@ -19,7 +19,6 @@ import {
   startCompactionActivity,
   type AgentTrace,
 } from '@agent/trace';
-import type { TurnRequest } from '@texra-ai/llm/turn';
 import { roundedUtilizationPercent } from '@shared/runs/contextUtilization';
 import {
   MODEL_COMPACTION_THRESHOLD_SETTING,
@@ -35,6 +34,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { rowAggregate, type Message } from '../loop/rows';
 import { estimateInputTokensOrNull } from './estimateInputTokens';
 import { turnText } from './turnText';
+import type { TurnRequest } from '@texra-ai/llm/turn';
 import type { BoundModel } from './modelBinding';
 
 /** Max tokens for the compaction summary response. */

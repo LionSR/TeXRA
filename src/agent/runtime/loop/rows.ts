@@ -5,7 +5,6 @@
  * reconcile-never-overwrite check hold on every write.
  */
 
-import type { MessageSchema } from '@texra-ai/llm/turn';
 import { redactSecrets } from '@logger/redaction';
 import {
   aggregateId as qualifyAggregateId,
@@ -19,6 +18,7 @@ import {
   type SnapshotRuntime,
 } from '@shared/schemas';
 import type { RunLedgerDraft, RunState } from '@shared/session/runStateFold';
+import type { MessageSchema } from '@texra-ai/llm/turn';
 import type { z } from 'zod';
 
 export type Message = z.infer<typeof MessageSchema>;

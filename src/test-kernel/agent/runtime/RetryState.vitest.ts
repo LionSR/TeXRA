@@ -28,6 +28,16 @@ import { it } from '@effect/vitest';
 import { MODEL_CONFIGS } from 'llm-zoo';
 import { APIError as OpenAIAPIError } from 'openai';
 import { afterEach, describe, expect, vi } from 'vitest';
+import {
+  ModelError,
+  ResolvedTurnSchema,
+  TurnResultSchema,
+  type Model,
+  type ModelOrigin,
+  type ResolvedTurn,
+  type TurnEvent,
+  type TurnResult,
+} from '@texra-ai/llm/turn';
 
 // Local imports
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
@@ -48,16 +58,6 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { UsageMonitor } from '@agent/runtime/UsageMonitor';
 import { noopTrace, TraceEmitter, type AgentTrace } from '@agent/trace';
 import { attachContextWindowError } from '@common/errors/sdkError/errorMetadata';
-import {
-  ModelError,
-  ResolvedTurnSchema,
-  TurnResultSchema,
-  type Model,
-  type ModelOrigin,
-  type ResolvedTurn,
-  type TurnEvent,
-  type TurnResult,
-} from '@texra-ai/llm/turn';
 import {
   LanguageModel,
   UNAVAILABLE_LANGUAGE_MODEL_PORT,

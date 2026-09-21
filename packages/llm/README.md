@@ -67,10 +67,11 @@ route, helper, tool-use and reflection turn included. Retry has two owners
 inside `ModelInvoker` (an automatic route-scoped batch under the session's
 `ModelRetryGate`, and a durable human permit); none of it is in this package.
 
-The boundary is nominal today: all 46 import sites reach the source through
-the `@llm/*` tsconfig alias, which `scripts/aliasUtils.mjs` expands to a
-filesystem path, so `package.json`'s `exports` map is never consulted. Closing
-that, and splitting `turn.ts`, are owned by
+Every consumer imports `@texra-ai/llm/<subpath>`, so `package.json`'s
+`exports` map is the boundary the resolver enforces: a module this package
+does not export cannot be reached from outside it. The `@llm/*` tsconfig
+alias that used to expand to a filesystem path and bypass the map is gone.
+Splitting `turn.ts` is owned by
 [the hardening note](../../.agents/docs/proposed/architecture/2026-09-20-llm-package-hardening.md).
 
 ## What it deliberately does not do
