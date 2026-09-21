@@ -5,7 +5,14 @@
  * notification, and subagent lineage tracking in a single module.
  */
 
-import { Context, Deferred, Effect, Fiber, Semaphore, type Scope } from 'effect';
+import {
+  Context,
+  Deferred,
+  Effect,
+  Fiber,
+  Semaphore,
+  type Scope,
+} from 'effect';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { SessionApprovals } from '@agent/runtime/runApprovalQueue';
@@ -74,8 +81,8 @@ interface ChildRunActivation {
 }
 
 /**
- * A run parked at WAITING: the fiber its generation stayed on, waiting inside
- * the scope that holds the run's teardown. Completing the latch ends the run
+ * A run parked at WAITING: the fiber its generation stayed on, inside the
+ * scope that holds the run's teardown. Completing the latch ends the run
  * through the lifecycle's terminal path; interrupting the fiber where it
  * waits ends the park alone, which is what a resumed generation does.
  */
@@ -145,11 +152,9 @@ interface RunRegistryInit {
 }
 
 /**
- * Session-owned registry of active runs and their change listeners.
- *
- * One instance belongs to each session, built by the session layer in the
- * session's scope over that session's event hub, approvals, and lease-release
- * boundary, and provided as {@link Runs}.
+ * Session-owned registry of active runs and their change listeners. One
+ * instance belongs to each session, built by the session layer in that
+ * session's scope and provided as {@link Runs}.
  */
 export class RunRegistry {
   private readonly handles = new Map<RunId, RunHandle>();
@@ -181,7 +186,7 @@ export class RunRegistry {
     Set<(handle: RunHandle | undefined) => void>
   >();
   private readonly childActivations = new Map<RunId, ChildRunActivation>();
-  /** The fiber of every run parked at WAITING in this session ({@link park}). */
+  /** Every run parked at WAITING in this session ({@link park}). */
   private readonly parked = new Map<RunId, ParkedRun>();
   /** The session's child-run concurrency budget, made on first use
    *  ({@link childRunBudget}). */
@@ -277,7 +282,7 @@ export class RunRegistry {
     return this.handles.has(runId) || this.childActivations.has(runId);
   }
 
-  /** Run a generation after earlier work and retain its lane through cleanup. */
+  /** Run a generation after earlier work, holding its lane through cleanup. */
   launchRun<A, E, R>(
     runId: RunId,
     operation: Effect.Effect<A, E, R>,
@@ -316,11 +321,11 @@ export class RunRegistry {
   /**
    * Park `handle`'s run on its own stop latch: the generation that reached
    * WAITING stays here as a fiber holding the run's teardown, instead of
-   * returning and leaving that teardown behind for someone else to invoke.
-   * Completing the latch ({@link terminate}) runs `termination`, the run's own
-   * terminal path; interrupting the fiber where it waits ({@link track},
-   * {@link dispose}) ends the park and nothing else. The fiber leaves the map
-   * when it ends, so a run parked here is one this process still holds.
+   * returning and leaving it behind for someone else to invoke. Completing
+   * the latch ({@link terminate}) runs `termination`, the run's own terminal
+   * path; interrupting the fiber where it waits ({@link track},
+   * {@link dispose}) ends the park alone. The fiber leaves the map when it
+   * ends, so a run parked here is one this process still holds.
    */
   park(
     handle: RunHandle,
@@ -346,8 +351,7 @@ export class RunRegistry {
   }
 
   /** Whether a generation of `runId` is parked at WAITING here ({@link park}):
-   *  the run is held, but by a fiber a resume supersedes rather than by a
-   *  generation a resume would run beside. */
+   *  held, but by a fiber a resume supersedes rather than runs beside. */
   isParked(runId: RunId): boolean {
     return this.parked.has(runId);
   }
@@ -481,7 +485,6 @@ export class RunRegistry {
       this.notifyWaiters(runId);
       return;
     }
-
     this.untrackHandle(handle);
   }
 
@@ -638,8 +641,8 @@ export class RunRegistry {
   /**
    * Every run live in this session: the tracked handles and the native child
    * loops retained between turns, whose activation is the only record of them.
-   * This is what a close stops and waits on, so a child with final delivery
-   * still to do is never left running under a released session.
+   * This is what a close stops and waits on, so a child with a final delivery
+   * to do is never left running under a released session.
    */
   getActiveIds(): RunId[] {
     return [
@@ -662,8 +665,8 @@ export class RunRegistry {
   }
 
   /**
-   * Wait for any of the given runs to change — see {@link addListener} for the
-   * full wake set — and succeed with the run id that changed first.
+   * Wait for any of the given runs to change — see {@link addListener} for
+   * the full wake set — and succeed with the run id that changed first.
    *
    * A caller that wants a bounded wait races or times out this effect instead
    * of passing a deadline in: interrupting the waiting fiber is what detaches
@@ -830,8 +833,7 @@ export class RunRegistry {
 
   /** The children one parent's detach covers. A Set, not an array: a child
    *  detached mid-turn has both a per-turn handle and a ChildRunActivation
-   *  under one runId, so both loops reach the same child and it must still be
-   *  published (and severed) exactly once. */
+   *  under one runId, so both loops reach it and it is severed once. */
   private childRunIds(parentRunId: RunId): readonly RunId[] {
     const childRunIds = new Set<RunId>();
     for (const activation of this.activeChildActivations(parentRunId))
@@ -842,7 +844,7 @@ export class RunRegistry {
   }
 
   /** Apply parent removal to local handles and approval ancestry without
-   *  publishing, over the children a durable detach already covers: the batch
+   *  publishing, over children a durable detach already covers: the batch
    *  {@link detachActiveChildren} committed, or a committed `run.removed`. */
   detachChildren(
     parentRunId: RunId,
@@ -885,12 +887,12 @@ export class RunRegistry {
 
   /**
    * Apply one stop: the descendant policy the caller declared, the root
-   * handle's own termination, and — when no live handle took it — the terminal
-   * row an ownerless stop must write itself. A detaching policy is the whole
-   * first step: the children leave the parent, durably and then locally,
-   * before anything interrupts it, because a child completing while that batch
-   * commits would otherwise route its terminal result to the just-stopped
-   * parent and the later sever cannot take that routing back.
+   * handle's own termination, and — when no live handle took it — the
+   * terminal row an ownerless stop must write itself. A detaching policy is
+   * the whole first step: the children leave the parent, durably and then
+   * locally, before anything interrupts it, because a child completing while
+   * that batch commits would otherwise route its terminal result to the
+   * just-stopped parent, and the later sever cannot take that routing back.
    */
   private applyStop(
     runId: RunId,

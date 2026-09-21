@@ -612,10 +612,9 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
             // way.
             Effect.catchCause((cause) =>
               Effect.sync(() => {
-                logger.warn(
-                  'Waiting-run termination failed; the run was settled without it',
-                  { data: { runId, error: Cause.squash(cause) } },
-                );
+                logger.warn('Waiting-run termination failed', {
+                  data: { runId, error: Cause.squash(cause) },
+                });
                 runs.untrackIfCurrent(handle);
               }),
             ),
