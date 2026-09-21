@@ -160,18 +160,6 @@ export const IMAGE_LATEX_TOOLS: readonly ImageLatexTool[] = LATEX_TOOLS.filter(
  */
 export const IMAGE_TOOL_LABEL = 'gm/magick';
 
-/**
- * Short display name for one image-tool candidate. The single source a
- * missing-dependency list reports labels from, so a renderer never has to
- * guess a display name from a binary id.
- */
-export const IMAGE_TOOL_DISPLAY_NAMES: Readonly<
-  Record<ImageLatexTool, string>
-> = {
-  gm: 'GraphicsMagick',
-  magick: 'ImageMagick',
-};
-
 /** A dependency `texra doctor` renders a row for. */
 type DoctorLatexToolName = DoctorEntry['name'];
 
