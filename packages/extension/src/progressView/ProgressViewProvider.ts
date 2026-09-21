@@ -88,7 +88,7 @@ import type {
   SurfaceActionMessage,
 } from '@shared/session/sessionFrames';
 import { allSettledVoid } from '@utils/core/allSettledVoid';
-import { debounce } from '@utils/core';
+import { createFlushableDebounce } from '@utils/core';
 import { DEBOUNCE_OPTIONS_MS } from '@utils/config/constants';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { checkCoreDependencies } from '@utils/system/toolUtils';
@@ -152,7 +152,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
    * It never auto-starts setup; the user launches it from the setup card.
    */
   private readonly onboardingFunnel: OnboardingFunnelRefresher;
-  private readonly debouncedRefreshCatalogs = debounce(
+  private readonly debouncedRefreshCatalogs = createFlushableDebounce(
     () => void this.runtime.runPromise(this.refreshCatalogs()),
     DEBOUNCE_OPTIONS_MS,
   );
@@ -479,7 +479,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     this.disposables.push(
       fileWatcher,
       agentDirectories.watchAgentDirectories(() =>
-        this.debouncedRefreshCatalogs(),
+        this.debouncedRefreshCatalogs.schedule(),
       ),
     );
     onTexraAuthSessionsChanged(this.context, () => {

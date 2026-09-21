@@ -8,8 +8,6 @@
  * missing or unknown command is a compile error. Handlers mutate the
  * module-level signals in `settingsState.ts` directly.
  */
-import { create } from 'mutative';
-
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   LATEX_CONFIG_KEYS,
@@ -74,18 +72,22 @@ export const settingsViewHandlers: SettingsViewOutboundHandlerRegistry = {
   [SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY_PREVIEW]: (data) => {
     const { storagePath, preview, lineCount, error } = data.preview;
     memoryItems.set(
-      create(memoryItems.get(), (draft) => {
-        const item = draft.find((entry) => entry.storagePath === storagePath);
-        if (!item) return;
+      memoryItems.get().map((item) => {
+        if (item.storagePath !== storagePath) return item;
         if (error) {
-          item.preview = undefined;
-          item.lineCount = undefined;
-          item.previewError = true;
-        } else {
-          item.preview = preview;
-          if (lineCount !== undefined) item.lineCount = lineCount;
-          item.previewError = undefined;
+          return {
+            ...item,
+            preview: undefined,
+            lineCount: undefined,
+            previewError: true,
+          };
         }
+        return {
+          ...item,
+          preview,
+          lineCount: lineCount ?? item.lineCount,
+          previewError: undefined,
+        };
       }),
     );
   },

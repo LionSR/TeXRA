@@ -2,8 +2,7 @@
 import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
-import { Effect, Exit, type FileSystem, type Path } from 'effect';
-import pDefer, { type DeferredPromise } from 'p-defer';
+import { Deferred, Effect, Exit, type FileSystem, type Path } from 'effect';
 import { describe, expect, it, onTestFinished, vi } from 'vitest';
 
 // Local imports
@@ -83,12 +82,12 @@ function decided(requestId: string): SessionEvent {
  * the host is presenting the request it staged.
  */
 function createTestHost() {
-  const staging = pDefer<void>();
-  const presentation = pDefer<void>();
+  const staging = Deferred.makeUnsafe<void>();
+  const presentation = Deferred.makeUnsafe<void>();
   const preview = {
     originalPath: '/tmp/original.tex',
     proposedPath: '/tmp/proposed.tex',
-    present: vi.fn(() => Effect.promise(() => presentation.promise)),
+    present: vi.fn(() => Deferred.await(presentation)),
     showDiff: vi.fn(() => Effect.void),
     openProposed: vi.fn(() => Effect.void),
     readProposedContent: vi.fn(() => Effect.succeed('edited by the user')),
@@ -109,7 +108,7 @@ function createTestHost() {
         previewContext: ToolEditPreviewContext,
       ) => {
         context = previewContext;
-        return Effect.promise(() => staging.promise).pipe(Effect.as(preview));
+        return Deferred.await(staging).pipe(Effect.as(preview));
       },
       revealApprovalSurface: () => Effect.void,
       openBuildDisplay: (() => Effect.void) as BuildDisplayFn,
@@ -135,7 +134,7 @@ describe('tool edit approval controller', () => {
     const requestId = testHost.contextForRequest().requestId;
     await run(testHost.contextForRequest().discard());
     expect(testHost.contextForRequest().isSettled()).toBe(true);
-    testHost.staging.resolve();
+    Deferred.doneUnsafe(testHost.staging, Effect.void);
     await presented;
 
     expect(testHost.host.decide).toHaveBeenCalledWith(RUN, requestId, {
@@ -165,7 +164,7 @@ describe('tool edit approval controller', () => {
     expect(released).toBe(false);
     expect(testHost.preview.dispose).not.toHaveBeenCalled();
 
-    testHost.staging.resolve();
+    Deferred.doneUnsafe(testHost.staging, Effect.void);
     await release;
     expect(released).toBe(true);
     expect(testHost.preview.dispose).toHaveBeenCalledOnce();
@@ -185,7 +184,7 @@ describe('tool edit approval controller', () => {
     // Staging finished, so the request is staged and the host is opening its
     // view on the staged files. A release now may not settle before that view
     // is open and closed again: closing it is what the release is for.
-    testHost.staging.resolve();
+    Deferred.doneUnsafe(testHost.staging, Effect.void);
     await vi.waitFor(() => {
       expect(testHost.preview.present).toHaveBeenCalledOnce();
     });
@@ -198,7 +197,7 @@ describe('tool edit approval controller', () => {
     expect(released).toBe(false);
     expect(testHost.preview.dispose).not.toHaveBeenCalled();
 
-    testHost.presentation.resolve();
+    Deferred.doneUnsafe(testHost.presentation, Effect.void);
     await release;
     expect(released).toBe(true);
     expect(testHost.preview.dispose).toHaveBeenCalledOnce();
@@ -212,13 +211,11 @@ describe('tool edit approval controller', () => {
   it('joins a second release to the cleanup the first one is running', async () => {
     const testHost = createTestHost();
     const controller = createController(testHost.host);
-    const disposal = pDefer<void>();
-    testHost.preview.dispose.mockImplementation(() =>
-      Effect.promise(() => disposal.promise),
-    );
+    const disposal = Deferred.makeUnsafe<void>();
+    testHost.preview.dispose.mockImplementation(() => Deferred.await(disposal));
 
-    testHost.staging.resolve();
-    testHost.presentation.resolve();
+    Deferred.doneUnsafe(testHost.staging, Effect.void);
+    Deferred.doneUnsafe(testHost.presentation, Effect.void);
     await run(controller.present(approvalRequest()));
     const requestId = testHost.contextForRequest().requestId;
 
@@ -234,7 +231,7 @@ describe('tool edit approval controller', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(released).toBe(false);
 
-    disposal.resolve();
+    Deferred.doneUnsafe(disposal, Effect.void);
     await release;
     expect(released).toBe(true);
     expect(testHost.preview.dispose).toHaveBeenCalledOnce();
@@ -244,8 +241,8 @@ describe('tool edit approval controller', () => {
     const testHost = createTestHost();
     const controller = createController(testHost.host);
 
-    testHost.staging.resolve();
-    testHost.presentation.resolve();
+    Deferred.doneUnsafe(testHost.staging, Effect.void);
+    Deferred.doneUnsafe(testHost.presentation, Effect.void);
     await run(controller.present(approvalRequest()));
     const requestId = testHost.contextForRequest().requestId;
     expect(testHost.preview.present).toHaveBeenCalled();
@@ -276,16 +273,13 @@ describe('tool edit approval controller', () => {
     const testHost = createTestHost();
     const controller = createController(testHost.host);
     const events: string[] = [];
-    const builds: DeferredPromise<void>[] = [];
+    const builds: Deferred.Deferred<void, unknown>[] = [];
     // The host build is a program now, and its own settlement is what a
     // release waits for, so the event it records belongs inside it.
     const openBuildDisplay = vi.fn(() => {
-      const build = pDefer<void>();
+      const build = Deferred.makeUnsafe<void, unknown>();
       builds.push(build);
-      return Effect.tryPromise({
-        try: () => build.promise,
-        catch: (error) => error,
-      }).pipe(
+      return Deferred.await(build).pipe(
         Effect.onExit((exit) =>
           Effect.sync(() => {
             events.push(Exit.isSuccess(exit) ? 'build-done' : 'build-failed');
@@ -329,8 +323,8 @@ describe('tool edit approval controller', () => {
       },
     );
 
-    testHost.staging.resolve();
-    testHost.presentation.resolve();
+    Deferred.doneUnsafe(testHost.staging, Effect.void);
+    Deferred.doneUnsafe(testHost.presentation, Effect.void);
     await run(controller.present(approvalRequest()));
     const requestId = testHost.contextForRequest().requestId;
 
@@ -352,7 +346,7 @@ describe('tool edit approval controller', () => {
     expect(testHost.preview.dispose).not.toHaveBeenCalled();
     expect(events).toEqual([]);
 
-    builds[0].resolve();
+    Deferred.doneUnsafe(builds[0], Effect.void);
     await release;
     expect(released).toBe(true);
     // The build settles before the release touches what it was reading.
@@ -379,7 +373,7 @@ describe('tool edit approval controller', () => {
     });
 
     const secondRelease = run(controller.release(secondRequestId));
-    builds[1].reject(new Error('the build failed'));
+    Deferred.doneUnsafe(builds[1], Effect.fail(new Error('the build failed')));
     await secondRelease;
     expect(events).toEqual([
       'build-done',

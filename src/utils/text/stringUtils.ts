@@ -1,7 +1,5 @@
 import { intlFormatDistance } from 'date-fns';
-import prettyBytes from 'pretty-bytes';
 import prettyMilliseconds from 'pretty-ms';
-import pluralizeWord from 'pluralize';
 
 const graphemeSegmenter = new Intl.Segmenter(undefined, {
   granularity: 'grapheme',
@@ -84,6 +82,18 @@ export function capitalize(str: string): string {
   return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
+/**
+ * Regular English plural of a noun phrase whose head noun is its last word:
+ * a consonant + `y` becomes `ies`, a sibilant ending takes `es`, everything
+ * else takes `s`. Irregular nouns are not guessed — a caller with one passes
+ * `plural` explicitly.
+ */
+function regularPlural(singular: string): string {
+  if (/[^aeiou]y$/i.test(singular)) return `${singular.slice(0, -1)}ies`;
+  if (/(?:s|x|z|ch|sh)$/i.test(singular)) return `${singular}es`;
+  return `${singular}s`;
+}
+
 /** Return the singular or plural form of `singular` based on `count`. */
 export function pluralize(
   count: number,
@@ -91,7 +101,7 @@ export function pluralize(
   plural?: string,
 ): string {
   if (plural !== undefined) return count === 1 ? singular : plural;
-  return pluralizeWord(singular, count);
+  return count === 1 ? singular : regularPlural(singular);
 }
 
 /**
@@ -289,7 +299,42 @@ export function formatRelativeTime(timestamp: number): string {
   return intlFormatDistance(timestamp, Date.now());
 }
 
-/** Human-readable byte size (binary units, e.g. `1.5 MiB`). */
+const BINARY_BYTE_UNITS = [
+  'B',
+  'KiB',
+  'MiB',
+  'GiB',
+  'TiB',
+  'PiB',
+  'EiB',
+  'ZiB',
+  'YiB',
+] as const;
+
+/**
+ * Human-readable byte size in binary units (e.g. `1.5 MiB`): the largest unit
+ * the value reaches, rounded to three significant digits — or to as many
+ * digits as its integer part needs, so a whole byte count below the next unit
+ * keeps every digit (`1023 B`, not `1020 B`). Rounding can push the figure up
+ * to the next unit, which is why the carry below runs after it: 1048575 bytes
+ * rounds to 1024 KiB and is reported as `1 MiB`.
+ */
 export function formatBytes(bytes: number): string {
-  return prettyBytes(bytes, { binary: true });
+  const sign = bytes < 0 ? '-' : '';
+  let magnitude = Math.abs(bytes);
+  let exponent = 0;
+  if (magnitude >= 1) {
+    exponent = Math.min(
+      Math.floor(Math.log(magnitude) / Math.log(1024)),
+      BINARY_BYTE_UNITS.length - 1,
+    );
+    magnitude /= 1024 ** exponent;
+  }
+  const precision = Math.max(3, Math.floor(magnitude).toString().length);
+  magnitude = Number(magnitude.toPrecision(precision));
+  if (magnitude >= 1024 && exponent < BINARY_BYTE_UNITS.length - 1) {
+    magnitude /= 1024;
+    exponent += 1;
+  }
+  return `${sign}${magnitude} ${BINARY_BYTE_UNITS[exponent]}`;
 }

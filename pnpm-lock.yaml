@@ -4,6 +4,189 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+catalogs:
+  default:
+    '@anthropic-ai/claude-agent-sdk':
+      specifier: ^0.3.272
+      version: 0.3.272
+    '@anthropic-ai/sdk':
+      specifier: ^0.125.0
+      version: 0.125.0
+    '@cantoo/pdf-lib':
+      specifier: ^2.9.2
+      version: 2.9.2
+    '@date-fns/tz':
+      specifier: ^1.5.0
+      version: 1.5.0
+    '@effect/platform-node':
+      specifier: 4.0.0-rc.115
+      version: 4.0.0-rc.115
+    '@effect/sql-sqlite-node':
+      specifier: 4.0.0-rc.115
+      version: 4.0.0-rc.115
+    '@google/genai':
+      specifier: ^2.22.0
+      version: 2.22.0
+    '@jamesgopsill/crossref-client':
+      specifier: ^1.1.0
+      version: 1.1.0
+    '@jitl/quickjs-wasmfile-release-sync':
+      specifier: 0.32.0
+      version: 0.32.0
+    '@octokit/request':
+      specifier: ^10.0.16
+      version: 10.0.16
+    '@octokit/request-error':
+      specifier: ^7.1.2
+      version: 7.1.2
+    '@openai/codex-sdk':
+      specifier: ^0.154.0
+      version: 0.154.0
+    '@openrouter/sdk':
+      specifier: ^1.2.123
+      version: 1.2.123
+    '@supabase/supabase-js':
+      specifier: 2.116.0
+      version: 2.116.0
+    '@typescript/native':
+      specifier: npm:typescript@^7.0.2
+      version: 7.0.2
+    acorn:
+      specifier: ^8.18.0
+      version: 8.18.0
+    acorn-walk:
+      specifier: ^8.3.5
+      version: 8.3.5
+    arxiv-client:
+      specifier: ^0.0.9
+      version: 0.0.9
+    bibtex:
+      specifier: ^0.9.0
+      version: 0.9.0
+    content-disposition:
+      specifier: ^3.0.0
+      version: 3.0.0
+    date-fns:
+      specifier: ^4.4.0
+      version: 4.4.0
+    diff:
+      specifier: ^9.0.0
+      version: 9.0.0
+    diff-match-patch:
+      specifier: ^1.0.5
+      version: 1.0.5
+    effect:
+      specifier: 4.0.0-rc.115
+      version: 4.0.0-rc.115
+    esbuild:
+      specifier: ^0.28.2
+      version: 0.28.2
+    escape-string-regexp:
+      specifier: ^5.0.0
+      version: 5.0.0
+    execa:
+      specifier: ^10.0.1
+      version: 10.0.1
+    fast-xml-parser:
+      specifier: ^5.11.1
+      version: 5.11.1
+    glob:
+      specifier: ^13.0.6
+      version: 13.0.6
+    http-status-codes:
+      specifier: ^2.3.0
+      version: 2.3.0
+    identifiers-arxiv:
+      specifier: ^0.1.1
+      version: 0.1.1
+    ignore:
+      specifier: ^7.0.9
+      version: 7.0.9
+    image-size:
+      specifier: ^2.0.4
+      version: 2.0.4
+    ipaddr.js:
+      specifier: ^2.5.0
+      version: 2.5.0
+    is-network-error:
+      specifier: ^1.3.2
+      version: 1.3.2
+    is-wsl:
+      specifier: ^3.1.1
+      version: 3.1.1
+    ky:
+      specifier: ^2.1.0
+      version: 2.1.0
+    llm-zoo:
+      specifier: ^1.36.0
+      version: 1.36.0
+    lru-cache:
+      specifier: ^11.5.2
+      version: 11.5.2
+    mime-types:
+      specifier: ^3.0.1
+      version: 3.0.2
+    nanoid:
+      specifier: ^6.0.1
+      version: 6.0.1
+    nunjucks:
+      specifier: ^3.2.4
+      version: 3.2.4
+    openai:
+      specifier: ^7.10.0
+      version: 7.10.0
+    pathe:
+      specifier: ^2.0.3
+      version: 2.0.3
+    pdf2pic:
+      specifier: ^3.2.0
+      version: 3.2.0
+    postal-mime:
+      specifier: ^3.0.0
+      version: 3.0.0
+    pretty-ms:
+      specifier: ^9.3.1
+      version: 9.3.1
+    quickjs-emscripten-core:
+      specifier: 0.32.0
+      version: 0.32.0
+    safe-stable-stringify:
+      specifier: ^2.5.0
+      version: 2.5.0
+    shell-quote:
+      specifier: ^1.10.0
+      version: 1.10.0
+    tar:
+      specifier: ^7.5.22
+      version: 7.5.22
+    tree-kill:
+      specifier: ^1.2.2
+      version: 1.2.2
+    turndown:
+      specifier: ^7.2.4
+      version: 7.2.4
+    turndown-plugin-gfm:
+      specifier: ^1.0.2
+      version: 1.0.2
+    typescript:
+      specifier: npm:@typescript/typescript6@^6.0.2
+      version: 6.0.2
+    undici:
+      specifier: ^8.10.2
+      version: 8.10.2
+    which:
+      specifier: ^5.0.0
+      version: 5.0.0
+    write-file-atomic:
+      specifier: ^7.0.1
+      version: 7.0.1
+    yaml:
+      specifier: ^2.9.1
+      version: 2.9.1
+    zod:
+      specifier: ^4.4.3
+      version: 4.4.3
+
 patchedDependencies:
   ink@7.1.1: db8f5740efe4e780f6517316175dfed1e68d62e76e533c06bf0b8f5e94b48aa6
   openai@7.10.0: d98512d39fc954483b782c38a6d4417f03559d68c718dfa4cc567382a26eaaf8
@@ -13,55 +196,55 @@ importers:
   .:
     dependencies:
       '@anthropic-ai/claude-agent-sdk':
-        specifier: ^0.3.272
+        specifier: 'catalog:'
         version: 0.3.272(@anthropic-ai/sdk@0.125.0(zod@4.4.3))(@modelcontextprotocol/sdk@1.30.0(supports-color@10.2.2)(zod@4.4.3))(zod@4.4.3)
       '@anthropic-ai/sdk':
-        specifier: ^0.125.0
+        specifier: 'catalog:'
         version: 0.125.0(zod@4.4.3)
       '@awesome.me/webawesome':
         specifier: ^3.12.0
         version: 3.12.0(@floating-ui/utils@0.2.12)(@types/node@22.19.17)(@types/react@19.3.0)
       '@cantoo/pdf-lib':
-        specifier: ^2.9.2
+        specifier: 'catalog:'
         version: 2.9.2(html-entities@2.6.0)
       '@date-fns/tz':
-        specifier: ^1.5.0
+        specifier: 'catalog:'
         version: 1.5.0
       '@effect/platform-node':
-        specifier: 4.0.0-rc.115
+        specifier: 'catalog:'
         version: 4.0.0-rc.115(effect@4.0.0-rc.115)(redis@6.2.1(@opentelemetry/api@1.9.1))
       '@effect/sql-sqlite-node':
-        specifier: 4.0.0-rc.115
+        specifier: 'catalog:'
         version: 4.0.0-rc.115(effect@4.0.0-rc.115)
       '@fortawesome/free-solid-svg-icons':
         specifier: ^7.3.1
         version: 7.3.1
       '@google/genai':
-        specifier: ^2.22.0
+        specifier: 'catalog:'
         version: 2.22.0(@modelcontextprotocol/sdk@1.30.0(supports-color@10.2.2)(zod@4.4.3))(supports-color@10.2.2)
       '@jamesgopsill/crossref-client':
-        specifier: ^1.1.0
+        specifier: 'catalog:'
         version: 1.1.0
       '@jitl/quickjs-wasmfile-release-sync':
-        specifier: 0.32.0
+        specifier: 'catalog:'
         version: 0.32.0
       '@lit-labs/signals':
         specifier: ^0.3.0
         version: 0.3.0
       '@octokit/request':
-        specifier: ^10.0.16
+        specifier: 'catalog:'
         version: 10.0.16
       '@octokit/request-error':
-        specifier: ^7.1.2
+        specifier: 'catalog:'
         version: 7.1.2
       '@openai/codex-sdk':
-        specifier: ^0.154.0
+        specifier: 'catalog:'
         version: 0.154.0
       '@openrouter/sdk':
-        specifier: ^1.2.123
+        specifier: 'catalog:'
         version: 1.2.123
       '@supabase/supabase-js':
-        specifier: 2.116.0
+        specifier: 'catalog:'
         version: 2.116.0(@opentelemetry/api@1.9.1)
       '@xterm/addon-fit':
         specifier: ^0.11.0
@@ -70,52 +253,43 @@ importers:
         specifier: ^6.0.0
         version: 6.0.0
       acorn:
-        specifier: ^8.18.0
+        specifier: 'catalog:'
         version: 8.18.0
       acorn-walk:
-        specifier: ^8.3.5
+        specifier: 'catalog:'
         version: 8.3.5
       arxiv-client:
-        specifier: ^0.0.9
+        specifier: 'catalog:'
         version: 0.0.9(debug@4.4.3(supports-color@10.2.2))(supports-color@10.2.2)
       bibtex:
-        specifier: ^0.9.0
+        specifier: 'catalog:'
         version: 0.9.0
       content-disposition:
-        specifier: ^3.0.0
+        specifier: 'catalog:'
         version: 3.0.0
-      data-uri-to-buffer:
-        specifier: ^7.0.0
-        version: 7.0.0
       date-fns:
-        specifier: ^4.4.0
+        specifier: 'catalog:'
         version: 4.4.0
-      deepmerge:
-        specifier: ^4.3.1
-        version: 4.3.1
       diff:
-        specifier: ^9.0.0
+        specifier: 'catalog:'
         version: 9.0.0
       diff-match-patch:
-        specifier: ^1.0.5
+        specifier: 'catalog:'
         version: 1.0.5
       effect:
-        specifier: 4.0.0-rc.115
+        specifier: 'catalog:'
         version: 4.0.0-rc.115
       escape-string-regexp:
-        specifier: ^5.0.0
+        specifier: 'catalog:'
         version: 5.0.0
       execa:
-        specifier: ^10.0.1
+        specifier: 'catalog:'
         version: 10.0.1
       fast-xml-parser:
-        specifier: ^5.11.1
+        specifier: 'catalog:'
         version: 5.11.1
-      fastest-levenshtein:
-        specifier: ^1.0.16
-        version: 1.0.16
       glob:
-        specifier: ^13.0.6
+        specifier: 'catalog:'
         version: 13.0.6
       highlight.js:
         specifier: ^11.12.0
@@ -124,40 +298,40 @@ importers:
         specifier: ^1.2.0
         version: 1.2.0
       http-status-codes:
-        specifier: ^2.3.0
+        specifier: 'catalog:'
         version: 2.3.0
       identifiers-arxiv:
-        specifier: ^0.1.1
+        specifier: 'catalog:'
         version: 0.1.1
       ignore:
-        specifier: ^7.0.9
+        specifier: 'catalog:'
         version: 7.0.9
       image-size:
-        specifier: ^2.0.4
+        specifier: 'catalog:'
         version: 2.0.4
       ipaddr.js:
-        specifier: ^2.5.0
+        specifier: 'catalog:'
         version: 2.5.0
       is-network-error:
-        specifier: ^1.3.2
+        specifier: 'catalog:'
         version: 1.3.2
       is-wsl:
-        specifier: ^3.1.1
+        specifier: 'catalog:'
         version: 3.1.1
       katex:
         specifier: ^0.18.7
         version: 0.18.7
       ky:
-        specifier: ^2.1.0
+        specifier: 'catalog:'
         version: 2.1.0
       lit:
         specifier: ^3.3.3
         version: 3.3.3
       llm-zoo:
-        specifier: ^1.36.0
+        specifier: 'catalog:'
         version: 1.36.0(zod@4.4.3)
       lru-cache:
-        specifier: ^11.5.2
+        specifier: 'catalog:'
         version: 11.5.2
       markdown-it:
         specifier: ^15.0.2
@@ -166,61 +340,43 @@ importers:
         specifier: ^1.0.0
         version: 1.0.0
       mime-types:
-        specifier: ^3.0.1
+        specifier: 'catalog:'
         version: 3.0.2
       monaco-editor:
         specifier: ^0.56.0
         version: 0.56.0
-      mutative:
-        specifier: ^1.3.0
-        version: 1.3.0
       nanoid:
-        specifier: ^6.0.1
+        specifier: 'catalog:'
         version: 6.0.1
       nunjucks:
-        specifier: ^3.2.4
+        specifier: 'catalog:'
         version: 3.2.4(chokidar@3.6.0)
       openai:
-        specifier: ^7.10.0
+        specifier: 'catalog:'
         version: 7.10.0(patch_hash=d98512d39fc954483b782c38a6d4417f03559d68c718dfa4cc567382a26eaaf8)(undici@8.10.2)(ws@8.21.3)(zod@4.4.3)
-      p-defer:
-        specifier: ^4.0.1
-        version: 4.0.1
       pathe:
-        specifier: ^2.0.3
+        specifier: 'catalog:'
         version: 2.0.3
       pdf2pic:
-        specifier: ^3.2.0
+        specifier: 'catalog:'
         version: 3.2.0(supports-color@10.2.2)
-      perfect-debounce:
-        specifier: ^2.1.0
-        version: 2.1.0
-      pluralize:
-        specifier: ^8.0.0
-        version: 8.0.0
       postal-mime:
-        specifier: ^3.0.0
+        specifier: 'catalog:'
         version: 3.0.0
-      pretty-bytes:
-        specifier: ^7.1.3
-        version: 7.1.3
       pretty-ms:
-        specifier: ^9.3.1
+        specifier: 'catalog:'
         version: 9.3.1
       quickjs-emscripten-core:
-        specifier: 0.32.0
+        specifier: 'catalog:'
         version: 0.32.0
       safe-stable-stringify:
-        specifier: ^2.5.0
+        specifier: 'catalog:'
         version: 2.5.0
       semver:
         specifier: ^7.8.5
         version: 7.8.5
-      serialize-error:
-        specifier: ^13.0.1
-        version: 13.0.1
       shell-quote:
-        specifier: ^1.10.0
+        specifier: 'catalog:'
         version: 1.10.0
       signal-polyfill:
         specifier: ^0.2.2
@@ -235,31 +391,31 @@ importers:
         specifier: ^7.2.0
         version: 7.2.0
       tar:
-        specifier: ^7.5.22
+        specifier: 'catalog:'
         version: 7.5.22
       tree-kill:
-        specifier: ^1.2.2
+        specifier: 'catalog:'
         version: 1.2.2
       turndown:
-        specifier: ^7.2.4
+        specifier: 'catalog:'
         version: 7.2.4
       turndown-plugin-gfm:
-        specifier: ^1.0.2
+        specifier: 'catalog:'
         version: 1.0.2
       undici:
-        specifier: ^8.10.2
+        specifier: 'catalog:'
         version: 8.10.2
       which:
-        specifier: ^5.0.0
+        specifier: 'catalog:'
         version: 5.0.0
       write-file-atomic:
-        specifier: ^7.0.1
+        specifier: 'catalog:'
         version: 7.0.1
       yaml:
-        specifier: ^2.9.1
+        specifier: 'catalog:'
         version: 2.9.1
       zod:
-        specifier: ^4.4.3
+        specifier: 'catalog:'
         version: 4.4.3
     devDependencies:
       '@effect/language-service':
@@ -295,9 +451,6 @@ importers:
       '@types/nunjucks':
         specifier: ^3.2.6
         version: 3.2.6
-      '@types/pluralize':
-        specifier: ^0.0.33
-        version: 0.0.33
       '@types/semver':
         specifier: ^7.8.0
         version: 7.8.0
@@ -320,13 +473,13 @@ importers:
         specifier: 8.18.1
         version: 8.18.1
       '@typescript/native':
-        specifier: npm:typescript@^7.0.2
+        specifier: 'catalog:'
         version: typescript@7.0.2
       citty:
         specifier: ^0.2.2
         version: 0.2.2
       esbuild:
-        specifier: ^0.28.2
+        specifier: 'catalog:'
         version: 0.28.2
       eslint:
         specifier: ^10.10.0
@@ -350,7 +503,7 @@ importers:
         specifier: ^3.9.6
         version: 3.9.6
       typescript:
-        specifier: npm:@typescript/typescript6@^6.0.2
+        specifier: 'catalog:'
         version: '@typescript/typescript6@6.0.2'
       typescript-eslint:
         specifier: ^8.70.0
@@ -368,209 +521,188 @@ importers:
   packages/agent:
     dependencies:
       '@anthropic-ai/claude-agent-sdk':
-        specifier: ^0.3.272
+        specifier: 'catalog:'
         version: 0.3.272(@anthropic-ai/sdk@0.125.0(zod@4.4.3))(@modelcontextprotocol/sdk@1.30.0(supports-color@10.2.2)(zod@4.4.3))(zod@4.4.3)
       '@anthropic-ai/sdk':
-        specifier: ^0.125.0
+        specifier: 'catalog:'
         version: 0.125.0(zod@4.4.3)
       '@cantoo/pdf-lib':
-        specifier: ^2.9.2
+        specifier: 'catalog:'
         version: 2.9.2(html-entities@2.6.0)
       '@date-fns/tz':
-        specifier: ^1.5.0
+        specifier: 'catalog:'
         version: 1.5.0
       '@effect/platform-node':
-        specifier: 4.0.0-rc.115
+        specifier: 'catalog:'
         version: 4.0.0-rc.115(effect@4.0.0-rc.115)(redis@6.2.1(@opentelemetry/api@1.9.1))
       '@effect/sql-sqlite-node':
-        specifier: 4.0.0-rc.115
+        specifier: 'catalog:'
         version: 4.0.0-rc.115(effect@4.0.0-rc.115)
       '@google/genai':
-        specifier: ^2.22.0
+        specifier: 'catalog:'
         version: 2.22.0(@modelcontextprotocol/sdk@1.30.0(supports-color@10.2.2)(zod@4.4.3))(supports-color@10.2.2)
       '@jamesgopsill/crossref-client':
-        specifier: ^1.1.0
+        specifier: 'catalog:'
         version: 1.1.0
       '@jitl/quickjs-wasmfile-release-sync':
-        specifier: 0.32.0
+        specifier: 'catalog:'
         version: 0.32.0
       '@octokit/request':
-        specifier: ^10.0.16
+        specifier: 'catalog:'
         version: 10.0.16
       '@octokit/request-error':
-        specifier: ^7.1.2
+        specifier: 'catalog:'
         version: 7.1.2
       '@openai/codex-sdk':
-        specifier: ^0.154.0
+        specifier: 'catalog:'
         version: 0.154.0
       '@openrouter/sdk':
-        specifier: ^1.2.123
+        specifier: 'catalog:'
         version: 1.2.123
       '@supabase/supabase-js':
-        specifier: 2.116.0
+        specifier: 'catalog:'
         version: 2.116.0(@opentelemetry/api@1.9.1)
       acorn:
-        specifier: ^8.18.0
+        specifier: 'catalog:'
         version: 8.18.0
       acorn-walk:
-        specifier: ^8.3.5
+        specifier: 'catalog:'
         version: 8.3.5
       arxiv-client:
-        specifier: ^0.0.9
+        specifier: 'catalog:'
         version: 0.0.9(debug@4.4.3(supports-color@10.2.2))(supports-color@10.2.2)
       bibtex:
-        specifier: ^0.9.0
+        specifier: 'catalog:'
         version: 0.9.0
       content-disposition:
-        specifier: ^3.0.0
+        specifier: 'catalog:'
         version: 3.0.0
-      data-uri-to-buffer:
-        specifier: ^7.0.0
-        version: 7.0.0
       date-fns:
-        specifier: ^4.4.0
+        specifier: 'catalog:'
         version: 4.4.0
-      deepmerge:
-        specifier: ^4.3.1
-        version: 4.3.1
       diff:
-        specifier: ^9.0.0
+        specifier: 'catalog:'
         version: 9.0.0
       diff-match-patch:
-        specifier: ^1.0.5
+        specifier: 'catalog:'
         version: 1.0.5
       escape-string-regexp:
-        specifier: ^5.0.0
+        specifier: 'catalog:'
         version: 5.0.0
       execa:
-        specifier: ^10.0.1
+        specifier: 'catalog:'
         version: 10.0.1
       fast-xml-parser:
-        specifier: ^5.11.1
+        specifier: 'catalog:'
         version: 5.11.1
       glob:
-        specifier: ^13.0.6
+        specifier: 'catalog:'
         version: 13.0.6
       http-status-codes:
-        specifier: ^2.3.0
+        specifier: 'catalog:'
         version: 2.3.0
       identifiers-arxiv:
-        specifier: ^0.1.1
+        specifier: 'catalog:'
         version: 0.1.1
       ignore:
-        specifier: ^7.0.9
+        specifier: 'catalog:'
         version: 7.0.9
       image-size:
-        specifier: ^2.0.4
+        specifier: 'catalog:'
         version: 2.0.4
       ipaddr.js:
-        specifier: ^2.5.0
+        specifier: 'catalog:'
         version: 2.5.0
       is-network-error:
-        specifier: ^1.3.2
+        specifier: 'catalog:'
         version: 1.3.2
       is-wsl:
-        specifier: ^3.1.1
+        specifier: 'catalog:'
         version: 3.1.1
       ky:
-        specifier: ^2.1.0
+        specifier: 'catalog:'
         version: 2.1.0
       llm-zoo:
-        specifier: ^1.36.0
+        specifier: 'catalog:'
         version: 1.36.0(zod@4.4.3)
       lru-cache:
-        specifier: ^11.5.2
+        specifier: 'catalog:'
         version: 11.5.2
       mime-types:
-        specifier: ^3.0.1
+        specifier: 'catalog:'
         version: 3.0.2
       nanoid:
-        specifier: ^6.0.1
+        specifier: 'catalog:'
         version: 6.0.1
       nunjucks:
-        specifier: ^3.2.4
+        specifier: 'catalog:'
         version: 3.2.4(chokidar@3.6.0)
       openai:
-        specifier: ^7.10.0
+        specifier: 'catalog:'
         version: 7.10.0(patch_hash=d98512d39fc954483b782c38a6d4417f03559d68c718dfa4cc567382a26eaaf8)(undici@8.10.2)(ws@8.21.3)(zod@4.4.3)
-      p-defer:
-        specifier: ^4.0.1
-        version: 4.0.1
       pathe:
-        specifier: ^2.0.3
+        specifier: 'catalog:'
         version: 2.0.3
       pdf2pic:
-        specifier: ^3.2.0
+        specifier: 'catalog:'
         version: 3.2.0(supports-color@10.2.2)
-      perfect-debounce:
-        specifier: ^2.1.0
-        version: 2.1.0
-      pluralize:
-        specifier: ^8.0.0
-        version: 8.0.0
       postal-mime:
-        specifier: ^3.0.0
+        specifier: 'catalog:'
         version: 3.0.0
-      pretty-bytes:
-        specifier: ^7.1.3
-        version: 7.1.3
       pretty-ms:
-        specifier: ^9.3.1
+        specifier: 'catalog:'
         version: 9.3.1
       quickjs-emscripten-core:
-        specifier: 0.32.0
+        specifier: 'catalog:'
         version: 0.32.0
       safe-stable-stringify:
-        specifier: ^2.5.0
+        specifier: 'catalog:'
         version: 2.5.0
-      serialize-error:
-        specifier: ^13.0.1
-        version: 13.0.1
       shell-quote:
-        specifier: ^1.10.0
+        specifier: 'catalog:'
         version: 1.10.0
       tar:
-        specifier: ^7.5.22
+        specifier: 'catalog:'
         version: 7.5.22
       tree-kill:
-        specifier: ^1.2.2
+        specifier: 'catalog:'
         version: 1.2.2
       turndown:
-        specifier: ^7.2.4
+        specifier: 'catalog:'
         version: 7.2.4
       turndown-plugin-gfm:
-        specifier: ^1.0.2
+        specifier: 'catalog:'
         version: 1.0.2
       undici:
-        specifier: ^8.10.2
+        specifier: 'catalog:'
         version: 8.10.2
       which:
-        specifier: ^5.0.0
+        specifier: 'catalog:'
         version: 5.0.0
       write-file-atomic:
-        specifier: ^7.0.1
+        specifier: 'catalog:'
         version: 7.0.1
       ws:
         specifier: ^8.21.3
         version: 8.21.3
       yaml:
-        specifier: ^2.9.1
+        specifier: 'catalog:'
         version: 2.9.1
     devDependencies:
       '@typescript/native':
-        specifier: npm:typescript@^7.0.2
+        specifier: 'catalog:'
         version: typescript@7.0.2
       effect:
-        specifier: 4.0.0-rc.115
+        specifier: 'catalog:'
         version: 4.0.0-rc.115
       esbuild:
-        specifier: ^0.28.2
+        specifier: 'catalog:'
         version: 0.28.2
       typescript:
-        specifier: npm:@typescript/typescript6@^6.0.2
+        specifier: 'catalog:'
         version: '@typescript/typescript6@6.0.2'
       zod:
-        specifier: ^4.4.3
+        specifier: 'catalog:'
         version: 4.4.3
 
   packages/cli:
@@ -2338,9 +2470,6 @@ packages:
   '@types/nunjucks@3.2.6':
     resolution: {integrity: sha512-pHiGtf83na1nCzliuAdq8GowYiXvH5l931xZ0YEHaLMNFgynpEqx+IPStlu7UaDkehfvl01e4x/9Tpwhy7Ue3w==}
 
-  '@types/pluralize@0.0.33':
-    resolution: {integrity: sha512-JOqsl+ZoCpP4e8TDke9W79FDcSgPAR0l6pixx2JHkhnRjvShyYiAYw2LVsnA7K08Y6DeOnaU6ujmENO4os/cYg==}
-
   '@types/react@19.3.0':
     resolution: {integrity: sha512-N0rFCuH9YoxG9/m61l9MfpJKfmLOVU0em7ipIz6TRgSSkvReLB9vL85GB+yr8Bs5leqpvg96JSwF4ZS1s4viQg==}
 
@@ -3248,10 +3377,6 @@ packages:
     resolution: {integrity: sha512-0R9ikRb668HB7QDxT1vkpuUBtqc53YyAwMwGeUFKRojY/NWKvdZ+9UYtRfGmhqNbRkTSVpMbmyhXipFFv2cb/A==}
     engines: {node: '>= 12'}
 
-  data-uri-to-buffer@7.0.0:
-    resolution: {integrity: sha512-CuRUx0TXGSbbWdEci3VK/XOZGP3n0P4pIKpsqpVtBqaIIuj3GKK8H45oAqA4Rg8FHipc+CzRdUzmD4YQXxv66Q==}
-    engines: {node: '>= 14'}
-
   data-urls@7.0.0:
     resolution: {integrity: sha512-23XHcCF+coGYevirZceTVD7NdJOqVn+49IHyxgszm+JIiHLoB2TkmPtsYkNWT1pvRSGkc35L6NHs0yHkN2SumA==}
     engines: {node: ^20.19.0 || ^22.12.0 || >=24.0.0}
@@ -3285,10 +3410,6 @@ packages:
 
   deep-is@0.1.4:
     resolution: {integrity: sha512-oIPzksmTg4/MriiaYGO+okXDT7ztn/w3Eptv/+gSIdMdKsJo0u4CfYNFJPy+4SKMuCqGw2wxnA+URMg3t8a/bQ==}
-
-  deepmerge@4.3.1:
-    resolution: {integrity: sha512-3sUqbMEc77XqpdNO7FRyRog+eW3ph+GYCbj+rK+uYyRMuwsVy0rMiVtPn+QJlKFvWP/1PYpapqYn0Me2knFn+A==}
-    engines: {node: '>=0.10.0'}
 
   default-browser-id@5.0.1:
     resolution: {integrity: sha512-x1VCxdX4t+8wVfd1so/9w+vQ4vx7lKd2Qp5tDRutErwmR85OgmfX7RlLRMWafRMY7hbEiXIbudNrjOAPa/hL8Q==}
@@ -3636,10 +3757,6 @@ packages:
   fast-xml-parser@5.11.1:
     resolution: {integrity: sha512-TBw6K/fxoQGGjCmZDw9w/ZwP3uDcnTM4YH/g+PFRWr8sbe5idXtxNN6vITh4+1ruCZaho6uBFurElsA7F0zzgw==}
     hasBin: true
-
-  fastest-levenshtein@1.0.16:
-    resolution: {integrity: sha512-eRnCtTTtGZFpQCwhJiUOuxPQWRXVKYDn0b2PeHfXL6/Zi53SLAzAHfVhVWK2AryC/WH05kGfxhFIPvTF0SXQzg==}
-    engines: {node: '>= 4.9.1'}
 
   fd-package-json@2.0.0:
     resolution: {integrity: sha512-jKmm9YtsNXN789RS/0mSzOC1NUq9mkVd65vbSSVsKdjGvYXBuE4oWe2QOEoFeRmJg+lPuZxpmrfFclNhoRMneQ==}
@@ -4513,10 +4630,6 @@ packages:
   ms@2.1.3:
     resolution: {integrity: sha512-6FlzubTLZG3J2a/NVCAleEhjzq5oxgHyaCU9yYXvcLsvoVaHJq/s5xXI6/XXP6tz7R9xAOtHnSO/tXtF3WRTlA==}
 
-  mutative@1.3.0:
-    resolution: {integrity: sha512-8MJj6URmOZAV70dpFe1YnSppRTKC4DsMkXQiBDFayLcDI4ljGokHxmpqaBQuDWa4iAxWaJJ1PS8vAmbntjjKmQ==}
-    engines: {node: '>=14.0'}
-
   mute-stream@0.0.8:
     resolution: {integrity: sha512-nnbWWOkoWyUsTjKrhgD0dcz22mdkSnpYqbEjIm2nhwhuxlSkpywJmBo8h0ZqJdkp73mb90SssHkN4rsRaBAfAA==}
 
@@ -4586,10 +4699,6 @@ packages:
   node-releases@2.0.53:
     resolution: {integrity: sha512-D9UOmYG3UH1V+ENW56t5QXBwJw1YEY18ruVeus89Rw+SyIgjPkCO84bRzO3uNIYosJbNwiabWVn48o3uJLjxFQ==}
     engines: {node: '>=18'}
-
-  non-error@0.1.0:
-    resolution: {integrity: sha512-TMB1uHiGsHRGv1uYclfhivcnf0/PdFp2pNqRxXjncaAsjYMoisaQJI+SSZCqRq+VliwRTC8tsMQfmrWjDMhkPQ==}
-    engines: {node: '>=20'}
 
   nopt@9.0.0:
     resolution: {integrity: sha512-Zhq3a+yFKrYwSBluL4H9XP3m3y5uvQkB/09CwDruCiRmR/UJYnn9W4R48ry0uGC70aeTPKLynBtscP9efFFcPw==}
@@ -4692,10 +4801,6 @@ packages:
     resolution: {integrity: sha512-BZOr3nRQHOntUjTrH8+Lh54smKHoHyur8We1V8DSMVrl5A2malOOwuJRnKRDjSnkoeBh4at6BwEnb5I7Jl31wg==}
     engines: {node: '>=8'}
 
-  p-defer@4.0.1:
-    resolution: {integrity: sha512-Mr5KC5efvAK5VUptYEIopP1bakB85k2IWXaRC0rsh1uwn1L6M0LVml8OIQ4Gudg4oyZakf7FmeRLkMMtZW1i5A==}
-    engines: {node: '>=12'}
-
   p-event@6.0.1:
     resolution: {integrity: sha512-Q6Bekk5wpzW5qIyUP4gdMEujObYstZl6DMMOSenwBvV0BlE5LkDwkjs5yHbZmdCEq2o4RJx4tE1vwxFVf2FG1w==}
     engines: {node: '>=16.17'}
@@ -4793,9 +4898,6 @@ packages:
   pend@1.2.0:
     resolution: {integrity: sha512-F3asv42UuXchdzt+xXqfW1OGlVBe+mxa2mqI0pg5yAHZPvFmY3Y6drSf/GQ1A86WgWEN9Kzh/WrgKa6iGcHXLg==}
 
-  perfect-debounce@2.1.0:
-    resolution: {integrity: sha512-LjgdTytVFXeUgtHZr9WYViYSM/g8MkcTPYDlPa3cDqMirHjKiSZPYd6DoL7pK8AJQr+uWkQvCjHNdiMqsrJs+g==}
-
   picocolors@1.1.1:
     resolution: {integrity: sha512-xceH2snhtb5M9liqDsmEw56le376mTZkEX/jEb/RxNFyegNul7eNslCXP9FDj/Lcu0X8KEyMceP2ntpaHrDEVA==}
 
@@ -4853,10 +4955,6 @@ packages:
     resolution: {integrity: sha512-OpN0zzVdiaiAhxpuuj5efpIS4sY9j7bY6uR5mnj5yPzGkdkjNKSJeUThPb60Jw29QuAZgA4o+/iB49kFiaBX6g==}
     engines: {node: '>=14'}
     hasBin: true
-
-  pretty-bytes@7.1.3:
-    resolution: {integrity: sha512-U2KZ675nqba6XSBppSjU2pRgc9Ffx9+uUtd/RTWYmOawVkZuUbBYuwdtFZQmLv+yMgQ2TQxWWuOpyNje67J9tg==}
-    engines: {node: '>=20'}
 
   pretty-ms@9.3.1:
     resolution: {integrity: sha512-HzMy3Geq23nVALD/M2LliU+F+M+gVNsvkQWWqeBZ8HDiCgzo6YPJ/Omrmtq24EFrIsk0a3EkQGEd7bDOo+IhGA==}
@@ -5083,10 +5181,6 @@ packages:
   send@1.2.1:
     resolution: {integrity: sha512-1gnZf7DFcoIcajTjTwjwuDjzuz4PPcY2StKPlsGAQ1+YH20IRVrBaXSWmdjowTJ6u8Rc01PoYOGHXfP1mYcZNQ==}
     engines: {node: '>= 18'}
-
-  serialize-error@13.0.1:
-    resolution: {integrity: sha512-bBZaRwLH9PN5HbLCjPId4dP5bNGEtumcErgOX952IsvOhVPrm3/AeK1y0UHA/QaPG701eg0yEnOKsCOC6X/kaA==}
-    engines: {node: '>=20'}
 
   serialize-error@7.0.1:
     resolution: {integrity: sha512-8I8TjW5KMOKsZQTvoxjuSIa7foAwPWGOts+6o7sgjz41/qMD9VQHEDxi6PBvK2l0MXUmqZyNpUK+T2tQaaElvw==}
@@ -7278,8 +7372,6 @@ snapshots:
 
   '@types/nunjucks@3.2.6': {}
 
-  '@types/pluralize@0.0.33': {}
-
   '@types/react@19.3.0':
     dependencies:
       csstype: 3.2.3
@@ -8157,8 +8249,6 @@ snapshots:
 
   data-uri-to-buffer@4.0.1: {}
 
-  data-uri-to-buffer@7.0.0: {}
-
   data-urls@7.0.0(@noble/hashes@2.2.0):
     dependencies:
       whatwg-mimetype: 5.0.0
@@ -8187,8 +8277,6 @@ snapshots:
       mimic-response: 3.1.0
 
   deep-is@0.1.4: {}
-
-  deepmerge@4.3.1: {}
 
   default-browser-id@5.0.1: {}
 
@@ -8659,8 +8747,6 @@ snapshots:
       path-expression-matcher: 1.6.2
       strnum: 2.4.2
       xml-naming: 0.3.0
-
-  fastest-levenshtein@1.0.16: {}
 
   fd-package-json@2.0.0:
     dependencies:
@@ -9524,8 +9610,6 @@ snapshots:
 
   ms@2.1.3: {}
 
-  mutative@1.3.0: {}
-
   mute-stream@0.0.8: {}
 
   mz@2.7.0:
@@ -9590,8 +9674,6 @@ snapshots:
       node-addon-api: 7.1.1
 
   node-releases@2.0.53: {}
-
-  non-error@0.1.0: {}
 
   nopt@9.0.0:
     dependencies:
@@ -9710,8 +9792,6 @@ snapshots:
 
   p-cancelable@2.1.1: {}
 
-  p-defer@4.0.1: {}
-
   p-event@6.0.1:
     dependencies:
       p-timeout: 6.1.4
@@ -9788,8 +9868,6 @@ snapshots:
 
   pend@1.2.0: {}
 
-  perfect-debounce@2.1.0: {}
-
   picocolors@1.1.1: {}
 
   picomatch@2.3.2: {}
@@ -9837,8 +9915,6 @@ snapshots:
   prelude-ls@1.2.1: {}
 
   prettier@3.9.6: {}
-
-  pretty-bytes@7.1.3: {}
 
   pretty-ms@9.3.1:
     dependencies:
@@ -10094,11 +10170,6 @@ snapshots:
       statuses: 2.0.2
     transitivePeerDependencies:
       - supports-color
-
-  serialize-error@13.0.1:
-    dependencies:
-      non-error: 0.1.0
-      type-fest: 5.6.0
 
   serialize-error@7.0.1:
     dependencies:

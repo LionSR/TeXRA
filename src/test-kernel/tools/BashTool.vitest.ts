@@ -5,8 +5,7 @@ import { strict as assert } from 'node:assert';
 import { it } from '@effect/vitest';
 
 // Third-party imports
-import pDefer from 'p-defer';
-import { Effect, Exit, Fiber, Schedule } from 'effect';
+import { Deferred, Effect, Exit, Fiber, Schedule } from 'effect';
 import { beforeEach, afterEach, describe, vi } from 'vitest';
 
 // Local imports
@@ -84,11 +83,13 @@ const DONE_EXEC_RESULT: ExecResult = {
  * settles.
  */
 function holdCommand(): (result: ExecResult) => void {
-  const command = pDefer<ExecResult>();
+  const command = Deferred.makeUnsafe<ExecResult>();
   vi.spyOn(execUtils, 'executeCommand').mockImplementation(() =>
-    Effect.promise(() => command.promise),
+    Deferred.await(command),
   );
-  return command.resolve;
+  return (result) => {
+    Deferred.doneUnsafe(command, Effect.succeed(result));
+  };
 }
 
 /** Shared teardown for background-launch cases. */
@@ -893,13 +894,13 @@ describe('BashTool', () => {
     'opens its deferred card before output and interrupts the command with its fiber',
     () =>
       Effect.gen(function* () {
-        const started = pDefer<void>();
+        const started = Deferred.makeUnsafe<void>();
         let commandTornDown = false;
         vi.spyOn(execUtils, 'executeCommand').mockImplementation(
           (_command, options) =>
             Effect.gen(function* () {
               options.onStdout?.('started\n');
-              started.resolve();
+              yield* Deferred.succeed(started, undefined);
               return yield* Effect.never;
             }).pipe(
               Effect.onInterrupt(() =>
@@ -927,7 +928,7 @@ describe('BashTool', () => {
             ),
           ),
         );
-        yield* Effect.promise(() => started.promise);
+        yield* Deferred.await(started);
         assert.deepEqual(hookCalls, ['output:started\n']);
         assert.equal(commandTornDown, false);
         yield* Fiber.interrupt(fiber);

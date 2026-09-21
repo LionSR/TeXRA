@@ -5,7 +5,6 @@
 // runtime objects wherever a test asserts through them.
 
 import { Cause, Deferred, Effect, Exit, Scope, SubscriptionRef } from 'effect';
-import pDefer from 'p-defer';
 import {
   beforeAll,
   beforeEach,
@@ -162,6 +161,7 @@ import {
 import { TEXRA_APPROVAL_POLICY_DEFAULT } from '@shared/approvalPolicy';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
+import { createDeferred } from '@test/support/asyncTestUtils';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
@@ -610,7 +610,7 @@ describe('createChatSessionController', () => {
   });
 
   it('does not surface an intentional stop as an error', async () => {
-    const run = pDefer<never>();
+    const run = createDeferred<never>();
     const session = makeSession();
     mocks.executeAgent.mockReturnValueOnce(run.promise);
     const ctrl = createChatSessionController(makeInit({ session }));
@@ -697,7 +697,7 @@ describe('createChatSessionController', () => {
     mocks.attachTerminalResultToast.mockReturnValue(detachResultToast);
 
     const rootRunResult =
-      pDefer<ToolUseRunResult<typeof RUN_OUTCOME.CANCELLED>>();
+      createDeferred<ToolUseRunResult<typeof RUN_OUTCOME.CANCELLED>>();
     // The launch mints the root run id, so the fixture takes it from the
     // launch instead of naming one of its own.
     mocks.executeAgent.mockImplementationOnce(
@@ -814,8 +814,9 @@ describe('createChatSessionController', () => {
       resultPresenters.add(present);
       return () => resultPresenters.delete(present);
     });
-    const runA = pDefer<ToolUseRunResult<typeof RUN_OUTCOME.CANCELLED>>();
-    const runB = pDefer<ToolUseRunResult<typeof RUN_OUTCOME.FAILED>>();
+    const runA =
+      createDeferred<ToolUseRunResult<typeof RUN_OUTCOME.CANCELLED>>();
+    const runB = createDeferred<ToolUseRunResult<typeof RUN_OUTCOME.FAILED>>();
     mocks.runAgent
       .mockReturnValueOnce(
         Effect.tryPromise({ try: () => runA.promise, catch: ensureError }),
@@ -901,7 +902,7 @@ describe('createChatSessionController', () => {
   });
 
   it('reserves the root-run slot before tryResumeRun awaits persisted state', async () => {
-    const configRead = pDefer<null>();
+    const configRead = createDeferred<null>();
     const session = makeSession({ runCompleted: true });
     // Nothing persisted for the run: the resume gives the slot back once the
     // durable read it waited on resolves.
@@ -923,7 +924,7 @@ describe('createChatSessionController', () => {
   });
 
   it('reserves the root-run slot before resume() awaits the resolution', async () => {
-    const configRead = pDefer<null>();
+    const configRead = createDeferred<null>();
     mocks.getRunRecords.mockReturnValue({
       readConfig: () => configRead.promise,
       exists: async () => false,
@@ -1075,7 +1076,7 @@ describe('createChatSessionController', () => {
     // different run) fires while A is still suspended. Exactly one caller
     // (A) holds the slot end to end, so B must bail out rather than claim it
     // and start work that A would clobber on waking.
-    const configRead = pDefer<null>();
+    const configRead = createDeferred<null>();
     mocks.getRunRecords.mockReturnValue({
       readConfig: () => configRead.promise,
       exists: async () => false,
@@ -1108,7 +1109,7 @@ describe('createChatSessionController', () => {
     // rehydration window, resume() must notice `session.stopRequested` and bail
     // out instead of silently starting the resumed run once the
     // awaits finish.
-    const ensureLoaded = pDefer<void>();
+    const ensureLoaded = createDeferred<void>();
     installSession({
       transcripts: {
         ensureLoaded: () => Effect.promise(() => ensureLoaded.promise),
@@ -1180,7 +1181,7 @@ describe('createChatSessionController', () => {
     // window before `onResumeResolved` has no run to mark: without the
     // re-read at adoption the user's Ctrl-C would leave no recoverable
     // conversation, and any stale run it did find would be the wrong one.
-    const resumeReached = pDefer<void>();
+    const resumeReached = createDeferred<void>();
     const session = makeSession({
       runId: 'd00001' as RunId,
       runCompleted: true,
@@ -1276,7 +1277,7 @@ describe('createChatSessionController', () => {
   });
 
   it('forwards a stop issued during manual resume helper-model setup', async () => {
-    const helperModel = pDefer<void>();
+    const helperModel = createDeferred<void>();
     mocks.setCliHelperModel.mockReturnValueOnce(
       Effect.tryPromise(() => helperModel.promise),
     );
@@ -1377,8 +1378,8 @@ describe('createChatSessionController', () => {
   });
 
   it('keeps an automatic resume cancelled after clear resets session state', async () => {
-    const leaseCheckStarted = pDefer<void>();
-    const releaseLeaseCheck = pDefer<void>();
+    const leaseCheckStarted = createDeferred<void>();
+    const releaseLeaseCheck = createDeferred<void>();
     const session = makeSession({ runCompleted: true });
     let resumeOptions: ResumeRunOptions | undefined;
     mocks.resumeRun.mockImplementationOnce(
@@ -1579,7 +1580,7 @@ describe('createChatSessionController', () => {
   });
 
   it('stops batching once ordinary follow-up routing is ready', async () => {
-    const resume = pDefer<typeof STARTED>();
+    const resume = createDeferred<typeof STARTED>();
     const { ctrl } = makeInterruptedController(Effect.void, true);
     mocks.resumeRun.mockImplementationOnce(
       (_id: RunId, options: ResumeRunOptions) =>
@@ -1680,7 +1681,7 @@ describe('createChatSessionController', () => {
   });
 
   it('does not auto-resume after stop during helper-model setup', async () => {
-    const helperModel = pDefer<void>();
+    const helperModel = createDeferred<void>();
     const session = makeSession({ runCompleted: true });
     const config = makeResumeConfig();
     mocks.setCliHelperModel.mockReturnValueOnce(
