@@ -36,6 +36,66 @@ export function extractFindings(issues) {
   return findings;
 }
 
+// Consumers knip cannot follow. The desktop suites import four source modules
+// through a `file://` URL built at run time (so a suite observes a module
+// instance of its own, fresh across `vi.resetModules()`), which is an edge no
+// static analysis can see: knip reads the module and the suite, finds no
+// import between them, and reports every name the suite destructures as an
+// export with no consumer. Those findings are false — deleting the export
+// breaks the suite — and they sit in the same bucket as a genuinely dead one,
+// which is the signal "a new export needs a consumer in the same PR" depends
+// on (#12084).
+//
+// The exemption is per name, not per file: a name counts as consumed only
+// while a suite that loads that very module still mentions it, so dropping the
+// last use puts the finding straight back in front of the ratchet.
+export const DYNAMIC_MODULE_LOADER =
+  'src/test-kernel/desktop/loadSourceModule.ts';
+
+// The modules the loader can serve, read from its own type table
+// (`'@alias/path': typeof import('@alias/path')`), so a module that leaves the
+// table stops being exempt on the same commit.
+export function parseDynamicModuleSpecifiers(loaderSource) {
+  const specifiers = [
+    ...new Set(
+      [...loaderSource.matchAll(/typeof import\('([^']+)'\)/gu)].map(
+        ([, specifier]) => specifier,
+      ),
+    ),
+  ];
+  if (specifiers.length === 0) {
+    throw new Error(
+      `${DYNAMIC_MODULE_LOADER} declares no dynamically loaded modules; the computed-URL exemption reads that table, so a rewrite of it must update this parser rather than silently exempt nothing (or everything).`,
+    );
+  }
+  return specifiers;
+}
+
+// Splits findings into the ones the ratchet answers for and the ones a suite
+// consumes through the computed-URL loader. `consumers` maps a module's repo
+// path to the sources of the suites that load it.
+export function partitionDynamicConsumers(findings, consumers) {
+  const kept = [];
+  const suppressed = [];
+  for (const finding of findings) {
+    const suiteSources = consumers.get(finding.file);
+    const consumed =
+      suiteSources != null &&
+      (finding.category === 'exports' || finding.category === 'types') &&
+      suiteSources.some((source) =>
+        new RegExp(`\\b${escapeForWordMatch(finding.name)}\\b`, 'u').test(
+          source,
+        ),
+      );
+    (consumed ? suppressed : kept).push(finding);
+  }
+  return { kept, suppressed };
+}
+
+function escapeForWordMatch(name) {
+  return name.replaceAll(/[.*+?^${}()|[\]\\]/gu, String.raw`\$&`);
+}
+
 function normalizeFinding(finding) {
   if (finding.kind) {
     return finding;

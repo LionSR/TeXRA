@@ -10,6 +10,8 @@ const {
   diffFindings,
   extractFindings,
   findingKey,
+  parseDynamicModuleSpecifiers,
+  partitionDynamicConsumers,
   parseKnipIssues,
   readBaseline,
 } = ratchet;
@@ -215,5 +217,48 @@ describe('check-dead-code-ratchet diffFindings', () => {
       newFindings: [],
       resolvedFindings: [{ file: 'a.ts', category: 'exports', name: 'foo' }],
     });
+  });
+});
+
+describe('check-dead-code-ratchet partitionDynamicConsumers', () => {
+  // The exemption is per name: a module the loader serves is not a blanket
+  // pass, or a genuinely dead export added next to a live one would inherit it.
+  it('keeps a name no loading suite mentions and exempts one that is consumed', () => {
+    const consumers = new Map([
+      [
+        'packages/desktop/src/main/platform/electronSecrets.ts',
+        ['const { getSecretStorageMode } = await loadSourceModule(spec);'],
+      ],
+    ]);
+    const findings: KnipFinding[] = [
+      {
+        file: 'packages/desktop/src/main/platform/electronSecrets.ts',
+        category: 'exports',
+        name: 'getSecretStorageMode',
+      },
+      {
+        file: 'packages/desktop/src/main/platform/electronSecrets.ts',
+        category: 'exports',
+        name: 'reallyUnused',
+      },
+      {
+        file: 'src/elsewhere.ts',
+        category: 'exports',
+        name: 'getSecretStorageMode',
+      },
+    ];
+
+    const { kept, suppressed } = partitionDynamicConsumers(findings, consumers);
+
+    expect({ kept, suppressed }).toEqual({
+      kept: [findings[1], findings[2]],
+      suppressed: [findings[0]],
+    });
+  });
+
+  it('refuses a loader that declares no modules rather than exempting nothing quietly', () => {
+    expect(() => parseDynamicModuleSpecifiers('export const x = 1;')).toThrow(
+      /declares no dynamically loaded modules/,
+    );
   });
 });
