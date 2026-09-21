@@ -25,11 +25,14 @@ import { fileURLToPath } from 'node:url';
 
 import { walkFiles } from './walkFiles.mjs';
 
+// Where this script lives: always the real checkout, even when a fixture root
+// is passed. The run vocabulary is production source, not fixture input, so it
+// is read from here rather than from the scanned root.
+const sourceRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
+
 // The optional root argument keeps fixture tests hermetic without duplicating
 // the production path-prefix configuration.
-const repoRoot = process.argv[2]
-  ? resolve(process.argv[2])
-  : join(dirname(fileURLToPath(import.meta.url)), '..');
+const repoRoot = process.argv[2] ? resolve(process.argv[2]) : sourceRoot;
 
 // Files whose prose is read as instructions by an agent or contributor. The
 // nested module READMEs are here for the same reason as the root ones: they
@@ -138,7 +141,7 @@ const EVENT_VOCABULARY_SOURCES = [
 function readEventTypes() {
   const types = new Set();
   for (const source of EVENT_VOCABULARY_SOURCES) {
-    const absolute = join(repoRoot, source);
+    const absolute = join(sourceRoot, source);
     if (!existsSync(absolute)) {
       // Skipping here would silently narrow the checked vocabulary: a rename of
       // sessionEvent.ts would drop every `run.*`/`tool.*`/`request.*` namespace
