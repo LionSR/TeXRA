@@ -384,9 +384,7 @@ class ChildRunInterruptible implements RunInterruptHandler {
     /** The launching caller's own stop, for a durable in-band child. */
     callerStop?: AbortSignal,
   ) {
-    this.detachCallerStop = callerStop
-      ? onAbort(callerStop, () => this.interrupt())
-      : () => {};
+    this.detachCallerStop = onAbort(callerStop, () => this.interrupt());
   }
 
   /** Stop this child: the loop's signal first, then the turn in flight. The
