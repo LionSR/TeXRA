@@ -27,8 +27,7 @@ vi.mock('execa', () => ({ execa: mocks.execa }));
 
 // `clone` is a platform-less entry: it installs the process runtime itself
 // and runs on what it gets back. Here it gets the harness's, so this suite
-// can spy on the runtime the command actually runs its program on. Clone is
-// the only entry these tests reach, so the omit shape is the only one.
+// can spy on the runtime the command actually runs its program on.
 vi.mock('@cli/runtime/cliProcessRuntime', async (importOriginal) => {
   const { testRuntime } = await import('@test/support/testProcessRuntime');
   const { Effect: EffectModule } = await import('effect');

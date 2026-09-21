@@ -91,7 +91,7 @@ ownership map:
 - unwrapping `RunFailure` into its cause, so a Promise embedder catches what
   the launch path threw.
 
-On `/effect` the scope owns each composition instead, so `Runtime.layer` may
+On `/effect` the scope owns each composition instead, so `Sessions.layer` may
 compose the same process again. The two entries differ in lifetime ownership,
 not in run semantics.
 
@@ -105,8 +105,8 @@ independent facts say `/effect` is Tier-1:
 2. `packages/agent/README.md` calls it "the surface," with the root entry as
    its Promise rendering holding "no logic of its own."
 3. It is the entry the repository's **only consumer-shaped artifact** actually
-   imports — `packages/agent/example/effectSession.mjs:16-17` imports
-   `{ Runtime, Sessions }` from `@texra-ai/agent/effect` and `{ nodePlatform }`
+   imports — `packages/agent/example/effectSession.mjs` imports
+   `{ Sessions }` from `@texra-ai/agent/effect` and `{ nodePlatform }`
    from `@texra-ai/agent/node`, installed from a packed tarball "exactly as a
    consumer off the registry would get it."
 
@@ -114,9 +114,9 @@ So the manifest is four entries, and `/effect` is not optional in it.
 
 ## 3. Exact exports
 
-**81 export bindings across the four entries; 69 distinct names** — 12 repeat
-bindings across 11 names deliberately declared from more than one entry. 31
-bindings are values, 50 are types.
+**79 export bindings across the four entries; 67 distinct names** — 12 repeat
+bindings across 11 names deliberately declared from more than one entry. 30
+bindings are values, 49 are types.
 
 Those 11 names in full, since each is a cross-entry commitment that has to be
 changed in every entry at once:
@@ -198,11 +198,10 @@ repeats; the other ten names contribute one each.
 | `RunId`                      | type  | `@shared/schemas` → `identifiers.ts`    |
 | `RunOutcome`                 | type  | `@shared/schemas` → `run.ts`            |
 
-### 3.3 `@texra-ai/agent/effect` — 29 (9 values, 20 types)
+### 3.3 `@texra-ai/agent/effect` — 27 (8 values, 19 types)
 
 | Name                     | Kind  | Defined in                            |
 | ------------------------ | ----- | ------------------------------------- |
-| `Runtime`                | value | `./effect/runtime.js`                 |
 | `Sessions`               | value | `./effect/sessions.js`                |
 | `AgentNotFound`          | value | `./effect/errors.js`                  |
 | `PlatformConflict`       | value | `./effect/errors.js`                  |
@@ -211,7 +210,6 @@ repeats; the other ten names contribute one each.
 | `DatabaseOpenFailed`     | value | `@shared/session/database`            |
 | `DatabaseReadFailed`     | value | `@shared/session/database`            |
 | `aggregateId`            | value | `@shared/schemas` → `sessionEvent.ts` |
-| `AgentRuntime`           | type  | `./effect/runtime.js`                 |
 | `AgentPlatform`          | type  | `./effect/runtime.js`                 |
 | `Session`                | type  | `./effect/sessions.js`                |
 | `Run`                    | type  | `./effect/sessions.js`                |
@@ -247,7 +245,7 @@ The honest count, and the reason publication stays gated:
   named external consumer exists. The manifest therefore describes a surface
   with no installed base — which is exactly when it is cheapest to fix.
 - **In-repo consumer-shaped: one.** `packages/agent/example/effectSession.mjs`,
-  installed from a packed tarball, exercising `/effect` (`Runtime`, `Sessions`,
+  installed from a packed tarball, exercising `/effect` (`Sessions`,
   `session.start`, the tagged refusal) and `/node` (`nodePlatform`). It is the
   only code in the tree that imports the package by its package name.
 - **The three hosts consume none of it.** `extension`, `desktop`, and `cli`
