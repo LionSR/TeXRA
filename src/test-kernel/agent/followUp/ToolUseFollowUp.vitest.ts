@@ -12,7 +12,7 @@ import {
   ToolUseFollowUpQueue,
   type FollowUpConsumerLease,
 } from '@agent/followUp/ToolUseFollowUpQueueManager';
-import type { ToolUseFollowUpTarget } from '@agent/runtime/runRegistry';
+import type { ToolUseFollowUpTarget } from '@agent/runtime/runRegistryTypes';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   AgentResume,

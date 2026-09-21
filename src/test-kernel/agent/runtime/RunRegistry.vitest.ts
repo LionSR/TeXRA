@@ -13,7 +13,7 @@ import type {
 } from '@agent/runtime/RunHandle';
 import { finalizeRunTerminal } from '@agent/runtime/AgentRunLifecycle';
 import { RunRegistry, Runs } from '@agent/runtime/runRegistry';
-import { RunBusy } from '@agent/runtime/runLanes';
+import { RunLive, RunRoster } from '@agent/runtime/runRoster';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { createSessionApprovals } from '@agent/runtime/runApprovalQueue';
 import {
@@ -30,7 +30,10 @@ import {
 import type { RunView } from '@shared/session/sessionView';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
-import { testRunHandle } from '@test/support/runHandleFixtures';
+import {
+  testParkedFibers,
+  testRunHandle,
+} from '@test/support/runHandleFixtures';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { generateRunId } from '@utils/core';
 import { ensureError } from '@utils/errors/errorMessage';
@@ -168,6 +171,7 @@ function createRegistry(
     approvals: createSessionApprovals(),
     finalizeRun: (input) => finalizeRun(testDefaultSession(), input),
     acquireRunClaim: () => Effect.succeed(Effect.void),
+    parked: testParkedFibers(),
     ...options,
   });
   return { events, phases, registry };
@@ -347,22 +351,20 @@ describe('runRegistry', () => {
     'drains when the last run leaves inside the listener-registration window',
     () =>
       Effect.gen(function* () {
-        const { registry } = createRegistry();
+        // The roster owns the drain, so the window is opened on its own
+        // `waitForAnyChange`; the registry only delegates.
+        const roster = new RunRoster(createSessionApprovals());
         const runId = generateRunId();
-        registry.track(createHandle(runId));
-        const register = registry.waitForAnyChange.bind(registry);
-        vi.spyOn(registry, 'waitForAnyChange').mockImplementation((ids) => {
+        roster.setHandle(createHandle(runId));
+        const register = roster.waitForAnyChange.bind(roster);
+        vi.spyOn(roster, 'waitForAnyChange').mockImplementation((ids) => {
           // The departure lands after the active read and before the listener
           // that would have reported it.
-          registry.untrack(runId);
+          roster.deleteHandle(runId);
           return register(ids);
         });
-        try {
-          yield* registry.awaitDrained();
-          expect(registry.getActiveIds()).toEqual([]);
-        } finally {
-          registry.dispose();
-        }
+        yield* roster.awaitDrained();
+        expect(roster.activeIds()).toEqual([]);
       }),
     { timeout: 2000 },
   );
@@ -1452,9 +1454,9 @@ it.effect(
       const removal = registry.withInactiveRunStep(runId, Effect.sync(remove));
       try {
         // Admission before the launch callback begins must already see its slot.
-        expect(yield* Effect.flip(removal)).toBeInstanceOf(RunBusy);
+        expect(yield* Effect.flip(removal)).toBeInstanceOf(RunLive);
         yield* Deferred.await(started);
-        expect(yield* Effect.flip(removal)).toBeInstanceOf(RunBusy);
+        expect(yield* Effect.flip(removal)).toBeInstanceOf(RunLive);
         expect(remove).not.toHaveBeenCalled();
       } finally {
         yield* Deferred.succeed(finish, undefined);
@@ -1465,7 +1467,7 @@ it.effect(
       // A parked turn may have no running generation, but its handle retains ownership.
       const parked = createHandle(runId, generateRunId());
       registry.track(parked);
-      expect(yield* Effect.flip(removal)).toBeInstanceOf(RunBusy);
+      expect(yield* Effect.flip(removal)).toBeInstanceOf(RunLive);
       registry.untrack(runId);
 
       const admitted = yield* Deferred.make<void>();

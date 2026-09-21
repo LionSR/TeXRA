@@ -29,7 +29,7 @@ import { Effect, SubscriptionRef, type Context } from 'effect';
 
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { RunBusy } from '@agent/runtime/runLanes';
+import { RunLive } from '@agent/runtime/runRoster';
 import { Runs } from '@agent/runtime/runRegistry';
 import type {
   SessionApprovals,
@@ -310,7 +310,7 @@ function deleteAdmittedRun(
       )
       .pipe(
         Effect.mapError((error): RequestError => {
-          if (error instanceof RunBusy) return new NotOwner({ runId });
+          if (error instanceof RunLive) return new NotOwner({ runId });
           if (
             error instanceof DatabaseWriteFailed &&
             error.cause instanceof DatabaseClaimRefused

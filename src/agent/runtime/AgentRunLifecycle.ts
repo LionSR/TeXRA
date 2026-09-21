@@ -555,8 +555,10 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
         // than leaving a teardown behind for someone else to invoke (issue
         // #7287). A resumed generation interrupts that fiber where it waits,
         // so the termination below runs only for a stop, never for a run that
-        // started again. The park outlives this scope, so its services travel.
-        const services = yield* Effect.context<AgentRunServices>();
+        // started again. The park outlives this scope on the session's own
+        // parked-fiber map, and the fiber inherits this one's context, so the
+        // termination below names the services it needs instead of carrying a
+        // copy of them.
         yield* runs.park(
           handle,
           ctx.stopped,
@@ -619,7 +621,6 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
               }),
             ),
             Effect.uninterruptible,
-            Effect.provide(services),
           ),
         );
         return result;

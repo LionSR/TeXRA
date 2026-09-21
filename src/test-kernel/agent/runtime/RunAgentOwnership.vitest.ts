@@ -82,6 +82,7 @@ import {
   RUN_OUTCOME,
   type RunId,
 } from '@shared/schemas';
+import { testParkedFibers } from '@test/support/runHandleFixtures';
 import { fakeProcessServices } from '@test/support/setupPlatform';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -370,6 +371,7 @@ describe('runAgent run ownership', () => {
           finalizeRun: ((input: { readonly outcome: string }) =>
             Effect.succeed({ ok: true, outcome: input.outcome })) as never,
           acquireRunClaim: () => Effect.succeed(Effect.void),
+          parked: testParkedFibers(),
         });
         const parked = new RunHandle(
           {
