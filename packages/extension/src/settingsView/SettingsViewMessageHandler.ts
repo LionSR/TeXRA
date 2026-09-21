@@ -306,7 +306,15 @@ export class SettingsViewMessageHandler {
   /**
    * The inbound registry: one settled program per message arm. `run` is this
    * host's R1 boundary — the dispatcher's `MessageHandler` contract is
-   * promise-shaped, so it is the only place a settings message is run.
+   * promise-shaped, so it is the only place a settings message is run, and
+   * the delegates reach the same boundary through `SettingsHandlerContext.run`.
+   *
+   * A tab whose arms all belong to one delegate contributes them as a table it
+   * owns (`...delegate.handlers`), as the desktop's controllers do; what is
+   * spelled out here is what this host performs itself — the profile and model
+   * commands, the Tools dashboard, the generic catalog write, and the two
+   * VS Code-only surfaces (Copilot access, extension installation) that have
+   * no catalog row to derive an arm from.
    */
   private createHandlerRegistry(
     context: vscode.ExtensionContext,
@@ -317,21 +325,7 @@ export class SettingsViewMessageHandler {
     return {
       webviewReady: () =>
         run(this.withActiveWebview((w) => this.sendAllData(w))),
-      getMemoryData: () =>
-        run(
-          this.withActiveWebview((w) => this.memoryHandlers.sendMemoryData(w)),
-        ),
-      getMemoryPreview: (message) =>
-        run(this.memoryHandlers.handleGetMemoryPreview(message)),
-      openMemoryFile: (message) =>
-        run(this.memoryHandlers.handleOpenMemoryFile(message)),
-      openMemoryFolder: () => run(this.memoryHandlers.handleOpenMemoryFolder()),
-      deleteMemory: (message) =>
-        run(this.memoryHandlers.handleDeleteMemory(message)),
-      pinMemory: (message) =>
-        run(this.memoryHandlers.setMemoryPinned(message.storagePath, true)),
-      unpinMemory: (message) =>
-        run(this.memoryHandlers.setMemoryPinned(message.storagePath, false)),
+      ...this.memoryHandlers.handlers,
       signIn: () =>
         run(safeExecuteCommand(AUTH_COMMANDS.SIGN_IN, [], this.viewName)),
       signOut: () =>
@@ -401,26 +395,7 @@ export class SettingsViewMessageHandler {
         run(this.agentHandlers.handleSaveAgentModePreset()),
       deleteAgentModePreset: (message) =>
         run(this.agentHandlers.handleDeleteAgentModePreset(message)),
-      getGitHubTokenStatus: () =>
-        run(
-          this.withActiveWebview((w) =>
-            this.githubHandlers.sendGitHubTokenStatus(w),
-          ),
-        ),
-      setGitHubToken: () => run(this.githubHandlers.handleSetGitHubToken()),
-      removeGitHubToken: () =>
-        run(this.githubHandlers.handleRemoveGitHubToken()),
-      openGitHubTokenUrl: () => run(this.githubHandlers.openGitHubTokenUrl()),
-      getPRSubscriptions: () =>
-        run(
-          this.withActiveWebview((w) =>
-            this.githubHandlers.sendPRSubscriptions(w),
-          ),
-        ),
-      unsubscribePR: (message) =>
-        this.githubHandlers.handleUnsubscribePR(message),
-      openPRSubscriptionStream: (message) =>
-        run(this.githubHandlers.handleOpenPRSubscriptionStream(message)),
+      ...this.githubHandlers.handlers,
       signInChatGpt: () => run(this.chatgptHandlers.handleSignIn()),
       signOutChatGpt: () => run(this.chatgptHandlers.handleSignOut()),
       setChatGptPreferSubscription: (message) =>
@@ -462,12 +437,7 @@ export class SettingsViewMessageHandler {
           ),
         ),
       runToolCommand: (message) => this.handleRunToolCommand(message),
-      applyLatexSettings: (message) =>
-        run(this.latexHandlers.handleApplyLatexSettings(message)),
-      installLatexWorkshop: () =>
-        run(this.latexHandlers.handleInstallLatexWorkshop()),
-      runInstallCommand: (message) =>
-        run(this.latexHandlers.handleRunInstallCommand(message)),
+      ...this.latexHandlers.handlers,
       getInlineCriticismEnabled: () =>
         run(this.withActiveWebview((w) => this.sendInlineCriticismEnabled(w))),
       setInlineCriticismEnabled: (message) =>
@@ -555,6 +525,7 @@ export class SettingsViewMessageHandler {
       withActiveWebview: (fn) => this.withActiveWebview(fn),
       postMessageToActiveWebview: (message) =>
         this.postMessageToActiveWebview(message),
+      run: (program) => this.runtime.runPromise(program),
     };
   }
 

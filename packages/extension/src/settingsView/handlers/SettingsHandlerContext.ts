@@ -2,6 +2,7 @@ import { Cause, Effect, Exit } from 'effect';
 
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import type { Log } from '@logger/logUtils';
+import type { ProcessServices } from '@platform/processRuntime';
 import { ensureError } from '@utils/errors/errorMessage';
 import type { ExtensionContext, Webview } from 'vscode';
 
@@ -29,6 +30,12 @@ export interface SettingsHandlerContext {
     fn: (webview: Webview) => Effect.Effect<void, E, R>,
   ): Effect.Effect<void, E, R>;
   postMessageToActiveWebview(message: unknown): Effect.Effect<void, Error>;
+  /**
+   * This view's R1 boundary. The dispatcher's `MessageHandler` contract is
+   * promise-shaped, so a delegate's inbound arm settles its program here and
+   * nowhere else — one runtime, one settle point, whichever tab owns the arm.
+   */
+  run<A, E>(program: Effect.Effect<A, E, ProcessServices>): Promise<A>;
 }
 
 /**
