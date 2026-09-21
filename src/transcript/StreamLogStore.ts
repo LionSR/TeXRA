@@ -11,12 +11,16 @@
  * (`chatSessionController`).
  *
  * The invariant that makes a missing sequence comparison safe is therefore
- * disjointness, not prefixing: every seed row was either delivered and dropped
- * before the run had a cache entry (a fresh run) or predates the tail's anchor
- * and is never delivered at all (a run resumed across a session boundary,
- * whose seed is a superset of what the tail carries), and every row the tail
- * applies after hydration postdates the seed read. So no permit or sequence
- * comparison decides where the two meet.
+ * disjointness, not prefixing. A transcript row reaches a cache exactly
+ * once: a launch publishes rows only after a run's residency exists, so
+ * every transcript row the tail applies postdates the seed read, and the
+ * pre-anchor rows a seed carries (a run resumed across a session boundary,
+ * whose seed is a superset of what the tail delivers) are never delivered
+ * by the tail. The only rows that can be both seeded and tail-applied are
+ * a fresh run's registration batch, every member of which is a no-op in
+ * `applyEvent` or idempotent (`run.activate` re-sets the status the seed
+ * already set). So no permit or sequence comparison decides where the two
+ * meet.
  */
 import { Effect, type Context } from 'effect';
 
@@ -154,8 +158,10 @@ export class StreamLogStore {
         Effect.onError(() =>
           Effect.sync(() => {
             lease.close();
-            // A residency the caller never acquired leaves no entry behind.
-            this.requestEviction(runId);
+            // A residency the caller never acquired leaves no entry behind,
+            // in either mode: a failed hydration never made anything
+            // resident, so the mode-gated eviction policy does not apply.
+            if (this.runs.get(runId)?.leases === 0) this.runs.delete(runId);
           }),
         ),
       );

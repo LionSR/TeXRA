@@ -1,7 +1,7 @@
 /** Event-backed transcript reads fold the same entries the live recorder does. */
 import { it } from '@effect/vitest';
 import { Effect, Layer } from 'effect';
-import { describe, expect } from 'vitest';
+import { describe, expect, vi } from 'vitest';
 
 import { databaseLayer } from '@controllers/session/Database';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
@@ -11,7 +11,7 @@ import {
   type RunId,
   type SessionEventDraft,
 } from '@shared/schemas';
-import { Database } from '@shared/session/database';
+import { Database, DatabaseReadFailed } from '@shared/session/database';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
 import { StreamLog } from '@shared/session/traceEntries';
 import { createTranscriptFold } from '@shared/session/traceFold';
@@ -156,6 +156,29 @@ describe('StreamLogStore event reads', () => {
           { type: 'run.removed', aggregateId: start.aggregateId },
         ]);
         for (const row of removed) store.acceptCommitted(row);
+        expect(store.get(RUN)).toBeUndefined();
+      }).pipe(Effect.provide(substrate)),
+  );
+  it.effect(
+    'a failed acquisition leaves no stub behind in ephemeral mode either',
+    () =>
+      Effect.gen(function* () {
+        const database = yield* Database;
+        yield* database.appendAll(history);
+        const store = StreamLogStore.open(database, {
+          kind: 'ephemeral',
+          reason: 'test',
+        });
+        const failure = new DatabaseReadFailed({
+          path: 'runs/ab12cd',
+          cause: new Error('KV timeout'),
+        });
+        vi.spyOn(database, 'readAggregate').mockReturnValue(
+          Effect.fail(failure),
+        );
+        expect(yield* Effect.flip(store.acquireRunResidency(RUN))).toBe(
+          failure,
+        );
         expect(store.get(RUN)).toBeUndefined();
       }).pipe(Effect.provide(substrate)),
   );
