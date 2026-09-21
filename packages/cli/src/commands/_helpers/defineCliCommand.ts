@@ -5,7 +5,7 @@ import {
   NO_PLATFORM_INSTALL,
 } from '@cli/runtime/cliProcessRuntime';
 import {
-  platformlessDiagnosticSink,
+  prePlatformDiagnosticSink,
   writeErrorStderr,
 } from '@cli/runtime/logSinks';
 import type { ParsedGlobalArgs } from '@cli/runtime/globalArgs';
@@ -112,17 +112,18 @@ export function defineCliCommand<const A extends ArgsDef, E>(
       // work. Building it here keeps that true for a command that does both.
       const program = options.run(context, runCtx);
       const exitCode = async (): Promise<number> => {
-        if (options.install === 'noPlatform') {
-          // The one sink these two entries ever get, chosen exactly as
-          // `initCliPlatform` chooses one for every other command: no init
-          // runs for them, and the console fallback it would have replaced
-          // puts the runtime build's own DEBUG and INFO lines on stdout,
-          // beside the command's result.
-          setLogSink(
-            context.quietLogs ? silentLogSink : platformlessDiagnosticSink,
-            { trusted: true },
-          );
-        }
+        // The sink that covers the runtime build below, chosen now that the
+        // context has answered `--quiet`. `installCliProcessRuntime` logs
+        // while its layers build (`UsageLogService started …`), and for a
+        // command that brings a platform up `initCliPlatform`'s own
+        // `setLogSink` runs one step later — inside the program this builds
+        // the runtime for. `bin/texra.ts` already put those lines on stderr;
+        // this is where `--quiet` can still silence them, and for the two
+        // platform-less entries it is the one sink they ever get.
+        setLogSink(
+          context.quietLogs ? silentLogSink : prePlatformDiagnosticSink,
+          { trusted: true },
+        );
         const runtime = await installCliProcessRuntime(
           context.storageRoot,
           options.install === 'noPlatform' ? NO_PLATFORM_INSTALL : undefined,
