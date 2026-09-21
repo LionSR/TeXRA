@@ -288,8 +288,8 @@ export class UsagePanel extends LitElement {
     // The bar is a widget that cannot overflow its own track, so it takes the
     // clamped value. The *text* states what the handler measured, floored at
     // 1% so a window that is genuinely in use never reads as `0% context
-    // used` — the rule `formatSubscriptionUsagePercent` sets and the CLI
-    // status bar already applies to this same number.
+    // used` — the rule `roundedContextPercent` sets and the CLI status bar
+    // already applies to this same number.
     const clamped = clamp(utilizationPercent, 0, 100);
     const roundedPercent = roundedContextPercent(utilizationPercent);
     const percentLabel = `${roundedPercent}% context used`;

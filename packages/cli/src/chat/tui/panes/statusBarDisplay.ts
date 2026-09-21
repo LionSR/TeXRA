@@ -292,7 +292,8 @@ function formatUsage(
   // the run reports `inputTokens` here.
   const { inputTokens: used, contextWindow, utilizationPercent } = contextState;
   const percent = roundedContextPercent(utilizationPercent);
-  // Shared with the progress view's context gauge (`fillColor` in UsagePanel).
+  // Reads the run's own `utilizationPercent`, not a used/contextWindow
+  // re-derivation (drifts); shared bands/rounding with UsagePanel's gauge.
   const band = contextGaugeBand(utilizationPercent);
   let color: StatusBarColor = 'dim';
   if (band === 'error') color = COLOR_ERROR;
