@@ -4,12 +4,11 @@ import { Effect } from 'effect';
 
 import { createPlatformAgentDirectories } from '@agent/index';
 import { createSupabaseAuth, type SupabaseAuthShape } from '@auth/SupabaseAuth';
-import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
+import { bootstrapHost } from '@controllers/hostBootstrap';
 import { openAppStateStore } from '@controllers/session/appStateStore';
 import { installProcessRuntime } from '@controllers/session/sessionLayer';
 import { globalDatabaseLayer } from '@controllers/session/Database';
 import { NotificationFailed } from '@hosts/uiHosts';
-import { setDebugModeConfig } from '@logger/logUtils';
 import { initPlatform } from '@platform/platform';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
@@ -23,12 +22,8 @@ import type { PlatformSecrets } from '@platform/secrets';
 import type { ConfigStore } from '@platform/defaults/jsonConfigProvider';
 import { JsonStore, nodeFileServices } from '@platform/defaults/jsonStore';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
-import { installLongRunningModelDispatcher } from '@platform/defaults/longRunningModelTransport';
 import { nodeProcesses } from '@platform/defaults/nodeProcesses';
-import {
-  createNodeWorkspaceRoots,
-  initializeNodeRuntimeSkills,
-} from '@platform/defaults/nodeHost';
+import { createNodeWorkspaceRoots } from '@platform/defaults/nodeHost';
 import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '@platform/languageModel';
 import { openTexraConfigStores } from '@platform/defaults/nodeStores';
 import {
@@ -38,8 +33,6 @@ import {
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { usageLogLayer } from '@telemetry/UsageLogService';
 import { directLeanLanguageServices } from '@tools/lean/direct/directLspAdapter';
-import { seedDisabledToolDefaults } from '@tools/toolAvailability';
-import { initProcessSettingHost } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
@@ -120,7 +113,6 @@ export async function initializeElectronPlatform(
   // own roots (desktopProjects.ts); this pair only backs the window before a
   // folder is open.
   const storage = new WorkspaceStorageProvider(dataRoot, undefined);
-  installLongRunningModelDispatcher();
   // The stores this root serves as `Secrets` and `AppState` open before the
   // runtime that serves them, so both are threaded in as values rather than
   // resolved per call. Opening needs the filesystem and nothing else —
@@ -235,19 +227,16 @@ export async function initializeElectronPlatform(
     workspaceState: workspaceStateStore,
     globalState: globalStateStore,
   });
-  initProcessSettingHost('desktop');
-  // The logger's process-wide debug-mode read, over this host's configuration.
-  setDebugModeConfig(processRoots.config);
-  // TeXRA's account plane (ChatGPT / Grok sign-in). Without this
-  // the model layer is bring-your-own-key. See installTexraAccountProbes.
-  installTexraAccountProbes(secrets);
-
-  // Seed first-install defaults (e.g. disabled tools). No-ops once
-  // DISABLED_TOOLS exists, so upgrading users keep the tools they enabled.
-  await runtime.runPromise(seedDisabledToolDefaults(globalStateStore));
-
-  // Project skills follow each project's session; only the bundle is fixed.
-  initializeNodeRuntimeSkills({ resourcesPath });
+  // Everything this process installs once after its platform exists, in the
+  // order the shared bootstrap owns for all three hosts.
+  await runtime.runPromise(
+    bootstrapHost({
+      host: 'desktop',
+      roots: processRoots,
+      secrets,
+      skills: { resourcesPath },
+    }),
+  );
 
   return {
     processRoots,

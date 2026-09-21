@@ -11,10 +11,9 @@ import {
 } from '@agent/runtime';
 import { createPlatformAgentDirectories } from '@agent/index';
 import type { SupabaseSessionLog } from '@auth/SupabaseSession';
-import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
+import { bootstrapHost } from '@controllers/hostBootstrap';
 import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { consoleLogSink, setLogSink, silentLogSink } from '@logger/logSink';
-import { setDebugModeConfig } from '@logger/logUtils';
 import { initPlatform, tryPlatform, type Platform } from '@platform/platform';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
@@ -30,11 +29,7 @@ import {
   type ProcessRuntime,
 } from '@platform/processRuntime';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
-import { installLongRunningModelDispatcher } from '@platform/defaults/longRunningModelTransport';
-import {
-  createNodeWorkspaceRoots,
-  initializeNodeRuntimeSkills,
-} from '@platform/defaults/nodeHost';
+import { createNodeWorkspaceRoots } from '@platform/defaults/nodeHost';
 import {
   createNodeStorageProvider,
   DEFAULT_NODE_STORAGE_ROOT,
@@ -45,8 +40,6 @@ import { sessionStoreClearedMessage } from '@shared/copy/sessionStore';
 import type { SessionOpenError } from '@shared/session/database';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { registerRuntimeShutdownHandlers } from '@tools/agentCliSessionStores';
-import { seedDisabledToolDefaults } from '@tools/toolAvailability';
-import { initProcessSettingHost } from '@utils/config/platformSettings';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
@@ -314,7 +307,6 @@ export function initCliPlatform(
         const installed = tryPlatform();
         if (installed) return { globalState, platform: installed };
 
-        installLongRunningModelDispatcher();
         const stateStores = yield* openCliWorkspaceState({
           storageRoot: context.storageRoot,
           workspacePath: context.cwd,
@@ -378,10 +370,20 @@ export function initCliPlatform(
           ),
         );
 
-        // Seed first-install defaults (e.g. disabled tools). No-ops for anyone
-        // whose DISABLED_TOOLS list already exists, so upgrading users keep the
-        // tools they enabled.
-        yield* seedDisabledToolDefaults(globalState);
+        // Everything this process installs once beside its platform, in the
+        // order the shared bootstrap owns for all three hosts. Before
+        // `initPlatform` below, not after: its one fallible step (the
+        // first-install tool seed) must fail while the platform is still
+        // private, as the seed did when this body owned it.
+        yield* bootstrapHost({
+          host: 'cli',
+          roots,
+          secrets: cliSecrets,
+          skills: {
+            resourcesPath: context.resourcesPath,
+            skillSourceOptions: context.skillSourceOptions,
+          },
+        });
 
         // Kill agent-spawned OS children before the process dies, exactly as the
         // extension and desktop hosts do. Background `bash` runs are spawned
@@ -404,15 +406,8 @@ export function initCliPlatform(
         });
 
         initPlatform(platform);
-        // The logger's process-wide debug-mode read, over this host's
-        // configuration.
-        setDebugModeConfig(roots.config);
         installedRoots = roots;
         sessionOpen = openSession;
-        initProcessSettingHost('cli');
-        // TeXRA's account plane (ChatGPT / Grok sign-in). Without
-        // this the model layer is bring-your-own-key. See installTexraAccountProbes.
-        installTexraAccountProbes(cliSecrets);
         if (context.installSignalHandlers !== false) {
           installCliShutdownSignalHandlers(lifecycle);
         }
@@ -469,11 +464,6 @@ export function initCliPlatform(
       initializeCliSupabaseAuth(cliServices.secrets, cliPlatformLog);
       supabaseAuthInitialized = true;
     }
-
-    initializeNodeRuntimeSkills({
-      resourcesPath: context.resourcesPath,
-      skillSourceOptions: context.skillSourceOptions,
-    });
 
     return cliServices;
   });
