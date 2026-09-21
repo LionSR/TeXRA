@@ -398,12 +398,6 @@
       "name": "runHeadlessAgent"
     },
     {
-      "file": "packages/cli/src/config/runConfigTui.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "ConfigApp"
-    },
-    {
       "file": "packages/cli/src/runtime/apiStatus.ts",
       "category": "production-dead",
       "kind": "exports",

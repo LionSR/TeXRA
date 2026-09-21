@@ -137,7 +137,7 @@ const refusingGlobalDatabase: Layer.Layer<GlobalDatabase> = Layer.succeed(
  * state store and the global root's database handle that install would
  * otherwise open for it.
  */
-export interface CliProcessRuntimeInstall {
+interface CliProcessRuntimeInstall {
   readonly appState: StateStore;
   readonly globalDatabase: Layer.Layer<GlobalDatabase>;
 }

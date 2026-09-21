@@ -24,7 +24,6 @@ import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 // Local imports - runtime
 import { CliUsageError, type CliContext } from '../runtime/cliContext';
 
-import { NO_PLATFORM_INSTALL } from '../runtime/cliProcessRuntime';
 import { getCliSecrets } from '../runtime/cliSecrets';
 import { CliExitCode } from '../runtime/exitCodes';
 import { askCliQuestion, writeTextStderr } from '../runtime/logSinks';
@@ -195,9 +194,9 @@ export const cloneCommand = withUsageSections(
     // entry installs for them serves a state store and a global-root handle
     // that refuse: clone serves no application state and reads no record, and
     // opening either would create the global storage directory and its
-    // database, which an env-token clone on a read-only storage root must not
-    // require.
-    install: NO_PLATFORM_INSTALL,
+    // database, which an env-token clone on a read-only storage root must
+    // not require.
+    install: 'noPlatform',
     // The project and destination parses are the builder's, above the
     // program: they refuse before anything is installed.
     run: (context, ctx) => {

@@ -6,7 +6,6 @@ import { Effect } from 'effect';
 import { parseGitHubSlug, type GitHubSlug } from '@tools/github/githubSlug';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
-import { NO_PLATFORM_INSTALL } from '../runtime/cliProcessRuntime';
 import { CliExitCode } from '../runtime/exitCodes';
 import { pathExists } from '../runtime/initConfig';
 import { tryOpenBrowser } from '../runtime/browser';
@@ -379,7 +378,7 @@ export const installGithubActionCommand = defineCliCommand({
   // The command brings no platform up: it only scaffolds a workflow file in a
   // git repository, so the runtime its entry installs for the program serves
   // the refusing state store and global-root handle `clone` takes.
-  install: NO_PLATFORM_INSTALL,
+  install: 'noPlatform',
   args: {
     ...GLOBAL_ARGS,
     branch: {
