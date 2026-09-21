@@ -39,7 +39,7 @@ export type SharedRunRow = Extract<
   }
 >;
 
-export type RequestState = {
+type RequestState = {
   readonly payload: PermissionPayload;
   /** The earlier request this one continues: an inquiry's multi-turn. */
   readonly thread: string | null;
@@ -50,7 +50,7 @@ export type RequestState = {
 };
 
 /** A follow-up queued for the run and not yet consumed, as its row holds it. */
-export type PendingFollowUp = Pick<
+type PendingFollowUp = Pick<
   Extract<SessionEvent, { type: 'followup.queued' }>,
   'followUpId' | 'content'
 >;

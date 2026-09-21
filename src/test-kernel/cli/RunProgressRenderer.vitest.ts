@@ -1004,7 +1004,7 @@ describe('CLI run progress renderer', () => {
 
       expect(
         output.split('\n').filter((line) => line.includes('Completed')),
-      ).toEqual(['polish paper.tex · Completed · 0s']);
+      ).toEqual(['[t0] · polish paper.tex · Completed · 0s']);
     }),
   );
 
@@ -1031,7 +1031,7 @@ describe('CLI run progress renderer', () => {
         }),
       );
 
-      expect(output).toContain('\r\x1b[2Kpolish paper.tex · 0s\n');
+      expect(output).toContain('\r\x1b[2K[t0] · polish paper.tex · 0s\n');
     }),
   );
 

@@ -1404,10 +1404,9 @@ function applyOwnArm(run: RunView, event: DisplaySessionEvent): RunView {
     case 'request.decided':
     case 'followup.queued':
     case 'followup.consumed':
-      // Existence cannot become more true (5.2, "Duplicates"): a second start
-      // for a run the view holds is a no-op. The rest move session slices
-      // alone, or are the shared rows `runRows.ts` owns, whose one effect on
-      // the run is the loop position the caller projects.
+      // Existence cannot become more true (5.2, "Duplicates"): a second
+      // start is a no-op. The rest move session slices alone, or are the
+      // shared rows `runRows.ts` owns; the caller projects their position.
       return run;
     case 'run.activate': {
       // Every activation, the launch and each resume, opens a running
