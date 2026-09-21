@@ -18,6 +18,7 @@ import { Effect, Result } from 'effect';
 import { SUPABASE_CONFIG } from '@auth/config';
 import { SupabaseAuth } from '@auth/SupabaseAuth';
 import { parseJsonWith } from '@common/parsing/safeParseJson';
+import { withLogChannel } from '@logger/effectLog';
 import { createLog } from '@logger/logUtils';
 import { filterNotNull } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -102,10 +103,10 @@ export function listRemoteAgents(): Effect.Effect<RemoteAgentListItem[]> {
     return (data ?? []).map(parseListItemRow).filter(filterNotNull);
   }).pipe(
     Effect.catch((error: RemoteAgentListError) =>
-      Effect.sync(() => {
-        log.warn(`Error listing remote agents: ${error.message}`);
-        return [];
-      }),
+      Effect.logWarning(`Error listing remote agents: ${error.message}`).pipe(
+        withLogChannel(CHANNEL),
+        Effect.as([]),
+      ),
     ),
   );
 }

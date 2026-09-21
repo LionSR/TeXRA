@@ -15,14 +15,11 @@ import { normalizeAgentSettingTools } from '@agent/runtime/agentSettingTools';
 import { SupabaseAuth } from '@auth/SupabaseAuth';
 import { parseYamlWith } from '@common/parsing/safeParseYaml';
 import { withLogChannel } from '@logger/effectLog';
-import { createLog } from '@logger/logUtils';
 import { ensureError } from '@utils/errors/errorMessage';
 
 import { fetchRemoteAgentConfigYaml } from './remoteAgentConfigClient';
 import { CHANNEL } from './remoteAgentList';
 import type { RemoteAgentConfig } from './types';
-
-const log = createLog(CHANNEL);
 
 /**
  * Load a remote agent configuration by name. A composition with no account
@@ -98,11 +95,9 @@ export const loadRemoteAgent = Effect.fn('RemoteAgentLoader.loadRemoteAgent')(
     // its own message, not an error-level log line.
     return yield* attempt.pipe(
       Effect.tapError((error: Error) =>
-        Effect.sync(() => {
-          log.error(
-            `Failed to load remote agent "${agentName}": ${error.message}`,
-          );
-        }),
+        Effect.logError(
+          `Failed to load remote agent "${agentName}": ${error.message}`,
+        ).pipe(withLogChannel(CHANNEL)),
       ),
     );
   },

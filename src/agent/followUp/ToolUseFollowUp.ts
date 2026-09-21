@@ -6,6 +6,7 @@ import {
   type RunClassification,
 } from '@agent/runtime/runClassification';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { withLogChannel, withLogData } from '@logger/effectLog';
 import { createLog } from '@logger/logUtils';
 import { AgentResume } from '@platform/interfaces';
 import { ownerPid, type RunId } from '@shared/schemas';
@@ -102,7 +103,8 @@ export function presentFollowUpResult(
   return { severity: 'none' };
 }
 
-const logger = createLog('ToolUseFollowUp');
+const CHANNEL = 'ToolUseFollowUp';
+const logger = createLog(CHANNEL);
 
 export function notifyFollowUpSent(runId: RunId, session: SessionHandle): void {
   session.followUps.notifySent(runId);
@@ -306,11 +308,10 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
       catch: ensureError,
     }).pipe(
       Effect.catch((error) =>
-        Effect.sync(() => {
-          logger.warn(`onAdmitted callback failed for run ${runId}`, {
-            data: { runId, error: String(error) },
-          });
-        }),
+        Effect.logWarning(`onAdmitted callback failed for run ${runId}`).pipe(
+          withLogData({ runId, error: String(error) }),
+          withLogChannel(CHANNEL),
+        ),
       ),
     );
   const dispatch = yield* admitFollowUp(

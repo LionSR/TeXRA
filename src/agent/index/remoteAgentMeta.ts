@@ -2,12 +2,12 @@
 
 import { Effect } from 'effect';
 import { RemoteAgentListError } from '@agent/remote/errorData';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import { AgentCategory } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { AgentEntry } from './agentEntry';
 
-const log = createLog('agentRegistry');
+const CHANNEL = 'agentRegistry';
 
 export function loadRemoteAgents(): Effect.Effect<AgentEntry[]> {
   return Effect.gen(function* () {
@@ -33,10 +33,10 @@ export function loadRemoteAgents(): Effect.Effect<AgentEntry[]> {
     });
   }).pipe(
     Effect.catch((error: RemoteAgentListError) =>
-      Effect.sync(() => {
-        log.warn(`Failed to load remote agents: ${error.message}`);
-        return [];
-      }),
+      Effect.logWarning(`Failed to load remote agents: ${error.message}`).pipe(
+        withLogChannel(CHANNEL),
+        Effect.as([]),
+      ),
     ),
   );
 }

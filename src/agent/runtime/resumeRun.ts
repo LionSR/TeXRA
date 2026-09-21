@@ -19,6 +19,7 @@ import type {
   FollowUpRecoveryLease,
 } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import { getRunRecords } from '@agent/storage/runRecords';
+import { withLogChannel, withLogData } from '@logger/effectLog';
 import { createLog } from '@logger/logUtils';
 import type { RecoveryContinuation } from '@platform/interfaces';
 import type { ProcessServices } from '@platform/processRuntime';
@@ -159,7 +160,8 @@ export const resumeClaimedRun = Effect.fn('resumeClaimedRun')(function* (
   ).pipe(Effect.provideService(Runs, runs));
 }, Effect.uninterruptible);
 
-const log = createLog('ResumeRun');
+const CHANNEL = 'ResumeRun';
+const log = createLog(CHANNEL);
 
 const REFUSED: ResumeRunResult = { failed: 'not_resumable' };
 /** A workflow run carries no follow-up batch, so nothing awaits delivery. */
@@ -390,13 +392,13 @@ function refusalFor(
     return Effect.succeed({ failed: 'finished' });
   }
   if (namesUnusableCheckpoint(error)) {
-    return Effect.sync(() => {
-      log.warn(
-        `Refusing to resume ${runId}: its saved state cannot be continued: ${toErrorMessage(error)}`,
-        { data: error },
-      );
-      return { failed: 'unusable_checkpoint' } as const;
-    });
+    return Effect.logWarning(
+      `Refusing to resume ${runId}: its saved state cannot be continued: ${toErrorMessage(error)}`,
+    ).pipe(
+      withLogData(error),
+      withLogChannel(CHANNEL),
+      Effect.as({ failed: 'unusable_checkpoint' } as const),
+    );
   }
   return Effect.succeed(undefined);
 }

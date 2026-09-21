@@ -1001,9 +1001,11 @@ export class SessionHandle {
     this.graph.detach((append) =>
       job(append).pipe(
         Effect.tapCause((cause) =>
-          Effect.sync(() => {
-            logger.error('Session publication failed', { data: cause });
-          }).pipe(Effect.ignoreCause),
+          Effect.logError('Session publication failed').pipe(
+            withLogData(cause),
+            withLogChannel(CHANNEL),
+            Effect.ignoreCause,
+          ),
         ),
         Effect.exit,
         Effect.tap((exit) =>
@@ -1096,11 +1098,11 @@ export class SessionHandle {
       // defect that ends the caller before that row is written. Interruption
       // still propagates.
       Effect.catchDefect((defect) =>
-        Effect.sync(() => {
-          logger.warn('Session publications could not be settled', {
-            data: defect,
-          });
-        }).pipe(Effect.andThen(Effect.fail(ensureError(defect)))),
+        Effect.logWarning('Session publications could not be settled').pipe(
+          withLogData(defect),
+          withLogChannel(CHANNEL),
+          Effect.andThen(Effect.fail(ensureError(defect))),
+        ),
       ),
     );
   }
@@ -1131,11 +1133,10 @@ export class SessionHandle {
           (listener) =>
             Effect.suspend(() => listener({ ...event, runId: target.id })).pipe(
               Effect.catchCause((cause) =>
-                Effect.sync(() => {
-                  logger.warn('Session result listener threw', {
-                    data: Cause.squash(cause),
-                  });
-                }),
+                Effect.logWarning('Session result listener threw').pipe(
+                  withLogData(Cause.squash(cause)),
+                  withLogChannel(CHANNEL),
+                ),
               ),
             ),
           { discard: true },
@@ -1418,21 +1419,19 @@ export const settleLiveSessionRuns: Effect.Effect<void> = Effect.gen(
         // short, then let it through: the runs behind this one are abandoned
         // by the same deadline rather than walked past as if each had failed.
         Effect.onInterrupt(() =>
-          Effect.sync(() => {
-            logger.warn(
-              `Host exit deadline passed before run ${runId} could settle`,
-            );
-          }),
+          Effect.logWarning(
+            `Host exit deadline passed before run ${runId} could settle`,
+          ).pipe(withLogChannel(CHANNEL)),
         ),
         Effect.catchCause((cause) =>
           Cause.hasInterrupts(cause)
             ? Effect.interrupt
-            : Effect.sync(() => {
-                logger.warn(
-                  `Failed to settle run ${runId} at host exit; a later launch classifies it from its checkpoint`,
-                  { data: Cause.squash(cause) },
-                );
-              }),
+            : Effect.logWarning(
+                `Failed to settle run ${runId} at host exit; a later launch classifies it from its checkpoint`,
+              ).pipe(
+                withLogData(Cause.squash(cause)),
+                withLogChannel(CHANNEL),
+              ),
         ),
       );
     }

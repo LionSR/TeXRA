@@ -1,15 +1,13 @@
 import { Effect } from 'effect';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { withLogChannel } from '@logger/effectLog';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel, withLogData } from '@logger/effectLog';
 import { type FlowSnapshotPayload, type RunId } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { getRunRecords } from './runRecords';
 
 const CHANNEL = 'Resumability';
-const log = createLog(CHANNEL);
 
 /**
  * What the durable run facts alone say about continuing a run: a
@@ -86,13 +84,9 @@ export const checkpointExists = Effect.fn('checkpointExists')(function* (
   return yield* session.ledger.latestSnapshot(runId).pipe(
     Effect.map((snapshot) => snapshot !== null),
     Effect.catch((error) =>
-      Effect.sync(() => {
-        log.warn(
-          `Could not read the checkpoint of ${runId}: ${toErrorMessage(error)}`,
-          { data: error },
-        );
-        return false;
-      }),
+      Effect.logWarning(
+        `Could not read the checkpoint of ${runId}: ${toErrorMessage(error)}`,
+      ).pipe(withLogData(error), withLogChannel(CHANNEL), Effect.as(false)),
     ),
   );
 });

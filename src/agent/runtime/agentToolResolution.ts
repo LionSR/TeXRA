@@ -28,7 +28,7 @@ import { Effect } from 'effect';
 
 import type { RuntimeToolRegistry as IToolRegistry } from '@agent/runtime/ToolServices';
 import type { AgentToolUseSetting } from '@agent/core/definition/AgentDataclass';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import {
   modelOptionsFrom,
   readModelAvailabilityInputs,
@@ -50,7 +50,7 @@ import {
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { ToolInjections } from './toolInjection';
 
-const log = createLog('AgentToolResolution');
+const CHANNEL = 'AgentToolResolution';
 
 interface ResolveAgentToolsInput {
   tools: AgentToolUseSetting['tools'];
@@ -105,14 +105,9 @@ function availableDelegationModelNamesForTools(
     // it surfaces as a defect and fails the run rather than being logged as a
     // degraded annotation.
     Effect.catch((error) =>
-      Effect.sync(() => {
-        log.warn(
-          `Could not load model options for delegation annotation: ${toErrorMessage(
-            error,
-          )}`,
-        );
-        return null;
-      }),
+      Effect.logWarning(
+        `Could not load model options for delegation annotation: ${toErrorMessage(error)}`,
+      ).pipe(withLogChannel(CHANNEL), Effect.as(null)),
     ),
   );
 }

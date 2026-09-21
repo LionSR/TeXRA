@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import { Cause, Effect, Exit, Result } from 'effect';
 
+import { withLogChannel, withLogData } from '@logger/effectLog';
 import { createLog } from '@logger/logUtils';
 import type { RecoveryContinuation } from '@platform/interfaces';
 import {
@@ -21,7 +22,8 @@ import type { Append } from '@shared/session/sessionEvents';
 import { createBoundedIdSet } from '@utils/core/boundedIdSet';
 import type { QueuedFollowUp, RunInput } from './RunInput';
 
-const logger = createLog('ToolUseFollowUpQueue');
+const CHANNEL = 'ToolUseFollowUpQueue';
+const logger = createLog(CHANNEL);
 
 /** What a producer hands the admission boundary. */
 export interface FollowUpQueueInput {
@@ -478,10 +480,9 @@ export class ToolUseFollowUpQueue {
                 }),
           );
         }
-        logger.warn(
+        yield* Effect.logWarning(
           `Follow-up for run ${runId} was not queued: another process holds the run.`,
-          { data: error },
-        );
+        ).pipe(withLogData(error), withLogChannel(CHANNEL));
         return { kind: 'refused', reason: 'owned_elsewhere' };
       }
 
@@ -678,12 +679,9 @@ export class ToolUseFollowUpQueue {
   ): Effect.Effect<void> {
     return release.pipe(
       Effect.catch((error) =>
-        Effect.sync(() => {
-          logger.warn(
-            `Run ${runId}: the claim taken to queue a follow-up was not released`,
-            { data: error },
-          );
-        }),
+        Effect.logWarning(
+          `Run ${runId}: the claim taken to queue a follow-up was not released`,
+        ).pipe(withLogData(error), withLogChannel(CHANNEL)),
       ),
     );
   }

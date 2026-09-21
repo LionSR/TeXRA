@@ -127,10 +127,13 @@ export function scanDirectory(
     return { entries, issues };
   }).pipe(
     Effect.catch((error: AgentScanError) =>
-      Effect.sync(() => {
-        log.error(`Failed to scan ${dir}: ${error.message}`);
-        return { entries: [], issues: [{ path: dir, message: error.message }] };
-      }),
+      Effect.logError(`Failed to scan ${dir}: ${error.message}`).pipe(
+        withLogChannel(CHANNEL),
+        Effect.as({
+          entries: [],
+          issues: [{ path: dir, message: error.message }],
+        }),
+      ),
     ),
   );
 }
