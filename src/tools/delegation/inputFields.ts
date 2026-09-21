@@ -322,13 +322,19 @@ export const resolveInvocationFileList = Effect.fn('resolveInvocationFileList')(
   > {
     return yield* Effect.gen(function* () {
       const { storage, workspace } = session.roots;
-      const references = yield* Effect.tryPromise({
-        try: async () => {
-          const storageRoot = await realpath(storage);
-          const references = await Promise.all(
-            files.map(async (file) => {
-              const absolutePath = workspaceAbsolutePath(workspace, file);
-              const canonicalPath = await realpath(absolutePath);
+      const storageRoot = yield* Effect.tryPromise({
+        try: () => realpath(storage),
+        catch: ensureError,
+      });
+      const references = yield* Effect.forEach(
+        files,
+        (file) => {
+          const absolutePath = workspaceAbsolutePath(workspace, file);
+          return Effect.tryPromise({
+            try: () => realpath(absolutePath),
+            catch: ensureError,
+          }).pipe(
+            Effect.flatMap((canonicalPath) => {
               const relative = path.relative(storageRoot, canonicalPath);
               const storagePath =
                 !path.isAbsolute(relative) &&
@@ -339,8 +345,10 @@ export const resolveInvocationFileList = Effect.fn('resolveInvocationFileList')(
                 storagePath !== undefined &&
                 runStorageLocationUnder(storage, storagePath) === undefined
               ) {
-                throw new Error(
-                  `${file}; workspace-storage files must be declared outputs of a completed child run.`,
+                return Effect.fail(
+                  new Error(
+                    `${file}; workspace-storage files must be declared outputs of a completed child run.`,
+                  ),
                 );
               }
               // Explicit run paths still pass the resolver's symlink rejection,
@@ -349,17 +357,16 @@ export const resolveInvocationFileList = Effect.fn('resolveInvocationFileList')(
                 runStorageLocationUnder(storage, absolutePath) !== undefined
                   ? absolutePath
                   : storagePath;
-              return {
+              return Effect.succeed({
                 file,
                 absolutePath: canonicalPath,
                 runStoragePath,
-              };
+              });
             }),
           );
-          return references;
         },
-        catch: ensureError,
-      });
+        { concurrency: 'unbounded' },
+      );
       // After the paths resolve, as it ran before: a reference this run does
       // not own is refused before anything is probed on disk.
       yield* assertWorkflowFilesExist(workspace, [
