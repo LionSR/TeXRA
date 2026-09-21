@@ -37,6 +37,7 @@ import {
   partitionDynamicConsumers,
   parseKnipIssues,
   readBaseline,
+  referencedIdentifiers,
 } from './check-dead-code-ratchet-core.mjs';
 import { walkFiles } from './walkFiles.mjs';
 
@@ -92,7 +93,8 @@ function dynamicTestConsumers() {
     include: (relativePath) => relativePath.endsWith('.vitest.ts'),
   })
     .map(({ absolutePath }) => readFileSync(absolutePath, 'utf8'))
-    .filter((source) => source.includes('loadSourceModule'));
+    .filter((source) => source.includes('loadSourceModule'))
+    .map((source) => ({ source, names: referencedIdentifiers(source) }));
 
   const consumers = new Map();
   for (const specifier of specifiers) {
@@ -109,9 +111,13 @@ function dynamicTestConsumers() {
         `${DYNAMIC_MODULE_LOADER} declares "${specifier}", which resolves to ${toRepoPath(modulePath)} — a file that does not exist.`,
       );
     }
-    const loadedBy = suites.filter((source) => source.includes(specifier));
-    if (loadedBy.length > 0) {
-      consumers.set(toRepoPath(modulePath), loadedBy);
+    const referenced = new Set();
+    for (const suite of suites) {
+      if (!suite.source.includes(specifier)) continue;
+      for (const name of suite.names) referenced.add(name);
+    }
+    if (referenced.size > 0) {
+      consumers.set(toRepoPath(modulePath), referenced);
     }
   }
   return consumers;

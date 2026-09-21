@@ -14,6 +14,7 @@ const {
   partitionDynamicConsumers,
   parseKnipIssues,
   readBaseline,
+  referencedIdentifiers,
 } = ratchet;
 type KnipFinding = {
   file: string;
@@ -227,7 +228,9 @@ describe('check-dead-code-ratchet partitionDynamicConsumers', () => {
     const consumers = new Map([
       [
         'packages/desktop/src/main/platform/electronSecrets.ts',
-        ['const { getSecretStorageMode } = await loadSourceModule(spec);'],
+        referencedIdentifiers(
+          'const { getSecretStorageMode } = await loadSourceModule(spec);',
+        ),
       ],
     ]);
     const findings: KnipFinding[] = [
@@ -254,6 +257,24 @@ describe('check-dead-code-ratchet partitionDynamicConsumers', () => {
       kept: [findings[1], findings[2]],
       suppressed: [findings[0]],
     });
+  });
+
+  // A name that survives only in prose is not a consumer: the export is dead
+  // and the ratchet has to say so, however long the comment outlives the use.
+  it('does not read a name out of a comment or a string literal as a use', () => {
+    const names = referencedIdentifiers(
+      `// getSecretStorageMode used to be read here.
+       it('covers getSecretStorageMode', () => {
+         expect(somethingElse).toBe(true);
+       });`,
+    );
+
+    expect([...names].toSorted()).toEqual([
+      'expect',
+      'it',
+      'somethingElse',
+      'toBe',
+    ]);
   });
 
   it('refuses a loader that declares no modules rather than exempting nothing quietly', () => {

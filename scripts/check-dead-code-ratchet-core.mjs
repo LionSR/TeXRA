@@ -1,6 +1,9 @@
 // Node.js imports
 import { stripVTControlCharacters } from 'node:util';
 
+// Third-party imports
+import ts from 'typescript';
+
 const EMPTY_COUNTS = { files: 0, exports: 0, types: 0, duplicates: 0 };
 const KNIP_KINDS = new Set(Object.keys(EMPTY_COUNTS));
 
@@ -71,29 +74,42 @@ export function parseDynamicModuleSpecifiers(loaderSource) {
   return specifiers;
 }
 
+// The names a suite really references, read from its syntax rather than its
+// text. A mention inside a comment, a test title or any other string literal
+// is not a consumer, and exempting an export on one would hold a dead name in
+// place for as long as the prose survived.
+export function referencedIdentifiers(source) {
+  const sourceFile = ts.createSourceFile(
+    'suite.ts',
+    source,
+    ts.ScriptTarget.ESNext,
+    false,
+    ts.ScriptKind.TS,
+  );
+  const names = new Set();
+  const visit = (node) => {
+    if (ts.isIdentifier(node)) names.add(node.text);
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return names;
+}
+
 // Splits findings into the ones the ratchet answers for and the ones a suite
 // consumes through the computed-URL loader. `consumers` maps a module's repo
-// path to the sources of the suites that load it.
+// path to the identifiers referenced by the suites that load it.
 export function partitionDynamicConsumers(findings, consumers) {
   const kept = [];
   const suppressed = [];
   for (const finding of findings) {
-    const suiteSources = consumers.get(finding.file);
+    const referenced = consumers.get(finding.file);
     const consumed =
-      suiteSources != null &&
+      referenced != null &&
       (finding.category === 'exports' || finding.category === 'types') &&
-      suiteSources.some((source) =>
-        new RegExp(`\\b${escapeForWordMatch(finding.name)}\\b`, 'u').test(
-          source,
-        ),
-      );
+      referenced.has(finding.name);
     (consumed ? suppressed : kept).push(finding);
   }
   return { kept, suppressed };
-}
-
-function escapeForWordMatch(name) {
-  return name.replaceAll(/[.*+?^${}()|[\]\\]/gu, String.raw`\$&`);
 }
 
 function normalizeFinding(finding) {
