@@ -6,6 +6,7 @@ import { sync as globSync } from 'glob';
 
 import { createLog } from '@logger/logUtils';
 import type { SettingsStores } from '@shared/config/settingsAccess';
+import { normalizeFilePath } from '@utils/core';
 import { runToolWithCheck } from '@utils/system/toolUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '../latexLogging';
@@ -51,7 +52,7 @@ const cleanupBackupFiles = Effect.fn('latex.cleanupBackupFiles')(function* (
     `${fileBaseName}.tex.bak*`,
     `${fileBaseName}.bak*`,
   ].flatMap((pattern) =>
-    globSync(path.join(fileDir, pattern).replaceAll('\\', '/'), {
+    globSync(normalizeFilePath(path.join(fileDir, pattern)), {
       nodir: true,
     }),
   );

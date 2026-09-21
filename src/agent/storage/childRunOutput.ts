@@ -6,6 +6,7 @@ import {
   type RunId,
   type RunStorageFileLocation,
 } from '@shared/schemas';
+import { normalizeFilePath } from '@utils/core';
 import { ensureError } from '@utils/errors/errorMessage';
 import {
   inspectRunStorageEntryUnder,
@@ -64,7 +65,7 @@ export const resolveChildRunOutput = Effect.fn('resolveChildRunOutput')(
     const declared = resultMeta.output.outputs.some(
       (output) =>
         output.location === 'runStorage' &&
-        output.relativePath.replaceAll('\\', '/') === reference.relativePath,
+        normalizeFilePath(output.relativePath) === reference.relativePath,
     );
     if (!declared) {
       return yield* Effect.fail(
