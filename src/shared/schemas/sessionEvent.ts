@@ -55,10 +55,7 @@ import {
   ToolResultPayloadSchema,
 } from './runLedgerEvent';
 import { UserFollowUpSupportSchema, WorktreeInfoSchema } from './run';
-import {
-  ApprovalBypassesSchema,
-  ConversationProgressSchema,
-} from './runState';
+import { ApprovalBypassesSchema, ConversationProgressSchema } from './runState';
 import { TranscriptEventSchemas } from './traceEvent';
 
 /**
