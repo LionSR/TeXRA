@@ -5,9 +5,10 @@
 // that list (`approvalQueue.ts`). This module owns only what a request needs
 // before it can be shown or answered on this host: the CLI policy's own
 // answer for the kinds it settles with nobody to ask, a retry's personal-key
-// lookup and the unattended switch that lookup enables, and the credential
-// work behind a retry on the user's own key — the `useOwnApiKey` capability a
-// decision names instead of answering itself.
+// lookup and the unattended switch that lookup enables, and the decision it
+// lands for the `useOwnApiKey` capability. The credential rules behind that
+// capability are not here — they are `ProgressApiKeyRetryController`'s, the
+// same ones the extension and the desktop switch on.
 //
 // The attached host answers nothing: it stages a tool edit's preview,
 // mirrors bypass state onto its wire, and presents events.
@@ -101,6 +102,10 @@ export function createTuiHostInteractions(
   let disposed = false;
   /** Requests this attachment has already acted on, pruned as they settle. */
   const acted = new Set<string>();
+  /** Retries this host has already landed a personal-credential decision
+   *  for. The fold lags the decision, so this is what tells the switch's own
+   *  program that it landed rather than fell through to a denial. */
+  const switched = new Set<string>();
   /** The undo this guard hands every decision it sends: a refused
    *  `request.decide` answered nothing, and the queue drops its own decided
    *  entry, so this entry must go too or no later level acts on the request
@@ -110,10 +115,6 @@ export function createTuiHostInteractions(
     acted.delete(requestId);
     switched.delete(requestId);
   };
-  /** Retries this host has already landed a personal-credential decision
-   *  for. The fold lags the decision, so this is what tells the switch's own
-   *  program that it landed rather than fell through to a denial. */
-  const switched = new Set<string>();
   /** Retries this host switched without asking, which get the notification. */
   const automaticSwitches = new Set<string>();
 
