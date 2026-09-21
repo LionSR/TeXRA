@@ -835,8 +835,13 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
     }),
   },
 
-  // System dependencies (latexindent, image processing) have moved to the
-  // LaTeX settings tab — see LaTeXTab.ts and SettingsViewMessageHandler.ts.
+  // The system LaTeX and image dependencies are not tool groups: no agent
+  // tool is gated on them, and they are surfaced by the LaTeX settings tab
+  // (LaTeXTab.ts, SettingsViewMessageHandler.ts) and `texra doctor` instead.
+  // Their one catalog — names, per-consumer required/alternative roles, and
+  // the doctor's row semantics — is `LATEX_TOOLS` in
+  // `@shared/constants/latexToolchain`, which lives in `shared` because the
+  // `latex` subsystem reads it too and cannot import `tools`.
 ];
 
 /** Look up a tool definition by id. */

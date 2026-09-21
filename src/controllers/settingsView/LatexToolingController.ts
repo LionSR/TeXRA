@@ -7,26 +7,21 @@ import {
   type LatexSettingsStatus,
 } from '@shared/schemas';
 import {
-  CORE_LATEX_TOOLS,
   DEPENDENCY_INSTALL_COMMANDS,
   HOMEBREW_INSTALL_COMMAND,
-  IMAGE_TOOLS,
+  IMAGE_LATEX_TOOLS,
+  PROBED_LATEX_TOOLS,
   SCOOP_INSTALL_COMMAND,
   SUPPORTED_LATEX_COMPILERS,
   type OSPlatform,
+  type ProbedLatexTool,
 } from '@shared/constants/latexToolchain';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const log = createLog('LatexToolingController');
 
-// `CORE_LATEX_TOOLS`/`IMAGE_TOOLS` (`@shared/constants/latexToolchain`) are the
-// single source of truth for the LaTeX toolchain probe set, shared with
-// `probe_environment`/`verify_setup`. Do not re-list tool names here.
-const LATEX_PROBE_TOOLS = [...CORE_LATEX_TOOLS, ...IMAGE_TOOLS] as const;
-
-type LatexProbeTool = (typeof LATEX_PROBE_TOOLS)[number];
-
-type LatexPathTool = Exclude<LatexProbeTool, 'perl'>;
+/** Perl backs latexindent but is never shown with a path of its own. */
+type LatexPathTool = Exclude<ProbedLatexTool, 'perl'>;
 
 type LatexRecommendedStatus = Pick<
   LatexSettingsStatus,
@@ -34,7 +29,7 @@ type LatexRecommendedStatus = Pick<
 >;
 
 interface LatexToolingControllerDeps {
-  checkToolInstalled(tool: LatexProbeTool): Effect.Effect<boolean>;
+  checkToolInstalled(tool: ProbedLatexTool): Effect.Effect<boolean>;
   findPath(tool: LatexPathTool): string | null;
   detectPackageManager(): LatexSettingsStatus['packageManager'];
   getPlatform(): OSPlatform;
@@ -72,7 +67,7 @@ export class LatexToolingController {
         latexindentInstalled: installed.latexindent && installed.perl,
         texcountInstalled: installed.texcount,
         imageProcessingInstalled:
-          installed.gs && (installed.gm || installed.magick),
+          installed.gs && IMAGE_LATEX_TOOLS.some((tool) => installed[tool]),
         platform: this.deps.getPlatform(),
         pdflatexPath: this.deps.findPath('pdflatex'),
         latexmkPath: this.deps.findPath('latexmk'),
@@ -111,9 +106,9 @@ export class LatexToolingController {
     );
   }
 
-  private checkTools(): Effect.Effect<Record<LatexProbeTool, boolean>> {
+  private checkTools(): Effect.Effect<Record<ProbedLatexTool, boolean>> {
     return Effect.all(
-      LATEX_PROBE_TOOLS.map((tool) =>
+      PROBED_LATEX_TOOLS.map((tool) =>
         Effect.map(
           this.deps.checkToolInstalled(tool),
           (installed) => [tool, installed] as const,
@@ -123,7 +118,7 @@ export class LatexToolingController {
     ).pipe(
       Effect.map(
         (entries) =>
-          Object.fromEntries(entries) as Record<LatexProbeTool, boolean>,
+          Object.fromEntries(entries) as Record<ProbedLatexTool, boolean>,
       ),
     );
   }

@@ -3,9 +3,10 @@ import { Effect } from 'effect';
 
 // Local imports
 import {
-  CORE_LATEX_TOOLS,
-  IMAGE_TOOLS,
+  IMAGE_LATEX_TOOLS,
+  IMAGE_TOOL_LABEL,
   LATEX_WORKSHOP_EXT_ID,
+  PROBED_LATEX_TOOLS,
 } from '@shared/constants/latexToolchain';
 import { checkToolInstalled } from '@utils/system/toolUtils';
 import { findToolInCommonPaths } from '@utils/system/platformPaths';
@@ -19,14 +20,7 @@ interface ToolStatus {
   path?: string;
 }
 
-/**
- * Core dependencies probed by `probe_environment` and `verify_setup`: the
- * LaTeX toolchain plus both image-tool candidates. The image requirement is
- * satisfied by either candidate — see {@link missingCoreTools}.
- */
-const PROBED_CORE_TOOLS = [...CORE_LATEX_TOOLS, ...IMAGE_TOOLS] as const;
-
-const IMAGE_TOOL_NAMES: ReadonlySet<string> = new Set(IMAGE_TOOLS);
+const IMAGE_TOOL_NAMES: ReadonlySet<string> = new Set(IMAGE_LATEX_TOOLS);
 
 /**
  * Resolve a tool as installed by (1) the known-tool check which spawns
@@ -53,8 +47,8 @@ export const locateTool = Effect.fn('locateTool')(function* (
 
 /**
  * Names of the missing core dependencies, given statuses for the whole of
- * {@link PROBED_CORE_TOOLS}. Either image tool satisfies the image
- * requirement, so both absent report a single `gm/magick` entry.
+ * {@link PROBED_LATEX_TOOLS}. Either image tool satisfies the image
+ * requirement, so both absent report a single {@link IMAGE_TOOL_LABEL} entry.
  */
 function missingCoreTools(statuses: readonly ToolStatus[]): string[] {
   const missing = statuses
@@ -63,7 +57,7 @@ function missingCoreTools(statuses: readonly ToolStatus[]): string[] {
   const hasImageTool = statuses.some(
     (tool) => IMAGE_TOOL_NAMES.has(tool.name) && tool.installed,
   );
-  if (!hasImageTool) missing.push('gm/magick');
+  if (!hasImageTool) missing.push(IMAGE_TOOL_LABEL);
   return missing;
 }
 
@@ -78,7 +72,7 @@ export const collectCoreSetupStatus = Effect.fn('collectCoreSetupStatus')(
   function* (platform: SetupPlatformShape) {
     const auth = yield* getSetupAuthStatus();
     const coreTools = yield* Effect.all(
-      PROBED_CORE_TOOLS.map((name) => locateTool(name)),
+      PROBED_LATEX_TOOLS.map((name) => locateTool(name)),
       { concurrency: 'unbounded' },
     );
     const missingCore = missingCoreTools(coreTools);
