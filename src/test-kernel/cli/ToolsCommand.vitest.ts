@@ -1,6 +1,7 @@
 import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { setLogSink } from '@logger/logSink';
 import { createLog, setDebugModeConfig } from '@logger/logUtils';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
@@ -78,6 +79,10 @@ describe('CLI tools command', () => {
   });
 
   afterEach(() => {
+    // `defineCliCommand` installs a sink for every command it runs, and this
+    // file mocks out the init that would replace it, so the process-wide sink
+    // and debug-mode config are this suite's to hand back.
+    setLogSink(null);
     setDebugModeConfig(null);
     stdoutSpy.mockRestore();
     stderrSpy.mockRestore();
