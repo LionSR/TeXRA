@@ -7,7 +7,7 @@
  * the two families cannot drift apart on what a halted run records.
  */
 
-import { Effect } from 'effect';
+import { Cause, Effect } from 'effect';
 import type { AgentTrace } from '@agent/trace';
 import type { RunId, RunOutcome } from '@shared/schemas';
 import { DatabaseWriteFailed } from '@shared/session/database';
@@ -49,17 +49,18 @@ export const recordHalt =
           ])
           .pipe(
             Effect.asVoid,
-            Effect.catch((error) =>
-              error instanceof RunLedgerRefused
+            Effect.catchCause((cause) => {
+              const failure = Cause.squash(cause);
+              return failure instanceof RunLedgerRefused
                 ? Effect.sync(() =>
                     deps.logger.warn('Failed to record the run halt', {
-                      data: error,
+                      data: failure,
                     }),
                   )
-                : error instanceof DatabaseWriteFailed
-                  ? Effect.fail(error)
-                  : Effect.die(error),
-            ),
+                : failure instanceof DatabaseWriteFailed
+                  ? Effect.fail(failure)
+                  : Effect.die(failure);
+            }),
           );
 
 /** The caller's error for a run that ended in a failure cause. */
