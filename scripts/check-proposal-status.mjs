@@ -71,7 +71,6 @@ function statusValue(text) {
         const match = /^status:\s*(.+)$/iu.exec(line.trim());
         if (match) return match[1];
       }
-      return null;
     }
   }
   let seenHeading = false;

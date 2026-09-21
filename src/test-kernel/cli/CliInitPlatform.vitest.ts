@@ -70,10 +70,9 @@ const mocks = vi.hoisted(() => ({
   tryPlatform: vi.fn(),
   publishPlatform: vi.fn(),
   // Collects the programs registered via the (mocked) lifecycle host's
-  // onShutdown so a test can run them and assert the usage-log dispose was
-  // wired.
+  // onShutdown so a test can run them and assert the agent shutdown drain
+  // was wired.
   shutdownHandlers: [] as Array<Effect.Effect<void, unknown>>,
-  /** Records the usage-log dispose when its program runs. */
 }));
 
 vi.mock('@cli/runtime/supabaseAuth', async () => {
