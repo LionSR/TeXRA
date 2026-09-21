@@ -43,12 +43,14 @@ export const sweepLeftoverRuns = Effect.fn('sweepLeftoverRuns')(function* (
     if (target.kind !== 'run') continue;
     const runId = target.id;
     if (running.has(runId)) continue;
-    yield* session.requests.removeRun(runId, 'automatic', row.commit).pipe(
-      Effect.catch((error) =>
-        Effect.logWarning(
-          'A background shell was retained because automatic deletion was refused.',
-        ).pipe(withLogData({ runId, error }), withLogChannel(CHANNEL)),
-      ),
-    );
+    yield* session.requests
+      .removeRun(runId, 'automatic', row.commit)
+      .pipe(
+        Effect.catch((error) =>
+          Effect.logWarning(
+            'A background shell was retained because automatic deletion was refused.',
+          ).pipe(withLogData({ runId, error }), withLogChannel(CHANNEL)),
+        ),
+      );
   }
 });

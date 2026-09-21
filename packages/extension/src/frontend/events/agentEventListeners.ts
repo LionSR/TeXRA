@@ -46,9 +46,9 @@ function warnOnFailure(
 ): Effect.Effect<void> {
   return program.pipe(
     Effect.catchCause((cause) =>
-      Effect.logWarning(
-        `${what}: ${toErrorMessage(Cause.squash(cause))}`,
-      ).pipe(withLogChannel(CHANNEL)),
+      Effect.logWarning(`${what}: ${toErrorMessage(Cause.squash(cause))}`).pipe(
+        withLogChannel(CHANNEL),
+      ),
     ),
   );
 }

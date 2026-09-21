@@ -47,13 +47,15 @@ function cleanupOldRecordings(
     const directory = recordingsDir(roots);
     const fs = yield* FileSystem.FileSystem;
     const cutoff = Date.now() - THREE_DAYS_MS;
-    const names = yield* fs.readDirectory(directory).pipe(
-      Effect.catch((error) =>
-        Effect.logWarning(
-          `Skipped cleanup of ${directory}: ${toErrorMessage(error)}`,
-        ).pipe(withLogChannel(CHANNEL), Effect.as([] as string[])),
-      ),
-    );
+    const names = yield* fs
+      .readDirectory(directory)
+      .pipe(
+        Effect.catch((error) =>
+          Effect.logWarning(
+            `Skipped cleanup of ${directory}: ${toErrorMessage(error)}`,
+          ).pipe(withLogChannel(CHANNEL), Effect.as([] as string[])),
+        ),
+      );
     yield* Effect.forEach(
       names,
       (name) => {

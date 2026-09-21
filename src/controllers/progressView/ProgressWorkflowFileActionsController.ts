@@ -164,17 +164,19 @@ export class ProgressWorkflowFileActionsController {
       let currentContent: string | undefined;
 
       if (backup !== undefined) {
-        currentContent = yield* this.deps.host.readFile(file).pipe(
-          Effect.catch((error) =>
-            Effect.logDebug(
-              `Could not read current content of ${file} before accept`,
-            ).pipe(
-              withLogData(error),
-              withLogChannel(CHANNEL),
-              Effect.as(undefined),
+        currentContent = yield* this.deps.host
+          .readFile(file)
+          .pipe(
+            Effect.catch((error) =>
+              Effect.logDebug(
+                `Could not read current content of ${file} before accept`,
+              ).pipe(
+                withLogData(error),
+                withLogChannel(CHANNEL),
+                Effect.as(undefined),
+              ),
             ),
-          ),
-        );
+          );
       }
 
       let copyMeta: AcceptCopyMeta | undefined;

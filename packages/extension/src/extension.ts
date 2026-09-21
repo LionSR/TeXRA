@@ -991,13 +991,15 @@ async function activateExtension(context: vscode.ExtensionContext) {
       // recompute too: the State 0 card has no other signal when a key is
       // added outside the main view's own round-trip.
       await runtime.runPromise(
-        progressViewProvider.refreshOnboardingFunnel().pipe(
-          Effect.catchCause((cause) =>
-            Effect.logWarning(
-              `Onboarding funnel refresh failed: ${toErrorMessage(Cause.squash(cause))}`,
-            ).pipe(withLogChannel(EXTENSION_CHANNEL)),
+        progressViewProvider
+          .refreshOnboardingFunnel()
+          .pipe(
+            Effect.catchCause((cause) =>
+              Effect.logWarning(
+                `Onboarding funnel refresh failed: ${toErrorMessage(Cause.squash(cause))}`,
+              ).pipe(withLogChannel(EXTENSION_CHANNEL)),
+            ),
           ),
-        ),
       );
     }),
   );

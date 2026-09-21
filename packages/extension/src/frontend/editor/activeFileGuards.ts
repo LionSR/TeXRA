@@ -134,9 +134,10 @@ export function runGuardedLatexCommand<R = never>(
     if (guardResult.status !== 'ok') {
       const failure = GUARD_FAILURE_MESSAGES[guardResult.status];
       const logLine = `Cannot ${action}: ${failure.logTail}`;
-      yield* (failure.level === 'error'
-        ? Effect.logError(logLine)
-        : Effect.logWarning(logLine)
+      yield* (
+        failure.level === 'error'
+          ? Effect.logError(logLine)
+          : Effect.logWarning(logLine)
       ).pipe(withLogChannel(channel));
       return;
     }

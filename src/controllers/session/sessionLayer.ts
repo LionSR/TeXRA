@@ -544,13 +544,15 @@ const sessionHandleLayer = (
             // here rather than escaping `Scope.close` and failing the
             // `invalidate` or `close` that asked for it.
             Effect.ensuring(
-              session.settlePublications().pipe(
-                Effect.catch((error) =>
-                  Effect.logWarning(
-                    `Session ${key.storage} left a failed publication behind as it closed.`,
-                  ).pipe(withLogData(error), withLogChannel(CHANNEL)),
+              session
+                .settlePublications()
+                .pipe(
+                  Effect.catch((error) =>
+                    Effect.logWarning(
+                      `Session ${key.storage} left a failed publication behind as it closed.`,
+                    ).pipe(withLogData(error), withLogChannel(CHANNEL)),
+                  ),
                 ),
-              ),
             ),
           ),
       );

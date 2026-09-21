@@ -55,13 +55,15 @@ const cleanupOldPastedImages = Effect.fn('pastedImage.cleanupOld')(
   function* () {
     const storageFs = yield* StorageFs;
     const cutoff = Date.now() - THREE_DAYS_MS;
-    const names = yield* storageFs.readDirectory(PASTED_DIR).pipe(
-      Effect.catch((error) =>
-        Effect.logWarning(
-          `Skipped cleanup of ${PASTED_DIR}: ${toErrorMessage(error)}`,
-        ).pipe(withLogChannel(CHANNEL), Effect.as([] as string[])),
-      ),
-    );
+    const names = yield* storageFs
+      .readDirectory(PASTED_DIR)
+      .pipe(
+        Effect.catch((error) =>
+          Effect.logWarning(
+            `Skipped cleanup of ${PASTED_DIR}: ${toErrorMessage(error)}`,
+          ).pipe(withLogChannel(CHANNEL), Effect.as([] as string[])),
+        ),
+      );
     yield* Effect.forEach(
       names,
       (name) => {

@@ -234,13 +234,15 @@ export function prepareSurfaceLaunch(
       // on the notice, and a host that cannot show it leaves a warn rather
       // than failing the launch.
       yield* Effect.forkDetach(
-        host.showInfoMessage(infoMessage).pipe(
-          Effect.catchTag('NotificationFailed', (failure) =>
-            Effect.logWarning(
-              `The partial team launch notice could not be shown: ${failure.message}`,
-            ).pipe(withLogChannel(CHANNEL)),
+        host
+          .showInfoMessage(infoMessage)
+          .pipe(
+            Effect.catchTag('NotificationFailed', (failure) =>
+              Effect.logWarning(
+                `The partial team launch notice could not be shown: ${failure.message}`,
+              ).pipe(withLogChannel(CHANNEL)),
+            ),
           ),
-        ),
       );
     }
     return preparation.request;

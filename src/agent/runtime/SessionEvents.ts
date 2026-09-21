@@ -161,10 +161,7 @@ export const sessionEventsLayer = Layer.effect(
             ? Effect.void
             : Effect.logWarning(
                 'Session publisher ended abnormally on close',
-              ).pipe(
-                withLogData(Cause.squash(cause)),
-                withLogChannel(CHANNEL),
-              ),
+              ).pipe(withLogData(Cause.squash(cause)), withLogChannel(CHANNEL)),
         ),
       ),
     );
