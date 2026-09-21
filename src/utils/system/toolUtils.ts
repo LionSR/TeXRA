@@ -23,6 +23,7 @@ import {
   TEXFMT_INSTALL_GUIDE,
   WOLFRAM_INSTALL_GUIDE,
   getInstallGuide,
+  IMAGE_TOOL_LABEL,
 } from '@shared/constants/latexToolchain';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -424,7 +425,7 @@ export const checkCoreDependencies = Effect.fn(
   // Check for either GraphicsMagick or ImageMagick, and add the image tool
   // to the missing list only if neither is installed.
   if (!(yield* detectImageTool())) {
-    missingBasicTools.push('gm/magick');
+    missingBasicTools.push(IMAGE_TOOL_LABEL);
     if (showError) {
       const errorMsg =
         'Neither GraphicsMagick nor ImageMagick is installed. Please install either tool for image processing.\n' +
