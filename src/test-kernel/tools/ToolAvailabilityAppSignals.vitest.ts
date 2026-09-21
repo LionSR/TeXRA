@@ -1,6 +1,6 @@
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect, Layer } from 'effect';
+import { Effect, Fiber, Layer } from 'effect';
 import { afterEach, describe, expect, vi } from 'vitest';
 
 import type { ConfigProvider } from '@platform/interfaces';
@@ -67,24 +67,28 @@ describe('tool availability app signals', () => {
           },
         ],
       }));
-      const { appSignals } = yield* Effect.promise(
+      const { onAppSignal } = yield* Effect.promise(
         () => import('@eventBus/AppSignals'),
       );
       const { refreshToolAvailability } = yield* Effect.promise(
         () => import('@tools/toolAvailability'),
       );
       const events: undefined[] = [];
-      const dispose = appSignals.on('toolAvailabilityChanged', (payload) => {
-        events.push(payload);
-      });
+      // The subscriber drains on its own fiber: the yield lets it register
+      // before the probe publishes, and the wait lets the delivery land.
+      const fiber = yield* Effect.fork(
+        onAppSignal('toolAvailabilityChanged', (payload) => {
+          events.push(payload);
+        }),
+      );
+      yield* Effect.yieldNow;
 
-      try {
-        yield* refreshToolAvailability(probeInputs);
+      yield* refreshToolAvailability(probeInputs);
 
-        expect(events).toEqual([undefined]);
-      } finally {
-        dispose();
-      }
+      yield* Effect.promise(() =>
+        vi.waitFor(() => expect(events).toEqual([undefined])),
+      );
+      yield* Fiber.interrupt(fiber);
     }).pipe(Effect.provide(probeServices)),
   );
 

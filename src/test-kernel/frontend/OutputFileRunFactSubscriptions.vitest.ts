@@ -109,7 +109,7 @@ vi.mock('vscode', () => {
 
 const { createTestSession, publishTestRunStart } =
   await import('@test/support/sessionTestUtils');
-const { appSignals } = await import('@eventBus/AppSignals');
+const { emitAppSignal } = await import('@eventBus/AppSignals');
 const { registerInlineCriticism, setInlineCriticismEnabled } =
   await import('@frontend/latex/inlineCriticism');
 const { registerFileDecorations } =
@@ -208,12 +208,15 @@ describe('output-file run fact frontend subscriptions', () => {
     ).toMatchObject(texraBadge);
 
     const writtenPath = '/tmp/texra-workspace-written.tex';
-    appSignals.emit('workspaceFilesWritten', {
+    emitAppSignal('workspaceFilesWritten', {
       absolutePaths: [writtenPath],
     });
-    expect(
-      provider.provideFileDecoration(vscode.Uri.file(writtenPath)),
-    ).toMatchObject(texraBadge);
+    // The badge lands on the subscriber's own fiber, a turn after the publish.
+    await vi.waitFor(() =>
+      expect(
+        provider.provideFileDecoration(vscode.Uri.file(writtenPath)),
+      ).toMatchObject(texraBadge),
+    );
 
     disposeContext(context);
     expect(

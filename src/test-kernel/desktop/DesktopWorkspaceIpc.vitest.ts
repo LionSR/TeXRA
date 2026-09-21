@@ -18,7 +18,9 @@ import {
 import { createDesktopWorkspaceIpc } from '@desktop/main/desktopWorkspaceIpc';
 import type { DesktopBrowserViews } from '@desktop/main/desktopBrowserViews';
 import type { DesktopPtyHost } from '@desktop/main/desktopPtyHost';
-import { appSignals } from '@eventBus/AppSignals';
+import { Effect } from 'effect';
+
+import { emitAppSignal } from '@eventBus/AppSignals';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
@@ -115,21 +117,28 @@ describe('desktop workspace IPC', () => {
 
   // The file tree caches its listing and there is no filesystem watcher, so a
   // run that accepts output files would leave it stale without this notice.
-  it('tells the renderer to re-list only when a write lands inside the workspace', () => {
+  it('tells the renderer to re-list only when a write lands inside the workspace', async () => {
     const postToRenderer = vi.fn();
     createIpc(postToRenderer);
+    // The IPC's subscription registers on its own fiber of this runtime; let
+    // it reach the hub before publishing, or the writes below reach nobody.
+    await testRuntime().runPromise(Effect.void);
 
-    appSignals.emit('workspaceFilesWritten', {
+    // Both writes are published before either is delivered, and one
+    // subscriber sees them in publication order — so the single call below is
+    // what proves the outside-the-workspace write was ignored.
+    emitAppSignal('workspaceFilesWritten', {
       absolutePaths: [externalPath],
     });
-    expect(postToRenderer).not.toHaveBeenCalled();
-
-    appSignals.emit('workspaceFilesWritten', {
+    emitAppSignal('workspaceFilesWritten', {
       absolutePaths: [externalPath, join(workspacePath, 'paper.tex')],
     });
-    expect(postToRenderer).toHaveBeenCalledExactlyOnceWith({
-      command: DESKTOP_WORKSPACE_COMMANDS.FILES_CHANGED,
-    });
+
+    await vi.waitFor(() =>
+      expect(postToRenderer).toHaveBeenCalledExactlyOnceWith({
+        command: DESKTOP_WORKSPACE_COMMANDS.FILES_CHANGED,
+      }),
+    );
   });
 
   it('lists only direct children and loads nested directories on demand', async () => {

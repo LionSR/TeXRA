@@ -154,7 +154,7 @@ VS Code-free zone and don't add a new subscribe surface. (Ruled in
 emit sites this once grandfathered have since migrated to session-owned
 emission via `SessionHandle.publish` / `SessionEvents`, so a new direct
 `bus.emit` is a violation, not a grandfathered pattern.) This does not restrict
-`appSignals.emit(...)` on the separate `AppSignals` bus within its documented
+`emitAppSignal(...)` on the separate `AppSignals` bus within its documented
 scope.
 
 **One publisher, loop-owned cards.** Every write to a session's event table
