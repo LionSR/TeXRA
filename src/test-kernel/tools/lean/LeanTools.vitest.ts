@@ -10,12 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { findExternalToolDef } from '@tools/externalToolDefs';
 import { resolveWorkspaceRoot } from '@tools/lean/direct/leanServerPool';
-import {
-  listLeanServers,
-  registerLeanServer,
-  unregisterLeanServer,
-  updateLeanServer,
-} from '@tools/lean/leanServerRegistry';
+import { createLeanServerRoster } from '@tools/lean/leanServerRegistry';
 import { extractHoverText } from '@tools/lean/leanTypes';
 import { runLakeCommand } from '@tools/lean/direct/lakeCommands';
 
@@ -102,21 +97,27 @@ describe('resolveWorkspaceRoot', () => {
 // ---------------------------------------------------------------------------
 
 describe('Lean external tool status', () => {
-  afterEach(() => {
-    for (const server of listLeanServers()) unregisterLeanServer(server.id);
-  });
-
   it('counts only starting and running Lean servers as active', async () => {
     const lean = findExternalToolDef('lean4');
     expect(lean?.statusLabel).toBeDefined();
 
-    registerLeanServer({
+    // The roster the host's adapter hands the probe, as the probe passes it on
+    // to the status callbacks.
+    const roster = createLeanServerRoster();
+    const prerequisites = () => ({
+      extensionAvailable: false,
+      lakeAvailable: true,
+      requiresExtension: false,
+      servers: roster.list(),
+    });
+
+    roster.register({
       id: 'direct:/failed',
       workspaceRoot: '/failed',
       mode: 'direct-lsp',
       status: 'error',
     });
-    registerLeanServer({
+    roster.register({
       id: 'direct:/stopped',
       workspaceRoot: '/stopped',
       mode: 'direct-lsp',
@@ -124,28 +125,22 @@ describe('Lean external tool status', () => {
     });
 
     await expect(
-      testRuntime().runPromise(
-        lean!.statusLabel!({ extensionAvailable: false, lakeAvailable: true }),
-      ),
+      testRuntime().runPromise(lean!.statusLabel!(prerequisites())),
     ).resolves.toBeUndefined();
 
-    registerLeanServer({
+    roster.register({
       id: 'direct:/running',
       workspaceRoot: '/running',
       mode: 'direct-lsp',
       status: 'starting',
     });
     await expect(
-      testRuntime().runPromise(
-        lean!.statusLabel!({ extensionAvailable: false, lakeAvailable: true }),
-      ),
+      testRuntime().runPromise(lean!.statusLabel!(prerequisites())),
     ).resolves.toBe('1 server active');
 
-    updateLeanServer('direct:/running', { status: 'running' });
+    roster.update('direct:/running', { status: 'running' });
     await expect(
-      testRuntime().runPromise(
-        lean!.statusLabel!({ extensionAvailable: false, lakeAvailable: true }),
-      ),
+      testRuntime().runPromise(lean!.statusLabel!(prerequisites())),
     ).resolves.toBe('1 server active');
   });
 });

@@ -39,10 +39,11 @@ import {
   GITHUB_POLL_INTERVAL_MS,
 } from '@tools/github/prSubscriptionConstants';
 import { LEAN4_EXTENSION_ID } from '@tools/lean/leanTypes';
+import { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import {
   isLeanServerActive,
-  listLeanServers,
   summarizeLeanServers,
+  type LeanServerInfo,
 } from '@tools/lean/leanServerRegistry';
 import { SetupPlatform } from '@tools/setup/platform';
 import { ZOTERO_PORT_KEY } from '@tools/zotero/bbtClient';
@@ -81,9 +82,8 @@ const ZOTERO_PROBE_TIMEOUT_MS = 2000;
  * Read off what the probed surfaces raise: a dynamic `import()` of a CLI's
  * SDK (the package is absent, or it failed for another reason), the native
  * binary lookup that follows it, and the localhost request the Zotero probe
- * makes (refused, or still unanswered at {@link ZOTERO_PROBE_TIMEOUT_MS}).
- * A tool that is simply not installed is not a failure — it is `check`
- * answering `false`.
+ * makes (refused, or still unanswered at {@link ZOTERO_PROBE_TIMEOUT_MS}). A
+ * tool that is simply not installed is `check` answering `false`.
  */
 type ToolProbeFailureReason =
   | 'module-not-found'
@@ -109,17 +109,19 @@ class ToolProbeFailed extends Data.TaggedError('ToolProbeFailed')<{
 
 /**
  * The process services a group's availability callbacks read: provider
- * credentials, and the host's setup capabilities for the one group whose
- * availability depends on the editor host (Lean 4's VS Code extension).
+ * credentials, the host's setup capabilities for the one group whose
+ * availability depends on the editor host (Lean 4's VS Code extension), and
+ * that host's Lean port, which owns the roster of running servers the same
+ * group reports. All three are `ProcessServices` arms, so every caller of the
+ * availability surface already holds them.
  */
-export type ToolProbeServices = Secrets | SetupPlatform;
+export type ToolProbeServices = Secrets | SetupPlatform | LeanLanguageServices;
 
 /**
  * The asking workspace, carried into a group's probe as data rather than read
  * from an ambient scope: the folder the GitHub group asks whether it is a git
- * repository, and the configuration the Zotero group reads its port from.
- * Every caller of the availability surface already holds both on the roots it
- * opened.
+ * repository, and the configuration the Zotero group reads its port from. Every
+ * caller of the availability surface already holds both on the roots it opened.
  */
 export interface ToolProbeInputs {
   readonly workspaceRoot: string | undefined;
@@ -135,8 +137,8 @@ export interface ExternalToolDef {
   /**
    * Optional shared probe result passed to check/status/detail callbacks.
    * Takes the asking workspace as data — the GitHub group's probe asks whether
-   * that folder is a git repository (#12421), the Zotero group's reads its
-   * port out of that workspace's configuration.
+   * that folder is a git repository (#12421), the Zotero group's reads its port
+   * out of that workspace's configuration.
    */
   readonly probe?: (
     inputs: ToolProbeInputs,
@@ -187,10 +189,9 @@ function fetchLocalhost(
 > {
   // The deadline sits on the request itself, which stays interruptible. A
   // bracket would not do: its acquire phase is uninterruptible, so a timeout
-  // around one cannot cut a connection that never returns headers — exactly
-  // the case this deadline exists for. The fiber's signal is the request's,
-  // so both the deadline and a caller interrupting the probe abort the socket
-  // rather than abandon it.
+  // around one cannot cut a connection that never returns headers. The fiber's
+  // signal is the request's, so both the deadline and a caller interrupting
+  // the probe abort the socket rather than abandon it.
   return Effect.tryPromise({
     try: (signal) => fetch(url, { signal }),
     catch: (cause) =>
@@ -207,8 +208,7 @@ function fetchLocalhost(
     // Status is read off the response before anything can suspend; cancelling
     // the body then frees the socket, since the probe never reads it, and a
     // cancel that itself fails says nothing about availability. An interrupt
-    // arriving instead of this step aborts the request's signal, which tears
-    // the same socket down.
+    // here instead aborts the request's signal, tearing the same socket down.
     Effect.flatMap((response) =>
       Effect.ignore(
         Effect.tryPromise({
@@ -231,10 +231,9 @@ function probeZoteroConnector(port: number): Effect.Effect<boolean> {
 /**
  * The port the Zotero group's own `probe` resolved. The availability layer
  * types a cached probe result `unknown` because the groups are heterogeneous;
- * this one's only ever originates from the Zotero group's own `probe`, and a
- * group that declares a `probe` reaches `check`/`detailCheck` only once that
- * probe has produced a value — the same bridge `prerequisitesChecks` makes for
- * the entries whose callbacks are pure over their prerequisites.
+ * this one's only ever originates from that probe, and a group that declares
+ * one reaches `check`/`detailCheck` only once it has produced a value — the
+ * bridge `prerequisitesChecks` makes for entries with pure callbacks.
  */
 function zoteroProbePort(probeResult: unknown): number {
   return probeResult as number;
@@ -254,9 +253,8 @@ const getGitHubPRPrerequisites = Effect.fn('getGitHubPRPrerequisites')(
     const tokenPresent = (yield* getGitHubToken(secrets)) !== undefined;
     // The probe reports "not a repository" as `false` and never fails;
     // interrupting a dashboard refresh kills its `git` process instead of
-    // abandoning it. An availability probe carries the workspace root the
-    // caller handed it and nothing else: `ExternalToolDef.probe` takes no
-    // setting slots, so the `rev-parse` spawn names none.
+    // abandoning it. An availability probe carries the workspace root and
+    // nothing else: `ExternalToolDef.probe` takes no setting slots.
     const inGitRepo = yield* isGitRepository(workspaceRoot, undefined);
     return { tokenPresent, inGitRepo };
   },
@@ -267,6 +265,8 @@ interface Lean4Prerequisites {
   lakeAvailable: boolean;
   /** The VS Code build drives Lean through the lean4 extension; other hosts spawn `lake` directly. */
   requiresExtension: boolean;
+  /** The host adapter's roster at probe time, read through the Lean port. */
+  servers: readonly LeanServerInfo[];
 }
 
 /** Lean tools work through the extension in VS Code and through `lake` elsewhere. */
@@ -321,8 +321,7 @@ function wslInstallHint(): string {
 
 /**
  * Availability check shared by the SDK-backed CLI integrations (Codex, Claude
- * Code): the dependency is present when its SDK imports and the native binary
- * resolves. Any import or resolution failure counts as unavailable.
+ * Code): present when its SDK imports and the native binary resolves.
  */
 function probeSdkBinaryAvailable(
   importSdk: () => Effect.Effect<unknown, Error>,
@@ -340,10 +339,9 @@ type SdkBinaryStatus =
 
 /**
  * Human-readable probe shared by the SDK-backed CLI integrations (Codex,
- * Claude Code): import the SDK (classifying a missing package specially),
- * then resolve the native binary (appending {@link wslInstallHint} when it is
- * absent). Callers own only the final "ready" line, so the import/binary
- * narrative lives in one place instead of once per entry.
+ * Claude Code): import the SDK (classifying a missing package specially), then
+ * resolve the native binary (appending {@link wslInstallHint} when it is
+ * absent). Callers own only the final "ready" line.
  */
 function probeSdkBinaryStatus(config: {
   importSdk: () => Effect.Effect<unknown, Error>;
@@ -355,8 +353,7 @@ function probeSdkBinaryStatus(config: {
 }): Effect.Effect<SdkBinaryStatus, ToolProbeFailed> {
   return Effect.gen(function* () {
     // Only the import is classified into a message; a binary-resolution
-    // failure stays on the error channel, as it did when it threw past the
-    // import's try/catch.
+    // failure stays on the error channel.
     const importFailure = yield* importProbedSdk(config.importSdk).pipe(
       Effect.as(undefined),
       Effect.catchTag('ToolProbeFailed', (failure) => {
@@ -388,16 +385,13 @@ function probeSdkBinaryStatus(config: {
 /**
  * Wire a prerequisites-style availability entry. `probe` runs once and its
  * result is cached by the availability layer, then handed back to every
- * callback as `probeResult`, typed `unknown` at the `ExternalToolDef`
- * boundary because the dashboard's entries are heterogeneous — each group
- * has its own prerequisites shape `T`. Bridging that cached `unknown` back to
- * `T` happens once, here, in `resolve`: a cache miss (`probeResult`
- * undefined) re-derives it via the entry's own `fallback`, and a
- * hit is cast back to `T`, which is safe because the value only ever
- * originated from this same entry's own `probe`. `check`/`statusLabel`/
- * `detailCheck` then receive the resolved `T` directly and stay pure
- * functions of it, instead of each tool group writing its own
- * `resolve(probeResult)` cast.
+ * callback as `probeResult`, typed `unknown` at the `ExternalToolDef` boundary
+ * because the dashboard's entries are heterogeneous — each group has its own
+ * prerequisites shape `T`. Bridging that cached `unknown` back to `T` happens
+ * once, here, in `resolve`: a cache miss re-derives it via the entry's own
+ * `fallback`, and a hit is cast back to `T`, safe because the value only ever
+ * originated from this entry's own `probe`. `check`/`statusLabel`/`detailCheck`
+ * then receive the resolved `T` directly and stay pure functions of it.
  */
 function prerequisitesChecks<T>(config: {
   probe: (
@@ -405,8 +399,7 @@ function prerequisitesChecks<T>(config: {
   ) => Effect.Effect<T, unknown, ToolProbeServices>;
   /**
    * Re-derives `T` on a cache miss, which the callbacks reach carrying no
-   * probe inputs of their own — so each entry says here what it can still
-   * answer without a workspace.
+   * probe inputs — so each entry says here what it answers without a workspace.
    */
   fallback: () => Effect.Effect<T, unknown, ToolProbeServices>;
   check: (prereqs: T) => boolean;
@@ -435,12 +428,10 @@ function prerequisitesChecks<T>(config: {
  *
  * `win32` takes precedence over any package manager: a global npm install
  * leaves only shell shims on Windows, which TeXRA cannot spawn (see
- * support/externalBinaryUtils.ts), so a CLI with a Windows installer has to
- * use it rather than npm.
+ * support/externalBinaryUtils.ts), so a CLI with a Windows installer uses it.
  *
- * Only managers this command map actually names are probed, so a Linux box
- * with both apt and Linuxbrew still gets the brew command rather than falling
- * through to npm.
+ * Only managers this command map names are probed, so a Linux box with both
+ * apt and Linuxbrew still gets the brew command rather than npm.
  *
  * Definitions call this from an `installCommand` getter so the probe stays
  * lazy — `hasPackageManager()` probes once per manager and caches, so reading
@@ -582,24 +573,32 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
       probe: () =>
         Effect.gen(function* () {
           const setup = yield* SetupPlatform;
+          const lean = yield* LeanLanguageServices;
           const extensionAvailable =
             setup.extensions?.isInstalled(LEAN4_EXTENSION_ID) ?? false;
           const lakeAvailable = findToolInCommonPaths('lake') !== null;
           // The setup port the probe already holds names the running product,
           // and only the VS Code build drives Lean through the extension.
           const requiresExtension = setup.host === 'extension';
-          return { extensionAvailable, lakeAvailable, requiresExtension };
+          return {
+            extensionAvailable,
+            lakeAvailable,
+            requiresExtension,
+            servers: lean.listServers(),
+          };
         }),
       fallback: () =>
-        Effect.succeed({
+        Effect.map(LeanLanguageServices, (lean) => ({
           extensionAvailable: false,
           lakeAvailable: false,
           requiresExtension: false,
-        }),
+          servers: lean.listServers(),
+        })),
       check: leanReady,
       statusLabel: (prerequisites) => {
         if (!leanReady(prerequisites)) return 'Needs setup';
-        const activeCount = listLeanServers().filter(isLeanServerActive).length;
+        const activeCount =
+          prerequisites.servers.filter(isLeanServerActive).length;
         return activeCount > 0
           ? `${formatResultCount(activeCount, 'server')} active`
           : undefined;
@@ -622,7 +621,7 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
           );
         }
         lines.push('');
-        lines.push(summarizeLeanServers());
+        lines.push(summarizeLeanServers(prerequisites.servers));
         return lines.join('\n');
       },
     }),

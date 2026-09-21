@@ -16,10 +16,10 @@ import type { ExtensionContext, Webview } from 'vscode';
  * above — builders, refresh fan-outs, delegate handlers — composes and is
  * settled at this host's R1 boundary: {@link SettingsHandlerContext.run} for
  * the arms a delegate owns, the dispatcher's own local `run` for the arms
- * still spelled out beside it. Both are the same runtime. Three arms sit
+ * still spelled out beside it. Both are the same runtime. Two arms sit
  * outside it: the Copilot access request settles its own runs because the
- * consent call carries a host deadline, and the tool-command and unsubscribe
- * arms are synchronous. A post still completes before a mutation's follow-up,
+ * consent call carries a host deadline, and the tool-command arm is
+ * synchronous. A post still completes before a mutation's follow-up,
  * because the program sequences them.
  *
  * `withActiveWebview` is the shared "run with the active webview" accessor

@@ -6,6 +6,7 @@ import { afterEach, describe, expect, vi } from 'vitest';
 import type { ConfigProvider } from '@platform/interfaces';
 import { Secrets, type PlatformSecrets } from '@platform/secrets';
 import type { ToolProbeInputs } from '@tools/externalToolDefs';
+import { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import { SetupPlatform } from '@tools/setup/platform';
 import { createFakeSetupPlatform } from './setup/fixtures';
 
@@ -43,6 +44,8 @@ const secretsLayer = Secrets.layer({
 const probeServices = Layer.mergeAll(
   secretsLayer,
   SetupPlatform.layer(createFakeSetupPlatform()),
+  // The mocked defs declare no Lean group, so nothing here reads the port.
+  Layer.mock(LeanLanguageServices, { listServers: () => [] }),
 );
 
 afterEach(() => {

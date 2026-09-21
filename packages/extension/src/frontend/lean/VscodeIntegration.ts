@@ -33,10 +33,8 @@ import {
   type PlainTermGoal,
 } from '@tools/lean/leanTypes';
 import {
-  listLeanServers,
-  registerLeanServer,
-  unregisterLeanServer,
-  updateLeanServer,
+  createLeanServerRoster,
+  type LeanServerRoster,
 } from '@tools/lean/leanServerRegistry';
 import type { LeanLanguageServicesShape } from '@tools/lean/leanLanguageServices';
 import { isStrictlyWithin } from '@utils/core/pathCore';
@@ -103,18 +101,20 @@ const LEAN_FEATURE_PROJECT_COMMANDS = new Set<LeanProjectCommand>([
  * Record a workspace folder as having an active VS Code-mediated Lean
  * server. Idempotent — called from every code path that successfully
  * reaches the leanprover.lean4 client provider, so the dashboard reflects
- * actual usage rather than a one-shot snapshot. The registry is the one
- * store of which servers exist: an entry already there is refreshed rather
- * than registered again (registering restarts its uptime clock), and an
- * entry dropped elsewhere is registered afresh.
+ * actual usage rather than a one-shot snapshot. The adapter's roster is the
+ * one store of which servers exist: an entry already there is refreshed
+ * rather than registered again (registering restarts its uptime clock).
  */
-function noteVscodeLeanServer(workspaceRoot: string): void {
+function noteVscodeLeanServer(
+  roster: LeanServerRoster,
+  workspaceRoot: string,
+): void {
   const id = `vscode:${workspaceRoot}`;
-  if (listLeanServers().some((server) => server.id === id)) {
-    updateLeanServer(id, { status: 'running' });
+  if (roster.list().some((server) => server.id === id)) {
+    roster.update(id, { status: 'running' });
     return;
   }
-  registerLeanServer({
+  roster.register({
     id,
     workspaceRoot,
     mode: 'vscode-extension',
@@ -127,15 +127,6 @@ function workspaceRootForFile(absolutePath: string): string {
     vscode.Uri.file(absolutePath),
   );
   return folder?.uri.fsPath ?? path.dirname(absolutePath);
-}
-
-/**
- * Clear all VS Code-mediated entries — called on extension deactivation.
- */
-export function clearVscodeLeanServerEntries(): void {
-  for (const server of listLeanServers()) {
-    if (server.mode === 'vscode-extension') unregisterLeanServer(server.id);
-  }
 }
 
 /**
@@ -361,6 +352,7 @@ function getClientProvider(
  */
 function sendPositionRequest<T>(
   globalState: StateStore,
+  roster: LeanServerRoster,
   absolutePath: string,
   line: number,
   column: number,
@@ -409,7 +401,7 @@ function sendPositionRequest<T>(
       };
     }
 
-    noteVscodeLeanServer(workspaceRootForFile(absolutePath));
+    noteVscodeLeanServer(roster, workspaceRootForFile(absolutePath));
 
     const params = {
       textDocument: { uri: leanUri.toString() },
@@ -431,6 +423,7 @@ function sendPositionRequest<T>(
  * host call fails the effect.
  */
 function fetchDiagnosticsForFile(
+  roster: LeanServerRoster,
   absolutePath: string,
 ): Effect.Effect<FetchDiagnosticsResult> {
   return Effect.gen(function* () {
@@ -455,7 +448,7 @@ function fetchDiagnosticsForFile(
       } satisfies FetchDiagnosticsResult;
     }
 
-    noteVscodeLeanServer(workspaceRootForFile(absolutePath));
+    noteVscodeLeanServer(roster, workspaceRootForFile(absolutePath));
 
     yield* Fiber.join(diagnosticsWait);
     return {
@@ -513,7 +506,10 @@ function executeProjectCommand(
 export function createVscodeLeanLanguageServices(
   globalState: StateStore,
 ): LeanLanguageServicesShape {
+  // This adapter's own roster; a reactivation builds an empty one.
+  const roster = createLeanServerRoster();
   return Object.freeze({
+    listServers: () => roster.list(),
     executeFileCommand: (command, filePath) =>
       executeFileCommand(globalState, command, filePath),
     // Positions are 0-indexed line and column; each of the three position
@@ -521,6 +517,7 @@ export function createVscodeLeanLanguageServices(
     getGoalState: (filePath, line, column) =>
       sendPositionRequest<PlainGoal>(
         globalState,
+        roster,
         filePath,
         line,
         column,
@@ -529,6 +526,7 @@ export function createVscodeLeanLanguageServices(
     getTermGoal: (filePath, line, column) =>
       sendPositionRequest<PlainTermGoal>(
         globalState,
+        roster,
         filePath,
         line,
         column,
@@ -537,12 +535,14 @@ export function createVscodeLeanLanguageServices(
     getHoverInfo: (filePath, line, column) =>
       sendPositionRequest<LspHover>(
         globalState,
+        roster,
         filePath,
         line,
         column,
         'textDocument/hover',
       ),
-    fetchDiagnosticsForFile,
+    fetchDiagnosticsForFile: (filePath) =>
+      fetchDiagnosticsForFile(roster, filePath),
     navigateToFirstError,
     executeProjectCommand: (command) =>
       executeProjectCommand(globalState, command),

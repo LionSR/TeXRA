@@ -58,10 +58,7 @@ import { SupabaseUriHandler } from '@frontend/auth/UriHandler';
 import { createLanguageModelPort } from '@frontend/lm/createLanguageModelPort';
 import { registerLanguageModelTools } from '@frontend/lm/registerLanguageModelTools';
 import { onTexraAuthSessionsChanged } from '@frontend/events/onTexraAuthSessionsChanged';
-import {
-  clearVscodeLeanServerEntries,
-  createVscodeLeanLanguageServices,
-} from '@frontend/lean/VscodeIntegration';
+import { createVscodeLeanLanguageServices } from '@frontend/lean/VscodeIntegration';
 import { resolveGitCommonRoot } from '@frontend/git/resolveGitRoot';
 import { registerInlineCriticism } from '@frontend/latex/inlineCriticism';
 import {
@@ -75,11 +72,7 @@ import * as logger from '@logger/logUtils';
 import { setLogSink } from '@logger/logSink';
 import { formatFatalErrorDetail } from '@logger/redaction';
 import { invalidateRuntimeModelRegistry } from '@model/runtimeModelRegistry';
-import {
-  SHUTDOWN_PHASE,
-  type AgentResumePort,
-  type LifecycleHost,
-} from '@platform/interfaces';
+import type { AgentResumePort, LifecycleHost } from '@platform/interfaces';
 import { installLongRunningModelDispatcher } from '@platform/defaults/longRunningModelTransport';
 import { initPlatform, type Platform } from '@platform/platform';
 import type { ProcessRuntime } from '@platform/processRuntime';
@@ -123,7 +116,6 @@ import {
 } from '@tools/github/githubAuth';
 import { killActiveRecording } from '@tools/media/audio';
 import { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
-import { setInlineCommentProvider } from '@tools/comment/InlineCommentTool';
 import {
   initProcessSettingHost,
   readSettingFrom,
@@ -272,6 +264,10 @@ async function initVscodePlatform(
       acquire: (configuration) =>
         acquireVscodeLanguageModel(context, configuration),
     },
+    // The Comments UI behind the `inline_comment` tool. The provider reads
+    // the controller this host registers at activation, so it is a value
+    // from module load; nothing about it waits on that registration.
+    inlineComments: getInlineCommentProvider(),
     // Lean through the Lean 4 extension, not a direct `lake` pool.
     lean: LeanLanguageServices.layer(
       createVscodeLeanLanguageServices(globalState),
@@ -663,10 +659,6 @@ async function activateExtension(context: vscode.ExtensionContext) {
   const workspaceState = gitRepoRoot
     ? new WorktreeStateStore(workspaceMemento, globalState, gitRepoRoot)
     : workspaceMemento;
-  lifecycle.onShutdown(
-    SHUTDOWN_PHASE.ON,
-    Effect.sync(() => clearVscodeLeanServerEntries()),
-  );
   const languageModel = createLanguageModelPort(context);
   // Shared `~/.texra` storage root (one history across CLI/desktop/extension,
   // #8622).
@@ -871,7 +863,6 @@ async function activateExtension(context: vscode.ExtensionContext) {
   context.subscriptions.push({ dispose: disposeGitHubAuthListener });
   registerInlineCriticism(context, runtime, runtimeSession);
   registerInlineComments(context);
-  setInlineCommentProvider(getInlineCommentProvider());
 
   statusBarItem = vscode.window.createStatusBarItem(
     'texra.taskStatus',

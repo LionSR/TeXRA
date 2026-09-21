@@ -11,6 +11,7 @@ import {
   globalStorageFsTestLayer,
   nodePlatformLayer,
 } from '@test/support/fsTestUtils';
+import { gitHubSubscriptionsLayer } from '@tools/github/subscriptionRegistries';
 import {
   LeanLanguageServices,
   type LeanLanguageServicesShape,
@@ -28,6 +29,7 @@ const unreadProcessService = (): never => {
   throw new Error('The CLI auth edge reads no process services.');
 };
 const unavailableLeanLanguageServices: LeanLanguageServicesShape = {
+  listServers: () => [],
   executeFileCommand: () =>
     Effect.die(
       new Error('LeanLanguageServices is not configured in this test'),
@@ -188,6 +190,8 @@ async function loadSupabaseAuth() {
         onDidChange: unreadProcessService,
       }),
       Layer.mock(AgentResume, { tryResumeRun: unreadProcessService }),
+      // Plain in-memory ownership tables; the auth edge binds nothing.
+      gitHubSubscriptionsLayer,
       SetupPlatform.layer({ host: 'cli', signIn: () => Effect.succeed(false) }),
       ToolInjections.layer([]),
     ),

@@ -89,6 +89,8 @@ export function directLeanLanguageServices(
 const portOverPool = (
   pool: LeanServerPool['Service'],
 ): LeanLanguageServicesShape => ({
+  listServers: () => pool.listServers(),
+
   fetchDiagnosticsForFile: (file, runId) =>
     foldStopped(pool.fetchDiagnosticsForFile(file, runId), () => ({
       ok: false,
