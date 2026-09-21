@@ -139,7 +139,13 @@ function readEventTypes() {
   const types = new Set();
   for (const source of EVENT_VOCABULARY_SOURCES) {
     const absolute = join(repoRoot, source);
-    if (!existsSync(absolute)) continue;
+    if (!existsSync(absolute)) {
+      // Skipping here would silently narrow the checked vocabulary: a rename of
+      // sessionEvent.ts would drop every `run.*`/`tool.*`/`request.*` namespace
+      // and the gate would still exit 0, which is the exact silent drift it
+      // exists to catch.
+      throw new Error(`event vocabulary source not found: ${source}`);
+    }
     const text = readFileSync(absolute, 'utf8');
     for (const [, name] of text.matchAll(
       /\b(?:durable|trace)\(\s*'([^']+)'/g,
