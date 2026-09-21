@@ -273,8 +273,16 @@ export function createDesktopSupabaseAuth(
       if (Exit.isFailure(cleared)) throw settleFailure(cleared.cause);
     },
 
+    /**
+     * Closing this window unsubscribes it from the protocol router, and
+     * nothing more: on macOS the process outlives its last window, so a
+     * sign-in the user is still completing in the browser must keep its
+     * pending record. The router queues that callback and the next window's
+     * coordinator adopts it, exactly as a cold start does. Cancelling here
+     * would erase the record and refuse the callback instead; the attempt's
+     * own deadline still clears it when nobody completes the sign-in.
+     */
     dispose() {
-      runtime.runFork(coordinator.cancel());
       subscription.dispose();
     },
   };

@@ -142,6 +142,13 @@ export class SupabaseSignInCoordinator {
   private readonly commits = new SerializedWrites();
   /** Serializes callback claims, so two windows cannot claim one attempt. */
   private readonly claims = new SerializedWrites();
+  /**
+   * Every nonce this coordinator minted. A claimed callback whose nonce is
+   * not one of them belongs to another window or to an earlier process, so it
+   * completes unattended instead of being mistaken for this coordinator's own
+   * superseded attempt. One hex string per interactive sign-in.
+   */
+  private readonly minted = new Set<string>();
   private active: SignInAttempt | undefined;
 
   constructor(private readonly options: SupabaseSignInCoordinatorOptions) {}
@@ -179,14 +186,17 @@ export class SupabaseSignInCoordinator {
     const nonce = callbackNonce(uri.query ?? '');
     return this.processCallback(uri, nonce).pipe(
       Effect.catchCause((cause) =>
-        Effect.sync(() => {
+        Effect.gen({ self: this }, function* () {
           const error = ensureError(settleFailure(cause));
           log.error(`Error processing OAuth callback: ${error.message}`);
+          const outcome = { kind: 'failed', message: error.message } as const;
           const attempt = this.attemptFor(nonce);
-          if (attempt) {
-            Deferred.doneUnsafe(attempt.outcome, Effect.fail(error));
-          }
-          return { kind: 'failed', message: error.message } as const;
+          // An attempt words the failure for its own caller; a callback with
+          // no attempt waiting in this process has only the transport, so a
+          // delivery to another window still reaches the user.
+          if (attempt) Deferred.doneUnsafe(attempt.outcome, Effect.fail(error));
+          else yield* this.options.transport.announce(outcome);
+          return outcome;
         }),
       ),
     );
@@ -266,13 +276,17 @@ export class SupabaseSignInCoordinator {
 
       const settled = Deferred.await(attempt.outcome);
       // A completed callback supersedes the launcher result, while a callback
-      // failure or cancellation still preempts a stalled launcher.
-      yield* Effect.raceFirst(
-        this.options.transport.presentSignInUrl(data.url),
-        Effect.asVoid(settled),
-      );
-
-      const session = yield* settled.pipe(
+      // failure or cancellation still preempts a stalled launcher. The
+      // deadline covers the presentation as well as the wait after it: a
+      // browser launcher or a host dialog that never answers must not strand
+      // the attempt past the life of its own pending record.
+      const session = yield* Effect.andThen(
+        Effect.raceFirst(
+          this.options.transport.presentSignInUrl(data.url),
+          Effect.asVoid(settled),
+        ),
+        settled,
+      ).pipe(
         Effect.timeoutOption(request.timeoutMs ?? AUTH_CALLBACK_TIMEOUT_MS),
         Effect.flatMap((completed) =>
           Option.isSome(completed)
@@ -303,7 +317,7 @@ export class SupabaseSignInCoordinator {
       }
 
       const attempt = this.attemptFor(claimed.nonce);
-      if (!attempt && this.active) {
+      if (!attempt && this.minted.has(claimed.nonce)) {
         log.debug(
           'OAuth callback ignored after its sign-in attempt was superseded',
         );
@@ -320,16 +334,25 @@ export class SupabaseSignInCoordinator {
         return yield* this.refuse(attempt, result);
       }
 
-      yield* this.commits.run(
+      // The attempt can be superseded at any suspension point, and the code
+      // exchange above is the slowest of them. Ownership is therefore
+      // re-checked on the commit lane, before the store rather than after it:
+      // storing first would overwrite whatever session is current, and
+      // clearing it afterwards would leave the user signed out of a session
+      // this callback never owned.
+      const stored = yield* this.commits.run(
         Effect.gen({ self: this }, function* () {
+          if (attempt && this.active !== attempt) return false;
           yield* this.session.storeSession(result.session);
-          // The attempt can be superseded at any suspension point. Once it is,
-          // the session just stored must not stay.
-          if (attempt && this.active !== attempt) {
-            yield* this.session.clearSessionIfCurrent(result.session);
-          }
+          return true;
         }),
       );
+      if (!stored) {
+        log.debug(
+          'OAuth callback dropped after its sign-in attempt was superseded',
+        );
+        return { kind: 'ignored', reason: 'superseded' } as const;
+      }
 
       const committed = {
         kind: 'committed',
@@ -353,35 +376,23 @@ export class SupabaseSignInCoordinator {
     attempt: SignInAttempt | undefined,
     result: {
       readonly error: string;
-      readonly isAuthError?: boolean;
       readonly cancelled?: boolean;
     },
   ): Effect.Effect<SignInCallbackOutcome, never, ProcessServices> {
     // Declining consent in the browser ends the attempt without failing it,
-    // so it never reaches a host's failure wording. Any other auth error is
-    // the attempt's failure, and a callback carrying neither is ignored.
-    let outcome: SignInCallbackOutcome = {
-      kind: 'ignored',
-      reason: result.error,
-    };
-    let settlement: Effect.Effect<SupabaseSession | null, Error> =
-      Effect.succeed(null);
-    if (result.cancelled) {
-      outcome = {
-        kind: 'ignored',
-        reason: 'the sign-in was cancelled in the browser',
-      };
-      settlement = Effect.fail(new SignInCancelled());
-    } else if (result.isAuthError) {
-      outcome = { kind: 'failed', message: result.error };
-      settlement = Effect.fail(
-        new Error(`OAuth error: ${result.error}. Try again.`),
-      );
-    }
+    // so it never reaches a host's failure wording. Every other refusal — an
+    // auth error, or a callback that claimed its nonce but carried no code —
+    // is the attempt's failure, worded so the diagnosis reaches the user.
+    const outcome: SignInCallbackOutcome = result.cancelled
+      ? { kind: 'ignored', reason: 'the sign-in was cancelled in the browser' }
+      : { kind: 'failed', message: result.error };
+    const settlement: Effect.Effect<SupabaseSession | null, Error> =
+      result.cancelled
+        ? Effect.fail(new SignInCancelled())
+        : Effect.fail(new Error(`OAuth error: ${result.error}. Try again.`));
     return Effect.gen({ self: this }, function* () {
       if (result.cancelled) log.info('Sign-in was cancelled in the browser');
-      else if (result.isAuthError) log.error(`Sign-in failed: ${result.error}`);
-      else log.debug(`Auth callback ignored: ${result.error}`);
+      else log.error(`Sign-in failed: ${result.error}`);
       if (attempt) Deferred.doneUnsafe(attempt.outcome, settlement);
       else yield* this.options.transport.announce(outcome);
       return outcome;
@@ -439,6 +450,7 @@ export class SupabaseSignInCoordinator {
       createdAt: Date.now(),
       outcome: Deferred.makeUnsafe<SupabaseSession | null, Error>(),
     };
+    this.minted.add(attempt.nonce);
     this.active = attempt;
     return attempt;
   }
