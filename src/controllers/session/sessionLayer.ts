@@ -399,8 +399,6 @@ const sessionHandleLayer = (
               ),
           claimOwner: (id) =>
             eventLog.claimOwner(qualifyAggregateId('run', id)),
-          runChildren: (id) =>
-            eventLog.readRunChildren(qualifyAggregateId('run', id)),
           recordListing: () => eventLog.readListing(),
           aggregateRows: (id) => eventLog.readAggregate(id, 1),
           publish: (events) =>

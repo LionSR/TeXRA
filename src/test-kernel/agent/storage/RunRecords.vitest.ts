@@ -3,12 +3,10 @@ import { it } from '@effect/vitest';
 import { beforeEach, describe, expect } from 'vitest';
 
 import { getRunRecords } from '@agent/storage';
-import { readRunChildren } from '@agent/storage/runLifecycle';
 import {
   aggregateId,
   AgentConfigFieldsSchema,
   type RunId,
-  type SessionEventDraft,
 } from '@shared/schemas';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { createTestSession } from '@test/support/sessionTestUtils';
@@ -115,34 +113,5 @@ describe('canonical run records', () => {
     await run(records.clearReport());
     expect(await run(records.readReport())).toBeNull();
     expect(await run(records.readWorkspaceFiles())).toEqual(['a.tex', 'b.tex']);
-  });
-
-  it('joins child labels through the declared creation edge', async () => {
-    const childId = '123abc' as RunId;
-    await run(
-      session.commit([
-        {
-          type: 'run.start',
-          aggregateId: aggregateId('run', childId),
-          identity: { kind: 'agent', agent: 'assistant' },
-          category: 'toolUse',
-          userFollowUpSupport: 'unsupported',
-          isRemote: false,
-          parent: { id: runId },
-        },
-        {
-          type: 'run.launchLabel',
-          aggregateId: aggregateId('run', childId),
-          label: 'approved child label',
-        },
-      ] satisfies SessionEventDraft[]),
-    );
-    expect(await run(readRunChildren(session, runId))).toEqual([
-      {
-        id: childId,
-        agent: 'approved child label',
-        timestamp: expect.any(String),
-      },
-    ]);
   });
 });

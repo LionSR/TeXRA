@@ -2,8 +2,8 @@
  * Run lifecycle operations.
  *
  * Business logic that orchestrates the run's records across its aggregate:
- * registration, activation, finalization and the child listing, separate
- * from the record accessors in `runRecords.ts`.
+ * registration, activation and finalization, separate from the record
+ * accessors in `runRecords.ts`.
  */
 
 import { Cause, Effect, Exit } from 'effect';
@@ -18,11 +18,9 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   AgentCategory,
   aggregateId,
-  aggregateTarget,
   type SessionEventDraft,
   USER_FOLLOW_UP_SUPPORT,
   emptyRunEndOutput,
-  type AggregateId,
   type RunEnd,
   type RunEndOutput,
   type RunId,
@@ -32,11 +30,7 @@ import {
   type UserFollowUpSupport,
 } from '@shared/schemas';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
-import {
-  getRunRecords,
-  runEndFromEvents,
-  type ChildRecord,
-} from './runRecords';
+import { getRunRecords, runEndFromEvents } from './runRecords';
 
 function pinRunWorkingDirectory(
   record: RunRecord,
@@ -324,56 +318,3 @@ export const readPersistedRunRecord = (
 ): Effect.Effect<RunRecord | null, Error> =>
   getRunRecords(session, runId).readRunRecord();
 
-/** Child labels and parentage come from the same immutable launch fact. */
-export const readRunChildren = Effect.fn('readRunChildren')(function* (
-  session: SessionHandle,
-  runId: RunId,
-): Effect.fn.Return<ChildRecord[], Error> {
-  const rows = yield* session.readRunChildren(runId);
-  const own = aggregateId('run', runId);
-  const parent = rows.find(
-    (row) => row.type === 'run.start' && row.aggregateId === own,
-  );
-  if (parent?.type !== 'run.start') return [];
-  const closed = new Set(
-    rows
-      .filter((row) => row.type === 'run.removed')
-      .map((row) => row.aggregateId),
-  );
-  if (closed.has(parent.aggregateId)) return [];
-  // A `run.detach` severs the edge the child's `run.start` recorded, so a
-  // detached child is no longer listed under its former parent: the same
-  // rule the session fold applies.
-  const detached = new Set(
-    rows
-      .filter((row) => row.type === 'run.detach')
-      .map((row) => row.aggregateId),
-  );
-  const labels = new Map<AggregateId, string>();
-  for (const row of rows) {
-    if (row.type === 'run.launchLabel') labels.set(row.aggregateId, row.label);
-  }
-  return rows.flatMap((row) => {
-    if (
-      row.type !== 'run.start' ||
-      row.parent === null ||
-      row.parent.startCommit !== parent.commit ||
-      row.parent.id !== runId ||
-      closed.has(row.aggregateId) ||
-      detached.has(row.aggregateId)
-    )
-      return [];
-    const target = aggregateTarget(row.aggregateId);
-    if (target.kind !== 'run') return [];
-    const label = labels.get(row.aggregateId);
-    if (label === undefined)
-      throw new Error(`Child launch label missing for ${target.id}`);
-    return [
-      {
-        id: target.id,
-        agent: label,
-        timestamp: new Date(row.at).toISOString(),
-      },
-    ];
-  });
-});
