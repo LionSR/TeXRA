@@ -727,8 +727,8 @@ export function createChatSessionController(
   // double hand-back or a missed restore silently loses the follow-ups typed
   // during an interruption. The shared parts are already named helpers
   // (`setupRunHost`, `toolUseResumeOptions`, `settleResumedTurn`,
-  // `recoverRun`, `endResumeUnstarted`, the two lease helpers above); what is
-  // left here genuinely differs. Don't merge these two bodies.
+  // `recoverRun`, the two lease helpers above); what is left here genuinely
+  // differs. Don't merge these two bodies.
   const resume = (id: RunId): Effect.Effect<void, unknown> =>
     // `Effect.suspend` is what keeps the claim handshake synchronous: its
     // body is this program's first step, so the availability check and the
