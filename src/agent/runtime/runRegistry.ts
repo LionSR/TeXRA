@@ -239,15 +239,18 @@ export class RunRegistry {
    * lane, still unwinding, or carrying a live tool-use flow: the states in
    * which a resume must be refused outright rather than queued on the run
    * lane, since it would otherwise start a fresh generation over a live one.
-   * A run parked at WAITING is not one of them: the resume supersedes its
-   * fiber ({@link park}), which is what leaves it resumable.
+   * A parked run ({@link park}) is not one of them until a stop wakes it: a
+   * resume supersedes the fiber where it waits, but a woken park is the run
+   * unwinding, still owing its terminal row and its claim release.
    *
    * Local ownership, never the durable phase: a crash leaves the phase RUNNING
    * by design, and an orphaned run in that phase is what a resume takes over.
    */
   isActiveOrResuming(runId: RunId): boolean {
+    const parked = this.parked.get(runId);
     return (
       this.lanes.isHeld(runId) ||
+      (parked !== undefined && Deferred.isDoneUnsafe(parked.stopped)) ||
       this.getToolUseFlowContext(runId) !== undefined
     );
   }
@@ -321,11 +324,10 @@ export class RunRegistry {
   /**
    * Park `handle`'s run on its own stop latch: the generation that reached
    * WAITING stays here as a fiber holding the run's teardown, instead of
-   * returning and leaving it behind for someone else to invoke. Completing
-   * the latch ({@link terminate}) runs `termination`, the run's own terminal
-   * path; interrupting the fiber where it waits ({@link track},
-   * {@link dispose}) ends the park alone. The fiber leaves the map when it
-   * ends, so a run parked here is one this process still holds.
+   * leaving it behind for someone else to invoke. Completing the latch
+   * ({@link terminate}) runs `termination`, the run's own terminal path;
+   * interrupting the fiber where it waits ({@link track}, {@link dispose})
+   * ends the park alone. The fiber leaves the map when it ends.
    */
   park(
     handle: RunHandle,
@@ -340,18 +342,16 @@ export class RunRegistry {
         Effect.sync(() => {
           const entry: ParkedRun = { fiber, stopped };
           this.parked.set(runId, entry);
-          const forget = (): void => {
+          fiber.addObserver(() => {
             if (this.parked.get(runId) === entry) this.parked.delete(runId);
-          };
-          fiber.addObserver(forget);
+          });
         }),
       ),
       Effect.asVoid,
     );
   }
 
-  /** Whether a generation of `runId` is parked at WAITING here ({@link park}):
-   *  held, but by a fiber a resume supersedes rather than runs beside. */
+  /** Whether a generation of `runId` is parked at WAITING ({@link park}). */
   isParked(runId: RunId): boolean {
     return this.parked.has(runId);
   }
@@ -372,8 +372,8 @@ export class RunRegistry {
     // swaps the handles is what stops a handle built before a `run.detach`
     // from restoring the edge that row removed.
     if (activation?.isDetached() || previous?.parent === null) handle.detach();
-    // This registration is the run starting again, so the generation parked
-    // at WAITING is over: its fiber is interrupted where it waits and its
+    // This registration is the run starting again, so the generation parked at
+    // WAITING is over: its fiber is interrupted where it waits and its
     // termination never runs. A stop that already woke that fiber is past
     // interrupting, so it crosses the handoff with the registration instead.
     const parked = this.parked.get(handle.runId);

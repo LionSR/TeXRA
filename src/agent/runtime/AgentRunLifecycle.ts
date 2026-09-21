@@ -552,11 +552,10 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
         logger.debug(`Task suspended with outcome: ${result.outcome}`);
         // The handle stays tracked (correct for resume) and so does the run:
         // this generation parks as a fiber on the run's own stop latch rather
-        // than returning and leaving a teardown behind for someone else to
-        // invoke (issue #7287). A resumed generation interrupts that fiber
-        // where it waits, so the termination below runs only for a stop, and
-        // never for a run that started again. The park outlives this scope,
-        // so the services it reads travel with it.
+        // than leaving a teardown behind for someone else to invoke (issue
+        // #7287). A resumed generation interrupts that fiber where it waits,
+        // so the termination below runs only for a stop, never for a run that
+        // started again. The park outlives this scope, so its services travel.
         const services = yield* Effect.context<AgentRunServices>();
         yield* runs.park(
           handle,
@@ -564,16 +563,14 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
           // A stop woke the park, so the run ends here, on the fiber that
           // still holds its teardown. Its trace went with the generation's
           // scope, so the stage close publishes through the session, and no
-          // usage totals ride the row: a suspended flow has no live monitor
-          // to read. The rest is the ordinary terminal path under the same
-          // exactly-once claim, so one `run.end` row closes this run however
-          // it ended.
+          // usage totals ride the row: a suspended flow has no live monitor to
+          // read. The rest is the ordinary terminal path under the same
+          // exactly-once claim, so one `run.end` row closes this run.
           Effect.gen(function* () {
             session.followUps.terminalize(runId);
             // The run's trace detached with its scope, so the stage close is
             // committed through the session. It and the terminal row are
-            // independent durable facts; the row still gets its own chance to
-            // land.
+            // independent durable facts; the row gets its own chance to land.
             const stageId = ctx.parentStage.id;
             if (stageId !== undefined)
               yield* session
@@ -592,18 +589,21 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
                   ),
                 );
             // A resumed generation replaced this registration while the stop
-            // was landing: the run started again, and its terminal fact is
-            // that generation's to write.
+            // was landing: the run started again, and the terminal is its.
             if (runs.getHandle(runId) !== handle) return;
-            yield* finalizeRunTerminal({
-              session,
-              handle,
-              outcome: RUN_OUTCOME.CANCELLED,
-              output: emptyRunEndOutput(handle.category),
-            });
-            // A root's claim is this generation's to drop: the resume that
-            // would have taken it over is not coming.
+            // A root's claim is this generation's to drop whether or not the
+            // row landed: the resume that would have taken it over is not
+            // coming. The terminal failure is re-raised after the release.
+            const finalized = yield* Effect.exit(
+              finalizeRunTerminal({
+                session,
+                handle,
+                outcome: RUN_OUTCOME.CANCELLED,
+                output: emptyRunEndOutput(handle.category),
+              }),
+            );
             if (!handle.isChild) yield* session.releaseRunLease(runId);
+            yield* finalized;
           }).pipe(
             // The run ends here, so the run-end hook fires here.
             Effect.ensuring(runOnRunEnd),
