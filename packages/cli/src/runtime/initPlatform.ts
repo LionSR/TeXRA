@@ -13,7 +13,7 @@ import { createPlatformAgentDirectories } from '@agent/index';
 import type { SupabaseSessionLog } from '@auth/SupabaseSession';
 import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
 import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
-import { consoleLogSink, setLogSink } from '@logger/logSink';
+import { consoleLogSink, setLogSink, silentLogSink } from '@logger/logSink';
 import { setDebugModeConfig } from '@logger/logUtils';
 import { initPlatform, tryPlatform, type Platform } from '@platform/platform';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
@@ -277,12 +277,9 @@ export function initCliPlatform(
     quietPlatformLogs = context.quietLogs;
     // The terminal is the operator's own, so entries reach it unredacted — the
     // contract `logSinks.ts` documents for CLI output.
-    setLogSink(
-      quietPlatformLogs ? { write: () => undefined } : consoleLogSink,
-      {
-        trusted: true,
-      },
-    );
+    setLogSink(quietPlatformLogs ? silentLogSink : consoleLogSink, {
+      trusted: true,
+    });
 
     // The one Effect runtime of this process (PRD 7.7) comes first: the stores
     // below open as Effect programs, and the session graph and every

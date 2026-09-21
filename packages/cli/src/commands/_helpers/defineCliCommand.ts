@@ -10,7 +10,7 @@ import {
 } from '@cli/runtime/logSinks';
 import type { ParsedGlobalArgs } from '@cli/runtime/globalArgs';
 import type { CliContext } from '@cli/runtime/cliContext';
-import { setLogSink } from '@logger/logSink';
+import { setLogSink, silentLogSink } from '@logger/logSink';
 import type { ProcessServices } from '@platform/processRuntime';
 
 import { contextFromArgs } from './context';
@@ -101,11 +101,15 @@ export function defineCliCommand<const A extends ArgsDef, E>(
       const exitCode = async (): Promise<number> => {
         const program = options.run(context, runCtx);
         if (options.install === 'noPlatform') {
-          // The one sink these two entries ever get: no `initCliPlatform`
+          // The one sink these two entries ever get, chosen exactly as
+          // `initCliPlatform` chooses one for every other command: no init
           // runs for them, and the console fallback it would have replaced
           // puts the runtime build's own DEBUG and INFO lines on stdout,
           // beside the command's result.
-          setLogSink(platformlessDiagnosticSink, { trusted: true });
+          setLogSink(
+            context.quietLogs ? silentLogSink : platformlessDiagnosticSink,
+            { trusted: true },
+          );
         }
         const runtime = await installCliProcessRuntime(
           context.storageRoot,
