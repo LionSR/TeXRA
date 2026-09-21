@@ -265,9 +265,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
         }
         return [];
       }
-      if (!data.user) {
-        return [];
-      }
+      if (!data.user) return [];
 
       return [this.toVSCodeSession(session)];
     });
