@@ -112,7 +112,13 @@ boundary and its determinism guards; the external-process strategies
 - `workflow.attempt` and `child.turn` share one key type and one fold;
   both rows remain.
 - One `formatDelivery` XML builder; every driver is fact selection only.
-- `bindAbortSignals` is gone and a native subagent's stop travels as one fiber
-  interruption. `effect-migration-baseline.json` is unchanged by that step:
+- Deferred with step 4, and not an acceptance line for the step-2 lane: once
+  the turn is interruptible, `bindAbortSignals` is gone and a native
+  subagent's stop travels as one fiber interruption. Until then the bridge is
+  the only path from a caller's `params.signal` or a turn signal into an
+  in-flight native turn — a run's stop is a `Deferred` latch raced in
+  `runUntilStopped`, and `executeAgent` and both resume entries are
+  `Effect.uninterruptible` — so deleting it breaks the stop button rather
+  than moving it. `effect-migration-baseline.json` is unchanged by that step:
   both `new AbortController(` rows are load-bearing (see 2.4).
 - No production path contains `implementations/flows`.
