@@ -56,10 +56,6 @@ import { commandOnly } from './messageFactories';
 // re-exported here for consumers that expect it from the schema module.
 export { SETTINGS_VIEW_CMD } from '@shared/ipc';
 
-// Re-export the goal-list row type from the wire-contract surface so settings
-// consumers keep a single import site.
-export { type GoalListItem } from '@shared/schemas';
-
 // Re-export the types and values needed by settings consumers from the
 // individual view-message modules so the historical settings surface (single
 // import site) stays intact. Keep this selective: the schemas themselves are
