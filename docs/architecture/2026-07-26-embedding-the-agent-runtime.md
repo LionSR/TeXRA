@@ -334,28 +334,23 @@ disk_; that is the entire capability.
 - **Enumeration** uses the npm `glob` package with **no `fs` option**
   (`src/agent/index/agentYamlScanner.ts:53-57`, import at `:3`). `glob` without
   an injected `fs` reads the real Node filesystem directly.
-- **Reading** three lines later goes through the platform filesystem port
-  (`AbsoluteFS.read` → `BaseFS.read` → `platform().fs.readFile`). _(That port,
-  its facade and the fake provider below have since been deleted; the read now
-  goes through Effect's own `FileSystem`. The straddle this section is about is
-  unchanged by that: `glob` still enumerates the real disk.)_
+- **Reading** three lines later goes through Effect's own `FileSystem`, which
+  a test or an embedder can back with something other than the real disk.
 
-So one function straddles two filesystem planes. Replacing `platform().fs` with
-an in-memory provider changes only the _read_ half; `glob` still enumerates the
-real disk and finds nothing, so the scan yields zero agents.
+So one function straddles two filesystem planes. Serving an in-memory
+`FileSystem` changes only the _read_ half; `glob` still enumerates the real
+disk and finds nothing, so the scan yields zero agents.
 
 ### The repo's own tests prove the constraint
 
-`src/test-kernel/agent/AgentRegistry.vitest.ts` is a memfs-backed test
-kernel (`createFakePlatform` defaults to `new FakeFileSystemProvider(...)`,
-`src/test-kernel/support/FakePlatform.ts:503`, backed by `memfs` at `:5`). To
-test the agent registry it has to opt _out_ of memfs:
+`src/test-kernel/agent/AgentRegistry.vitest.ts` installs a fake platform whose
+only override is the directory port:
 
 ```ts
 // src/test-kernel/agent/AgentRegistry.vitest.ts
-createFakePlatform(
+await installPlatform(
   { workspaceState },
-  { fs: nodeFilesystem, agentDirectories: mutableAgentDirectories },
+  { agentDirectories: mutableAgentDirectories },
 );
 ```
 
@@ -367,7 +362,7 @@ write a real YAML file:
 const customDir = await mkdtemp(resolve(tmpdir(), 'texra-custom-agent-'));
 await writeFile(resolve(customDir, 'chat.yaml'), [...].join('\n'));
 …
-useAgentDirectories({ custom: async () => customDir });
+useAgentDirectories({ custom: () => Effect.succeed(customDir) });
 ```
 
 Its `builtIn()`/`builtInToolUse()` point at the real repo tree
@@ -379,8 +374,8 @@ one agent, an embedder cannot either.
 
 ### What injection _does_ buy you
 
-- **Skipping the packaged bundle.** `scanDirectory` returns `[]` for an empty
-  path (`src/agent/index/agentYamlScanner.ts:49`), so
+- **Skipping the packaged bundle.** `scanDirectory` returns no entries for an
+  empty path (`src/agent/index/agentYamlScanner.ts:68`), so
   `builtIn: () => Effect.succeed('')` and
   `builtInToolUse: () => Effect.succeed('')` are legal and cheap. This is the
   "empty-builtIn trick" the proposals mention, and it does work. With it you
