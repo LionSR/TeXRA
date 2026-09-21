@@ -99,9 +99,9 @@ export const consoleLogSink: LogSink = {
 
 /**
  * The sink of a host that wants no diagnostics at all. A CLI command run with
- * `--quiet` installs this in place of the console fallback, whether its
- * platform init does it or — for the entries that bring no platform up —
- * `defineCliCommand` does.
+ * `--quiet` installs this in place of the console fallback: `defineCliCommand`
+ * before it builds the process runtime, and the platform init again for the
+ * commands that reach one.
  */
 export const silentLogSink: LogSink = Object.freeze({
   write: () => undefined,

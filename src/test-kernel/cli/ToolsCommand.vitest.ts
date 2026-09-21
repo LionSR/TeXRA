@@ -1,6 +1,7 @@
 import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createLog, setDebugModeConfig } from '@logger/logUtils';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 import { FakeStateStore } from '@test/support/FakePlatform';
@@ -77,6 +78,7 @@ describe('CLI tools command', () => {
   });
 
   afterEach(() => {
+    setDebugModeConfig(null);
     stdoutSpy.mockRestore();
     stderrSpy.mockRestore();
   });
@@ -122,6 +124,30 @@ describe('CLI tools command', () => {
       tool: { id: 'codex', enabled: true, action: 'enabled' },
       ts: expect.any(String),
     });
+  });
+
+  it('keeps the runtime build diagnostic off NDJSON stdout', async () => {
+    // #12931: the process runtime's layers log while they build — before the
+    // platform init that used to be the first thing to install a sink — and
+    // the console fallback covering that window sent DEBUG to stdout, so the
+    // first line of an NDJSON run was not a record and the stream would not
+    // parse. Debug mode is on because it decides how much such a line
+    // carries, never whether it is written.
+    setDebugModeConfig({ get: () => true });
+    mocks.installCliProcessRuntime.mockImplementation(async () => {
+      createLog('UsageLogService').debug('UsageLogService started');
+      return testRuntime();
+    });
+
+    await runToolsCli(['enable', 'codex', '--output-format', 'ndjson']);
+
+    expect(
+      stdout
+        .trimEnd()
+        .split('\n')
+        .map((line) => JSON.parse(line).kind),
+    ).toEqual(['tool-toggle']);
+    expect(stderr).toContain('[UsageLogService] UsageLogService started');
   });
 
   it('emits JSON for install guides without running the command', async () => {

@@ -240,17 +240,18 @@ export function askCliQuestion(
 }
 
 /**
- * The host diagnostic sink of a CLI entry that brings no platform up.
- * `clone` and `install-github-action` never reach `initCliPlatform`, so
- * nothing would replace `@logger/logSink`'s console fallback for them — and
- * that fallback sends DEBUG and INFO to stdout, where the process runtime's
- * own build diagnostics (`UsageLogService started …`) would land in the
- * middle of the command's output. This renders the same line `consoleLogSink`
+ * The host diagnostic sink of this process until a platform installs its own.
+ * `@logger/logSink`'s console fallback sends DEBUG and INFO to stdout, and
+ * the process runtime logs while its layers build (`UsageLogService started
+ * …`) — before `initCliPlatform` runs its own `setLogSink`, and for `clone`
+ * and `install-github-action` before a platform that never comes up. Under
+ * `--output-format ndjson` that line is the first thing on stdout and the
+ * stream stops being parseable. This renders the same line `consoleLogSink`
  * does, with every level on stderr: nothing is dropped, and stdout stays the
- * command's result. Installed by `defineCliCommand` before it builds the
- * runtime for those two entries.
+ * command's result. Installed by `bin/texra.ts` as its first statement and
+ * again by `defineCliCommand` once the context has answered `--quiet`.
  */
-export const platformlessDiagnosticSink: HostLogSink = Object.freeze({
+export const prePlatformDiagnosticSink: HostLogSink = Object.freeze({
   write(entry: LogEntry) {
     const channel = entryChannel(entry);
     writeTextStderr(`${channel ? `[${channel}] ` : ''}${entryMessage(entry)}`);
