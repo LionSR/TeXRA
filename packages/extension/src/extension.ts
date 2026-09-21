@@ -272,6 +272,9 @@ async function initVscodePlatform(
     // through it for as long as this runtime lives.
     globalDatabase: globalDatabaseLayer(storage.getGlobalStoragePath()),
   });
+  // Recorded the moment it exists: every step below runs on it and can fail,
+  // and `shutdownExtension` is what disposes it when activation does.
+  processRuntime = runtime;
   // VS Code restarts the extension host when the first workspace folder
   // changes, so the configuration stores stay pinned for this process.
   const config = new JsonConfigProvider(
@@ -304,7 +307,6 @@ async function initVscodePlatform(
       skills: { resourcesPath: path.join(context.extensionPath, 'resources') },
     }),
   );
-  processRuntime = runtime;
   return { secrets, runtime, auth, authReadiness, roots };
 }
 
@@ -320,8 +322,9 @@ function shutdownExtension(): Promise<void> {
       Effect.ensuring(
         Effect.suspend(() => {
           if (lifecycleHost === host) lifecycleHost = undefined;
-          // No runtime, no session was ever opened: an activation that failed
-          // before installing one has nothing to tear down here.
+          // No runtime: activation failed before building one, so there is
+          // nothing here to tear down. A runtime with no session behind it
+          // still gets disposed; the session teardown is a no-op then.
           const runtime = processRuntime;
           if (!runtime) return Effect.void;
           return teardownDefaultSession().pipe(
