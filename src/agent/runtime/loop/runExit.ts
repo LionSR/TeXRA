@@ -29,7 +29,7 @@ interface HaltDeps {
  * opened (`null`, or a null `phase`) has no step to halt, so it writes
  * nothing. A refused ledger write is best-effort by design: the run is already
  * ending, and raising here would replace its real outcome with a bookkeeping
- * failure, so `RunLedgerRefused` is warned about instead. Other ledger write
+ * failure, so `RunLedgerRefused` is warned about instead. Other database write
  * failures still fail normally.
  */
 export const recordHalt =
