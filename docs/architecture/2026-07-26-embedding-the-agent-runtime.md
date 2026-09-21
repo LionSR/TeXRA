@@ -32,28 +32,57 @@ services the shipped Node hosts pass to `installProcessRuntime` are a
 shipped-feature choice; the raw loop only needs some `LeanLanguageServices`
 layer there.
 
-### Step 1 — `initPlatform(createNodePlatform(...))`
+### Step 1 — `initPlatform({ lifecycle, agentDirectories })`
 
-`platform()` throws until this runs
-(`src/platform/platform.ts:73-80`). `initPlatform` itself just freezes and
-stores the services object (`src/platform/platform.ts:65-67`).
+`platform()` throws until this runs (`src/platform/platform.ts:68-75`).
+`initPlatform` itself just freezes and stores the services object
+(`src/platform/platform.ts:60-62`).
 
-`createNodePlatform` (`src/platform/defaults/nodeHost.ts:94-118`) fills in the
-Node defaults — `nodeFilesystem`, `createNodeWorkspace`, `JsonConfigProvider`,
-`nodeFileLocks` and the no-op tool-availability host — and requires the host
-to supply the rest: `configStores`, `globalState`, `workspaceState`,
-`storage`, `secrets`, `lifecycle`, `agentDirectories`, `getWorkspacePath`
-(`src/platform/defaults/nodeHost.ts:53-69`).
+There is no `createNodePlatform` factory any more, and no list of eight further
+services to fill in. `Platform` has shrunk onto two required members plus one
+optional one (`src/platform/platform.ts:39-52`):
 
-When Step 3 will copy the packaged bundle, `agentDirectories` must be the
-matching global-storage port from `createPlatformAgentDirectories`, or an
-equivalent port that resolves the same copied directories. The factory and the
-bootstrap both resolve those directories through `GlobalStorageFS`
-(`src/agent/index/platformAgentDirectories.ts:41-42,166-169`). Bootstrapping
-alone does not replace the port already installed in the platform.
+```ts
+interface Platform {
+  readonly lifecycle: LifecycleHost;
+  readonly agentDirectories: AgentDirectoriesPort;
+  readonly toolMissingHandler?: (
+    message: string,
+    openDocsCommand?: string,
+  ) => void | Promise<void>;
+}
+```
+
+Everything the old factory supplied moved to one of two owners, and an embedder
+supplies each one there rather than in the platform literal:
+
+- **Process services** (the filesystem, `Path`, secrets, application state, the
+  resume port, the editor language-model bridge) are Effect services provided
+  once per process by `installProcessRuntime`
+  (`src/controllers/session/sessionLayer.ts:1055-1069`).
+- **Per-workspace services** (the workspace root, its storage paths, its
+  configuration and its state stores) are a `WorkspaceRoots`
+  (`@platform/workspaceRoots`) carried by each `SessionHandle`, so one process
+  can hold sessions rooted in several folders. Build one with
+  `createNodeWorkspaceRoots` (`src/platform/defaults/nodeHost.ts:59-76`), which
+  canonicalizes the workspace path and picks the config provider.
+
+`agentDirectories` is the port that names the three directories the registry
+scans. `createPlatformAgentDirectories`
+(`src/agent/index/platformAgentDirectories.ts:20-33`) builds one over a
+packaged resources tree; its `builtIn()` and `builtInToolUse()` read that tree
+in place. Nothing is copied into global storage, so there is no bundle-copy
+step to run and no version state key to keep.
+
+Beside the platform, a Node root calls `bootstrapHost`
+(`src/controllers/hostBootstrap.ts:77-96`) once, on its own process runtime: it
+installs the model HTTP dispatcher, the process setting host, the logger's
+debug-mode read, the account probes, the runtime skill sources, and the
+first-install disabled-tool seed. An embedder that skips it gets a runtime
+without those, not a broken one.
 
 Only a composition root calls `initPlatform`; that rule is stated in the
-`nodeHost` module header (`src/platform/defaults/nodeHost.ts:1-14`).
+`nodeHost` module header (`src/platform/defaults/nodeHost.ts:1-18`).
 
 ### Feature-parity step — the `lean` layer of `installProcessRuntime`
 
@@ -91,41 +120,27 @@ model call.
 
 ### Step 3 — agent directories
 
-To use the packaged bundle, install its matching port in Step 1 and then
-bootstrap the files:
+To use the packaged agent definitions, install a port that names the tree they
+sit in. There is no copy step: `builtIn()` and `builtInToolUse()` resolve
+inside `resourcesPath`, and the files are read where they are.
 
 ```ts
-// Before Step 1:
 const agentDirectories = createPlatformAgentDirectories({
   channel: 'my-embedder',
+  resourcesPath, // dir containing agents/, tool_use_agents/, skills/
   customDirectoryStore: { get: () => undefined },
 });
-initPlatform(
-  createNodePlatform({
-    /* …8 other required services… */
-    agentDirectories,
-  }),
-);
-
-// The process runtime comes first: `bootstrapNodeAgentDirectories` is an
-// Effect, so it does nothing until something runs it. `await` on an Effect is
-// a silent no-op — the bundle is never copied and `loadAgents` below then
-// finds nothing.
-installProcessRuntime(await nodeProcesses.selfIdentity());
-
-// src/platform/defaults/nodeHost.ts:178-199
-await effectRuntime().runPromise(
-  bootstrapNodeAgentDirectories({
-    channel: 'my-embedder',
-    resourcesPath, // dir containing agents/, tool_use_agents/, skills/
-    currentVersion,
-    versionStateKey, // your own globalState key
-  }),
-);
+initPlatform({ lifecycle, agentDirectories });
 ```
 
-Alternatively, skip the bundle entirely and hand `createNodePlatform` an
-`AgentDirectoriesPort` that points at your own directory. See
+`customDirectoryStore.get()` is the user-configured custom agent directory, or
+`undefined` for none. The three methods return Effects, not Promises
+(`src/agent/index/AgentDirectoryService.ts:61-85`); a failure to resolve a
+directory is an `AgentDirectoriesFailed`, and the `issueReporter` option
+decides how it surfaces (the default logs it at `warn`).
+
+Alternatively, skip the packaged tree entirely and hand `initPlatform` an
+`AgentDirectoriesPort` of your own that points at your directory. See
 [§2](#2-agentdirectoriesport-is-three-directory-paths-not-agent-values) — this
 is the part the plan of record describes incorrectly.
 
@@ -182,63 +197,88 @@ runtime packages named `@platform/platform`, `@agent/runtime/runAgent`, and so
 on.
 
 ```ts
+import { Effect } from 'effect';
 import { initPlatform } from '@platform/platform';
-import {
-  createNodePlatform,
-  bootstrapNodeAgentDirectories,
-} from '@platform/defaults/nodeHost';
+import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
+import { createNodeWorkspaceRoots } from '@platform/defaults/nodeHost';
 import { directLeanLanguageServices } from '@tools/lean/direct/directLspAdapter';
 import { createPlatformAgentDirectories } from '@agent/index/platformAgentDirectories';
 import { installProcessRuntime } from '@controllers/session/sessionLayer';
 import { nodeProcesses } from '@platform/defaults/nodeProcesses';
-import { effectRuntime } from '@platform/processRuntime';
+import { bootstrapHost } from '@controllers/hostBootstrap';
 import { loadAgents } from '@agent/index/agentRegistry';
-import { initializeDefaultSession } from '@agent/runtime/SessionHandle';
+import { initializeDefaultSession } from '@agent/runtime/sessionGraph';
 import { runAgent } from '@agent/runtime/runAgent';
 import { validateRunRequest } from '@agent/core/state/runRequests';
 import { AgentCategory } from '@shared/schemas/agent';
 
+// Step 1 — the platform is two members; everything else has another owner.
+const lifecycle = createLifecycleHost();
 const agentDirectories = createPlatformAgentDirectories({
   channel: 'my-embedder',
+  resourcesPath, // dir containing agents/, tool_use_agents/, skills/
   customDirectoryStore: { get: () => undefined },
 });
-initPlatform(
-  createNodePlatform({
-    /* …8 other required services… */
-    agentDirectories,
-  }),
-); // Step 1
-installProcessRuntime({
-  processStart: await nodeProcesses.selfIdentity(),
+initPlatform({ lifecycle, agentDirectories });
+
+// The process services: filesystem, secrets, application state, and the rest.
+const runtime = installProcessRuntime({
+  processStart: nodeProcesses.selfIdentity(),
+  globalStorage,
+  secrets,
+  appState: globalState,
   /* …the other process services… */
   lean: directLeanLanguageServices(), // Shipped-feature parity
-}); // Step 3 needs it
-await effectRuntime().runPromise(bootstrapNodeAgentDirectories({/* … */})); // Step 3
-
-const session = initializeDefaultSession({});
-const detachHostInteractions = session.interactions.use({
-  cancel: () => {},
-  requestRetry: async () => ({ action: 'deny', reason: 'No retry prompts.' }),
-}); // see §3 — DO NOT SKIP
-await loadAgents({ includeRemote: false });
-
-const validated = validateExecutionRequest({
-  config: {
-    agent: 'assistant',
-    agentCategory: AgentCategory.ToolUse,
-    instruction: 'Hello',
-  },
 });
-if (!validated.valid) throw new Error(validated.message);
 
-try {
-  await runAgent(validated.request, {
-    session,
-    approvalPromptsUnavailable: true,
-  });
-} finally {
-  detachHostInteractions();
-}
+// The per-workspace services, carried by the session rather than the platform.
+const roots = createNodeWorkspaceRoots({
+  workspacePath,
+  storage,
+  globalStorage,
+  config,
+  workspaceState,
+  globalState,
+});
+
+await runtime.runPromise(
+  Effect.gen(function* () {
+    // Everything a TeXRA process installs once beside its platform.
+    yield* bootstrapHost({
+      host: 'cli',
+      roots,
+      secrets,
+      skills: { resourcesPath },
+    });
+
+    const session = yield* initializeDefaultSession({ roots });
+    const detachHostInteractions = session.interactions.use({
+      cancel: () => {},
+      requestRetry: async () => ({
+        action: 'deny',
+        reason: 'No retry prompts.',
+      }),
+    }); // see §3 — DO NOT SKIP
+    yield* Effect.promise(() => loadAgents({ includeRemote: false }));
+
+    const validated = validateRunRequest({
+      config: {
+        agent: 'assistant',
+        agentCategory: AgentCategory.ToolUse,
+        instruction: 'Hello',
+      },
+    });
+    if (!validated.valid) throw new Error(validated.message);
+
+    yield* Effect.ensuring(
+      runAgent(validated.request, {
+        session,
+        approvalPromptsUnavailable: true,
+      }),
+      Effect.sync(detachHostInteractions),
+    );
+  }),
+);
 ```
 
 `validateRunRequest` (`src/agent/core/state/runRequests.ts`)
@@ -268,15 +308,19 @@ an embedder. That is correct only in a narrow sense, and the phrasing invites a
 wrong reading. State it plainly:
 
 ```ts
-// src/platform/interfaces.ts:270-274
+// src/platform/interfaces.ts:208-216
 export interface AgentDirectoriesPort {
-  custom(): Promise<string>;
-  builtIn(): Promise<string>;
-  builtInToolUse(): Promise<string>;
+  custom(): Effect.Effect<
+    string,
+    AgentDirectoriesFailed,
+    GlobalStorageFs | FileSystem.FileSystem
+  >;
+  builtIn(): Effect.Effect<string, AgentDirectoriesFailed>;
+  builtInToolUse(): Effect.Effect<string, AgentDirectoriesFailed>;
 }
 ```
 
-Three methods, each returning a **directory path string**. The port cannot
+Three methods, each yielding a **directory path string**. The port cannot
 carry an agent definition, a parsed object, a YAML string, or a virtual
 filesystem. Injecting it redirects the scan to _a different real directory on
 disk_; that is the entire capability.
@@ -337,10 +381,11 @@ one agent, an embedder cannot either.
 
 - **Skipping the packaged bundle.** `scanDirectory` returns `[]` for an empty
   path (`src/agent/index/agentYamlScanner.ts:49`), so
-  `builtIn: async () => ''` and `builtInToolUse: async () => ''` are legal and
-  cheap. This is the "empty-builtIn trick" the proposals mention, and it does
-  work. With it you can skip Step 3's `bootstrapNodeAgentDirectories` entirely
-  and point `custom()` at your own directory of YAML.
+  `builtIn: () => Effect.succeed('')` and
+  `builtInToolUse: () => Effect.succeed('')` are legal and cheap. This is the
+  "empty-builtIn trick" the proposals mention, and it does work. With it you
+  can skip the packaged resources tree entirely and point `custom()` at your
+  own directory of YAML.
 - **Choosing where custom agents live.** The CLI builds its port with
   `createPlatformAgentDirectories({ channel: 'cli', customDirectoryStore: … })`
   (`packages/cli/src/runtime/initPlatform.ts:276-279`,
@@ -558,11 +603,11 @@ says so.
   whatever port the embedder passed. The `memory`/`plan` injections do not
   depend on this choice (`src/agent/runtime/toolInjection.ts`).
 
-`bootstrapNodeAgentDirectories` is safe to skip **only** if the installed
-`AgentDirectoriesPort` names directories populated by some other means (§2).
-When using `createPlatformAgentDirectories`, skipping the bootstrap leaves its
-global-storage built-in directories unpopulated, and `loadAgents` finds no
-packaged agents.
+There is no separate agent-bundle bootstrap to run or skip. The installed
+`AgentDirectoriesPort` is the whole of it: `createPlatformAgentDirectories`
+resolves `builtIn()` and `builtInToolUse()` inside the `resourcesPath` it was
+given and the files are read where they sit, so a port pointed at a tree that
+does not hold them leaves `loadAgents` with no packaged agents (§2).
 
 ---
 
@@ -575,16 +620,19 @@ classification makes that distinction.
 
 ### Runtime bootstrap and shipped-feature parity
 
-- **`:280` — `initPlatform(createNodePlatform({…}))`:** Required.
-  `platform()` throws otherwise (`src/platform/platform.ts:73-80`).
+- **`initPlatform({ lifecycle, agentDirectories })`:** Required.
+  `platform()` throws otherwise (`src/platform/platform.ts:68-75`).
 - **`lean: directLeanLanguageServices()`** (in
   `packages/cli/src/runtime/cliProcessRuntime.ts`): Shipped-feature parity, not
   a raw-loop requirement. It is the direct Lean services layer of the process
   runtime; an embedder may pass another port. The `memory` and `plan`
   injections self-register (`src/agent/runtime/toolInjection.ts`).
-- **`:380` — `bootstrapNodeAgentDirectories({ channel: 'cli', … })`:**
-  Required only when using the packaged agent bundle; an injected port that
-  names other real directories replaces it (§2).
+- **`bootstrapHost({ host: 'cli', roots, secrets, skills })`:** The shared
+  once-per-process install every host runs beside its platform
+  (`src/controllers/hostBootstrap.ts:77-96`): the model HTTP dispatcher, the
+  process setting host, the logger's debug-mode read, the account probes, the
+  runtime skill sources, and the first-install disabled-tool seed. An embedder
+  that skips it gets a runtime without those, not a broken one.
 
 ### CLI initialization choices (8) — not runtime obligations
 
@@ -615,12 +663,13 @@ classification makes that distinction.
 The desktop main process makes the same three initialization choices, showing
 how a shipped host obtains full feature parity rather than proving that every
 call is a minimum runtime requirement:
-`initPlatform` at `packages/desktop/src/main/platform/index.ts:272`,
-`lean: directLeanLanguageServices()` in its `installProcessRuntime` call, and
-`bootstrapNodeAgentDirectories` at `:324`. It also calls the optional
-`initializeNodeRuntimeSkills` (`:228`). Product policy is not necessarily
-CLI-only: desktop also calls `seedDisabledToolDefaults(globalStateStore)` at
-`packages/desktop/src/main/platform/index.ts:225`.
+`initPlatform({ lifecycle, agentDirectories })` at
+`packages/desktop/src/main/platform/index.ts:221` over the port it builds at
+`:212`, `lean: directLeanLanguageServices()` in its `installProcessRuntime`
+call, and the same `bootstrapHost` the CLI runs, at `:233`. Product policy is
+not necessarily CLI-only: the disabled-tool seed and the runtime skill sources
+reach both hosts through that one shared call rather than being repeated per
+host.
 
 ---
 
@@ -636,22 +685,14 @@ CLI-only: desktop also calls `seedDisabledToolDefaults(globalStateStore)` at
 2. **The process runtime is once-per-process.** The Lean layer is built with
    it and closed with it; a host passes it exactly where it calls
    `installProcessRuntime` (`src/controllers/session/sessionLayer.ts`).
-3. **`bootstrapNodeAgentDirectories` uses an ambiguous string guard key.** A
-   module-level `Map` stores `resourcesPath` under the guard key
-   `${channel}:${versionStateKey}`
-   (`src/platform/defaults/nodeHost.ts:84,181-185,198`). A call is skipped when
-   that derived string and the resources path match a previous call. Colons are
-   not escaped, so distinct pairs such as `('a:b', 'c')` and `('a', 'b:c')`
-   collide. Embedders must use colon-free channel and version-state values
-   until the key representation is made unambiguous.
-4. **The registry is process-global**, not session-scoped
+3. **The registry is process-global**, not session-scoped
    (`src/agent/index/agentRegistry.ts:116-148`). There is no per-embedder agent
    namespace.
-5. **`initializeDefaultSession` throws on a second call**
-   (`src/agent/runtime/SessionHandle.ts:445-449`). Embedding inside a process that
-   already hosts TeXRA means reusing `tryDefaultSession()` or owning your own
-   `SessionHandle`.
-6. **Some failure modes cluster at run time, not startup.** A missing
+4. **`initializeDefaultSession` throws when a default is already open over the
+   same storage root** (`src/agent/runtime/sessionGraph.ts:313-316`). Embedding
+   inside a process that already hosts TeXRA means reusing
+   `tryDefaultSession()` or owning your own `SessionHandle`.
+5. **Some failure modes cluster at run time, not startup.** A missing
    `loadAgents` throws at agent resolution, and a missing interactions
    attachment, or a host that omits a request method the run calls, parks the
    run mid-way. Neither fails fast at bootstrap.
