@@ -1404,9 +1404,8 @@ async function smokePackagedLaunch(args) {
   const label = 'Desktop package launch smoke';
   const desktopRequire = createRequire(join(desktopRoot, 'package.json'));
   const { _electron: electron } = desktopRequire('@playwright/test');
-  const { buildDesktopSmokeEnvironment, rememberOpenProject } = await import(
-    './desktop-package-smoke-environment.mjs'
-  );
+  const { buildDesktopSmokeEnvironment, rememberOpenProject } =
+    await import('./desktop-package-smoke-environment.mjs');
 
   let executablePath;
   let temporaryRoot;
