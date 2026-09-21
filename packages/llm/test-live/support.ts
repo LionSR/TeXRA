@@ -161,7 +161,7 @@ function followUp(result: TurnResult, continuation: Continuation): TurnRequest {
   };
 }
 
-export interface LiveProtocol {
+interface LiveProtocol {
   /** The protocol as `TurnProtocolSchema` names it; also the suite name. */
   readonly protocol: string;
   /** The environment variable holding this route's credential. */
@@ -224,27 +224,25 @@ export function liveProtocol(spec: LiveProtocol): void {
           const turn = yield* configured.prepareTurn(TEXT_REQUEST);
           assert(turn.mode === 'foreground');
           const producing = yield* Deferred.make<void>();
-          const completed = yield* Deferred.make<void>();
           // The reader parks on the first delta rather than racing the rest of
           // the response: the interrupt then always lands mid-stream, with the
-          // body still open, which is the thing under test.
+          // body still open, which is the thing under test. The evidence is
+          // that interruption finishes at all - a codec whose stream release
+          // never returned would hang here until the 180s timeout.
           const fiber = yield* configured.streamTurn(turn).pipe(
-            Stream.runForEach((event) => {
-              if (event.kind === 'delta')
-                return Deferred.succeed(producing, undefined).pipe(
-                  Effect.andThen(Effect.never),
-                );
-              if (event.kind === 'completed')
-                return Deferred.succeed(completed, undefined);
-              return Effect.void;
-            }),
+            Stream.runForEach((event) =>
+              event.kind === 'delta'
+                ? Deferred.succeed(producing, undefined).pipe(
+                    Effect.andThen(Effect.never),
+                  )
+                : Effect.void,
+            ),
             Effect.forkChild,
           );
           yield* Deferred.await(producing);
           yield* Fiber.interrupt(fiber);
           const exit = yield* Fiber.await(fiber);
           expect(Exit.hasInterrupts(exit)).toBe(true);
-          expect(yield* Deferred.isDone(completed)).toBe(false);
         }),
       );
     });
@@ -254,9 +252,15 @@ export function liveProtocol(spec: LiveProtocol): void {
         Effect.gen(function* () {
           const result = yield* completeTurn(model(), TEXT_REQUEST);
           const usage = result.usage;
+          // Every principal count in `UsageSchema` is nullable, and MiniMax and
+          // Google both document receipts that omit the split, so demanding
+          // both halves would fail a route whose codec did nothing wrong. The
+          // contract under test is that a real receipt parsed into a usage
+          // record carrying real counts.
           assert(usage !== null);
-          expect(usage.inputTokens).toBeGreaterThan(0);
-          expect(usage.outputTokens).toBeGreaterThan(0);
+          expect(
+            (usage.inputTokens ?? 0) + (usage.outputTokens ?? 0),
+          ).toBeGreaterThan(0);
         }),
       );
     });
