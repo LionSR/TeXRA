@@ -124,7 +124,15 @@ function enforcedCandidates(base) {
 }
 
 function checkPullRequestDiff(base) {
-  const enforced = enforcedCandidates(base);
+  // One revision for everything: `A...HEAD` diffs the merge base of A and
+  // HEAD, so reading the base side at A's tip would compare old-side line
+  // numbers against a newer file whenever the base branch moves between the
+  // checkout and this step.
+  const mergeBase = execFileSync('git', ['merge-base', base, 'HEAD'], {
+    cwd: rootDir,
+    encoding: 'utf8',
+  }).trim();
+  const enforced = enforcedCandidates(mergeBase);
   const files = [
     ...new Set(
       enforced.candidates.flatMap((candidate) =>
@@ -134,38 +142,46 @@ function checkPullRequestDiff(base) {
   ];
   const diff = execFileSync(
     'git',
-    ['diff', '--unified=0', `${base}...HEAD`, '--', ...files],
+    ['diff', '--unified=0', `${mergeBase}..HEAD`, '--', ...files],
     { cwd: rootDir, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 },
   );
   const touched = touchedCandidates(
     enforced,
     changedLinesByFile(diff),
     readSource,
-    (file) => showAtRevision(base, file),
+    (file) => showAtRevision(mergeBase, file),
   );
-  if (touched.length === 0) {
+  // Removing an entry removes the protection, so it needs the same citation
+  // as rewriting the declaration — otherwise the protection goes in one PR
+  // and the refused change lands in the next with nothing to stop it.
+  const headIds = new Set(baseline.candidates.map((c) => c.id));
+  const removed = enforced.candidates
+    .filter((candidate) => !headIds.has(candidate.id))
+    .map((candidate) => candidate.id);
+  for (const hit of touched) {
+    console.log(`${hit.id} touched at ${hit.file}#${hit.symbol}`);
+  }
+  for (const id of removed) {
+    console.log(`${id} removed from ${BASELINE_FILE}`);
+  }
+  if (touched.length === 0 && removed.length === 0) {
     console.log('No refused candidate is touched by this diff.');
     return;
   }
 
   const body = process.env.PR_BODY ?? '';
   const uncited = [
-    ...new Set(
-      touched.filter((hit) => !body.includes(hit.id)).map((h) => h.id),
-    ),
-  ];
+    ...new Set([...touched.map((hit) => hit.id), ...removed]),
+  ].filter((id) => !body.includes(id));
   const byId = new Map(enforced.candidates.map((c) => [c.id, c]));
-  for (const hit of touched) {
-    console.log(`${hit.id} touched at ${hit.file}#${hit.symbol}`);
-  }
   if (uncited.length === 0) {
     console.log('Every touched candidate is cited in the pull-request body.');
     return;
   }
 
   console.error(
-    `\nThis pull request changes declarations that a ruling already refused, ` +
-      `and its body cites no ruling id for them:\n\n` +
+    `\nThis pull request changes or drops declarations that a ruling already ` +
+      `refused, and its body cites no ruling id for them:\n\n` +
       uncited
         .map((id) => {
           const candidate = byId.get(id);
