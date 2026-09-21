@@ -91,7 +91,7 @@ import { allSettledVoid } from '@utils/core/allSettledVoid';
 import { createFlushableDebounce } from '@utils/core';
 import { DEBOUNCE_OPTIONS_MS } from '@utils/config/constants';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { checkCoreDependencies } from '@utils/system/toolUtils';
+import { checkCoreDependencies } from '@utils/system/checkCoreDependencies';
 
 import { createExtensionHostRequests } from './extensionHostRequests';
 

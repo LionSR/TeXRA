@@ -9,7 +9,7 @@ import { parse as shellParse } from 'shell-quote';
 // Local imports
 import { createLog } from '@logger/logUtils';
 import { platform } from '@platform/platform';
-import type { ExecResult, MissingTool } from '@shared/schemas';
+import type { ExecResult } from '@shared/schemas';
 import {
   PDFLATEX_INSTALL_GUIDE,
   LATEXDIFF_INSTALL_GUIDE,
@@ -22,7 +22,6 @@ import {
   LATEXMK_INSTALL_GUIDE,
   TEXFMT_INSTALL_GUIDE,
   WOLFRAM_INSTALL_GUIDE,
-  IMAGE_LATEX_TOOLS,
   getInstallGuide,
 } from '@shared/constants/latexToolchain';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
@@ -403,46 +402,21 @@ export function getToolDocsCommand(tool: string): string | undefined {
   return TOOL_CONFIGS[tool]?.openDocsCommand;
 }
 
-function missingTool(id: string, interchangeable: boolean): MissingTool {
-  return { id, label: TOOL_CONFIGS[id]?.label ?? id, interchangeable };
+/** Display label for `id` from TOOL_CONFIGS, defaulting to the id itself. */
+export function toolLabel(id: string): string {
+  return TOOL_CONFIGS[id]?.label ?? id;
 }
 
-/**
- * Check core dependencies required by TeXRA features (latexindent, Perl,
- * Ghostscript, GraphicsMagick/ImageMagick). Every probe answers `false`
- * rather than failing, so this has no failure of its own to mask.
- * @param showError Whether to show error messages for missing tools
- * @returns The missing dependency entries.
- */
-export const checkCoreDependencies = Effect.fn(
-  'toolUtils.checkCoreDependencies',
-)(function* (showError: boolean = true): Effect.fn.Return<MissingTool[]> {
-  const basicTools = ['latexindent', 'perl', 'gs'];
-  const basicResults = yield* Effect.all(
-    basicTools.map((tool) => checkToolInstalled(tool, showError)),
-    { concurrency: 'unbounded' },
-  );
-  const missing: MissingTool[] = basicTools
-    .filter((_, i) => !basicResults[i])
-    .map((id) => missingTool(id, false));
-
-  // Report both image tools as interchangeable only if neither is installed.
-  if (!(yield* detectImageTool())) {
-    missing.push(...IMAGE_LATEX_TOOLS.map((id) => missingTool(id, true)));
-    if (showError) {
-      const errorMsg =
-        'Neither GraphicsMagick nor ImageMagick is installed. Please install either tool for image processing.\n' +
-        'GraphicsMagick:\n' +
-        GM_INSTRUCTIONS +
-        '\n\nOR\n\nImageMagick:\n' +
-        MAGICK_INSTRUCTIONS;
-      // Report through the host handler like every other missing tool.
-      yield* reportMissingTool(errorMsg, INSTALL_DOCS);
-    }
-  }
-
-  return missing;
-});
+/** Reports the neither-GraphicsMagick-nor-ImageMagick error through the host handler. */
+export function reportMissingImageTools(): Effect.Effect<void> {
+  const errorMsg =
+    'Neither GraphicsMagick nor ImageMagick is installed. Please install either tool for image processing.\n' +
+    'GraphicsMagick:\n' +
+    GM_INSTRUCTIONS +
+    '\n\nOR\n\nImageMagick:\n' +
+    MAGICK_INSTRUCTIONS;
+  return reportMissingTool(errorMsg, INSTALL_DOCS);
+}
 
 /** Package managers TeXRA knows how to install dependencies with. */
 export const SYSTEM_PACKAGE_MANAGERS = ['brew', 'apt', 'scoop'] as const;

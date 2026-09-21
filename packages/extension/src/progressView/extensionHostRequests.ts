@@ -114,10 +114,8 @@ import {
   locateInWorkspace,
   workspaceRelativePath,
 } from '@utils/files/workspaceFS';
-import {
-  checkCoreDependencies,
-  getToolDocsCommand,
-} from '@utils/system/toolUtils';
+import { checkCoreDependencies } from '@utils/system/checkCoreDependencies';
+import { getToolDocsCommand } from '@utils/system/toolUtils';
 import {
   formatResultCount,
   normalizeLineEndings,
