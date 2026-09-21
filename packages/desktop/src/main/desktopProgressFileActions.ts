@@ -9,7 +9,7 @@ import {
   type ValidatedRunRequest,
 } from '@agent/runtime';
 import { createLatexRunDiscovery } from '@agent/storage';
-import { appSignals } from '@eventBus/AppSignals';
+import { emitAppSignal } from '@eventBus/AppSignals';
 import { acceptEditedFileReplace } from '@latex/acceptedFileTarget';
 import { openFirstLabelMatch } from '@latex/labelSearch';
 import { LaTeXdiffService } from '@latex/latexdiff';
@@ -160,7 +160,7 @@ export class DesktopProgressFileActions {
         confirm: (message) =>
           Effect.promise(() => this.ui.confirmAcceptFile(message)),
         emitWritten: (absolutePath) =>
-          appSignals.emit('workspaceFilesWritten', {
+          emitAppSignal('workspaceFilesWritten', {
             absolutePaths: [absolutePath],
           }),
         showInfo: (message) => this.ui.showInfoMessage(message),

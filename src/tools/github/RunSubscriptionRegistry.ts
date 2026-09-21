@@ -17,7 +17,7 @@ import type { AgentTrace } from '@agent/trace';
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 
-import { appSignals } from '@eventBus/AppSignals';
+import { emitAppSignal } from '@eventBus/AppSignals';
 import { createLog } from '@logger/logUtils';
 import { AgentResume, type Disposable } from '@platform/interfaces';
 import type { Secrets } from '@platform/secrets';
@@ -284,6 +284,6 @@ export class RunSubscriptionRegistry<K extends string, Input> {
   }
 
   private emitBindingsChanged(): void {
-    appSignals.emit('githubSubscriptionsChanged', undefined);
+    emitAppSignal('githubSubscriptionsChanged', undefined);
   }
 }

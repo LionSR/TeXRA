@@ -11,7 +11,6 @@ import {
   noActiveGitHubSubscriptionMessage,
   unsubscribeGitHubKey,
 } from '@controllers/settingsView/githubSubscriptions';
-import { appSignals } from '@eventBus/AppSignals';
 import { PromptFailed, type MessageHost } from '@hosts/uiHosts';
 import type { StateStore } from '@platform/interfaces';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
@@ -50,6 +49,7 @@ import {
   gitHubTokenRejectedMessage,
   resolveGitHubTokenSource,
 } from '@tools/github/githubAuth';
+import { subscribeDesktopAppSignal } from './desktopAppSignalSubscription.js';
 import { subscribeDesktopGoalChanges } from './desktopGoalSubscription.js';
 import type {
   DesktopCommandMessage,
@@ -436,9 +436,10 @@ export function createDesktopSettingsIpc(
   // needs the push. The session outlives the window, so the subscription is
   // window-scoped and released in `dispose` below.
   //
-  // App signals and goal changes run their listeners on the emitter's call
-  // stack. Every refresh a signal triggers reads this paper's own session,
-  // which each of these posters takes from `options.session` as data.
+  // App signals and goal changes deliver on their own fiber of this window's
+  // runtime, not on the emitter's stack. Every refresh a signal triggers
+  // reads this paper's own session, which each of these posters takes from
+  // `options.session` as data.
   const subscriptions = [
     subscribeDesktopGoalChanges(
       options.session,
@@ -514,25 +515,32 @@ export function createDesktopSettingsIpc(
   // releases a PR, repo or issue subscription changes the list the Git tab is
   // showing, which the desktop used to re-read only when the user asked.
   subscriptions.push(
-    appSignals.on('githubSubscriptionsChanged', () =>
-      runAsync(postGitHubSubscriptions()),
+    subscribeDesktopAppSignal(
+      'githubSubscriptionsChanged',
+      () => runAsync(postGitHubSubscriptions()),
+      runtime,
     ),
     // `apply_team` writes the roster straight from the setup agent, so the
     // open view is showing agents and a team it just replaced. The signal
     // comes from whichever paper's run applied the team; the catalog is
     // rebuilt from this paper's presets, not the emitter's.
-    appSignals.on('agentRosterChanged', () =>
-      runAsync(options.agentSettingsController.refreshCatalogData()),
+    subscribeDesktopAppSignal(
+      'agentRosterChanged',
+      () => runAsync(options.agentSettingsController.refreshCatalogData()),
+      runtime,
     ),
     // Outside VS Code a rejected token left the pollers failing in silence.
     // The dialog is the whole fix: `resolveGitHubTokenSource` reports only
     // which store holds a token, and rejection leaves the secret in place, so
     // re-posting the status would repaint the same "token set" badge. Marking
     // a stored token as rejected would need a new status on the wire.
-    appSignals.on('githubTokenInvalid', ({ message }) =>
-      runAsync(
-        options.ui.showErrorMessage(gitHubTokenRejectedMessage(message)),
-      ),
+    subscribeDesktopAppSignal(
+      'githubTokenInvalid',
+      ({ message }) =>
+        runAsync(
+          options.ui.showErrorMessage(gitHubTokenRejectedMessage(message)),
+        ),
+      runtime,
     ),
   );
 

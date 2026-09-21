@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 
 import type { SessionHandle } from '@agent/runtime';
-import { appSignals } from '@eventBus/AppSignals';
+import { subscribeAppSignal } from '@frontend/events/appSignalSubscriptions';
 import { subscribeAddOutputFilesRunFact } from '@frontend/events/runFactSubscriptions';
 import type { ProcessRuntime } from '@platform/processRuntime';
 
@@ -75,11 +75,12 @@ export function registerFileDecorations(
     runtime,
   );
 
-  const unsubscribeWritten = appSignals.on(
+  const unsubscribeWritten = subscribeAppSignal(
     'workspaceFilesWritten',
     ({ absolutePaths }) => {
       provider.markTouched(absolutePaths);
     },
+    runtime,
   );
 
   context.subscriptions.push(

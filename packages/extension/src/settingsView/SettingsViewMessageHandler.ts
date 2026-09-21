@@ -26,7 +26,7 @@ import {
 } from '@controllers/settingsView/ToolDashboardData';
 import { SettingsProfileKeyController } from '@controllers/settingsView/SettingsProfileKeyController';
 import { SettingsProfileController } from '@controllers/settingsView/SettingsProfileController';
-import { appSignals } from '@eventBus/AppSignals';
+import { emitAppSignal } from '@eventBus/AppSignals';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import {
   isInlineCriticismEnabled,
@@ -39,6 +39,7 @@ import {
   showLoggedErrorMessage,
   showLoggedInfoMessage,
 } from '@frontend/ui/errorHandlingUtils';
+import { subscribeAppSignal } from '@frontend/events/appSignalSubscriptions';
 import { subscribeGoalStateChanges } from '@frontend/events/runFactSubscriptions';
 import { NotificationFailed } from '@hosts/uiHosts';
 import { createLog, type Log } from '@logger/logUtils';
@@ -242,22 +243,30 @@ export class SettingsViewMessageHandler {
 
     context.subscriptions.push(
       {
-        dispose: appSignals.on('githubSubscriptionsChanged', () => {
-          this.runtime.runFork(
-            this.withActiveWebview((w) =>
-              this.githubHandlers.sendPRSubscriptions(w),
-            ),
-          );
-        }),
+        dispose: subscribeAppSignal(
+          'githubSubscriptionsChanged',
+          () => {
+            this.runtime.runFork(
+              this.withActiveWebview((w) =>
+                this.githubHandlers.sendPRSubscriptions(w),
+              ),
+            );
+          },
+          this.runtime,
+        ),
       },
       {
-        dispose: appSignals.on('toolAvailabilityChanged', () => {
-          this.runtime.runFork(
-            this.withActiveWebview((w) =>
-              this.sendToolDashboardData(w, { skipChecks: true }),
-            ),
-          );
-        }),
+        dispose: subscribeAppSignal(
+          'toolAvailabilityChanged',
+          () => {
+            this.runtime.runFork(
+              this.withActiveWebview((w) =>
+                this.sendToolDashboardData(w, { skipChecks: true }),
+              ),
+            );
+          },
+          this.runtime,
+        ),
       },
       {
         // `apply_team` writes the roster straight from the setup agent, so
@@ -266,18 +275,28 @@ export class SettingsViewMessageHandler {
         // the agent-creator reloads before it emits. Without that flag this
         // listener would rescan the YAML and re-fetch the remote catalog on
         // every roster write.
-        dispose: appSignals.on('agentRosterChanged', () => {
-          this.runtime.runFork(this.refreshAfterAgentMutation(undefined, true));
-        }),
+        dispose: subscribeAppSignal(
+          'agentRosterChanged',
+          () => {
+            this.runtime.runFork(
+              this.refreshAfterAgentMutation(undefined, true),
+            );
+          },
+          this.runtime,
+        ),
       },
       {
-        dispose: appSignals.on('languageModelsChanged', () => {
-          this.runtime.runFork(
-            this.withActiveWebview((webview) =>
-              this.sendModelSelectionData(webview),
-            ),
-          );
-        }),
+        dispose: subscribeAppSignal(
+          'languageModelsChanged',
+          () => {
+            this.runtime.runFork(
+              this.withActiveWebview((webview) =>
+                this.sendModelSelectionData(webview),
+              ),
+            );
+          },
+          this.runtime,
+        ),
       },
     );
     const unsubscribeGoals = subscribeGoalStateChanges(
@@ -765,7 +784,7 @@ export class SettingsViewMessageHandler {
         requiresOpenWorkspace: () => !this.session.roots.workspace,
         onApprovalPolicyChanged: (policy) => {
           this.session.setApprovalPolicy(policy);
-          appSignals.emit('approvalPolicyChanged', undefined);
+          emitAppSignal('approvalPolicyChanged', undefined);
         },
       });
       if (result.kind === 'ignored') return;

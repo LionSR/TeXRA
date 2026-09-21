@@ -25,7 +25,6 @@ import {
 } from '@common/files/fileListingRules';
 import { FILE_HANDLING_RULES } from '@common/files/fileHandlingRules';
 import { getIncludedExtensions } from '@common/files/fileTypeUtils';
-import { appSignals } from '@eventBus/AppSignals';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import { normalizeFilePath } from '@utils/core';
 import { locateInWorkspace } from '@utils/files/workspaceFS';
@@ -45,6 +44,7 @@ import {
   type DesktopBrowserBounds,
   type DesktopEnvironmentSummary,
 } from '../shared/desktopWorkspaceMessages.js';
+import { subscribeDesktopAppSignal } from './desktopAppSignalSubscription.js';
 import type {
   DesktopCommandMessage,
   DesktopMessageHandler,
@@ -65,10 +65,10 @@ interface DesktopWorkspaceIpcOptions {
   /**
    * Root of the project this window shows, and the only workspace root this
    * handler resolves against — a request names a path relative to the project
-   * it was sent for, not to whichever project happens to be active. App-signal
-   * listeners run in the emitter's context, which for a run in another open
-   * project is that project's session; the window's own project is what a
-   * re-list decision compares to.
+   * it was sent for, not to whichever project happens to be active. An
+   * app-signal listener hears every project's writes, including a run in
+   * another open project; the window's own project is what a re-list decision
+   * compares to.
    */
   getWorkspacePath(): string | undefined;
   getEnvironmentSummary(): Promise<DesktopEnvironmentSummary>;
@@ -268,7 +268,7 @@ export function createDesktopWorkspaceIpc(
   // Refresh. There is no filesystem watcher here; this signal is the only
   // notice the main process gets. Writes outside the workspace root cannot
   // appear in the tree, so they are not worth a re-list.
-  const unsubscribeFilesWritten = appSignals.on(
+  const unsubscribeFilesWritten = subscribeDesktopAppSignal(
     'workspaceFilesWritten',
     ({ absolutePaths }) => {
       const root = options.getWorkspacePath();
@@ -278,6 +278,7 @@ export function createDesktopWorkspaceIpc(
         command: DESKTOP_WORKSPACE_COMMANDS.FILES_CHANGED,
       });
     },
+    options.runtime,
   );
 
   /**

@@ -34,7 +34,8 @@ import {
 } from '@controllers/session/sessionLayer';
 import { globalDatabaseLayer } from '@controllers/session/Database';
 import { bootstrapHost } from '@controllers/hostBootstrap';
-import { appSignals } from '@eventBus/AppSignals';
+import { emitAppSignal } from '@eventBus/AppSignals';
+import { subscribeAppSignal } from '@frontend/events/appSignalSubscriptions';
 import { refreshApiKeyStatusBar } from '@frontend/statusBar/apiKeyStatusBar';
 import { acquireVscodeLanguageModel } from '@frontend/lm/acquireVscodeLanguageModel';
 import {
@@ -693,7 +694,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
   // token, so activation now performs that one background fetch.
   const invalidateLanguageModels = () => {
     invalidateRuntimeModelRegistry();
-    appSignals.emit('languageModelsChanged', undefined);
+    emitAppSignal('languageModelsChanged', undefined);
   };
   context.subscriptions.push(
     languageModel.onDidChange(invalidateLanguageModels),
@@ -831,7 +832,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
       );
     }),
   );
-  const disposeGitHubAuthListener = appSignals.on(
+  const disposeGitHubAuthListener = subscribeAppSignal(
     'githubTokenInvalid',
     ({ message }) => {
       const rejected = gitHubTokenRejectedMessage(message);
@@ -844,6 +845,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
           }
         });
     },
+    runtime,
   );
   context.subscriptions.push({ dispose: disposeGitHubAuthListener });
   registerInlineCriticism(context, runtime, runtimeSession);
@@ -970,9 +972,10 @@ async function activateExtension(context: vscode.ExtensionContext) {
   // Approval-policy setting updates emit on this signal; the subscription
   // here is what makes the refresh reachable, so a missed subscribe is a
   // missing behavior rather than a silent no-op.
-  const disposeApprovalPolicyTooltipRefresh = appSignals.on(
+  const disposeApprovalPolicyTooltipRefresh = subscribeAppSignal(
     'approvalPolicyChanged',
     updateStatusBarTooltip,
+    runtime,
   );
 
   // Surface curated research tools to VS Code's Language Model Tool API
