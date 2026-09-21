@@ -1094,7 +1094,7 @@ export function installProcessRuntime({
     AgentResume.layer(agentResume),
     SetupPlatform.layer(setup),
     ToolInjections.layer(AGENT_TOOL_INJECTIONS),
-    // Built with this runtime, so a disposed process leaves no run bindings.
+    // Built with this runtime: a replacement starts with empty tables.
     gitHubSubscriptionsLayer,
     editorModel === undefined
       ? Layer.empty

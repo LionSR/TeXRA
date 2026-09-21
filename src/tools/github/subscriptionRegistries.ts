@@ -29,7 +29,13 @@ import {
 import { RunSubscriptionRegistry } from './RunSubscriptionRegistry';
 import { GitHubSubscriptions } from './subscriptionBindings';
 
-/** The ownership tables of one process runtime. */
+/**
+ * The ownership tables of one process runtime. Building them here is what
+ * makes a replacement runtime start empty; it does not release what the old
+ * one held. This layer has no finalizer, and each registry drops the
+ * `Disposable` from `source.onKeysChanged(...)`, so the listeners outlive a
+ * disposed runtime on the module-singleton polling sources (#12933).
+ */
 export const gitHubSubscriptionsLayer: Layer.Layer<GitHubSubscriptions> =
   Layer.sync(GitHubSubscriptions, () => ({
     pr: new RunSubscriptionRegistry<string, PRSubscribeInput>({
