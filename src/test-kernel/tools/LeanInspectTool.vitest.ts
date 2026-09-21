@@ -27,6 +27,7 @@ function fakeServices(
     fetchDiagnosticsForFile: vi.fn(),
     navigateToFirstError: vi.fn(),
     executeProjectCommand: vi.fn(),
+    listServers: () => [],
     ...overrides,
   } as LeanLanguageServicesShape;
 }
