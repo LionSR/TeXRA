@@ -45,7 +45,7 @@ const probeServices = Layer.mergeAll(
   secretsLayer,
   SetupPlatform.layer(createFakeSetupPlatform()),
   // The mocked defs declare no Lean group, so nothing here reads the port.
-  Layer.mock(LeanLanguageServices, {}),
+  Layer.mock(LeanLanguageServices, { listServers: () => [] }),
 );
 
 afterEach(() => {

@@ -72,6 +72,7 @@ import {
   type LeanServerPoolOptions,
 } from '@tools/lean/direct/leanServerPool';
 import {
+  createLeanServerRoster,
   isLeanServerActive,
   type LeanServerInfo,
 } from '@tools/lean/leanServerRegistry';
@@ -374,6 +375,7 @@ describe('LeanServerPool', () => {
             LeanServer.layer({
               workspaceRoot: projectRoot,
               lakeCommand: fakeLakePath,
+              roster: createLeanServerRoster(),
             }).pipe(Layer.provide(spawnerLayer)),
           ).pipe(Scope.provide(scope)),
         );

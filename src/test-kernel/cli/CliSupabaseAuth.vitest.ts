@@ -11,6 +11,7 @@ import {
   globalStorageFsTestLayer,
   nodePlatformLayer,
 } from '@test/support/fsTestUtils';
+import { GitHubSubscriptions } from '@tools/github/subscriptionBindings';
 import {
   LeanLanguageServices,
   type LeanLanguageServicesShape,
@@ -187,6 +188,8 @@ async function loadSupabaseAuth() {
         onDidChange: unreadProcessService,
       }),
       Layer.mock(AgentResume, { tryResumeRun: unreadProcessService }),
+      // Plain in-memory ownership tables; the auth edge binds nothing.
+      GitHubSubscriptions.layer,
       SetupPlatform.layer({ host: 'cli', signIn: () => Effect.succeed(false) }),
       ToolInjections.layer([]),
     ),

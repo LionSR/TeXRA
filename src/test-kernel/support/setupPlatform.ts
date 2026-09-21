@@ -339,6 +339,7 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     { SetupPlatform },
     { ToolInjections },
     { SupabaseAuth },
+    { GitHubSubscriptions },
   ] = await Promise.all([
     import('@platform/platform'),
     import('@test/support/testWorkspaceRoots'),
@@ -352,6 +353,10 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     import('@tools/setup/platform'),
     import('@agent/runtime/toolInjection'),
     import('@auth/SupabaseAuth'),
+    // Imported here rather than statically for the reason the header gives:
+    // the registries pull in the follow-up module, and a setup-file import
+    // would cache it ahead of a suite that mocks it.
+    import('@tools/github/subscriptionBindings'),
   ]);
   current = host;
   // The process services, over whichever host is installed when a member is
@@ -374,6 +379,10 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     // The run-end stop is absent, as on a host whose Lean integration owns
     // server lifetime: the mock's placeholder for it would die on every run.
     Layer.mock(LeanLanguageServices, unavailableLeanLanguageServices),
+    // The ownership tables are plain in-memory registries built on demand,
+    // so the bare runtime carries the real ones: nothing polls until a
+    // suite binds a subscription.
+    GitHubSubscriptions.layer,
     Secrets.layer(fakeHostSecrets),
     AppState.layer(fakeHostAppState),
     SupabaseAuth.layer(fakeHostAuth),
