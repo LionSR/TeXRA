@@ -40,18 +40,18 @@ covers, which the operation handle deliberately does not copy.
 
 Ten files, about 10 500 lines.
 
-| File                    | What it owns                                                                                                                                  |
-| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| File                    | What it owns                                                                                                                                                                               |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `turn.ts`               | the `Model` interface, the protocol enum, messages, request, configuration, result and event schemas, `ModelError`, SSE, stream pull, tool-argument parsing, the abort-safe request helper |
-| `openaiChat.ts`         | `openaiChatModel`: `openai-chat` and the direct `deepseek-chat`, `kimi-chat`, `glm-chat`, `xai-chat`, `dashscope-chat` and `minimax-chat` branches |
-| `openaiResponses.ts`    | `openaiResponsesModel`, `openaiResponsesWebSocketModel`, and the pure `openaiResponsesContinuation`                                            |
-| `anthropicMessages.ts`  | `anthropicMessagesModel`                                                                                                                       |
-| `googleInteractions.ts` | `googleInteractionsModel`                                                                                                                      |
-| `openrouterChat.ts`     | `openrouterChatModel`                                                                                                                          |
-| `chatStream.ts`         | the shared Chat SSE decode loop                                                                                                                |
-| `uploadCache.ts`        | the digest-keyed, model-scoped upload cache behind `uploadFile`                                                                                |
-| `prefixFingerprint.ts`  | the admitted-history fingerprint a background completion anchors on                                                                            |
-| `openaiError.ts`        | SDK error classification into `ModelError`                                                                                                     |
+| `openaiChat.ts`         | `openaiChatModel`: `openai-chat` and the direct `deepseek-chat`, `kimi-chat`, `glm-chat`, `xai-chat`, `dashscope-chat` and `minimax-chat` branches                                         |
+| `openaiResponses.ts`    | `openaiResponsesModel`, `openaiResponsesWebSocketModel`, and the pure `openaiResponsesContinuation`                                                                                        |
+| `anthropicMessages.ts`  | `anthropicMessagesModel`                                                                                                                                                                   |
+| `googleInteractions.ts` | `googleInteractionsModel`                                                                                                                                                                  |
+| `openrouterChat.ts`     | `openrouterChatModel`                                                                                                                                                                      |
+| `chatStream.ts`         | the shared Chat SSE decode loop                                                                                                                                                            |
+| `uploadCache.ts`        | the digest-keyed, model-scoped upload cache behind `uploadFile`                                                                                                                            |
+| `prefixFingerprint.ts`  | the admitted-history fingerprint a background completion anchors on                                                                                                                        |
+| `openaiError.ts`        | SDK error classification into `ModelError`                                                                                                                                                 |
 
 The twelfth protocol, `vscode-lm`, cannot live here: it is acquired from the
 editor. `packages/extension/src/frontend/lm/acquireVscodeLanguageModel.ts`

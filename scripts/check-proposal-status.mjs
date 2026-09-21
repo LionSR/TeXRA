@@ -146,7 +146,9 @@ for (const entry of walkFiles(proposedRoot, {
 }
 
 if (failures.length > 0) {
-  console.error('Notes under .agents/docs/proposed/ declare themselves done:\n');
+  console.error(
+    'Notes under .agents/docs/proposed/ declare themselves done:\n',
+  );
   for (const { file, marker, lifecycle } of failures) {
     const target = file.replace('/proposed/', `/${lifecycle}/`);
     console.error(`  ${file}\n    ${marker} → git mv it to ${target}`);
