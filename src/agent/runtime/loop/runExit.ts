@@ -30,9 +30,7 @@ type HaltWriteResolution =
   | { readonly kind: 'fail'; readonly error: DatabaseWriteFailed }
   | { readonly kind: 'die'; readonly defect: unknown };
 
-function classifyHaltWriteCause(
-  cause: Cause.Cause<HaltWriteFailure>,
-): HaltWriteResolution {
+function classifyHaltWriteCause(cause: Cause.Cause<unknown>): HaltWriteResolution {
   const failure = Cause.findErrorOption(cause);
   if (Option.isSome(failure)) {
     if (failure.value instanceof RunLedgerRefused) {
