@@ -317,4 +317,3 @@ export const readPersistedRunRecord = (
   session: SessionHandle,
 ): Effect.Effect<RunRecord | null, Error> =>
   getRunRecords(session, runId).readRunRecord();
-

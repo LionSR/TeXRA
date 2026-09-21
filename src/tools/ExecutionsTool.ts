@@ -751,12 +751,11 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       // the fold: "no handle in this process" alone never justifies calling a
       // command finished, and a run whose owner is gone reads as interrupted
       // rather than as one that recorded how it ended.
-      const retained = `this is the retained log; /executions/${runId}/report has the result summary`;
-      const footer = isTerminalOutcomePhase(run.status)
-        ? `[finished: ${retained}]`
-        : run.statusDetail === null
-          ? `[still running: re-read for more output, use action='wait' on /executions/${runId} to block until it finishes, or read /executions/${runId}/report once it has]`
-          : `[${run.statusDetail} ${retained}]`;
+      const lead = isTerminalOutcomePhase(run.status)
+        ? 'finished:'
+        : (run.statusDetail ??
+          `still running: re-read for more output, or use action='wait' on /executions/${runId} to block until it finishes;`);
+      const footer = `[${lead} this is the retained log; /executions/${runId}/report has the result summary]`;
       const out: string[] = [
         `Output for ${runId} (process, ${formatRunStatus(run)}): ${chars.toLocaleString()} retained transcript chars; command-output cap ${BASH_BACKGROUND_LOG_CAP_CHARS.toLocaleString()} chars, ${lines.length.toLocaleString()} lines.`,
       ];

@@ -25,8 +25,7 @@ import { formatTimestamp } from '@utils/text/stringUtils';
  * (`process` / `multiAgentWorkflow`).
  */
 export type RunDisplayCategory =
-  | AgentCategory
-  | Exclude<RunIdentity['kind'], 'agent'>;
+  AgentCategory | Exclude<RunIdentity['kind'], 'agent'>;
 
 export function runDisplayCategory(run: RunView): RunDisplayCategory {
   return run.identity.kind === 'agent' ? run.category : run.identity.kind;
