@@ -533,6 +533,7 @@ export default tseslint.config(
       'src/**/*.{ts,mts}',
       'packages/agent/src/**/*.{ts,mts}',
       'packages/llm/src/**/*.{ts,mts}',
+      'packages/llm/test-live/**/*.{ts,mts}',
       'packages/extension/src/**/*.{ts,mts}',
       'packages/desktop/src/**/*.{ts,mts}',
       'packages/desktop/design-harness/**/*.{ts,mts}',
@@ -648,6 +649,15 @@ export default tseslint.config(
     files: ['packages/llm/src/**/*.ts'],
     languageOptions: {
       parserOptions: { project: ['./packages/llm/tsconfig.json'] },
+    },
+  },
+
+  // The live tier is a separate program over the same package: its own
+  // tsconfig, so the suites lint under the same rules as the sources they call.
+  {
+    files: ['packages/llm/test-live/**/*.ts'],
+    languageOptions: {
+      parserOptions: { project: ['./packages/llm/tsconfig.test-live.json'] },
     },
   },
 

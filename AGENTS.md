@@ -151,6 +151,14 @@ or layers, and do not mock repository modules. A `vi.mock` is what moves your
 suite to the slow tier; removing it moves it back. The tier is not a target to
 opt into — write the suite the durable way and it lands there.
 
+`packages/llm` carries a third project, in its own
+`packages/llm/vitest.live.config.mjs`: one suite per HTTP protocol, run
+against the real provider (`npm run test:live`). It sits outside
+`vitest.config.mjs` on purpose — it spends money and needs the network, so it
+is never part of `npm test`. Each suite gates itself on its route's key and
+skips without it; CI runs it only on the `live-llm` label
+(`.github/workflows/live-llm.yml`).
+
 ### Scoping the test run
 
 `npm test` runs every suite under `src/test-kernel/`. It is the gate CI enforces
