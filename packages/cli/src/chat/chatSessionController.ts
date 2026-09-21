@@ -1157,7 +1157,6 @@ export function createChatSessionController(
       return recoverRun(
         Effect.gen(function* () {
           const meta = sessionMetaSignal.get();
-          const currentAgent = meta.agent || initialAgent;
           const currentModel = meta.model || initialModel;
           const selection = yield* selectCliRunnableModel(currentModel, {
             stores: { ...stores, secrets, runtime },
@@ -1193,7 +1192,7 @@ export function createChatSessionController(
             return;
           }
           startRootRun({
-            agent: currentAgent,
+            agent: meta.agent || initialAgent,
             model: selection.model,
             instruction,
             ...(displayInstruction !== undefined ? { displayInstruction } : {}),
@@ -1233,8 +1232,7 @@ export function createChatSessionController(
         readonly kind: 'accept' | 'reject';
         readonly runId: RunId;
       } => {
-    const runId = activeRunIdSignal.get();
-    const stream = runViewOf(currentView(), runId);
+    const stream = runViewOf(currentView(), activeRunIdSignal.get());
     if (!stream || stream.parentId === null) return { kind: 'none' };
     return {
       kind: focusedChildAcceptsFollowUps(stream) ? 'accept' : 'reject',
