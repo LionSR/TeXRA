@@ -19,9 +19,7 @@ import {
   type ModelAvailabilityKind,
   type ModelOptionData,
 } from '@shared/schemas';
-import {
-  REASONING_LEVEL_LABELS,
-} from '@shared/settingsView/settingsViewMessages';
+import { REASONING_LEVEL_LABELS } from '@shared/settingsView/settingsViewMessages';
 import {
   DEFAULT_HELPER_MODEL,
   providerDisplayName,

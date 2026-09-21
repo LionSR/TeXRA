@@ -50,11 +50,7 @@ import {
   type RunId,
   type WorkflowCallProgress,
 } from '@shared/schemas';
-import {
-  isSettledRow,
-  type ToolRow,
-  type TranscriptRow,
-} from '@ui/transcript';
+import { isSettledRow, type ToolRow, type TranscriptRow } from '@ui/transcript';
 import { formatWorkflowPhaseHeading } from '@ui/copy/workflowCall';
 import {
   loadInk,

@@ -18,9 +18,7 @@ import {
   type AgentCategory,
   type FileLocation,
 } from '@shared/schemas';
-import {
-  type SettingsTabPanelName,
-} from '@shared/settingsView/settingsViewMessages';
+import { type SettingsTabPanelName } from '@shared/settingsView/settingsViewMessages';
 import {
   commandCatalog,
   settingsTabByCommand,

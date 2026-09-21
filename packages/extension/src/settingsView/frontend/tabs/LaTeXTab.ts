@@ -39,10 +39,7 @@ import {
   renderSettingsSectionHeading,
   renderSettingsToggleRow,
 } from '@ui/wa/settingsSection';
-import {
-  renderSetStatusIcon,
-  statusCheckIconStyles,
-} from '@ui/wa/statusIcons';
+import { renderSetStatusIcon, statusCheckIconStyles } from '@ui/wa/statusIcons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 // Web Awesome button + icon bundles (side-effect imports)

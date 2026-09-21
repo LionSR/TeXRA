@@ -10,9 +10,7 @@ vi.mock('@shared/hostBridge', () => ({
 
 import type { SubscriptionSectionProvider } from '@settingsView/frontend/components/profile/SubscriptionSection';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import type {
-  SubscriptionAuthStatus,
-} from '@shared/settingsView/settingsViewMessages';
+import type { SubscriptionAuthStatus } from '@shared/settingsView/settingsViewMessages';
 
 import {
   mountComponent,

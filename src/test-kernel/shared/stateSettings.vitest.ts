@@ -49,9 +49,7 @@ import type {
   SettingStore,
   StateSettingEntry,
 } from '@shared/state/stateSettings';
-import type {
-  DerivedSettingsSnapshot,
-} from '@shared/settingsView/settingsViewMessages';
+import type { DerivedSettingsSnapshot } from '@shared/settingsView/settingsViewMessages';
 import { buildSettingsSnapshotMessage } from '@shared/settingsView/handlers/settingsSnapshot';
 import {
   DEFAULT_HELPER_MODEL,

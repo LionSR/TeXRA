@@ -26,9 +26,7 @@ import {
   CODEX_SANDBOX_MODE_DEFAULT,
 } from '@shared/schemas';
 import { settingsViewSettingByKey } from '@shared/state/stateSettings';
-import {
-  type ToolDashboardItem,
-} from '@shared/settingsView/settingsViewMessages';
+import { type ToolDashboardItem } from '@shared/settingsView/settingsViewMessages';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { renderEmptyState } from '@ui/wa/emptyState';
 import { renderLoadingState } from '@ui/wa/loadingState';

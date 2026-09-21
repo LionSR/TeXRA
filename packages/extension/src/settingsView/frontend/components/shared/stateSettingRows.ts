@@ -13,9 +13,7 @@ import { postMessage } from '@shared/hostBridge';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 
 import type { SettingEnumChoice } from '@shared/state/stateSettings';
-import type {
-  StateSettingValue,
-} from '@shared/settingsView/settingsViewMessages';
+import type { StateSettingValue } from '@shared/settingsView/settingsViewMessages';
 import {
   settingEnumChoices,
   settingsViewSettingByKey,

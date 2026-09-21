@@ -1,7 +1,5 @@
 import type { AgentCategory, GettingStartedAction } from '@shared/schemas';
-import type {
-  SettingsTabPanelName,
-} from '@shared/settingsView/settingsViewMessages';
+import type { SettingsTabPanelName } from '@shared/settingsView/settingsViewMessages';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   toElectronAccelerator,

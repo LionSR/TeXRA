@@ -20,9 +20,7 @@ import type { StateStore } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { AgentCategory } from '@shared/schemas';
-import type {
-  SettingsTabPanelName,
-} from '@shared/settingsView/settingsViewMessages';
+import type { SettingsTabPanelName } from '@shared/settingsView/settingsViewMessages';
 
 // Local file imports
 import { SettingsViewMessageHandler } from './SettingsViewMessageHandler';

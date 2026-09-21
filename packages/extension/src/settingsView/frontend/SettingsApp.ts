@@ -20,10 +20,7 @@ import {
   type SettingsTabPanelName,
 } from '@shared/settingsView/settingsViewMessages';
 import { isKnownUnsupported } from '@shared/utils/dispatcher';
-import {
-  registerTeXRAWebAwesomeIcons,
-  waIcon,
-} from '@ui/wa/webAwesomeIcons';
+import { registerTeXRAWebAwesomeIcons, waIcon } from '@ui/wa/webAwesomeIcons';
 
 // Local imports - settings view
 import {

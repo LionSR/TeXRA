@@ -17,9 +17,7 @@ import {
 } from '@controllers/modelAccess/subscriptionProviders';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import type {
-  SubscriptionAuthStatus,
-} from '@shared/settingsView/settingsViewMessages';
+import type { SubscriptionAuthStatus } from '@shared/settingsView/settingsViewMessages';
 
 export function subscriptionAuthStatus(
   providerId: SubscriptionProviderId,

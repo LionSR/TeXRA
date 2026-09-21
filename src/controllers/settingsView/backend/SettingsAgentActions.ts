@@ -11,9 +11,7 @@ import type { ProcessServices } from '@platform/processRuntime';
 // Local imports - shared
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { isPackagedAgentSource, type AgentSource } from '@shared/schemas';
-import {
-  type SettingsMessageFor,
-} from '@shared/settingsView/settingsViewMessages';
+import { type SettingsMessageFor } from '@shared/settingsView/settingsViewMessages';
 // Local imports - utilities
 import { entryExists } from '@utils/files/fsEntryExists';
 import { isStrictlyWithin } from '@utils/core/pathCore';

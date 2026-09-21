@@ -15,10 +15,7 @@ import {
   type ProviderKeyStatus,
 } from '@shared/settingsView/settingsViewMessages';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
-import {
-  renderKeyStatusIcon,
-  statusCheckIconStyles,
-} from '@ui/wa/statusIcons';
+import { renderKeyStatusIcon, statusCheckIconStyles } from '@ui/wa/statusIcons';
 import { renderSettingsSectionHeading } from '@ui/wa/settingsSection';
 
 // Side-effect imports - register WA icon component

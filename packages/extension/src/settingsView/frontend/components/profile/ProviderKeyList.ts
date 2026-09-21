@@ -14,10 +14,7 @@ import { PROVIDER_STATE_ENTRIES } from '@shared/constants/providers';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
 import { renderSettingsSectionHeading } from '@ui/wa/settingsSection';
-import {
-  renderKeyStatusIcon,
-  statusCheckIconStyles,
-} from '@ui/wa/statusIcons';
+import { renderKeyStatusIcon, statusCheckIconStyles } from '@ui/wa/statusIcons';
 
 // Side-effect imports - register WA icon component
 import '@awesome.me/webawesome/dist/components/icon/icon.js';

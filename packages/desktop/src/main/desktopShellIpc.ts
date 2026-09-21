@@ -5,9 +5,7 @@ import type { AgentDirectoriesFailed } from '@platform/interfaces';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { GlobalStorageFs } from '@platform/rootedFs';
 import type { AgentCategory } from '@shared/schemas';
-import type {
-  SettingsTabPanelName,
-} from '@shared/settingsView/settingsViewMessages';
+import type { SettingsTabPanelName } from '@shared/settingsView/settingsViewMessages';
 import {
   DESKTOP_SHELL_COMMANDS,
   type DesktopLayoutPanel,

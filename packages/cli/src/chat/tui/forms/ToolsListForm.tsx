@@ -11,9 +11,7 @@ import {
 } from '@cli/runtime/tools';
 import type { ConfigProvider, StateStore } from '@platform/interfaces';
 import type { ProcessRuntime } from '@platform/processRuntime';
-import type {
-  ToolDashboardItem,
-} from '@shared/settingsView/settingsViewMessages';
+import type { ToolDashboardItem } from '@shared/settingsView/settingsViewMessages';
 import { toolDependencyStatusLabel } from '@shared/tools/toolDependencyStatusLabels';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
