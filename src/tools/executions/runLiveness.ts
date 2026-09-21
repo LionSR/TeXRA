@@ -23,10 +23,11 @@ import { Effect } from 'effect';
  * existence of a `flow.snapshot` says only whether there is something to
  * continue, which is the resume path's question, not this one.
  *
- * The cost is the point: the /executions listing walks this once per row, so
- * it must stay at one metadata read (skipped entirely when the caller already
- * holds the row) and, for a row with no recorded outcome, one claim read. A
- * row that recorded its outcome pays neither.
+ * The cost is the point: a caller asks this per run, so it must stay at one
+ * metadata read (skipped entirely when the caller already holds the row) and,
+ * for a row with no recorded outcome, one claim read. A row that recorded its
+ * outcome pays neither. A surface listing many runs reads the session fold
+ * instead, which has already decided all of this for every run at once.
  */
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';

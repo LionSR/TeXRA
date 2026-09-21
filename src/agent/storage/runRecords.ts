@@ -31,13 +31,6 @@ import {
   type RunId,
 } from '@shared/schemas';
 
-/** A child launch projected from its canonical creation fact. */
-export interface ChildRecord {
-  readonly id: RunId;
-  readonly agent: string;
-  readonly timestamp: string;
-}
-
 /**
  * The structural identity of one child turn (#9531): the run is the
  * aggregate, `attemptId` the child-run attempt that accepted it, `turnIndex`

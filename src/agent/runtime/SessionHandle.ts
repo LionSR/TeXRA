@@ -960,12 +960,6 @@ export class SessionHandle {
     return this.graph.runRecords(runId);
   }
 
-  readRunChildren(
-    runId: RunId,
-  ): Effect.Effect<readonly SessionEvent[], DatabaseReadFailed> {
-    return this.graph.runChildren(runId);
-  }
-
   /** Every committed row of one aggregate, private rows included, for the
    *  readers that fold a keyed record or a journal over the whole aggregate. */
   readAggregate(

@@ -41,7 +41,6 @@ import {
 import { withTempDirEffect } from '@test/support/tempDirPlatform';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
-import { ensureError } from '@utils/errors/errorMessage';
 
 /**
  * Move a run's phase the way its loop does: a `flow.step` row, which is the
@@ -82,12 +81,10 @@ const tempDirs = useTempDirs();
 
 const mocks = vi.hoisted(() => ({
   readConfig: vi.fn(),
-  readChildren: vi.fn(),
   readReport: vi.fn(),
   readResultMeta: vi.fn(),
   readRunEnd: vi.fn(),
   readWorkspaceFiles: vi.fn(),
-  listRuns: vi.fn(),
 }));
 
 vi.mock('@agent/storage/runRecords', async () => {
@@ -107,24 +104,6 @@ vi.mock('@agent/storage/runRecords', async () => {
           Effect.promise(() => mocks.readWorkspaceFiles()),
       }),
     ),
-  };
-});
-
-vi.mock('@agent/storage', async () => {
-  const actual =
-    await vi.importActual<typeof import('@agent/storage')>('@agent/storage');
-  return {
-    ...actual,
-    listRuns: () =>
-      Effect.tryPromise({
-        try: () => mocks.listRuns(),
-        catch: ensureError,
-      }),
-    readRunChildren: () =>
-      Effect.tryPromise({
-        try: () => mocks.readChildren(),
-        catch: ensureError,
-      }),
   };
 });
 
@@ -181,8 +160,6 @@ describe('ExecutionsTool', () => {
       }),
     );
     vi.clearAllMocks();
-    mocks.listRuns.mockResolvedValue([]);
-    mocks.readChildren.mockResolvedValue([]);
     mocks.readReport.mockResolvedValue(null);
     mocks.readResultMeta.mockResolvedValue(null);
     mocks.readRunEnd.mockResolvedValue(null);

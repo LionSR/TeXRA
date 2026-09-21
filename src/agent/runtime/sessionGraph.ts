@@ -100,9 +100,6 @@ export interface SessionGraph {
   readonly aggregateRows: (
     id: AggregateId,
   ) => Effect.Effect<readonly SessionEvent[], DatabaseReadFailed>;
-  readonly runChildren: (
-    id: RunId,
-  ) => Effect.Effect<readonly SessionEvent[], DatabaseReadFailed>;
   readonly recordListing: () => Effect.Effect<
     readonly SessionEvent[],
     DatabaseReadFailed

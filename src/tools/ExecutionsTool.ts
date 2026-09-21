@@ -3,6 +3,11 @@
  * running processes. Supports viewing past runs, waiting for status
  * changes, reading output from background processes, and killing live
  * runs.
+ *
+ * Every fact about a run — what it is, what it is called, how far it got,
+ * whose child it is, what it still has to do — is read off the session fold
+ * (`SessionView`). The fold is the one reading of the durable rows, so this
+ * surface never resolves liveness, parentage or a task list a second time.
  */
 
 // Node imports
@@ -13,16 +18,12 @@ import { Data, Deferred, Duration, Effect, FileSystem } from 'effect';
 import {
   deriveResumability,
   getRunRecords,
-  readRunChildren,
   listRunWorkspaceFiles,
   unwrapResultMeta,
-  type ChildRecord,
-  listRuns,
   resolveRunWorkspaceFilePath,
 } from '@agent/storage';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { ToolCall } from '@agent/runtime/ToolCall';
-import type { RunHandle } from '@agent/runtime/RunHandle';
 import { Runs } from '@agent/runtime/runRegistry';
 import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
 import { StorageFs } from '@platform/rootedFs';
@@ -31,16 +32,10 @@ import {
   RunIdSchema,
   ToolError,
   type RunId,
-  type TodoItem,
   type ToolResult,
 } from '@shared/schemas';
 import { BASH_BACKGROUND_LOG_CAP_CHARS } from '@shared/toolUse';
-import {
-  isInFlightPhase,
-  isTerminalOutcomePhase,
-} from '@shared/runs/runStatus';
-import { deriveWorkflowRunModel } from '@shared/session/sessionFold';
-import type { SessionView } from '@shared/session/sessionView';
+import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { assertNoParentTraversal } from '@tools/pathResolution';
 import { executed } from '@tools/core/result';
@@ -48,7 +43,6 @@ import { requireToolRun } from '@tools/core/toolRun';
 import {
   hasCompletedRunConversationEvidence,
   readCompletedRunConversation,
-  readCompletedRunTodos,
 } from '@transcript';
 import { assertNever, unique } from '@utils/core';
 import { readSettingFrom } from '@utils/config/platformSettings';
@@ -59,20 +53,16 @@ import { formatBytes, splitContentLines } from '@utils/text/stringUtils';
 
 // Local file imports
 import {
-  buildCompletedSummaryLines,
-  buildRunningSummaryLines,
+  buildSummaryLines,
   buildSummaryTailLines,
+  childRunViews,
   formatChildLine,
   formatListingLine,
-  formatStatusInfo,
+  formatRunStatus,
   formatTodoHeader,
   formatTodoSection,
-  getRunStatusInfo,
-  statusInfoFromLiveness,
   runDisplayCategory,
-  shouldSuppressAutoDeliveredSubagentReport,
-  type RunDisplayCategory,
-  type RunSummaryOptions,
+  runTodos,
 } from './executionFormatters';
 import { defineTool } from './core/define';
 import {
@@ -82,7 +72,6 @@ import {
 } from './formatting';
 import { serializeFilteredConfig } from './executions/configView';
 import { formatConversation } from './executions/conversationFormat';
-import { resolveRunLiveness } from './executions/runLiveness';
 import { EXECUTION_PATH_LIST } from './executions/pathCatalog';
 import {
   OUTPUT_MAX_LINES,
@@ -100,14 +89,6 @@ import {
   shouldSkipWait,
 } from './executions/waitCoordination';
 import { workflowBoardView } from './executions/workflowSummaryView';
-
-/**
- * Bound on the durable reads one listing page or one children block fans
- * out at once: every row asks for its own metadata (and, when the row
- * recorded no outcome, the run claim), so the fan-out is bounded rather
- * than page-wide.
- */
-const DURABLE_READ_CONCURRENCY = 16;
 
 /**
  * One of the still-Promise collaborators this tool reads — run
@@ -163,31 +144,6 @@ const awaitStatusChange = Effect.fn('ExecutionsTool.awaitStatusChange')(
   },
   Effect.scoped,
 );
-
-/**
- * The board of a workflow-script run (the identity the session fold derives
- * `transcript.run` for) — the same `workflowRunModel` fold the three boards
- * paint — folded cold so it is complete whether or not a port holds the run
- * (`runView`'s transcript tier is complete only while one does).
- */
-function workflowBoardLines(
-  view: SessionView | null,
-  runId: RunId,
-  board: ReturnType<typeof deriveWorkflowRunModel> | null,
-): string[] {
-  const resolved = board ?? (view && deriveWorkflowRunModel(view, runId));
-  return resolved
-    ? ['', 'Workflow:', JSON.stringify(workflowBoardView(resolved), null, 2)]
-    : [];
-}
-
-function getRunningTodos(
-  session: SessionHandle,
-  handle: RunHandle,
-): readonly TodoItem[] {
-  const run = session.runView(handle.runId);
-  return run?.category === AgentCategory.ToolUse ? run.todos : [];
-}
 
 interface SizedEntry {
   readonly path: string;
@@ -413,7 +369,13 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     offset: number,
     limit: number,
   ) {
-    const entries = yield* listRuns(context.session);
+    // One cold fold of the log's listing tier: every run's identity, model,
+    // description, parentage and status, already decided. Nothing per row.
+    const view = yield* context.session.readView([]);
+    const entries = [...view.runs.values()].toSorted(
+      (left, right) =>
+        right.launchedAt - left.launchedAt || right.createdAt - left.createdAt,
+    );
 
     if (entries.length === 0) {
       return executed('No run history found.');
@@ -424,102 +386,37 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       offset,
       limit,
     );
-    // One page, not one directory — see DURABLE_READ_CONCURRENCY.
-    const lines = yield* Effect.forEach(
-      page,
-      (entry) => formatListingLine(entry, context.session),
-      { concurrency: DURABLE_READ_CONCURRENCY },
-    );
 
     return executed(
-      `Executions (showing ${start}–${end} of ${total}, most recent first):\n\n${lines.join('\n')}${formatPaginationHint(end, total)}`,
+      `Executions (showing ${start}–${end} of ${total}, most recent first):\n\n${page.map(formatListingLine).join('\n')}${formatPaginationHint(end, total)}`,
     );
   });
 
+  /**
+   * One line set for a live run and a finished one alike: the fold answers
+   * for both, so there is no second summary shape to keep in step.
+   *
+   * The view is folded cold rather than read off the live projection, which
+   * deliberately keeps only a bounded transcript for inactive runs: a
+   * workflow's board would otherwise lose its terminal cards and its
+   * board-level opened state. That board is why this is the one read on the
+   * surface that names its run's aggregate; every other path here takes the
+   * listing tier alone.
+   */
   private readonly showSummary = Effect.fn('ExecutionsTool.showSummary')(
     function* (
-      this: ExecutionsTool,
       context: RunToolContext,
       runId: RunId,
-      options: RunSummaryOptions = {},
+      options: {
+        readonly suppressAutoDeliveredSubagentReport?: boolean;
+      } = {},
     ) {
-      // Check in-memory handle first (free) — a live run has everything we need
       const session = context.session;
-      const runs = yield* Runs;
-      const handle = runs.getHandle(runId);
+      const view = yield* session.readView([runId]);
+      const run = view.runs.get(runId);
 
-      if (handle) {
-        // Running run: agent/status and task state are session-owned;
-        // fetch only the remaining durable details from run storage.
-        const records = getRunRecords(context.session, runId);
-        const todos = getRunningTodos(session, handle);
-        const run = session.runView(runId);
-        const [children, report] = yield* Effect.all(
-          [readRunChildren(context.session, runId), records.readReport()],
-          { concurrency: 2 },
-        );
-
-        const info = runs.getStatus(handle);
-        // `handle.category` is the live wire's run mode, fabricated for a
-        // non-agent run (a background bash reports toolUse). The stamped
-        // identity is what the completed branch displays, so the running branch
-        // reads it too and the same run cannot change category as it settles;
-        // an agent run has no identity-derived category and keeps its mode.
-        const category =
-          runDisplayCategory(run?.identity, null) ?? handle.category;
-        const lines = buildRunningSummaryLines(
-          runId,
-          handle,
-          category,
-          info,
-          run,
-        );
-        if (run?.identity.kind === 'multiAgentWorkflow') {
-          lines.push(...workflowBoardLines(null, runId, run.transcript.run));
-        }
-
-        yield* this.appendSummaryTail(
-          context,
-          lines,
-          runId,
-          category,
-          children,
-          todos,
-          report,
-          {
-            suppressReport: shouldSuppressAutoDeliveredSubagentReport(
-              options,
-              handle,
-              context.runId,
-            ),
-          },
-        );
-
-        return executed(lines.join('\n'));
-      }
-
-      // Completed run: the view's facts beside the private records.
-      const records = getRunRecords(context.session, runId);
-      const run = session.runView(runId);
-      // The live projection deliberately keeps only a bounded transcript for
-      // inactive runs. Fold this completed aggregate cold so workflow cards
-      // retain their terminal statuses and board-level opened state.
-      const durableView = yield* session.readView([runId]);
-      const summaryRun = durableView.runs.get(runId) ?? run;
-      const [record, children, todos, report] = yield* Effect.all(
-        [
-          records.readRunRecord(),
-          readRunChildren(context.session, runId),
-          readCompletedRunTodos(runId, session).pipe(
-            Effect.mapError((cause) => new ExecutionsReadFailed({ cause })),
-          ),
-          records.readReport(),
-        ],
-        { concurrency: 4 },
-      );
-
-      if (!run && !record) {
-        const resumability = yield* deriveResumability(runId, context.session);
+      if (!run) {
+        const resumability = yield* deriveResumability(runId, session);
         if (resumability.kind !== 'checkpoint') {
           return yield* Effect.fail(new ToolError(`Run not found: ${runId}`));
         }
@@ -528,97 +425,51 @@ Delegated subagent and workflow results are delivered automatically as follow-up
         );
       }
 
-      // Identity comes only from the stamped run row; without a row the
-      // display falls back to the config.
-      const identity = summaryRun?.identity;
-      const category = runDisplayCategory(identity, record);
-      const info = yield* getRunStatusInfo(
-        runId,
-        context.session,
-        run && isTerminalOutcomePhase(run.status) ? run.status : null,
-      );
-      const lines = buildCompletedSummaryLines(
-        runId,
-        record,
-        identity,
-        category,
-        info,
-        summaryRun,
-      );
-      if (identity?.kind === 'multiAgentWorkflow') {
+      // The report is a private record row, never part of the display fold.
+      const report = yield* getRunRecords(session, runId).readReport();
+      const lines = buildSummaryLines(run);
+
+      // Non-null exactly for a workflow-script run: the fold derives the
+      // board every host paints, and this bounds it for a model's context.
+      if (run.transcript.run !== null) {
         lines.push(
-          ...workflowBoardLines(
-            durableView,
-            runId,
-            summaryRun?.transcript.run ?? null,
-          ),
+          '',
+          'Workflow:',
+          JSON.stringify(workflowBoardView(run.transcript.run), null, 2),
         );
       }
 
-      yield* this.appendSummaryTail(
-        context,
-        lines,
-        runId,
-        category,
-        children,
-        todos,
-        report,
+      const children = childRunViews(view, runId);
+      if (children.length > 0) {
+        lines.push('', `Children (${children.length}):`);
+        lines.push(...children.map((child) => `  ${formatChildLine(child)}`));
+      }
+
+      // A report the caller already received as a follow-up is elided. Only a
+      // handle this process still tracks proves the child-run loop delivered
+      // it, so a finished run keeps its report inline. Deliberately
+      // identity-agnostic: a background bash run (`process`, category
+      // toolUse) auto-delivers exactly like a delegated agent.
+      const suppressReport =
+        options.suppressAutoDeliveredSubagentReport === true &&
+        run.category === AgentCategory.ToolUse &&
+        context.runId !== undefined &&
+        run.parentId === context.runId &&
+        (yield* Runs).getHandle(runId) !== undefined;
+
+      lines.push(
+        ...buildSummaryTailLines(
+          runId,
+          runDisplayCategory(run),
+          children.length > 0,
+          runTodos(run),
+          report,
+          { suppressReport },
+        ),
       );
 
       return executed(lines.join('\n'));
     },
-  );
-
-  /**
-   * Append the shared summary tail (children, todos, report, available paths)
-   * common to both the running-handle and completed-run branches.
-   */
-  private readonly appendSummaryTail = Effect.fn(
-    'ExecutionsTool.appendSummaryTail',
-  )(function* (
-    this: ExecutionsTool,
-    context: RunToolContext,
-    lines: string[],
-    runId: RunId,
-    category: RunDisplayCategory | undefined,
-    children: ChildRecord[],
-    todos: readonly TodoItem[],
-    report: string | null,
-    options: { readonly suppressReport?: boolean } = {},
-  ) {
-    if (children.length > 0) {
-      lines.push('', `Children (${children.length}):`);
-      const formatted = yield* this.formatChildren(context, children);
-      lines.push(...formatted.map((line) => `  ${line}`));
-    }
-    lines.push(
-      ...buildSummaryTailLines(
-        runId,
-        category,
-        children.length > 0,
-        todos,
-        report,
-        options,
-      ),
-    );
-  });
-
-  /**
-   * Fetch metas and format each child as a summary line, bounded like the
-   * listing page (DURABLE_READ_CONCURRENCY).
-   */
-  private readonly formatChildren = Effect.fn('ExecutionsTool.formatChildren')(
-    (context: RunToolContext, children: ChildRecord[]) =>
-      Effect.forEach(
-        children,
-        (child) =>
-          formatChildLine(
-            child,
-            context.session.runView(child.id),
-            context.session,
-          ),
-        { concurrency: DURABLE_READ_CONCURRENCY },
-      ),
   );
 
   private readonly handleKill = Effect.fn('ExecutionsTool.handleKill')(
@@ -684,32 +535,26 @@ Delegated subagent and workflow results are delivered automatically as follow-up
   );
 
   /**
-   * Same source of truth as `showSummary()`'s completed-run todos branch: a
-   * running run's task list is read from session snapshot state. Once
-   * the run is finished this must route through
-   * `readCompletedRunTodos()` so this endpoint never disagrees with the
-   * summary about which tasks are still pending.
+   * The same fold `/executions/{id}` reads its task lines from, so this
+   * endpoint can never disagree with the summary about which tasks are
+   * still pending.
    */
   private readonly showTodos = Effect.fn('ExecutionsTool.showTodos')(function* (
     context: RunToolContext,
     runId: RunId,
   ) {
-    const session = context.session;
-    const handle = (yield* Runs).getHandle(runId);
-    const todos = handle
-      ? getRunningTodos(session, handle)
-      : yield* readCompletedRunTodos(runId, session).pipe(
-          Effect.mapError((cause) => new ExecutionsReadFailed({ cause })),
-        );
+    // A task list is a listing fact (`run.fact` keyed `todos`), so this names
+    // no aggregate: reading a task list never folds a transcript.
+    const run = (yield* context.session.readView([])).runs.get(runId);
+    const todos = run === undefined ? [] : runTodos(run);
 
     if (todos.length === 0) {
       return executed(`No task list found for run ${runId}.`);
     }
 
-    const lines = formatTodoSection(todos);
-    const header = formatTodoHeader(runId, todos);
-
-    return executed(`${header}\n\n${lines.join('\n')}`);
+    return executed(
+      `${formatTodoHeader(runId, todos)}\n\n${formatTodoSection(todos).join('\n')}`,
+    );
   });
 
   private readonly showReport = Effect.fn('ExecutionsTool.showReport')(
@@ -758,15 +603,17 @@ Delegated subagent and workflow results are delivered automatically as follow-up
   );
 
   private readonly showChildren = Effect.fn('ExecutionsTool.showChildren')(
-    function* (this: ExecutionsTool, context: RunToolContext, runId: RunId) {
-      const children = yield* readRunChildren(context.session, runId);
+    function* (context: RunToolContext, runId: RunId) {
+      // Parentage and a child's line are listing facts, so this names no
+      // aggregate: no transcript is folded to list children.
+      const view = yield* context.session.readView([]);
+      const children = childRunViews(view, runId);
       if (children.length === 0) {
-        return executed(`No child runs found for .`);
+        return executed(`No child runs found for ${runId}.`);
       }
 
-      const lines = yield* this.formatChildren(context, children);
       return executed(
-        `Children of ${runId} (${children.length}):\n\n${lines.join('\n')}`,
+        `Children of ${runId} (${children.length}):\n\n${children.map(formatChildLine).join('\n')}`,
       );
     },
   );
@@ -782,13 +629,17 @@ Delegated subagent and workflow results are delivered automatically as follow-up
         );
       }
 
-      // Filter out fields irrelevant to this agent's category. Identity comes
-      // only from the stamped run row.
-      const category = runDisplayCategory(
-        context.session.runView(runId)?.identity,
-        record,
+      // Filter out fields irrelevant to this run's display category, which
+      // the fold decides from the stamped identity. Read from the fold's
+      // listing tier rather than the live view, so a run no port holds is
+      // filtered by the same rule as one that is.
+      const run = (yield* context.session.readView([])).runs.get(runId);
+      return executed(
+        serializeFilteredConfig(
+          record,
+          run === undefined ? undefined : runDisplayCategory(run),
+        ),
       );
-      return executed(serializeFilteredConfig(record, category));
     },
   );
 
@@ -863,14 +714,11 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       runId: RunId,
       viewRange?: [number, number],
     ) {
-      // The handle only proves the run is live in this process; liveness
-      // itself is resolved below, from facts that outlive this process.
-      const handle = (yield* Runs).getHandle(runId);
       const run = context.session.runView(runId);
-      if (!run && !handle) {
+      if (run === undefined) {
         return yield* Effect.fail(new ToolError(`Run not found: ${runId}`));
       }
-      if (run?.identity.kind !== 'process') {
+      if (run.identity.kind !== 'process') {
         return executed(
           `/executions/${runId}/output is only available for background commands (bash with run_in_background). ` +
             `Use /executions/${runId}/conversation for an agent run's message history.`,
@@ -890,36 +738,23 @@ Delegated subagent and workflow results are delivered automatically as follow-up
         .pipe(Effect.mapError((cause) => new ExecutionsReadFailed({ cause })));
 
       const { lines, chars } = projectProcessOutput(entries);
-      // No snapshot: `meta` was read before the transcript, and a command that
-      // finished during that read must not be judged against the row as it
-      // looked beforehand. One read of one run can afford a fresh one.
-      const liveness = yield* resolveRunLiveness(runId, context.session);
-      const info = statusInfoFromLiveness(liveness);
-      // The footer states the same reading as the header: "no handle in this
-      // process" alone never justifies calling the command finished, and a
-      // handle this process still tracks past its terminal phase never
-      // justifies calling it still running.
-      const retained = `this is the retained log; /executions/${runId}/report has the result summary`;
-      const footer = ((): string => {
-        switch (liveness.kind) {
-          case 'live':
-            return isInFlightPhase(liveness.info.status)
-              ? `[still running: re-read for more output, or use action='wait' on /executions/${runId} to block until it finishes]`
-              : `[${liveness.info.status}; ${retained}]`;
-          case 'unsettled':
-            return `[not running in this process (${liveness.reason}); ${retained}]`;
-          case 'interrupted':
-            return `[interrupted before finishing; ${retained}]`;
-          case 'settled':
-            // Nothing here can see a detached shell that outlived its owner, so
-            // this says only what the durable facts establish.
-            return liveness.outcome
-              ? `[finished: ${retained}]`
-              : `[no TeXRA process owns this run and no result was recorded; ${retained}]`;
-        }
-      })();
+      // The row above was read before the transcript, and a command that
+      // finished during that read must not be judged against it: the view is
+      // in memory, so one read of one run can afford a fresh row. Only a
+      // tombstone takes a run out of the view, and then the row this call
+      // already holds is the last honest reading of it.
+      const current = context.session.runView(runId) ?? run;
+      // The footer states the same reading as the header, and both come from
+      // the fold: "no handle in this process" alone never justifies calling a
+      // command finished, and a run whose owner is gone reads as interrupted
+      // rather than as one that recorded how it ended.
+      const lead = isTerminalOutcomePhase(current.status)
+        ? 'finished:'
+        : (current.statusDetail ??
+          `still running: re-read for more output, or use action='wait' on /executions/${runId} to block until it finishes;`);
+      const footer = `[${lead} this is the retained log; /executions/${runId}/report has the result summary]`;
       const out: string[] = [
-        `Output for ${runId} (process, ${formatStatusInfo(info)}): ${chars.toLocaleString()} retained transcript chars; command-output cap ${BASH_BACKGROUND_LOG_CAP_CHARS.toLocaleString()} chars, ${lines.length.toLocaleString()} lines.`,
+        `Output for ${runId} (process, ${formatRunStatus(current)}): ${chars.toLocaleString()} retained transcript chars; command-output cap ${BASH_BACKGROUND_LOG_CAP_CHARS.toLocaleString()} chars, ${lines.length.toLocaleString()} lines.`,
       ];
 
       if (lines.length === 0) {
