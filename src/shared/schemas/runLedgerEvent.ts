@@ -311,12 +311,10 @@ export const ToolIntentPayloadSchema = z.strictObject({
 
 /* ----------------------------------------------------------- tool.binding */
 
-/**
- * The approval that guards one outcome-unknown call: the single carrier of an
- * intent's `approvalRequestId`, committed beside the `request.opened` it
- * names. `attempt` is the intent attempt the approval admits, so a later
- * dispatch of the same call needs its own binding.
- */
+/** The approval that guards one outcome-unknown call: the single carrier of
+ *  an intent's `approvalRequestId`, committed beside the `request.opened` it
+ *  names. `attempt` is the intent attempt the approval admits, so a later
+ *  dispatch of the same call needs its own binding. */
 export const ToolBindingPayloadSchema = z.strictObject({
   callId: CallIdSchema,
   attempt: z.int().positive(),
@@ -497,19 +495,16 @@ const PendingRetrySchema = z.strictObject({
   /** Route requirements without secrets: a credential scope, never a
    *  credential. */
   credentialScope: z.string().min(1),
-  /**
-   * No default and no `.catch`. A spent permit that reads as an unused one
-   * silently buys a second billed attempt: `waiting` = a decision is
-   * outstanding, `authorized` = exactly one unused permit, `started` =
-   * consumed, a new decision is required.
-   */
+  /** No default and no `.catch`. A spent permit that reads as an unused one
+   *  silently buys a second billed attempt: `waiting` = a decision is
+   *  outstanding, `authorized` = one unused permit, `started` = consumed. */
   substate: z.enum(['waiting', 'authorized', 'started']),
 });
 export type PendingRetry = z.infer<typeof PendingRetrySchema>;
 
 /** The durable human retry permit: the one carrier of the gate the retry
  *  owner (`ModelInvoker`) walks through `waiting` -> `authorized` ->
- *  `started`. `null` retires it, which a denial or a cancellation writes. */
+ *  `started`; `null` retires it. */
 export const ModelRetryPayloadSchema = z.strictObject({
   permit: PendingRetrySchema.nullable(),
 });

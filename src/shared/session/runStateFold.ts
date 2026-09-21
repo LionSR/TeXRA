@@ -33,17 +33,12 @@ import {
   type CommitOrdinal,
   type FlowSnapshotPayload,
   type DispatchFacts,
-  type FlowStep,
   type InvocationRef,
   type ModelCompatibilityKey,
   type NormalizedUsage,
   type PendingRetry,
-  type PermissionPayload,
-  type RequestDecision,
   type RetryErrorInfo,
-  type RunFamily,
   type RunLoopPhase,
-  type RunOutcome,
   type SessionEvent,
   type SessionEventDraft,
   type SnapshotRuntime,
@@ -51,6 +46,12 @@ import {
   type ToolResultPayload,
 } from '@shared/schemas';
 import { isObject } from '@utils/core';
+import {
+  applyRunRow,
+  byId,
+  freshRunRows,
+  type RunRows,
+} from './runRows';
 import type { z } from 'zod';
 
 /**
@@ -156,41 +157,21 @@ type PendingIntent = {
   readonly approvalRequestId: string | null;
 };
 
-/** A follow-up queued for the run and not yet consumed, as its row holds it. */
-type PendingFollowUp = Pick<
-  Extract<SessionEvent, { type: 'followup.queued' }>,
-  'followUpId' | 'content'
->;
-
-type RequestState = {
-  readonly payload: PermissionPayload;
-  readonly resolved: boolean;
-  /** The recorded decision (R5): the `request.decided` row's, null while
-   *  the request is open. */
-  readonly decision: RequestDecision | null;
-};
-
 /**
  * What the loop continues from. A plain type with no schema of its own,
  * because giving it one invites persisting it (C10). Every field is derived
  * from the row that produced it.
  */
-export type RunState = {
+export type RunState = RunRows & {
   /** The last folded row. */
   readonly commit: CommitOrdinal;
   readonly snapshotCommit: CommitOrdinal | null;
   /** Ledger rows folded into this state: zero means nothing but queued
    *  input has folded, which is what tells an unopened run from a broken one. */
   readonly rowsBeforeSnapshot: number;
-  readonly family: RunFamily | null;
-  readonly step: FlowStep | null;
-  readonly outcome: RunOutcome | null;
   /** `null` until the opening `flow.snapshot`: no row that presupposes an
    *  opened run folds before it. */
   readonly phase: RunLoopPhase | null;
-  readonly round: number;
-  readonly turn: number;
-  readonly continuationIndex: number;
   readonly modelId: string | null;
   readonly modelCompatibilityKey: ModelCompatibilityKey | null;
   readonly lastError: RetryErrorInfo | null;
@@ -210,22 +191,6 @@ export type RunState = {
   readonly pendingResponse: PendingResponse | null;
   /** By call id. */
   readonly pendingIntents: Readonly<Record<string, PendingIntent>>;
-  /** By request id, with its recovery binding resolved at each snapshot. */
-  readonly requests: Readonly<Record<string, RequestState>>;
-  /**
-   * Queued follow-ups without a `followup.consumed`, in commit order: what
-   * a run's input queue is seeded from on start and resume (C3). A loop's
-   * live state folds only the batches it appends, so a follow-up another
-   * writer queued while the loop ran is in its queue, not here; `load`
-   * folds every row and holds them all.
-   */
-  readonly followUps: readonly PendingFollowUp[];
-  /**
-   * Every follow-up id a queued row named, consumed or not: the unique key.
-   * A delivery its producer replays after a restart (#9531) is a second row
-   * under an id already here, and it is queued once, never twice.
-   */
-  readonly followUpIds: ReadonlySet<string>;
   /** Derived (D12): the priced usage stamped on every `response` row plus
    *  `tool.result` `add` operations. No snapshot carries it. */
   readonly usage: RunUsageTotals;
@@ -283,33 +248,14 @@ const IGNORED_ROW_TYPES: Readonly<
 };
 const IGNORED = new Set<string>(Object.keys(IGNORED_ROW_TYPES));
 
-/**
- * A record keyed by an id the state carries: call ids come from the provider,
- * so the key `__proto__` is reachable from outside. On a plain object it would
- * hit the inherited setter instead of creating an own entry, and an intent
- * that is absent from `Object.keys` is an outcome-unknown barrier the resume
- * rule never sees. Null-prototype, therefore, for every id-keyed record here:
- * one rule, no per-key reasoning about which ids a provider can choose.
- */
-function byId<T>(entries: Iterable<readonly [string, T]>): Record<string, T> {
-  const record = Object.create(null) as Record<string, T>;
-  for (const [key, value] of entries) record[key] = value;
-  return record;
-}
-
 /** The state a run starts from: every field at its zero, no family bound
  *  yet. Both run programs open from this and stamp their own family. */
 export const freshRunState = (commit: CommitOrdinal): RunState => ({
+  ...freshRunRows(),
   commit,
   snapshotCommit: null,
   rowsBeforeSnapshot: 0,
-  family: null,
-  step: null,
-  outcome: null,
   phase: null,
-  round: 0,
-  turn: 0,
-  continuationIndex: 0,
   modelId: null,
   modelCompatibilityKey: null,
   lastError: null,
@@ -321,9 +267,6 @@ export const freshRunState = (commit: CommitOrdinal): RunState => ({
   lastTurn: null,
   pendingResponse: null,
   pendingIntents: byId([]),
-  requests: byId([]),
-  followUps: [],
-  followUpIds: new Set(),
   usage: EMPTY_RUN_USAGE_TOTALS,
   flow: null,
 });
@@ -510,36 +453,35 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
     );
   }
   switch (row.type) {
-    case 'flow.step': {
-      const p = row.payload;
+    case 'flow.step':
+    case 'request.opened':
+    case 'request.decided':
+    case 'followup.queued':
+    case 'followup.consumed': {
+      // The rows `sessionFold` reads too: applied once, in `runRows.ts`.
+      // `unresolved` is a malformed aggregate here — this fold reads a run's
+      // whole history, so a decision always follows the opening it answers.
+      const verdict = applyRunRow(current, row);
+      if (verdict.kind === 'unchanged') return null;
+      if (verdict.kind === 'unresolved') {
+        return refuse(
+          'out-of-order',
+          `decision names no request ${verdict.requestId}`,
+          commit,
+        );
+      }
+      if (verdict.kind === 'contradiction') {
+        return refuse('out-of-order', verdict.detail, commit);
+      }
       const state = current ?? freshRunState(commit);
-      if (state.family !== null && state.family !== p.family) {
-        return refuse('out-of-order', 'a step of another family', commit);
-      }
-      const coordinates = [
-        ['round', p.round] as const,
-        ['turn', p.turn] as const,
-        ['continuationIndex', p.continuationIndex] as const,
-      ];
-      for (const [name, value] of coordinates) {
-        if (value != null && value < state[name]) {
-          return refuse(
-            'out-of-order',
-            `${name} ${value} is below ${state[name]}`,
-            commit,
-          );
-        }
-      }
       return Result.succeed({
         ...state,
         commit,
-        rowsBeforeSnapshot: state.rowsBeforeSnapshot + 1,
-        family: p.family,
-        step: p.step,
-        round: p.round ?? state.round,
-        turn: p.turn ?? state.turn,
-        continuationIndex: p.continuationIndex ?? state.continuationIndex,
-        outcome: p.step === 'halted' ? (p.outcome ?? null) : state.outcome,
+        // Only the loop's own step is a ledger row; queued input and the
+        // requests a session opens do not open a run.
+        rowsBeforeSnapshot:
+          state.rowsBeforeSnapshot + (verdict.rows.step === undefined ? 0 : 1),
+        ...verdict.rows,
       });
     }
     case 'flow.snapshot': {
@@ -923,83 +865,6 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
       // Committed with its `tool.result` or its `waiting` step; the ledger
       // row beside it is the fact.
       return null;
-    case 'request.opened': {
-      if (current === null) return null;
-      if (Object.hasOwn(current.requests, row.requestId)) {
-        return refuse(
-          'out-of-order',
-          `request ${row.requestId} opened twice`,
-          commit,
-        );
-      }
-      return Result.succeed({
-        ...current,
-        commit,
-        requests: byId([
-          ...Object.entries(current.requests),
-          [
-            row.requestId,
-            { payload: row.payload, resolved: false, decision: null },
-          ],
-        ]),
-      });
-    }
-    case 'request.decided': {
-      if (current === null) return null;
-      const request = current.requests[row.requestId];
-      if (request === undefined) {
-        return refuse(
-          'out-of-order',
-          `decision names no request ${row.requestId}`,
-          commit,
-        );
-      }
-      return Result.succeed({
-        ...current,
-        commit,
-        requests: byId([
-          ...Object.entries(current.requests),
-          [
-            row.requestId,
-            { ...request, resolved: true, decision: row.decision },
-          ],
-        ]),
-      });
-    }
-    case 'followup.queued': {
-      // Queued input may precede the run's opening (a follow-up admitted
-      // before the first batch commits), so it folds onto a fresh state the
-      // way the opening message does. It is not a row the opening snapshot
-      // is checked against, so `rowsBeforeSnapshot` stays put. A replayed
-      // delivery id is the same follow-up, already queued once: not folded.
-      if (current?.followUpIds.has(row.followUpId)) return null;
-      const state = current ?? freshRunState(commit);
-      return Result.succeed({
-        ...state,
-        commit,
-        followUps: [
-          ...state.followUps,
-          { followUpId: row.followUpId, content: row.content },
-        ],
-        followUpIds: new Set([...state.followUpIds, row.followUpId]),
-      });
-    }
-    case 'followup.consumed': {
-      // The consumer commits this with the message the follow-up became. On
-      // the live path the queued row may be one this state never folded
-      // (another writer queued it while the loop ran), so an id absent here
-      // consumes nothing; on `load` every queued row precedes the
-      // consumption naming it, since a consumer only takes a follow-up whose
-      // row its producer had already enqueued on the one publisher.
-      if (current === null) return null;
-      return Result.succeed({
-        ...current,
-        commit,
-        followUps: current.followUps.filter(
-          (f) => f.followUpId !== row.followUpId,
-        ),
-      });
-    }
     default:
       if (IGNORED.has(row.type)) return null;
       return refuse('unknown-run-row', row.type, commit);
