@@ -46,11 +46,7 @@ import {
   MAX_CONCURRENT_REPO_SUBSCRIPTIONS,
   GITHUB_POLL_INTERVAL_MS,
 } from './prSubscriptionConstants';
-import {
-  issueSubscriptionRegistry,
-  prSubscriptionRegistry,
-  repoSubscriptionRegistry,
-} from './subscriptionBindings';
+import { GitHubSubscriptions } from './subscriptionBindings';
 import { SharedIssuePollingSource } from './IssuePollingSource';
 import { SharedPRPollingSource } from './PRPollingSource';
 import { parseGitHubSlug } from './githubSlug';
@@ -223,12 +219,13 @@ const execSubscribe = Effect.fn('GitHubSubscriptionTool.subscribe')(function* (
   session: SessionHandle,
 ) {
   yield* requireToken();
+  const subscriptions = yield* GitHubSubscriptions;
   const target = requirePath(input);
   const minAnnotationLevel = input.min_annotation_level;
   const annotationLevelDescription =
     ANNOTATION_LEVEL_DESCRIPTIONS[minAnnotationLevel];
   if (target.kind === 'repo') {
-    const created = yield* repoSubscriptionRegistry.bind(
+    const created = yield* subscriptions.repo.bind(
       runId,
       target,
       session,
@@ -244,7 +241,7 @@ const execSubscribe = Effect.fn('GitHubSubscriptionTool.subscribe')(function* (
     );
   }
   if (target.kind === 'pr') {
-    const created = yield* prSubscriptionRegistry.bind(
+    const created = yield* subscriptions.pr.bind(
       runId,
       {
         ...target,
@@ -280,7 +277,7 @@ const execSubscribe = Effect.fn('GitHubSubscriptionTool.subscribe')(function* (
       (yield* resolveIssueIsPR(target.owner, target.repo, target.issueNumber)));
 
   if (isPR) {
-    const created = yield* prSubscriptionRegistry.bind(
+    const created = yield* subscriptions.pr.bind(
       runId,
       {
         owner: target.owner,
@@ -305,7 +302,7 @@ const execSubscribe = Effect.fn('GitHubSubscriptionTool.subscribe')(function* (
       summary,
     );
   }
-  const created = yield* issueSubscriptionRegistry.bind(runId, target, session);
+  const created = yield* subscriptions.issue.bind(runId, target, session);
   return executed(
     created
       ? `Subscribed to ${issueSlug}. New comments and state transitions (closed / reopened) arrive as <github-webhook-activity> follow-ups. The subscription stays active across close so reopens are caught: call command="unsubscribe" to release the slot.`
@@ -339,46 +336,52 @@ const resolveIssueIsPR = (
         : Effect.succeed(res.data.pull_request != null),
   );
 
-function execUnsubscribe(input: UnsubscribeInput, runId: RunId): ToolResult {
-  const target = requirePath(input);
-  const slug = slugOf(target);
-  let removed: boolean;
-  let label: string;
-  if (target.kind === 'repo') {
-    removed = repoSubscriptionRegistry.unbind(runId, target);
-    label = `repo ${slug}`;
-  } else if (target.kind === 'pr') {
-    removed = prSubscriptionRegistry.unbind(runId, target);
-    label = prRef(slug, target.pullNumber);
-  } else {
-    // Symmetric to subscribe: a /issues/N path may have been re-routed to a
-    // PR subscription. Try both — whichever owns it wins.
-    const issueRemoved = issueSubscriptionRegistry.unbind(runId, target);
-    const prRemoved = prSubscriptionRegistry.unbind(runId, {
-      owner: target.owner,
-      repo: target.repo,
-      pullNumber: target.issueNumber,
-    });
-    removed = issueRemoved || prRemoved;
-    label = issueRef(slug, target.issueNumber);
-  }
-  return {
-    status: 'executed',
-    summary: removed
-      ? `Unsubscribed from ${label}`
-      : `Was not subscribed to ${label}`,
-  };
-}
+const execUnsubscribe = Effect.fn('GitHubSubscriptionTool.unsubscribe')(
+  function* (input: UnsubscribeInput, runId: RunId) {
+    const subscriptions = yield* GitHubSubscriptions;
+    const target = requirePath(input);
+    const slug = slugOf(target);
+    let removed: boolean;
+    let label: string;
+    if (target.kind === 'repo') {
+      removed = subscriptions.repo.unbind(runId, target);
+      label = `repo ${slug}`;
+    } else if (target.kind === 'pr') {
+      removed = subscriptions.pr.unbind(runId, target);
+      label = prRef(slug, target.pullNumber);
+    } else {
+      // Symmetric to subscribe: a /issues/N path may have been re-routed to
+      // a PR subscription. Try both — whichever owns it wins.
+      const issueRemoved = subscriptions.issue.unbind(runId, target);
+      const prRemoved = subscriptions.pr.unbind(runId, {
+        owner: target.owner,
+        repo: target.repo,
+        pullNumber: target.issueNumber,
+      });
+      removed = issueRemoved || prRemoved;
+      label = issueRef(slug, target.issueNumber);
+    }
+    return {
+      status: 'executed',
+      summary: removed
+        ? `Unsubscribed from ${label}`
+        : `Was not subscribed to ${label}`,
+    } satisfies ToolResult;
+  },
+);
 
-function execList(runId: RunId): ToolResult {
+const execList = Effect.fn('GitHubSubscriptionTool.list')(function* (
+  runId: RunId,
+) {
+  const subscriptions = yield* GitHubSubscriptions;
   const keysBoundToRun = (
     bindings: ReadonlyArray<{ key: string; runIds: readonly string[] }>,
   ): string[] =>
     bindings.filter((b) => b.runIds.includes(runId)).map((b) => b.key);
   const all = [
-    ...keysBoundToRun(repoSubscriptionRegistry.list()),
-    ...keysBoundToRun(prSubscriptionRegistry.list()),
-    ...keysBoundToRun(issueSubscriptionRegistry.list()),
+    ...keysBoundToRun(subscriptions.repo.list()),
+    ...keysBoundToRun(subscriptions.pr.list()),
+    ...keysBoundToRun(subscriptions.issue.list()),
   ];
   if (all.length === 0) {
     return executed(
@@ -390,7 +393,7 @@ function execList(runId: RunId): ToolResult {
     all.map((k) => `- ${k}`).join('\n'),
     `${all.length} active subscription(s).`,
   );
-}
+});
 
 const gitInDir = (
   args: string[],
@@ -610,9 +613,9 @@ export const GitHubSubscriptionTool = defineTool({
         case 'subscribe':
           return yield* execSubscribe(input, run.runId, run.session);
         case 'unsubscribe':
-          return yield* Effect.sync(() => execUnsubscribe(input, run.runId));
+          return yield* execUnsubscribe(input, run.runId);
         case 'list':
-          return yield* Effect.sync(() => execList(run.runId));
+          return yield* execList(run.runId);
         case 'find_current':
           return yield* execFindCurrent(
             input,

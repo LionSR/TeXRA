@@ -62,8 +62,6 @@ export class GitHubSubscriptionHandlers {
   ) {
     // Each arm is a settings-view message, so its program settles on the
     // view's boundary here rather than in the view's own registry.
-    // `unsubscribePR` alone stays synchronous: it drops an in-memory
-    // registration, with no program to settle.
     this.handlers = {
       getGitHubTokenStatus: () =>
         ctx.run(ctx.withActiveWebview((w) => this.sendGitHubTokenStatus(w))),
@@ -72,7 +70,7 @@ export class GitHubSubscriptionHandlers {
       openGitHubTokenUrl: () => ctx.run(this.openGitHubTokenUrl()),
       getPRSubscriptions: () =>
         ctx.run(ctx.withActiveWebview((w) => this.sendPRSubscriptions(w))),
-      unsubscribePR: (message) => this.handleUnsubscribePR(message),
+      unsubscribePR: (message) => ctx.run(this.handleUnsubscribePR(message)),
       openPRSubscriptionStream: (message) =>
         ctx.run(this.handleOpenPRSubscriptionStream(message)),
     };
@@ -135,21 +133,27 @@ export class GitHubSubscriptionHandlers {
   }
 
   sendPRSubscriptions(webview: vscode.Webview) {
-    return postToWebview(webview, {
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_PR_SUBSCRIPTIONS,
-      subscriptions: listGitHubSubscriptionEntries(getProgressRunLabel),
-    });
+    return Effect.flatMap(
+      listGitHubSubscriptionEntries(getProgressRunLabel),
+      (subscriptions) =>
+        postToWebview(webview, {
+          command: SETTINGS_VIEW_COMMANDS.UPDATE_PR_SUBSCRIPTIONS,
+          subscriptions,
+        }),
+    );
   }
 
   private handleUnsubscribePR(
     data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.UNSUBSCRIBE_PR>,
-  ): void {
-    const removed = unsubscribeGitHubKey(data.key);
-    if (removed === 0) {
-      void vscode.window.showInformationMessage(
-        noActiveGitHubSubscriptionMessage(data.key),
-      );
-    }
+  ) {
+    return Effect.gen(function* () {
+      const removed = yield* unsubscribeGitHubKey(data.key);
+      if (removed === 0) {
+        void vscode.window.showInformationMessage(
+          noActiveGitHubSubscriptionMessage(data.key),
+        );
+      }
+    });
   }
 
   private handleOpenPRSubscriptionStream(

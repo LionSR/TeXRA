@@ -1,10 +1,9 @@
+// Third-party imports
+import { Effect } from 'effect';
+
 // Local imports - GitHub subscriptions
 import type { RunId } from '@shared/schemas';
-import {
-  issueSubscriptionRegistry,
-  prSubscriptionRegistry,
-  repoSubscriptionRegistry,
-} from '@tools/github/subscriptionBindings';
+import { GitHubSubscriptions } from '@tools/github/subscriptionBindings';
 
 interface GitHubSubscriptionOwner {
   readonly runId: RunId;
@@ -17,9 +16,11 @@ interface GitHubSubscriptionEntry {
 }
 
 /** Builds the shared PR, issue, and repository subscription presentation. */
-export function listGitHubSubscriptionEntries(
-  getRunLabel: (runId: RunId) => string | undefined,
-): GitHubSubscriptionEntry[] {
+export const listGitHubSubscriptionEntries = Effect.fn(
+  'githubSubscriptions.listEntries',
+)(function* (getRunLabel: (runId: RunId) => string | undefined) {
+  const subscriptions = yield* GitHubSubscriptions;
+
   function toEntry(binding: {
     key: string;
     runIds: readonly RunId[];
@@ -34,11 +35,11 @@ export function listGitHubSubscriptionEntries(
   }
 
   return [
-    ...prSubscriptionRegistry.list().map(toEntry),
-    ...repoSubscriptionRegistry.list().map(toEntry),
-    ...issueSubscriptionRegistry.list().map(toEntry),
+    ...subscriptions.pr.list().map(toEntry),
+    ...subscriptions.repo.list().map(toEntry),
+    ...subscriptions.issue.list().map(toEntry),
   ];
-}
+});
 
 /**
  * What both Git tabs say when {@link unsubscribeGitHubKey} matched nothing —
@@ -55,11 +56,14 @@ export function noActiveGitHubSubscriptionMessage(key: string): string {
  * shape must not silently default to the repo registry (a destructive unbind),
  * so it is treated as an explicit no-match instead.
  */
-export function unsubscribeGitHubKey(key: string): number {
-  if (key.includes('/pulls/')) return prSubscriptionRegistry.unbindAll(key);
-  if (key.includes('/issues/')) return issueSubscriptionRegistry.unbindAll(key);
+export const unsubscribeGitHubKey = Effect.fn(
+  'githubSubscriptions.unsubscribeKey',
+)(function* (key: string) {
+  const subscriptions = yield* GitHubSubscriptions;
+  if (key.includes('/pulls/')) return subscriptions.pr.unbindAll(key);
+  if (key.includes('/issues/')) return subscriptions.issue.unbindAll(key);
   if (/^[^/\s]+\/[^/\s]+$/.test(key)) {
-    return repoSubscriptionRegistry.unbindAll(key);
+    return subscriptions.repo.unbindAll(key);
   }
   return 0;
-}
+});

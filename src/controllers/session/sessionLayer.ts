@@ -106,6 +106,7 @@ import {
   InlineComments,
   type InlineCommentProvider,
 } from '@tools/comment/InlineCommentTool';
+import { GitHubSubscriptions } from '@tools/github/subscriptionBindings';
 import type { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import { SetupPlatform, type SetupPlatformShape } from '@tools/setup/platform';
 import { StreamLogStore } from '@transcript/StreamLogStore';
@@ -1109,6 +1110,9 @@ export function installProcessRuntime({
     AgentResume.layer(agentResume),
     SetupPlatform.layer(setup),
     ToolInjections.layer(AGENT_TOOL_INJECTIONS),
+    // The subscription ownership tables, built with this runtime so a
+    // disposed process leaves no run bindings behind.
+    GitHubSubscriptions.layer,
     editorModel === undefined
       ? Layer.empty
       : Layer.succeed(EditorModel)(editorModel),

@@ -330,7 +330,7 @@ export function createDesktopSettingsIpc(
           postMemoryData(),
           postModelSelectionData(),
           postGitHubTokenStatus(),
-          Effect.sync(postGitHubSubscriptions),
+          postGitHubSubscriptions(),
           options.credentialSettingsController.postStartupData(),
           options.toolingSettingsController.postStartupData(),
           options.agentSettingsController.postStartupData(),
@@ -500,23 +500,25 @@ export function createDesktopSettingsIpc(
     });
   }
 
-  // Reads the in-memory subscription registry and repaints; nothing here
-  // awaits, so it stays the plain call its callers make.
-  function postGitHubSubscriptions(): void {
-    options.postToRenderer({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_PR_SUBSCRIPTIONS,
-      subscriptions: listGitHubSubscriptionEntries((runId) =>
+  // Reads the process's subscription registries and repaints.
+  const postGitHubSubscriptions = Effect.fn('desktop.postSubscriptions')(
+    function* () {
+      const subscriptions = yield* listGitHubSubscriptionEntries((runId) =>
         options.ui.getRunLabel(runId),
-      ),
-    });
-  }
+      );
+      options.postToRenderer({
+        command: SETTINGS_VIEW_COMMANDS.UPDATE_PR_SUBSCRIPTIONS,
+        subscriptions,
+      });
+    },
+  );
 
   // The same stance as the goal subscription above: a run that binds or
   // releases a PR, repo, or issue subscription changes the list the Git tab is
   // showing, and until now the desktop only re-read it when the user asked.
   subscriptions.push(
     appSignals.on('githubSubscriptionsChanged', () =>
-      runAsync(Effect.sync(postGitHubSubscriptions)),
+      runAsync(postGitHubSubscriptions()),
     ),
     // `apply_team` writes the roster straight from the setup agent, so the
     // open view is showing agents and a team it just replaced. The signal
@@ -552,14 +554,16 @@ export function createDesktopSettingsIpc(
   }
 
   async function unsubscribeGitHub(data: { key: string }): Promise<void> {
-    const removed = unsubscribeGitHubKey(data.key);
-    if (removed === 0) {
-      await runtime.runPromise(
-        options.ui.showInfoMessage(noActiveGitHubSubscriptionMessage(data.key)),
-      );
-      return;
-    }
-    postGitHubSubscriptions();
+    await runtime.runPromise(
+      Effect.gen(function* () {
+        const removed = yield* unsubscribeGitHubKey(data.key);
+        yield* removed === 0
+          ? options.ui.showInfoMessage(
+              noActiveGitHubSubscriptionMessage(data.key),
+            )
+          : postGitHubSubscriptions();
+      }),
+    );
   }
 
   const settingsHandlers: SettingsViewInboundHandlerRegistry = {
@@ -610,7 +614,7 @@ export function createDesktopSettingsIpc(
     openGitHubTokenUrl: async () => {
       await options.ui.openExternal(GITHUB_TOKEN_CREATE_URL);
     },
-    getPRSubscriptions: postGitHubSubscriptions,
+    getPRSubscriptions: () => runtime.runPromise(postGitHubSubscriptions()),
     unsubscribePR: unsubscribeGitHub,
     openPRSubscriptionStream: (message) => revealRun(message.runId),
     ...options.credentialSettingsController.chatGptHandlers,
