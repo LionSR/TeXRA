@@ -34,10 +34,7 @@ import { runDirUnder } from '@utils/files/runStorageFs';
 import { sanitizePathSegment } from '@utils/text/sanitizePathSegment';
 import { countLines, formatDuration } from '@utils/text/stringUtils';
 import { unifiedDiffText } from '@utils/text/unifiedDiff';
-import {
-  formatChildRunDelivery,
-  formatChildRunError,
-} from './deliveryEnvelope';
+import { formatDelivery } from './deliveryEnvelope';
 
 export type SubagentResultMeta = Extract<ResultMeta, { producer: 'subagent' }>;
 
@@ -197,24 +194,20 @@ export function formatSubagentDelivery(
     }
   }
 
-  return formatChildRunDelivery(
-    {
-      tag: DELIVERY_TAG.subagentResult,
-      runId: options.runId,
-      attributes: [
-        { name: 'agent', value: agentName },
-        { name: 'category', value: output.category },
-        { name: 'status', value: result.outcome },
-      ],
-    },
-    {
-      wallTime:
-        options.wallTimeMs !== undefined
-          ? formatDuration(options.wallTimeMs)
-          : undefined,
-      lines,
-    },
-  );
+  return formatDelivery({
+    tag: DELIVERY_TAG.subagentResult,
+    runId: options.runId,
+    attributes: [
+      { name: 'agent', value: agentName },
+      { name: 'category', value: output.category },
+      { name: 'status', value: result.outcome },
+    ],
+    wallTime:
+      options.wallTimeMs !== undefined
+        ? formatDuration(options.wallTimeMs)
+        : undefined,
+    lines,
+  });
 }
 
 /**
@@ -231,27 +224,23 @@ export function formatSubagentError(
   },
 ): string {
   const formatted = normalizeProviderError(err);
-  return formatChildRunError(
-    {
-      tag: DELIVERY_TAG.subagentError,
-      runId,
-      attributes: [
-        { name: 'agent', value: agentName },
-        { name: 'retryable', value: formatted.userRetryable },
-      ],
-    },
-    {
-      wallTime:
-        options?.wallTimeMs !== undefined
-          ? formatDuration(options.wallTimeMs)
-          : undefined,
-      lines: formatDeliveryPreamble({
-        workingDirectory: options?.workingDirectory,
-        memoryMisses: options?.memoryMisses,
-      }),
-      message: formatted.message,
-    },
-  );
+  return formatDelivery({
+    tag: DELIVERY_TAG.subagentError,
+    runId,
+    attributes: [
+      { name: 'agent', value: agentName },
+      { name: 'retryable', value: formatted.userRetryable },
+    ],
+    wallTime:
+      options?.wallTimeMs !== undefined
+        ? formatDuration(options.wallTimeMs)
+        : undefined,
+    lines: formatDeliveryPreamble({
+      workingDirectory: options?.workingDirectory,
+      memoryMisses: options?.memoryMisses,
+    }),
+    message: formatted.message,
+  });
 }
 
 // ============================================================================

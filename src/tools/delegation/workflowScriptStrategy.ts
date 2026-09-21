@@ -39,10 +39,7 @@ import { DELEGATE_MULTI_AGENTS_TOOL_NAME } from '@shared/constants/delegationToo
 import { escapeText } from '@shared/utils/xmlEscape';
 import { truncateSummary } from '@utils/text/stringUtils';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
-import {
-  formatChildRunDelivery,
-  formatChildRunError,
-} from './deliveryEnvelope';
+import { formatDelivery } from './deliveryEnvelope';
 
 // Local file imports
 import {
@@ -381,31 +378,23 @@ export function createWorkflowScriptStrategy(
     formatDelivery: (turn) =>
       Effect.try({
         try: () =>
-          formatChildRunDelivery(
-            {
-              tag: DELIVERY_TAG.workflowScriptResult,
-              runId: params.runId,
-            },
-            {
-              response: `${formatWorkflowResult(turn.result)}${runLog.format()}\n\n${formatWorkflowScriptReference(params.scriptPath)}`,
-              lines: [formatSummaryLine('completed')],
-            },
-          ),
+          formatDelivery({
+            tag: DELIVERY_TAG.workflowScriptResult,
+            runId: params.runId,
+            response: `${formatWorkflowResult(turn.result)}${runLog.format()}\n\n${formatWorkflowScriptReference(params.scriptPath)}`,
+            lines: [formatSummaryLine('completed')],
+          }),
         catch: ensureError,
       }),
 
     formatError: (_turn, err) => {
       const errorCause = toErrorMessage(err);
-      return formatChildRunError(
-        {
-          tag: DELIVERY_TAG.workflowScriptError,
-          runId: params.runId,
-        },
-        {
-          message: `${errorCause}${runLog.format()}\n\n${formatWorkflowScriptReference(params.scriptPath)}\n\nCompleted agent() calls are journaled under meta.name '${params.name}' for this agent; rerunning that file with the same agent resumes without repeating them (failed, cancelled, and skipped calls run again).`,
-          lines: [formatSummaryLine('failed', errorCause)],
-        },
-      );
+      return formatDelivery({
+        tag: DELIVERY_TAG.workflowScriptError,
+        runId: params.runId,
+        lines: [formatSummaryLine('failed', errorCause)],
+        message: `${errorCause}${runLog.format()}\n\n${formatWorkflowScriptReference(params.scriptPath)}\n\nCompleted agent() calls are journaled under meta.name '${params.name}' for this agent; rerunning that file with the same agent resumes without repeating them (failed, cancelled, and skipped calls run again).`,
+      });
     },
   };
 }

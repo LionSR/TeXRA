@@ -70,11 +70,7 @@ import {
   launchAgentCliSession,
   reraiseAgentCliCallFailure,
 } from './agentCliShared';
-import {
-  formatChildRunDelivery,
-  formatChildRunError,
-  toDeliveryUsage,
-} from './delegation/deliveryEnvelope';
+import { formatDelivery, toDeliveryUsage } from './delegation/deliveryEnvelope';
 import {
   CODEX_AGENT_NAME,
   buildCodexCommandToolLog,
@@ -395,24 +391,22 @@ function buildCodexLaunch(params: {
           }
         : undefined,
     formatDelivery: (turn, wallTimeMs, lastPrompt) =>
-      formatChildRunDelivery(
-        {
-          tag: DELIVERY_TAG.codexResult,
-          runId,
-          prompt: lastPrompt,
-          attributes: [{ name: 'thread-id', value: thread.id || null }],
-        },
-        {
-          wallTime: formatWallTimeSeconds(wallTimeMs),
-          response: turn.finalResponse,
-          usage: toDeliveryUsage(turn.usage),
-        },
-      ),
+      formatDelivery({
+        tag: DELIVERY_TAG.codexResult,
+        runId,
+        prompt: lastPrompt,
+        attributes: [{ name: 'thread-id', value: thread.id || null }],
+        wallTime: formatWallTimeSeconds(wallTimeMs),
+        response: turn.finalResponse,
+        usage: toDeliveryUsage(turn.usage),
+      }),
     formatError: (_turn, err, lastPrompt) =>
-      formatChildRunError(
-        { tag: DELIVERY_TAG.codexError, runId, prompt: lastPrompt },
-        { message: toErrorMessage(err) },
-      ),
+      formatDelivery({
+        tag: DELIVERY_TAG.codexError,
+        runId,
+        prompt: lastPrompt,
+        message: toErrorMessage(err),
+      }),
     loopFailedMessage: 'Codex run loop failed after launch',
   });
 }
