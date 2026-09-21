@@ -26,6 +26,15 @@ export const CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY =
 export const TELEMETRY_ENABLED_KEY = 'texra.telemetry.enabled';
 
 /**
+ * Canonical config key for `texra.logger.debugMode`, whose one meaning is
+ * transcript verbosity: the debug tier of the transcript fold and the detail
+ * of the payloads it shows. A log surface's own level filter decides what
+ * that surface prints, so no producer reads this key to widen or narrow a
+ * log — only a fold's view build does.
+ */
+export const DEBUG_MODE_KEY = 'texra.logger.debugMode';
+
+/**
  * Telemetry is on unless a scope opts out. Shared by the catalog row and by
  * `UsageLogService`, which resolves both scopes itself rather than through the
  * merged config read.
