@@ -13,7 +13,7 @@ import { withVSCodeProgress } from '@frontend/ui/progress';
 import { TikzPictureManager } from '@latex/TikzPictureManager';
 import { createLog } from '@logger/logUtils';
 import type { ProcessServices } from '@platform/processRuntime';
-import { withSessionFs } from '@platform/rootedFs';
+import type { StorageFs, WorkspaceFs } from '@platform/rootedFs';
 import { pathToLocationIn } from '@utils/files/fileLocation';
 import { pluralize, truncateWithEllipsis } from '@utils/text/stringUtils';
 
@@ -70,7 +70,7 @@ export function handleExtractTikzFigures(
 
 export function handleCompileTikzFigures(
   session: SessionHandle,
-): Effect.Effect<void, never, ProcessServices> {
+): Effect.Effect<void, never, ProcessServices | WorkspaceFs | StorageFs> {
   return runGuardedLatexCommand(
     session,
     {
@@ -96,13 +96,12 @@ export function handleCompileTikzFigures(
                 message: 'Extracting and compiling TikZ pictures...',
               });
 
+              // Over the session's rooted filesystems the command root
+              // provided, not a view built at this depth.
               const { roots } = session;
-              const compiledFiles = yield* withSessionFs(
+              const compiledFiles = yield* TikzPictureManager.compile(
+                pathToLocationIn(roots.workspace, filePath),
                 roots,
-                TikzPictureManager.compile(
-                  pathToLocationIn(roots.workspace, filePath),
-                  roots,
-                ),
               );
 
               if (compiledFiles.length === 0) {

@@ -18,7 +18,7 @@ import {
   type OverleafRemote,
 } from '@latex/overleafProject';
 import { createLog } from '@logger/logUtils';
-import { withSessionFs, WorkspaceFs } from '@platform/rootedFs';
+import { WorkspaceFs } from '@platform/rootedFs';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { RootedFileSystem } from '@utils/files/rootedFileSystem';
@@ -368,24 +368,20 @@ export function cloneOverleafProject(
     }
 
     // The session's workspace view both names the clone target and lists it,
-    // so the emptiness check and the clone agree on one folder.
-    yield* withSessionFs(
-      session.roots,
-      Effect.gen(function* () {
-        const workspaceFs = yield* WorkspaceFs;
-        const workspacePath = workspaceFs.root;
-        if (!workspacePath) {
-          yield* Effect.forkDetach(
-            showLoggedMessage(CHANNEL, 'Open a workspace folder first.'),
-          );
-          return;
-        }
-        yield* runOverleafClone(
-          remote,
-          workspacePath,
-          buildOverleafClonePorts(secrets, remote, workspaceFs),
-        );
-      }),
+    // so the emptiness check and the clone agree on one folder. The view is
+    // the one the command root provided; this depth only reads it.
+    const workspaceFs = yield* WorkspaceFs;
+    const workspacePath = workspaceFs.root;
+    if (!workspacePath) {
+      yield* Effect.forkDetach(
+        showLoggedMessage(CHANNEL, 'Open a workspace folder first.'),
+      );
+      return;
+    }
+    yield* runOverleafClone(
+      remote,
+      workspacePath,
+      buildOverleafClonePorts(secrets, remote, workspaceFs),
     );
   });
 }
