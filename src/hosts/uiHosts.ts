@@ -251,4 +251,3 @@ export class TerminalRunFailed extends Data.TaggedError('TerminalRunFailed')<{
   readonly command: string;
   readonly cause?: unknown;
 }> {}
-
