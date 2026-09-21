@@ -727,8 +727,9 @@ export function createChatSessionController(
   // double hand-back or a missed restore silently loses the follow-ups typed
   // during an interruption. The shared parts are already named helpers
   // (`setupRunHost`, `toolUseResumeOptions`, `settleResumedTurn`,
-  // `recoverRun`, and the two lease helpers above); what is left here is the
-  // part that genuinely differs. Don't merge these two bodies.
+  // `recoverRun`, `endResumeUnstarted`, and the two lease helpers above);
+  // what is left here is the part that genuinely differs. Don't merge these
+  // two bodies.
   const resume = (id: RunId): Effect.Effect<void, unknown> =>
     // `Effect.suspend` is what keeps the claim handshake synchronous: its
     // body is this program's first step, so the availability check and the
@@ -750,6 +751,21 @@ export function createChatSessionController(
       const supersededRecovery = supersedeInterruptedRecovery();
       let recovery: FollowUpRecoveryLease | undefined;
       let recoveryHandedOff = false;
+      /**
+       * The one end this resume has when it never reaches the run: hand back
+       * a lease nothing took, put back what the synchronous prologue
+       * superseded, say why, mark the run complete and settle the slot.
+       * `announce` is the only thing a refusal and a failure disagree on --
+       * a refusal names its reason and leaves the exit code untouched, a
+       * failure goes through `reportRunFailure`, which decides both.
+       */
+      const endResumeUnstarted = (announce: () => void): void => {
+        handBackUnusedRecovery(recovery, recoveryHandedOff);
+        restoreInterruptedRecovery(supersededRecovery);
+        announce();
+        session.markRunCompleted();
+        Deferred.doneUnsafe(claimedRun, Effect.void);
+      };
       const attemptResume = Effect.gen(function* () {
         // The durable record carries the config the TUI adopts before the run.
         // Workflow runs resume headless through `texra resume`, not inside a
@@ -759,13 +775,10 @@ export function createChatSessionController(
           store.readConfig(),
           store.exists(),
         ]);
-        // Refusal tail every early exit below shares: put back what the
-        // synchronous prologue superseded, surface the reason, settle the slot.
+        // Refusal tail every early exit below shares. No lease is held at
+        // any of them, so the hand-back inside is a no-op there.
         const refuseResume = (reason: string): void => {
-          restoreInterruptedRecovery(supersededRecovery);
-          appendLocalErrorTranscript(reason);
-          session.markRunCompleted();
-          Deferred.doneUnsafe(claimedRun, Effect.void);
+          endResumeUnstarted(() => appendLocalErrorTranscript(reason));
         };
         if (!config || !exists) {
           refuseResume(`Run not found: ${id}`);
@@ -872,11 +885,7 @@ export function createChatSessionController(
         );
       });
       return recoverRun(attemptResume, (error) => {
-        handBackUnusedRecovery(recovery, recoveryHandedOff);
-        restoreInterruptedRecovery(supersededRecovery);
-        reportRunFailure(error);
-        session.markRunCompleted();
-        Deferred.doneUnsafe(claimedRun, Effect.void);
+        endResumeUnstarted(() => reportRunFailure(error));
       });
     });
 
