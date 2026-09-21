@@ -33,7 +33,7 @@ import {
 } from '@shared/schemas';
 import { InquiryRecords } from '@shared/session/inquiryRecords';
 import { defineTool } from '@tools/core/define';
-import { nullishWithDefault } from '@tools/core/inputSchema';
+import { commandUnion, nullishWithDefault } from '@tools/core/inputSchema';
 import { executed } from '@tools/core/result';
 import { formatResultCount } from '@utils/text/stringUtils';
 
@@ -45,88 +45,78 @@ const logger = createLog('InquiryTool');
 // Schemas
 // ============================================================================
 
-// Branches use looseObject (not strictObject): provider conversion flattens
-// the union into one advertised object and OpenAI-compatible providers
-// null-fill the properties belonging to the other commands. See AGENTS.md
-// "Tool input schemas".
-const AskSchema = z.looseObject({
-  command: z
-    .literal('ask')
-    .describe(
-      'Dispatch a question to the user (who will consult an external AI model). ' +
-        'Returns immediately with {status: "dispatched", thread_id}. ' +
-        'Do NOT wait: the answer arrives as a separate [inquiry] continuation message later.',
+const InquiryInputSchema = commandUnion([
+  {
+    command: z
+      .literal('ask')
+      .describe(
+        'Dispatch a question to the user (who will consult an external AI model). ' +
+          'Returns immediately with {status: "dispatched", thread_id}. ' +
+          'Do NOT wait: the answer arrives as a separate [inquiry] continuation message later.',
+      ),
+    question: z
+      .string()
+      .min(1)
+      .describe(
+        'The self-contained question. The external model has NO context from this conversation; ' +
+          'include all definitions, notation, and problem setup directly, and say what kind of ' +
+          'answer you need (proof sketch, calculation, reference, etc.).',
+      ),
+    thread_id: InquiryThreadIdSchema.nullish().describe(
+      'Omit to start a new thread. Pass an existing answered thread_id to ask a follow-up: ' +
+        'prior Q/A in that thread is preserved and shown to the user. ' +
+        'Passing a thread_id that is still open or dropped will error.',
     ),
-  question: z
-    .string()
-    .min(1)
-    .describe(
-      'The self-contained question. The external model has NO context from this conversation; ' +
-        'include all definitions, notation, and problem setup directly, and say what kind of ' +
-        'answer you need (proof sketch, calculation, reference, etc.).',
+    context: z
+      .string()
+      .nullish()
+      .describe(
+        'Short note shown to the user explaining why this question is being asked.',
+      ),
+    suggestSearch: z
+      .boolean()
+      .nullish()
+      .describe(
+        'Set true when the external model should enable web search for this question.',
+      ),
+    attachFiles: z
+      .array(z.string())
+      .nullish()
+      .describe(
+        'Workspace-relative paths the user should upload to the external model.',
+      ),
+  },
+  {
+    command: z
+      .literal('read')
+      .describe(
+        'Read the full untruncated transcript of one inquiry thread. ' +
+          'Use this when a [inquiry] continuation truncated content you need, ' +
+          'or when revisiting an earlier thread.',
+      ),
+    thread_id: InquiryThreadIdSchema.describe('The thread to read.'),
+  },
+  {
+    command: z
+      .literal('list')
+      .describe(
+        'Enumerate inquiry threads. Filter by status to find what is still pending, what has been ' +
+          'answered, or what was dropped. Useful for self-orientation after multiple wake-ups, ' +
+          'before starting a new turn after a long pause, or to recover a forgotten thread_id.',
+      ),
+    status: nullishWithDefault(
+      z.enum(['open', 'answered', 'dropped', 'any']),
+      'open',
+    ).describe(
+      '"open" → awaiting user answer (default: matches the most common need). ' +
+        '"answered" → user has submitted an answer. ' +
+        '"dropped" → user rejected the inquiry. ' +
+        '"any" → all threads regardless of status.',
     ),
-  thread_id: InquiryThreadIdSchema.nullish().describe(
-    'Omit to start a new thread. Pass an existing answered thread_id to ask a follow-up: ' +
-      'prior Q/A in that thread is preserved and shown to the user. ' +
-      'Passing a thread_id that is still open or dropped will error.',
-  ),
-  context: z
-    .string()
-    .nullish()
-    .describe(
-      'Short note shown to the user explaining why this question is being asked.',
+    scope: nullishWithDefault(z.enum(['run', 'all']), 'run').describe(
+      '"run" → only threads belonging to this run; "all" → every run\'s threads.',
     ),
-  suggestSearch: z
-    .boolean()
-    .nullish()
-    .describe(
-      'Set true when the external model should enable web search for this question.',
-    ),
-  attachFiles: z
-    .array(z.string())
-    .nullish()
-    .describe(
-      'Workspace-relative paths the user should upload to the external model.',
-    ),
-});
-
-const ReadSchema = z.looseObject({
-  command: z
-    .literal('read')
-    .describe(
-      'Read the full untruncated transcript of one inquiry thread. ' +
-        'Use this when a [inquiry] continuation truncated content you need, ' +
-        'or when revisiting an earlier thread.',
-    ),
-  thread_id: InquiryThreadIdSchema.describe('The thread to read.'),
-});
-
-const ListSchema = z.looseObject({
-  command: z
-    .literal('list')
-    .describe(
-      'Enumerate inquiry threads. Filter by status to find what is still pending, what has been ' +
-        'answered, or what was dropped. Useful for self-orientation after multiple wake-ups, ' +
-        'before starting a new turn after a long pause, or to recover a forgotten thread_id.',
-    ),
-  status: nullishWithDefault(
-    z.enum(['open', 'answered', 'dropped', 'any']),
-    'open',
-  ).describe(
-    '"open" → awaiting user answer (default: matches the most common need). ' +
-      '"answered" → user has submitted an answer. ' +
-      '"dropped" → user rejected the inquiry. ' +
-      '"any" → all threads regardless of status.',
-  ),
-  scope: nullishWithDefault(z.enum(['run', 'all']), 'run').describe(
-    '"run" → only threads belonging to this run; "all" → every run\'s threads.',
-  ),
-});
-
-const InquiryInputSchema = z.discriminatedUnion('command', [
-  AskSchema,
-  ReadSchema,
-  ListSchema,
+  },
 ]);
 
 export type InquiryInput = z.infer<typeof InquiryInputSchema>;

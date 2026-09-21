@@ -14,6 +14,7 @@ import {
   workspacePathPorts,
   type WorkspacePathPorts,
 } from '@tools/pathResolution';
+import { commandUnion } from '@tools/core/inputSchema';
 import { executed } from '@tools/core/result';
 import {
   countBySeverity,
@@ -55,55 +56,48 @@ const DiagnosticsPathSchema = z
   .min(1)
   .describe('Workspace-relative or absolute file path.');
 
-// Branches use looseObject (not strictObject): provider conversion flattens
-// the union into one advertised object and OpenAI-compatible providers
-// null-fill the properties belonging to the other commands. See AGENTS.md
-// "Tool input schemas".
-const DiagnosticsListSchema = z.looseObject({
-  command: z
-    .literal('list')
-    .describe('Retrieve full linter diagnostics for a file.'),
-  path: DiagnosticsPathSchema,
-});
-
-const DiagnosticsCountSchema = z.looseObject({
-  command: z
-    .literal('count')
-    .describe(
-      'Retrieve a severity-count summary of linter diagnostics for a file.',
-    ),
-  path: DiagnosticsPathSchema,
-});
-
-const DiagnosticsAddSchema = z.looseObject({
-  command: z
-    .literal('add')
-    .describe(
-      'Push a critique annotation as a diagnostic (squiggle + Problems panel entry) without inserting a literal \\criticize{...}{...}{...} macro into the document.',
-    ),
-  path: DiagnosticsPathSchema,
-  line: z.int().min(1).describe('1-based line number where the issue occurs.'),
-  message: z.string().min(1).describe('Description of the issue.'),
-  severity: z
-    .int()
-    .min(0)
-    .max(5)
-    .describe(
-      'Severity 0–5: 5=desk-rejection risk, 4=significantly weakens, 3=worth addressing, 2=minor polish, 1=cosmetic, 0=verified/correct.',
-    ),
-  confidence: z
-    .int()
-    .min(1)
-    .max(5)
-    .describe(
-      'Confidence 1–5: 5=certain, 4=high certainty with minor subjectivity, 3=reasonable but field-dependent, 2=subjective, 1=speculative.',
-    ),
-});
-
-const DiagnosticsInputSchema = z.discriminatedUnion('command', [
-  DiagnosticsListSchema,
-  DiagnosticsCountSchema,
-  DiagnosticsAddSchema,
+const DiagnosticsInputSchema = commandUnion([
+  {
+    command: z
+      .literal('list')
+      .describe('Retrieve full linter diagnostics for a file.'),
+    path: DiagnosticsPathSchema,
+  },
+  {
+    command: z
+      .literal('count')
+      .describe(
+        'Retrieve a severity-count summary of linter diagnostics for a file.',
+      ),
+    path: DiagnosticsPathSchema,
+  },
+  {
+    command: z
+      .literal('add')
+      .describe(
+        'Push a critique annotation as a diagnostic (squiggle + Problems panel entry) without inserting a literal \\criticize{...}{...}{...} macro into the document.',
+      ),
+    path: DiagnosticsPathSchema,
+    line: z
+      .int()
+      .min(1)
+      .describe('1-based line number where the issue occurs.'),
+    message: z.string().min(1).describe('Description of the issue.'),
+    severity: z
+      .int()
+      .min(0)
+      .max(5)
+      .describe(
+        'Severity 0–5: 5=desk-rejection risk, 4=significantly weakens, 3=worth addressing, 2=minor polish, 1=cosmetic, 0=verified/correct.',
+      ),
+    confidence: z
+      .int()
+      .min(1)
+      .max(5)
+      .describe(
+        'Confidence 1–5: 5=certain, 4=high certainty with minor subjectivity, 3=reasonable but field-dependent, 2=subjective, 1=speculative.',
+      ),
+  },
 ]);
 
 export type DiagnosticsInput = z.infer<typeof DiagnosticsInputSchema>;
