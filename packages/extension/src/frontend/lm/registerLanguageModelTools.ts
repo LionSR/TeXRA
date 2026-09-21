@@ -12,12 +12,7 @@
 import * as vscode from 'vscode';
 import { Effect, Fiber } from 'effect';
 
-import {
-  FileInteractionState,
-  Runs,
-  ToolCall,
-  type SessionHandle,
-} from '@agent/runtime';
+import { Runs, ToolCall, type SessionHandle } from '@agent/runtime';
 import { createLog } from '@logger/logUtils';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import { sessionFsLayer } from '@platform/rootedFs';
@@ -110,7 +105,6 @@ export function registerLanguageModelTools(
               return yield* tool.call(input).pipe(
                 Effect.provideService(ToolCall, {
                   roots: session.roots,
-                  tracker: new FileInteractionState(),
                   run: undefined,
                 }),
                 Effect.provideService(Runs, session.runs),

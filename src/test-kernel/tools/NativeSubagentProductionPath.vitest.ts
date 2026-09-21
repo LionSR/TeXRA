@@ -32,6 +32,7 @@ import { readChildTurnState } from '@agent/storage/runRecords';
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
+import { noopTrace } from '@agent/trace';
 import { RunHandle } from '@agent/runtime/RunHandle';
 import type { BoundModel } from '@agent/runtime/run/modelBinding';
 import type { Message } from '@agent/runtime/loop/rows';
@@ -427,11 +428,14 @@ async function queueSecondAssertionFollowUp(
       .pipe(
         Effect.provide(
           nativeToolTestLayer({
-            model: parentContext.model,
             tracker: new FileInteractionState(),
             run: {
               runId: parentContext.runId,
               session: parentContext.session,
+              config: AgentConfigSchema.parse({
+                agent: 'chat',
+                model: parentContext.model,
+              }),
               toolPolicy: {},
             },
           }),
@@ -508,12 +512,16 @@ async function launchWaitingChild(options: {
   };
   const parentCall = {
     roots: session.roots,
-    model: PARENT_MODEL,
     tracker: new FileInteractionState(),
     workingDirectory: process.cwd(),
     run: {
       runId: PARENT_RUN_ID,
       session,
+      config: AgentConfigSchema.parse({
+        agent: 'chat',
+        model: PARENT_MODEL,
+      }),
+      logger: noopTrace,
       toolPolicy: {
         approvalPromptsUnavailable: false,
         runtimeUnavailableTools: [],

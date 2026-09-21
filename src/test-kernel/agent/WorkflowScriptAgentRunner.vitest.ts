@@ -7,7 +7,9 @@ import { Cause, Deferred, Effect, Exit, FileSystem } from 'effect';
 
 import { beforeEach, describe, expect, vi } from 'vitest';
 
+import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
+import { noopTrace } from '@agent/trace';
 import { RunLanes } from '@agent/runtime/runLanes';
 import { Runs } from '@agent/runtime/runRegistry';
 import type { WorkflowAgentInvocation } from '@agent/workflowScript/types';
@@ -246,16 +248,20 @@ function parentContext(): DelegationParent {
   } as never;
   return {
     roots: createFakeWorkspaceRoots(),
-    model: 'parent-model',
     tracker: new FileInteractionState(),
     workingDirectory: WORKSPACE_PATH,
-    delegationAgentScope: {
-      workflow: ['builtInWorkflow:correct'],
-      toolUse: ['builtInToolUse:assistant'],
-    },
     run: {
       runId: parentRunId,
       session,
+      config: AgentConfigSchema.parse({
+        agent: 'chat',
+        model: 'parent-model',
+      }),
+      logger: noopTrace,
+      delegationAgentScope: {
+        workflow: ['builtInWorkflow:correct'],
+        toolUse: ['builtInToolUse:assistant'],
+      },
       toolPolicy: {
         approvalPromptsUnavailable: true,
         runtimeUnavailableTools: ['user_question'],

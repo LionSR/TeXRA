@@ -41,7 +41,6 @@ import { executeSubagent } from './subagentRun';
 
 /** Invocation capabilities required by a delegation tool after its entry check. */
 export interface DelegationParent extends ToolCallShape {
-  readonly model: string;
   readonly run: NonNullable<ToolCallShape['run']>;
 }
 
@@ -50,12 +49,12 @@ export function requireDelegationParent(
   toolName: string,
   call: ToolCallShape,
 ): DelegationParent {
-  if (!call.run || !call.model) {
+  if (!call.run) {
     throw new ToolError(
       `${toolName} requires an active launched agent session.`,
     );
   }
-  return { ...call, run: call.run, model: call.model };
+  return { ...call, run: call.run };
 }
 
 const DEFAULT_DELEGATION_REJECTION_FEEDBACK = [
@@ -287,7 +286,7 @@ export const proposeAndExecute = Effect.fn('proposeAndExecute')(function* (
         parent.roots,
         proposal.agentCategory,
         agentOverride,
-        parent.delegationAgentScope ?? undefined,
+        parent.run.delegationAgentScope ?? undefined,
       )
     : undefined;
 

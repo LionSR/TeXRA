@@ -12,6 +12,7 @@ import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { fakePath } from '@test/support/FakePlatform';
 import { TraceEmitter } from '@agent/trace';
+import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { deriveWorkflowScriptCheckpointId } from '@agent/workflowScript/checkpoint';
 import { getRunRecords } from '@agent/storage';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
@@ -154,14 +155,16 @@ return await agent('saved call')`;
 
 function toolLayer(stopAfterCycle = false) {
   return nativeToolTestLayer({
-    model: 'parent-model',
-    stopAfterCycle,
-    trace: new TraceEmitter(),
     toolCallId: 'tool-call',
     hooks: { recordSubagentCost: vi.fn() },
     run: {
       runId: parentRunId,
       session: testDefaultSession(),
+      config: AgentConfigSchema.parse({
+        agent: 'chat',
+        model: 'parent-model',
+      }),
+      logger: new TraceEmitter(),
       toolPolicy: { stopAfterCycle },
     },
   });
@@ -472,8 +475,10 @@ return null`;
             }),
           }),
           expect.objectContaining({
-            model: 'parent-model',
-            run: expect.objectContaining({ runId: parentRunId }),
+            run: expect.objectContaining({
+              runId: parentRunId,
+              config: expect.objectContaining({ model: 'parent-model' }),
+            }),
           }),
         );
       }),

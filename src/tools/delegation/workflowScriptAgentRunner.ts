@@ -61,7 +61,7 @@ function workflowScriptModelSelection(
   const requestedModel = invocation.options.model;
   return selectAvailableDelegationModel({
     ...(requestedModel !== undefined && { requestedModel }),
-    parentModel: parent.model,
+    parentModel: parent.run.config.model,
     settings: parent.roots,
   }).pipe(
     Effect.mapError((error) => {
@@ -112,8 +112,8 @@ const resolveWorkflowCallConfig = Effect.fn('resolveWorkflowCallConfig')(
       ...(parent.workingDirectory !== undefined && {
         workingDirectory: parent.workingDirectory,
       }),
-      ...(parent.delegationAgentScope && {
-        delegationAgentScope: parent.delegationAgentScope,
+      ...(parent.run.delegationAgentScope && {
+        delegationAgentScope: parent.run.delegationAgentScope,
       }),
     };
     if (call.options.schema !== undefined) {
@@ -127,7 +127,7 @@ const resolveWorkflowCallConfig = Effect.fn('resolveWorkflowCallConfig')(
         parent.roots,
         AgentCategory.ToolUse,
         requestedAgentName,
-        parent.delegationAgentScope ?? undefined,
+        parent.run.delegationAgentScope ?? undefined,
       );
       const model = yield* workflowScriptModelSelection(call, parent);
       return {
@@ -150,7 +150,7 @@ const resolveWorkflowCallConfig = Effect.fn('resolveWorkflowCallConfig')(
               parent.roots,
               AgentCategory.Workflow,
               requestedAgentName,
-              parent.delegationAgentScope ?? undefined,
+              parent.run.delegationAgentScope ?? undefined,
             );
       if (agent.category !== AgentCategory.Workflow) {
         throw new WorkflowRunAbortError(
@@ -829,7 +829,7 @@ export function createWorkflowScriptAgentRunner(
               session,
               approvalPromptsUnavailable:
                 parent.run.toolPolicy.approvalPromptsUnavailable,
-              onApprovalPolicyDenial: parent.onApprovalPolicyDenial,
+              onApprovalPolicyDenial: parent.run.onApprovalPolicyDenial,
               runtimeUnavailableTools:
                 parent.run.toolPolicy.runtimeUnavailableTools,
               // Live inherited bypass values, matching LLM delegation: each

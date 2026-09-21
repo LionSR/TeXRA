@@ -104,7 +104,7 @@ export const executeSubagent = Effect.fn('executeSubagent')(function* (
     recordSubagentCost?.(costUsd ?? 0);
   };
 
-  const delegationAgentScope = parent.delegationAgentScope ?? undefined;
+  const delegationAgentScope = parent.run.delegationAgentScope ?? undefined;
   const childConfigPayload: AgentConfigPayload = {
     ...configPayload,
     ...(delegationAgentScope ? { delegationAgentScope } : {}),
@@ -125,12 +125,12 @@ export const executeSubagent = Effect.fn('executeSubagent')(function* (
     );
   };
 
-  if (parent.stopAfterCycle ?? parent.run.toolPolicy.stopAfterCycle) {
+  if (parent.run.toolPolicy.stopAfterCycle) {
     // The parent is mid-cycle, so child progress cannot be delivered as a
     // follow-up the way the detached loop does it. Degrade deliberately to the
     // parent run's trace (the same trace nested tool activity projects onto):
     // the orchestrator's transcript still records what its child is doing.
-    const parentTrace = parent.trace;
+    const parentTrace = parent.run.logger;
     const notifyParentTrace = (update: SubagentProgressUpdate): void => {
       const line = describeSubagentProgress(agentName, update);
       if (line) parentTrace?.info(line);
@@ -143,7 +143,7 @@ export const executeSubagent = Effect.fn('executeSubagent')(function* (
         session: parentSession,
         approvalPromptsUnavailable:
           parent.run.toolPolicy.approvalPromptsUnavailable,
-        onApprovalPolicyDenial: parent.onApprovalPolicyDenial,
+        onApprovalPolicyDenial: parent.run.onApprovalPolicyDenial,
         runtimeUnavailableTools: parent.run.toolPolicy.runtimeUnavailableTools,
         onRunResolved: inheritChildRunApprovals,
         onCost: recordCost,
@@ -199,7 +199,7 @@ export const executeSubagent = Effect.fn('executeSubagent')(function* (
         workingDirectory,
         approvalPromptsUnavailable:
           parent.run.toolPolicy.approvalPromptsUnavailable,
-        onApprovalPolicyDenial: parent.onApprovalPolicyDenial,
+        onApprovalPolicyDenial: parent.run.onApprovalPolicyDenial,
         runtimeUnavailableTools: parent.run.toolPolicy.runtimeUnavailableTools,
         onRunResolved: inheritChildRunApprovals,
         userFollowUpSupport,

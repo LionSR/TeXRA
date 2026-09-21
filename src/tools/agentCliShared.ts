@@ -369,7 +369,7 @@ const withAgentCliApproval = Effect.fn('agentCliShared.withAgentCliApproval')(
     run: (run: ToolRun) => Effect.Effect<ToolResult, AgentCliToolFailure, R>,
   ): Effect.fn.Return<ToolResult, AgentCliToolFailure, R | ToolCall> {
     const activeRun = yield* requireToolRun(toolName, toolCall);
-    if (toolCall.stopAfterCycle) {
+    if (activeRun.toolPolicy.stopAfterCycle) {
       return yield* Effect.fail(
         new ToolError(
           `${toolName} is unavailable in one-shot runs: it delivers its result as a follow-up message, and this run ends after the current cycle so no follow-up can be collected. Delegate with delegate_agent, which returns the child's result directly.`,

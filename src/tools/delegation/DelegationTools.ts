@@ -143,13 +143,13 @@ Optional auto-attach from the input LaTeX:
         call.roots,
         'workflow',
         input.agent,
-        call.delegationAgentScope ?? undefined,
+        call.run.delegationAgentScope ?? undefined,
       );
       const agentName = agent.name;
 
       const model = yield* selectAvailableDelegationModel({
         requestedModel: input.model,
-        parentModel: call.model,
+        parentModel: call.run.config.model,
         settings: call.roots,
       });
 
@@ -285,13 +285,13 @@ Git worktree support: resolved from the active workspace at runtime.`,
         call.roots,
         'toolUse',
         input.agent!,
-        call.delegationAgentScope ?? undefined,
+        call.run.delegationAgentScope ?? undefined,
       );
       const agentName = agent.name;
 
       const model = yield* selectAvailableDelegationModel({
         requestedModel: input.model,
-        parentModel: call.model,
+        parentModel: call.run.config.model,
         settings: call.roots,
       });
       const rootUserInstruction = call.userInstruction;

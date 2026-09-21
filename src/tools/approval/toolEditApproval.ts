@@ -246,7 +246,7 @@ export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
     });
     if (decision === 'allow') return acceptProposedAsIs();
     if (isTexraApprovalDenied(decision)) {
-      call.onApprovalPolicyDenial?.();
+      run.onApprovalPolicyDenial?.();
       return { action: 'deny', reason: texraApprovalDenialMessage(decision) };
     }
     if (!runId) {

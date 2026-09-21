@@ -300,8 +300,7 @@ Durability: the journal is keyed by meta.name and the agent field within this se
       const { session, runId: parentRunId } = parent.run;
       const workingDirectory = parent.workingDirectory;
       // A mid-cycle parent has no later turn for a follow-up: wait on the run.
-      const stopAfterCycle =
-        parent.stopAfterCycle ?? parent.run.toolPolicy.stopAfterCycle;
+      const stopAfterCycle = parent.run.toolPolicy.stopAfterCycle;
       let scriptPath: string;
       let script: string;
       if (input.scriptPath != null) {
@@ -355,7 +354,7 @@ Durability: the journal is keyed by meta.name and the agent field within this se
           defaultAgent: requireWorkflowOrToolUseAgent(
             parent.roots,
             input.agent,
-            parent.delegationAgentScope ?? undefined,
+            parent.run.delegationAgentScope ?? undefined,
           ),
         };
       });
@@ -420,7 +419,7 @@ Durability: the journal is keyed by meta.name and the agent field within this se
       // the active credentials cannot serve fails here, with the available list,
       // instead of mid-run on the first provider call.
       const runModel = yield* selectAvailableDelegationModel({
-        parentModel: parent.model,
+        parentModel: parent.run.config.model,
         settings: parent.roots,
       }).pipe(
         // Same annotation `runPhase` puts on every other phase failure.

@@ -163,8 +163,11 @@ describe('claude_agent tool launch and resume fallback', () => {
       }).pipe(
         Effect.provide(
           nativeToolTestLayer({
-            stopAfterCycle: true,
-            run: { session: testSession, runId: parentRunId, toolPolicy: {} },
+            run: {
+              session: testSession,
+              runId: parentRunId,
+              toolPolicy: { stopAfterCycle: true },
+            },
           }),
         ),
       ),
