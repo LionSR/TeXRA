@@ -136,6 +136,17 @@ export function createDesktopSettingsIpc(
   const { globalState, runtime } = options;
   const { roots } = options.session;
   const { workspaceState, config } = roots;
+  /** A settings program over this project's rooted filesystems: the one
+   *  provision of the IPC surface, taken at the window's edge rather than
+   *  at the depth that reads. */
+  const overSessionFiles = <A, E>(
+    program: Effect.Effect<A, E, StorageFs | ProcessServices>,
+  ) => withSessionFs(roots, program);
+
+  /** Its awaited settle, as an IPC handler answers. */
+  const onSessionFiles = <A, E>(
+    program: Effect.Effect<A, E, StorageFs | ProcessServices>,
+  ): Promise<A> => runtime.runPromise(overSessionFiles(program));
   // Commands declared `unsupported(...)` in settingsHandlers below surface as
   // a visible info dialog instead of a console-only error log.
   const onError = (error: unknown): void => {
@@ -188,15 +199,10 @@ export function createDesktopSettingsIpc(
     );
   }
 
-  // Every memory program runs over this project's storage view, built from
-  // the roots this window already holds.
   function postMemoryData() {
-    return Effect.map(
-      withSessionFs(roots, memoryController.getMemoryDataMessage()),
-      (message) => {
-        options.postToRenderer(message);
-      },
-    );
+    return Effect.map(memoryController.getMemoryDataMessage(), (message) => {
+      options.postToRenderer(message);
+    });
   }
 
   /**
@@ -207,7 +213,7 @@ export function createDesktopSettingsIpc(
   function postMemoryMutation(
     mutation: Effect.Effect<unknown, never, StorageFs>,
   ) {
-    return Effect.map(withSessionFs(roots, mutation), (message) => {
+    return Effect.map(mutation, (message) => {
       if (message != null) options.postToRenderer(message);
     });
   }
@@ -219,10 +225,7 @@ export function createDesktopSettingsIpc(
    */
   function postMemoryPreview(storagePath: string) {
     return Effect.map(
-      withSessionFs(
-        roots,
-        Effect.exit(memoryController.getMemoryPreviewMessage(storagePath)),
-      ),
+      Effect.exit(memoryController.getMemoryPreviewMessage(storagePath)),
       (previewed) => {
         if (Exit.isSuccess(previewed)) {
           options.postToRenderer(previewed.value);
@@ -276,12 +279,9 @@ export function createDesktopSettingsIpc(
 
   async function openMemoryFolder(): Promise<void> {
     const memoryPath = resolveMemoryStoragePath();
-    await runtime.runPromise(
-      withSessionFs(
-        roots,
-        StorageFs.use((storage) =>
-          storage.makeDirectory(memoryPath, { recursive: true }),
-        ),
+    await onSessionFiles(
+      StorageFs.use((storage) =>
+        storage.makeDirectory(memoryPath, { recursive: true }),
       ),
     );
     await runtime.runPromise(
@@ -425,9 +425,11 @@ export function createDesktopSettingsIpc(
    * reported through `onError`, exactly as the rejection of the promise this
    * replaces was.
    */
-  function runAsync<E>(work: Effect.Effect<void, E, ProcessServices>): void {
+  function runAsync<E>(
+    work: Effect.Effect<void, E, StorageFs | ProcessServices>,
+  ): void {
     runtime.runFork(
-      work.pipe(
+      overSessionFiles(work).pipe(
         Effect.catchCause((cause) =>
           Effect.sync(() => onError(Cause.squash(cause))),
         ),
@@ -570,23 +572,21 @@ export function createDesktopSettingsIpc(
     // the dispatcher, so this entry is never actually invoked — it exists
     // only to satisfy the exhaustive registry type.
     webviewReady: () => {},
-    getMemoryData: () => runtime.runPromise(postMemoryData()),
+    getMemoryData: () => onSessionFiles(postMemoryData()),
     getMemoryPreview: (message) =>
-      runtime.runPromise(postMemoryPreview(message.storagePath)),
+      onSessionFiles(postMemoryPreview(message.storagePath)),
     openMemoryFile,
     openMemoryFolder,
     deleteMemory: (message) =>
-      runtime.runPromise(
-        postMemoryMutation(memoryController.deleteMemory(message)),
-      ),
+      onSessionFiles(postMemoryMutation(memoryController.deleteMemory(message))),
     pinMemory: (message) =>
-      runtime.runPromise(
+      onSessionFiles(
         postMemoryMutation(
           memoryController.setMemoryPinned(message.storagePath, true),
         ),
       ),
     unpinMemory: (message) =>
-      runtime.runPromise(
+      onSessionFiles(
         postMemoryMutation(
           memoryController.setMemoryPinned(message.storagePath, false),
         ),
