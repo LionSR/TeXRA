@@ -32,6 +32,7 @@ import {
   disposeProcessRuntime,
   installProcessRuntime,
 } from '@controllers/session/sessionLayer';
+import { globalDatabaseLayer } from '@controllers/session/Database';
 import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
 import { appSignals } from '@eventBus/AppSignals';
 import { refreshApiKeyStatusBar } from '@frontend/statusBar/apiKeyStatusBar';
@@ -279,6 +280,10 @@ async function initVscodePlatform(
       version: extensionVersion,
       editorType: vscode.env.appName || undefined,
     }),
+    // The process's one handle on that same global root: the inquiry
+    // threads, the update check and the CLI-shared input history read
+    // through it for as long as this runtime lives.
+    globalDatabase: globalDatabaseLayer(storage.getGlobalStoragePath()),
   });
   // VS Code restarts the extension host when the first workspace folder
   // changes, so the configuration stores stay pinned for this process.

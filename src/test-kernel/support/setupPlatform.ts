@@ -17,7 +17,7 @@
 // that mocks it.
 import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem';
 import * as NodePath from '@effect/platform-node/NodePath';
-import { Effect, SubscriptionRef } from 'effect';
+import { Effect } from 'effect';
 import { afterEach, beforeEach } from 'vitest';
 
 import type { ToolInjections } from '@agent/runtime/toolInjection';
@@ -366,16 +366,8 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     NodePath.layer,
     Layer.mock(UpdateCheckRecords, {}),
     // The records above are mocked, so the bare runtime's global-root handle
-    // is too: a suite that reads it provides its own innermost. The two
-    // subscription refs are real values rather than stubs because they are
-    // the handle's only non-effectful members, so a mock cannot omit them.
-    Layer.unwrap(
-      Effect.map(
-        Effect.all([SubscriptionRef.make(0), SubscriptionRef.make(0)]),
-        ([level, observedCommit]) =>
-          Layer.mock(GlobalDatabase, { cleared: null, level, observedCommit }),
-      ),
-    ),
+    // is too: a suite that reads it provides its own innermost.
+    Layer.mock(GlobalDatabase, {}),
     Layer.mock(InquiryRecords, {}),
     // A suite that exercises a Lean tool provides its own port innermost.
     // The run-end stop is absent, as on a host whose Lean integration owns

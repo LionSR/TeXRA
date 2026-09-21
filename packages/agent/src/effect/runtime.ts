@@ -31,6 +31,7 @@ import {
   disposeProcessRuntime,
   installProcessRuntime,
 } from '@controllers/session/sessionLayer';
+import { globalDatabaseLayer } from '@controllers/session/Database';
 import { setDebugModeConfig } from '@logger/logUtils';
 import { initPlatform, tryPlatform, type Platform } from '@platform/platform';
 import type { AgentResumePort } from '@platform/interfaces';
@@ -217,6 +218,9 @@ export function composeProcess(platform: AgentPlatform): ProcessHold {
       // An embedder reports no usage: the package has no version or editor of
       // its own to stamp entries with, and no account plane to send them on.
       usageLog: Layer.empty,
+      // The embedder's global root is a root like any host's: one handle for
+      // the life of the runtime this composition installs.
+      globalDatabase: globalDatabaseLayer(platform.roots.globalStorage),
     });
     installedHere = true;
   }

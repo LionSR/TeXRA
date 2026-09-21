@@ -308,15 +308,32 @@ export class Database extends Context.Service<
 
 /**
  * The process's one handle on the global storage root, built beside
- * `GlobalStorageFs` in `installProcessRuntime` and held for the process's
- * life. Every application record of that root — the inquiry threads, the
- * update check, the CLI's input history, the desktop's remembered projects —
- * reads and writes through it, so the root's `data_version` poll is forked
- * once per process instead of once per operation, and the connection is
- * neither opened nor torn down on a single-row read. The per-workspace
- * {@link Database} of a session's root is unchanged and unrelated.
+ * `GlobalStorageFs` by the entry that installs the process runtime and held
+ * for that runtime's life. Every application record of that root — the
+ * inquiry threads, the update check, the CLI's input history, the desktop's
+ * remembered projects — reads and writes through it, so the root's
+ * `data_version` poll is forked once per process instead of once per
+ * operation, and the connection is neither opened nor torn down on a
+ * single-row read. The per-workspace {@link Database} of a session's root is
+ * unchanged and unrelated.
+ *
+ * The shape is that handle's application-record surface and nothing else:
+ * the global root holds no session, so its reactive members (`level`,
+ * `observedCommit`, `cleared`) and the run-ledger reads over them have no
+ * reader here, and a tag that offered them would invite one.
  */
 export class GlobalDatabase extends Context.Service<
   GlobalDatabase,
-  Context.Service.Shape<typeof Database>
+  Pick<
+    Context.Service.Shape<typeof Database>,
+    | 'appendAll'
+    | 'readInputHistory'
+    | 'appendInputHistory'
+    | 'readDesktopProjects'
+    | 'readUpdateCheck'
+    | 'recordUpdateCheck'
+    | 'readInquiryRecord'
+    | 'listInquiryRecords'
+    | 'updateInquiryRecord'
+  >
 >()('@texra/session/GlobalDatabase') {}

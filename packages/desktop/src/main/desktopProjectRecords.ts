@@ -5,7 +5,20 @@ import { aggregateId } from '@shared/schemas';
 import { GlobalDatabase } from '@shared/session/database';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 
-/** The remembered projects, on the process's handle on the global root. */
+/**
+ * The remembered projects, on the process's handle on the global root.
+ *
+ * That root is the shared `~/.texra` this process already keeps its sessions,
+ * inquiry threads and update check in, not the Electron profile directory
+ * this list used to be written to: the same ruling that moved the
+ * update-check row onto the one process handle moves this row with it, since
+ * one handle per process is the point and a second root would mean a second
+ * connection and a second change poll for one list. The move is a one-time
+ * loss of the remembered list for an existing install — the first launch
+ * after it shows no recent projects and the list fills again as projects are
+ * opened. Nothing reads the old row: a reader for it would be exactly the
+ * legacy-format path this repo does not keep.
+ */
 export const openDesktopProjectRecords = Effect.gen(function* () {
   const database = yield* GlobalDatabase;
   const id = aggregateId('desktop-projects', 'remembered');

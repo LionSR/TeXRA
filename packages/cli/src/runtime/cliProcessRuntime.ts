@@ -9,11 +9,12 @@
  * whose native validation runs before platform initialization. Whichever
  * arrives first builds the runtime and the rest run on it, so a normal run
  * still ends with exactly the runtime the platform's shutdown disposes.
- * Every entry but clone opens the global state store with the install, so
- * `AppState` answers from the first install on rather than only under
- * `initCliPlatform`; clone hands over {@link refusingStateStore} instead (see
- * the function's docstring), so its install creates nothing under the storage
- * root and a read or write of application state there is loud.
+ * Every entry but clone opens the global state store and the global root's
+ * database with the install, so `AppState` and the application records answer
+ * from the first install on rather than only under `initCliPlatform`; clone
+ * hands over {@link refusingStateStore} and {@link refusingGlobalDatabase}
+ * instead (see their docstrings), so its install creates nothing under the
+ * storage root and a read or write of either there is loud.
  *
  * This module is the CLI's composition root for that runtime, and every
  * entry that awaits it holds the result in a local and threads it on: there
@@ -41,11 +42,12 @@
  * opens only the workspace scope and no entry has to discover a store some
  * other entry opened.
  */
-import { Effect } from 'effect';
+import { Effect, Layer } from 'effect';
 
 import { installedProcessRuntime } from '@agent/runtime';
 import { SignInFailed } from '@common/errors/signInFailed';
 import { openAppStateStore } from '@controllers/session/appStateStore';
+import { globalDatabaseLayer } from '@controllers/session/Database';
 import {
   disposeProcessRuntime,
   installProcessRuntime,
@@ -57,6 +59,7 @@ import { nodeFileServices } from '@platform/defaults/jsonStore';
 import { DEFAULT_NODE_STORAGE_ROOT } from '@platform/defaults/nodeStorage';
 import { nodeProcesses } from '@platform/defaults/nodeProcesses';
 import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
+import { GlobalDatabase } from '@shared/session/database';
 import { usageLogLayer } from '@telemetry/UsageLogService';
 import { directLeanLanguageServices } from '@tools/lean/direct/directLspAdapter';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -94,6 +97,37 @@ export const refusingStateStore = (): StateStore => ({
     ),
 });
 
+const NO_CLONE_GLOBAL_ROOT =
+  'The `texra clone` entry reads and writes no global record: it runs without a platform and its storage root may be read-only.';
+
+const refuseGlobalRecord = (operation: string) =>
+  Effect.die(new Error(`${NO_CLONE_GLOBAL_ROOT} "${operation}" cannot run.`));
+
+/**
+ * The `GlobalDatabase` of that same entry. Opening the real handle creates
+ * the global storage directory and its SQLite file and forks that root's
+ * 250 ms change poll for the life of the runtime; `clone` may hold a
+ * read-only storage root, runs no records operation, and is the one entry
+ * that installs a runtime and disposes none — an opened handle would also
+ * hold the event loop open past the clone's own exit. Every member here is a
+ * defect rather than a tagged failure, as a read of {@link refusingStateStore}
+ * is: no caller in a clone process composes one, so an answer of any other
+ * kind would read as an empty global root rather than as no global root at
+ * all.
+ */
+export const refusingGlobalDatabase: Layer.Layer<GlobalDatabase> =
+  Layer.succeed(GlobalDatabase)({
+    appendAll: () => refuseGlobalRecord('appendAll'),
+    readInputHistory: () => refuseGlobalRecord('readInputHistory'),
+    appendInputHistory: () => refuseGlobalRecord('appendInputHistory'),
+    readDesktopProjects: () => refuseGlobalRecord('readDesktopProjects'),
+    readUpdateCheck: () => refuseGlobalRecord('readUpdateCheck'),
+    recordUpdateCheck: () => refuseGlobalRecord('recordUpdateCheck'),
+    readInquiryRecord: () => refuseGlobalRecord('readInquiryRecord'),
+    listInquiryRecords: () => refuseGlobalRecord('listInquiryRecords'),
+    updateInquiryRecord: () => refuseGlobalRecord('updateInquiryRecord'),
+  });
+
 /**
  * Install the process runtime, or join the one already installed: every entry
  * that awaits this holds it in a local and threads it on, so nothing below
@@ -105,18 +139,22 @@ export const refusingStateStore = (): StateStore => ({
  * there is no second record beside the runtime for a joining caller (or a
  * second root, like the test kernel's) to keep in sync.
  *
- * `appState` is `clone`'s: the one platform-less, secrets-only entry, whose
+ * `options` is `clone`'s: the one platform-less, secrets-only entry, whose
  * token can come from the environment and whose storage root may be
- * read-only. Opening the global state store creates the global storage
- * directory and its database, so clone hands over
- * {@link refusingStateStore} and this install opens nothing. Nothing in a
- * clone process joins the install after it, which is what makes that safe: a
- * default caller joining a clone-installed runtime reads the refusal loudly,
- * and a CLI process runs exactly one command.
+ * read-only. Opening the global state store or the global root's database
+ * creates the global storage directory and its SQLite file, so clone hands
+ * over {@link refusingStateStore} and {@link refusingGlobalDatabase} and this
+ * install opens nothing under that root. Nothing in a clone process joins the
+ * install after it, which is what makes that safe: a default caller joining a
+ * clone-installed runtime reads the refusal loudly, and a CLI process runs
+ * exactly one command.
  */
 export function installCliProcessRuntime(
   storageRoot?: string,
-  options?: { readonly appState: StateStore },
+  options?: {
+    readonly appState: StateStore;
+    readonly globalDatabase: Layer.Layer<GlobalDatabase>;
+  },
 ): Promise<ProcessRuntime> {
   const current = installedProcessRuntime();
   if (current) {
@@ -138,11 +176,11 @@ export function installCliProcessRuntime(
       await Effect.runPromise(
         Effect.gen(function* () {
           const processStart = yield* nodeProcesses.selfIdentity();
-          // The records layers take the path as a value, so it resolves here,
-          // at install, with the pure calculator: the directory is the state
-          // store's to create when it opens below, and clone — whose storage
-          // root may be read-only, and which runs no records operation — must
-          // not create it at all.
+          // The global root resolves here, at install, with the pure
+          // calculator: the directory is the state store's and the global
+          // database's to create when they open below, and clone — whose
+          // storage root may be read-only, and which runs no records
+          // operation — must not create it at all.
           const globalStoragePath = resolveGlobalStoragePath(
             storageRoot ?? DEFAULT_NODE_STORAGE_ROOT,
           );
@@ -194,6 +232,10 @@ export function installCliProcessRuntime(
       // runtime's disposal drains the queue, and that disposal is the last
       // shutdown step of every exit path this process has.
       usageLog: usageLogLayer({ version, editorType: 'cli' }),
+      // The one handle on the global root, held for this runtime's life and
+      // closed with it — or clone's refusal, which opens nothing.
+      globalDatabase:
+        options?.globalDatabase ?? globalDatabaseLayer(globalStoragePath),
     });
     // The output plane runs its Effects on this runtime from here on; the
     // disposal below hands it back the no-runtime state.

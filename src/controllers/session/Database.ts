@@ -1270,12 +1270,16 @@ export const databaseLayer = (
   ).pipe(Layer.provide(Reactivity.layer));
 
 /**
- * The process's handle on the global storage root, built once by
- * `installProcessRuntime` and held for the process's life: the same
- * connection, the same schema and the one `data_version` poll every
- * application record of that root reads and writes through. The root is a
- * value here because the process knows it before the runtime exists; the
- * per-session `Database` takes its root from `WorkspaceRoots` instead.
+ * The process's handle on the global storage root: the same connection, the
+ * same schema and the one `data_version` poll every application record of
+ * that root reads and writes through, built once with the runtime the entry
+ * hands it to and closed when that runtime is disposed. The root is a value
+ * here because the entry knows it before the runtime exists; the per-session
+ * `Database` takes its root from `WorkspaceRoots` instead.
+ *
+ * Building this creates the directory, the SQLite file and the poll fiber, so
+ * an entry that must create none of the three passes a refusing layer in its
+ * place rather than this one (`installProcessRuntime`'s `globalDatabase`).
  */
 export const globalDatabaseLayer = (
   storage: string,

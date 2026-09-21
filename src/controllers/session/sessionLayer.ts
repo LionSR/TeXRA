@@ -96,8 +96,9 @@ import { SessionInputs } from '@shared/session/sessionInputs';
 
 import {
   Database,
-  GlobalDatabase,
+  type DatabaseOpenFailed,
   type DatabaseReadFailed,
+  type GlobalDatabase,
   type SessionOpenError,
 } from '@shared/session/database';
 import { releaseRunResources } from '@tools/approval';
@@ -106,7 +107,7 @@ import { SetupPlatform, type SetupPlatformShape } from '@tools/setup/platform';
 import { StreamLogStore } from '@transcript/StreamLogStore';
 import { inquiryRecordsLayer } from './inquiryRecords';
 import { updateCheckRecordsLayer } from './updateCheckRecords';
-import { databaseLayer, globalDatabaseLayer } from './Database';
+import { databaseLayer } from './Database';
 import { collectPendingDeletions } from './deletionCleanup';
 import { sessionRequests } from './SessionRequests';
 import { sweepLeftoverRuns } from './sweepLeftoverRuns';
@@ -1038,6 +1039,22 @@ interface ProcessRuntimeOptions {
     never,
     HttpClient.HttpClient | SupabaseAuth
   >;
+  /**
+   * The process's handle on the global storage root —
+   * `globalDatabaseLayer(globalStorage)` on every entry that has one — built
+   * with this runtime and closed when it is disposed. It is the entry's to
+   * pass for the same reason `appState` is: opening the handle creates the
+   * global storage directory and its SQLite file and forks that root's
+   * change poll for the process's life, and the one entry that runs before
+   * any platform, on a storage root that may be read-only, and that disposes
+   * no runtime, must do none of the three. That entry hands over a refusing
+   * layer beside its refusing state store.
+   */
+  readonly globalDatabase: Layer.Layer<
+    GlobalDatabase,
+    DatabaseOpenFailed,
+    ProcessIdentity
+  >;
 }
 
 export function installProcessRuntime({
@@ -1052,6 +1069,7 @@ export function installProcessRuntime({
   editorModel,
   lean,
   usageLog,
+  globalDatabase: globalDatabaseOption,
 }: ProcessRuntimeOptions): ProcessRuntime {
   // Non-failing by contract: `nodeProcesses.selfIdentity()` reports an
   // unreadable identity as undefined, and a root that already read one hands
@@ -1060,12 +1078,12 @@ export function installProcessRuntime({
     ProcessIdentity,
     Effect.map(processStart, (start) => ({ ownerId: processOwnerId(start) })),
   );
-  // The one handle on the global root, built here and held for the process's
-  // life: the records below are `Layer.effect`s over it, and it is provided
-  // outside the session family so the entry's `Layer.fresh` cannot rebuild it
-  // per root. A global root that will not open is a defect, not a per-record
-  // failure: nothing downstream has an answer for it.
-  const globalDatabase = globalDatabaseLayer(globalStorage).pipe(
+  // The entry's handle on the global root, held for the process's life: the
+  // records below are `Layer.effect`s over it, and it is provided outside the
+  // session family so the entry's `Layer.fresh` cannot rebuild it per root. A
+  // global root the entry meant to open and that will not open is a defect,
+  // not a per-record failure: nothing downstream has an answer for it.
+  const globalDatabase = globalDatabaseOption.pipe(
     Layer.provide(identity),
     Layer.orDie,
   );

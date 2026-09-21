@@ -7,6 +7,7 @@ import { createSupabaseAuth, type SupabaseAuthShape } from '@auth/SupabaseAuth';
 import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
 import { openAppStateStore } from '@controllers/session/appStateStore';
 import { installProcessRuntime } from '@controllers/session/sessionLayer';
+import { globalDatabaseLayer } from '@controllers/session/Database';
 import { NotificationFailed } from '@hosts/uiHosts';
 import { setDebugModeConfig } from '@logger/logUtils';
 import { initPlatform } from '@platform/platform';
@@ -209,6 +210,9 @@ export async function initializeElectronPlatform(
       version: app.getVersion(),
       editorType: 'desktop',
     }),
+    // The process's one handle on that same global root, which the desktop's
+    // remembered projects and its update check read through.
+    globalDatabase: globalDatabaseLayer(storage.getGlobalStoragePath()),
   });
 
   repairLaunchPath();

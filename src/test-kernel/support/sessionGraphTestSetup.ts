@@ -1,6 +1,7 @@
 import { Effect, Layer } from 'effect';
 
 import { installProcessRuntime } from '@controllers/session/sessionLayer';
+import { globalDatabaseLayer } from '@controllers/session/Database';
 import { directLeanLanguageServices } from '@tools/lean/direct/directLspAdapter';
 import { initTestProcessRuntime } from './testProcessRuntime';
 import { createFakeWorkspaceRoots } from './FakePlatform';
@@ -64,5 +65,6 @@ initTestProcessRuntime(
     lean: directLeanLanguageServices(),
     // The harness reports no usage; the telemetry suite starts its own.
     usageLog: Layer.empty,
+    globalDatabase: globalDatabaseLayer(globalStorage),
   }),
 );

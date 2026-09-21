@@ -26,6 +26,7 @@ import { CliUsageError, type CliContext } from '../runtime/cliContext';
 
 import {
   installCliProcessRuntime,
+  refusingGlobalDatabase,
   refusingStateStore,
 } from '../runtime/cliProcessRuntime';
 import { getCliSecrets } from '../runtime/cliSecrets';
@@ -214,12 +215,13 @@ export const cloneCommand = withUsageSections(
       // `CliSecrets`, whose reads and writes are Effect programs run at this
       // host edge. Install the process runtime before the first one, the same
       // way the update check does for the entry that precedes any platform —
-      // but with a state store that refuses: clone serves no application
-      // state, and opening the real store would create the global storage
-      // directory and its database, which an env-token clone on a read-only
-      // storage root must not require.
+      // but with a state store and a global-root handle that refuse: clone
+      // serves no application state and reads no record, and opening either
+      // would create the global storage directory and its database, which an
+      // env-token clone on a read-only storage root must not require.
       const runtime = await installCliProcessRuntime(context.storageRoot, {
         appState: refusingStateStore(),
+        globalDatabase: refusingGlobalDatabase,
       });
 
       const outcome = await runtime.runPromise(
