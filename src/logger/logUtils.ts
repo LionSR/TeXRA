@@ -74,29 +74,46 @@ export function isDebugModeEnabled(): boolean {
  * below, so a cause chain flattens whole. The spread comes first so the named
  * fields are not reported as overwritten; the values are identical either way,
  * since reading `error.name` returns an own enumerable `name` when one exists.
+ *
+ * `flattened` is what keeps a cycle finite. `safe-stable-stringify` detects a
+ * cycle by looking for the *post-replacer* value on its own stack, so handing
+ * it a fresh object for each visit of the same `Error` would defeat that check
+ * and recurse until the stack overflows. One object per `Error` per render
+ * makes the identity it tests stable, and a self-referential property or a
+ * `cause` cycle renders `"[Circular]"`.
  */
-function serializeError(error: Error): Record<string, unknown> {
-  return {
-    ...error,
+function serializeError(
+  error: Error,
+  flattened: WeakMap<Error, Record<string, unknown>>,
+): Record<string, unknown> {
+  const existing = flattened.get(error);
+  if (existing !== undefined) return existing;
+  const flat: Record<string, unknown> = {};
+  flattened.set(error, flat);
+  Object.assign(flat, error, {
     name: error.name,
     message: error.message,
     stack: error.stack,
-    ...(error.cause === undefined ? {} : { cause: error.cause }),
-  };
+  });
+  if (error.cause !== undefined) flat['cause'] = error.cause;
+  return flat;
 }
 
 /**
  * Render a debug payload for display. Errors don't survive `JSON.stringify`,
- * so they're flattened here; `safe-stable-stringify` already renders circular
- * references as `"[Circular]"`. Shared with `@logger/effectLog`, so an entry
- * carries the same rendered payload whichever producer wrote it.
+ * so they're flattened here, each `Error` to one object for the whole render
+ * so `safe-stable-stringify` still renders a cycle as `"[Circular]"`. Shared
+ * with `@logger/effectLog`, so an entry carries the same rendered payload
+ * whichever producer wrote it.
  */
 export function formatLogData(data: unknown): string {
   if (typeof data !== 'object' || data === null) return String(data);
+  const flattened = new WeakMap<Error, Record<string, unknown>>();
   return (
     safeStringify(
       data,
-      (_key, value) => (value instanceof Error ? serializeError(value) : value),
+      (_key, value) =>
+        value instanceof Error ? serializeError(value, flattened) : value,
       2,
     ) ?? String(data)
   );

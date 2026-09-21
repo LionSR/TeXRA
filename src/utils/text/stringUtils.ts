@@ -299,20 +299,42 @@ export function formatRelativeTime(timestamp: number): string {
   return intlFormatDistance(timestamp, Date.now());
 }
 
-const BINARY_BYTE_UNITS = ['B', 'KiB', 'MiB', 'GiB', 'TiB', 'PiB'] as const;
+const BINARY_BYTE_UNITS = [
+  'B',
+  'KiB',
+  'MiB',
+  'GiB',
+  'TiB',
+  'PiB',
+  'EiB',
+  'ZiB',
+  'YiB',
+] as const;
 
 /**
- * Human-readable byte size (binary units, e.g. `1.5 MiB`): the largest unit
- * the value reaches, at three significant digits with trailing zeros dropped.
+ * Human-readable byte size in binary units (e.g. `1.5 MiB`): the largest unit
+ * the value reaches, rounded to three significant digits — or to as many
+ * digits as its integer part needs, so a whole byte count below the next unit
+ * keeps every digit (`1023 B`, not `1020 B`). Rounding can push the figure up
+ * to the next unit, which is why the carry below runs after it: 1048575 bytes
+ * rounds to 1024 KiB and is reported as `1 MiB`.
  */
 export function formatBytes(bytes: number): string {
   const sign = bytes < 0 ? '-' : '';
-  const magnitude = Math.abs(bytes);
-  if (magnitude < 1) return `${sign}${magnitude} B`;
-  const exponent = Math.min(
-    Math.floor(Math.log(magnitude) / Math.log(1024)),
-    BINARY_BYTE_UNITS.length - 1,
-  );
-  const scaled = Number((magnitude / 1024 ** exponent).toPrecision(3));
-  return `${sign}${scaled} ${BINARY_BYTE_UNITS[exponent]}`;
+  let magnitude = Math.abs(bytes);
+  let exponent = 0;
+  if (magnitude >= 1) {
+    exponent = Math.min(
+      Math.floor(Math.log(magnitude) / Math.log(1024)),
+      BINARY_BYTE_UNITS.length - 1,
+    );
+    magnitude /= 1024 ** exponent;
+  }
+  const precision = Math.max(3, Math.floor(magnitude).toString().length);
+  magnitude = Number(magnitude.toPrecision(precision));
+  if (magnitude >= 1024 && exponent < BINARY_BYTE_UNITS.length - 1) {
+    magnitude /= 1024;
+    exponent += 1;
+  }
+  return `${sign}${magnitude} ${BINARY_BYTE_UNITS[exponent]}`;
 }
