@@ -755,8 +755,8 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       const footer = isTerminalOutcomePhase(run.status)
         ? `[finished: ${retained}]`
         : run.statusDetail === null
-          ? `[still running: re-read for more output, or use action='wait' on /executions/${runId} to block until it finishes]`
-          : `[not running in this process: ${run.statusDetail} ${retained}]`;
+          ? `[still running: re-read for more output, use action='wait' on /executions/${runId} to block until it finishes, or read /executions/${runId}/report once it has]`
+          : `[${run.statusDetail} ${retained}]`;
       const out: string[] = [
         `Output for ${runId} (process, ${formatRunStatus(run)}): ${chars.toLocaleString()} retained transcript chars; command-output cap ${BASH_BACKGROUND_LOG_CAP_CHARS.toLocaleString()} chars, ${lines.length.toLocaleString()} lines.`,
       ];
