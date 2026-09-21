@@ -57,7 +57,8 @@ export function rowAggregate(runId: RunId) {
   return qualifyAggregateId('run', runId);
 }
 
-type StepCoordinates = Pick<
+/** The coordinates a `flow.step` row is stamped with. */
+export type StepCoordinates = Pick<
   RunState,
   'family' | 'round' | 'turn' | 'continuationIndex'
 >;
