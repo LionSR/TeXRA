@@ -238,12 +238,12 @@ Effect's own file system as much as possible") settled the general question
 the PRD reserved; what was missing is the per-family record the PRD asks for,
 and it is this:
 
-| Family                       | Used for                                                                     | Stabilization or exit                                                                                                                                |
-| ---------------------------- | ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `effect/unstable/http`       | `HttpClient` on the auth, model and telemetry paths (27 sites)               | Stays; follows the module when Effect promotes it. Exit is `ky`, which still serves 8 tool and remote-agent call sites and is not being deleted yet. |
-| `effect/unstable/process`    | Type-only, the two Lean direct-server files                                  | Stays type-only until the process edges convert (#12078). Exit is `execa`, which every other spawn site already uses.                                |
-| `effect/unstable/sql`        | `SqlClient` under `@effect/sql-sqlite-node`, the one session database        | Stays; the repo already depends on the same RC line. Exit is the official Node SQLite driver directly, which the client only wraps.                  |
-| `effect/unstable/reactivity` | `Reactivity.layer` behind the database's invalidation signal (`Database.ts`) | Stays with `sql`; it is that client's own invalidation contract. Exit is an in-repo emitter over the committed-wake levels the layer already owns.   |
+| Family                       | Used for                                                                      | Stabilization or exit                                                                                                                                |
+| ---------------------------- | ----------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `effect/unstable/http`       | `HttpClient` on the auth, model and telemetry paths (27 sites)                | Stays; follows the module when Effect promotes it. Exit is `ky`, which still serves 8 tool and remote-agent call sites and is not being deleted yet. |
+| `effect/unstable/process`    | Type-only, the two Lean direct-server files                                   | Stays type-only until the process edges convert (#12078). Exit is `execa`, which every other spawn site already uses.                                |
+| `effect/unstable/sql`        | `SqlClient` under `@effect/sql-sqlite-node`, the one session database         | Stays; the repo already depends on the same RC line. Exit is the official Node SQLite driver directly, which the client only wraps.                  |
+| `effect/unstable/reactivity` | `Reactivity.layer` behind the database's invalidation signal (`Database.ts`)  | Stays with `sql`; it is that client's own invalidation contract. Exit is an in-repo emitter over the committed-wake levels the layer already owns.   |
 | `effect/unstable/encoding`   | `Sse.makeParser` for provider token streams (`packages/llm/src/transport.ts`) | Stays; it replaced a hand-rolled SSE parser. Exit is restoring that parser, which is a single function over one `Stream`.                            |
 
 **Evidence.** `rg "effect/unstable/"` returns exactly these five families and
