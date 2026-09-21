@@ -7,7 +7,7 @@
  * readiness gate: a restored session is usable the moment it is constructed,
  * and what a stream with no live flow context in this process is gets decided
  * by the fold's `readOnly` and `group` rules over the session's view, never
- * by a boot pass. It carries the session's `Runs` and `Requests` as the
+ * by a boot pass. It carries the session's `Runs` and its requests as the
  * session layer built them, and composes {@link SessionHostInteractions} and
  * the other session-scoped owners.
  *
@@ -223,7 +223,8 @@ export class SessionHandle {
    * The session's `Runs` service, as the session layer built it in the
    * session's scope (`SessionGraph.runs`): registration, lookup, change
    * listeners, and subagent lineage. The record carries it for a host that
-   * holds the session; Effect code below a launch takes it from context.
+   * holds the session; Effect code below a launch takes it from context,
+   * where the run and request entries provide this same value.
    * Hears every phase-moving row this process committed
    * ({@link receiveFoldedEvent}), in commit order and only once the view has
    * folded it; the phase itself is the fold's (`RunView.status`), never a
@@ -238,13 +239,13 @@ export class SessionHandle {
    */
   readonly events: SessionEventReads;
   /**
-   * The session's `Requests` service, as the session layer built it in the
-   * session's scope (`SessionGraph.requests`): its approval state and the one
-   * handler of every request a surface issues to this session (PRD 7.6, 8.2).
+   * The session's requests, as the session layer built them in the session's
+   * scope (`SessionGraph.requests`): its approval state and the one handler
+   * of every request a surface issues to this session (PRD 7.6, 8.2).
    * An in-process surface runs that handler on the runtime its own
    * composition root owns and reads the Effect's own result as the response.
-   * The record carries the built value for a host that holds the session;
-   * Effect code below a launch takes it from context.
+   * Everything that answers a request already holds the session, so this is
+   * reached through the session rather than from context.
    */
   readonly requests: SessionGraph['requests'];
   /** The run ledger over this session's event plane, provided to each run's

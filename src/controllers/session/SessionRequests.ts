@@ -22,7 +22,7 @@
  * the response; a bridge posts it as the `Response` of 8.4.
  *
  * Built per session by `sessionLayer.ts`'s opener as that session's
- * `Requests`: it acts on exactly the session it was built for, on that
+ * requests: it acts on exactly the session it was built for, on that
  * session's `Runs`, and on the approval state it carries.
  */
 import { Effect, SubscriptionRef, type Context } from 'effect';
@@ -32,8 +32,8 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { RunBusy } from '@agent/runtime/runLanes';
 import { Runs } from '@agent/runtime/runRegistry';
 import type {
-  Requests,
   SessionApprovals,
+  SessionRequests,
 } from '@agent/runtime/runApprovalQueue';
 import { AgentResume, type AgentResumePort } from '@platform/interfaces';
 import {
@@ -69,7 +69,7 @@ type SessionRequestLog = Pick<
 >;
 
 /**
- * The session's `Requests`: its approval state and the handler that admits
+ * The session's requests: its approval state and the handler that admits
  * on the log's sequence table. One value per session, so the decision lanes
  * below, like the approval queues beside them, serialize within a session and
  * never across two.
@@ -81,7 +81,7 @@ export function sessionRequests(
   local: SubscriptionRef.SubscriptionRef<LocalRuntimeState>,
   inquiryRecords: Context.Service.Shape<typeof InquiryRecords>,
   agentResume: AgentResumePort,
-): Context.Service.Shape<typeof Requests> {
+): SessionRequests {
   /**
    * One in-process serial lane per request id. `decideRequest`'s checked
    * append fences the row across processes, but the row alone: two surfaces

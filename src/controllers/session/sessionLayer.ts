@@ -45,11 +45,8 @@ import {
   ToolInjections,
 } from '@agent/runtime/toolInjection';
 import { EditorModel } from '@agent/runtime/run/modelBinding';
-import {
-  createSessionApprovals,
-  Requests,
-} from '@agent/runtime/runApprovalQueue';
-import { RunRegistry, Runs } from '@agent/runtime/runRegistry';
+import { createSessionApprovals } from '@agent/runtime/runApprovalQueue';
+import { RunRegistry } from '@agent/runtime/runRegistry';
 import { runLedgerLayer } from '@agent/runtime/RunLedger';
 import { sessionEventsLayer, tailFrom } from '@agent/runtime/SessionEvents';
 import { ModelRetryGate } from '@agent/runtime/ModelRetryGate';
@@ -262,9 +259,9 @@ function unwindSession(session: SessionHandle): Effect.Effect<void> {
 }
 
 /**
- * The handle of one root and the session's `Runs` and `Requests`, over the
- * root's graph:
- * the last layer of the entry, so it is the first thing unwound when the
+ * The handle of one root, over the root's graph: the session is the entry's
+ * one service, and its `Runs` and requests are reached through it.
+ * The last layer of the entry, so it is the first thing unwound when the
  * entry closes and the graph outlives every publisher above it. Every
  * release goes through the entry: `close` and the runtime's disposal
  * invalidate it, and the handle's own `dispose` asks for the same through
@@ -565,7 +562,6 @@ const sessionHandleLayer = (
             ),
           ),
       );
-      const { runs, requests } = session;
       // Registered after the handle, so it is the first thing unwound when
       // the entry closes: `current` stops answering with this session before
       // its owners unwind.
@@ -657,8 +653,6 @@ const sessionHandleLayer = (
         Effect.forkIn(consumerScope),
       );
       yield* sweepLeftoverRuns(session, initialListing).pipe(
-        Effect.provideService(Runs, runs),
-        Effect.provideService(Requests, requests),
         Effect.catch((error) =>
           Effect.sync(() =>
             log.warn('Background-shell cleanup failed.', {
@@ -681,10 +675,7 @@ const sessionHandleLayer = (
         Effect.repeat({ schedule: Schedule.spaced('30 seconds') }),
         Effect.forkScoped,
       );
-      return Context.make(Session, session).pipe(
-        Context.add(Runs, runs),
-        Context.add(Requests, requests),
-      );
+      return Context.make(Session, session);
     }),
   );
 
@@ -748,7 +739,7 @@ const sessionLayer = (
  */
 class Sessions extends Context.Service<
   Sessions,
-  LayerMap.LayerMap<SessionKey, Session | Runs | Requests, SessionOpenError>
+  LayerMap.LayerMap<SessionKey, Session, SessionOpenError>
 >()('@texra/session/Sessions') {
   /** The map, releasing an entry the handle asked to be released through
    *  the runtime that holds the map. */
@@ -822,13 +813,9 @@ const heldSession = (root: string) =>
     const held = yield* sessions
       .contextEffectOption(key)
       .pipe(Effect.scoped, Effect.catch(unopenedEntry(key)));
-    return Option.isNone(held)
-      ? undefined
-      : {
-          key,
-          session: Context.get(held.value, Session),
-          runs: Context.get(held.value, Runs),
-        };
+    if (Option.isNone(held)) return undefined;
+    const session = Context.get(held.value, Session);
+    return { key, session, runs: session.runs };
   });
 
 /**

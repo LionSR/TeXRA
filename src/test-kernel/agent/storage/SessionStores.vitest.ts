@@ -14,8 +14,6 @@ import {
 import { afterEach, describe, expect, vi } from 'vitest';
 
 // Local imports
-import { Requests } from '@agent/runtime/runApprovalQueue';
-import { Runs } from '@agent/runtime/runRegistry';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { sweepLeftoverRuns } from '@controllers/session/sweepLeftoverRuns';
 import { aggregateId, type RunId } from '@shared/schemas';
@@ -217,10 +215,7 @@ describe('indexed background-shell cleanup', () => {
               ),
             ),
           );
-          yield* sweepLeftoverRuns(session, rows.flat()).pipe(
-            Effect.provideService(Runs, session.runs),
-            Effect.provideService(Requests, session.requests),
-          );
+          yield* sweepLeftoverRuns(session, rows.flat());
           const swept = yield* Stream.runHead(
             session.viewChanges.pipe(
               Stream.filter((view) => !view.runs.has(shell)),

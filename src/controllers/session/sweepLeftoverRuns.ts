@@ -1,6 +1,4 @@
 import { Effect, SubscriptionRef } from 'effect';
-import { Requests } from '@agent/runtime/runApprovalQueue';
-import { Runs, type RunRegistry } from '@agent/runtime/runRegistry';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { createLog } from '@logger/logUtils';
 import {
@@ -13,8 +11,10 @@ import { isInFlightPhase } from '@shared/runs/runStatus';
 const log = createLog('LeftoverRunSweep');
 
 /** Runs this process is running right now, by handle or by in-flight phase. */
-function runningRuns(session: SessionHandle, runs: RunRegistry): Set<RunId> {
-  const running = new Set(runs.getAgentHandles().map((handle) => handle.runId));
+function runningRuns(session: SessionHandle): Set<RunId> {
+  const running = new Set(
+    session.runs.getAgentHandles().map((handle) => handle.runId),
+  );
   for (const run of SubscriptionRef.getUnsafe(session.view).runs.values()) {
     if (isInFlightPhase(run.status)) running.add(run.id);
   }
@@ -31,8 +31,7 @@ export const sweepLeftoverRuns = Effect.fn('sweepLeftoverRuns')(function* (
       .filter((row) => row.type === 'run.removed')
       .map((row) => row.aggregateId),
   );
-  const running = runningRuns(session, yield* Runs);
-  const requests = yield* Requests;
+  const running = runningRuns(session);
   for (const row of rows) {
     if (
       row.type !== 'run.start' ||
@@ -44,7 +43,7 @@ export const sweepLeftoverRuns = Effect.fn('sweepLeftoverRuns')(function* (
     if (target.kind !== 'run') continue;
     const runId = target.id;
     if (running.has(runId)) continue;
-    yield* requests.removeRun(runId, 'automatic', row.commit).pipe(
+    yield* session.requests.removeRun(runId, 'automatic', row.commit).pipe(
       Effect.catch((error) =>
         Effect.sync(() => {
           log.warn(
