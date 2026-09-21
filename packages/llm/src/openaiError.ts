@@ -2,7 +2,7 @@
 import OpenAI from 'openai';
 
 // Local imports - canonical model errors
-import { authOrRejectionKind, ModelError, retryAfterMsOf } from './turn.js';
+import { authOrRejectionKind, ModelError, retryAfterMsOf } from './errors.js';
 
 /** Classifies failures shared by the two direct OpenAI protocols. */
 export function openaiFailure(cause: unknown): ModelError {

@@ -393,7 +393,7 @@ is not `ModelProvider` with mistakes; it is a different fact. It carries
 `openai-response` beside `openai` because usage is recorded per wire surface,
 and the Responses API bills differently from Chat Completions. The wire
 surface already has one declaration in the 1.0 provider package: the
-origin's `protocol` ([turn.ts:29-44](../../../../packages/llm/src/turn.ts)),
+origin's `protocol` ([protocol.ts:30-43](../../../../packages/llm/src/protocol.ts)),
 `openai-responses`, `openai-chat`, `anthropic-messages`, and so on. A usage
 record's provider is the protocol of the turn that produced it, read off the
 origin the package already attaches to every response. `unknown` disappears

@@ -8,10 +8,10 @@ import { z } from 'zod';
 // Local imports - canonical model contract
 import {
   FileUploadSchema,
-  ModelError,
   type FileUpload,
   type UnreleasedUpload,
 } from './turn.js';
+import { ModelError } from './errors.js';
 
 /**
  * Time allowed between lowering a turn and the provider resolving its file
