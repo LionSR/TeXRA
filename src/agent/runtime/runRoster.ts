@@ -24,8 +24,8 @@ import { Data, Deferred, Effect, type Scope } from 'effect';
 import type { SessionApprovals } from '@agent/runtime/runApprovalQueue';
 import type { RunId } from '@shared/schemas';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
-import type { RunHandle } from './RunHandle';
 import { RunChangeListeners } from './runChangeListeners';
+import type { RunHandle } from './RunHandle';
 import type { ChildRunActivation, ParkedRun } from './runRegistryTypes';
 
 /** A generation, a hold or a retained owner already has the run here. */

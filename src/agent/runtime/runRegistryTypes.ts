@@ -7,8 +7,6 @@
  * re-declaring the child-activation and stop shapes they both handle.
  */
 
-import type { Deferred, Effect, Fiber, FiberMap } from 'effect';
-
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { SessionApprovals } from '@agent/runtime/runApprovalQueue';
 import type {
@@ -17,6 +15,7 @@ import type {
 } from '@agent/storage/runLifecycle';
 import type { RunId, SessionEventDraft, RunPhase } from '@shared/schemas';
 import type { RunView } from '@shared/session/sessionView';
+import type { Deferred, Effect, Fiber, FiberMap } from 'effect';
 import type { LiveToolUseFlowContext } from './RunHandle';
 
 /**

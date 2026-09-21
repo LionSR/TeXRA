@@ -13,7 +13,7 @@ import type {
 } from '@agent/runtime/RunHandle';
 import { finalizeRunTerminal } from '@agent/runtime/AgentRunLifecycle';
 import { RunRegistry, Runs } from '@agent/runtime/runRegistry';
-import { RunLive } from '@agent/runtime/runRoster';
+import { RunLive, RunRoster } from '@agent/runtime/runRoster';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { createSessionApprovals } from '@agent/runtime/runApprovalQueue';
 import {
@@ -351,22 +351,20 @@ describe('runRegistry', () => {
     'drains when the last run leaves inside the listener-registration window',
     () =>
       Effect.gen(function* () {
-        const { registry } = createRegistry();
+        // The roster owns the drain, so the window is opened on its own
+        // `waitForAnyChange`; the registry only delegates.
+        const roster = new RunRoster(createSessionApprovals());
         const runId = generateRunId();
-        registry.track(createHandle(runId));
-        const register = registry.waitForAnyChange.bind(registry);
-        vi.spyOn(registry, 'waitForAnyChange').mockImplementation((ids) => {
+        roster.setHandle(createHandle(runId));
+        const register = roster.waitForAnyChange.bind(roster);
+        vi.spyOn(roster, 'waitForAnyChange').mockImplementation((ids) => {
           // The departure lands after the active read and before the listener
           // that would have reported it.
-          registry.untrack(runId);
+          roster.deleteHandle(runId);
           return register(ids);
         });
-        try {
-          yield* registry.awaitDrained();
-          expect(registry.getActiveIds()).toEqual([]);
-        } finally {
-          registry.dispose();
-        }
+        yield* roster.awaitDrained();
+        expect(roster.activeIds()).toEqual([]);
       }),
     { timeout: 2000 },
   );

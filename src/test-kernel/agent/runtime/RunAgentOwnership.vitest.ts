@@ -68,7 +68,6 @@ import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { RunHandle } from '@agent/runtime/RunHandle';
 import { createSessionApprovals } from '@agent/runtime/runApprovalQueue';
 import { RunRegistry } from '@agent/runtime/runRegistry';
-import { testParkedFibers } from '@test/support/runHandleFixtures';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import { runAgent } from '@agent/runtime/runAgent';
 import {
@@ -83,6 +82,7 @@ import {
   RUN_OUTCOME,
   type RunId,
 } from '@shared/schemas';
+import { testParkedFibers } from '@test/support/runHandleFixtures';
 import { fakeProcessServices } from '@test/support/setupPlatform';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
