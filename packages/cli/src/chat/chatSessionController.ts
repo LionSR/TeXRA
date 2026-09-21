@@ -555,7 +555,7 @@ export function createChatSessionController(
         createTuiHostInteractions(presentationHost, sessionContext, {
           session: runtimeSession,
           secrets,
-          stores,
+          settings: stores,
           runtime,
         }),
       ),

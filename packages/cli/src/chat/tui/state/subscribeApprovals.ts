@@ -78,7 +78,7 @@ interface TuiApprovalStores {
   /** The settings slots a key prompt reads a provider's display name and key
    *  URL from, so a retry that has to ask for a credential words the ask the
    *  same way `/key` does. */
-  readonly stores: SettingsStores;
+  readonly settings: SettingsStores;
   /** The process runtime this attachment's decisions are issued on, held for
    *  the host's lifetime rather than looked up per decision. */
   readonly runtime: ProcessRuntime;
@@ -139,7 +139,7 @@ export function createTuiHostInteractions(
       provider
         ? promptForCliProviderApiKey(
             stores.secrets,
-            stores.stores,
+            stores.settings,
             provider,
           ).pipe(
             Effect.mapError(

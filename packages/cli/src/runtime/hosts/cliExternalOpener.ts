@@ -20,7 +20,7 @@ import { launchBrowser } from '../browser';
  * itself, so an interrupted fiber detaches from the launch exactly as the two
  * graphical hosts detach from theirs.
  */
-export class CliExternalOpener implements ExternalOpener {
+class CliExternalOpener implements ExternalOpener {
   openExternal(url: string): Effect.Effect<void, ExternalOpenFailed> {
     return Effect.tryPromise({
       try: () => launchBrowser(url),
