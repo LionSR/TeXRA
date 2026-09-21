@@ -7,7 +7,7 @@
  * re-declaring the child-activation and stop shapes they both handle.
  */
 
-import type { Deferred, Effect, Fiber } from 'effect';
+import type { Deferred, Effect, Fiber, FiberMap } from 'effect';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { SessionApprovals } from '@agent/runtime/runApprovalQueue';
@@ -129,4 +129,12 @@ export interface RunRegistryInit {
   readonly acquireRunClaim: (
     runId: RunId,
   ) => Effect.Effect<Effect.Effect<void, Error>, Error>;
+  /**
+   * The session's one owner of parked fibers, made in the session's scope
+   * (`sessionLayer.ts`) because `FiberMap.make` needs one. A run that parks at
+   * WAITING keeps its fiber here, so the park outlives the generation's own
+   * scope without becoming a daemon nobody owns: the session's scope closing
+   * is what interrupts every fiber still in it.
+   */
+  readonly parked: FiberMap.FiberMap<RunId>;
 }

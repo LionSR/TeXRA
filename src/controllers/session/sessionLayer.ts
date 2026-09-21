@@ -45,7 +45,7 @@ import {
 } from '@agent/runtime/toolInjection';
 import { EditorModel } from '@agent/runtime/run/modelBinding';
 import { createSessionApprovals } from '@agent/runtime/runApprovalQueue';
-import { RunRegistry } from '@agent/runtime/runRegistry';
+import { makeParkedRuns, RunRegistry } from '@agent/runtime/runRegistry';
 import { runLedgerLayer } from '@agent/runtime/RunLedger';
 import { sessionEventsLayer, tailFrom } from '@agent/runtime/SessionEvents';
 import { ModelRetryGate } from '@agent/runtime/ModelRetryGate';
@@ -339,6 +339,7 @@ const sessionHandleLayer = (
           : settleTo(last.commit).pipe(Effect.as(rows));
       };
       const now = () => SubscriptionRef.getUnsafe(eventLog.observedCommit);
+      const parkedRuns = yield* makeParkedRuns();
       const graph = (session: SessionHandle): SessionGraph => {
         // The session's approval state, built here rather than by the handle
         // so that its runs and its request handler share the one instance and
@@ -484,6 +485,7 @@ const sessionHandleLayer = (
             finalizeRun: (input) => finalizeRun(session, input),
             acquireRunClaim: (runId) =>
               session.acquireClaims(qualifyAggregateId('run', runId)),
+            parked: parkedRuns,
           }),
           // The session's requests: the approval state above and the handler
           // that admits on the root graph's log.

@@ -1,9 +1,9 @@
-import { Effect } from 'effect';
+import { Effect, type FiberMap, Scope } from 'effect';
 
 // Local imports
 import type { AgentTrace } from '@agent/trace';
 import { RunHandle, type RunFacts } from '@agent/runtime/RunHandle';
-import { RunRegistry } from '@agent/runtime/runRegistry';
+import { makeParkedRuns, RunRegistry } from '@agent/runtime/runRegistry';
 import { createSessionApprovals } from '@agent/runtime/runApprovalQueue';
 import { AgentCategory } from '@shared/schemas';
 import type { RunId, RunIdentity } from '@shared/schemas';
@@ -32,6 +32,20 @@ export function testRunHandle(input: {
   return new RunHandle(run, input.parent ?? null, input.trace);
 }
 
+/**
+ * The parked-fiber map a fixture registry owns. Production makes it in the
+ * session's scope (`sessionLayer.ts`); a fixture's lifetime is the test, so
+ * the scope here is one nothing closes — the same shape as the registry the
+ * fixture hands back, which nothing disposes either.
+ */
+export function testParkedFibers(): FiberMap.FiberMap<RunId> {
+  return Effect.runSync(
+    makeParkedRuns().pipe(
+      Effect.provideService(Scope.Scope, Scope.makeUnsafe()),
+    ),
+  );
+}
+
 /** A registry over an empty fold: no run has a view, which is what a
  *  fixture that never publishes a phase-moving row would see. */
 export function testRunRegistry(): RunRegistry {
@@ -42,5 +56,6 @@ export function testRunRegistry(): RunRegistry {
     finalizeRun: (input) =>
       Effect.succeed({ ok: true, outcome: input.outcome }),
     acquireRunClaim: () => Effect.succeed(Effect.void),
+    parked: testParkedFibers(),
   });
 }

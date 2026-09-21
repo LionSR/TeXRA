@@ -30,7 +30,10 @@ import {
 import type { RunView } from '@shared/session/sessionView';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
-import { testRunHandle } from '@test/support/runHandleFixtures';
+import {
+  testParkedFibers,
+  testRunHandle,
+} from '@test/support/runHandleFixtures';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { generateRunId } from '@utils/core';
 import { ensureError } from '@utils/errors/errorMessage';
@@ -168,6 +171,7 @@ function createRegistry(
     approvals: createSessionApprovals(),
     finalizeRun: (input) => finalizeRun(testDefaultSession(), input),
     acquireRunClaim: () => Effect.succeed(Effect.void),
+    parked: testParkedFibers(),
     ...options,
   });
   return { events, phases, registry };

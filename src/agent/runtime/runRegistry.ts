@@ -9,7 +9,14 @@
  * stop does with those records lives in `runStopping.ts`.
  */
 
-import { Context, Deferred, Effect, Semaphore, type Scope } from 'effect';
+import {
+  Context,
+  Deferred,
+  Effect,
+  FiberMap,
+  Semaphore,
+  type Scope,
+} from 'effect';
 
 import {
   RUN_PHASE,
@@ -37,6 +44,21 @@ import type {
 } from './runRegistryTypes';
 
 /**
+ * The owner of a session's parked fibers, for the caller's scope.
+ *
+ * A run that reaches WAITING keeps the fiber holding its teardown
+ * ({@link RunRegistry.park}); the map owns that fiber, so a park the session
+ * never woke ends when the session's scope closes instead of outliving it as
+ * a daemon. It is made here rather than by the registry's constructor because
+ * `FiberMap.make` needs a scope and the registry is a value.
+ */
+export const makeParkedRuns = (): Effect.Effect<
+  FiberMap.FiberMap<RunId>,
+  never,
+  Scope.Scope
+> => FiberMap.make<RunId>();
+
+/**
  * Session-owned registry of active runs and their change listeners. One
  * instance belongs to each session, built by the session layer in that
  * session's scope and provided as {@link Runs}.
@@ -48,6 +70,8 @@ export class RunRegistry {
   private readonly roster: RunRoster;
   private readonly stopper: RunStopper;
   private readonly runView: RunRegistryInit['runView'];
+  /** The session-scoped owner of every parked fiber ({@link park}). */
+  private readonly parked: RunRegistryInit['parked'];
   /** The session's child-run concurrency budget, made on first use
    *  ({@link childRunBudget}). */
   private budget: Semaphore.Semaphore | undefined;
@@ -55,6 +79,7 @@ export class RunRegistry {
 
   constructor(options: RunRegistryInit) {
     this.runView = options.runView;
+    this.parked = options.parked;
     this.roster = new RunRoster(options.approvals);
     this.stopper = new RunStopper(
       this.roster,
@@ -177,16 +202,23 @@ export class RunRegistry {
    * (`RunStopper.terminate`) runs `termination`, the run's own terminal path;
    * interrupting the fiber where it waits ({@link track}, {@link dispose})
    * ends the park alone. The fiber leaves the roster when it ends.
+   *
+   * The fiber belongs to the session's parked-fiber map, whose scope is the
+   * session's, so the park outlives the generation's own scope without
+   * becoming a daemon nobody owns. It also inherits the parking fiber's
+   * context, which is why `termination` names the services it needs rather
+   * than arriving pre-provided from a copy the caller took.
    */
-  park(
+  park<R>(
     handle: RunHandle,
     stopped: Deferred.Deferred<void>,
-    termination: Effect.Effect<void>,
-  ): Effect.Effect<void> {
+    termination: Effect.Effect<void, never, R>,
+  ): Effect.Effect<void, never, R> {
     const runId = handle.runId;
-    return Effect.forkDetach(
-      Deferred.await(stopped).pipe(Effect.andThen(termination)),
-    ).pipe(
+    return FiberMap.run(
+      this.parked,
+      runId,
+    )(Deferred.await(stopped).pipe(Effect.andThen(termination))).pipe(
       Effect.tap((fiber) =>
         Effect.sync(() => {
           this.roster.setParked(runId, { fiber, stopped });
@@ -362,22 +394,15 @@ export class RunRegistry {
     return { kind: 'no_session', runStatus: status };
   }
 
-  /**
-   * Terminate a run via its handle, or, for a native child loop between turns
-   * (an activation with no turn handle), interrupt the loop itself. A
-   * cascading stop is admitted synchronously and a detaching one with its
-   * settlement ({@link RunStop.accepted}); either way the caller executes the
-   * returned settlement at its Effect boundary before releasing ownership.
-   */
+  /** Terminate a run via its handle, or, for a native child loop between
+   *  turns, interrupt the loop itself: `RunStopper.kill` has the contract the
+   *  caller owes the returned {@link RunStop}. */
   kill(runId: RunId, options: RunStopOptions = {}): RunStop {
     return this.stopper.kill(runId, options);
   }
 
-  /**
-   * Stop a visible agent run and apply the caller's declared child policy.
-   * Hosts call this instead of reconstructing stop behavior from
-   * child-interrupts, root interrupts, and run-status writes.
-   */
+  /** Stop a visible agent run and apply the caller's declared child policy:
+   *  the one gesture hosts call, whose choreography is `RunStopper`'s. */
   stopAgentRun(
     runId: RunId,
     options: RunStopOptions = {},
