@@ -94,6 +94,9 @@ vi.mock('@cli/runtime/supabaseAuth', async () => {
 
 vi.mock('@logger/logSink', () => ({
   consoleLogSink: mocks.consoleLogSink,
+  // The sink a `--quiet` init picks instead; the double only has to be a
+  // distinct value, since `setLogSink` is a spy here.
+  silentLogSink: { write: () => undefined },
   setLogSink: vi.fn(),
 }));
 

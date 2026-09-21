@@ -29,6 +29,13 @@ vi.mock('@cli/runtime/agents', async (importOriginal) => ({
 const { listAgents, showAgent } = await import('@cli/commands/agents');
 const { parseCliAgentCategoryFilter } = await import('@cli/runtime/agents');
 
+// Both entries are programs now; the command runs them on the process runtime
+// it installs, and here that is the harness's.
+const runListAgents = (...args: Parameters<typeof listAgents>) =>
+  testRuntime().runPromise(listAgents(...args));
+const runShowAgent = (...args: Parameters<typeof showAgent>) =>
+  testRuntime().runPromise(showAgent(...args));
+
 const LEAN_AGENT = {
   name: 'lean',
   source: 'builtInToolUse',
@@ -125,7 +132,7 @@ describe('CLI agents command', () => {
       },
     });
 
-    const exitCode = await listAgents(createRunCommandCliContext());
+    const exitCode = await runListAgents(createRunCommandCliContext());
 
     expect(exitCode).toBe(0);
     expect(agentCatalogMock.loadAgents).toHaveBeenCalledWith({
@@ -144,7 +151,7 @@ describe('CLI agents command', () => {
   it('shows a text empty state when no workflow agents are visible', async () => {
     stubCatalog({ [AgentCategory.Workflow]: { all: [CORRECT_AGENT] } });
 
-    const exitCode = await listAgents(createRunCommandCliContext(), {
+    const exitCode = await runListAgents(createRunCommandCliContext(), {
       category: AgentCategory.Workflow,
     });
 
@@ -162,7 +169,7 @@ describe('CLI agents command', () => {
   it('keeps quiet empty agent lists byte-empty for shell completion', async () => {
     stubCatalog({ [AgentCategory.Workflow]: { all: [CORRECT_AGENT] } });
 
-    const exitCode = await listAgents(
+    const exitCode = await runListAgents(
       createRunCommandCliContext({ quietLogs: true }),
       {
         category: AgentCategory.Workflow,
@@ -195,7 +202,7 @@ describe('CLI agents command', () => {
         return [LEAN_AGENT, CHAT_AGENT];
       },
     );
-    const exitCode = await listAgents(createRunCommandCliContext(), {
+    const exitCode = await runListAgents(createRunCommandCliContext(), {
       category: AgentCategory.ToolUse,
     });
 
@@ -224,7 +231,7 @@ describe('CLI agents command', () => {
       [AgentCategory.ToolUse]: { all: [CHAT_AGENT] },
     });
 
-    const exitCode = await listAgents(createRunCommandCliContext(), {
+    const exitCode = await runListAgents(createRunCommandCliContext(), {
       includeHidden: true,
     });
 
@@ -277,7 +284,7 @@ describe('CLI agents command', () => {
   ])('$name', async ({ agent, args, textContain }) => {
     mocks.resolveCliAgent.mockReturnValue(Effect.succeed(agent));
 
-    const exitCode = await showAgent(createRunCommandCliContext(), args);
+    const exitCode = await runShowAgent(createRunCommandCliContext(), args);
 
     expect(exitCode).toBe(0);
     expect(cliInitPlatformMock.initCliPlatform).toHaveBeenCalledTimes(1);
@@ -296,7 +303,7 @@ describe('CLI agents command', () => {
   it('reports missing agents after CLI agent resolution misses', async () => {
     mocks.resolveCliAgent.mockReturnValue(Effect.succeed(undefined));
 
-    const exitCode = await showAgent(
+    const exitCode = await runShowAgent(
       createRunCommandCliContext(),
       'missing-agent',
     );

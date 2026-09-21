@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import isNetworkError from 'is-network-error';
 
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -15,19 +16,30 @@ export function isCliFetchStackLog(args: readonly unknown[]): boolean {
   );
 }
 
-export async function suppressCliFetchStackLogs<T>(
-  operation: () => Promise<T>,
-): Promise<T> {
-  const originalError = console.error;
-  console.error = (...args: unknown[]) => {
-    if (isCliFetchStackLog(args)) return;
-    originalError(...args);
-  };
-  try {
-    return await operation();
-  } finally {
-    console.error = originalError;
-  }
+/**
+ * Run `program` with the model-access fetch's own stack dumps filtered out of
+ * `console.error`. The swap is acquired and released around the program, so
+ * an interrupted or failed run restores the sink exactly as a settled one
+ * does.
+ */
+export function suppressCliFetchStackLogs<A, E, R>(
+  program: Effect.Effect<A, E, R>,
+): Effect.Effect<A, E, R> {
+  return Effect.acquireUseRelease(
+    Effect.sync(() => {
+      const originalError = console.error;
+      console.error = (...args: unknown[]) => {
+        if (isCliFetchStackLog(args)) return;
+        originalError(...args);
+      };
+      return originalError;
+    }),
+    () => program,
+    (originalError) =>
+      Effect.sync(() => {
+        console.error = originalError;
+      }),
+  );
 }
 
 export function formatCliModelListError(error: unknown): string {

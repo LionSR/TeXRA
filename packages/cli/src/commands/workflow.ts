@@ -33,7 +33,6 @@ import {
   initCliPlatform,
   type CliPlatformServices,
 } from '../runtime/initPlatform';
-import { installCliProcessRuntime } from '../runtime/cliProcessRuntime';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { emitCliResult } from './_helpers/output';
@@ -502,15 +501,12 @@ export const headlessRunCommand = defineCliCommand({
         'File whose contents are passed before --instruction when both are set',
     },
   },
-  run: async (context, ctx) => {
-    const init = {
+  run: (context, ctx) =>
+    runHeadlessAgent(context, {
       agent: ctx.args.agent,
       ...collectCommonAgentRunFlags(ctx.rawArgs, ctx.args.instruction),
       output: optionalStringFlagValue(ctx.rawArgs, 'output'),
       outputDir: optionalStringFlagValue(ctx.rawArgs, 'output-dir'),
       model: optString(ctx.args.model),
-    };
-    const runtime = await installCliProcessRuntime(context.storageRoot);
-    return runtime.runPromise(runHeadlessAgent(context, init));
-  },
+    }),
 });

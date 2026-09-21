@@ -46,12 +46,15 @@ export function buildInitConfig(answers: InitAnswers): InitConfigShape {
  * `false` only for a genuinely absent path; any other failure (EACCES, EIO)
  * propagates instead of being reported as "absent".
  *
- * Promise-shaped, unlike its neighbours: its other caller
- * (`commands/installGithubAction.ts`) is a Promise-native citty action, and
- * an Effect here would put a bare `Effect.run*` in that action — a site the
- * run-boundary ratchet freezes. Written with a rejection handler rather than
- * `try`/`catch` because this module imports `effect`, and such a module
- * carries no raw catch clause.
+ * Still Promise-shaped, unlike its neighbours. Both callers are Effect
+ * programs now (`commands/init.ts` and `commands/installGithubAction.ts`, the
+ * latter as of the `defineCliCommand` Effect contract), and each wraps this
+ * one call itself: `init` as a defect it does not report on, the GitHub
+ * action as a typed failure its `catchExitCode` writes. Giving this function
+ * one Effect shape would have to pick between those two readings, which is a
+ * change to what the callers report, not a lift. Written with a rejection
+ * handler rather than `try`/`catch` because this module imports `effect`, and
+ * such a module carries no raw catch clause.
  */
 export async function pathExists(filePath: string): Promise<boolean> {
   return access(filePath).then(

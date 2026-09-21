@@ -1,8 +1,10 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
+import { Effect } from 'effect';
+
 import { parseGitHubSlug, type GitHubSlug } from '@tools/github/githubSlug';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 import { CliExitCode } from '../runtime/exitCodes';
 import { pathExists } from '../runtime/initConfig';
@@ -135,218 +137,237 @@ function printSecretChecklist(slug: GitHubSlug | null): void {
   );
 }
 
-async function openGitHubAppInstaller(slug: GitHubSlug | null): Promise<void> {
-  if (!slug) return;
+function openGitHubAppInstaller(slug: GitHubSlug | null): Effect.Effect<void> {
+  return Effect.gen(function* () {
+    if (!slug) return;
 
-  const opened = await tryOpenBrowser(TEXRA_GITHUB_APP_INSTALL_URL);
-  writeTextStdout('');
-  if (opened) {
-    writeTextStdout(
-      `Opened the TeXRA GitHub App installer. Grant it access to ${slug.owner}/${slug.repo}.`,
+    // `tryOpenBrowser` reports a failed launch as `false`; it never rejects.
+    const opened = yield* Effect.promise(() =>
+      tryOpenBrowser(TEXRA_GITHUB_APP_INSTALL_URL),
     );
-  } else {
-    writeTextStdout(
-      `Install the TeXRA GitHub App on ${slug.owner}/${slug.repo}:\n${TEXRA_GITHUB_APP_INSTALL_URL}`,
-    );
-  }
+    writeTextStdout('');
+    if (opened) {
+      writeTextStdout(
+        `Opened the TeXRA GitHub App installer. Grant it access to ${slug.owner}/${slug.repo}.`,
+      );
+    } else {
+      writeTextStdout(
+        `Install the TeXRA GitHub App on ${slug.owner}/${slug.repo}:\n${TEXRA_GITHUB_APP_INSTALL_URL}`,
+      );
+    }
+  });
 }
 
-async function runInstallGithubAction(
-  context: CliContext,
-  opts: InstallOptions,
-): Promise<number> {
-  const { cwd } = context;
+function runInstallGithubAction(context: CliContext, opts: InstallOptions) {
+  return Effect.gen(function* () {
+    const { cwd } = context;
 
-  if (!isGitRepo(cwd)) {
-    writeTextStderr(
-      'Not inside a git repository. Run this from a cloned GitHub repo.',
-    );
-    return CliExitCode.Usage;
-  }
+    if (!isGitRepo(cwd)) {
+      writeTextStderr(
+        'Not inside a git repository. Run this from a cloned GitHub repo.',
+      );
+      return CliExitCode.Usage;
+    }
 
-  const root = repoRoot(cwd) ?? cwd;
-  const workflowAbsPath = path.join(root, WORKFLOW_RELATIVE_PATH);
+    const root = repoRoot(cwd) ?? cwd;
+    const workflowAbsPath = path.join(root, WORKFLOW_RELATIVE_PATH);
 
-  if ((await pathExists(workflowAbsPath)) && !opts.force) {
-    writeTextStderr(
-      `${WORKFLOW_RELATIVE_PATH} already exists. Re-run with --force to overwrite it.`,
-    );
-    return CliExitCode.Usage;
-  }
+    // An unreadable workflow path is the command's failure, reported by the
+    // `catchExitCode` below; only "not there" is an answer.
+    const workflowExists = yield* Effect.tryPromise({
+      try: () => pathExists(workflowAbsPath),
+      catch: ensureError,
+    });
+    if (workflowExists && !opts.force) {
+      writeTextStderr(
+        `${WORKFLOW_RELATIVE_PATH} already exists. Re-run with --force to overwrite it.`,
+      );
+      return CliExitCode.Usage;
+    }
 
-  const url = remoteUrl(root);
-  const slug = url ? parseGitHubSlug(url) : null;
-  const base = opts.base ?? defaultBranch(root) ?? 'main';
-  const branch = opts.branch ?? DEFAULT_BRANCH_NAME;
-  const startBranch = currentBranch(root);
+    const url = remoteUrl(root);
+    const slug = url ? parseGitHubSlug(url) : null;
+    const base = opts.base ?? defaultBranch(root) ?? 'main';
+    const branch = opts.branch ?? DEFAULT_BRANCH_NAME;
+    const startBranch = currentBranch(root);
 
-  const branchExists = localBranchExists(root, branch);
-  if (branchExists && !opts.force) {
-    writeTextStderr(
-      `Branch "${branch}" already exists. Pass --branch <name> or --force.`,
-    );
-    return CliExitCode.Usage;
-  }
+    const branchExists = localBranchExists(root, branch);
+    if (branchExists && !opts.force) {
+      writeTextStderr(
+        `Branch "${branch}" already exists. Pass --branch <name> or --force.`,
+      );
+      return CliExitCode.Usage;
+    }
 
-  const baseRef = branchExists ? base : resolveBaseRef(root, base);
-  if (!baseRef) {
-    writeTextStderr(
-      `Could not resolve base branch "${base}". Fetch it or pass --base <branch>.`,
-    );
-    return CliExitCode.Usage;
-  }
+    const baseRef = branchExists ? base : resolveBaseRef(root, base);
+    if (!baseRef) {
+      writeTextStderr(
+        `Could not resolve base branch "${base}". Fetch it or pass --base <branch>.`,
+      );
+      return CliExitCode.Usage;
+    }
 
-  // Only once the command is committed to writing the workflow file: the
-  // guards above still abort having done nothing, so they must not leave an
-  // installer tab open behind them. Open it before checkout so interruption
-  // during the launch cannot strand the user on the target branch.
-  await openGitHubAppInstaller(slug);
+    // Only once the command is committed to writing the workflow file: the
+    // guards above still abort having done nothing, so they must not leave an
+    // installer tab open behind them. Open it before checkout so interruption
+    // during the launch cannot strand the user on the target branch.
+    yield* openGitHubAppInstaller(slug);
 
-  const checkout = branchExists
-    ? git(root, 'checkout', branch)
-    : git(root, 'checkout', '-b', branch, baseRef);
-  if (!checkout.success) {
-    writeTextStderr(
-      `Failed to check out branch "${branch}": ${checkout.stderr}`,
-    );
-    return CliExitCode.AgentError;
-  }
+    const checkout = branchExists
+      ? git(root, 'checkout', branch)
+      : git(root, 'checkout', '-b', branch, baseRef);
+    if (!checkout.success) {
+      writeTextStderr(
+        `Failed to check out branch "${branch}": ${checkout.stderr}`,
+      );
+      return CliExitCode.AgentError;
+    }
 
-  // Report the failure, put the user back on the branch they started from, and
-  // hand back the error exit code.
-  const abort = (message: string): number => {
-    writeTextStderr(message);
-    restoreBranch(root, startBranch);
-    return CliExitCode.AgentError;
-  };
+    // Report the failure, put the user back on the branch they started from, and
+    // hand back the error exit code.
+    const abort = (message: string): number => {
+      writeTextStderr(message);
+      restoreBranch(root, startBranch);
+      return CliExitCode.AgentError;
+    };
 
-  try {
-    await mkdir(path.dirname(workflowAbsPath), { recursive: true });
-    await writeFile(workflowAbsPath, WORKFLOW_TEMPLATE, 'utf8');
-  } catch (error) {
-    return abort(
-      `Failed to write ${WORKFLOW_RELATIVE_PATH}: ${toErrorMessage(error)}`,
-    );
-  }
+    // The write is the one fallible step with a recovery of its own: its
+    // failure is the abort message below, not the command's error channel.
+    const writeFailure = yield* Effect.tryPromise({
+      try: async (): Promise<string | null> => {
+        await mkdir(path.dirname(workflowAbsPath), { recursive: true });
+        await writeFile(workflowAbsPath, WORKFLOW_TEMPLATE, 'utf8');
+        return null;
+      },
+      catch: ensureError,
+    }).pipe(Effect.catch((error) => Effect.succeed(toErrorMessage(error))));
+    if (writeFailure !== null) {
+      return abort(
+        `Failed to write ${WORKFLOW_RELATIVE_PATH}: ${writeFailure}`,
+      );
+    }
 
-  const add = git(root, 'add', '--', WORKFLOW_RELATIVE_PATH);
-  if (!add.success) {
-    return abort(`Failed to stage the workflow: ${add.stderr}`);
-  }
+    const add = git(root, 'add', '--', WORKFLOW_RELATIVE_PATH);
+    if (!add.success) {
+      return abort(`Failed to stage the workflow: ${add.stderr}`);
+    }
 
-  const diff = git(
-    root,
-    'diff',
-    '--cached',
-    '--quiet',
-    '--',
-    WORKFLOW_RELATIVE_PATH,
-  );
-  if (diff.exitCode !== 0 && diff.exitCode !== 1) {
-    return abort(`Failed to inspect staged workflow changes: ${diff.stderr}`);
-  }
-
-  const hasWorkflowChanges = diff.exitCode === 1;
-  if (hasWorkflowChanges) {
-    const commit = git(
+    const diff = git(
       root,
-      'commit',
-      '-m',
-      'ci: add TeXRA code-review workflow',
+      'diff',
+      '--cached',
+      '--quiet',
       '--',
       WORKFLOW_RELATIVE_PATH,
     );
-    if (!commit.success) {
-      return abort(`Failed to commit the workflow: ${commit.stderr}`);
+    if (diff.exitCode !== 0 && diff.exitCode !== 1) {
+      return abort(`Failed to inspect staged workflow changes: ${diff.stderr}`);
     }
-    writeTextStdout(`Created ${WORKFLOW_RELATIVE_PATH} on branch "${branch}".`);
-  } else {
-    writeTextStdout(
-      `${WORKFLOW_RELATIVE_PATH} already matches the TeXRA template on branch "${branch}".`,
-    );
-    if (!branchExists) {
-      restoreBranch(root, startBranch);
+
+    const hasWorkflowChanges = diff.exitCode === 1;
+    if (hasWorkflowChanges) {
+      const commit = git(
+        root,
+        'commit',
+        '-m',
+        'ci: add TeXRA code-review workflow',
+        '--',
+        WORKFLOW_RELATIVE_PATH,
+      );
+      if (!commit.success) {
+        return abort(`Failed to commit the workflow: ${commit.stderr}`);
+      }
+      writeTextStdout(
+        `Created ${WORKFLOW_RELATIVE_PATH} on branch "${branch}".`,
+      );
+    } else {
+      writeTextStdout(
+        `${WORKFLOW_RELATIVE_PATH} already matches the TeXRA template on branch "${branch}".`,
+      );
+      if (!branchExists) {
+        restoreBranch(root, startBranch);
+        printSecretChecklist(slug);
+        return CliExitCode.Success;
+      }
+    }
+
+    if (!opts.openPr) {
+      writeTextStdout(
+        `Skipped push/PR (--no-pr). Push "${branch}" and open a PR when ready.`,
+      );
       printSecretChecklist(slug);
       return CliExitCode.Success;
     }
-  }
 
-  if (!opts.openPr) {
-    writeTextStdout(
-      `Skipped push/PR (--no-pr). Push "${branch}" and open a PR when ready.`,
-    );
-    printSecretChecklist(slug);
-    return CliExitCode.Success;
-  }
-
-  if (!slug) {
-    writeTextStdout(
-      'No GitHub "origin" remote detected — committed to the new branch locally.',
-    );
-    writeTextStdout(
-      `Push "${branch}" to your GitHub remote and open a PR manually.`,
-    );
-    printSecretChecklist(slug);
-    return CliExitCode.Success;
-  }
-
-  const push = git(root, 'push', '-u', 'origin', branch);
-  if (!push.success) {
-    writeTextStderr(`Failed to push "${branch}": ${push.stderr}`);
-    writeTextStdout(
-      `Once pushed, open ${compareUrl(slug, base, branch)} to propose the PR.`,
-    );
-    printSecretChecklist(slug);
-    return CliExitCode.AgentError;
-  }
-
-  // Open the PR-creation page in the browser and let the user review the diff
-  // and propose the PR themselves, rather than creating it headlessly. Prefer
-  // `gh pr create --web` (it prefills the title/body) and fall back to opening
-  // the compare URL directly when gh is unavailable or cannot open the page.
-  const prPageUrl = compareUrl(slug, base, branch);
-  let opened: boolean;
-  if (ghAvailable(root)) {
-    const pr = gh(
-      root,
-      'pr',
-      'create',
-      '--web',
-      '--base',
-      base,
-      '--head',
-      branch,
-      '--title',
-      'Add TeXRA code review',
-      '--body',
-      PR_BODY,
-    );
-    opened = pr.success;
-    if (!pr.success) {
-      const diagnostic = pr.stderr || pr.stdout;
-      writeTextStderr(
-        diagnostic
-          ? `gh pr create --web failed: ${diagnostic}`
-          : 'gh pr create --web failed; opening the compare URL instead.',
+    if (!slug) {
+      writeTextStdout(
+        'No GitHub "origin" remote detected — committed to the new branch locally.',
       );
-      opened = await tryOpenBrowser(prPageUrl);
+      writeTextStdout(
+        `Push "${branch}" to your GitHub remote and open a PR manually.`,
+      );
+      printSecretChecklist(slug);
+      return CliExitCode.Success;
     }
-  } else {
-    opened = await tryOpenBrowser(prPageUrl);
-  }
 
-  restoreBranch(root, startBranch);
-  if (opened) {
-    writeTextStdout(
-      'Opened the pull-request page in your browser — review the diff and click "Create pull request".',
-    );
-  } else {
-    writeTextStdout(
-      `Branch pushed, but the browser did not open. Open this page to propose the PR:\n${prPageUrl}`,
-    );
-  }
-  printSecretChecklist(slug);
-  return CliExitCode.Success;
+    const push = git(root, 'push', '-u', 'origin', branch);
+    if (!push.success) {
+      writeTextStderr(`Failed to push "${branch}": ${push.stderr}`);
+      writeTextStdout(
+        `Once pushed, open ${compareUrl(slug, base, branch)} to propose the PR.`,
+      );
+      printSecretChecklist(slug);
+      return CliExitCode.AgentError;
+    }
+
+    // Open the PR-creation page in the browser and let the user review the diff
+    // and propose the PR themselves, rather than creating it headlessly. Prefer
+    // `gh pr create --web` (it prefills the title/body) and fall back to opening
+    // the compare URL directly when gh is unavailable or cannot open the page.
+    const prPageUrl = compareUrl(slug, base, branch);
+    let opened: boolean;
+    if (ghAvailable(root)) {
+      const pr = gh(
+        root,
+        'pr',
+        'create',
+        '--web',
+        '--base',
+        base,
+        '--head',
+        branch,
+        '--title',
+        'Add TeXRA code review',
+        '--body',
+        PR_BODY,
+      );
+      opened = pr.success;
+      if (!pr.success) {
+        const diagnostic = pr.stderr || pr.stdout;
+        writeTextStderr(
+          diagnostic
+            ? `gh pr create --web failed: ${diagnostic}`
+            : 'gh pr create --web failed; opening the compare URL instead.',
+        );
+        opened = yield* Effect.promise(() => tryOpenBrowser(prPageUrl));
+      }
+    } else {
+      opened = yield* Effect.promise(() => tryOpenBrowser(prPageUrl));
+    }
+
+    restoreBranch(root, startBranch);
+    if (opened) {
+      writeTextStdout(
+        'Opened the pull-request page in your browser — review the diff and click "Create pull request".',
+      );
+    } else {
+      writeTextStdout(
+        `Branch pushed, but the browser did not open. Open this page to propose the PR:\n${prPageUrl}`,
+      );
+    }
+    printSecretChecklist(slug);
+    return CliExitCode.Success;
+  });
 }
 
 export const installGithubActionCommand = defineCliCommand({
@@ -354,6 +375,10 @@ export const installGithubActionCommand = defineCliCommand({
     name: 'install-github-action',
     description: 'Install the TeXRA GitHub App and scaffold code review',
   },
+  // The command brings no platform up: it only scaffolds a workflow file in a
+  // git repository, so the runtime its entry installs for the program serves
+  // the refusing state store and global-root handle `clone` takes.
+  install: 'noPlatform',
   args: {
     ...GLOBAL_ARGS,
     branch: {

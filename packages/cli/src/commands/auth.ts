@@ -8,7 +8,6 @@ import { isNonEmptyString } from '@utils/text/stringUtils';
 
 import { CliUsageError, type CliContext } from '../runtime/cliContext';
 import { CliExitCode } from '../runtime/exitCodes';
-import { installCliProcessRuntime } from '../runtime/cliProcessRuntime';
 import { initCliPlatform } from '../runtime/initPlatform';
 import {
   githubSelectAccountWarning,
@@ -210,13 +209,12 @@ export const loginCommand = withUsageSections(
           'Suggest a specific provider account, such as a GitHub username or Google email',
       },
     },
-    run: async (context, ctx) => {
+    // The transport check is the builder's, above the program: it refuses
+    // before `defineCliCommand` installs anything.
+    run: (context, ctx) => {
       const init = loginInitFromArgs(ctx.args);
       assertLoginTransportExclusive(init);
-      // The picker runs before any platform init, so the command's one run is
-      // on the process runtime itself; `initCliPlatform` adopts it.
-      const runtime = await installCliProcessRuntime(context.storageRoot);
-      return runtime.runPromise(runLoginCommand(context, init));
+      return runLoginCommand(context, init);
     },
   }),
   [
@@ -240,24 +238,20 @@ export const logoutCommand = defineCliCommand({
   args: {
     ...GLOBAL_ARGS,
   },
-  async run(context) {
-    const runtime = await installCliProcessRuntime(context.storageRoot);
-    return runtime.runPromise(
-      Effect.gen(function* () {
-        yield* initCliPlatform({ ...context, quietLogs: true });
-        const signOutResult = yield* withCliAuthError(signOutCliSupabase());
-        if (!signOutResult.ok) return CliExitCode.ModelOrNetworkError;
+  run: (context) =>
+    Effect.gen(function* () {
+      yield* initCliPlatform({ ...context, quietLogs: true });
+      const signOutResult = yield* withCliAuthError(signOutCliSupabase());
+      if (!signOutResult.ok) return CliExitCode.ModelOrNetworkError;
 
-        const payload = { authenticated: false };
-        emitCliResult(context, {
-          json: payload,
-          ndjson: { kind: 'auth', ...payload },
-          text: 'Signed out.',
-        });
-        return CliExitCode.Success;
-      }),
-    );
-  },
+      const payload = { authenticated: false };
+      emitCliResult(context, {
+        json: payload,
+        ndjson: { kind: 'auth', ...payload },
+        text: 'Signed out.',
+      });
+      return CliExitCode.Success;
+    }),
 });
 
 /**
@@ -284,33 +278,28 @@ const authStatusCommand = defineCliCommand({
   args: {
     ...GLOBAL_ARGS,
   },
-  async run(context) {
-    // The init stays inside the fold (a platform that cannot come up is the
-    // same report as a failed profile read), so the run borrows the process
-    // runtime rather than an init result.
-    const runtime = await installCliProcessRuntime(context.storageRoot);
-    return runtime.runPromise(
-      Effect.gen(function* () {
-        const statusResult = yield* withCliAuthError(
-          initCliPlatform({ ...context, quietLogs: true }).pipe(
-            Effect.flatMap(() => getCliAuthProfile()),
-          ),
-        );
-        if (!statusResult.ok) return CliExitCode.ModelOrNetworkError;
-        const profile = statusResult.value;
+  // The init stays inside the fold: a platform that cannot come up is the
+  // same report as a failed profile read.
+  run: (context) =>
+    Effect.gen(function* () {
+      const statusResult = yield* withCliAuthError(
+        initCliPlatform({ ...context, quietLogs: true }).pipe(
+          Effect.flatMap(() => getCliAuthProfile()),
+        ),
+      );
+      if (!statusResult.ok) return CliExitCode.ModelOrNetworkError;
+      const profile = statusResult.value;
 
-        emitCliResult(context, {
-          json: profile,
-          ndjson: { kind: 'auth-status', ...profile },
-          text: [
-            formatAuthStatusLine(profile),
-            ...(profile.note ? [profile.note] : []),
-          ].join('\n'),
-        });
-        return CliExitCode.Success;
-      }),
-    );
-  },
+      emitCliResult(context, {
+        json: profile,
+        ndjson: { kind: 'auth-status', ...profile },
+        text: [
+          formatAuthStatusLine(profile),
+          ...(profile.note ? [profile.note] : []),
+        ].join('\n'),
+      });
+      return CliExitCode.Success;
+    }),
 });
 
 export const authCommand = defineCommand({

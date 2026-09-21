@@ -18,7 +18,6 @@ import {
   initCliPlatform,
   type CliPlatformServices,
 } from '../runtime/initPlatform';
-import { installCliProcessRuntime } from '../runtime/cliProcessRuntime';
 import { writeTextStderr } from '../runtime/logSinks';
 import {
   cliMultiAgentPresetListRecord,
@@ -266,18 +265,11 @@ const multiAgentListCommand = defineCliCommand({
   args: {
     ...GLOBAL_ARGS,
   },
-  run: async (context) => {
-    const runtime = await installCliProcessRuntime(context.storageRoot);
-    return runtime.runPromise(
-      Effect.gen(function* () {
-        const services = yield* initCliPlatform({
-          ...context,
-          quietLogs: true,
-        });
-        return yield* runMultiAgentList(context, services);
-      }),
-    );
-  },
+  run: (context) =>
+    Effect.gen(function* () {
+      const services = yield* initCliPlatform({ ...context, quietLogs: true });
+      return yield* runMultiAgentList(context, services);
+    }),
 });
 
 const multiAgentShowCommand = defineCliCommand({
@@ -293,18 +285,11 @@ const multiAgentShowCommand = defineCliCommand({
       description: 'Preset id or name from `texra multi-agent list`',
     },
   },
-  run: async (context, ctx) => {
-    const runtime = await installCliProcessRuntime(context.storageRoot);
-    return runtime.runPromise(
-      Effect.gen(function* () {
-        const services = yield* initCliPlatform({
-          ...context,
-          quietLogs: true,
-        });
-        return yield* runMultiAgentShow(context, ctx.args.preset, services);
-      }),
-    );
-  },
+  run: (context, ctx) =>
+    Effect.gen(function* () {
+      const services = yield* initCliPlatform({ ...context, quietLogs: true });
+      return yield* runMultiAgentShow(context, ctx.args.preset, services);
+    }),
 });
 
 const multiAgentRunCommand = withUsageSections(
@@ -352,16 +337,13 @@ const multiAgentRunCommand = withUsageSections(
           'File whose contents are passed before --instruction when both are set',
       },
     },
-    run: async (context, ctx) => {
-      const init = {
+    run: (context, ctx) =>
+      runMultiAgentPreset(context, {
         preset: ctx.args.preset,
         ...collectCommonAgentRunFlags(ctx.rawArgs, ctx.args.instruction),
         agent: optString(ctx.args.agent),
         model: optString(ctx.args.model),
-      };
-      const runtime = await installCliProcessRuntime(context.storageRoot);
-      return runtime.runPromise(runMultiAgentPreset(context, init));
-    },
+      }),
   }),
   [
     {

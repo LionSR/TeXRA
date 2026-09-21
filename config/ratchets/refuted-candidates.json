@@ -75,20 +75,7 @@
         {
           "file": "packages/cli/src/runtime/cliProcessRuntime.ts",
           "symbol": "installCliProcessRuntime",
-          "signature": "export function installCliProcessRuntime( storageRoot?: string, options?: { readonly appState: StateStore; readonly globalDatabase: Layer.Layer<GlobalDatabase>; }, ): Promise<ProcessRuntime> {…}"
-        }
-      ]
-    },
-    {
-      "id": "RT-define-cli-command-run",
-      "candidate": "defineCliCommand's run as an Effect",
-      "why": "It types 35 command handlers, two of them entirely Promise-native; installGithubAction.ts would become a runtime effect importer with try/catch and trip the catch:effect-importer row.",
-      "ruling": ".agents/docs/proposed/simplification/2026-09-17-effect-round-trips-and-dual-systems.md#refuted-or-declined-at-implementation",
-      "symbols": [
-        {
-          "file": "packages/cli/src/commands/_helpers/defineCliCommand.ts",
-          "symbol": "defineCliCommand",
-          "signature": "export function defineCliCommand<const A extends ArgsDef>( options: DefineCliCommandOptions<A>, ): CommandDef<A> {…}"
+          "signature": "export function installCliProcessRuntime( storageRoot?: string, options?: CliProcessRuntimeInstall, ): Promise<ProcessRuntime> {…}"
         }
       ]
     },

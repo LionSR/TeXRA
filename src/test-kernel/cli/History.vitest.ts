@@ -1144,13 +1144,17 @@ describe('CLI history runtime', () => {
           Effect.succeed({ status: 'streamLogs_missing' }),
         );
 
-        const exitCode = await runHistoryExport(
-          createTestCliContext({
-            cwd: '/workspace',
-            resourcesPath: '/resources',
-          }),
-          'a1a1a1' as RunId,
-          'html',
+        // The command is a program now; the entry runs it on the process
+        // runtime it installs, and here that is the harness's.
+        const exitCode = await testRuntime().runPromise(
+          runHistoryExport(
+            createTestCliContext({
+              cwd: '/workspace',
+              resourcesPath: '/resources',
+            }),
+            'a1a1a1' as RunId,
+            'html',
+          ),
         );
 
         expect(exitCode).toBe(CliExitCode.Usage);

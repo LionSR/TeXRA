@@ -7,6 +7,7 @@ import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
+import { NO_PLATFORM_INSTALL } from '@cli/runtime/cliProcessRuntime';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
 import { testRuntime } from '@test/support/testProcessRuntime';
@@ -19,25 +20,30 @@ const mocks = vi.hoisted(() => ({
   execa: vi.fn(),
   executeCommandSync: vi.fn(),
   getSecret: vi.fn(),
+  installCliProcessRuntime: vi.fn(),
   readCliAmbientState: vi.fn(),
   setSecret: vi.fn(),
 }));
 
 vi.mock('execa', () => ({ execa: mocks.execa }));
 
-// `clone` is a platform-less entry: it installs the process runtime itself
-// and runs on what it gets back. Here it gets the harness's, so this suite
-// can spy on the runtime the command actually runs its program on.
+// `clone` is a platform-less entry: its command entry installs the process
+// runtime and runs the clone program on what it gets back. Here that is the
+// harness's runtime, and the install itself is a spy, so the suite can assert
+// what the entry hands it — `NO_PLATFORM_INSTALL`, the real one, spread in
+// from the module below. Dropping that argument is what would open the global
+// root's handle and hold the event loop past clone's own exit.
 vi.mock('@cli/runtime/cliProcessRuntime', async (importOriginal) => {
   const { testRuntime } = await import('@test/support/testProcessRuntime');
   const { Effect: EffectModule } = await import('effect');
-  // `refusingStateStore` is the real one: what clone hands the install is
-  // part of what this suite covers.
   const actual =
     await importOriginal<typeof import('@cli/runtime/cliProcessRuntime')>();
+  mocks.installCliProcessRuntime.mockImplementation(() =>
+    Promise.resolve(testRuntime()),
+  );
   return {
     ...actual,
-    installCliProcessRuntime: () => Promise.resolve(testRuntime()),
+    installCliProcessRuntime: mocks.installCliProcessRuntime,
     disposeCliProcessRuntime: EffectModule.void,
   };
 });
@@ -95,6 +101,9 @@ describe('CLI Overleaf clone command', () => {
       stderr += text;
     });
     for (const mock of Object.values(mocks)) mock.mockReset();
+    mocks.installCliProcessRuntime.mockImplementation(() =>
+      Promise.resolve(testRuntime()),
+    );
     mocks.deleteSecret.mockReturnValue(Effect.void);
     mocks.execa.mockResolvedValue({});
     mocks.executeCommandSync.mockReturnValue({
@@ -133,6 +142,12 @@ describe('CLI Overleaf clone command', () => {
     ]);
 
     expect(result.exitCode).toBe(CliExitCode.Success);
+    // The platform-less handoff itself: clone opens no global state store and
+    // no global-root handle, so it holds the event loop open past nothing.
+    expect(mocks.installCliProcessRuntime).toHaveBeenCalledWith(
+      undefined,
+      NO_PLATFORM_INSTALL,
+    );
     expect(mocks.getSecret).toHaveBeenCalledWith('overleaf.gitToken');
     expect(mocks.execa).toHaveBeenCalledWith(
       'git',
