@@ -16,6 +16,7 @@ import {
 } from '@auth/xai';
 import { AgentError } from '@common/errors';
 import { attachMissingApiKeyError } from '@common/errors/sdkError/errorMetadata';
+import { withLogChannel } from '@logger/effectLog';
 import { createLog } from '@logger/logUtils';
 import {
   copilotRouteUnavailableReason,
@@ -46,7 +47,8 @@ import { ensureError } from '@utils/errors/errorMessage';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 import type { HttpClient } from 'effect/unstable/http';
 
-const log = createLog('modelRoutes');
+const CHANNEL = 'modelRoutes';
+const log = createLog(CHANNEL);
 
 /**
  * The Grok subscription's OAuth token is accepted by xAI's own API surface
@@ -211,9 +213,9 @@ export const resolveSubscriptionCredential = Effect.fn(
     if (profile === null) return null;
     const signedIn = yield* isCodexSignedIn();
     if (!signedIn) {
-      log.warn(
+      yield* Effect.logWarning(
         `Prefer ChatGPT subscription is on but no ChatGPT session is signed in: model ${config.name} bills the OpenAI API key.`,
-      );
+      ).pipe(withLogChannel(CHANNEL));
       return null;
     }
     const coordinator = codexCoordinator(secrets);
@@ -264,9 +266,9 @@ export const resolveSubscriptionCredential = Effect.fn(
     if (profile === null) return null;
     const signedIn = yield* isXaiSignedIn();
     if (!signedIn) {
-      log.warn(
+      yield* Effect.logWarning(
         `Prefer Grok subscription is on but no Grok session is signed in: model ${config.name} bills the xAI API key.`,
-      );
+      ).pipe(withLogChannel(CHANNEL));
       return null;
     }
     const accessToken = yield* xaiCoordinator(secrets)

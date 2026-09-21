@@ -1,11 +1,11 @@
 import * as os from 'node:os';
 import { Effect } from 'effect';
 
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import { nodeProcesses } from '@platform/defaults/nodeProcesses';
 import type { OwnerLiveness } from '@shared/schemas';
 
-const log = createLog('LeaseOwnerLiveness');
+const CHANNEL = 'LeaseOwnerLiveness';
 
 /**
  * Identity of the process recorded as an aggregate's claim owner: a pid, the
@@ -62,9 +62,9 @@ export const proveOwnerLiveness = (
   Effect.gen(function* () {
     const localHostname = os.hostname();
     if (owner.hostname.toLowerCase() !== localHostname.toLowerCase()) {
-      log.warn(
+      yield* Effect.logWarning(
         `Claim owner pid ${owner.pid} was recorded on host ${owner.hostname}; its liveness is unprovable from ${localHostname}`,
-      );
+      ).pipe(withLogChannel(CHANNEL));
       return 'unprovable';
     }
     if (yield* pidProvablyDead(owner.pid)) return 'dead';
@@ -72,15 +72,15 @@ export const proveOwnerLiveness = (
     if (observed === undefined) {
       // The process may have exited between the two probes.
       if (yield* pidProvablyDead(owner.pid)) return 'dead';
-      log.warn(
+      yield* Effect.logWarning(
         `Claim owner pid ${owner.pid} exists but its start identity cannot be read; its liveness is unprovable`,
-      );
+      ).pipe(withLogChannel(CHANNEL));
       return 'unprovable';
     }
     if (owner.processStart === null) {
-      log.warn(
+      yield* Effect.logWarning(
         `Claim owner pid ${owner.pid} exists but its record carries no start identity; its liveness is unprovable`,
-      );
+      ).pipe(withLogChannel(CHANNEL));
       return 'unprovable';
     }
     return observed === owner.processStart ? 'alive' : 'dead';

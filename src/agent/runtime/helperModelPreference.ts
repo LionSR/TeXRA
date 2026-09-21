@@ -11,7 +11,7 @@
 import { Effect } from 'effect';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import {
   modelUnavailableReasonFrom,
   readModelAvailabilityInputs,
@@ -22,7 +22,7 @@ import { getRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import { AgentCategory } from '@shared/schemas';
 import { getHelperModelName } from './helperModelName';
 
-const log = createLog('helperModelPreference');
+const CHANNEL = 'helperModelPreference';
 
 /**
  * Swap `config`'s model for the configured helper model, or return it unchanged
@@ -48,9 +48,9 @@ export const applyHelperModelPreference = Effect.fn(
     config.agentCategory === AgentCategory.ToolUse &&
     !helperModelConfig?.capabilities.supportsFunctionCalling
   ) {
-    log.warn(
+    yield* Effect.logWarning(
       `Keeping ${config.model} for ${config.agent}: helper model ${helperModel} does not support function calling.`,
-    );
+    ).pipe(withLogChannel(CHANNEL));
     return config;
   }
 
@@ -59,9 +59,9 @@ export const applyHelperModelPreference = Effect.fn(
     helperModel,
   );
   if (unavailable) {
-    log.warn(
+    yield* Effect.logWarning(
       `Keeping ${config.model} for ${config.agent}: helper model ${helperModel} is unavailable. ${unavailable}`,
-    );
+    ).pipe(withLogChannel(CHANNEL));
     return config;
   }
 

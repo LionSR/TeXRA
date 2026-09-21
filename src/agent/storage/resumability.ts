@@ -1,13 +1,15 @@
 import { Effect } from 'effect';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { withLogChannel } from '@logger/effectLog';
 import { createLog } from '@logger/logUtils';
 import { type FlowSnapshotPayload, type RunId } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { getRunRecords } from './runRecords';
 
-const log = createLog('Resumability');
+const CHANNEL = 'Resumability';
+const log = createLog(CHANNEL);
 
 /**
  * What the durable run facts alone say about continuing a run: a
@@ -41,9 +43,9 @@ export const deriveResumability = Effect.fn('deriveResumability')(function* (
     .pipe(Effect.result);
   if (endResult._tag === 'Failure') {
     const error = endResult.failure;
-    log.debug(
+    yield* Effect.logDebug(
       `Failed to read the terminal record for ${runId}: ${toErrorMessage(error)}`,
-    );
+    ).pipe(withLogChannel(CHANNEL));
     return {
       kind: 'unreadable',
       cause: `run metadata could not be read (${toErrorMessage(error)})`,
@@ -54,9 +56,9 @@ export const deriveResumability = Effect.fn('deriveResumability')(function* (
     .pipe(Effect.result);
   if (snapshot._tag === 'Failure') {
     const error = snapshot.failure;
-    log.debug(
+    yield* Effect.logDebug(
       `Failed to read the latest snapshot for ${runId}: ${toErrorMessage(error)}`,
-    );
+    ).pipe(withLogChannel(CHANNEL));
     return {
       kind: 'unreadable',
       cause: `checkpoint could not be read (${toErrorMessage(error)})`,

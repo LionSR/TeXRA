@@ -14,6 +14,7 @@ import { extractToolNames } from '@agent/index/agentYamlScanner';
 import { normalizeAgentSettingTools } from '@agent/runtime/agentSettingTools';
 import { SupabaseAuth } from '@auth/SupabaseAuth';
 import { parseYamlWith } from '@common/parsing/safeParseYaml';
+import { withLogChannel } from '@logger/effectLog';
 import { createLog } from '@logger/logUtils';
 import { ensureError } from '@utils/errors/errorMessage';
 
@@ -40,12 +41,16 @@ export const loadRemoteAgent = Effect.fn('RemoteAgentLoader.loadRemoteAgent')(
       );
     }
 
-    log.info(`Loading remote agent: ${agentName}`);
+    yield* Effect.logInfo(`Loading remote agent: ${agentName}`).pipe(
+      withLogChannel(CHANNEL),
+    );
 
     const attempt = Effect.gen(function* () {
       const configYaml = yield* fetchRemoteAgentConfigYaml(agentName, token);
 
-      log.debug(`Parsing YAML for remote agent: ${agentName}`);
+      yield* Effect.logDebug(
+        `Parsing YAML for remote agent: ${agentName}`,
+      ).pipe(withLogChannel(CHANNEL));
       const parsedYaml = parseYamlWith(configYaml, AgentDefinitionSchema);
       if (Result.isFailure(parsedYaml)) {
         return yield* Effect.fail(
@@ -82,7 +87,9 @@ export const loadRemoteAgent = Effect.fn('RemoteAgentLoader.loadRemoteAgent')(
           : undefined,
       });
 
-      log.info(`Successfully loaded remote agent: ${agentName}`);
+      yield* Effect.logInfo(
+        `Successfully loaded remote agent: ${agentName}`,
+      ).pipe(withLogChannel(CHANNEL));
 
       return config;
     });

@@ -13,6 +13,7 @@ import {
   type AgentDefinition,
 } from '@agent/core/definition/AgentDataclass';
 import { parseYamlWith } from '@common/parsing/safeParseYaml';
+import { withLogChannel } from '@logger/effectLog';
 import { createLog } from '@logger/logUtils';
 import type { AgentScanIssue, AgentSource } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
@@ -21,7 +22,8 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { readNormalizedFile } from '@utils/files/fsDurability';
 import type { AgentEntry } from './agentEntry';
 
-const log = createLog('agentRegistry');
+const CHANNEL = 'agentRegistry';
+const log = createLog(CHANNEL);
 
 /**
  * One file- or directory-level scan failure. Scanning is a best-effort
@@ -110,14 +112,18 @@ export function scanDirectory(
         entries.push(scanned.success);
         continue;
       }
-      log.warn(`Failed to scan ${entry.path}: ${scanned.failure.message}`);
+      yield* Effect.logWarning(
+        `Failed to scan ${entry.path}: ${scanned.failure.message}`,
+      ).pipe(withLogChannel(CHANNEL));
       issues.push({
         path: path.relative(dir, entry.path),
         message: scanned.failure.message,
       });
     }
 
-    log.debug(`Scanned ${entries.length} agents from ${source}`);
+    yield* Effect.logDebug(
+      `Scanned ${entries.length} agents from ${source}`,
+    ).pipe(withLogChannel(CHANNEL));
     return { entries, issues };
   }).pipe(
     Effect.catch((error: AgentScanError) =>
