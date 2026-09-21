@@ -14,6 +14,7 @@ import { Effect } from 'effect';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { DatabaseReadFailed } from '@shared/session/database';
+import { foldAttempts } from '@shared/session/attemptFold';
 import {
   aggregateId,
   JsonValueSchema,
@@ -186,23 +187,26 @@ export function readWorkflowCallAttempt(
   key: string,
 ): Effect.Effect<WorkflowCallAttemptMark, DatabaseReadFailed> {
   return session.readAggregate(checkpointAggregate(checkpointId)).pipe(
-    Effect.map((rows) =>
-      rows.reduce<WorkflowCallAttemptMark>(
-        (mark, row) =>
-          row.type === 'workflow.attempt' && row.key === key
-            ? {
-                // A first mark is itself the highest; `null` is absence, never
-                // a number to maximize against.
-                attempt: Math.max(mark.attempt ?? row.attempt, row.attempt),
-                superseded:
-                  row.supersededRunId == null
-                    ? mark.superseded
-                    : [...mark.superseded, row.supersededRunId],
-              }
-            : mark,
-        { attempt: null, superseded: [] },
-      ),
-    ),
+    Effect.map((rows) => {
+      const marks = rows.filter(
+        (row): row is Extract<SessionEvent, { type: 'workflow.attempt' }> =>
+          row.type === 'workflow.attempt' && row.key === key,
+      );
+      // Every mark opens an attempt and none of them closes one: the row says
+      // a launch happened, never that it ended, so the shared fold's
+      // high-water mark over this one call's series is the whole answer, and
+      // `null` — absence — is what it reports for a call that never launched.
+      const { highest } = foldAttempts(marks, (row) => ({
+        attempt: { key: row.key, index: row.attempt },
+        settled: false,
+      }));
+      return {
+        attempt: highest === null ? null : highest.index,
+        superseded: marks.flatMap((row) =>
+          row.supersededRunId == null ? [] : [row.supersededRunId],
+        ),
+      };
+    }),
   );
 }
 

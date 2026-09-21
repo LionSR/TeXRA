@@ -1034,7 +1034,7 @@ describe('createWorkflowScriptAgentRunner', () => {
         mocks.readChildTurnState.mockReturnValue(
           Effect.succeed({
             active: null,
-            lastCompleted: { attemptId: 'a0', turnIndex: 0 },
+            lastCompleted: { key: 'a0', index: 0 },
           }),
         );
         const runner = defaultRunner({ onCost });
@@ -1069,7 +1069,7 @@ describe('createWorkflowScriptAgentRunner', () => {
       mocks.readChildTurnState.mockReturnValue(
         Effect.succeed({
           active: null,
-          lastCompleted: { attemptId: 'a0', turnIndex: 0 },
+          lastCompleted: { key: 'a0', index: 0 },
         }),
       );
 
@@ -1313,7 +1313,7 @@ describe('createWorkflowScriptAgentRunner', () => {
       mocks.readChildTurnState.mockReturnValue(
         Effect.succeed({
           active: null,
-          lastCompleted: { attemptId: 'a0', turnIndex: 0 },
+          lastCompleted: { key: 'a0', index: 0 },
         }),
       );
       const report = reportSpy();
@@ -1346,7 +1346,7 @@ describe('createWorkflowScriptAgentRunner', () => {
       mocks.readChildTurnState.mockReturnValue(
         Effect.succeed({
           active: null,
-          lastCompleted: { attemptId: 'a0', turnIndex: 0 },
+          lastCompleted: { key: 'a0', index: 0 },
         }),
       );
 
@@ -1395,7 +1395,7 @@ describe('createWorkflowScriptAgentRunner', () => {
       });
       mocks.readChildTurnState.mockReturnValue(
         Effect.succeed({
-          active: { attemptId: 'a0', turnIndex: 1 },
+          active: { key: 'a0', index: 1 },
           lastCompleted: null,
         }),
       );
@@ -1451,7 +1451,7 @@ describe('createWorkflowScriptAgentRunner', () => {
       mocks.readChildTurnState.mockReturnValue(
         Effect.succeed({
           active: null,
-          lastCompleted: { attemptId: 'a0', turnIndex: 0 },
+          lastCompleted: { key: 'a0', index: 0 },
         }),
       );
       const report = reportSpy();
@@ -1497,7 +1497,7 @@ describe('createWorkflowScriptAgentRunner', () => {
       mocks.readChildTurnState.mockReturnValue(
         Effect.succeed({
           active: null,
-          lastCompleted: { attemptId: 'a0', turnIndex: 0 },
+          lastCompleted: { key: 'a0', index: 0 },
         }),
       );
       const report = reportSpy();

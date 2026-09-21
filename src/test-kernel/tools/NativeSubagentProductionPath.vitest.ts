@@ -797,7 +797,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     const completed = turnState.lastCompleted;
     expect(completed).not.toBeNull();
     // The delivery id the loop derives from that turn's identity.
-    const deliveryId = `${runId}:${completed!.attemptId}:${completed!.turnIndex}:delivery`;
+    const deliveryId = `${runId}:${completed!.key}:${completed!.index}:delivery`;
 
     // Replay the identical logical delivery 100 times through the real
     // admission path: no additional parent message, no additional wake.
