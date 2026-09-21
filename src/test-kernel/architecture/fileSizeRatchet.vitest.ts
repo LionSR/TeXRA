@@ -18,8 +18,8 @@
 // hostAgentDeepImportRatchet.vitest.ts; the scan is a line count, so no AST.
 
 // Node imports
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
-import { posix, resolve } from 'node:path';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 // Third-party imports
 import { describe, expect, it } from 'vitest';
@@ -27,6 +27,7 @@ import { describe, expect, it } from 'vitest';
 import {
   expectRealCoverage,
   productionFilesUnder,
+  productionRoots,
   REPO_ROOT,
 } from '../support/repoScan';
 
@@ -36,18 +37,6 @@ interface FileSizeBaseline {
   semantics: string;
   threshold: number;
   files: Record<string, number>;
-}
-
-/**
- * `src` plus every workspace package that has one, derived rather than listed:
- * a package added later is covered on the day it lands instead of quietly
- * sitting outside the budget.
- */
-function productionRoots(): string[] {
-  const packages = readdirSync(resolve(REPO_ROOT, 'packages'))
-    .filter((name) => existsSync(resolve(REPO_ROOT, 'packages', name, 'src')))
-    .map((name) => posix.join('packages', name, 'src'));
-  return ['src', ...packages.toSorted((a, b) => a.localeCompare(b))];
 }
 
 /** Lines in `file`, `wc -l` semantics: a trailing newline ends the last line. */

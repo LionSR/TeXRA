@@ -15,8 +15,8 @@
 // hostAgentDeepImportRatchet.vitest.ts.
 
 // Node imports
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
-import { posix, resolve } from 'node:path';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 // Third-party imports
 import ts from 'typescript';
@@ -26,6 +26,7 @@ import {
   expectRealCoverage,
   parseSourceFile,
   productionFilesUnder,
+  productionRoots,
   REPO_ROOT,
 } from '../support/repoScan';
 
@@ -34,14 +35,6 @@ const BASELINE_FILE = 'config/ratchets/unknown-error-baseline.json';
 interface UnknownErrorBaseline {
   semantics: string;
   files: Record<string, number>;
-}
-
-/** `src` plus every workspace package that has a source root. */
-function productionRoots(): string[] {
-  const packages = readdirSync(resolve(REPO_ROOT, 'packages'))
-    .filter((name) => existsSync(resolve(REPO_ROOT, 'packages', name, 'src')))
-    .map((name) => posix.join('packages', name, 'src'));
-  return ['src', ...packages.toSorted((a, b) => a.localeCompare(b))];
 }
 
 /** `Effect.Effect`, the only spelling the repo uses for the type. */
@@ -118,7 +111,9 @@ describe('unknown Effect error-channel ratchet', () => {
   it('rejects any per-file count that no longer matches the baseline', () => {
     const drifted = Object.entries(baseline.files)
       .filter(([file, count]) => (current.get(file) ?? 0) !== count)
-      .map(([file, count]) => `  ${file}: ${count} -> ${current.get(file) ?? 0}`)
+      .map(
+        ([file, count]) => `  ${file}: ${count} -> ${current.get(file) ?? 0}`,
+      )
       .toSorted((a, b) => a.localeCompare(b));
     expect(
       drifted,

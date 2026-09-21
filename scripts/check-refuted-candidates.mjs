@@ -94,7 +94,9 @@ function checkPullRequestDiff(base) {
 
   const body = process.env.PR_BODY ?? '';
   const uncited = [
-    ...new Set(touched.filter((hit) => !body.includes(hit.id)).map((h) => h.id)),
+    ...new Set(
+      touched.filter((hit) => !body.includes(hit.id)).map((h) => h.id),
+    ),
   ];
   const byId = new Map(baseline.candidates.map((c) => [c.id, c]));
   for (const hit of touched) {

@@ -51,12 +51,30 @@ interface RefutedBaseline {
   candidates: RefutedCandidate[];
 }
 
+/** The block body `node` carries, if it is a declaration that has one. */
+function functionBody(node: ts.Node): ts.Block | undefined {
+  const declaration =
+    ts.isFunctionDeclaration(node) ||
+    ts.isFunctionExpression(node) ||
+    ts.isArrowFunction(node) ||
+    ts.isMethodDeclaration(node) ||
+    ts.isConstructorDeclaration(node) ||
+    ts.isGetAccessorDeclaration(node) ||
+    ts.isSetAccessorDeclaration(node)
+      ? node
+      : undefined;
+  return declaration?.body && ts.isBlock(declaration.body)
+    ? declaration.body
+    : undefined;
+}
+
 /** The body blocks inside `node`, including its own, as [start, end) ranges. */
 function bodyRanges(node: ts.Node): Array<readonly [number, number]> {
   const ranges: Array<readonly [number, number]> = [];
   const visit = (current: ts.Node): void => {
-    if (ts.isFunctionLike(current) && current.body && ts.isBlock(current.body)) {
-      ranges.push([current.body.getStart(), current.body.end] as const);
+    const body = functionBody(current);
+    if (body) {
+      ranges.push([body.getStart(), body.end] as const);
       // Nested functions sit inside a range that is already elided.
       return;
     }
