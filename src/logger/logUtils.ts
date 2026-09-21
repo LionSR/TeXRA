@@ -69,11 +69,15 @@ export function isDebugModeEnabled(): boolean {
  * Flatten an `Error` into the plain object `JSON.stringify` would otherwise
  * render as `{}`: its three non-enumerable display fields, its `cause` (also
  * non-enumerable when set through the constructor option), and its own
- * enumerable properties (e.g. `statusCode`, `requestId`). A nested `cause`
- * that is itself an `Error` reaches this function again through the replacer
- * below, so a cause chain flattens whole. The spread comes first so the named
- * fields are not reported as overwritten; the values are identical either way,
- * since reading `error.name` returns an own enumerable `name` when one exists.
+ * enumerable properties (e.g. `statusCode`, `requestId`). `AggregateError`'s
+ * `errors` and a system error's `code` are own but non-enumerable, so they are
+ * copied by name too: without them an aggregated failure would render as the
+ * wrapper's message alone, with every underlying failure dropped. A nested
+ * `cause` that is itself an `Error` reaches this function again through the
+ * replacer below, so a cause chain flattens whole. The spread comes first so
+ * the named fields are not reported as overwritten; the values are identical
+ * either way, since reading `error.name` returns an own enumerable `name` when
+ * one exists.
  *
  * `flattened` is what keeps a cycle finite. `safe-stable-stringify` detects a
  * cycle by looking for the *post-replacer* value on its own stack, so handing
@@ -96,6 +100,9 @@ function serializeError(
     stack: error.stack,
   });
   if (error.cause !== undefined) flat['cause'] = error.cause;
+  if (error instanceof AggregateError) flat['errors'] = error.errors;
+  const code = (error as { code?: unknown }).code;
+  if (code !== undefined) flat['code'] = code;
   return flat;
 }
 
