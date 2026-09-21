@@ -118,7 +118,6 @@
     "src/tools/github/RepoPollingSource.ts": 548,
     "src/tools/lean/direct/leanServer.ts": 609,
     "src/tools/lean/direct/leanServerPool.ts": 615,
-    "src/tools/memory/MemoryTool.ts": 638,
-    "src/utils/system/toolUtils.ts": 503
+    "src/tools/memory/MemoryTool.ts": 638
   }
 }

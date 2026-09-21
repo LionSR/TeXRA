@@ -23,7 +23,6 @@ import {
   TEXFMT_INSTALL_GUIDE,
   WOLFRAM_INSTALL_GUIDE,
   getInstallGuide,
-  IMAGE_TOOL_LABEL,
 } from '@shared/constants/latexToolchain';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -39,6 +38,7 @@ interface ToolConfig {
   command?: string | string[]; // Optional - defaults to "${toolName} --version"
   errorMessage: string;
   openDocsCommand?: string; // Optional command to open documentation
+  label?: string; // Display name for missing-dependency lists; defaults to the id
 }
 
 /**
@@ -98,12 +98,13 @@ function texTool(name: string, guide: string): string {
 /** Build a ToolConfig with the default install-docs link unless `docs: false`. */
 function withDocs(
   errorMessage: string,
-  extra: { command?: string | string[]; docs?: false } = {},
+  extra: { command?: string | string[]; docs?: false; label?: string } = {},
 ): ToolConfig {
   return {
     errorMessage,
     ...(extra.command ? { command: extra.command } : {}),
     ...(extra.docs === false ? {} : { openDocsCommand: INSTALL_DOCS }),
+    ...(extra.label ? { label: extra.label } : {}),
   };
 }
 
@@ -112,11 +113,12 @@ const TOOL_CONFIGS: Record<string, ToolConfig> = {
   magick: withDocs(
     'ImageMagick is not installed. Please install ImageMagick to use PDF to PNG conversion.\n' +
       MAGICK_INSTRUCTIONS,
+    { label: 'ImageMagick' },
   ),
   gm: withDocs(
     'GraphicsMagick is not installed. Please install GraphicsMagick to use PDF to PNG conversion.\n' +
       GM_INSTRUCTIONS,
-    { command: 'gm version' },
+    { command: 'gm version', label: 'GraphicsMagick' },
   ),
   perl: withDocs(
     'Perl is not installed. latexindent requires Perl.\n' + PERL_INSTRUCTIONS,
@@ -400,45 +402,21 @@ export function getToolDocsCommand(tool: string): string | undefined {
   return TOOL_CONFIGS[tool]?.openDocsCommand;
 }
 
-/**
- * Check core dependencies required by TeXRA features
- * (latexindent, Perl, Ghostscript, GraphicsMagick/ImageMagick).
- * @param showError Whether to show error messages for missing tools
- * @returns The missing tool names.
- *
- * Every probe below answers `false` rather than failing, and the host report
- * logs its own rejection, so this has no failure of its own to mask — the
- * "assume everything is missing" rescue it used to carry could only ever have
- * fired on a defect.
- */
-export const checkCoreDependencies = Effect.fn(
-  'toolUtils.checkCoreDependencies',
-)(function* (showError: boolean = true): Effect.fn.Return<string[]> {
-  // Check basic tools
-  const basicTools = ['latexindent', 'perl', 'gs'];
-  const basicResults = yield* Effect.all(
-    basicTools.map((tool) => checkToolInstalled(tool, showError)),
-    { concurrency: 'unbounded' },
-  );
-  const missingBasicTools = basicTools.filter((_, i) => !basicResults[i]);
+/** Display label for `id` from TOOL_CONFIGS, defaulting to the id itself. */
+export function toolLabel(id: string): string {
+  return TOOL_CONFIGS[id]?.label ?? id;
+}
 
-  // One entry for the image capability, and only if neither tool is there.
-  if (!(yield* detectImageTool())) {
-    missingBasicTools.push(IMAGE_TOOL_LABEL);
-    if (showError) {
-      const errorMsg =
-        'Neither GraphicsMagick nor ImageMagick is installed. Please install either tool for image processing.\n' +
-        'GraphicsMagick:\n' +
-        GM_INSTRUCTIONS +
-        '\n\nOR\n\nImageMagick:\n' +
-        MAGICK_INSTRUCTIONS;
-      // Report through the host handler like every other missing tool.
-      yield* reportMissingTool(errorMsg, INSTALL_DOCS);
-    }
-  }
-
-  return missingBasicTools;
-});
+/** Reports the neither-GraphicsMagick-nor-ImageMagick error through the host handler. */
+export function reportMissingImageTools(): Effect.Effect<void> {
+  const errorMsg =
+    'Neither GraphicsMagick nor ImageMagick is installed. Please install either tool for image processing.\n' +
+    'GraphicsMagick:\n' +
+    GM_INSTRUCTIONS +
+    '\n\nOR\n\nImageMagick:\n' +
+    MAGICK_INSTRUCTIONS;
+  return reportMissingTool(errorMsg, INSTALL_DOCS);
+}
 
 /** Package managers TeXRA knows how to install dependencies with. */
 export const SYSTEM_PACKAGE_MANAGERS = ['brew', 'apt', 'scoop'] as const;

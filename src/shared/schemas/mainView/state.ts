@@ -246,8 +246,21 @@ export type AgentConfigBannerState = z.infer<
   typeof AgentConfigBannerStateSchema
 >;
 
+/**
+ * One missing dependency as the host reports it: already labeled for
+ * display, and marked when another entry in the same list satisfies the same
+ * requirement (GraphicsMagick vs ImageMagick) — the wire carries that
+ * choose-one fact so no renderer has to decode it from an id.
+ */
+const MissingToolSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  interchangeable: z.boolean(),
+});
+export type MissingTool = z.infer<typeof MissingToolSchema>;
+
 export const DependencyBannerDataSchema = z.object({
-  missingTools: z.array(z.string()).nullish(),
+  missingTools: z.array(MissingToolSchema).nullish(),
 });
 const DependencyBannerStateSchema = BannerStateSchema.extend(
   DependencyBannerDataSchema.shape,
