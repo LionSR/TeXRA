@@ -133,7 +133,10 @@ export type DesktopInboundRoute =
  * pairs of one surface share a prefix, and the handler that owns the surface
  * is also the one that would drop a reply the renderer posted back by
  * mistake. The settings view keeps its own camelCase namespace
- * (`SETTINGS_VIEW_COMMANDS`), which both hosts share.
+ * (`SETTINGS_VIEW_COMMANDS`), which both hosts share. `shell` is the one
+ * carve-out: its ids are two disjoint lists, so only the inbound
+ * `DESKTOP_SHELL_IPC_COMMANDS` are routed and a stray outbound
+ * `DESKTOP_SHELL_COMMANDS` reply is dropped for having no route at all.
  */
 const DESKTOP_INBOUND_ROUTE_COMMANDS: Record<
   DesktopInboundRoute,
