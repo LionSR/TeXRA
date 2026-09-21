@@ -1,4 +1,4 @@
-// CLI host's ANSI markdown adapter — builds on the shared `@shared/markdown`
+// CLI host's ANSI markdown adapter — builds on the shared `@ui/markdown`
 // factory but swaps `MarkdownIt`'s HTML renderer rules for ANSI-emitting ones.
 //
 // Math is intentionally disabled in the CLI: terminals can't render KaTeX
@@ -22,11 +22,11 @@ import {
   createMarkdownProcessor,
   type MarkdownProcessorRenderEnv,
   type MarkdownProcessor,
-} from '@shared/markdown/createMarkdownProcessor';
+} from '@ui/markdown/createMarkdownProcessor';
 import {
   createMarkdownRenderer,
   type MarkdownItInstance,
-} from '@shared/markdown/createMarkdownRenderer';
+} from '@ui/markdown/createMarkdownRenderer';
 import { clamp } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { normalizeKnownHtmlForCliMarkdown } from './htmlMarkdownNormalize';

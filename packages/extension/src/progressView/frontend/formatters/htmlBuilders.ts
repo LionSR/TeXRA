@@ -15,15 +15,15 @@ import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 import { diffWordsWithSpace } from 'diff';
 
 import type { FileListEntry } from '@shared/schemas';
-import type { FileListRow } from '@shared/transcript';
 import { highlightSpans } from '@shared/highlighting/highlightCode';
+import { copyWithFeedback } from '@shared/utils/clipboard';
+import type { FileListRow } from '@ui/transcript';
 
 // Local imports - shared utilities
-import type { TeXRAIconName } from '@shared/wa/iconNames';
-import { stopSpinnerMotion } from '@shared/wa/spinner';
-import { renderStatusBadge } from '@shared/wa/statusIcons';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
-import { copyWithFeedback } from '@shared/utils/clipboard';
+import type { TeXRAIconName } from '@ui/wa/iconNames';
+import { stopSpinnerMotion } from '@ui/wa/spinner';
+import { renderStatusBadge } from '@ui/wa/statusIcons';
+import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { getBasename } from '@utils/core';
 import { formatBytes } from '@utils/text/stringUtils';
 

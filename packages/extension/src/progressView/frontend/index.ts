@@ -4,7 +4,7 @@
  * mounts the runtime onto the `<progress-app>` the host's HTML carries.
  */
 // Web Awesome runtime (theme + token bridge); components are added per family.
-import '@shared/wa';
+import '@ui/wa';
 
 // Third-party styles
 import 'katex/dist/katex.min.css';

@@ -51,12 +51,6 @@ import {
   type WorkflowCallProgress,
 } from '@shared/schemas';
 import {
-  isSettledRow,
-  type ToolRow,
-  type TranscriptRow,
-} from '@shared/transcript';
-import { formatWorkflowPhaseHeading } from '@shared/copy/workflowCall';
-import {
   loadInk,
   renderOutputAtTerminalSize,
 } from '@test/support/inkTestHarness.ts';
@@ -66,6 +60,8 @@ import {
   textRowFixture,
   toolRowFixture,
 } from '@test/support/transcriptRowFixtures';
+import { isSettledRow, type ToolRow, type TranscriptRow } from '@ui/transcript';
+import { formatWorkflowPhaseHeading } from '@ui/copy/workflowCall';
 
 const RUN_ID = 'cli-test-run' as RunId;
 const ROOT_RUN = 'root-run' as RunId;

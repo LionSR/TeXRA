@@ -3,7 +3,10 @@ import { Effect } from 'effect';
 import type { PromptHost } from '@hosts/uiHosts';
 import { resolveMemoryStoragePath } from '@platform/defaults/workspaceStorage';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import type { MemoryPreview, MemoryViewItem } from '@shared/schemas';
+import type {
+  MemoryPreview,
+  MemoryViewItem,
+} from '@shared/settingsView/settingsViewMessages';
 import { MAX_PINNED_MEMORIES } from '@tools/memory/constants';
 import {
   deleteMemoryPath,

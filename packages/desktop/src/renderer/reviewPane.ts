@@ -5,9 +5,9 @@ import './TexraDiffView';
 import { html, nothing, render, type TemplateResult } from 'lit';
 
 import { DESKTOP_THEME_KIND, type Theme } from '@shared/schemas';
-import { renderIconActionButton } from '@shared/wa/actionButtons';
-import { renderEmptyState } from '@shared/wa/emptyState';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { renderIconActionButton } from '@ui/wa/actionButtons';
+import { renderEmptyState } from '@ui/wa/emptyState';
+import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 import { buildEditorTree, type EditorTreeNode } from './editorTree';
 import type { DesktopShowDiffMessage } from '../shared/desktopDiffMessages';

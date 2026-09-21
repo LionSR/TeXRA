@@ -30,7 +30,7 @@ import type { Platform } from '@platform/platform';
 import type { PlatformSecrets, SecretsFailed } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
-import { getCoreSettingDefault } from '@shared/schemas';
+import { getCoreSettingDefault } from '@shared/state/stateSettings';
 import type { SetupPlatformShape } from '@tools/setup/platform';
 
 /**

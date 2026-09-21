@@ -6,7 +6,7 @@ import {
 } from '@shared/approvalPolicy';
 import { summarizeFollowupMessage } from '@shared/subagentFollowup';
 import { getModelLabel } from '@shared/model/modelLabel';
-import { BACKGROUND_TASK } from '@shared/copy/nestedRuns';
+import { BACKGROUND_TASK } from '@ui/copy/nestedRuns';
 import { truncateSummary } from '@utils/text/stringUtils';
 
 import { formatResumeCommand } from './state/resumeHint';

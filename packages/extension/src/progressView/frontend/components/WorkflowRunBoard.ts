@@ -26,8 +26,6 @@ import type {
   RunId,
   WorkflowCallProgress,
 } from '@shared/schemas';
-import { designTokens } from '@shared/styles';
-import type { WorkflowTaskRow } from '@shared/transcript';
 import type { SessionView, RunView } from '@shared/session/sessionView';
 import {
   resolvePhase,
@@ -35,7 +33,6 @@ import {
   type SurfaceRefusal,
 } from '@shared/session/surface';
 import { SessionUiEvents } from '@shared/session/uiEvents';
-import { formatWorkflowTally } from '@shared/copy/workflowCall';
 import {
   formatWorkflowRowGroup,
   workflowPhaseRows,
@@ -44,9 +41,12 @@ import {
   type WorkflowRowGroup,
   type WorkflowRunModel,
 } from '@shared/runs/workflowRunModel';
-import { terminalStatusIcon } from '@shared/wa/statusIcons';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { TickerController } from '@shared/litControllers/TickerController';
+import { designTokens } from '@ui/styles';
+import type { WorkflowTaskRow } from '@ui/transcript';
+import { formatWorkflowTally } from '@ui/copy/workflowCall';
+import { terminalStatusIcon } from '@ui/wa/statusIcons';
+import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { assertNever } from '@utils/core';
 import {
   formatCompactDuration,

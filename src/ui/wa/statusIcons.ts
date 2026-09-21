@@ -6,9 +6,9 @@ import { css, html, type CSSResult, type TemplateResult } from 'lit';
 import { ifDefined } from 'lit/directives/if-defined.js';
 
 // Local imports
-import type { ProviderKeyStatus } from '@shared/schemas';
-import type { TeXRAIconName } from '@shared/wa/iconNames';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import type { ProviderKeyStatus } from '@shared/settingsView/settingsViewMessages';
+import type { TeXRAIconName } from '@ui/wa/iconNames';
+import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 /**
  * Abstract terminal-run outcome, independent of any one surface's status

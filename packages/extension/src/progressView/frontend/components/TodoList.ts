@@ -8,10 +8,10 @@ import { classMap } from 'lit/directives/class-map.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 // Local imports - shared styles
-import { designTokens, commonViewStyles } from '@shared/styles';
 import { TODO_STATUS, STATUS_DISPLAY, type TodoItem } from '@shared/schemas';
-import { stopSpinnerMotion } from '@shared/wa/spinner';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { designTokens, commonViewStyles } from '@ui/styles';
+import { stopSpinnerMotion } from '@ui/wa/spinner';
+import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { pluralize } from '@utils/text/stringUtils';
 
 // Local imports - base class

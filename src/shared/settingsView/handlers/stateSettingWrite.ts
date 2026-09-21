@@ -21,7 +21,7 @@ import {
   type SettingHost,
   type SettingsViewSnapshot,
   type SettingsViewStateSettingEntry,
-} from '@shared/schemas';
+} from '@shared/state/stateSettings';
 import {
   readSetting,
   resetSetting,

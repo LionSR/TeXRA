@@ -33,14 +33,6 @@ import {
   type WorkflowCallProgress,
   type WorkflowControlAction,
 } from '@shared/schemas';
-import type { WorkflowTaskRow as WorkflowTaskRowModel } from '@shared/transcript';
-import {
-  WORKFLOW_CALL_STATUS_GLYPH,
-  WORKFLOW_PHASE_GLYPH,
-  formatWorkflowPhaseHeading,
-  formatWorkflowPhaseTally,
-  formatWorkflowTally,
-} from '@shared/copy/workflowCall';
 import {
   formatWorkflowCallLiveParts,
   formatWorkflowRowGroup,
@@ -50,6 +42,14 @@ import {
   type WorkflowPhaseRow,
   type WorkflowRunModel,
 } from '@shared/runs/workflowRunModel';
+import type { WorkflowTaskRow as WorkflowTaskRowModel } from '@ui/transcript';
+import {
+  WORKFLOW_CALL_STATUS_GLYPH,
+  WORKFLOW_PHASE_GLYPH,
+  formatWorkflowPhaseHeading,
+  formatWorkflowPhaseTally,
+  formatWorkflowTally,
+} from '@ui/copy/workflowCall';
 import { clampIndex, filterNotNullish } from '@utils/core';
 import { formatCompactDuration, formatCostUsd } from '@utils/text/stringUtils';
 

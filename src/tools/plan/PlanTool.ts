@@ -37,7 +37,6 @@ import {
 } from '@tools/goal';
 import { requireNonEmptyString } from '@tools/utils';
 import { defineTool } from '@tools/core/define';
-import { commandUnion } from '@tools/core/inputSchema';
 import { errorResult, executed } from '@tools/core/result';
 import { generateShortId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -57,9 +56,12 @@ function formatGoalView(goal: Goal): string {
 /**
  * Schema for the unified plan tool input. A discriminated union over
  * `command`: 'update' carries the plan; 'pause'/'complete' carry a reason.
+ * Branches stay `looseObject`: provider schema flattening advertises one
+ * object across commands, and OpenAI-compatible providers null-fill the other
+ * branches' fields.
  */
-const PlanToolInputSchema = commandUnion([
-  {
+const PlanToolInputSchema = z.discriminatedUnion('command', [
+  z.looseObject({
     command: z.literal('update'),
     objective: z
       .string()
@@ -69,15 +71,15 @@ const PlanToolInputSchema = commandUnion([
           'verifiable stopping condition. Plain prose or markdown - no ' +
           'structured steps (track those with the todo tool).',
       ),
-  },
-  {
+  }),
+  z.looseObject({
     command: z.literal('pause'),
     reason: z
       .string()
       .min(1)
       .describe('Why you are pausing: describe what you need from the user.'),
-  },
-  {
+  }),
+  z.looseObject({
     command: z.literal('complete'),
     reason: z
       .string()
@@ -86,7 +88,7 @@ const PlanToolInputSchema = commandUnion([
         'How you verified completion: cite current filesystem state, ' +
           'test output, or command results (never conversation memory).',
       ),
-  },
+  }),
 ]);
 
 type PlanToolInput = z.infer<typeof PlanToolInputSchema>;

@@ -71,17 +71,17 @@ import {
   codingPlanForApiProvider,
   codingPlanForUsageSetting,
 } from '@shared/codingPlanSubscriptions';
+import type { SubscriptionUsageProvider } from '@shared/schemas';
+import type { SettingsViewSnapshot } from '@shared/state/stateSettings';
 import type {
   DerivedSettingsSnapshot,
   SettingsMessageFor,
   SettingsViewInboundHandlerRegistry,
-  SettingsViewSnapshot,
-  SubscriptionUsageProvider,
-} from '@shared/schemas';
+} from '@shared/settingsView/settingsViewMessages';
 import {
   dispatchSettingsViewInbound,
   SETTINGS_VIEW_CMD,
-} from '@shared/schemas';
+} from '@shared/settingsView/settingsViewMessages';
 
 import {
   applyStateSettingUpdate,

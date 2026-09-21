@@ -16,10 +16,10 @@ import type { PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import {
   MODEL_AVAILABILITY_STATUS,
-  REASONING_LEVEL_LABELS,
   type ModelAvailabilityKind,
   type ModelOptionData,
 } from '@shared/schemas';
+import { REASONING_LEVEL_LABELS } from '@shared/settingsView/settingsViewMessages';
 import {
   DEFAULT_HELPER_MODEL,
   providerDisplayName,

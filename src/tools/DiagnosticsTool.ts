@@ -14,7 +14,6 @@ import {
   workspacePathPorts,
   type WorkspacePathPorts,
 } from '@tools/pathResolution';
-import { commandUnion } from '@tools/core/inputSchema';
 import { executed } from '@tools/core/result';
 import {
   countBySeverity,
@@ -56,22 +55,22 @@ const DiagnosticsPathSchema = z
   .min(1)
   .describe('Workspace-relative or absolute file path.');
 
-const DiagnosticsInputSchema = commandUnion([
-  {
+const DiagnosticsInputSchema = z.discriminatedUnion('command', [
+  z.looseObject({
     command: z
       .literal('list')
       .describe('Retrieve full linter diagnostics for a file.'),
     path: DiagnosticsPathSchema,
-  },
-  {
+  }),
+  z.looseObject({
     command: z
       .literal('count')
       .describe(
         'Retrieve a severity-count summary of linter diagnostics for a file.',
       ),
     path: DiagnosticsPathSchema,
-  },
-  {
+  }),
+  z.looseObject({
     command: z
       .literal('add')
       .describe(
@@ -97,7 +96,7 @@ const DiagnosticsInputSchema = commandUnion([
       .describe(
         'Confidence 1–5: 5=certain, 4=high certainty with minor subjectivity, 3=reasonable but field-dependent, 2=subjective, 1=speculative.',
       ),
-  },
+  }),
 ]);
 
 export type DiagnosticsInput = z.infer<typeof DiagnosticsInputSchema>;

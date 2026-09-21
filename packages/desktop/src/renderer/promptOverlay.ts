@@ -1,7 +1,7 @@
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/dialog/dialog.js';
 import '@awesome.me/webawesome/dist/components/input/input.js';
-import { renderLabeledActionButton } from '@shared/wa/actionButtons';
+import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 import {
   DESKTOP_PROMPT_COMMANDS,
   type DesktopSettlePromptMessage,

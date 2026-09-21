@@ -4,11 +4,11 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import { LitElement, css, html, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
 
-import { designTokens, commonViewStyles } from '@shared/styles';
 import { GETTING_STARTED_ACTION_PRESENTATION } from '@shared/schemas';
-import { ONBOARDING_SETUP_HANDOFF } from '@shared/copy/onboarding';
 import { SessionUiEvents } from '@shared/session/uiEvents';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { designTokens, commonViewStyles } from '@ui/styles';
+import { ONBOARDING_SETUP_HANDOFF } from '@ui/copy/onboarding';
+import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 const { runSetup: RUN_SETUP, openWalkthrough: OPEN_WALKTHROUGH } =
   GETTING_STARTED_ACTION_PRESENTATION;

@@ -18,7 +18,8 @@ Use the alias, not a long relative chain.
 | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `src/agent/`        | The agent domain model, the two run loops, and provider abstraction. Largest subsystem; has its own READMEs — start with [`agent/core/README.md`](agent/core/README.md)                                  |
 | `src/tools/`        | Tool implementations the agent can call (bash, file edits, delegation, search, setup)                                                                                                                    |
-| `src/shared/`       | Two things: wire contracts and message types (Zod schemas), **and** the shared browser UI kit (`wa/`, `styles/`, `litControllers/`, `markdown/`). Browser-reachable throughout                           |
+| `src/shared/`       | Wire contracts and message types (Zod schemas) plus the host-neutral logic over them. Browser-reachable throughout                                                                                       |
+| `src/ui/`           | The shared browser UI kit (`wa/`, `styles/`, `transcript/`, `markdown/`, `copy/`) all three hosts render with. Lit and Web Awesome live here, not in a host package                                      |
 | `src/controllers/`  | Host-neutral orchestration — the layer hosts call into instead of driving `agent/` directly                                                                                                              |
 | `src/utils/`        | Host-agnostic helpers. A fixed set is additionally browser-safe (see below)                                                                                                                              |
 | `src/latex/`        | LaTeX compilation, diffing, formatting, and log parsing                                                                                                                                                  |
@@ -55,25 +56,27 @@ way `tsc` will not catch.
 
 ## Picking between the general-sounding names
 
-`shared/`, `common/`, and `utils/` are the three placements newcomers get wrong.
+`shared/`, `ui/`, `common/`, and `utils/` are the placements newcomers get
+wrong.
 
-- **`shared/`** — two things, both browser-reachable. First, types and schemas
-  that cross a process or wire boundary (extension host ↔ webview, main ↔
-  renderer, client ↔ backend): if both sides must agree on the shape, it goes
-  here. Second, the **shared browser UI kit** — `shared/wa/` (Web Awesome icon
-  and component helpers), `shared/styles/`, `shared/litControllers/`,
-  `shared/markdown/`. That is runtime UI code, not a
-  contract: 23 modules under `shared/` import `lit`. Reusable webview UI belongs
-  here, not in a host package.
+- **`shared/`** — types and schemas that cross a process or wire boundary
+  (extension host ↔ webview, main ↔ renderer, client ↔ backend): if both sides
+  must agree on the shape, it goes here, together with the host-neutral logic
+  that folds and reads them.
+- **`ui/`** — the **shared browser UI kit**: `ui/wa/` (Web Awesome icon and
+  component helpers), `ui/styles/`, `ui/transcript/` (the transcript row
+  model), `ui/markdown/` and `ui/copy/` (user-facing strings). That is runtime
+  UI code, not a contract — it imports `lit`. Reusable webview UI belongs here,
+  not in a host package and not under `shared/`.
 - **`common/`** — cross-cutting logic with domain meaning that is not a wire
   contract. Error classification is the clearest example.
 - **`utils/`** — leaf helpers with no domain knowledge. If it could plausibly be
   an npm package, it belongs here.
 
 When two fit, prefer the one with the tighter constraints. Note that "tighter"
-varies within `shared/` itself: `shared/settingsView/handlers/` is guarded by
+varies by directory: `shared/settingsView/handlers/` is guarded by
 `SharedSettingsViewBoundary.vitest.ts` against importing `@controllers/`,
-`@agent/`, `@model/`, `@tools/` or `@auth/`, while `shared/wa/` deliberately
+`@agent/`, `@model/`, `@tools/` or `@auth/`, while `ui/wa/` deliberately
 depends on Lit. Check for an existing boundary test near your target directory
 before assuming either extreme.
 

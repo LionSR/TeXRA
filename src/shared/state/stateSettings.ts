@@ -18,45 +18,41 @@ import {
   PROVIDER_ENDPOINT_STATE_ENTRIES,
 } from '@shared/constants/providers';
 import {
-  CLAUDE_AGENT_DEFAULT_EFFORT,
-  CLAUDE_AGENT_DEFAULT_MODEL,
-  CLAUDE_AGENT_DEFAULT_PERMISSION_MODE,
-  ClaudeAgentEffortSchema,
-  ClaudeAgentModelSchema,
-  ClaudeAgentPermissionModeSchema,
-  CODEX_APPROVAL_POLICY_DEFAULT,
-  CODEX_REASONING_EFFORT_DEFAULT,
-  CODEX_SANDBOX_MODE_DEFAULT,
-  CodexApprovalPolicySchema,
-  CodexReasoningEffortSchema,
-  CodexSandboxModeSchema,
-} from '@shared/schemas/agentCliSettings';
-import {
-  CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
-  CHILD_RUN_CONCURRENCY_BUDGET_SETTING,
-  ChatgptCodexContextWindowSchema,
-  ChildRunConcurrencyBudgetSchema,
-  LATEXDIFF_TEMP_FILE_LOCATIONS,
-  MODEL_COMPACTION_THRESHOLD_SETTING,
-  MODEL_RETRY_MAX_ATTEMPTS_SETTING,
-  ModelCompactionThresholdPercentSchema,
-  ModelRetryMaxAttemptsSchema,
-  CliOutputFormatSchema,
-  TELEMETRY_ENABLED_DEFAULT,
-} from '@shared/schemas/coreSettings';
-import {
   DEFAULT_ENABLED_REGEX_REPLACEMENTS,
   DEFAULT_ENABLED_REPLACEMENTS,
   NON_REGEX_REPLACEMENT_CATEGORIES,
   REGEX_REPLACEMENT_CATEGORIES,
 } from '@shared/constants/replacementCategories';
 import {
+  ActiveSkillSourceScopeSchema,
   AGENT_SKILLS_ENABLED_DEFAULT,
   AgentSkillsEnabledSchema,
-} from '@shared/schemas/agentSkills';
+  CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
+  CHILD_RUN_CONCURRENCY_BUDGET_SETTING,
+  ChatgptCodexContextWindowSchema,
+  ChildRunConcurrencyBudgetSchema,
+  CLAUDE_AGENT_DEFAULT_EFFORT,
+  CLAUDE_AGENT_DEFAULT_MODEL,
+  CLAUDE_AGENT_DEFAULT_PERMISSION_MODE,
+  ClaudeAgentEffortSchema,
+  ClaudeAgentModelSchema,
+  ClaudeAgentPermissionModeSchema,
+  CliOutputFormatSchema,
+  CODEX_APPROVAL_POLICY_DEFAULT,
+  CODEX_REASONING_EFFORT_DEFAULT,
+  CODEX_SANDBOX_MODE_DEFAULT,
+  CodexApprovalPolicySchema,
+  CodexReasoningEffortSchema,
+  CodexSandboxModeSchema,
+  LATEXDIFF_TEMP_FILE_LOCATIONS,
+  MODEL_COMPACTION_THRESHOLD_SETTING,
+  MODEL_RETRY_MAX_ATTEMPTS_SETTING,
+  ModelCompactionThresholdPercentSchema,
+  ModelRetryMaxAttemptsSchema,
+  SkillNameSchema,
+  TELEMETRY_ENABLED_DEFAULT,
+} from '@shared/schemas';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
-import { ActiveSkillSourceScopeSchema } from './activeSkills';
-import { SkillNameSchema } from './skillName';
 
 // ============================================================================
 // Git defaults
@@ -929,32 +925,6 @@ const PROVIDER_ROUTING_SETTINGS = (
   }),
 );
 
-/**
- * Copy for the provider toggles whose settings-view row and Models-tab
- * control read identically, written once so the two cannot drift apart. Rows
- * whose tab control needs its own shorter copy spell both out instead — see
- * `modelProviderToggle`.
- */
-const OPENROUTER_COPY = {
-  label: 'Use OpenRouter for all models',
-  description:
-    'Route all API calls through OpenRouter instead of direct provider APIs. Requires an OpenRouter API key; your OpenRouter key is always used directly.',
-} as const;
-
-const KIMI_CODE_COPY = {
-  label: 'Prefer Kimi Code',
-  description:
-    'Route dual-backend Kimi models (K3) through the Kimi Code coding endpoint when a Kimi Code API key is set. The two coding-only models always use the key. When off, K3 uses the Moonshot open platform.',
-} as const;
-
-const GLM_CODING_PLAN_COPY = {
-  label: 'GLM Coding Plan',
-  description:
-    'Use a Coding Plan subscription key instead of pay-as-you-go. Routes requests through the coding-specific endpoint with monthly quota limits.',
-  warningUrl: 'https://z.ai/subscribe',
-  warningUrlLabel: 'Subscribe',
-} as const;
-
 export const STATE_SETTINGS: readonly StateSettingEntry[] = [
   // --- Git commit author marking ---------------------------------------------
   surfacedSetting({
@@ -1314,8 +1284,9 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
   surfacedSetting({
     key: GlobalStateKey.USE_OPENROUTER,
     schema: z.boolean().prefault(false),
-    title: OPENROUTER_COPY.label,
-    description: OPENROUTER_COPY.description,
+    title: 'Use OpenRouter for all models',
+    description:
+      'Route all API calls through OpenRouter instead of direct provider APIs. Requires an OpenRouter API key; your OpenRouter key is always used directly.',
     category: 'model',
     slots: sameSlot('globalState'),
     honoredBy: everyHost(PROVIDER_CONFIG_READER),
@@ -1323,7 +1294,14 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     surfaces: {
       settingsView: 'profile',
       cliConfig: true,
-      models: [{ provider: 'openRouter', ...OPENROUTER_COPY }],
+      models: [
+        {
+          provider: 'openRouter',
+          label: 'Use OpenRouter for all models',
+          description:
+            'Route all API calls through OpenRouter instead of direct provider APIs. Requires an OpenRouter API key; your OpenRouter key is always used directly.',
+        },
+      ],
     },
   }),
 
@@ -1331,8 +1309,9 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
   surfacedSetting({
     key: GlobalStateKey.KIMI_CODE_PREFER,
     schema: z.boolean().prefault(false),
-    title: KIMI_CODE_COPY.label,
-    description: KIMI_CODE_COPY.description,
+    title: 'Prefer Kimi Code',
+    description:
+      'Route dual-backend Kimi models (K3) through the Kimi Code coding endpoint when a Kimi Code API key is set. The two coding-only models always use the key. When off, K3 uses the Moonshot open platform.',
     category: 'model',
     slots: sameSlot('globalState'),
     honoredBy: everyHost('src/agent/runtime/run/modelBinding.ts'),
@@ -1345,15 +1324,23 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     surfaces: {
       settingsView: 'profile',
       cliConfig: true,
-      models: [{ provider: 'kimiCode', ...KIMI_CODE_COPY }],
+      models: [
+        {
+          provider: 'kimiCode',
+          label: 'Prefer Kimi Code',
+          description:
+            'Route dual-backend Kimi models (K3) through the Kimi Code coding endpoint when a Kimi Code API key is set. The two coding-only models always use the key. When off, K3 uses the Moonshot open platform.',
+        },
+      ],
     },
   }),
   ...PROVIDER_ROUTING_SETTINGS,
   surfacedSetting({
     key: GlobalStateKey.GLM_CODING_PLAN,
     schema: z.boolean().prefault(false),
-    title: GLM_CODING_PLAN_COPY.label,
-    description: GLM_CODING_PLAN_COPY.description,
+    title: 'GLM Coding Plan',
+    description:
+      'Use a Coding Plan subscription key instead of pay-as-you-go. Routes requests through the coding-specific endpoint with monthly quota limits.',
     category: 'model',
     slots: sameSlot('globalState'),
     honoredBy: everyHost(ROUTE_ENDPOINT_READER),
@@ -1361,7 +1348,16 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     surfaces: {
       settingsView: 'profile',
       cliConfig: true,
-      models: [{ provider: 'glm', ...GLM_CODING_PLAN_COPY }],
+      models: [
+        {
+          provider: 'glm',
+          label: 'GLM Coding Plan',
+          description:
+            'Use a Coding Plan subscription key instead of pay-as-you-go. Routes requests through the coding-specific endpoint with monthly quota limits.',
+          warningUrl: 'https://z.ai/subscribe',
+          warningUrlLabel: 'Subscribe',
+        },
+      ],
     },
   }),
 

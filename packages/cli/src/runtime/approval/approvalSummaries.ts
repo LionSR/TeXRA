@@ -8,11 +8,11 @@ import {
   type UserQuestionPermission,
 } from '@shared/schemas';
 import { getModelLabel } from '@shared/model/modelLabel';
+import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import {
   WORKFLOW_SCRIPT_PROPOSAL_COPY,
   workflowScriptPlanSummary,
-} from '@shared/copy/workflowScriptProposal';
-import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
+} from '@ui/copy/workflowScriptProposal';
 import { buildDiffHunks, formatHunkLines } from '@utils/text/unifiedDiff';
 
 import {

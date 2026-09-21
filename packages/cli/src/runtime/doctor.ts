@@ -14,9 +14,9 @@ import {
 } from '@latex/latexToolchain';
 import { workspaceTexraConfigPath } from '@platform/defaults/nodeStorage';
 import { TELEMETRY_ENABLED_KEY } from '@shared/schemas';
-import { RESEARCHER_ACCESS } from '@shared/copy/onboarding';
 import type { UsageLoggingOptOut } from '@telemetry/UsageLogService';
 import { TEXRA_CLI_SUPPORTED_NODE_RANGE } from '@tools/externalToolDefs';
+import { RESEARCHER_ACCESS } from '@ui/copy/onboarding';
 import { extractErrorMessage } from '@utils/errors/errorMessage';
 import { formatResultCount } from '@utils/text/stringUtils';
 

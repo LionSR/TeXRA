@@ -7,7 +7,6 @@ import { html, type TemplateResult } from 'lit';
 
 import type { SessionView } from '@shared/session/sessionView';
 import { applySurfaceAction, emptySurface } from '@shared/session/surface';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
 import {
   ROOT,
   withForeignOwner,
@@ -15,6 +14,7 @@ import {
   withSettledRun,
   withWaitingCall,
 } from '@test/shared/session/fanOutScenario';
+import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 import '@progressView/frontend/components/WorkflowRunBoard';
 

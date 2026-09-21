@@ -13,7 +13,7 @@ import {
   unsupportedLoginProviderMessage,
 } from '@cli/runtime/loginOptions';
 import { formatCliManualAuthUrlMessage } from '@cli/runtime/supabaseAuth';
-import { RESEARCHER_ACCESS_AUTH } from '@shared/copy/accountAuth';
+import { RESEARCHER_ACCESS_AUTH } from '@ui/copy/accountAuth';
 
 describe('CLI login arguments (texra login)', () => {
   it.each<{

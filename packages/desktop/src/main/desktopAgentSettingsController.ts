@@ -33,14 +33,13 @@ import type { AgentDirectoriesFailed } from '@platform/interfaces';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import type { GlobalStorageFs } from '@platform/rootedFs';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import {
-  agentKey,
-  type AgentCategory,
-  type AgentSource,
-  type SettingsMessageFor,
-  type SettingsViewInboundHandlerRegistry,
-  type SettingsViewInboundMessage,
-} from '@shared/schemas';
+import { agentKey } from '@shared/schemas';
+import type { AgentCategory, AgentSource } from '@shared/schemas';
+import type {
+  SettingsMessageFor,
+  SettingsViewInboundHandlerRegistry,
+  SettingsViewInboundMessage,
+} from '@shared/settingsView/settingsViewMessages';
 import {
   buildAgentModePresetsMessage,
   buildAgentSelectionMessage,

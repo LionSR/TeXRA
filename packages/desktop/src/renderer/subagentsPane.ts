@@ -7,7 +7,7 @@ import { html, nothing, type TemplateResult } from 'lit';
 import type { RunId } from '@shared/schemas';
 import type { SessionView } from '@shared/session/sessionView';
 import type { Surface } from '@shared/session/surface';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 export interface SubagentsPaneModel {
   readonly view: SessionView;

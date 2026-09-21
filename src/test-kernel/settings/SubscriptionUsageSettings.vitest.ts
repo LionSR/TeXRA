@@ -8,11 +8,13 @@ import {
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { formatSubscriptionUsagePercent } from '@shared/subscriptionUsagePresentation';
 import {
-  dispatchSettingsViewOutbound,
-  SettingsViewInboundMessageSchema,
   type SubscriptionUsageSnapshot,
   type SubscriptionUsageSnapshots,
 } from '@shared/schemas';
+import {
+  dispatchSettingsViewOutbound,
+  SettingsViewInboundMessageSchema,
+} from '@shared/settingsView/settingsViewMessages';
 
 const NOW = 1_800_000_000_000;
 

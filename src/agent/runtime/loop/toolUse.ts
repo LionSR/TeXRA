@@ -885,12 +885,11 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   const finalize = (exit: Exit.Exit<LoopExit, Error>) =>
     Effect.uninterruptible(
       Effect.gen(function* () {
-        const state = yield* Ref.get(latest);
         // Every exit that ends the run writes its `halted` step; the state a
         // stop interrupted stays at the phase its rows left, so resume
         // continues it.
         // A tool-use step is stamped with the run state as folded.
-        const halt = recordHalt({ ledger, logger, runId }, state, (s) => s);
+        const halt = recordHalt({ ledger, logger, runId }, (s) => s);
         const release = (next: 'recoverable' | 'terminal') =>
           Effect.sync(() => {
             detach();
@@ -903,16 +902,17 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         if (Exit.isSuccess(exit)) {
           if (exit.value.waiting) return yield* release('recoverable');
           const outcome = exit.value.outcome;
-          yield* halt(outcome);
+          yield* halt(exit.value.state, outcome);
           return yield* release(
             outcome === RUN_OUTCOME.COMPLETED ? 'terminal' : 'recoverable',
           );
         }
+        const state = yield* Ref.get(latest);
         if (Cause.hasInterrupts(exit.cause)) {
-          yield* halt(RUN_OUTCOME.CANCELLED);
+          yield* halt(state, RUN_OUTCOME.CANCELLED);
           return yield* release('recoverable');
         }
-        yield* halt(RUN_OUTCOME.FAILED);
+        yield* halt(state, RUN_OUTCOME.FAILED);
         yield* release('recoverable');
       }),
     );

@@ -12,7 +12,10 @@ import {
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
-import { CLI_STATE_SETTINGS, type SurfacedSettingEntry } from '@shared/schemas';
+import {
+  CLI_STATE_SETTINGS,
+  type SurfacedSettingEntry,
+} from '@shared/state/stateSettings';
 import {
   readSetting,
   type SettingsStores,

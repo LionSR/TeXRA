@@ -30,19 +30,19 @@ import type {
   InquiryThreadRecord,
   PermissionPayload,
 } from '@shared/schemas';
+import { CopyButtonController } from '@shared/litControllers/CopyButtonController';
+import type { SurfaceDecision } from '@shared/session/approvalDecision';
+import type { Surface } from '@shared/session/surface';
+import { SessionUiEvents } from '@shared/session/uiEvents';
 import {
   commonViewStyles,
   designTokens,
   requestPanelSharedStyles,
-} from '@shared/styles';
-import { CopyButtonController } from '@shared/litControllers/CopyButtonController';
-import { renderLabeledActionButton } from '@shared/wa/actionButtons';
-import { renderDotMeta } from '@shared/wa/metaStrip';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+} from '@ui/styles';
+import { renderLabeledActionButton } from '@ui/wa/actionButtons';
+import { renderDotMeta } from '@ui/wa/metaStrip';
+import { waIcon } from '@ui/wa/webAwesomeIcons';
 
-import type { SurfaceDecision } from '@shared/session/approvalDecision';
-import type { Surface } from '@shared/session/surface';
-import { SessionUiEvents } from '@shared/session/uiEvents';
 import { createFlushableDebounce, tryParseUrl } from '@utils/core';
 import {
   BaseFeedbackPanel,

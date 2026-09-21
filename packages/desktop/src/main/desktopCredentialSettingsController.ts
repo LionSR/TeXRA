@@ -39,14 +39,14 @@ import {
   codingPlanForApiProvider,
   codingPlanForUsageSetting,
 } from '@shared/codingPlanSubscriptions';
+import { type SubscriptionUsageProvider } from '@shared/schemas';
 import {
   type SettingsViewInboundHandlerRegistry,
-  type SubscriptionUsageProvider,
   type UpdateSubscriptionAuthStatusMessage,
-} from '@shared/schemas';
-import { ACCOUNT_OUTCOME } from '@shared/copy/accountAuth';
+} from '@shared/settingsView/settingsViewMessages';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { SettingsStatePorts } from '@shared/settingsView/types';
+import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
 import { getProviderKeyUrl } from '@utils/config/providerConfig';
 import { allSettledVoid } from '@utils/core/allSettledVoid';
 import { toErrorMessage } from '@utils/errors/errorMessage';

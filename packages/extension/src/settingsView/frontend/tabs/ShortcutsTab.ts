@@ -4,11 +4,6 @@ import { LitElement, css, html, nothing, type TemplateResult } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 
 import {
-  commonViewStyles,
-  designTokens,
-  settingsBannerStyles,
-} from '@shared/styles';
-import {
   detectBrowserPlatform,
   formatDesktopAccelerator,
 } from '@shared/commands/accelerators';
@@ -18,13 +13,18 @@ import {
   type DesktopShortcutEntry,
 } from '@shared/commands/shortcutPreferences';
 import {
+  commonViewStyles,
+  designTokens,
+  settingsBannerStyles,
+} from '@ui/styles';
+import {
   renderIconActionButton,
   renderLabeledActionButton,
-} from '@shared/wa/actionButtons';
-import { renderEmptyState } from '@shared/wa/emptyState';
-import { renderSettingsBanner } from '@shared/wa/settingsBanner';
-import { renderSettingsSectionHeading } from '@shared/wa/settingsSection';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+} from '@ui/wa/actionButtons';
+import { renderEmptyState } from '@ui/wa/emptyState';
+import { renderSettingsBanner } from '@ui/wa/settingsBanner';
+import { renderSettingsSectionHeading } from '@ui/wa/settingsSection';
+import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { groupBy } from '@utils/core';
 import { pluralize } from '@utils/text/stringUtils';
 

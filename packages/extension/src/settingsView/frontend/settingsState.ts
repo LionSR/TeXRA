@@ -32,16 +32,12 @@ import {
   byCategory,
   CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
   CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
-  DEFAULT_LATEX_SETTINGS_STATUS,
   MODEL_COMPACTION_THRESHOLD_SETTING,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
-  settingsViewSettingByKey,
   TELEMETRY_ENABLED_KEY,
   TOOL_EDIT_APPROVAL_CONFIG_KEY,
   type AgentCategory,
   type AgentModePreset,
-  type AgentScanIssue,
-  type AgentSelectionItem,
   type ByCategory,
   type ClaudeAgentEffort,
   type ClaudeAgentModel,
@@ -49,19 +45,25 @@ import {
   type CodexApprovalPolicy,
   type CodexReasoningEffort,
   type CodexSandboxMode,
-  type CopilotRouteInfo,
   type GoalListItem,
+  type SkillDisplayIssue,
+  type SkillDisplayItem,
+  type SubscriptionUsageSnapshots,
+} from '@shared/schemas';
+import { settingsViewSettingByKey } from '@shared/state/stateSettings';
+import {
+  DEFAULT_LATEX_SETTINGS_STATUS,
+  type AgentScanIssue,
+  type AgentSelectionItem,
+  type CopilotRouteInfo,
   type MemoryViewItem,
   type ModelSelectionItem,
   type ProviderKeyStatus,
   type PRSubscriptionEntry,
   type SettingsTabPanelName,
-  type SkillDisplayIssue,
-  type SkillDisplayItem,
   type SubscriptionAuthStatuses,
-  type SubscriptionUsageSnapshots,
   type ToolDashboardItem,
-} from '@shared/schemas';
+} from '@shared/settingsView/settingsViewMessages';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import type { LatexConfigValues } from '@shared/constants/latexConfig';
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';

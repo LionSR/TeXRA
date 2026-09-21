@@ -2,7 +2,7 @@ import '@progressView/frontend/components/CompactionActivity';
 
 import { html } from 'lit';
 
-import type { CompactionActivityRow } from '@shared/transcript';
+import type { CompactionActivityRow } from '@ui/transcript';
 
 import type { FormatResult } from '../baseLogFormatter';
 

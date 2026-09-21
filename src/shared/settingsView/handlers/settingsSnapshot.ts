@@ -11,10 +11,12 @@
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   settingsViewSnapshotEntries,
-  type DerivedSettingsSnapshot,
   type SettingHost,
-  type SettingsSnapshotValues,
-} from '@shared/schemas';
+} from '@shared/state/stateSettings';
+import type {
+  DerivedSettingsSnapshot,
+  SettingsSnapshotValues,
+} from '@shared/settingsView/settingsViewMessages';
 import {
   readSetting,
   type SettingsStores,

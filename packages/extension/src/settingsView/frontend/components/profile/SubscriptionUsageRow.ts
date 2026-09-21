@@ -4,7 +4,6 @@ import { customElement, property } from 'lit/decorators.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/progress-bar/progress-bar.js';
 
-import { commonViewStyles, designTokens } from '@shared/styles';
 import {
   formatSubscriptionUsagePercent,
   formatSubscriptionUsageReset,
@@ -12,6 +11,7 @@ import {
   subscriptionUsageWindowLabel,
 } from '@shared/subscriptionUsagePresentation';
 import type { SubscriptionUsageSnapshot } from '@shared/schemas';
+import { commonViewStyles, designTokens } from '@ui/styles';
 
 type UnavailableReason = Extract<
   SubscriptionUsageSnapshot,

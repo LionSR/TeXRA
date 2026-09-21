@@ -26,12 +26,12 @@ import {
   type SessionView,
   type RunView,
 } from '@shared/session/sessionView';
-import { formatWorkflowPhaseHeading } from '@shared/copy/workflowCall';
 import { isInFlightPhase } from '@shared/runs/runStatus';
 import {
   flowPosition,
   formatFlowPositionLabel,
 } from '@shared/runs/runStatusDisplay';
+import { formatWorkflowPhaseHeading } from '@ui/copy/workflowCall';
 
 /** The bound bridge, itself a signal so a computed over the view (the
  *  approval Surface's foreground) re-tracks when a chat session rebinds. */

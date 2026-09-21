@@ -10,21 +10,21 @@ import '@awesome.me/webawesome/dist/components/radio-group/radio-group.js';
 import '@awesome.me/webawesome/dist/components/textarea/textarea.js';
 
 // Local imports - shared styles
-import {
-  commonViewStyles,
-  designTokens,
-  requestPanelSharedStyles,
-} from '@shared/styles';
-
-// Local imports - shared schemas
 import type {
   UserQuestionAnswers,
   UserQuestionPermission,
   UserQuestionPrompt,
 } from '@shared/schemas';
+import {
+  commonViewStyles,
+  designTokens,
+  requestPanelSharedStyles,
+} from '@ui/styles';
+
+// Local imports - shared schemas
 
 // Local imports - shared utilities
-import { renderLabeledActionButton } from '@shared/wa/actionButtons';
+import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 
 // Local imports - base class
 import {

@@ -7,9 +7,10 @@
  * the two families cannot drift apart on what a halted run records.
  */
 
-import { Effect } from 'effect';
+import { Cause, Effect, Option, Result } from 'effect';
 import type { AgentTrace } from '@agent/trace';
 import type { RunId, RunOutcome } from '@shared/schemas';
+import { DatabaseWriteFailed } from '@shared/session/database';
 import { RunLedger, RunLedgerRefused } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
 import { ensureError } from '@utils/errors/errorMessage';
@@ -23,20 +24,53 @@ interface HaltDeps {
   readonly runId: RunId;
 }
 
+type HaltWriteFailure = RunLedgerRefused | DatabaseWriteFailed;
+type HaltWriteResolution =
+  | { readonly kind: 'warn'; readonly error: RunLedgerRefused }
+  | { readonly kind: 'fail'; readonly error: DatabaseWriteFailed }
+  | { readonly kind: 'die'; readonly defect: unknown };
+
+function classifyHaltWriteCause(
+  cause: Cause.Cause<unknown>,
+): HaltWriteResolution {
+  const failure = Cause.findErrorOption(cause);
+  if (Option.isSome(failure)) {
+    if (failure.value instanceof RunLedgerRefused) {
+      return { kind: 'warn', error: failure.value };
+    }
+    if (failure.value instanceof DatabaseWriteFailed) {
+      return { kind: 'fail', error: failure.value };
+    }
+  }
+
+  const defect = Cause.findDefect(cause);
+  if (Result.isSuccess(defect)) {
+    if (defect.success instanceof RunLedgerRefused) {
+      return { kind: 'warn', error: defect.success };
+    }
+    if (defect.success instanceof DatabaseWriteFailed) {
+      return { kind: 'fail', error: defect.success };
+    }
+    return { kind: 'die', defect: defect.success };
+  }
+
+  return { kind: 'die', defect: Cause.squash(cause) };
+}
+
 /**
  * Appends the run's `halted` step for `outcome`. A run whose state never
  * opened (`null`, or a null `phase`) has no step to halt, so it writes
- * nothing. Recording the halt is best-effort by design: the run is already
+ * nothing. A refused ledger write is best-effort by design: the run is already
  * ending, and raising here would replace its real outcome with a bookkeeping
- * failure, so a refused write is warned about instead.
+ * failure, so `RunLedgerRefused` is warned about instead. Other database write
+ * failures still fail normally.
  */
 export const recordHalt =
+  (deps: HaltDeps, toCoordinates: (state: RunState) => StepCoordinates) =>
   (
-    deps: HaltDeps,
     state: RunState | null,
-    toCoordinates: (state: RunState) => StepCoordinates,
-  ) =>
-  (outcome: RunOutcome): Effect.Effect<void> =>
+    outcome: RunOutcome,
+  ): Effect.Effect<void, DatabaseWriteFailed> =>
     state === null || state.phase === null
       ? Effect.void
       : deps.ledger
@@ -44,13 +78,21 @@ export const recordHalt =
             haltedStepRow(deps.runId, toCoordinates(state), outcome),
           ])
           .pipe(
-            Effect.catch((error) =>
-              Effect.sync(() =>
-                deps.logger.warn('Failed to record the run halt', {
-                  data: error,
-                }),
-              ),
-            ),
+            Effect.asVoid,
+            Effect.catchCause((cause) => {
+              const resolution = classifyHaltWriteCause(cause);
+              if (resolution.kind === 'warn') {
+                return Effect.sync(() =>
+                  deps.logger.warn('Failed to record the run halt', {
+                    data: resolution.error,
+                  }),
+                );
+              }
+              if (resolution.kind === 'fail') {
+                return Effect.fail(resolution.error);
+              }
+              return Effect.die(resolution.defect);
+            }),
           );
 
 /** The caller's error for a run that ended in a failure cause. */

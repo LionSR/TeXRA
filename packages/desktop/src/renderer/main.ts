@@ -8,7 +8,7 @@ import '@fontsource-variable/jetbrains-mono';
 import './styles.css';
 import './themeTokens.css';
 
-import '@shared/wa';
+import '@ui/wa';
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/dialog/dialog.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
@@ -33,12 +33,12 @@ import {
 
 import { formatDesktopAccelerator } from '@shared/commands/accelerators';
 
-import { applyHostBodyTheme } from '@shared/wa/hostTheme';
+import { applyHostBodyTheme } from '@ui/wa/hostTheme';
 import {
   renderIconActionButton,
   renderLabeledActionButton,
-} from '@shared/wa/actionButtons';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+} from '@ui/wa/actionButtons';
+import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { extractErrorMessage } from '@utils/errors/errorMessage';
 
 import { type DesktopLayoutPanel } from '../shared/desktopShellMessages';

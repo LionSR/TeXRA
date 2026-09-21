@@ -10,7 +10,7 @@ import {
 } from '@agent/runtime';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { RunId } from '@shared/schemas';
-import { formatInstructionActionHint } from '@shared/copy/instructionActionHint';
+import { formatInstructionActionHint } from '@ui/copy/instructionActionHint';
 
 // Local imports - CLI runtime
 import {

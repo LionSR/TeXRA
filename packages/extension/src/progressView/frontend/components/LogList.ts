@@ -14,12 +14,12 @@ import { repeat } from 'lit/directives/repeat.js';
 
 import './TaskGroupList';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
-import '@shared/wa/spinner';
+import '@ui/wa/spinner';
 import type { RunId } from '@shared/schemas';
-import { designTokens } from '@shared/styles';
 import type { RunView } from '@shared/session/sessionView';
 import type { Surface } from '@shared/session/surface';
 import { SessionUiEvents } from '@shared/session/uiEvents';
+import { designTokens } from '@ui/styles';
 import { getComposedPathElement } from '../utils';
 import { logStyles } from '../styles/logStyles';
 import type { TaskGroupList } from './TaskGroupList';

@@ -22,12 +22,12 @@ import {
 } from '@shared/subagentFollowup';
 import type { WorkflowScriptDeliverySummary } from '@shared/schemas';
 import { DELIVERY_TAGS } from '@shared/deliveryTags';
-import { designTokens } from '@shared/styles';
 import { CopyButtonController } from '@shared/litControllers/CopyButtonController';
-import { buttonStyles, focusRingStyles } from '@shared/styles/controlStyles';
-import { markdownStyles } from '@shared/styles/markdownStyles';
-import { renderIconActionButton } from '@shared/wa/actionButtons';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { designTokens } from '@ui/styles';
+import { buttonStyles, focusRingStyles } from '@ui/styles/controlStyles';
+import { markdownStyles } from '@ui/styles/markdownStyles';
+import { renderIconActionButton } from '@ui/wa/actionButtons';
+import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 // Local imports - formatter helpers
 import { processMarkdownContent } from '../formatters/markdownRenderer';

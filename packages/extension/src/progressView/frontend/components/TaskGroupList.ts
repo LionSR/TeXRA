@@ -17,19 +17,7 @@ import {
   type RunId,
   type TaskGroup,
 } from '@shared/schemas';
-import type { TranscriptRow } from '@shared/transcript';
-import { designTokens } from '@shared/styles';
 import type { TranscriptView } from '@shared/session/sessionView';
-import {
-  formatWorkflowPhaseHeading,
-  workflowPhaseHeadingOfGroup,
-} from '@shared/copy/workflowCall';
-
-// Side-effect imports - register Web Awesome components
-import '@awesome.me/webawesome/dist/components/button/button.js';
-import '@awesome.me/webawesome/dist/components/details/details.js';
-import '@awesome.me/webawesome/dist/components/icon/icon.js';
-
 import { isInFlightPhase } from '@shared/runs/runStatus';
 import { taskGroupDisplayStatus } from '@shared/runs/taskGroupProjection';
 import {
@@ -37,10 +25,22 @@ import {
   formatRunStatusLabel,
 } from '@shared/runs/runStatusDisplay';
 import { SessionUiEvents } from '@shared/session/uiEvents';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
-import { renderEmptyState } from '@shared/wa/emptyState';
-import { terminalStatusIcon } from '@shared/wa/statusIcons';
 import { compareBySeqNo } from '@shared/runs/runOrdering';
+import type { TranscriptRow } from '@ui/transcript';
+import { designTokens } from '@ui/styles';
+import {
+  formatWorkflowPhaseHeading,
+  workflowPhaseHeadingOfGroup,
+} from '@ui/copy/workflowCall';
+
+// Side-effect imports - register Web Awesome components
+import '@awesome.me/webawesome/dist/components/button/button.js';
+import '@awesome.me/webawesome/dist/components/details/details.js';
+import '@awesome.me/webawesome/dist/components/icon/icon.js';
+
+import { waIcon } from '@ui/wa/webAwesomeIcons';
+import { renderEmptyState } from '@ui/wa/emptyState';
+import { terminalStatusIcon } from '@ui/wa/statusIcons';
 import { groupBy } from '@utils/core';
 import { formatDuration, pluralize } from '@utils/text/stringUtils';
 

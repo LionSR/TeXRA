@@ -11,7 +11,7 @@ import {
   compactionActivityRow,
   projectTranscriptRow,
   type TranscriptRow,
-} from '@shared/transcript';
+} from '@ui/transcript';
 
 import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
 

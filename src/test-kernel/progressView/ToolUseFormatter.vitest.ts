@@ -12,7 +12,7 @@ import {
   type ErrorRow,
   type StreamingTextRow,
   type ToolRow,
-} from '@shared/transcript';
+} from '@ui/transcript';
 
 // Local imports - test utilities
 import {

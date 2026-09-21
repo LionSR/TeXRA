@@ -2,10 +2,10 @@
 
 // Local imports - shared copy
 import type { PermissionPayload } from '@shared/schemas';
-import { DELEGATION_APPROVAL_COPY } from '@shared/copy/delegationApproval';
+import { APPROVE_SESSION_ACTION } from '@shared/session/approvalDecision';
+import { DELEGATION_APPROVAL_COPY } from '@ui/copy/delegationApproval';
 
 // Local imports - approval decision vocabulary
-import { APPROVE_SESSION_ACTION } from '@shared/session/approvalDecision';
 
 // Local imports - base class
 import { BaseApprovalPanel } from './BaseApprovalPanel';

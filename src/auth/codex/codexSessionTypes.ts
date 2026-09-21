@@ -7,7 +7,7 @@
  */
 import { z } from 'zod';
 
-import { CHATGPT_AUTH } from '@shared/copy/accountAuth';
+import { CHATGPT_AUTH } from '@ui/copy/accountAuth';
 
 import {
   SubscriptionOAuthError,

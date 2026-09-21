@@ -29,7 +29,7 @@ import {
   DEVICE_CODE_DESCRIPTION,
   GROK_AUTH,
   RESEARCHER_ACCESS_AUTH,
-} from '@shared/copy/accountAuth';
+} from '@ui/copy/accountAuth';
 import { ListForm } from './_shared/ListForm';
 
 export type AccountAccessFormValue =

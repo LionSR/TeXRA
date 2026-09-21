@@ -7,7 +7,7 @@
 import {
   createMarkdownRenderer,
   type MarkdownItInstance,
-} from '@shared/markdown/createMarkdownRenderer';
+} from '@ui/markdown/createMarkdownRenderer';
 
 import { highlightCode } from './highlightCode';
 

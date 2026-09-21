@@ -5,20 +5,17 @@ import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles
-import { commonViewStyles, designTokens } from '@shared/styles';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import {
-  type PRSubscriptionEntry,
   DEFAULT_GIT_AUTHOR_EMAIL,
   DEFAULT_GIT_AUTHOR_NAME,
-} from '@shared/schemas';
-import {
-  renderSetStatusIcon,
-  statusCheckIconStyles,
-} from '@shared/wa/statusIcons';
-import { renderLabeledActionButton } from '@shared/wa/actionButtons';
-import { renderSettingsSectionHeading } from '@shared/wa/settingsSection';
+} from '@shared/state/stateSettings';
+import { type PRSubscriptionEntry } from '@shared/settingsView/settingsViewMessages';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { renderSetStatusIcon, statusCheckIconStyles } from '@ui/wa/statusIcons';
+import { renderLabeledActionButton } from '@ui/wa/actionButtons';
+import { renderSettingsSectionHeading } from '@ui/wa/settingsSection';
 
 // Web Awesome icon bundle (side-effect import)
 import '@awesome.me/webawesome/dist/components/button/button.js';
@@ -26,7 +23,7 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/input/input.js';
 
 // Local imports - shared constants
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { commonViewStyles, designTokens } from '@ui/styles';
 
 // Local imports - catalog-driven settings rows
 import {

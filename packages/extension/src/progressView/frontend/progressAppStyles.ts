@@ -2,8 +2,8 @@
 import { css } from 'lit';
 
 // Shared styles
-import { visuallyHiddenStyles } from '@shared/styles';
-import { buttonStyles } from '@shared/styles/controlStyles';
+import { visuallyHiddenStyles } from '@ui/styles';
+import { buttonStyles } from '@ui/styles/controlStyles';
 
 /**
  * Layout for the `<progress-app>` shell: the 38px header, the body, the

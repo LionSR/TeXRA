@@ -10,7 +10,7 @@ import {
 } from '@cli/runtime/memory';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
-import type { MemoryViewItem } from '@shared/schemas';
+import type { MemoryViewItem } from '@shared/settingsView/settingsViewMessages';
 import { loadMemoryItems } from '@tools/memory/memoryFileSystem';
 
 import { AsyncListForm } from './_shared/ListForm';

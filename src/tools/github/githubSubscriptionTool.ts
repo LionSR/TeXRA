@@ -26,7 +26,7 @@ import { Secrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { ToolError, type RunId, type ToolResult } from '@shared/schemas';
 import { parseWorkingDirectory } from '@tools/pathResolution';
-import { commandUnion, nullishWithDefault } from '@tools/core/inputSchema';
+import { nullishWithDefault } from '@tools/core/inputSchema';
 import { executed } from '@tools/core/result';
 import { requireToolRun } from '@tools/core/toolRun';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -72,8 +72,11 @@ const DEFAULT_ANNOTATION_LEVEL_DESCRIPTION =
 const SUBSCRIPTION_PATH_DESCRIPTION =
   'Subscription target, mirroring GitHub\'s REST URL shape: "owner/repo" (repo-wide, coarse), "owner/repo/pulls/N" (per-PR, nuanced), or "owner/repo/issues/N" (per-issue).';
 
-const GitHubSubscriptionInputSchema = commandUnion([
-  {
+// Branches stay `looseObject`: provider schema flattening advertises one
+// object across commands, and OpenAI-compatible providers null-fill the other
+// branches' fields.
+const GitHubSubscriptionInputSchema = z.discriminatedUnion('command', [
+  z.looseObject({
     command: z.literal('subscribe').describe('Start watching the path.'),
     path: z.string().describe(SUBSCRIPTION_PATH_DESCRIPTION),
     /**
@@ -87,17 +90,17 @@ const GitHubSubscriptionInputSchema = commandUnion([
     ).describe(
       `Lowest inline check-annotation level for PR subscriptions. Defaults to ${DEFAULT_ANNOTATION_LEVEL_DESCRIPTION}; "warning" includes warnings, "notice" includes every annotation.`,
     ),
-  },
-  {
+  }),
+  z.looseObject({
     command: z.literal('unsubscribe').describe('Stop watching the path.'),
     path: z.string().describe(SUBSCRIPTION_PATH_DESCRIPTION),
-  },
-  {
+  }),
+  z.looseObject({
     command: z
       .literal('list')
       .describe('List active subscriptions on this run.'),
-  },
-  {
+  }),
+  z.looseObject({
     command: z
       .literal('find_current')
       .describe(
@@ -113,7 +116,7 @@ const GitHubSubscriptionInputSchema = commandUnion([
       .describe(
         "Working directory to resolve the current branch's PR. Defaults to the agent's working directory.",
       ),
-  },
+  }),
 ]);
 
 type GitHubSubscriptionInput = z.infer<typeof GitHubSubscriptionInputSchema>;

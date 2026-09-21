@@ -12,7 +12,10 @@ import { Effect } from 'effect';
 // Local imports
 import type { ToolHost } from '@agent/core/tools/ToolTypes';
 import { AppState } from '@platform/interfaces';
-import type { ToolCommandKind, ToolDashboardItem } from '@shared/schemas';
+import type {
+  ToolCommandKind,
+  ToolDashboardItem,
+} from '@shared/settingsView/settingsViewMessages';
 import {
   findExternalToolDef,
   type ExternalToolDef,

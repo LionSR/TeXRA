@@ -9,16 +9,17 @@ import { customElement, property } from 'lit/decorators.js';
 // Local imports - shared webview
 import { postMessage } from '@shared/hostBridge';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { TELEMETRY_ENABLED_KEY } from '@shared/schemas';
+import { type SessionProblem } from '@shared/settingsView/settingsViewMessages';
+import { createEvent } from '@shared/utils/events';
 import {
   commonViewStyles,
   designTokens,
   settingsBannerStyles,
-} from '@shared/styles';
-import { TELEMETRY_ENABLED_KEY, type SessionProblem } from '@shared/schemas';
-import { renderLabeledActionButton } from '@shared/wa/actionButtons';
-import { renderSettingsBanner } from '@shared/wa/settingsBanner';
-import { renderSettingsSectionHeading } from '@shared/wa/settingsSection';
-import { createEvent } from '@shared/utils/events';
+} from '@ui/styles';
+import { renderLabeledActionButton } from '@ui/wa/actionButtons';
+import { renderSettingsBanner } from '@ui/wa/settingsBanner';
+import { renderSettingsSectionHeading } from '@ui/wa/settingsSection';
 
 // Local imports - catalog-driven settings rows
 import { renderStateSettingToggleRow } from '../components/shared/stateSettingRows';

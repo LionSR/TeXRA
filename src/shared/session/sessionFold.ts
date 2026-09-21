@@ -87,19 +87,7 @@ import {
   type TranscriptSubscription,
   type WorkflowDeclaredPlan,
 } from '@shared/schemas';
-import {
-  compactionActivityRow,
-  isSettledRow,
-  projectTranscriptRow,
-  type TranscriptRow,
-  type TranscriptRowKind,
-} from '@shared/transcript';
 import { hasIncompleteEmbeddedSubagentFollowup } from '@shared/subagentFollowup';
-import {
-  appendTranscriptText,
-  transcriptText,
-  type TranscriptText,
-} from '@shared/transcript/transcriptText';
 import { getModelLabel } from '@shared/model/modelLabel';
 import {
   applyCompactionActivityEntry,
@@ -131,6 +119,18 @@ import {
   workflowRunModel,
   type ChildRunProgress,
 } from '@shared/runs/workflowRunModel';
+import {
+  appendTranscriptText,
+  transcriptText,
+  type TranscriptText,
+} from '@ui/transcript/transcriptText';
+import {
+  compactionActivityRow,
+  isSettledRow,
+  projectTranscriptRow,
+  type TranscriptRow,
+  type TranscriptRowKind,
+} from '@ui/transcript';
 import { isObject } from '@utils/core';
 import {
   applyRunRow,

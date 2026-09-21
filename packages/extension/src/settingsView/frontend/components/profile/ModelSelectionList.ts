@@ -4,22 +4,25 @@ import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 
 // Local imports - shared styles
-import { commonViewStyles, designTokens } from '@shared/styles';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
+import { MODEL_AVAILABILITY_STATUS } from '@shared/schemas';
 import {
-  MODEL_AVAILABILITY_STATUS,
   REASONING_LEVEL_LABELS,
   REASONING_LEVEL_OPTIONS,
   type ModelSelectionItem,
   type ProviderKeyStatus,
-} from '@shared/schemas';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+} from '@shared/settingsView/settingsViewMessages';
 import {
-  renderKeyStatusIcon,
-  statusCheckIconStyles,
-} from '@shared/wa/statusIcons';
-import { renderSettingsSectionHeading } from '@shared/wa/settingsSection';
+  PROVIDER_DISPLAY_NAMES,
+  MODEL_SOURCE_ORDER,
+  EXPENSIVE_MODEL_HINT,
+  isExpensiveModel,
+} from '@shared/constants/providers';
+import { GlobalStateKey } from '@shared/state/stateKeys';
+import { waIcon } from '@ui/wa/webAwesomeIcons';
+import { renderKeyStatusIcon, statusCheckIconStyles } from '@ui/wa/statusIcons';
+import { renderSettingsSectionHeading } from '@ui/wa/settingsSection';
 
 // Side-effect imports - register WA icon component
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
@@ -29,16 +32,10 @@ import '@awesome.me/webawesome/dist/components/switch/switch.js';
 import '@awesome.me/webawesome/dist/components/button/button.js';
 
 // Local imports - shared constants
-import {
-  PROVIDER_DISPLAY_NAMES,
-  MODEL_SOURCE_ORDER,
-  EXPENSIVE_MODEL_HINT,
-  isExpensiveModel,
-} from '@shared/constants/providers';
 
 // Local imports - profile view styles and events
-import { readSelectValue } from '@shared/wa/selectTemplates';
-import { GlobalStateKey } from '@shared/state/stateKeys';
+import { readSelectValue } from '@ui/wa/selectTemplates';
+import { commonViewStyles, designTokens } from '@ui/styles';
 import { groupBy } from '@utils/core';
 import { pluralize } from '@utils/text/stringUtils';
 import { postStateSetting } from '../shared/stateSettingRows';

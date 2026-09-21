@@ -14,26 +14,23 @@ import { customElement, property, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 
 // Local imports - shared styles
-import { commonViewStyles, designTokens } from '@shared/styles';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
-import type {
-  AgentCategory,
-  AgentSelectionItem,
-  AgentSource,
-} from '@shared/schemas';
+import type { AgentCategory, AgentSource } from '@shared/schemas';
+import type { AgentSelectionItem } from '@shared/settingsView/settingsViewMessages';
 import {
   AGENT_SOURCE,
   agentKey as agentKeyFromSourceName,
   isPackagedAgentSource,
 } from '@shared/schemas';
+import { commonViewStyles, designTokens } from '@ui/styles';
 import {
   renderLabeledActionButton,
   type LabeledActionButtonOptions,
-} from '@shared/wa/actionButtons';
-import type { TeXRAIconName } from '@shared/wa/iconNames';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
-import { AGENT_DECORATORS } from '@shared/wa/icons';
+} from '@ui/wa/actionButtons';
+import type { TeXRAIconName } from '@ui/wa/iconNames';
+import { waIcon } from '@ui/wa/webAwesomeIcons';
+import { AGENT_DECORATORS } from '@ui/wa/icons';
 import { getBasename, groupBy } from '@utils/core';
 
 // Local imports - shared schemas and events

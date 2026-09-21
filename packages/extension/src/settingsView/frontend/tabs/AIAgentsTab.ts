@@ -10,7 +10,6 @@ import { customElement, property } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - shared styles
-import { commonViewStyles, designTokens } from '@shared/styles';
 import {
   type ClaudeAgentEffort,
   type ClaudeAgentModel,
@@ -18,21 +17,22 @@ import {
   type CodexApprovalPolicy,
   type CodexReasoningEffort,
   type CodexSandboxMode,
-  type ToolDashboardItem,
   CLAUDE_AGENT_DEFAULT_EFFORT,
   CLAUDE_AGENT_DEFAULT_MODEL,
   CLAUDE_AGENT_DEFAULT_PERMISSION_MODE,
   CODEX_APPROVAL_POLICY_DEFAULT,
   CODEX_REASONING_EFFORT_DEFAULT,
   CODEX_SANDBOX_MODE_DEFAULT,
-  settingsViewSettingByKey,
 } from '@shared/schemas';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
-import { renderEmptyState } from '@shared/wa/emptyState';
-import { renderLoadingState } from '@shared/wa/loadingState';
-
+import { settingsViewSettingByKey } from '@shared/state/stateSettings';
+import { type ToolDashboardItem } from '@shared/settingsView/settingsViewMessages';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import { readSelectValue } from '@shared/wa/selectTemplates';
+import { commonViewStyles, designTokens } from '@ui/styles';
+import { waIcon } from '@ui/wa/webAwesomeIcons';
+import { renderEmptyState } from '@ui/wa/emptyState';
+import { renderLoadingState } from '@ui/wa/loadingState';
+
+import { readSelectValue } from '@ui/wa/selectTemplates';
 
 // Local imports - catalog-driven settings rows
 import {

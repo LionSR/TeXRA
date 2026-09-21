@@ -10,7 +10,7 @@ vi.mock('@shared/hostBridge', () => ({
 
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { AGENT_SOURCE } from '@shared/schemas';
-import type { AgentSelectionItem } from '@shared/schemas';
+import type { AgentSelectionItem } from '@shared/settingsView/settingsViewMessages';
 import {
   mountComponent,
   useLitComponentTestDom,

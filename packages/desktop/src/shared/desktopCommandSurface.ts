@@ -1,8 +1,5 @@
-import type {
-  AgentCategory,
-  GettingStartedAction,
-  SettingsTabPanelName,
-} from '@shared/schemas';
+import type { AgentCategory, GettingStartedAction } from '@shared/schemas';
+import type { SettingsTabPanelName } from '@shared/settingsView/settingsViewMessages';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   toElectronAccelerator,
@@ -18,7 +15,7 @@ import {
   dispatchCommandFromRegistry,
   type CommandHandler,
 } from '@shared/commands/registry';
-import type { TeXRAIconName } from '@shared/wa/iconNames';
+import type { TeXRAIconName } from '@ui/wa/iconNames';
 import { DESKTOP_LOG_COMMANDS } from './desktopLogMessages.js';
 import { DESKTOP_ONBOARDING_COMMANDS } from './desktopOnboardingMessages.js';
 import { DESKTOP_PROJECT_COMMANDS } from './desktopProjectMessages.js';

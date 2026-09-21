@@ -13,12 +13,12 @@ import { Effect } from 'effect';
 import { z } from 'zod';
 
 import { ToolCall } from '@agent/runtime/ToolCall';
+import { ToolError } from '@shared/schemas';
 import {
   settingByKey,
   settingSchemaWithoutPrefault,
-  ToolError,
   type StateSettingEntry,
-} from '@shared/schemas';
+} from '@shared/state/stateSettings';
 
 import { executed } from '@tools/core/result';
 import { defineTool } from '../core/define';

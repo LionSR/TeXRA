@@ -4,8 +4,8 @@ import { Cause, Effect } from 'effect';
 import { formatChatAsMarkdown } from '@agent/export';
 import { listRuns } from '@agent/storage';
 import { type RunId } from '@shared/schemas';
-import { formatCliHistoryDeletionSummary } from '@shared/copy/runHistory';
 import { assembleTrace, injectStandaloneTrace } from '@transcript';
+import { formatCliHistoryDeletionSummary } from '@ui/copy/runHistory';
 import { assertNever } from '@utils/core';
 import { formatResultCount } from '@utils/text/stringUtils';
 

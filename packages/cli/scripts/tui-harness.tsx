@@ -60,7 +60,6 @@ import {
   type UserQuestionPermission,
 } from '@shared/schemas';
 import { subscribeToSignalChanges } from '@shared/signals';
-import { FOCUSED_BACKGROUND_TASK } from '@shared/copy/nestedRuns';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
   isInFlightPhase,
@@ -80,6 +79,7 @@ import {
 import { clearGoal, setGoalSessionAutoApproval, startGoal } from '@tools/goal';
 import { prepareToolEditApprovalPrompt } from '@tools/approval/toolEditApproval';
 import { createRunTrace } from '@transcript';
+import { FOCUSED_BACKGROUND_TASK } from '@ui/copy/nestedRuns';
 import { generateRunId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 

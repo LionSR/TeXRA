@@ -7,7 +7,7 @@
 // platform global state and pass it in.
 
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
-import { ONBOARDING_SETUP_HANDOFF } from '@shared/copy/onboarding';
+import { ONBOARDING_SETUP_HANDOFF } from '@ui/copy/onboarding';
 
 interface FirstRunSetupContinuationInputs {
   /** The first-run picker just configured a credential in this process. */

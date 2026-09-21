@@ -3,7 +3,7 @@ import { Effect } from 'effect';
 import { resolveMemoryStoragePath } from '@platform/defaults/workspaceStorage';
 import { withSessionFs, type StorageFs } from '@platform/rootedFs';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
-import type { MemoryViewItem } from '@shared/schemas';
+import type { MemoryViewItem } from '@shared/settingsView/settingsViewMessages';
 import { MEMORY_DISPLAY_ROOT } from '@tools/memory/constants';
 import { loadMemoryPreview } from '@tools/memory/memoryFileSystem';
 import { displayToStoragePath, toDisplayPath } from '@tools/memory/memoryUtils';

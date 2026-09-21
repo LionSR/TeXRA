@@ -6,7 +6,6 @@ import { customElement, property } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - shared styles, ipc, and schemas
-import { commonViewStyles, designTokens } from '@shared/styles';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import {
@@ -16,20 +15,23 @@ import {
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
 import {
-  type ToolCategory,
-  type ToolDashboardItem,
   BASH_APPROVAL_CONFIG_KEY,
   TOOL_EDIT_APPROVAL_CONFIG_KEY,
 } from '@shared/schemas';
-import { renderLabeledActionButton } from '@shared/wa/actionButtons';
-import { renderLoadingState } from '@shared/wa/loadingState';
-import { renderSettingsSectionHeading } from '@shared/wa/settingsSection';
-import type { TeXRAIconName } from '@shared/wa/iconNames';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import {
+  type ToolCategory,
+  type ToolDashboardItem,
+} from '@shared/settingsView/settingsViewMessages';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { commonViewStyles, designTokens } from '@ui/styles';
+import { renderLabeledActionButton } from '@ui/wa/actionButtons';
+import { renderLoadingState } from '@ui/wa/loadingState';
+import { renderSettingsSectionHeading } from '@ui/wa/settingsSection';
+import type { TeXRAIconName } from '@ui/wa/iconNames';
+import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 // Local imports - shared state keys and utilities
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import { readSelectValue } from '@shared/wa/selectTemplates';
+import { readSelectValue } from '@ui/wa/selectTemplates';
 import { groupBy } from '@utils/core';
 
 // Side-effect imports - register WA button, icon, select, and option components

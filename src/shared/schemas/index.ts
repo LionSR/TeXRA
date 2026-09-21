@@ -26,7 +26,6 @@ export * from './skillDisplay';
 export * from './codex';
 export * from './coreSettings';
 export * from './opResults';
-export * from './stateSettings';
 export * from './workflowScriptFiles';
 export * from './historyRunStatus';
 
@@ -78,10 +77,6 @@ export * from './progressView/data';
 
 // Layer 6: Other view message schemas
 export * from './commonViewMessages';
-// Memory/Profile view-message schemas have a single public home in
-// settingsViewMessages. History status is shared with the CLI and is exported
-// above from its host-neutral leaf module.
-export * from './settingsViewMessages';
 export * from './subscriptionUsage';
 
 // Layer 7: Composite schemas (depend on multiple layers)

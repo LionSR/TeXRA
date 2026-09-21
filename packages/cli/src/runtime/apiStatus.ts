@@ -8,8 +8,8 @@ import { CODING_PLAN_SUBSCRIPTIONS } from '@shared/codingPlanSubscriptions';
 import { formatSubscriptionUsageSummary } from '@shared/subscriptionUsagePresentation';
 import type { SubscriptionUsageSnapshot } from '@shared/schemas';
 import { providerDisplayName } from '@shared/constants/providers';
-import { OWN_API_KEYS } from '@shared/copy/modelAccess';
-import { RESEARCHER_ACCESS } from '@shared/copy/onboarding';
+import { OWN_API_KEYS } from '@ui/copy/modelAccess';
+import { RESEARCHER_ACCESS } from '@ui/copy/onboarding';
 
 import {
   formatCliChatGptPreference,

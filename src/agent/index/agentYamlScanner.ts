@@ -15,7 +15,8 @@ import {
 import { parseYamlWith } from '@common/parsing/safeParseYaml';
 import { withLogChannel } from '@logger/effectLog';
 import { createLog } from '@logger/logUtils';
-import type { AgentScanIssue, AgentSource } from '@shared/schemas';
+import type { AgentSource } from '@shared/schemas';
+import type { AgentScanIssue } from '@shared/settingsView/settingsViewMessages';
 import { AgentCategory } from '@shared/schemas';
 import { groupBy } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';

@@ -8,7 +8,7 @@ import {
   confirmCardKeyHintsForWidth,
   confirmCardPulsedTitle,
 } from '@cli/chat/tui/modals/ConfirmCardState';
-import { DELEGATION_APPROVAL_COPY } from '@shared/copy/delegationApproval';
+import { DELEGATION_APPROVAL_COPY } from '@ui/copy/delegationApproval';
 
 describe('CLI confirm-card key handling', () => {
   const feedbackRejection = {

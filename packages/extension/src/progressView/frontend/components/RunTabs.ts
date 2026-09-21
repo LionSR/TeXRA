@@ -14,7 +14,6 @@ import { when } from 'lit/directives/when.js';
 
 // Local imports
 import type { RunId } from '@shared/schemas';
-import { designTokens, commonViewStyles } from '@shared/styles';
 import type { SessionView, RunView } from '@shared/session/sessionView';
 import { resolveSelected, type Surface } from '@shared/session/surface';
 import { SessionUiEvents } from '@shared/session/uiEvents';
@@ -22,8 +21,9 @@ import {
   RUN_GROUP_LABELS,
   RUN_GROUP_ORDER,
 } from '@shared/runs/runStatusDisplay';
-import { focusRingStyles } from '@shared/styles/controlStyles';
-import { AGENT_DECORATORS, getAgentCategoryDecorator } from '@shared/wa/icons';
+import { designTokens, commonViewStyles } from '@ui/styles';
+import { focusRingStyles } from '@ui/styles/controlStyles';
+import { AGENT_DECORATORS, getAgentCategoryDecorator } from '@ui/wa/icons';
 
 // Side-effect imports - register WA components
 import '@awesome.me/webawesome/dist/components/badge/badge.js';
@@ -32,10 +32,10 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/relative-time/relative-time.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 import './WorktreeChip';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
-import { type TeXRAIconName } from '@shared/wa/iconNames';
-import { renderEmptyState } from '@shared/wa/emptyState';
-import { BACKGROUND_TASK } from '@shared/copy/nestedRuns';
+import { waIcon } from '@ui/wa/webAwesomeIcons';
+import { type TeXRAIconName } from '@ui/wa/iconNames';
+import { renderEmptyState } from '@ui/wa/emptyState';
+import { BACKGROUND_TASK } from '@ui/copy/nestedRuns';
 import { getBasename } from '@utils/core';
 import { formatRelativeTime, formatResultCount } from '@utils/text/stringUtils';
 import { layoutStyles } from '../styles/logStyles';

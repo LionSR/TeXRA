@@ -19,7 +19,8 @@ import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import type { StateStore } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import type { AgentCategory, SettingsTabPanelName } from '@shared/schemas';
+import type { AgentCategory } from '@shared/schemas';
+import type { SettingsTabPanelName } from '@shared/settingsView/settingsViewMessages';
 
 // Local file imports
 import { SettingsViewMessageHandler } from './SettingsViewMessageHandler';

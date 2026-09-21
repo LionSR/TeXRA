@@ -7,7 +7,7 @@ import {
   STREAM_LOG_ENTRY_TYPES,
   StreamLogEntrySchema,
 } from '@shared/schemas';
-import { projectTranscriptRow, type WebSearchRow } from '@shared/transcript';
+import { projectTranscriptRow, type WebSearchRow } from '@ui/transcript';
 import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
 
 type WebFormatters =

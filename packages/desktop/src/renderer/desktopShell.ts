@@ -16,9 +16,9 @@ import type { SessionView } from '@shared/session/sessionView';
 import type { Shell } from '@shared/session/shell';
 import { resolveSelected, type Surface } from '@shared/session/surface';
 import { SessionUiEvents } from '@shared/session/uiEvents';
-import { renderIconActionButton } from '@shared/wa/actionButtons';
-import type { TeXRAIconName } from '@shared/wa/iconNames';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { renderIconActionButton } from '@ui/wa/actionButtons';
+import type { TeXRAIconName } from '@ui/wa/iconNames';
+import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 import {
   WORKBENCH_KIND_META,

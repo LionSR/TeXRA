@@ -11,24 +11,24 @@ import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - shared styles
+import { SessionUiEvents } from '@shared/session/uiEvents';
+import type { RuntimeRequest } from '@shared/session/runtimeRequest';
 import {
   commonViewStyles,
   designTokens,
   requestPanelSharedStyles,
-} from '@shared/styles';
+} from '@ui/styles';
 
 // Local imports - shared helpers
 import {
   renderLabeledActionButton,
   renderLabeledActionButtonParts,
-} from '@shared/wa/actionButtons';
-import { renderDotMeta, type MetaPart } from '@shared/wa/metaStrip';
+} from '@ui/wa/actionButtons';
+import { renderDotMeta, type MetaPart } from '@ui/wa/metaStrip';
 import {
   renderSplitButtonMenuParts,
   splitButtonTriggerStyles,
-} from '@shared/wa/splitButton';
-import { SessionUiEvents } from '@shared/session/uiEvents';
-import type { RuntimeRequest } from '@shared/session/runtimeRequest';
+} from '@ui/wa/splitButton';
 import { pluralize } from '@utils/text/stringUtils';
 
 // Local imports - base class

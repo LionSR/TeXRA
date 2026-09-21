@@ -12,9 +12,13 @@
 import { postMessage } from '@shared/hostBridge';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 
-import type { SettingEnumChoice, StateSettingValue } from '@shared/schemas';
-import { settingEnumChoices, settingsViewSettingByKey } from '@shared/schemas';
-import { renderSettingsToggleRow } from '@shared/wa/settingsSection';
+import type { SettingEnumChoice } from '@shared/state/stateSettings';
+import type { StateSettingValue } from '@shared/settingsView/settingsViewMessages';
+import {
+  settingEnumChoices,
+  settingsViewSettingByKey,
+} from '@shared/state/stateSettings';
+import { renderSettingsToggleRow } from '@ui/wa/settingsSection';
 
 // Third-party imports
 import type { TemplateResult } from 'lit';

@@ -12,18 +12,15 @@ import { SignalWatcher } from '@shared/signals';
 import { installToolbarTooltips } from '@shared/litControllers/TooltipController';
 
 // Local imports - shared styles
-import { commonViewStyles, designTokens } from '@shared/styles';
 
 // Local imports - shared schemas and constants
 import {
   dispatchSettingsViewOutbound,
   type SettingsTabPanelName,
-} from '@shared/schemas';
+} from '@shared/settingsView/settingsViewMessages';
 import { isKnownUnsupported } from '@shared/utils/dispatcher';
-import {
-  registerTeXRAWebAwesomeIcons,
-  waIcon,
-} from '@shared/wa/webAwesomeIcons';
+import { commonViewStyles, designTokens } from '@ui/styles';
+import { registerTeXRAWebAwesomeIcons, waIcon } from '@ui/wa/webAwesomeIcons';
 
 // Local imports - settings view
 import {

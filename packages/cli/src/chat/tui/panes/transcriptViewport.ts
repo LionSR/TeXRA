@@ -1,8 +1,8 @@
 // Pure viewport math for bounded pending transcript panes.
 
 import { createLog } from '@logger/logUtils';
-import type { TranscriptRow } from '@shared/transcript';
 import type { RunLabels } from '@shared/tools/executionsDisplay';
+import type { TranscriptRow } from '@ui/transcript';
 import { createBoundedIdSet } from '@utils/core/boundedIdSet';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {

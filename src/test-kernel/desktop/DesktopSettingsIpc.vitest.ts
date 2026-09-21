@@ -23,11 +23,8 @@ import {
   BASH_APPROVAL_CONFIG_KEY,
   AGENT_SKILLS_CONFIG_KEY,
 } from '@shared/schemas';
-import type {
-  DerivedSettingsSnapshot,
-  ModelOptionData,
-  RunId,
-} from '@shared/schemas';
+import type { ModelOptionData, RunId } from '@shared/schemas';
+import type { DerivedSettingsSnapshot } from '@shared/settingsView/settingsViewMessages';
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';

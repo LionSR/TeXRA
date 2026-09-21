@@ -17,30 +17,28 @@ import {
   type HandlerRegistry,
 } from '@shared/utils/dispatcher';
 import {
+  AgentCategorySchema,
+  AgentMetadataBaseSchema,
+  AgentModePresetSchema,
+  AgentSourceSchema,
+  GoalListItemSchema,
+  ModelAvailabilityFieldsSchema,
+  RunIdSchema,
+  SkillDisplayIssueSchema,
+  SkillDisplayItemSchema,
+  SubscriptionUsageSnapshotsSchema,
+  WebviewReadyMessageSchema,
+} from '@shared/schemas';
+import {
   settingSchemaWithoutPrefault,
   settingsViewSnapshotEntries,
   type SettingsViewSnapshot,
-} from './stateSettings';
-import {
-  SkillDisplayIssueSchema,
-  SkillDisplayItemSchema,
-} from './skillDisplay';
-import { GoalListItemSchema } from './goal';
-
-import {
-  AgentCategorySchema,
-  AgentMetadataBaseSchema,
-  AgentSourceSchema,
-} from './agent';
-import { AgentModePresetSchema } from './agentPresets';
-import { ModelAvailabilityFieldsSchema } from './mainView/state';
+} from '@shared/state/stateSettings';
 import {
   SignInMessageSchema,
   SignOutMessageSchema,
   UpdateProfileMessageSchema,
 } from './profileViewMessages';
-import { RunIdSchema } from './identifiers';
-import { SubscriptionUsageSnapshotsSchema } from './subscriptionUsage';
 import {
   DeleteMemoryMessageSchema,
   GetMemoryDataMessageSchema,
@@ -53,16 +51,10 @@ import {
   UpdateMemoryPreviewMessageSchema,
 } from './memoryViewMessages';
 import { commandOnly } from './messageFactories';
-import { WebviewReadyMessageSchema } from './commonViewMessages';
 
 // SETTINGS_VIEW_CMD is defined in ipc.ts to avoid a circular dependency;
 // re-exported here for consumers that expect it from the schema module.
 export { SETTINGS_VIEW_CMD } from '@shared/ipc';
-
-// Re-export the goal-list row type from its shared leaf module so this file
-// (consumed by webview frontends) does not pull in the goal-row runtime
-// modules. The goal helpers are imported from '@shared/schemas/goal' directly.
-export { type GoalListItem } from './goal';
 
 // Re-export the types and values needed by settings consumers from the
 // individual view-message modules so the historical settings surface (single

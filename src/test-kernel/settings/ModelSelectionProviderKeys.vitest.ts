@@ -9,7 +9,10 @@ vi.mock('@shared/hostBridge', () => ({
 }));
 
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import type { ModelSelectionItem, ProviderKeyStatus } from '@shared/schemas';
+import type {
+  ModelSelectionItem,
+  ProviderKeyStatus,
+} from '@shared/settingsView/settingsViewMessages';
 import {
   mountComponent,
   useLitComponentTestDom,

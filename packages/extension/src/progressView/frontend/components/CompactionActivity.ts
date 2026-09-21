@@ -2,14 +2,14 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import { LitElement, css, html, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
-import { designTokens, commonViewStyles } from '@shared/styles';
 import {
   COMPACTION_ACTIVITY_LABEL,
   type CompactionActivityStatus,
 } from '@shared/runs/compactionActivityProjection';
-import type { TeXRAIconName } from '@shared/wa/iconNames';
-import { stopSpinnerMotion } from '@shared/wa/spinner';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { designTokens, commonViewStyles } from '@ui/styles';
+import type { TeXRAIconName } from '@ui/wa/iconNames';
+import { stopSpinnerMotion } from '@ui/wa/spinner';
+import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 const ACTIVITY_ICON: Record<
   Exclude<CompactionActivityStatus, 'running'>,

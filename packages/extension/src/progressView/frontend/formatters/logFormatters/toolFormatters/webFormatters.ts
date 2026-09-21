@@ -13,9 +13,9 @@ import {
   SPINNER_ICON_NAME,
 } from '@progressView/frontend/formatters/htmlBuilders';
 import type { FormatResult } from '@progressView/frontend/formatters/baseLogFormatter';
-import type { WebSearchRow } from '@shared/transcript';
-import type { TeXRAIconName } from '@shared/wa/iconNames';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import type { WebSearchRow } from '@ui/transcript';
+import type { TeXRAIconName } from '@ui/wa/iconNames';
+import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { pluralize } from '@utils/text/stringUtils';
 import { buildToolUseDetails } from './helpers';
 

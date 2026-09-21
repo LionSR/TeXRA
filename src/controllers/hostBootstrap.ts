@@ -39,7 +39,7 @@ import {
 import { installLongRunningModelDispatcher } from '@platform/defaults/longRunningModelTransport';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
-import type { SettingHost } from '@shared/schemas';
+import type { SettingHost } from '@shared/state/stateSettings';
 import { seedDisabledToolDefaults } from '@tools/toolAvailability';
 import { initProcessSettingHost } from '@utils/config/platformSettings';
 

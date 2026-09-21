@@ -794,30 +794,6 @@
       "name": "ActiveSkillSummarySchema"
     },
     {
-      "file": "src/shared/schemas/settingsViewMessages.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "SETTINGS_TAB_ORDER"
-    },
-    {
-      "file": "src/shared/schemas/stateSettings.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "ALL_SETTINGS"
-    },
-    {
-      "file": "src/shared/schemas/stateSettings.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "DEFAULT_TOOL_PATH_PROTECTION_ENABLED"
-    },
-    {
-      "file": "src/shared/schemas/stateSettings.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "STATE_SETTINGS"
-    },
-    {
       "file": "src/shared/schemas/streamLogEntry.ts",
       "category": "production-dead",
       "kind": "exports",
@@ -828,6 +804,30 @@
       "category": "production-dead",
       "kind": "exports",
       "name": "SubscriptionUsageSnapshotSchema"
+    },
+    {
+      "file": "src/shared/settingsView/settingsViewMessages.ts",
+      "category": "production-dead",
+      "kind": "exports",
+      "name": "SETTINGS_TAB_ORDER"
+    },
+    {
+      "file": "src/shared/state/stateSettings.ts",
+      "category": "production-dead",
+      "kind": "exports",
+      "name": "ALL_SETTINGS"
+    },
+    {
+      "file": "src/shared/state/stateSettings.ts",
+      "category": "production-dead",
+      "kind": "exports",
+      "name": "DEFAULT_TOOL_PATH_PROTECTION_ENABLED"
+    },
+    {
+      "file": "src/shared/state/stateSettings.ts",
+      "category": "production-dead",
+      "kind": "exports",
+      "name": "STATE_SETTINGS"
     },
     {
       "file": "src/shared/subagentFollowup.ts",

@@ -1,7 +1,7 @@
 import { html, nothing, type TemplateResult } from 'lit';
 import { repeat } from 'lit/directives/repeat.js';
 
-import { renderEmptyState } from '@shared/wa/emptyState';
+import { renderEmptyState } from '@ui/wa/emptyState';
 
 import {
   workbenchPanelDomId,

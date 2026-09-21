@@ -18,6 +18,7 @@
         "./src/shared/*.ts",
         "./src/shared/*/index.ts"
       ],
+      "@ui/*": ["./src/ui/*", "./src/ui/*.ts", "./src/ui/*/index.ts"],
       "@common/webview": ["./packages/extension/src/common/webview/index.ts"],
       "@common/*": [
         "./src/common/*",

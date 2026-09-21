@@ -8,9 +8,9 @@ import {
   CHATGPT_AUTH,
   GROK_AUTH,
   RESEARCHER_ACCESS_AUTH,
-} from '@shared/copy/accountAuth';
-import { OWN_API_KEYS } from '@shared/copy/modelAccess';
-import { RESEARCHER_ACCESS } from '@shared/copy/onboarding';
+} from '@ui/copy/accountAuth';
+import { OWN_API_KEYS } from '@ui/copy/modelAccess';
+import { RESEARCHER_ACCESS } from '@ui/copy/onboarding';
 
 // Kept to one rendered row: the /api form and the account panel both
 // budget a single line for this description (75 columns at most).

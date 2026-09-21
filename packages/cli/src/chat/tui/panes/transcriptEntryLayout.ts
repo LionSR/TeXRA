@@ -21,10 +21,10 @@ import {
   USER_ENTRY_PREFIX,
 } from '@cli/tui/ui/glyphs';
 import type { WorkflowCallProgress } from '@shared/schemas';
-import type { TranscriptRow, TranscriptRowKind } from '@shared/transcript';
-import { WORKFLOW_CALL_STATUS_GLYPH } from '@shared/copy/workflowCall';
 import type { CompactionActivityStatus } from '@shared/runs/compactionActivityProjection';
 import type { RunLabels } from '@shared/tools/executionsDisplay';
+import type { TranscriptRow, TranscriptRowKind } from '@ui/transcript';
+import { WORKFLOW_CALL_STATUS_GLYPH } from '@ui/copy/workflowCall';
 import { renderAnsiMarkdown } from '../render/ansiMarkdown';
 import { transcriptRowBodyLines } from '../render/transcriptRowLines';
 import {

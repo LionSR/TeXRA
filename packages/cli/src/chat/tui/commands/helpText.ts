@@ -6,7 +6,7 @@
 // its own row.
 
 import { metaChordLabel } from '@cli/runtime/shortcutLabels';
-import { SESSION_LIST } from '@shared/copy/nestedRuns';
+import { SESSION_LIST } from '@ui/copy/nestedRuns';
 
 import { textInputEditingHelp } from '../input/textInputBindings';
 

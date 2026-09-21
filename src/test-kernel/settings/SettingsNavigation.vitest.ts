@@ -10,7 +10,7 @@ vi.mock('@shared/hostBridge', () => ({
 }));
 
 import type { SettingsNavGroup } from '@settingsView/frontend/settingsNav';
-import type { SettingsTabPanelName } from '@shared/schemas';
+import type { SettingsTabPanelName } from '@shared/settingsView/settingsViewMessages';
 
 import { useLitComponentTestDom } from './litComponentTestUtils';
 

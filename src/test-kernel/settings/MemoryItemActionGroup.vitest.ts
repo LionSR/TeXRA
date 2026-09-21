@@ -12,7 +12,7 @@ vi.mock('@shared/hostBridge', () => ({
 // Local imports
 import type { MemoryItem } from '@settingsView/frontend/components/memory/MemoryItem';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import type { MemoryViewItem } from '@shared/schemas';
+import type { MemoryViewItem } from '@shared/settingsView/settingsViewMessages';
 
 // Local file imports
 import {
@@ -50,7 +50,7 @@ function tooltipText(
 
 /**
  * Regression coverage for the wa-button-group + tooltip consolidation onto
- * `renderIconActionButtonParts` (src/shared/wa/actionButtons.ts): the
+ * `renderIconActionButtonParts` (src/ui/wa/actionButtons.ts): the
  * pin/open/delete cluster must keep rendering one `<wa-tooltip>` per grouped
  * button and keep posting the same settings-view commands on click.
  */

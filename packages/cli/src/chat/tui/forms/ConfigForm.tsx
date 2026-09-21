@@ -24,7 +24,7 @@ import {
   settingIsNumber,
   settingIsString,
   type SurfacedSettingEntry,
-} from '@shared/schemas';
+} from '@shared/state/stateSettings';
 import { stripPrefix } from '@shared/config/configKeys';
 import { settingDefault, settingSlot } from '@shared/config/settingsAccess';
 

@@ -4,11 +4,13 @@ import { API_PROVIDERS } from '@model/apiProviders';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   modelsTabSettings,
+  type SettingHost,
+} from '@shared/state/stateSettings';
+import {
   type ProviderKeyStatus,
   type ProviderSetting,
-  type SettingHost,
   type UpdateProfileMessage,
-} from '@shared/schemas';
+} from '@shared/settingsView/settingsViewMessages';
 import {
   readSetting,
   type SettingsStores,

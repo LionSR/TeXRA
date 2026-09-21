@@ -15,14 +15,14 @@ import {
   type ContextStateData,
   type TokenUsageStats,
 } from '@shared/schemas';
-import { designTokens } from '@shared/styles';
-import { usageCostLabel, usageRouteBadge } from '@shared/copy/modelAccess';
-import { focusRingStyles } from '@shared/styles/controlStyles';
 import { contextGaugeBand, roundedContextPercent } from '@shared/contextGauge';
+import { designTokens } from '@ui/styles';
+import { usageCostLabel, usageRouteBadge } from '@ui/copy/modelAccess';
+import { focusRingStyles } from '@ui/styles/controlStyles';
 
 // Local imports - shared icons and utils
-import type { TeXRAIconName } from '@shared/wa/iconNames';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import type { TeXRAIconName } from '@ui/wa/iconNames';
+import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { clamp } from '@utils/core';
 import {
   formatCompactTokenCount,

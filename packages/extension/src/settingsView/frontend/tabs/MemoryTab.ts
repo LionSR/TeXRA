@@ -5,10 +5,10 @@ import { customElement, property } from 'lit/decorators.js';
 
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
-import type { MemoryViewItem } from '@shared/schemas';
-import { commonViewStyles, designTokens } from '@shared/styles';
+import type { MemoryViewItem } from '@shared/settingsView/settingsViewMessages';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { renderLabeledActionButton } from '@shared/wa/actionButtons';
+import { commonViewStyles, designTokens } from '@ui/styles';
+import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 
 import { renderStateSettingToggleRow } from '../components/shared/stateSettingRows';
 

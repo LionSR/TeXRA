@@ -68,7 +68,6 @@ import {
   type RunId,
   AgentCategory,
 } from '@shared/schemas';
-import { FOCUSED_BACKGROUND_TASK } from '@shared/copy/nestedRuns';
 import {
   DatabaseClaimRefused,
   DatabaseWriteFailed,
@@ -76,6 +75,7 @@ import {
 import type { RuntimeRequest } from '@shared/session/runtimeRequest';
 import { escapeText } from '@shared/utils/xmlEscape';
 import { getDefaultUnavailableToolNames } from '@tools/registry';
+import { FOCUSED_BACKGROUND_TASK } from '@ui/copy/nestedRuns';
 import { generateRunId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { handleTuiSlashCommand } from './tui/commands/handleSlashCommand';

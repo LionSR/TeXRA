@@ -110,6 +110,7 @@ const VSCODE_FREE_ZONE_DIRS = [
   'src/tools',
   'src/controllers',
   'src/shared',
+  'src/ui',
   'src/replacement',
   'src/eventBus',
   'src/hosts',
@@ -871,14 +872,14 @@ export default tseslint.config(
   // instead of accumulating parallel hand-rolled `<wa-icon>` templates.
   {
     files: ['src/**/*.{ts,tsx,mts}', 'packages/**/*.{ts,tsx,mts}'],
-    ignores: ['src/shared/wa/webAwesomeIcons.ts', '**/*.vitest.ts'],
+    ignores: ['src/ui/wa/webAwesomeIcons.ts', '**/*.vitest.ts'],
     rules: {
       'no-restricted-syntax': [
         'error',
         {
           selector: 'TemplateElement[value.raw=/<wa-icon[\\s>\\/]/]',
           message:
-            'Build <wa-icon> markup via waIcon() from @shared/wa/webAwesomeIcons instead of a hand-rolled template.',
+            'Build <wa-icon> markup via waIcon() from @ui/wa/webAwesomeIcons instead of a hand-rolled template.',
         },
       ],
     },

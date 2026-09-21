@@ -2,10 +2,10 @@ import '@awesome.me/webawesome/dist/components/button/button.js';
 import { html, css, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
 
-import { designTokens, commonViewStyles, bannerStyles } from '@shared/styles';
-import { renderIconActionButton } from '@shared/wa/actionButtons';
-import { renderBannerFrame } from '@shared/wa/bannerFrame';
 import { SessionUiEvents } from '@shared/session/uiEvents';
+import { designTokens, commonViewStyles, bannerStyles } from '@ui/styles';
+import { renderIconActionButton } from '@ui/wa/actionButtons';
+import { renderBannerFrame } from '@ui/wa/bannerFrame';
 import { VisibleBanner } from './StateVisibleBanner';
 
 @customElement('login-banner')

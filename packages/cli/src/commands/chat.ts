@@ -1,6 +1,6 @@
 import { defineCommand } from 'citty';
 
-import { RESEARCHER_ACCESS_AUTH } from '@shared/copy/accountAuth';
+import { RESEARCHER_ACCESS_AUTH } from '@ui/copy/accountAuth';
 
 import { assertExplicitModelKnown } from '../runtime/runModel';
 import {

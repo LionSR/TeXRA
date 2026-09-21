@@ -26,14 +26,14 @@ import {
   type OutputFileInfo,
   type RunId,
 } from '@shared/schemas';
-import { designTokens, commonViewStyles } from '@shared/styles';
 import { formatRoundStageLabel } from '@shared/runs/runStatusDisplay';
 import type { HostRequest } from '@shared/session/hostRequest';
 import type { Surface } from '@shared/session/surface';
 import { SessionUiEvents } from '@shared/session/uiEvents';
-import { renderIconActionButton } from '@shared/wa/actionButtons';
-import type { TeXRAIconName } from '@shared/wa/iconNames';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { designTokens, commonViewStyles } from '@ui/styles';
+import { renderIconActionButton } from '@ui/wa/actionButtons';
+import type { TeXRAIconName } from '@ui/wa/iconNames';
+import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { getBasename, normalizeFilePath } from '@utils/core';
 import { pluralize } from '@utils/text/stringUtils';
 import { getComposedPathElement } from '../utils';

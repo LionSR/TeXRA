@@ -12,7 +12,7 @@ import type {
   SettingsViewInboundHandlerRegistry,
   ToolCommandKind,
   ToolDashboardItem,
-} from '@shared/schemas';
+} from '@shared/settingsView/settingsViewMessages';
 import { buildSettingsSnapshotMessage } from '@shared/settingsView/handlers/settingsSnapshot';
 import type { SettingsStatePorts } from '@shared/settingsView/types';
 import { unsupported } from '@shared/utils/dispatcher';

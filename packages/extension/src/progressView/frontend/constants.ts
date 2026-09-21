@@ -1,7 +1,7 @@
 import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
-import { APPROVAL_BYPASS_BADGE } from '@shared/copy/approvalBypass';
-import { DELEGATION_APPROVAL_COPY } from '@shared/copy/delegationApproval';
-import type { TeXRAIconName } from '@shared/wa/iconNames';
+import { APPROVAL_BYPASS_BADGE } from '@ui/copy/approvalBypass';
+import { DELEGATION_APPROVAL_COPY } from '@ui/copy/delegationApproval';
+import type { TeXRAIconName } from '@ui/wa/iconNames';
 
 export interface ProgressToolbarButton {
   id: string;

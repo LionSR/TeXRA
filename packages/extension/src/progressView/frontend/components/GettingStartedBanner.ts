@@ -3,16 +3,16 @@ import { html, css, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
 import { ifDefined } from 'lit/directives/if-defined.js';
 
-import { designTokens, commonViewStyles, bannerStyles } from '@shared/styles';
 import {
   GETTING_STARTED_ACTION_PRESENTATION,
   type GettingStartedAction,
 } from '@shared/schemas';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
-
-import { renderIconActionButton } from '@shared/wa/actionButtons';
-import { renderBannerFrame } from '@shared/wa/bannerFrame';
 import { SessionUiEvents } from '@shared/session/uiEvents';
+import { designTokens, commonViewStyles, bannerStyles } from '@ui/styles';
+import { waIcon } from '@ui/wa/webAwesomeIcons';
+
+import { renderIconActionButton } from '@ui/wa/actionButtons';
+import { renderBannerFrame } from '@ui/wa/bannerFrame';
 import { VisibleBanner } from './StateVisibleBanner';
 
 /** Slim project-bootstrap row shown when the workspace has no LaTeX files. */

@@ -16,7 +16,6 @@ import {
   type WorkflowCallProgress,
   type WorkflowPlanMarker,
 } from '@shared/schemas';
-import type { WorkflowTaskRow } from '@shared/transcript';
 import {
   formatWorkflowCallLiveParts,
   workflowMarkerOf,
@@ -25,6 +24,7 @@ import {
   type ChildRunProgress,
   type WorkflowRunModel,
 } from '@shared/runs/workflowRunModel';
+import type { WorkflowTaskRow } from '@ui/transcript';
 
 interface TaskSpec {
   readonly id: string;

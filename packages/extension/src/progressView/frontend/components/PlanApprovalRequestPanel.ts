@@ -10,11 +10,11 @@ import {
   designTokens,
   requestPanelSharedStyles,
   sp,
-} from '@shared/styles';
+} from '@ui/styles';
 
 // Local imports - shared utilities
-import { PLAN_GOAL_COPY } from '@shared/copy/delegationApproval';
-import { renderLabeledActionButton } from '@shared/wa/actionButtons';
+import { PLAN_GOAL_COPY } from '@ui/copy/delegationApproval';
+import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 
 // Local imports - base class
 import { BaseApprovalPanel } from './BaseApprovalPanel';

@@ -17,8 +17,8 @@ import { ifDefined } from 'lit/directives/if-defined.js';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 
 // Local imports - shared transcript model
-import type { StreamingTextRow } from '@shared/transcript';
-import type { TeXRAIconName } from '@shared/wa/iconNames';
+import type { StreamingTextRow } from '@ui/transcript';
+import type { TeXRAIconName } from '@ui/wa/iconNames';
 
 // Local imports - formatter helpers
 import { formatDisplayTimestamp } from '../timestampUtils';

@@ -11,15 +11,15 @@ import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 // Local imports - shared styles + helpers
-import { commonViewStyles, designTokens } from '@shared/styles';
-import { DELEGATION_APPROVAL_COPY } from '@shared/copy/delegationApproval';
 import { createEvent } from '@shared/utils/events';
-import { renderLabeledActionButton } from '@shared/wa/actionButtons';
+import { commonViewStyles, designTokens } from '@ui/styles';
+import { DELEGATION_APPROVAL_COPY } from '@ui/copy/delegationApproval';
+import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 import {
   renderSplitButtonMenuParts,
   splitButtonTriggerStyles,
-} from '@shared/wa/splitButton';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+} from '@ui/wa/splitButton';
+import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 /** Each menu item's dropdown-item value is the event it emits when selected. */
 const MENU_EVENTS = ['approve-session', 'approve-all-delegated-work'] as const;

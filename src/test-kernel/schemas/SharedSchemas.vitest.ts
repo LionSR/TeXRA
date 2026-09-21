@@ -5,14 +5,16 @@
 import { describe, expect, it } from 'vitest';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
-  dispatchSettingsViewOutbound,
-  SETTINGS_TAB_GROUPS,
-  SETTINGS_TAB_ORDER,
   WebSearchPayloadSchema,
   planSummaryLine,
   parseClaudeAgentModel,
   parseCodexApprovalPolicy,
 } from '@shared/schemas';
+import {
+  dispatchSettingsViewOutbound,
+  SETTINGS_TAB_GROUPS,
+  SETTINGS_TAB_ORDER,
+} from '@shared/settingsView/settingsViewMessages';
 
 describe('parseCodexApprovalPolicy', () => {
   it('defaults to automatic approval for invalid persisted values', () => {

@@ -5,12 +5,12 @@
  */
 import { z } from 'zod';
 
-import { CHATGPT_AUTH, GROK_AUTH } from '@shared/copy/accountAuth';
 import { AgentCategorySchema, AgentSourceSchema } from '@shared/schemas/agent';
+import { CHATGPT_AUTH, GROK_AUTH } from '@ui/copy/accountAuth';
 import {
   TEXRA_ICON_CANONICAL_NAMES,
   type TeXRAIconName,
-} from '@shared/wa/iconNames';
+} from '@ui/wa/iconNames';
 import { DocumentFileTypeSchema } from '../fileTypes';
 import { ToolConfigFieldsSchema } from '../toolConfig';
 
@@ -203,7 +203,7 @@ export const WorkspaceRootOptionDataSchema = PickerOptionBaseSchema;
 export const TeamOptionDataSchema = PickerOptionBaseSchema.extend({
   /** Provenance uses the shared `'built-in' | 'custom'` team vocabulary. */
   source: z.enum(['built-in', 'custom']),
-  /** Web Awesome icon name registered in `src/shared/wa/iconNames.ts`. */
+  /** Web Awesome icon name registered in `src/ui/wa/iconNames.ts`. */
   icon: z.string(),
   /** Preset description, surfaced as the option `title`. */
   description: z.string().prefault(''),

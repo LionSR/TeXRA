@@ -404,7 +404,7 @@ export const commonViewStyles: CSSResult = css`
     font-style: italic;
   }
 
-  /* Structure owned by the shared renderLoadingState helper (@shared/wa) */
+  /* Structure owned by the shared renderLoadingState helper (@ui/wa) */
   .loading-state {
     display: flex;
     align-items: center;
@@ -420,7 +420,7 @@ export const commonViewStyles: CSSResult = css`
   }
 
   /* Class hooks consumed by the shared renderEmptyState() helper
-     (@shared/wa/emptyState). Neutralizes the UA heading chrome on
+     (@ui/wa/emptyState). Neutralizes the UA heading chrome on
      .empty-state-title (bold weight, larger size, block margins) so it
      reads like the plain paragraph text these lists used before adopting
      the helper; color/italic still cascade from .empty-state. */

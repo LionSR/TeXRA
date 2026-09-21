@@ -5,7 +5,7 @@ import { createLog } from '@logger/logUtils';
 import {
   DEFAULT_LATEX_SETTINGS_STATUS,
   type LatexSettingsStatus,
-} from '@shared/schemas';
+} from '@shared/settingsView/settingsViewMessages';
 import {
   DEPENDENCY_INSTALL_COMMANDS,
   HOMEBREW_INSTALL_COMMAND,

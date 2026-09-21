@@ -1,4 +1,4 @@
-import type { SettingsTabPanelName } from '../schemas/settingsViewMessages';
+import type { SettingsTabPanelName } from '@shared/settingsView/settingsViewMessages';
 
 export interface CommandKeybinding {
   key: string;

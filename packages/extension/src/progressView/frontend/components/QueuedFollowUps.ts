@@ -8,8 +8,8 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - shared styles
-import { designTokens, commonViewStyles } from '@shared/styles';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { designTokens, commonViewStyles } from '@ui/styles';
+import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { pluralize, truncateWithEllipsis } from '@utils/text/stringUtils';
 
 // Web Awesome native components

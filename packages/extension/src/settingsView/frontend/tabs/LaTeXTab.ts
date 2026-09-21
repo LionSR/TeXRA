@@ -19,31 +19,14 @@ import {
 import { customElement, property, state } from 'lit/decorators.js';
 
 // Local imports - shared webview
-import {
-  commonViewStyles,
-  designTokens,
-  settingsBannerStyles,
-} from '@shared/styles';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { settingByKey } from '@shared/state/stateSettings';
 import {
   type LatexSettingsStatus,
   DEFAULT_LATEX_SETTINGS_STATUS,
-  settingByKey,
-} from '@shared/schemas';
-import { renderLabeledActionButton } from '@shared/wa/actionButtons';
-import { renderLoadingState } from '@shared/wa/loadingState';
-import { renderSettingsBanner } from '@shared/wa/settingsBanner';
-import {
-  renderSettingsSectionHeading,
-  renderSettingsToggleRow,
-} from '@shared/wa/settingsSection';
-import {
-  renderSetStatusIcon,
-  statusCheckIconStyles,
-} from '@shared/wa/statusIcons';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+} from '@shared/settingsView/settingsViewMessages';
 
 // Web Awesome button + icon bundles (side-effect imports)
 import '@awesome.me/webawesome/dist/components/button/button.js';
@@ -78,6 +61,22 @@ import {
   type InstallCommand,
   type OSPlatform,
 } from '@shared/constants/latexToolchain';
+
+// Local imports - shared webview toolkit
+import {
+  commonViewStyles,
+  designTokens,
+  settingsBannerStyles,
+} from '@ui/styles';
+import { renderLabeledActionButton } from '@ui/wa/actionButtons';
+import { renderLoadingState } from '@ui/wa/loadingState';
+import { renderSettingsBanner } from '@ui/wa/settingsBanner';
+import {
+  renderSettingsSectionHeading,
+  renderSettingsToggleRow,
+} from '@ui/wa/settingsSection';
+import { renderSetStatusIcon, statusCheckIconStyles } from '@ui/wa/statusIcons';
+import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 // Local imports - shared utilities
 import { clampOptional, filterNotNullish } from '@utils/core';

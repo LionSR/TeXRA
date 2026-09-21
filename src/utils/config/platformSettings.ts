@@ -1,5 +1,5 @@
 import type { ConfigTarget, ConfigWriteFailed } from '@platform/interfaces';
-import { settingByKey, type SettingHost } from '@shared/schemas';
+import { settingByKey, type SettingHost } from '@shared/state/stateSettings';
 import {
   readSetting,
   writeSetting,

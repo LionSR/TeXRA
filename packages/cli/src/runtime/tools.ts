@@ -6,7 +6,7 @@ import {
   isExternalToolDefVisible,
 } from '@controllers/settingsView/ToolDashboardData';
 import type { StateStore } from '@platform/interfaces';
-import type { ToolDashboardItem } from '@shared/schemas';
+import type { ToolDashboardItem } from '@shared/settingsView/settingsViewMessages';
 import {
   findExternalToolDef,
   type ExternalToolDef,

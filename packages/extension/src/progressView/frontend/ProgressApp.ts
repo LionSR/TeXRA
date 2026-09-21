@@ -32,8 +32,7 @@ import '@awesome.me/webawesome/dist/components/input/input.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - shared webview
-import '@shared/wa/spinner';
-import { designTokens } from '@shared/styles';
+import '@ui/wa/spinner';
 import {
   FILE_SELECT_CONFIGS,
   LAUNCH_FILE_LISTS,
@@ -43,9 +42,10 @@ import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import type { SessionView, RunView } from '@shared/session/sessionView';
 import { resolveSelected, type Surface } from '@shared/session/surface';
 import { SessionUiEvents } from '@shared/session/uiEvents';
-import { renderIconActionButton } from '@shared/wa/actionButtons';
-import { registerTeXRAWebAwesomeIcons } from '@shared/wa/webAwesomeIcons';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { designTokens } from '@ui/styles';
+import { renderIconActionButton } from '@ui/wa/actionButtons';
+import { registerTeXRAWebAwesomeIcons } from '@ui/wa/webAwesomeIcons';
+import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { getBasename } from '@utils/core';
 
 // Local imports - progress view frontend

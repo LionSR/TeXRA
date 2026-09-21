@@ -15,7 +15,7 @@ import {
   type RunOutcome,
   type WorkflowCallProgress,
 } from '@shared/schemas';
-import { formatWorkflowCallLine } from '@shared/copy/workflowCall';
+import { formatWorkflowCallLine } from '@ui/copy/workflowCall';
 import { generateShortId } from '@utils/core';
 
 /**

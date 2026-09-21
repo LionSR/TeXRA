@@ -10,7 +10,7 @@ Font Awesome Free
 https://fontawesome.com
 
 Icon artwork from the `@fortawesome/free-solid-svg-icons` package is imported by
-`src/shared/wa/webAwesomeIcons.ts` and bundled into TeXRA's shipped hosts, so
+`src/ui/wa/webAwesomeIcons.ts` and bundled into TeXRA's shipped hosts, so
 the icons are redistributed with this product.
 
 Copyright (c) Fonticons, Inc. (https://fontawesome.com)

@@ -1315,13 +1315,15 @@ export const runReflection = Effect.fn('reflection.run')(function* (
   const finalize = (exit: Exit.Exit<LoopExit, Error>) =>
     Effect.uninterruptible(
       Effect.gen(function* () {
-        const state = yield* Ref.get(latest);
-        const halt = recordHalt({ ledger, logger, runId }, state, coordinates);
-        if (Exit.isSuccess(exit)) return yield* halt(exit.value.outcome);
-        if (Cause.hasInterrupts(exit.cause)) {
-          return yield* halt(RUN_OUTCOME.CANCELLED);
+        const halt = recordHalt({ ledger, logger, runId }, coordinates);
+        if (Exit.isSuccess(exit)) {
+          return yield* halt(exit.value.state, exit.value.outcome);
         }
-        yield* halt(RUN_OUTCOME.FAILED);
+        const state = yield* Ref.get(latest);
+        if (Cause.hasInterrupts(exit.cause)) {
+          return yield* halt(state, RUN_OUTCOME.CANCELLED);
+        }
+        yield* halt(state, RUN_OUTCOME.FAILED);
       }),
     );
 

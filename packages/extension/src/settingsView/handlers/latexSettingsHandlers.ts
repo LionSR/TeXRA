@@ -13,7 +13,7 @@ import {
   SETTINGS_VIEW_CMD,
   type SettingsMessageFor,
   type SettingsViewInboundHandlerRegistry,
-} from '@shared/schemas';
+} from '@shared/settingsView/settingsViewMessages';
 import {
   LATEX_WORKSHOP_EXT_ID,
   normalizePlatform,

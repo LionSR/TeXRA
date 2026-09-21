@@ -15,22 +15,22 @@ import { codexAccountLabel } from '@auth/codex/codexSessionTypes';
 import { xaiAccountLabel } from '@auth/xai/xaiSessionTypes';
 
 // Local imports - shared styles
-import { commonViewStyles, designTokens } from '@shared/styles';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import {
   CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
-  type SubscriptionAuthStatus,
   type SubscriptionUsageSnapshot,
 } from '@shared/schemas';
-import { CHATGPT_AUTH, GROK_AUTH } from '@shared/copy/accountAuth';
-import { renderLabeledActionButton } from '@shared/wa/actionButtons';
+import { type SubscriptionAuthStatus } from '@shared/settingsView/settingsViewMessages';
+import { commonViewStyles, designTokens } from '@ui/styles';
+import { CHATGPT_AUTH, GROK_AUTH } from '@ui/copy/accountAuth';
+import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 import {
   renderSettingsNumberRow,
   renderSettingsSectionHeading,
   renderSettingsToggleRow,
-} from '@shared/wa/settingsSection';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+} from '@ui/wa/settingsSection';
+import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 // Local imports - settings view components
 import './SubscriptionUsageRow';

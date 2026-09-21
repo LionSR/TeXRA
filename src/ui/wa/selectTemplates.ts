@@ -12,8 +12,8 @@ import {
   type AgentOptionData,
   type ModelOptionData,
 } from '@shared/schemas';
-import { AGENT_DECORATORS, getModelProviderDecorator } from '@shared/wa/icons';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { AGENT_DECORATORS, getModelProviderDecorator } from '@ui/wa/icons';
+import { waIcon } from '@ui/wa/webAwesomeIcons';
 import type WaSelect from '@awesome.me/webawesome/dist/components/select/select.js';
 
 /**

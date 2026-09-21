@@ -57,7 +57,7 @@ const PAGE_DOWN = ESC + '[6~';
 const ANSI_SGR_PATTERN = new RegExp(`${ESC}\\[[0-?]*[ -/]*m`, 'g');
 const RUNNING_STATUS_PATTERN = /◆ [-|\/\\] Running/;
 const STOPPED_SUBAGENT_INPUT_MESSAGE_START =
-  // Keep in sync with FOCUSED_BACKGROUND_TASK in src/shared/copy/nestedRuns.ts.
+  // Keep in sync with FOCUSED_BACKGROUND_TASK in src/ui/copy/nestedRuns.ts.
   'This background task is no longer accepting follow-ups; press Tab to select a session';
 const STOPPED_SELECTED_BACKGROUND_TASK_MESSAGE =
   // Keep in sync with FOCUSED_BACKGROUND_TASK.selectedNoLongerAccepting.

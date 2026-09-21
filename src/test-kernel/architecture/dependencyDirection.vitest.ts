@@ -35,6 +35,7 @@ const VSCODE_FREE_ZONES = [
   'src/tools',
   'src/controllers',
   'src/shared',
+  'src/ui',
   'src/replacement',
   'src/eventBus',
   'src/hosts',
@@ -242,8 +243,12 @@ describe('VS Code-free zones never import vscode', () => {
 });
 
 describe('Shared layer dependency direction', () => {
+  // `src/ui` is held to the same rule as `src/shared`: the toolkit renders a
+  // host-neutral view model handed to it, so an `@agent/*` import there would
+  // be the run system leaking into the render layer.
   it('does not grow shared-to-agent imports', () => {
-    const offenders = sourceFilesUnder('src/shared')
+    const offenders = ['src/shared', 'src/ui']
+      .flatMap((root) => sourceFilesUnder(root))
       .filter((file) => importsMatching(file, AGENT_IMPORT_PATTERNS))
       .map(toRepoPath)
       .filter((file) => !SHARED_AGENT_IMPORT_ALLOWLIST_SET.has(file))
