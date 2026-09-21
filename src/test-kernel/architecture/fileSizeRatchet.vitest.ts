@@ -14,6 +14,12 @@
 // gone, and one whose file has fallen to the threshold, both fail until the
 // entry is deleted.
 //
+// What that asymmetry costs, stated plainly: this suite compares each file
+// against the number in the baseline, so it cannot tell a budget that was
+// always 700 from one a PR raised to 700. Raising an entry is an author rule,
+// not a machine-checked one — a one-line change to a reviewed file. Every
+// other direction is enforced here.
+//
 // Clones the checked-in-baseline vitest pattern from
 // hostAgentDeepImportRatchet.vitest.ts; the scan is a line count, so no AST.
 

@@ -51,8 +51,13 @@ interface RefutedBaseline {
   candidates: RefutedCandidate[];
 }
 
-/** The block body `node` carries, if it is a declaration that has one. */
-function functionBody(node: ts.Node): ts.Block | undefined {
+/**
+ * The body `node` carries, if it is a declaration that has one. An arrow's
+ * expression body counts: `const f = (a: A) => pipeline(a)` is as much an
+ * implementation as a braced one, and leaving it in would make every
+ * implementation-only edit to such a symbol read as a change of shape.
+ */
+function functionBody(node: ts.Node): ts.Node | undefined {
   const declaration =
     ts.isFunctionDeclaration(node) ||
     ts.isFunctionExpression(node) ||
@@ -63,9 +68,7 @@ function functionBody(node: ts.Node): ts.Block | undefined {
     ts.isSetAccessorDeclaration(node)
       ? node
       : undefined;
-  return declaration?.body && ts.isBlock(declaration.body)
-    ? declaration.body
-    : undefined;
+  return declaration?.body;
 }
 
 /** The body blocks inside `node`, including its own, as [start, end) ranges. */
@@ -84,17 +87,31 @@ function bodyRanges(node: ts.Node): Array<readonly [number, number]> {
   return ranges;
 }
 
-/** Drop comments so a reworded JSDoc is not read as a change of shape. Naive
- *  `//` stripping, the same rule repoScan.stripComments uses. */
+/**
+ * `text` with its comments removed and its whitespace collapsed. Scanned
+ * rather than pattern-stripped: a signature holds string and regex literals,
+ * and a naive `//` cut would silently truncate a URL default and hide every
+ * later change to it. A shape comparison is exact, so its input has to be.
+ */
 function stripComments(text: string): string {
-  return text
-    .replaceAll(/\/\*[\s\S]*?\*\//g, '')
-    .split('\n')
-    .map((line) => {
-      const commentStart = line.indexOf('//');
-      return commentStart === -1 ? line : line.slice(0, commentStart);
-    })
-    .join('\n');
+  const scanner = ts.createScanner(
+    ts.ScriptTarget.Latest,
+    /* skipTrivia */ false,
+    ts.LanguageVariant.JSX,
+    text,
+  );
+  let out = '';
+  for (
+    let token = scanner.scan();
+    token !== ts.SyntaxKind.EndOfFileToken;
+    token = scanner.scan()
+  ) {
+    const isComment =
+      token === ts.SyntaxKind.SingleLineCommentTrivia ||
+      token === ts.SyntaxKind.MultiLineCommentTrivia;
+    if (!isComment) out += scanner.getTokenText();
+  }
+  return out;
 }
 
 /**
