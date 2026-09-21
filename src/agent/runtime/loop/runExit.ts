@@ -35,10 +35,12 @@ interface HaltDeps {
 export const recordHalt =
   (
     deps: HaltDeps,
-    state: RunState | null,
     toCoordinates: (state: RunState) => StepCoordinates,
   ) =>
-  (outcome: RunOutcome): Effect.Effect<void, DatabaseWriteFailed> =>
+  (
+    state: RunState | null,
+    outcome: RunOutcome,
+  ): Effect.Effect<void, DatabaseWriteFailed> =>
     state === null || state.phase === null
       ? Effect.void
       : deps.ledger

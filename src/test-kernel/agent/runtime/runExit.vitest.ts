@@ -41,11 +41,10 @@ describe('recordHalt', () => {
           logger: { warn } as never,
           runId,
         },
-        openedState,
         (state) => state,
       );
 
-      yield* halt(RUN_OUTCOME.CANCELLED);
+      yield* halt(openedState, RUN_OUTCOME.CANCELLED);
 
       expect(appendBatch).toHaveBeenCalledOnce();
       expect(warn).toHaveBeenCalledWith('Failed to record the run halt', {
@@ -69,11 +68,12 @@ describe('recordHalt', () => {
           logger: { warn } as never,
           runId,
         },
-        openedState,
         (state) => state,
       );
 
-      expect(yield* Effect.flip(halt(RUN_OUTCOME.FAILED))).toBe(failure);
+      expect(yield* Effect.flip(halt(openedState, RUN_OUTCOME.FAILED))).toBe(
+        failure,
+      );
       expect(appendBatch).toHaveBeenCalledOnce();
       expect(warn).not.toHaveBeenCalled();
     }),
