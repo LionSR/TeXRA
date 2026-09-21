@@ -14,7 +14,11 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: live-llm-${{ github.ref }}
+  # `labeled` fires for every label, so an unrelated label added while a paid
+  # run is in flight would cancel it through this group before the job's own
+  # condition skipped the replacement. Those events get a unique group, as
+  # `claude-code-review.yml` does.
+  group: live-llm-${{ github.ref }}${{ (github.event.action == 'labeled' && github.event.label.name != 'live-llm') && format('-label-{0}', github.run_id) || '' }}
   cancel-in-progress: true
 
 permissions:

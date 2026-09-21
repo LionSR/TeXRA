@@ -252,14 +252,16 @@ export function liveProtocol(spec: LiveProtocol): void {
         Effect.gen(function* () {
           const result = yield* completeTurn(model(), TEXT_REQUEST);
           const usage = result.usage;
-          // Every principal count in `UsageSchema` is nullable, and MiniMax and
-          // Google both document receipts that omit the split, so demanding
-          // both halves would fail a route whose codec did nothing wrong. The
-          // contract under test is that a real receipt parsed into a usage
-          // record carrying real counts.
+          // Every principal count in `UsageSchema` is nullable, and both
+          // MiniMax and Google document receipts that carry only a total, so
+          // demanding the split would fail a route whose codec did nothing
+          // wrong. The contract under test is that a real receipt parsed into
+          // a usage record carrying a real count.
           assert(usage !== null);
           expect(
-            (usage.inputTokens ?? 0) + (usage.outputTokens ?? 0),
+            (usage.inputTokens ?? 0) +
+              (usage.outputTokens ?? 0) +
+              (usage.totalTokens ?? 0),
           ).toBeGreaterThan(0);
         }),
       );
