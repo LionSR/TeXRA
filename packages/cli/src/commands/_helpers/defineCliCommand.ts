@@ -70,8 +70,9 @@ interface DefineCliCommandOptions<A extends ArgsDef, E> {
    * that cannot open the storage root still reads as "could not list models"
    * rather than as a TeXRA crash.
    *
-   * Omit it for commands that rely on `runCli`'s top-level `CliUsageError`
-   * handling instead.
+   * It speaks for the work only. A `CliUsageError` the builder above throws
+   * is raised before this catch exists, so a command can both refuse its
+   * arguments as a usage error and report a failed run with its own code.
    */
   readonly catchExitCode?: number | ((error: unknown) => number);
 }
@@ -105,8 +106,12 @@ export function defineCliCommand<const A extends ArgsDef, E>(
         ctx.rawArgs,
       );
       const runCtx = ctx as CliCommandRunContext<A>;
+      // Built above the catch below, not inside it: a `CliUsageError` the
+      // builder throws is the command refusing its arguments, which `runCli`
+      // reports as a usage error, and `catchExitCode` speaks only for the
+      // work. Building it here keeps that true for a command that does both.
+      const program = options.run(context, runCtx);
       const exitCode = async (): Promise<number> => {
-        const program = options.run(context, runCtx);
         if (options.install === 'noPlatform') {
           // The one sink these two entries ever get, chosen exactly as
           // `initCliPlatform` chooses one for every other command: no init
