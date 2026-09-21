@@ -160,10 +160,9 @@ export function createDesktopSettingsIpc(
     );
   };
   // The memory controller's prompts are the window's own dialogs; a window
-  // that has gone away rejects them, and that reaches the controller as a
-  // typed failure rather than as an unknown rejection — `PromptFailed` for
-  // the confirmation, and the notification member's own tag for the warning
-  // it is.
+  // that has gone away rejects them, and that reaches the controller as a typed
+  // failure rather than as an unknown rejection — `PromptFailed` for the
+  // confirmation, and the notification member's own tag for the warning it is.
   const memoryController = new SettingsMemoryController({
     prompt: {
       confirm: (message, promptOptions) =>
@@ -314,9 +313,9 @@ export function createDesktopSettingsIpc(
     return Effect.gen(function* () {
       postSettingsSnapshot('git-author');
       options.toolingSettingsController.postLatexConfigValues();
-      // Forked, not yielded: `runFork` runs the goal read on this turn, so
-      // the list still repaints ahead of the snapshots below, and the dialog
-      // a failed read raises does not hold them up. Nothing waits on it, as
+      // Forked, not yielded: `runFork` runs the goal read on this turn, so the
+      // list still repaints ahead of the snapshots below, and the dialog a
+      // failed read raises does not hold them up. Nothing waits on it, as
       // nothing waited on the eagerly started promise it replaces.
       runAsync(postGoalList());
       postSettingsSnapshot('multi-agent');
@@ -460,13 +459,12 @@ export function createDesktopSettingsIpc(
   }
 
   // Both writers below re-probe external tools: the GitHub token gates the
-  // `github_subscription` tool group, so without it the Tools tab keeps
-  // showing the group as unavailable until the user clicks Re-check. The
-  // extension gets this from `secrets.onDidChange`; the desktop has no
-  // secret-change event, but these two functions are the only places it
-  // writes the token, so the explicit calls cover the same ground.
-  // `refreshToolAvailability` emits `toolAvailabilityChanged`, which is what
-  // repaints the dashboard.
+  // `github_subscription` tool group, so without it the Tools tab keeps showing
+  // the group as unavailable until the user clicks Re-check. The extension gets
+  // this from `secrets.onDidChange`; the desktop has no secret-change event,
+  // but these two functions are the only places it writes the token, so the
+  // explicit calls cover the same ground. `refreshToolAvailability` emits
+  // `toolAvailabilityChanged`, which repaints the dashboard.
   function setGitHubToken() {
     return Effect.gen(function* () {
       const token = yield* options.ui.promptForSecret({
@@ -503,19 +501,18 @@ export function createDesktopSettingsIpc(
   // Reads the process's subscription registries and repaints.
   const postGitHubSubscriptions = Effect.fn('desktop.postSubscriptions')(
     function* () {
-      const subscriptions = yield* listGitHubSubscriptionEntries((runId) =>
-        options.ui.getRunLabel(runId),
-      );
       options.postToRenderer({
         command: SETTINGS_VIEW_COMMANDS.UPDATE_PR_SUBSCRIPTIONS,
-        subscriptions,
+        subscriptions: yield* listGitHubSubscriptionEntries((runId) =>
+          options.ui.getRunLabel(runId),
+        ),
       });
     },
   );
 
   // The same stance as the goal subscription above: a run that binds or
-  // releases a PR, repo, or issue subscription changes the list the Git tab is
-  // showing, and until now the desktop only re-read it when the user asked.
+  // releases a PR, repo or issue subscription changes the list the Git tab is
+  // showing, which the desktop used to re-read only when the user asked.
   subscriptions.push(
     appSignals.on('githubSubscriptionsChanged', () =>
       runAsync(postGitHubSubscriptions()),
@@ -530,8 +527,8 @@ export function createDesktopSettingsIpc(
     // Outside VS Code a rejected token left the pollers failing in silence.
     // The dialog is the whole fix: `resolveGitHubTokenSource` reports only
     // which store holds a token, and rejection leaves the secret in place, so
-    // re-posting the token status would repaint the same "token set" badge.
-    // Marking a stored token as rejected would need a new status on the wire.
+    // re-posting the status would repaint the same "token set" badge. Marking
+    // a stored token as rejected would need a new status on the wire.
     appSignals.on('githubTokenInvalid', ({ message }) =>
       runAsync(
         options.ui.showErrorMessage(gitHubTokenRejectedMessage(message)),
@@ -557,10 +554,9 @@ export function createDesktopSettingsIpc(
     await runtime.runPromise(
       Effect.gen(function* () {
         const removed = yield* unsubscribeGitHubKey(data.key);
+        const absent = noActiveGitHubSubscriptionMessage(data.key);
         yield* removed === 0
-          ? options.ui.showInfoMessage(
-              noActiveGitHubSubscriptionMessage(data.key),
-            )
+          ? options.ui.showInfoMessage(absent)
           : postGitHubSubscriptions();
       }),
     );

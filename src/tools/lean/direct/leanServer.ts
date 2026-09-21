@@ -99,11 +99,7 @@ export type LeanSessionError =
 export interface LeanServerOptions {
   readonly workspaceRoot: string;
   readonly lakeCommand: string;
-  /**
-   * The adapter's roster, handed over by the pool that builds this server:
-   * the entry is registered here and dropped by the scope's finalizer, so a
-   * disposed pool leaves no server behind in the dashboard's list.
-   */
+  /** The owning pool's roster: registered here, dropped by this scope. */
   readonly roster: LeanServerRoster;
 }
 

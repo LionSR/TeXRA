@@ -506,9 +506,7 @@ function executeProjectCommand(
 export function createVscodeLeanLanguageServices(
   globalState: StateStore,
 ): LeanLanguageServicesShape {
-  // This adapter's roster, created with it: a reactivation builds a new
-  // adapter and therefore a new, empty table, so no deactivation sweep is
-  // needed to keep stale Lean 4 clients out of the dashboard.
+  // This adapter's own roster; a reactivation builds an empty one.
   const roster = createLeanServerRoster();
   return Object.freeze({
     listServers: () => roster.list(),
