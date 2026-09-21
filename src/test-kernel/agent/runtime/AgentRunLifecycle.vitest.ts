@@ -619,6 +619,16 @@ describe('runFlowWithLifecycle', () => {
         yield* stop.settlement;
 
         expect(stopSessionsForRun).toHaveBeenCalledWith(runId);
+        // The stage close and the terminal row are independent durable facts:
+        // a lost close must not cost the row a stopped run is read by.
+        expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
+          testDefaultSession(),
+          {
+            runId,
+            outcome: RUN_OUTCOME.CANCELLED,
+            output: EMPTY_TOOL_USE_OUTPUT,
+          },
+        );
       } finally {
         testDefaultSession().runs.untrack(runId);
       }
@@ -869,22 +879,22 @@ function finalizeFixture(): {
   runId: RunId;
   session: SessionHandle;
   handle: ReturnType<typeof testRunHandle>;
-  untrack: Mock<(runId: RunId) => void>;
+  untrackIfCurrent: Mock<(handle: RunHandle) => boolean>;
   settlePublications: Mock<(runId?: RunId) => Effect.Effect<void, Error>>;
 } {
   const runId =
     `f${(finalizeFixtureCounter++).toString(16).padStart(5, '0')}` as RunId;
-  const untrack = vi.fn<(runId: RunId) => void>();
+  const untrackIfCurrent = vi.fn<(handle: RunHandle) => boolean>(() => true);
   const settlePublications = vi.fn(
     (_runId?: RunId): Effect.Effect<void, Error> => Effect.void,
   );
   return {
     runId,
     session: {
-      runs: { untrack },
+      runs: { untrackIfCurrent },
       settlePublications,
     } as unknown as SessionHandle,
-    untrack,
+    untrackIfCurrent,
     settlePublications,
     handle: testRunHandle({
       runId,
@@ -914,7 +924,7 @@ describe('finalizeRunTerminal', () => {
     'finalizes exactly once when two callers race across the persist await',
     () =>
       Effect.gen(function* () {
-        const { runId, session, handle, untrack } = finalizeFixture();
+        const { runId, session, handle, untrackIfCurrent } = finalizeFixture();
         // Park the first caller at its persist await so the second caller arrives
         // while the first has not yet emitted or settled anything.
         const parked = yield* parkNextFinalize;
@@ -951,13 +961,13 @@ describe('finalizeRunTerminal', () => {
         // `run.end` is not a trace arm: the storage finalizer is its one
         // writer, so writing it once is what "exactly once" means here.
         expect(storageMocks.finalizeRun).toHaveBeenCalledTimes(1);
-        expect(untrack).toHaveBeenCalledTimes(1);
+        expect(untrackIfCurrent).toHaveBeenCalledTimes(1);
       }),
   );
 
   it.effect('flushes display artifacts before publishing and untracking', () =>
     Effect.gen(function* () {
-      const { runId, session, handle, untrack, settlePublications } =
+      const { session, handle, untrackIfCurrent, settlePublications } =
         finalizeFixture();
       const flushStarted = yield* Deferred.make<void>();
       const releaseFlush = yield* Deferred.make<void>();
@@ -977,13 +987,13 @@ describe('finalizeRunTerminal', () => {
       yield* Deferred.await(flushStarted);
       expect(settlePublications).toHaveBeenCalledOnce();
       expect(storageMocks.finalizeRun).not.toHaveBeenCalled();
-      expect(untrack).not.toHaveBeenCalled();
+      expect(untrackIfCurrent).not.toHaveBeenCalled();
 
       yield* Deferred.succeed(releaseFlush, undefined);
       yield* Fiber.join(finalization);
 
       expect(storageMocks.finalizeRun).toHaveBeenCalledOnce();
-      expect(untrack).toHaveBeenCalledExactlyOnceWith(runId);
+      expect(untrackIfCurrent).toHaveBeenCalledExactlyOnceWith(handle);
     }),
   );
 
@@ -1021,7 +1031,7 @@ describe('finalizeRunTerminal', () => {
   });
 
   it('records a failed drain as the terminal outcome', async () => {
-    const { runId, session, handle, untrack, settlePublications } =
+    const { runId, session, handle, untrackIfCurrent, settlePublications } =
       finalizeFixture();
     settlePublications.mockReturnValueOnce(
       Effect.fail(new Error('artifact flush failed')),
@@ -1049,7 +1059,7 @@ describe('finalizeRunTerminal', () => {
         }),
       }),
     );
-    expect(untrack).toHaveBeenCalledExactlyOnceWith(runId);
+    expect(untrackIfCurrent).toHaveBeenCalledExactlyOnceWith(handle);
   });
 
   // A plane whose consumer stopped cannot settle at all: that is a lost drain
@@ -1078,7 +1088,7 @@ describe('finalizeRunTerminal', () => {
   );
 
   it('settles and untracks once while reporting terminal metadata failure', async () => {
-    const { runId, session, handle, untrack } = finalizeFixture();
+    const { runId, session, handle, untrackIfCurrent } = finalizeFixture();
     const durabilityError = new Error('metadata disk write failed');
     storageMocks.finalizeRun.mockReturnValueOnce(
       Effect.succeed({
@@ -1103,7 +1113,7 @@ describe('finalizeRunTerminal', () => {
         runId,
       },
     });
-    expect(untrack).toHaveBeenCalledExactlyOnceWith(runId);
+    expect(untrackIfCurrent).toHaveBeenCalledExactlyOnceWith(handle);
     expect(channelTraceMocks.warn).toHaveBeenCalledExactlyOnceWith(
       'Failed to finalize durable run state',
       {

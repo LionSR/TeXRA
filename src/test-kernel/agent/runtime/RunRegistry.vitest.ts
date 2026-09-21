@@ -254,8 +254,12 @@ function trackSuspendedWaitingHandle(
 }
 
 /**
- * Park a tracked handle the way `runFlowWithLifecycle` does: the teardown,
- * then the run's terminal row and its untrack, on the fiber the stop wakes.
+ * Park a tracked handle the way `runFlowWithLifecycle`'s WAITING branch does:
+ * the stage close this run still owes (`teardown` here, guarded so an
+ * independent durable fact cannot cost the row), the guard that leaves a
+ * resumed successor alone, then the ordinary terminal path — all on the fiber
+ * the stop wakes. The cascade itself is the lifecycle's and is covered there;
+ * what these tests read off it is the registry's half of the park.
  */
 function parkWaitingHandle(
   registry: RunRegistry,
@@ -266,19 +270,21 @@ function parkWaitingHandle(
     registry.park(
       handle,
       Deferred.makeUnsafe<void>(),
-      teardown.pipe(
-        Effect.andThen(
-          finalizeRun(testDefaultSession(), {
-            runId: handle.runId,
-            outcome: RUN_OUTCOME.CANCELLED,
-          }),
-        ),
-        Effect.andThen(
+      Effect.gen(function* () {
+        yield* teardown.pipe(Effect.catch(() => Effect.void));
+        if (registry.getHandle(handle.runId) !== handle) return;
+        yield* finalizeRunTerminal({
+          session: testDefaultSession(),
+          handle,
+          outcome: RUN_OUTCOME.CANCELLED,
+        });
+      }).pipe(
+        Effect.catchCause(() =>
           Effect.sync(() => {
-            registry.untrack(handle.runId);
+            registry.untrackIfCurrent(handle);
           }),
         ),
-        Effect.orDie,
+        Effect.provideService(Runs, registry),
       ),
     ),
   );
@@ -626,139 +632,6 @@ describe('runRegistry', () => {
       }),
   );
 
-  it.effect(
-    'settles and untracks a waiting handle when terminal metadata persistence fails',
-    () =>
-      Effect.gen(function* () {
-        const { phases, registry } = createRegistry();
-        const parentRunId = generateRunId();
-        const runId = generateRunId();
-        const durabilityError = new Error('metadata disk write failed');
-        storageMocks.finalizeRun.mockReturnValueOnce(
-          Effect.succeed({
-            ok: false,
-            outcomePersisted: false,
-            error: durabilityError,
-          }),
-        );
-        channelTraceMocks.warn.mockClear();
-
-        try {
-          trackSuspendedWaitingHandle(registry, phases, {
-            runId,
-            parent: parentRunId,
-          });
-
-          const stop = registry.kill(runId);
-          expect(stop.accepted()).toBe(true);
-          yield* stop.settlement;
-
-          expect(registry.getHandle(runId)).toBeUndefined();
-          expect(channelTraceMocks.warn).toHaveBeenCalledExactlyOnceWith(
-            'Failed to finalize stopped waiting run',
-            {
-              data: {
-                runId,
-                outcomePersisted: false,
-                error: durabilityError,
-              },
-            },
-          );
-        } finally {
-          registry.dispose();
-        }
-      }),
-  );
-
-  it.effect('persists a waiting stop after transcript cleanup fails', () =>
-    Effect.gen(function* () {
-      const { phases, registry } = createRegistry();
-      const runId = generateRunId();
-      const cleanupError = new Error('transcript reload failed');
-      storageMocks.finalizeRun.mockReturnValueOnce(
-        Effect.succeed({ ok: true }),
-      );
-      channelTraceMocks.warn.mockClear();
-
-      try {
-        trackSuspendedWaitingHandle(registry, phases, {
-          runId,
-          parent: generateRunId(),
-          cleanup: () => Promise.reject(cleanupError),
-        });
-
-        const stop = registry.kill(runId);
-        expect(stop.accepted()).toBe(true);
-        yield* stop.settlement;
-
-        expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
-          testDefaultSession(),
-          {
-            runId,
-            outcome: RUN_OUTCOME.CANCELLED,
-            output: EMPTY_TOOL_USE_OUTPUT,
-          },
-        );
-        expect(channelTraceMocks.warn).toHaveBeenCalledWith(
-          'Waiting-run cleanup failed; continuing terminal persistence',
-          { data: { runId, error: cleanupError } },
-        );
-      } finally {
-        registry.dispose();
-      }
-    }),
-  );
-
-  it.effect(
-    'persists a waiting stop when only flow-record retention fails',
-    () =>
-      Effect.gen(function* () {
-        const { phases, registry } = createRegistry();
-        const runId = generateRunId();
-        const cleanupError = new Error('flow retention failed');
-        storageMocks.finalizeRun.mockReturnValueOnce(
-          Effect.succeed({
-            ok: false,
-            outcomePersisted: true,
-            error: cleanupError,
-          }),
-        );
-        channelTraceMocks.warn.mockClear();
-
-        try {
-          trackSuspendedWaitingHandle(registry, phases, {
-            runId,
-            parent: generateRunId(),
-          });
-
-          const stop = registry.kill(runId);
-          expect(stop.accepted()).toBe(true);
-          yield* stop.settlement;
-
-          expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
-            testDefaultSession(),
-            {
-              runId,
-              outcome: RUN_OUTCOME.CANCELLED,
-              output: EMPTY_TOOL_USE_OUTPUT,
-            },
-          );
-          expect(channelTraceMocks.warn).toHaveBeenCalledExactlyOnceWith(
-            'Failed to finalize stopped waiting run',
-            {
-              data: {
-                runId,
-                outcomePersisted: true,
-                error: cleanupError,
-              },
-            },
-          );
-        } finally {
-          registry.dispose();
-        }
-      }),
-  );
-
   it('reports a failed kill for a tracked handle with neither an interrupt nor a suspension', () => {
     // Guards the fallback above: a handle that never parked must still no-op,
     // or the fallback could spuriously tear down a handle mid-completion, in
@@ -803,13 +676,15 @@ describe('runRegistry', () => {
   });
 
   it.effect(
-    'refuses a waiting stop once a terminal finalize has claimed the run',
+    'keeps one terminal publisher when a stop wakes a claimed parked run',
     () =>
       Effect.gen(function* () {
-        // Both terminal writers claim the same gate, so a kill landing while
-        // `finalizeRunTerminal` is parked at its persist await cannot run the
-        // suspended teardown, publish a second `result`, or persist a second
-        // terminal status over the finalizer's outcome.
+        // The stop still reaches the parked fiber and runs its termination —
+        // the registry holds no terminal claim of its own. The claim inside
+        // `finalizeRunTerminal` is what keeps the publication to one: a kill
+        // landing while an earlier finalizer is parked at its persist await
+        // cannot publish a second `result` or persist a second terminal
+        // status over that finalizer's outcome.
         const { phases, registry } = createRegistry();
         const parentRunId = generateRunId();
         const runId = generateRunId();
@@ -847,12 +722,14 @@ describe('runRegistry', () => {
           expect(storageMocks.finalizeRun).toHaveBeenCalledOnce();
 
           const stop = registry.kill(runId);
-          expect(stop.accepted()).toBe(false);
+          expect(stop.accepted()).toBe(true);
           yield* stop.settlement;
 
           yield* Deferred.succeed(release, undefined);
           yield* Fiber.join(finalized);
-          expect(teardown).not.toHaveBeenCalled();
+          // The park's own termination ran to its terminal step and stopped
+          // there: the claim was gone, so no second row was written.
+          expect(teardown).toHaveBeenCalledOnce();
           expect(storageMocks.finalizeRun).toHaveBeenCalledExactlyOnceWith(
             session,
             expect.objectContaining({

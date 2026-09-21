@@ -117,6 +117,9 @@ const SESSION = {
     untrack: untrackRun,
     // No generation is live unless a case says so.
     isActiveOrResuming: () => mocks.runActive(),
+    // This fixture never parks a run at WAITING; the cases that do build a
+    // real registry of their own.
+    isParked: () => false,
     // The registry's local application of a durable detach, over the one
     // handle this fixture tracks.
     detachChildren: vi.fn((_parent: RunId, children: readonly RunId[]) => {
