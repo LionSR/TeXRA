@@ -1597,13 +1597,13 @@ export class ModelError extends Data.TaggedError('ModelError')<
 
 /**
  * Rebuild a `ModelError` with `patch` applied over the fields it already
- * carries.
+ * carries. `message` and `cause` live on `Error` as own non-enumerable
+ * properties, so the spread that carries every other field silently drops
+ * both; restating them keeps a re-thrown error's text and origin.
  *
- * `message` and `cause` live on `Error` as own non-enumerable properties, so
- * the spread that carries every other field silently drops both. Restating
- * them is what keeps a re-thrown error's text and origin, and every adapter
- * that annotates an error with the response/request it belongs to was
- * restating them by hand.
+ * `patch` is spread last, so one of its keys wins even when its value is
+ * `undefined`: a computed `requestId: undefined` erases the id the failure
+ * mapping already read. Pass only the keys the call site observed.
  */
 export const enrichModelError = (
   error: ModelError,
