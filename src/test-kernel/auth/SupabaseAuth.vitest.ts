@@ -8,16 +8,21 @@ import { afterEach, describe, expect, vi } from 'vitest';
 import { SUPABASE_GOTRUE_STORAGE_KEY } from '@auth/config';
 import { createSupabaseAuth, type SupabaseAuthShape } from '@auth/SupabaseAuth';
 import type { SessionSecretStore } from '@auth/oauth/sessionAccess';
+import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
+import { setLogSink } from '@logger/logSink';
 import * as logger from '@logger/logUtils';
 import { SecretsFailed } from '@platform/secrets';
 import { FakeSecrets } from '@test/support/FakePlatform';
+import { captureLogEntries } from '@test/support/logSinkCapture';
 
 function createAuth(
   secrets: SessionSecretStore,
   whenReady?: () => Effect.Effect<void, Error>,
 ): SupabaseAuthShape {
   return Effect.runSync(
-    createSupabaseAuth({ secrets, ...(whenReady ? { whenReady } : {}) }),
+    createSupabaseAuth({ secrets, ...(whenReady ? { whenReady } : {}) }).pipe(
+      Effect.provide(effectDiagnosticsLayer),
+    ),
   );
 }
 
@@ -65,6 +70,7 @@ describe('SupabaseAuth PKCE flow state', () => {
   const VERIFIER_KEY = `${SUPABASE_GOTRUE_STORAGE_KEY}-code-verifier`;
 
   afterEach(() => {
+    setLogSink(null);
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
@@ -175,7 +181,7 @@ describe('SupabaseAuth PKCE flow state', () => {
     'still signs in this window when the secret store is unwritable',
     () =>
       Effect.gen(function* () {
-        const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+        const logs = captureLogEntries();
         // A locked keychain answers an absent value (rather than throwing) on
         // reads and throws on writes; only the in-process mirror remains usable.
         const secrets: SessionSecretStore = {
@@ -194,10 +200,7 @@ describe('SupabaseAuth PKCE flow state', () => {
 
         yield* Effect.promise(() => startSignIn(auth));
 
-        expect(warn).toHaveBeenCalledWith(
-          'SupabaseAuth',
-          expect.stringContaining('keychain locked'),
-        );
+        expect(logs.has('WARN', 'SupabaseAuth', 'keychain locked')).toBe(true);
 
         // The callback lands in this window: the exchange must still succeed
         // using the mirrored verifier even though the store miss returned absent.

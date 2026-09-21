@@ -23,7 +23,7 @@ import {
   Stream,
 } from 'effect';
 
-import { debug } from '@logger/logUtils';
+import { withLogChannel, withLogData } from '@logger/effectLog';
 import { MEMORY_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import { StorageFs } from '@platform/rootedFs';
 import type { MemoryViewItem } from '@shared/schemas';
@@ -157,6 +157,8 @@ const readStoragePrefix = Effect.fn('memoryFileSystem.readStoragePrefix')(
  * truncated head). Skipping is the whole recovery: the walk continues and the
  * entry still appears, with the reason on the debug channel.
  */
+const CHANNEL = 'memory';
+
 const readMemoryMeta = Effect.fn('memoryFileSystem.readMemoryMeta')(
   (storagePath: string, stats: { size: number }) =>
     readStoragePrefix(storagePath, FRONTMATTER_SCAN_BYTES, stats).pipe(
@@ -167,14 +169,9 @@ const readMemoryMeta = Effect.fn('memoryFileSystem.readMemoryMeta')(
         }),
       ),
       Effect.catch((cause) =>
-        Effect.sync(() => {
-          debug(
-            'memory',
-            `Skipping attribution for unreadable memory file ${storagePath}`,
-            { data: cause },
-          );
-          return null;
-        }),
+        Effect.logDebug(
+          `Skipping attribution for unreadable memory file ${storagePath}`,
+        ).pipe(withLogChannel(CHANNEL), withLogData(cause), Effect.as(null)),
       ),
     ),
 );

@@ -16,6 +16,7 @@ import {
 } from '@agent/index';
 import { showLoggedMessageWithDocs } from '@frontend/ui/errorHandlingUtils';
 import { selectFolder } from '@frontend/ui/dialogs';
+import { withLogChannel } from '@logger/effectLog';
 import { createLog } from '@logger/logUtils';
 import type { AgentDirectoriesFailed } from '@platform/interfaces';
 import type { ProcessRuntime } from '@platform/processRuntime';
@@ -470,11 +471,9 @@ class AgentDirectoryManager {
     this.getHost().runtime.runFork(
       this.ensureAgentWatchers().pipe(
         Effect.catch((error) =>
-          Effect.sync(() => {
-            log.error(
-              `Failed to refresh agent directory watchers: ${toErrorMessage(error)}`,
-            );
-          }),
+          Effect.logError(
+            `Failed to refresh agent directory watchers: ${toErrorMessage(error)}`,
+          ).pipe(withLogChannel(CHANNEL)),
         ),
       ),
     );

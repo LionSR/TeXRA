@@ -6,6 +6,7 @@ import { Cause, Effect, Exit, FileSystem, type PlatformError } from 'effect';
 
 // Local imports
 import { generateDiffFileName } from '@latex/latexdiff/diffFileNameManager';
+import { withLogChannel } from '@logger/effectLog';
 import { createLog } from '@logger/logUtils';
 import { WorkspaceFs } from '@platform/rootedFs';
 import type { FileLocation } from '@shared/schemas';
@@ -20,7 +21,8 @@ import { locateInWorkspace } from '@utils/files/workspaceFS';
 import { getExtensionLowercase } from '@utils/core/pathCore';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 
-const log = createLog('AcceptedFileTarget');
+const CHANNEL = 'AcceptedFileTarget';
+const log = createLog(CHANNEL);
 
 export type AcceptedFileTarget = {
   targetLocation: FileLocation;
@@ -167,15 +169,15 @@ export function commitAcceptedFile<E>(
       // Diff-file cleanup is a best-effort side effect of accepting a file: a
       // file already gone is the post-condition, and any other failure (a
       // locked file) is reported without failing the accept.
-      yield* fs.remove(stale.absolutePath, { force: true }).pipe(
-        Effect.catchTag('PlatformError', (error) =>
-          Effect.sync(() => {
-            log.warn(
+      yield* fs
+        .remove(stale.absolutePath, { force: true })
+        .pipe(
+          Effect.catchTag('PlatformError', (error) =>
+            Effect.logWarning(
               `Could not remove the stale diff file ${stale.absolutePath}: ${error.message}`,
-            );
-          }),
-        ),
-      );
+            ).pipe(withLogChannel(CHANNEL)),
+          ),
+        );
     }
 
     yield* ports.showInfo(

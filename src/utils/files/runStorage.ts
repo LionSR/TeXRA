@@ -4,7 +4,7 @@ import * as path from 'node:path';
 // Third-party imports
 import { Effect, FileSystem, PlatformError } from 'effect';
 
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { type RunId, type FileLocation } from '@shared/schemas';
 import {
@@ -31,8 +31,6 @@ import {
   snapshotExists,
 } from './runStorageFs';
 import { locateInWorkspace } from './workspaceFS';
-
-const log = createLog(CHANNEL);
 
 /** `isFileNotFoundError` over the standard library's errors: the one reading
  *  of "nothing is there" the guards below branch on. */
@@ -95,11 +93,9 @@ export class RunFileService {
         (candidate) =>
           this.mirrorWorkspaceFile(candidate).pipe(
             Effect.catch((error) =>
-              Effect.sync(() => {
-                log.warn(
-                  `Failed to mirror workspace dependency ${candidate.absolutePath}: ${toErrorMessage(error)}`,
-                );
-              }),
+              Effect.logWarning(
+                `Failed to mirror workspace dependency ${candidate.absolutePath}: ${toErrorMessage(error)}`,
+              ).pipe(withLogChannel(CHANNEL)),
             ),
           ),
         { concurrency: 'unbounded', discard: true },
@@ -291,9 +287,9 @@ export class RunFileService {
               depDir === '' &&
               depName === WORKFLOW_OUTPUT_BASENAME
             ) {
-              log.debug(
+              yield* Effect.logDebug(
                 `Skipping run-dir mirror of ${relativePath}: would clobber primary output in ${relativeDirectory}`,
-              );
+              ).pipe(withLogChannel(CHANNEL));
               return;
             }
 
@@ -320,14 +316,11 @@ export class RunFileService {
             const hasSnapshot = yield* fs.stat(snapshotAbsolute).pipe(
               Effect.as(true),
               Effect.catch((error) =>
-                Effect.sync(() => {
-                  if (!isAbsent(error)) {
-                    log.warn(
+                isAbsent(error)
+                  ? Effect.succeed(false)
+                  : Effect.logWarning(
                       `Unable to stat snapshot ${snapshotAbsolute}; linking the workspace mirror instead: ${toErrorMessage(error)}`,
-                    );
-                  }
-                  return false;
-                }),
+                    ).pipe(withLogChannel(CHANNEL), Effect.as(false)),
               ),
             );
             const sourceAbsolute = hasSnapshot
@@ -359,29 +352,27 @@ export class RunFileService {
                   : ('realFile' as const);
               }),
               Effect.catch((error) =>
-                Effect.sync(() => {
-                  log.warn(
-                    `Skipping run-dir mirror of ${relativePath}: cannot stat the destination in ${relativeDirectory}: ${toErrorMessage(error)}`,
-                  );
-                  return 'unreadable' as const;
-                }),
+                Effect.logWarning(
+                  `Skipping run-dir mirror of ${relativePath}: cannot stat the destination in ${relativeDirectory}: ${toErrorMessage(error)}`,
+                ).pipe(
+                  withLogChannel(CHANNEL),
+                  Effect.as('unreadable' as const),
+                ),
               ),
             );
             if (destination === 'realFile') {
-              log.debug(
+              yield* Effect.logDebug(
                 `Skipping run-dir mirror of ${relativePath}: destination in ${relativeDirectory} is an existing real file`,
-              );
+              ).pipe(withLogChannel(CHANNEL));
               return;
             }
             if (destination === 'unreadable') return;
 
             yield* createSymlink(sourceAbsolute, destinationAbsolute).pipe(
               Effect.catch((error) =>
-                Effect.sync(() => {
-                  log.warn(
-                    `Unable to mirror ${relativePath} into ${relativeDirectory}: ${toErrorMessage(error)}`,
-                  );
-                }),
+                Effect.logWarning(
+                  `Unable to mirror ${relativePath} into ${relativeDirectory}: ${toErrorMessage(error)}`,
+                ).pipe(withLogChannel(CHANNEL)),
               ),
             );
           }),

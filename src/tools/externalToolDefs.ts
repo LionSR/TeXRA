@@ -19,7 +19,7 @@ import {
   causeChain,
   isModuleNotFoundError,
 } from '@common/errors/errorPredicates';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import { apiKeyEnvName, lookupApiKeyOrigin } from '@model/apiProviders';
 import type { ConfigProvider } from '@platform/interfaces';
 import { Secrets } from '@platform/secrets';
@@ -59,7 +59,7 @@ import { isGitRepository } from '@utils/git/isGitRepository';
 import { formatResultCount } from '@utils/text/stringUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-const log = createLog('externalToolDefs');
+const CHANNEL = 'externalToolDefs';
 
 /**
  * Node.js semver range the `texra` CLI supports; the same value
@@ -806,12 +806,12 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
         // A secret store that will not answer is not the same fact as an
         // unset key, so the environment fallback names the failure.
         Effect.catchTag('SecretsFailed', (failure) =>
-          Effect.sync(() => {
-            log.warn(
-              `Reading the Anthropic API key failed; reporting the environment instead: ${failure.message}`,
-            );
-            return process.env[anthropicApiKeyEnv] ? 'env' : 'none';
-          }),
+          Effect.logWarning(
+            `Reading the Anthropic API key failed; reporting the environment instead: ${failure.message}`,
+          ).pipe(
+            withLogChannel(CHANNEL),
+            Effect.as(process.env[anthropicApiKeyEnv] ? 'env' : 'none'),
+          ),
         ),
       );
       const hasOauthToken = hasClaudeCodeOauthToken();

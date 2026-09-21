@@ -69,6 +69,8 @@ import {
 import { createVsCodeLogSink } from '@frontend/vscode/vscodeLogSink';
 import { VscodeSecrets } from '@frontend/vscode/vscodeSecrets';
 import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
+import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
+import { withLogChannel, withLogData } from '@logger/effectLog';
 import * as logger from '@logger/logUtils';
 import { setLogSink } from '@logger/logSink';
 import { formatFatalErrorDetail } from '@logger/redaction';
@@ -121,7 +123,8 @@ import { mementoStateStore } from './frontend/vscodeStateStore';
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';
 import { registerCommands } from './commands';
 
-const log = logger.createLog('extension');
+const EXTENSION_CHANNEL = 'extension';
+const log = logger.createLog(EXTENSION_CHANNEL);
 
 const authLog = logger.createLog('SupabaseAuthProvider');
 
@@ -527,12 +530,15 @@ export async function activate(context: vscode.ExtensionContext) {
           ? Effect.void
           : Effect.promise(() => shutdownExtension()).pipe(
               Effect.catchCause((cause) =>
-                Effect.sync(() => {
-                  log.error(
-                    'Extension cleanup after failed activation failed',
-                    { data: Cause.squash(cause) },
-                  );
-                }),
+                Effect.logError(
+                  'Extension cleanup after failed activation failed',
+                ).pipe(
+                  withLogData(Cause.squash(cause)),
+                  withLogChannel(EXTENSION_CHANNEL),
+                  // No runtime exists to hold the diagnostics layer yet, so
+                  // the entry needs it provided to reach the host's sink.
+                  Effect.provide(effectDiagnosticsLayer),
+                ),
               ),
             ),
       ),
@@ -755,11 +761,9 @@ async function activateExtension(context: vscode.ExtensionContext) {
     void runtime.runPromise(
       loadAgents().pipe(
         Effect.catchCause((cause) =>
-          Effect.sync(() => {
-            log.warn(
-              `Remote agent refresh failed: ${toErrorMessage(Cause.squash(cause))}`,
-            );
-          }),
+          Effect.logWarning(
+            `Remote agent refresh failed: ${toErrorMessage(Cause.squash(cause))}`,
+          ).pipe(withLogChannel(EXTENSION_CHANNEL)),
         ),
       ),
     );
@@ -801,11 +805,9 @@ async function activateExtension(context: vscode.ExtensionContext) {
       config: runtimeSession.roots.config,
     }).pipe(
       Effect.catchCause((cause) =>
-        Effect.sync(() => {
-          log.error(
-            `Tool availability refresh failed (${trigger}): ${toErrorMessage(Cause.squash(cause))}`,
-          );
-        }),
+        Effect.logError(
+          `Tool availability refresh failed (${trigger}): ${toErrorMessage(Cause.squash(cause))}`,
+        ).pipe(withLogChannel(EXTENSION_CHANNEL)),
       ),
     );
 
@@ -888,11 +890,9 @@ async function activateExtension(context: vscode.ExtensionContext) {
     runtime.runPromise(
       apiKeyStatusRefresh().pipe(
         Effect.catchCause((cause) =>
-          Effect.sync(() => {
-            log.error(
-              `API key status refresh failed: ${toErrorMessage(Cause.squash(cause))}`,
-            );
-          }),
+          Effect.logError(
+            `API key status refresh failed: ${toErrorMessage(Cause.squash(cause))}`,
+          ).pipe(withLogChannel(EXTENSION_CHANNEL)),
         ),
       ),
     );
@@ -995,15 +995,15 @@ async function activateExtension(context: vscode.ExtensionContext) {
       // recompute too: the State 0 card has no other signal when a key is
       // added outside the main view's own round-trip.
       await runtime.runPromise(
-        progressViewProvider.refreshOnboardingFunnel().pipe(
-          Effect.catchCause((cause) =>
-            Effect.sync(() => {
-              log.warn(
+        progressViewProvider
+          .refreshOnboardingFunnel()
+          .pipe(
+            Effect.catchCause((cause) =>
+              Effect.logWarning(
                 `Onboarding funnel refresh failed: ${toErrorMessage(Cause.squash(cause))}`,
-              );
-            }),
+              ).pipe(withLogChannel(EXTENSION_CHANNEL)),
+            ),
           ),
-        ),
       );
     }),
   );

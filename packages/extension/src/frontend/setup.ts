@@ -5,6 +5,7 @@ import * as vscode from 'vscode';
 
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { promptExtensionInstall } from '@frontend/ui/instruction';
+import { withLogChannel } from '@logger/effectLog';
 import { createLog } from '@logger/logUtils';
 import type { AgentDirectoriesFailed, StateStore } from '@platform/interfaces';
 import type { ProcessRuntime } from '@platform/processRuntime';
@@ -14,7 +15,8 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { registerExternalRoot } from '@utils/files/externalRoots';
 import { extendEnvPath } from '@utils/system/platformPaths';
 
-const log = createLog('extension');
+const CHANNEL = 'extension';
+const log = createLog(CHANNEL);
 
 /** External-root registration options for the custom agents directory. */
 const CUSTOM_AGENT_ROOT_OPTIONS = {
@@ -84,11 +86,9 @@ export function registerAgentDirectoryRoots(
     (register) =>
       register.pipe(
         Effect.catchCause((cause) =>
-          Effect.sync(() => {
-            log.error(
-              `Failed to register agent directory root: ${toErrorMessage(Cause.squash(cause))}`,
-            );
-          }),
+          Effect.logError(
+            `Failed to register agent directory root: ${toErrorMessage(Cause.squash(cause))}`,
+          ).pipe(withLogChannel(CHANNEL)),
         ),
       ),
     { discard: true },
@@ -112,11 +112,9 @@ export function refreshCustomAgentRoot(): Effect.Effect<
       ),
     ),
     Effect.catchCause((cause) =>
-      Effect.sync(() => {
-        log.error(
-          `Failed to refresh custom agents root: ${toErrorMessage(Cause.squash(cause))}`,
-        );
-      }),
+      Effect.logError(
+        `Failed to refresh custom agents root: ${toErrorMessage(Cause.squash(cause))}`,
+      ).pipe(withLogChannel(CHANNEL)),
     ),
   );
 }
@@ -141,11 +139,9 @@ export async function initializeLatexSupport(
       }
     }).pipe(
       Effect.catchCause((cause) =>
-        Effect.sync(() => {
-          log.warn(
-            `Failed to extend PATH with TeX directories: ${toErrorMessage(Cause.squash(cause))}`,
-          );
-        }),
+        Effect.logWarning(
+          `Failed to extend PATH with TeX directories: ${toErrorMessage(Cause.squash(cause))}`,
+        ).pipe(withLogChannel(CHANNEL)),
       ),
     ),
   );
@@ -164,7 +160,9 @@ export async function initializeLatexSupport(
         // evaluating TeXRA or using it on a non-LaTeX project should not be
         // prompted to install a TeX extension they don't need. They'll still
         // discover it via the LaTeX settings tab or compile errors later.
-        log.info('LaTeX Workshop extension not found, prompting installation');
+        yield* Effect.logInfo(
+          'LaTeX Workshop extension not found, prompting installation',
+        ).pipe(withLogChannel(CHANNEL));
         yield* promptExtensionInstall(globalState, {
           suppressKey: 'latex-workshop-install',
           message:
@@ -175,11 +173,9 @@ export async function initializeLatexSupport(
       }
     }).pipe(
       Effect.catchCause((cause) =>
-        Effect.sync(() => {
-          log.error(
-            `Error initializing LaTeX support: ${toErrorMessage(Cause.squash(cause))}`,
-          );
-        }),
+        Effect.logError(
+          `Error initializing LaTeX support: ${toErrorMessage(Cause.squash(cause))}`,
+        ).pipe(withLogChannel(CHANNEL)),
       ),
     ),
   );

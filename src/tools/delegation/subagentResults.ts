@@ -14,6 +14,7 @@ import { Effect, FileSystem } from 'effect';
 
 import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
 import { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
+import { withLogChannel } from '@logger/effectLog';
 import { createLog } from '@logger/logUtils';
 import {
   runStorageFilePath,
@@ -291,7 +292,7 @@ const LARGE_CHANGE_DIFF_LINES = 80;
  */
 const LARGE_CHANGE_RATIO = 0.4;
 
-const log = createLog('subagentDiffs');
+const CHANNEL = 'subagentDiffs';
 // The boundary warn in `buildSubagentResult` predates the A4 file merge and
 // stays on its historical channel so log ingestion keyed on it keeps seeing it.
 const deliveryLog = createLog('subagentDelivery');
@@ -375,11 +376,9 @@ const computeAndWriteWorkflowDiffs = Effect.fn(
         // unchanged file (matching the loud diff-unavailable note the caller
         // boundary logs).
         Effect.catch((error) =>
-          Effect.sync(() => {
-            log.warn(
-              `Skipping diff for ${o.absolutePath}: ${toErrorMessage(error)}`,
-            );
-          }),
+          Effect.logWarning(
+            `Skipping diff for ${o.absolutePath}: ${toErrorMessage(error)}`,
+          ).pipe(withLogChannel(CHANNEL)),
         ),
       ),
     { concurrency: 'unbounded' },

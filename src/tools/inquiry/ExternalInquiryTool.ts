@@ -20,7 +20,7 @@ import { Cause, Effect } from 'effect';
 import { z } from 'zod';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { ToolCall } from '@agent/runtime/ToolCall';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel, withLogData } from '@logger/effectLog';
 import {
   type InquiryThreadRecord,
   aggregateId as qualifyAggregateId,
@@ -39,7 +39,7 @@ import { formatResultCount } from '@utils/text/stringUtils';
 
 import { collectKnownSessionLinks } from './inquiryRecordFormatting';
 
-const logger = createLog('InquiryTool');
+const CHANNEL = 'InquiryTool';
 
 // ============================================================================
 // Schemas
@@ -249,9 +249,12 @@ export class ExternalInquiryTool extends defineTool({
       const suggestSearch = input.suggestSearch ?? undefined;
       const attachFiles = input.attachFiles ?? undefined;
 
-      logger.info(`Inquiry dispatch [${input.thread_id ?? 'new'}]`, {
-        data: input.question.slice(0, 100),
-      });
+      yield* Effect.logInfo(
+        `Inquiry dispatch [${input.thread_id ?? 'new'}]`,
+      ).pipe(
+        withLogData(input.question.slice(0, 100)),
+        withLogChannel(CHANNEL),
+      );
 
       const manifest = yield* records.recordOpenQuestion({
         threadId: input.thread_id ?? undefined,
@@ -330,12 +333,12 @@ export class ExternalInquiryTool extends defineTool({
               // the thread stays open, which the warning says, and the
               // original failure is what the tool reports.
               Effect.catchCause((cause) =>
-                Effect.sync(() => {
-                  logger.warn(
-                    `Inquiry thread ${manifest.threadId} stays open after its request failed to open`,
-                    { data: Cause.squash(cause) },
-                  );
-                }),
+                Effect.logWarning(
+                  `Inquiry thread ${manifest.threadId} stays open after its request failed to open`,
+                ).pipe(
+                  withLogData(Cause.squash(cause)),
+                  withLogChannel(CHANNEL),
+                ),
               ),
             ),
           ),

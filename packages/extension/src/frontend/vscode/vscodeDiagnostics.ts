@@ -8,11 +8,11 @@
 import { Effect, Option } from 'effect';
 import * as vscode from 'vscode';
 
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 
 import { firstEventOrTimeout } from './vscodeEventWait';
 
-const log = createLog('VscodeDiagnostics');
+const CHANNEL = 'VscodeDiagnostics';
 
 /**
  * Wait for diagnostics to change for a specific file, giving up after
@@ -44,9 +44,9 @@ export function waitForDiagnosticsChange(
   ).pipe(
     Effect.tap((observed) =>
       Option.isNone(observed)
-        ? Effect.sync(() =>
-            log.debug(`Timed out waiting for diagnostics: ${uri.fsPath}`),
-          )
+        ? Effect.logDebug(
+            `Timed out waiting for diagnostics: ${uri.fsPath}`,
+          ).pipe(withLogChannel(CHANNEL))
         : Effect.void,
     ),
     Effect.asVoid,

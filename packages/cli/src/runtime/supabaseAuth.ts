@@ -239,7 +239,8 @@ export function signOutCliSupabase(): Effect.Effect<
       .pipe(Effect.mapError(unwrapAuthPortCause));
     yield* refreshRemoteAgentCatalogAfterSignOut(
       invalidateRemoteAgentsAfterSignOut(),
-      (message) => activeAuthLog?.warn?.('cli-auth', message),
+      (message) =>
+        Effect.sync(() => activeAuthLog?.warn?.('cli-auth', message)),
     );
   });
 }

@@ -15,7 +15,7 @@ import type { AgentRunServices } from '@agent/runtime/toolInjection';
 import { Runs } from '@agent/runtime/runRegistry';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import { formatError } from '@common/errors';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import type { AppState } from '@platform/interfaces';
 import type { LanguageModel } from '@platform/languageModel';
 import type { Secrets } from '@platform/secrets';
@@ -46,7 +46,7 @@ import {
 import { selectAvailableDelegationModel } from './delegationAvailability';
 import { requireVisibleAgent, type DelegationParent } from './proposalFlow';
 
-const log = createLog('workflowScriptAgentRunner');
+const CHANNEL = 'workflowScriptAgentRunner';
 
 function workflowRunnerError(error: unknown): Error {
   return error instanceof SubagentDurabilityError
@@ -370,11 +370,9 @@ const fenceSupersededRun = (
       (release) =>
         release.pipe(
           Effect.catch((error) =>
-            Effect.sync(() => {
-              log.warn(
-                `Workflow child ${runId} kept its claim after the call that fenced it: ${formatError('claim release failed', error)}`,
-              );
-            }),
+            Effect.logWarning(
+              `Workflow child ${runId} kept its claim after the call that fenced it: ${formatError('claim release failed', error)}`,
+            ).pipe(withLogChannel(CHANNEL)),
           ),
         ),
     );

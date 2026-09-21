@@ -7,6 +7,7 @@ import { Effect, FileSystem } from 'effect';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 
 // Local imports
+import { withLogChannel, withLogData } from '@logger/effectLog';
 import { createLog } from '@logger/logUtils';
 import { AgentResume } from '@platform/interfaces';
 import type { AcceptCopyMeta, RunId } from '@shared/schemas';
@@ -20,7 +21,8 @@ import {
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { RunOutputsSource } from './runOutputs';
 
-const log = createLog('ProgressWorkflowFileActions');
+const CHANNEL = 'ProgressWorkflowFileActions';
+const log = createLog(CHANNEL);
 
 type ProgressWorkflowFileActionsState = RunOutputsSource;
 
@@ -162,17 +164,19 @@ export class ProgressWorkflowFileActionsController {
       let currentContent: string | undefined;
 
       if (backup !== undefined) {
-        currentContent = yield* this.deps.host.readFile(file).pipe(
-          Effect.catch((error) =>
-            Effect.sync(() => {
-              log.debug(
+        currentContent = yield* this.deps.host
+          .readFile(file)
+          .pipe(
+            Effect.catch((error) =>
+              Effect.logDebug(
                 `Could not read current content of ${file} before accept`,
-                { data: error },
-              );
-              return undefined;
-            }),
-          ),
-        );
+              ).pipe(
+                withLogData(error),
+                withLogChannel(CHANNEL),
+                Effect.as(undefined),
+              ),
+            ),
+          );
       }
 
       let copyMeta: AcceptCopyMeta | undefined;

@@ -39,7 +39,8 @@ import type { AgentEvent, AgentTrace, ResultEvent } from '@agent/trace';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import { finalizeRun } from '@agent/storage/runLifecycle';
 import type { ResponseTextProcessing } from '@latex/texraResponseTextProcessing';
-import { createLog, isDebugModeEnabled } from '@logger/logUtils';
+import { withLogChannel, withLogData } from '@logger/effectLog';
+import { isDebugModeEnabled } from '@logger/logUtils';
 import { redactSecrets } from '@logger/redaction';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
@@ -102,7 +103,7 @@ import type { SessionApprovals } from './runApprovalQueue';
 import type { RunRegistry } from './runRegistry';
 import type { ModelRetryGate } from './ModelRetryGate';
 
-const logger = createLog('sessionHandle');
+const CHANNEL = 'sessionHandle';
 
 /**
  * Facts a run had queued did not commit before its lease ended: the artifact
@@ -506,9 +507,9 @@ export class SessionHandle {
       );
       const primary = failures.shift();
       for (const error of failures)
-        logger.warn(`Run ${runId}: claim release also failed`, {
-          data: error,
-        });
+        yield* Effect.logWarning(
+          `Run ${runId}: claim release also failed`,
+        ).pipe(withLogData(error), withLogChannel(CHANNEL));
       if (primary !== undefined)
         return yield* Effect.fail(ensureError(primary));
     });
@@ -760,12 +761,16 @@ export class SessionHandle {
       return yield* this.decisionFor(runId, requestId, from).pipe(
         Effect.map((row) => row.decision),
         Effect.catch((cause) =>
-          Effect.sync((): RequestDecision => {
-            logger.warn(`Request ${requestId} closed without a decision`, {
-              data: cause,
-            });
-            return { action: 'cancel', cause: cause.message };
-          }),
+          Effect.logWarning(
+            `Request ${requestId} closed without a decision`,
+          ).pipe(
+            withLogData(cause),
+            withLogChannel(CHANNEL),
+            Effect.as({
+              action: 'cancel',
+              cause: cause.message,
+            } satisfies RequestDecision),
+          ),
         ),
       );
     }).pipe(
@@ -999,9 +1004,11 @@ export class SessionHandle {
     this.graph.detach((append) =>
       job(append).pipe(
         Effect.tapCause((cause) =>
-          Effect.sync(() => {
-            logger.error('Session publication failed', { data: cause });
-          }).pipe(Effect.ignoreCause),
+          Effect.logError('Session publication failed').pipe(
+            withLogData(cause),
+            withLogChannel(CHANNEL),
+            Effect.ignoreCause,
+          ),
         ),
         Effect.exit,
         Effect.tap((exit) =>
@@ -1094,11 +1101,11 @@ export class SessionHandle {
       // defect that ends the caller before that row is written. Interruption
       // still propagates.
       Effect.catchDefect((defect) =>
-        Effect.sync(() => {
-          logger.warn('Session publications could not be settled', {
-            data: defect,
-          });
-        }).pipe(Effect.andThen(Effect.fail(ensureError(defect)))),
+        Effect.logWarning('Session publications could not be settled').pipe(
+          withLogData(defect),
+          withLogChannel(CHANNEL),
+          Effect.andThen(Effect.fail(ensureError(defect))),
+        ),
       ),
     );
   }
@@ -1129,11 +1136,10 @@ export class SessionHandle {
           (listener) =>
             Effect.suspend(() => listener({ ...event, runId: target.id })).pipe(
               Effect.catchCause((cause) =>
-                Effect.sync(() => {
-                  logger.warn('Session result listener threw', {
-                    data: Cause.squash(cause),
-                  });
-                }),
+                Effect.logWarning('Session result listener threw').pipe(
+                  withLogData(Cause.squash(cause)),
+                  withLogChannel(CHANNEL),
+                ),
               ),
             ),
           { discard: true },
@@ -1324,9 +1330,9 @@ export const settleLiveSessionRuns: Effect.Effect<void> = Effect.gen(
         ): Effect.Effect<Error | undefined> =>
           Effect.gen(function* () {
             if (!tracked) {
-              logger.warn(
+              yield* Effect.logWarning(
                 `Run ${runId} was untracked while the host exit settled it; any transcript groups it left open stay open`,
-              );
+              ).pipe(withLogChannel(CHANNEL));
               return undefined;
             }
             // A failed read leaves nothing to close; it is reported after the
@@ -1416,21 +1422,16 @@ export const settleLiveSessionRuns: Effect.Effect<void> = Effect.gen(
         // short, then let it through: the runs behind this one are abandoned
         // by the same deadline rather than walked past as if each had failed.
         Effect.onInterrupt(() =>
-          Effect.sync(() => {
-            logger.warn(
-              `Host exit deadline passed before run ${runId} could settle`,
-            );
-          }),
+          Effect.logWarning(
+            `Host exit deadline passed before run ${runId} could settle`,
+          ).pipe(withLogChannel(CHANNEL)),
         ),
         Effect.catchCause((cause) =>
           Cause.hasInterrupts(cause)
             ? Effect.interrupt
-            : Effect.sync(() => {
-                logger.warn(
-                  `Failed to settle run ${runId} at host exit; a later launch classifies it from its checkpoint`,
-                  { data: Cause.squash(cause) },
-                );
-              }),
+            : Effect.logWarning(
+                `Failed to settle run ${runId} at host exit; a later launch classifies it from its checkpoint`,
+              ).pipe(withLogData(Cause.squash(cause)), withLogChannel(CHANNEL)),
         ),
       );
     }

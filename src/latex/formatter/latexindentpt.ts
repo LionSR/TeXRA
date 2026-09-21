@@ -4,14 +4,12 @@ import { Effect, FileSystem } from 'effect';
 
 import { sync as globSync } from 'glob';
 
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { normalizeFilePath } from '@utils/core';
 import { runToolWithCheck } from '@utils/system/toolUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '../latexLogging';
-
-const log = createLog(CHANNEL);
 
 export const LATEXINDENT_CONFIG_KEY = 'texra.latex.latexindentConfig';
 
@@ -33,13 +31,14 @@ const cleanupIndentLog = Effect.fn('latex.cleanupIndentLog')(function* (
   const removed = yield* fs.remove(logPath, { force: true }).pipe(
     Effect.as(true),
     Effect.catch((err) =>
-      Effect.sync(() => {
-        log.warn(`Error removing indent.log: ${toErrorMessage(err)}`);
-        return false;
-      }),
+      Effect.logWarning(
+        `Error removing indent.log: ${toErrorMessage(err)}`,
+      ).pipe(withLogChannel(CHANNEL), Effect.as(false)),
     ),
   );
-  if (removed) log.debug(`Removed ${logPath}`);
+  if (removed) {
+    yield* Effect.logDebug(`Removed ${logPath}`).pipe(withLogChannel(CHANNEL));
+  }
 });
 
 /** Delete all files matching backup glob patterns in a directory. */
@@ -61,15 +60,16 @@ const cleanupBackupFiles = Effect.fn('latex.cleanupBackupFiles')(function* (
     const removed = yield* fs.remove(backupFile, { force: true }).pipe(
       Effect.as(true),
       Effect.catch((err) =>
-        Effect.sync(() => {
-          log.warn(
-            `Error removing backup file ${backupFile}: ${toErrorMessage(err)}`,
-          );
-          return false;
-        }),
+        Effect.logWarning(
+          `Error removing backup file ${backupFile}: ${toErrorMessage(err)}`,
+        ).pipe(withLogChannel(CHANNEL), Effect.as(false)),
       ),
     );
-    if (removed) log.debug(`Removed backup file: ${backupFile}`);
+    if (removed) {
+      yield* Effect.logDebug(`Removed backup file: ${backupFile}`).pipe(
+        withLogChannel(CHANNEL),
+      );
+    }
   }
 });
 
@@ -126,14 +126,16 @@ export const runLatexIndent = Effect.fn('latex.runLatexIndent')(
     }
 
     if (success) {
-      log.info(`Indented ${absolutePath}`);
+      yield* Effect.logInfo(`Indented ${absolutePath}`).pipe(
+        withLogChannel(CHANNEL),
+      );
     }
     return success;
   },
   Effect.catch((err) =>
-    Effect.sync(() => {
-      log.error(`Error running LaTeX indent: ${toErrorMessage(err)}`);
-      return false;
-    }),
+    Effect.logError(`Error running LaTeX indent: ${toErrorMessage(err)}`).pipe(
+      withLogChannel(CHANNEL),
+      Effect.as(false),
+    ),
   ),
 );

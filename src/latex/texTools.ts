@@ -6,7 +6,7 @@ import { Data, Effect, FileSystem } from 'effect';
 import { z } from 'zod';
 
 // Local imports
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import { WorkspaceFs } from '@platform/rootedFs';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { ExecResult, FileLocation } from '@shared/schemas';
@@ -179,7 +179,6 @@ export const compileLatex2Pdf = Effect.fn('compileLatex2Pdf')(function* (
   // Schema provides compiler default; channel defaults to module constant
   const parsed = LaTeXCompileOptionsSchema.parse(options);
   const channel = parsed.channel ?? CHANNEL;
-  const log = createLog(channel);
   const { outputDirectory, compiler, timeout, extraInputDirs } = parsed;
   const fs = yield* FileSystem.FileSystem;
   const workspacePath = (yield* WorkspaceFs).root;
@@ -223,7 +222,9 @@ export const compileLatex2Pdf = Effect.fn('compileLatex2Pdf')(function* (
     // any inherited values. `path.delimiter` keeps it cross-platform.
     const env = buildLatexInputEnv(texInputParts, bibSearchParts);
     for (const [key, value] of Object.entries(env)) {
-      log.debug(`Setting ${key} to: ${value}`);
+      yield* Effect.logDebug(`Setting ${key} to: ${value}`).pipe(
+        withLogChannel(channel),
+      );
     }
 
     // The compiler's cwd is the workspace root: a session with no folder open
@@ -260,10 +261,10 @@ export const compileLatex2Pdf = Effect.fn('compileLatex2Pdf')(function* (
       // Suppress error for latexmk to try pdflatex as fallback
       result = yield* runTool('latexmk', latexmkArgs, false);
       if (!result) {
-        log.warn(
+        yield* Effect.logWarning(
           'latexmk not found, falling back to single-pass pdflatex — ' +
             'bibliography, cross-references, and index may be incomplete',
-        );
+        ).pipe(withLogChannel(channel));
         result = yield* runTool('pdflatex', pdflatexArgs, true);
       }
     } else {
@@ -271,7 +272,9 @@ export const compileLatex2Pdf = Effect.fn('compileLatex2Pdf')(function* (
     }
 
     if (result && result.success) {
-      log.debug(`Successfully compiled ${latexFile}`);
+      yield* Effect.logDebug(`Successfully compiled ${latexFile}`).pipe(
+        withLogChannel(channel),
+      );
       return { ok: true, pdfPath: `${outputStem}.pdf` } as const;
     }
     return {
@@ -281,7 +284,9 @@ export const compileLatex2Pdf = Effect.fn('compileLatex2Pdf')(function* (
   });
 
   const failed = Effect.fnUntraced(function* (message: string) {
-    log.error(`Error compiling LaTeX: ${message}`);
+    yield* Effect.logError(`Error compiling LaTeX: ${message}`).pipe(
+      withLogChannel(channel),
+    );
     const tail = yield* readCompileLogTail(`${outputStem}.log`);
     return {
       ok: false,

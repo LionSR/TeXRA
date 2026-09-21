@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { redactSecrets } from '@logger/redaction';
+import { redactDisplayValue, redactSecrets } from '@logger/redaction';
 import { API_KEY_PROVIDER_IDS } from '@shared/constants/providers';
 
 /**
@@ -83,5 +83,32 @@ describe('desktop log redaction', () => {
     expect(Object.keys(PROVIDER_KEY_EXAMPLES).toSorted()).toEqual(
       [...API_KEY_PROVIDER_IDS].toSorted(),
     );
+  });
+});
+
+// A `withLogData` payload reaches `redactDisplayValue` raw, before any sink
+// renders it. An `Error`'s fields are non-enumerable, so the walk must flatten
+// it or the render at the sink would show `{}` where the error was.
+describe('redactDisplayValue over raw log payloads', () => {
+  it('flattens an Error, cause chain included, and scrubs it like any payload', () => {
+    const key = 'sk-provider-redaction-example-1234567890abcdef';
+    const error = new Error(`outer failure holding ${key}`, {
+      cause: new Error('inner cause'),
+    });
+    const redacted = redactDisplayValue({ data: error });
+
+    const rendered = JSON.stringify(redacted);
+    expect(rendered).not.toContain(key);
+    expect(rendered).toContain('outer failure holding [redacted]');
+    expect(rendered).toContain('inner cause');
+    expect(rendered).toContain('"name":"Error"');
+    expect(rendered).toContain('"stack"');
+  });
+
+  it('terminates on a cyclic payload, leaving its report to the renderer', () => {
+    const payload: Record<string, unknown> = { note: 'self' };
+    payload['self'] = payload;
+
+    expect(() => redactDisplayValue(payload)).not.toThrow();
   });
 });

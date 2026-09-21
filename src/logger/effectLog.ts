@@ -17,8 +17,7 @@
 import { Effect } from 'effect';
 
 // Local imports
-import { LOG_CHANNEL } from '@logger/logSink';
-import { formatLogData, isDebugModeEnabled } from '@logger/logUtils';
+import { LOG_CHANNEL, LOG_DATA } from '@logger/logSink';
 
 /**
  * Name the channel every `Effect.log*` inside `self` belongs to. Annotations
@@ -32,18 +31,13 @@ export const withLogChannel =
 
 /**
  * Attach a debug payload to the entries inside `self`, on the same terms as
- * `createLog`'s `{ data }` option: rendered with Errors flattened, and only
- * when debug mode is on, so an ordinary session's diagnostics stay readable.
- * The setting is read when the effect runs, not when it is built, so a program
- * composed once still honours a mode the user changed since.
+ * `createLog`'s `{ data }` option: the payload rides the entry raw under the
+ * `data` annotation, and the sinks that render annotations show it only in
+ * debug mode, with `Error`s flattened. Nothing here reads configuration at
+ * build or run time — whether a surface renders the payload is the sink's
+ * decision, made where the entry is displayed.
  */
 export const withLogData =
   (data: unknown) =>
   <A, E, R>(self: Effect.Effect<A, E, R>): Effect.Effect<A, E, R> =>
-    data == null
-      ? self
-      : Effect.suspend(() =>
-          isDebugModeEnabled()
-            ? Effect.annotateLogs(self, { data: formatLogData(data) })
-            : self,
-        );
+    data == null ? self : Effect.annotateLogs(self, { [LOG_DATA]: data });

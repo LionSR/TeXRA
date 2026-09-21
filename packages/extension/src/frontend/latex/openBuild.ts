@@ -8,6 +8,7 @@ import type { SessionHandle } from '@agent/runtime';
 import { isLatexFile } from '@common/files/fileTypeUtils';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import { compileLatex2Pdf } from '@latex/texTools';
+import { withLogChannel, withLogData } from '@logger/effectLog';
 import { createLog } from '@logger/logUtils';
 import { withSessionFs } from '@platform/rootedFs';
 import type { FileLocation } from '@shared/schemas';
@@ -22,7 +23,6 @@ import { pathToLocationIn } from '@utils/files/fileLocation';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'OpenBuildUtils';
-const log = createLog(CHANNEL);
 
 /**
  * A VS Code editor call as an Effect. The editor's promises reject with an
@@ -269,9 +269,11 @@ const prepareLatexBuild = (
       // writeLine only shows `data` when texra.logger.debugMode is on
       // (default off), and this failure's whole point is to be visible
       // without needing to enable debug logging.
-      log.warn(
+      yield* Effect.logWarning(
         `Internal LaTeX compilation failed for ${uri.fsPath}:\n${compiled.logTail}`,
-        { data: { sourceFile: uri.fsPath, logTail: compiled.logTail } },
+      ).pipe(
+        withLogData({ sourceFile: uri.fsPath, logTail: compiled.logTail }),
+        withLogChannel(CHANNEL),
       );
       return false;
     }
@@ -290,9 +292,9 @@ const scheduleViewerRefresh: Effect.Effect<void> = Effect.gen(function* () {
     vscode.commands.executeCommand('latex-workshop.refresh-viewer'),
   ).pipe(
     Effect.catch((err) =>
-      Effect.sync(() => {
-        log.warn(`Viewer refresh failed: ${toErrorMessage(err)}`);
-      }),
+      Effect.logWarning(`Viewer refresh failed: ${toErrorMessage(err)}`).pipe(
+        withLogChannel(CHANNEL),
+      ),
     ),
   );
 });
@@ -322,10 +324,10 @@ export const scheduleViewerDisplay: Effect.Effect<boolean> = Effect.gen(
       ),
       Effect.as(true),
       Effect.catch((err) =>
-        Effect.sync((): boolean => {
-          log.warn(`Viewer display failed: ${toErrorMessage(err)}`);
-          return false;
-        }),
+        Effect.logWarning(`Viewer display failed: ${toErrorMessage(err)}`).pipe(
+          withLogChannel(CHANNEL),
+          Effect.as(false),
+        ),
       ),
     );
   },

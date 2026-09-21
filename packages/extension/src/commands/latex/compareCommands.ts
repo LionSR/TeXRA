@@ -20,6 +20,7 @@ import {
   siblingLocation,
   type CommitAcceptedFilePorts,
 } from '@latex/acceptedFileTarget';
+import { withLogChannel } from '@logger/effectLog';
 import { createLog } from '@logger/logUtils';
 import type { AcceptCopyMeta, FileLocation } from '@shared/schemas';
 import { DIFF_REGISTRATION_DELAY_MS } from '@shared/constants/latexTiming';
@@ -154,12 +155,9 @@ export const handleCompare = Effect.fn('compareCommands.handleCompare')(
       Effect.catchIf(
         (error) => error.reason === 'not-registered',
         () =>
-          Effect.sync(() => {
-            log.warn(
-              `Could not check Progress view location: command '${contextKeyCommandId}' not found`,
-            );
-            return undefined;
-          }),
+          Effect.logWarning(
+            `Could not check Progress view location: command '${contextKeyCommandId}' not found`,
+          ).pipe(withLogChannel(CHANNEL), Effect.as(undefined)),
       ),
     );
 
@@ -177,9 +175,9 @@ export const handleCompare = Effect.fn('compareCommands.handleCompare')(
       ),
     );
 
-    log.info(
+    yield* Effect.logInfo(
       `Opened diff comparison between ${baseFileName} and ${editedFileName}`,
-    );
+    ).pipe(withLogChannel(CHANNEL));
   },
   Effect.catchCause((cause) =>
     showLoggedErrorMessage(

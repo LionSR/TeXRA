@@ -20,6 +20,7 @@ import {
 } from 'effect';
 
 import type { AgentEvent } from '@agent/trace';
+import { withLogChannel, withLogData } from '@logger/effectLog';
 import { createLog } from '@logger/logUtils';
 import {
   aggregateId as qualifyAggregateId,
@@ -38,7 +39,8 @@ import {
   type SessionEventsShape,
 } from '@shared/session/sessionEvents';
 
-const logger = createLog('sessionEvents');
+const CHANNEL = 'sessionEvents';
+const logger = createLog(CHANNEL);
 
 /** One unit of the publisher's work: a job over the log's append, and the
  *  deferred its enqueuer waits on, if any. */
@@ -157,11 +159,9 @@ export const sessionEventsLayer = Layer.effect(
         Effect.catchCause((cause) =>
           Cause.hasInterruptsOnly(cause)
             ? Effect.void
-            : Effect.sync(() =>
-                logger.warn('Session publisher ended abnormally on close', {
-                  data: Cause.squash(cause),
-                }),
-              ),
+            : Effect.logWarning(
+                'Session publisher ended abnormally on close',
+              ).pipe(withLogData(Cause.squash(cause)), withLogChannel(CHANNEL)),
         ),
       ),
     );
@@ -208,9 +208,10 @@ export const sessionEventsLayer = Layer.effect(
           ).pipe(
             Effect.map(() => committed),
             Effect.tapCause((cause) =>
-              Effect.sync(() => {
-                logger.error('Session publication failed', { data: cause });
-              }),
+              Effect.logError('Session publication failed').pipe(
+                withLogData(cause),
+                withLogChannel(CHANNEL),
+              ),
             ),
             Effect.onExit(() => Effect.sync(() => pending.delete(done))),
           ),

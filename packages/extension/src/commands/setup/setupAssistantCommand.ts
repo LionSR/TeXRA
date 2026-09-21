@@ -15,6 +15,7 @@ import {
   SETUP_INSTRUCTION,
 } from '@controllers/onboarding/setupLaunch';
 import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
+import { withLogChannel, withLogData } from '@logger/effectLog';
 import { createLog } from '@logger/logUtils';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import type { StateStore, StateWriteFailed } from '@platform/interfaces';
@@ -92,13 +93,16 @@ function withOpenRouterFlagOn<A, E, R>(
       // finalizer logs it and continues, so a failed restore never masks the
       // launch's own outcome. The handler names the whole channel, so a
       // widened one fails to compile rather than escaping unlogged.
-      globalState.update(GlobalStateKey.USE_OPENROUTER, false).pipe(
-        Effect.catch((error: StateWriteFailed) =>
-          Effect.sync(() => {
-            log.error('Failed to restore useOpenRouter flag.', { data: error });
-          }),
+      globalState
+        .update(GlobalStateKey.USE_OPENROUTER, false)
+        .pipe(
+          Effect.catch((error: StateWriteFailed) =>
+            Effect.logError('Failed to restore useOpenRouter flag.').pipe(
+              withLogData(error),
+              withLogChannel(CHANNEL),
+            ),
+          ),
         ),
-      ),
   );
 }
 

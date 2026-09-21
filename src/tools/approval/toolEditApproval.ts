@@ -5,7 +5,7 @@ import { Cause, Effect, FileSystem } from 'effect';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { ToolCall } from '@agent/runtime/ToolCall';
 import { isLatexFile } from '@common/files/fileTypeUtils';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel, withLogData } from '@logger/effectLog';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { WorkspaceFs } from '@platform/rootedFs';
 import {
@@ -37,7 +37,7 @@ import {
   normalizeLineEndings,
 } from '@utils/text/stringUtils';
 
-const logger = createLog('ToolEditApproval');
+const CHANNEL = 'ToolEditApproval';
 
 /**
  * Tool-edit approval request / result shapes.
@@ -289,12 +289,12 @@ export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
               onNeverCommitted: releaseStaged
                 ? releaseStaged.pipe(
                     Effect.catchCause((cause) =>
-                      Effect.sync(() => {
-                        logger.warn(
-                          `Failed to release the tool-edit preview staged for request ${permission.requestId}`,
-                          { data: Cause.squash(cause) },
-                        );
-                      }),
+                      Effect.logWarning(
+                        `Failed to release the tool-edit preview staged for request ${permission.requestId}`,
+                      ).pipe(
+                        withLogData(Cause.squash(cause)),
+                        withLogChannel(CHANNEL),
+                      ),
                     ),
                   )
                 : Effect.void,

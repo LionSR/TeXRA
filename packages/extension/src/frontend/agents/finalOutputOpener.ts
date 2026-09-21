@@ -5,10 +5,10 @@ import {
   selectAutoOpenFinalOutput,
   type WorkflowFlowResult,
 } from '@agent/runtime';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 
-const log = createLog('FinalOutputOpener');
+const CHANNEL = 'FinalOutputOpener';
 
 /**
  * On successful workflow completion, preview the final revised output so
@@ -48,7 +48,7 @@ export const openFinalOutputIfAvailable = (
     // The preview is the whole point of this call: a failure leaves the user
     // with only the status-bar hint, so it is loud, not a debug note.
     if (Result.isFailure(previewed))
-      log.warn(
+      yield* Effect.logWarning(
         `Unable to auto-open final output ${primary.absolutePath}: ${String(previewed.failure)}`,
-      );
+      ).pipe(withLogChannel(CHANNEL));
   });

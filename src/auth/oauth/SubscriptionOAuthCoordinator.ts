@@ -17,7 +17,7 @@ import { Deferred, Effect, Result } from 'effect';
 
 // Local imports
 import { safeParseJson } from '@common/parsing/safeParseJson';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { AuthPortError, SerializedWrites } from '../authProgram';
@@ -31,7 +31,7 @@ import type { SubscriptionSessionBase } from './subscriptionSessionSchema';
 import type { HttpClient } from 'effect/unstable/http';
 import type { z } from 'zod';
 
-const log = createLog('SubscriptionOAuth');
+const CHANNEL = 'SubscriptionOAuth';
 
 /** Secret-backed persistence for one session bundle. */
 export interface SubscriptionSessionStorage {
@@ -183,16 +183,16 @@ export class SubscriptionOAuthCoordinator<S extends SubscriptionSession> {
       const parsedJson = safeParseJson(raw);
       if (Result.isFailure(parsedJson)) {
         // Present-but-corrupt is not the same as never signed in.
-        log.warn(
+        yield* Effect.logWarning(
           `Stored subscription session is not valid JSON; treating as signed out: ${toErrorMessage(parsedJson.failure)}`,
-        );
+        ).pipe(withLogChannel(CHANNEL));
         return null;
       }
       const parsed = this.policy.sessionSchema.safeParse(parsedJson.success);
       if (!parsed.success) {
-        log.warn(
+        yield* Effect.logWarning(
           `Stored subscription session failed schema validation; treating as signed out: ${toErrorMessage(parsed.error)}`,
-        );
+        ).pipe(withLogChannel(CHANNEL));
         return null;
       }
       return parsed.data;

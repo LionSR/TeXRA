@@ -1,8 +1,8 @@
 import { Cause, Effect, Latch, Queue, type Scope } from 'effect';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-const log = createLog('cli.chat');
+const CHANNEL = 'cli.chat';
 
 /**
  * The chat session's follow-up deliveries: one at a time, in the order they
@@ -66,11 +66,9 @@ export const makeFollowUpDeliveryQueue = (
               Effect.catchCause((cause) =>
                 Cause.hasInterrupts(cause)
                   ? Effect.failCause(cause)
-                  : Effect.sync(() =>
-                      log.warn(
-                        `A follow-up delivery failed: ${toErrorMessage(Cause.squash(cause))}`,
-                      ),
-                    ),
+                  : Effect.logWarning(
+                      `A follow-up delivery failed: ${toErrorMessage(Cause.squash(cause))}`,
+                    ).pipe(withLogChannel(CHANNEL)),
               ),
             ),
             Effect.sync(() => settle(1)),

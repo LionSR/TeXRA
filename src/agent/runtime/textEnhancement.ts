@@ -1,6 +1,7 @@
 import { Effect } from 'effect';
 
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
+import { withLogChannel } from '@logger/effectLog';
 import { createLog } from '@logger/logUtils';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { LanguageModel } from '@platform/languageModel';
@@ -11,7 +12,8 @@ import { POLISH_PROMPT_PREFIX } from './bundledPrompts';
 import { helperCompletion, helperModel } from './helperModel';
 import type { HttpClient } from 'effect/unstable/http';
 
-const log = createLog('TextEnhancement');
+const CHANNEL = 'TextEnhancement';
+const log = createLog(CHANNEL);
 
 /**
  * Polish `text` with the configured helper model. Fails with the reason the
@@ -35,9 +37,9 @@ export const polishTextWithAI = Effect.fn('polishTextWithAI')(function* (
     }
     const corrected = extractTextFromTag(responseText, 'corrected_text');
     if (!corrected) {
-      log.warn(
+      yield* Effect.logWarning(
         'Model did not wrap response in <corrected_text> tags; using raw response',
-      );
+      ).pipe(withLogChannel(CHANNEL));
     }
     return (corrected ?? responseText).trim();
   }).pipe(

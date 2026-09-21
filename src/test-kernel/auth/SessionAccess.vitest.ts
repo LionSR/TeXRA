@@ -8,7 +8,9 @@ import {
   type SessionAccessCoordinator,
   type SessionSecretStore,
 } from '@auth/oauth/sessionAccess';
-import * as logger from '@logger/logUtils';
+import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
+import { setLogSink } from '@logger/logSink';
+import { captureLogEntries } from '@test/support/logSinkCapture';
 
 function coordinator(
   overrides: Partial<SessionAccessCoordinator> = {},
@@ -22,13 +24,14 @@ function coordinator(
 describe('getSubscriptionSessionStatus', () => {
   afterEach(() => {
     vi.restoreAllMocks();
+    setLogSink(null);
   });
 
   it.effect(
     'warns on the caller-supplied channel and reports signed-out when the status read fails (#10635)',
     () =>
       Effect.gen(function* () {
-        const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+        const logs = captureLogEntries();
         const failing = coordinator({
           getStatus: () => Effect.fail(new Error('secret store unavailable')),
         });
@@ -37,15 +40,16 @@ describe('getSubscriptionSessionStatus', () => {
           () => failing,
           'subscriptionStatusProbe',
           'ChatGPT',
-        );
+        ).pipe(Effect.provide(effectDiagnosticsLayer));
 
         expect(status).toEqual({ signedIn: false });
-        expect(warn).toHaveBeenCalledWith(
-          'subscriptionStatusProbe',
-          expect.stringContaining(
+        expect(
+          logs.has(
+            'WARN',
+            'subscriptionStatusProbe',
             'Failed to read ChatGPT session status: secret store unavailable',
           ),
-        );
+        ).toBe(true);
       }),
   );
 });

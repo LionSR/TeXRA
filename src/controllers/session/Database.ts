@@ -40,7 +40,7 @@ import { z } from 'zod';
 import { proveOwnerLiveness } from '@agent/storage/leaseOwnerLiveness';
 import { parseJsonWith } from '@common/parsing/safeParseJson';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import {
   AggregateIdSchema,
   RunIdSchema,
@@ -82,7 +82,7 @@ import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { localDatabasePath } from './localDatabasePath';
 /** The database file of a session root, beside the stores it replaces. */
 const SESSION_DATABASE_FILE = 'texra.db';
-const log = createLog('sessionDatabase');
+const CHANNEL = 'sessionDatabase';
 /**
  * Event history and bounded current application records.
  *
@@ -1354,9 +1354,9 @@ const configure = Effect.fnUntraced(function* (
       : yield* resetStore(sql, path);
   yield* applySchema(sql);
   if (cleared !== null) {
-    log.warn(
+    yield* Effect.logWarning(
       `Session store ${path} held ${cleared.rows} rows of format ${cleared.storedFormat}; this build reads format ${SESSION_EVENT_FORMAT} and keeps no compatibility with earlier persisted data, so the store was cleared.`,
-    );
+    ).pipe(withLogChannel(CHANNEL));
   }
   return cleared;
 });

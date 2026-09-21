@@ -25,7 +25,7 @@ import { createTeamCatalogPorts } from '@controllers/mainView/teamCatalogPorts';
 
 // Local imports - shared types and errors
 import type { MessageHost } from '@hosts/uiHosts';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import type { StateStore } from '@platform/interfaces';
 import type { GlobalStorageFs } from '@platform/rootedFs';
 import {
@@ -43,7 +43,7 @@ import { pastedImageFullPath } from '@utils/files/pastedImageUtils';
 
 type LaunchRequest = Extract<HostRequest, { kind: 'launch' }>;
 
-const log = createLog('MainViewRunLaunch');
+const CHANNEL = 'MainViewRunLaunch';
 
 type LaunchPreparation =
   | { valid: true; request: ValidatedRunRequest }
@@ -234,15 +234,15 @@ export function prepareSurfaceLaunch(
       // on the notice, and a host that cannot show it leaves a warn rather
       // than failing the launch.
       yield* Effect.forkDetach(
-        host.showInfoMessage(infoMessage).pipe(
-          Effect.catchTag('NotificationFailed', (failure) =>
-            Effect.sync(() => {
-              log.warn(
+        host
+          .showInfoMessage(infoMessage)
+          .pipe(
+            Effect.catchTag('NotificationFailed', (failure) =>
+              Effect.logWarning(
                 `The partial team launch notice could not be shown: ${failure.message}`,
-              );
-            }),
+              ).pipe(withLogChannel(CHANNEL)),
+            ),
           ),
-        ),
       );
     }
     return preparation.request;

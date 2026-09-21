@@ -22,7 +22,7 @@ import {
 } from '@agent/runtime';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import type { StateStore } from '@platform/interfaces';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
@@ -37,7 +37,6 @@ import {
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'agentEventListeners';
-const log = createLog(CHANNEL);
 
 /** Warn-log a step whose failure is a diagnostic rather than non-delivery,
  *  and carry on with the step after it. */
@@ -47,9 +46,9 @@ function warnOnFailure(
 ): Effect.Effect<void> {
   return program.pipe(
     Effect.catchCause((cause) =>
-      Effect.sync(() => {
-        log.warn(`${what}: ${toErrorMessage(Cause.squash(cause))}`);
-      }),
+      Effect.logWarning(`${what}: ${toErrorMessage(Cause.squash(cause))}`).pipe(
+        withLogChannel(CHANNEL),
+      ),
     ),
   );
 }
@@ -131,11 +130,10 @@ function handleRequestShowInstruction(
     { deferDismissal: true },
   ).pipe(
     Effect.catchCause((cause) =>
-      Effect.sync(() => {
-        log.warn(
-          `Failed to show instruction "${payload.key}": ${toErrorMessage(Cause.squash(cause))}`,
-        );
-      }).pipe(
+      Effect.logWarning(
+        `Failed to show instruction "${payload.key}": ${toErrorMessage(Cause.squash(cause))}`,
+      ).pipe(
+        withLogChannel(CHANNEL),
         // The instruction may be a launch failure's only surface, so fall
         // back to the error toast rather than dropping it.
         Effect.andThen(handleRequestShowError({ message: payload.message })),

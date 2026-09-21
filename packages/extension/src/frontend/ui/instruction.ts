@@ -4,13 +4,12 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel, withLogData } from '@logger/effectLog';
 import type { StateStore, StateWriteFailed } from '@platform/interfaces';
 import { INSTRUCTION_PREFIX } from '@shared/state/stateKeys';
 
 const NEVER_REMIND = 'Never remind again';
 const CHANNEL = 'instruction';
-const log = createLog(CHANNEL);
 
 function handleInstructionChoice(
   store: StateStore,
@@ -61,11 +60,10 @@ export function showInstructionWithSuppress(
     if (!options.deferDismissal) return settle;
     return settle.pipe(
       Effect.catchCause((cause) =>
-        Effect.sync(() => {
-          log.warn(`Failed to settle instruction "${key}"`, {
-            data: Cause.squash(cause),
-          });
-        }),
+        Effect.logWarning(`Failed to settle instruction "${key}"`).pipe(
+          withLogData(Cause.squash(cause)),
+          withLogChannel(CHANNEL),
+        ),
       ),
       Effect.forkDetach,
       Effect.asVoid,

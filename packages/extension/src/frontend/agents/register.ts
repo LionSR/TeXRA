@@ -8,10 +8,10 @@ import * as vscode from 'vscode';
 import { createWorkspaceAgentRosterController, refresh } from '@agent/index';
 import type { SessionHandle } from '@agent/runtime';
 import { emitAppSignal } from '@eventBus/AppSignals';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import type { AgentSource } from '@shared/schemas';
 
-const log = createLog('AgentRegister');
+const CHANNEL = 'AgentRegister';
 
 export const promptToAddAgentToConfig = Effect.fnUntraced(function* (
   agentName: string,
@@ -27,7 +27,9 @@ export const promptToAddAgentToConfig = Effect.fnUntraced(function* (
     .some((entry) => entry.name === agentName);
 
   if (alreadyVisible) {
-    log.debug(`Agent "${agentName}" already in configuration`);
+    yield* Effect.logDebug(
+      `Agent "${agentName}" already in configuration`,
+    ).pipe(withLogChannel(CHANNEL));
     return;
   }
 

@@ -5,7 +5,7 @@ import * as path from 'node:path';
 import { Data, Effect, Option } from 'effect';
 
 // Local imports
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import { StorageFs } from '@platform/rootedFs';
 import { THREE_DAYS_MS } from '@utils/config/constants';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -13,7 +13,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 // Local imports - filesystem
 import { PASTED_DIR, isPastedImage } from './pastedImageName';
 
-const log = createLog('pastedImage');
+const CHANNEL = 'pastedImage';
 
 /**
  * The absolute path of a pasted image under `storageRoot` — the form for code
@@ -55,16 +55,15 @@ const cleanupOldPastedImages = Effect.fn('pastedImage.cleanupOld')(
   function* () {
     const storageFs = yield* StorageFs;
     const cutoff = Date.now() - THREE_DAYS_MS;
-    const names = yield* storageFs.readDirectory(PASTED_DIR).pipe(
-      Effect.catch((error) =>
-        Effect.sync(() => {
-          log.warn(
+    const names = yield* storageFs
+      .readDirectory(PASTED_DIR)
+      .pipe(
+        Effect.catch((error) =>
+          Effect.logWarning(
             `Skipped cleanup of ${PASTED_DIR}: ${toErrorMessage(error)}`,
-          );
-          return [] as string[];
-        }),
-      ),
-    );
+          ).pipe(withLogChannel(CHANNEL), Effect.as([] as string[])),
+        ),
+      );
     yield* Effect.forEach(
       names,
       (name) => {
@@ -82,11 +81,9 @@ const cleanupOldPastedImages = Effect.fn('pastedImage.cleanupOld')(
             return mtime <= cutoff ? storageFs.remove(filePath) : Effect.void;
           }),
           Effect.catch((error) =>
-            Effect.sync(() => {
-              log.warn(
-                `Could not remove stale file ${filePath}: ${toErrorMessage(error)}`,
-              );
-            }),
+            Effect.logWarning(
+              `Could not remove stale file ${filePath}: ${toErrorMessage(error)}`,
+            ).pipe(withLogChannel(CHANNEL)),
           ),
         );
       },

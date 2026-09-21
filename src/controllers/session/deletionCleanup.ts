@@ -7,13 +7,15 @@ import { Effect, type Context } from 'effect';
 
 import { isFileNotFoundError } from '@common/errors';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
+import { withLogChannel, withLogData } from '@logger/effectLog';
 import { createLog } from '@logger/logUtils';
 import type { RunId } from '@shared/schemas';
 import type { Database } from '@shared/session/database';
 import { isPathWithin } from '@utils/core/pathCore';
 import { ensureError } from '@utils/errors/errorMessage';
 
-const log = createLog('DeletionCleanup');
+const CHANNEL = 'DeletionCleanup';
+const log = createLog(CHANNEL);
 
 /**
  * Remove each run's run directory under the storage root it was
@@ -82,12 +84,9 @@ export const collectPendingDeletions = Effect.fn('collectPendingDeletions')(
         )
         .pipe(
           Effect.catch((error) =>
-            Effect.sync(() => {
-              log.warn(
-                `Deletion cleanup remains pending for ${event.aggregateId}`,
-                { data: error },
-              );
-            }),
+            Effect.logWarning(
+              `Deletion cleanup remains pending for ${event.aggregateId}`,
+            ).pipe(withLogData(error), withLogChannel(CHANNEL)),
           ),
         );
     }

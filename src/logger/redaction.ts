@@ -1,3 +1,4 @@
+import { flattenError } from '@logger/formatLogData';
 import { API_KEY_PROVIDER_IDS } from '@shared/constants/providers';
 
 const REDACTED = '[redacted]';
@@ -79,17 +80,42 @@ export function redactSecrets(text: string): string {
 
 /** Scrub a constructed JSON-shaped display value without changing its field structure.
  * Persisted execution records and provider inputs must retain their original values.
+ *
+ * A payload reaches this raw: `withLogData` attaches `data` to the entry
+ * unrendered, so this pass is the first walk over it. An `Error` in a payload
+ * is flattened exactly as a render would (its fields are non-enumerable, so
+ * the plain walk below would collapse it to `{}`), through one `errors` map
+ * per call so a `cause` cycle terminates. An object cycle meets `seen` and
+ * keeps the reference it already carries, so the render's
+ * `safe-stable-stringify` still reports it as `"[Circular]"` instead of this
+ * walk recursing to a stack overflow.
  */
 export function redactDisplayValue<T>(value: T): T {
-  if (typeof value === 'string') return redactSecrets(value) as T;
-  if (Array.isArray(value)) return value.map(redactDisplayValue) as T;
+  return redactValue(value, new WeakMap(), new WeakSet()) as T;
+}
+
+function redactValue(
+  value: unknown,
+  errors: WeakMap<Error, Record<string, unknown>>,
+  seen: WeakSet<object>,
+): unknown {
+  if (typeof value === 'string') return redactSecrets(value);
+  if (value instanceof Error)
+    return redactValue(flattenError(value, errors), errors, seen);
+  if (Array.isArray(value)) {
+    if (seen.has(value)) return value;
+    seen.add(value);
+    return value.map((field) => redactValue(field, errors, seen));
+  }
   if (value === null || typeof value !== 'object') return value;
+  if (seen.has(value)) return value;
+  seen.add(value);
   return Object.fromEntries(
     Object.entries(value).map(([key, field]) => [
       key,
       typeof field === 'string' && SECRET_FIELD_NAME_PATTERN.test(key)
         ? REDACTED
-        : redactDisplayValue(field),
+        : redactValue(field, errors, seen),
     ]),
-  ) as T;
+  );
 }

@@ -8,11 +8,14 @@ import {
   prepareBuildDisplay,
   scheduleViewerDisplay,
 } from '@frontend/latex/openBuild';
+import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
+import { setLogSink } from '@logger/logSink';
 import {
   LATEX_VIEWER_OPEN_DELAY_MS,
   LATEX_VIEWER_REFRESH_DELAY_MS,
 } from '@shared/constants/latexTiming';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
+import { captureLogEntries } from '@test/support/logSinkCapture';
 
 const mocks = vi.hoisted(() => ({
   exists: vi.fn(async (_path: string) => true),
@@ -135,11 +138,13 @@ describe('openBuildDisplayIfTex viewer delivery', () => {
   });
 
   afterEach(() => {
+    setLogSink(null);
     vi.useRealTimers();
   });
 
   it.live('reports non-delivery when the PDF viewer open rejects', () =>
     Effect.gen(function* () {
+      const logs = captureLogEntries();
       mocks.executeCommand.mockImplementation(async (command: string) => {
         if (command === 'latex-workshop.view') {
           throw new Error('viewer unavailable');
@@ -148,7 +153,9 @@ describe('openBuildDisplayIfTex viewer delivery', () => {
       });
 
       const delivery = yield* Effect.forkChild(
-        withHostFs(openBuildDisplayIfTex(session, workspaceTex)),
+        withHostFs(openBuildDisplayIfTex(session, workspaceTex)).pipe(
+          Effect.provide(effectDiagnosticsLayer),
+        ),
         { startImmediately: true },
       );
       // Flush the setup chain (exists -> openTextDocument -> showTextDocument ->
@@ -160,9 +167,8 @@ describe('openBuildDisplayIfTex viewer delivery', () => {
       );
 
       expect(yield* Fiber.join(delivery)).toBe(false);
-      expect(mocks.warn).toHaveBeenCalledWith(
-        'OpenBuildUtils',
-        expect.stringContaining('Viewer display failed'),
+      expect(logs.has('WARN', 'OpenBuildUtils', 'Viewer display failed')).toBe(
+        true,
       );
     }),
   );
@@ -231,6 +237,7 @@ describe('openBuildDisplayIfTex viewer delivery', () => {
         // A synchronous throw from `executeCommand('latex-workshop.view')` must
         // become a rejection that resolves `false`, not leave the promise pending
         // forever (#10556).
+        const logs = captureLogEntries();
         mocks.executeCommand.mockImplementation((command: string) => {
           if (command === 'latex-workshop.view') {
             throw new Error('viewer unavailable');
@@ -239,7 +246,9 @@ describe('openBuildDisplayIfTex viewer delivery', () => {
         });
 
         const delivery = yield* Effect.forkChild(
-          withHostFs(openBuildDisplayIfTex(session, workspaceTex)),
+          withHostFs(openBuildDisplayIfTex(session, workspaceTex)).pipe(
+            Effect.provide(effectDiagnosticsLayer),
+          ),
           { startImmediately: true },
         );
         yield* Effect.promise(() => vi.advanceTimersByTimeAsync(0));
@@ -248,10 +257,9 @@ describe('openBuildDisplayIfTex viewer delivery', () => {
         );
 
         expect(yield* Fiber.join(delivery)).toBe(false);
-        expect(mocks.warn).toHaveBeenCalledWith(
-          'OpenBuildUtils',
-          expect.stringContaining('Viewer display failed'),
-        );
+        expect(
+          logs.has('WARN', 'OpenBuildUtils', 'Viewer display failed'),
+        ).toBe(true);
       }),
   );
 
@@ -262,6 +270,7 @@ describe('openBuildDisplayIfTex viewer delivery', () => {
         // The refresh command is scheduled only after `latex-workshop.view` has
         // settled, so its synchronous throw must be warn-logged without downgrading
         // the already-established viewer delivery (#10556).
+        const logs = captureLogEntries();
         mocks.executeCommand.mockImplementation((command: string) => {
           if (command === 'latex-workshop.refresh-viewer') {
             throw new Error('refresh unavailable');
@@ -270,7 +279,9 @@ describe('openBuildDisplayIfTex viewer delivery', () => {
         });
 
         const delivery = yield* Effect.forkChild(
-          withHostFs(openBuildDisplayIfTex(session, workspaceTex)),
+          withHostFs(openBuildDisplayIfTex(session, workspaceTex)).pipe(
+            Effect.provide(effectDiagnosticsLayer),
+          ),
           { startImmediately: true },
         );
         yield* Effect.promise(() => vi.advanceTimersByTimeAsync(0));
@@ -282,10 +293,9 @@ describe('openBuildDisplayIfTex viewer delivery', () => {
         );
 
         expect(yield* Fiber.join(delivery)).toBe(true);
-        expect(mocks.warn).toHaveBeenCalledWith(
-          'OpenBuildUtils',
-          expect.stringContaining('Viewer refresh failed'),
-        );
+        expect(
+          logs.has('WARN', 'OpenBuildUtils', 'Viewer refresh failed'),
+        ).toBe(true);
       }),
   );
 

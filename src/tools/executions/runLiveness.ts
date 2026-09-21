@@ -34,13 +34,15 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { RunStatusInfo } from '@agent/runtime/RunHandle';
 import { Runs } from '@agent/runtime/runRegistry';
 import { getRunRecords } from '@agent/storage/runRecords';
+import { withLogChannel } from '@logger/effectLog';
 import { createLog } from '@logger/logUtils';
 import { type RunId, type RunOutcome, type RunPhase } from '@shared/schemas';
 import { runHeldClause } from '@shared/runs/runStatusDisplay';
 import { claimStanding } from '@shared/session/database';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-const log = createLog('RunLiveness');
+const CHANNEL = 'RunLiveness';
+const log = createLog(CHANNEL);
 
 /**
  * What may be said about a run right now. `unsettled` carries a mid-sentence
@@ -105,9 +107,9 @@ export const resolveRunLiveness = Effect.fn('resolveRunLiveness')(function* (
     }
     const standing = claimStanding(yield* session.claimOwner(runId));
     if (standing.kind === 'self') {
-      log.warn(
+      yield* Effect.logWarning(
         `Run ${runId} holds this process's claim with no tracked run and no recorded outcome; reporting it as unsettled rather than finished`,
-      );
+      ).pipe(withLogChannel(CHANNEL));
       return { kind: 'unsettled', reason: OWNED_HERE_REASON };
     }
     if (standing.kind === 'held') {

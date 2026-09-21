@@ -5,7 +5,7 @@ import * as vscode from 'vscode';
 // Local imports
 import { formatError } from '@common/errors';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
-import { createLog, type Log } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /** Valid documentation identifiers for error messages. */
@@ -20,16 +20,15 @@ type DocId = 'intelligent-merge' | 'custom-agents' | 'latex-diff';
  * only log anyway.
  */
 function announce<A>(
-  log: Log,
+  channel: string,
   notice: Effect.Effect<A, { readonly message: string }>,
   whenRefused: A,
 ): Effect.Effect<A> {
   return notice.pipe(
     Effect.catch((failure) =>
-      Effect.sync(() => {
-        log.error(`Could not show the notification: ${failure.message}`);
-        return whenRefused;
-      }),
+      Effect.logError(
+        `Could not show the notification: ${failure.message}`,
+      ).pipe(withLogChannel(channel), Effect.as(whenRefused)),
     ),
   );
 }
@@ -41,10 +40,9 @@ export function showLoggedErrorMessage(
   err: unknown,
 ): Effect.Effect<string> {
   return Effect.gen(function* () {
-    const log = createLog(channel);
     const message = formatError(prefix, err);
-    log.error(message);
-    yield* announce(log, vscodeUi.showErrorMessage(message), undefined);
+    yield* Effect.logError(message).pipe(withLogChannel(channel));
+    yield* announce(channel, vscodeUi.showErrorMessage(message), undefined);
     return message;
   });
 }
@@ -55,9 +53,8 @@ export function showLoggedMessage(
   message: string,
 ): Effect.Effect<string> {
   return Effect.gen(function* () {
-    const log = createLog(channel);
-    log.error(message);
-    yield* announce(log, vscodeUi.showErrorMessage(message), undefined);
+    yield* Effect.logError(message).pipe(withLogChannel(channel));
+    yield* announce(channel, vscodeUi.showErrorMessage(message), undefined);
     return message;
   });
 }
@@ -68,9 +65,8 @@ export function showLoggedInfoMessage(
   message: string,
 ): Effect.Effect<string> {
   return Effect.gen(function* () {
-    const log = createLog(channel);
-    log.info(message);
-    yield* announce(log, vscodeUi.showInfoMessage(message), undefined);
+    yield* Effect.logInfo(message).pipe(withLogChannel(channel));
+    yield* announce(channel, vscodeUi.showInfoMessage(message), undefined);
     return message;
   });
 }
@@ -83,10 +79,9 @@ export function showLoggedMessageWithDocs(
   actionLabel = 'View Docs',
 ): Effect.Effect<void> {
   return Effect.gen(function* () {
-    const log = createLog(channel);
-    log.error(message);
+    yield* Effect.logError(message).pipe(withLogChannel(channel));
     const selection = yield* announce(
-      log,
+      channel,
       vscodeUi.error(message, { items: [actionLabel] }),
       undefined,
     );
@@ -99,9 +94,9 @@ export function showLoggedMessageWithDocs(
       catch: (err: unknown) => err,
     }).pipe(
       Effect.catch((err) =>
-        Effect.sync(() => {
-          log.error(`Failed to open documentation: ${toErrorMessage(err)}`);
-        }),
+        Effect.logError(
+          `Failed to open documentation: ${toErrorMessage(err)}`,
+        ).pipe(withLogChannel(channel)),
       ),
     );
   });

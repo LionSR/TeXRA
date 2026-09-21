@@ -31,7 +31,7 @@ import {
   Result,
 } from 'effect';
 
-import { warn } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import type { RunId } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -234,10 +234,9 @@ const make = Effect.fn('LeanServerPool.make')(function* ({
               (other) => other !== root,
             );
             if (!others) return yield* Effect.fail(error);
-            warn(
-              LOG_CHANNEL,
+            yield* Effect.logWarning(
               `Lean spawn hit a full file table; stopping other servers and retrying (${toErrorMessage(error)})`,
-            );
+            ).pipe(withLogChannel(LOG_CHANNEL));
             yield* evictOthersForExhausted(root);
             return yield* serverFor(root);
           }),
@@ -475,26 +474,24 @@ const make = Effect.fn('LeanServerPool.make')(function* ({
           ['LeanSessionDisposed', 'LeanSessionNotRunning'],
           (error): Effect.Effect<FetchDiagnosticsResult> => {
             const message = toErrorMessage(error);
-            warn(
-              LOG_CHANNEL,
+            return Effect.logWarning(
               `fetchDiagnosticsForFile: session interrupted for ${file}: ${message}`,
+            ).pipe(
+              withLogChannel(LOG_CHANNEL),
+              Effect.as({ ok: false, kind: 'toolchain_unavailable', message }),
             );
-            return Effect.succeed({
-              ok: false,
-              kind: 'toolchain_unavailable',
-              message,
-            });
           },
         ),
         Effect.catch((error): Effect.Effect<FetchDiagnosticsResult> => {
           // Opening/reading the file itself failed (e.g. ENOENT) — the file is
           // the problem, so the tool keeps its "could not open file" framing.
           const message = toErrorMessage(error);
-          warn(
-            LOG_CHANNEL,
+          return Effect.logWarning(
             `fetchDiagnosticsForFile: could not read ${file}: ${message}`,
+          ).pipe(
+            withLogChannel(LOG_CHANNEL),
+            Effect.as({ ok: false, kind: 'file_missing', message }),
           );
-          return Effect.succeed({ ok: false, kind: 'file_missing', message });
         }),
       ),
     ).pipe(
@@ -503,15 +500,12 @@ const make = Effect.fn('LeanServerPool.make')(function* ({
         // broken `lake`/`lean` toolchain — report it as toolchain_unavailable
         // so the tool gives setup guidance, not "could not open file".
         const message = toErrorMessage(error);
-        warn(
-          LOG_CHANNEL,
+        return Effect.logWarning(
           `fetchDiagnosticsForFile: no Lean session for ${file}: ${message}`,
+        ).pipe(
+          withLogChannel(LOG_CHANNEL),
+          Effect.as({ ok: false, kind: 'toolchain_unavailable', message }),
         );
-        return Effect.succeed({
-          ok: false,
-          kind: 'toolchain_unavailable',
-          message,
-        });
       }),
     );
   });
@@ -532,13 +526,9 @@ const make = Effect.fn('LeanServerPool.make')(function* ({
         // the cause, honoring `Promise<boolean>` so a missing or broken `lake`
         // does not throw out of the JSON-RPC path.
         Effect.catch((error) =>
-          Effect.sync(() => {
-            warn(
-              LOG_CHANNEL,
-              `executeFileCommand(${command}) failed for ${filePath}: ${toErrorMessage(error)}`,
-            );
-            return false;
-          }),
+          Effect.logWarning(
+            `executeFileCommand(${command}) failed for ${filePath}: ${toErrorMessage(error)}`,
+          ).pipe(withLogChannel(LOG_CHANNEL), Effect.as(false)),
         ),
       );
     },

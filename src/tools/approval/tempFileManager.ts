@@ -22,8 +22,10 @@ import * as path from 'node:path';
 
 import { Effect } from 'effect';
 
-import { debug } from '@logger/logUtils';
+import { withLogChannel, withLogData } from '@logger/effectLog';
 import { generateShortId } from '@utils/core';
+
+const CHANNEL = 'approval.tempFiles';
 
 export interface ApprovalTempFiles {
   readonly originalPath: string;
@@ -51,11 +53,10 @@ const removeTempFile = (target: string): Effect.Effect<void> =>
     catch: (error) => error,
   }).pipe(
     Effect.catch((error) =>
-      Effect.sync(() => {
-        debug('approval.tempFiles', `Failed to unlink temp file ${target}`, {
-          data: error,
-        });
-      }),
+      Effect.logDebug(`Failed to unlink temp file ${target}`).pipe(
+        withLogData(error),
+        withLogChannel(CHANNEL),
+      ),
     ),
   );
 

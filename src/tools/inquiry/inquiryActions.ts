@@ -13,7 +13,7 @@ import { Effect } from 'effect';
 // Local imports - agent
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import { AgentResume } from '@platform/interfaces';
 
 // Local imports - shared
@@ -35,7 +35,7 @@ import {
   truncateSummary,
 } from '@utils/text/stringUtils';
 
-const logger = createLog('InquiryTool');
+const CHANNEL = 'InquiryTool';
 
 const QUESTION_TRUNCATION = 400;
 const ANSWER_TRUNCATION = 2000;
@@ -174,25 +174,27 @@ export const recordInquiryDecision = Effect.fn('recordInquiryDecision')(
       });
       event = 'answered';
     } else {
-      logger.info(`Inquiry ${threadId} dropped (${decision.action})`);
+      yield* Effect.logInfo(
+        `Inquiry ${threadId} dropped (${decision.action})`,
+      ).pipe(withLogChannel(CHANNEL));
       manifest = yield* records.markDropped({ threadId, turnIndex });
       event = 'dropped';
     }
     if (!manifest) {
       const closed = yield* closedByEarlierAttempt(threadId, turnIndex);
       if (!closed) {
-        logger.warn(
+        yield* Effect.logWarning(
           `Inquiry ${event === 'answered' ? 'answer' : 'drop'} ignored: thread ${threadId} has no open turn ${turnIndex}.`,
-        );
+        ).pipe(withLogChannel(CHANNEL));
         return;
       }
       // What the thread says is what the run is told: the earlier attempt's
       // record is the decision that stands, whatever this attempt asked for.
       manifest = closed;
       event = closed.status === 'answered' ? 'answered' : 'dropped';
-      logger.info(
+      yield* Effect.logInfo(
         `Inquiry ${threadId}: re-delivering the ${event} continuation for turn ${turnIndex}, recorded by an attempt that never delivered it.`,
-      );
+      ).pipe(withLogChannel(CHANNEL));
     }
     const lastTurn = manifest.turns.at(-1);
     const parentRunId: RunId | null | undefined = manifest.parentRunId;
@@ -224,9 +226,9 @@ export const recordInquiryDecision = Effect.fn('recordInquiryDecision')(
       { session },
     );
     if (result.status === 'failed') {
-      logger.warn(
+      yield* Effect.logWarning(
         `Inquiry continuation for ${threadId}: run ${parentRunId} refused it (${result.reason}).`,
-      );
+      ).pipe(withLogChannel(CHANNEL));
       yield* publishThreadUpdate(threadId, 'parent_finished', session);
       return;
     }

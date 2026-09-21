@@ -8,7 +8,8 @@ import {
   generateSessionDescription,
   getDisplayedInstruction,
 } from '@agent/runtime/sessionDescription';
-import * as logger from '@logger/logUtils';
+import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
+import { setLogSink } from '@logger/logSink';
 import {
   LanguageModel,
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
@@ -17,6 +18,7 @@ import { aggregateId as qualifyAggregateId, type RunId } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
 import { fakeStores } from '@test/support/FakePlatform';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
+import { captureLogEntries } from '@test/support/logSinkCapture';
 import {
   createTestSession,
   publishTestRunStart,
@@ -68,6 +70,9 @@ function runDescription(
       // signature's `LanguageModel` requirement.
       Effect.provide(LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT)),
       Effect.provide(testHttpClientLayer),
+      // The failure is reported with `Effect.logWarning`, so the host sink a
+      // test captures is reached through the logger layer production installs.
+      Effect.provide(effectDiagnosticsLayer),
     ),
   );
 }
@@ -80,6 +85,7 @@ function mockToolUseAnswer(text: string): void {
 
 describe('session description helpers', () => {
   beforeEach(() => {
+    setLogSink(null);
     vi.restoreAllMocks();
     vi.clearAllMocks();
   });
@@ -151,18 +157,17 @@ describe('session description helpers', () => {
       Effect.gen(function* () {
         const session = createTestSession();
         const helperError = new Error('helper unavailable');
-        const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+        const logs = captureLogEntries();
         mocks.helperModel.mockReturnValueOnce(Effect.fail(helperError));
 
         expect(
           yield* Effect.promise(() => runDescription(generateRunId(), session)),
         ).toBeUndefined();
 
-        expect(warn).toHaveBeenCalledOnce();
-        expect(warn).toHaveBeenCalledWith(
-          'SessionDescription',
-          expect.stringContaining('helper unavailable'),
-        );
+        expect(logs.at('WARN', 'SessionDescription')).toHaveLength(1);
+        expect(
+          logs.has('WARN', 'SessionDescription', 'helper unavailable'),
+        ).toBe(true);
       }),
   );
 });

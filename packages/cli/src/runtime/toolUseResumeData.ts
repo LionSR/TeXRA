@@ -3,7 +3,7 @@ import { retrieveSessionResumeData, type AgentConfig } from '@agent/runtime';
 
 import { deriveResumability } from '@agent/storage';
 import type { SessionHandle } from '@agent/runtime';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import {
   AgentCategory,
   RUN_OUTCOME,
@@ -13,7 +13,7 @@ import {
 } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-const logger = createLog('CliToolUseResumeData');
+const CHANNEL = 'CliToolUseResumeData';
 
 /**
  * The durable facts a run's continuability is decided from. `history list`
@@ -83,9 +83,9 @@ export const isCliRunResumable = Effect.fn('isCliRunResumable')(function* (
   if (decision.kind === 'unreadable') {
     // An unreadable run is advertised here and refused at open time, out loud
     // either way.
-    logger.warn(
+    yield* Effect.logWarning(
       `Advertising workflow ${facts.id} as resumable without reading its persisted state: ${decision.cause}`,
-    );
+    ).pipe(withLogChannel(CHANNEL));
     return true;
   }
   return (
@@ -113,12 +113,9 @@ export const readCliResumedModel = Effect.fn('readCliResumedModel')(function* (
       resume?.type === 'toolUse' ? resume.agentConfig.model : undefined,
     ),
     Effect.catch((error) =>
-      Effect.sync(() => {
-        logger.debug(
-          `No resumed model for history entry ${id}: ${toErrorMessage(error)}`,
-        );
-        return undefined;
-      }),
+      Effect.logDebug(
+        `No resumed model for history entry ${id}: ${toErrorMessage(error)}`,
+      ).pipe(withLogChannel(CHANNEL), Effect.as(undefined)),
     ),
   );
 });

@@ -19,10 +19,12 @@ import {
   type PendingOAuthState,
 } from '@auth/pendingOAuthState';
 import { parseJsonWith } from '@common/parsing/safeParseJson';
+import { withLogChannel } from '@logger/effectLog';
 import { createLog } from '@logger/logUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-const log = createLog('pendingOAuthStore');
+const CHANNEL = 'pendingOAuthStore';
+const log = createLog(CHANNEL);
 
 /**
  * Key prefix a durable {@link PendingOAuthSlots} implementation puts its
@@ -110,12 +112,9 @@ export class PendingOAuthStore {
   sweep(): Effect.Effect<void> {
     return Effect.gen({ self: this }, function* () {
       const nonces = yield* Effect.catch(this.slots.nonces(), (error) =>
-        Effect.sync(() => {
-          log.warn(
-            `Unable to inspect stored OAuth callback state for cleanup: ${toErrorMessage(error)}`,
-          );
-          return [] as readonly string[];
-        }),
+        Effect.logWarning(
+          `Unable to inspect stored OAuth callback state for cleanup: ${toErrorMessage(error)}`,
+        ).pipe(withLogChannel(CHANNEL), Effect.as([] as readonly string[])),
       );
       for (const nonce of nonces) {
         yield* Effect.catch(
@@ -126,11 +125,9 @@ export class PendingOAuthStore {
             }
           }),
           (error) =>
-            Effect.sync(() => {
-              log.warn(
-                `Unable to clean up stored OAuth callback state: ${toErrorMessage(error)}`,
-              );
-            }),
+            Effect.logWarning(
+              `Unable to clean up stored OAuth callback state: ${toErrorMessage(error)}`,
+            ).pipe(withLogChannel(CHANNEL)),
         );
       }
     });
@@ -168,4 +165,11 @@ export function memoryPendingOAuthSlots(): PendingOAuthSlots {
       }),
     nonces: () => Effect.sync(() => [...records.keys()]),
   };
+}
+
+/** A sign-in nonce: 16 random bytes, hex, as `OAUTH_NONCE_PATTERN` spells it. */
+export function mintCallbackNonce(): string {
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  return [...bytes].map((byte) => byte.toString(16).padStart(2, '0')).join('');
 }

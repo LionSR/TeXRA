@@ -11,7 +11,7 @@ import {
   type RunRecord,
 } from '@agent/core/definition/RunRecord';
 import type { LatexRunDiscoveryPort } from '@latex/latexdiff/runDiscovery';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import {
   AgentCategory,
   aggregateTarget,
@@ -25,7 +25,7 @@ import { filterNotNull, toNewestFirstByTimestamp } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 import { checkpointExists } from './resumability';
-const log = createLog('RunListing');
+const CHANNEL = 'RunListing';
 const RUN_STORAGE_CONCURRENCY = 32;
 
 // ============================================================================
@@ -162,12 +162,9 @@ export const listRuns = Effect.fn('listRuns')(function* (
         return { ...base, kind: 'run', identity, record };
       }).pipe(
         Effect.catch((error) =>
-          Effect.sync(() => {
-            log.warn(
-              `Skipping corrupt run ${run.id}: ${toErrorMessage(error)}`,
-            );
-            return null;
-          }),
+          Effect.logWarning(
+            `Skipping corrupt run ${run.id}: ${toErrorMessage(error)}`,
+          ).pipe(withLogChannel(CHANNEL), Effect.as(null)),
         ),
       ),
     { concurrency: RUN_STORAGE_CONCURRENCY },

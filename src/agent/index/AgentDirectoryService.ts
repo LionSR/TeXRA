@@ -6,6 +6,7 @@ import { Effect, FileSystem } from 'effect';
 
 // Local imports
 import { CUSTOM_AGENTS_STORAGE_DIR } from '@common/storage/storageLayout';
+import { withLogChannel } from '@logger/effectLog';
 import { createLog } from '@logger/logUtils';
 import {
   AgentDirectoriesFailed,
@@ -140,7 +141,9 @@ export class AgentDirectoryService {
             );
           }),
         );
-      this.log.debug(`Using default custom agents directory: ${defaultPath}`);
+      yield* Effect.logDebug(
+        `Using default custom agents directory: ${defaultPath}`,
+      ).pipe(withLogChannel(this.options.channel));
       return defaultPath;
     });
   }
@@ -158,9 +161,9 @@ export class AgentDirectoryService {
 
     return Effect.gen({ self: this }, function* () {
       if (!path.isAbsolute(configuredPath)) {
-        this.log.error(
+        yield* Effect.logError(
           `Custom agents directory must be an absolute path: ${configuredPath}`,
-        );
+        ).pipe(withLogChannel(this.options.channel));
         yield* this.reportIssue(
           'Custom agents directory must be an absolute path',
           'custom-agents',
@@ -178,9 +181,9 @@ export class AgentDirectoryService {
         ),
       );
       if (!parentExists) {
-        this.log.error(
+        yield* Effect.logError(
           `Parent directory does not exist for custom agents directory: ${parentDir}`,
-        );
+        ).pipe(withLogChannel(this.options.channel));
         yield* this.reportIssue(
           'Parent directory for custom agents directory does not exist',
           'custom-agents',
@@ -201,9 +204,9 @@ export class AgentDirectoryService {
             ),
           ),
         );
-      this.log.debug(
+      yield* Effect.logDebug(
         `Using custom agents directory from setting: ${configuredPath}`,
-      );
+      ).pipe(withLogChannel(this.options.channel));
       return configuredPath;
     });
   }

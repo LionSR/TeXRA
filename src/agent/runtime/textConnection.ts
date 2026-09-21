@@ -9,6 +9,7 @@ import { classifyAgentError } from '@common/errors';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '@latex/latexLogging';
 import type { ResponseTextConnector } from '@latex/texraResponseTextProcessing';
+import { withLogChannel } from '@logger/effectLog';
 import { createLog } from '@logger/logUtils';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import {
@@ -65,7 +66,9 @@ export function createAgentResponseTextConnector(
       const choice = text.trim();
       const connector = CASE_CONNECTORS[choice];
       if (connector === undefined) {
-        log.debug(`Invalid choice: ${choice}. Defaulting to space.`);
+        yield* Effect.logDebug(
+          `Invalid choice: ${choice}. Defaulting to space.`,
+        ).pipe(withLogChannel(CHANNEL));
         return DEFAULT_CONNECTOR;
       }
       return connector;

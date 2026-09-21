@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
 
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 
 import {
   AgentDirectoryService,
@@ -20,14 +20,15 @@ interface PlatformAgentDirectoryOptions {
 export function createPlatformAgentDirectories(
   options: PlatformAgentDirectoryOptions,
 ): AgentDirectoryService {
-  const log = createLog(options.channel);
   return new AgentDirectoryService({
     channel: options.channel,
     resourcesPath: options.resourcesPath,
     customDirectoryStore: options.customDirectoryStore,
     issueReporter: options.issueReporter ?? {
       report: (message, docsId) =>
-        Effect.sync(() => log.warn(`${message}. See documentation: ${docsId}`)),
+        Effect.logWarning(`${message}. See documentation: ${docsId}`).pipe(
+          withLogChannel(options.channel),
+        ),
     },
   });
 }

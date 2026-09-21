@@ -2,7 +2,7 @@ import { Cause, Data, Effect, FileSystem } from 'effect';
 import * as vscode from 'vscode';
 import { nanoid } from 'nanoid';
 
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import { HOST_BRIDGE_API_KEY } from '@shared/hostBridgeTypes';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
@@ -78,7 +78,7 @@ const buildWebviewHtml = Effect.fnUntraced(function* (
  * stylesheet under `dist/`. Covers the main, progress, and settings views.
  */
 export class BundledViewContentProvider {
-  private readonly log: ReturnType<typeof createLog>;
+  private readonly channel: string;
 
   constructor(
     private readonly context: vscode.ExtensionContext,
@@ -90,7 +90,7 @@ export class BundledViewContentProvider {
      */
     private readonly viewFolder: string,
   ) {
-    this.log = createLog(`${viewName}ContentProvider`);
+    this.channel = `${viewName}ContentProvider`;
   }
 
   /**
@@ -120,19 +120,19 @@ export class BundledViewContentProvider {
       attributes,
     ).pipe(
       Effect.tap(() =>
-        Effect.sync(() => {
-          this.log.debug(`Generated HTML content for ${this.viewName}`);
-        }),
+        Effect.logDebug(`Generated HTML content for ${this.viewName}`).pipe(
+          withLogChannel(this.channel),
+        ),
       ),
       // A view that cannot render its template still gets a page: the
       // failure is logged here, once, with its cause.
       Effect.catchCause((cause) =>
-        Effect.sync(() => {
-          this.log.error(
-            `Error generating HTML content: ${toErrorMessage(Cause.squash(cause))}`,
-          );
-          return '<html><body>Error loading content</body></html>';
-        }),
+        Effect.logError(
+          `Error generating HTML content: ${toErrorMessage(Cause.squash(cause))}`,
+        ).pipe(
+          withLogChannel(this.channel),
+          Effect.as('<html><body>Error loading content</body></html>'),
+        ),
       ),
     );
   }

@@ -20,6 +20,7 @@ import { z } from 'zod';
 // Local imports
 import type { WorkPlanState } from '@agent/core/state/AgentWorkspaceState';
 import { ToolCall, type ToolCallShape } from '@agent/runtime/ToolCall';
+import { withLogChannel, withLogData } from '@logger/effectLog';
 import { createLog } from '@logger/logUtils';
 import type { Goal, Plan, RunId, ToolResult } from '@shared/schemas';
 import { goalElapsedMs, ToolError } from '@shared/schemas';
@@ -42,7 +43,8 @@ import { generateShortId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { formatCompactDuration } from '@utils/text/stringUtils';
 
-const logger = createLog('PlanTool');
+const CHANNEL = 'PlanTool';
+const logger = createLog(CHANNEL);
 
 function formatGoalView(goal: Goal): string {
   return [
@@ -122,10 +124,10 @@ const startGoalForPlan = Effect.fn('PlanTool.startGoalForPlan')(function* (
   autoApprovalScope: GoalAutoApprovalScope,
 ) {
   if (!isGoalEnabled(ports.call.roots.config)) {
-    logger.warn(
+    yield* Effect.logWarning(
       'Run as Goal requested but goal feature flag is off; ' +
         'continuing without an autonomous goal.',
-    );
+    ).pipe(withLogChannel(CHANNEL));
     return executed(
       `The user selected Run as Goal, but the goal feature flag is ` +
         `currently disabled. The plan is approved, but no autonomous ` +
@@ -228,7 +230,9 @@ const requestApproval = Effect.fn('PlanTool.requestApproval')(function* (
   const requestId = `plan-${generateShortId()}`;
   const goalEnabled = isGoalEnabled(ports.call.roots.config);
 
-  logger.info('Requesting approval for plan objective');
+  yield* Effect.logInfo('Requesting approval for plan objective').pipe(
+    withLogChannel(CHANNEL),
+  );
 
   const result = yield* ports.session.openRequest(runId, {
     kind: 'planApproval',
@@ -236,12 +240,16 @@ const requestApproval = Effect.fn('PlanTool.requestApproval')(function* (
   });
 
   if (result.action === 'approve') {
-    logger.info('Plan approved by user');
+    yield* Effect.logInfo('Plan approved by user').pipe(
+      withLogChannel(CHANNEL),
+    );
     return buildApprovedResult();
   }
 
   if (result.action === 'approve_and_goal') {
-    logger.info('Plan approved by user with goal mode');
+    yield* Effect.logInfo('Plan approved by user with goal mode').pipe(
+      withLogChannel(CHANNEL),
+    );
     return yield* startGoalForPlan(
       ports,
       plan,
@@ -282,9 +290,9 @@ const requestApproval = Effect.fn('PlanTool.requestApproval')(function* (
         ? `\nUser feedback: ${feedback}`
         : '\nNo specific feedback was provided.';
 
-      logger.info(
-        'Plan rejected by user',
-        feedback ? { data: feedback } : undefined,
+      yield* Effect.logInfo('Plan rejected by user').pipe(
+        withLogData(feedback),
+        withLogChannel(CHANNEL),
       );
 
       return errorResult(

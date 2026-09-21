@@ -7,7 +7,7 @@
  */
 import { Effect } from 'effect';
 import { AuthPortError, settleFailure } from '@auth/authProgram';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import type { SecretsFailed } from '@platform/secrets';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -87,12 +87,9 @@ export function getSubscriptionSessionStatus(
 ): Effect.Effect<SubscriptionSessionStatus> {
   return Effect.suspend(() => getCoordinator().getStatus()).pipe(
     Effect.catchCause((cause) =>
-      Effect.sync(() => {
-        createLog(channel).warn(
-          `Failed to read ${displayName} session status: ${toErrorMessage(settleFailure(cause))}`,
-        );
-        return { signedIn: false };
-      }),
+      Effect.logWarning(
+        `Failed to read ${displayName} session status: ${toErrorMessage(settleFailure(cause))}`,
+      ).pipe(withLogChannel(channel), Effect.as({ signedIn: false })),
     ),
   );
 }

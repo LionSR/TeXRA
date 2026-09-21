@@ -1,5 +1,6 @@
 import { Cause, Effect, Exit } from 'effect';
 import type { ReviewIssueReport } from '@agent/review/reviewIssues';
+import { withLogChannel, withLogData } from '@logger/effectLog';
 import { createLog } from '@logger/logUtils';
 import type { FileLocation } from '@shared/schemas';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
@@ -15,7 +16,8 @@ import type {
   RuntimePresentationEventPayloads,
 } from './runtimePresentationEvents';
 
-const logger = createLog('SessionHostInteractions');
+const CHANNEL = 'SessionHostInteractions';
+const logger = createLog(CHANNEL);
 
 /**
  * Ceiling on presentation notices queued while no host is attached. A session
@@ -167,11 +169,10 @@ function presentOn<K extends RuntimePresentationEvent>(
     return Effect.forkDetach(
       presented.pipe(
         Effect.catchCause((cause) =>
-          Effect.sync(() => {
-            logger.warn('A host presentation notice failed', {
-              data: { event, cause: Cause.squash(cause) },
-            });
-          }),
+          Effect.logWarning('A host presentation notice failed').pipe(
+            withLogData({ event, cause: Cause.squash(cause) }),
+            withLogChannel(CHANNEL),
+          ),
         ),
       ),
     ).pipe(Effect.asVoid);
@@ -235,12 +236,11 @@ export class SessionHostInteractions implements HostInteractions {
         Effect.catch((failure) =>
           options.fallbackMessage === undefined
             ? Effect.fail(failure)
-            : Effect.sync(() => {
-                logger.warn(
-                  'Presentation emit failed; showing the generic error',
-                  { data: failure.cause },
-                );
-              }).pipe(
+            : Effect.logWarning(
+                'Presentation emit failed; showing the generic error',
+              ).pipe(
+                withLogData(failure.cause),
+                withLogChannel(CHANNEL),
                 Effect.andThen(
                   presentOn(interactions, 'requestShowError', {
                     message: options.fallbackMessage,
@@ -254,11 +254,10 @@ export class SessionHostInteractions implements HostInteractions {
       if (active) {
         return present(active.interactions).pipe(
           Effect.catch((failure) =>
-            Effect.sync(() => {
-              logger.warn('Live presentation emit failed', {
-                data: failure.cause,
-              });
-            }),
+            Effect.logWarning('Live presentation emit failed').pipe(
+              withLogData(failure.cause),
+              withLogChannel(CHANNEL),
+            ),
           ),
         );
       }
@@ -377,11 +376,9 @@ export class SessionHostInteractions implements HostInteractions {
         if (!replay) return;
         yield* replay(attachment.interactions).pipe(
           Effect.catch((failure) =>
-            Effect.sync(() => {
-              logger.warn('Failed to replay a session presentation notice', {
-                data: failure.cause,
-              });
-            }),
+            Effect.logWarning(
+              'Failed to replay a session presentation notice',
+            ).pipe(withLogData(failure.cause), withLogChannel(CHANNEL)),
           ),
         );
       }

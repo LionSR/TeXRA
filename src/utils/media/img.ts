@@ -6,7 +6,7 @@ import { Data, Effect, FileSystem } from 'effect';
 import { imageSize } from 'image-size';
 
 // Local imports - log
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import type { ConfigProvider } from '@platform/interfaces';
 import { getMimeType, isImageMimeType } from '@utils/files/mimeUtils';
 import { detectImageTool } from '@utils/system/toolUtils';
@@ -16,7 +16,6 @@ import { executeCommand } from '@utils/system/execUtils';
 import { countPdfPagesInBuffer } from './pdfPageCount';
 
 const CHANNEL = 'ImgUtils';
-const log = createLog(CHANNEL);
 
 /** DPI/density used when rasterizing a PDF page to PNG. */
 const PDF_RASTER_DENSITY = 300;
@@ -62,9 +61,9 @@ function removeTemporary(
     .remove(target, { recursive: true, force: true })
     .pipe(
       Effect.catchTag('PlatformError', (error) =>
-        Effect.sync(() =>
-          log.warn(`Failed to remove ${what} ${target}: ${error.message}`),
-        ),
+        Effect.logWarning(
+          `Failed to remove ${what} ${target}: ${error.message}`,
+        ).pipe(withLogChannel(CHANNEL)),
       ),
     );
 }
@@ -155,9 +154,9 @@ const resizeImageIfNeeded = Effect.fn('img.resizeImageIfNeeded')(function* (
           });
         }
 
-        log.debug(
+        yield* Effect.logDebug(
           `Resized image ${imagePath} (${width}x${height}) to fit within ${maxDimension}px`,
-        );
+        ).pipe(withLogChannel(CHANNEL));
         return yield* fs.readFile(tempPath);
       }),
     (tempPath) => removeTemporary(fs, tempPath, 'temporary file'),
@@ -189,7 +188,9 @@ export const getBase64EncodedMedia = Effect.fn('img.getBase64EncodedMedia')(
       });
     }
 
-    log.debug(`Successfully encoded image: ${mediaPath}`);
+    yield* Effect.logDebug(`Successfully encoded image: ${mediaPath}`).pipe(
+      withLogChannel(CHANNEL),
+    );
     return toBase64(mediaBytes);
   },
 );
@@ -199,17 +200,19 @@ export const countPdfPages = Effect.fn('img.countPdfPages')(
   function* (pdfPath: string) {
     const fs = yield* FileSystem.FileSystem;
     if (!(yield* fs.exists(pdfPath))) {
-      log.debug(`PDF file not found: ${pdfPath}`);
+      yield* Effect.logDebug(`PDF file not found: ${pdfPath}`).pipe(
+        withLogChannel(CHANNEL),
+      );
       return 0;
     }
     const bytes = yield* fs.readFile(pdfPath);
     return yield* conversionStep(() => countPdfPagesInBuffer(bytes));
   },
   Effect.catchTag(['PlatformError', 'MediaConversionFailed'], (error) =>
-    Effect.sync(() => {
-      log.error(`Error counting PDF pages: ${error.message}`);
-      return 0;
-    }),
+    Effect.logError(`Error counting PDF pages: ${error.message}`).pipe(
+      withLogChannel(CHANNEL),
+      Effect.as(0),
+    ),
   ),
 );
 
@@ -264,7 +267,9 @@ const singlePagePdf2Png = Effect.fn('img.singlePagePdf2Png')(function* (
   }
 
   const imageBytes = yield* fs.readFile(outputPath);
-  log.debug(`Successfully converted page ${pageNum} of ${absolutePath} to PNG`);
+  yield* Effect.logDebug(
+    `Successfully converted page ${pageNum} of ${absolutePath} to PNG`,
+  ).pipe(withLogChannel(CHANNEL));
   return toBase64(imageBytes);
 });
 
@@ -279,7 +284,9 @@ export const processPdf2Png = Effect.fn('img.processPdf2Png')(
   function* (pdfPath: string) {
     const fs = yield* FileSystem.FileSystem;
     if (!(yield* fs.exists(pdfPath))) {
-      log.debug(`PDF file not found: ${pdfPath}`);
+      yield* Effect.logDebug(`PDF file not found: ${pdfPath}`).pipe(
+        withLogChannel(CHANNEL),
+      );
       return null;
     }
 
@@ -306,9 +313,9 @@ export const processPdf2Png = Effect.fn('img.processPdf2Png')(
           if (pagesToConvert < pageCount) {
             // The cap protects against pathological PDFs, but dropping pages
             // silently lets a model reason about a paper it has only part of.
-            log.warn(
+            yield* Effect.logWarning(
               `Rasterizing only the first ${pagesToConvert} of ${pageCount} pages from ${pdfPath}; the rest are not attached.`,
-            );
+            ).pipe(withLogChannel(CHANNEL));
           }
           const base64Images: string[] = [];
           for (let pageNum = 1; pageNum <= pagesToConvert; pageNum++) {
@@ -316,18 +323,18 @@ export const processPdf2Png = Effect.fn('img.processPdf2Png')(
               yield* singlePagePdf2Png(pdfPath, pageNum, tempDir, tool),
             );
           }
-          log.debug(
+          yield* Effect.logDebug(
             `Successfully converted ${base64Images.length} pages from ${pdfPath}`,
-          );
+          ).pipe(withLogChannel(CHANNEL));
           return base64Images;
         }),
       (tempDir) => removeTemporary(fs, tempDir, 'temporary directory'),
     );
   },
   Effect.catchTag(['PlatformError', 'MediaConversionFailed'], (error) =>
-    Effect.sync(() => {
-      log.error(`Error processing PDF input: ${error.message}`);
-      return null;
-    }),
+    Effect.logError(`Error processing PDF input: ${error.message}`).pipe(
+      withLogChannel(CHANNEL),
+      Effect.as(null),
+    ),
   ),
 );

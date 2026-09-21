@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
 
 import { type SessionHandle } from '@agent/runtime';
-import { warn as logWarning } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import { getExhaustionReason } from '@shared/schemas';
 import type { RequestDecision, RetryPermission, RunId } from '@shared/schemas';
 import {
@@ -15,6 +15,8 @@ import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 import { type CliContext, type CliPromptRequest } from '../cliContext';
 import { askCliQuestion, writeTextStderr } from '../logSinks';
 import { safeTerminalText } from '../terminalText';
+
+const CHANNEL = 'cli.approval';
 
 export interface CliApprovalPromptHooks {
   readonly beforePrompt?: () => void;
@@ -230,20 +232,16 @@ export const askApproval = Effect.fn('approvalPrompts.askApproval')(function* (
       return decision;
     }),
   ).pipe(
-    Effect.catch((error) =>
-      Effect.sync(() => {
-        logWarning(
-          'cli.approval',
-          `The CLI approval prompt failed: ${toErrorMessage(error)}`,
-        );
-        // A prompt that never reached a person closes the request rather
-        // than speaking for one: the cause says so.
-        const failed: RequestDecision = {
-          action: 'cancel',
-          cause: 'CLI approval prompt failed.',
-        };
-        return failed;
-      }),
-    ),
+    Effect.catch((error) => {
+      // A prompt that never reached a person closes the request rather
+      // than speaking for one: the cause says so.
+      const failed: RequestDecision = {
+        action: 'cancel',
+        cause: 'CLI approval prompt failed.',
+      };
+      return Effect.logWarning(
+        `The CLI approval prompt failed: ${toErrorMessage(error)}`,
+      ).pipe(withLogChannel(CHANNEL), Effect.as(failed));
+    }),
   );
 });

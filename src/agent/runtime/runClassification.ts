@@ -24,12 +24,12 @@ import { Effect } from 'effect';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { deriveResumability } from '@agent/storage/resumability';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel, withLogData } from '@logger/effectLog';
 import type { OwnerId, RunId } from '@shared/schemas';
 import { claimStanding } from '@shared/session/database';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-const log = createLog('RunClassification');
+const CHANNEL = 'RunClassification';
 
 export type RunClassification =
   | { readonly kind: 'held_elsewhere'; readonly owner: OwnerId }
@@ -52,7 +52,9 @@ const classifyRunFacts = Effect.fn('classifyRunFacts')(function* (
   const facts = yield* deriveResumability(runId, session);
   if (facts.kind === 'checkpoint') return { kind: 'resumable' };
   if (facts.kind === 'none') return { kind: 'finished' };
-  log.warn(`Cannot classify ${runId}: ${facts.cause}`);
+  yield* Effect.logWarning(`Cannot classify ${runId}: ${facts.cause}`).pipe(
+    withLogChannel(CHANNEL),
+  );
   return { kind: 'unclassified', cause: facts.cause };
 });
 
@@ -65,7 +67,10 @@ export const classifyRun = Effect.fn('classifyRun')(function* (
   if (claimResult._tag === 'Failure') {
     const error = claimResult.failure;
     const cause = `claim unreadable (${toErrorMessage(error)})`;
-    log.warn(`Cannot classify ${runId}: ${cause}`, { data: error });
+    yield* Effect.logWarning(`Cannot classify ${runId}: ${cause}`).pipe(
+      withLogData(error),
+      withLogChannel(CHANNEL),
+    );
     return { kind: 'unclassified', cause };
   }
   const standing = claimStanding(claimResult.success);
