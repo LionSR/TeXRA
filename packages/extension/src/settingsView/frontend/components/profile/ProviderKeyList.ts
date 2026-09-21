@@ -6,7 +6,10 @@ import { customElement, property, state } from 'lit/decorators.js';
 import { commonViewStyles, designTokens } from '@shared/styles';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
-import type { ProviderKeyStatus, ProviderSetting } from '@shared/schemas';
+import type {
+  ProviderKeyStatus,
+  ProviderSetting,
+} from '@shared/settingsView/settingsViewMessages';
 import { PROVIDER_STATE_ENTRIES } from '@shared/constants/providers';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { renderIconActionButton } from '@shared/wa/actionButtons';

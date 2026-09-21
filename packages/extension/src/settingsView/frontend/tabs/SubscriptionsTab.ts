@@ -17,10 +17,12 @@ import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import {
   CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
-  type CopilotRouteInfo,
-  type SubscriptionAuthStatuses,
   type SubscriptionUsageSnapshots,
 } from '@shared/schemas';
+import {
+  type CopilotRouteInfo,
+  type SubscriptionAuthStatuses,
+} from '@shared/settingsView/settingsViewMessages';
 import { TickerController } from '@shared/litControllers/TickerController';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import { renderSettingsSectionHeading } from '@shared/wa/settingsSection';

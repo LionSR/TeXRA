@@ -27,11 +27,11 @@ import {
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { settingByKey } from '@shared/state/stateSettings';
 import {
   type LatexSettingsStatus,
   DEFAULT_LATEX_SETTINGS_STATUS,
-  settingByKey,
-} from '@shared/schemas';
+} from '@shared/settingsView/settingsViewMessages';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import { renderLoadingState } from '@shared/wa/loadingState';
 import { renderSettingsBanner } from '@shared/wa/settingsBanner';

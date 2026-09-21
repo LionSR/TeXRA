@@ -26,7 +26,7 @@ import {
 import { withLogChannel, withLogData } from '@logger/effectLog';
 import { MEMORY_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import { StorageFs } from '@platform/rootedFs';
-import type { MemoryViewItem } from '@shared/schemas';
+import type { MemoryViewItem } from '@shared/settingsView/settingsViewMessages';
 import {
   MAX_PINNED_MEMORIES,
   MAX_PREVIEW_LINES,

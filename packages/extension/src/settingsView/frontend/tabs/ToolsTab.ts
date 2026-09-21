@@ -16,11 +16,13 @@ import {
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
 import {
-  type ToolCategory,
-  type ToolDashboardItem,
   BASH_APPROVAL_CONFIG_KEY,
   TOOL_EDIT_APPROVAL_CONFIG_KEY,
 } from '@shared/schemas';
+import {
+  type ToolCategory,
+  type ToolDashboardItem,
+} from '@shared/settingsView/settingsViewMessages';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import { renderLoadingState } from '@shared/wa/loadingState';
 import { renderSettingsSectionHeading } from '@shared/wa/settingsSection';

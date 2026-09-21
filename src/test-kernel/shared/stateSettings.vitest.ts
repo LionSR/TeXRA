@@ -12,8 +12,20 @@ import { describe, vi } from 'vitest';
 import * as logger from '@logger/logUtils';
 import { TEXRA_APPROVAL_POLICY_CONFIG_KEY } from '@shared/approvalPolicy';
 import {
-  ALL_SETTINGS,
   AGENT_SKILLS_CONFIG_KEY,
+  CLAUDE_AGENT_DEFAULT_EFFORT,
+  CLAUDE_AGENT_DEFAULT_MODEL,
+  CLAUDE_AGENT_DEFAULT_PERMISSION_MODE,
+  CODEX_APPROVAL_POLICY_DEFAULT,
+  CODEX_REASONING_EFFORT_DEFAULT,
+  CODEX_SANDBOX_MODE_DEFAULT,
+  CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
+  CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
+  MODEL_COMPACTION_THRESHOLD_SETTING,
+  MODEL_RETRY_MAX_ATTEMPTS_SETTING,
+} from '@shared/schemas';
+import {
+  ALL_SETTINGS,
   CLI_CONFIG_SLOT_KEYS,
   CLI_STATE_SETTINGS,
   DEFAULT_GIT_AUTHOR_EMAIL,
@@ -26,26 +38,20 @@ import {
   settingByKey,
   settingsViewSettingByKey,
   settingsViewSnapshotEntries,
-  dispatchSettingsViewOutbound,
   stateSettingByKey,
+} from '@shared/state/stateSettings';
+import {
+  dispatchSettingsViewOutbound,
   REASONING_LEVEL_OPTIONS,
-  CLAUDE_AGENT_DEFAULT_EFFORT,
-  CLAUDE_AGENT_DEFAULT_MODEL,
-  CLAUDE_AGENT_DEFAULT_PERMISSION_MODE,
-  CODEX_APPROVAL_POLICY_DEFAULT,
-  CODEX_REASONING_EFFORT_DEFAULT,
-  CODEX_SANDBOX_MODE_DEFAULT,
-  CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
-  CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
-  MODEL_COMPACTION_THRESHOLD_SETTING,
-  MODEL_RETRY_MAX_ATTEMPTS_SETTING,
-} from '@shared/schemas';
+} from '@shared/settingsView/settingsViewMessages';
 import type {
-  DerivedSettingsSnapshot,
   SettingHost,
   SettingStore,
   StateSettingEntry,
-} from '@shared/schemas';
+} from '@shared/state/stateSettings';
+import type {
+  DerivedSettingsSnapshot,
+} from '@shared/settingsView/settingsViewMessages';
 import { buildSettingsSnapshotMessage } from '@shared/settingsView/handlers/settingsSnapshot';
 import {
   DEFAULT_HELPER_MODEL,

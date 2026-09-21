@@ -13,8 +13,8 @@ import type {
   SettingHost,
   SettingStore,
   StateSettingEntry,
-} from '@shared/schemas';
-import { settingByKey } from '@shared/schemas';
+} from '@shared/state/stateSettings';
+import { settingByKey } from '@shared/state/stateSettings';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 const log = createLog('settingsAccess');

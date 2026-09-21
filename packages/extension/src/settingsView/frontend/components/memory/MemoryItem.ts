@@ -19,7 +19,7 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - shared styles
 import { designTokens, commonViewStyles } from '@shared/styles';
-import type { MemoryViewItem } from '@shared/schemas';
+import type { MemoryViewItem } from '@shared/settingsView/settingsViewMessages';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import { DetailsOpenController } from '@shared/litControllers/DetailsOpenController';

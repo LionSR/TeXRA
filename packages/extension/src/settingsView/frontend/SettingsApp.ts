@@ -18,7 +18,7 @@ import { commonViewStyles, designTokens } from '@shared/styles';
 import {
   dispatchSettingsViewOutbound,
   type SettingsTabPanelName,
-} from '@shared/schemas';
+} from '@shared/settingsView/settingsViewMessages';
 import { isKnownUnsupported } from '@shared/utils/dispatcher';
 import {
   registerTeXRAWebAwesomeIcons,

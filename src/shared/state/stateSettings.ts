@@ -18,45 +18,41 @@ import {
   PROVIDER_ENDPOINT_STATE_ENTRIES,
 } from '@shared/constants/providers';
 import {
-  CLAUDE_AGENT_DEFAULT_EFFORT,
-  CLAUDE_AGENT_DEFAULT_MODEL,
-  CLAUDE_AGENT_DEFAULT_PERMISSION_MODE,
-  ClaudeAgentEffortSchema,
-  ClaudeAgentModelSchema,
-  ClaudeAgentPermissionModeSchema,
-  CODEX_APPROVAL_POLICY_DEFAULT,
-  CODEX_REASONING_EFFORT_DEFAULT,
-  CODEX_SANDBOX_MODE_DEFAULT,
-  CodexApprovalPolicySchema,
-  CodexReasoningEffortSchema,
-  CodexSandboxModeSchema,
-} from '@shared/schemas/agentCliSettings';
-import {
-  CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
-  CHILD_RUN_CONCURRENCY_BUDGET_SETTING,
-  ChatgptCodexContextWindowSchema,
-  ChildRunConcurrencyBudgetSchema,
-  LATEXDIFF_TEMP_FILE_LOCATIONS,
-  MODEL_COMPACTION_THRESHOLD_SETTING,
-  MODEL_RETRY_MAX_ATTEMPTS_SETTING,
-  ModelCompactionThresholdPercentSchema,
-  ModelRetryMaxAttemptsSchema,
-  CliOutputFormatSchema,
-  TELEMETRY_ENABLED_DEFAULT,
-} from '@shared/schemas/coreSettings';
-import {
   DEFAULT_ENABLED_REGEX_REPLACEMENTS,
   DEFAULT_ENABLED_REPLACEMENTS,
   NON_REGEX_REPLACEMENT_CATEGORIES,
   REGEX_REPLACEMENT_CATEGORIES,
 } from '@shared/constants/replacementCategories';
 import {
+  ActiveSkillSourceScopeSchema,
   AGENT_SKILLS_ENABLED_DEFAULT,
   AgentSkillsEnabledSchema,
-} from '@shared/schemas/agentSkills';
+  CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
+  CHILD_RUN_CONCURRENCY_BUDGET_SETTING,
+  ChatgptCodexContextWindowSchema,
+  ChildRunConcurrencyBudgetSchema,
+  CLAUDE_AGENT_DEFAULT_EFFORT,
+  CLAUDE_AGENT_DEFAULT_MODEL,
+  CLAUDE_AGENT_DEFAULT_PERMISSION_MODE,
+  ClaudeAgentEffortSchema,
+  ClaudeAgentModelSchema,
+  ClaudeAgentPermissionModeSchema,
+  CliOutputFormatSchema,
+  CODEX_APPROVAL_POLICY_DEFAULT,
+  CODEX_REASONING_EFFORT_DEFAULT,
+  CODEX_SANDBOX_MODE_DEFAULT,
+  CodexApprovalPolicySchema,
+  CodexReasoningEffortSchema,
+  CodexSandboxModeSchema,
+  LATEXDIFF_TEMP_FILE_LOCATIONS,
+  MODEL_COMPACTION_THRESHOLD_SETTING,
+  MODEL_RETRY_MAX_ATTEMPTS_SETTING,
+  ModelCompactionThresholdPercentSchema,
+  ModelRetryMaxAttemptsSchema,
+  SkillNameSchema,
+  TELEMETRY_ENABLED_DEFAULT,
+} from '@shared/schemas';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
-import { ActiveSkillSourceScopeSchema } from './activeSkills';
-import { SkillNameSchema } from './skillName';
 
 // ============================================================================
 // Git defaults

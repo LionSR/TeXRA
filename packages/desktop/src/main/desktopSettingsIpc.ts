@@ -19,13 +19,13 @@ import type { PlatformSecrets } from '@platform/secrets';
 import { resolveMemoryStoragePath } from '@platform/defaults/workspaceStorage';
 import { codingPlanForUsageSetting } from '@shared/codingPlanSubscriptions';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { type RunId } from '@shared/schemas';
 import {
   dispatchSettingsViewInbound,
   SettingsViewInboundMessageSchema,
   type DerivedSettingsSnapshot,
-  type RunId,
   type SettingsViewInboundHandlerRegistry,
-} from '@shared/schemas';
+} from '@shared/settingsView/settingsViewMessages';
 import {
   applyStateSettingUpdate,
   type SettingsSnapshotPosters,

@@ -1,5 +1,5 @@
 import type { SelectItem } from '@cli/tui/ui/Select';
-import type { SurfacedSettingEntry } from '@shared/schemas';
+import type { SurfacedSettingEntry } from '@shared/state/stateSettings';
 import { capitalize, formatResultCount } from '@utils/text/stringUtils';
 
 const CONFIG_CATEGORY_LABELS: Readonly<Record<string, string>> = {

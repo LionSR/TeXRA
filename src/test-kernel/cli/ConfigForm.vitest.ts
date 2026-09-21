@@ -39,8 +39,8 @@ import {
   ALL_SETTINGS,
   CLI_STATE_SETTINGS,
   DEFAULT_GIT_AUTHOR_NAME,
-} from '@shared/schemas';
-import type { SurfacedSettingEntry } from '@shared/schemas';
+} from '@shared/state/stateSettings';
+import type { SurfacedSettingEntry } from '@shared/state/stateSettings';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';

@@ -27,7 +27,7 @@ import type {
   ToolCommandKind,
   ToolDashboardItem,
   ToolInstallAction,
-} from '@shared/schemas';
+} from '@shared/settingsView/settingsViewMessages';
 import { DetailsOpenController } from '@shared/litControllers/DetailsOpenController';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { renderStatusBadge } from '@shared/wa/statusIcons';

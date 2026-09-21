@@ -1,8 +1,7 @@
+import type { AgentCategory, GettingStartedAction } from '@shared/schemas';
 import type {
-  AgentCategory,
-  GettingStartedAction,
   SettingsTabPanelName,
-} from '@shared/schemas';
+} from '@shared/settingsView/settingsViewMessages';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   toElectronAccelerator,

@@ -40,11 +40,11 @@ import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import { NotificationFailed } from '@hosts/uiHosts';
 import type { ProcessServices } from '@platform/processRuntime';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
+import { agentKey } from '@shared/schemas';
 import {
-  agentKey,
   SETTINGS_VIEW_CMD,
   type SettingsMessageFor,
-} from '@shared/schemas';
+} from '@shared/settingsView/settingsViewMessages';
 import {
   buildAgentSelectionMessage,
   buildCustomAgentDirMessage,

@@ -7,13 +7,13 @@ import { customElement, property, state } from 'lit/decorators.js';
 import { commonViewStyles, designTokens } from '@shared/styles';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
+import { MODEL_AVAILABILITY_STATUS } from '@shared/schemas';
 import {
-  MODEL_AVAILABILITY_STATUS,
   REASONING_LEVEL_LABELS,
   REASONING_LEVEL_OPTIONS,
   type ModelSelectionItem,
   type ProviderKeyStatus,
-} from '@shared/schemas';
+} from '@shared/settingsView/settingsViewMessages';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import {
   renderKeyStatusIcon,

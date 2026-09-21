@@ -19,7 +19,7 @@ import {
   SETTINGS_VIEW_CMD,
   type SettingsMessageFor,
   type SettingsViewInboundHandlerRegistry,
-} from '@shared/schemas';
+} from '@shared/settingsView/settingsViewMessages';
 import { hasExtension } from '@utils/core/pathCore';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 

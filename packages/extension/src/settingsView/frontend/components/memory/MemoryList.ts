@@ -11,7 +11,7 @@ import { customElement, property, state } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - shared
-import type { MemoryViewItem } from '@shared/schemas';
+import type { MemoryViewItem } from '@shared/settingsView/settingsViewMessages';
 import { designTokens, commonViewStyles } from '@shared/styles';
 import { renderEmptyState } from '@shared/wa/emptyState';
 

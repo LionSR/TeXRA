@@ -1,4 +1,6 @@
-import type { ToolDependencyStatus } from '@shared/schemas';
+import type {
+  ToolDependencyStatus,
+} from '@shared/settingsView/settingsViewMessages';
 
 import { safeLookup } from '@utils/core';
 

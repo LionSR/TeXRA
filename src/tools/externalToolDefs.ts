@@ -23,7 +23,7 @@ import { withLogChannel } from '@logger/effectLog';
 import { apiKeyEnvName, lookupApiKeyOrigin } from '@model/apiProviders';
 import type { ConfigProvider } from '@platform/interfaces';
 import { Secrets } from '@platform/secrets';
-import type { ToolCategory } from '@shared/schemas';
+import type { ToolCategory } from '@shared/settingsView/settingsViewMessages';
 import { DELEGATE_MULTI_AGENTS_TOOL_NAME } from '@shared/constants/delegationTools';
 import type { RegisteredToolName } from '@tools/registry';
 import { importCodexClass, findCodexBinaryPath } from '@tools/codexImport';

@@ -13,7 +13,9 @@ import {
   LATEX_CONFIG_KEYS,
   type LatexConfigValues,
 } from '@shared/constants/latexConfig';
-import { type SettingsViewOutboundHandlerRegistry } from '@shared/schemas';
+import {
+  type SettingsViewOutboundHandlerRegistry,
+} from '@shared/settingsView/settingsViewMessages';
 
 import {
   activePresetId,

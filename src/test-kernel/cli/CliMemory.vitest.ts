@@ -11,7 +11,7 @@ import {
   loadCliMemoryDetail,
 } from '@cli/runtime/memory';
 import { StorageFs } from '@platform/rootedFs';
-import type { MemoryViewItem } from '@shared/schemas';
+import type { MemoryViewItem } from '@shared/settingsView/settingsViewMessages';
 import type { RootedFileSystem } from '@utils/files/rootedFileSystem';
 
 vi.mock('@tools/memory/memoryFileSystem', () => ({

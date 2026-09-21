@@ -7,7 +7,10 @@ import { customElement, property } from 'lit/decorators.js';
 import { commonViewStyles, designTokens } from '@shared/styles';
 
 // Local imports - shared schemas
-import type { ModelSelectionItem, ProviderKeyStatus } from '@shared/schemas';
+import type {
+  ModelSelectionItem,
+  ProviderKeyStatus,
+} from '@shared/settingsView/settingsViewMessages';
 
 // Local imports - settings view components (side-effect: register)
 import '../components/profile/ProviderKeyList';

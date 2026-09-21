@@ -5,7 +5,7 @@ import { customElement, property } from 'lit/decorators.js';
 
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
-import type { MemoryViewItem } from '@shared/schemas';
+import type { MemoryViewItem } from '@shared/settingsView/settingsViewMessages';
 import { commonViewStyles, designTokens } from '@shared/styles';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';

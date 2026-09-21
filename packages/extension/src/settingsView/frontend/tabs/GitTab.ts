@@ -9,10 +9,12 @@ import { commonViewStyles, designTokens } from '@shared/styles';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import {
-  type PRSubscriptionEntry,
   DEFAULT_GIT_AUTHOR_EMAIL,
   DEFAULT_GIT_AUTHOR_NAME,
-} from '@shared/schemas';
+} from '@shared/state/stateSettings';
+import {
+  type PRSubscriptionEntry,
+} from '@shared/settingsView/settingsViewMessages';
 import {
   renderSetStatusIcon,
   statusCheckIconStyles,

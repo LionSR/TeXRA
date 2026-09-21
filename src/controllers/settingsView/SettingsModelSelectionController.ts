@@ -25,12 +25,12 @@ import { StateWriteFailed } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { type ModelOptionData } from '@shared/schemas';
 import {
   type CopilotRouteInfo,
-  type ModelOptionData,
   type ModelSelectionItem,
   type UpdateModelSelectionMessage,
-} from '@shared/schemas';
+} from '@shared/settingsView/settingsViewMessages';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import {
   isFastFirstResponseModel,

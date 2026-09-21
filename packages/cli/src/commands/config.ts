@@ -6,7 +6,8 @@ import {
   InvalidAgentTeamError,
   loadAgents,
 } from '@agent/index';
-import { agentKeyOf, CLI_STATE_SETTINGS } from '@shared/schemas';
+import { agentKeyOf } from '@shared/schemas';
+import { CLI_STATE_SETTINGS } from '@shared/state/stateSettings';
 import { readSetting } from '@shared/config/settingsAccess';
 import { unique } from '@utils/core';
 

@@ -23,13 +23,15 @@ import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import {
   type AgentCategory,
-  type AgentScanIssue,
-  type AgentSelectionItem,
   type ByCategory,
   byCategory,
   MODEL_COMPACTION_THRESHOLD_SETTING,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
 } from '@shared/schemas';
+import {
+  type AgentScanIssue,
+  type AgentSelectionItem,
+} from '@shared/settingsView/settingsViewMessages';
 import {
   renderIconActionButton,
   renderLabeledActionButton,

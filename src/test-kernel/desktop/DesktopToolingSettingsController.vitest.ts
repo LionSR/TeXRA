@@ -8,7 +8,10 @@ import { DefaultDesktopToolingSettingsController } from '@desktop/main/desktopTo
 import { emitAppSignal } from '@eventBus/AppSignals';
 import { withProcessServices } from '@platform/processRuntime';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import type { ToolCommandKind, ToolDashboardItem } from '@shared/schemas';
+import type {
+  ToolCommandKind,
+  ToolDashboardItem,
+} from '@shared/settingsView/settingsViewMessages';
 import { HOMEBREW_INSTALL_COMMAND } from '@shared/constants/latexToolchain';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { assertSupported, isUnsupported } from '@shared/utils/dispatcher';

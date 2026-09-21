@@ -20,9 +20,11 @@ import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import {
   CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
-  type SubscriptionAuthStatus,
   type SubscriptionUsageSnapshot,
 } from '@shared/schemas';
+import {
+  type SubscriptionAuthStatus,
+} from '@shared/settingsView/settingsViewMessages';
 import { CHATGPT_AUTH, GROK_AUTH } from '@shared/copy/accountAuth';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import {

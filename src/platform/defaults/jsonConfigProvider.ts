@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
 
-import { getCoreSettingDefault } from '@shared/schemas';
+import { getCoreSettingDefault } from '@shared/state/stateSettings';
 import { canonicalConfigKey } from '@shared/config/configKeys';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 

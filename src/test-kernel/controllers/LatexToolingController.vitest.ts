@@ -3,7 +3,9 @@ import { Effect } from 'effect';
 import { describe, expect } from 'vitest';
 
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
-import { DEFAULT_LATEX_SETTINGS_STATUS } from '@shared/schemas';
+import {
+  DEFAULT_LATEX_SETTINGS_STATUS,
+} from '@shared/settingsView/settingsViewMessages';
 import {
   HOMEBREW_INSTALL_COMMAND,
   type OSPlatform,

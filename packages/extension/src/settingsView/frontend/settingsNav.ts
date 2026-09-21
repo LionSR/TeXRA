@@ -7,7 +7,7 @@
 import {
   SETTINGS_TAB_GROUPS,
   type SettingsTabPanelName,
-} from '@shared/schemas';
+} from '@shared/settingsView/settingsViewMessages';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 
 export interface SettingsNavEntry {

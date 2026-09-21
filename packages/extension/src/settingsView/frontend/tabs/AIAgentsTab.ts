@@ -18,15 +18,17 @@ import {
   type CodexApprovalPolicy,
   type CodexReasoningEffort,
   type CodexSandboxMode,
-  type ToolDashboardItem,
   CLAUDE_AGENT_DEFAULT_EFFORT,
   CLAUDE_AGENT_DEFAULT_MODEL,
   CLAUDE_AGENT_DEFAULT_PERMISSION_MODE,
   CODEX_APPROVAL_POLICY_DEFAULT,
   CODEX_REASONING_EFFORT_DEFAULT,
   CODEX_SANDBOX_MODE_DEFAULT,
-  settingsViewSettingByKey,
 } from '@shared/schemas';
+import { settingsViewSettingByKey } from '@shared/state/stateSettings';
+import {
+  type ToolDashboardItem,
+} from '@shared/settingsView/settingsViewMessages';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { renderEmptyState } from '@shared/wa/emptyState';
 import { renderLoadingState } from '@shared/wa/loadingState';

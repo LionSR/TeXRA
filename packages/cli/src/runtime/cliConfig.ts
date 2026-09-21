@@ -20,7 +20,10 @@ import type { ConfigProvider } from '@platform/interfaces';
 import { canonicalConfigKey } from '@shared/config/configKeys';
 import { readConfigSetting } from '@shared/config/settingsAccess';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import { CLI_CONFIG_SLOT_KEYS, settingByKey } from '@shared/schemas';
+import {
+  CLI_CONFIG_SLOT_KEYS,
+  settingByKey,
+} from '@shared/state/stateSettings';
 
 // Local imports - utilities
 import {

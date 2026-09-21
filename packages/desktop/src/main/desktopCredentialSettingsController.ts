@@ -39,11 +39,11 @@ import {
   codingPlanForApiProvider,
   codingPlanForUsageSetting,
 } from '@shared/codingPlanSubscriptions';
+import { type SubscriptionUsageProvider } from '@shared/schemas';
 import {
   type SettingsViewInboundHandlerRegistry,
-  type SubscriptionUsageProvider,
   type UpdateSubscriptionAuthStatusMessage,
-} from '@shared/schemas';
+} from '@shared/settingsView/settingsViewMessages';
 import { ACCOUNT_OUTCOME } from '@shared/copy/accountAuth';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { SettingsStatePorts } from '@shared/settingsView/types';

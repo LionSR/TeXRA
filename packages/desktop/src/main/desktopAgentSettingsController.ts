@@ -37,10 +37,12 @@ import {
   agentKey,
   type AgentCategory,
   type AgentSource,
+} from '@shared/schemas';
+import {
   type SettingsMessageFor,
   type SettingsViewInboundHandlerRegistry,
   type SettingsViewInboundMessage,
-} from '@shared/schemas';
+} from '@shared/settingsView/settingsViewMessages';
 import {
   buildAgentModePresetsMessage,
   buildAgentSelectionMessage,

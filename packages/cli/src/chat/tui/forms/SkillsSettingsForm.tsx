@@ -3,10 +3,10 @@ import { Text } from 'ink';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import {
   ActiveSkillSourceScopeSchema,
-  stateSettingByKey,
   type ActiveSkillSourceScope,
   type SkillDisplayItem,
 } from '@shared/schemas';
+import { stateSettingByKey } from '@shared/state/stateSettings';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { readSetting } from '@shared/config/settingsAccess';
 import { applyStateSettingUpdate } from '@shared/settingsView/handlers/stateSettingWrite';

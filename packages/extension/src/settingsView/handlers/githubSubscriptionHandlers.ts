@@ -25,7 +25,7 @@ import {
   SETTINGS_VIEW_CMD,
   type SettingsMessageFor,
   type SettingsViewInboundHandlerRegistry,
-} from '@shared/schemas';
+} from '@shared/settingsView/settingsViewMessages';
 import {
   GITHUB_TOKEN_CREATE_URL,
   GITHUB_TOKEN_PROMPT,
