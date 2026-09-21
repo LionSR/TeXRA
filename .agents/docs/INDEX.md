@@ -28,6 +28,7 @@ ruling and argues against it explicitly.
 | What the repo owes an autonomous agent    | [agent-refactorability gates](./proposed/process/2026-09-20-agent-refactorability-gates.md)                        |
 | State of the tree after the refactors     | [post-refactor architecture survey](./proposed/architecture/2026-09-20-post-refactor-architecture-survey.md)       |
 | Shipping 1.0                              | [TeXRA 1.0 implementation plan](./proposed/architecture/2026-09-09-texra-1-0-implementation-plan.md)               |
+| Runtime performance budgets               | [runtime performance measurement record](./proposed/process/2026-09-21-runtime-performance-measurement-record.md)  |
 
 A topic missing from this table has no owner yet: the tree and `git log` are
 the index for everything else, as they always were. Adding a row is how a note
