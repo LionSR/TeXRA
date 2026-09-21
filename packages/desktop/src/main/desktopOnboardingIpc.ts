@@ -211,8 +211,10 @@ export function createDesktopOnboardingIpc(
           options.runtime.runFork(
             dismiss.pipe(
               // The reporter receives the rejection itself, exactly as the
-              // promise-side handler on this call used to hand it over.
-              Effect.catchTag('OnboardingDismissFailed', (failure) =>
+              // promise-side handler on this call used to hand it over. The
+              // handler's parameter names the channel's whole error type, so a
+              // second tag added to `dismiss` fails to compile here.
+              Effect.catch((failure: OnboardingDismissFailed) =>
                 Effect.sync(() => options.onAsyncError(failure.cause)),
               ),
             ),
