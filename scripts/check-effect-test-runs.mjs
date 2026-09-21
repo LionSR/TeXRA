@@ -82,6 +82,19 @@ function staticSpecifierText(node) {
  * the helper itself is inline in the body. A run inside a named helper is not
  * counted, which is the documented allowance.
  */
+/**
+ * The name a call is made under, following a curried factory to its inner
+ * callee: `it.each(cases)('name', body)` is a call of `it.each`, and reading
+ * only the outer expression's text would see `it.each(cases)` and miss the
+ * boundary. The prevailing style in this repository is curried, so without
+ * this the gate would silently skip those bodies.
+ */
+function calleeText(call) {
+  let expression = call.expression;
+  while (ts.isCallExpression(expression)) expression = expression.expression;
+  return expression.getText();
+}
+
 function enclosingBoundary(node) {
   let current = node;
   while (current != null) {
@@ -102,7 +115,7 @@ function enclosingBoundary(node) {
         ts.isCallExpression(call) &&
         call.arguments.includes(parent)
       ) {
-        const callee = call.expression.getText();
+        const callee = calleeText(call);
         if (TEST_CALLEE.test(callee)) return { kind: 'test', callee };
         if (HOOK_CALLEE.test(callee)) return { kind: 'hook', callee };
         if (
