@@ -906,12 +906,12 @@ describe('childRunLoop E2E fixtures', () => {
       }),
   );
 
-  // it.live: the WAITING status is the session fold projecting the waiting row
-  // that `commitFlowStep` commits after delivery returns, and the loop offers
+  // it.live: the WAITING status is the session fold projecting the park row
+  // that `commitPark` commits after delivery returns, and the loop offers
   // no in-fiber hook between the two, so the one surviving poll observes a
   // process-runtime fact under the live clock.
   it.live(
-    'parks a child-stream loop on a waiting row, so the next turn is admitted onto its queue',
+    'parks a child-stream loop on its own park row, so the next turn is admitted onto its queue',
     () =>
       Effect.gen(function* () {
         const runId = loopRunId();

@@ -70,7 +70,7 @@ import {
   RUN_LIFECYCLE_READY,
   RUN_SUBSTATE,
   isPlainAgentIdentity,
-  listingTypeOf,
+  listingKeyOf,
   isTranscriptEvent,
   ownerPid,
   requestParksItsCaller,
@@ -1758,10 +1758,11 @@ function foldDurable(
       event.type === 'run.end')
       ? foldTraceEvent(view, event, deferred)
       : false;
-  if (listingTypeOf(event) === null) return traceChanged;
+  const listingType = listingKeyOf(event);
+  if (listingType === null) return traceChanged;
   // Listing facts are ordered by commit per (aggregate, listing type),
   // whichever read delivered them (5.2, "Duplicates").
-  const listingKey = `${event.aggregateId}/${listingTypeOf(event)}`;
+  const listingKey = `${event.aggregateId}/${listingType}`;
   const { latest } = sessionIndexesOf(view);
   const newest = latest.get(listingKey);
   if (newest !== undefined && event.commit <= newest) return traceChanged;

@@ -337,8 +337,8 @@ export function buildScenario({ proposal = false } = {}) {
     payload: { family: 'toolUse', step: 'turn.begin', turn: 1 },
   });
   log.emit(GRANDCHILD, T.grandchildFiles, {
-    type: 'addOutputFiles',
-    filesByRound: { 1: [] },
+    type: 'run.fact',
+    fact: { key: 'outputFiles', filesByRound: { 1: [] } },
   });
   log.emit(GRANDCHILD, T.grandchildDone, {
     type: 'run.end',

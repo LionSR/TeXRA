@@ -315,15 +315,18 @@ describe('ExecutionsTool', () => {
           );
           session.publish([
             {
-              type: 'updateTodos',
+              type: 'run.fact',
               aggregateId: aggregateId('run', childRunId),
-              todos: [
-                {
-                  content: 'Read live snapshot state',
-                  status: 'in_progress',
-                  activeForm: 'Reading live snapshot state',
-                },
-              ],
+              fact: {
+                key: 'todos',
+                todos: [
+                  {
+                    content: 'Read live snapshot state',
+                    status: 'in_progress',
+                    activeForm: 'Reading live snapshot state',
+                  },
+                ],
+              },
             },
           ]);
           yield* session.settlePublications();
@@ -526,15 +529,18 @@ describe('ExecutionsTool', () => {
               publishTestRunStart(session, runId);
               session.publish([
                 {
-                  type: 'updateTodos',
+                  type: 'run.fact',
                   aggregateId: aggregateId('run', runId),
-                  todos: [
-                    {
-                      content: 'Read the committed task list',
-                      status: 'in_progress',
-                      activeForm: 'Reading the committed task list',
-                    },
-                  ],
+                  fact: {
+                    key: 'todos',
+                    todos: [
+                      {
+                        content: 'Read the committed task list',
+                        status: 'in_progress',
+                        activeForm: 'Reading the committed task list',
+                      },
+                    ],
+                  },
                 },
               ]);
               yield* session.settlePublications();

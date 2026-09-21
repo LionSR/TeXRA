@@ -122,9 +122,9 @@ async function seedTasks(runId: RunId, todos: TodoItem[]): Promise<void> {
   publishTestRunStart(taskSession, runId);
   taskSession.publish([
     {
-      type: 'updateTodos',
+      type: 'run.fact',
       aggregateId: aggregateId('run', runId),
-      todos,
+      fact: { key: 'todos', todos },
     },
   ]);
   await settleSessionEvents();

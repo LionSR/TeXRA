@@ -124,22 +124,25 @@ async function emitOutputFiles(
 ): Promise<void> {
   session.publish([
     {
-      type: 'addOutputFiles',
+      type: 'run.fact',
       aggregateId: qualifyAggregateId('run', runId),
-      filesByRound: {
-        1: [
-          {
-            source: absolutePath,
-            location: {
-              kind: 'workspace',
-              absolutePath,
-              relativePath: absolutePath.split('/').at(-1) ?? absolutePath,
+      fact: {
+        key: 'outputFiles',
+        filesByRound: {
+          1: [
+            {
+              source: absolutePath,
+              location: {
+                kind: 'workspace',
+                absolutePath,
+                relativePath: absolutePath.split('/').at(-1) ?? absolutePath,
+              },
+              lineage: null,
+              diff: null,
+              round: 1,
             },
-            lineage: null,
-            diff: null,
-            round: 1,
-          },
-        ],
+          ],
+        },
       },
     },
   ]);

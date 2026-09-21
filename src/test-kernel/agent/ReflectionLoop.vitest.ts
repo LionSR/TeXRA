@@ -78,7 +78,7 @@ import { RunFileService } from '@utils/files/runStorage';
 import {
   createRecordingHost,
   recordTraceEvents,
-  traceEventsOfType,
+  runFactsOfKey,
 } from './progressTestUtils';
 
 /**
@@ -943,7 +943,7 @@ describe('the output facts a reflection round publishes', () => {
         turns: [COMPLETE, { failWith: PROVIDER_FAILURE }],
       });
 
-      const opened = traceEventsOfType(first.events, 'addOutputFiles');
+      const opened = runFactsOfKey(first.events, 'outputFiles');
       expect(Object.keys(opened.at(-1)?.filesByRound ?? {})).toEqual(['0']);
 
       const resumedLogger = new TraceEmitter();
@@ -959,7 +959,7 @@ describe('the output facts a reflection round publishes', () => {
       // The row carries the run's whole round map, not the round that just
       // finished: a cold fold keeps only the newest row, so the restored
       // round has to ride along.
-      const republished = traceEventsOfType(resumed.events, 'addOutputFiles');
+      const republished = runFactsOfKey(resumed.events, 'outputFiles');
       const filesByRound = republished.at(-1)?.filesByRound ?? {};
       expect(Object.keys(filesByRound)).toEqual(['0', '1']);
       expect((filesByRound[0] as OutputFileInfo[])[0]?.round).toBe(0);
@@ -976,10 +976,7 @@ describe('the output facts a reflection round publishes', () => {
 
       yield* runLoop({ runId, session, rounds: 1, logger });
 
-      const failures = traceEventsOfType(
-        recorded.events,
-        'updateCompileFailures',
-      );
+      const failures = runFactsOfKey(recorded.events, 'compileFailures');
       expect(failures).toHaveLength(1);
       expect(failures[0]?.filesByRound[0]).toMatchObject([
         { round: 0, displayName: 'main.tex' },

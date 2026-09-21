@@ -747,6 +747,19 @@ export function listingTypeOf(
 }
 
 /**
+ * The `latest` key one row folds under: its listing type, qualified by the
+ * row's own discriminator where it carries one. The mirror of the listing
+ * query's `GROUP BY`, so "the newest row the fold holds" means the same
+ * thing on a cold read and on a replay: one `run.fact` family's newest row
+ * never suppresses another's.
+ */
+export function listingKeyOf(event: SessionEvent): string | null {
+  const type = listingTypeOf(event);
+  if (type === null) return null;
+  return event.type === 'run.fact' ? `${type}/${event.fact.key}` : type;
+}
+
+/**
  * The read that delivered a durable row (PRD 7.1): the cold listing, one
  * aggregate's history, or the tail. Only a tail row advances `cursor`.
  */

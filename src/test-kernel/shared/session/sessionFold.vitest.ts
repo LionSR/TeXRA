@@ -743,9 +743,10 @@ describe('sessionFold', () => {
   });
 
   it('takes each round map from the newest row, on a cold read and on replay', () => {
-    // `addOutputFiles`, `updateMissingOutputs` and `updateCompileFailures`
-    // are latest-only listing keys, so a cold read hands the fold one row of
-    // each per run. Every row therefore carries the run's whole round map
+    // The `outputFiles`, `missingOutputs` and `compileFailures` run facts
+    // are latest-only listing keys of their own — the listing groups by the
+    // fact key beside the row type — so a cold read hands the fold one row
+    // of each per run. Every row therefore carries the run's whole round map
     // (`OutputState`), and the fold replaces rather than merges.
     const log = new Log();
     const start = log.emit(CHILD, 3000, {
@@ -772,32 +773,41 @@ describe('sessionFold', () => {
     });
     const firstRound = [
       log.emit(CHILD, 3010, {
-        type: 'addOutputFiles',
-        filesByRound: { 0: [outputOf(0)] },
+        type: 'run.fact',
+        fact: { key: 'outputFiles', filesByRound: { 0: [outputOf(0)] } },
       }),
       log.emit(CHILD, 3011, {
-        type: 'updateMissingOutputs',
-        filesByRound: { 0: ['intro.tex'] },
+        type: 'run.fact',
+        fact: { key: 'missingOutputs', filesByRound: { 0: ['intro.tex'] } },
       }),
       log.emit(CHILD, 3012, {
-        type: 'updateCompileFailures',
-        filesByRound: { 0: [failureOf(0)] },
+        type: 'run.fact',
+        fact: { key: 'compileFailures', filesByRound: { 0: [failureOf(0)] } },
       }),
     ];
     // The second round republishes the run's whole map, the first round
     // included; round 1 compiled cleanly and produced no missing outputs.
     const secondRound = [
       log.emit(CHILD, 3020, {
-        type: 'addOutputFiles',
-        filesByRound: { 0: [outputOf(0)], 1: [outputOf(1)] },
+        type: 'run.fact',
+        fact: {
+          key: 'outputFiles',
+          filesByRound: { 0: [outputOf(0)], 1: [outputOf(1)] },
+        },
       }),
       log.emit(CHILD, 3021, {
-        type: 'updateMissingOutputs',
-        filesByRound: { 0: ['intro.tex'], 1: [] },
+        type: 'run.fact',
+        fact: {
+          key: 'missingOutputs',
+          filesByRound: { 0: ['intro.tex'], 1: [] },
+        },
       }),
       log.emit(CHILD, 3022, {
-        type: 'updateCompileFailures',
-        filesByRound: { 0: [failureOf(0)], 1: [] },
+        type: 'run.fact',
+        fact: {
+          key: 'compileFailures',
+          filesByRound: { 0: [failureOf(0)], 1: [] },
+        },
       }),
     ];
     const bothRounds = {
@@ -847,8 +857,8 @@ describe('sessionFold', () => {
     const dropped = foldAll(
       [
         log.emit(CHILD, 3030, {
-          type: 'addOutputFiles',
-          filesByRound: { 1: [outputOf(1)] },
+          type: 'run.fact',
+          fact: { key: 'outputFiles', filesByRound: { 1: [outputOf(1)] } },
         }),
       ].map((event) => ({
         _tag: 'event' as const,

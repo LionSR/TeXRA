@@ -113,14 +113,17 @@ describe('traceFrame replays the document through the one fold', () => {
 
   it('replays tool-use content without workflow output state', () => {
     const trace = traceDocument(runStart(AgentCategory.ToolUse), {
-      type: 'updateTodos',
-      todos: [
-        {
-          content: 'Replay the plan',
-          status: 'pending',
-          activeForm: 'Replaying the plan',
-        },
-      ],
+      type: 'run.fact',
+      fact: {
+        key: 'todos',
+        todos: [
+          {
+            content: 'Replay the plan',
+            status: 'pending',
+            activeForm: 'Replaying the plan',
+          },
+        ],
+      },
     });
 
     const replayed = foldTrace(trace);

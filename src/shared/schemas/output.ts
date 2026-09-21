@@ -267,7 +267,7 @@ export const RoundOutputSchema = z.strictObject({
   compileFailures: CompileFailureSchema.array().prefault(() => []),
   /** The expected output files this round did not produce, as last reported.
    *  Persisted with the round so a resumed run still publishes the whole
-   *  run's missing-output map on its next `updateMissingOutputs` row. */
+   *  run's missing-output map on its next `missingOutputs` run fact. */
   missingOutputs: z
     .string()
     .array()
