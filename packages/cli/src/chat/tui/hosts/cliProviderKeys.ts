@@ -56,7 +56,11 @@ export const commitCliProviderApiKey = Effect.fn('commitCliProviderApiKey')(
       prompt: tuiUi,
       externalOpener: cliExternalOpener,
       getProviderDisplayName: (candidate) =>
-        getProviderDisplayName(stores, candidate, providerDisplayName(candidate)),
+        getProviderDisplayName(
+          stores,
+          candidate,
+          providerDisplayName(candidate),
+        ),
       getProviderKeyUrl: (candidate) => getProviderKeyUrl(stores, candidate),
       // The key-dependent state this host repaints: the process's API-key
       // lookup cache, and the subscription-preference level the status bar

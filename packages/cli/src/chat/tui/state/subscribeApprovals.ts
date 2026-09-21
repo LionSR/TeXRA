@@ -163,6 +163,11 @@ export function createTuiHostInteractions(
     triggerRetry: (runId, requestId) =>
       Effect.sync(() => {
         switched.add(requestId);
+        // The notice belongs to the switch itself, not to the program that
+        // asked for it: the controller only reaches here on a live
+        // attachment (`isRetryPending`), and saying it here cannot race the
+        // fold dropping the request.
+        if (automaticSwitches.has(requestId)) notify('credentialSwitched');
         // This capability already selected the credential route; decomposing
         // the decision again would call the capability recursively.
         landRequestDecision(
@@ -217,12 +222,7 @@ export function createTuiHostInteractions(
         // Read the local fact, not the fold: `triggerRetry` lands its
         // decision on the session's own queue, so the request can still be
         // listed here for a moment after the switch committed.
-        if (switched.has(requestId)) {
-          if (!disposed && automaticSwitches.has(requestId)) {
-            notify('credentialSwitched');
-          }
-          return;
-        }
+        if (switched.has(requestId)) return;
         // Success and failure have the same lifetime: a lookup that finishes
         // after this attachment leaves must not answer for its next owner.
         if (disposed || pendingRetry(requestId) === undefined) return;
@@ -345,6 +345,7 @@ export function createTuiHostInteractions(
     for (const id of automaticSwitches) {
       if (!live.has(id)) automaticSwitches.delete(id);
     }
+    for (const id of switched) if (!live.has(id)) switched.delete(id);
     for (const request of pending) {
       if (acted.has(request.requestId)) continue;
       const payload = request.payload;
