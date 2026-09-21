@@ -5,15 +5,14 @@
 import { LRUCache } from 'lru-cache';
 
 import { createLog } from '@logger/logUtils';
-import { assertNever } from '@utils/core';
-import { toErrorMessage } from '@utils/errors/errorMessage';
-
 import {
   NON_REGEX_REPLACEMENT_CATEGORIES,
   REGEX_REPLACEMENT_CATEGORIES,
   type NonRegexReplacementCategory,
   type RegexReplacementCategory,
 } from '@shared/constants/replacementCategories';
+import { assertNever } from '@utils/core';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
   ReplacementRuleSet,
@@ -196,9 +195,9 @@ function getAllReplacements(read: ReplacementConfigRead): NonRegexRuleSet {
 
   const patterns: Record<string, string> = Object.assign(
     {},
-    ...NON_REGEX_REPLACEMENT_CATEGORIES.filter((name) =>
-      enabled.has(name),
-    ).map((name) => NON_REGEX_RULES[name].patterns),
+    ...NON_REGEX_REPLACEMENT_CATEGORIES.filter((name) => enabled.has(name)).map(
+      (name) => NON_REGEX_RULES[name].patterns,
+    ),
     customReplacements,
   );
 
