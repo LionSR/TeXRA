@@ -37,6 +37,7 @@ import {
 import {
   aggregateId as qualifyAggregateId,
   AgentCategory,
+  AgentConfigFieldsSchema,
   emptyRunEndOutput,
   LOG_LEVELS,
   MESSAGE_TYPES,
@@ -55,11 +56,10 @@ import {
   type RunOutcome,
   type RunPhase,
   type RunId,
+  type SessionEventDraft,
   type UserQuestionPermission,
 } from '@shared/schemas';
 import { subscribeToSignalChanges } from '@shared/signals';
-import type { SessionEventDraft } from '@shared/schemas/sessionEvent';
-import { AgentConfigFieldsSchema } from '@shared/schemas/agentConfig';
 import { FOCUSED_BACKGROUND_TASK } from '@shared/copy/nestedRuns';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import {

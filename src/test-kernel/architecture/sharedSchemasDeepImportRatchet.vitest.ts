@@ -5,9 +5,12 @@
 // deep import from the scanned roots fails, and there is no baseline to
 // regenerate.
 //
-// Scope: repo-root `src/` and every `packages/*/src`, excluding only the
-// surface's own interior `src/shared/schemas/` (a sibling import there cannot
-// use the barrel). test-kernel files are ratcheted like production.
+// Scope: repo-root `src/`, repo-root `scripts/`, and every `packages/*/src`
+// and `packages/*/scripts`, excluding only the surface's own interior
+// `src/shared/schemas/` (a sibling import there cannot use the barrel).
+// `scripts/` directories ship dev tooling alongside production code and are
+// not exempt from the prohibition. test-kernel files are ratcheted like
+// production.
 
 // Node imports
 import { readFileSync, readdirSync } from 'node:fs';
@@ -29,12 +32,16 @@ const DEEP_IMPORT_PREFIX = '@shared/schemas/';
 
 function scanRoots(): string[] {
   const packagesRoot = resolve(REPO_ROOT, 'packages');
+  const packageDirs = readdirSync(packagesRoot, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .toSorted((a, b) => a.localeCompare(b));
+
   return [
     'src',
-    ...readdirSync(packagesRoot, { withFileTypes: true })
-      .filter((entry) => entry.isDirectory())
-      .map((entry) => `packages/${entry.name}/src`)
-      .toSorted((a, b) => a.localeCompare(b)),
+    'scripts',
+    ...packageDirs.map((name) => `packages/${name}/src`),
+    ...packageDirs.map((name) => `packages/${name}/scripts`),
   ];
 }
 
