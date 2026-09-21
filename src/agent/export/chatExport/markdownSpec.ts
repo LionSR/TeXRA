@@ -37,7 +37,7 @@ function markdownHeader(meta: DocumentMeta): string {
   const fileList = meta.files.length
     ? [
         '**Files:**',
-        ...meta.files.map(([l, v]) => `- ${l}: \`${v}\``),
+        ...meta.files.map(({ label, value }) => `- ${label}: \`${value}\``),
         '',
       ].join('\n')
     : '';

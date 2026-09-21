@@ -33,11 +33,13 @@ export const HEADER_FIELDS = [
   { key: 'description', label: 'Summary' },
 ] as const satisfies readonly { key: keyof DocumentMeta; label: string }[];
 
-function collectFiles(config: ExportConfig): Array<[string, string]> {
-  const files: Array<[string, string]> = [];
+function collectFiles(
+  config: ExportConfig,
+): Array<{ label: string; value: string }> {
+  const files: Array<{ label: string; value: string }> = [];
 
   const addFiles = (label: string, values: string[] | undefined) => {
-    if (values?.length) files.push([label, values.join(', ')]);
+    if (values?.length) files.push({ label, value: values.join(', ') });
   };
 
   addFiles('Input files', config.inputFiles);
