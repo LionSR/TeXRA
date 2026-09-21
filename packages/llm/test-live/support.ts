@@ -239,7 +239,10 @@ export function liveProtocol(spec: LiveProtocol): void {
             ),
             Effect.forkChild,
           );
-          yield* Deferred.await(producing);
+          // Raced against the reader's own exit: a stream that fails or ends
+          // before any delta surfaces that error here instead of parking the
+          // test on a deferred nobody will ever complete.
+          yield* Effect.raceFirst(Deferred.await(producing), Fiber.join(fiber));
           yield* Fiber.interrupt(fiber);
           const exit = yield* Fiber.await(fiber);
           expect(Exit.hasInterrupts(exit)).toBe(true);
@@ -252,17 +255,20 @@ export function liveProtocol(spec: LiveProtocol): void {
         Effect.gen(function* () {
           const result = yield* completeTurn(model(), TEXT_REQUEST);
           const usage = result.usage;
-          // Every principal count in `UsageSchema` is nullable, and both
-          // MiniMax and Google document receipts that carry only a total, so
-          // demanding the split would fail a route whose codec did nothing
-          // wrong. The contract under test is that a real receipt parsed into
-          // a usage record carrying a real count.
+          // Every principal count in `UsageSchema` is nullable, and the
+          // receipts these routes document differ: Google may report only a
+          // total, and MiniMax bills on characters and may report only those.
+          // So the contract under test is that a real receipt parsed into a
+          // usage record carrying some real count of what the route bills.
           assert(usage !== null);
-          expect(
+          const billed =
             (usage.inputTokens ?? 0) +
-              (usage.outputTokens ?? 0) +
-              (usage.totalTokens ?? 0),
-          ).toBeGreaterThan(0);
+            (usage.outputTokens ?? 0) +
+            (usage.totalTokens ?? 0) +
+            (usage.providerUsage?.kind === 'minimax'
+              ? usage.providerUsage.totalCharacters
+              : 0);
+          expect(billed).toBeGreaterThan(0);
         }),
       );
     });
