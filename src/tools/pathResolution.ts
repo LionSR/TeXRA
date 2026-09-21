@@ -260,8 +260,9 @@ function annotateExternalPermission(
 
 /**
  * Throw a ToolError when the resolved path points into a read-only external
- * root. Workspace paths and writable externals pass through. Call this from
- * write/edit tools immediately before requesting approval.
+ * root. Workspace paths and writable externals pass through. The run loop
+ * calls this for the paths a tool declares in `ToolGuard.writes`, before the
+ * body runs; a tool does not call it itself.
  */
 export function assertWritable(
   resolved: WorkspacePathResolution,
