@@ -37,8 +37,9 @@
  * The process services every entry provides the same way, and every one of
  * them is a value this function already holds when it installs: `Secrets`
  * over the one `CliSecrets` of this storage root, `AppState` over the global
- * state store opened here, before the install (the refusing store for clone,
- * the one secrets-only entry), and `SetupPlatform` over the CLI's sign-in. The
+ * state store opened here, before the install (the refusing store for the two
+ * entries that bring no platform up), and `SetupPlatform` over the CLI's
+ * sign-in. The
  * global store is served by the runtime as `AppState`, so `initCliPlatform`
  * opens only the workspace scope and no entry has to discover a store some
  * other entry opened.
