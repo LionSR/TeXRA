@@ -75,7 +75,6 @@
     "src/agent/runtime/loop/toolUseDispatch.ts": 1007,
     "src/agent/runtime/ModelInvoker.ts": 1321,
     "src/agent/runtime/run/modelBinding.ts": 1191,
-    "src/agent/runtime/runRegistry.ts": 1103,
     "src/agent/runtime/SessionHandle.ts": 1444,
     "src/agent/workflowScript/runWorkflowScript.ts": 988,
     "src/agent/workflowScript/sandbox.ts": 700,
