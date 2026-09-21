@@ -1,8 +1,6 @@
 /**
- * Small effects shared by the three hosts' OAuth sign-in/sign-out flows
- * (`packages/extension/src/frontend/auth/SupabaseAuthProvider.ts`,
- * `packages/desktop/src/main/desktopSupabaseAuth.ts`,
- * `packages/cli/src/runtime/supabaseAuth.ts`). Deliberately narrow: the
+ * The post-sign-out catalog refresh the three hosts share. Deliberately
+ * narrow: the
  * broader post-auth cache-invalidation sequence is a permanent host boundary,
  * not a missing shared coordinator. The extension invalidates its long-lived
  * model cache before publishing a session event. Desktop routes the same
@@ -23,25 +21,6 @@
 import { Cause, Effect } from 'effect';
 
 import { toErrorMessage } from '@utils/errors/errorMessage';
-
-/**
- * Validate a Supabase `signInWithOAuth` result, returning the redirect URL
- * or throwing the "OAuth initialization failed" message the desktop and CLI
- * hosts already surface verbatim on failure. The extension host keeps its
- * own variant (a user-facing notification with a "Try again." suffix), so
- * it isn't routed through this helper.
- */
-export function requireOAuthRedirectUrl(
-  data: { url?: string | null },
-  error: { message: string } | null,
-): string {
-  if (error || !data.url) {
-    throw new Error(
-      `OAuth initialization failed: ${error?.message || 'missing auth URL'}`,
-    );
-  }
-  return data.url;
-}
 
 /**
  * Best-effort remote-agent-catalog refresh after sign-out. Failures are
