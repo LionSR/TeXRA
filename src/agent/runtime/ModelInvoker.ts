@@ -10,7 +10,7 @@
  * bounded batch of attempts under the session's `ModelRetryGate`, so sibling
  * runs on one credential share cooling. Owner B is a human and indefinite,
  * and it is durable here: the prompt is admitted by a `request.opened`
- * row bound through a `flow.snapshot` whose `pendingRetry` walks
+ * row whose `model.retry` permit walks
  * `waiting` -> `authorized` -> `started`. A decision survives a restart, an
  * unused permit survives one, and a consumed permit never buys a second
  * billed attempt implicitly.
@@ -60,6 +60,7 @@ import {
   type DeclinableUsageRoute,
   type InvocationRef,
   type NormalizedUsage,
+  type PendingRetry,
   type ProviderError,
   type RequestDecision,
   type RetryErrorInfo,
@@ -90,6 +91,7 @@ import { turnText } from './run/turnText';
 import { dispatchFactsFor } from './run/tools';
 import {
   redactedForFact,
+  retryRow,
   rowAggregate,
   runtimeSnapshotRow,
   stepRow,
@@ -279,14 +281,16 @@ export const modelInvokerLayer = (): Layer.Layer<
           fileOptions: { continuationCount: round, baseName },
         });
 
-      /** The snapshot the retry protocol commits: runtime fields on the last
-       *  written family state, references from the folded rows. */
-      const retrySnapshot = (
+      /** The rows one move of the retry gate commits: the permit on its own
+       *  row, the failure it presents on the snapshot that owns `lastError`. */
+      const retryRows = (
         state: RunState,
-        runtime: Partial<
-          Pick<SnapshotRuntime, 'pendingRetry' | 'lastError' | 'declinedRoutes'>
-        >,
-      ): RunLedgerDraft => runtimeSnapshotRow(runId, state, runtime);
+        permit: PendingRetry | null,
+        runtime: Partial<Pick<SnapshotRuntime, 'lastError' | 'declinedRoutes'>>,
+      ): readonly RunLedgerDraft[] => [
+        retryRow(runId, permit),
+        runtimeSnapshotRow(runId, state, runtime),
+      ];
 
       /**
        * Whether a turn runs as background work: a workflow turn on a binding
@@ -1035,8 +1039,7 @@ export const modelInvokerLayer = (): Layer.Layer<
                 payload: redactedForFact({ kind: 'retry', data: request }),
                 thread: null,
               },
-              retrySnapshot(state, {
-                pendingRetry: pendingRetry('waiting'),
+              ...retryRows(state, pendingRetry('waiting'), {
                 lastError: info,
               }),
             ]),
@@ -1107,8 +1110,7 @@ export const modelInvokerLayer = (): Layer.Layer<
           );
           state = yield* Effect.uninterruptible(
             ledger.appendBatch(runId, state, [
-              retrySnapshot(state, {
-                pendingRetry: pendingRetry('authorized'),
+              ...retryRows(state, pendingRetry('authorized'), {
                 lastError: info,
                 declinedRoutes,
               }),
@@ -1125,7 +1127,7 @@ export const modelInvokerLayer = (): Layer.Layer<
         // Either answer clears the gate, keeping the failure it recorded.
         state = yield* Effect.uninterruptible(
           ledger.appendBatch(runId, state, [
-            retrySnapshot(state, { pendingRetry: null, lastError: info }),
+            ...retryRows(state, null, { lastError: info }),
           ]),
         );
         return decision.action === 'deny'
@@ -1167,8 +1169,8 @@ export const modelInvokerLayer = (): Layer.Layer<
             ? { invocation: open.invocation, accepted: open.accepted }
             : null;
         // The manual gate as resumed. `waiting`: re-present the same request.
-        // `authorized`: one unused permit. `started`: the permit was spent by
-        // an attempt that never reported, so a new decision is required.
+        // `authorized`: one unused permit. `started`: spent by an attempt that
+        // never reported, so a new decision is required.
         let admission: 'automatic' | 'authorized' | 'decision' | 'waiting' =
           'automatic';
         let outstanding: string | null = null;
@@ -1240,9 +1242,7 @@ export const modelInvokerLayer = (): Layer.Layer<
             }
             state = yield* Effect.uninterruptible(
               ledger.appendBatch(runId, state, [
-                runtimeSnapshotRow(runId, state, {
-                  pendingRetry: { ...gate, substate: 'started' },
-                }),
+                retryRow(runId, { ...gate, substate: 'started' }),
               ]),
             );
             admission = 'automatic';

@@ -54,11 +54,8 @@ const runtimeOf = (
   modelId,
   modelCompatibilityKey: compatibilityKey,
   lastError: null,
-  pendingRetry: null,
   declinedRoutes: [],
 });
-
-const references = { pendingIntents: [], pendingResponse: null } as const;
 
 function toolUseSnapshot(
   modelId: string,
@@ -67,7 +64,6 @@ function toolUseSnapshot(
   return {
     family: 'toolUse',
     runtime: runtimeOf(modelId, compatibilityKey),
-    references,
     state: { shouldSkipCycle: false, stateSlices: null },
   };
 }
@@ -76,7 +72,6 @@ function reflectionSnapshot(modelId: string): FlowSnapshotPayload {
   return {
     family: 'reflection',
     runtime: runtimeOf(modelId, COMPATIBILITY_KEY),
-    references,
     state: {
       currentRound: 1,
       totalRounds: 2,

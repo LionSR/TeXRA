@@ -30,7 +30,7 @@ import {
   type RunId,
 } from '@shared/schemas';
 
-import { foldRunState } from '@shared/session/runStateFold';
+import { foldRunState, unboundRequests } from '@shared/session/runStateFold';
 import { fold } from '@shared/session/sessionFold';
 import { redactTraceDraft } from '@shared/session/traceRedaction';
 import {
@@ -453,6 +453,51 @@ describe('sessionFold', () => {
     const unknown = foldAll(scenario.pending);
     expect(runView(unknown, CHILD).group).toBe('waiting');
     expect(runView(unknown, CHILD).readOnly).toBe(true);
+  });
+
+  it('lists two runs requests of the same id side by side: identity is run and id', () => {
+    // The projection dedupes a run's already-listed requests by id alone,
+    // so the dedupe must stay scoped to that run: another run may legally
+    // hold an open request of the same id, and shadowing it would leave
+    // that request without a panel.
+    const log = new Log();
+    log.emit(CHILD, 1650, {
+      type: 'run.start',
+      identity: CHILD_IDENTITY,
+      category: AgentCategory.ToolUse,
+      isRemote: false,
+      userFollowUpSupport: 'unsupported',
+      parent: null,
+    });
+    log.emit(PROCESS, 1650, {
+      type: 'run.start',
+      identity: { kind: 'process', tool: 'bash' },
+      category: AgentCategory.ToolUse,
+      isRemote: false,
+      parent: null,
+      userFollowUpSupport: 'unsupported',
+    });
+    const open = (id: RunId) =>
+      log.emit(id, 1651, {
+        type: 'request.opened',
+        requestId: 'req-1',
+        payload: {
+          kind: 'bash',
+          data: {
+            requestId: 'req-1',
+            allowBypass: true,
+            runId: id,
+            command: 'latexmk -pdf main.tex',
+          },
+        },
+      });
+    open(CHILD);
+    open(PROCESS);
+    const view = foldAll([subscribe(CHILD, PROCESS), ...log.events.map(tail)]);
+    expect(view.requests.map((r) => [r.runId, r.requestId])).toStrictEqual([
+      [CHILD, 'req-1'],
+      [PROCESS, 'req-1'],
+    ]);
   });
 
   it('reads another live process as held and read-only, and an unreadable run as an overlay', () => {
@@ -1256,30 +1301,27 @@ const RUNTIME = {
   modelId: 'gpt-test',
   modelCompatibilityKey: null,
   lastError: null,
-  pendingRetry: null,
   declinedRoutes: [],
 };
-const toolUseSnapshot = (
-  references: Record<string, unknown> = {
-    pendingIntents: [],
-    pendingResponse: null,
-  },
-  runtime: Record<string, unknown> = {},
-) => ({
+const toolUseSnapshot = (runtime: Record<string, unknown> = {}) => ({
   type: 'flow.snapshot',
   payload: {
     family: 'toolUse',
     runtime: { ...RUNTIME, ...runtime },
-    references,
     state: { shouldSkipCycle: false, stateSlices: null },
   },
+});
+
+/** The binding row an approval commits beside its `request.opened`. */
+const toolBinding = (callId: string, requestId: string, attempt = 1) => ({
+  type: 'tool.binding',
+  payload: { callId, attempt, requestId },
 });
 const reflectionSnapshot = {
   type: 'flow.snapshot',
   payload: {
     family: 'reflection',
     runtime: RUNTIME,
-    references: { pendingIntents: [], pendingResponse: null },
     state: {
       currentRound: 0,
       totalRounds: 1,
@@ -1401,10 +1443,7 @@ const TURN_ROWS: readonly SessionEvent[] = [
     messages: [TOOL_GROUP],
     sourceResponse: RESPONSE_ID,
   }),
-  toolUseSnapshot(
-    { pendingIntents: [], pendingResponse: null },
-    { phase: 'results.ready' },
-  ),
+  toolUseSnapshot({ phase: 'results.ready' }),
   {
     type: 'flow.step',
     payload: { family: 'toolUse', step: 'turn.end', turn: 1 },
@@ -1457,7 +1496,7 @@ describe('foldRunState', () => {
       },
     ],
     [
-      'approval requested, never resolved: the binding rides the snapshot',
+      'approval requested, never resolved: the binding rides its own row',
       () => {
         const state = stateOf(
           through(
@@ -1475,17 +1514,7 @@ describe('foldRunState', () => {
                 },
               },
             },
-            toolUseSnapshot({
-              pendingIntents: [
-                {
-                  callId: 'call-a',
-                  attempt: 1,
-                  responseId: RESPONSE_ID,
-                  approvalRequestId: 'req-1',
-                },
-              ],
-              pendingResponse: { responseId: RESPONSE_ID, settled: [] },
-            }),
+            toolBinding('call-a', 'req-1'),
           ),
         );
         expect(state?.requests['req-1']?.resolved).toBe(false);
@@ -1495,7 +1524,7 @@ describe('foldRunState', () => {
       },
     ],
     [
-      'an inquiry stands unbound across the snapshots of its run',
+      'an inquiry stands unbound; a request that parks a tool does not',
       () => {
         const opened = (payload: Record<string, unknown>) => ({
           type: 'request.opened',
@@ -1503,8 +1532,8 @@ describe('foldRunState', () => {
           payload,
         });
         // The inquiry tool returns at once and the answer arrives as a
-        // follow-up, so no binding recovers it and a snapshot still folds.
-        const state = stateOf(
+        // follow-up, so no binding recovers it and none is expected.
+        const inquiry = stateOf(
           through(
             6,
             opened({
@@ -1518,50 +1547,30 @@ describe('foldRunState', () => {
                 transcript: [],
               },
             }),
-            toolUseSnapshot({
-              pendingIntents: [
-                {
-                  callId: 'call-a',
-                  attempt: 1,
-                  responseId: RESPONSE_ID,
-                  approvalRequestId: null,
-                },
-              ],
-              pendingResponse: { responseId: RESPONSE_ID, settled: [] },
+          ),
+        );
+        expect(inquiry?.requests['req-2']?.resolved).toBe(false);
+        expect(inquiry === null ? [] : unboundRequests(inquiry)).toEqual([]);
+        // A request that parks a tool is not that case: nothing in a later
+        // process could answer it, so a resume retires it first
+        // (`RunLedger.acquire`).
+        const parking = stateOf(
+          through(
+            6,
+            opened({
+              kind: 'bash',
+              data: {
+                requestId: 'req-2',
+                command: 'ls',
+                allowBypass: true,
+                runId: LEDGER_RUN,
+              },
             }),
           ),
         );
-        expect(state?.requests['req-2']?.resolved).toBe(false);
-        // A request that parks a tool is not that case: nothing in a later
-        // process could answer it, so the snapshot refuses to be authored
-        // over it and a resume retires it first.
-        expect(
-          reasonOf(
-            through(
-              6,
-              opened({
-                kind: 'bash',
-                data: {
-                  requestId: 'req-2',
-                  command: 'ls',
-                  allowBypass: true,
-                  runId: LEDGER_RUN,
-                },
-              }),
-              toolUseSnapshot({
-                pendingIntents: [
-                  {
-                    callId: 'call-a',
-                    attempt: 1,
-                    responseId: RESPONSE_ID,
-                    approvalRequestId: null,
-                  },
-                ],
-                pendingResponse: { responseId: RESPONSE_ID, settled: [] },
-              }),
-            ),
-          ),
-        ).toBe('dangling-binding');
+        expect(parking === null ? [] : unboundRequests(parking)).toEqual([
+          'req-2',
+        ]);
       },
     ],
     [
@@ -1845,24 +1854,6 @@ describe('foldRunState', () => {
 
   it.each([
     ['out-of-order', () => foldRunState(null, [TURN_ROWS[1], TURN_ROWS[0]])],
-    [
-      'stale-snapshot',
-      () =>
-        through(
-          7,
-          toolUseSnapshot({
-            pendingIntents: [
-              {
-                callId: 'call-a',
-                attempt: 1,
-                responseId: RESPONSE_ID,
-                approvalRequestId: null,
-              },
-            ],
-            pendingResponse: { responseId: RESPONSE_ID, settled: ['call-a'] },
-          }),
-        ),
-    ],
     ['orphan-settlement', () => through(2, settlement('call-a'))],
     [
       // The intent admitted attempt 1; attempt 2 is another dispatch, and
@@ -1871,21 +1862,10 @@ describe('foldRunState', () => {
       () => through(6, settlement('call-a', { attempt: 2 })),
     ],
     [
-      'dangling-binding',
-      () =>
-        through(
-          2,
-          toolUseSnapshot(undefined, {
-            pendingRetry: {
-              requestId: 'req-9',
-              invocation: INVOCATION,
-              failedModelId: 'gpt-test',
-              failedCompatibilityKey: null,
-              credentialScope: 'openai',
-              substate: 'waiting',
-            },
-          }),
-        ),
+      // A binding names the intent the rows hold, at the attempt the
+      // approval admits; anything else is a row out of order.
+      'out-of-order',
+      () => through(6, toolBinding('call-a', 'req-9', 2)),
     ],
     [
       'mismatched-delivery',
@@ -1903,12 +1883,14 @@ describe('foldRunState', () => {
     expect(reasonOf(run())).toBe(reason);
   });
 
-  it('keeps the five private ledger types out of the listing and off the transport, and lists flow.step', () => {
+  it('keeps the private ledger types out of the listing and off the transport, and lists flow.step', () => {
     const ledgerTypes = [
       'model.message',
       'model.compaction',
       'tool.intent',
+      'tool.binding',
       'tool.result',
+      'model.retry',
       'flow.snapshot',
     ] as const;
     for (const type of ledgerTypes) expect(listingTypeOf({ type })).toBeNull();

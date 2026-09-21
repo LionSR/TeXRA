@@ -145,11 +145,16 @@ function openRequest(
   return openRequestOn(ROOT_RUN, payload);
 }
 
+/** A request id is opened once per run (`runRows.ts`), and this file opens
+ *  every one of them on the same long-lived session, so each fixture mints
+ *  its own. */
+let proposalOrdinal = 0;
+
 function agentProposal(
   overrides: Partial<AgentProposalPermission> = {},
 ): AgentProposalPermission {
   const base = {
-    requestId: 'proposal-1',
+    requestId: `proposal-${(proposalOrdinal += 1)}`,
     runId: ROOT_RUN,
     agent: 'review',
     model: 'deepseekT',
@@ -274,8 +279,6 @@ describe('human input approval policy', () => {
 });
 
 describe('approval prompt hooks', () => {
-  const proposal = agentProposal();
-
   it.effect('runs the before-prompt hook for interactive approval events', () =>
     Effect.gen(function* () {
       const tracker = trackPromptEvents();
@@ -283,7 +286,10 @@ describe('approval prompt hooks', () => {
         context({ approvalPrompt: tracker.answerWith('n no review needed') }),
         tracker.hooks,
       );
-      const result = yield* openRequest({ kind: 'proposal', data: proposal });
+      const result = yield* openRequest({
+        kind: 'proposal',
+        data: agentProposal(),
+      });
 
       expect(result).toEqual({
         action: 'reject',
@@ -302,7 +308,10 @@ describe('approval prompt hooks', () => {
           context({ approvalPolicy: 'yolo' }),
           tracker.hooks,
         );
-        const result = yield* openRequest({ kind: 'proposal', data: proposal });
+        const result = yield* openRequest({
+          kind: 'proposal',
+          data: agentProposal(),
+        });
 
         expect(result).toEqual({ action: 'approve' });
         expect(tracker.events).toEqual([]);
@@ -314,7 +323,10 @@ describe('approval prompt hooks', () => {
     () =>
       Effect.gen(function* () {
         useCliHostInteractions(context({ approvalPolicy: 'never' }));
-        const result = yield* openRequest({ kind: 'proposal', data: proposal });
+        const result = yield* openRequest({
+          kind: 'proposal',
+          data: agentProposal(),
+        });
 
         expect(result).toEqual({
           action: 'deny',
@@ -325,12 +337,13 @@ describe('approval prompt hooks', () => {
 });
 
 describe('retry request classification (#7331)', () => {
-  const retryRequest: RetryPermission = {
-    requestId: 'headless-retry',
+  let retryOrdinal = 0;
+  const retryRequest = (): RetryPermission => ({
+    requestId: `headless-retry-${(retryOrdinal += 1)}`,
     runId: ROOT_RUN,
     operation: 'Model invocation',
     errorMessage: 'stream dropped before first token',
-  };
+  });
 
   function requestHeadlessRetry(
     ctx: CliContext,
@@ -339,7 +352,7 @@ describe('retry request classification (#7331)', () => {
     useCliHostInteractions(ctx);
     return openRequest({
       kind: 'retry',
-      data: { ...retryRequest, ...overrides },
+      data: { ...retryRequest(), ...overrides },
     });
   }
 

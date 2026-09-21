@@ -1,8 +1,9 @@
 /**
  * The loops' row constructors: every ledger draft a loop appends, built from
- * the folded `RunState` and nothing else. A `flow.snapshot`'s references are
- * derived from the state the ledger returned, which is what lets the fold's
- * reconcile-never-overwrite check hold on every write.
+ * the folded `RunState` and nothing else. A `flow.snapshot` carries the
+ * family state and the coordinates the loop owns; every fact a row already
+ * carries (the pending response, its intents, their approval bindings, the
+ * retry permit) is folded from that row and never restated here.
  */
 
 import { redactSecrets } from '@logger/redaction';
@@ -10,6 +11,7 @@ import {
   aggregateId as qualifyAggregateId,
   type FlowStep,
   type FlowSnapshotPayload,
+  type PendingRetry,
   type PermissionPayload,
   type RunId,
   type RunLoopPhase,
@@ -130,19 +132,9 @@ interface SnapshotCoordinates {
   readonly runtime?: Partial<
     Pick<
       SnapshotRuntime,
-      | 'modelId'
-      | 'modelCompatibilityKey'
-      | 'lastError'
-      | 'pendingRetry'
-      | 'declinedRoutes'
+      'modelId' | 'modelCompatibilityKey' | 'lastError' | 'declinedRoutes'
     >
   >;
-  /**
-   * Approval bindings for outcome-unknown intents, by call id: the snapshot
-   * is the one carrier of an intent's `approvalRequestId`, so the batch that
-   * commits a `tool-outcome` request names it here.
-   */
-  readonly intentBindings?: Readonly<Record<string, string>>;
 }
 
 interface SnapshotPatch extends SnapshotCoordinates {
@@ -184,42 +176,18 @@ function buildSnapshot(
       patch.runtime !== undefined && 'lastError' in patch.runtime
         ? (patch.runtime.lastError ?? null)
         : state.lastError,
-    pendingRetry:
-      patch.runtime !== undefined && 'pendingRetry' in patch.runtime
-        ? (patch.runtime.pendingRetry ?? null)
-        : state.pendingRetry,
     declinedRoutes: patch.runtime?.declinedRoutes ?? state.declinedRoutes,
-  };
-  const pending = state.pendingResponse;
-  const references = {
-    pendingIntents: Object.entries(state.pendingIntents).map(
-      ([callId, intent]) => ({
-        callId,
-        attempt: intent.attempt,
-        responseId: intent.responseId,
-        approvalRequestId:
-          patch.intentBindings?.[callId] ?? intent.approvalRequestId,
-      }),
-    ),
-    pendingResponse:
-      pending === null
-        ? null
-        : {
-            responseId: pending.responseId,
-            settled: Object.keys(pending.settled),
-          },
   };
   return {
     type: 'flow.snapshot',
     aggregateId: rowAggregate(runId),
-    payload: { ...flow, runtime, references },
+    payload: { ...flow, runtime },
   };
 }
 
 /**
  * A `flow.snapshot` for the tool-use family. Coordinates and runtime fields
- * come from the folded state unless the patch moves them; the references
- * are always the folded ones.
+ * come from the folded state unless the patch moves them.
  */
 export function snapshotRow(
   runId: RunId,
@@ -245,9 +213,9 @@ export function reflectionSnapshotRow(
 }
 
 /**
- * A snapshot that moves only runtime fields (the retry gate, the last error,
- * the model binding) on the family state the run last wrote, for either
- * family: what the invoker commits inside its admission protocol.
+ * A snapshot that moves only runtime fields (the last error, the model
+ * binding, the declined routes) on the family state the run last wrote, for
+ * either family: what the invoker commits inside its admission protocol.
  */
 export function runtimeSnapshotRow(
   runId: RunId,
@@ -263,6 +231,34 @@ export function runtimeSnapshotRow(
     { phase: state.phase, runtime },
     state.flow,
   );
+}
+
+/**
+ * The approval that guards one outcome-unknown call: committed in the batch
+ * that opens the request it names, and the one carrier of the binding the
+ * fold reads back.
+ */
+export function bindingRow(
+  runId: RunId,
+  binding: { callId: string; attempt: number; requestId: string },
+): RunLedgerDraft {
+  return {
+    type: 'tool.binding',
+    aggregateId: rowAggregate(runId),
+    payload: binding,
+  };
+}
+
+/** The retry owner's durable gate, its one carrier: `null` retires it. */
+export function retryRow(
+  runId: RunId,
+  permit: PendingRetry | null,
+): RunLedgerDraft {
+  return {
+    type: 'model.retry',
+    aggregateId: rowAggregate(runId),
+    payload: { permit },
+  };
 }
 
 /** Each arm of a draft union keeps its own required fields. */

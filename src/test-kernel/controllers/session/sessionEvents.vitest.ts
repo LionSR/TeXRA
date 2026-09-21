@@ -2256,16 +2256,7 @@ describe('RunLedger', () => {
       stageId: null,
     },
   ] as const;
-  const snapshot = (
-    phase: string,
-    references: Extract<
-      RunLedgerDraft,
-      { type: 'flow.snapshot' }
-    >['payload']['references'] = {
-      pendingIntents: [],
-      pendingResponse: null,
-    },
-  ): RunLedgerDraft => ({
+  const snapshot = (phase: string): RunLedgerDraft => ({
     type: 'flow.snapshot',
     aggregateId: AGGREGATE,
     payload: {
@@ -2278,16 +2269,14 @@ describe('RunLedger', () => {
         modelId: 'gpt-test',
         modelCompatibilityKey: null,
         lastError: null,
-        pendingRetry: null,
         declinedRoutes: [],
       },
-      references,
       state: { shouldSkipCycle: false, stateSlices: null },
     },
   });
   const refusalOf = (error: unknown): RunLedgerRefused | null =>
     error instanceof RunLedgerRefused ? error : null;
-  /** The approval a barrier call waits on, and the snapshot that binds it. */
+  /** The approval a barrier call waits on, and the row that binds it. */
   const approvalRequested: RunLedgerDraft = {
     type: 'request.opened',
     aggregateId: AGGREGATE,
@@ -2302,17 +2291,11 @@ describe('RunLedger', () => {
       },
     },
   };
-  const bindingSnapshot = snapshot('results.ready', {
-    pendingIntents: [
-      {
-        callId: 'call-a',
-        attempt: 1,
-        responseId: RESPONSE_ID,
-        approvalRequestId: 'req-1',
-      },
-    ],
-    pendingResponse: { responseId: RESPONSE_ID, settled: [] },
-  });
+  const approvalBinding: RunLedgerDraft = {
+    type: 'tool.binding',
+    aggregateId: AGGREGATE,
+    payload: { callId: 'call-a', attempt: 1, requestId: 'req-1' },
+  };
   const toolEnd = (callId: string): RunLedgerDraft => ({
     type: 'tool.end',
     aggregateId: AGGREGATE,
@@ -2552,17 +2535,14 @@ describe('RunLedger', () => {
           .pipe(Effect.flip);
         expect(refusalOf(orphanGroup)?.reason).toBe('unprepared-history');
         expect((yield* log.readAggregate(AGGREGATE, 1)).length).toBe(written);
-        // An approval precedes the snapshot that binds it. The other order is
-        // a caller defect, not a refusal the loop could act on.
-        const late = yield* run
-          .appendBatch(RUN, state, [bindingSnapshot, approvalRequested])
-          .pipe(Effect.exit);
-        expect(Exit.isFailure(late) && Cause.hasDies(late.cause)).toBe(true);
+        // The approval and the row that binds it commit in one batch; the
+        // binding names the intent the rows already hold.
         state = yield* run.appendBatch(RUN, state, [
           approvalRequested,
-          bindingSnapshot,
+          approvalBinding,
         ]);
         expect(state.requests['req-1']?.resolved).toBe(false);
+        expect(state.pendingIntents['call-a']?.approvalRequestId).toBe('req-1');
         // A real attachment carries loose keys and binary fields: accepted, and
         // the binary fields never reach the row.
         state = yield* run.appendBatch(RUN, state, [

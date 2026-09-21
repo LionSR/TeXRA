@@ -156,7 +156,6 @@ function invokerLayer(script: readonly ScriptedTurn[], seen: InvokeRequest[]) {
               const failed = yield* ledger.appendBatch(run.runId, state, [
                 runtimeSnapshotRow(run.runId, state, {
                   lastError: scripted.failWith,
-                  pendingRetry: null,
                   declinedRoutes: [],
                 }),
               ]);

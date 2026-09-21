@@ -51,6 +51,8 @@ import {
   FlowStepPayloadSchema,
   ModelCompactionPayloadSchema,
   ModelMessagePayloadSchema,
+  ModelRetryPayloadSchema,
+  ToolBindingPayloadSchema,
   ToolIntentPayloadSchema,
   ToolResultPayloadSchema,
 } from './runLedgerEvent';
@@ -435,11 +437,9 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
     }),
   ),
 ]);
-/**
- * The run's private records: on the same aggregate as its display rows, read
- * by the runtime's typed accessors and never by a renderer
- * (`isDisplaySessionEvent` keeps them out of the transport by type).
- */
+/** The run's private records: on the same aggregate as its display rows,
+ *  read by the runtime's typed accessors and never by a renderer
+ *  (`isDisplaySessionEvent` keeps them out of the transport by type). */
 const RunRecordEventDraftSchema = z.discriminatedUnion('type', [
   durable('run.record', { record: RunRecordFieldsSchema }),
   durable('run.launchLabel', { label: z.string() }),
@@ -458,7 +458,13 @@ const RunLedgerEventDraftSchema = z.discriminatedUnion('type', [
   durable('model.message', { payload: ModelMessagePayloadSchema }),
   durable('model.compaction', { payload: ModelCompactionPayloadSchema }),
   durable('tool.intent', { payload: ToolIntentPayloadSchema }),
+  /** The approval that guards one outcome-unknown call, committed in the
+   *  batch that opens the request it names. */
+  durable('tool.binding', { payload: ToolBindingPayloadSchema }),
   durable('tool.result', { payload: ToolResultPayloadSchema }),
+  /** The human retry permit, written by the one retry owner
+   *  (`ModelInvoker`): the gate a restart reads back. */
+  durable('model.retry', { payload: ModelRetryPayloadSchema }),
   durable('flow.snapshot', { payload: FlowSnapshotPayloadSchema }),
   /**
    * One child turn's identity and fate: the child loop's own bookkeeping,
@@ -578,14 +584,12 @@ export type DisplaySessionEvent = z.infer<typeof DisplaySessionEventSchema>;
 /**
  * The version of the stored vocabulary: the shape of every row a session
  * database holds. TeXRA keeps no compatibility with earlier persisted data
- * (AGENTS.md "Compatibility and format retirement"), so a store written
- * under any other version is unsupported state: `Database` clears it at
- * open, the one boundary that owns the file, and stamps this version, so a
- * row of another vocabulary never reaches a fold. Bump it with any change
- * to the stored shape of `SessionEventSchema`; `sessionEventFormat.vitest.ts`
- * pins that shape and fails a change that leaves the version alone.
+ * (AGENTS.md "Compatibility and format retirement"), so `Database` clears a
+ * store stamped with any other version at open and stamps this one. Bump it
+ * with any change to the stored shape of `SessionEventSchema`, which
+ * `sessionEventFormat.vitest.ts` pins.
  */
-export const SESSION_EVENT_FORMAT = 7;
+export const SESSION_EVENT_FORMAT = 8;
 
 export const SessionEventSchema = z.discriminatedUnion('type', [
   ...DisplaySessionEventSchema.options,
@@ -656,7 +660,9 @@ export function listingTypeOf(
     case 'model.message':
     case 'model.compaction':
     case 'tool.intent':
+    case 'tool.binding':
     case 'tool.result':
+    case 'model.retry':
     case 'flow.snapshot':
     case 'child.turn':
     case 'workflow.script':

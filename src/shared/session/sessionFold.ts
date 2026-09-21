@@ -19,19 +19,19 @@
  * the session's `latest` index and ignored when it is not above it,
  * whichever read delivered it. A transcript row folds only for an aggregate
  * in the subscription set (its `view.folded` entry), and only when its seq
- * is above that entry, which it then advances. `view.cursor` moves on tail rows
- * alone. Existence: a run exists iff its `run.start` has folded and its
- * `run.removed` has not; the two share one `latest` entry, so the
- * tombstone is final under every read, ids are never reused (decision 9),
- * and a fact naming any other run changes nothing. Listing hydration is
- * authoritative (7.2): at the replay marker every run no listing row of
- * that sequence named is removed the way a tombstone removes it.
+ * is above that entry, which it then advances; `view.cursor` moves on tail
+ * rows alone. Existence: a run exists iff its `run.start` has folded and its
+ * `run.removed` has not; the two share one `latest` entry, so the tombstone
+ * is final under every read, ids are never reused (decision 9), and a fact
+ * naming any other run changes nothing. Listing hydration is authoritative
+ * (7.2): at the replay marker every run no listing row of that sequence
+ * named is removed the way a tombstone removes it.
  *
  * The run model (`transcript.run`) is derived only when one of its inputs
- * moved: the run's own `run.start`, a status change, a transcript entry
- * the model reads (a workflow card, a group boundary, a plan marker), or a
- * direct child's progress. Folding a frame defers that derivation to the end
- * of the frame, so a replay of R events derives each touched board once.
+ * moved: the run's own `run.start`, a status change, a transcript entry the
+ * model reads (a workflow card, a group boundary, a plan marker), or a
+ * direct child's progress. Folding a frame defers that derivation to the
+ * end of the frame, so a replay of R events derives each board once.
  *
  * The publication contract (decision D5): every view `fold` returns is
  * immutable, and untouched branches are shared by reference between levels.
@@ -43,19 +43,17 @@
  * row, one that lands no task group, and a delete of a key its map never
  * held all leave those branches the objects the previous level published.
  * Every `RunView` value, every `TranscriptView` value, and the
- * `SessionView` envelope are replaced on change and never mutated. A host
- * that compares any of these by identity sees exactly what changed, and an
- * older view is stable to read for as long as it is held. It is not a fold
- * input: the fold's own indexes live in module-private maps keyed by the
- * value they index, per transcript (row and group positions, the measured
- * live text, the newest thinking row) and per view (the current claims, the
- * newest commit per listing entry, the live text per row, the local
- * snapshot, runs by owner, the runs whose lifecycle ended, the
- * aggregates the listing named), and those are single-owner, advancing with
+ * `SessionView` envelope are replaced on change and never mutated, so a host
+ * comparing them by identity sees exactly what changed and an older view
+ * stays stable to read. The fold's own indexes are not inputs: they live in
+ * module-private maps keyed by the value they index, per transcript (row and
+ * group positions, the measured live text, the newest thinking row) and per
+ * view (the claims, the newest commit per listing entry, the live text per
+ * row, the local snapshot, runs by owner, the ended runs, the listed
+ * aggregates, each run's shared-row slice), single-owner and advancing with
  * the latest level only. The invariant the copy rests on: an arm that writes
  * a container reports `changed`, so `foldWith` publishes the envelope
- * holding the copy; a write followed by "no change" would be dropped, not
- * shared.
+ * holding the copy; a write followed by "no change" would be dropped.
  */
 
 import {
@@ -134,6 +132,12 @@ import {
   type ChildRunProgress,
 } from '@shared/runs/workflowRunModel';
 import { isObject } from '@utils/core';
+import {
+  applyRunRow,
+  freshRunRows,
+  type RunRows,
+  type SharedRunRow,
+} from './runRows';
 import { createTranscriptFold } from './traceFold';
 import { isRunningStreamingTextEntry, StreamLog } from './traceEntries';
 
@@ -143,7 +147,6 @@ type RunStartEvent = Extract<DisplaySessionEvent, { type: 'run.start' }>;
 
 /** Workflow-script run ids whose run model a batch derives at its end. */
 type DeferredRunModels = Set<RunId> | null;
-
 /** Canonical dashboard rows a workflow-script run model reads. */
 const WORKFLOW_DASHBOARD_KINDS = new Set<TranscriptRowKind>([
   'compactionActivity',
@@ -151,19 +154,16 @@ const WORKFLOW_DASHBOARD_KINDS = new Set<TranscriptRowKind>([
   'workflowTask',
 ]);
 
-/** Residency cap on the dashboard rows one run model folds: a long workflow
- *  keeps its newest cards, never an unbounded history (PRD 5.2). */
+/** Residency cap on one run model's dashboard rows (PRD 5.2). */
 const MAX_RUN_MODEL_DASHBOARD_ROWS = 2_000;
 
 // ---------------------------------------------------------------------------
 // Entry
 // ---------------------------------------------------------------------------
 
-/**
- * One input, or a frame of them (the transport's unit, 7.4 and 8.1) or a
- * replay: every input in order, with each touched workflow board's run model
- * derived once at the end instead of once per event.
- */
+/** One input, or a frame of them (the transport's unit, 7.4 and 8.1) or a
+ *  replay: every input in order, with each touched workflow board's run
+ *  model derived once at the end instead of once per event. */
 export function fold(
   view: SessionView,
   input: FoldInput | readonly FoldInput[],
@@ -280,10 +280,9 @@ interface SessionIndexes {
   readonly byOwner: Map<string, Set<RunId>>;
   /** Current sequence-row claims for the checked resident scope. */
   readonly claims: Map<AggregateId, string | null>;
-  /** Every follow-up id a run's rows named, consumed ones included: the
-   *  queued set's unique key, so a delivery replayed after its consumption
-   *  is not listed again (the run-state fold's `followUpIds`). */
-  readonly followUpIds: Map<RunId, Set<string>>;
+  /** What the rows both folds read say about each run (`runRows.ts`);
+   *  `view.requests`, `view.queuedFollowUps` and `RunView.flow` project it. */
+  readonly rows: Map<RunId, RunRows>;
   /** One entry per `${aggregate}/${listing type}`: the commit of the latest
    *  listing fact folded for it, so a replayed older one is ignored. The
    *  lifecycle entry outlives its run: it is what keeps a tombstone
@@ -312,7 +311,7 @@ function sessionIndexesOf(view: SessionView): SessionIndexes {
       ended: new Set(),
       byOwner: new Map(),
       claims: new Map(),
-      followUpIds: new Map(),
+      rows: new Map(),
       latest: new Map(),
       inflight: new Map(),
       local: { self: [], dead: [], unreadable: [] },
@@ -1372,16 +1371,16 @@ function foldTextChunk(view: SessionView, chunk: TextChunk): boolean {
 // Durable events
 // ---------------------------------------------------------------------------
 
-/** A tool-use fact on a run whose arm cannot hold it is a publisher or
- *  category defect, made loud at the fold's boundary. */
+/** A tool-use fact on a run whose arm cannot hold it is a publisher defect,
+ *  made loud at the fold's boundary. */
 function wrongArm(run: RunView, name: string): never {
   throw new Error(
     `${name} names ${run.id}, a ${run.category} run; the fact belongs to the ${AgentCategory.ToolUse} arm`,
   );
 }
 
-/** The event's own arm applied to its run (topology, session slices, and
- *  the transcript tier are handled by the caller). */
+/** The event's own arm applied to its run (topology, session slices, the
+ *  transcript tier and the shared rows' own position are the caller's). */
 function applyOwnArm(run: RunView, event: DisplaySessionEvent): RunView {
   switch (event.type) {
     case 'log':
@@ -1396,17 +1395,24 @@ function applyOwnArm(run: RunView, event: DisplaySessionEvent): RunView {
     case 'stream.end':
     case 'response.finalized':
     case 'domain':
-      return run;
     case 'run.start':
+    case 'approval.policy':
+    case 'inquiryThreadUpdated':
+    case 'run.removed':
+    case 'flow.step':
+    case 'request.opened':
+    case 'request.decided':
+    case 'followup.queued':
+    case 'followup.consumed':
       // Existence cannot become more true (5.2, "Duplicates"): a second
-      // start for a run the view holds is a no-op.
+      // start is a no-op. The rest move session slices alone, or are the
+      // shared rows `runRows.ts` owns; the caller projects their position.
       return run;
     case 'run.activate': {
-      // Every activation, the launch and each resume, opens a running window
-      // (one run model, 3.3): the phase, the run window, and a fresh
-      // incarnation's progress are folded from it. A first activation is
-      // starting and a later one resuming (ruling A9-1), for a run whose
-      // loop steps; the first `flow.step` clears it.
+      // Every activation, the launch and each resume, opens a running
+      // window (one run model, 3.3): the phase, the run window and a fresh
+      // incarnation's progress fold from it. A first activation is starting
+      // and a later one resuming (A9-1); the first `flow.step` clears it.
       let substate: RunView['substate'] = null;
       if (isPlainAgentIdentity(run.identity)) {
         substate =
@@ -1424,11 +1430,10 @@ function applyOwnArm(run: RunView, event: DisplaySessionEvent): RunView {
       };
     }
     case 'run.config': {
-      // A background process has no model: its `run.config` is the fabricated
-      // `AgentConfig` that feeds the live wire, and the `model` there is the
-      // schema's prefault, not a model the run ever calls. Every other
-      // identity — a native or CLI-driven agent, a workflow-script run —
-      // carries the model its launch actually routed, so it is shown.
+      // A background process has no model: its `run.config` is the
+      // fabricated `AgentConfig` that feeds the live wire, whose `model` is
+      // the schema's prefault. Every other identity carries the model its
+      // launch routed, so it is shown.
       const model = run.identity.kind === 'process' ? null : event.config.model;
       return {
         ...run,
@@ -1442,14 +1447,12 @@ function applyOwnArm(run: RunView, event: DisplaySessionEvent): RunView {
     case 'conversation.progress':
       return { ...run, conversationProgress: event.progress };
     case 'usage':
-      // `usage` is a latest-only listing key, so a cold read delivers exactly
-      // one row per run: the row must be — and is — the run's cumulative
-      // total, published by the single reporter for that run (`UsageMonitor`
-      // for a model-driven run, the agent-CLI loop for its own child run).
-      // The newest row therefore replaces the total; summing here would
-      // double-count every earlier round an aggregate replay brings on top of
-      // the listing row. The one-element sum normalizes the extended payload
-      // (`elapsedTime`, `percentageCached`, `toolUseTokens`) down to the
+      // A latest-only listing key, so a cold read delivers one row per run,
+      // and that row is the run's cumulative total from its single reporter
+      // (`UsageMonitor`, or the agent-CLI loop for its own child run). The
+      // newest row replaces the total; summing would double-count every
+      // earlier round an aggregate replay brings on top of the listing row.
+      // The one-element sum normalizes the extended payload down to the
       // view's `TokenUsageStats` shape.
       return { ...run, usage: sumUsageStats([event.usage]) };
     case 'context.state':
@@ -1510,29 +1513,24 @@ function applyOwnArm(run: RunView, event: DisplaySessionEvent): RunView {
         },
         event.at,
       );
-    case 'request.opened':
-    case 'request.decided':
-    case 'approval.policy':
-    case 'inquiryThreadUpdated':
-    case 'followup.queued':
-    case 'followup.consumed':
-    case 'run.removed':
-      return run;
-    case 'flow.step': {
-      // The loop's position (one run model, 3.3): `halted` is the loop's
-      // own word and moves nothing, the terminal phase is `run.end`'s
-      // alone; every other step carries the park.
-      const { outcome: _outcome, ...flow } = event.payload;
-      return flow.step === 'halted'
-        ? { ...run, flow }
-        : parked({ ...run, flow }, flow.step === 'waiting', event.at);
-    }
   }
 }
 
+/** The run's loop position, projected from the slice the rows folded
+ *  (one run model, 3.3): `halted` is the loop's own word and moves nothing,
+ *  the terminal phase is `run.end`'s; every other step carries the park. */
+function withPosition(run: RunView, rows: RunRows, at: number): RunView {
+  const { family, step, round, turn, continuationIndex } = rows;
+  if (family === null || step === null) return run;
+  const flow = { family, step, round, turn, continuationIndex };
+  return step === 'halted'
+    ? { ...run, flow }
+    : parked({ ...run, flow }, step === 'waiting', at);
+}
+
 /** The run window (3.3): a park closes it and settles the transcript, any
- *  other move opens it. The one phase writer for both rows that park — a
- *  loop's `flow.step waiting` and an agent-CLI child's `child.park`. */
+ *  other move opens it. The one phase writer for both rows that park, a
+ *  loop's `flow.step waiting` and a child's `child.park`. */
 function parked(run: RunView, atRest: boolean, at: number): RunView {
   const moved: RunView = {
     ...run,
@@ -1543,46 +1541,35 @@ function parked(run: RunView, atRest: boolean, at: number): RunView {
   return atRest ? withSettledTranscript(moved, at) : moved;
 }
 
-/** Session-level slices, applied before the run arm so the arm's
- *  aggregates see them. */
+/** Session-level slices, applied before the run arm so the arm's aggregates
+ *  see them. Returns the run's row slice when a shared row moved the loop's
+ *  position, the only part of it the run arm projects. */
 function applySessionSlices(
   view: SessionView,
   runId: RunId | null,
   event: DisplaySessionEvent,
-): void {
+): RunRows | null {
   switch (event.type) {
     case 'run.start':
-      // The initial snapshot rides the existence fact (PRD 6, item 2). The
-      // one production writer (`runLifecycle.ts`) always stamps it; the trace
-      // viewer's synthetic envelope carries no policy and leaves the entry to
-      // `approval.policy`, which is why the field stays optional.
+      // The initial snapshot rides the existence fact (PRD 6, item 2).
+      // `runLifecycle.ts` always stamps it; the trace viewer's synthetic
+      // envelope carries none, which is why the field stays optional.
       if (event.approvalPolicy && runId !== null) {
         writableMap(view, 'policy').set(runId, event.approvalPolicy);
       }
-      return;
+      return null;
+    case 'flow.step':
     case 'request.opened':
-      // A set keyed by request id (5.2); a replayed request is below the
-      // pair's `latest` entry and never reaches here.
-      if (runId === null) return;
-      view.requests = [
-        ...view.requests,
-        {
-          runId,
-          requestId: event.requestId,
-          payload: event.payload,
-          thread: event.thread ?? null,
-        },
-      ];
-      return;
     case 'request.decided':
-      view.requests = view.requests.filter(
-        (r) => r.requestId !== event.requestId,
-      );
-      return;
+    case 'followup.queued':
+    case 'followup.consumed':
+      // One application, in `runRows.ts`; the containers are its
+      // projections. A replayed row is below the pair's `latest` entry.
+      return runId === null ? null : applyRowFacts(view, runId, event);
     case 'approval.policy':
       if (runId !== null)
         writableMap(view, 'policy').set(runId, event.snapshot);
-      return;
+      return null;
     case 'inquiryThreadUpdated': {
       const {
         type: _type,
@@ -1600,60 +1587,77 @@ function applySessionSlices(
         at === -1
           ? [...view.inquiries, thread]
           : view.inquiries.with(at, thread);
-      return;
-    }
-    case 'followup.queued': {
-      // A set keyed by follow-up id, like the requests above. A re-read row is
-      // below the pair's `latest` entry and never reaches here; a delivery its
-      // producer replayed under an id this run already named, queued or
-      // consumed, is the same follow-up and is not listed again.
-      if (runId === null) return;
-      if (knownFollowUpIds(view, runId).has(event.followUpId)) return;
-      knownFollowUpIds(view, runId).add(event.followUpId);
-      const queued = view.queuedFollowUps.get(runId) ?? [];
-      writableMap(view, 'queuedFollowUps').set(runId, [
-        ...queued,
-        {
-          followUpId: event.followUpId,
-          text: event.content.displayText ?? event.content.text,
-        },
-      ]);
-      return;
-    }
-    case 'followup.consumed': {
-      if (runId === null) return;
-      knownFollowUpIds(view, runId).add(event.followUpId);
-      const queued = view.queuedFollowUps.get(runId);
-      if (queued === undefined) return;
-      const remaining = queued.filter(
-        (followUp) => followUp.followUpId !== event.followUpId,
-      );
-      if (remaining.length === queued.length) return;
-      if (remaining.length === 0) {
-        writableMap(view, 'queuedFollowUps').delete(runId);
-      } else {
-        writableMap(view, 'queuedFollowUps').set(runId, remaining);
-      }
-      return;
+      return null;
     }
     default:
-      return;
+      return null;
   }
 }
 
-/** The follow-up ids a run's rows named, created on first use. */
-function knownFollowUpIds(view: SessionView, runId: RunId): Set<string> {
-  const { followUpIds } = sessionIndexesOf(view);
-  const ids = followUpIds.get(runId) ?? new Set<string>();
-  followUpIds.set(runId, ids);
-  return ids;
+/** One shared row, applied by `runRows.ts` and projected onto the session's
+ *  containers. `unresolved` is the partial read, not a defect: a cold
+ *  listing delivers one request row per run, so the opening a decision
+ *  answers may never have reached this view. */
+function applyRowFacts(
+  view: SessionView,
+  runId: RunId,
+  event: SharedRunRow,
+): RunRows | null {
+  const { rows } = sessionIndexesOf(view);
+  const before = rows.get(runId) ?? freshRunRows();
+  const verdict = applyRunRow(before, event);
+  if (verdict.kind === 'contradiction') {
+    throw new Error(`${event.type} on ${runId}: ${verdict.detail}`);
+  }
+  if (verdict.kind !== 'applied') return null;
+  const after: RunRows = { ...before, ...verdict.rows };
+  rows.set(runId, after);
+  if (verdict.rows.requests !== undefined) projectRequests(view, runId, after);
+  if (verdict.rows.followUps !== undefined)
+    projectFollowUps(view, runId, after);
+  return verdict.rows.step === undefined ? null : after;
 }
 
-/**
- * Move `run` from `previousParentId` to its current parent. A parent the
- * view has no `run.start` for re-roots the run: top-level, no ancestors
- * (5.2, `ancestors`).
- */
+/** `view.requests` is every run's open requests, in the order the rows
+ *  opened them (5.2): this run's rebuilt from its slice, every other run's
+ *  left where they are. Identity is (runId, requestId), so the dedupe of
+ *  already-listed requests is scoped to this run, never another's. */
+function projectRequests(view: SessionView, runId: RunId, rows: RunRows) {
+  const open = Object.entries(rows.requests).filter(([, r]) => !r.resolved);
+  const ids = new Set(open.map(([requestId]) => requestId));
+  const kept = view.requests.filter(
+    (r) => r.runId !== runId || ids.has(r.requestId),
+  );
+  view.requests = [
+    ...kept,
+    ...open.flatMap(([requestId, r]) =>
+      kept.some((q) => q.runId === runId && q.requestId === requestId)
+        ? []
+        : [{ runId, requestId, payload: r.payload, thread: r.thread }],
+    ),
+  ];
+}
+
+/** The run's untaken input, as the view shows it. A map that never held
+ *  this run is left alone: a delete that removes nothing must not copy. */
+function projectFollowUps(view: SessionView, runId: RunId, rows: RunRows) {
+  if (rows.followUps.length === 0) {
+    if (view.queuedFollowUps.has(runId)) {
+      writableMap(view, 'queuedFollowUps').delete(runId);
+    }
+    return;
+  }
+  writableMap(view, 'queuedFollowUps').set(
+    runId,
+    rows.followUps.map((f) => ({
+      followUpId: f.followUpId,
+      text: f.content.displayText ?? f.content.text,
+    })),
+  );
+}
+
+/** Move `run` from `previousParentId` to its current parent. A parent the
+ *  view has no `run.start` for re-roots the run: top level, no ancestors. */
 function relink(
   view: SessionView,
   run: RunView,
@@ -1691,8 +1695,7 @@ function relink(
   refreshAncestors(view, run.id);
 }
 
-/** The run a durable event names: its aggregate, except for the thread
- *  aggregate of an inquiry (5.1). */
+/** The run a durable event names: its aggregate, bar an inquiry's thread. */
 function runOfEvent(event: DisplaySessionEvent): RunId | null {
   return event.type === 'inquiryThreadUpdated'
     ? null
@@ -1742,8 +1745,11 @@ function foldDurable(
   const created = !known;
   const before = known ?? createRun(view, event as RunStartEvent, runId);
 
-  applySessionSlices(view, runId, event);
-  const own = applyOwnArm(before, event);
+  // The rows both folds read are applied once, in `runRows.ts`; the only
+  // part of that slice the run itself carries is the loop's position.
+  const moved = applySessionSlices(view, runId, event);
+  const arm = applyOwnArm(before, event);
+  const own = moved === null ? arm : withPosition(arm, moved, event.at);
   if (event.type === 'run.end') {
     // The run ended; a terminal phase ends every live row (5.2, "In-flight
     // text": a run can end with a row unfinalized).
@@ -1862,7 +1868,7 @@ function foldRunRemoved(
   if (view.queuedFollowUps.has(run.id)) {
     writableMap(view, 'queuedFollowUps').delete(run.id);
   }
-  sessionIndexesOf(view).followUpIds.delete(run.id);
+  sessionIndexesOf(view).rows.delete(run.id);
   writableMap(view, 'folded').delete(qualifyAggregateId('run', run.id));
   if (view.requests.some((r) => r.runId === run.id)) {
     view.requests = view.requests.filter((r) => r.runId !== run.id);

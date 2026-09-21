@@ -307,10 +307,8 @@ function reflectionSnapshot(): FlowSnapshotPayload {
       modelId: 'deepseekT',
       modelCompatibilityKey: null,
       lastError: null,
-      pendingRetry: null,
       declinedRoutes: [],
     },
-    references: { pendingIntents: [], pendingResponse: null },
     state: {
       currentRound: 0,
       totalRounds: 4,

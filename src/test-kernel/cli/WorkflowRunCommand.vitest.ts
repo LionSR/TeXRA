@@ -347,11 +347,9 @@ function reflectionSnapshot(
       modelId: 'deepseekT',
       modelCompatibilityKey: null,
       lastError: null,
-      pendingRetry: null,
       declinedRoutes: [],
       ...runtime,
     },
-    references: { pendingIntents: [], pendingResponse: null },
     state: {
       currentRound: 0,
       totalRounds: 4,

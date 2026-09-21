@@ -71,6 +71,7 @@ import {
 import { guardedToolCall } from './toolGuard';
 import {
   appendRow,
+  bindingRow,
   displayRow,
   redactedForFact,
   rowAggregate,
@@ -635,7 +636,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     // its own id, so one barrier never accumulates requests. Anything else
     // opens a fresh one: the fold refuses a second `request.opened` on an id
     // it already carries, so a request retired without a decision cannot be
-    // reopened, only replaced (and the snapshot below rebinds the intent).
+    // reopened, only replaced (and the binding row below rebinds the intent).
     const standing =
       intent.approvalRequestId !== null &&
       bound !== undefined &&
@@ -664,14 +665,9 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     };
     // A request row is committed whenever no live request stands: the call
     // never raised one, or the one it raised was retired without a decision
-    // and this opens its replacement, bound to the same call by the snapshot.
+    // and this opens its replacement, bound to the same call by the
+    // `tool.binding` committed with it.
     if (standing === null) {
-      const flow = toolUseFlowState(current);
-      if (flow === null) {
-        return yield* Effect.die(
-          new Error('A pending call needs an opened run.'),
-        );
-      }
       yield* append([
         {
           type: 'request.opened',
@@ -682,10 +678,10 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
           payload: redactedForFact({ kind: 'userQuestion', data: request }),
           thread: null,
         },
-        snapshotRow(runId, current, {
-          phase: 'tools.dispatching',
-          state: flow,
-          intentBindings: { [fact.callId]: requestId },
+        bindingRow(runId, {
+          callId: fact.callId,
+          attempt: intent.attempt,
+          requestId,
         }),
       ]).pipe(Effect.orDie);
       current = yield* SynchronizedRef.get(stateRef);
@@ -972,21 +968,9 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   if (flow === null) {
     return yield* Effect.die(new Error('Delivery needs an opened run.'));
   }
-  // The snapshot's references describe the state after the delivering
-  // append folds: no pending response, no intents of it. A snapshot authored
-  // from the pre-delivery state would fail the fold's stale-snapshot check.
-  const afterDelivery: RunState = {
-    ...settledState,
-    pendingResponse: null,
-    pendingIntents: Object.fromEntries(
-      Object.entries(settledState.pendingIntents).filter(
-        ([, intent]) => intent.responseId !== responseId,
-      ),
-    ),
-  };
   const delivered = yield* ledger.appendBatch(runId, settledState, [
     appendRow(runId, [group], responseId),
-    snapshotRow(runId, afterDelivery, {
+    snapshotRow(runId, settledState, {
       phase: 'results.ready',
       state: {
         ...flow,
