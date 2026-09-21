@@ -632,46 +632,38 @@ const resumeToolUseWithOwnedLease = Effect.fn('resumeToolUseWithOwnedLease')(
     options: ResumeToolUseFromResumeDataOptions & { session: SessionHandle },
   ) {
     const runSession = options.session;
-    // The turn's scope closes before any release below. The launch's
-    // finalizers compensate through the run's own claim - the stage's
-    // FAILED close is an append - so a scope that unwound after
-    // `releaseRunLease` would have its compensation refused
-    // `DatabaseNotOwner`. Each exit leaves the scope as a value instead.
-    const outcome = yield* Effect.scoped(
-      Effect.gen(function* () {
-        const setup = yield* Effect.exit(
-          Effect.gen(function* () {
-            const parentRunId = yield* persistedParentRunId(
-              runSession,
-              resume.runId,
-            );
-            const definition = yield* prepareAgentDefinition({
-              config: resume.agentConfig,
-              enforceCategory: true,
-              session: runSession,
-              suppressErrorNotification: true,
-            });
-            const ctx = yield* buildAgentLaunchContext({
-              definition,
-              runId: resume.runId,
-              resumed: true,
-              modelCompatibilityKey: resume.modelCompatibilityKey,
-              session: runSession,
-              toolPolicy: {
-                approvalPromptsUnavailable: options.approvalPromptsUnavailable,
-                runtimeUnavailableTools: options.runtimeUnavailableTools,
-              },
-            });
-            return { ctx, parentRunId };
-          }),
-        );
-        if (Exit.isFailure(setup)) {
-          return { phase: 'setup', exit: setup } as const;
-        }
-        const { ctx, parentRunId } = setup.value;
-        const { setting } = ctx;
-        const result = yield* Effect.exit(
-          runFlowWithLifecycle(
+    // Every exit escapes this scope, and the release is outside it. Both
+    // orders matter: the launch's finalizers compensate through the run's
+    // own claim - the stage's FAILED close is an append - so a scope that
+    // unwound after `releaseRunLease` would have its compensation refused
+    // `DatabaseNotOwner`, and a failure captured inside the scope would
+    // close it successfully, so the exit-aware finalizer would never fire.
+    const outcome = yield* Effect.exit(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const parentRunId = yield* persistedParentRunId(
+            runSession,
+            resume.runId,
+          );
+          const definition = yield* prepareAgentDefinition({
+            config: resume.agentConfig,
+            enforceCategory: true,
+            session: runSession,
+            suppressErrorNotification: true,
+          });
+          const ctx = yield* buildAgentLaunchContext({
+            definition,
+            runId: resume.runId,
+            resumed: true,
+            modelCompatibilityKey: resume.modelCompatibilityKey,
+            session: runSession,
+            toolPolicy: {
+              approvalPromptsUnavailable: options.approvalPromptsUnavailable,
+              runtimeUnavailableTools: options.runtimeUnavailableTools,
+            },
+          });
+          const { setting } = ctx;
+          return yield* runFlowWithLifecycle(
             ctx,
             (handle) =>
               // Inside the lifecycle so the rejection ends the started stream
@@ -696,36 +688,29 @@ const resumeToolUseWithOwnedLease = Effect.fn('resumeToolUseWithOwnedLease')(
                     },
                   ),
             buildLifecycleOptions(options, parentRunId),
-          ),
-        );
-        return { phase: 'run', exit: result } as const;
-      }),
+          );
+        }),
+      ),
     );
-    if (outcome.phase === 'setup') {
-      return yield* Effect.failCause(outcome.exit.cause).pipe(
-        Effect.onExit(() => runSession.releaseRunLease(resume.runId)),
-      );
-    }
-    const result = outcome.exit;
-    if (Exit.isFailure(result)) {
+    if (Exit.isFailure(outcome)) {
       const released = yield* Effect.exit(
         runSession.releaseRunLease(resume.runId),
       );
       if (Exit.isFailure(released)) {
         return yield* Effect.fail(
           new AggregateError(
-            [Cause.squash(result.cause), Cause.squash(released.cause)],
+            [Cause.squash(outcome.cause), Cause.squash(released.cause)],
             `Run ${resume.runId} failed and its final artifacts could not be persisted`,
           ),
         );
       }
-      return yield* Effect.failCause(result.cause);
+      return yield* Effect.failCause(outcome.cause);
     }
     // A WAITING result retains ownership for the next resumed turn.
-    if (!isWaitingFlowResult(result.value)) {
+    if (!isWaitingFlowResult(outcome.value)) {
       yield* runSession.releaseRunLease(resume.runId);
     }
-    return result.value;
+    return outcome.value;
   },
   Effect.uninterruptible,
 );
