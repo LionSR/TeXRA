@@ -2,6 +2,7 @@
 import { Effect } from 'effect';
 
 // Local imports - log
+import { withLogChannel } from '@logger/effectLog';
 import { createLog } from '@logger/logUtils';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { runToolWithCheck } from '@utils/system/toolUtils';
@@ -35,7 +36,9 @@ export const runTexFmt = Effect.fn('latex.runTexFmt')(
       return false;
     }
 
-    log.info(`Formatted ${filePath}`);
+    yield* Effect.logInfo(`Formatted ${filePath}`).pipe(
+      withLogChannel(CHANNEL),
+    );
     return true;
   },
   Effect.catch((err) =>

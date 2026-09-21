@@ -4,6 +4,7 @@ import { Effect, FileSystem } from 'effect';
 
 import { sync as globSync } from 'glob';
 
+import { withLogChannel } from '@logger/effectLog';
 import { createLog } from '@logger/logUtils';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { runToolWithCheck } from '@utils/system/toolUtils';
@@ -38,7 +39,9 @@ const cleanupIndentLog = Effect.fn('latex.cleanupIndentLog')(function* (
       }),
     ),
   );
-  if (removed) log.debug(`Removed ${logPath}`);
+  if (removed) {
+    yield* Effect.logDebug(`Removed ${logPath}`).pipe(withLogChannel(CHANNEL));
+  }
 });
 
 /** Delete all files matching backup glob patterns in a directory. */
@@ -68,7 +71,11 @@ const cleanupBackupFiles = Effect.fn('latex.cleanupBackupFiles')(function* (
         }),
       ),
     );
-    if (removed) log.debug(`Removed backup file: ${backupFile}`);
+    if (removed) {
+      yield* Effect.logDebug(`Removed backup file: ${backupFile}`).pipe(
+        withLogChannel(CHANNEL),
+      );
+    }
   }
 });
 
@@ -125,7 +132,9 @@ export const runLatexIndent = Effect.fn('latex.runLatexIndent')(
     }
 
     if (success) {
-      log.info(`Indented ${absolutePath}`);
+      yield* Effect.logInfo(`Indented ${absolutePath}`).pipe(
+        withLogChannel(CHANNEL),
+      );
     }
     return success;
   },

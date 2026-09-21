@@ -2,6 +2,7 @@ import * as path from 'node:path';
 
 import { Effect, FileSystem, Path, PlatformError } from 'effect';
 
+import { withLogChannel } from '@logger/effectLog';
 import { createLog } from '@logger/logUtils';
 import { EXCLUDED_DIRS } from '@shared/constants/latexTiming';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -63,10 +64,14 @@ export const indentLatexFilesInDirectory = Effect.fn(
   PlatformError.PlatformError,
   FileSystem.FileSystem | Path.Path
 > {
-  log.debug(`Starting LaTeX indentation process for directory: ${directory}`);
+  yield* Effect.logDebug(
+    `Starting LaTeX indentation process for directory: ${directory}`,
+  ).pipe(withLogChannel(CHANNEL));
 
   if (!formatter) {
-    log.debug('LaTeX formatter disabled; skipping indentation');
+    yield* Effect.logDebug(
+      'LaTeX formatter disabled; skipping indentation',
+    ).pipe(withLogChannel(CHANNEL));
     return { status: 'disabled', directory, count: 0 };
   }
   const {
@@ -75,11 +80,15 @@ export const indentLatexFilesInDirectory = Effect.fn(
     run: runFormatter,
     settings: formatterSettings,
   } = formatter;
-  log.debug(`Formatter: ${id}, Config: ${config}`);
+  yield* Effect.logDebug(`Formatter: ${id}, Config: ${config}`).pipe(
+    withLogChannel(CHANNEL),
+  );
 
   const fs = yield* FileSystem.FileSystem;
   if (config && !(yield* entryExists(fs, config))) {
-    log.error(`Formatter config file not found at ${config}`);
+    yield* Effect.logError(`Formatter config file not found at ${config}`).pipe(
+      withLogChannel(CHANNEL),
+    );
     return {
       status: 'missing-config',
       directory,
@@ -123,17 +132,23 @@ export const indentLatexFilesInDirectory = Effect.fn(
       }
 
       progressCallback?.(`Indenting ${path.basename(fullPath)}...`, 0);
-      log.debug(`Processing file: ${fullPath}`);
+      yield* Effect.logDebug(`Processing file: ${fullPath}`).pipe(
+        withLogChannel(CHANNEL),
+      );
 
       // Both formatters report a failed run as `false`, so a per-file
       // recovery here would have nothing left to catch.
       if (
         yield* runFormatter(fullPath, workspaceRoot, config, formatterSettings)
       ) {
-        log.info(`Successfully formatted: ${fullPath}`);
+        yield* Effect.logInfo(`Successfully formatted: ${fullPath}`).pipe(
+          withLogChannel(CHANNEL),
+        );
         indentedCount++;
       } else {
-        log.error(`Failed to format ${fullPath}`);
+        yield* Effect.logError(`Failed to format ${fullPath}`).pipe(
+          withLogChannel(CHANNEL),
+        );
       }
     }
   });

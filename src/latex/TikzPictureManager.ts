@@ -5,6 +5,7 @@ import * as path from 'node:path';
 import { Effect, FileSystem } from 'effect';
 
 // Local imports - log
+import { withLogChannel, withLogData } from '@logger/effectLog';
 import { createLog } from '@logger/logUtils';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { FileLocation } from '@shared/schemas';
@@ -49,7 +50,9 @@ const createStandalone = Effect.fn('TikzPictureManager.createStandalone')(
     );
 
     yield* fs.writeFileString(texLocation.absolutePath, standaloneContent);
-    log.debug(`Created standalone LaTeX file: ${texLocation.absolutePath}`);
+    yield* Effect.logDebug(
+      `Created standalone LaTeX file: ${texLocation.absolutePath}`,
+    ).pipe(withLogChannel(CHANNEL));
 
     return texLocation;
   },
@@ -120,9 +123,13 @@ const compile = Effect.fn('TikzPictureManager.compile')(function* (
 
   yield* fs.makeDirectory(buildDir, { recursive: true });
 
-  log.debug(`Extracting TikZ pictures from ${latexFile.absolutePath}`);
+  yield* Effect.logDebug(
+    `Extracting TikZ pictures from ${latexFile.absolutePath}`,
+  ).pipe(withLogChannel(CHANNEL));
   const labeledTikzPictures = yield* extract(latexFile);
-  log.debug(`Found ${labeledTikzPictures.length} labeled TikZ pictures`);
+  yield* Effect.logDebug(
+    `Found ${labeledTikzPictures.length} labeled TikZ pictures`,
+  ).pipe(withLogChannel(CHANNEL));
 
   const template = roots.config.get<string>('texra.latex.tikzTemplate');
   const compiledFiles: FileLocation[] = [];
@@ -147,14 +154,14 @@ const compile = Effect.fn('TikzPictureManager.compile')(function* (
         compiler: 'pdflatex',
       });
       if (!compiled.ok) {
-        log.warn(
+        yield* Effect.logWarning(
           `Failed to compile TikZ picture ${texLocation.absolutePath}:\n${compiled.logTail}`,
-          {
-            data: {
-              texFile: texLocation.absolutePath,
-              logTail: compiled.logTail,
-            },
-          },
+        ).pipe(
+          withLogData({
+            texFile: texLocation.absolutePath,
+            logTail: compiled.logTail,
+          }),
+          withLogChannel(CHANNEL),
         );
       }
 
@@ -166,7 +173,9 @@ const compile = Effect.fn('TikzPictureManager.compile')(function* (
 
       if (yield* fs.exists(pdfLocation.absolutePath)) {
         compiledFiles.push(pdfLocation);
-        log.debug(`Successfully compiled: ${pdfLocation.absolutePath}`);
+        yield* Effect.logDebug(
+          `Successfully compiled: ${pdfLocation.absolutePath}`,
+        ).pipe(withLogChannel(CHANNEL));
       }
     }
   }
