@@ -51,14 +51,17 @@ interface LatexToolEntry {
    * as "a compiler is available".
    */
   readonly drivesCompile?: true;
+  /** Probed by the dependency banner (`checkCoreDependencies`). */
+  readonly core?: true;
 }
 
 /**
  * The one catalog of external LaTeX and image dependencies TeXRA probes, and
- * what each one means to each consumer that probes it. Three surfaces read it
+ * what each one means to each consumer that probes it. Four surfaces read it
  * and none restates a name: the doctor probe (`@latex/latexToolchain`), the
- * setup assistant's probe (`@tools/setup/toolProbing`), and the settings
- * view's LaTeX status (`@controllers/settingsView/LatexToolingController`).
+ * setup assistant's (`@tools/setup/toolProbing`), the settings view's LaTeX
+ * status (`@controllers/settingsView/LatexToolingController`), and the
+ * dependency banner (`checkCoreDependencies` in `@utils/system/toolUtils`).
  *
  * The order is the doctor's row order, which is user-visible CLI output.
  *
@@ -111,10 +114,11 @@ const LATEX_TOOLS = [
     name: 'latexindent',
     doctor: { row: 'optional', purpose: 'LaTeX formatting' },
     probe: 'required',
+    core: true,
   },
   { name: 'texcount', doctor: { row: 'none' }, probe: 'required' },
-  { name: 'perl', doctor: { row: 'none' }, probe: 'required' },
-  { name: 'gs', doctor: { row: 'none' }, probe: 'required' },
+  { name: 'perl', doctor: { row: 'none' }, probe: 'required', core: true },
+  { name: 'gs', doctor: { row: 'none' }, probe: 'required', core: true },
   { name: 'gm', doctor: { row: 'none' }, probe: 'image' },
   { name: 'magick', doctor: { row: 'none' }, probe: 'image' },
 ] as const satisfies readonly LatexToolEntry[];
@@ -124,6 +128,8 @@ type CatalogEntry = (typeof LATEX_TOOLS)[number];
 type EntryWith<Role extends ProbeRole> = Extract<CatalogEntry, { probe: Role }>;
 
 type CompilerEntry = Extract<CatalogEntry, { drivesCompile: true }>;
+
+type CoreEntry = Extract<CatalogEntry, { core: true }>;
 
 type DoctorEntry = Extract<
   CatalogEntry,
@@ -148,6 +154,10 @@ export const PROBED_LATEX_TOOLS: readonly ProbedLatexTool[] =
   LATEX_TOOLS.filter(
     (tool): tool is EntryWith<'required' | 'image'> => tool.probe !== 'none',
   ).map((tool) => tool.name);
+
+/** The named tools the dependency banner probes; derived, not restated. */
+export const CORE_DEPENDENCY_TOOLS: readonly CoreEntry['name'][] =
+  LATEX_TOOLS.filter((t): t is CoreEntry => 'core' in t).map((t) => t.name);
 
 /** The image tools; either one alone satisfies the image capability. */
 export const IMAGE_LATEX_TOOLS: readonly ImageLatexTool[] = LATEX_TOOLS.filter(
@@ -471,6 +481,15 @@ type DependencyInstallKey =
   | 'texcountInstalled'
   | 'imageProcessingInstalled';
 
+/** One install option for a package manager; the table below is all three. */
+const forManager =
+  (packageManager: InstallCommand['packageManager']) =>
+  (command: string): InstallCommand => ({ command, packageManager });
+
+const brew = forManager('brew');
+const apt = forManager('apt');
+const scoop = forManager('scoop');
+
 /**
  * Per-dependency install commands keyed by `DependencyInfo.key`.
  *
@@ -486,89 +505,29 @@ export const DEPENDENCY_INSTALL_COMMANDS: Record<
   Record<OSPlatform, readonly InstallCommand[]>
 > = {
   texDistributionInstalled: {
-    darwin: [
-      {
-        command: 'brew install texlive',
-        packageManager: 'brew',
-      },
-    ],
-    linux: [
-      {
-        command: 'sudo apt-get install -y texlive-full',
-        packageManager: 'apt',
-      },
-    ],
-    win32: [
-      {
-        command: 'scoop install miktex',
-        packageManager: 'scoop',
-      },
-    ],
+    darwin: [brew('brew install texlive')],
+    linux: [apt('sudo apt-get install -y texlive-full')],
+    win32: [scoop('scoop install miktex')],
   },
   latexdiffInstalled: {
-    darwin: [
-      {
-        command: 'brew install latexdiff',
-        packageManager: 'brew',
-      },
-    ],
-    linux: [
-      {
-        command: 'sudo apt-get install -y latexdiff',
-        packageManager: 'apt',
-      },
-    ],
+    darwin: [brew('brew install latexdiff')],
+    linux: [apt('sudo apt-get install -y latexdiff')],
     win32: [],
   },
   latexindentInstalled: {
-    darwin: [
-      {
-        command: 'brew install latexindent',
-        packageManager: 'brew',
-      },
-    ],
-    linux: [
-      {
-        command: 'sudo apt-get install -y texlive-extra-utils perl',
-        packageManager: 'apt',
-      },
-    ],
+    darwin: [brew('brew install latexindent')],
+    linux: [apt('sudo apt-get install -y texlive-extra-utils perl')],
     win32: [],
   },
   texcountInstalled: {
-    darwin: [
-      {
-        command: 'brew install texcount',
-        packageManager: 'brew',
-      },
-    ],
-    linux: [
-      {
-        command: 'sudo apt-get install -y texlive-extra-utils',
-        packageManager: 'apt',
-      },
-    ],
+    darwin: [brew('brew install texcount')],
+    linux: [apt('sudo apt-get install -y texlive-extra-utils')],
     win32: [],
   },
   imageProcessingInstalled: {
-    darwin: [
-      {
-        command: 'brew install ghostscript graphicsmagick',
-        packageManager: 'brew',
-      },
-    ],
-    linux: [
-      {
-        command: 'sudo apt-get install -y ghostscript graphicsmagick',
-        packageManager: 'apt',
-      },
-    ],
-    win32: [
-      {
-        command: 'scoop install ghostscript graphicsmagick',
-        packageManager: 'scoop',
-      },
-    ],
+    darwin: [brew('brew install ghostscript graphicsmagick')],
+    linux: [apt('sudo apt-get install -y ghostscript graphicsmagick')],
+    win32: [scoop('scoop install ghostscript graphicsmagick')],
   },
 };
 
