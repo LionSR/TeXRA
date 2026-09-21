@@ -17,6 +17,7 @@ import {
   withCallbackNonce,
 } from '@controllers/auth/pendingOAuthStore';
 import {
+  SignInCancelled,
   SupabaseSignInCoordinator,
   type AuthCallbackTransport,
   type SignInCallbackOutcome,
@@ -237,12 +238,16 @@ export function createDesktopSupabaseAuth(
       runtime,
       coordinator.signIn({ provider, timeoutMs }).pipe(
         Effect.flatMap((session) => Effect.as(reportSignedIn(session), true)),
-        Effect.catchCause((cause) =>
-          Effect.as(
-            reportSignInFailure(toErrorMessage(settleFailure(cause))),
-            false,
-          ),
-        ),
+        Effect.catchCause((cause) => {
+          const failure = settleFailure(cause);
+          // Declining consent in the browser is the user's own decision, not
+          // something to raise a dialog about.
+          if (failure instanceof SignInCancelled) {
+            log.info('Desktop sign-in was cancelled in the system browser');
+            return Effect.succeed(false);
+          }
+          return Effect.as(reportSignInFailure(toErrorMessage(failure)), false);
+        }),
       ),
     );
 

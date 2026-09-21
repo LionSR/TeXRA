@@ -17,6 +17,12 @@ interface AuthCallbackParseError {
   success: false;
   error: string;
   isAuthError?: boolean;
+  /**
+   * The user declined consent in the browser (`error=access_denied`). The
+   * attempt is over with no session, but nothing failed, so a host words it
+   * as the non-event it is rather than as a sign-in failure.
+   */
+  cancelled?: boolean;
 }
 
 export type AuthCallbackCodeParseResult =
@@ -44,6 +50,7 @@ export function parseAuthCallbackCode(
       success: false,
       error: getParam('error_description') || error,
       isAuthError: true,
+      ...(error === 'access_denied' && { cancelled: true }),
     };
   }
 

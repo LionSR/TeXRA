@@ -40,6 +40,19 @@ import { callbackNonce, type PendingOAuthStore } from './pendingOAuthStore';
 
 const log = createLog('supabaseSignIn');
 
+/**
+ * The user declined consent in the browser. `signIn` fails with this rather
+ * than a plain error so a host can tell "the user changed their mind" from
+ * "the sign-in broke": the desktop, whose sign-ins run detached, says nothing
+ * at all for it.
+ */
+export class SignInCancelled extends Error {
+  constructor(message = 'Sign-in was cancelled in the browser.') {
+    super(message);
+    this.name = 'SignInCancelled';
+  }
+}
+
 /** What one inbound callback did. */
 export type SignInCallbackOutcome =
   | { readonly kind: 'committed'; readonly session: SupabaseSession }
@@ -338,24 +351,39 @@ export class SupabaseSignInCoordinator {
   /** A callback whose code exchange did not yield a session. */
   private refuse(
     attempt: SignInAttempt | undefined,
-    result: { readonly error: string; readonly isAuthError?: boolean },
+    result: {
+      readonly error: string;
+      readonly isAuthError?: boolean;
+      readonly cancelled?: boolean;
+    },
   ): Effect.Effect<SignInCallbackOutcome, never, ProcessServices> {
-    const outcome: SignInCallbackOutcome = result.isAuthError
-      ? { kind: 'failed', message: result.error }
-      : { kind: 'ignored', reason: result.error };
+    // Declining consent in the browser ends the attempt without failing it,
+    // so it never reaches a host's failure wording. Any other auth error is
+    // the attempt's failure, and a callback carrying neither is ignored.
+    let outcome: SignInCallbackOutcome = {
+      kind: 'ignored',
+      reason: result.error,
+    };
+    let settlement: Effect.Effect<SupabaseSession | null, Error> =
+      Effect.succeed(null);
+    if (result.cancelled) {
+      outcome = {
+        kind: 'ignored',
+        reason: 'the sign-in was cancelled in the browser',
+      };
+      settlement = Effect.fail(new SignInCancelled());
+    } else if (result.isAuthError) {
+      outcome = { kind: 'failed', message: result.error };
+      settlement = Effect.fail(
+        new Error(`OAuth error: ${result.error}. Try again.`),
+      );
+    }
     return Effect.gen({ self: this }, function* () {
-      if (result.isAuthError) log.error(`Sign-in failed: ${result.error}`);
+      if (result.cancelled) log.info('Sign-in was cancelled in the browser');
+      else if (result.isAuthError) log.error(`Sign-in failed: ${result.error}`);
       else log.debug(`Auth callback ignored: ${result.error}`);
-      if (attempt) {
-        Deferred.doneUnsafe(
-          attempt.outcome,
-          result.isAuthError
-            ? Effect.fail(new Error(`OAuth error: ${result.error}. Try again.`))
-            : Effect.succeed(null),
-        );
-      } else {
-        yield* this.options.transport.announce(outcome);
-      }
+      if (attempt) Deferred.doneUnsafe(attempt.outcome, settlement);
+      else yield* this.options.transport.announce(outcome);
       return outcome;
     });
   }
