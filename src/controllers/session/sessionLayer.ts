@@ -517,9 +517,8 @@ const sessionHandleLayer = (
       );
       // Capture the startup cohort before callers can publish new launches.
       const initialListing = yield* eventLog.readListing();
-      const transcripts = yield* StreamLogStore.open(
+      const transcripts = StreamLogStore.open(
         eventLog,
-        initialListing,
         key.open.transcriptMode,
       );
       // The gate's probe fibers and waiting calls end with this scope, after

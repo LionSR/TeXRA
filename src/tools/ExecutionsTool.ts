@@ -725,15 +725,9 @@ Delegated subagent and workflow results are delivered automatically as follow-up
         );
       }
 
-      const transcripts = context.session.transcripts;
-      // The transcript log is keyed by the run id itself.
-      if (!transcripts.has(runId)) {
-        return executed(
-          `No retained output for ${runId}: its transcript log is no longer available. ` +
-            `Use /executions/${runId}/report for the result summary.`,
-        );
-      }
-      const entries = yield* transcripts
+      // The row above already proved the run is in the session's view; its
+      // transcript is read from the same rows.
+      const entries = yield* context.session.transcripts
         .readEntries(runId)
         .pipe(Effect.mapError((cause) => new ExecutionsReadFailed({ cause })));
 

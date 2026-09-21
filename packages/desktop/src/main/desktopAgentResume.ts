@@ -64,7 +64,7 @@ export class DesktopProcessResumeOwner {
     recovery?: RecoveryContinuation,
   ): Effect.Effect<boolean, AgentResumeFailed> {
     for (const session of this.options.sessions()) {
-      if (!session.transcripts.has(runId)) continue;
+      if (session.runView(runId) === undefined) continue;
       return this.resumeDesktopRun(runId, session, recovery);
     }
     return Effect.succeed(false);
@@ -84,11 +84,10 @@ export class DesktopProcessResumeOwner {
       runId,
       () => this.shuttingDown || !this.isOpen(session),
     );
-    // The resident transcript index is a cache of this process; the run may
-    // have been deleted from the durable transcript store by another process
-    // since it was loaded. Read the store before resuming: neither the lease
-    // (a deleted run holds none) nor the run lane (in-process only)
-    // sees that fact.
+    // The session's view is this process's fold; the run may have been
+    // deleted by another process since the row it folded. Read the rows
+    // before resuming: neither the lease (a deleted run holds none) nor the
+    // run roster (in-process only) sees that fact.
     if (isCancellationRequested()) return Effect.succeed(false);
     const runtime = this.options.runtime();
     const attempt = Effect.gen(function* () {

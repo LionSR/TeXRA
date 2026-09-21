@@ -1105,7 +1105,7 @@ export class SessionHandle {
 
   /** Apply a durable fact delivered by the root's ordered table tail. */
   receiveCommittedEvent(event: SessionEvent): Effect.Effect<void> {
-    return this.transcripts.acceptCommitted(event);
+    return Effect.sync(() => this.transcripts.acceptCommitted(event));
   }
 
   /**
