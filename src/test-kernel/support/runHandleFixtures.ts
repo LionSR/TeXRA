@@ -39,7 +39,6 @@ export function testRunRegistry(): RunRegistry {
     runView: () => undefined,
     commit: () => Effect.void,
     approvals: createSessionApprovals(),
-    releaseRootRunLease: () => Effect.void,
     finalizeRun: (input) =>
       Effect.succeed({ ok: true, outcome: input.outcome }),
     acquireRunClaim: () => Effect.succeed(Effect.void),

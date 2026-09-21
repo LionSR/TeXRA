@@ -132,7 +132,6 @@ interface FoldedPhases {
 function createRegistry(
   options: {
     approvals?: ReturnType<typeof createSessionApprovals>;
-    releaseRootRunLease?: (runId: RunId) => Effect.Effect<void, Error>;
     commit?: (
       drafts: readonly SessionEventDraft[],
     ) => Effect.Effect<void, Error>;
@@ -167,7 +166,6 @@ function createRegistry(
         events.published.push(...drafts);
       }),
     approvals: createSessionApprovals(),
-    releaseRootRunLease: () => Effect.void,
     finalizeRun: (input) => finalizeRun(testDefaultSession(), input),
     acquireRunClaim: () => Effect.succeed(Effect.void),
     ...options,
@@ -240,7 +238,9 @@ function trackSuspendedWaitingHandle(
     options.overrides,
   );
   registry.track(handle);
-  handle.suspend(
+  parkWaitingHandle(
+    registry,
+    handle,
     options.teardown ??
       Effect.tryPromise({
         try: async () => {
@@ -251,6 +251,37 @@ function trackSuspendedWaitingHandle(
   );
   phases.set(options.runId, RUN_PHASE.WAITING);
   return handle;
+}
+
+/**
+ * Park a tracked handle the way `runFlowWithLifecycle` does: the teardown,
+ * then the run's terminal row and its untrack, on the fiber the stop wakes.
+ */
+function parkWaitingHandle(
+  registry: RunRegistry,
+  handle: RunHandle,
+  teardown: Effect.Effect<void, Error>,
+): void {
+  Effect.runSync(
+    registry.park(
+      handle,
+      Deferred.makeUnsafe<void>(),
+      teardown.pipe(
+        Effect.andThen(
+          finalizeRun(testDefaultSession(), {
+            runId: handle.runId,
+            outcome: RUN_OUTCOME.CANCELLED,
+          }),
+        ),
+        Effect.andThen(
+          Effect.sync(() => {
+            registry.untrack(handle.runId);
+          }),
+        ),
+        Effect.orDie,
+      ),
+    ),
+  );
 }
 
 /** Run a stop's native settlement at the test boundary and report whether a
@@ -328,40 +359,6 @@ describe('runRegistry', () => {
         }
       }),
     { timeout: 2000 },
-  );
-
-  it.effect(
-    'lets exactly one stop claim a suspended run and reports its teardown',
-    () =>
-      Effect.gen(function* () {
-        const handle = createHandle(generateRunId());
-        const cleanupFinished = yield* Deferred.make<void>();
-        handle.suspend(Deferred.await(cleanupFinished));
-
-        const teardown = handle.beginSuspendedTermination();
-        expect(teardown).toBeDefined();
-        expect(handle.suspendedTerminationStarted).toBe(true);
-        // A second stop of the same suspended run finds the claim taken, so it
-        // cannot start a second teardown or publish a second terminal outcome.
-        expect(handle.beginSuspendedTermination()).toBeUndefined();
-        let observedCompletion = false;
-        const observation = yield* Effect.forkChild(
-          (teardown ?? Effect.void).pipe(
-            Effect.tap(() =>
-              Effect.sync(() => {
-                observedCompletion = true;
-              }),
-            ),
-          ),
-        );
-        // The teardown parks on the Deferred below, so the flag can only flip
-        // after it is completed and the negative assertion needs no hop.
-        expect(observedCompletion).toBe(false);
-
-        yield* Deferred.succeed(cleanupFinished, undefined);
-        yield* Fiber.join(observation);
-        expect(observedCompletion).toBe(true);
-      }),
   );
 
   it('drains a background-bash RunHandle on shutdown without disturbing a resumable agent run (issue #8155)', () => {
@@ -900,7 +897,7 @@ describe('runRegistry', () => {
           });
           const handle = createHandle(runId, parentRunId);
           registry.track(handle);
-          handle.suspend(Effect.sync(cleanup));
+          parkWaitingHandle(registry, handle, Effect.sync(cleanup));
           // Mirrors resumeQueuedToolUseFromResumeData's status flip that runs ahead of
           // the resumed run's own context — RUNNING phase, RESUMING substate.
           phases.set(runId, RUN_PHASE.RUNNING, {

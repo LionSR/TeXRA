@@ -243,7 +243,6 @@ describe('runAgent run ownership', () => {
         const first = yield* Effect.forkChild(launch(), {
           startImmediately: true,
         });
-        expect(trackedHandle?.isSuspended).toBe(false);
         expect(yield* Effect.flip(launch())).toMatchObject({
           message: `Run is already running: ${RUN_ID}`,
         });
@@ -359,17 +358,14 @@ describe('runAgent run ownership', () => {
     () =>
       Effect.gen(function* () {
         // A real registry: the kill goes through `runs.kill`, the parked
-        // handle carries the launch's stop, and its WAITING teardown must
-        // still run and finalize the run as cancelled.
-        const finalizeParked = vi.fn((_input: { readonly outcome: string }) =>
-          Effect.succeed({ ok: true as const }),
-        );
+        // handle carries the launch's stop, and the parked fiber's
+        // termination must still run before the stop settles.
         const runs = new RunRegistry({
           runView: () => undefined,
           commit: () => Effect.void,
           approvals: createSessionApprovals(),
-          releaseRootRunLease: () => Effect.void,
-          finalizeRun: finalizeParked as never,
+          finalizeRun: ((input: { readonly outcome: string }) =>
+            Effect.succeed({ ok: true, outcome: input.outcome })) as never,
           acquireRunClaim: () => Effect.succeed(Effect.void),
         });
         const parked = new RunHandle(
@@ -382,7 +378,10 @@ describe('runAgent run ownership', () => {
         );
         runs.track(parked);
         let tornDown = false;
-        parked.suspend(
+        const parkStopped = yield* Deferred.make<void>();
+        yield* runs.park(
+          parked,
+          parkStopped,
           Effect.sync(() => {
             tornDown = true;
           }),
@@ -410,12 +409,10 @@ describe('runAgent run ownership', () => {
         expect({
           accepted: stop.accepted(),
           tornDown,
-          finalized: finalizeParked.mock.calls.map(([input]) => input.outcome),
           launch: Exit.isFailure(exit) && Cause.squash(exit.cause),
         }).toMatchObject({
           accepted: true,
           tornDown: true,
-          finalized: [RUN_OUTCOME.CANCELLED],
           launch: { name: 'AbortError' },
         });
       }),

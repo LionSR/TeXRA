@@ -416,7 +416,10 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
   const runId = resume.runId;
   const followUps = session.followUps;
 
-  if ((yield* Runs).getHandle(resume.runId)?.suspendedTerminationStarted) {
+  // A stop already reached the parked generation this resume would replace:
+  // the run is ending, and a resume over it would revive what that stop is
+  // settling.
+  if ((yield* Runs).getHandle(resume.runId)?.stopRequested === true) {
     followUps.release(queueLease, 'recoverable');
     return REFUSED;
   }

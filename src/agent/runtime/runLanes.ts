@@ -11,7 +11,7 @@
  * interrupted while queued hands its successor the wait for whoever actually
  * holds the lane, instead of leaving a task behind in a queue nobody can
  * reach. What this scheduler adds on top are the two facts the generic lane
- * has no notion of: the generation gate ({@link RunLanes.holdLive}) and
+ * has no notion of: the generation gate ({@link RunLanes.holdInactive}) and
  * refusal at session disposal ({@link RunLanes.disposeAll}).
  */
 
@@ -36,13 +36,10 @@ export class RunLanes {
   /** The hand-off chain per run id; `withPerKeyLane` owns the entries. */
   private readonly lanes = new Map<string, PerKeyLane>();
   /**
-   * The completion of every generation of a run still unwinding — held as a
-   * set rather than one chained value because they end in no fixed order: a
-   * turn's teardown routinely ends while the child loop that outlives it is
-   * still live, and clearing the gate on the shorter one would let a resume
-   * claim the run under the loop still holding it. A run with no generation
-   * unwinding has no entry, so the gate is open exactly when the key is
-   * absent.
+   * The completion of every generation of a run a caller is holding against
+   * local ownership ({@link holdInactive}) — held as a set rather than one
+   * chained value because they end in no fixed order. A run no caller holds
+   * has no entry, so the gate is open exactly when the key is absent.
    */
   private readonly live = new Map<string, Set<Deferred.Deferred<void>>>();
   /**
@@ -118,27 +115,6 @@ export class RunLanes {
         )(step),
       ).pipe(Effect.ensuring(Effect.sync(() => this.waiting.delete(refusal))));
     });
-  }
-
-  /**
-   * Add `termination` to the run's live generations.
-   *
-   * The teardown releases the run lease: it is the tail of the
-   * suspended generation, so the lane waits for it before a resume can
-   * claim the run again.
-   * A child loop's generation stays in the gate until the loop ends; a
-   * turn's teardown joins it rather than replacing it, and the gate opens
-   * only once every one of them has unwound.
-   */
-  holdLive(
-    runId: string,
-    termination: Effect.Effect<void>,
-  ): Effect.Effect<void> {
-    const close = this.openGeneration(runId);
-    return termination.pipe(
-      Effect.ensuring(Effect.sync(close)),
-      Effect.uninterruptible,
-    );
   }
 
   /**
