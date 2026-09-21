@@ -69,10 +69,53 @@ function checkSymbolsResolve() {
   }
 }
 
+/** `git show <rev>:<path>`, or undefined when that revision has no such file. */
+function showAtRevision(rev, file) {
+  try {
+    return execFileSync('git', ['show', `${rev}:${file}`], {
+      cwd: rootDir,
+      encoding: 'utf8',
+      maxBuffer: 64 * 1024 * 1024,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * The candidates the gate enforces: the base revision's, unioned with the
+ * head's. Reading only the head baseline would let one PR delete an entry and
+ * rewrite its declaration with no ruling cited, which is precisely the move
+ * the gate exists to make deliberate. A deletion is legal — it just has to
+ * name the id it overturns.
+ */
+function enforcedCandidates(base) {
+  const baseText = showAtRevision(base, BASELINE_FILE);
+  const baseCandidates = baseText ? JSON.parse(baseText).candidates : [];
+  const merged = new Map();
+  // Head metadata wins (a PR may reword a ruling), symbols are unioned, so
+  // dropping one symbol from an entry hides no declaration either.
+  for (const candidate of [...baseCandidates, ...baseline.candidates]) {
+    const symbols = new Map(
+      (merged.get(candidate.id)?.symbols ?? []).map((entry) => [
+        `${entry.file}#${entry.symbol}`,
+        entry,
+      ]),
+    );
+    for (const entry of candidate.symbols) {
+      symbols.set(`${entry.file}#${entry.symbol}`, entry);
+    }
+    merged.set(candidate.id, { ...candidate, symbols: [...symbols.values()] });
+  }
+  return { candidates: [...merged.values()] };
+}
+
 function checkPullRequestDiff(base) {
+  const enforced = enforcedCandidates(base);
   const files = [
     ...new Set(
-      baseline.candidates.flatMap((candidate) =>
+      enforced.candidates.flatMap((candidate) =>
         candidate.symbols.map((entry) => entry.file),
       ),
     ),
@@ -83,9 +126,10 @@ function checkPullRequestDiff(base) {
     { cwd: rootDir, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 },
   );
   const touched = touchedCandidates(
-    baseline,
+    enforced,
     changedLinesByFile(diff),
     readSource,
+    (file) => showAtRevision(base, file),
   );
   if (touched.length === 0) {
     console.log('No refused candidate is touched by this diff.');
@@ -98,7 +142,7 @@ function checkPullRequestDiff(base) {
       touched.filter((hit) => !body.includes(hit.id)).map((h) => h.id),
     ),
   ];
-  const byId = new Map(baseline.candidates.map((c) => [c.id, c]));
+  const byId = new Map(enforced.candidates.map((c) => [c.id, c]));
   for (const hit of touched) {
     console.log(`${hit.id} touched at ${hit.file}#${hit.symbol}`);
   }

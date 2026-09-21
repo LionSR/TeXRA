@@ -29,7 +29,7 @@ export function locateSymbol(source, symbol) {
   const lines = source.split('\n');
   const declaration = new RegExp(
     `^(?:export\\s+)?(?:declare\\s+)?(?:async\\s+)?(?:abstract\\s+)?` +
-      `(?:function\\s+\\*?|class\\s+|interface\\s+|type\\s+|enum\\s+|const\\s+|let\\s+|var\\s+)` +
+      `(?:function\\s*\\*\\s*|function\\s+|class\\s+|interface\\s+|type\\s+|enum\\s+|const\\s+|let\\s+|var\\s+)` +
       `${symbol}\\b`,
   );
   const startIndex = lines.findIndex((line) => declaration.test(line));
@@ -52,43 +52,111 @@ export function locateSymbol(source, symbol) {
 }
 
 /**
- * Head-side line numbers a unified diff changes, per file. Read from
- * `git diff --unified=0`, so a hunk header names exactly the changed lines; a
- * pure deletion (`+0`) is attributed to the line it was removed from, which
- * is what "the PR touched this symbol" has to mean for deleted code.
+ * The line numbers a unified diff changes, per file, on BOTH sides: `head`
+ * holds new-file lines, `base` holds old-file lines. Read from
+ * `git diff --unified=0`, so a hunk header names exactly the changed lines.
+ *
+ * Both sides are recorded because "the PR touched this declaration" has two
+ * shapes. An edit or an insertion shows up on the head side, where the
+ * declaration still is. A pure deletion has no head lines at all — git emits
+ * `+N,0`, whose `N` is the surviving line before the removal, not the removed
+ * code — so it is only visible against the old file, where the declaration
+ * still stood. A side whose hunk count is 0 contributes nothing.
  */
 export function changedLinesByFile(diffText) {
   const changed = new Map();
-  let file;
+  const sideOf = (file) => {
+    const sides = changed.get(file) ?? { base: new Set(), head: new Set() };
+    changed.set(file, sides);
+    return sides;
+  };
+  const pathOf = (line, prefix) => {
+    const path = line.slice(4).trim();
+    return path === '/dev/null' ? undefined : path.replace(prefix, '');
+  };
+  let basePath;
+  let headPath;
   for (const line of diffText.split('\n')) {
-    if (line.startsWith('+++ ')) {
-      const path = line.slice(4).trim();
-      file = path === '/dev/null' ? undefined : path.replace(/^b\//, '');
+    if (line.startsWith('--- ')) {
+      basePath = pathOf(line, /^a\//);
       continue;
     }
-    const hunk = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/.exec(line);
-    if (!hunk || file === undefined) continue;
-    const start = Number(hunk[1]);
-    const count = hunk[2] === undefined ? 1 : Number(hunk[2]);
-    const lines = changed.get(file) ?? new Set();
-    for (let n = start; n < start + Math.max(count, 1); n += 1) lines.add(n);
-    changed.set(file, lines);
+    if (line.startsWith('+++ ')) {
+      headPath = pathOf(line, /^b\//);
+      continue;
+    }
+    const hunk = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/.exec(line);
+    if (!hunk) continue;
+    const span = (startText, countText) => {
+      const start = Number(startText);
+      const count = countText === undefined ? 1 : Number(countText);
+      return { start, count };
+    };
+    const base = span(hunk[1], hunk[2]);
+    const head = span(hunk[3], hunk[4]);
+    if (basePath !== undefined && base.count > 0) {
+      const lines = sideOf(basePath).base;
+      for (let n = base.start; n < base.start + base.count; n += 1)
+        lines.add(n);
+    }
+    if (headPath !== undefined && head.count > 0) {
+      const lines = sideOf(headPath).head;
+      for (let n = head.start; n < head.start + head.count; n += 1)
+        lines.add(n);
+    }
   }
   return changed;
 }
 
-/** Every refuted symbol whose declaration overlaps a changed line. */
-export function touchedCandidates(baseline, changed, readSource) {
+/**
+ * The line range of `symbol` in `source`, or undefined when `source` does not
+ * declare it. Absence is an answer here, not a failure: a symbol is looked up
+ * on both revisions, and one side legitimately lacks it when the PR adds or
+ * removes the declaration. The head baseline's own symbols are separately
+ * required to resolve, by `checkSymbolsResolve` in the gate.
+ */
+function rangeOf(source, symbol) {
+  if (source === undefined) return undefined;
+  try {
+    return locateSymbol(source, symbol);
+  } catch {
+    return undefined;
+  }
+}
+
+const overlaps = (lines, range) =>
+  range !== undefined &&
+  [...lines].some((line) => line >= range.startLine && line <= range.endLine);
+
+/**
+ * Every refuted symbol whose declaration overlaps a changed line, on either
+ * revision: the head declaration against the head-side lines, and the base
+ * declaration against the old-side lines, so a deletion still counts as a
+ * touch. `readBaseSource` returns undefined for a file the base revision does
+ * not have.
+ */
+export function touchedCandidates(
+  baseline,
+  changed,
+  readSource,
+  readBaseSource = () => undefined,
+) {
   const touched = [];
+  const seen = new Set();
   for (const candidate of baseline.candidates) {
     for (const { file, symbol } of candidate.symbols) {
-      const lines = changed.get(file);
-      if (!lines || lines.size === 0) continue;
-      const { startLine, endLine } = locateSymbol(readSource(file), symbol);
-      const overlaps = [...lines].some(
-        (line) => line >= startLine && line <= endLine,
-      );
-      if (overlaps) touched.push({ id: candidate.id, file, symbol });
+      const sides = changed.get(file);
+      if (!sides) continue;
+      const hit =
+        (sides.head.size > 0 &&
+          overlaps(sides.head, rangeOf(readSource(file), symbol))) ||
+        (sides.base.size > 0 &&
+          overlaps(sides.base, rangeOf(readBaseSource(file), symbol)));
+      if (!hit) continue;
+      const key = `${candidate.id}\u0000${file}\u0000${symbol}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      touched.push({ id: candidate.id, file, symbol });
     }
   }
   return touched;
