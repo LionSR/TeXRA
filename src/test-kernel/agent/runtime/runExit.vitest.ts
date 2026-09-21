@@ -5,28 +5,31 @@ import { describe, expect, vi } from 'vitest';
 
 // Local imports
 import { recordHalt } from '@agent/runtime/loop/runExit';
-import {
-  RUN_OUTCOME,
-  RUN_PHASE,
-  type RunId,
-} from '@shared/schemas';
+import { RUN_OUTCOME, RUN_PHASE, type RunId } from '@shared/schemas';
 import { DatabaseWriteFailed } from '@shared/session/database';
 import { RunLedgerRefused } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
 import { generateRunId } from '@utils/core';
 
-const runId = generateRunId() as RunId;
-const openedState = {
-  family: 'toolUse',
-  phase: RUN_PHASE.RUNNING,
-  round: 2,
-  turn: 3,
-  continuationIndex: 1,
-} as unknown as RunState;
+function makeRunId(): RunId {
+  return generateRunId() as RunId;
+}
+
+function makeOpenedState(): RunState {
+  return {
+    family: 'toolUse',
+    phase: RUN_PHASE.RUNNING,
+    round: 2,
+    turn: 3,
+    continuationIndex: 1,
+  } as unknown as RunState;
+}
 
 describe('recordHalt', () => {
   it.effect('warns and succeeds when the ledger refuses the halt write', () =>
     Effect.gen(function* () {
+      const runId = makeRunId();
+      const openedState = makeOpenedState();
       const refusal = new RunLedgerRefused({
         reason: 'not-owner',
         runId,
@@ -55,6 +58,8 @@ describe('recordHalt', () => {
 
   it.effect('fails on database write errors without downgrading them to warnings', () =>
     Effect.gen(function* () {
+      const runId = makeRunId();
+      const openedState = makeOpenedState();
       const failure = new DatabaseWriteFailed({
         path: 'session.db',
         cause: new Error('disk full'),
@@ -81,6 +86,8 @@ describe('recordHalt', () => {
 
   it.effect('dies on defects that are not typed halt-write failures', () =>
     Effect.gen(function* () {
+      const runId = makeRunId();
+      const openedState = makeOpenedState();
       const defect = new Error('unexpected halt defect');
       const appendBatch = vi.fn(() => Effect.die(defect));
       const warn = vi.fn();

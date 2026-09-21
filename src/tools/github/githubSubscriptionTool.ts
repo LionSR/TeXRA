@@ -72,6 +72,9 @@ const DEFAULT_ANNOTATION_LEVEL_DESCRIPTION =
 const SUBSCRIPTION_PATH_DESCRIPTION =
   'Subscription target, mirroring GitHub\'s REST URL shape: "owner/repo" (repo-wide, coarse), "owner/repo/pulls/N" (per-PR, nuanced), or "owner/repo/issues/N" (per-issue).';
 
+// Branches stay `looseObject`: provider schema flattening advertises one
+// object across commands, and OpenAI-compatible providers null-fill the other
+// branches' fields.
 const GitHubSubscriptionInputSchema = z.discriminatedUnion('command', [
   z.looseObject({
     command: z.literal('subscribe').describe('Start watching the path.'),

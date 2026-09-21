@@ -56,6 +56,9 @@ function formatGoalView(goal: Goal): string {
 /**
  * Schema for the unified plan tool input. A discriminated union over
  * `command`: 'update' carries the plan; 'pause'/'complete' carry a reason.
+ * Branches stay `looseObject`: provider schema flattening advertises one
+ * object across commands, and OpenAI-compatible providers null-fill the other
+ * branches' fields.
  */
 const PlanToolInputSchema = z.discriminatedUnion('command', [
   z.looseObject({
