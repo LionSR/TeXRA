@@ -1309,6 +1309,34 @@ describe('createChatSessionController', () => {
       }).pipe(Effect.provide(fakeProcessServices())),
   );
 
+  it('restores the draft when the root run fails before the target folds', async () => {
+    // The follow-up target never folds (no run in the view), so the race is
+    // decided by the root run's settlement — and a failed settlement means
+    // "the conversation ended", not a failure that escapes the delivery and
+    // skips both restore branches.
+    installSession({
+      view: await testRuntime().runPromise(SubscriptionRef.make(currentView())),
+    });
+    const session = makeSession({
+      runId: 'a11111' as RunId,
+      runSettled: Effect.fail(new Error('model call failed')),
+    });
+    const ctrl = createChatSessionController(
+      makeInit({
+        session,
+        getSlashCommandContext: () => ({}) as SlashCommandContext,
+      }),
+    );
+
+    await testRuntime().runPromise(ctrl.submit('Keep this for me.'));
+
+    await vi.waitFor(() =>
+      expect(
+        draftRestoreRequest.get().map((request) => request.text),
+      ).toContain('Keep this for me.'),
+    );
+  });
+
   it('forwards a stop issued during manual resume helper-model setup', async () => {
     const helperModel = createDeferred<void>();
     mocks.setCliHelperModel.mockReturnValueOnce(
