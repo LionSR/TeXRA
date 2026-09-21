@@ -47,14 +47,15 @@ Status: proposed
 ## 1. Method, and what was actually verified
 
 Every name below was read out of the four entry modules under
-`packages/agent/src/` and then resolved back to its defining module. Of the 77
-re-exported bindings, 60 resolve to a direct `export` declaration in the named
+`packages/agent/src/` and then resolved back to its defining module. Of the 73
+re-exported bindings, 56 resolve to a direct `export` declaration in the named
 module; the remaining 17 reach `src/shared/schemas/index.ts`, which is a barrel
 of 60 `export *` lines, and each was resolved through it to a concrete
 declaration — 15 distinct names across `opResults.ts`, `agent.ts`,
-`agentConfig.ts`, `identifiers.ts`, `run.ts`, and `sessionEvent.ts`. Four
-further names are declared locally in the entry files themselves (two in
-`index.ts`, two in `node.ts`). **Nothing in §3 is unresolved.**
+`agentConfig.ts`, `identifiers.ts`, `run.ts`, and `sessionEvent.ts`. Six
+further names are declared locally in the entry files themselves (four in
+`index.ts`, two in `node.ts`). Those two buckets are the §3 total: 73 + 6 = 79.
+**Nothing in §3 is unresolved.**
 
 Verified by static resolution, cross-checked against the dead-export ratchet:
 `npm run check:dead-code-ratchet` is green and records no `packages/agent`
