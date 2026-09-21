@@ -29,7 +29,7 @@ interface HaltDeps {
  * opened (`null`, or a null `phase`) has no step to halt, so it writes
  * nothing. A refused ledger write is best-effort by design: the run is already
  * ending, and raising here would replace its real outcome with a bookkeeping
- * failure, so `RunLedgerRefused` is warned about instead. Other `appendBatch`
+ * failure, so `RunLedgerRefused` is warned about instead. Other database write
  * failures still fail normally.
  */
 export const recordHalt =
@@ -38,10 +38,7 @@ export const recordHalt =
     state: RunState | null,
     toCoordinates: (state: RunState) => StepCoordinates,
   ) =>
-  (outcome: RunOutcome): Effect.Effect<
-    void,
-    RunLedgerRefused | DatabaseWriteFailed
-  > =>
+  (outcome: RunOutcome): Effect.Effect<void, DatabaseWriteFailed> =>
     state === null || state.phase === null
       ? Effect.void
       : deps.ledger
@@ -50,14 +47,14 @@ export const recordHalt =
           ])
           .pipe(
             Effect.asVoid,
-            Effect.catchIf(
-              (error) => error instanceof RunLedgerRefused,
-              (error) =>
-                Effect.sync(() =>
-                  deps.logger.warn('Failed to record the run halt', {
-                    data: error,
-                  }),
-                ),
+            Effect.catch((error) =>
+              error instanceof RunLedgerRefused
+                ? Effect.sync(() =>
+                    deps.logger.warn('Failed to record the run halt', {
+                      data: error,
+                    }),
+                  )
+                : Effect.fail(error),
             ),
           );
 
