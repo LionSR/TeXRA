@@ -46,11 +46,10 @@ import {
   type RunOutcome,
   type RunUsageTotals,
 } from '@shared/schemas';
-import { RunLedger, RunLedgerRefused } from '@shared/session/runLedger';
+import { RunLedger } from '@shared/session/runLedger';
 import { freshRunState, type RunState } from '@shared/session/runStateFold';
 import { goalOf, pauseGoal, setGoalSessionAutoApproval } from '@tools/goal';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
-import { ensureError } from '@utils/errors/errorMessage';
 
 import { AgentRun } from '../run/AgentRun';
 import { compactIfNeeded } from '../run/compaction';
@@ -69,6 +68,7 @@ import {
   haltedStepRow,
   NOT_RESUMABLE_MESSAGE,
   rowAggregate,
+  runExitFailure,
   snapshotRow,
   stepRow,
   toolUseFlowState,
@@ -923,7 +923,9 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
             outcome === RUN_OUTCOME.COMPLETED ? 'terminal' : 'recoverable',
           );
         }
-        if (Cause.hasInterrupts(exit.cause)) {
+        // Only a cause that is nothing but interrupts is a stop; a run that
+        // failed and was then interrupted halts as the failure it was.
+        if (Cause.hasInterruptsOnly(exit.cause)) {
           yield* halt(RUN_OUTCOME.CANCELLED);
           return yield* release('recoverable');
         }
@@ -931,17 +933,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         yield* release('recoverable');
       }),
     );
-
-  /** The caller's error for a run that ended in a failure cause. */
-  const failure = (error: unknown): Error => {
-    if (error instanceof RunLedgerRefused) {
-      return new Error(
-        `The run ledger refused a write (${error.reason}): ${error.detail}`,
-        { cause: error },
-      );
-    }
-    return ensureError(error);
-  };
 
   return yield* program.pipe(
     Effect.onExit(finalize),
@@ -952,7 +943,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     ),
     Effect.catchCause((cause) => {
       if (Cause.hasInterrupts(cause)) return Effect.failCause(cause);
-      const stopped = failure(Cause.squash(cause));
+      const stopped = runExitFailure(Cause.squash(cause));
       logger.warn(`Tool-use run ${runId} stopped: ${stopped.message}`);
       return Effect.fail(stopped);
     }),

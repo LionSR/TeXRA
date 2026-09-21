@@ -105,7 +105,7 @@ import {
   type RunStorageFileLocation,
   type RunUsageTotals,
 } from '@shared/schemas';
-import { RunLedger, RunLedgerRefused } from '@shared/session/runLedger';
+import { RunLedger } from '@shared/session/runLedger';
 import { freshRunState, type RunState } from '@shared/session/runStateFold';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { readSettingFrom } from '@utils/config/platformSettings';
@@ -123,6 +123,7 @@ import {
   NOT_RESUMABLE_MESSAGE,
   reflectionFlowState,
   reflectionSnapshotRow,
+  runExitFailure,
   runtimeSnapshotRow,
   stepRow,
   type ReflectionFlowState,
@@ -1333,28 +1334,21 @@ export const runReflection = Effect.fn('reflection.run')(function* (
                   ),
                 );
         if (Exit.isSuccess(exit)) return yield* halt(exit.value.outcome);
-        if (Cause.hasInterrupts(exit.cause)) {
+        // Only a cause that is nothing but interrupts is a stop; a run that
+        // failed and was then interrupted halts as the failure it was.
+        if (Cause.hasInterruptsOnly(exit.cause)) {
           return yield* halt(RUN_OUTCOME.CANCELLED);
         }
         yield* halt(RUN_OUTCOME.FAILED);
       }),
     );
 
-  /** The caller's error for a run that ended in a failure cause. */
-  const failure = (error: unknown): Error =>
-    error instanceof RunLedgerRefused
-      ? new Error(
-          `The run ledger refused a write (${error.reason}): ${error.detail}`,
-          { cause: error },
-        )
-      : ensureError(error);
-
   return yield* program.pipe(
     Effect.onExit(finalize),
     Effect.map((loop) => result(loop.outcome, loop.state)),
     Effect.catchCause((cause) => {
       if (Cause.hasInterrupts(cause)) return Effect.failCause(cause);
-      const stopped = failure(Cause.squash(cause));
+      const stopped = runExitFailure(Cause.squash(cause));
       logger.warn(`Reflection run ${runId} stopped: ${stopped.message}`);
       return Effect.fail(stopped);
     }),
