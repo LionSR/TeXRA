@@ -6,7 +6,9 @@ import { it } from '@effect/vitest';
 import { Deferred, Effect } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
+import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
+import { noopTrace } from '@agent/trace';
 import { Runs } from '@agent/runtime/runRegistry';
 import type { RunId } from '@shared/schemas';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
@@ -82,11 +84,12 @@ describe('executeSubagent child run launch', () => {
 
   const parent: DelegationParent = {
     roots: createFakeWorkspaceRoots(),
-    model: 'gpt5',
     tracker: new FileInteractionState(),
     run: {
       runId: 'parent-exec' as RunId,
       session: { tag: 'parent-session' } as never,
+      config: AgentConfigSchema.parse({ agent: 'chat', model: 'gpt5' }),
+      logger: noopTrace,
       toolPolicy: {
         approvalPromptsUnavailable: false,
         runtimeUnavailableTools: [],

@@ -19,6 +19,7 @@ vi.mock('@agent/followUp/ToolUseFollowUp', async (importOriginal) => ({
 }));
 
 // Local imports
+import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import type { RunHandle } from '@agent/runtime/RunHandle';
 import { AgentCategory, type RunId } from '@shared/schemas';
 import { testRunHandle } from '@test/support/runHandleFixtures';
@@ -145,8 +146,15 @@ describe('DelegateAgentTool resume ownership', () => {
         .pipe(
           Effect.provide(
             nativeToolTestLayer({
-              model: 'parent-model',
-              run: { session, runId: parentRunId, toolPolicy: {} },
+              run: {
+                session,
+                runId: parentRunId,
+                config: AgentConfigSchema.parse({
+                  agent: 'chat',
+                  model: 'parent-model',
+                }),
+                toolPolicy: {},
+              },
             }),
           ),
         );

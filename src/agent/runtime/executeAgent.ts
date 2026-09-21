@@ -58,12 +58,8 @@ import { modelInvokerLayer } from './ModelInvoker';
 import { agentRunLayer } from './run/AgentRun';
 import { runReflection } from './loop/reflection';
 import { runToolUse } from './loop/toolUse';
-import {
-  NO_TOOL_INJECTIONS,
-  ToolInjections,
-  type AgentRunServices,
-} from './toolInjection';
 import { Runs } from './runRegistry';
+import type { AgentRunServices } from './toolInjection';
 import type { SessionHandle } from './SessionHandle';
 import type { RunHandle, AgentRunHandle } from './RunHandle';
 
@@ -110,7 +106,6 @@ type ToolUseLaunchVariant =
 function runLayerFor(
   ctx: AgentLaunchContext,
   shared: SubagentRunOptions,
-  toolInjections: ToolInjections['Service'],
   onIdle: (() => void) | undefined,
 ) {
   const runSession = ctx.session;
@@ -119,7 +114,6 @@ function runLayerFor(
       agentRunLayer(ctx, {
         parentRunId: shared.parentRunId ?? null,
         tools: shared.tools,
-        toolInjections,
         onApprovalPolicyDenial: shared.onApprovalPolicyDenial,
         callbacks: {
           onProgress: (update) => {
@@ -192,10 +186,7 @@ function runUntilStopped<R>(
 function launchToolUseRun(
   ctx: AgentLaunchContext,
   handle: RunHandle,
-  shared: SubagentRunOptions & {
-    /** The process injections the Effect-typed caller read for this run. */
-    readonly toolInjections: ToolInjections['Service'];
-  },
+  shared: SubagentRunOptions,
   variant: ToolUseLaunchVariant,
 ): Effect.Effect<AgentRuntimeFlowResult, Error, AgentRunServices> {
   const { runId } = ctx;
@@ -220,7 +211,6 @@ function launchToolUseRun(
           runLayerFor(
             ctx,
             shared,
-            shared.toolInjections,
             variant.kind === 'fresh' ? variant.onIdle : undefined,
           ),
         ),
@@ -258,9 +248,7 @@ function launchReflectionRun(
 ): Effect.Effect<AgentRuntimeFlowResult, Error, AgentRunServices> {
   const { runId } = ctx;
   const program = runReflection({ resume: options.resumed === true }).pipe(
-    // The reflection family injects no conditional tools (memory and plan are
-    // tool-use infrastructure), so its run resolves tools from an empty list.
-    Effect.provide(runLayerFor(ctx, options, NO_TOOL_INJECTIONS, undefined)),
+    Effect.provide(runLayerFor(ctx, options, undefined)),
     Effect.flatMap((result) =>
       Effect.gen(function* () {
         const flowResult: WorkflowFlowResult = {
@@ -476,9 +464,6 @@ export function executeAgent(
   options: ExecuteAgentOptions & { session: SessionHandle },
 ): Effect.Effect<AgentRuntimeFlowResult, Error, ProcessServices> {
   return Effect.gen(function* () {
-    // Read here, on the Effect side of the lifecycle's Promise seam: the
-    // flow drivers below resolve the run's tools from it.
-    const toolInjections = yield* ToolInjections;
     // A resumed run's parentage is its handle's, never the caller's word: no
     // resume caller can name one (`RunAgentOptions` has no parent field), so
     // reading the caller's option here would relaunch a resumed child as a
@@ -577,7 +562,7 @@ export function executeAgent(
                 return yield* launchToolUseRun(
                   ctx,
                   handle,
-                  { ...options, parentRunId, toolInjections },
+                  { ...options, parentRunId },
                   { kind: 'fresh', onIdle: options.onIdle },
                 );
               }
@@ -610,6 +595,9 @@ export function executeAgent(
       }
     });
   }).pipe(
+    // The run's scope: the launch acquires the run trace into it and the
+    // finalizer drops its subscribers once the run has ended.
+    Effect.scoped,
     Effect.uninterruptible,
     Effect.provideService(Runs, options.session.runs),
   );
@@ -644,87 +632,85 @@ const resumeToolUseWithOwnedLease = Effect.fn('resumeToolUseWithOwnedLease')(
     options: ResumeToolUseFromResumeDataOptions & { session: SessionHandle },
   ) {
     const runSession = options.session;
-    const toolInjections = yield* ToolInjections;
-    const setup = yield* Effect.exit(
-      Effect.gen(function* () {
-        const parentRunId = yield* persistedParentRunId(
-          runSession,
-          resume.runId,
-        );
-        const definition = yield* prepareAgentDefinition({
-          config: resume.agentConfig,
-          enforceCategory: true,
-          session: runSession,
-          suppressErrorNotification: true,
-        });
-        const ctx = yield* buildAgentLaunchContext({
-          definition,
-          runId: resume.runId,
-          resumed: true,
-          modelCompatibilityKey: resume.modelCompatibilityKey,
-          session: runSession,
-          toolPolicy: {
-            approvalPromptsUnavailable: options.approvalPromptsUnavailable,
-            runtimeUnavailableTools: options.runtimeUnavailableTools,
-          },
-        });
-        return { ctx, parentRunId };
-      }),
-    );
-    if (Exit.isFailure(setup)) {
-      return yield* Effect.failCause(setup.cause).pipe(
-        Effect.onExit(() => runSession.releaseRunLease(resume.runId)),
-      );
-    }
-    const { ctx, parentRunId } = setup.value;
-    const { setting } = ctx;
-    const result = yield* Effect.exit(
-      runFlowWithLifecycle(
-        ctx,
-        (handle) =>
-          // Inside the lifecycle so the rejection ends the started stream
-          // with its FAILED result like any other run failure.
-          setting.agentCategory !== AgentCategory.ToolUse
-            ? // Keep this historical diagnostic byte-for-byte for external monitors.
-              Effect.fail(
-                new AgentError(
-                  'Attempted to resume a non tool-use agent with resumeToolUseFromSnapshot.',
-                ),
-              )
-            : launchToolUseRun(
-                ctx,
-                handle,
-                { ...options, parentRunId, toolInjections },
-                {
-                  kind: 'resume',
-                  resume,
-                  isCancellationRequested: options.isCancellationRequested,
-                  onCancellationAtFlowAttachment:
-                    options.onCancellationAtFlowAttachment,
-                },
-              ),
-        buildLifecycleOptions(options, parentRunId),
+    // Every exit escapes this scope, and the release is outside it. Both
+    // orders matter: the launch's finalizers compensate through the run's
+    // own claim - the stage's FAILED close is an append - so a scope that
+    // unwound after `releaseRunLease` would have its compensation refused
+    // `DatabaseNotOwner`, and a failure captured inside the scope would
+    // close it successfully, so the exit-aware finalizer would never fire.
+    const outcome = yield* Effect.exit(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const parentRunId = yield* persistedParentRunId(
+            runSession,
+            resume.runId,
+          );
+          const definition = yield* prepareAgentDefinition({
+            config: resume.agentConfig,
+            enforceCategory: true,
+            session: runSession,
+            suppressErrorNotification: true,
+          });
+          const ctx = yield* buildAgentLaunchContext({
+            definition,
+            runId: resume.runId,
+            resumed: true,
+            modelCompatibilityKey: resume.modelCompatibilityKey,
+            session: runSession,
+            toolPolicy: {
+              approvalPromptsUnavailable: options.approvalPromptsUnavailable,
+              runtimeUnavailableTools: options.runtimeUnavailableTools,
+            },
+          });
+          const { setting } = ctx;
+          return yield* runFlowWithLifecycle(
+            ctx,
+            (handle) =>
+              // Inside the lifecycle so the rejection ends the started stream
+              // with its FAILED result like any other run failure.
+              setting.agentCategory !== AgentCategory.ToolUse
+                ? // Keep this historical diagnostic byte-for-byte for external monitors.
+                  Effect.fail(
+                    new AgentError(
+                      'Attempted to resume a non tool-use agent with resumeToolUseFromSnapshot.',
+                    ),
+                  )
+                : launchToolUseRun(
+                    ctx,
+                    handle,
+                    { ...options, parentRunId },
+                    {
+                      kind: 'resume',
+                      resume,
+                      isCancellationRequested: options.isCancellationRequested,
+                      onCancellationAtFlowAttachment:
+                        options.onCancellationAtFlowAttachment,
+                    },
+                  ),
+            buildLifecycleOptions(options, parentRunId),
+          );
+        }),
       ),
     );
-    if (Exit.isFailure(result)) {
+    if (Exit.isFailure(outcome)) {
       const released = yield* Effect.exit(
         runSession.releaseRunLease(resume.runId),
       );
       if (Exit.isFailure(released)) {
         return yield* Effect.fail(
           new AggregateError(
-            [Cause.squash(result.cause), Cause.squash(released.cause)],
+            [Cause.squash(outcome.cause), Cause.squash(released.cause)],
             `Run ${resume.runId} failed and its final artifacts could not be persisted`,
           ),
         );
       }
-      return yield* Effect.failCause(result.cause);
+      return yield* Effect.failCause(outcome.cause);
     }
     // A WAITING result retains ownership for the next resumed turn.
-    if (!isWaitingFlowResult(result.value)) {
+    if (!isWaitingFlowResult(outcome.value)) {
       yield* runSession.releaseRunLease(resume.runId);
     }
-    return result.value;
+    return outcome.value;
   },
   Effect.uninterruptible,
 );

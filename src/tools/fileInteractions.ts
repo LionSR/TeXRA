@@ -9,7 +9,7 @@ import { errorResult } from '@tools/core/result';
 export const recordToolFileRead = Effect.fn('fileInteractions.recordRead')(
   function* (path: string): Effect.fn.Return<void, never, ToolCall> {
     const call = yield* ToolCall;
-    call.tracker.recordRead(path);
+    call.tracker?.recordRead(path);
   },
 );
 
@@ -21,7 +21,7 @@ export const requireFileReadForEdit = Effect.fn(
   errorMessage?: string,
 ): Effect.fn.Return<ToolResult | null, never, ToolCall> {
   const call = yield* ToolCall;
-  if (!exists || call.tracker.hasRead(path)) {
+  if (!exists || call.tracker?.hasRead(path)) {
     return null;
   }
   return errorResult(

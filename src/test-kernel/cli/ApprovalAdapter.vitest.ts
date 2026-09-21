@@ -101,8 +101,12 @@ function ensureRun(runId: RunId) {
 function approvalLayer(runId: RunId, onApprovalPolicyDenial?: () => void) {
   return nativeToolTestLayer({
     workingDirectory: '/tmp',
-    run: { runId, session: testDefaultSession(), toolPolicy: {} },
-    onApprovalPolicyDenial,
+    run: {
+      runId,
+      session: testDefaultSession(),
+      toolPolicy: {},
+      onApprovalPolicyDenial,
+    },
   });
 }
 

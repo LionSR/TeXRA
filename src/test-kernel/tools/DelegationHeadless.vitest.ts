@@ -12,6 +12,7 @@ import {
   type MockInstance,
 } from 'vitest';
 
+import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import type { ToolCallShape } from '@agent/runtime/ToolCall';
 import type { RunHandle } from '@agent/runtime/RunHandle';
 import { Runs } from '@agent/runtime/runRegistry';
@@ -150,19 +151,18 @@ function parentRunContext(
     userInstruction: string;
     hooks: NonNullable<ToolCallShape['hooks']>;
   }> = {},
-): Partial<ToolCallShape> {
+): Parameters<typeof nativeToolTestLayer>[0] {
   const session = overrides.session ?? testDefaultSession();
   const stopAfterCycle = overrides.stopAfterCycle ?? false;
   return {
-    model: 'deepseekT',
     ...(overrides.userInstruction !== undefined && {
       userInstruction: overrides.userInstruction,
     }),
     ...(overrides.hooks !== undefined && { hooks: overrides.hooks }),
-    stopAfterCycle,
     run: {
       runId: overrides.runId ?? PARENT_RUN_ID,
       session,
+      config: AgentConfigSchema.parse({ agent: 'chat', model: 'deepseekT' }),
       toolPolicy: {
         stopAfterCycle,
         approvalPromptsUnavailable:

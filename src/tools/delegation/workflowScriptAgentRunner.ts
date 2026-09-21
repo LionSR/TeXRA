@@ -57,11 +57,13 @@ function workflowRunnerError(error: unknown): Error {
 function workflowScriptModelSelection(
   invocation: Pick<WorkflowAgentInvocation, 'options'>,
   parent: DelegationParent,
+  /** The model the dispatching call pinned; never the live cell. */
+  parentModel: string,
 ): Effect.Effect<string, Error, Secrets | AppState | LanguageModel> {
   const requestedModel = invocation.options.model;
   return selectAvailableDelegationModel({
     ...(requestedModel !== undefined && { requestedModel }),
-    parentModel: parent.model,
+    parentModel,
     settings: parent.roots,
   }).pipe(
     Effect.mapError((error) => {
@@ -99,6 +101,7 @@ const resolveWorkflowCallConfig = Effect.fn('resolveWorkflowCallConfig')(
   function* (
     call: Pick<WorkflowAgentInvocation, 'prompt' | 'options'>,
     parent: DelegationParent,
+    parentModel: string,
     defaultAgent: AgentEntry,
     runId: RunId,
   ): Effect.fn.Return<
@@ -112,8 +115,8 @@ const resolveWorkflowCallConfig = Effect.fn('resolveWorkflowCallConfig')(
       ...(parent.workingDirectory !== undefined && {
         workingDirectory: parent.workingDirectory,
       }),
-      ...(parent.delegationAgentScope && {
-        delegationAgentScope: parent.delegationAgentScope,
+      ...(parent.run.delegationAgentScope && {
+        delegationAgentScope: parent.run.delegationAgentScope,
       }),
     };
     if (call.options.schema !== undefined) {
@@ -127,9 +130,13 @@ const resolveWorkflowCallConfig = Effect.fn('resolveWorkflowCallConfig')(
         parent.roots,
         AgentCategory.ToolUse,
         requestedAgentName,
-        parent.delegationAgentScope ?? undefined,
+        parent.run.delegationAgentScope ?? undefined,
       );
-      const model = yield* workflowScriptModelSelection(call, parent);
+      const model = yield* workflowScriptModelSelection(
+        call,
+        parent,
+        parentModel,
+      );
       return {
         configPayload: {
           ...sharedConfigFields,
@@ -150,7 +157,7 @@ const resolveWorkflowCallConfig = Effect.fn('resolveWorkflowCallConfig')(
               parent.roots,
               AgentCategory.Workflow,
               requestedAgentName,
-              parent.delegationAgentScope ?? undefined,
+              parent.run.delegationAgentScope ?? undefined,
             );
       if (agent.category !== AgentCategory.Workflow) {
         throw new WorkflowRunAbortError(
@@ -160,7 +167,11 @@ const resolveWorkflowCallConfig = Effect.fn('resolveWorkflowCallConfig')(
       }
       // Model resolves before any file I/O so an unavailable/invalid
       // declared model fails the call without touching the filesystem.
-      const model = yield* workflowScriptModelSelection(call, parent);
+      const model = yield* workflowScriptModelSelection(
+        call,
+        parent,
+        parentModel,
+      );
       const [inputs, context, media] = yield* Effect.all([
         resolveInvocationFileList(
           session,
@@ -779,6 +790,15 @@ const recoverOrLaunchWorkflowChild = Effect.fn('recoverOrLaunchWorkflowChild')(
  */
 export function createWorkflowScriptAgentRunner(
   parent: DelegationParent,
+  /**
+   * The model the parent was running when `delegate_multi_agents` was
+   * dispatched, read by the dispatching call itself. It cannot be read
+   * here: a detached workflow builds this runner on the forked child-loop
+   * fiber, after its tool call settled and after the child-run permit
+   * wait, by which point a pending parent model switch may have applied
+   * to the live `run.config.model` cell.
+   */
+  parentModel: string,
   defaultAgent: AgentEntry,
   checkpointId: string,
   run: WorkflowRunIdentity,
@@ -813,6 +833,7 @@ export function createWorkflowScriptAgentRunner(
               yield* resolveWorkflowCallConfig(
                 invocation,
                 parent,
+                parentModel,
                 defaultAgent,
                 run.runId,
               );
@@ -829,7 +850,7 @@ export function createWorkflowScriptAgentRunner(
               session,
               approvalPromptsUnavailable:
                 parent.run.toolPolicy.approvalPromptsUnavailable,
-              onApprovalPolicyDenial: parent.onApprovalPolicyDenial,
+              onApprovalPolicyDenial: parent.run.onApprovalPolicyDenial,
               runtimeUnavailableTools:
                 parent.run.toolPolicy.runtimeUnavailableTools,
               // Live inherited bypass values, matching LLM delegation: each

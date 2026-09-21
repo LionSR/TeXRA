@@ -7,7 +7,9 @@ import { Cause, Deferred, Effect, Exit, FileSystem } from 'effect';
 
 import { beforeEach, describe, expect, vi } from 'vitest';
 
+import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
+import { noopTrace } from '@agent/trace';
 import { RunLanes } from '@agent/runtime/runLanes';
 import { Runs } from '@agent/runtime/runRegistry';
 import type { WorkflowAgentInvocation } from '@agent/workflowScript/types';
@@ -235,6 +237,9 @@ const runs = {
 // point them at a real temporary tree.
 let sessionRoots = { workspace: WORKSPACE_PATH, storage: STORAGE_PATH };
 
+/** The model the dispatching call pins and hands the runner. */
+const PARENT_MODEL = 'parent-model';
+
 function parentContext(): DelegationParent {
   // The probe fences an interrupted attempt on its run lane and its run claim
   // before it may advance past it, so the stub session answers both.
@@ -246,16 +251,20 @@ function parentContext(): DelegationParent {
   } as never;
   return {
     roots: createFakeWorkspaceRoots(),
-    model: 'parent-model',
     tracker: new FileInteractionState(),
     workingDirectory: WORKSPACE_PATH,
-    delegationAgentScope: {
-      workflow: ['builtInWorkflow:correct'],
-      toolUse: ['builtInToolUse:assistant'],
-    },
     run: {
       runId: parentRunId,
       session,
+      config: AgentConfigSchema.parse({
+        agent: 'chat',
+        model: PARENT_MODEL,
+      }),
+      logger: noopTrace,
+      delegationAgentScope: {
+        workflow: ['builtInWorkflow:correct'],
+        toolUse: ['builtInToolUse:assistant'],
+      },
       toolPolicy: {
         approvalPromptsUnavailable: true,
         runtimeUnavailableTools: ['user_question'],
@@ -265,10 +274,11 @@ function parentContext(): DelegationParent {
 }
 
 function defaultRunner(
-  hooks?: Parameters<typeof createWorkflowScriptAgentRunner>[4],
+  hooks?: Parameters<typeof createWorkflowScriptAgentRunner>[5],
 ): ReturnType<typeof createWorkflowScriptAgentRunner> {
   return createWorkflowScriptAgentRunner(
     parentContext(),
+    PARENT_MODEL,
     defaultAgent,
     'tool-call-7',
     run,
@@ -1077,6 +1087,7 @@ describe('createWorkflowScriptAgentRunner', () => {
     Effect.gen(function* () {
       const runner = createWorkflowScriptAgentRunner(
         parentContext(),
+        PARENT_MODEL,
         { ...defaultAgent, category: 'toolUse', source: 'builtInToolUse' },
         'tool-call-8',
         run,

@@ -128,9 +128,13 @@ describe('requestBashApproval queueing', () => {
         }).pipe(
           Effect.provide(
             nativeToolTestLayer({
-              run: { runId, session, toolPolicy: {} },
-              onApprovalPolicyDenial: () => {
-                policyDenials += 1;
+              run: {
+                runId,
+                session,
+                toolPolicy: {},
+                onApprovalPolicyDenial: () => {
+                  policyDenials += 1;
+                },
               },
             }),
           ),

@@ -150,9 +150,13 @@ function inRun<A, E>(effect: Effect.Effect<A, E, ToolServices>) {
       nativeToolTestLayer({
         workingDirectory: WORKSPACE_PATH,
         tracker,
-        run: { runId, session: testDefaultSession(), toolPolicy: {} },
-        onApprovalPolicyDenial: () => {
-          policyDenials += 1;
+        run: {
+          runId,
+          session: testDefaultSession(),
+          toolPolicy: {},
+          onApprovalPolicyDenial: () => {
+            policyDenials += 1;
+          },
         },
       }),
     ),

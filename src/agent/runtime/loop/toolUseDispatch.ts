@@ -408,7 +408,24 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
         ...(stageId !== undefined ? { stageId } : {}),
       });
     };
+    // Child spend the settlement below carries, latched like the streamed
+    // output above: the settlement reads this total once, so a detached child
+    // run that rolls its cost in after the call returned would otherwise add
+    // to a dead local. Its spend stays on the child's own run instead, which
+    // the record says rather than leaving a silent increment behind.
     let subagentCost = 0;
+    let billing = true;
+    const recordSubagentCost = (costUsd: number): void => {
+      if (costUsd <= 0) return;
+      if (!billing) {
+        logger.debug(
+          `${fact.toolName}: a child run reported its cost after the call settled; it stays on the child's own run.`,
+          { data: { costUsd } },
+        );
+        return;
+      }
+      subagentCost += costUsd;
+    };
     turn.workspace.interactions.recordToolCall();
     let result: ToolResult;
     if (!tool) {
@@ -420,28 +437,22 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
             Effect.provideService(ToolCall, {
               roots: run.session.roots,
               run,
-              delegationAgentScope: run.delegationAgentScope,
-              model: run.config.model,
               workingDirectory: run.workingDirectory,
-              stopAfterCycle: run.toolPolicy.stopAfterCycle,
-              onApprovalPolicyDenial: run.onApprovalPolicyDenial,
               tracker: turn.workspace.interactions,
               workPlanState: turn.workspace.workPlan,
-              trace: logger,
               userInstruction:
                 run.config.rootUserInstruction ?? turn.userInstruction,
               toolCallId: fact.callId,
               hooks: {
                 onToolOutput,
-                recordSubagentCost: (costUsd) => {
-                  if (costUsd > 0) subagentCost += costUsd;
-                },
+                recordSubagentCost,
               },
             }),
           ),
         ),
       );
       accepting = false;
+      billing = false;
       if (Exit.isSuccess(invoked)) {
         result = invoked.value;
       } else if (Cause.hasInterrupts(invoked.cause)) {
