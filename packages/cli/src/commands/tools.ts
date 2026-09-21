@@ -4,6 +4,7 @@ import { execa } from 'execa';
 import { parse as shellParse } from 'shell-quote';
 
 import type { ToolProbeInputs } from '@tools/externalToolDefs';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { CliExitCode } from '../runtime/exitCodes';
 import { installCliProcessRuntime } from '../runtime/cliProcessRuntime';
@@ -147,14 +148,24 @@ const shellRun = Effect.fn('cli.tools.shellRun')(function* (command: string) {
   // code here, never to a throw. The parse gates both branches: on Windows the
   // parts are discarded, but a command carrying shell operators still parses to
   // non-strings and is refused before it reaches the shell.
-  const parsed = yield* Effect.try(() => shellParse(command)).pipe(
-    Effect.orElseSucceed(() => null),
-  );
-  if (
-    parsed === null ||
-    !parsed.every((arg): arg is string => typeof arg === 'string')
-  ) {
-    return CliExitCode.AgentError;
+  //
+  // A refusal fails the command rather than returning a bare exit code: both
+  // callers declare `catchExitCode: CliExitCode.AgentError`, which writes the
+  // message to stderr and exits with the same code the silent return used, so
+  // the only change is that the user is told why nothing ran.
+  const parsed = yield* Effect.try({
+    try: () => shellParse(command),
+    catch: (cause) =>
+      new Error(
+        `Cannot run the registered command for this tool (${command}): ${toErrorMessage(cause)}`,
+      ),
+  });
+  if (!parsed.every((arg): arg is string => typeof arg === 'string')) {
+    return yield* Effect.fail(
+      new Error(
+        `Refusing to run the registered command for this tool (${command}): it carries shell operators or redirection.`,
+      ),
+    );
   }
   if (process.platform === 'win32') {
     const result = yield* Effect.promise(() =>
@@ -163,7 +174,13 @@ const shellRun = Effect.fn('cli.tools.shellRun')(function* (command: string) {
     return result.exitCode ?? CliExitCode.AgentError;
   }
   const [cmd, ...args] = parsed;
-  if (!cmd) return CliExitCode.AgentError;
+  if (!cmd) {
+    return yield* Effect.fail(
+      new Error(
+        `The registered command for this tool is empty (${command}); there is nothing to run.`,
+      ),
+    );
+  }
   const result = yield* Effect.promise(() =>
     execa(cmd, args, { stdio: 'inherit', reject: false }),
   );
