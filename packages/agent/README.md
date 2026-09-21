@@ -161,7 +161,7 @@ files.
 | `@texra-ai/agent`         | `runAgent`, `closeSession`, `AgentRun`, `defineTool`, `MapToolRegistry`, and the `AgentEvent` / `ITool` / `AgentFlowResult` / `SessionCloseReport` types |
 | `@texra-ai/agent/schemas` | Zod schemas + inferred types for agent definitions, configs, and run results                                                                             |
 | `@texra-ai/agent/node`    | `nodePlatform(options)`, a ready-made Node `Platform` with its workspace roots                                                                           |
-| `@texra-ai/agent/effect`  | `Sessions`, `Session`, `Run` and the tagged errors: the services the entry above renders                                                        |
+| `@texra-ai/agent/effect`  | `Sessions`, `Session`, `Run` and the tagged errors: the services the entry above renders                                                                 |
 
 Every entry needs the `effect` and `zod` peers installed, the root one
 included: `@texra-ai/agent` is the Effect surface rendered as Promises, and
@@ -202,11 +202,11 @@ const program = Effect.gen(function* () {
 }).pipe(Effect.scoped, Effect.provide(Sessions.layer(nodePlatform(options))));
 ```
 
-| Service    | What it is                                                                                                                                                                                      |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Service    | What it is                                                                                                                                                                                                                                                                                                  |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `Sessions` | The process's one session owner: `open(roots?)`, `close(roots?)`, `list`. One session per workspace storage root, the same owner every TeXRA host opens through. `Sessions.layer(platform)` composes the process and provides it, with this scope as the lifetime of the hold it takes on that composition. |
-| `Session`  | `start`, `request`, `view.changes`, and `subscribe`, whose transcript interest is held for a `Scope` and cleared when it closes. A value, one per root, not a tag.                          |
-| `Run`      | `runId`, `result`, `view`, `events`, `interrupt`. `start` succeeds at admission: the run exists in the session, its row published and its trace live.                                       |
+| `Session`  | `start`, `request`, `view.changes`, and `subscribe`, whose transcript interest is held for a `Scope` and cleared when it closes. A value, one per root, not a tag.                                                                                                                                          |
+| `Run`      | `runId`, `result`, `view`, `events`, `interrupt`. `start` succeeds at admission: the run exists in the session, its row published and its trace live.                                                                                                                                                       |
 
 `session.view.changes` publishes the fold's levels as values: each is
 immutable, an older level stays exactly what it was for as long as it is held,
