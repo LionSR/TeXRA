@@ -260,6 +260,11 @@ async function driveRun(options: RunAgentOptions): Promise<typeof RESULT> {
   return RESULT;
 }
 
+/** Runs the run's own lifecycle hook, as the host invokes it. */
+async function runOnRun(options: RunAgentOptions): Promise<void> {
+  await Effect.runPromise(options.onRun?.(HANDLE) ?? Effect.void);
+}
+
 describe('agent package sessions', () => {
   beforeEach(() => {
     mocks.sessionInits.splice(0);
@@ -492,7 +497,7 @@ describe('agent package sessions', () => {
           async (_input: unknown, options: RunAgentOptions) => {
             options.onRunResolved?.('ae0001', TRACE);
             await enterRun('ae0001');
-            await Effect.runPromise(options.onRun?.(HANDLE) ?? Effect.void);
+            await runOnRun(options);
             return RESULT;
           },
         );

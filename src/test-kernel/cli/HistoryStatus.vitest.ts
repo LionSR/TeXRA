@@ -1,5 +1,6 @@
 import '@test/support/sessionGraphTestSetup';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { it } from '@effect/vitest';
+import { beforeEach, describe, expect } from 'vitest';
 
 import { Effect } from 'effect';
 
@@ -18,6 +19,7 @@ import {
   listResumableCliHistoryEntries,
   readCliHistoryDetails,
 } from '@cli/runtime/history';
+import { withProcessServices } from '@platform/processRuntime';
 import {
   aggregateId,
   CLI_RUN_STATUS,
@@ -200,43 +202,55 @@ describe('CLI history status formatting', () => {
   // terminal-rejection filter. A run the resume path later refuses is still
   // advertised here and refused, in its own words, on open — what it must
   // never become is 'completed' (the crash-masking guard).
-  it('advertises a run with a snapshot, and never calls it completed', async () => {
-    const id = 'bad-f10' as RunId;
-    await seedSnapshot(id, TOOL_USE_CONFIG, 'orchestrator', 'toolUse');
+  it.effect(
+    'advertises a run with a snapshot, and never calls it completed',
+    () =>
+      Effect.gen(function* () {
+        const id = 'bad-f10' as RunId;
+        yield* Effect.promise(() =>
+          seedSnapshot(id, TOOL_USE_CONFIG, 'orchestrator', 'toolUse'),
+        );
 
-    const details = await testRuntime().runPromise(
-      readCliHistoryDetails(Effect.succeed(testDefaultSession()), id),
-    );
+        const details = yield* withProcessServices(
+          testRuntime(),
+          readCliHistoryDetails(Effect.succeed(testDefaultSession()), id),
+        );
 
-    expect(details?.hasFlowRecord).toBe(true);
-    expect(details?.status).toBe(HISTORY_RUN_STATUS.RESUMABLE);
-    expect(details?.status).not.toBe(CLI_RUN_STATUS.COMPLETED);
-    expect(formatCliHistoryDetailsText(details!)).toContain(
-      'Flow record: present',
-    );
-  });
+        expect(details?.hasFlowRecord).toBe(true);
+        expect(details?.status).toBe(HISTORY_RUN_STATUS.RESUMABLE);
+        expect(details?.status).not.toBe(CLI_RUN_STATUS.COMPLETED);
+        expect(formatCliHistoryDetailsText(details!)).toContain(
+          'Flow record: present',
+        );
+      }),
+  );
 
-  it('marks workflow snapshots as CLI-resumable', async () => {
-    const id = 'c0ffee-f10' as RunId;
-    await seedSnapshot(id, WORKFLOW_CONFIG, 'correct', 'reflection');
+  it.effect('marks workflow snapshots as CLI-resumable', () =>
+    Effect.gen(function* () {
+      const id = 'c0ffee-f10' as RunId;
+      yield* Effect.promise(() =>
+        seedSnapshot(id, WORKFLOW_CONFIG, 'correct', 'reflection'),
+      );
 
-    const details = await testRuntime().runPromise(
-      readCliHistoryDetails(Effect.succeed(testDefaultSession()), id),
-    );
+      const details = yield* withProcessServices(
+        testRuntime(),
+        readCliHistoryDetails(Effect.succeed(testDefaultSession()), id),
+      );
 
-    expect(details?.hasFlowRecord).toBe(true);
-    expect(details?.status).toBe(HISTORY_RUN_STATUS.RESUMABLE);
-    expect(formatCliHistoryDetailsText(details!)).toContain(
-      'Flow record: present',
-    );
-  });
+      expect(details?.hasFlowRecord).toBe(true);
+      expect(details?.status).toBe(HISTORY_RUN_STATUS.RESUMABLE);
+      expect(formatCliHistoryDetailsText(details!)).toContain(
+        'Flow record: present',
+      );
+    }),
+  );
 
   // A checkpoint alone is not enough: without a config there is no category
   // to resume under and nothing for a host to adopt, so the row says so.
-  it('does not offer a run whose config is missing as resumable', async () => {
-    const id = 'baad-c0f' as RunId;
-    await Effect.runPromise(
-      testDefaultSession().commit([
+  it.effect('does not offer a run whose config is missing as resumable', () =>
+    Effect.gen(function* () {
+      const id = 'baad-c0f' as RunId;
+      yield* testDefaultSession().commit([
         {
           type: 'run.start',
           aggregateId: aggregateId('run', id),
@@ -246,23 +260,22 @@ describe('CLI history status formatting', () => {
           isRemote: false,
           parent: null,
         },
-      ]),
-    );
-    await Effect.runPromise(
-      testDefaultSession().commit([
+      ]);
+      yield* testDefaultSession().commit([
         {
           type: 'flow.snapshot',
           aggregateId: aggregateId('run', id),
           payload: snapshotPayload('toolUse'),
         },
-      ]),
-    );
+      ]);
 
-    const details = await testRuntime().runPromise(
-      readCliHistoryDetails(Effect.succeed(testDefaultSession()), id),
-    );
+      const details = yield* withProcessServices(
+        testRuntime(),
+        readCliHistoryDetails(Effect.succeed(testDefaultSession()), id),
+      );
 
-    expect(details?.hasFlowRecord).toBe(true);
-    expect(details?.status).not.toBe(HISTORY_RUN_STATUS.RESUMABLE);
-  });
+      expect(details?.hasFlowRecord).toBe(true);
+      expect(details?.status).not.toBe(HISTORY_RUN_STATUS.RESUMABLE);
+    }),
+  );
 });

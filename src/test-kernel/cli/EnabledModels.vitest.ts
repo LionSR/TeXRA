@@ -1,5 +1,6 @@
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect } from 'vitest';
 
 import {
   listCliEnabledModelCatalog,
@@ -16,38 +17,39 @@ describe('CLI enabled models catalog', () => {
     state = new FakeStateStore();
   });
 
-  it('resolves a CLI spelling and reports the resulting list', async () => {
-    await Effect.runPromise(
-      state.update(GlobalStateKey.MODEL_SELECTION, {
+  it.effect('resolves a CLI spelling and reports the resulting list', () =>
+    Effect.gen(function* () {
+      yield* state.update(GlobalStateKey.MODEL_SELECTION, {
         enabledExtras: [],
         disabledDefaults: ['grok45'],
-      }),
-    );
-    const result = await Effect.runPromise(
-      setCliModelEnabled(state, 'grok-4.5', true),
-    );
-    expect(result.model).toBe('grok45');
-    expect(result.enabled).toBe(true);
-    expect(result.list).toEqual(DEFAULT_MODELS);
-  });
+      });
+      const result = yield* setCliModelEnabled(state, 'grok-4.5', true);
+      expect(result.model).toBe('grok45');
+      expect(result.enabled).toBe(true);
+      expect(result.list).toEqual(DEFAULT_MODELS);
+    }),
+  );
 
-  it('rejects an id no CLI model answers to', async () => {
-    await expect(
-      Effect.runPromise(setCliModelEnabled(state, 'nonexistent-xyz', true)),
-    ).rejects.toThrow(/Unknown model/);
-  });
+  it.effect('rejects an id no CLI model answers to', () =>
+    Effect.gen(function* () {
+      const error = yield* Effect.flip(
+        setCliModelEnabled(state, 'nonexistent-xyz', true),
+      );
+      expect(error.message).toMatch(/Unknown model/);
+    }),
+  );
 
-  it('lists catalog rows with enabled flags', async () => {
-    await Effect.runPromise(
-      state.update(GlobalStateKey.MODEL_SELECTION, {
+  it.effect('lists catalog rows with enabled flags', () =>
+    Effect.gen(function* () {
+      yield* state.update(GlobalStateKey.MODEL_SELECTION, {
         enabledExtras: [],
         disabledDefaults: ['grok45'],
-      }),
-    );
-    const catalog = listCliEnabledModelCatalog(state);
-    expect(catalog.find((row) => row.id === 'grok45')?.enabled).toBe(false);
-    expect(catalog.find((row) => row.id === 'deepseekproT')?.enabled).toBe(
-      true,
-    );
-  });
+      });
+      const catalog = listCliEnabledModelCatalog(state);
+      expect(catalog.find((row) => row.id === 'grok45')?.enabled).toBe(false);
+      expect(catalog.find((row) => row.id === 'deepseekproT')?.enabled).toBe(
+        true,
+      );
+    }),
+  );
 });

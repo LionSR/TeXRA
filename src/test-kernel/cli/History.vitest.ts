@@ -6,14 +6,14 @@ import '@test/support/sessionGraphTestSetup';
 import { mkdir, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 import { Effect } from 'effect';
-import { it as effectIt } from '@effect/vitest';
+import { it } from '@effect/vitest';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import {
   createTestSession,
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 import { testRuntime } from '@test/support/testProcessRuntime';
 
@@ -504,27 +504,29 @@ describe('CLI history runtime', () => {
     await expect(historyDetails('deadbe' as RunId)).resolves.toBeNull();
   });
 
-  it('finds a stamped diagnostic-only root in CLI history details', async () => {
-    const runId = 'a11ce7a11ce7' as RunId;
-    const session = testDefaultSession();
-    publishTestRunStart(session, runId);
-    session.publishRunEvent(runId, {
-      type: 'log',
-      level: 'info',
-      message: 'Root status only',
-      messageType: MESSAGE_TYPES.PROGRESS_STATUS,
-    });
-    await Effect.runPromise(session.settlePublications());
-    mockNothingPersisted();
-    // The run's own `run.start` plus the diagnostic-only transcript row
-    // prove the run exists even though it yields no conversation.
+  it.effect('finds a stamped diagnostic-only root in CLI history details', () =>
+    Effect.gen(function* () {
+      const runId = 'a11ce7a11ce7' as RunId;
+      const session = testDefaultSession();
+      publishTestRunStart(session, runId);
+      session.publishRunEvent(runId, {
+        type: 'log',
+        level: 'info',
+        message: 'Root status only',
+        messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+      });
+      yield* session.settlePublications();
+      mockNothingPersisted();
+      // The run's own `run.start` plus the diagnostic-only transcript row
+      // prove the run exists even though it yields no conversation.
 
-    await expect(historyDetails(runId)).resolves.toMatchObject({
-      id: runId,
-      status: 'unknown',
-      conversationPreview: null,
-    });
-  });
+      expect(yield* Effect.promise(() => historyDetails(runId))).toMatchObject({
+        id: runId,
+        status: 'unknown',
+        conversationPreview: null,
+      });
+    }),
+  );
 
   it('treats full-only conversation data as a found run', async () => {
     mockNothingPersisted();
@@ -926,32 +928,30 @@ describe('CLI history runtime', () => {
     expect(details?.files).toEqual([]);
   });
 
-  effectIt.live(
-    'deletes indexed executions and reports a later missing lookup',
-    () =>
-      Effect.acquireUseRelease(
-        Effect.sync(createTestSession),
-        (session) =>
-          Effect.gen(function* () {
-            const id = 'aabbcc' as RunId;
-            publishTestRunStart(session, id);
-            yield* session.settlePublications();
-            expect(yield* deleteCliHistory(session, { all: true })).toEqual({
-              deleted: 'all',
-              count: 1,
-              active: [],
-              failed: [],
-            });
-            expect(yield* deleteCliHistory(session, { id })).toEqual({
-              deleted: 'one',
-              id,
-              found: false,
-              status: 'not-found',
-            });
-            expect(mocks.listRuns).not.toHaveBeenCalled();
-          }),
-        (session) => session.dispose(),
-      ),
+  it.live('deletes indexed executions and reports a later missing lookup', () =>
+    Effect.acquireUseRelease(
+      Effect.sync(createTestSession),
+      (session) =>
+        Effect.gen(function* () {
+          const id = 'aabbcc' as RunId;
+          publishTestRunStart(session, id);
+          yield* session.settlePublications();
+          expect(yield* deleteCliHistory(session, { all: true })).toEqual({
+            deleted: 'all',
+            count: 1,
+            active: [],
+            failed: [],
+          });
+          expect(yield* deleteCliHistory(session, { id })).toEqual({
+            deleted: 'one',
+            id,
+            found: false,
+            status: 'not-found',
+          });
+          expect(mocks.listRuns).not.toHaveBeenCalled();
+        }),
+      (session) => session.dispose(),
+    ),
   );
 
   it('validates run id shape before command handlers use storage', () => {
@@ -960,148 +960,165 @@ describe('CLI history runtime', () => {
   });
 
   describe('history export (--export)', () => {
-    it('builds export input from the stored config, conversation, and run facts', async () => {
-      const runId = 'a1a1a1' as RunId;
-      mocks.readConversation.mockResolvedValue([
-        {
-          kind: 'user-message',
-          parts: [{ type: 'text', text: 'Polish the lemma.' }],
-        },
-        { kind: 'assistant-text', text: 'Done.' },
-      ]);
-      const session = await publishRunFacts(runId, {
-        description: 'Polish pass',
-      });
-      // The export stamps the run's own launch time, which the publisher
-      // stamped on `run.start`.
-      const launchedAt = (
-        await Effect.runPromise(session.readView([]))
-      ).runs.get(runId)?.launchedAt;
-
-      const result = await testRuntime().runPromise(
-        readCliHistoryExportInput(Effect.succeed(testDefaultSession()), runId),
-      );
-
-      expect(result).toEqual({
-        status: 'ok',
-        exportInput: {
-          timestamp: new Date(launchedAt!).toISOString(),
-          description: 'Polish pass',
-          config: {
-            agent: 'correct',
-            model: 'deepseekT',
-            instruction: 'Polish the introduction.',
-            inputFiles: ['chapters/intro.tex'],
-            mediaFiles: [],
-            contextFiles: [],
-            outputFiles: ['chapters/intro.tex'],
-          },
-          nodes: [
+    it.effect(
+      'builds export input from the stored config, conversation, and run facts',
+      () =>
+        Effect.gen(function* () {
+          const runId = 'a1a1a1' as RunId;
+          mocks.readConversation.mockResolvedValue([
             {
               kind: 'user-message',
               parts: [{ type: 'text', text: 'Polish the lemma.' }],
             },
             { kind: 'assistant-text', text: 'Done.' },
-          ],
-        },
-      });
-    });
+          ]);
+          const session = yield* Effect.promise(() =>
+            publishRunFacts(runId, { description: 'Polish pass' }),
+          );
+          // The export stamps the run's own launch time, which the publisher
+          // stamped on `run.start`.
+          const launchedAt = (yield* session.readView([])).runs.get(
+            runId,
+          )?.launchedAt;
 
-    it('reports "not_found" only when there is no trace of the run at all', async () => {
-      mockNothingPersisted();
-
-      await expect(
-        testRuntime().runPromise(
-          readCliHistoryExportInput(
+          const result = yield* readCliHistoryExportInput(
             Effect.succeed(testDefaultSession()),
-            'facade' as RunId,
+            runId,
+          );
+
+          expect(result).toEqual({
+            status: 'ok',
+            exportInput: {
+              timestamp: new Date(launchedAt!).toISOString(),
+              description: 'Polish pass',
+              config: {
+                agent: 'correct',
+                model: 'deepseekT',
+                instruction: 'Polish the introduction.',
+                inputFiles: ['chapters/intro.tex'],
+                mediaFiles: [],
+                contextFiles: [],
+                outputFiles: ['chapters/intro.tex'],
+              },
+              nodes: [
+                {
+                  kind: 'user-message',
+                  parts: [{ type: 'text', text: 'Polish the lemma.' }],
+                },
+                { kind: 'assistant-text', text: 'Done.' },
+              ],
+            },
+          });
+        }),
+    );
+
+    it.effect(
+      'reports "not_found" only when there is no trace of the run at all',
+      () =>
+        Effect.gen(function* () {
+          mockNothingPersisted();
+
+          expect(
+            yield* readCliHistoryExportInput(
+              Effect.succeed(testDefaultSession()),
+              'facade' as RunId,
+            ),
+          ).toEqual({ status: 'not_found' });
+        }),
+    );
+
+    it.effect(
+      'reports "incomplete" (not "not_found") when config exists but conversation does not',
+      () =>
+        Effect.gen(function* () {
+          // history show would still display this run (it has a config) —
+          // export just has nothing to render, which is a different failure than
+          // the id not resolving to anything at all. This is the beforeEach
+          // baseline: stored config, no conversation, no meta.
+          expect(
+            yield* readCliHistoryExportInput(
+              Effect.succeed(testDefaultSession()),
+              'a1a1a1' as RunId,
+            ),
+          ).toEqual({ status: 'incomplete' });
+        }),
+    );
+
+    it.effect(
+      'reports "incomplete" (not "not_found") when conversation exists but config does not',
+      () =>
+        Effect.gen(function* () {
+          mocks.readConfig.mockResolvedValue(null);
+          mocks.readConversation.mockResolvedValue([
+            { kind: 'assistant-text', text: 'hi' },
+          ]);
+
+          expect(
+            yield* readCliHistoryExportInput(
+              Effect.succeed(testDefaultSession()),
+              'a1a1a1' as RunId,
+            ),
+          ).toEqual({ status: 'incomplete' });
+        }),
+    );
+
+    it.effect(
+      'reports "not_found" (not "incomplete") when the stored conversation is an empty array',
+      () =>
+        Effect.gen(function* () {
+          // A stored-but-empty conversation array is truthy (`![]` is `false`),
+          // so a naive `!conversation` check would treat it as "present" and
+          // report 'incomplete' here — while `history show` builds no preview
+          // from an empty array and, with config/meta also absent, reports the
+          // same id as not found. The two commands must agree.
+          mockNothingPersisted();
+          mocks.readConversation.mockResolvedValue([]);
+
+          expect(
+            yield* readCliHistoryExportInput(
+              Effect.succeed(testDefaultSession()),
+              'facade' as RunId,
+            ),
+          ).toEqual({ status: 'not_found' });
+          expect(
+            yield* Effect.promise(() => historyDetails('facade' as RunId)),
+          ).toBeNull();
+        }),
+    );
+
+    it.live('reads the bundled trace-viewer default template', () =>
+      Effect.gen(function* () {
+        const resourcesPath = yield* Effect.promise(() =>
+          makeTempDir('texra-history-standalone-', tempDirs),
+        );
+        const traceViewerDir = path.join(resourcesPath, 'traceViewer');
+        yield* Effect.promise(() => mkdir(traceViewerDir, { recursive: true }));
+        yield* Effect.promise(() =>
+          writeFile(
+            path.join(traceViewerDir, 'index.html'),
+            '<html>standalone</html>',
           ),
-        ),
-      ).resolves.toEqual({ status: 'not_found' });
-    });
+        );
 
-    it('reports "incomplete" (not "not_found") when config exists but conversation does not', async () => {
-      // history show would still display this run (it has a config) —
-      // export just has nothing to render, which is a different failure than
-      // the id not resolving to anything at all. This is the beforeEach
-      // baseline: stored config, no conversation, no meta.
-      await expect(
-        testRuntime().runPromise(
-          readCliHistoryExportInput(
-            Effect.succeed(testDefaultSession()),
-            'a1a1a1' as RunId,
-          ),
-        ),
-      ).resolves.toEqual({ status: 'incomplete' });
-    });
+        expect(yield* readCliHistoryStandaloneTemplate(resourcesPath)).toBe(
+          '<html>standalone</html>',
+        );
+      }),
+    );
 
-    it('reports "incomplete" (not "not_found") when conversation exists but config does not', async () => {
-      mocks.readConfig.mockResolvedValue(null);
-      mocks.readConversation.mockResolvedValue([
-        { kind: 'assistant-text', text: 'hi' },
-      ]);
+    it.live(
+      'returns null instead of throwing when the default template is absent',
+      () =>
+        Effect.gen(function* () {
+          const resourcesPath = yield* Effect.promise(() =>
+            makeTempDir('texra-history-standalone-empty-', tempDirs),
+          );
 
-      await expect(
-        testRuntime().runPromise(
-          readCliHistoryExportInput(
-            Effect.succeed(testDefaultSession()),
-            'a1a1a1' as RunId,
-          ),
-        ),
-      ).resolves.toEqual({ status: 'incomplete' });
-    });
-
-    it('reports "not_found" (not "incomplete") when the stored conversation is an empty array', async () => {
-      // A stored-but-empty conversation array is truthy (`![]` is `false`),
-      // so a naive `!conversation` check would treat it as "present" and
-      // report 'incomplete' here — while `history show` builds no preview
-      // from an empty array and, with config/meta also absent, reports the
-      // same id as not found. The two commands must agree.
-      mockNothingPersisted();
-      mocks.readConversation.mockResolvedValue([]);
-
-      await expect(
-        testRuntime().runPromise(
-          readCliHistoryExportInput(
-            Effect.succeed(testDefaultSession()),
-            'facade' as RunId,
-          ),
-        ),
-      ).resolves.toEqual({ status: 'not_found' });
-      await expect(historyDetails('facade' as RunId)).resolves.toBeNull();
-    });
-
-    it('reads the bundled trace-viewer default template', async () => {
-      const resourcesPath = await makeTempDir(
-        'texra-history-standalone-',
-        tempDirs,
-      );
-      const traceViewerDir = path.join(resourcesPath, 'traceViewer');
-      await mkdir(traceViewerDir, { recursive: true });
-      await writeFile(
-        path.join(traceViewerDir, 'index.html'),
-        '<html>standalone</html>',
-      );
-
-      await expect(
-        testRuntime().runPromise(
-          readCliHistoryStandaloneTemplate(resourcesPath),
-        ),
-      ).resolves.toBe('<html>standalone</html>');
-    });
-
-    it('returns null instead of throwing when the default template is absent', async () => {
-      const resourcesPath = await makeTempDir(
-        'texra-history-standalone-empty-',
-        tempDirs,
-      );
-
-      await expect(
-        testRuntime().runPromise(
-          readCliHistoryStandaloneTemplate(resourcesPath),
-        ),
-      ).resolves.toBeNull();
-    });
+          expect(
+            yield* readCliHistoryStandaloneTemplate(resourcesPath),
+          ).toBeNull();
+        }),
+    );
 
     describe('runHistoryExport html', () => {
       // Capture every byte written so we can assert on exit code + wording
@@ -1139,29 +1156,31 @@ describe('CLI history runtime', () => {
         stderrSpy.mockRestore();
       });
 
-      it('reports missing replayable roots without an empty sidecar list', async () => {
-        mocks.assembleTrace.mockReturnValue(
-          Effect.succeed({ status: 'streamLogs_missing' }),
-        );
+      it.effect(
+        'reports missing replayable roots without an empty sidecar list',
+        () =>
+          Effect.gen(function* () {
+            mocks.assembleTrace.mockReturnValue(
+              Effect.succeed({ status: 'streamLogs_missing' }),
+            );
 
-        // The command is a program now; the entry runs it on the process
-        // runtime it installs, and here that is the harness's.
-        const exitCode = await testRuntime().runPromise(
-          runHistoryExport(
-            createTestCliContext({
-              cwd: '/workspace',
-              resourcesPath: '/resources',
-            }),
-            'a1a1a1' as RunId,
-            'html',
-          ),
-        );
+            // The command is a program now; the entry runs it on the process
+            // runtime it installs, and here that is the harness's.
+            const exitCode = yield* runHistoryExport(
+              createTestCliContext({
+                cwd: '/workspace',
+                resourcesPath: '/resources',
+              }),
+              'a1a1a1' as RunId,
+              'html',
+            );
 
-        expect(exitCode).toBe(CliExitCode.Usage);
-        expect(stdout).toBe('');
-        expect(stderr).toContain('no replayable run-root transcript');
-        expect(stderr).not.toContain('sidecars (');
-      });
+            expect(exitCode).toBe(CliExitCode.Usage);
+            expect(stdout).toBe('');
+            expect(stderr).toContain('no replayable run-root transcript');
+            expect(stderr).not.toContain('sidecars (');
+          }),
+      );
     });
   });
 });

@@ -1,7 +1,8 @@
 import * as path from 'node:path';
 
+import { it } from '@effect/vitest';
 import { Effect, FileSystem, Layer } from 'effect';
-import { describe, expect, it } from 'vitest';
+import { describe, expect } from 'vitest';
 
 import {
   acceptEditedFileReplace,
@@ -70,114 +71,126 @@ describe('acceptEditedFileReplace', () => {
     };
   }
 
-  it('cleans up the stale diff file after a successful accept', async () => {
-    const { base, edited } = paperPair();
-    const filesystem = fakeFilesystem();
+  it.effect('cleans up the stale diff file after a successful accept', () =>
+    Effect.gen(function* () {
+      const { base, edited } = paperPair();
+      const filesystem = fakeFilesystem();
 
-    const accepted = await Effect.runPromise(
-      acceptEditedFileReplace(base, edited, buildPorts()).pipe(
-        Effect.provide(filesystem.layer),
-      ),
-    );
+      const accepted = yield* acceptEditedFileReplace(
+        base,
+        edited,
+        buildPorts(),
+      ).pipe(Effect.provide(filesystem.layer));
 
-    expect(accepted).toBe(true);
-    expect(filesystem.removed).toEqual([
-      absolutePath('ws', 'paper_correct_diff.tex'),
-    ]);
-  });
+      expect(accepted).toBe(true);
+      expect(filesystem.removed).toEqual([
+        absolutePath('ws', 'paper_correct_diff.tex'),
+      ]);
+    }),
+  );
 
-  it('does not clean up when the user declines the confirmation', async () => {
-    const { base, edited } = paperPair();
-    const filesystem = fakeFilesystem();
+  it.effect('does not clean up when the user declines the confirmation', () =>
+    Effect.gen(function* () {
+      const { base, edited } = paperPair();
+      const filesystem = fakeFilesystem();
 
-    const accepted = await Effect.runPromise(
-      acceptEditedFileReplace(
+      const accepted = yield* acceptEditedFileReplace(
         base,
         edited,
         buildPorts({ confirm: () => Effect.succeed(false) }),
-      ).pipe(Effect.provide(filesystem.layer)),
-    );
+      ).pipe(Effect.provide(filesystem.layer));
 
-    expect(accepted).toBe(false);
-    expect(filesystem.removed).toEqual([]);
-    expect(filesystem.written).toEqual([]);
-  });
+      expect(accepted).toBe(false);
+      expect(filesystem.removed).toEqual([]);
+      expect(filesystem.written).toEqual([]);
+    }),
+  );
 
-  it('does not delete the just-accepted file when it collides with the derived diff name', async () => {
-    // base is literally named "<edited-stem>_diff.tex" — the same name
-    // staleDiffFileLocation would derive for this edited/base pair — so the
-    // write target and the "stale diff" coincide.
-    const base = createWorkspaceLocation(
-      absolutePath('ws', 'paper_diff.tex'),
-      'paper_diff.tex',
-    );
-    const edited = createWorkspaceLocation(
-      absolutePath('ws', 'paper.tex'),
-      'paper.tex',
-    );
-    const filesystem = fakeFilesystem();
+  it.effect(
+    'does not delete the just-accepted file when it collides with the derived diff name',
+    () =>
+      Effect.gen(function* () {
+        // base is literally named "<edited-stem>_diff.tex" — the same name
+        // staleDiffFileLocation would derive for this edited/base pair — so the
+        // write target and the "stale diff" coincide.
+        const base = createWorkspaceLocation(
+          absolutePath('ws', 'paper_diff.tex'),
+          'paper_diff.tex',
+        );
+        const edited = createWorkspaceLocation(
+          absolutePath('ws', 'paper.tex'),
+          'paper.tex',
+        );
+        const filesystem = fakeFilesystem();
 
-    const accepted = await Effect.runPromise(
-      acceptEditedFileReplace(base, edited, buildPorts()).pipe(
-        Effect.provide(filesystem.layer),
-      ),
-    );
+        const accepted = yield* acceptEditedFileReplace(
+          base,
+          edited,
+          buildPorts(),
+        ).pipe(Effect.provide(filesystem.layer));
 
-    expect(accepted).toBe(true);
-    expect(filesystem.removed).toEqual([]);
-  });
+        expect(accepted).toBe(true);
+        expect(filesystem.removed).toEqual([]);
+      }),
+  );
 
-  it('does not clean up the base diff when accepting into a new sibling (extension mismatch)', async () => {
-    // Different extensions -> getAcceptedFileTarget resolves to a new
-    // sibling file, leaving base untouched, so its diff is still accurate.
-    const { base } = paperPair();
-    const edited = createWorkspaceLocation(
-      absolutePath('ws', 'notes.md'),
-      'notes.md',
-    );
-    const filesystem = fakeFilesystem();
+  it.effect(
+    'does not clean up the base diff when accepting into a new sibling (extension mismatch)',
+    () =>
+      Effect.gen(function* () {
+        // Different extensions -> getAcceptedFileTarget resolves to a new
+        // sibling file, leaving base untouched, so its diff is still accurate.
+        const { base } = paperPair();
+        const edited = createWorkspaceLocation(
+          absolutePath('ws', 'notes.md'),
+          'notes.md',
+        );
+        const filesystem = fakeFilesystem();
 
-    const accepted = await Effect.runPromise(
-      acceptEditedFileReplace(base, edited, buildPorts()).pipe(
-        Effect.provide(filesystem.layer),
-      ),
-    );
+        const accepted = yield* acceptEditedFileReplace(
+          base,
+          edited,
+          buildPorts(),
+        ).pipe(Effect.provide(filesystem.layer));
 
-    expect(accepted).toBe(true);
-    expect(filesystem.removed).toEqual([]);
-  });
+        expect(accepted).toBe(true);
+        expect(filesystem.removed).toEqual([]);
+      }),
+  );
 });
 
 describe('commitAcceptedFile', () => {
-  it('writes the edited content into the resolved target and reports success', async () => {
-    const { base, edited } = paperPair();
-    const copy = createWorkspaceLocation(
-      absolutePath('ws', 'paper_copy.tex'),
-      'paper_copy.tex',
-    );
-    const filesystem = fakeFilesystem();
-    const infoMessages: string[] = [];
-    const ports: CommitAcceptedFilePorts = {
-      emitWritten: () => undefined,
-      showInfo: (message) =>
-        Effect.sync(() => {
-          infoMessages.push(message);
-        }),
-    };
+  it.effect(
+    'writes the edited content into the resolved target and reports success',
+    () =>
+      Effect.gen(function* () {
+        const { base, edited } = paperPair();
+        const copy = createWorkspaceLocation(
+          absolutePath('ws', 'paper_copy.tex'),
+          'paper_copy.tex',
+        );
+        const filesystem = fakeFilesystem();
+        const infoMessages: string[] = [];
+        const ports: CommitAcceptedFilePorts = {
+          emitWritten: () => undefined,
+          showInfo: (message) =>
+            Effect.sync(() => {
+              infoMessages.push(message);
+            }),
+        };
 
-    await Effect.runPromise(
-      commitAcceptedFile(
-        base,
-        edited,
-        { targetLocation: copy, targetFileName: 'paper_copy.tex' },
-        false,
-        ports,
-      ).pipe(Effect.provide(filesystem.layer)),
-    );
+        yield* commitAcceptedFile(
+          base,
+          edited,
+          { targetLocation: copy, targetFileName: 'paper_copy.tex' },
+          false,
+          ports,
+        ).pipe(Effect.provide(filesystem.layer));
 
-    expect(filesystem.written).toEqual([
-      { absolutePath: copy.absolutePath, content: 'edited content' },
-    ]);
-    expect(infoMessages).toEqual([expect.stringMatching(/created/)]);
-  });
+        expect(filesystem.written).toEqual([
+          { absolutePath: copy.absolutePath, content: 'edited content' },
+        ]);
+        expect(infoMessages).toEqual([expect.stringMatching(/created/)]);
+      }),
+  );
 });

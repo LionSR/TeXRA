@@ -1,31 +1,38 @@
 import { readFile, readdir } from 'node:fs/promises';
 import * as path from 'node:path';
 
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { describe, expect, it } from 'vitest';
+import { describe, expect } from 'vitest';
 
-import { withTempDir } from '@test/support/tempDirPlatform';
+import { withTempDirEffect } from '@test/support/tempDirPlatform';
 import { writeFileAtomic } from '@utils/files/fsDurability';
 
 describe('fsDurability.writeFileAtomic', () => {
-  it('writes content, overwrites in place, and leaves no temp residue', async () => {
-    await withTempDir('texra-atomic-', async (dir) => {
-      const target = path.join(dir, 'flow.json');
+  it.live(
+    'writes content, overwrites in place, and leaves no temp residue',
+    () =>
+      Effect.gen(function* () {
+        yield* withTempDirEffect('texra-atomic-', (dir) =>
+          Effect.gen(function* () {
+            const target = path.join(dir, 'flow.json');
 
-      await Effect.runPromise(
-        writeFileAtomic(target, Buffer.from('{"step":1}')),
-      );
-      expect(await readFile(target, 'utf8')).toBe('{"step":1}');
+            yield* writeFileAtomic(target, Buffer.from('{"step":1}'));
+            expect(yield* Effect.promise(() => readFile(target, 'utf8'))).toBe(
+              '{"step":1}',
+            );
 
-      // Overwrite — the crash-sensitive path (re-serialized run state).
-      await Effect.runPromise(
-        writeFileAtomic(target, Buffer.from('{"step":2}')),
-      );
-      expect(await readFile(target, 'utf8')).toBe('{"step":2}');
+            // Overwrite — the crash-sensitive path (re-serialized run state).
+            yield* writeFileAtomic(target, Buffer.from('{"step":2}'));
+            expect(yield* Effect.promise(() => readFile(target, 'utf8'))).toBe(
+              '{"step":2}',
+            );
 
-      // The temp file must have been renamed away, not abandoned.
-      const entries = await readdir(dir);
-      expect(entries).toEqual(['flow.json']);
-    });
-  });
+            // The temp file must have been renamed away, not abandoned.
+            const entries = yield* Effect.promise(() => readdir(dir));
+            expect(entries).toEqual(['flow.json']);
+          }),
+        );
+      }),
+  );
 });

@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, vi } from 'vitest';
 import { initCliPlatform } from '@cli/runtime/initPlatform';
 import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
 import { StateWriteFailed } from '@platform/interfaces';
+import { withProcessServices } from '@platform/processRuntime';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import {
@@ -352,13 +353,12 @@ describe('CLI platform init', () => {
         // local, not a process-wide read.
         const { runtime } = yield* initCliPlatform(cliContext());
 
-        const setup = yield* Effect.promise(() =>
-          runtime.runPromise(Effect.service(SetupPlatform)),
+        const setup = yield* withProcessServices(
+          runtime,
+          Effect.service(SetupPlatform),
         );
         expect(setup.host).toBe('cli');
-        expect(
-          yield* Effect.promise(() => runtime.runPromise(setup.signIn())),
-        ).toBe(true);
+        expect(yield* withProcessServices(runtime, setup.signIn())).toBe(true);
         expect(mocks.signInCliSupabase).toHaveBeenCalledOnce();
         expect(mocks.signInCliSupabase).toHaveBeenCalledWith(runtime, {
           openBrowser: true,

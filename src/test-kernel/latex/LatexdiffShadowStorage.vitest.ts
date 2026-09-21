@@ -392,40 +392,50 @@ describe('LaTeXdiffService shadow output', () => {
       }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
-  it('mirrors workspace dependencies into diff round storage', async () => {
-    const tempDir = await makeTempDir('texra-diff-mirror-', tempDirs);
-    const workspaceDir = path.join(tempDir, 'workspace');
-    const storageRoot = path.join(tempDir, 'storage');
-    const dependencyPath = path.join(workspaceDir, 'refs', 'macros.sty');
-    await mkdir(path.dirname(dependencyPath), { recursive: true });
-    await writeFile(dependencyPath, '\\newcommand{\\RR}{\\mathbb{R}}\n');
+  it.live('mirrors workspace dependencies into diff round storage', () =>
+    Effect.gen(function* () {
+      const tempDir = yield* Effect.promise(() =>
+        makeTempDir('texra-diff-mirror-', tempDirs),
+      );
+      const workspaceDir = path.join(tempDir, 'workspace');
+      const storageRoot = path.join(tempDir, 'storage');
+      const dependencyPath = path.join(workspaceDir, 'refs', 'macros.sty');
+      yield* Effect.promise(() =>
+        mkdir(path.dirname(dependencyPath), { recursive: true }),
+      );
+      yield* Effect.promise(() =>
+        writeFile(dependencyPath, '\\newcommand{\\RR}{\\mathbb{R}}\n'),
+      );
 
-    await installNodeBackedPlatform(workspaceDir, storageRoot);
+      yield* Effect.promise(() =>
+        installNodeBackedPlatform(workspaceDir, storageRoot),
+      );
 
-    const runId = 'run-1' as RunId;
-    const fileService = new RunFileService(runId, testWorkspaceRoots());
-    await Effect.runPromise(
-      Effect.gen(function* () {
+      const runId = 'run-1' as RunId;
+      const fileService = new RunFileService(runId, testWorkspaceRoots());
+      yield* Effect.gen(function* () {
         yield* fileService.mirrorWorkspaceFile(
           createWorkspaceLocation(dependencyPath, 'refs/macros.sty'),
         );
         yield* fileService.ensureMirroredInDiffRoundDir(2);
-      }).pipe(Effect.provide(nodePlatformLayer)),
-    );
+      }).pipe(Effect.provide(nodePlatformLayer));
 
-    await expect(
-      readFile(
-        path.join(
-          runDirUnder(testWorkspaceRoots().storage, runId),
-          'diff',
-          'r2',
-          'refs',
-          'macros.sty',
+      expect(
+        yield* Effect.promise(() =>
+          readFile(
+            path.join(
+              runDirUnder(testWorkspaceRoots().storage, runId),
+              'diff',
+              'r2',
+              'refs',
+              'macros.sty',
+            ),
+            'utf8',
+          ),
         ),
-        'utf8',
-      ),
-    ).resolves.toBe('\\newcommand{\\RR}{\\mathbb{R}}\n');
-  });
+      ).toBe('\\newcommand{\\RR}{\\mathbb{R}}\n');
+    }),
+  );
 });
 
 describe('LaTeXdiffService logger channel', () => {

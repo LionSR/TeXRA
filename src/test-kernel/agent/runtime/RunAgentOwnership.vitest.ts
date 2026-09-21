@@ -171,6 +171,13 @@ function launch({ kind = 'resume', ...options }: RunOptions = {}) {
   );
 }
 
+/** Runs the launch's own `onRun` lifecycle hook, as the mocked host would. */
+function runOnRun(options: {
+  readonly onRun?: () => Effect.Effect<void>;
+}): Promise<void> {
+  return Effect.runPromise(options.onRun?.() ?? Effect.void);
+}
+
 describe('runAgent run ownership', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -685,8 +692,7 @@ describe('runAgent run ownership', () => {
         }
         mocks.executeAgent.mockImplementationOnce(
           async (_config, _id, options) => {
-            if (lifecycleStarted)
-              await Effect.runPromise(options.onRun?.() ?? Effect.void);
+            if (lifecycleStarted) await runOnRun(options);
             throw runError;
           },
         );
