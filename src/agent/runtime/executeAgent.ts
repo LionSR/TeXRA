@@ -632,67 +632,81 @@ const resumeToolUseWithOwnedLease = Effect.fn('resumeToolUseWithOwnedLease')(
     options: ResumeToolUseFromResumeDataOptions & { session: SessionHandle },
   ) {
     const runSession = options.session;
-    const setup = yield* Effect.exit(
+    // The turn's scope closes before any release below. The launch's
+    // finalizers compensate through the run's own claim - the stage's
+    // FAILED close is an append - so a scope that unwound after
+    // `releaseRunLease` would have its compensation refused
+    // `DatabaseNotOwner`. Each exit leaves the scope as a value instead.
+    const outcome = yield* Effect.scoped(
       Effect.gen(function* () {
-        const parentRunId = yield* persistedParentRunId(
-          runSession,
-          resume.runId,
+        const setup = yield* Effect.exit(
+          Effect.gen(function* () {
+            const parentRunId = yield* persistedParentRunId(
+              runSession,
+              resume.runId,
+            );
+            const definition = yield* prepareAgentDefinition({
+              config: resume.agentConfig,
+              enforceCategory: true,
+              session: runSession,
+              suppressErrorNotification: true,
+            });
+            const ctx = yield* buildAgentLaunchContext({
+              definition,
+              runId: resume.runId,
+              resumed: true,
+              modelCompatibilityKey: resume.modelCompatibilityKey,
+              session: runSession,
+              toolPolicy: {
+                approvalPromptsUnavailable: options.approvalPromptsUnavailable,
+                runtimeUnavailableTools: options.runtimeUnavailableTools,
+              },
+            });
+            return { ctx, parentRunId };
+          }),
         );
-        const definition = yield* prepareAgentDefinition({
-          config: resume.agentConfig,
-          enforceCategory: true,
-          session: runSession,
-          suppressErrorNotification: true,
-        });
-        const ctx = yield* buildAgentLaunchContext({
-          definition,
-          runId: resume.runId,
-          resumed: true,
-          modelCompatibilityKey: resume.modelCompatibilityKey,
-          session: runSession,
-          toolPolicy: {
-            approvalPromptsUnavailable: options.approvalPromptsUnavailable,
-            runtimeUnavailableTools: options.runtimeUnavailableTools,
-          },
-        });
-        return { ctx, parentRunId };
+        if (Exit.isFailure(setup)) {
+          return { phase: 'setup', exit: setup } as const;
+        }
+        const { ctx, parentRunId } = setup.value;
+        const { setting } = ctx;
+        const result = yield* Effect.exit(
+          runFlowWithLifecycle(
+            ctx,
+            (handle) =>
+              // Inside the lifecycle so the rejection ends the started stream
+              // with its FAILED result like any other run failure.
+              setting.agentCategory !== AgentCategory.ToolUse
+                ? // Keep this historical diagnostic byte-for-byte for external monitors.
+                  Effect.fail(
+                    new AgentError(
+                      'Attempted to resume a non tool-use agent with resumeToolUseFromSnapshot.',
+                    ),
+                  )
+                : launchToolUseRun(
+                    ctx,
+                    handle,
+                    { ...options, parentRunId },
+                    {
+                      kind: 'resume',
+                      resume,
+                      isCancellationRequested: options.isCancellationRequested,
+                      onCancellationAtFlowAttachment:
+                        options.onCancellationAtFlowAttachment,
+                    },
+                  ),
+            buildLifecycleOptions(options, parentRunId),
+          ),
+        );
+        return { phase: 'run', exit: result } as const;
       }),
     );
-    if (Exit.isFailure(setup)) {
-      return yield* Effect.failCause(setup.cause).pipe(
+    if (outcome.phase === 'setup') {
+      return yield* Effect.failCause(outcome.exit.cause).pipe(
         Effect.onExit(() => runSession.releaseRunLease(resume.runId)),
       );
     }
-    const { ctx, parentRunId } = setup.value;
-    const { setting } = ctx;
-    const result = yield* Effect.exit(
-      runFlowWithLifecycle(
-        ctx,
-        (handle) =>
-          // Inside the lifecycle so the rejection ends the started stream
-          // with its FAILED result like any other run failure.
-          setting.agentCategory !== AgentCategory.ToolUse
-            ? // Keep this historical diagnostic byte-for-byte for external monitors.
-              Effect.fail(
-                new AgentError(
-                  'Attempted to resume a non tool-use agent with resumeToolUseFromSnapshot.',
-                ),
-              )
-            : launchToolUseRun(
-                ctx,
-                handle,
-                { ...options, parentRunId },
-                {
-                  kind: 'resume',
-                  resume,
-                  isCancellationRequested: options.isCancellationRequested,
-                  onCancellationAtFlowAttachment:
-                    options.onCancellationAtFlowAttachment,
-                },
-              ),
-        buildLifecycleOptions(options, parentRunId),
-      ),
-    );
+    const result = outcome.exit;
     if (Exit.isFailure(result)) {
       const released = yield* Effect.exit(
         runSession.releaseRunLease(resume.runId),
@@ -713,8 +727,6 @@ const resumeToolUseWithOwnedLease = Effect.fn('resumeToolUseWithOwnedLease')(
     }
     return result.value;
   },
-  // The resumed turn's scope: the launch's run trace retires with it.
-  Effect.scoped,
   Effect.uninterruptible,
 );
 
