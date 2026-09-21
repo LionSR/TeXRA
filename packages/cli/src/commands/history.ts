@@ -35,7 +35,7 @@ import {
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { GLOBAL_ARGS, optString } from './_helpers/globalArgs';
 import { emitCliResult } from './_helpers/output';
-import type { CliContext } from '../runtime/cliContext';
+import { CliUsageError, type CliContext } from '../runtime/cliContext';
 
 export function parseHistoryListLimit(
   value: string | undefined,
@@ -256,14 +256,16 @@ const historyListCommand = defineCliCommand({
       description: 'Show at most this many runs',
     },
   },
-  // The argument parses are the builder's, above the program: they settle
-  // the command before `defineCliCommand` installs anything.
+  // The argument parses are the builder's, above the program: a refusal is
+  // `CliUsageError`, which `runCli` reports as the same stderr line and exit
+  // 2 the program would have returned — and refuses before `defineCliCommand`
+  // installs a process runtime this command would never bring a platform up
+  // to dispose.
   run: (context, ctx) => {
     const limitValue = optString(ctx.args.limit);
     const limit = parseHistoryListLimit(limitValue);
     if (limitValue !== undefined && limit === undefined) {
-      writeTextStderr(`Invalid history limit: ${limitValue}`);
-      return Effect.succeed(CliExitCode.Usage);
+      throw new CliUsageError(`Invalid history limit: ${limitValue}`);
     }
     return runHistoryList(context, { limit });
   },
@@ -293,14 +295,12 @@ const historyShowCommand = defineCliCommand({
   run: (context, ctx) => {
     const id = parseCliHistoryId(ctx.args.id);
     if (!id) {
-      writeTextStderr(`Invalid run id: ${ctx.args.id}`);
-      return Effect.succeed(CliExitCode.Usage);
+      throw new CliUsageError(`Invalid run id: ${ctx.args.id}`);
     }
     const exportFormat = optString(ctx.args.export);
     if (exportFormat !== undefined) {
       if (exportFormat !== 'html' && exportFormat !== 'md') {
-        writeTextStderr(formatInvalidExportFormatText(exportFormat));
-        return Effect.succeed(CliExitCode.Usage);
+        throw new CliUsageError(formatInvalidExportFormatText(exportFormat));
       }
       return runHistoryExport(context, id, exportFormat);
     }
@@ -332,8 +332,7 @@ const historyDeleteCommand = defineCliCommand({
     const rawId = optString(ctx.args.id);
     const id = rawId ? parseCliHistoryId(rawId) : undefined;
     if (rawId && !id) {
-      writeTextStderr(`Invalid run id: ${rawId}`);
-      return Effect.succeed(CliExitCode.Usage);
+      throw new CliUsageError(`Invalid run id: ${rawId}`);
     }
     return runHistoryDelete(context, {
       id,

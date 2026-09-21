@@ -33,11 +33,15 @@ interface DefineCliCommandOptions<A extends ArgsDef, E> {
    * The value it settles on is forwarded to `setExitCode`, so a handler
    * reduces to "do the work, return a code".
    *
-   * It is called to BUILD that program, before the runtime is installed, so a
-   * command whose usage guard must settle before anything is installed keeps
-   * that guard in the builder and returns a program that is already decided
-   * (`texra clone`'s project-id parse, `texra history`'s id and limit parses,
-   * `texra config edit`'s terminal check, `texra login`'s transport check).
+   * It is called to BUILD that program, before the runtime is installed. A
+   * command that refuses its arguments must therefore refuse HERE, in the
+   * builder, by throwing `CliUsageError` (`texra clone`'s project parse,
+   * `texra history`'s id and limit parses, `texra config edit`'s terminal
+   * check, `texra login`'s transport check) — not by returning a program that
+   * settles on an exit code. A returned program is run, and running one
+   * installs a process runtime that only the platform shutdown disposes; a
+   * command that refuses before it brings a platform up would leave the
+   * global root's handle holding the event loop open past its own exit.
    */
   readonly run: (
     context: CliContext,
