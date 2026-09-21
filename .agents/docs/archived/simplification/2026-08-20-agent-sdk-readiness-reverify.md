@@ -9,7 +9,7 @@ Archived: 2026-09-06
 > and unready surface; design subagent boundaries" — against the plan of record
 > ([`2026-07-09-agent-sdk-north-star.md`](../architecture/2026-07-09-agent-sdk-north-star.md))
 > and the immediately-prior pass
-> ([`-08-19`](../../implemented/architecture/2026-08-19-agent-sdk-readiness-reverify.md), measured at
+> ([`-08-19`](../architecture/2026-08-19-agent-sdk-readiness-reverify.md), measured at
 > `391033e`). This pass found the alignment **holds and has strengthened
 > marginally**: every `-08-19` claim re-verifies at `74fab00`, and the frozen
 > host deep-import lists narrowed by one specifier in each host with no baseline

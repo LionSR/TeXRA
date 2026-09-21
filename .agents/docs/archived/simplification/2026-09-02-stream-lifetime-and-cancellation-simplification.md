@@ -81,7 +81,7 @@ a budget to add.
   `streamApprovalQueue.ts` as a non-goal of that migration. The round 3
   verifier already ruled this a scope fence, not a design rationale; §2.D
   cites it and does not treat it as a KEEP.
-- **`.agents/docs/proposed/architecture/2026-08-26-effect-4-runtime-migration.md`** proposes Effect
+- **`.agents/docs/archived/architecture/2026-08-26-effect-4-runtime-migration.md`** proposes Effect
   scopes as a future replacement for `DisposableStore`. Nothing below adds
   to that store.
 

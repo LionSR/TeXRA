@@ -81,7 +81,7 @@ defect. The one admissible persisted derivation is a checkpoint: a snapshot
 the rows can always rebuild and that loses every conflict with them, kept
 only to bound replay cost. A snapshot that carries a fact no row carries is
 not a checkpoint, it is a second store; PR1's `flow.snapshot` is written to
-"restore what no row carries" ([PR1 §2.6](../../proposed/architecture/2026-09-08-pr1-run-ledger-foundation.md)),
+"restore what no row carries" ([PR1 §2.6](../../archived/architecture/2026-09-08-pr1-run-ledger-foundation.md)),
 and that gap closes by giving those facts rows, not by keeping the snapshot
 authoritative.
 
@@ -163,7 +163,7 @@ claims ([execution ownership](../../proposed/architecture/2026-09-10-execution-o
 §1, row 1). The split was meant to separate display rows from ledger rows.
 That distinction is a property of a row type, not of an aggregate, and the
 PR1 ledger's `foldRunState` already has to read both aggregates in one commit
-order ([PR1 §4.2](../../proposed/architecture/2026-09-08-pr1-run-ledger-foundation.md)). The recommended
+order ([PR1 §4.2](../../archived/architecture/2026-09-08-pr1-run-ledger-foundation.md)). The recommended
 shape is **one aggregate kind, `run`, keyed by the run id**, with row types
 marked display-visible or ledger-private. That deletes the second sequence
 counter, the second claim, the `RunAggregates` two-key signature that PR1
@@ -488,7 +488,7 @@ vocabulary it finds. Landing PR1 first hardens the duplicate; landing this
 first removes a documented deviation from PR1 before it is written.
 
 1. **S0, docs, same day.** Amend the
-   [PR1 note](../../proposed/architecture/2026-09-08-pr1-run-ledger-foundation.md) (`RunAggregates` to
+   [PR1 note](../../archived/architecture/2026-09-08-pr1-run-ledger-foundation.md) (`RunAggregates` to
    the run id; rows land on the `run` aggregate), the
    [Tier-1 manifest](../../proposed/architecture/2026-09-10-agent-sdk-tier-1-manifest.md) (drop
    `StreamTabId` and `StreamTabIdSchema` from all three entries), and the

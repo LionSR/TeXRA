@@ -1,10 +1,12 @@
 # Architectural review of the September 6 studies
 
-Status: proposed
+Status: archived — its four contract revisions were folded into the delivery
+plan; the direction it reviewed shipped.
+Archived: 2026-09-21
 
 Date: 2026-09-06. Verdict: retain the direction; revise four contracts before treating it as an implementation specification.
 
-Reviewed: the [decision study](../../proposed/architecture/2026-09-06-agent-architecture-study.md), [runtime study](../../proposed/architecture/2026-09-06-agent-loop-architecture-study.md), [LLM package study](./2026-09-06-llm-package-architecture-study.md), and [HTML explorer](../../proposed/architecture/2026-09-06-agent-architecture.html). The review concerns the proposed architecture, not a reproduced production defect. The studies explicitly describe a recommendation; passing their HTML and link checks does not validate the architecture.
+Reviewed: the [decision study](./2026-09-06-agent-architecture-study.md), [runtime study](./2026-09-06-agent-loop-architecture-study.md), [LLM package study](../../implemented/architecture/2026-09-06-llm-package-architecture-study.md), and [HTML explorer](./2026-09-06-agent-architecture.html). The review concerns the proposed architecture, not a reproduced production defect. The studies explicitly describe a recommendation; passing their HTML and link checks does not validate the architecture.
 
 TeXRA source in the studies is `cc22843af3fa7d8457b6899266a6e04bf15067e9`. Live main had advanced to `89d5942cee5c0f9cfec85dc6e99273cec4c80b69` when reviewed. The inspected handler, tool, and September runtime-proposal files cited below are unchanged between those revisions. The existing four external source pins remain the comparison baseline; this review does not assert a new exhaustive survey of upstream heads.
 

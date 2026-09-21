@@ -11,7 +11,7 @@ status: implemented
 > `dist`. 1059 clauses in 415 files. Classification by agents, with an
 > independent check of every fourth entry; the per-slice agreement rates are
 > in section 4. This is the census that Phase 0, item 6 of
-> [`.agents/docs/proposed/architecture/2026-08-26-effect-4-runtime-migration.md`](../../proposed/architecture/2026-08-26-effect-4-runtime-migration.md)
+> [`.agents/docs/archived/architecture/2026-08-26-effect-4-runtime-migration.md`](../../archived/architecture/2026-08-26-effect-4-runtime-migration.md)
 > asks for. No production code changes accompany it.
 
 ## 1. Why this census exists
@@ -134,7 +134,7 @@ under `src/agent/` where the third segment is used so that `runtime`,
 
 The owner's second ruling on the migration ("fully embrace Effect; no
 pass-throughs, no adapters", recorded against R1 in
-`.agents/docs/proposed/architecture/2026-08-26-effect-4-runtime-migration.md`) decides what this
+`.agents/docs/archived/architecture/2026-08-26-effect-4-runtime-migration.md`) decides what this
 census is for. A catch clause is **not** translated into an Effect
 equivalent. It is deleted, unless it is one of exactly two things:
 

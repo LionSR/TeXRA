@@ -110,7 +110,7 @@ The September 8 owner ruling selects the official client and approves Node
 `^22.16.0 || >=24.0.0`: Node 23 lacks the driver's required
 `setReturnArrays()` API. This supersedes the earlier decision to retain
 the handwritten client at Node 22.13.0. The substrate's
-[client comparison](2026-09-03-persistence-substrate-decision.md#client-selection-at-the-approved-host-floor)
+[client comparison](../../archived/architecture/2026-09-03-persistence-substrate-decision.md#client-selection-at-the-approved-host-floor)
 records the required APIs and the reproduced upstream failed-COMMIT adoption
 gate. Use the official driver and its public transaction ownership, without a
 custom SQLite driver or VFS. This selection does not complete the remaining
@@ -434,7 +434,7 @@ spike does not establish delivery.
   for the implementation packages above.
 
 [runtime]: ../../implemented/architecture/2026-09-04-agent-runtime-on-effect.md
-[substrate]: ./2026-09-03-persistence-substrate-decision.md
+[substrate]: ../../archived/architecture/2026-09-03-persistence-substrate-decision.md
 [sdk]: ./2026-09-05-agent-sdk-architecture.md
-[prd]: ./2026-08-26-effect-4-runtime-migration.md
-[study]: ../../proposed/architecture/2026-09-06-agent-architecture-study.md
+[prd]: ../../archived/architecture/2026-08-26-effect-4-runtime-migration.md
+[study]: ../../archived/architecture/2026-09-06-agent-architecture-study.md

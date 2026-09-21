@@ -1,6 +1,8 @@
 # Effect 4 interface findings: what the pinned types actually say
 
-Status: proposed
+Status: archived — measured against `effect@4.0.0-rc.112`; the pin has moved
+and the findings that still bind live in AGENTS.md.
+Archived: 2026-09-21
 
 Measured against `effect@4.0.0-rc.112` (the repo's exact pin) and the tree at
 `1cf1a84`, by six parallel lanes each reviewed by two independent adversarial

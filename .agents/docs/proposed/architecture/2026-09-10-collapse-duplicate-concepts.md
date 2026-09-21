@@ -372,7 +372,7 @@ actionable result.
 
 Two proposed notes are already building on the two-identifier vocabulary:
 
-- [PR1 run ledger foundation](2026-09-08-pr1-run-ledger-foundation.md) declares
+- [PR1 run ledger foundation](../../archived/architecture/2026-09-08-pr1-run-ledger-foundation.md) declares
   `interface RunAggregates { executionId; streamId }` and documents it as a
   **deviation it was forced into**, reasoning that "nothing on the execution
   aggregate names its stream, so a one-argument signature would need a reverse
@@ -455,7 +455,7 @@ defect this note is about, in the project's own instructions.
 
 The [observability plane](2026-09-09-observability-plane.md) owns the run-event
 emission path; family **E** should be read as input to it, not as competing
-work. The [PR1 run ledger](2026-09-08-pr1-run-ledger-foundation.md) owns
+work. The [PR1 run ledger](../../archived/architecture/2026-09-08-pr1-run-ledger-foundation.md) owns
 execution-state persistence. The
 [1.0 implementation plan](2026-09-09-texra-1-0-implementation-plan.md) owns the
 retirement of `KVStore`, `PersistedFlow`, the file-based lease, `JsonStore`

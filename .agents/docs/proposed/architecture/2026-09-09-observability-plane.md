@@ -266,7 +266,7 @@ the seam is two files wide rather than now.
 
 ## 5. Corrections to existing notes
 
-- **[`2026-09-08-effect-4-interface-findings.md`](2026-09-08-effect-4-interface-findings.md) §3
+- **[`2026-09-08-effect-4-interface-findings.md`](../../archived/architecture/2026-09-08-effect-4-interface-findings.md) §3
   should be re-scoped.** Its API findings are correct and verified: there is no synchronous
   `PubSub` constructor carrying a delivery strategy, and `makeAtomicUnbounded` yields a poll-queue
   rather than a callback registry. Its _conclusion_ does not follow. The section preserves

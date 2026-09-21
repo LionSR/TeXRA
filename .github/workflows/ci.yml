@@ -206,6 +206,12 @@ jobs:
       - name: Check guidance file references resolve
         run: node scripts/check-guidance-refs.mjs
 
+      # Same reason this job is ungated: a note that shipped but still sits in
+      # `.agents/docs/proposed/` arrives on the docs side of the split, and an
+      # agent reading it as a live direction gets a confidently wrong answer.
+      - name: Check no proposal declares itself complete
+        run: node scripts/check-proposal-status.mjs
+
       # The docs-root boundary decides what the texra.ai site publishes. It
       # runs inside `docs:build` (via `check:content`), but that job is gated
       # off on code-only PRs and on pushes to main — exactly the paths where a

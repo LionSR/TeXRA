@@ -1,6 +1,8 @@
 # Agent-SDK readiness — re-verification pass (2026-09-13)
 
 Status: implemented
+Archived: 2026-09-21 — superseded by the 2026-09-17 pass, the one current
+re-verification.
 
 > **Status.** Re-derived by direct inspection at HEAD `a7cd2ab`
 > (`refactor(platform): resolveLatexDir takes FileSystem from context (#12375)`).

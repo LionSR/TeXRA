@@ -1115,13 +1115,13 @@ Everything the surveys found duplicated, and the one thing it becomes. Rows mark
 | Five more collapse rows are banked                                                                            | §11             |
 | Row counts in §1 are stale by a factor (`platform()` 19/41, six rows deleted, pin rc.115); re-measure at HEAD | §1 (not edited) |
 
-[prd]: ./2026-08-26-effect-4-runtime-migration.md
+[prd]: ../../archived/architecture/2026-08-26-effect-4-runtime-migration.md
 [runtime]: ../../implemented/architecture/2026-09-04-agent-runtime-on-effect.md
-[substrate]: ./2026-09-03-persistence-substrate-decision.md
+[substrate]: ../../archived/architecture/2026-09-03-persistence-substrate-decision.md
 [plan]: ./2026-09-06-effect-runtime-delivery-plan.md
 [injection]: ./2026-09-10-effect-native-injection-context-pipelines.md
 [onerun]: ../../implemented/architecture/2026-09-10-one-run-model.md
-[pr1]: ./2026-09-08-pr1-run-ledger-foundation.md
-[findings]: ./2026-09-08-effect-4-interface-findings.md
-[loop]: ./2026-09-06-agent-loop-architecture-study.md
+[pr1]: ../../archived/architecture/2026-09-08-pr1-run-ledger-foundation.md
+[findings]: ../../archived/architecture/2026-09-08-effect-4-interface-findings.md
+[loop]: ../../archived/architecture/2026-09-06-agent-loop-architecture-study.md
 [lease]: ./2026-09-10-execution-ownership-lane-and-lease.md

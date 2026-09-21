@@ -259,7 +259,7 @@ maintained in parallel.
 ## Per-session `LayerMap`, per-run `Layer.effect`: decision 8's "one provide at the process entry" is amended (ruled 2026-09-18)
 
 **Question.** Decision 8 of the
-[Effect-4 PRD §15](../../proposed/architecture/2026-08-26-effect-4-runtime-migration.md#15-open-decisions-for-ratification)
+[Effect-4 PRD §15](../../archived/architecture/2026-08-26-effect-4-runtime-migration.md#15-open-decisions-for-ratification)
 ratified Effect's best-practice guides, including "one `provide` at the
 process entry". The landed runtime provides services at three lifetimes, not
 one. Is that a deviation to repair?
@@ -321,7 +321,7 @@ Deleting the row (the allowlist is the ruling, and a zeroed row would stop
 naming these four). Building a second internal cancellation tree beside the
 fiber's, which is what converting these to signals-of-signals would produce.
 
-## Runtime threading: each composition root holds its `ManagedRuntime` in a local (ruled 2026-09-18; answers [Effect-4 PRD §15](../../proposed/architecture/2026-08-26-effect-4-runtime-migration.md#15-open-decisions-for-ratification) decision 2)
+## Runtime threading: each composition root holds its `ManagedRuntime` in a local (ruled 2026-09-18; answers [Effect-4 PRD §15](../../archived/architecture/2026-08-26-effect-4-runtime-migration.md#15-open-decisions-for-ratification) decision 2)
 
 **Question.** Decision 2 asked whether the host managed runtime belongs
 directly in each composition root or behind one host-neutral

@@ -1,6 +1,8 @@
 # Agent-SDK readiness — re-verification pass (2026-09-09)
 
 Status: implemented
+Archived: 2026-09-21 — superseded by the 2026-09-17 pass, the one current
+re-verification.
 
 > **Status:** Written 2026-09-09 and, per the maintainer's request on #12154
 > ("do them from latest main"), **re-derived against the latest `main` at
@@ -36,7 +38,7 @@ ratified (the pure-Effect runtime,
 and the accepted delivery plan
 [`2026-09-06-effect-runtime-delivery-plan.md`](../../proposed/architecture/2026-09-06-effect-runtime-delivery-plan.md),
 built on the migration PRD
-[`2026-08-26-effect-4-runtime-migration.md`](../../proposed/architecture/2026-08-26-effect-4-runtime-migration.md)).
+[`2026-08-26-effect-4-runtime-migration.md`](../architecture/2026-08-26-effect-4-runtime-migration.md)).
 The specific SDK-surface and subagent **enumerations**, however, live in
 documents still marked `status: proposed` — notably
 [`2026-09-05-agent-sdk-architecture.md`](../../proposed/architecture/2026-09-05-agent-sdk-architecture.md),
@@ -49,7 +51,7 @@ re-expression onto Effect**, not because they are unnecessary indirection today
 (the review is explicit that "deleting node classes is an implementation
 consequence, not the product objective", and the reflection pipeline and
 tool-use loop are both preserved as first-class programs —
-[`2026-09-06-agent-architecture-review.md`](../../proposed/architecture/2026-09-06-agent-architecture-review.md)).
+[`2026-09-06-agent-architecture-review.md`](../architecture/2026-09-06-agent-architecture-review.md)).
 
 The practical consequence for this routine: the three deliverables the standing
 question asks a fresh pass to produce — (a) abstractions to remove, (b) surface

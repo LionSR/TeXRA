@@ -1,6 +1,8 @@
 # Agent-SDK readiness — re-verification pass (2026-08-19)
 
 Status: implemented
+Archived: 2026-09-21 — superseded by the 2026-09-17 pass, the one current
+re-verification.
 
 > **Status:** Verification-only, written 2026-08-19 against branch HEAD
 > `391033e`. The scheduled audit routine re-ran the standing question — "review

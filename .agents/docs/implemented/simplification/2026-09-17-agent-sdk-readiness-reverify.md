@@ -6,7 +6,7 @@ Status: implemented
 > question — "review the agent core, model handler, logger, and surface for
 > unnecessary abstraction and unready surface; design subagent boundaries" —
 > against the immediately prior filed pass
-> ([`-09-14`](./2026-09-14-agent-sdk-readiness-reverify.md), the "twelfth
+> ([`-09-14`](../../archived/simplification/2026-09-14-agent-sdk-readiness-reverify.md), the "twelfth
 > consecutive green", inspected at `d5e95a89`) and the Tier-1 manifest of record
 > ([`2026-09-10-agent-sdk-tier-1-manifest.md`](../../proposed/architecture/2026-09-10-agent-sdk-tier-1-manifest.md)).
 > This is the **thirteenth consecutive green pass** (`-08-19` through `-09-17`).

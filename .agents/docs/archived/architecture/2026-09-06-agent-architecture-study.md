@@ -1,6 +1,8 @@
 # TeXRA agent architecture: own the LLM package, replace the graph
 
-Status: proposed
+Status: archived — both recommendations shipped: `packages/llm` exists and the
+graph engine is gone.
+Archived: 2026-09-21
 
 Date: 2026-09-06. Status: research and recommended design, not an implemented migration or a change to the binding PRDs.
 
@@ -10,10 +12,10 @@ This follows the owner's latest direction: TeXRA is small enough to make an aggr
 
 The detailed studies are:
 
-- [Architectural review and required contract revisions](../../proposed/architecture/2026-09-06-agent-architecture-review.md): preserves the reflection pipeline and identifies four open runtime/LLM contract gaps. Read alongside the proposed APIs below; this remains a design draft.
+- [Architectural review and required contract revisions](./2026-09-06-agent-architecture-review.md): preserves the reflection pipeline and identifies four open runtime/LLM contract gaps. Read alongside the proposed APIs below; this remains a design draft.
 - [Interactive HTML architecture explorer](./2026-09-06-agent-architecture.html): current/proposed diagrams, turn recovery, all 41 handler members, and upstream references. Opens locally without network assets.
 - [Agent loops, durable phases, and recovery](./2026-09-06-agent-loop-architecture-study.md).
-- [Turning the model handlers into TeXRA's LLM package](../../proposed/architecture/2026-09-06-llm-package-architecture-study.md).
+- [Turning the model handlers into TeXRA's LLM package](../../implemented/architecture/2026-09-06-llm-package-architecture-study.md).
 - [Source pins, reproducible census, and offline probe](../../evidence/2026-09-06-agent-architecture/README.md).
 
 ## Decision in concrete terms

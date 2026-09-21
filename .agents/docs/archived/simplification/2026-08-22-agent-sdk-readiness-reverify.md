@@ -11,7 +11,7 @@ Archived: 2026-09-06
 > against the plan of record
 > ([`2026-07-09-agent-sdk-north-star.md`](../architecture/2026-07-09-agent-sdk-north-star.md))
 > and the three immediately-prior passes
-> ([`-08-19`](../../implemented/architecture/2026-08-19-agent-sdk-readiness-reverify.md) at `391033e`,
+> ([`-08-19`](../architecture/2026-08-19-agent-sdk-readiness-reverify.md) at `391033e`,
 > [`-08-20`](./2026-08-20-agent-sdk-readiness-reverify.md) at `74fab00`,
 > [`-08-21`](./2026-08-21-agent-sdk-readiness-reverify.md) at `c48e5cb`). This
 > pass re-derived the verdict from four fresh, independent area audits (core,

@@ -31,12 +31,12 @@ the 2026-09-07 record of how the repo reasoned about Promise wraps, not as a
 count, a file map, or a work order. The rule in §2 — a wrap is legitimate
 exactly when the thing on the other side will never be an Effect — is the one
 part still quoted, and it survives in R1 of the
-[Effect-4 PRD](../../proposed/architecture/2026-08-26-effect-4-runtime-migration.md#r1-effect-exists-inside-promises-at-the-boundary).
+[Effect-4 PRD](./2026-08-26-effect-4-runtime-migration.md#r1-effect-exists-inside-promises-at-the-boundary).
 
 Every production `Effect.tryPromise` and `Effect.promise` site is classified
 here as a **legitimate foreign edge** or a **Promise-typed surface that has
 not been converted yet**, so the migration lanes of
-[2026-08-26-effect-4-runtime-migration.md](../../proposed/architecture/2026-08-26-effect-4-runtime-migration.md)
+[2026-08-26-effect-4-runtime-migration.md](./2026-08-26-effect-4-runtime-migration.md)
 can be aimed at the second set and stop worrying about the first.
 
 The audit answers a question that keeps recurring in review: is wrapping a

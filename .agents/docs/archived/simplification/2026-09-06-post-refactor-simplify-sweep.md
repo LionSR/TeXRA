@@ -67,7 +67,7 @@ reading could not have caught this.
 ## The real yield: 261 skipped candidates
 
 Agents were told not to port a non-Effect file to Effect — those lanes belong to
-`.agents/docs/proposed/architecture/2026-08-26-effect-4-runtime-migration.md` and several were in flight
+`.agents/docs/archived/architecture/2026-08-26-effect-4-runtime-migration.md` and several were in flight
 on open PRs — but to record the opportunity instead. **78 of the 261 skips are
 Effect-port opportunities**, and 24 name a hand-rolled primitive with a direct
 Effect equivalent.

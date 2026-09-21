@@ -1,6 +1,8 @@
 # Agent-SDK readiness — re-verification pass (2026-09-11)
 
 Status: implemented
+Archived: 2026-09-21 — superseded by the 2026-09-17 pass, the one current
+re-verification.
 
 > **Status.** Re-derived by direct inspection at HEAD `9e44649`
 > (`fix: store enabled models as a delta … (1.0 clean slate) (#12235)`,

@@ -56,13 +56,13 @@ rule, version 2, with the Effect shape in its section 12), and
 `.agents/docs/archived/architecture/2026-09-03-projection-adapter-ledger.md` (every layer
 classified). Where this PRD and those documents differ, this PRD governs.
 Its companion is the persistence decision
-`.agents/docs/proposed/architecture/2026-09-03-persistence-substrate-decision.md` (the event
+`.agents/docs/archived/architecture/2026-09-03-persistence-substrate-decision.md` (the event
 table as the only persisted truth), written by the persistence cutover owner
 after two rounds of alignment with this program. That document has since
 landed and sits in the tree at that path, so every "agreed with the
 substrate owner" claim below is checkable against it. This
 PRD follows the governing rules of
-`.agents/docs/proposed/architecture/2026-08-26-effect-4-runtime-migration.md` (R1 to R3, R5 to R10).
+`.agents/docs/archived/architecture/2026-08-26-effect-4-runtime-migration.md` (R1 to R3, R5 to R10).
 
 ---
 
@@ -856,7 +856,7 @@ in `src/shared/copy/`.
 ## 6. Events
 
 The only contract between this PRD and the persistence cutover is section
-6.1 of `.agents/docs/proposed/architecture/2026-09-03-persistence-substrate-decision.md`
+6.1 of `.agents/docs/archived/architecture/2026-09-03-persistence-substrate-decision.md`
 (clauses C1 to C10, jointly owned, changes land there first); this document
 references its clauses and does not restate them. That document lands in its
 owner's pull request, not this one; until it merges, the clause numbers here

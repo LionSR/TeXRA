@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Effect migration ratchet — Phase 1 of
-// .agents/docs/proposed/architecture/2026-08-26-effect-4-runtime-migration.md, "Execution strategy"
+// .agents/docs/archived/architecture/2026-08-26-effect-4-runtime-migration.md, "Execution strategy"
 // rule 3: leftovers fail CI, not review.
 //
 // Counts, per production file, the mechanisms the migration retires and
@@ -49,7 +49,7 @@ const baselinePath = join(
   'effect-migration-baseline.json',
 );
 const PRD =
-  '.agents/docs/proposed/architecture/2026-08-26-effect-4-runtime-migration.md';
+  '.agents/docs/archived/architecture/2026-08-26-effect-4-runtime-migration.md';
 const INJECTION_PLAN =
   '.agents/docs/proposed/architecture/2026-09-10-effect-native-injection-context-pipelines.md';
 /** This script, for the message that tells a reader where to retire a row. */
@@ -499,7 +499,7 @@ const ROWS = [
 ];
 
 const SEMANTICS =
-  'Per-file counts of the mechanisms the Effect 4 migration retires (.agents/docs/proposed/architecture/2026-08-26-effect-4-runtime-migration.md, execution rule 3), owned by scripts/check-effect-migration-ratchet.mjs. ' +
+  'Per-file counts of the mechanisms the Effect 4 migration retires (.agents/docs/archived/architecture/2026-08-26-effect-4-runtime-migration.md, execution rule 3), owned by scripts/check-effect-migration-ratchet.mjs. ' +
   'Scope: *.ts, *.tsx and *.mts under src/ and packages/*/src/, excluding src/test-kernel/, *.vitest.ts, and any dist/ or node_modules/ directory (packages/*/scripts and packages/*/tests are outside the scanned roots). ' +
   'Files are parsed with the TypeScript compiler API, so comments and string literals never count. ' +
   "Rows: 'platform()' counts calls of the platform export of @platform/platform (src/platform/platform.ts) under whatever local name the file binds it to: `import { platform as p }` then p(), and `import * as P` then P.platform(), included; tryPlatform and unrelated bindings such as node:os platform excluded; " +

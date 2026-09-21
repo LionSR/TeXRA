@@ -1,6 +1,7 @@
 # Persistence cutover integration audit (2026-09-06)
 
-Status: proposed
+Status: archived — a dated checkpoint of a cutover that has since landed.
+Archived: 2026-09-21
 
 **Amendment (2026-09-09):** The accepted [TeXRA 1.0 direction](../../../../AGENTS.md#texra-10-direction)
 supersedes the legacy-state import and preservation-as-current-state gates
