@@ -5,9 +5,15 @@
 // deep import from the scanned roots fails, and there is no baseline to
 // regenerate.
 //
-// Scope: repo-root `src/` and every `packages/*/src`, excluding only the
-// surface's own interior `src/shared/schemas/` (a sibling import there cannot
-// use the barrel). test-kernel files are ratcheted like production.
+// Scope: repo-root `src/`, repo-root `scripts/`, and every `packages/*/src`
+// and `packages/*/scripts`, excluding only the surface's own interior
+// `src/shared/schemas/` (a sibling import there cannot use the barrel).
+// `scripts/` directories ship dev tooling alongside production code and are
+// not exempt from the prohibition — most of their files are plain
+// .js/.mjs/.cjs rather than TypeScript, so the scan admits those extensions
+// only under a `scripts` root (`src` and `packages/*/src` stay TS-only, the
+// convention every production root already follows). test-kernel files are
+// ratcheted like production.
 
 // Node imports
 import { readFileSync, readdirSync } from 'node:fs';
@@ -29,13 +35,21 @@ const DEEP_IMPORT_PREFIX = '@shared/schemas/';
 
 function scanRoots(): string[] {
   const packagesRoot = resolve(REPO_ROOT, 'packages');
+  const packageDirs = readdirSync(packagesRoot, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .toSorted((a, b) => a.localeCompare(b));
+
   return [
     'src',
-    ...readdirSync(packagesRoot, { withFileTypes: true })
-      .filter((entry) => entry.isDirectory())
-      .map((entry) => `packages/${entry.name}/src`)
-      .toSorted((a, b) => a.localeCompare(b)),
+    'scripts',
+    ...packageDirs.map((name) => `packages/${name}/src`),
+    ...packageDirs.map((name) => `packages/${name}/scripts`),
   ];
+}
+
+function isScriptRoot(root: string): boolean {
+  return root === 'scripts' || root.endsWith('/scripts');
 }
 
 interface Scan {
@@ -53,6 +67,7 @@ function scanForDeepImports(): Scan {
     for (const file of sourceFilesUnder(resolve(REPO_ROOT, root), {
       excludeTestKernel: false,
       missingDirReturnsEmpty: true,
+      includeJs: isScriptRoot(root),
     })) {
       const repoPath = toRepoPath(file);
       if (repoPath.startsWith(SURFACE_INTERIOR)) continue;

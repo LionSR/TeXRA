@@ -41,6 +41,9 @@ export function productionRoots(): string[] {
 
 export const SOURCE_FILE = /\.(?:ts|tsx|mts|cts)$/;
 
+/** Plain-JS script extensions — not part of `SOURCE_FILE`'s TS-only default. */
+const SCRIPT_JS_FILE = /\.(?:js|jsx|mjs|cjs)$/;
+
 export function toRepoPath(path: string): string {
   return relative(REPO_ROOT, resolve(REPO_ROOT, path)).replaceAll('\\', '/');
 }
@@ -54,6 +57,8 @@ export function sourceFilesUnder(
     readonly repoRelative?: boolean;
     /** Drop files under src/test-kernel/. */
     readonly excludeTestKernel?: boolean;
+    /** Also match .js/.jsx/.mjs/.cjs — for scanning plain-JS script directories. */
+    readonly includeJs?: boolean;
   },
 ): string[] {
   let entries: string[];
@@ -65,7 +70,12 @@ export function sourceFilesUnder(
   }
 
   return entries
-    .filter((entry) => SOURCE_FILE.test(entry) && !entry.endsWith('.d.ts'))
+    .filter(
+      (entry) =>
+        (SOURCE_FILE.test(entry) ||
+          (opts?.includeJs && SCRIPT_JS_FILE.test(entry))) &&
+        !entry.endsWith('.d.ts'),
+    )
     .map((entry) => join(dir, entry))
     .filter(
       (file) =>
