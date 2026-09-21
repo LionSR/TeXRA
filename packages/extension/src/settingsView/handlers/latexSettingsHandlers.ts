@@ -9,7 +9,11 @@ import * as vscode from 'vscode';
 
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import { SETTINGS_VIEW_CMD, type SettingsMessageFor } from '@shared/schemas';
+import {
+  SETTINGS_VIEW_CMD,
+  type SettingsMessageFor,
+  type SettingsViewInboundHandlerRegistry,
+} from '@shared/schemas';
 import {
   LATEX_WORKSHOP_EXT_ID,
   normalizePlatform,
@@ -127,8 +131,18 @@ function resolveUpdateValue(
   return { ...remaining, ...setting.value };
 }
 
+/** The LaTeX tab's inbound arms, spread into the settings-view registry. */
+type LatexTabHandlers = Pick<
+  SettingsViewInboundHandlerRegistry,
+  | typeof SETTINGS_VIEW_CMD.APPLY_LATEX_SETTINGS
+  | typeof SETTINGS_VIEW_CMD.INSTALL_LATEX_WORKSHOP
+  | typeof SETTINGS_VIEW_CMD.RUN_INSTALL_COMMAND
+>;
+
 /** LaTeX settings handler delegate. */
 export class LatexSettingsHandlers {
+  readonly handlers: LatexTabHandlers;
+
   private readonly toolingController = new LatexToolingController({
     checkToolInstalled: (tool) => checkToolInstalled(tool, false),
     findPath: findToolInCommonPaths,
@@ -147,7 +161,17 @@ export class LatexSettingsHandlers {
     },
   });
 
-  constructor(private readonly ctx: SettingsHandlerContext) {}
+  constructor(private readonly ctx: SettingsHandlerContext) {
+    // Each arm is a settings-view message, so its program settles on the
+    // view's boundary here rather than in the view's own registry.
+    this.handlers = {
+      applyLatexSettings: (message) =>
+        ctx.run(this.handleApplyLatexSettings(message)),
+      installLatexWorkshop: () => ctx.run(this.handleInstallLatexWorkshop()),
+      runInstallCommand: (message) =>
+        ctx.run(this.handleRunInstallCommand(message)),
+    };
+  }
 
   sendLatexSettingsStatus(webview: vscode.Webview) {
     return Effect.flatMap(this.toolingController.detectStatus(), (settings) =>
@@ -158,7 +182,7 @@ export class LatexSettingsHandlers {
     );
   }
 
-  handleApplyLatexSettings(
+  private handleApplyLatexSettings(
     data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.APPLY_LATEX_SETTINGS>,
   ) {
     return withHandlerErrorHandling(
@@ -198,13 +222,13 @@ export class LatexSettingsHandlers {
     );
   }
 
-  handleInstallLatexWorkshop() {
+  private handleInstallLatexWorkshop() {
     return this.installExtension(LATEX_WORKSHOP_EXT_ID, (w) =>
       this.sendLatexSettingsStatus(w),
     );
   }
 
-  handleRunInstallCommand(
+  private handleRunInstallCommand(
     data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.RUN_INSTALL_COMMAND>,
   ) {
     return Effect.sync(() => {

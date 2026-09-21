@@ -53,7 +53,7 @@
     "packages/extension/src/progressView/ProgressViewProvider.ts": 831,
     "packages/extension/src/settingsView/frontend/tabs/LaTeXTab.ts": 1192,
     "packages/extension/src/settingsView/handlers/agentHandlers.ts": 531,
-    "packages/extension/src/settingsView/SettingsViewMessageHandler.ts": 1153,
+    "packages/extension/src/settingsView/SettingsViewMessageHandler.ts": 1124,
     "packages/llm/src/anthropicMessages.ts": 1094,
     "packages/llm/src/googleInteractions.ts": 1414,
     "packages/llm/src/openaiChat.ts": 1630,
