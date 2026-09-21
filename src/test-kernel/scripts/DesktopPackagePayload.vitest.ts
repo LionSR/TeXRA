@@ -18,7 +18,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 // Local imports - desktop test paths
 import { repoPath } from '../desktop/desktopTestPaths.ts';
 
-const verifierPath = repoPath('scripts/verify-desktop-package.mjs');
+const verifierPath = repoPath('scripts/verify-desktop.mjs');
 const extensionPackageUtilsUrl = pathToFileURL(
   repoPath('scripts/extension-package-utils.mjs'),
 ).href;
@@ -243,7 +243,7 @@ function runVerifier(packageRoot: string): {
   stderr: string;
   stdout: string;
 } {
-  const result = spawnSync(process.execPath, [verifierPath], {
+  const result = spawnSync(process.execPath, [verifierPath, 'package'], {
     cwd: repoPath('.'),
     encoding: 'utf8',
     env: {

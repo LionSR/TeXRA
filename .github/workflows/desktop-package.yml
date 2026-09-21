@@ -77,7 +77,7 @@ jobs:
         id: desktop-signing
         env:
           TEXRA_REQUIRE_DESKTOP_SIGNING: ${{ inputs.require_desktop_signing && '1' || '0' }}
-        run: node scripts/verify-desktop-signing-env.mjs mac
+        run: node scripts/verify-desktop.mjs signing-env mac
 
       - name: Package macOS desktop installers
         run: |
@@ -193,7 +193,7 @@ jobs:
         id: desktop-signing
         env:
           TEXRA_REQUIRE_DESKTOP_SIGNING: ${{ inputs.require_desktop_signing && '1' || '0' }}
-        run: node scripts/verify-desktop-signing-env.mjs win
+        run: node scripts/verify-desktop.mjs signing-env win
 
       - name: Package Windows desktop installer
         run: pnpm --filter @texra/desktop exec electron-builder --config ${{ steps.desktop-signing.outputs.electron_builder_config }} --publish never
@@ -271,7 +271,7 @@ jobs:
         env:
           TEXRA_DESKTOP_INSTALLER_PLATFORM: all
           TEXRA_DESKTOP_INSTALLER_ROOT: artifacts/desktop-release
-        run: node scripts/verify-desktop-installer-artifacts.mjs
+        run: node scripts/verify-desktop.mjs installers
 
       - name: Publish desktop artifacts to public release repository
         env:
