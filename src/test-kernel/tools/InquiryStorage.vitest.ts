@@ -5,6 +5,7 @@ import { it } from '@effect/vitest';
 import { Effect, Layer, Result } from 'effect';
 import { afterEach, beforeEach, describe, expect } from 'vitest';
 
+import { globalDatabaseLayer } from '@controllers/session/Database';
 import { inquiryRecordsLayer } from '@controllers/session/inquiryRecords';
 import { processOwnerId } from '@platform/defaults/nodeProcesses';
 import {
@@ -26,8 +27,13 @@ describe('InquiryStorage', () => {
   afterEach(() => rmSync(storage, { recursive: true, force: true }));
   const layer = Layer.unwrap(
     Effect.sync(() =>
-      inquiryRecordsLayer(storage).pipe(
-        Layer.provide(ProcessIdentity.layer(processOwnerId(undefined))),
+      inquiryRecordsLayer.pipe(
+        Layer.provide(
+          globalDatabaseLayer(storage).pipe(
+            Layer.provide(ProcessIdentity.layer(processOwnerId(undefined))),
+            Layer.orDie,
+          ),
+        ),
       ),
     ),
   );

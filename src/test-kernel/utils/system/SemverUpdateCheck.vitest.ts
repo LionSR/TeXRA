@@ -4,6 +4,7 @@ import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem';
 import { it as effectIt } from '@effect/vitest';
 import { Effect, Exit, Fiber, FileSystem, Layer } from 'effect';
 import { TestClock } from 'effect/testing';
+import { globalDatabaseLayer } from '@controllers/session/Database';
 import { updateCheckRecordsLayer } from '@controllers/session/updateCheckRecords';
 import { processOwnerId } from '@platform/defaults/nodeProcesses';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
@@ -38,8 +39,15 @@ describe('runDailyUpdateCheck', () => {
         yield* TestClock.setTime(nowMs);
         return yield* program.pipe(
           Effect.provide(
-            updateCheckRecordsLayer(storage).pipe(
-              Layer.provide(ProcessIdentity.layer(processOwnerId(undefined))),
+            updateCheckRecordsLayer.pipe(
+              Layer.provide(
+                globalDatabaseLayer(storage).pipe(
+                  Layer.provide(
+                    ProcessIdentity.layer(processOwnerId(undefined)),
+                  ),
+                  Layer.orDie,
+                ),
+              ),
             ),
           ),
         );

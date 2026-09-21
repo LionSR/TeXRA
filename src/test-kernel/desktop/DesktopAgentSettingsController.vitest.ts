@@ -1,5 +1,6 @@
 import { Effect, Layer, ManagedRuntime } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { globalDatabaseLayer } from '@controllers/session/Database';
 import { inquiryRecordsLayer } from '@controllers/session/inquiryRecords';
 
 import { DefaultDesktopAgentSettingsController } from '@desktop/main/desktopAgentSettingsController';
@@ -54,8 +55,15 @@ beforeEach(() => {
         testHttpClientLayer,
         Layer.mock(UpdateCheckRecords, {}),
         fakeProcessServices(),
-        inquiryRecordsLayer(globalStorage).pipe(
-          Layer.provide(ProcessIdentity.layer(processOwnerId(undefined))),
+        // Last, so this root's real handle wins over the fake host's
+        // mocked one.
+        inquiryRecordsLayer.pipe(
+          Layer.provideMerge(
+            globalDatabaseLayer(globalStorage).pipe(
+              Layer.provide(ProcessIdentity.layer(processOwnerId(undefined))),
+              Layer.orDie,
+            ),
+          ),
         ),
       ),
     ),
