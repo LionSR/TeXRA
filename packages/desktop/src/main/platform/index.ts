@@ -7,15 +7,12 @@ import { createSupabaseAuth, type SupabaseAuthShape } from '@auth/SupabaseAuth';
 import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
 import { openAppStateStore } from '@controllers/session/appStateStore';
 import { installProcessRuntime } from '@controllers/session/sessionLayer';
+import { globalDatabaseLayer } from '@controllers/session/Database';
 import { NotificationFailed } from '@hosts/uiHosts';
 import { setDebugModeConfig } from '@logger/logUtils';
 import { initPlatform } from '@platform/platform';
-import {
-  withProcessServices,
-  type ProcessRuntime,
-} from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
-import { SHUTDOWN_PHASE } from '@platform/interfaces';
 import type {
   AgentDirectoriesPort,
   AgentResumePort,
@@ -27,10 +24,7 @@ import type { ConfigStore } from '@platform/defaults/jsonConfigProvider';
 import { JsonStore, nodeFileServices } from '@platform/defaults/jsonStore';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { installLongRunningModelDispatcher } from '@platform/defaults/longRunningModelTransport';
-import {
-  nodeProcesses,
-  processOwnerId,
-} from '@platform/defaults/nodeProcesses';
+import { nodeProcesses } from '@platform/defaults/nodeProcesses';
 import {
   createNodeWorkspaceRoots,
   initializeNodeRuntimeSkills,
@@ -41,9 +35,8 @@ import {
   WorkspaceStorageProvider,
   resolveGlobalStoragePath,
 } from '@platform/defaults/workspaceStorage';
-import type { OwnerId } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { UsageLogService } from '@telemetry/UsageLogService';
+import { usageLogLayer } from '@telemetry/UsageLogService';
 import { directLeanLanguageServices } from '@tools/lean/direct/directLspAdapter';
 import { seedDisabledToolDefaults } from '@tools/toolAvailability';
 import { initProcessSettingHost } from '@utils/config/platformSettings';
@@ -79,7 +72,6 @@ export interface ElectronPlatformInitResult {
    * `platform()` singleton: one owner, one place to substitute in a test.
    */
   globalState: StateStore;
-  ownerId: OwnerId;
   secrets: PlatformSecrets;
   /** The account plane served as `SupabaseAuth`, built beside `secrets`. */
   supabaseAuth: SupabaseAuthShape;
@@ -202,7 +194,6 @@ export async function initializeElectronPlatform(
   const runtime = installProcessRuntime({
     processStart: Effect.succeed(processStart),
     globalStorage: storage.getGlobalStoragePath(),
-    updateCheckStorage: resolveGlobalStoragePath(userDataPath),
     secrets,
     appState: globalStateStore,
     auth: supabaseAuth,
@@ -211,6 +202,17 @@ export async function initializeElectronPlatform(
     agentResume,
     setup: setupAuth.platform,
     lean: directLeanLanguageServices(),
+    // Desktop model traffic goes to the same Supabase usage log the extension
+    // and CLI write to, tagged with editorType 'desktop' and the app version.
+    // The runtime's disposal drains the queue, so a queue shorter than one
+    // batch is not lost at quit -- plan accounting included.
+    usageLog: usageLogLayer({
+      version: app.getVersion(),
+      editorType: 'desktop',
+    }),
+    // The process's one handle on that same global root, which the desktop's
+    // remembered projects and its update check read through.
+    globalDatabase: globalDatabaseLayer(storage.getGlobalStoragePath()),
   });
 
   repairLaunchPath();
@@ -240,20 +242,6 @@ export async function initializeElectronPlatform(
   // the model layer is bring-your-own-key. See installTexraAccountProbes.
   installTexraAccountProbes(secrets);
 
-  // Route desktop model traffic to the same Supabase usage log the extension
-  // and CLI write to, tagged with editorType 'desktop' and the app version.
-  // Without this call the 30 s flush cadence never starts and every entry
-  // carries an undefined host/version, so a queue shorter than one batch is
-  // lost at quit — including plan accounting. `dispose()` drains it, from the
-  // same BEFORE phase the other two hosts use.
-  await runtime.runPromise(
-    UsageLogService.initialize(runtime.scope, {}, app.getVersion(), 'desktop'),
-  );
-  lifecycle.onShutdown(
-    SHUTDOWN_PHASE.BEFORE,
-    withProcessServices(runtime, UsageLogService.dispose()),
-  );
-
   // Seed first-install defaults (e.g. disabled tools). No-ops once
   // DISABLED_TOOLS exists, so upgrading users keep the tools they enabled.
   await runtime.runPromise(seedDisabledToolDefaults(globalStateStore));
@@ -266,7 +254,6 @@ export async function initializeElectronPlatform(
     globalConfigStore: configStores.global,
     lifecycle,
     globalState: globalStateStore,
-    ownerId: processOwnerId(processStart),
     secrets,
     supabaseAuth,
     agentDirectories,

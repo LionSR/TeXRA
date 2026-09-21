@@ -44,7 +44,6 @@ import type { SettingsStores } from '@shared/config/settingsAccess';
 import { sessionStoreClearedMessage } from '@shared/copy/sessionStore';
 import type { SessionOpenError } from '@shared/session/database';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { UsageLogService } from '@telemetry/UsageLogService';
 import { registerRuntimeShutdownHandlers } from '@tools/agentCliSessionStores';
 import { seedDisabledToolDefaults } from '@tools/toolAvailability';
 import { initProcessSettingHost } from '@utils/config/platformSettings';
@@ -159,13 +158,13 @@ const cliPlatformLog: SupabaseSessionLog = {
 
 /**
  * The canonical "shut down the CLI platform" sequence — lifecycle shutdown
- * hooks (notably `UsageLogService.dispose()`) then the NDJSON stdout flush —
- * shared by every process.exit()-ing teardown path: the headless signal
- * handlers below AND the interactive chat TUI's own signal handlers (see
- * `handOffCliShutdownSignalHandlers`), which take over SIGINT/SIGTERM
- * exclusively once mounted and must perform the same sequence the platform's
- * own (now handed-off) handlers would have. One definition means the two
- * paths can't drift.
+ * hooks, then the NDJSON stdout flush, then the runtime disposal that drains
+ * the usage log — shared by every process.exit()-ing teardown path: the
+ * headless signal handlers below AND the interactive chat TUI's own signal
+ * handlers (see `handOffCliShutdownSignalHandlers`), which take over
+ * SIGINT/SIGTERM exclusively once mounted and must perform the same sequence
+ * the platform's own (now handed-off) handlers would have. One definition
+ * means the two paths can't drift.
  *
  * Runs on the default runtime rather than the process runtime: the lifecycle
  * shutdown below disposes the process runtime (`disposeCliProcessRuntime`)
@@ -390,9 +389,8 @@ export function initCliPlatform(
         // extension and desktop hosts do. Background `bash` runs are spawned
         // `detached` (their own process group, see execUtils) so they survive
         // `texra` exiting and can never deliver their follow-up result — without
-        // this drain they are orphaned. Registered before the usage-log flush
-        // below so the kills (all synchronous) land first, matching the other
-        // hosts' ordering.
+        // this drain they are orphaned. The usage log is drained later still,
+        // by the runtime disposal these handlers end with.
         registerRuntimeShutdownHandlers(lifecycle, {
           // The session is opened lazily (`sessionOpen`); a process that never
           // asked for one has nothing to flush.
@@ -400,9 +398,6 @@ export function initCliPlatform(
             const session = tryDefaultSession();
             return session ? session.settlePublications() : Effect.void;
           }),
-          afterFlushArtifacts: [
-            withProcessServices(runtime, UsageLogService.dispose()),
-          ],
           afterRunSettlement: [
             teardownDefaultSession(),
             flushNdjsonStdout(),
@@ -410,17 +405,6 @@ export function initCliPlatform(
           ],
         });
 
-        // Route CLI model traffic to the same Supabase usage log the extension
-        // writes to, tagged with editorType 'cli' and the CLI version.
-        // dispose() flushes any queued entries; it
-        // runs on normal exit (bin/texra.ts finally) and on signals, both of
-        // which run lifecycle.runShutdown.
-        yield* UsageLogService.initialize(
-          runtime.scope,
-          {},
-          context.version,
-          'cli',
-        );
         initPlatform(platform);
         // The logger's process-wide debug-mode read, over this host's
         // configuration.

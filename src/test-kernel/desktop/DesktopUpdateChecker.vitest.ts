@@ -2,6 +2,7 @@ import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem';
 import { it } from '@effect/vitest';
 import { Deferred, Effect, Fiber, FileSystem, Layer } from 'effect';
 import { describe, expect, vi } from 'vitest';
+import { globalDatabaseLayer } from '@controllers/session/Database';
 import { updateCheckRecordsLayer } from '@controllers/session/updateCheckRecords';
 import {
   checkForDesktopUpdate,
@@ -31,8 +32,13 @@ const withRecords = <A, E>(program: Effect.Effect<A, E, UpdateCheckRecords>) =>
       });
       return yield* program.pipe(
         Effect.provide(
-          updateCheckRecordsLayer(storage).pipe(
-            Layer.provide(ProcessIdentity.layer(processOwnerId(undefined))),
+          updateCheckRecordsLayer.pipe(
+            Layer.provide(
+              globalDatabaseLayer(storage).pipe(
+                Layer.provide(ProcessIdentity.layer(processOwnerId(undefined))),
+                Layer.orDie,
+              ),
+            ),
           ),
         ),
       );

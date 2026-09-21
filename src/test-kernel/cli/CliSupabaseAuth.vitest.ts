@@ -129,12 +129,17 @@ vi.mock('@cli/runtime/supabaseAuthDeviceCode', () => ({
 async function loadSupabaseAuth() {
   vi.resetModules();
   const { Layer, ManagedRuntime } = await import('effect');
-  const [{ inquiryRecordsLayer }, { ProcessIdentity }, { processOwnerId }] =
-    await Promise.all([
-      import('@controllers/session/inquiryRecords'),
-      import('@shared/session/sessionEvents'),
-      import('@platform/defaults/nodeProcesses'),
-    ]);
+  const [
+    { inquiryRecordsLayer },
+    { globalDatabaseLayer },
+    { ProcessIdentity },
+    { processOwnerId },
+  ] = await Promise.all([
+    import('@controllers/session/inquiryRecords'),
+    import('@controllers/session/Database'),
+    import('@shared/session/sessionEvents'),
+    import('@platform/defaults/nodeProcesses'),
+  ]);
   const [
     { Secrets },
     { AgentResume, AppState },
@@ -159,8 +164,13 @@ async function loadSupabaseAuth() {
       globalStorageFsTestLayer(globalStorage),
       Layer.mock(UpdateCheckRecords, {}),
       Layer.mock(LeanLanguageServices, unavailableLeanLanguageServices),
-      inquiryRecordsLayer(globalStorage).pipe(
-        Layer.provide(ProcessIdentity.layer(processOwnerId(undefined))),
+      inquiryRecordsLayer.pipe(
+        Layer.provideMerge(
+          globalDatabaseLayer(globalStorage).pipe(
+            Layer.provide(ProcessIdentity.layer(processOwnerId(undefined))),
+            Layer.orDie,
+          ),
+        ),
       ),
       // The process services this suite's runtime carries: the auth run edge
       // reads none of them, so a member call is a test error the mock raises

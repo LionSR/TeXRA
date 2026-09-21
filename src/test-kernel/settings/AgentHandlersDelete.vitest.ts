@@ -4,6 +4,7 @@ import * as path from 'node:path';
 
 import { Effect, FileSystem, Layer, ManagedRuntime } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { globalDatabaseLayer } from '@controllers/session/Database';
 import { inquiryRecordsLayer } from '@controllers/session/inquiryRecords';
 
 import { processOwnerId } from '@platform/defaults/nodeProcesses';
@@ -184,8 +185,15 @@ describe('AgentHandlers custom-agent file actions', () => {
           testHttpClientLayer,
           Layer.mock(UpdateCheckRecords, {}),
           fakeProcessServices(),
-          inquiryRecordsLayer(globalStorage).pipe(
-            Layer.provide(ProcessIdentity.layer(processOwnerId(undefined))),
+          // Last, so this root's real handle wins over the fake host's
+          // mocked one.
+          inquiryRecordsLayer.pipe(
+            Layer.provideMerge(
+              globalDatabaseLayer(globalStorage).pipe(
+                Layer.provide(ProcessIdentity.layer(processOwnerId(undefined))),
+                Layer.orDie,
+              ),
+            ),
           ),
         ),
       ),

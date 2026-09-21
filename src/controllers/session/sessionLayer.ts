@@ -36,7 +36,7 @@ import {
   type FileSystem,
   type Path,
 } from 'effect';
-import { FetchHttpClient } from 'effect/unstable/http';
+import { FetchHttpClient, type HttpClient } from 'effect/unstable/http';
 
 import { proveOwnerLiveness } from '@agent/storage/leaseOwnerLiveness';
 import { finalizeRun } from '@agent/storage/runLifecycle';
@@ -96,7 +96,9 @@ import { SessionInputs } from '@shared/session/sessionInputs';
 
 import {
   Database,
+  type DatabaseOpenFailed,
   type DatabaseReadFailed,
+  type GlobalDatabase,
   type SessionOpenError,
 } from '@shared/session/database';
 import { releaseRunResources } from '@tools/approval';
@@ -977,7 +979,6 @@ const closeSession = (root: string) =>
 interface ProcessRuntimeOptions {
   readonly processStart: Effect.Effect<string | undefined>;
   readonly globalStorage: string;
-  readonly updateCheckStorage: string;
   readonly secrets: PlatformSecrets;
   /**
    * The root's agent-resume port, served as `AgentResume`. The same value
@@ -1026,12 +1027,39 @@ interface ProcessRuntimeOptions {
     never,
     FileSystem.FileSystem | Path.Path
   >;
+  /**
+   * The host's usage log (`usageLogLayer`), stamped with its version and
+   * editor. Built with this runtime and drained when it is disposed, so no
+   * root brackets the sender itself; `Layer.empty` is a composition that
+   * reports no usage at all. Passed as a layer for the same reason `lean`
+   * is: this module does not reach into the telemetry subsystem.
+   */
+  readonly usageLog: Layer.Layer<
+    never,
+    never,
+    HttpClient.HttpClient | SupabaseAuth
+  >;
+  /**
+   * The process's handle on the global storage root —
+   * `globalDatabaseLayer(globalStorage)` on every entry that has one — built
+   * with this runtime and closed when it is disposed. It is the entry's to
+   * pass for the same reason `appState` is: opening the handle creates the
+   * global storage directory and its SQLite file and forks that root's
+   * change poll for the process's life, and the one entry that runs before
+   * any platform, on a storage root that may be read-only, and that disposes
+   * no runtime, must do none of the three. That entry hands over a refusing
+   * layer beside its refusing state store.
+   */
+  readonly globalDatabase: Layer.Layer<
+    GlobalDatabase,
+    DatabaseOpenFailed,
+    ProcessIdentity
+  >;
 }
 
 export function installProcessRuntime({
   processStart,
   globalStorage,
-  updateCheckStorage,
   secrets,
   appState,
   auth,
@@ -1040,6 +1068,8 @@ export function installProcessRuntime({
   setup,
   editorModel,
   lean,
+  usageLog,
+  globalDatabase: globalDatabaseOption,
 }: ProcessRuntimeOptions): ProcessRuntime {
   // Non-failing by contract: `nodeProcesses.selfIdentity()` reports an
   // unreadable identity as undefined, and a root that already read one hands
@@ -1048,9 +1078,18 @@ export function installProcessRuntime({
     ProcessIdentity,
     Effect.map(processStart, (start) => ({ ownerId: processOwnerId(start) })),
   );
+  // The entry's handle on the global root, held for the process's life: the
+  // records below are `Layer.effect`s over it, and it is provided outside the
+  // session family so the entry's `Layer.fresh` cannot rebuild it per root. A
+  // global root the entry meant to open and that will not open is a defect,
+  // not a per-record failure: nothing downstream has an answer for it.
+  const globalDatabase = globalDatabaseOption.pipe(
+    Layer.provide(identity),
+    Layer.orDie,
+  );
   const services = Layer.mergeAll(
-    inquiryRecordsLayer(globalStorage),
-    updateCheckRecordsLayer(updateCheckStorage),
+    inquiryRecordsLayer,
+    updateCheckRecordsLayer,
     Secrets.layer(secrets),
     AppState.layer(appState),
     SupabaseAuth.layer(auth),
@@ -1082,6 +1121,11 @@ export function installProcessRuntime({
   const runtime = withForkFailureReporting(
     ManagedRuntime.make(
       Sessions.layer(held, release).pipe(
+        // The usage log's own lifetime: its sender and ticker run for as long
+        // as this runtime does, and its finalizer drains the queue while the
+        // account plane below is still up. Ahead of `services` in the chain
+        // so that plane and the HTTP client reach it.
+        Layer.provideMerge(usageLog),
         Layer.provideMerge(services),
         // The Lean pool is one per process — its servers are shared across
         // roots — as is the cross-workspace storage view below it: every
@@ -1089,6 +1133,9 @@ export function installProcessRuntime({
         // global-storage path against a root of its own.
         Layer.provideMerge(lean),
         Layer.provideMerge(globalStorageFsLayer(globalStorage)),
+        // The records' handle on that same root, for the same reason: one
+        // connection and one change poll per process, outside the entry.
+        Layer.provideMerge(globalDatabase),
         Layer.provideMerge(
           Layer.mergeAll(
             effectDiagnosticsLayer,

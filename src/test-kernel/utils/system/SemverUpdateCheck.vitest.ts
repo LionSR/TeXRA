@@ -4,6 +4,7 @@ import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem';
 import { it as effectIt } from '@effect/vitest';
 import { Effect, Exit, Fiber, FileSystem, Layer } from 'effect';
 import { TestClock } from 'effect/testing';
+import { globalDatabaseLayer } from '@controllers/session/Database';
 import { updateCheckRecordsLayer } from '@controllers/session/updateCheckRecords';
 import { processOwnerId } from '@platform/defaults/nodeProcesses';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
@@ -35,19 +36,29 @@ describe('runDailyUpdateCheck', () => {
         const storage = yield* fs.makeTempDirectoryScoped({
           prefix: 'texra-update-check-',
         });
-        yield* TestClock.setTime(nowMs);
-        return yield* program.pipe(
+        // The test clock governs the program alone, not the handle: the
+        // global-root handle is now held open for the process's life and
+        // polls `data_version` every 250ms, so a day advanced on a clock
+        // that fiber also sleeps on would step the poll a quarter-million
+        // times. Built outside, it ticks on the live clock and the
+        // throttle still sees whatever day the program says it is.
+        return yield* Effect.andThen(TestClock.setTime(nowMs), program).pipe(
+          Effect.provide(TestClock.layer()),
           Effect.provide(
-            updateCheckRecordsLayer(storage).pipe(
-              Layer.provide(ProcessIdentity.layer(processOwnerId(undefined))),
+            updateCheckRecordsLayer.pipe(
+              Layer.provide(
+                globalDatabaseLayer(storage).pipe(
+                  Layer.provide(
+                    ProcessIdentity.layer(processOwnerId(undefined)),
+                  ),
+                  Layer.orDie,
+                ),
+              ),
             ),
           ),
         );
       }),
-    ).pipe(
-      Effect.provide(NodeFileSystem.layer),
-      Effect.provide(TestClock.layer()),
-    );
+    ).pipe(Effect.provide(NodeFileSystem.layer));
 
   effectIt.live('notifies before stamping a successful live check', () =>
     withRecords(

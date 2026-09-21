@@ -4,48 +4,36 @@ import { Context, Effect, Layer, Result } from 'effect';
 import {
   InquiryThreadIdSchema,
   ToolError,
-  type OwnerId,
   type InquiryThreadId,
   type InquiryThreadSummary,
   type InquiryThreadRecord,
   type OpenInquiryTurn,
   type AnsweredInquiryTurn,
 } from '@shared/schemas';
-import { Database } from '@shared/session/database';
-import { ProcessIdentity } from '@shared/session/sessionEvents';
+import { GlobalDatabase } from '@shared/session/database';
 import { InquiryRecords } from '@shared/session/inquiryRecords';
 import { toNewestFirstByTimestamp, unique, hexId12 } from '@utils/core';
 import { ensureError } from '@utils/errors/errorMessage';
 
-import { withScopedDatabase } from './Database';
-
 const QUESTION_PREVIEW_CHARS = 200;
 
-/** The global inquiry owner is configured once; database connections are operation-scoped. */
+/** Every operation runs on the process's one handle on the global root. */
 function inquiryOperations(
-  globalStorage: string,
-  ownerId: OwnerId,
+  database: Context.Service.Shape<typeof GlobalDatabase>,
 ): Context.Service.Shape<typeof InquiryRecords> {
-  /** Each operation owns its connection; SQLite serializes transitions across processes. */
-  const inGlobalDatabase = <A, E>(operation: Effect.Effect<A, E, Database>) =>
-    withScopedDatabase(globalStorage, ownerId, operation);
-
   const changeThread = <A extends InquiryThreadRecord | null>(
     id: InquiryThreadId,
     change: (current: InquiryThreadRecord | null) => A,
   ) =>
-    inGlobalDatabase(
-      Effect.gen(function* () {
-        const database = yield* Database;
-        const result = yield* database.updateInquiryRecord(id, (current) =>
-          Result.try({
-            try: () => change(current),
-            catch: ensureError,
-          }),
-        );
-        return yield* Effect.fromResult(result);
-      }),
-    );
+    Effect.gen(function* () {
+      const result = yield* database.updateInquiryRecord(id, (current) =>
+        Result.try({
+          try: () => change(current),
+          catch: ensureError,
+        }),
+      );
+      return yield* Effect.fromResult(result);
+    });
 
   function normalizeSessionLinks(
     links?: string[] | null,
@@ -229,11 +217,7 @@ function inquiryOperations(
   function readExternalInquiryThread(threadId: string) {
     const parsed = InquiryThreadIdSchema.safeParse(threadId);
     if (!parsed.success) return Effect.succeed(null);
-    return inGlobalDatabase(
-      Effect.flatMap(Database, (database) =>
-        database.readInquiryRecord(parsed.data),
-      ),
-    );
+    return database.readInquiryRecord(parsed.data);
   }
 
   function manifestToSummary(
@@ -264,31 +248,27 @@ function inquiryOperations(
       Context.Service.Shape<typeof InquiryRecords>['listThreadsByStatus']
     >[0],
   ) {
-    return inGlobalDatabase(
-      Effect.gen(function* () {
-        const database = yield* Database;
-        const all = yield* database.listInquiryRecords();
+    return Effect.gen(function* () {
+      const all = yield* database.listInquiryRecords();
 
-        const filtered = all.filter((m) => {
-          if (params.status !== 'any' && m.status !== params.status)
-            return false;
-          if (params.scope === 'run') {
-            if (!params.runId) return false;
-            if (m.parentRunId !== params.runId) return false;
-          }
-          return true;
-        });
+      const filtered = all.filter((m) => {
+        if (params.status !== 'any' && m.status !== params.status) return false;
+        if (params.scope === 'run') {
+          if (!params.runId) return false;
+          if (m.parentRunId !== params.runId) return false;
+        }
+        return true;
+      });
 
-        const sorted = toNewestFirstByTimestamp(
-          filtered,
-          (manifest) => manifest.updatedAt,
-        );
+      const sorted = toNewestFirstByTimestamp(
+        filtered,
+        (manifest) => manifest.updatedAt,
+      );
 
-        const trimmed =
-          params.limit != null ? sorted.slice(0, params.limit) : sorted;
-        return trimmed.map(manifestToSummary);
-      }),
-    );
+      const trimmed =
+        params.limit != null ? sorted.slice(0, params.limit) : sorted;
+      return trimmed.map(manifestToSummary);
+    });
   }
 
   return {
@@ -301,11 +281,8 @@ function inquiryOperations(
   };
 }
 
-/** Provide the inquiry owner without opening a connection until an operation runs. */
-export const inquiryRecordsLayer = (globalStorage: string) =>
-  Layer.effect(
-    InquiryRecords,
-    Effect.map(ProcessIdentity, ({ ownerId }) =>
-      inquiryOperations(globalStorage, ownerId),
-    ),
-  );
+/** The inquiry records of the global root, over the process's one handle. */
+export const inquiryRecordsLayer = Layer.effect(
+  InquiryRecords,
+  Effect.map(GlobalDatabase, inquiryOperations),
+);

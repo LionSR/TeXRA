@@ -7,7 +7,6 @@ import { initCliPlatform } from '@cli/runtime/initPlatform';
 import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
 import { StateWriteFailed } from '@platform/interfaces';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { UsageLogService } from '@telemetry/UsageLogService';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import {
   claudeAgentSessionsFor,
@@ -75,7 +74,6 @@ const mocks = vi.hoisted(() => ({
   // wired.
   shutdownHandlers: [] as Array<Effect.Effect<void, unknown>>,
   /** Records the usage-log dispose when its program runs. */
-  disposeUsageLog: vi.fn(),
 }));
 
 vi.mock('@cli/runtime/supabaseAuth', async () => {
@@ -131,19 +129,6 @@ vi.mock('@platform/defaults/nodeHost', () => ({
   createNodeWorkspaceRoots: mocks.createNodeWorkspaceRoots,
   initializeNodeRuntimeSkills: mocks.initializeNodeRuntimeSkills,
 }));
-
-// The two lifecycle arms are Effects the host runs, so the doubles answer
-// with one rather than `undefined`. `dispose` records when its program runs,
-// not when the host builds it: the shutdown registration holds the program.
-vi.mock('@telemetry/UsageLogService', async () => {
-  const { Effect: effect } = await import('effect');
-  return {
-    UsageLogService: {
-      initialize: vi.fn(() => effect.void),
-      dispose: () => effect.sync(mocks.disposeUsageLog),
-    },
-  };
-});
 
 // First-init dependencies: only exercised when tryPlatform() returns undefined.
 // Most cases keep tryPlatform truthy and skip this block, so these stubs are
@@ -251,31 +236,6 @@ describe('CLI platform init', () => {
     mocks.tryPlatform.mockReset();
     mocks.tryPlatform.mockReturnValue({ globalState: stubGlobalState() });
     mocks.authenticated = false;
-  });
-
-  it('wires usage logging on first platform init', async () => {
-    // tryPlatform() === undefined drives the once-per-process first-init block.
-    mocks.tryPlatform.mockReturnValue({ globalState: stubGlobalState() });
-    mocks.tryPlatform.mockReturnValueOnce(undefined);
-
-    await Effect.runPromise(
-      initCliPlatform(
-        cliContext({ version: '1.2.3', installSignalHandlers: false }),
-      ),
-    );
-
-    expect(vi.mocked(UsageLogService.initialize)).toHaveBeenCalledWith(
-      expect.anything(),
-      {},
-      '1.2.3',
-      'cli',
-    );
-
-    // The dispose handler must be registered on shutdown so queued entries flush.
-    expect(mocks.disposeUsageLog).not.toHaveBeenCalled();
-    for (const handler of mocks.shutdownHandlers)
-      await Effect.runPromise(handler);
-    expect(mocks.disposeUsageLog).toHaveBeenCalled();
   });
 
   it('retries after seed failure without publishing platform, session, or signals', async () => {

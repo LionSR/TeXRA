@@ -32,6 +32,7 @@ import {
   disposeProcessRuntime,
   installProcessRuntime,
 } from '@controllers/session/sessionLayer';
+import { globalDatabaseLayer } from '@controllers/session/Database';
 import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
 import { appSignals } from '@eventBus/AppSignals';
 import { refreshApiKeyStatusBar } from '@frontend/statusBar/apiKeyStatusBar';
@@ -81,10 +82,7 @@ import {
 } from '@platform/interfaces';
 import { installLongRunningModelDispatcher } from '@platform/defaults/longRunningModelTransport';
 import { initPlatform, type Platform } from '@platform/platform';
-import {
-  withProcessServices,
-  type ProcessRuntime,
-} from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import {
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
   type LanguageModelPort,
@@ -113,7 +111,7 @@ import {
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
 import type { CommandId } from '@shared/commands/catalog';
-import { UsageLogService } from '@telemetry/UsageLogService';
+import { usageLogLayer } from '@telemetry/UsageLogService';
 import { registerRuntimeShutdownHandlers } from '@tools/agentCliSessionStores';
 import {
   refreshToolAvailability,
@@ -249,10 +247,17 @@ async function initVscodePlatform(
     tryResumeRun: (runId, recovery) =>
       tryResumeFromResumeData(runId, runtime, getSession(), recovery),
   };
+  // Usage logging is a runtime service, not an authentication-provider
+  // capability: it runs even when Supabase sign-in is not configured, as it
+  // does on desktop and CLI, and the service itself decides which records can
+  // be sent and preserves plan-accounting records for hosted routes.
+  const extensionVersion =
+    typeof context.extension.packageJSON?.version === 'string'
+      ? context.extension.packageJSON.version
+      : undefined;
   const runtime = installProcessRuntime({
     processStart: Effect.succeed(processStart),
     globalStorage: storage.getGlobalStoragePath(),
-    updateCheckStorage: storage.getGlobalStoragePath(),
     secrets,
     appState: globalState,
     auth,
@@ -271,6 +276,14 @@ async function initVscodePlatform(
     lean: LeanLanguageServices.layer(
       createVscodeLeanLanguageServices(globalState),
     ),
+    usageLog: usageLogLayer({
+      version: extensionVersion,
+      editorType: vscode.env.appName || undefined,
+    }),
+    // The process's one handle on that same global root: the inquiry
+    // threads, the update check and the CLI-shared input history read
+    // through it for as long as this runtime lives.
+    globalDatabase: globalDatabaseLayer(storage.getGlobalStoragePath()),
   });
   // VS Code restarts the extension host when the first workspace folder
   // changes, so the configuration stores stay pinned for this process.
@@ -717,10 +730,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
   // `context.subscriptions` (see the push near the end of `activate`), matching
   // `apiKeyStatusBarItem`. Registering them here too would double-dispose.
   registerRuntimeShutdownHandlers(lifecycle, {
-    afterAgentShutdown: [
-      killActiveRecording(),
-      withProcessServices(runtime, UsageLogService.dispose()),
-    ],
+    afterAgentShutdown: [killActiveRecording()],
     flushArtifacts: runtimeSession.settlePublications(),
     afterRunSettlement: [Effect.sync(() => disposeDiffRefresh())],
   });
@@ -776,31 +786,6 @@ async function activateExtension(context: vscode.ExtensionContext) {
       ),
     );
   }
-
-  // Usage logging is a runtime service, not an authentication-provider
-  // capability. Initialize it even when Supabase sign-in is not configured,
-  // matching desktop and CLI; the service itself decides which records can be
-  // sent and preserves plan-accounting records for hosted routes.
-  const extensionVersion =
-    typeof context.extension.packageJSON?.version === 'string'
-      ? context.extension.packageJSON.version
-      : undefined;
-  await runtime.runPromise(
-    UsageLogService.initialize(
-      runtime.scope,
-      {},
-      extensionVersion,
-      vscode.env.appName || undefined,
-    ).pipe(
-      Effect.catchCause((cause) =>
-        Effect.sync(() => {
-          log.warn(
-            `Failed to initialize usage logging: ${toErrorMessage(Cause.squash(cause))}`,
-          );
-        }),
-      ),
-    ),
-  );
 
   const progressViewProvider = new ProgressViewProvider(
     context,

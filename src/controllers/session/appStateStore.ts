@@ -21,7 +21,7 @@
  * `update` is the port's own write and composes `set`, raising
  * {@link StateWriteFailed}, so nothing here reaches for a runner.
  */
-import { Effect } from 'effect';
+import { Effect, Layer } from 'effect';
 
 import {
   nodeProcesses,
@@ -32,13 +32,40 @@ import {
   JsonValueSchema,
   aggregateId,
   type JsonValue,
+  type OwnerId,
   type PersistedJsonValue,
 } from '@shared/schemas';
 import { Database } from '@shared/session/database';
+import { ProcessIdentity } from '@shared/session/sessionEvents';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
-import { withScopedDatabase } from './Database';
+import { databaseLayer } from './Database';
+import { WorkspaceRoots } from './WorkspaceRoots';
+
+/**
+ * Run one operation on a scoped persistent connection to `storage`, owned by
+ * `ownerId`. This store is the one caller left that cannot hold the process's
+ * global handle: it is opened before the process runtime exists, on the CLI
+ * and the desktop, and the {@link StateStore} it returns has no close for a
+ * long-lived connection to be released by. Every other application record of
+ * a global root takes `GlobalDatabase` from context instead.
+ */
+const withScopedDatabase = <A, E>(
+  storage: string,
+  ownerId: OwnerId,
+  operation: Effect.Effect<A, E, Database>,
+) =>
+  Effect.scoped(
+    operation.pipe(
+      Effect.provide(
+        databaseLayer('persistent').pipe(
+          Layer.provide(Layer.succeed(WorkspaceRoots)({ storage })),
+          Layer.provide(ProcessIdentity.layer(ownerId)),
+        ),
+      ),
+    ),
+  );
 
 /**
  * One write at a time per key and database, module-wide so two stores over

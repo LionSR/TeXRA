@@ -67,7 +67,10 @@ import { closeSession, openSessionEffect } from '@agent/runtime/sessionGraph';
 import { createSessionApprovals } from '@agent/runtime/runApprovalQueue';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { inquiryRecordsLayer } from '@controllers/session/inquiryRecords';
-import { databaseLayer } from '@controllers/session/Database';
+import {
+  databaseLayer,
+  globalDatabaseLayer,
+} from '@controllers/session/Database';
 import { collectPendingDeletions } from '@controllers/session/deletionCleanup';
 import { sessionRequests } from '@controllers/session/SessionRequests';
 import {
@@ -705,8 +708,12 @@ describe('Sessions owner', () => {
       }).pipe(
         Effect.provide(graph([runStart])),
         Effect.provide(
-          inquiryRecordsLayer(createFakeWorkspaceRoots().globalStorage).pipe(
-            Layer.provide(ProcessIdentity.layer(SELF)),
+          inquiryRecordsLayer.pipe(
+            Layer.provide(
+              globalDatabaseLayer(
+                createFakeWorkspaceRoots().globalStorage,
+              ).pipe(Layer.provide(ProcessIdentity.layer(SELF)), Layer.orDie),
+            ),
           ),
         ),
       ),

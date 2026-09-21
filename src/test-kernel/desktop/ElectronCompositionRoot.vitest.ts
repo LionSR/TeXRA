@@ -1,11 +1,12 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join, relative } from 'node:path';
-import { Cause, Effect, Exit, FileSystem } from 'effect';
+import { Cause, Effect, Exit, FileSystem, Layer } from 'effect';
 import { it as effectIt } from '@effect/vitest';
 
 import { describe, expect, it, vi } from 'vitest';
 import * as agentRuntime from '@agent/runtime';
+import { globalDatabaseLayer } from '@controllers/session/Database';
 import { openDesktopProjectRegistry } from '@desktop/main/desktopProjects.js';
 import { openDesktopProjectRecords } from '@desktop/main/desktopProjectRecords.js';
 import { JsonStore } from '@platform/defaults/jsonStore';
@@ -13,6 +14,8 @@ import {
   nodeProcesses,
   processOwnerId,
 } from '@platform/defaults/nodeProcesses';
+import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
+import { ProcessIdentity } from '@shared/session/sessionEvents';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { createFakeHost } from '@test/support/setupPlatform';
 import { createTestSession } from '@test/support/sessionTestUtils';
@@ -25,6 +28,22 @@ import {
   REPO_ROOT,
   desktopSourcePath,
 } from './desktopTestPaths.ts';
+
+/**
+ * The records over a temp profile's global root, on a handle the caller's
+ * scope owns: the process runtime holds one in production, and these suites
+ * reopen the same root to prove what survives a closed handle.
+ */
+const projectRecordsOf = Effect.fnUntraced(function* (profile: string) {
+  const owner = processOwnerId(yield* nodeProcesses.selfIdentity());
+  const context = yield* Layer.build(
+    globalDatabaseLayer(resolveGlobalStoragePath(profile)).pipe(
+      Layer.provide(ProcessIdentity.layer(owner)),
+      Layer.orDie,
+    ),
+  );
+  return yield* Effect.provide(openDesktopProjectRecords, context);
+});
 
 function readDesktopMainIndex(): Promise<string> {
   return readFile(desktopSourcePath('main', 'index.ts'), 'utf8');
@@ -57,10 +76,9 @@ describe('desktop composition root and launch environment', () => {
           const previous = '{"texra.desktop.openPapers":["earlier-project"]}';
           yield* fs.makeDirectory(join(profile, 'state'));
           yield* fs.writeFileString(oldState, previous);
-          const owner = processOwnerId(yield* nodeProcesses.selfIdentity());
           yield* Effect.scoped(
             Effect.gen(function* () {
-              const records = yield* openDesktopProjectRecords(profile, owner);
+              const records = yield* projectRecordsOf(profile);
               expect(yield* records.read).toEqual([]);
               yield* Effect.all(
                 [records.remember('/first'), records.remember('/second')],
@@ -70,7 +88,7 @@ describe('desktop composition root and launch environment', () => {
               yield* records.forget('/second');
             }),
           );
-          const reopened = yield* openDesktopProjectRecords(profile, owner);
+          const reopened = yield* projectRecordsOf(profile);
           expect(yield* reopened.read).toEqual(['/first']);
           expect(yield* fs.readFileString(oldState)).toBe(previous);
         }),
@@ -104,8 +122,7 @@ describe('desktop composition root and launch environment', () => {
           yield* Effect.addFinalizer(() =>
             Effect.sync(() => opener.mockRestore()),
           );
-          const owner = processOwnerId(yield* nodeProcesses.selfIdentity());
-          const records = yield* openDesktopProjectRecords(profile, owner);
+          const records = yield* projectRecordsOf(profile);
           const config = yield* JsonStore.open(join(profile, 'config.json'));
           const host = createFakeHost({
             storagePath: join(profile, 'no-project'),
@@ -173,8 +190,7 @@ describe('desktop composition root and launch environment', () => {
         yield* Effect.addFinalizer(() =>
           Effect.sync(() => opener.mockRestore()),
         );
-        const owner = processOwnerId(yield* nodeProcesses.selfIdentity());
-        const records = yield* openDesktopProjectRecords(profile, owner);
+        const records = yield* projectRecordsOf(profile);
         const config = yield* JsonStore.open(join(profile, 'config.json'));
         const host = createFakeHost({
           storagePath: join(profile, 'no-project'),
