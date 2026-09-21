@@ -7,7 +7,6 @@ import {
 } from '@agent/runtime';
 import { createLog } from '@logger/logUtils';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import { readSettingFrom } from '@utils/config/platformSettings';
 
 const log = createLog('FinalOutputOpener');
 
