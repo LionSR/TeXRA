@@ -10,7 +10,7 @@ import { ToolError, type ToolResult } from '@shared/schemas';
 
 // Local imports - tools
 import { requireFileReadForEdit } from '@tools/fileInteractions';
-import { assertWritable, resolveAndFormat } from '@tools/pathResolution';
+import { resolveAndFormat } from '@tools/pathResolution';
 import {
   appendApprovalDiffNote,
   buildApprovalRejectedResult,
@@ -102,7 +102,11 @@ interface ResolveWritableTargetOptions {
   validate?: (target: { path: string; displayPath: string }) => void;
 }
 
-/** Resolve, authorize, read-gate, and load a workspace file for editing. */
+/**
+ * Resolve, read-gate, and load a workspace file for editing. Writability is
+ * not asked here: the write tools declare their target as a loop-side guard,
+ * so a read-only external root is already refused before this runs.
+ */
 export const resolveWritableTarget = Effect.fn('resolveWritableTarget')(
   function* (
     inputPath: string,
@@ -112,9 +116,9 @@ export const resolveWritableTarget = Effect.fn('resolveWritableTarget')(
     unknown,
     ToolCall | FileSystem.FileSystem
   > {
-    // Resolution, the read-only-root check and the caller's own validation all
-    // reject with a ToolError the tool runner reports to the model, so they
-    // stay a failure rather than becoming a defect.
+    // Resolution and the caller's own validation both reject with a ToolError
+    // the tool runner reports to the model, so they stay a failure rather than
+    // becoming a defect.
     const call = yield* ToolCall;
     const { path, absolutePath, displayPath } = yield* Effect.try({
       try: () => {
@@ -124,8 +128,6 @@ export const resolveWritableTarget = Effect.fn('resolveWritableTarget')(
           inputPath,
           call.workingDirectory,
         );
-        assertWritable(resolved, display);
-
         const fsPath = resolved.fsPath;
         options.validate?.({ path: fsPath, displayPath: display });
         return {
