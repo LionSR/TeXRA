@@ -7,9 +7,6 @@
  * no Zod schema backs it.
  */
 
-// Third-party imports
-import { Effect } from 'effect';
-
 // Local imports - utils
 import { createLog } from '@logger/logUtils';
 import { OUTPUT_DOCUMENT_TAG } from '@shared/schemas';
@@ -144,17 +141,16 @@ export function extractContentFromXMLbyTagMultiple(
  * @param outputContent The content to extract scratchpad from
  * @param thinkingTag The XML tag name used for the scratchpad content
  */
-export const extractScratchpad = (
+export function extractScratchpad(
   outputContent: string,
   thinkingTag: string = 'scratchpad',
-): Effect.Effect<string | null> =>
-  Effect.sync(() => {
-    const extractedContent = extractTextFromTag(outputContent, thinkingTag);
-    if (!extractedContent) return null;
-    // Turndown/regex formatting is deterministic and spawns nothing, so this
-    // extraction carries no error channel.
-    return formatContent(extractedContent);
-  });
+): string | null {
+  const extractedContent = extractTextFromTag(outputContent, thinkingTag);
+  if (!extractedContent) return null;
+  // Turndown/regex formatting is deterministic and spawns nothing, so this
+  // extraction is an ordinary call.
+  return formatContent(extractedContent);
+}
 
 export interface MultipleExtractionResult {
   documents: NamedDocument[] | null;
