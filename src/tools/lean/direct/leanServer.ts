@@ -45,13 +45,13 @@ import {
 import { debug, info, warn } from '@logger/logUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { DiagnosticSeverity } from '@utils/diagnostics/diagnosticFormatting';
-import type { LeanServerRoster } from '../leanServerRegistry';
 import {
   makeJsonRpcConnection,
   type JsonRpcConnection,
   type JsonRpcConnectionDisposed,
   type JsonRpcRequestError,
 } from './jsonRpc';
+import type { LeanServerRoster } from '../leanServerRegistry';
 import type {
   LeanDiagnostic,
   LspDiagnostic,

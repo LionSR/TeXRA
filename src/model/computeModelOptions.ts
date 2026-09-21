@@ -2,6 +2,7 @@ import { Data, Effect } from 'effect';
 import { MODEL_CONFIGS, type ModelConfig, type ReasoningEffort } from 'llm-zoo';
 import { z } from 'zod';
 
+import { createLog } from '@logger/logUtils';
 import {
   isCodexSignedIn,
   isPreferCodexSubscription,
@@ -10,7 +11,6 @@ import {
   isPreferXaiSubscription,
   isXaiSignedIn,
 } from '@model/xai/xaiSubscription';
-import { createLog } from '@logger/logUtils';
 import { StateWriteFailed } from '@platform/interfaces';
 import type { StateStore } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';

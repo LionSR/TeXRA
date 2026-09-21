@@ -617,9 +617,8 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
       check: leanReady,
       statusLabel: (prerequisites) => {
         if (!leanReady(prerequisites)) return 'Needs setup';
-        const activeCount = prerequisites.servers.filter(
-          isLeanServerActive,
-        ).length;
+        const activeCount =
+          prerequisites.servers.filter(isLeanServerActive).length;
         return activeCount > 0
           ? `${formatResultCount(activeCount, 'server')} active`
           : undefined;

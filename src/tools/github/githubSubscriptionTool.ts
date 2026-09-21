@@ -225,11 +225,7 @@ const execSubscribe = Effect.fn('GitHubSubscriptionTool.subscribe')(function* (
   const annotationLevelDescription =
     ANNOTATION_LEVEL_DESCRIPTIONS[minAnnotationLevel];
   if (target.kind === 'repo') {
-    const created = yield* subscriptions.repo.bind(
-      runId,
-      target,
-      session,
-    );
+    const created = yield* subscriptions.repo.bind(runId, target, session);
     const slug = slugOf(target);
     return executed(
       created
