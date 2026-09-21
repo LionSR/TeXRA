@@ -8,10 +8,10 @@
 // Third-party imports
 import { Effect } from 'effect';
 
-// Local imports - controllers
-import { SettingsProfileKeyController } from '@controllers/settingsView/SettingsProfileKeyController';
 // Local imports - CLI runtime
 import { cliExternalOpener } from '@cli/runtime/hosts/cliExternalOpener';
+// Local imports - controllers
+import { SettingsProfileKeyController } from '@controllers/settingsView/SettingsProfileKeyController';
 // Local imports - model
 import { invalidateApiKeyCache, type ApiProvider } from '@model/apiProviders';
 // Local imports - platform
@@ -76,7 +76,7 @@ export const commitCliProviderApiKey = Effect.fn('commitCliProviderApiKey')(
         }),
     });
     yield* controller.commitProviderKey(provider, key);
-    if (reported) return yield* Effect.fail(reported);
+    if (reported) yield* Effect.fail(reported);
   },
 );
 

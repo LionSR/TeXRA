@@ -24,6 +24,7 @@ import { loadAgents } from '@agent/index';
 import { tryDefaultSession } from '@agent/runtime';
 import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
 import { DEFAULT_MODELS } from '@model/modelOptionsBasic';
+import { apiKeySecretName } from '@model/apiProviders';
 import { platform } from '@platform/platform';
 import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
 import { MEMORY_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
@@ -135,7 +136,6 @@ import { resolveCliModelAccessRoute } from '../src/runtime/modelAccessRoute';
 import { updateCliModelAccess } from '../src/runtime/modelAccessSelection';
 import { installCliProcessRuntime } from '../src/runtime/cliProcessRuntime';
 import { initCliPlatform } from '../src/runtime/initPlatform';
-import { apiKeySecretName } from '@model/apiProviders';
 import { resolveCliResourcesPath } from '../src/runtime/resourcesPath';
 import {
   createCliRuntimeHost,

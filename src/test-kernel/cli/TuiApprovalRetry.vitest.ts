@@ -328,10 +328,12 @@ function expectNoPreferenceWrites(): void {
   expect(mocks.setGLMCodingPlan).not.toHaveBeenCalled();
 }
 
-/** A retry that never switched: nothing consulted the credential store for
- *  a switch, and no access setting was rewritten. */
+/** A retry that never switched: no switch was announced and no access
+ *  setting was rewritten. Reading the key store is not a change - the card's
+ *  own lookup decides whether to offer the switch at all - so the cases that
+ *  also mean "nothing read the store" say so themselves. */
 function expectNoCredentialChange(): void {
-  expect(mocks.hasUsableApiKey).not.toHaveBeenCalled();
+  expect(mocks.notify).not.toHaveBeenCalledWith('credentialSwitched');
   expectNoPreferenceWrites();
 }
 
@@ -916,7 +918,6 @@ describe('TUI request decisions', () => {
 
         expect(yield* Fiber.join(pending)).toEqual({ action: 'reject' });
         expectNoCredentialChange();
-        expect(mocks.notify).not.toHaveBeenCalledWith('credentialSwitched');
       }),
   );
 

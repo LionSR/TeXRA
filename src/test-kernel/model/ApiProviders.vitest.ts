@@ -4,7 +4,6 @@ import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 import {
   apiKeyEnvName,
-  apiKeyExistsUncached,
   apiKeySecretName,
   configuredApiKeyProviders,
   getApiKey,
@@ -12,6 +11,7 @@ import {
   invalidateApiKeyCache,
   loadApiKeyStatusMap,
   lookupApiKeyOrigin,
+  lookupApiKeyUncached,
 } from '@model/apiProviders';
 import { SecretsFailed, type PlatformSecrets } from '@platform/secrets';
 import { createDeferred } from '@test/support/asyncTestUtils';
@@ -127,7 +127,7 @@ describe('API provider key caches', () => {
     Effect.gen(function* () {
       const { secrets } = createSecrets({}, { OPENAI_API_KEY: '' });
 
-      expect(yield* apiKeyExistsUncached(secrets, 'openai')).toBe(false);
+      expect(yield* lookupApiKeyUncached(secrets, 'openai')).toBeUndefined();
     }),
   );
 
