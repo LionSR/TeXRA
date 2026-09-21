@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 
 // Third-party imports
 import { Effect } from 'effect';
+import { z } from 'zod';
 
 // Local imports - canonical model contract
 import {
@@ -28,7 +29,7 @@ const EXPIRY_MARGIN_MS = 60_000;
 const RELEASE_DEADLINE = '10 seconds';
 
 /** What one upload left on the provider. */
-interface Uploaded {
+export interface Uploaded {
   readonly fileId: string;
   /** Epoch milliseconds; `null` when the provider stated no expiry. */
   readonly expiresAtMs: number | null;
@@ -50,7 +51,7 @@ export interface UploadCache {
 const digestOf = (base64: string): string =>
   createHash('sha256').update(base64).digest('hex');
 
-export function uploadCache(provider: {
+function uploadCache(provider: {
   readonly send: (file: FileUpload) => Effect.Effect<Uploaded, ModelError>;
   readonly remove: (fileId: string) => Effect.Effect<void, ModelError>;
 }): UploadCache {
@@ -162,4 +163,57 @@ export function uploadCache(provider: {
   });
 
   return { fileIdFor, uploadFile, releaseUploads };
+}
+
+/**
+ * The `{ send, remove }` pair for a provider whose Files API follows the shape
+ * the supported providers share: create a file from the bytes, read an id and
+ * an expiry off the response, and treat a 404 on delete as the deletion this
+ * asked for. Only the SDK calls, how a response states its expiry, and the
+ * provider's name differ, so those are what a binding supplies; the
+ * malformed-response ruling and the 404 tolerance are stated once here.
+ */
+export function filesApiUploads(provider: {
+  /** Names the provider in the malformed-response message. */
+  readonly providerName: string;
+  readonly model: string;
+  /** Maps an SDK rejection to this binding's enriched `ModelError`. */
+  readonly failure: (cause: unknown) => ModelError;
+  /**
+   * The create response's id and expiry, in canonical form. Each provider
+   * states its expiry differently (RFC 3339 against whole Unix seconds), so
+   * the schema that reads it is the binding's, not this helper's.
+   */
+  readonly parseUploaded: (raw: unknown) => z.ZodSafeParseResult<Uploaded>;
+  readonly create: (file: FileUpload, signal: AbortSignal) => Promise<unknown>;
+  readonly remove: (fileId: string, signal: AbortSignal) => Promise<unknown>;
+}): UploadCache {
+  return uploadCache({
+    send: (upload) =>
+      Effect.gen(function* () {
+        const created = yield* Effect.tryPromise({
+          try: (signal) => provider.create(upload, signal),
+          catch: provider.failure,
+        });
+        const parsed = provider.parseUploaded(created);
+        if (!parsed.success)
+          return yield* new ModelError({
+            kind: 'malformed-output',
+            message: `${provider.providerName} returned an upload without a usable file id.`,
+            model: provider.model,
+            cause: parsed.error,
+          });
+        return parsed.data;
+      }),
+    remove: (fileId) =>
+      Effect.tryPromise({
+        try: (signal) => provider.remove(fileId, signal),
+        catch: provider.failure,
+      }).pipe(
+        Effect.asVoid,
+        Effect.catchTag('ModelError', (error) =>
+          error.status === 404 ? Effect.void : Effect.fail(error),
+        ),
+      ),
+  });
 }
