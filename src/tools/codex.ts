@@ -425,9 +425,7 @@ const createCodexThread = Effect.fn('codex.createCodexThread')(function* (
     try: findCodexBinaryPath,
     catch: ensureError,
   });
-  const codex = new CodexClass({
-    codexPathOverride: codexPath,
-  });
+  const codex = new CodexClass({ codexPathOverride: codexPath });
   const config = yield* getCodexConfig;
   // Resumed threads keep their stored workspace unless explicitly overridden.
   const workspace =
@@ -484,6 +482,8 @@ export class CodexTool extends defineTool({
       agentCliApprovalCommand(CODEX_AGENT_NAME, input.prompt, (state) =>
         codexSandboxMode(input, state),
       ),
+    // A resumed thread keeps its stored workspace: name none, not the wrong one.
+    cwd: 'unknown',
   },
 }) {
   protected execute(input: CodexInput) {
