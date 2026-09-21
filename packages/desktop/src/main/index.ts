@@ -94,6 +94,7 @@ import { createDesktopHostRequests } from './desktopHostRequests.js';
 import { createDesktopAgentRun } from './desktopAgentRun.js';
 import { installDesktopHostBridge } from './hostBridge.js';
 import { createDesktopLogIpc } from './desktopLogIpc.js';
+import { createDesktopProjectsIpc } from './desktopProjectsIpc.js';
 import {
   isDesktopCommandMessage,
   type DesktopMessageHandler,
@@ -117,11 +118,7 @@ import {
   DesktopWorkspaceInboundMessageSchema,
   EMPTY_DESKTOP_ENVIRONMENT_SUMMARY,
 } from '../shared/desktopWorkspaceMessages.js';
-import {
-  DESKTOP_PROJECT_COMMANDS,
-  DesktopCloseProjectMessageSchema,
-  DesktopSelectProjectMessageSchema,
-} from '../shared/desktopProjectMessages.js';
+import { DESKTOP_PROJECT_COMMANDS } from '../shared/desktopProjectMessages.js';
 import { installDesktopProtocolCallbackLifecycle } from './desktopProtocolCallbacks.js';
 import {
   attachRendererConsoleLog,
@@ -167,7 +164,11 @@ import {
 } from './fatalStartupError.js';
 import { initializeElectronPlatform } from './platform/index.js';
 import { showDesktopWarningDialog } from './platform/warningDialog.js';
-import { postDesktopSettingsView } from '../shared/desktopCommandSurface.js';
+import {
+  desktopInboundRoute,
+  postDesktopSettingsView,
+  type DesktopInboundRoute,
+} from '../shared/desktopCommandSurface.js';
 import type { DesktopSetupAuth } from './desktopSetupAuth.js';
 import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
 
@@ -1763,51 +1764,32 @@ function createWindow(options: {
       onAsyncError: reportAsyncError,
     },
   );
-  // The desktop-only handlers, in match order. A message every one of them
-  // declines is a session message: the project it names answers it.
-  // Renderer traffic about projects: the list it asks for once it boots, and
-  // the select and close requests. safeParse, not parse: dispatch has no
-  // catch, so a malformed message is dropped, not an unhandled rejection.
-  const projectsIpc: DesktopMessageHandler = {
-    handleMessage(message) {
-      switch (message.command) {
-        case DESKTOP_PROJECT_COMMANDS.REQUEST_PROJECTS:
-          postProjects();
-          return true;
-        case DESKTOP_PROJECT_COMMANDS.SELECT_PROJECT: {
-          const parsed = DesktopSelectProjectMessageSchema.safeParse(message);
-          if (parsed.success) selectProject(parsed.data.key);
-          return true;
-        }
-        case DESKTOP_PROJECT_COMMANDS.CLOSE_PROJECT: {
-          const parsed = DesktopCloseProjectMessageSchema.safeParse(message);
-          if (parsed.success)
-            closeProject(parsed.data.key, parsed.data.hasUnsavedChanges);
-          return true;
-        }
-        default:
-          return false;
-      }
-    },
-  };
-  const desktopHandlers: DesktopMessageHandler[] = [
-    promptController,
-    {
+  // One handler per inbound command namespace: the message's `command` names
+  // its route (`desktopInboundRoute`), so a message is parsed by the one
+  // surface that owns it instead of being offered to every handler in turn.
+  const desktopRoutes: Record<DesktopInboundRoute, DesktopMessageHandler> = {
+    prompt: promptController,
+    settings: {
       handleMessage: (message) =>
         settingsIpcRef.current?.handleMessage(message) ?? false,
     },
-    onboardingIpc,
-    projectsIpc,
-    workspaceIpc,
-    logsIpc,
-    createDesktopShellIpc(shellActions),
-  ];
+    onboarding: onboardingIpc,
+    projects: createDesktopProjectsIpc({
+      postProjects,
+      selectProject,
+      closeProject,
+    }),
+    workspace: workspaceIpc,
+    logs: logsIpc,
+    shell: createDesktopShellIpc(shellActions),
+  };
   const hostBridge = installDesktopHostBridge(window, {
     onRendererMessage: (message) => {
       if (isDesktopCommandMessage(message)) {
-        for (const handler of desktopHandlers) {
-          if (handler.handleMessage(message)) break;
-        }
+        const route = desktopInboundRoute(message.command);
+        // A command no surface owns is renderer drift, not a session
+        // message: session frames are keyed by `kind`, never `command`.
+        if (route) desktopRoutes[route].handleMessage(message);
         return;
       }
       // A session message names its project: that project's port answers it.
