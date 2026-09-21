@@ -1619,19 +1619,19 @@ function applyRowFacts(
 }
 
 /** `view.requests` is every run's open requests, in the order the rows
- *  opened them (5.2): this run's rebuilt from its slice (request ids are
- *  session-unique), every other run's left where they are. */
+ *  opened them (5.2): this run's rebuilt from its slice, every other run's
+ *  left where they are. Identity is (runId, requestId), so the dedupe of
+ *  already-listed requests is scoped to this run, never another's. */
 function projectRequests(view: SessionView, runId: RunId, rows: RunRows) {
   const open = Object.entries(rows.requests).filter(([, r]) => !r.resolved);
   const ids = new Set(open.map(([requestId]) => requestId));
   const kept = view.requests.filter(
     (r) => r.runId !== runId || ids.has(r.requestId),
   );
-  const held = new Set(kept.map((r) => r.requestId));
   view.requests = [
     ...kept,
     ...open.flatMap(([requestId, r]) =>
-      held.has(requestId)
+      kept.some((q) => q.runId === runId && q.requestId === requestId)
         ? []
         : [{ runId, requestId, payload: r.payload, thread: r.thread }],
     ),

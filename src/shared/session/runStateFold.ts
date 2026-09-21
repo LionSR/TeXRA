@@ -762,12 +762,17 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
           commit,
         );
       }
+      const permit = row.payload.permit;
+      // A permit presupposes the request.opened it names.
+      if (permit !== null && current.requests[permit.requestId] === undefined) {
+        return refuse('out-of-order', `dangling ${permit.requestId}`, commit);
+      }
       // The retry owner's durable gate, its one carrier: `null` retires it.
       return Result.succeed({
         ...current,
         commit,
         rowsBeforeSnapshot: current.rowsBeforeSnapshot + 1,
-        pendingRetry: row.payload.permit,
+        pendingRetry: permit,
       });
     }
     case 'tool.result': {

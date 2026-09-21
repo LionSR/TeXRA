@@ -455,6 +455,51 @@ describe('sessionFold', () => {
     expect(runView(unknown, CHILD).readOnly).toBe(true);
   });
 
+  it('lists two runs requests of the same id side by side: identity is run and id', () => {
+    // The projection dedupes a run's already-listed requests by id alone,
+    // so the dedupe must stay scoped to that run: another run may legally
+    // hold an open request of the same id, and shadowing it would leave
+    // that request without a panel.
+    const log = new Log();
+    log.emit(CHILD, 1650, {
+      type: 'run.start',
+      identity: CHILD_IDENTITY,
+      category: AgentCategory.ToolUse,
+      isRemote: false,
+      userFollowUpSupport: 'unsupported',
+      parent: null,
+    });
+    log.emit(PROCESS, 1650, {
+      type: 'run.start',
+      identity: { kind: 'process', tool: 'bash' },
+      category: AgentCategory.ToolUse,
+      isRemote: false,
+      parent: null,
+      userFollowUpSupport: 'unsupported',
+    });
+    const open = (id: RunId) =>
+      log.emit(id, 1651, {
+        type: 'request.opened',
+        requestId: 'req-1',
+        payload: {
+          kind: 'bash',
+          data: {
+            requestId: 'req-1',
+            allowBypass: true,
+            runId: id,
+            command: 'latexmk -pdf main.tex',
+          },
+        },
+      });
+    open(CHILD);
+    open(PROCESS);
+    const view = foldAll([subscribe(CHILD, PROCESS), ...log.events.map(tail)]);
+    expect(view.requests.map((r) => [r.runId, r.requestId])).toStrictEqual([
+      [CHILD, 'req-1'],
+      [PROCESS, 'req-1'],
+    ]);
+  });
+
   it('reads another live process as held and read-only, and an unreadable run as an overlay', () => {
     const held = foldAll([...scenario.pending, local({ dead: [] })]);
     const child = runView(held, CHILD);
