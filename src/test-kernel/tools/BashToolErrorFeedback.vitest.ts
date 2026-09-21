@@ -172,7 +172,6 @@ describe('BashTool error feedback', () => {
     ),
   );
 
-
   // The refusal copy a call settles with. Approval is the run loop's
   // declared guard now, not a step in the body, so the copy is asserted at
   // the builder the guard hands its decision to.

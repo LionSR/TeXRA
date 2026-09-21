@@ -437,36 +437,33 @@ export function dispatchAgentCliTool<R = never>(params: {
 > {
   const { agentName, store, resumeId, sourceId, prompt, labels, launch } =
     params;
-  return withAgentCliRun(
-    agentName,
-    params.toolCall,
-    (run) =>
-      Effect.gen(function* () {
-        const registry = store(yield* Runs);
-        const callerRunId = run.runId;
-        if (sourceId) {
-          yield* requireCallerOwnership(
-            sourceId,
-            callerRunId,
-            registry.getHandle(registry.lookup(sourceId)),
-            labels,
-          );
-        }
-        return yield* resumeOrLaunchAgentCliSession(registry, {
-          session: run.session,
-          id: resumeId,
-          prompt,
+  return withAgentCliRun(agentName, params.toolCall, (run) =>
+    Effect.gen(function* () {
+      const registry = store(yield* Runs);
+      const callerRunId = run.runId;
+      if (sourceId) {
+        yield* requireCallerOwnership(
+          sourceId,
           callerRunId,
+          registry.getHandle(registry.lookup(sourceId)),
           labels,
-          launch: (releaseFallbackClaim) =>
-            launch({
-              session: run.session,
-              parentRunId: run.runId,
-              parentWorkingDirectory: params.toolCall.workingDirectory,
-              releaseFallbackClaim,
-            }),
-        });
-      }),
+        );
+      }
+      return yield* resumeOrLaunchAgentCliSession(registry, {
+        session: run.session,
+        id: resumeId,
+        prompt,
+        callerRunId,
+        labels,
+        launch: (releaseFallbackClaim) =>
+          launch({
+            session: run.session,
+            parentRunId: run.runId,
+            parentWorkingDirectory: params.toolCall.workingDirectory,
+            releaseFallbackClaim,
+          }),
+      });
+    }),
   );
 }
 
