@@ -110,24 +110,14 @@ export class RunRegistry {
   }
 
   /**
-   * Whether a generation of `runId` is live in this process — holding its
-   * lane, still unwinding, or carrying a live tool-use flow: the states in
-   * which a resume must be refused outright rather than queued on the run
-   * lane, since it would otherwise start a fresh generation over a live one.
-   * A parked run ({@link park}) is not one of them until a stop wakes it: a
-   * resume supersedes the fiber where it waits, but a woken park is the run
-   * unwinding, still owing its terminal row and its claim release.
-   *
-   * Local ownership, never the durable phase: a crash leaves the phase RUNNING
-   * by design, and an orphaned run in that phase is what a resume takes over.
+   * Whether a generation of `runId` is live in this process — the roster's
+   * one admission answer ({@link RunRoster.isLive}), which {@link launchRun}
+   * also refuses on, inside its lane claim. Read here only by a caller that
+   * must decide before it tracks a handle of its own, since tracking one
+   * would replace the live generation's stop target.
    */
-  isActiveOrResuming(runId: RunId): boolean {
-    const parked = this.roster.parkedRun(runId);
-    return (
-      this.roster.isHeld(runId) ||
-      (parked !== undefined && Deferred.isDoneUnsafe(parked.stopped)) ||
-      this.getToolUseFlowContext(runId) !== undefined
-    );
+  isLive(runId: RunId): boolean {
+    return this.roster.isLive(runId);
   }
 
   /** Reserve an inactive run for deletion; never wait for a live owner. */
@@ -153,21 +143,22 @@ export class RunRegistry {
     });
   }
 
-  /** Run a generation after earlier work, holding its lane through cleanup. */
+  /**
+   * Run a generation after earlier work, holding its lane through cleanup, and
+   * refuse with `RunLive` when a generation of the run is already live here
+   * ({@link RunRoster.isLive}). The refusal is taken in the same synchronous
+   * step as the lane claim, so it is the whole duplicate-launch answer: a
+   * resume that would otherwise start a second generation over a live one is
+   * refused here rather than by a caller's earlier read of the same fact. The
+   * claim that survives it lifts the run's stop marks ({@link
+   * RunRoster.clearStops}); a refused launch leaves the stop's gate intact.
+   */
   launchRun<A, E, R>(
     runId: RunId,
     operation: Effect.Effect<A, E, R>,
   ): Effect.Effect<A, E | Error, R> {
     return Effect.suspend(() => {
       this.assertActive();
-      // A generation admitted through the lane is this run starting again:
-      // whatever stop the run was marked for belongs to the generation it
-      // ended, and the one taking the lane admits children of its own. The
-      // lane is what makes this a separate admission rather than the same
-      // stop's own bookkeeping — a turn handle the stopping generation
-      // replaces takes no lane, so it no longer reopens a window the stop is
-      // still closing.
-      this.roster.clearStops(runId);
       return this.roster.launch(runId, operation);
     });
   }
@@ -275,14 +266,11 @@ export class RunRegistry {
 
   /**
    * Refuse a child admitted under a parent whose stop has begun, the way
-   * {@link assertActive} refuses one admitted under a closing session. A child
-   * this registry already holds is not an admission: a native child's
-   * activation and every turn handle it tracks re-enter here while the detach
-   * runs, and those are the children the stop is severing, not new ones.
+   * {@link assertActive} refuses one admitted under a closing session. Who is
+   * admissible is the roster's ({@link RunRoster.admitsChild}).
    */
   private assertAdmitsChild(parentRunId: RunId, childRunId: RunId): void {
-    if (!this.roster.isStopping(parentRunId)) return;
-    if (this.roster.hasRetainedOwner(childRunId)) return;
+    if (this.roster.admitsChild(parentRunId, childRunId)) return;
     throw new Error(
       `Cannot launch child run ${childRunId} under run ${parentRunId} while that run is stopping.`,
     );

@@ -322,10 +322,10 @@ function probeJournal<A>(
  * takes the same claim without conflict.
  *
  * `holdInactiveRun` answers this one. The run lane is the single in-process
- * authority for "a generation of this run is live here" — the one
- * `resumeRun` consults through `isActiveOrResuming` — so a resume already
- * under way holds it and this hold is refused, and a resume that starts after
- * it finds the run held and refuses in its turn.
+ * authority for "a generation of this run is live here" — the one a resume's
+ * own launch is refused on (`RunRoster.isLive`) — so a resume already under
+ * way holds it and this hold is refused, and a resume that starts after it
+ * finds the run held and refuses in its turn.
  *
  * Together they are what makes the terminal re-read under them final:
  * without them a resume can append `run.activate` between the reading and the

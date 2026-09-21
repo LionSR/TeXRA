@@ -50,6 +50,7 @@ import {
 } from './executeAgent';
 import { classifyRun } from './runClassification';
 import { Runs } from './runRegistry';
+import { RunLive } from './runRoster';
 import {
   retrieveSessionResumeData,
   type ToolUseResumeData,
@@ -143,11 +144,7 @@ export const resumeClaimedRun = Effect.fn('resumeClaimedRun')(function* (
 ): Effect.fn.Return<ResumeRunResult, Error, ProcessServices> {
   const session = options.session;
   const { runs } = session;
-  if (
-    options.isCancellationRequested?.() === true ||
-    runs.isActiveOrResuming(runId)
-  )
-    return REFUSED;
+  if (options.isCancellationRequested?.() === true) return REFUSED;
   const recovery = options.recovery
     ? session.followUps.useRecovery(options.recovery)
     : session.followUps.claimRecovery(runId, true);
@@ -211,7 +208,6 @@ const resumeRunWithRecoveryProvenance = Effect.fn(
   recoveryIsProvisional: boolean,
 ): Effect.fn.Return<ResumeRunResult, Error, AgentRunServices> {
   const session = options.session;
-  const runs = yield* Runs;
   const cancelled = () => options.isCancellationRequested?.() === true;
   // `releaseUnstartedRecovery` revalidates the continuation against the
   // boundary itself, so a lease that stopped being the entry's owner while
@@ -234,7 +230,7 @@ const resumeRunWithRecoveryProvenance = Effect.fn(
     yield* abandonSupplied(false);
     return REFUSED;
   }
-  if (cancelled() || runs.isActiveOrResuming(runId)) {
+  if (cancelled()) {
     yield* abandonSupplied();
     return REFUSED;
   }
@@ -259,7 +255,7 @@ const resumeRunWithRecoveryProvenance = Effect.fn(
     return yield* Effect.fail(retrieved.failure);
   }
   const resume = retrieved.success;
-  if (cancelled() || runs.isActiveOrResuming(runId)) {
+  if (cancelled()) {
     releaseQueue();
     return REFUSED;
   }
@@ -289,7 +285,7 @@ const resumeRunWithRecoveryProvenance = Effect.fn(
     yield* options
       .onResumeResolved()
       .pipe(Effect.onError(() => Effect.sync(releaseQueue)));
-    if (cancelled() || runs.isActiveOrResuming(runId)) {
+    if (cancelled()) {
       releaseQueue();
       return REFUSED;
     }
@@ -363,7 +359,11 @@ const releaseUnstartedRecovery = Effect.fn('releaseUnstartedRecovery')(
 );
 
 /**
- * The two expected launch failures a host words; anything else fails.
+ * The expected launch failures a host words; anything else fails.
+ *
+ * `RunLive` is the run lane's own refusal: a generation of this run is already
+ * live in this process, so the launch was refused where the lane is claimed
+ * rather than by a read of the same fact taken earlier on this path.
  *
  * A refusal is also the one moment this process learns, for the run the user
  * just asked to open, that another live TeXRA process holds it. That fact is
@@ -377,6 +377,7 @@ function refusalFor(
   session: SessionHandle,
   runId: RunId,
 ): Effect.Effect<ResumeRunResult | undefined> {
+  if (error instanceof RunLive) return Effect.succeed(REFUSED);
   if (
     error instanceof DatabaseWriteFailed &&
     error.cause instanceof DatabaseClaimRefused

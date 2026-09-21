@@ -27,6 +27,7 @@ import {
 import { applyHelperModelPreference } from './helperModelPreference';
 import { executeAgent, type ExecuteAgentOptions } from './executeAgent';
 import { RunHandle } from './RunHandle';
+import { RunLive } from './runRoster';
 import type { SessionHandle } from './SessionHandle';
 import type { AgentFlowResult } from './AgentFlowResult';
 
@@ -123,17 +124,18 @@ export const runAgent = Effect.fn('runAgent')(function* (
   // A resume of a run this session already runs is a duplicate, refused here
   // before any snapshot is taken: queued behind the live generation it would
   // wake without a handle of its own and restore a prior terminal fact over
-  // the one that generation is about to write. A provisional launch handle
-  // is tracked before the lane is claimed, so `isActiveOrResuming` is not
-  // enough: treating that handle as a parked predecessor would overwrite
-  // its interrupt handler and leave the first launch unstoppable.
+  // the one that generation is about to write. The lane takes the same
+  // refusal (`RunRegistry.launchRun`), but this launch tracks a provisional
+  // handle before it claims the lane, and tracking one over a live
+  // generation would overwrite its interrupt handler and leave the first
+  // launch unstoppable — so the one decision is read once, here, first.
   const existingHandle = runSession.runs.getHandle(runId);
   if (
     !shouldRegister &&
-    (runSession.runs.isActiveOrResuming(runId) ||
+    (runSession.runs.isLive(runId) ||
       (existingHandle !== undefined && !runSession.runs.isParked(runId)))
   )
-    return yield* Effect.fail(new Error(`Run is already running: ${runId}`));
+    return yield* Effect.fail(new RunLive({ runId }));
   // The launch's one stop: the launch handle's interrupt completes it, the
   // launch fails at its next preparation step once it has, and the run
   // adopts it as its own stop, so a stop reaches the run wherever the launch
