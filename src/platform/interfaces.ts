@@ -184,6 +184,25 @@ export interface LifecycleHost {
   readonly shutdownRan: boolean;
 }
 
+/**
+ * The process's shutdown lifecycle as an Effect service
+ * (`@texra/platform/Lifecycle`), provided once by the composition root through
+ * `installProcessRuntime`. The shape is the host itself: a program that
+ * registers a shutdown handler or drains the phases yields this rather than
+ * reading whichever lifecycle the process platform happens to hold.
+ *
+ * `layer` takes the host itself, for the same reason `Secrets.layer` does:
+ * every root builds its lifecycle before it installs the runtime that serves
+ * it, so the service is the value the root already holds.
+ */
+export class Lifecycle extends Context.Service<Lifecycle, LifecycleHost>()(
+  '@texra/platform/Lifecycle',
+) {
+  static layer(lifecycle: LifecycleHost): Layer.Layer<Lifecycle> {
+    return Layer.succeed(Lifecycle)(lifecycle);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Agent directories
 // ---------------------------------------------------------------------------
@@ -227,6 +246,28 @@ export interface AgentDirectoriesPort {
   >;
   builtIn(): Effect.Effect<string, AgentDirectoriesFailed>;
   builtInToolUse(): Effect.Effect<string, AgentDirectoriesFailed>;
+}
+
+/**
+ * The process's agent directories as an Effect service
+ * (`@texra/platform/AgentDirectories`), provided once by the composition root
+ * through `installProcessRuntime`. The shape is the port itself: a program
+ * that resolves one of the three local agent directories yields the port's own
+ * readers instead of reaching for the process platform's copy.
+ *
+ * `layer` takes the port itself, for the same reason `Secrets.layer` does:
+ * every root builds its agent directories before it installs the runtime that
+ * serves them, so the service is the value the root already holds.
+ */
+export class AgentDirectories extends Context.Service<
+  AgentDirectories,
+  AgentDirectoriesPort
+>()('@texra/platform/AgentDirectories') {
+  static layer(
+    directories: AgentDirectoriesPort,
+  ): Layer.Layer<AgentDirectories> {
+    return Layer.succeed(AgentDirectories)(directories);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -293,5 +334,38 @@ export class AgentResume extends Context.Service<
 >()('@texra/platform/AgentResume') {
   static layer(port: AgentResumePort): Layer.Layer<AgentResume> {
     return Layer.succeed(AgentResume)(port);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Tool-missing reporter
+// ---------------------------------------------------------------------------
+
+/**
+ * The host's optional "tool is missing" reporter. The VS Code host is the only
+ * one with a UI for it; every other host omits it, and callers treat an absent
+ * reporter as silence.
+ */
+export type ToolMissingHandler = (
+  message: string,
+  openDocsCommand?: string,
+) => void | Promise<void>;
+
+/**
+ * The process's tool-missing reporter as an Effect service
+ * (`@texra/platform/ToolMissingReporter`), provided once by the composition
+ * root through `installProcessRuntime`. A program that needs to surface a
+ * missing tool yields it via `Effect.serviceOption`, so an absent reporter is
+ * silence rather than a missing requirement.
+ *
+ * `layer` takes the reporter the root already holds; a host without a
+ * tool-missing UI omits the service, exactly as it omitted the platform port.
+ */
+export class ToolMissingReporter extends Context.Service<
+  ToolMissingReporter,
+  ToolMissingHandler
+>()('@texra/platform/ToolMissingReporter') {
+  static layer(report: ToolMissingHandler): Layer.Layer<ToolMissingReporter> {
+    return Layer.succeed(ToolMissingReporter)(report);
   }
 }

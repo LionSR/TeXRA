@@ -26,7 +26,7 @@ import { createTeamCatalogPorts } from '@controllers/mainView/teamCatalogPorts';
 // Local imports - shared types and errors
 import type { MessageHost } from '@hosts/uiHosts';
 import { withLogChannel } from '@logger/effectLog';
-import type { StateStore } from '@platform/interfaces';
+import type { AgentDirectories, StateStore } from '@platform/interfaces';
 import type { GlobalStorageFs } from '@platform/rootedFs';
 import {
   AgentCategory,
@@ -136,7 +136,7 @@ export function prepareSurfaceLaunch(
 ): Effect.Effect<
   ValidatedRunRequest,
   Rejected | Cancelled,
-  GlobalStorageFs | FileSystem.FileSystem
+  GlobalStorageFs | FileSystem.FileSystem | AgentDirectories
 > {
   return Effect.gen(function* () {
     let preparation: LaunchPreparation;

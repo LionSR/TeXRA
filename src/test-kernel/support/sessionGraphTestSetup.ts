@@ -6,10 +6,12 @@ import { directLeanLanguageServices } from '@tools/lean/direct/directLspAdapter'
 import { initTestProcessRuntime } from './testProcessRuntime';
 import { createFakeWorkspaceRoots } from './FakePlatform';
 import {
+  fakeHostAgentDirectories,
   fakeHostAgentResume,
   fakeHostAppState,
   fakeHostAuth,
   fakeHostLanguageModel,
+  fakeHostLifecycle,
   fakeHostSecrets,
   fakeSetupPlatform,
 } from './setupPlatform';
@@ -60,6 +62,8 @@ initTestProcessRuntime(
     auth: fakeHostAuth,
     languageModel: fakeHostLanguageModel,
     agentResume: fakeHostAgentResume,
+    agentDirectories: fakeHostAgentDirectories,
+    lifecycle: fakeHostLifecycle,
     setup: fakeSetupPlatform,
     // The Node hosts' layer: inert until a Lean tool is invoked.
     lean: directLeanLanguageServices(),

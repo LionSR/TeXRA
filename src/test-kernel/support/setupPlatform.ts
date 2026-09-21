@@ -28,8 +28,10 @@ import {
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { ProcessServices } from '@platform/processRuntime';
 import type {
+  AgentDirectoriesPort,
   AgentResumePort,
   AppState,
+  LifecycleHost,
   StateStore,
 } from '@platform/interfaces';
 import {
@@ -315,6 +317,30 @@ export const fakeHostAgentResume: AgentResumePort = {
     ),
 };
 
+/** The `AgentDirectories` service of every test runtime, delegating per call
+ *  for the same reason `fakeHostSecrets` does: hosts change per test, the
+ *  runtime does not. */
+export const fakeHostAgentDirectories: AgentDirectoriesPort = {
+  custom: () => installedHost().platform.agentDirectories.custom(),
+  builtIn: () => installedHost().platform.agentDirectories.builtIn(),
+  builtInToolUse: () =>
+    installedHost().platform.agentDirectories.builtInToolUse(),
+};
+
+/** The `Lifecycle` service of every test runtime, delegating per call for the
+ *  same reason `fakeHostSecrets` does: hosts change per test, the runtime
+ *  does not. */
+export const fakeHostLifecycle: LifecycleHost = {
+  onShutdown: (phase, handler) =>
+    installedHost().platform.lifecycle.onShutdown(phase, handler),
+  get runShutdown() {
+    return installedHost().platform.lifecycle.runShutdown;
+  },
+  get shutdownRan() {
+    return installedHost().platform.lifecycle.shutdownRan;
+  },
+};
+
 /** The process services a fake host provides to a program. */
 export type FakeProcessServices = ProcessServices;
 
@@ -357,7 +383,7 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     { Layer, ManagedRuntime },
     { testHttpClientLayer },
     { Secrets },
-    { AgentResume, AppState },
+    { AgentDirectories, AgentResume, AppState, Lifecycle },
     { LanguageModel },
     { SetupPlatform },
     { ToolInjections },
@@ -403,6 +429,8 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     SupabaseAuth.layer(fakeHostAuth),
     LanguageModel.layer(fakeHostLanguageModel),
     AgentResume.layer(fakeHostAgentResume),
+    AgentDirectories.layer(fakeHostAgentDirectories),
+    Lifecycle.layer(fakeHostLifecycle),
     SetupPlatform.layer(fakeSetupPlatform),
     // No conditional injections on the bare fake host: a suite that
     // exercises them passes its own list to `resolveAgentTools`.

@@ -65,10 +65,16 @@ import {
   type ProcessRuntime,
 } from '@platform/processRuntime';
 import {
+  AgentDirectories,
   AgentResume,
   AppState,
+  Lifecycle,
+  ToolMissingReporter,
+  type AgentDirectoriesPort,
   type AgentResumePort,
+  type LifecycleHost,
   type StateStore,
+  type ToolMissingHandler,
 } from '@platform/interfaces';
 import { LanguageModel, type LanguageModelPort } from '@platform/languageModel';
 import { globalStorageFsLayer } from '@platform/rootedFs';
@@ -963,6 +969,24 @@ interface ProcessRuntimeOptions {
    */
   readonly agentResume: AgentResumePort;
   /**
+   * The root's agent directories, served as `AgentDirectories`: the same value
+   * the root wires into its platform, required of every entry even where it
+   * resolves to empty directories (the agent package's embedder default).
+   */
+  readonly agentDirectories: AgentDirectoriesPort;
+  /**
+   * The root's shutdown lifecycle, served as `Lifecycle`: the same host every
+   * entry drains on shutdown. A subscriber that must register a cleanup reads
+   * it from context rather than from the process platform.
+   */
+  readonly lifecycle: LifecycleHost;
+  /**
+   * The host's tool-missing reporter, served as `ToolMissingReporter`. Optional
+   * because only the VS Code host has a UI for it; an absent reporter serves
+   * the no-op, so a missing-tool probe still answers without surfacing.
+   */
+  readonly toolMissingReporter?: ToolMissingHandler;
+  /**
    * The root's global state store, opened before this install and served as
    * `AppState`. Every entry has one: an entry that serves no application state
    * (the CLI's platform-less `clone`, whose storage root may be read-only)
@@ -1043,6 +1067,9 @@ export function installProcessRuntime({
   auth,
   languageModel,
   agentResume,
+  agentDirectories,
+  lifecycle,
+  toolMissingReporter,
   setup,
   editorModel,
   inlineComments,
@@ -1074,6 +1101,11 @@ export function installProcessRuntime({
     SupabaseAuth.layer(auth),
     LanguageModel.layer(languageModel),
     AgentResume.layer(agentResume),
+    AgentDirectories.layer(agentDirectories),
+    Lifecycle.layer(lifecycle),
+    toolMissingReporter === undefined
+      ? Layer.empty
+      : ToolMissingReporter.layer(toolMissingReporter),
     SetupPlatform.layer(setup),
     ToolInjections.layer(AGENT_TOOL_INJECTIONS),
     // Built with this runtime: a replacement starts with empty tables.

@@ -16,11 +16,16 @@ import {
   resolveDelegationScopeAgents,
 } from '@agent/index/agentRegistry';
 import type { AgentEntry } from '@agent/index/agentEntry';
+import { AgentDirectories } from '@platform/interfaces';
 import { GlobalStorageFs } from '@platform/rootedFs';
 import { AgentCategory } from '@shared/schemas';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { REPO_ROOT } from '@test/support/repoScan';
-import { hostStores, installPlatform } from '@test/support/setupPlatform';
+import {
+  fakeHostAgentDirectories,
+  hostStores,
+  installPlatform,
+} from '@test/support/setupPlatform';
 import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
 import type { RootedFileSystem } from '@utils/files/rootedFileSystem';
 
@@ -96,6 +101,8 @@ describe('cross-category agent resolution', () => {
           refresh({ includeRemote: false }),
           GlobalStorageFs,
           {} as RootedFileSystem,
+        ).pipe(
+          Effect.provideService(AgentDirectories, fakeHostAgentDirectories),
         ),
         nodePlatformLayer,
       ),

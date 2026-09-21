@@ -164,7 +164,9 @@ export async function runChat(
   // The entry's runtime, in a local: the chat is the first thing that opens
   // the process session, and the Effects below settle on the same runtime.
   // The init and that first session open are one program on it.
-  const runtime = await installCliProcessRuntime(context.storageRoot);
+  const runtime = await installCliProcessRuntime(context.storageRoot, {
+    resourcesPath: context.resourcesPath,
+  });
   const { services, runtimeSession } = await runtime.runPromise(
     Effect.gen(function* () {
       const built = yield* initCliPlatform({ ...context, quietLogs: true });

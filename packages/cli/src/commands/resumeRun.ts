@@ -82,7 +82,9 @@ export async function runResumeCommand(
   // This entry never suppresses the platform's own signal handlers: the
   // window below (the ownership gate, the resume) still needs a graceful
   // handler, and `runChat` hands ownership over once Ink mounts.
-  const runtime = await installCliProcessRuntime(context.storageRoot);
+  const runtime = await installCliProcessRuntime(context.storageRoot, {
+    resourcesPath: context.resourcesPath,
+  });
 
   const decision = await runtime.runPromise(
     Effect.gen(function* () {

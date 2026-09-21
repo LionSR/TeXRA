@@ -20,6 +20,7 @@ import {
   resolveCliAgentInCategory,
   resolveCliRunAgent,
 } from '@cli/runtime/agents';
+import { AgentDirectories } from '@platform/interfaces';
 import type { ProcessServices } from '@platform/processRuntime';
 import { GlobalStorageFs } from '@platform/rootedFs';
 import { AgentCategory } from '@shared/schemas';
@@ -27,7 +28,11 @@ import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { REPO_ROOT } from '@test/support/repoScan';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
-import { hostStores, installPlatform } from '@test/support/setupPlatform';
+import {
+  fakeHostAgentDirectories,
+  hostStores,
+  installPlatform,
+} from '@test/support/setupPlatform';
 import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
 import type { RootedFileSystem } from '@utils/files/rootedFileSystem';
 
@@ -98,6 +103,8 @@ describe('CLI agent validation with a shadowed name', () => {
           refresh({ includeRemote: false }),
           GlobalStorageFs,
           {} as RootedFileSystem,
+        ).pipe(
+          Effect.provideService(AgentDirectories, fakeHostAgentDirectories),
         ),
         nodePlatformLayer,
       ),

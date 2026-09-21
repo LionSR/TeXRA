@@ -2,7 +2,7 @@
 import { Effect, FileSystem } from 'effect';
 import { getAgentsByCategory, loadAgents, refresh } from '@agent/index';
 import { supabaseAuthenticated } from '@auth/SupabaseAuth';
-import type { StateStore } from '@platform/interfaces';
+import type { AgentDirectories, StateStore } from '@platform/interfaces';
 import type { GlobalStorageFs } from '@platform/rootedFs';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 
@@ -18,14 +18,14 @@ export function createTeamCatalogPorts(workspaceState: StateStore): {
   readonly ensureCatalogLoaded: () => Effect.Effect<
     void,
     unknown,
-    GlobalStorageFs | FileSystem.FileSystem
+    GlobalStorageFs | FileSystem.FileSystem | AgentDirectories
   >;
   readonly getAgents: typeof getAgentsByCategory;
   readonly canAccessRemoteCatalog: () => Effect.Effect<boolean>;
   readonly refreshRemote: () => Effect.Effect<
     void,
     unknown,
-    GlobalStorageFs | FileSystem.FileSystem
+    GlobalStorageFs | FileSystem.FileSystem | AgentDirectories
   >;
 } {
   return {

@@ -9,7 +9,6 @@ import {
   tryDefaultSession,
   type SessionHandle,
 } from '@agent/runtime';
-import { createPlatformAgentDirectories } from '@agent/index';
 import type { SupabaseSessionLog } from '@auth/SupabaseSession';
 import { bootstrapHost } from '@controllers/hostBootstrap';
 import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
@@ -17,7 +16,9 @@ import { consoleLogSink, setLogSink, silentLogSink } from '@logger/logSink';
 import { initPlatform, tryPlatform, type Platform } from '@platform/platform';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
+  AgentDirectories,
   AppState,
+  Lifecycle,
   type LifecycleHost,
   type StateStore,
   type StateWriteFailed,
@@ -28,7 +29,6 @@ import {
   withProcessServices,
   type ProcessRuntime,
 } from '@platform/processRuntime';
-import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { createNodeWorkspaceRoots } from '@platform/defaults/nodeHost';
 import { DEFAULT_NODE_STORAGE_ROOT } from '@platform/defaults/nodeStorage';
 import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
@@ -131,13 +131,6 @@ function logAt(
 ): void {
   if (quietPlatformLogs) return;
   writeTextStderr(`[${level}] [${channel}] ${message}`);
-}
-
-// A shutdown-handler failure is actionable degradation by the same rule, so it
-// bypasses quietLogs too — every CLI command passes quietLogs:true, and routing
-// this through logAt would make the cross-host parity below unreachable.
-function showLifecycleError(message: string): void {
-  writeTextStderr(`[error] [cli.lifecycle] ${message}`);
 }
 
 const cliPlatformLog: SupabaseSessionLog = {
@@ -279,7 +272,10 @@ export function initCliPlatform(
     // init finds it installed; each then adopts that one rather than building a
     // second and leaving the first undisposed.
     const runtime = yield* Effect.tryPromise({
-      try: () => installCliProcessRuntime(context.storageRoot),
+      try: () =>
+        installCliProcessRuntime(context.storageRoot, {
+          resourcesPath: context.resourcesPath,
+        }),
       catch: ensureError,
     });
 
@@ -308,22 +304,12 @@ export function initCliPlatform(
           storageRoot: context.storageRoot,
           workspacePath: context.cwd,
         });
-        // Same severity and wording as the extension/desktop hosts: a shutdown
-        // handler failure is an error everywhere, not a warning in one host.
-        const lifecycle = createLifecycleHost({
-          onError: (phase, error) => {
-            showLifecycleError(
-              `Lifecycle ${phase} handler failed: ${toErrorMessage(error)}`,
-            );
-          },
-        });
-        const agentDirectories = createPlatformAgentDirectories({
-          channel: 'cli',
-          // Built-in agents are read straight out of the CLI package's shipped
-          // `dist/resources`, never copied into the shared `~/.texra` root.
-          resourcesPath: context.resourcesPath,
-          customDirectoryStore: { get: () => undefined },
-        });
+        // The process lifecycle and agent directories are the values the
+        // runtime install built before the platform init: the platform
+        // publishes the same instances, so nothing here re-enters the ambient
+        // locator or builds a second copy beside the runtime's.
+        const lifecycle = yield* Lifecycle;
+        const agentDirectories = yield* AgentDirectories;
         const cliSecrets = getCliSecrets(context.storageRoot);
         const platform: Platform = { lifecycle, agentDirectories };
         // One process, one project: the process roots are the `--cwd` workspace,

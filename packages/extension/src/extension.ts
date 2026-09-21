@@ -252,6 +252,9 @@ async function initVscodePlatform(
     // credential-only one. The one defaulting site for this host.
     languageModel: extras.languageModel ?? UNAVAILABLE_LANGUAGE_MODEL_PORT,
     agentResume,
+    agentDirectories,
+    lifecycle,
+    toolMissingReporter: extras.toolMissingHandler,
     setup: vscodeSetupPlatform,
     // The editor's language models, so the run layer binds `vscode-lm`
     // models on this host (R2); consent was granted from the settings view.

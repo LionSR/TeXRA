@@ -126,7 +126,9 @@ export function defineCliCommand<const A extends ArgsDef, E>(
         );
         const runtime = await installCliProcessRuntime(
           context.storageRoot,
-          options.install === 'noPlatform' ? NO_PLATFORM_INSTALL : undefined,
+          options.install === 'noPlatform'
+            ? NO_PLATFORM_INSTALL
+            : { resourcesPath: context.resourcesPath },
         );
         return runtime.runPromise(program);
       };

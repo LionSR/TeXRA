@@ -3,7 +3,7 @@
 import { Data, Effect, FileSystem } from 'effect';
 import { AgentRosterController } from '@agent/roster/AgentRosterController';
 import { createLog } from '@logger/logUtils';
-import { platform } from '@platform/platform';
+import { AgentDirectories } from '@platform/interfaces';
 import type { GlobalStorageFs } from '@platform/rootedFs';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type {
@@ -114,7 +114,7 @@ export function loadAgents(
 ): Effect.Effect<
   void,
   AgentCatalogLoadError,
-  GlobalStorageFs | FileSystem.FileSystem
+  GlobalStorageFs | FileSystem.FileSystem | AgentDirectories
 > {
   const includeRemote = options.includeRemote ?? true;
   return onCatalogLoadLane(
@@ -137,7 +137,7 @@ function queueLoad(
 ): Effect.Effect<
   void,
   AgentCatalogLoadError,
-  GlobalStorageFs | FileSystem.FileSystem
+  GlobalStorageFs | FileSystem.FileSystem | AgentDirectories
 > {
   return Effect.suspend(() => {
     if (loadEpoch !== epoch) return Effect.void;
@@ -155,13 +155,13 @@ function doLoad(
 ): Effect.Effect<
   boolean,
   AgentCatalogLoadError,
-  GlobalStorageFs | FileSystem.FileSystem
+  GlobalStorageFs | FileSystem.FileSystem | AgentDirectories
 > {
   return Effect.gen(function* () {
     const startTime = Date.now();
 
     // Load from all sources in parallel
-    const dirs = platform().agentDirectories;
+    const dirs = yield* AgentDirectories;
     const [customDir, builtInDir, toolUseDir] = yield* Effect.all(
       [dirs.custom(), dirs.builtIn(), dirs.builtInToolUse()],
       { concurrency: 'unbounded' },
@@ -291,7 +291,7 @@ export function refresh(
 ): Effect.Effect<
   void,
   AgentCatalogLoadError,
-  GlobalStorageFs | FileSystem.FileSystem
+  GlobalStorageFs | FileSystem.FileSystem | AgentDirectories
 > {
   return Effect.suspend(() => {
     const loadEpoch = ++epoch;
@@ -314,7 +314,7 @@ function removeRemoteEntries(): void {
 export function invalidateRemoteAgentsAfterSignOut(): Effect.Effect<
   void,
   never,
-  GlobalStorageFs | FileSystem.FileSystem
+  GlobalStorageFs | FileSystem.FileSystem | AgentDirectories
 > {
   return Effect.suspend(() => {
     removeRemoteEntries();
@@ -600,7 +600,7 @@ export function computeAgentOptionsData(
 ): Effect.Effect<
   AgentOptionsDataPayload,
   AgentCatalogLoadError,
-  GlobalStorageFs | FileSystem.FileSystem
+  GlobalStorageFs | FileSystem.FileSystem | AgentDirectories
 > {
   return Effect.map(loadAgents(), () => ({
     workflow: entriesToOptionData(
