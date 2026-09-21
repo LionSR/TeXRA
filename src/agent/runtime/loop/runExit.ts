@@ -10,7 +10,7 @@
 import { Effect } from 'effect';
 import type { AgentTrace } from '@agent/trace';
 import type { RunId, RunOutcome } from '@shared/schemas';
-import type { DatabaseWriteFailed } from '@shared/session/database';
+import { DatabaseWriteFailed } from '@shared/session/database';
 import { RunLedger, RunLedgerRefused } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
 import { ensureError } from '@utils/errors/errorMessage';
@@ -54,7 +54,9 @@ export const recordHalt =
                       data: error,
                     }),
                   )
-                : Effect.fail(error),
+                : error instanceof DatabaseWriteFailed
+                  ? Effect.fail(error)
+                  : Effect.die(error),
             ),
           );
 
