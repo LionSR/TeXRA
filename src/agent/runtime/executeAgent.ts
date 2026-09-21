@@ -520,10 +520,8 @@ export function executeAgent(
           Deferred.await(ctx.stopped),
         ),
       );
-      // The join is `ensuring`, not a generator `finally`: the generator
-      // driver does not resume a `finally` after a failed `yield*`, so a
-      // join written there runs on the success path only and the run's
-      // failure path would release the lease with the write in flight.
+      // The join is `ensuring`, not a generator `finally`: the driver skips
+      // a `finally` after a failed `yield*`, releasing the lease mid-write.
       return yield* Effect.gen(function* () {
         const result = yield* runFlowWithLifecycle(
           ctx,
