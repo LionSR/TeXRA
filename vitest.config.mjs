@@ -81,10 +81,12 @@ const REACHES_A_HOST = [
 // What the scan cannot see: a pair of suites sharing process terminal state.
 // Those are found by file-order shuffles and kept by name in the ratchet
 // baseline — shrink-only, a stale entry fails config load. The companion
-// `hostReadByModuleUnderTest` list is gone: every module those suites drove
-// now takes its host as a layer or a value, and the one suite left reached
-// the harness's installed host through `nativeToolTestLayer`, which the scan
-// above now names like the other support modules that read one.
+// `hostReadByModuleUnderTest` list is gone: five of its rows named modules
+// since fixed to take their host as a layer or a value, six were stale
+// because the scan above already sends those suites to `kernel` on an
+// import of a host-installing support module, and the last one reached the
+// harness's installed host through `nativeToolTestLayer`, which the scan now
+// names like the other support modules that read one.
 const KERNEL_BASELINE = 'config/ratchets/pure-tier-kernel-suites.json';
 const kernelBaseline = JSON.parse(
   readFileSync(resolve(rootDir, KERNEL_BASELINE), 'utf8'),
