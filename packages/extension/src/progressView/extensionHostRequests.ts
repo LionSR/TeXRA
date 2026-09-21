@@ -716,19 +716,15 @@ export function createExtensionHostRequests(
     latexdiffFiles: (baseFile, editedFile) =>
       commandVerb('texra.latexdiff', undefined, baseFile, editedFile),
     openDashboard: commandVerb('texra.showDashboard'),
-    openSettings: (section, sessionType) => {
-      switch (section) {
-        case 'agents':
-          return commandVerb(
+    openSettings: (section, sessionType) =>
+      section === 'agents'
+        ? commandVerb(
             'texra.showAgents',
             sessionType === 'toolUse' ? 'toolUse' : undefined,
-          );
-        case 'models':
-          return commandVerb('texra.showModels');
-        case 'teams':
-          return commandVerb('texra.showMultiAgent');
-      }
-    },
+          )
+        : section === 'models'
+          ? commandVerb('texra.showModels')
+          : commandVerb('texra.showMultiAgent'),
     setApiKey: (provider) =>
       Effect.gen(function* () {
         yield* commandVerb('texra.setApiKey', provider);
