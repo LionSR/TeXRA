@@ -58,6 +58,10 @@ function decideToolEdits(
 }
 
 const runId = 'abcdef' as RunId;
+// The two roots this suite installs. Every absolute path built from them —
+// a stub's key, an expectation — goes through `path.join`, because that is
+// what the code under test joins with: an interpolated `/` names a different
+// file wherever the separator is not `/`.
 const workspacePath = '/workspace';
 const storagePath = '/storage';
 
@@ -271,7 +275,7 @@ describe('accept_run_files progress events', () => {
 
       expect(result.status).toBe('executed');
       expect(explicit.events).toEqual([]);
-      expect(written).toEqual([[`${workspacePath}/paper.tex`]]);
+      expect(written).toEqual([[path.join(workspacePath, 'paper.tex')]]);
       expect(tracker.hasRead('paper.tex')).toBe(true);
       dispose();
     }).pipe(Effect.provide(nativeToolTestLayer())),
@@ -367,7 +371,13 @@ describe('accept_run_files progress events', () => {
       const tool = new AcceptRunFilesTool();
       let approvalOriginal = '';
       let approvalProposed = '';
-      const snapshotPath = `${storagePath}/executions/${runId}/original/draft.tex`;
+      const snapshotPath = path.join(
+        storagePath,
+        'executions',
+        runId,
+        'original',
+        'draft.tex',
+      );
 
       setRunStorageEntries();
       const write = stubWorkspaceFiles(true, 'new content');
@@ -406,7 +416,13 @@ describe('accept_run_files progress events', () => {
         };
         const tool = new AcceptRunFilesTool();
         const tracker = new FileInteractionState();
-        const snapshotPath = `${projectRoots.storage}/executions/${runId}/original/paper.tex`;
+        const snapshotPath = path.join(
+          projectRoots.storage,
+          'executions',
+          runId,
+          'original',
+          'paper.tex',
+        );
         let approvalOriginal = '';
         let approvalProposed = '';
         const { written, dispose } = recordWrittenFiles();
@@ -422,7 +438,10 @@ describe('accept_run_files progress events', () => {
         });
         absoluteFilePaths.add(snapshotPath);
         absoluteContents.set(snapshotPath, 'original project');
-        absoluteContents.set('/project/draft.tex', 'proposed project');
+        absoluteContents.set(
+          path.join(projectRoots.workspace, 'draft.tex'),
+          'proposed project',
+        );
         absoluteContentFallback = 'wrong project';
         decideToolEdits((request) => {
           approvalOriginal = request.originalContent;
@@ -449,7 +468,7 @@ describe('accept_run_files progress events', () => {
         expect({ approvalOriginal, approvalProposed, written }).toEqual({
           approvalOriginal: 'original project',
           approvalProposed: 'proposed project',
-          written: [['/project/paper.tex']],
+          written: [[path.join(projectRoots.workspace, 'paper.tex')]],
         });
         dispose();
       }).pipe(Effect.provide(nativeToolTestLayer())),

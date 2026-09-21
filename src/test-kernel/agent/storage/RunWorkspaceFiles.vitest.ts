@@ -55,9 +55,17 @@ describe('listRunWorkspaceFiles', () => {
     await expect(list(['not-a-dir.tex/child.tex'])).resolves.toEqual([]);
   });
 
-  it('propagates operational stat failures', async () => {
-    // A component past the filesystem's name limit fails ENAMETOOLONG, which
-    // is neither absence nor a non-directory parent, so it must surface.
-    await expect(list([`${'x'.repeat(5000)}.tex`])).rejects.toThrow();
-  });
+  // POSIX only: an over-long component is ENAMETOOLONG here, while Windows
+  // reports an unusable name as ERROR_INVALID_NAME, which libuv translates to
+  // ENOENT — absence, which this call is supposed to skip. No cross-platform
+  // path produces an operational `lstat` failure on a real filesystem, so the
+  // branch is asserted where one exists rather than through a mock.
+  it.skipIf(process.platform === 'win32')(
+    'propagates operational stat failures',
+    async () => {
+      // A component past the filesystem's name limit fails ENAMETOOLONG, which
+      // is neither absence nor a non-directory parent, so it must surface.
+      await expect(list([`${'x'.repeat(5000)}.tex`])).rejects.toThrow();
+    },
+  );
 });
