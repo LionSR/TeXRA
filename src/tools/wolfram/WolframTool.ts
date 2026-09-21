@@ -109,9 +109,12 @@ export const WolframTool = defineTool({
   description: `Execute approval-gated Wolfram Language code. Use this tool for quick calculations, symbolic math, and one-off evaluations only when Wolfram/external computation is allowed by the user. Do not use it when the user requested a specific verification method or prohibited external computation. Sessions do NOT persist between calls - each run starts fresh with no memory of previous variables or definitions. For complex scripts requiring session persistence, iterative development, or saving intermediate results, write to a .wl file and run via bash instead. Compute and print actual results: do not hardcode expected values in Print statements; use VerificationTest or assertions so output reflects real computation.`,
   schema: WolframInputSchema,
   // The shell line the run would be, gated by the loop before the body runs.
+  // `execute` passes the workspace as the command's cwd whatever working
+  // directory the call was given, so the prompt names that one.
   guard: {
     bash: (input: WolframInput) =>
       Effect.succeed(wolframApprovalCommand(input.code)),
+    cwd: 'workspace',
   },
   execute: Effect.fn('WolframTool.call')(function* (input: WolframInput) {
     const call = yield* ToolCall;

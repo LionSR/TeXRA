@@ -36,11 +36,19 @@ const guardRefusal = Effect.fn('toolUse.guard')(function* (
   const guard = tool.guard;
   if (!guard) return undefined;
   // The guard reads the call's own validated arguments, from the same schema
-  // `call` validates with. An input that schema refuses reaches no prompt and
-  // no path: the `call` below re-reads it and returns the validation error,
-  // which is the report.
-  const parsed = tool.definition.zodSchema?.safeParse(rawInput);
-  if (!parsed || !parsed.success) return undefined;
+  // `call` validates with. A tool that declares a guard but no schema would
+  // have the guard quietly stop gating it, so it is a defect, not a skip.
+  const schema = tool.definition.zodSchema;
+  if (!schema)
+    return yield* Effect.die(
+      new Error(
+        `Tool ${tool.definition.name} declares a guard but no schema: the guard has no arguments to read.`,
+      ),
+    );
+  // An input that schema refuses reaches no prompt and no path: the `call`
+  // below re-reads it and returns the validation error, which is the report.
+  const parsed = schema.safeParse(rawInput);
+  if (!parsed.success) return undefined;
   const input = parsed.data as never;
   const call = yield* ToolCall;
 
@@ -64,12 +72,19 @@ const guardRefusal = Effect.fn('toolUse.guard')(function* (
 
   if (!guard.bash) return undefined;
   const command = yield* guard.bash(input);
+  // The directory the approved command runs in, as the tool declared it: the
+  // call's working directory when it named one and the session's workspace
+  // otherwise, or the workspace whatever the call named when that is where
+  // the executor runs.
+  const executorCwd =
+    guard.cwd === 'workspace'
+      ? call.roots.workspace
+      : (parseWorkingDirectory(call.workingDirectory) ?? call.roots.workspace);
   const decision = yield* requestBashApproval({
     command,
-    // The directory the approved command runs in, resolved the one way every
-    // gated tool resolves it: the call's working directory when it named one,
-    // the session's workspace otherwise.
-    cwd: parseWorkingDirectory(call.workingDirectory) ?? call.roots.workspace,
+    // A tool whose executor can name no directory names none here, rather
+    // than a directory the approved command may not run in.
+    cwd: guard.cwd === 'unknown' ? null : executorCwd,
   });
   return decision.action === 'approve'
     ? undefined

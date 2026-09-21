@@ -29,6 +29,16 @@ export interface ToolGuard<T, R = never> {
    * show (a Codex sandbox mode, a Claude permission mode).
    */
   readonly bash?: (input: T) => Effect.Effect<string, never, R>;
+  /**
+   * Where the approved command actually runs, when that is not the call's own
+   * directory. Omitted: the call's working directory, else the workspace,
+   * which is what a shell-shaped tool uses. `'workspace'`: the session
+   * workspace whatever working directory the call was given (`wolfram` runs
+   * its script there). `'unknown'`: the executor cannot name one, so the
+   * prompt names none rather than a directory the command may not run in
+   * (`send_to_terminal` reuses a terminal whose shell has its own directory).
+   */
+  readonly cwd?: 'workspace' | 'unknown';
 }
 
 /**
