@@ -82,8 +82,7 @@ import {
   reraiseAgentCliCallFailure,
 } from './agentCliShared';
 import {
-  formatChildRunDelivery,
-  formatChildRunError,
+  formatDelivery,
   toDeliveryUsage,
 } from './delegation/deliveryEnvelope';
 import {
@@ -510,30 +509,26 @@ function buildClaudeAgentLaunch(params: {
       if (turn.errorMessage) log.error(turn.errorMessage);
     },
     formatDelivery: (turn, wallTimeMs, lastPrompt) =>
-      formatChildRunDelivery(
-        {
-          tag: DELIVERY_TAG.claudeAgentResult,
-          runId,
-          prompt: lastPrompt,
-          attributes: [{ name: 'session-id', value: turn.sessionId || null }],
-        },
-        {
-          wallTime: formatWallTimeSeconds(wallTimeMs),
-          response: turn.finalResponse,
-          usage: toDeliveryUsage(turn.usage),
-          lines: claudeCostLines(turn),
-        },
-      ),
+      formatDelivery({
+        tag: DELIVERY_TAG.claudeAgentResult,
+        runId,
+        prompt: lastPrompt,
+        attributes: [{ name: 'session-id', value: turn.sessionId || null }],
+        wallTime: formatWallTimeSeconds(wallTimeMs),
+        response: turn.finalResponse,
+        usage: toDeliveryUsage(turn.usage),
+        lines: claudeCostLines(turn),
+      }),
     formatError: (turn, err, lastPrompt) =>
-      formatChildRunError(
-        { tag: DELIVERY_TAG.claudeAgentError, runId, prompt: lastPrompt },
-        {
-          lines: turn ? claudeCostLines(turn) : undefined,
-          message: toErrorMessage(
-            err ?? turn?.errorMessage ?? turn?.finalResponse,
-          ),
-        },
-      ),
+      formatDelivery({
+        tag: DELIVERY_TAG.claudeAgentError,
+        runId,
+        prompt: lastPrompt,
+        lines: turn ? claudeCostLines(turn) : undefined,
+        message: toErrorMessage(
+          err ?? turn?.errorMessage ?? turn?.finalResponse,
+        ),
+      }),
     loopFailedMessage: 'Claude Agent run loop failed after launch',
   });
 }

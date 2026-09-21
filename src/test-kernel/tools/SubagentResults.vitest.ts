@@ -8,10 +8,7 @@ import {
   type RunEndOutput,
   type RunId,
 } from '@shared/schemas';
-import {
-  formatChildRunDelivery,
-  formatChildRunError,
-} from '@tools/delegation/deliveryEnvelope';
+import { formatDelivery } from '@tools/delegation/deliveryEnvelope';
 import {
   formatBashDelivery,
   formatBashError,
@@ -54,29 +51,25 @@ function seconds(milliseconds: number): string {
   return `${(milliseconds / 1000).toFixed(1)}s`;
 }
 
-// formatChildRunDelivery/formatChildRunError are the one result/error builder
-// family for every child-run delivery: the native subagent path
-// (formatSubagentDelivery/formatSubagentError) and the agent-CLI tools
-// (codex.ts, claudeAgent.ts). The cases below replay the exact parameter
-// mappings used at the real call sites; the expected strings are
-// byte-identical to what the pre-merge agent-CLI formatters
-// (formatAgentCliDelivery/formatAgentCliError) produced.
+// formatDelivery is the one builder behind every child-run delivery: the
+// native subagent path (formatSubagentDelivery/formatSubagentError), the
+// background-bash path, workflow scripts, and the agent-CLI tools (codex.ts,
+// claudeAgent.ts). An error report is the same envelope carrying `message`.
+// The cases below replay the exact parameter mappings used at the real call
+// sites; the expected strings are byte-identical to what the pre-merge
+// agent-CLI formatters (formatAgentCliDelivery/formatAgentCliError) produced.
 
-describe('formatChildRunDelivery', () => {
+describe('formatDelivery', () => {
   it('renders the codex shape: thread-id attr, raw usage, no cost line', () => {
-    const xml = formatChildRunDelivery(
-      {
-        tag: 'codex-result',
-        runId: 'exec-1',
-        prompt: 'do the thing',
-        attributes: [{ name: 'thread-id', value: 'th-42' }],
-      },
-      {
-        wallTime: seconds(1234),
-        response: 'all done',
-        usage: { input: 100, output: 20 },
-      },
-    );
+    const xml = formatDelivery({
+      tag: 'codex-result',
+      runId: 'exec-1',
+      prompt: 'do the thing',
+      attributes: [{ name: 'thread-id', value: 'th-42' }],
+      wallTime: seconds(1234),
+      response: 'all done',
+      usage: { input: 100, output: 20 },
+    });
     expect(xml).toBe(
       [
         '<codex-result id="exec-1" prompt="do the thing" thread-id="th-42">',
@@ -89,20 +82,16 @@ describe('formatChildRunDelivery', () => {
   });
 
   it('renders the claude shape: session-id attr and a cost extra line', () => {
-    const xml = formatChildRunDelivery(
-      {
-        tag: 'claude-agent-result',
-        runId: 'exec-2',
-        prompt: 'summarize',
-        attributes: [{ name: 'session-id', value: 'sess-7' }],
-      },
-      {
-        wallTime: seconds(9000),
-        response: 'summary',
-        usage: { input: 5, output: 0 },
-        lines: ['<cost-usd>0.1234</cost-usd>'],
-      },
-    );
+    const xml = formatDelivery({
+      tag: 'claude-agent-result',
+      runId: 'exec-2',
+      prompt: 'summarize',
+      attributes: [{ name: 'session-id', value: 'sess-7' }],
+      wallTime: seconds(9000),
+      response: 'summary',
+      usage: { input: 5, output: 0 },
+      lines: ['<cost-usd>0.1234</cost-usd>'],
+    });
     expect(xml).toBe(
       [
         '<claude-agent-result id="exec-2" prompt="summarize" session-id="sess-7">',
@@ -116,15 +105,15 @@ describe('formatChildRunDelivery', () => {
   });
 
   it('omits the provider id attribute (thread-id), usage, and extra lines when absent/falsy', () => {
-    const xml = formatChildRunDelivery(
-      {
-        tag: 'codex-result',
-        runId: 'exec-3',
-        prompt: 'p',
-        attributes: [{ name: 'thread-id', value: null }],
-      },
-      { wallTime: seconds(0), response: 'r', usage: null },
-    );
+    const xml = formatDelivery({
+      tag: 'codex-result',
+      runId: 'exec-3',
+      prompt: 'p',
+      attributes: [{ name: 'thread-id', value: null }],
+      wallTime: seconds(0),
+      response: 'r',
+      usage: null,
+    });
     expect(xml).toBe(
       [
         '<codex-result id="exec-3" prompt="p">',
@@ -136,24 +125,26 @@ describe('formatChildRunDelivery', () => {
   });
 
   it('falls back to "(no response)" for an empty response', () => {
-    const xml = formatChildRunDelivery(
-      { tag: 'codex-result', runId: 'e', prompt: 'p' },
-      { wallTime: seconds(500), response: '' },
-    );
+    const xml = formatDelivery({
+      tag: 'codex-result',
+      runId: 'e',
+      prompt: 'p',
+      wallTime: seconds(500),
+      response: '',
+    });
     expect(xml).toContain('<response>(no response)</response>');
   });
 
   it('truncates the echoed prompt to 200 chars and escapes attrs/text', () => {
     const longPrompt = 'x'.repeat(250);
-    const xml = formatChildRunDelivery(
-      {
-        tag: 'codex-result',
-        runId: 'a&b"<c',
-        prompt: `${longPrompt}<&"`,
-        attributes: [{ name: 'thread-id', value: '<id&"' }],
-      },
-      { wallTime: seconds(100), response: 'a < b & c "q"' },
-    );
+    const xml = formatDelivery({
+      tag: 'codex-result',
+      runId: 'a&b"<c',
+      prompt: `${longPrompt}<&"`,
+      attributes: [{ name: 'thread-id', value: '<id&"' }],
+      wallTime: seconds(100),
+      response: 'a < b & c "q"',
+    });
     // id/prompt/thread-id are attribute-escaped (&, ", < — not >); the prompt is
     // sliced to 200 chars BEFORE escaping, so the trailing <&" never appears.
     expect(xml).toContain(
@@ -162,14 +153,14 @@ describe('formatChildRunDelivery', () => {
     // response is text-escaped (&, < — quotes left intact)
     expect(xml).toContain('<response>a &lt; b &amp; c "q"</response>');
   });
-});
 
-describe('formatChildRunError', () => {
   it('renders the error shape, escaping attrs and the message body', () => {
-    const xml = formatChildRunError(
-      { tag: 'codex-error', runId: 'exec-1', prompt: 'why did it fail?' },
-      { message: toErrorMessage(new Error('boom <&>')) },
-    );
+    const xml = formatDelivery({
+      tag: 'codex-error',
+      runId: 'exec-1',
+      prompt: 'why did it fail?',
+      message: toErrorMessage(new Error('boom <&>')),
+    });
     expect(xml).toBe(
       [
         '<codex-error id="exec-1" prompt="why did it fail?">',

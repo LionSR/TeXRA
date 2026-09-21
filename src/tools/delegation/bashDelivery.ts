@@ -13,10 +13,7 @@ import { escapeText } from '@shared/utils/xmlEscape';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { formatDuration, splitContentLines } from '@utils/text/stringUtils';
 
-import {
-  formatChildRunDelivery,
-  formatChildRunError,
-} from './deliveryEnvelope';
+import { formatDelivery } from './deliveryEnvelope';
 
 /** Last N lines of output for the delivery preview. */
 const OUTPUT_PREVIEW_LINES = 20;
@@ -85,14 +82,12 @@ export function formatBashDelivery(
       lines.push(`<${name}-preview>${escapeText(preview)}</${name}-preview>`);
     }
   }
-  return formatChildRunDelivery(
-    {
-      tag: DELIVERY_TAG.backgroundResult,
-      runId,
-      attributes: [{ name: 'command', value: command }],
-    },
-    { lines },
-  );
+  return formatDelivery({
+    tag: DELIVERY_TAG.backgroundResult,
+    runId,
+    attributes: [{ name: 'command', value: command }],
+    lines,
+  });
 }
 
 /**
@@ -103,12 +98,10 @@ export function formatBashError(
   command: string,
   err: unknown,
 ): string {
-  return formatChildRunError(
-    {
-      tag: DELIVERY_TAG.backgroundError,
-      runId,
-      attributes: [{ name: 'command', value: command }],
-    },
-    { message: toErrorMessage(err) },
-  );
+  return formatDelivery({
+    tag: DELIVERY_TAG.backgroundError,
+    runId,
+    attributes: [{ name: 'command', value: command }],
+    message: toErrorMessage(err),
+  });
 }

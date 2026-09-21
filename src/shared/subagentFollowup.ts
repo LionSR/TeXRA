@@ -320,7 +320,7 @@ export function summarizeSubagentFollowup(text: unknown): string {
   }
 
   // Result/error envelopes share one shape across families
-  // (formatChildRunDelivery/formatChildRunError): subagent-*, background-*,
+  // (deliveryEnvelope.ts's `formatDelivery`): subagent-*, background-*,
   // codex-*, claude-agent-*. Agent-CLI producers (codex.ts, claudeAgent.ts)
   // don't set an `agent` attribute, so fall back to the tag's own family name
   // (e.g. `codex-result` → `codex`) rather than the generic `subagent`.
