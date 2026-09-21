@@ -55,9 +55,17 @@ export class SettingsViewProvider {
     onTexraAuthSessionsChanged(context, () => {
       if (this._view) {
         if (isAgentCatalogAuthRefreshDeferred()) {
-          runAfterAgentCatalogAuthRefresh(() =>
-            this.postAllData(this._view!.webview),
-          );
+          // The panel this repaint belongs to is whichever one is open when
+          // the preflight releases it, not the one open when auth changed: a
+          // dispose and reopen inside that window must not repaint the dead
+          // webview and leave the live one stale.
+          runAfterAgentCatalogAuthRefresh(this.runtime, [
+            Effect.suspend(() =>
+              this._view
+                ? this.messageHandler.sendAllData(this._view.webview)
+                : Effect.void,
+            ),
+          ]);
           return;
         }
         void this.postAllData(this._view.webview);

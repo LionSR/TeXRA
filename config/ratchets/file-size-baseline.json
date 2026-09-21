@@ -50,7 +50,7 @@
     "packages/extension/src/progressView/frontend/components/WorkflowRunBoard.ts": 763,
     "packages/extension/src/progressView/frontend/ProgressApp.ts": 518,
     "packages/extension/src/progressView/frontend/sessionSurfaces.ts": 522,
-    "packages/extension/src/progressView/ProgressViewProvider.ts": 831,
+    "packages/extension/src/progressView/ProgressViewProvider.ts": 829,
     "packages/extension/src/settingsView/frontend/tabs/LaTeXTab.ts": 1192,
     "packages/extension/src/settingsView/handlers/agentHandlers.ts": 531,
     "packages/extension/src/settingsView/SettingsViewMessageHandler.ts": 1153,
