@@ -163,7 +163,7 @@ async function appendRows(
   runId: RunId,
   rows: readonly LogRow[],
 ): Promise<void> {
-  if (!taskSession.transcripts.has(runId))
+  if (taskSession.runView(runId) === undefined)
     publishTestRunStart(taskSession, runId);
   taskSession.publish(
     rows.map((row) => ({

@@ -436,7 +436,7 @@ describe('desktop process resume owner', () => {
 
       expect(yield* Fiber.join(resume)).toBe(false);
       expect(runAgent).not.toHaveBeenCalled();
-      expect(harness.session.transcripts.has(runId)).toBe(false);
+      expect(harness.session.runView(runId)).toBeUndefined();
     }),
   );
 
@@ -453,7 +453,7 @@ describe('desktop process resume owner', () => {
         expect(yield* harness.owner.tryResumeRun(runId)).toBe(false);
         expect(runAgent).not.toHaveBeenCalled();
         expect(retrieveSessionResumeData).not.toHaveBeenCalled();
-        expect(harness.session.transcripts.has(runId)).toBe(true);
+        expect(harness.session.runView(runId)).toBeDefined();
       }),
   );
 });

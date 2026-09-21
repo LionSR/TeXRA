@@ -144,9 +144,7 @@ export class StreamLogStore {
 
   /** Retain a run's transcript for the run itself, seeded from the rows it has
    *  already committed. */
-  acquireRunResidency(
-    runId: RunId,
-  ): Effect.Effect<TranscriptResidencyLease, Error> {
+  acquireRunResidency(runId: RunId) {
     return Effect.gen({ self: this }, function* () {
       const lease = this.retain(runId);
       yield* this.hydrate(runId).pipe(
@@ -184,7 +182,7 @@ export class StreamLogStore {
   }
 
   /** Fold the run's committed rows into its cache, once per run. */
-  private hydrate(runId: RunId): Effect.Effect<void, Error> {
+  private hydrate(runId: RunId) {
     return Effect.gen({ self: this }, function* () {
       if (this.runs.get(runId)?.hydrated === true) return;
       const seed = foldEntries(
