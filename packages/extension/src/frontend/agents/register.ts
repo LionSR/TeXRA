@@ -7,7 +7,7 @@ import * as vscode from 'vscode';
 // Local imports
 import { createWorkspaceAgentRosterController, refresh } from '@agent/index';
 import type { SessionHandle } from '@agent/runtime';
-import { appSignals } from '@eventBus/AppSignals';
+import { emitAppSignal } from '@eventBus/AppSignals';
 import { createLog } from '@logger/logUtils';
 import type { AgentSource } from '@shared/schemas';
 
@@ -56,7 +56,7 @@ export const promptToAddAgentToConfig = Effect.fnUntraced(function* (
   yield* refresh();
   // The write above rewrites the selection as `custom`, retiring any applied
   // team, so an open settings view needs the same notice `apply_team` sends.
-  appSignals.emit('agentRosterChanged', undefined);
+  emitAppSignal('agentRosterChanged', undefined);
   yield* Effect.tryPromise({
     try: async () =>
       vscode.commands.executeCommand('texra.refreshAllOptions', {

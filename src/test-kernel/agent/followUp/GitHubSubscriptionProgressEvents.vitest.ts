@@ -5,7 +5,7 @@ import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
+import { Effect, Fiber } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
 const submitFollowUpMock = vi.hoisted(() => vi.fn());
@@ -15,7 +15,11 @@ vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
 }));
 
 // Local imports
-import { appSignals } from '@eventBus/AppSignals';
+import {
+  onAppSignal,
+  type AppSignal,
+  type AppSignalPayloads,
+} from '@eventBus/AppSignals';
 import type { RunId } from '@shared/schemas';
 import { testRuntime } from '@test/support/testProcessRuntime';
 
@@ -49,26 +53,29 @@ function createTestRegistry(
 }
 
 /**
- * The payload each signal carries, derived from the emitter's own `on`
- * signature so the suite needs no private payload map from the bus module.
+ * Collect one signal on a fiber of the harness runtime, as a host's own run
+ * edge does. The await lets that fiber register before the caller publishes:
+ * a subscription only receives what is published after it exists.
  */
-type AppSignalPayloads = {
-  [K in Parameters<typeof appSignals.on>[0]]: Parameters<
-    Parameters<typeof appSignals.on<K>>[1]
-  >[0];
-};
-
-function recordAppSignal<K extends keyof AppSignalPayloads>(
+async function recordAppSignal<K extends AppSignal>(
   event: K,
-): {
+): Promise<{
   readonly events: { event: K; payload: AppSignalPayloads[K] }[];
   readonly dispose: () => void;
-} {
+}> {
   const events: { event: K; payload: AppSignalPayloads[K] }[] = [];
-  const dispose = appSignals.on(event, (payload) => {
-    events.push({ event, payload });
-  });
-  return { events, dispose };
+  const fiber = testRuntime().runFork(
+    onAppSignal(event, (payload) => {
+      events.push({ event, payload });
+    }),
+  );
+  await testRuntime().runPromise(Effect.void);
+  return {
+    events,
+    dispose: () => {
+      testRuntime().runFork(Fiber.interrupt(fiber));
+    },
+  };
 }
 
 class TestPollingSource extends PollingSourceBase<
@@ -175,7 +182,7 @@ describe('GitHub subscription app signals and follow-ups', () => {
   });
 
   it('publishes githubSubscriptionsChanged through app signals', async () => {
-    const signal = recordAppSignal('githubSubscriptionsChanged');
+    const signal = await recordAppSignal('githubSubscriptionsChanged');
     const source = new RegistryTestSource();
     const session = createTestSession();
     const registry = createTestRegistry(source);
@@ -184,16 +191,22 @@ describe('GitHub subscription app signals and follow-ups', () => {
       await testRuntime().runPromise(
         registry.bind('stream-a' as RunId, 'owner/repo', session),
       );
-      expect(signal.events).toEqual([
-        { event: 'githubSubscriptionsChanged', payload: undefined },
-      ]);
+      // Delivery runs on the subscriber's fiber, so each publication lands a
+      // turn after the call that made it.
+      await vi.waitFor(() =>
+        expect(signal.events).toEqual([
+          { event: 'githubSubscriptionsChanged', payload: undefined },
+        ]),
+      );
 
       registry.unbind('stream-a' as RunId, 'owner/repo');
 
-      expect(signal.events).toEqual([
-        { event: 'githubSubscriptionsChanged', payload: undefined },
-        { event: 'githubSubscriptionsChanged', payload: undefined },
-      ]);
+      await vi.waitFor(() =>
+        expect(signal.events).toEqual([
+          { event: 'githubSubscriptionsChanged', payload: undefined },
+          { event: 'githubSubscriptionsChanged', payload: undefined },
+        ]),
+      );
     } finally {
       signal.dispose();
       await Effect.runPromise(session.dispose());
@@ -203,7 +216,9 @@ describe('GitHub subscription app signals and follow-ups', () => {
   it.effect('reports token invalid events through app signals', () =>
     Effect.gen(function* () {
       const host = createRecordingHost();
-      const signal = recordAppSignal('githubTokenInvalid');
+      const signal = yield* Effect.promise(() =>
+        recordAppSignal('githubTokenInvalid'),
+      );
       const listener = (): Effect.Effect<void> => Effect.void;
       const state: BasePollSubscriptionState = {
         listeners: new Set([listener]),
@@ -215,10 +230,14 @@ describe('GitHub subscription app signals and follow-ups', () => {
       try {
         yield* new TestPollingSource().failWithAuthError(state);
 
-        expect(signal.events).toContainEqual({
-          event: 'githubTokenInvalid',
-          payload: { message: 'bad token' },
-        });
+        yield* Effect.promise(() =>
+          vi.waitFor(() =>
+            expect(signal.events).toContainEqual({
+              event: 'githubTokenInvalid',
+              payload: { message: 'bad token' },
+            }),
+          ),
+        );
         expect(host.events).toEqual([]);
       } finally {
         signal.dispose();

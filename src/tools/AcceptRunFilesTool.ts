@@ -17,7 +17,7 @@ import { Effect, FileSystem } from 'effect';
 import { getRunRecords } from '@agent/storage';
 import type { ToolServices } from '@agent/runtime/ToolServices';
 import { ToolCall, type ToolCallShape } from '@agent/runtime/ToolCall';
-import { appSignals } from '@eventBus/AppSignals';
+import { emitAppSignal } from '@eventBus/AppSignals';
 import { cleanupAcceptedWorkspaceDiffFiles } from '@latex/acceptedFileTarget';
 import { WorkspaceFs } from '@platform/rootedFs';
 import { stripCriticizeAnnotations } from '@replacement/advanced';
@@ -384,7 +384,7 @@ Parameters map directly to subagent-result delivery attributes:
 
       // Badge all accepted workspace files
       if (acceptedEntries.length > 0) {
-        appSignals.emit('workspaceFilesWritten', {
+        emitAppSignal('workspaceFilesWritten', {
           absolutePaths: acceptedEntries.map((e) => e.destAbsolutePath),
         });
       }

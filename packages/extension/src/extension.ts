@@ -34,7 +34,8 @@ import {
 } from '@controllers/session/sessionLayer';
 import { globalDatabaseLayer } from '@controllers/session/Database';
 import { bootstrapHost } from '@controllers/hostBootstrap';
-import { appSignals } from '@eventBus/AppSignals';
+import { emitAppSignal } from '@eventBus/AppSignals';
+import { subscribeAppSignal } from '@frontend/events/appSignalSubscriptions';
 import { refreshApiKeyStatusBar } from '@frontend/statusBar/apiKeyStatusBar';
 import { acquireVscodeLanguageModel } from '@frontend/lm/acquireVscodeLanguageModel';
 import {
@@ -693,7 +694,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
   // token, so activation now performs that one background fetch.
   const invalidateLanguageModels = () => {
     invalidateRuntimeModelRegistry();
-    appSignals.emit('languageModelsChanged', undefined);
+    emitAppSignal('languageModelsChanged', undefined);
   };
   context.subscriptions.push(
     languageModel.onDidChange(invalidateLanguageModels),
@@ -831,7 +832,8 @@ async function activateExtension(context: vscode.ExtensionContext) {
       );
     }),
   );
-  const disposeGitHubAuthListener = appSignals.on(
+  const gitHubAuthListener = subscribeAppSignal(
+    runtime,
     'githubTokenInvalid',
     ({ message }) => {
       const rejected = gitHubTokenRejectedMessage(message);
@@ -845,7 +847,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
         });
     },
   );
-  context.subscriptions.push({ dispose: disposeGitHubAuthListener });
+  context.subscriptions.push(gitHubAuthListener);
   registerInlineCriticism(context, runtime, runtimeSession);
   registerInlineComments(context);
 
@@ -970,7 +972,8 @@ async function activateExtension(context: vscode.ExtensionContext) {
   // Approval-policy setting updates emit on this signal; the subscription
   // here is what makes the refresh reachable, so a missed subscribe is a
   // missing behavior rather than a silent no-op.
-  const disposeApprovalPolicyTooltipRefresh = appSignals.on(
+  const approvalPolicyTooltipRefresh = subscribeAppSignal(
+    runtime,
     'approvalPolicyChanged',
     updateStatusBarTooltip,
   );
@@ -981,7 +984,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
 
   context.subscriptions.push(
     { dispose: disposeStatusListener },
-    { dispose: disposeApprovalPolicyTooltipRefresh },
+    approvalPolicyTooltipRefresh,
     statusBarItem,
     // Registered here rather than through the shared command registry because
     // the handler closes over this activation's status-bar refresh queue.

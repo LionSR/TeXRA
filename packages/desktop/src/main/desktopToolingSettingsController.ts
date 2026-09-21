@@ -5,7 +5,6 @@ import {
   buildToolDashboardItems,
   planToolTerminalAction,
 } from '@controllers/settingsView/ToolDashboardData';
-import { appSignals } from '@eventBus/AppSignals';
 import type { ConfigProvider } from '@platform/interfaces';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
@@ -23,6 +22,8 @@ import {
   refreshToolAvailability,
 } from '@tools/toolAvailability';
 import { setToolEnabled } from '@utils/config/constants';
+
+import { subscribeDesktopAppSignal } from './desktopAppSignalSubscription.js';
 
 const NO_EXTENSION_HOSTING =
   'TeXRA Desktop runs standalone and cannot host VS Code extensions.';
@@ -110,7 +111,8 @@ export class DefaultDesktopToolingSettingsController implements DesktopToolingSe
     // change. Subscribing here rather than posting after each call site is
     // what makes the dashboard follow availability instead of following the
     // one path that remembered to re-post.
-    this.unsubscribeToolAvailability = appSignals.on(
+    this.unsubscribeToolAvailability = subscribeDesktopAppSignal(
+      options.runtime,
       'toolAvailabilityChanged',
       () => {
         options.runtime.runFork(

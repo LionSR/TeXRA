@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 
 import type { SessionHandle } from '@agent/runtime';
-import { appSignals } from '@eventBus/AppSignals';
+import { subscribeAppSignal } from '@frontend/events/appSignalSubscriptions';
 import { subscribeAddOutputFilesRunFact } from '@frontend/events/runFactSubscriptions';
 import type { ProcessRuntime } from '@platform/processRuntime';
 
@@ -75,7 +75,8 @@ export function registerFileDecorations(
     runtime,
   );
 
-  const unsubscribeWritten = appSignals.on(
+  const writtenListener = subscribeAppSignal(
+    runtime,
     'workspaceFilesWritten',
     ({ absolutePaths }) => {
       provider.markTouched(absolutePaths);
@@ -86,6 +87,6 @@ export function registerFileDecorations(
     vscode.window.registerFileDecorationProvider(provider),
     provider,
     { dispose: unsubscribeOutputFiles },
-    { dispose: unsubscribeWritten },
+    writtenListener,
   );
 }

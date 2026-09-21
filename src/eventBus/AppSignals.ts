@@ -1,4 +1,4 @@
-import { EventEmitter } from 'node:events';
+import { Effect, PubSub } from 'effect';
 
 /**
  * Cross-cutting, process-scoped app-lifecycle signals (auth, subscriptions,
@@ -7,13 +7,38 @@ import { EventEmitter } from 'node:events';
  * (`SessionEvents` in `agent/runtime/`), per the VS Code-free-zone rule in
  * CLAUDE.md.
  *
+ * Delivery and error order, which this module owns and no caller may vary:
+ *
+ * - `emitAppSignal` publishes and returns. It never runs a subscriber, so a
+ *   subscriber can neither block nor fail the code that emitted.
+ * - Each subscriber drains its own `PubSub` subscription on its own fiber,
+ *   forked at the host's run edge (R1: the fork lives at the host entry, not
+ *   in the bus). One subscriber sees the signals it subscribed to in
+ *   publication order; there is no order *between* subscribers, and a slow
+ *   one holds up neither the publisher nor another subscriber.
+ * - A subscriber that throws is logged at `warn` by its own delivery fiber
+ *   and keeps its subscription: one broken listener never truncates a
+ *   delivery. This is the one contract the `PubSub` conversion changed — the
+ *   `EventEmitter` this replaces ran every listener on the emitter's stack
+ *   and then rethrew the first listener's error into `emit`, so a settings
+ *   view that failed to repaint could fail the tool call that wrote the
+ *   file. Nothing depended on that throw; every caller emitted as a
+ *   statement.
+ * - A subscriber is live once its forked fiber has reached the `subscribe`
+ *   below, which is a later scheduler turn than the `runFork` at the host's
+ *   run edge: `runFork` schedules the fiber and returns, it does not run it.
+ *   So a signal published in the same synchronous turn that subscribed
+ *   reaches nobody — the ordinary `PubSub` rule that a subscription only
+ *   receives what is published after it exists, and the reason the suites
+ *   here yield once before they publish.
+ *
  * Every signal below records which hosts consume it and — where a host does
  * not — why not. A signal with no such note is the ambiguous middle this file
  * exists to prevent: a host that silently never reacts is indistinguishable
  * from a host that deliberately doesn't. Keep the note truthful when you add a
  * subscriber; "no equivalent surface" is a valid, and common, answer.
  */
-interface AppSignalPayloads {
+export interface AppSignalPayloads {
   /**
    * GitHub rejected the configured token. Frontends can surface the failure
    * and direct the user to token settings.
@@ -102,39 +127,84 @@ interface AppSignalPayloads {
   workspaceFilesWritten: { absolutePaths: string[] };
 }
 
-type AppSignal = keyof AppSignalPayloads;
+export type AppSignal = keyof AppSignalPayloads;
 
-class AppSignals {
-  private readonly emitter = new EventEmitter();
-
-  on<K extends AppSignal>(
-    event: K,
-    listener: (payload: AppSignalPayloads[K]) => void,
-    options?: { signal?: AbortSignal },
-  ): () => void {
-    if (options?.signal?.aborted) return () => {};
-
-    this.emitter.on(event, listener);
-    const cleanup = (): void => {
-      this.emitter.off(event, listener);
-    };
-    options?.signal?.addEventListener('abort', cleanup, { once: true });
-    return cleanup;
-  }
-
-  emit<K extends AppSignal>(event: K, payload: AppSignalPayloads[K]): void {
-    let listenerFailed = false;
-    let firstError: unknown;
-    for (const listener of this.emitter.rawListeners(event)) {
-      try {
-        listener(payload);
-      } catch (error) {
-        if (!listenerFailed) firstError = error;
-        listenerFailed = true;
-      }
-    }
-    if (listenerFailed) throw firstError;
-  }
+/**
+ * One published signal. The key and its payload are correlated by the two
+ * public functions below, which is where a caller proves the pair; on the
+ * hub they travel as what every subscription reads, a key and one of the
+ * declared payloads.
+ */
+interface AppSignalEvent {
+  readonly signal: AppSignal;
+  readonly payload: AppSignalPayloads[AppSignal];
 }
 
-export const appSignals = new AppSignals();
+/**
+ * The hub every signal is published to, opened by the first subscriber. A
+ * `PubSub` is built inside an Effect and this module holds no execution
+ * boundary of its own (R1), so there is nothing to open it before then — and
+ * nothing is lost: a subscription only receives what is published after it
+ * exists, so a signal emitted before the first subscriber had no reader
+ * either way. Unbounded and never shut down: it lives as long as the
+ * process, and publishing never blocks or drops.
+ */
+let hub: PubSub.PubSub<AppSignalEvent> | undefined;
+
+const openHub: Effect.Effect<PubSub.PubSub<AppSignalEvent>> = Effect.suspend(
+  () => {
+    if (hub !== undefined) return Effect.succeed(hub);
+    // `??=` settles a race between two first subscribers on the winner: the
+    // loser publishes into, and reads from, the hub the winner opened.
+    return Effect.map(
+      PubSub.unbounded<AppSignalEvent>(),
+      (opened) => (hub ??= opened),
+    );
+  },
+);
+
+/**
+ * Publish `signal` to every current subscriber and return. Synchronous by
+ * construction: the publish is the enqueue, and the hub is unbounded, so it
+ * always accepts without suspending. The delivery itself runs on each
+ * subscriber's own fiber — see the delivery and error order above.
+ */
+export function emitAppSignal<K extends AppSignal>(
+  signal: K,
+  payload: AppSignalPayloads[K],
+): void {
+  if (hub === undefined) return;
+  PubSub.publishUnsafe(hub, { signal, payload });
+}
+
+/**
+ * Deliver `signal` to `listener` until the caller interrupts. The program a
+ * host's run edge forks: its scope holds the subscription, so interrupting
+ * the fiber unsubscribes, and the `warn` on a failing listener is this
+ * module's, not the host's.
+ */
+export function onAppSignal<K extends AppSignal>(
+  signal: K,
+  listener: (payload: AppSignalPayloads[K]) => void,
+): Effect.Effect<void> {
+  return Effect.scoped(
+    Effect.gen(function* () {
+      const subscription = yield* PubSub.subscribe(yield* openHub);
+      while (true) {
+        const event = yield* PubSub.take(subscription);
+        if (event.signal !== signal) continue;
+        // The key matched, so the payload is the one this key declares; a
+        // generic key cannot carry that pairing through the hub's type.
+        const payload = event.payload as AppSignalPayloads[K];
+        yield* Effect.sync(() => listener(payload)).pipe(
+          Effect.catchCause((cause) =>
+            Effect.logWarning(
+              `An "${signal}" app-signal subscriber failed`,
+              cause,
+            ),
+          ),
+        );
+      }
+    }),
+  );
+}

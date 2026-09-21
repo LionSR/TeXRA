@@ -6,7 +6,7 @@ import { Cause, Data, Effect, FileSystem } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
-import { appSignals } from '@eventBus/AppSignals';
+import { emitAppSignal } from '@eventBus/AppSignals';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { registerDiffRefresh } from '@frontend/ui/diffView';
 import {
@@ -98,7 +98,7 @@ const acceptEditedFailure =
  */
 const acceptPorts: CommitAcceptedFilePorts = {
   emitWritten: (absolutePath) =>
-    appSignals.emit('workspaceFilesWritten', {
+    emitAppSignal('workspaceFilesWritten', {
       absolutePaths: [absolutePath],
     }),
   showInfo: (message) =>

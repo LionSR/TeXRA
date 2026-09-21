@@ -26,7 +26,7 @@ import {
 } from '@controllers/settingsView/ToolDashboardData';
 import { SettingsProfileKeyController } from '@controllers/settingsView/SettingsProfileKeyController';
 import { SettingsProfileController } from '@controllers/settingsView/SettingsProfileController';
-import { appSignals } from '@eventBus/AppSignals';
+import { emitAppSignal } from '@eventBus/AppSignals';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import {
   isInlineCriticismEnabled,
@@ -39,6 +39,7 @@ import {
   showLoggedErrorMessage,
   showLoggedInfoMessage,
 } from '@frontend/ui/errorHandlingUtils';
+import { subscribeAppSignal } from '@frontend/events/appSignalSubscriptions';
 import { subscribeGoalStateChanges } from '@frontend/events/runFactSubscriptions';
 import { NotificationFailed } from '@hosts/uiHosts';
 import { createLog, type Log } from '@logger/logUtils';
@@ -241,44 +242,36 @@ export class SettingsViewMessageHandler {
     this.handlerRegistry = this.createHandlerRegistry(context);
 
     context.subscriptions.push(
-      {
-        dispose: appSignals.on('githubSubscriptionsChanged', () => {
-          this.runtime.runFork(
-            this.withActiveWebview((w) =>
-              this.githubHandlers.sendPRSubscriptions(w),
-            ),
-          );
-        }),
-      },
-      {
-        dispose: appSignals.on('toolAvailabilityChanged', () => {
-          this.runtime.runFork(
-            this.withActiveWebview((w) =>
-              this.sendToolDashboardData(w, { skipChecks: true }),
-            ),
-          );
-        }),
-      },
-      {
-        // `apply_team` writes the roster straight from the setup agent, so
-        // the open view is showing agents and a team it just replaced. The
-        // catalog is already fresh: a team change moves no agent files, and
-        // the agent-creator reloads before it emits. Without that flag this
-        // listener would rescan the YAML and re-fetch the remote catalog on
-        // every roster write.
-        dispose: appSignals.on('agentRosterChanged', () => {
-          this.runtime.runFork(this.refreshAfterAgentMutation(undefined, true));
-        }),
-      },
-      {
-        dispose: appSignals.on('languageModelsChanged', () => {
-          this.runtime.runFork(
-            this.withActiveWebview((webview) =>
-              this.sendModelSelectionData(webview),
-            ),
-          );
-        }),
-      },
+      subscribeAppSignal(this.runtime, 'githubSubscriptionsChanged', () => {
+        this.runtime.runFork(
+          this.withActiveWebview((w) =>
+            this.githubHandlers.sendPRSubscriptions(w),
+          ),
+        );
+      }),
+      subscribeAppSignal(this.runtime, 'toolAvailabilityChanged', () => {
+        this.runtime.runFork(
+          this.withActiveWebview((w) =>
+            this.sendToolDashboardData(w, { skipChecks: true }),
+          ),
+        );
+      }),
+      // `apply_team` writes the roster straight from the setup agent, so the
+      // open view is showing agents and a team it just replaced. The catalog
+      // is already fresh: a team change moves no agent files, and the
+      // agent-creator reloads before it emits. Without that flag this listener
+      // would rescan the YAML and re-fetch the remote catalog on every roster
+      // write.
+      subscribeAppSignal(this.runtime, 'agentRosterChanged', () => {
+        this.runtime.runFork(this.refreshAfterAgentMutation(undefined, true));
+      }),
+      subscribeAppSignal(this.runtime, 'languageModelsChanged', () => {
+        this.runtime.runFork(
+          this.withActiveWebview((webview) =>
+            this.sendModelSelectionData(webview),
+          ),
+        );
+      }),
     );
     const unsubscribeGoals = subscribeGoalStateChanges(
       session,
@@ -765,7 +758,7 @@ export class SettingsViewMessageHandler {
         requiresOpenWorkspace: () => !this.session.roots.workspace,
         onApprovalPolicyChanged: (policy) => {
           this.session.setApprovalPolicy(policy);
-          appSignals.emit('approvalPolicyChanged', undefined);
+          emitAppSignal('approvalPolicyChanged', undefined);
         },
       });
       if (result.kind === 'ignored') return;

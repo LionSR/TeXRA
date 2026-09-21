@@ -29,7 +29,7 @@ import {
 } from 'effect';
 
 import { createChannelTrace, type AgentTrace } from '@agent/trace';
-import { appSignals } from '@eventBus/AppSignals';
+import { emitAppSignal } from '@eventBus/AppSignals';
 
 import {
   SHUTDOWN_PHASE,
@@ -711,7 +711,7 @@ export abstract class PollingSourceBase<
         data: err,
       });
       yield* this.emit(state, this.formatErrorEvent(state, err.message));
-      appSignals.emit('githubTokenInvalid', { message: err.message });
+      emitAppSignal('githubTokenInvalid', { message: err.message });
       this.detach(key);
       return;
     }

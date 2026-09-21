@@ -29,7 +29,7 @@ import {
   type TeamRosterCatalog,
 } from '@common/teams/TeamRoster';
 import { applyTeamRosterWithPreflight } from '@common/teams/TeamRosterApplication';
-import { appSignals } from '@eventBus/AppSignals';
+import { emitAppSignal } from '@eventBus/AppSignals';
 import {
   AGENT_MODE_PRESETS,
   AGENT_MODE_PRESETS_BY_ID,
@@ -104,7 +104,7 @@ const applyTeam = Effect.fn('ApplyTeamTool.execute')(function* (
         yield* roster.setDefaultTeam(preset.id);
         // The setup agent runs this mid-conversation, so an open settings
         // view is showing a roster this call just replaced.
-        appSignals.emit('agentRosterChanged', undefined);
+        emitAppSignal('agentRosterChanged', undefined);
       }).pipe(
         // The roster writes are the port's own failure: the preflight reads
         // this channel, and the two stores' tags would not name the port.
