@@ -38,8 +38,8 @@ const kernelTimeoutMs = process.platform === 'win32' ? 20_000 : 10_000;
 // one of these directories is `pure` unless it mocks a repository module
 // (`vi.mock` / `vi.doMock` — a partial factory left in a shared registry is
 // what the next suite imports) or reaches a host (`@platform/*`, or the
-// support modules that install one). Add a `vi.mock` and the suite moves to
-// `kernel` on its own; remove it and the suite moves back. The tier's premise
+// support modules that install or read one). Add a `vi.mock` and the suite
+// moves to `kernel` on its own; remove it and the suite moves back. The premise
 // — nothing in it installs or replaces anything, so nothing can leak — is
 // therefore true by construction, which is what makes the shared registry
 // deterministic here. A directory earns a place in this list by holding

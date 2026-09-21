@@ -73,6 +73,13 @@ export interface RunProgressRendererInit {
   readonly getColumns?: () => number | undefined;
   readonly setInterval?: typeof setInterval;
   readonly clearInterval?: typeof clearInterval;
+  /**
+   * The agent catalog's round count for a workflow agent. Named here rather
+   * than read from `@agent/index` inside the renderer so a caller — the test
+   * harness included — states the catalog it renders against instead of
+   * reaching for the process-wide one.
+   */
+  readonly plannedRoundsFor?: (agentName: string) => number | undefined;
 }
 
 export function shouldRenderRunProgress(
@@ -148,6 +155,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   private readonly clearInterval: typeof clearInterval;
   private readonly ansi: boolean;
   private readonly getColumns: () => number | undefined;
+  private readonly plannedRoundsFor: (agentName: string) => number | undefined;
   private lastRenderAt = 0;
   private lastLine = '';
   private liveLine = false;
@@ -173,6 +181,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     this.clearInterval = init.clearInterval ?? clearInterval;
     this.ansi = init.colorEnabled;
     this.getColumns = init.getColumns;
+    this.plannedRoundsFor = init.plannedRoundsFor ?? workflowRoundsFromCatalog;
     this.attachedAt = this.nowMs();
   }
 
@@ -287,7 +296,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
       root.identity?.kind === 'agent' ? root.identity.agent : undefined;
     const plannedRounds =
       root.category === AgentCategory.Workflow && agentName !== undefined
-        ? getAgent(agentName, AgentCategory.Workflow)?.rounds
+        ? this.plannedRoundsFor(agentName)
         : undefined;
     const parts: string[] = [];
     if (position !== undefined) {
@@ -402,6 +411,12 @@ function normalizeTerminalColumns(
 
 function isMultiRound(rounds: number | undefined): rounds is number {
   return rounds != null && rounds > 1;
+}
+
+/** The process catalog's answer, which every production renderer renders
+ *  against. */
+function workflowRoundsFromCatalog(agentName: string): number | undefined {
+  return getAgent(agentName, AgentCategory.Workflow)?.rounds;
 }
 
 // ---------------------------------------------------------------------------
