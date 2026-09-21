@@ -239,7 +239,12 @@ describe('outputDiscovery diagnostics', () => {
 
   // #10635: an unreadable round subtree warns while the remaining rounds
   // still scan, on the channel the whole scan was annotated with.
-  it.effect(
+  //
+  // POSIX only: the unreadable directory is made with mode bits, and Windows
+  // ignores them — `chmod(dir, 0o000)` leaves the directory listable there, so
+  // the scan finds nothing to warn about. The behaviour under test is the
+  // scan's, not the filesystem's, and is covered wherever mode bits apply.
+  it.effect.skipIf(process.platform === 'win32')(
     'warns on the pinned channel for an unreadable round dir and keeps the readable rounds',
     () =>
       Effect.gen(function* () {

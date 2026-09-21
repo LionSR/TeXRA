@@ -4,16 +4,15 @@
  *
  * The map builds a root's server on first use, memoizes it, serializes
  * concurrent first-touch requests for the same root onto one build, and
- * releases a server that sits unused for the idle time-to-live. Each request
- * holds a lease (the map's reference count) for its duration. The pool's own
- * bookkeeping is one `Ref` of root to owners and leases: every agent run that
- * uses a server owns it until its run-end hook fires; a server whose final
- * owner ended is invalidated at once, or, while a lease is in flight, when
- * that lease ends. `restart_server` invalidates and rebuilds every root
- * (each on its own, so one failure does not interrupt a sibling); a spawn
- * that hits a full file table invalidates the idle roots, waits for the ones
- * already closing, and retries once. Closing the pool's scope ends the map
- * and every server.
+ * releases a server unused for the idle time-to-live. Each request holds a
+ * lease (the map's reference count) for its duration. The pool's bookkeeping
+ * is one `Ref` of root to owners and leases: every agent run that uses a
+ * server owns it until its run-end hook fires; a server whose final owner
+ * ended is invalidated at once, or, while a lease is in flight, when that
+ * lease ends. `restart_server` invalidates and rebuilds every root (each on
+ * its own, so one failure does not interrupt a sibling); a spawn that hits a
+ * full file table invalidates the idle roots, waits for the ones already
+ * closing, and retries once. Closing the pool's scope ends map and servers.
  */
 
 import { access } from 'node:fs/promises';
@@ -38,6 +37,8 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { runLakeCommand } from './lakeCommands';
 import { LeanServer, type LeanStartError } from './leanServer';
+import { createLeanServerRoster } from '../leanServerRegistry';
+import type { LeanServerInfo } from '../leanServerRegistry';
 import type { ChildProcessSpawner } from 'effect/unstable/process';
 import type { LeanLanguageServices } from '../leanLanguageServices';
 import type {
@@ -51,8 +52,7 @@ const LOG_CHANNEL = 'lean.direct';
 
 /**
  * Lake arguments for project commands that fan out across all active servers.
- * Commands absent here (restart_server, stop_server, install_elan, …) are
- * handled by their own dedicated branches.
+ * Commands absent here (restart_server, stop_server, …) have own branches.
  */
 const LAKE_PROJECT_ARGS = {
   build: ['build'],
@@ -126,6 +126,8 @@ export class LeanServerPool extends Context.Service<
     ) => Effect.Effect<LspResult<T>>;
     /** See {@link LeanLanguageServices.stopSessionsForRun}. */
     readonly stopSessionsForRun: (runId: RunId) => Effect.Effect<void>;
+    /** See {@link LeanLanguageServices.listServers}. */
+    readonly listServers: () => readonly LeanServerInfo[];
   }
 >()('@texra/lean/LeanServerPool') {
   static readonly layer = (
@@ -141,8 +143,11 @@ const make = Effect.fn('LeanServerPool.make')(function* ({
   lakeCommand,
   idleTimeToLive,
 }: LeanServerPoolOptions) {
+  // This pool's own roster, so the dashboard's list ends when the pool does.
+  const roster = createLeanServerRoster();
   const servers = yield* LayerMap.make(
-    (root: string) => LeanServer.layer({ workspaceRoot: root, lakeCommand }),
+    (root: string) =>
+      LeanServer.layer({ workspaceRoot: root, lakeCommand, roster }),
     { idleTimeToLive },
   );
   const entries = yield* Ref.make<ReadonlyMap<string, RootEntry>>(new Map());
@@ -159,9 +164,8 @@ const make = Effect.fn('LeanServerPool.make')(function* ({
   /**
    * Roots whose server is live or still starting, dropping closed and
    * never-started ones. The prune removes exactly the roots this scan saw
-   * closed: writing the scanned snapshot back would erase a root another
-   * fiber leased while the scan yielded, and that root's run would then never
-   * be an owner of the server it started.
+   * closed: writing the snapshot back would erase a root another fiber leased
+   * while the scan yielded, whose run would then never own its server.
    */
   const liveEntries = Effect.gen(function* () {
     const live = new Map<string, RootEntry>();
@@ -184,9 +188,9 @@ const make = Effect.fn('LeanServerPool.make')(function* ({
 
   /**
    * Stop currently-idle other roots after EMFILE/ENFILE, then return so the
-   * caller can retry the spawn. Wait for servers already closing so their
-   * descriptors are gone first. Do not wait for busy servers: position RPCs
-   * have no timeout, so one hung hover/goal would stall the start.
+   * caller can retry the spawn, waiting first for servers already closing so
+   * their descriptors are gone. Not for busy ones: position RPCs have no
+   * timeout, so one hung hover/goal would stall the start.
    */
   const evictOthersForExhausted = Effect.fn(
     'LeanServerPool.evictOthersForExhausted',
@@ -215,9 +219,8 @@ const make = Effect.fn('LeanServerPool.make')(function* ({
 
   const acquire = Effect.fn('LeanServerPool.acquire')(function* (root: string) {
     if (yield* Ref.get(stopped)) return yield* new LeanAdapterStopped();
-    // A server the map has already dropped but whose scope is still closing
-    // keeps the root reserved: its replacement spawns once the old process
-    // has released its descriptors.
+    // A server the map dropped but whose scope is still closing keeps the
+    // root reserved: its replacement spawns once the descriptors are back.
     const previous = (yield* Ref.get(entries)).get(root)?.server;
     if (previous && !(yield* RcMap.has(servers.rcMap, root))) {
       yield* Deferred.await(previous.closed);
@@ -256,9 +259,9 @@ const make = Effect.fn('LeanServerPool.make')(function* ({
 
   /**
    * Lease the root's server for the caller's scope. The owner is recorded
-   * before the readiness wait so a run end that lands meanwhile sees it; a
-   * new owner supersedes a deferred stop. Uninterruptible where the lease
-   * count and its release are paired, so neither can be left unmatched.
+   * before the readiness wait so a run end that lands meanwhile sees it; a new
+   * owner supersedes a deferred stop. Uninterruptible where the lease count
+   * and its release are paired, so neither is left unmatched.
    */
   const lease = Effect.fn('LeanServerPool.lease')(function* (
     root: string,
@@ -320,17 +323,15 @@ const make = Effect.fn('LeanServerPool.make')(function* ({
    * Run-end hook: release the ended run's ownership of every server it used.
    * A shared server survives while another run still owns it. If the final
    * owner ends during an in-flight request, the stop waits for the final
-   * lease. Servers started outside any run have no owners and use the idle
-   * time-to-live.
+   * lease. Servers started outside any run use the idle time-to-live.
    */
   const stopSessionsForRun = Effect.fn('LeanServerPool.stopSessionsForRun')(
     function* (runId: RunId) {
       const live = yield* liveEntries;
       const roots: string[] = [];
       for (const root of live.keys()) {
-        // Decided from the entry inside the update, not from the scan's copy:
-        // a lease taken meanwhile must keep its server alive rather than be
-        // invalidated as if the root were idle.
+        // Decided inside the update, not from the scan's copy: a lease taken
+        // meanwhile keeps its server alive rather than be invalidated as idle.
         const stopNow = yield* Ref.modify(entries, (map) => {
           const current = map.get(root);
           if (!current?.owners.has(runId)) return [false, map] as const;
@@ -378,8 +379,8 @@ const make = Effect.fn('LeanServerPool.make')(function* ({
         message: `No Lean project session active. Run a Lean tool against a file in your project first, then retry "${args.join(' ')}".`,
       });
     }
-    // Leased for the command's duration: a build is server activity. The
-    // lake commands serialize per workspace inside `runLakeCommand`, which
+    // Leased for the command's duration: a build is server activity. Lake
+    // commands serialize per workspace inside `runLakeCommand`, which
     // succeeds with the exit code and never fails on it.
     const results = yield* Effect.forEach(
       roots,
@@ -389,7 +390,7 @@ const make = Effect.fn('LeanServerPool.make')(function* ({
             Effect.andThen(
               // `runLakeCommand` reports a non-zero exit in its result and
               // runs execa with `reject: false`, so it succeeds rather than
-              // failing — including when `lake` is missing.
+              // fails, including when `lake` is missing.
               runLakeCommand({
                 workspaceRoot: root,
                 lakeCommand,
@@ -424,8 +425,7 @@ const make = Effect.fn('LeanServerPool.make')(function* ({
           });
         }
         // Every root gets its restart attempt: a failing respawn must not
-        // interrupt a sibling's restart. The first failure is reported once
-        // all have settled.
+        // interrupt a sibling's. The first failure is reported once all settle.
         const restarts = yield* Effect.forEach(
           live,
           ([root, entry]) => Effect.result(restart(root, entry, runId)),
@@ -441,10 +441,9 @@ const make = Effect.fn('LeanServerPool.make')(function* ({
           discard: true,
         });
         return;
-      // `fetch_file_cache` normally needs the active editor's file; we don't
-      // have one in CLI/desktop, so it falls back to the project-wide cache
-      // fetch (same as `fetch_cache`). All four fan out one lake-arg set per
-      // live root via the LAKE_PROJECT_ARGS lookup.
+      // `fetch_file_cache` normally needs the active editor's file; CLI and
+      // desktop have none, so it falls back to the project-wide fetch (same
+      // as `fetch_cache`). All four fan out one LAKE_PROJECT_ARGS set per root.
       case 'build':
       case 'clean':
       case 'fetch_cache':
@@ -502,8 +501,7 @@ const make = Effect.fn('LeanServerPool.make')(function* ({
       Effect.catch((error): Effect.Effect<FetchDiagnosticsResult> => {
         // Server start covers both "not a Lake project" and a missing or
         // broken `lake`/`lean` toolchain — report it as toolchain_unavailable
-        // so the tool can give actionable setup guidance instead of a generic
-        // "could not open file".
+        // so the tool gives setup guidance, not "could not open file".
         const message = toErrorMessage(error);
         warn(
           LOG_CHANNEL,
@@ -531,8 +529,8 @@ const make = Effect.fn('LeanServerPool.make')(function* ({
       ).pipe(
         Effect.as(true),
         // Return false (LeanFileTool surfaces it as a failure result) and log
-        // the cause. Honors the `Promise<boolean>` contract so a missing/broken
-        // `lake` doesn't throw out of the JSON-RPC path.
+        // the cause, honoring `Promise<boolean>` so a missing or broken `lake`
+        // does not throw out of the JSON-RPC path.
         Effect.catch((error) =>
           Effect.sync(() => {
             warn(
@@ -578,6 +576,7 @@ const make = Effect.fn('LeanServerPool.make')(function* ({
     executeProjectCommand,
     positionRequest,
     stopSessionsForRun,
+    listServers: () => roster.list(),
   });
 });
 

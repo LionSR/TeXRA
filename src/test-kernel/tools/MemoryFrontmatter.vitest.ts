@@ -10,7 +10,7 @@ import {
   type MemoryFileMeta,
 } from '@tools/memory/memoryMeta';
 
-describe('memory frontmatter (yaml-backed)', () => {
+describe('memory frontmatter (yaml-backed) (src/tools/memory/memoryMeta.ts)', () => {
   it('round-trips metadata through build and parse', () => {
     const meta: MemoryFileMeta = {
       modifiedBy: 'reviser-agent',

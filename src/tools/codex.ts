@@ -50,7 +50,6 @@ import {
 import { DELIVERY_TAG } from '@shared/deliveryTags';
 import { buildSyntheticToolUseConfig } from '@tools/core/syntheticAgentConfig';
 import { parseWorkingDirectory } from '@tools/pathResolution';
-import { requestBashApproval } from '@tools/approval/bashApproval';
 import { formatWallTimeSeconds, previewLabel } from '@utils/text/stringUtils';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -58,10 +57,16 @@ import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { CODEX_CLI_MODEL } from './codexConfig';
 import { defineTool } from './core/define';
 import { buildAgentWorkspaceOptions } from './agentWorkspaceOptions';
-import { importCodexClass, findCodexBinaryPath } from './codexImport';
+import {
+  codexSandboxMode,
+  getCodexConfig,
+  importCodexClass,
+  findCodexBinaryPath,
+} from './codexImport';
 import { type ChildRun } from './delegation/childRun';
 import { codexThreadsFor } from './agentCliSessionStores';
 import {
+  agentCliApprovalCommand,
   agentCliCall,
   type AgentCliToolFailure,
   buildAgentCliLaunch,
@@ -100,12 +105,6 @@ import type {
 // All other config (model, reasoning, sandbox getter) is lazy-imported from
 // codexConfig.ts at runtime to avoid pulling the heavy platform/SDK graph into
 // the tool-registration path.
-
-/** Lazy accessor for codexConfig.ts exports (loaded once, cached). */
-let _configModule: typeof import('./codexConfig.js') | null = null;
-const getCodexConfig = Effect.promise(
-  async () => (_configModule ??= await import('./codexConfig.js')),
-);
 
 // ============================================================================
 // Schema
@@ -480,11 +479,17 @@ export class CodexTool extends defineTool({
     'Always async: returns immediately with a run ID; each turn is delivered back as a follow-up message (including the thread_id). ' +
     'Pass thread_id on a later call to send a follow-up instruction to an existing session, like delegate_agent(execution_id=…).',
   schema: CodexInputSchema,
+  guard: {
+    bash: (input: CodexInput) =>
+      agentCliApprovalCommand(CODEX_AGENT_NAME, input.prompt, (state) =>
+        codexSandboxMode(input, state),
+      ),
+  },
 }) {
   protected execute(input: CodexInput) {
     return Effect.gen({ self: this }, function* () {
       return yield* reraiseAgentCliCallFailure(
-        this.run(input, yield* ToolCall, requestBashApproval),
+        this.run(input, yield* ToolCall),
       );
     });
   }
@@ -493,25 +498,19 @@ export class CodexTool extends defineTool({
     this: CodexTool,
     input: CodexInput,
     toolCall: ToolCallShape,
-    requestApproval: typeof requestBashApproval,
   ): Effect.fn.Return<
     ToolResult,
     AgentCliToolFailure,
     ToolCall | Runs | AgentResume
   > {
-    // Resolve the effective sandbox mode once (per-call override, else the
-    // user-configured default) rather than mutating the parsed input object.
-    const sandboxMode =
-      input.sandbox_mode ??
-      (yield* getCodexConfig).getCodexSandboxMode(
-        toolCall.roots.workspaceState,
-      );
+    const sandboxMode = yield* codexSandboxMode(
+      input,
+      toolCall.roots.workspaceState,
+    );
 
     return yield* dispatchAgentCliTool({
       toolCall,
-      requestApproval,
-      agentName: 'codex',
-      approvalLabel: `[codex ${sandboxMode}] ${input.prompt}`,
+      agentName: CODEX_AGENT_NAME,
       store: codexThreadsFor,
       resumeId: input.thread_id ?? undefined,
       prompt: input.prompt,

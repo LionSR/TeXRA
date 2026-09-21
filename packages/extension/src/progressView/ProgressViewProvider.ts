@@ -484,13 +484,11 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     );
     onTexraAuthSessionsChanged(this.context, () => {
       if (isAgentCatalogAuthRefreshDeferred()) {
-        runAfterAgentCatalogAuthRefresh(async () => {
-          await Promise.all([
-            this.runtime.runPromise(this.snapshot.refreshCatalogs),
-            this.runtime.runPromise(this.snapshot.refreshAuth),
-            this.runtime.runPromise(this.refreshOnboardingFunnel()),
-          ]);
-        });
+        runAfterAgentCatalogAuthRefresh(this.runtime, [
+          this.snapshot.refreshCatalogs,
+          this.snapshot.refreshAuth,
+          this.refreshOnboardingFunnel(),
+        ]);
         return;
       }
       this.runtime.runFork(this.refreshAfterCredentialChange());

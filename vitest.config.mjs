@@ -38,8 +38,8 @@ const kernelTimeoutMs = process.platform === 'win32' ? 20_000 : 10_000;
 // one of these directories is `pure` unless it mocks a repository module
 // (`vi.mock` / `vi.doMock` — a partial factory left in a shared registry is
 // what the next suite imports) or reaches a host (`@platform/*`, or the
-// support modules that install one). Add a `vi.mock` and the suite moves to
-// `kernel` on its own; remove it and the suite moves back. The tier's premise
+// support modules that install or read one). Add a `vi.mock` and the suite
+// moves to `kernel` on its own; remove it and the suite moves back. The premise
 // — nothing in it installs or replaces anything, so nothing can leak — is
 // therefore true by construction, which is what makes the shared registry
 // deterministic here. A directory earns a place in this list by holding
@@ -75,22 +75,23 @@ const REACHES_A_HOST = [
   /from\s+['"](?:lit|lit-html|lit\/|@lit\/|jsdom)/,
   /@vitest-environment\s+jsdom|new JSDOM\s*\(/,
   /from\s+['"]@platform\//,
-  /from\s+['"]@test\/support\/(?:setupPlatform|setupFakePlatform|FakePlatform|FakeHosts|tempDirPlatform|sessionTestUtils|defaultSessionTestSetup|sessionGraphTestSetup|testProcessRuntime|testWorkspaceRoots)['"]/,
+  /from\s+['"]@test\/support\/(?:setupPlatform|setupFakePlatform|FakePlatform|FakeHosts|tempDirPlatform|nativeToolTestLayer|sessionTestUtils|defaultSessionTestSetup|sessionGraphTestSetup|testProcessRuntime|testWorkspaceRoots)['"]/,
   /import\s+['"]@test\/support\/(?:defaultSessionTestSetup|sessionGraphTestSetup)['"]/,
 ];
-// What the scan cannot see: a module under test that reads the host itself,
-// or a pair of suites sharing process terminal state. Those are found by
-// running each suite alone with no host (a deterministic fail) and by file-
-// order shuffles, and kept by name in the ratchet baseline — shrink-only, a
-// stale entry fails config load.
+// What the scan cannot see: a pair of suites sharing process terminal state.
+// Those are found by file-order shuffles and kept by name in the ratchet
+// baseline — shrink-only, a stale entry fails config load. The companion
+// `hostReadByModuleUnderTest` list is gone: five of its rows named modules
+// since fixed to take their host as a layer or a value, six were stale
+// because the scan above already sends those suites to `kernel` on an
+// import of a host-installing support module, and the last one reached the
+// harness's installed host through `nativeToolTestLayer`, which the scan now
+// names like the other support modules that read one.
 const KERNEL_BASELINE = 'config/ratchets/pure-tier-kernel-suites.json';
 const kernelBaseline = JSON.parse(
   readFileSync(resolve(rootDir, KERNEL_BASELINE), 'utf8'),
 );
-const keptInKernel = new Set([
-  ...kernelBaseline.hostReadByModuleUnderTest,
-  ...kernelBaseline.shareTerminalState,
-]);
+const keptInKernel = new Set(kernelBaseline.shareTerminalState);
 const stale = [...keptInKernel].filter(
   (file) => !existsSync(resolve(rootDir, file)),
 );

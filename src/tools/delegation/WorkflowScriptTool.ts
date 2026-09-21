@@ -13,7 +13,7 @@ import {
 } from '@agent/workflowScript/checkpoint';
 import { parseWorkflowScript } from '@agent/workflowScript/parseScript';
 import { ToolCall } from '@agent/runtime/ToolCall';
-import { RunBusy } from '@agent/runtime/runLanes';
+import { RunLive } from '@agent/runtime/runRoster';
 import { registerRun } from '@agent/storage/runLifecycle';
 import {
   AgentConfigSchema,
@@ -670,7 +670,7 @@ Durability: the journal is keyed by meta.name and the agent field within this se
             )
             .pipe(
               Effect.catchIf(
-                (error) => error instanceof RunBusy,
+                (error) => error instanceof RunLive,
                 () => Effect.succeed(alreadyRunning()),
               ),
             ),

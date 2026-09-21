@@ -110,6 +110,7 @@ function createHandlers(): AgentHandlers {
       },
       withActiveWebview: vi.fn(() => Effect.void),
       postMessageToActiveWebview: vi.fn(() => Effect.void),
+      run: (program) => testRuntime().runPromise(program),
     },
     mocks.refreshAfterAgentMutation,
     installedHost().roots,

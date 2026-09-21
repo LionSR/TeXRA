@@ -9,12 +9,13 @@
  * whose native validation runs before platform initialization. Whichever
  * arrives first builds the runtime and the rest run on it, so a normal run
  * still ends with exactly the runtime the platform's shutdown disposes.
- * Every entry but clone opens the global state store and the global root's
- * database with the install, so `AppState` and the application records answer
- * from the first install on rather than only under `initCliPlatform`; clone
- * hands over {@link refusingStateStore} and {@link refusingGlobalDatabase}
- * instead (see their docstrings), so its install creates nothing under the
- * storage root and a read or write of either there is loud.
+ * Every entry but the two platform-less ones opens the global state store and
+ * the global root's database with the install, so `AppState` and the
+ * application records answer from the first install on rather than only under
+ * `initCliPlatform`; `clone` and `install-github-action` hand over
+ * {@link NO_PLATFORM_INSTALL} instead (see its docstring), so their install
+ * creates nothing under the storage root and a read or write of either there
+ * is loud.
  *
  * This module is the CLI's composition root for that runtime, and every
  * entry that awaits it holds the result in a local and threads it on: there
@@ -36,8 +37,9 @@
  * The process services every entry provides the same way, and every one of
  * them is a value this function already holds when it installs: `Secrets`
  * over the one `CliSecrets` of this storage root, `AppState` over the global
- * state store opened here, before the install (the refusing store for clone,
- * the one secrets-only entry), and `SetupPlatform` over the CLI's sign-in. The
+ * state store opened here, before the install (the refusing store for the two
+ * entries that bring no platform up), and `SetupPlatform` over the CLI's
+ * sign-in. The
  * global store is served by the runtime as `AppState`, so `initCliPlatform`
  * opens only the workspace scope and no entry has to discover a store some
  * other entry opened.
@@ -54,7 +56,10 @@ import {
 } from '@controllers/session/sessionLayer';
 import { StateWriteFailed, type StateStore } from '@platform/interfaces';
 import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '@platform/languageModel';
-import type { ProcessRuntime } from '@platform/processRuntime';
+import {
+  withProcessServices,
+  type ProcessRuntime,
+} from '@platform/processRuntime';
 import { nodeFileServices } from '@platform/defaults/jsonStore';
 import { DEFAULT_NODE_STORAGE_ROOT } from '@platform/defaults/nodeStorage';
 import { nodeProcesses } from '@platform/defaults/nodeProcesses';
@@ -72,61 +77,95 @@ import { ensureCliSupabaseAuth, signInCliSupabase } from './supabaseAuth';
 
 let pending: Promise<ProcessRuntime> | null = null;
 
-const NO_CLONE_APP_STATE =
-  'The `texra clone` entry serves no application state: it runs without a platform and its storage root may be read-only.';
+const NO_PLATFORM_APP_STATE =
+  'A platform-less TeXRA CLI entry serves no application state: it runs without a platform and its storage root may be read-only.';
 
 /**
- * The `AppState` of the one CLI entry that has none. `clone` runs before any
- * platform and may hold a read-only storage root, so opening the real store —
- * which would create the global storage directory and its database — is what
- * it must not do. A write is a tagged refusal the caller composes; a read is
- * a defect, because a store that answered with the caller's fallback would
- * read as absent state rather than as no store at all.
+ * The `AppState` of the CLI entries that have none. `clone` and
+ * `install-github-action` run before any platform and may hold a read-only
+ * storage root, so opening the real store — which would create the global
+ * storage directory and its database — is what they must not do. A write is a
+ * tagged refusal the caller composes; a read is a defect, because a store that
+ * answered with the caller's fallback would read as absent state rather than
+ * as no store at all.
  */
-export const refusingStateStore = (): StateStore => ({
+const refusingStateStore: StateStore = Object.freeze({
   get<T>(key: string): T {
-    throw new Error(`${NO_CLONE_APP_STATE} "${key}" cannot be read.`);
+    throw new Error(`${NO_PLATFORM_APP_STATE} "${key}" cannot be read.`);
   },
   update: (key: string) =>
     Effect.fail(
       new StateWriteFailed({
         key,
-        message: `${NO_CLONE_APP_STATE} "${key}" cannot be written.`,
+        message: `${NO_PLATFORM_APP_STATE} "${key}" cannot be written.`,
         cause: undefined,
       }),
     ),
 });
 
-const NO_CLONE_GLOBAL_ROOT =
-  'The `texra clone` entry reads and writes no global record: it runs without a platform and its storage root may be read-only.';
+const NO_PLATFORM_GLOBAL_ROOT =
+  'A platform-less TeXRA CLI entry reads and writes no global record: it runs without a platform and its storage root may be read-only.';
 
 const refuseGlobalRecord = (operation: string) =>
-  Effect.die(new Error(`${NO_CLONE_GLOBAL_ROOT} "${operation}" cannot run.`));
+  Effect.die(
+    new Error(`${NO_PLATFORM_GLOBAL_ROOT} "${operation}" cannot run.`),
+  );
 
 /**
- * The `GlobalDatabase` of that same entry. Opening the real handle creates
+ * The `GlobalDatabase` of those same entries. Opening the real handle creates
  * the global storage directory and its SQLite file and forks that root's
- * 250 ms change poll for the life of the runtime; `clone` may hold a
- * read-only storage root, runs no records operation, and is the one entry
- * that installs a runtime and disposes none — an opened handle would also
- * hold the event loop open past the clone's own exit. Every member here is a
- * defect rather than a tagged failure, as a read of {@link refusingStateStore}
- * is: no caller in a clone process composes one, so an answer of any other
- * kind would read as an empty global root rather than as no global root at
- * all.
+ * 250 ms change poll for the life of the runtime; a platform-less entry may
+ * hold a read-only storage root, runs no records operation, and installs a
+ * runtime it disposes none of — an opened handle would also hold the event
+ * loop open past that entry's own exit. Every member here is a defect rather
+ * than a tagged failure, as a read of {@link refusingStateStore} is: no caller
+ * in such a process composes one, so an answer of any other kind would read as
+ * an empty global root rather than as no global root at all.
  */
-export const refusingGlobalDatabase: Layer.Layer<GlobalDatabase> =
-  Layer.succeed(GlobalDatabase)({
-    appendAll: () => refuseGlobalRecord('appendAll'),
-    readInputHistory: () => refuseGlobalRecord('readInputHistory'),
-    appendInputHistory: () => refuseGlobalRecord('appendInputHistory'),
-    readDesktopProjects: () => refuseGlobalRecord('readDesktopProjects'),
-    readUpdateCheck: () => refuseGlobalRecord('readUpdateCheck'),
-    recordUpdateCheck: () => refuseGlobalRecord('recordUpdateCheck'),
-    readInquiryRecord: () => refuseGlobalRecord('readInquiryRecord'),
-    listInquiryRecords: () => refuseGlobalRecord('listInquiryRecords'),
-    updateInquiryRecord: () => refuseGlobalRecord('updateInquiryRecord'),
-  });
+const refusingGlobalDatabase: Layer.Layer<GlobalDatabase> = Layer.succeed(
+  GlobalDatabase,
+)({
+  appendAll: () => refuseGlobalRecord('appendAll'),
+  readInputHistory: () => refuseGlobalRecord('readInputHistory'),
+  appendInputHistory: () => refuseGlobalRecord('appendInputHistory'),
+  readDesktopProjects: () => refuseGlobalRecord('readDesktopProjects'),
+  readUpdateCheck: () => refuseGlobalRecord('readUpdateCheck'),
+  recordUpdateCheck: () => refuseGlobalRecord('recordUpdateCheck'),
+  readInquiryRecord: () => refuseGlobalRecord('readInquiryRecord'),
+  listInquiryRecords: () => refuseGlobalRecord('listInquiryRecords'),
+  updateInquiryRecord: () => refuseGlobalRecord('updateInquiryRecord'),
+});
+
+/**
+ * What an entry hands {@link installCliProcessRuntime} in place of the global
+ * state store and the global root's database handle that install would
+ * otherwise open for it.
+ */
+interface CliProcessRuntimeInstall {
+  readonly appState: StateStore;
+  readonly globalDatabase: Layer.Layer<GlobalDatabase>;
+}
+
+/**
+ * The install of the two CLI entries that bring no platform up: `clone`, the
+ * secrets-only entry whose token can come from the environment and whose
+ * storage root may be read-only, and `install-github-action`, which only
+ * scaffolds a workflow file inside a git repository. Neither runs the platform
+ * shutdown that disposes the runtime it installs, so neither may open the
+ * global state store or the global root's database: the two refusals above
+ * create nothing under the storage root and hold the event loop open past no
+ * exit.
+ *
+ * Frozen, with its store frozen too: it crosses a module boundary and is read
+ * once per command, so a caller that decorated `appState.get` would change how
+ * every later platform-less run in the process refuses. `globalDatabase` is an
+ * Effect `Layer`, an immutable descriptor this module does not own, so it is
+ * left as Effect built it rather than frozen from here.
+ */
+export const NO_PLATFORM_INSTALL: CliProcessRuntimeInstall = Object.freeze({
+  appState: refusingStateStore,
+  globalDatabase: refusingGlobalDatabase,
+});
 
 /**
  * Install the process runtime, or join the one already installed: every entry
@@ -139,22 +178,17 @@ export const refusingGlobalDatabase: Layer.Layer<GlobalDatabase> =
  * there is no second record beside the runtime for a joining caller (or a
  * second root, like the test kernel's) to keep in sync.
  *
- * `options` is `clone`'s: the one platform-less, secrets-only entry, whose
- * token can come from the environment and whose storage root may be
- * read-only. Opening the global state store or the global root's database
- * creates the global storage directory and its SQLite file, so clone hands
- * over {@link refusingStateStore} and {@link refusingGlobalDatabase} and this
- * install opens nothing under that root. Nothing in a clone process joins the
- * install after it, which is what makes that safe: a default caller joining a
- * clone-installed runtime reads the refusal loudly, and a CLI process runs
- * exactly one command.
+ * `options` is {@link NO_PLATFORM_INSTALL}, which the two platform-less
+ * entries pass. Opening the global state store or the global root's database
+ * creates the global storage directory and its SQLite file, so those entries
+ * hand over the refusals above and this install opens nothing under that root.
+ * Nothing in such a process joins the install after it, which is what makes
+ * that safe: a default caller joining a refusing install reads the refusal
+ * loudly, and a CLI process runs exactly one command.
  */
 export function installCliProcessRuntime(
   storageRoot?: string,
-  options?: {
-    readonly appState: StateStore;
-    readonly globalDatabase: Layer.Layer<GlobalDatabase>;
-  },
+  options?: CliProcessRuntimeInstall,
 ): Promise<ProcessRuntime> {
   const current = installedProcessRuntime();
   if (current) {
@@ -214,9 +248,16 @@ export function installCliProcessRuntime(
         // one: signing in runs a program on it, long after this returns. The
         // account plane it reports on is the one built above, which is also
         // the plane this runtime serves as `SupabaseAuth`.
+        // The shared sign-in coordinator runs on the process services this
+        // install builds, and the setup port hands back a service-free
+        // program, so the services are provided from the runtime itself.
         signIn: () =>
-          signInCliSupabase(runtime, { openBrowser: true }).pipe(
-            Effect.andThen(auth.authenticated),
+          withProcessServices(
+            runtime,
+            signInCliSupabase(runtime, { openBrowser: true }).pipe(
+              Effect.andThen(auth.authenticated),
+            ),
+          ).pipe(
             Effect.mapError(
               (cause) =>
                 new SignInFailed({

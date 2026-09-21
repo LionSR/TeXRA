@@ -6,6 +6,7 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { runCli } from '@cli/commands/root';
+import { NO_PLATFORM_INSTALL } from '@cli/runtime/cliProcessRuntime';
 import { defaultBranch } from '@cli/runtime/gitOps';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
@@ -13,11 +14,31 @@ import { parseGitHubSlug } from '@tools/github/githubSlug';
 
 const browserMocks = vi.hoisted(() => ({
   tryOpenBrowser: vi.fn().mockResolvedValue(true),
+  installCliProcessRuntime: vi.fn(),
 }));
 
 vi.mock('@cli/runtime/browser', () => ({
   tryOpenBrowser: browserMocks.tryOpenBrowser,
 }));
+
+// The command brings no platform up, but its entry still installs the process
+// runtime its program runs on. Here that is the harness's, so the suite never
+// builds a real one, and the install is a spy so the test below can assert
+// what the entry hands it: `NO_PLATFORM_INSTALL`, the real value spread in
+// from the module. Without it the install would open the global root's handle
+// this command never brings a platform up to dispose.
+vi.mock('@cli/runtime/cliProcessRuntime', async (importOriginal) => {
+  const { testRuntime } = await import('@test/support/testProcessRuntime');
+  const actual =
+    await importOriginal<typeof import('@cli/runtime/cliProcessRuntime')>();
+  browserMocks.installCliProcessRuntime.mockImplementation(() =>
+    Promise.resolve(testRuntime()),
+  );
+  return {
+    ...actual,
+    installCliProcessRuntime: browserMocks.installCliProcessRuntime,
+  };
+});
 
 const repos: string[] = [];
 
@@ -65,6 +86,7 @@ describe('install-github-action command', () => {
     spyOnStreamWrite(process.stdout);
     spyOnStreamWrite(process.stderr);
     browserMocks.tryOpenBrowser.mockClear();
+    browserMocks.installCliProcessRuntime.mockClear();
   });
 
   it('commits only the generated workflow file', async () => {
@@ -75,6 +97,12 @@ describe('install-github-action command', () => {
     const result = await runInstall(repo);
 
     expect(result.exitCode).toBe(CliExitCode.Success);
+    // The platform-less handoff itself: the entry opens no global state store
+    // and no global-root handle for a command that disposes neither.
+    expect(browserMocks.installCliProcessRuntime).toHaveBeenCalledWith(
+      undefined,
+      NO_PLATFORM_INSTALL,
+    );
     expect(git(repo, 'show', '--name-only', '--format=', 'HEAD')).toBe(
       '.github/workflows/texra-code-review.yml',
     );

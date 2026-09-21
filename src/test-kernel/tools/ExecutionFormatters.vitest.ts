@@ -37,7 +37,7 @@ vi.mock('@agent/storage/runRecords', async (importOriginal) => ({
 }));
 
 // Local imports
-import { getRunStatusInfo } from '@tools/executionFormatters';
+import { resolveRunLiveness } from '@tools/executions/runLiveness';
 import { turnAttributionNote } from '@tools/executions/turnAttribution';
 
 let session: SessionHandle;
@@ -90,7 +90,7 @@ function persisted(outcome: RunOutcome | null): void {
   mocks.readRunEnd.mockReturnValue(Effect.succeed(end));
 }
 
-describe('getRunStatusInfo', () => {
+describe('resolveRunLiveness', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     // Unclaimed unless a case says otherwise: the claim is the only thing an
@@ -103,9 +103,9 @@ describe('getRunStatusInfo', () => {
   it('reports the recorded outcome when the live handle is gone', async () => {
     persisted('cancelled');
 
-    const info = await onSessionRuns(getRunStatusInfo(RUN_ID, session));
+    const liveness = await onSessionRuns(resolveRunLiveness(RUN_ID, session));
 
-    assert.strictEqual(info.status, 'cancelled');
+    assert.deepStrictEqual(liveness, { kind: 'settled', outcome: 'cancelled' });
   });
 
   it('reads no durable row and no claim for a run the caller already settled', async () => {
@@ -113,11 +113,11 @@ describe('getRunStatusInfo', () => {
     // and nothing else for a run that already said how it ended.
     persisted(null);
 
-    const info = await onSessionRuns(
-      getRunStatusInfo(RUN_ID, session, 'completed'),
+    const liveness = await onSessionRuns(
+      resolveRunLiveness(RUN_ID, session, 'completed'),
     );
 
-    assert.strictEqual(info.status, 'completed');
+    assert.deepStrictEqual(liveness, { kind: 'settled', outcome: 'completed' });
     assert.strictEqual(mocks.readRunEnd.mock.calls.length, 0);
     assert.strictEqual(claimOwner.mock.calls.length, 0);
   });
@@ -130,10 +130,15 @@ describe('getRunStatusInfo', () => {
       Effect.succeed({ ownerId: foreignOwner(5150), liveness: 'alive' }),
     );
 
-    const info = await onSessionRuns(getRunStatusInfo(RUN_ID, session, null));
+    const liveness = await onSessionRuns(
+      resolveRunLiveness(RUN_ID, session, null),
+    );
 
-    assert.strictEqual(info.status, 'unknown');
-    assert.match(info.detail ?? '', /pid 5150 on other-host/);
+    assert.strictEqual(liveness.kind, 'unsettled');
+    assert.match(
+      liveness.kind === 'unsettled' ? liveness.reason : '',
+      /pid 5150 on other-host/,
+    );
   });
 
   it('calls a run nobody owns and nothing recorded interrupted', async () => {
@@ -142,27 +147,26 @@ describe('getRunStatusInfo', () => {
       Effect.succeed({ ownerId: null, liveness: null }),
     );
 
-    const info = await onSessionRuns(getRunStatusInfo(RUN_ID, session));
+    const liveness = await onSessionRuns(resolveRunLiveness(RUN_ID, session));
 
-    assert.strictEqual(info.status, 'cancelled');
     // The two facts the arm was decided from, and nothing about whether
     // there is anything left to continue.
-    assert.match(
-      info.detail ?? '',
-      /interrupted; no owner and no recorded outcome/,
-    );
+    assert.deepStrictEqual(liveness, { kind: 'interrupted' });
   });
 
-  it('does not call a run cancelled while another process holds it', async () => {
+  it('does not settle a run while another process holds it', async () => {
     persisted(null);
     claimOwner.mockReturnValue(
       Effect.succeed({ ownerId: foreignOwner(4242), liveness: 'alive' }),
     );
 
-    const info = await onSessionRuns(getRunStatusInfo(RUN_ID, session));
+    const liveness = await onSessionRuns(resolveRunLiveness(RUN_ID, session));
 
-    assert.strictEqual(info.status, 'unknown');
-    assert.match(info.detail ?? '', /pid 4242 on other-host/);
+    assert.strictEqual(liveness.kind, 'unsettled');
+    assert.match(
+      liveness.kind === 'unsettled' ? liveness.reason : '',
+      /pid 4242 on other-host/,
+    );
   });
 
   it('does not settle a run whose claim this process holds with no run', async () => {
@@ -172,10 +176,13 @@ describe('getRunStatusInfo', () => {
       Effect.succeed({ ownerId: foreignOwner(process.pid), liveness: 'self' }),
     );
 
-    const info = await onSessionRuns(getRunStatusInfo(RUN_ID, session));
+    const liveness = await onSessionRuns(resolveRunLiveness(RUN_ID, session));
 
-    assert.strictEqual(info.status, 'unknown');
-    assert.match(info.detail ?? '', /no live run/);
+    assert.strictEqual(liveness.kind, 'unsettled');
+    assert.match(
+      liveness.kind === 'unsettled' ? liveness.reason : '',
+      /no live run/,
+    );
   });
 
   it('still reports the outcome while this process lags releasing the claim', async () => {
@@ -187,19 +194,22 @@ describe('getRunStatusInfo', () => {
       Effect.succeed({ ownerId: foreignOwner(process.pid), liveness: 'self' }),
     );
 
-    const info = await onSessionRuns(getRunStatusInfo(RUN_ID, session));
+    const liveness = await onSessionRuns(resolveRunLiveness(RUN_ID, session));
 
-    assert.strictEqual(info.status, 'completed');
+    assert.deepStrictEqual(liveness, { kind: 'settled', outcome: 'completed' });
   });
 
   it('reports an unreadable claim rather than a terminal reading', async () => {
     persisted(null);
     claimOwner.mockReturnValue(Effect.fail(new Error('claim unreadable')));
 
-    const info = await onSessionRuns(getRunStatusInfo(RUN_ID, session));
+    const liveness = await onSessionRuns(resolveRunLiveness(RUN_ID, session));
 
-    assert.strictEqual(info.status, 'unknown');
-    assert.match(info.detail ?? '', /cannot read \(claim unreadable\)/);
+    assert.strictEqual(liveness.kind, 'unsettled');
+    assert.match(
+      liveness.kind === 'unsettled' ? liveness.reason : '',
+      /cannot read \(claim unreadable\)/,
+    );
   });
 });
 

@@ -7,6 +7,7 @@ import { ToolCall } from '@agent/runtime/ToolCall';
 import { createLog } from '@logger/logUtils';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import { Secrets } from '@platform/secrets';
+import { IMAGE_TOOL_LABEL } from '@shared/constants/latexToolchain';
 import { ToolError } from '@shared/schemas';
 
 // Local file imports
@@ -44,9 +45,10 @@ const verify = Effect.fn('VerifySetupTool.execute')(function* (
         ),
       );
     }
-    // Accept `gm/magick` as an alias since that's how the full-check path
-    // reports a missing image tool; the agent naturally reuses that token.
-    if (name === 'gm/magick') {
+    // Accept the image-capability label as an alias since that's how the
+    // full-check path reports a missing image tool; the agent naturally
+    // reuses that token.
+    if (name === IMAGE_TOOL_LABEL) {
       const [gm, magick] = yield* Effect.all(
         [locateTool('gm'), locateTool('magick')],
         { concurrency: 'unbounded' },
@@ -56,7 +58,7 @@ const verify = Effect.fn('VerifySetupTool.execute')(function* (
         ok
           ? `Verified: ${gm.installed ? '"gm"' : '"magick"'} is installed and on PATH.`
           : `Not found: neither "gm" nor "magick" is on PATH. The install may not have completed, or the shell PATH needs to be refreshed.`,
-        `Verify gm/magick: ${ok ? 'ok' : 'missing'}`,
+        `Verify ${IMAGE_TOOL_LABEL}: ${ok ? 'ok' : 'missing'}`,
       );
     }
     // First char must be alphanumeric — rejects punctuation-only
@@ -66,7 +68,7 @@ const verify = Effect.fn('VerifySetupTool.execute')(function* (
     if (!/^[A-Za-z0-9][A-Za-z0-9._+\-]*$/.test(name)) {
       return yield* Effect.fail(
         new ToolError(
-          `Invalid tool name "${name}". Must start with an alphanumeric character; only \`A-Za-z0-9._+-\` are allowed thereafter (or the alias "gm/magick").`,
+          `Invalid tool name "${name}". Must start with an alphanumeric character; only \`A-Za-z0-9._+-\` are allowed thereafter (or the alias "${IMAGE_TOOL_LABEL}").`,
         ),
       );
     }

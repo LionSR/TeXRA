@@ -64,6 +64,11 @@ const OPEN_HEADING =
  */
 function statusValue(text) {
   const lines = text.split('\n');
+  // Where the prose starts. Frontmatter is not the header block, so the scan
+  // below begins after its closing delimiter: a `##` line inside frontmatter
+  // (a YAML comment, or Markdown in a block scalar) would otherwise read as
+  // the first section heading and end the scan before the title.
+  let bodyStart = 0;
   if (lines[0]?.trim() === '---') {
     const end = lines.indexOf('---', 1);
     if (end !== -1) {
@@ -71,11 +76,11 @@ function statusValue(text) {
         const match = /^status:\s*(.+)$/iu.exec(line.trim());
         if (match) return match[1];
       }
-      return null;
+      bodyStart = end + 1;
     }
   }
   let seenHeading = false;
-  for (const line of lines) {
+  for (const line of lines.slice(bodyStart)) {
     if (/^#{2,6}\s/u.test(line)) break;
     if (/^#\s/u.test(line)) {
       seenHeading = true;

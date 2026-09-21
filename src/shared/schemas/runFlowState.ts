@@ -9,7 +9,7 @@
  */
 import { z } from 'zod';
 
-import { TurnProtocolSchema } from '@llm/turn';
+import { TurnProtocolSchema } from '@texra-ai/llm/turn';
 
 import { JsonValueSchema } from './jsonValue';
 import { LineCountSchema } from './lineChanges';

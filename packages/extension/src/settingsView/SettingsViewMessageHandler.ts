@@ -26,7 +26,7 @@ import {
 } from '@controllers/settingsView/ToolDashboardData';
 import { SettingsProfileKeyController } from '@controllers/settingsView/SettingsProfileKeyController';
 import { SettingsProfileController } from '@controllers/settingsView/SettingsProfileController';
-import { appSignals } from '@eventBus/AppSignals';
+import { emitAppSignal } from '@eventBus/AppSignals';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import {
   isInlineCriticismEnabled,
@@ -39,6 +39,7 @@ import {
   showLoggedErrorMessage,
   showLoggedInfoMessage,
 } from '@frontend/ui/errorHandlingUtils';
+import { subscribeAppSignal } from '@frontend/events/appSignalSubscriptions';
 import { subscribeGoalStateChanges } from '@frontend/events/runFactSubscriptions';
 import { NotificationFailed } from '@hosts/uiHosts';
 import { createLog, type Log } from '@logger/logUtils';
@@ -241,44 +242,36 @@ export class SettingsViewMessageHandler {
     this.handlerRegistry = this.createHandlerRegistry(context);
 
     context.subscriptions.push(
-      {
-        dispose: appSignals.on('githubSubscriptionsChanged', () => {
-          this.runtime.runFork(
-            this.withActiveWebview((w) =>
-              this.githubHandlers.sendPRSubscriptions(w),
-            ),
-          );
-        }),
-      },
-      {
-        dispose: appSignals.on('toolAvailabilityChanged', () => {
-          this.runtime.runFork(
-            this.withActiveWebview((w) =>
-              this.sendToolDashboardData(w, { skipChecks: true }),
-            ),
-          );
-        }),
-      },
-      {
-        // `apply_team` writes the roster straight from the setup agent, so
-        // the open view is showing agents and a team it just replaced. The
-        // catalog is already fresh: a team change moves no agent files, and
-        // the agent-creator reloads before it emits. Without that flag this
-        // listener would rescan the YAML and re-fetch the remote catalog on
-        // every roster write.
-        dispose: appSignals.on('agentRosterChanged', () => {
-          this.runtime.runFork(this.refreshAfterAgentMutation(undefined, true));
-        }),
-      },
-      {
-        dispose: appSignals.on('languageModelsChanged', () => {
-          this.runtime.runFork(
-            this.withActiveWebview((webview) =>
-              this.sendModelSelectionData(webview),
-            ),
-          );
-        }),
-      },
+      subscribeAppSignal(this.runtime, 'githubSubscriptionsChanged', () => {
+        this.runtime.runFork(
+          this.withActiveWebview((w) =>
+            this.githubHandlers.sendPRSubscriptions(w),
+          ),
+        );
+      }),
+      subscribeAppSignal(this.runtime, 'toolAvailabilityChanged', () => {
+        this.runtime.runFork(
+          this.withActiveWebview((w) =>
+            this.sendToolDashboardData(w, { skipChecks: true }),
+          ),
+        );
+      }),
+      // `apply_team` writes the roster straight from the setup agent, so the
+      // open view is showing agents and a team it just replaced. The catalog
+      // is already fresh: a team change moves no agent files, and the
+      // agent-creator reloads before it emits. Without that flag this listener
+      // would rescan the YAML and re-fetch the remote catalog on every roster
+      // write.
+      subscribeAppSignal(this.runtime, 'agentRosterChanged', () => {
+        this.runtime.runFork(this.refreshAfterAgentMutation(undefined, true));
+      }),
+      subscribeAppSignal(this.runtime, 'languageModelsChanged', () => {
+        this.runtime.runFork(
+          this.withActiveWebview((webview) =>
+            this.sendModelSelectionData(webview),
+          ),
+        );
+      }),
     );
     const unsubscribeGoals = subscribeGoalStateChanges(
       session,
@@ -306,7 +299,15 @@ export class SettingsViewMessageHandler {
   /**
    * The inbound registry: one settled program per message arm. `run` is this
    * host's R1 boundary — the dispatcher's `MessageHandler` contract is
-   * promise-shaped, so it is the only place a settings message is run.
+   * promise-shaped, so it is the only place a settings message is run, and
+   * the delegates reach the same boundary through `SettingsHandlerContext.run`.
+   *
+   * A tab whose arms all belong to one delegate contributes them as a table it
+   * owns (`...delegate.handlers`), as the desktop's controllers do. Spelled
+   * out here is the rest: what this host performs itself (profile and model
+   * commands, the Tools dashboard, the catalog write, and the VS Code-only
+   * Copilot and extension-install surfaces), plus the tab arms whose delegates
+   * own no table yet — agent, ChatGPT/Grok, inline-criticism and goal arms.
    */
   private createHandlerRegistry(
     context: vscode.ExtensionContext,
@@ -317,21 +318,7 @@ export class SettingsViewMessageHandler {
     return {
       webviewReady: () =>
         run(this.withActiveWebview((w) => this.sendAllData(w))),
-      getMemoryData: () =>
-        run(
-          this.withActiveWebview((w) => this.memoryHandlers.sendMemoryData(w)),
-        ),
-      getMemoryPreview: (message) =>
-        run(this.memoryHandlers.handleGetMemoryPreview(message)),
-      openMemoryFile: (message) =>
-        run(this.memoryHandlers.handleOpenMemoryFile(message)),
-      openMemoryFolder: () => run(this.memoryHandlers.handleOpenMemoryFolder()),
-      deleteMemory: (message) =>
-        run(this.memoryHandlers.handleDeleteMemory(message)),
-      pinMemory: (message) =>
-        run(this.memoryHandlers.setMemoryPinned(message.storagePath, true)),
-      unpinMemory: (message) =>
-        run(this.memoryHandlers.setMemoryPinned(message.storagePath, false)),
+      ...this.memoryHandlers.handlers,
       signIn: () =>
         run(safeExecuteCommand(AUTH_COMMANDS.SIGN_IN, [], this.viewName)),
       signOut: () =>
@@ -401,26 +388,7 @@ export class SettingsViewMessageHandler {
         run(this.agentHandlers.handleSaveAgentModePreset()),
       deleteAgentModePreset: (message) =>
         run(this.agentHandlers.handleDeleteAgentModePreset(message)),
-      getGitHubTokenStatus: () =>
-        run(
-          this.withActiveWebview((w) =>
-            this.githubHandlers.sendGitHubTokenStatus(w),
-          ),
-        ),
-      setGitHubToken: () => run(this.githubHandlers.handleSetGitHubToken()),
-      removeGitHubToken: () =>
-        run(this.githubHandlers.handleRemoveGitHubToken()),
-      openGitHubTokenUrl: () => run(this.githubHandlers.openGitHubTokenUrl()),
-      getPRSubscriptions: () =>
-        run(
-          this.withActiveWebview((w) =>
-            this.githubHandlers.sendPRSubscriptions(w),
-          ),
-        ),
-      unsubscribePR: (message) =>
-        this.githubHandlers.handleUnsubscribePR(message),
-      openPRSubscriptionStream: (message) =>
-        run(this.githubHandlers.handleOpenPRSubscriptionStream(message)),
+      ...this.githubHandlers.handlers,
       signInChatGpt: () => run(this.chatgptHandlers.handleSignIn()),
       signOutChatGpt: () => run(this.chatgptHandlers.handleSignOut()),
       setChatGptPreferSubscription: (message) =>
@@ -462,12 +430,7 @@ export class SettingsViewMessageHandler {
           ),
         ),
       runToolCommand: (message) => this.handleRunToolCommand(message),
-      applyLatexSettings: (message) =>
-        run(this.latexHandlers.handleApplyLatexSettings(message)),
-      installLatexWorkshop: () =>
-        run(this.latexHandlers.handleInstallLatexWorkshop()),
-      runInstallCommand: (message) =>
-        run(this.latexHandlers.handleRunInstallCommand(message)),
+      ...this.latexHandlers.handlers,
       getInlineCriticismEnabled: () =>
         run(this.withActiveWebview((w) => this.sendInlineCriticismEnabled(w))),
       setInlineCriticismEnabled: (message) =>
@@ -555,6 +518,7 @@ export class SettingsViewMessageHandler {
       withActiveWebview: (fn) => this.withActiveWebview(fn),
       postMessageToActiveWebview: (message) =>
         this.postMessageToActiveWebview(message),
+      run: (program) => this.runtime.runPromise(program),
     };
   }
 
@@ -794,7 +758,7 @@ export class SettingsViewMessageHandler {
         requiresOpenWorkspace: () => !this.session.roots.workspace,
         onApprovalPolicyChanged: (policy) => {
           this.session.setApprovalPolicy(policy);
-          appSignals.emit('approvalPolicyChanged', undefined);
+          emitAppSignal('approvalPolicyChanged', undefined);
         },
       });
       if (result.kind === 'ignored') return;

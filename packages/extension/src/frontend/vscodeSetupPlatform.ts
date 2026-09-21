@@ -70,7 +70,5 @@ export const vscodeSetupPlatform: SetupPlatformShape = {
           }),
       }),
   },
-  terminal: {
-    runCommand: runTerminalCommand,
-  },
+  terminal: runTerminalCommand,
 };

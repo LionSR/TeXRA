@@ -75,7 +75,6 @@ import {
   injectStandaloneTrace,
   hasCompletedRunConversationEvidence,
   readCompletedRunConversation as readCompletedRunConversationEffect,
-  readCompletedRunTodos,
 } from '@transcript';
 
 const tempDirs = useTempDirs();
@@ -100,6 +99,16 @@ async function stampRun(runId: RunId): Promise<void> {
 let taskSession: ReturnType<typeof createTestSession>;
 const readCompletedRunConversation = (id: RunId) =>
   Effect.runPromise(readCompletedRunConversationEffect(id, taskSession));
+/** The run's task list as every surface reads it: off the session fold. */
+const completedRunTodos = (id: RunId) =>
+  Effect.runPromise(
+    taskSession.readView([id]).pipe(
+      Effect.map((view) => {
+        const run = view.runs.get(id);
+        return run?.category === AgentCategory.ToolUse ? run.todos : [];
+      }),
+    ),
+  );
 const loadChatExportInput = (id: RunId) =>
   Effect.runPromise(loadChatExportInputEffect(id, taskSession));
 
@@ -445,9 +454,7 @@ describe('completedRunArchive facade', () => {
       conversationResult.conversation,
     );
 
-    expect(
-      await Effect.runPromise(readCompletedRunTodos(runId, taskSession)),
-    ).toEqual([
+    expect(await completedRunTodos(runId)).toEqual([
       { content: 'Fix the bug', status: 'completed', activeForm: 'Fixing' },
     ]);
   });
@@ -675,9 +682,7 @@ describe('completedRunArchive facade', () => {
     expect(conversationResult).toEqual({ conversation: null, source: 'none' });
     expect(hasCompletedRunConversationEvidence(conversationResult)).toBe(false);
 
-    expect(
-      await Effect.runPromise(readCompletedRunTodos(runId, taskSession)),
-    ).toEqual([]);
+    expect(await completedRunTodos(runId)).toEqual([]);
   });
 
   it('reads a registered run whose transcript is empty', async () => {
@@ -691,9 +696,7 @@ describe('completedRunArchive facade', () => {
     });
     expect(hasCompletedRunConversationEvidence(conversationResult)).toBe(false);
 
-    expect(
-      await Effect.runPromise(readCompletedRunTodos(runId, taskSession)),
-    ).toEqual([]);
+    expect(await completedRunTodos(runId)).toEqual([]);
   });
 
   it('reconstructs structured successful and failed tool results as model-facing text', async () => {

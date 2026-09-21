@@ -1,14 +1,18 @@
 /**
- * Per-process registry of active Lean language servers.
+ * The roster of active Lean language servers, owned by the host's
+ * {@link LeanLanguageServices} adapter rather than by this module.
  *
- * Two adapters write to this registry:
+ * Two adapters keep one each:
  *   1. The VS Code integration (one virtual entry per Lean client provided by
  *      the leanprover.lean4 extension).
- *   2. The direct LSP adapter used by CLI/desktop builds (one entry per
- *      `lake env lean --server` subprocess we spawn).
+ *   2. The direct LSP pool used by CLI/desktop builds (one entry per
+ *      `lake env lean --server` subprocess it spawns).
  *
- * The Tools dashboard reads from here so users see the same "running servers"
- * surface across all three builds.
+ * Exactly one adapter exists per process, so a roster's lifetime is that
+ * adapter's: nothing survives a runtime disposal and no host has to sweep
+ * another host's entries. The Tools dashboard reads it through the port
+ * (`LeanLanguageServices.listServers`), so users see the same "running
+ * servers" surface across all three builds.
  */
 
 import {
@@ -31,14 +35,6 @@ export interface LeanServerInfo {
   readonly errorMessage?: string;
 }
 
-const servers = new Map<string, LeanServerInfo>();
-
-export function listLeanServers(): readonly LeanServerInfo[] {
-  return [...servers.values()].sort((a, b) =>
-    a.workspaceRoot.localeCompare(b.workspaceRoot),
-  );
-}
-
 export function isLeanServerActive(info: LeanServerInfo): boolean {
   return info.status === 'starting' || info.status === 'running';
 }
@@ -50,39 +46,52 @@ interface RegisterLeanServerInit {
   readonly status?: LeanServerStatus;
 }
 
-export function registerLeanServer(init: RegisterLeanServerInit): void {
-  servers.set(init.id, {
-    id: init.id,
-    workspaceRoot: init.workspaceRoot,
-    mode: init.mode,
-    status: init.status ?? 'starting',
-    startedAt: Date.now(),
-  });
-}
-
 interface UpdateLeanServerPatch {
   readonly status?: LeanServerStatus;
   readonly errorMessage?: string;
 }
 
-export function updateLeanServer(
-  id: string,
-  patch: UpdateLeanServerPatch,
-): void {
-  const existing = servers.get(id);
-  if (!existing) return;
-  servers.set(id, {
-    ...existing,
-    status: patch.status ?? existing.status,
-    errorMessage:
-      patch.status && patch.status !== 'error'
-        ? undefined
-        : (patch.errorMessage ?? existing.errorMessage),
-  });
+/** One adapter's live server table; the adapter is its only writer. */
+export interface LeanServerRoster {
+  list(): readonly LeanServerInfo[];
+  register(init: RegisterLeanServerInit): void;
+  update(id: string, patch: UpdateLeanServerPatch): void;
+  unregister(id: string): void;
 }
 
-export function unregisterLeanServer(id: string): void {
-  servers.delete(id);
+/** The roster an adapter creates when it is built. */
+export function createLeanServerRoster(): LeanServerRoster {
+  const servers = new Map<string, LeanServerInfo>();
+  return {
+    list: () =>
+      [...servers.values()].sort((a, b) =>
+        a.workspaceRoot.localeCompare(b.workspaceRoot),
+      ),
+    register: (init) => {
+      servers.set(init.id, {
+        id: init.id,
+        workspaceRoot: init.workspaceRoot,
+        mode: init.mode,
+        status: init.status ?? 'starting',
+        startedAt: Date.now(),
+      });
+    },
+    update: (id, patch) => {
+      const existing = servers.get(id);
+      if (!existing) return;
+      servers.set(id, {
+        ...existing,
+        status: patch.status ?? existing.status,
+        errorMessage:
+          patch.status && patch.status !== 'error'
+            ? undefined
+            : (patch.errorMessage ?? existing.errorMessage),
+      });
+    },
+    unregister: (id) => {
+      servers.delete(id);
+    },
+  };
 }
 
 function statusTail(info: LeanServerInfo, now: number): string {
@@ -99,7 +108,7 @@ function statusTail(info: LeanServerInfo, now: number): string {
 }
 
 export function summarizeLeanServers(
-  list: readonly LeanServerInfo[] = listLeanServers(),
+  list: readonly LeanServerInfo[],
   now: number = Date.now(),
 ): string {
   if (list.length === 0) return 'No Lean servers registered.';

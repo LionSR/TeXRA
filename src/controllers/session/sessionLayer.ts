@@ -1,19 +1,18 @@
 /**
  * The per-session Effect graph and the process's keyed family of them (PRD
- * one-fold-three-renderers, 7.3 and 7.7). `Sessions` is a `LayerMap`
- * keyed by workspace storage root: one session per root and one only,
- * built on the one `ManagedRuntime` each process makes at its entry
- * (`installProcessRuntime`). A root's entry is the complete session: the
- * root-scoped services (the database event log, the session event reads and
- * publications, the fold, the session inputs, the three local sources, and
- * the owner-liveness prober) and the `SessionHandle` built over them, whose
- * request handler admits on that graph. The handle layer opens the root's
- * transcript store over that log and hands it to the handle. Every opener
- * (the hosts' default session,
- * the desktop's papers, the SDK) resolves its root here, so opening a root
- * twice returns one handle, and the map is the one owner of its lifetime:
- * an open borrows, `close` settles and releases, and the runtime's disposal
- * releases whatever is still open.
+ * one-fold-three-renderers, 7.3 and 7.7). `Sessions` is a `LayerMap` keyed by
+ * workspace storage root: one session per root and one only, built on the one
+ * `ManagedRuntime` each process makes at its entry (`installProcessRuntime`).
+ * A root's entry is the complete session: the root-scoped services (the
+ * database event log, the session event reads and publications, the fold, the
+ * session inputs, the three local sources, and the owner-liveness prober) and
+ * the `SessionHandle` built over them, whose request handler admits on that
+ * graph. The handle layer opens the root's transcript store over that log and
+ * hands it to the handle. Every opener (the hosts' default session, the
+ * desktop's papers, the SDK) resolves its root here, so opening a root twice
+ * returns one handle, and the map is the one owner of its lifetime: an open
+ * borrows, `close` settles and releases, and the runtime's disposal releases
+ * whatever is still open.
  */
 import { NodeFileSystem, NodePath } from '@effect/platform-node';
 import {
@@ -46,7 +45,7 @@ import {
 } from '@agent/runtime/toolInjection';
 import { EditorModel } from '@agent/runtime/run/modelBinding';
 import { createSessionApprovals } from '@agent/runtime/runApprovalQueue';
-import { RunRegistry } from '@agent/runtime/runRegistry';
+import { makeParkedRuns, RunRegistry } from '@agent/runtime/runRegistry';
 import { runLedgerLayer } from '@agent/runtime/RunLedger';
 import { sessionEventsLayer, tailFrom } from '@agent/runtime/SessionEvents';
 import { ModelRetryGate } from '@agent/runtime/ModelRetryGate';
@@ -102,6 +101,9 @@ import {
   type SessionOpenError,
 } from '@shared/session/database';
 import { releaseRunResources } from '@tools/approval';
+import { InlineComments } from '@tools/comment/InlineCommentTool';
+import type { InlineCommentProvider } from '@tools/comment/InlineCommentTool';
+import { gitHubSubscriptionsLayer } from '@tools/github/subscriptionRegistries';
 import type { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import { SetupPlatform, type SetupPlatformShape } from '@tools/setup/platform';
 import { StreamLogStore } from '@transcript/StreamLogStore';
@@ -128,13 +130,12 @@ const OWNER_LIVENESS_PROBE_INTERVAL = '5 seconds';
 
 /**
  * Which session an entry is: its storage root, the value `SessionView.key`
- * carries, together with what the opener supplied for building it (the
- * roots, the transcript store mode the graph opens its stores with, the
- * response text policy, the host interactions it is born with).
- * Equal and hashed by the storage root alone: two opens of one root resolve
- * one session, over what the first of them supplied. Nothing store-bound
- * can be injected past that boundary (PR #11893, agent SDK architecture
- * proposal, section 3).
+ * carries, together with what the opener supplied for building it (the roots,
+ * the transcript store mode the graph opens its stores with, the response text
+ * policy, the host interactions it is born with). Equal and hashed by the
+ * storage root alone: two opens of one root resolve one session, over what the
+ * first of them supplied. Nothing store-bound can be injected past that
+ * boundary (PR #11893, agent SDK architecture proposal, section 3).
  */
 class SessionKey implements Equal.Equal {
   constructor(readonly open: SessionHandleInit) {}
@@ -158,16 +159,15 @@ class Session extends Context.Service<Session, SessionHandle>()(
 ) {}
 
 /**
- * The sessions the owner holds, outside the map: what the owner's
- * synchronous `current` and `held` read, and so the process's one list of
- * live sessions (`heldSessions`, `forEachLiveSession`) — no module keeps a
- * second one. An entry is written once its handle exists
- * and removed as the first step of its release, so a root whose session is
- * still building, or already unwinding, reads as having none. Keyed by the
- * entry's `SessionKey` and matched on its captured `key.storage` at lookup,
- * as `heldSession` matches. A session retains the roots resolved when it opens. `heldSession` below is the map's own answer, which
- * waits for a building entry; `closeSession` needs that, a synchronous read
- * cannot have it.
+ * The sessions the owner holds, outside the map: what the owner's synchronous
+ * `current` and `held` read, and so the process's one list of live sessions
+ * (`heldSessions`, `forEachLiveSession`) — no module keeps a second one. An
+ * entry is written once its handle exists and removed as the first step of its
+ * release, so a root whose session is still building, or already unwinding,
+ * reads as having none. Keyed by the entry's `SessionKey` and matched on its
+ * captured `key.storage` at lookup, as `heldSession` matches. `heldSession`
+ * below is the map's own answer, which waits for a building entry;
+ * `closeSession` needs that, a synchronous read cannot have it.
  */
 type HeldSessions = Map<SessionKey, SessionHandle>;
 
@@ -195,13 +195,13 @@ function foreignOwners(view: SessionView, self: OwnerId): OwnerId[] {
 }
 
 /**
- * The liveness prober (PRD 5.2, contract C5): every owner the view names
- * on a non-terminal run other than this process, proved by
- * `kill(pid, 0)` plus the start-identity check per distinct owner, never
- * per run. Probed whenever that owner set changes and on an interval
- * between changes. Alive and unprovable owners hold their runs; only an
- * explicit death verdict permits an interrupted classification. It writes `dead`;
- * `unreadable` is the status machine's.
+ * The liveness prober (PRD 5.2, contract C5): every owner the view names on a
+ * non-terminal run other than this process, proved by `kill(pid, 0)` plus the
+ * start-identity check per distinct owner, never per run. Probed whenever that
+ * owner set changes and on an interval between changes. Alive and unprovable
+ * owners hold their runs; only an explicit death verdict permits an
+ * interrupted classification. It writes `dead`; `unreadable` is the status
+ * machine's.
  */
 const ownerLiveness = Layer.effectDiscard(
   Effect.gen(function* () {
@@ -262,12 +262,11 @@ function unwindSession(session: SessionHandle): Effect.Effect<void> {
 
 /**
  * The handle of one root, over the root's graph: the session is the entry's
- * one service, and its `Runs` and requests are reached through it.
- * The last layer of the entry, so it is the first thing unwound when the
- * entry closes and the graph outlives every publisher above it. Every
- * release goes through the entry: `close` and the runtime's disposal
- * invalidate it, and the handle's own `dispose` asks for the same through
- * `graph.close`.
+ * one service, and its `Runs` and requests are reached through it. The last
+ * layer of the entry, so it is the first thing unwound when the entry closes
+ * and the graph outlives every publisher above it. Every release goes through
+ * the entry: `close` and the runtime's disposal invalidate it, and the
+ * handle's own `dispose` asks for the same through `graph.close`.
  */
 const sessionHandleLayer = (
   key: SessionKey,
@@ -295,19 +294,19 @@ const sessionHandleLayer = (
           SubscriptionRef.getUnsafe(view.ref).cursor,
           SubscriptionRef.getUnsafe(delivered),
         );
-      /** The settled level as a stream: `settledCursor` re-read on every
-       *  move of either coordinate. It ends with the fold (`view.changes`,
-       *  rather than the bare ref `folded` wakes on, whose tail outlives
-       *  every reader), so a wait on it is answered or dies, never hangs. */
+      /** The settled level as a stream: `settledCursor` re-read on every move
+       *  of either coordinate. It ends with the fold (`view.changes`, not the
+       *  bare ref `folded` wakes on, whose tail outlives every reader), so a
+       *  wait on it is answered or dies, never hangs. */
       const settledChanges = Stream.merge(
         view.changes,
         SubscriptionRef.changes(delivered),
         { haltStrategy: 'left' },
       ).pipe(Stream.map(settledCursor));
       /** Wait until the tail has delivered and the view has folded every
-       *  commit up to `commit`: what "published" means to a caller that
-       *  reads the view next. One wait on the level both coordinates feed,
-       *  since `settledCursor` is already their min. */
+       *  commit up to `commit`: what "published" means to a caller that reads
+       *  the view next. One wait on the level both coordinates feed, since
+       *  `settledCursor` is already their min. */
       const settleTo = (commit: CommitOrdinal) =>
         settledChanges.pipe(
           Stream.filter((cursor) => cursor >= commit),
@@ -340,13 +339,13 @@ const sessionHandleLayer = (
           : settleTo(last.commit).pipe(Effect.as(rows));
       };
       const now = () => SubscriptionRef.getUnsafe(eventLog.observedCommit);
+      const parkedRuns = yield* makeParkedRuns();
       const graph = (session: SessionHandle): SessionGraph => {
         // The session's approval state, built here rather than by the handle
         // so that its runs and its request handler share the one instance and
-        // the session's scope owns it. The authority publishes a stream's
-        // full policy snapshot on every effective bypass change;
-        // `SessionHandle.setApprovalPolicy` publishes the same snapshot when
-        // the policy half moves.
+        // the session's scope owns it. The authority publishes a stream's full
+        // policy snapshot on every effective bypass change, as does
+        // `SessionHandle.setApprovalPolicy` when the policy half moves.
         const approvals = createSessionApprovals((runId) =>
           session.publishApprovalPolicy(runId),
         );
@@ -399,8 +398,6 @@ const sessionHandleLayer = (
               ),
           claimOwner: (id) =>
             eventLog.claimOwner(qualifyAggregateId('run', id)),
-          runChildren: (id) =>
-            eventLog.readRunChildren(qualifyAggregateId('run', id)),
           recordListing: () => eventLog.readListing(),
           aggregateRows: (id) => eventLog.readAggregate(id, 1),
           publish: (events) =>
@@ -488,7 +485,7 @@ const sessionHandleLayer = (
             finalizeRun: (input) => finalizeRun(session, input),
             acquireRunClaim: (runId) =>
               session.acquireClaims(qualifyAggregateId('run', runId)),
-            releaseRootRunLease: (runId) => session.releaseRunLease(runId),
+            parked: parkedRuns,
           }),
           // The session's requests: the approval state above and the handler
           // that admits on the root graph's log.
@@ -547,9 +544,9 @@ const sessionHandleLayer = (
         (session) =>
           unwindSession(session).pipe(
             // Settlement reports what the session's own publications left
-            // behind. The release still has to finish, so that report is
-            // logged here rather than escaping `Scope.close` and failing the
-            // `invalidate` or `close` that asked for the release.
+            // behind. The release still has to finish, so that report is logged
+            // here rather than escaping `Scope.close` and failing the
+            // `invalidate` or `close` that asked for it.
             Effect.ensuring(
               session.settlePublications().pipe(
                 Effect.catch((error) =>
@@ -639,8 +636,8 @@ const sessionHandleLayer = (
       );
       // The registry's phase notification rides the fold-gated tail, not the
       // raw one above: its waiters and child rosters read `RunView.status`
-      // synchronously, so a row must reach them only once the view holds the
-      // state that row produced.
+      // synchronously, so a row reaches them only once the view holds the
+      // state it produced.
       yield* Stream.runForEach(session.folded(anchor), (event) =>
         session.receiveFoldedEvent(event),
       ).pipe(
@@ -708,13 +705,13 @@ const sessionGraphLayer = (key: SessionKey) => {
 
 /**
  * The complete session of one root: the handle over the root's graph, the
- * handle alone being the entry's service. `Layer.fresh`: the layer map
- * builds every key's entry through one memo map, and layers memoize by
- * reference, so without it the root-scoped layers would be built once and
- * every root on the process would share one log and one fold. The `fresh`
- * covers the sources and the database and nothing above them: every process
- * service the entry reads — the identity first among them, a real effect —
- * comes from the runtime's own context, built once for the process.
+ * handle alone being the entry's service. `Layer.fresh`: the layer map builds
+ * every key's entry through one memo map, and layers memoize by reference, so
+ * without it the root-scoped layers would be built once and every root on the
+ * process would share one log and one fold. The `fresh` covers the sources and
+ * the database and nothing above them: every process service the entry reads —
+ * the identity first among them, a real effect — comes from the runtime's own
+ * context, built once for the process.
  */
 const sessionLayer = (
   key: SessionKey,
@@ -728,13 +725,12 @@ const sessionLayer = (
   );
 
 /**
- * The keyed resource family the desktop's N papers and the SDK's N roots
- * need: one session per root, held by the map until `close` releases it
- * or the runtime goes. Opens borrow (the reference an open takes is
- * released at once) and the idle lifetime is infinite, so no reader's
- * detachment and no reference count decides a session's end: the
- * application does, explicitly (PR #11893, agent SDK architecture
- * proposal, section 3).
+ * The keyed resource family the desktop's N papers and the SDK's N roots need:
+ * one session per root, held by the map until `close` releases it or the
+ * runtime goes. Opens borrow (the reference an open takes is released at once)
+ * and the idle lifetime is infinite, so no reader's detachment and no
+ * reference count decides a session's end: the application does, explicitly
+ * (PR #11893, agent SDK architecture proposal, section 3).
  */
 class Sessions extends Context.Service<
   Sessions,
@@ -796,11 +792,11 @@ const unopenedEntry =
       return Option.none();
     });
 
-/** The session held for `root`, if the map holds one: an entry still
- *  building is waited for, never skipped, which is what lets a close issued
- *  right after an open find the session (`SessionOwner.open`). Builds
- *  nothing. The owner's `current` reads the `HeldSessions` map instead: it
- *  answers synchronously and so cannot wait for a build. */
+/** The session held for `root`, if the map holds one: an entry still building
+ *  is waited for, never skipped, which is what lets a close issued right after
+ *  an open find the session (`SessionOwner.open`). Builds nothing. The owner's
+ *  `current` reads the `HeldSessions` map instead: it answers synchronously
+ *  and so cannot wait for a build. */
 const heldSession = (root: string) =>
   Effect.gen(function* () {
     const sessions = yield* Sessions;
@@ -816,28 +812,26 @@ const heldSession = (root: string) =>
   });
 
 /**
- * Close the session of one root (PR #11893, agent SDK architecture
- * proposal, section 9): refuse new runs, stop the root runs it
- * owns (the stop cascades into their children) and the children no root
- * owns any more (a native subagent detached from a stopped parent, between
- * turns), wait for their drivers to settle them inside one budget,
- * flush the session's artifacts while its stores are still open, and
- * release the entry. The budget is the lifecycle's shutdown-phase deadline.
- * Executions
- * that outlive the budget are reported, and the entry stays, refusing new
- * work, until they actually settle; only then is it released, so no later
- * open builds a second session over a root whose stores a run still
- * writes. Nothing here touches the process lifecycle or another root.
+ * Close the session of one root (PR #11893, agent SDK architecture proposal,
+ * section 9): refuse new runs, stop the root runs it owns (the stop cascades
+ * into their children) and the children no root owns any more (a native
+ * subagent detached from a stopped parent, between turns), wait for their
+ * drivers to settle them inside one budget, flush the session's artifacts
+ * while its stores are still open, and release the entry. The budget is the
+ * lifecycle's shutdown-phase deadline. Executions that outlive the budget are
+ * reported, and the entry stays, refusing new work, until they actually
+ * settle; only then is it released, so no later open builds a second session
+ * over a root whose stores a run still writes.
  *
  * The whole close is uninterruptible, so the budget above is its one
  * cancellation channel: its first steps (closing admissions and killing the
- * root's runs) cannot be undone and its last (the artifact flush and
- * the entry's release) must still run, so a caller that races or times out
- * this effect must not be able to leave a session shut to new runs, its
- * artifacts unflushed and its entry never released. It does not mask the
- * two races below: `Effect.race` forks its arms interruptible whatever the
- * region around it, so the budget still interrupts the settlement wait and
- * the flush, and the report still returns at the deadline.
+ * root's runs) cannot be undone and its last (the artifact flush and the
+ * entry's release) must still run, so a caller that races or times out this
+ * effect must not be able to leave a session shut to new runs, its artifacts
+ * unflushed and its entry never released. It does not mask the two races
+ * below: `Effect.race` forks its arms interruptible whatever the region around
+ * it, so the budget still interrupts the settlement wait and the flush, and
+ * the report still returns at the deadline.
  */
 const closeSession = (root: string) =>
   Effect.gen(function* () {
@@ -849,19 +843,19 @@ const closeSession = (root: string) =>
     // A failed settle travels the defect channel: see the race below.
     const flushArtifacts = session.settlePublications().pipe(Effect.orDie);
     runs.closeAdmissions();
-    // Every touch of the session's storage runs in its scope: the stop
-    // writes each run's outcome under the session's roots, and the flush
-    // writes its stores there. A child with a handle is stopped by its
-    // parent's cascade; a native child between turns has no handle, and
-    // its kill interrupts the loop the registry retains for it.
+    // Every touch of the session's storage runs in its scope: the stop writes
+    // each run's outcome under the session's roots, and the flush writes its
+    // stores there. A child with a handle is stopped by its parent's cascade;
+    // a native child between turns has no handle, and its kill interrupts the
+    // loop the registry retains for it.
     const termination = yield* Effect.forkDetach(
       Effect.all(
         runs.getActiveIds().flatMap((runId) => {
           if (runs.getHandle(runId)?.isChild) return [];
-          // A settlement fails when a fact the stop owed storage was
-          // refused. `close` answers a `SessionCloseReport` and names no
-          // error, so that travels the same defect channel the flush below
-          // documents, rather than being widened into this close's type.
+          // A settlement fails when a fact the stop owed storage was refused.
+          // `close` answers a `SessionCloseReport` and names no error, so that
+          // travels the same defect channel the flush below documents, rather
+          // than being widened into this close's type.
           return [
             runs
               .kill(runId, { detachActiveChildren: false })
@@ -889,9 +883,9 @@ const closeSession = (root: string) =>
       Effect.catchCause((cause) =>
         // A refused stop fact kills the detached termination fiber. The run
         // may still be unwinding, so retain the entry until it settles, then
-        // make the same final flush and release the ordinary close path owes.
-        // Re-raise the original defect after arming that cleanup so callers
-        // still observe the failed close instead of a false success report.
+        // make the same final flush and release the ordinary close path owes,
+        // re-raising the original defect after arming that cleanup so callers
+        // still see the failed close instead of a false success report.
         Effect.forkDetach(
           runs
             .awaitDrained()
@@ -920,17 +914,16 @@ const closeSession = (root: string) =>
             ),
           ),
         );
-    // The release is the flush's finalizer: the entry goes, or its release
-    // is armed on the settlement, whatever the flush's exit, and a flush
-    // that fails still fails this close.
+    // The release is the flush's finalizer: the entry goes, or its release is
+    // armed on the settlement, whatever the flush's exit, and a flush that
+    // fails still fails this close.
     //
     // `flushArtifacts` does fail when a session publication failed, and
-    // `Effect.orDie` is deliberate rather than an oversight:
-    // `close` answers a `SessionCloseReport` and names no error, so the
-    // defect is the channel a failed flush travels on, and `ProcessHold.release`
-    // (packages/agent/src/effect/runtime.ts) documents the embedder seeing
-    // exactly that. Widening it into a typed failure is a contract change,
-    // not a conversion.
+    // `Effect.orDie` is deliberate: `close` answers a `SessionCloseReport` and
+    // names no error, so the defect is the channel a failed flush travels on,
+    // and `ProcessHold.release` (packages/agent/src/effect/runtime.ts)
+    // documents the embedder seeing exactly that. Widening it into a typed
+    // failure is a contract change, not a conversion.
     yield* Effect.race(
       flushArtifacts,
       Fiber.join(budget).pipe(
@@ -951,62 +944,60 @@ const closeSession = (root: string) =>
   }).pipe(Effect.uninterruptible);
 
 /**
- * Make the one Effect runtime of this process over its identity (PRD 7.7)
- * and install it with the session family it serves: called by a
- * composition root exactly once at startup, right beside `initPlatform()`,
- * which calls {@link disposeProcessRuntime} on its shutdown path after the
- * last session has released its graph. The identity is a program for the
- * process start: already-resolved on a host that read it before installing,
- * still a pending read for a process whose composition root is its first
- * run (the package). It is one of the process services below, so it is read
- * once for the process rather than again per session entry. The owner it
- * installs answers in Effect, on the opener's own fiber; its one
- * synchronous face, `current`, reads the held map and runs nothing.
+ * Make the one Effect runtime of this process over its identity (PRD 7.7) and
+ * install it with the session family it serves: called by a composition root
+ * exactly once at startup, right beside `initPlatform()`, which calls
+ * {@link disposeProcessRuntime} on its shutdown path after the last session
+ * has released its graph. The identity is a program for the process start:
+ * already-resolved on a host that read it before installing, still a pending
+ * read for a process whose composition root is its first run (the package). It
+ * is one of the process services below, so it is read once for the process
+ * rather than again per session entry. The owner it installs answers in
+ * Effect, on the opener's own fiber; its one synchronous face, `current`,
+ * reads the held map and runs nothing.
  *
  * The process services (injection plan §3.1, the one process provide point)
- * are merged here from what the root hands over: `Secrets` and `AppState`
- * over the root's own stores, which every root now opens before it calls
- * this — the desktop and CLI roots open theirs on a bootstrap run rather
- * than on the runtime they are about to install, so both arrive as values
- * (the CLI's secrets-only `clone` entry hands over a store that refuses
- * instead of opening one); `SupabaseAuth` over the root's account plane;
- * `LanguageModel` over the
- * root's editor language-model bridge (`UNAVAILABLE_LANGUAGE_MODEL_PORT`
- * where the host has none); `AgentResume` over the root's own resume port;
- * `SetupPlatform` over the root's host-varying setup capabilities; and
- * `ToolInjections` over `AGENT_TOOL_INJECTIONS`, the same list for every host.
+ * are merged here from what the root hands over: `Secrets` and `AppState` over
+ * the root's own stores, which every root now opens before it calls this — the
+ * desktop and CLI roots open theirs on a bootstrap run rather than on the
+ * runtime they are about to install, so both arrive as values (the CLI's
+ * secrets-only `clone` entry hands over a store that refuses instead of
+ * opening one); `SupabaseAuth` over the root's account plane; `LanguageModel`
+ * over the root's editor language-model bridge
+ * (`UNAVAILABLE_LANGUAGE_MODEL_PORT` where the host has none); `AgentResume`
+ * over the root's own resume port; `SetupPlatform` over the root's
+ * host-varying setup capabilities; and `ToolInjections` over
+ * `AGENT_TOOL_INJECTIONS`, the same list for every host.
  */
 interface ProcessRuntimeOptions {
   readonly processStart: Effect.Effect<string | undefined>;
   readonly globalStorage: string;
   readonly secrets: PlatformSecrets;
   /**
-   * The root's agent-resume port, served as `AgentResume`. The same value
-   * the root wires into its platform; required of every entry, even one
-   * whose port always answers `false` (the agent package's embedder
-   * default).
+   * The root's agent-resume port, served as `AgentResume`: the same value the
+   * root wires into its platform, required of every entry even where it always
+   * answers `false` (the agent package's embedder default).
    */
   readonly agentResume: AgentResumePort;
   /**
    * The root's global state store, opened before this install and served as
-   * `AppState`. Every entry has one: an entry that serves no application
-   * state — the CLI's platform-less `clone`, whose storage root may be
-   * read-only — passes a store that refuses instead, so a read or a write
-   * of absent state is loud rather than a missing service.
+   * `AppState`. Every entry has one: an entry that serves no application state
+   * (the CLI's platform-less `clone`, whose storage root may be read-only)
+   * passes a store that refuses, so absent state is loud, not missing.
    */
   readonly appState: StateStore;
   /**
    * The root's account plane, served as `SupabaseAuth`. Every shipped host
-   * builds one from its secrets; a composition with no TeXRA account plane
-   * (the agent package serving an embedder) serves
-   * `unavailableSupabaseAuth()`, whose probes answer signed-out.
+   * builds one from its secrets; a composition with no TeXRA account plane (the
+   * agent package serving an embedder) serves `unavailableSupabaseAuth()`,
+   * whose probes answer signed-out.
    */
   readonly auth: SupabaseAuthShape;
   /**
    * The host's editor language-model bridge, served as `LanguageModel`. Every
    * host has a value for it: the VS Code extension's bridge to the editor's
-   * language-model API, or `UNAVAILABLE_LANGUAGE_MODEL_PORT` on hosts without
-   * one, where discovery discovers nothing.
+   * language-model API, or `UNAVAILABLE_LANGUAGE_MODEL_PORT` elsewhere, where
+   * discovery discovers nothing.
    */
   readonly languageModel: LanguageModelPort;
   readonly setup: SetupPlatformShape;
@@ -1017,10 +1008,16 @@ interface ProcessRuntimeOptions {
    */
   readonly editorModel?: EditorModel['Service'];
   /**
+   * The host's inline-comment provider, for the one host with a Comments UI.
+   * Absent elsewhere, where the tool is off the roster and a call that
+   * reached it anyway fails naming the missing host wiring.
+   */
+  readonly inlineComments?: InlineCommentProvider;
+  /**
    * The host's Lean language services: the VS Code extension's bridge to the
    * Lean 4 extension, or the direct `lake env lean --server` pool on a Node
    * host, over the `FileSystem`/`Path` this install provides. Built with the
-   * runtime and closed when it is disposed.
+   * runtime and closed with it.
    */
   readonly lean: Layer.Layer<
     LeanLanguageServices,
@@ -1029,10 +1026,9 @@ interface ProcessRuntimeOptions {
   >;
   /**
    * The host's usage log (`usageLogLayer`), stamped with its version and
-   * editor. Built with this runtime and drained when it is disposed, so no
-   * root brackets the sender itself; `Layer.empty` is a composition that
-   * reports no usage at all. Passed as a layer for the same reason `lean`
-   * is: this module does not reach into the telemetry subsystem.
+   * editor. Built with this runtime and drained when it is disposed, so no root
+   * brackets the sender itself; `Layer.empty` reports no usage at all. Passed
+   * as a layer for the reason `lean` is: no reach into telemetry from here.
    */
   readonly usageLog: Layer.Layer<
     never,
@@ -1042,13 +1038,12 @@ interface ProcessRuntimeOptions {
   /**
    * The process's handle on the global storage root —
    * `globalDatabaseLayer(globalStorage)` on every entry that has one — built
-   * with this runtime and closed when it is disposed. It is the entry's to
-   * pass for the same reason `appState` is: opening the handle creates the
-   * global storage directory and its SQLite file and forks that root's
-   * change poll for the process's life, and the one entry that runs before
-   * any platform, on a storage root that may be read-only, and that disposes
-   * no runtime, must do none of the three. That entry hands over a refusing
-   * layer beside its refusing state store.
+   * with this runtime and closed when it is disposed. It is the entry's to pass
+   * for the reason `appState` is: opening the handle creates the global storage
+   * directory and its SQLite file and forks that root's change poll for the
+   * process's life, and the one entry that runs before any platform, on a
+   * possibly read-only root, and that disposes no runtime, must do none of the
+   * three. It hands over a refusing layer beside its refusing store.
    */
   readonly globalDatabase: Layer.Layer<
     GlobalDatabase,
@@ -1067,6 +1062,7 @@ export function installProcessRuntime({
   agentResume,
   setup,
   editorModel,
+  inlineComments,
   lean,
   usageLog,
   globalDatabase: globalDatabaseOption,
@@ -1097,16 +1093,20 @@ export function installProcessRuntime({
     AgentResume.layer(agentResume),
     SetupPlatform.layer(setup),
     ToolInjections.layer(AGENT_TOOL_INJECTIONS),
+    // Built with this runtime: a replacement starts with empty tables.
+    gitHubSubscriptionsLayer,
     editorModel === undefined
       ? Layer.empty
       : Layer.succeed(EditorModel)(editorModel),
+    inlineComments === undefined
+      ? Layer.empty
+      : Layer.succeed(InlineComments)(inlineComments),
   ).pipe(Layer.provideMerge(identity));
-  // The map's services on the caller's own fiber: an Effect-native opener
-  // (the SDK) runs these where it stands, so the owner adds no run site of
-  // its own. Supply only the owned session family: the caller retains its
-  // tracer, logger, and other independently provided services. `current`,
-  // the owner's one synchronous face, reads the held map instead.
-
+  // The map's services on the caller's own fiber: an Effect-native opener (the
+  // SDK) runs these where it stands, so the owner adds no run site of its own.
+  // Supply only the owned session family: the caller retains its tracer,
+  // logger and other independently provided services. `current`, the owner's
+  // one synchronous face, reads the held map instead.
   const onThisRuntime = <A, E>(
     effect: Effect.Effect<A, E, Sessions>,
   ): Effect.Effect<A, E> =>
@@ -1121,16 +1121,16 @@ export function installProcessRuntime({
   const runtime = withForkFailureReporting(
     ManagedRuntime.make(
       Sessions.layer(held, release).pipe(
-        // The usage log's own lifetime: its sender and ticker run for as long
-        // as this runtime does, and its finalizer drains the queue while the
-        // account plane below is still up. Ahead of `services` in the chain
-        // so that plane and the HTTP client reach it.
+        // The usage log's own lifetime: its sender and ticker run as long as
+        // this runtime does, and its finalizer drains the queue while the
+        // account plane below is still up. Ahead of `services` in the chain so
+        // that plane and the HTTP client reach it.
         Layer.provideMerge(usageLog),
         Layer.provideMerge(services),
         // The Lean pool is one per process — its servers are shared across
         // roots — as is the cross-workspace storage view below it: every
-        // session shares that root, so nothing below resolves a
-        // global-storage path against a root of its own.
+        // session shares that root, so nothing below resolves a global-storage
+        // path against a root of its own.
         Layer.provideMerge(lean),
         Layer.provideMerge(globalStorageFsLayer(globalStorage)),
         // The records' handle on that same root, for the same reason: one
@@ -1171,15 +1171,14 @@ export function installProcessRuntime({
  *
  * The caller passes the runtime it holds. The owner is uninstalled first and
  * the runtime stays alive for the whole of its own disposal: its layer
- * finalizers are what release the open sessions, and they still publish
- * while they unwind -- a session's release unwinds the handle and then
- * awaits the publications that teardown left in flight
+ * finalizers are what release the open sessions, and they still publish while
+ * they unwind -- a session's release unwinds the handle and then awaits the
+ * publications that teardown left in flight
  * (`SessionHandle.settlePublications`), on the releasing fiber.
  *
  * Idempotent and safe to race: a second call joins the disposal already in
  * flight rather than starting another. The extension's shutdown path runs it
- * as a finalizer (`Effect.ensuring`) and permits a later shutdown, so both
- * happen.
+ * as a finalizer (`Effect.ensuring`) and permits a later shutdown, so both run.
  */
 let disposal: Effect.Effect<void> | undefined;
 

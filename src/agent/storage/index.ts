@@ -9,16 +9,15 @@
  * (#10011).
  */
 
-export { type ChildRecord, getRunRecords } from './runRecords';
+export { getRunRecords } from './runRecords';
 export { unwrapResultMeta } from './resultMeta';
 export {
   listRunWorkspaceFiles,
   resolveRunWorkspaceFilePath,
 } from './runWorkspaceFiles';
-export { finalizeRun, registerRun, readRunChildren } from './runLifecycle';
+export { finalizeRun, registerRun } from './runLifecycle';
 export {
   type AgentRunListingEntry,
-  type RunListingEntry,
   createLatexRunDiscovery,
   listRuns,
   isUserVisibleRun,

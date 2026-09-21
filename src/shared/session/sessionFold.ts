@@ -132,7 +132,6 @@ import {
   workflowMarkerOf,
   workflowRunModel,
   type ChildRunProgress,
-  type WorkflowRunModel,
 } from '@shared/runs/workflowRunModel';
 import { isObject } from '@utils/core';
 import { createTranscriptFold } from './traceFold';
@@ -884,16 +883,6 @@ function withRunModel(view: SessionView, run: RunView): RunView {
   };
 }
 
-/** Re-derive one workflow run model from a folded view on demand. */
-export function deriveWorkflowRunModel(
-  view: SessionView,
-  runId: RunId,
-): WorkflowRunModel | null {
-  const run = view.runs.get(runId);
-  if (!run || !isWorkflowScriptRun(run)) return null;
-  return withRunModel(view, run).transcript.run;
-}
-
 /** Derive the run model now, or note the run for the end of the batch. */
 function runModelAt(
   view: SessionView,
@@ -1435,7 +1424,12 @@ function applyOwnArm(run: RunView, event: DisplaySessionEvent): RunView {
       };
     }
     case 'run.config': {
-      const model = run.identity.kind === 'agent' ? event.config.model : null;
+      // A background process has no model: its `run.config` is the fabricated
+      // `AgentConfig` that feeds the live wire, and the `model` there is the
+      // schema's prefault, not a model the run ever calls. Every other
+      // identity — a native or CLI-driven agent, a workflow-script run —
+      // carries the model its launch actually routed, so it is shown.
+      const model = run.identity.kind === 'process' ? null : event.config.model;
       return {
         ...run,
         model,

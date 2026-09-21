@@ -17,7 +17,7 @@ import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { initializeDefaultSession } from '@agent/runtime/sessionGraph';
 import { closeSession } from '@agent/runtime/sessionGraph';
-import { appSignals } from '@eventBus/AppSignals';
+import { onAppSignal } from '@eventBus/AppSignals';
 import { WorkspaceFs } from '@platform/rootedFs';
 import type { RequestDecision, RunId } from '@shared/schemas';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
@@ -58,6 +58,10 @@ function decideToolEdits(
 }
 
 const runId = 'abcdef' as RunId;
+// The two roots this suite installs. Every absolute path built from them —
+// a stub's key, an expectation — goes through `path.join`, because that is
+// what the code under test joins with: an interpolated `/` names a different
+// file wherever the separator is not `/`.
 const workspacePath = '/workspace';
 const storagePath = '/storage';
 
@@ -214,16 +218,23 @@ function runAccept(
   );
 }
 
-/** Collects workspaceFilesWritten payloads until disposed. */
-function recordWrittenFiles(): { written: string[][]; dispose: () => void } {
-  const written: string[][] = [];
-  const dispose = appSignals.on(
-    'workspaceFilesWritten',
-    ({ absolutePaths }) => {
-      written.push(absolutePaths);
-    },
-  );
-  return { written, dispose };
+/**
+ * Collect workspaceFilesWritten payloads on a fiber of the running test,
+ * which its completion interrupts. The yield lets that fiber register before
+ * the tool publishes: a subscription only receives what is published after
+ * it exists.
+ */
+function recordWrittenFiles(): Effect.Effect<string[][]> {
+  return Effect.gen(function* () {
+    const written: string[][] = [];
+    yield* Effect.forkChild(
+      onAppSignal('workspaceFilesWritten', ({ absolutePaths }) => {
+        written.push(absolutePaths);
+      }),
+    );
+    yield* Effect.yieldNow;
+    return written;
+  });
 }
 
 describe('accept_run_files progress events', () => {
@@ -254,7 +265,7 @@ describe('accept_run_files progress events', () => {
       const explicit = createRecordingHost();
       const tool = new AcceptRunFilesTool();
       const tracker = new FileInteractionState();
-      const { written, dispose } = recordWrittenFiles();
+      const written = yield* recordWrittenFiles();
 
       setRunStorageEntries({
         [`executions/${runId}/output.tex`]: 'File',
@@ -271,9 +282,13 @@ describe('accept_run_files progress events', () => {
 
       expect(result.status).toBe('executed');
       expect(explicit.events).toEqual([]);
-      expect(written).toEqual([[`${workspacePath}/paper.tex`]]);
+      // Delivery runs on the recorder's own fiber, a turn after the publish.
+      yield* Effect.promise(() =>
+        vi.waitFor(() =>
+          expect(written).toEqual([[path.join(workspacePath, 'paper.tex')]]),
+        ),
+      );
       expect(tracker.hasRead('paper.tex')).toBe(true);
-      dispose();
     }).pipe(Effect.provide(nativeToolTestLayer())),
   );
 
@@ -367,7 +382,13 @@ describe('accept_run_files progress events', () => {
       const tool = new AcceptRunFilesTool();
       let approvalOriginal = '';
       let approvalProposed = '';
-      const snapshotPath = `${storagePath}/executions/${runId}/original/draft.tex`;
+      const snapshotPath = path.join(
+        storagePath,
+        'executions',
+        runId,
+        'original',
+        'draft.tex',
+      );
 
       setRunStorageEntries();
       const write = stubWorkspaceFiles(true, 'new content');
@@ -406,10 +427,16 @@ describe('accept_run_files progress events', () => {
         };
         const tool = new AcceptRunFilesTool();
         const tracker = new FileInteractionState();
-        const snapshotPath = `${projectRoots.storage}/executions/${runId}/original/paper.tex`;
+        const snapshotPath = path.join(
+          projectRoots.storage,
+          'executions',
+          runId,
+          'original',
+          'paper.tex',
+        );
         let approvalOriginal = '';
         let approvalProposed = '';
-        const { written, dispose } = recordWrittenFiles();
+        const written = yield* recordWrittenFiles();
 
         setRunStorageEntries({}, projectRoots.storage);
         workspaceReads.set('draft.tex', {
@@ -422,7 +449,10 @@ describe('accept_run_files progress events', () => {
         });
         absoluteFilePaths.add(snapshotPath);
         absoluteContents.set(snapshotPath, 'original project');
-        absoluteContents.set('/project/draft.tex', 'proposed project');
+        absoluteContents.set(
+          path.join(projectRoots.workspace, 'draft.tex'),
+          'proposed project',
+        );
         absoluteContentFallback = 'wrong project';
         decideToolEdits((request) => {
           approvalOriginal = request.originalContent;
@@ -446,12 +476,16 @@ describe('accept_run_files progress events', () => {
         );
 
         expect(result.status).toBe('executed');
-        expect({ approvalOriginal, approvalProposed, written }).toEqual({
-          approvalOriginal: 'original project',
-          approvalProposed: 'proposed project',
-          written: [['/project/paper.tex']],
-        });
-        dispose();
+        // Delivery runs on the recorder's own fiber, a turn after the publish.
+        yield* Effect.promise(() =>
+          vi.waitFor(() =>
+            expect({ approvalOriginal, approvalProposed, written }).toEqual({
+              approvalOriginal: 'original project',
+              approvalProposed: 'proposed project',
+              written: [[path.join(projectRoots.workspace, 'paper.tex')]],
+            }),
+          ),
+        );
       }).pipe(Effect.provide(nativeToolTestLayer())),
   );
 

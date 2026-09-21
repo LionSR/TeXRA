@@ -206,7 +206,11 @@ function registerProcessRun(instruction: string) {
   });
 }
 
-/** Register a multi-agent-workflow run and return its id. */
+/**
+ * Register a multi-agent-workflow run and return its id. A workflow-script
+ * run publishes its `run.config` the way `createChildRun` does at launch, so
+ * the fold sees the model the launch actually routed.
+ */
 function registerWorkflowRun(name: string, model?: string) {
   return Effect.gen(function* () {
     const runId = generateRunId();
@@ -216,11 +220,25 @@ function registerWorkflowRun(name: string, model?: string) {
       {
         name,
         instruction: `Workflow script ${name}`,
-        ...(model ? { model } : {}),
+        ...(model === undefined ? {} : { model }),
       },
       name,
       { identity: { kind: 'multiAgentWorkflow', workflowName: name } },
     );
+    if (model !== undefined) {
+      const session = testDefaultSession();
+      session.publishRunEvent(runId, {
+        type: 'run.config',
+        runId,
+        config: AgentConfigSchema.parse({
+          agent: name,
+          agentCategory: AgentCategory.Workflow,
+          model,
+          instruction: `Workflow script '${name}'`,
+        }),
+      });
+      yield* session.settlePublications();
+    }
     return runId;
   });
 }
@@ -759,7 +777,8 @@ describe('ExecutionsTool /executions/{id}/output', () => {
 
         assert.equal(summary.status, 'executed');
         assert.equal(listing.status, 'executed');
-        // One model rule: the record's model is real, so both surfaces show it.
+        // Both surfaces read the same fold, so neither can disagree about
+        // what the run is or what model it routed to.
         assert.ok(listingOutput.includes('parity-model-1'));
         assert.ok(summaryOutput.includes('Model: parity-model-1'));
         assert.ok(summaryOutput.includes('Category: multiAgentWorkflow'));
@@ -793,6 +812,9 @@ describe('ExecutionsTool /executions/{id}/output', () => {
         // The stamped identity, not the live wire's fabricated run mode.
         assert.ok(runningOutput.includes('Category: process'));
         assert.ok(!runningOutput.includes('Category: toolUse'));
+        // A shell command routes no model, so the synthetic config's
+        // prefaulted one must not reach the summary.
+        assert.ok(!runningOutput.includes('Model:'));
         // /output is readable while the process runs, so the running summary
         // must advertise it — the same path the completed row lists.
         assert.ok(

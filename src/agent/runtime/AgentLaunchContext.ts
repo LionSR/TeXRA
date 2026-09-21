@@ -108,12 +108,12 @@ export interface AgentLaunchContext extends LaunchResolvedRunFacts {
   readonly resolvedAgentDescription?: string;
   readonly attachedMemoryMisses: AttachedMemoryMiss[];
   /**
-   * The run's one stop, completed by {@link AgentRunShape.interrupt} — a host
+   * The run's one stop: {@link AgentRunShape.interrupt} completes it — a host
    * kill through the run handle, the live tool-use flow context, or the launch
-   * handle's interrupt before the run has a handle of its own. The runner
-   * races it once, at the boundary that owns the run's program, so a stop
-   * reaches the loop as a fiber interruption whose finalizers record the halt.
-   * Nothing else stops a run.
+   * handle's interrupt — and so does `RunRegistry.terminate`, which wakes a run
+   * parked at WAITING on this same latch. No other route stops a run. The
+   * runner races it once, at the boundary that owns the run's program, so a
+   * stop reaches the loop as a fiber interruption recorded by its finalizers.
    */
   readonly stopped: Deferred.Deferred<void>;
 }

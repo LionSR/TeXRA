@@ -15,7 +15,6 @@ import type {
   RunPhase,
 } from '@shared/schemas';
 import { runIdentityName } from '@shared/schemas';
-import type { Effect } from 'effect';
 
 export interface RunStatusInfo {
   status: RunPhase | 'unknown';
@@ -23,7 +22,7 @@ export interface RunStatusInfo {
   /**
    * Why the status reads the way it does, when the phase alone would mislead:
    * a run another process holds, or one interrupted with a checkpoint still
-   * on disk. Rendered after the status by `formatStatusInfo`.
+   * on disk.
    */
   detail?: string;
 }
@@ -53,17 +52,6 @@ export interface RunInterruptHandler {
    */
   readonly ownsBackgroundProcess?: boolean;
 }
-
-/**
- * A run parked at WAITING, and whether a stop has already claimed its teardown.
- *
- * Presence is the authoritative suspension fact: only the WAITING branch of
- * `runFlowWithLifecycle` parks a handle, so no reader has to cross-check the
- * run phase to learn whether a run is really suspended.
- */
-type RunSuspension =
-  | { readonly state: 'parked'; readonly teardown: Effect.Effect<void, Error> }
-  | { readonly state: 'terminating' };
 
 /**
  * The projection of the flow's {@link ToolUseFlowContext} that a run handle
@@ -115,7 +103,6 @@ export class RunHandle<
   private _parent: RunId | null;
   private interruptHandler?: RunInterruptHandler;
   private toolUseFlowContext?: LiveToolUseFlowContext;
-  private suspension?: RunSuspension;
 
   /** Whether a caller has claimed the run's exactly-once terminal outcome. */
   private terminalClaimed = false;
@@ -164,9 +151,9 @@ export class RunHandle<
    * Returns true for exactly one caller — the flag flips synchronously in the
    * same tick as the check, so two `finalizeRunTerminal` calls racing across
    * await points (e.g. a lifecycle arm vs a concurrent finalize of the same
-   * handle) cannot both win. A stop of a suspended run claims through the same
-   * gate ({@link beginSuspendedTermination}), so the run lifecycle and the
-   * registry cannot both publish a terminal outcome for one run.
+   * handle) cannot both win. A stop of a run parked at WAITING ends the run
+   * through this same gate, since its parked fiber finalizes the run itself,
+   * so the lifecycle and a stop cannot both publish a terminal outcome.
    */
   claimTerminalFinalize(): boolean {
     if (this.terminalClaimed) return false;
@@ -256,50 +243,6 @@ export class RunHandle<
     if (this.interruptHandler?.ownsBackgroundProcess !== true) return false;
     this.interruptHandler.interrupt();
     return true;
-  }
-
-  /**
-   * Park this handle at WAITING, carrying the teardown a stop must run.
-   *
-   * The live tool-use session and interrupt context are already gone by the
-   * time a run suspends (the tool-use loop's scope detaches them on return)
-   * while the handle stays tracked so a later resume can find it, so
-   * `RunRegistry.terminate()` reaches a suspended run through
-   * {@link beginSuspendedTermination} instead of a live interrupt (#7287).
-   */
-  suspend(teardown: Effect.Effect<void, Error>): void {
-    this.suspension = { state: 'parked', teardown };
-  }
-
-  /**
-   * True while this handle is parked at WAITING, or a stop has claimed that
-   * parking. Presence of the suspension is the fact; a launch handle that
-   * is merely tracked is not suspended.
-   */
-  get isSuspended(): boolean {
-    return this.suspension !== undefined;
-  }
-
-  /** True once a stop claimed this suspended run and owns its teardown. */
-  get suspendedTerminationStarted(): boolean {
-    return this.suspension?.state === 'terminating';
-  }
-
-  /**
-   * Claim the terminal outcome of a run parked at WAITING and return its
-   * native teardown. Returns undefined when this
-   * handle never parked, when a stop already claimed it, or when a
-   * `finalizeRunTerminal` already claimed the run's terminal outcome. The whole
-   * transition is synchronous, so a stop and a concurrent finalize of the same
-   * handle cannot both proceed.
-   */
-  beginSuspendedTermination(): Effect.Effect<void, Error> | undefined {
-    if (this.suspension?.state !== 'parked') return undefined;
-    if (!this.claimTerminalFinalize()) return undefined;
-    this.stopped = true;
-    const { teardown } = this.suspension;
-    this.suspension = { state: 'terminating' };
-    return teardown;
   }
 }
 

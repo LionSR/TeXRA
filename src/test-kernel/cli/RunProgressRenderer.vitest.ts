@@ -39,13 +39,9 @@ import {
 } from '@test/support/sessionTestUtils';
 import { makeRunView, viewWith } from './fixtures/sessionViewFixture';
 
-const mocks = vi.hoisted(() => ({
-  getAgent: vi.fn(),
-}));
-
-vi.mock('@agent/index', () => ({
-  getAgent: mocks.getAgent,
-}));
+/** The catalog the renderer is built over: named by the caller, as production
+ *  names the process catalog, so no suite has to replace `@agent/index`. */
+const plannedRoundsFor = vi.fn<(agentName: string) => number | undefined>();
 
 function context(overrides: Partial<CliContext> = {}): CliContext {
   return createTestCliContext({
@@ -381,6 +377,7 @@ function plainRenderer(
         nowMs: () => 0,
         // Every view change paints: the cases pin the line, not the throttle.
         minIntervalMs: 0,
+        plannedRoundsFor,
         ...init,
       },
     )!,
@@ -397,6 +394,7 @@ function ansiRenderer(
       write: output.write,
       nowMs: () => 0,
       minIntervalMs: 0,
+      plannedRoundsFor,
       ...init,
     })!,
   );
@@ -462,7 +460,7 @@ function decodeStreamChunk(
 
 describe('CLI run progress renderer', () => {
   beforeEach(() => {
-    mocks.getAgent.mockReset();
+    plannedRoundsFor.mockReset();
   });
 
   it('renders a single ANSI status line and clears it on close', async () => {
@@ -514,28 +512,21 @@ describe('CLI run progress renderer', () => {
   });
 
   it('shows planned workflow rounds before the first model turn', async () => {
-    mocks.getAgent.mockReturnValue({
-      rounds: 2,
-    });
+    plannedRoundsFor.mockReturnValue(2);
     const output = outputBuffer();
     const renderer = plainRenderer(output, { minIntervalMs: 0 });
 
     await handleRunConfig(renderer);
     await handleRound(renderer, 'stream-1', 0);
 
-    expect(mocks.getAgent).toHaveBeenCalledWith(
-      'polish',
-      AgentCategory.Workflow,
-    );
+    expect(plannedRoundsFor).toHaveBeenCalledWith('polish');
     expect(output.text).toBe(
       'polish paper.tex · 2 rounds · 0s\n' + '[r1/2] · polish paper.tex · 0s\n',
     );
   });
 
   it('keeps the planned total when a workflow overruns its rounds', async () => {
-    mocks.getAgent.mockReturnValue({
-      rounds: 3,
-    });
+    plannedRoundsFor.mockReturnValue(3);
     const output = outputBuffer();
     const renderer = plainRenderer(output, { minIntervalMs: 0 });
 
@@ -548,9 +539,7 @@ describe('CLI run progress renderer', () => {
   });
 
   it('does not add workflow round hints to tool-use progress', async () => {
-    mocks.getAgent.mockReturnValue({
-      rounds: 2,
-    });
+    plannedRoundsFor.mockReturnValue(2);
     const output = outputBuffer();
     const renderer = plainRenderer(output);
 
@@ -559,7 +548,7 @@ describe('CLI run progress renderer', () => {
       inputFiles: [],
     });
 
-    expect(mocks.getAgent).not.toHaveBeenCalled();
+    expect(plannedRoundsFor).not.toHaveBeenCalled();
     expect(output.text).toBe('polish · 0s\n');
   });
 

@@ -33,7 +33,6 @@ import { dispatchFactsFor } from '@agent/runtime/run/tools';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { UsageMonitor } from '@agent/runtime/UsageMonitor';
 import { TraceEmitter } from '@agent/trace';
-import type { Model, TurnResult } from '@llm/turn';
 import {
   AgentCategory,
   type RequestDecision,
@@ -54,6 +53,8 @@ import {
   autoDecideRequests,
   sessionWithInteractions,
 } from '../progressTestUtils';
+
+import type { Model, TurnResult } from '@texra-ai/llm/turn';
 
 // ---------------------------------------------------------------------------
 // The loop harness: the run's own services over a real session ledger, with

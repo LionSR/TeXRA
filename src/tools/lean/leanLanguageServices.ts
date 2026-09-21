@@ -15,6 +15,7 @@ import { Context, Layer, type Effect } from 'effect';
 
 import type { RunId } from '@shared/schemas';
 
+import type { LeanServerInfo } from './leanServerRegistry';
 import type {
   LeanFileCommand,
   LeanProjectCommand,
@@ -41,6 +42,15 @@ import type {
  * `LspTools.ts`) before invoking the port, so an adapter never re-resolves.
  */
 export interface LeanLanguageServicesShape {
+  /**
+   * The servers this adapter currently holds, for the Tools dashboard. The
+   * adapter owns the roster (`createLeanServerRoster`): the VS Code bridge
+   * records one virtual entry per Lean 4 client it reaches, the direct pool
+   * one per `lake env lean --server` it spawns, and both tables die with the
+   * process runtime that built the adapter. Synchronous because both are a
+   * read of an in-memory map.
+   */
+  listServers(): readonly LeanServerInfo[];
   executeFileCommand(
     command: LeanFileCommand,
     filePath: string,

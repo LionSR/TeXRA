@@ -4,6 +4,7 @@ import { customElement, property } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { when } from 'lit/directives/when.js';
 
+import { IMAGE_TOOL_LABEL } from '@shared/constants/latexToolchain';
 import { designTokens, commonViewStyles, bannerStyles } from '@shared/styles';
 import type { DependencyBannerState } from '@shared/schemas';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
@@ -70,9 +71,9 @@ export class DependencyBanner extends StateVisibleBanner<DependencyBannerState> 
   override render(): TemplateResult {
     const missing = this.state.missingTools ?? [];
     const tools = missing.flatMap((tool) =>
-      tool === 'gm/magick' ? ['gm', 'magick'] : [tool],
+      tool === IMAGE_TOOL_LABEL ? ['gm', 'magick'] : [tool],
     );
-    const imageToolMissing = missing.includes('gm/magick');
+    const imageToolMissing = missing.includes(IMAGE_TOOL_LABEL);
 
     return renderWarningBanner({
       id: 'dependencyBanner',

@@ -105,8 +105,7 @@ const log = createLog('sessionDatabase');
  * cross-aggregate resume read), and one type across aggregates in commit
  * order (the listing tier across runs). `UNIQUE (aggregate_id, seq)` is
  * both the density guarantee and the index a single aggregate's history reads
- * from its seq. `event_parent_start` finds a run's children by the parent
- * creation commit their `run.start` was stamped with.
+ * from its seq.
  */
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS input_history (
@@ -141,7 +140,6 @@ CREATE TABLE IF NOT EXISTS event (
 CREATE INDEX IF NOT EXISTS event_agg_type_seq ON event(aggregate_id, type, seq);
 CREATE INDEX IF NOT EXISTS event_agg_commit   ON event(aggregate_id, "commit");
 CREATE INDEX IF NOT EXISTS event_type_commit  ON event(type, "commit");
-CREATE INDEX IF NOT EXISTS event_parent_start ON event(json_extract(data, '$.parent.startCommit')) WHERE type = 'run.start.1';
 `;
 const EVENT_COLUMNS = `e."commit" AS "commit", e.aggregate_id AS aggregateId,
   e.seq, e.type, e.owner_id AS ownerId, e.at, e.data`;
@@ -366,20 +364,6 @@ export const databaseLayer = (
         )
         SELECT ${EVENT_COLUMNS} FROM latest JOIN event e USING (aggregate_id,type,seq)
         ORDER BY "commit"
-      `;
-      const runChildren = `
-        WITH parent AS (SELECT "commit" AS start FROM event WHERE aggregate_id = ? AND type = 'run.start.1'),
-        children AS (SELECT aggregate_id AS id FROM event INDEXED BY event_parent_start
-          WHERE type = 'run.start.1' AND json_extract(data, '$.parent.startCommit') = (SELECT start FROM parent)),
-        relevant AS (
-          SELECT id, 'run.start.1' AS type FROM children
-          UNION ALL SELECT id, 'run.removed.1' FROM children
-          UNION ALL SELECT id, 'run.launchLabel.1' FROM children
-          UNION ALL SELECT ?, 'run.start.1'
-          UNION ALL SELECT ?, 'run.removed.1'
-        ),
-        latest AS (SELECT e.aggregate_id,e.type,MAX(e.seq) AS seq FROM relevant r JOIN event e ON e.aggregate_id=r.id AND e.type=r.type GROUP BY e.aggregate_id,e.type)
-        SELECT ${EVENT_COLUMNS} FROM latest JOIN event e USING (aggregate_id,type,seq) ORDER BY "commit"
       `;
       const aggregate = `SELECT ${EVENT_COLUMNS} FROM event e
         WHERE e.aggregate_id = ? AND e.seq >= ?
@@ -908,7 +892,6 @@ export const databaseLayer = (
               return event;
             }),
           ),
-        readRunChildren: (id) => query(decodedRows(runChildren, [id, id, id])),
         readAppState: () => query(readAppState),
         readUpdateCheck: (host) => query(readUpdateCheck(host)),
         recordUpdateCheck: (host, change) =>

@@ -6,7 +6,7 @@
 import { Cause, Effect, Exit } from 'effect';
 
 import type { AgentTrace } from '@agent/trace';
-import type { Model, ResolvedTurn } from '@llm/turn';
+import type { Model, ResolvedTurn } from '@texra-ai/llm/turn';
 
 /**
  * The provider's counted input tokens for `turn`, or null where it offers no

@@ -1,4 +1,5 @@
 import { Effect } from 'effect';
+import { setLogSink } from '@logger/logSink';
 import { tryPlatform } from '@platform/platform';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -8,8 +9,21 @@ import { CliExitCode } from '../runtime/exitCodes';
 import {
   flushNdjsonStdout,
   installCliPipeErrorHandlers,
+  prePlatformDiagnosticSink,
   writeTextStderr,
 } from '../runtime/logSinks';
+
+// This process owns its diagnostic sink from here, not from the init that
+// eventually installs the platform's: `@logger/logSink`'s console fallback
+// sends DEBUG and INFO to stdout, and the process runtime logs while its
+// layers build (`UsageLogService started …`) — which happens before
+// `initCliPlatform`, and for the two platform-less entries before a platform
+// that never comes up. Under `--output-format ndjson` that line was the
+// first thing on stdout and the stream was no longer parseable. Every
+// pre-platform diagnostic goes to stderr instead; `--quiet` is not known
+// until citty has parsed the argv, so `defineCliCommand` swaps in the silent
+// sink for it, and `initCliPlatform` swaps in the platform's as before.
+setLogSink(prePlatformDiagnosticSink, { trusted: true });
 
 // The process entry: one run, with the platform's shutdown drain and the
 // final NDJSON flush as its finalizers, in that order — the drain is a

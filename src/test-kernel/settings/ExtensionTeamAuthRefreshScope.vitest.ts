@@ -7,6 +7,7 @@ import {
   runAfterAgentCatalogAuthRefresh,
   withAgentCatalogAuthRefreshDeferred,
 } from '@frontend/auth/agentCatalogRefreshScope';
+import { testRuntime } from '@test/support/testProcessRuntime';
 
 describe('extension team auth catalog refresh scope', () => {
   beforeEach(resetAgentCatalogAuthRefreshScopeForTests);
@@ -59,9 +60,11 @@ describe('extension team auth catalog refresh scope', () => {
             Effect.sync(() => {
               // Models/settings listeners run after the preflight-owned fetch and
               // then reuse the populated cache instead of forcing another fetch.
-              runAfterAgentCatalogAuthRefresh(async () => {
-                if (!refreshed) remoteFetches += 1;
-              });
+              runAfterAgentCatalogAuthRefresh(testRuntime(), [
+                Effect.sync(() => {
+                  if (!refreshed) remoteFetches += 1;
+                }),
+              ]);
               return true;
             }),
           forceRefreshRemoteCatalog: () =>

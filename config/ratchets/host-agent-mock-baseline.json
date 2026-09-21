@@ -62,16 +62,6 @@
       "specifier": "@agent/runtime/SessionResumeRetrieval"
     },
     {
-      "file": "src/test-kernel/cli/RunChatConfig.vitest.ts",
-      "form": "mock",
-      "specifier": "@agent/index"
-    },
-    {
-      "file": "src/test-kernel/cli/RunProgressRenderer.vitest.ts",
-      "form": "mock",
-      "specifier": "@agent/index"
-    },
-    {
       "file": "src/test-kernel/cli/WorkflowRunCommand.vitest.ts",
       "form": "mock",
       "specifier": "@agent/storage"

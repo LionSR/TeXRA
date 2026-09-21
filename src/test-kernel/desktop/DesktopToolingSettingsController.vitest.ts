@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
 import type { ToolTerminalAction } from '@controllers/settingsView/ToolDashboardData';
 import { DefaultDesktopToolingSettingsController } from '@desktop/main/desktopToolingSettingsController';
-import { appSignals } from '@eventBus/AppSignals';
+import { emitAppSignal } from '@eventBus/AppSignals';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { ToolCommandKind, ToolDashboardItem } from '@shared/schemas';
 import { HOMEBREW_INSTALL_COMMAND } from '@shared/constants/latexToolchain';
@@ -110,7 +110,7 @@ function installDefaultToolDataDoubles(): void {
   toolData.buildItems.mockImplementation(async () => [DASHBOARD_ITEM]);
   toolData.lastCheckResults.mockImplementation(() => []);
   toolData.refreshAvailability.mockImplementation(async () => {
-    appSignals.emit('toolAvailabilityChanged', undefined);
+    emitAppSignal('toolAvailabilityChanged', undefined);
   });
   toolData.planTerminalAction.mockImplementation(({ toolId, commandKind }) => ({
     kind: 'terminal',
@@ -197,7 +197,7 @@ describe('DefaultDesktopToolingSettingsController', () => {
     toolData.lastCheckResults.mockReturnValue(null);
     toolData.refreshAvailability.mockImplementation(async () => {
       await refreshPending;
-      appSignals.emit('toolAvailabilityChanged', undefined);
+      emitAppSignal('toolAvailabilityChanged', undefined);
     });
     const { controller, posted } = createFixture();
 
@@ -270,12 +270,16 @@ describe('DefaultDesktopToolingSettingsController', () => {
     });
 
     expect(globalState.get(GlobalStateKey.DISABLED_TOOLS)).toEqual(['zotero']);
-    expect(events).toEqual([
-      'state:update',
-      'dashboard:cached',
-      'dashboard:build',
-      'renderer:post',
-    ]);
+    // The repaint the toggle's re-probe triggers runs on the subscriber's own
+    // fiber, so the order below settles a turn after the toggle resolves.
+    await vi.waitFor(() =>
+      expect(events).toEqual([
+        'state:update',
+        'dashboard:cached',
+        'dashboard:build',
+        'renderer:post',
+      ]),
+    );
   });
 
   it('completes a fresh availability check before rebuilding the dashboard', async () => {
@@ -290,7 +294,7 @@ describe('DefaultDesktopToolingSettingsController', () => {
     });
     toolData.refreshAvailability.mockImplementation(async () => {
       events.push('dashboard:refresh');
-      appSignals.emit('toolAvailabilityChanged', undefined);
+      emitAppSignal('toolAvailabilityChanged', undefined);
     });
     const { controller } = createFixture({
       renderer: {

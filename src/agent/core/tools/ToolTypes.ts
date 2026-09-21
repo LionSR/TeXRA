@@ -9,6 +9,39 @@ import type { Effect } from 'effect';
 export type ToolHost = 'cli' | 'desktop' | 'extension';
 
 /**
+ * The guard the run loop applies before a tool's body runs, declared on the
+ * tool instead of called inside it: the paths the call writes and the command
+ * it must get approved. `agent/runtime/loop/toolGuard.ts` is the one place
+ * either is asked for, so no tool body opens its own approval prompt or
+ * re-checks its own roots.
+ */
+export interface ToolGuard<T, R = never> {
+  /**
+   * The paths this call writes, read from its arguments. Each is resolved
+   * against the call's workspace and working directory — which refuses a path
+   * outside either — and refused when it lands in a read-only external root.
+   */
+  readonly writes?: (input: T) => readonly string[];
+  /**
+   * The command this call runs, spelled as the approval prompt shows it. The
+   * loop puts it through the session's bash approval before the body runs.
+   * An Effect because the spelling can depend on settings the prompt must
+   * show (a Codex sandbox mode, a Claude permission mode).
+   */
+  readonly bash?: (input: T) => Effect.Effect<string, never, R>;
+  /**
+   * Where the approved command actually runs, when that is not the call's own
+   * directory. Omitted: the call's working directory, else the workspace,
+   * which is what a shell-shaped tool uses. `'workspace'`: the session
+   * workspace whatever working directory the call was given (`wolfram` runs
+   * its script there). `'unknown'`: the executor cannot name one, so the
+   * prompt names none rather than a directory the command may not run in
+   * (`send_to_terminal` reuses a terminal whose shell has its own directory).
+   */
+  readonly cwd?: 'workspace' | 'unknown';
+}
+
+/**
  * Contract for tool implementations.
  * BaseTool provides the canonical implementation with Zod validation. Expected
  * tool failures are returned as literal `{ status: 'error', error: ... }`
@@ -39,6 +72,8 @@ export interface ITool<E = unknown, R = never> {
   /** Its card opens before the call runs; a fast tool's opens and closes
    *  with its settlement. */
   readonly slow?: boolean;
+  /** The loop-side guard this tool declares; see {@link ToolGuard}. */
+  readonly guard?: ToolGuard<never, R>;
   call(rawInput: unknown): Effect.Effect<ToolResult, E, R>;
 }
 

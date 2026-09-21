@@ -727,8 +727,8 @@ export function createChatSessionController(
   // double hand-back or a missed restore silently loses the follow-ups typed
   // during an interruption. The shared parts are already named helpers
   // (`setupRunHost`, `toolUseResumeOptions`, `settleResumedTurn`,
-  // `recoverRun`, and the two lease helpers above); what is left here is the
-  // part that genuinely differs. Don't merge these two bodies.
+  // `recoverRun`, the two lease helpers above); what is left here genuinely
+  // differs. Don't merge these two bodies.
   const resume = (id: RunId): Effect.Effect<void, unknown> =>
     // `Effect.suspend` is what keeps the claim handshake synchronous: its
     // body is this program's first step, so the availability check and the
@@ -750,6 +750,15 @@ export function createChatSessionController(
       const supersededRecovery = supersedeInterruptedRecovery();
       let recovery: FollowUpRecoveryLease | undefined;
       let recoveryHandedOff = false;
+      /** The end of a resume that never reached its run: hand back an untaken
+       *  lease, restore the superseded recovery, announce, complete, settle. */
+      const endResumeUnstarted = (announce: () => void): void => {
+        handBackUnusedRecovery(recovery, recoveryHandedOff);
+        restoreInterruptedRecovery(supersededRecovery);
+        announce();
+        session.markRunCompleted();
+        Deferred.doneUnsafe(claimedRun, Effect.void);
+      };
       const attemptResume = Effect.gen(function* () {
         // The durable record carries the config the TUI adopts before the run.
         // Workflow runs resume headless through `texra resume`, not inside a
@@ -759,14 +768,8 @@ export function createChatSessionController(
           store.readConfig(),
           store.exists(),
         ]);
-        // Refusal tail every early exit below shares: put back what the
-        // synchronous prologue superseded, surface the reason, settle the slot.
-        const refuseResume = (reason: string): void => {
-          restoreInterruptedRecovery(supersededRecovery);
-          appendLocalErrorTranscript(reason);
-          session.markRunCompleted();
-          Deferred.doneUnsafe(claimedRun, Effect.void);
-        };
+        const refuseResume = (reason: string): void =>
+          endResumeUnstarted(() => appendLocalErrorTranscript(reason));
         if (!config || !exists) {
           refuseResume(`Run not found: ${id}`);
           return;
@@ -872,11 +875,7 @@ export function createChatSessionController(
         );
       });
       return recoverRun(attemptResume, (error) => {
-        handBackUnusedRecovery(recovery, recoveryHandedOff);
-        restoreInterruptedRecovery(supersededRecovery);
-        reportRunFailure(error);
-        session.markRunCompleted();
-        Deferred.doneUnsafe(claimedRun, Effect.void);
+        endResumeUnstarted(() => reportRunFailure(error));
       });
     });
 

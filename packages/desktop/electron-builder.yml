@@ -23,7 +23,8 @@ directories:
 # otherwise the app would ship a second, never-loaded node_modules copy. For the
 # Codex and Claude Code SDKs that copy would include 250-410 MiB of native CLI
 # binary each; the app resolves a user-installed CLI at runtime instead.
-# scripts/verify-desktop-package.mjs fails the build if either reappears.
+# `node scripts/verify-desktop.mjs package` fails the build if either
+# reappears.
 files:
   - from: dist
     to: dist

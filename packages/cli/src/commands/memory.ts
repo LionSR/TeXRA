@@ -4,11 +4,7 @@ import { Effect } from 'effect';
 import { loadMemoryItems } from '@tools/memory/memoryFileSystem';
 
 import { CliExitCode } from '../runtime/exitCodes';
-import { installCliProcessRuntime } from '../runtime/cliProcessRuntime';
-import {
-  initCliPlatform,
-  type CliPlatformServices,
-} from '../runtime/initPlatform';
+import { initCliPlatform } from '../runtime/initPlatform';
 import {
   formatCliMemoryList,
   formatCliMemoryPreview,
@@ -21,67 +17,39 @@ import { GLOBAL_ARGS } from './_helpers/globalArgs';
 import { emitCliResult } from './_helpers/output';
 import type { CliContext } from '../runtime/cliContext';
 
-/**
- * The process roots this command's init installed, which the memory reads run
- * their storage view over. Absent only when another root installed the
- * platform first, and then there is no root here to name.
- */
-function memoryRoots(
-  services: CliPlatformServices,
-): NonNullable<CliPlatformServices['roots']> {
-  if (!services.roots) {
-    throw new Error(
-      'texra memory needs the workspace roots its platform init installs.',
+function runMemoryList(context: CliContext) {
+  // The init and the read it feeds are one program, run on the process
+  // runtime the command entry installs.
+  return Effect.gen(function* () {
+    const services = yield* initCliPlatform({ ...context, quietLogs: true });
+    // Pass the full list to `formatCliMemoryList`; it owns truncation (the
+    // `Memories (N):` total and `... N more` overflow line) and JSON/NDJSON
+    // consumers should see every memory, not a capped slice.
+    const items = yield* runCliMemory(services.roots, loadMemoryItems());
+
+    emitCliResult(context, {
+      json: items,
+      ndjson: items.map((memory) => ({ kind: 'memory', memory })),
+      text: formatCliMemoryList(items),
+    });
+    return CliExitCode.Success;
+  });
+}
+
+function runMemoryShow(context: CliContext, inputPath: string) {
+  return Effect.gen(function* () {
+    const services = yield* initCliPlatform({ ...context, quietLogs: true });
+    const record = yield* runCliMemory(
+      services.roots,
+      loadCliMemoryDetail(inputPath),
     );
-  }
-  return services.roots;
-}
-
-async function runMemoryList(context: CliContext): Promise<number> {
-  // The command's one run, on the process runtime this entry installs or
-  // joins: the init and the read it feeds are one program on it.
-  const runtime = await installCliProcessRuntime(context.storageRoot);
-  return runtime.runPromise(
-    Effect.gen(function* () {
-      const services = yield* initCliPlatform({ ...context, quietLogs: true });
-      // Pass the full list to `formatCliMemoryList`; it owns truncation (the
-      // `Memories (N):` total and `... N more` overflow line) and JSON/NDJSON
-      // consumers should see every memory, not a capped slice.
-      const items = yield* runCliMemory(
-        memoryRoots(services),
-        loadMemoryItems(),
-      );
-
-      emitCliResult(context, {
-        json: items,
-        ndjson: items.map((memory) => ({ kind: 'memory', memory })),
-        text: formatCliMemoryList(items),
-      });
-      return CliExitCode.Success;
-    }),
-  );
-}
-
-async function runMemoryShow(
-  context: CliContext,
-  inputPath: string,
-): Promise<number> {
-  const runtime = await installCliProcessRuntime(context.storageRoot);
-  return runtime.runPromise(
-    Effect.gen(function* () {
-      const services = yield* initCliPlatform({ ...context, quietLogs: true });
-      const record = yield* runCliMemory(
-        memoryRoots(services),
-        loadCliMemoryDetail(inputPath),
-      );
-      emitCliResult(context, {
-        json: record,
-        ndjson: { kind: 'memory-detail', ...record },
-        text: formatCliMemoryPreview(record),
-      });
-      return CliExitCode.Success;
-    }),
-  );
+    emitCliResult(context, {
+      json: record,
+      ndjson: { kind: 'memory-detail', ...record },
+      text: formatCliMemoryPreview(record),
+    });
+    return CliExitCode.Success;
+  });
 }
 
 const memoryListCommand = defineCliCommand({

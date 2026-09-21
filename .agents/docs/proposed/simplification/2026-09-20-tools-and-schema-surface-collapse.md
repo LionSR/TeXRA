@@ -93,8 +93,19 @@ folds.
 5. Derive the replacement-category universe from the registry; rename the
    colliding type pairs (about 150 lines). The two ordered apply lists stay,
    because order is behavior.
-6. Delete `core/define.ts` and inline the `execute` forwarder; make path and
-   bash approval one loop-side guard the tool declares rather than calls.
+6. Inline the `execute` forwarder (landed, #12891); make path and bash
+   approval one loop-side guard the tool declares rather than calls.
+   Deleting `core/define.ts` is refuted, on the evidence of that same PR: it
+   is not a pass-through but the fence that keeps `ToolServices` off the
+   SDK's published surface. `packages/agent/src/index.ts` exports
+   `defineTool` from `@tools/core/definition`, and
+   `packages/agent/scripts/validate-artifacts.mjs` walks each published
+   entry's whole declaration graph, so moving the `R = ToolServices` default
+   onto `defineTool` itself makes `definition.d.ts` import `ToolServices` ->
+   `ToolCall` -> `AgentWorkspaceState` -> `ServerTools` ->
+   `@anthropic-ai/sdk` and the agent build fails the provider-leak check.
+   The specialization has to live in a module the SDK entry does not reach,
+   which is what `define.ts` is.
 7. Move the module-global mutable ownership state into session- or
    process-scoped services, one PR per subsystem: the Lean server map in
    `leanServerRegistry.ts`, the agent-engine slot (only after the #12888
@@ -120,6 +131,6 @@ decisions for the owner; neither is fixed by a refactor.
   every machine configuration.
 - `sessionEvent.ts` has no `updateTodos` arm; `runRecords.ts` has one
   latest-row reader.
-- The tool-call path has five layers; `core/define.ts` is gone.
+- The tool-call path has five layers; `core/define.ts` stays (step 6).
 - `src/tools` has no module-level mutable ownership state; the surviving
   memo caches are listed by name in the ledger.

@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 // Local imports
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 
-describe('agent workspace work-plan state', () => {
+describe('agent workspace work-plan state (src/agent/core/state/AgentWorkspaceState.ts)', () => {
   it.each([
     ['a snapshot without workPlan', {}],
     ['a retired todo/plan snapshot', { todos: [], plan: null }],

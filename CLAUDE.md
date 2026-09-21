@@ -60,11 +60,17 @@ Things the tree won't tell you:
   frontends excluded) or a named webview runtime entry in the script's
   `BOUNDARY_RUNTIME_ENTRIES`, and ESLint's
   `no-warning-comments` fails on any `@adapter-until` marker, since the owner
-  ruled there are no temporary adapters), and `pure-tier-kernel-suites` (suites a source
-  scan classes as host-free but which read the host through the module under
-  test, so they run in the isolated `kernel` Vitest project — see AGENTS.md
+  ruled there are no temporary adapters), and `pure-tier-kernel-suites` (the Ink
+  renderer suites a source scan classes as host-free but which leak process
+  terminal state into each other, so they run in the isolated `kernel` Vitest
+  project — see AGENTS.md
   "Test tiers"), and `store-public-surface` (the frozen public method set of
-  the run log store). The invariant to hold is "never widen a
+  the run log store). Three more budget the code itself rather than an
+  import edge — `file-size-baseline` (a per-file line budget over 500 lines),
+  `refuted-candidates` (the costed-and-refused refactors, with their ruling
+  anchors) and `unknown-error-baseline` (per-file counts of
+  `Effect.Effect<..., unknown, ...>`); AGENTS.md "Directory organization" has
+  the rules. The invariant to hold is "never widen a
   baseline"; the open work is the Tier-1 public manifest and shrinking the
   frozen lists, not
   another lint rule. npm publication is deliberately held until a named external
@@ -148,7 +154,7 @@ VS Code-free zone and don't add a new subscribe surface. (Ruled in
 emit sites this once grandfathered have since migrated to session-owned
 emission via `SessionHandle.publish` / `SessionEvents`, so a new direct
 `bus.emit` is a violation, not a grandfathered pattern.) This does not restrict
-`appSignals.emit(...)` on the separate `AppSignals` bus within its documented
+`emitAppSignal(...)` on the separate `AppSignals` bus within its documented
 scope.
 
 **One publisher, loop-owned cards.** Every write to a session's event table

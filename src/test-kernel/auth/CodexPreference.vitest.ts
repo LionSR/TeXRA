@@ -13,7 +13,7 @@ import { FakeScopedConfigProvider } from '@test/support/FakePlatform';
 
 const CODEX_PREFER_SUBSCRIPTION_KEY = 'texra.chatgptCodex.preferSubscription';
 
-describe('Codex subscription preference', () => {
+describe('Codex subscription preference (src/model/codex/codexSubscription.ts)', () => {
   it('writes workspace preference when workspace config already controls it', async () => {
     await installPlatform({
       config: { [CODEX_PREFER_SUBSCRIPTION_KEY]: false },

@@ -111,3 +111,7 @@
 - name: 're-review'
   color: '0e8a16'
   description: 'Request a fresh AI review of this PR (consumed by the review workflows)'
+
+- name: 'live-llm'
+  color: 'd93f0b'
+  description: 'Run the live provider suites for packages/llm on this PR (paid, real API calls)'

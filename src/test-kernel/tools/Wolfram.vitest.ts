@@ -8,6 +8,7 @@ import { it } from '@effect/vitest';
 // wolframscript invocation it builds).
 
 import { afterEach, describe, expect, vi } from 'vitest';
+import { guardedToolCall } from '@agent/runtime/loop/toolGuard';
 import type { RequestDecision, RunId } from '@shared/schemas';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
@@ -21,9 +22,10 @@ import {
 } from '../agent/progressTestUtils';
 
 /**
- * Dispatch the tool on its own run and hold the command request it opens: the
- * request is a `request.opened` row the run parks on, answered by the case's
- * own `request.decide`.
+ * Dispatch the tool the way the run loop does - through `guardedToolCall`, so
+ * the guard the tool declares runs before its body - and hold the command
+ * request that guard opens: the request is a `request.opened` row the run
+ * parks on, answered by the case's own `request.decide`.
  */
 function dispatchWolfram(runId: RunId, code: string) {
   return Effect.gen(function* () {
@@ -47,7 +49,7 @@ function dispatchWolfram(runId: RunId, code: string) {
     );
 
     const result = yield* Effect.forkChild(
-      new WolframTool().call({ code }).pipe(
+      guardedToolCall(new WolframTool(), { code }).pipe(
         Effect.provide(
           nativeToolTestLayer({
             run: { session: session, runId: runId, toolPolicy: {} },

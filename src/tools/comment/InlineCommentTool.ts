@@ -1,5 +1,5 @@
 // Third-party imports
-import { Effect } from 'effect';
+import { Context, Effect, Option } from 'effect';
 import { z } from 'zod';
 
 // Internal imports
@@ -57,28 +57,35 @@ export interface InlineCommentProvider {
   list(input: { absolutePath?: string }): InlineCommentThreadView[];
 }
 
-let provider: InlineCommentProvider | undefined;
-
-export function setInlineCommentProvider(next: InlineCommentProvider): void {
-  provider = next;
-}
+/**
+ * The host's inline-comment provider, served by `installProcessRuntime`'s
+ * `inlineComments` option on the one host that has a Comments UI. A host
+ * without one provides no layer, exactly as it does for `EditorModel`, and
+ * the tool reads the absence rather than a module slot's `undefined`.
+ */
+export class InlineComments extends Context.Service<
+  InlineComments,
+  InlineCommentProvider
+>()('@texra/tools/InlineComments') {}
 
 /**
- * Resolve the host-injected provider, failing when none was wired. The failure
+ * Resolve the host's provider, failing when the host serves none. The failure
  * is intentional: `unavailableHosts` already keeps `inline_comment` out of the
- * CLI and desktop rosters, so reaching the tool with no provider means a host
- * skipped the registration — a startup bug that must name itself rather than
+ * CLI and desktop rosters, so reaching the tool without a provider means the
+ * VS Code host skipped it — a startup bug that must name itself rather than
  * report a plausible no-op back to the agent.
  */
-function requireProvider(): Effect.Effect<InlineCommentProvider, ToolError> {
-  return provider
-    ? Effect.succeed(provider)
-    : Effect.fail(
-        new ToolError(
-          'Inline comments are unavailable: no host called setInlineCommentProvider() during startup. Only the VS Code extension host wires this tool.',
-        ),
-      );
-}
+const requireProvider = Effect.gen(function* () {
+  const provider = yield* Effect.serviceOption(InlineComments);
+  if (Option.isNone(provider)) {
+    return yield* Effect.fail(
+      new ToolError(
+        'Inline comments are unavailable: this host serves no inline-comment provider. Only the VS Code extension host wires this tool.',
+      ),
+    );
+  }
+  return provider.value;
+});
 
 const THREAD_ID_DESCRIPTION = 'The thread id returned by "add" or "list".';
 const COMMENT_BODY_DESCRIPTION = 'The comment text (Markdown supported).';
@@ -203,7 +210,7 @@ const addThread = Effect.fn('InlineCommentTool.addThread')(function* (
       ),
     catch: addCommentFailure,
   });
-  const provider = yield* requireProvider();
+  const provider = yield* requireProvider;
   const result = yield* Effect.try({
     try: () =>
       provider.add({
@@ -231,7 +238,7 @@ const replyToThread = Effect.fn('InlineCommentTool.reply')(function* (
   input: ReplyCommentInput,
 ) {
   const { threadId, body } = input;
-  if (!(yield* requireProvider()).reply({ threadId, body })) {
+  if (!(yield* requireProvider).reply({ threadId, body })) {
     return threadNotFound(threadId);
   }
   const summary = `Replied to comment thread ${threadId}`;
@@ -243,7 +250,7 @@ const setThreadResolved = Effect.fn('InlineCommentTool.setResolved')(function* (
   resolved: boolean,
 ) {
   const { threadId } = input;
-  if (!(yield* requireProvider()).setResolved({ threadId, resolved })) {
+  if (!(yield* requireProvider).setResolved({ threadId, resolved })) {
     return threadNotFound(threadId);
   }
   const summary = `${resolved ? 'Resolved' : 'Reopened'} comment thread ${threadId}`;
@@ -263,7 +270,7 @@ const listThreads = Effect.fn('InlineCommentTool.list')(function* (
           input.path ?? undefined,
           call.workingDirectory,
         ).absolute;
-  const threads = (yield* requireProvider()).list({ absolutePath });
+  const threads = (yield* requireProvider).list({ absolutePath });
   if (threads.length === 0) {
     return executed(
       input.path

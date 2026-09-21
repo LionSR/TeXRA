@@ -12,7 +12,10 @@ import { API_PROVIDERS, lookupApiKeyOrigin } from '@model/apiProviders';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import { Secrets } from '@platform/secrets';
 import { nodeHostEnvironment } from '@platform/defaults/nodeHostEnvironment';
-import { LATEX_WORKSHOP_EXT_ID } from '@shared/constants/latexToolchain';
+import {
+  IMAGE_TOOL_LABEL,
+  LATEX_WORKSHOP_EXT_ID,
+} from '@shared/constants/latexToolchain';
 import { executed } from '@tools/core/result';
 import { resolveGitHubTokenSource } from '@tools/github/githubAuth';
 import { detectPackageManager } from '@utils/system/toolUtils';
@@ -193,7 +196,7 @@ const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* () {
  */
 export const ProbeEnvironmentTool = defineTool({
   name: 'probe_environment',
-  description: `Probe the active host and environment and return a structured JSON summary covering host kind, OS, shell, PATH, detected package manager (brew/apt/scoop), installation status of TeXRA's core LaTeX dependencies (pdflatex, latexmk, latexindent, perl, gs, gm/magick, texcount, latexdiff), the LaTeX Workshop VS Code extension, each provider API key's origin (TeXRA secrets, environment, or absent; values are never returned), ChatGPT subscription state, broader usable credential status, and TeXRA account sign-in status. Read-only, no approval required. Call this first in any setup session to decide what to do next.`,
+  description: `Probe the active host and environment and return a structured JSON summary covering host kind, OS, shell, PATH, detected package manager (brew/apt/scoop), installation status of TeXRA's core LaTeX dependencies (pdflatex, latexmk, latexindent, perl, gs, ${IMAGE_TOOL_LABEL}, texcount, latexdiff), the LaTeX Workshop VS Code extension, each provider API key's origin (TeXRA secrets, environment, or absent; values are never returned), ChatGPT subscription state, broader usable credential status, and TeXRA account sign-in status. Read-only, no approval required. Call this first in any setup session to decide what to do next.`,
   schema: ProbeEnvironmentInputSchema,
   execute: (_input: ProbeInput) => probe(),
 });

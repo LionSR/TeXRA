@@ -9,10 +9,10 @@ import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 import {
   GOOGLE_PREFIX_DOMAIN,
   googleInteractionsModel,
-} from '@llm/googleInteractions';
-import { admittedFingerprint } from '@llm/prefixFingerprint';
-import { RemoteOperationSchema } from '@llm/turn';
-import type { ModelError, TurnRequest, TurnResult } from '@llm/turn';
+} from '@texra-ai/llm/google-interactions';
+import { admittedFingerprint } from '@texra-ai/llm/prefix-fingerprint';
+import { RemoteOperationSchema } from '@texra-ai/llm/turn';
+import type { ModelError, TurnRequest, TurnResult } from '@texra-ai/llm/turn';
 
 function model(
   store = true,

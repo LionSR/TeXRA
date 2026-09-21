@@ -21,7 +21,6 @@ import { testRunHandle } from '@test/support/runHandleFixtures';
 import { claudeAgentSessionsFor } from '@tools/agentCliSessionStores';
 
 const mocks = vi.hoisted(() => ({
-  requestBashApproval: vi.fn(),
   registerRun: vi.fn(),
   createChildRun: vi.fn(),
   startChildRunLoop: vi.fn(),
@@ -29,11 +28,6 @@ const mocks = vi.hoisted(() => ({
   buildClaudeAgentEnv: vi.fn(),
   findClaudeBinaryPath: vi.fn(),
   submitFollowUp: vi.fn(),
-}));
-
-vi.mock('@tools/approval/bashApproval', () => ({
-  requestBashApproval: mocks.requestBashApproval,
-  buildBashApprovalRejectedResult: vi.fn(),
 }));
 
 vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
@@ -79,7 +73,8 @@ vi.mock('@tools/claudeAgentConfig', () => ({
   buildClaudeAgentEnv: mocks.buildClaudeAgentEnv,
 }));
 
-vi.mock('@tools/claudeAgentImport', () => ({
+vi.mock('@tools/claudeAgentImport', async (importActual) => ({
+  ...(await importActual<typeof import('@tools/claudeAgentImport')>()),
   importClaudeAgentSdk: () => Effect.succeed(mocks.query),
   findClaudeBinaryPath: mocks.findClaudeBinaryPath,
 }));
@@ -122,9 +117,6 @@ describe('claude_agent tool launch and resume fallback', () => {
     mocks.startChildRunLoop.mockReturnValue(completedChildRunLoop());
     mocks.buildClaudeAgentEnv.mockReset();
     mocks.findClaudeBinaryPath.mockReset();
-    mocks.requestBashApproval.mockReturnValue(
-      Effect.succeed({ action: 'approve' }),
-    );
 
     mocks.registerRun.mockReturnValue(Effect.void);
     mocks.buildClaudeAgentEnv.mockReturnValue(Effect.succeed({}));
@@ -157,7 +149,6 @@ describe('claude_agent tool launch and resume fallback', () => {
             'claude_code is unavailable in one-shot runs',
           ),
         });
-        expect(mocks.requestBashApproval).not.toHaveBeenCalled();
         expect(mocks.registerRun).not.toHaveBeenCalled();
         expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
       }).pipe(
@@ -497,14 +488,18 @@ describe('claude_agent tool launch and resume fallback', () => {
             ),
           )
           .mockReturnValueOnce(Effect.succeed({}));
-        // The second call's approval is the last step before it claims the id.
-        mocks.requestBashApproval
-          .mockReturnValueOnce(Effect.succeed({ action: 'approve' }))
-          .mockImplementationOnce(() =>
-            Deferred.succeed(secondDispatching, undefined).pipe(
-              Effect.as({ action: 'approve' }),
-            ),
-          );
+        // The second call contends on the claim the first still holds; that
+        // lost claim is the step that sends it into the fallback wait, and
+        // the gate has to fire from there so the case releases the first
+        // launch only once the second is actually waiting.
+        const realClaim = ClaudeAgentSessions.claim.bind(ClaudeAgentSessions);
+        const claim = vi
+          .spyOn(ClaudeAgentSessions, 'claim')
+          .mockImplementation((sessionId: string) => {
+            const release = realClaim(sessionId);
+            if (!release) Deferred.doneUnsafe(secondDispatching, Effect.void);
+            return release;
+          });
 
         const tool = new ClaudeAgentTool();
         const first = yield* Effect.forkChild(
@@ -536,6 +531,7 @@ describe('claude_agent tool launch and resume fallback', () => {
 
         captured.strategy?.releaseSessionOwnership?.();
         expect(ClaudeAgentSessions.lookup('stale-session')).toBeUndefined();
+        claim.mockRestore();
       }).pipe(
         Effect.provide(
           nativeToolTestLayer({

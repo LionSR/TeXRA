@@ -12,8 +12,6 @@ import { describe } from 'vitest';
 
 import { TERMINAL_OUTPUT_MAX_CHARS } from '@common/terminalOutput';
 import type { TerminalRunResult } from '@hosts/uiHosts';
-import type { ConfigProvider } from '@platform/interfaces';
-import { BASH_APPROVAL_CONFIG_KEY } from '@shared/schemas';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { installPlatform } from '@test/support/setupPlatform';
@@ -22,25 +20,6 @@ import { SendToTerminalTool } from '@tools/setup/SendToTerminalTool';
 
 // Local file imports
 import { createFakeSetupPlatform } from './fixtures';
-
-/**
- * `requestBashApproval` reads `texra.toolUse.requireBashApproval` via
- * `getConfig`, which falls through to its default (`true`) when no
- * platform is registered — so without intervention the approval prompt
- * would emit on the bus and the test would hang waiting for a settle
- * callback that never arrives. Stub the platform's config so the
- * approval flag resolves to `false`.
- *
- * The stub returns `defaultValue` verbatim for every key except
- * `BASH_APPROVAL_CONFIG_KEY`, so behaviour stays identical to "no platform
- * registered" unless a test also checks the approval flag.
- */
-const approvalSkippingConfig: ConfigProvider = {
-  get: <T>(key: string, defaultValue?: T): T =>
-    key === BASH_APPROVAL_CONFIG_KEY ? (false as T) : (defaultValue as T),
-  update: () => Effect.void,
-  inspect: () => undefined,
-};
 
 interface RunRecord {
   name: string;
@@ -63,13 +42,10 @@ async function setupTool(
   await installPlatform(
     {},
     {
-      config: approvalSkippingConfig,
       setup: createFakeSetupPlatform({
-        terminal: {
-          runCommand(args) {
-            runs.push(args);
-            return Effect.succeed(result);
-          },
+        terminal: (args) => {
+          runs.push(args);
+          return Effect.succeed(result);
         },
       }),
     },

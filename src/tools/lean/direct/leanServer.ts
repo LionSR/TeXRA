@@ -13,7 +13,7 @@
  * Release is the scope's finalizers, in order: the shutdown protocol
  * (`shutdown` request under its bound, `exit`, SIGTERM, wait, SIGKILL, wait),
  * the JSON-RPC close, the process stop (a no-op once the protocol ran), the
- * registry entry. Every wait is on the runtime clock.
+ * roster entry. Every wait is on the runtime clock.
  *
  * Lives under `src/tools/lean/direct/` (host-neutral): Node-only, no `vscode`
  * imports, suitable for both the CLI and the desktop main process.
@@ -46,16 +46,12 @@ import { debug, info, warn } from '@logger/logUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { DiagnosticSeverity } from '@utils/diagnostics/diagnosticFormatting';
 import {
-  registerLeanServer,
-  unregisterLeanServer,
-  updateLeanServer,
-} from '../leanServerRegistry';
-import {
   makeJsonRpcConnection,
   type JsonRpcConnection,
   type JsonRpcConnectionDisposed,
   type JsonRpcRequestError,
 } from './jsonRpc';
+import type { LeanServerRoster } from '../leanServerRegistry';
 import type {
   LeanDiagnostic,
   LspDiagnostic,
@@ -103,6 +99,8 @@ export type LeanSessionError =
 export interface LeanServerOptions {
   readonly workspaceRoot: string;
   readonly lakeCommand: string;
+  /** The owning pool's roster: registered here, dropped by this scope. */
+  readonly roster: LeanServerRoster;
 }
 
 export class LeanServer extends Context.Service<
@@ -215,6 +213,7 @@ const stopProcess = Effect.fn('LeanServer.stopProcess')(function* (
 const make = ({
   workspaceRoot: root,
   lakeCommand,
+  roster,
 }: LeanServerOptions): Effect.Effect<
   LeanServer['Service'],
   LeanStartError,
@@ -227,14 +226,14 @@ const make = ({
     const ended = yield* Deferred.make<ServerEnd>();
     const openFiles = new Map<string, OpenedFile>();
 
-    registerLeanServer({
+    roster.register({
       id,
       workspaceRoot: root,
       mode: 'direct-lsp',
       status: 'starting',
     });
     yield* Effect.addFinalizer(() =>
-      Effect.sync(() => unregisterLeanServer(id)).pipe(
+      Effect.sync(() => roster.unregister(id)).pipe(
         Effect.andThen(Deferred.succeed(closed, undefined)),
       ),
     );
@@ -319,7 +318,7 @@ const make = ({
           LOG_CHANNEL,
           `lake env lean --server ended (${end.message ?? 'exit code 0'}) at ${root}${tail ? `\n${tail}` : ''}`,
         );
-        updateLeanServer(id, { status: end.status, errorMessage: end.message });
+        roster.update(id, { status: end.status, errorMessage: end.message });
         yield* abandonFiles;
         yield* rpc.close(end.message ?? 'Lean server stopped');
         yield* Deferred.succeed(ended, end);
@@ -371,7 +370,7 @@ const make = ({
         ),
       );
     yield* rpc.notify('initialized', {});
-    updateLeanServer(id, { status: 'running' });
+    roster.update(id, { status: 'running' });
 
     const shutdown = yield* Effect.cached(
       Effect.gen(function* () {

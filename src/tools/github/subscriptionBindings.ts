@@ -1,49 +1,27 @@
-import {
-  issueKeyToString,
-  SharedIssuePollingSource,
-  type IssueKey,
-} from './IssuePollingSource';
-import {
-  prKeyToString,
-  SharedPRPollingSource,
-  type PRSubscribeInput,
-} from './PRPollingSource';
-import {
-  repoKeyToString,
-  SharedRepoPollingSource,
-  type RepoKey,
-  type RepoSubscribeInput,
-} from './RepoPollingSource';
-import { RunSubscriptionRegistry } from './RunSubscriptionRegistry';
+import { Context } from 'effect';
+
+import type { IssueKey } from './IssuePollingSource';
+import type { PRSubscribeInput } from './PRPollingSource';
+import type { RepoKey, RepoSubscribeInput } from './RepoPollingSource';
+import type { RunSubscriptionRegistry } from './RunSubscriptionRegistry';
 
 /**
- * The three process-wide subscription registries, one per polling source.
+ * The three subscription registries, one per polling source, held for the
+ * process by `installProcessRuntime` rather than by this module. They record
+ * which runs own which subscription, so their lifetime is the runtime's: a
+ * disposed runtime takes the ownership table with it instead of carrying a
+ * previous process's bindings into the next one.
+ *
  * Shared by the github_subscription tool (bind/unbind/list) and the settings
- * UI (list/unbindAll) so both see the same ownership.
+ * UI (list/unbindAll) so both see the same ownership. The layer that builds
+ * them is `gitHubSubscriptionsLayer` in `./subscriptionRegistries`: this
+ * module stays free of runtime imports so naming the service costs nothing.
  */
-export const prSubscriptionRegistry = new RunSubscriptionRegistry<
-  string,
-  PRSubscribeInput
->({
-  name: 'PRRunSubscriptionRegistry',
-  source: SharedPRPollingSource,
-  keyOf: prKeyToString,
-});
-
-export const repoSubscriptionRegistry = new RunSubscriptionRegistry<
-  RepoKey,
-  RepoSubscribeInput
->({
-  name: 'RepoRunSubscriptionRegistry',
-  source: SharedRepoPollingSource,
-  keyOf: repoKeyToString,
-});
-
-export const issueSubscriptionRegistry = new RunSubscriptionRegistry<
-  string,
-  IssueKey
->({
-  name: 'IssueRunSubscriptionRegistry',
-  source: SharedIssuePollingSource,
-  keyOf: issueKeyToString,
-});
+export class GitHubSubscriptions extends Context.Service<
+  GitHubSubscriptions,
+  {
+    readonly pr: RunSubscriptionRegistry<string, PRSubscribeInput>;
+    readonly repo: RunSubscriptionRegistry<RepoKey, RepoSubscribeInput>;
+    readonly issue: RunSubscriptionRegistry<string, IssueKey>;
+  }
+>()('@texra/tools/GitHubSubscriptions') {}

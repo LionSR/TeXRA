@@ -24,7 +24,7 @@ function shadowText(element: AccountTabElement): string {
   return element.shadowRoot?.textContent ?? '';
 }
 
-describe('account usage status', () => {
+describe('account usage status (packages/extension/src/settingsView/frontend/tabs/AccountTab.ts)', () => {
   useLitComponentTestDom(
     () => import('@settingsView/frontend/tabs/AccountTab'),
   );

@@ -6,8 +6,11 @@ import { it } from '@effect/vitest';
 import { Cause, Deferred, Effect, Exit, Fiber, Logger, Stream } from 'effect';
 import { TestClock } from 'effect/testing';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
-import { anthropicMessagesModel } from '@llm/anthropicMessages';
-import type { AnthropicMessagesConfiguration, TurnRequest } from '@llm/turn';
+import { anthropicMessagesModel } from '@texra-ai/llm/anthropic-messages';
+import type {
+  AnthropicMessagesConfiguration,
+  TurnRequest,
+} from '@texra-ai/llm/turn';
 
 const CONFIG: AnthropicMessagesConfiguration = {
   protocol: 'anthropic-messages',

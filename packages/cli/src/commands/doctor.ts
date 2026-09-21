@@ -1,3 +1,4 @@
+import { defineCommand } from 'citty';
 import { Cause, Effect, Exit } from 'effect';
 
 import { withProcessServices } from '@platform/processRuntime';
@@ -14,7 +15,8 @@ import { initCliPlatform } from '../runtime/initPlatform';
 import { getCliModelAccessList } from '../runtime/modelAccess';
 import { getCliAuthProfile } from '../runtime/supabaseAuth';
 
-import { defineCliCommand } from './_helpers/defineCliCommand';
+import { contextFromArgs } from './_helpers/context';
+import { setExitCode } from './_helpers/exitCode';
 import { suppressCliFetchStackLogs } from './_helpers/fetchSilencer';
 import { GLOBAL_ARGS } from './_helpers/globalArgs';
 import type { CliContext } from '../runtime/cliContext';
@@ -46,9 +48,6 @@ function doctorReport(context: CliContext): Effect.Effect<DoctorReport> {
       );
     }
     const services = init.value;
-    // Consent is read from the workspace configuration the init installed;
-    // without it the telemetry check reports the gap.
-    const roots = services.roots;
     // The healthy report settles on the root's own context — the provision
     // `services.runtime.runPromise` made before this became one program — so
     // the availability read takes the process's `LanguageModel` port from it
@@ -61,9 +60,9 @@ function doctorReport(context: CliContext): Effect.Effect<DoctorReport> {
           services.runtime,
           getCliModelAccessList({ stores: services }),
         ),
-        ...(roots && {
-          usageLoggingOptOut: () => usageLoggingOptOut(roots.config),
-        }),
+        // Consent is read from the workspace configuration the init
+        // installed.
+        usageLoggingOptOut: () => usageLoggingOptOut(services.roots.config),
       }),
     );
   });
@@ -74,17 +73,25 @@ async function runDoctor(context: CliContext): Promise<number> {
   // (`BARE_EFFECT_RUN_SITES` in dependencyDirection.vitest.ts): the program
   // starts before the process runtime exists and, on the failed-init path,
   // ends with that runtime already disposed, so it can borrow none.
-  const report = await suppressCliFetchStackLogs(() =>
-    Effect.runPromise(doctorReport(context)),
+  const report = await Effect.runPromise(
+    suppressCliFetchStackLogs(doctorReport(context)),
   );
   writeDoctorReport(context, report);
   return doctorExitCode(report);
 }
 
-export const doctorCommand = defineCliCommand({
+export const doctorCommand = defineCommand({
   meta: { name: 'doctor', description: 'Check CLI runtime dependencies' },
   args: {
     ...GLOBAL_ARGS,
   },
-  run: runDoctor,
+  // The one command that cannot take `defineCliCommand`: that helper installs
+  // the process runtime and runs the command's program on it, and this report
+  // can borrow a runtime at neither end — none exists when the init fold
+  // begins, and an init that fails disposes the one it installed before it
+  // re-raises. So the `contextFromArgs` → `setExitCode` fold stays here.
+  async run(ctx) {
+    const context = await contextFromArgs(ctx.args, ctx.rawArgs);
+    setExitCode(await runDoctor(context));
+  },
 });

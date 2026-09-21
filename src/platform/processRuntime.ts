@@ -24,6 +24,7 @@ import type { SupabaseAuth } from '@auth/SupabaseAuth';
 import type { GlobalDatabase } from '@shared/session/database';
 import type { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
 import type { InquiryRecords } from '@shared/session/inquiryRecords';
+import type { GitHubSubscriptions } from '@tools/github/subscriptionBindings';
 import type { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import type { SetupPlatform } from '@tools/setup/platform';
 import type { HttpClient } from 'effect/unstable/http';
@@ -42,8 +43,10 @@ import type { Secrets } from './secrets';
  * `@effect/platform-node` so a program that reads or resolves a file takes
  * them from context instead of building a Node layer of its own, and
  * `GlobalStorageFs`, the cross-workspace storage view every session of the
- * process shares, and `GlobalDatabase`, that same root's one database handle,
- * which the records above and the CLI's input history read through.
+ * process shares, `GlobalDatabase`, that same root's one database handle,
+ * which the records above and the CLI's input history read through, and
+ * `GitHubSubscriptions`, the run-ownership tables the subscription tool and
+ * the settings Git tab share.
  */
 export type ProcessServices =
   | FileSystem.FileSystem
@@ -60,6 +63,7 @@ export type ProcessServices =
   | SetupPlatform
   | ToolInjections
   | LeanLanguageServices
+  | GitHubSubscriptions
   | SupabaseAuth;
 
 export type ProcessRuntime = ManagedRuntime.ManagedRuntime<

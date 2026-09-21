@@ -28,7 +28,6 @@ const DEFAULT_BASH_REJECTION_GUIDANCE =
 export interface BashApprovalRequest {
   readonly command: string;
   readonly cwd?: string | null;
-  readonly runId?: RunId | null;
 }
 
 /** What a bash approval settles to: the approval, or one of the refusals. */
@@ -45,19 +44,16 @@ export type BashDecision =
  */
 function prepareBashApprovalPrompt(
   request: BashApprovalRequest,
+  runId: RunId,
   session: SessionHandle,
 ): BashPermission {
-  const runId = request.runId ?? undefined;
-  const isBypassed = runId
-    ? session.approvals.bash.bypass.isBypassed(runId)
-    : false;
   const cwd = request.cwd?.trim();
   return {
     requestId: `bash-${generateShortId()}`,
     command: request.command,
     ...(cwd && { cwd }),
-    allowBypass: !isBypassed,
-    runId: runId ?? '',
+    allowBypass: !session.approvals.bash.bypass.isBypassed(runId),
+    runId,
   };
 }
 
@@ -80,11 +76,8 @@ export const requestBashApproval = Effect.fn('requestBashApproval')(function* (
       new Error('A bash approval needs an active run.'),
     );
   }
-  const { session } = run;
-  const runId = request.runId ?? run.runId;
-  const isRunBypassed = Boolean(
-    runId && session.approvals.bash.bypass.isBypassed(runId),
-  );
+  const { session, runId } = run;
+  const isRunBypassed = session.approvals.bash.bypass.isBypassed(runId);
   const decision = decideTexraApproval({
     policy: session.approvalPolicy,
     promptRequired: approvalsEnabled,
@@ -98,13 +91,7 @@ export const requestBashApproval = Effect.fn('requestBashApproval')(function* (
     return { action: 'deny', reason: texraApprovalDenialMessage(decision) };
   }
 
-  if (!runId) {
-    return yield* Effect.fail(
-      new Error('A bash approval needs a run to open its request on.'),
-    );
-  }
-
-  const permission = prepareBashApprovalPrompt({ ...request, runId }, session);
+  const permission = prepareBashApprovalPrompt(request, runId, session);
   return yield* session.approvals.bash.enqueue(runId, {
     prompt: session
       .openRequest(runId, { kind: 'bash', data: permission })

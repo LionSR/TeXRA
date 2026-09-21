@@ -9,6 +9,5 @@ export type { TraceDocument } from './traceDocumentSchema';
 export {
   hasCompletedRunConversationEvidence,
   readCompletedRunConversation,
-  readCompletedRunTodos,
 } from './completedRunArchive';
 export { injectStandaloneTrace } from './standaloneTraceHtml';

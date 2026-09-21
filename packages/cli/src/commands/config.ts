@@ -19,7 +19,6 @@ import {
   formatCliAgentRoster,
   readCliAgentRoster,
 } from '../runtime/agentRoster';
-import { installCliProcessRuntime } from '../runtime/cliProcessRuntime';
 import { CliExitCode } from '../runtime/exitCodes';
 import {
   initCliPlatform,
@@ -58,26 +57,11 @@ function asTeamUsageError<E>(error: E): E | CliUsageError {
     : error;
 }
 
-/**
- * The process roots this command's init installed. Absent only when another
- * root installed the platform first, which leaves no workspace to configure.
- */
-function installedRoots(
-  services: CliPlatformServices,
-): NonNullable<CliPlatformServices['roots']> {
-  if (!services.roots) {
-    throw new Error(
-      'texra config needs the workspace roots its platform init installs.',
-    );
-  }
-  return services.roots;
-}
-
 const showConfig = Effect.fn('showConfig')(function* (
   context: CliContext,
   services: CliPlatformServices,
 ) {
-  const stores = installedRoots(services);
+  const stores = services.roots;
   const agents = yield* readCliAgentRoster(stores);
   const settings = Object.fromEntries(
     CLI_STATE_SETTINGS.map((entry) => [
@@ -115,7 +99,7 @@ const configureAgentRoster = Effect.fn('configureAgentRoster')(function* (
     readonly clearDefaultAgent: boolean;
   },
 ) {
-  const roots = installedRoots(services);
+  const roots = services.roots;
   // The controller below resolves agent keys, so the registry must be loaded
   // first; the honest roster read happens once, later, where it is emitted.
   yield* loadAgents({ includeRemote: false });
@@ -238,45 +222,37 @@ const configAgentsCommand = defineCliCommand({
       description: 'Return chat-agent selection to the automatic default',
     },
   },
-  run: async (context, ctx) => {
-    const runtime = await installCliProcessRuntime(context.storageRoot);
-    return runtime.runPromise(
-      Effect.gen(function* () {
-        const services = yield* initCliPlatform({
-          ...context,
-          quietLogs: true,
-        });
-        return yield* configureAgentRoster(context, services, {
-          inherit: ctx.args.inherit === true,
-          all: ctx.args.all === true,
-          team: optString(ctx.args.team),
-          workflow: optString(ctx.args.workflow),
-          toolUse: optString(ctx.args['tool-use']),
-          defaultTeam: optString(ctx.args['default-team']),
-          clearDefault: ctx.args['clear-default'] === true,
-          defaultAgent: optString(ctx.args['default-agent']),
-          clearDefaultAgent: ctx.args['clear-default-agent'] === true,
-        });
-      }),
-    );
-  },
+  run: (context, ctx) =>
+    Effect.gen(function* () {
+      const services = yield* initCliPlatform({
+        ...context,
+        quietLogs: true,
+      });
+      return yield* configureAgentRoster(context, services, {
+        inherit: ctx.args.inherit === true,
+        all: ctx.args.all === true,
+        team: optString(ctx.args.team),
+        workflow: optString(ctx.args.workflow),
+        toolUse: optString(ctx.args['tool-use']),
+        defaultTeam: optString(ctx.args['default-team']),
+        clearDefault: ctx.args['clear-default'] === true,
+        defaultAgent: optString(ctx.args['default-agent']),
+        clearDefaultAgent: ctx.args['clear-default-agent'] === true,
+      });
+    }),
 });
 
 const configShowCommand = defineCliCommand({
   meta: { name: 'show', description: 'Show effective CLI configuration' },
   args: { ...GLOBAL_ARGS },
-  run: async (context) => {
-    const runtime = await installCliProcessRuntime(context.storageRoot);
-    return runtime.runPromise(
-      Effect.gen(function* () {
-        const services = yield* initCliPlatform({
-          ...context,
-          quietLogs: true,
-        });
-        return yield* showConfig(context, services);
-      }),
-    );
-  },
+  run: (context) =>
+    Effect.gen(function* () {
+      const services = yield* initCliPlatform({
+        ...context,
+        quietLogs: true,
+      });
+      return yield* showConfig(context, services);
+    }),
 });
 
 const configEditCommand = defineCliCommand({
@@ -285,31 +261,35 @@ const configEditCommand = defineCliCommand({
     description: 'Open the interactive configuration view',
   },
   args: { ...GLOBAL_ARGS },
-  run: async (context) => {
+  // The terminal check is the builder's, above the program: it refuses
+  // before `defineCliCommand` installs anything.
+  run: (context) => {
     const ambient = readCliAmbientState();
     if (!ambient.stdinIsTty || !context.stdoutIsTty || context.termIsDumb) {
       throw new CliUsageError(
         'Interactive configuration requires a terminal. Use `texra config show` or `texra config agents` in scripts.',
       );
     }
-    const runtime = await installCliProcessRuntime(context.storageRoot);
-    const services = await runtime.runPromise(
-      initCliPlatform({ ...context, quietLogs: true }),
-    );
-    // The config TUI mounts Ink at this Promise edge rather than inside a
-    // fiber of the runtime it outlives, so the import and the run stay here.
-    const { runConfigTui } = await import('../config/runConfigTui');
-    await runtime.runPromise(
-      runConfigTui({
-        stores: installedRoots(services),
+    return Effect.gen(function* () {
+      const services = yield* initCliPlatform({ ...context, quietLogs: true });
+      // The config TUI's module is loaded lazily, so a headless `config show`
+      // in the same process never pays for Ink. The TUI itself is part of
+      // this program rather than a second run past a Promise edge: its Ink
+      // mount is acquire/use/release-scoped, so the fiber that runs it is the
+      // one that tears it down.
+      const { runConfigTui } = yield* Effect.promise(
+        () => import('../config/runConfigTui'),
+      );
+      yield* runConfigTui({
+        stores: services.roots,
         secrets: services.secrets,
         runtime: services.runtime,
-        workspaceRoot: services.roots?.workspace,
+        workspaceRoot: services.roots.workspace,
         colorEnabled: context.stdoutColorEnabled,
         onError: writeErrorStderr,
-      }),
-    );
-    return CliExitCode.Success;
+      });
+      return CliExitCode.Success;
+    });
   },
 });
 

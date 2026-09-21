@@ -16,7 +16,6 @@ import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { codexThreadsFor } from '@tools/agentCliSessionStores';
 
 const mocks = vi.hoisted(() => ({
-  requestBashApproval: vi.fn(),
   registerRun: vi.fn(),
   createChildRun: vi.fn(),
   startChildRunLoop: vi.fn(),
@@ -24,11 +23,6 @@ const mocks = vi.hoisted(() => ({
   findCodexBinaryPath: vi.fn(),
   resumeThread: vi.fn(),
   submitFollowUp: vi.fn(),
-}));
-
-vi.mock('@tools/approval/bashApproval', () => ({
-  requestBashApproval: mocks.requestBashApproval,
-  buildBashApprovalRejectedResult: vi.fn(),
 }));
 
 vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
@@ -73,7 +67,8 @@ vi.mock('@tools/codexConfig', () => ({
   CODEX_CLI_MODEL: 'gpt-5.2-codex',
 }));
 
-vi.mock('@tools/codexImport', () => ({
+vi.mock('@tools/codexImport', async (importActual) => ({
+  ...(await importActual<typeof import('@tools/codexImport')>()),
   importCodexClass: mocks.importCodexClass,
   findCodexBinaryPath: mocks.findCodexBinaryPath,
 }));
@@ -114,9 +109,6 @@ describe('codex tool - atomic resume fallback', () => {
     mocks.startChildRunLoop.mockReturnValue(completedChildRunLoop());
     mocks.importCodexClass.mockReset();
     mocks.findCodexBinaryPath.mockReset();
-    mocks.requestBashApproval.mockReturnValue(
-      Effect.succeed({ action: 'approve' }),
-    );
 
     mocks.registerRun.mockReturnValue(Effect.void);
     mocks.findCodexBinaryPath.mockReturnValue(undefined);

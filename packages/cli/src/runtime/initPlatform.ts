@@ -11,10 +11,9 @@ import {
 } from '@agent/runtime';
 import { createPlatformAgentDirectories } from '@agent/index';
 import type { SupabaseSessionLog } from '@auth/SupabaseSession';
-import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
+import { bootstrapHost } from '@controllers/hostBootstrap';
 import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
-import { consoleLogSink, setLogSink } from '@logger/logSink';
-import { setDebugModeConfig } from '@logger/logUtils';
+import { consoleLogSink, setLogSink, silentLogSink } from '@logger/logSink';
 import { initPlatform, tryPlatform, type Platform } from '@platform/platform';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
@@ -30,23 +29,14 @@ import {
   type ProcessRuntime,
 } from '@platform/processRuntime';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
-import { installLongRunningModelDispatcher } from '@platform/defaults/longRunningModelTransport';
-import {
-  createNodeWorkspaceRoots,
-  initializeNodeRuntimeSkills,
-} from '@platform/defaults/nodeHost';
-import {
-  createNodeStorageProvider,
-  DEFAULT_NODE_STORAGE_ROOT,
-} from '@platform/defaults/nodeStorage';
+import { createNodeWorkspaceRoots } from '@platform/defaults/nodeHost';
+import { DEFAULT_NODE_STORAGE_ROOT } from '@platform/defaults/nodeStorage';
 import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { sessionStoreClearedMessage } from '@shared/copy/sessionStore';
 import type { SessionOpenError } from '@shared/session/database';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { registerRuntimeShutdownHandlers } from '@tools/agentCliSessionStores';
-import { seedDisabledToolDefaults } from '@tools/toolAvailability';
-import { initProcessSettingHost } from '@utils/config/platformSettings';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
@@ -116,12 +106,13 @@ export type CliPlatformServices = Pick<Platform, 'lifecycle'> &
     readonly secrets: PlatformSecrets;
     /**
      * The process roots this init installed: one process, one project (the
-     * `--cwd` workspace). Undefined only when another root installed the
-     * platform before this init ran (a test harness's fake host), so the
-     * caller that needs them reports their absence rather than falling back
-     * to a process-wide lookup.
+     * `--cwd` workspace) -- or, when another root installed the platform
+     * before this init ran (a test harness's fake host), the roots that
+     * root's process session was opened over. A process with neither is a
+     * composition defect the init refuses below, so every caller gets roots
+     * rather than branching on their absence.
      */
-    readonly roots?: WorkspaceRoots;
+    readonly roots: WorkspaceRoots;
     /**
      * The process session over the process roots: one CLI process, one
      * project, one persistent session, opened by the first entry point that
@@ -276,12 +267,9 @@ export function initCliPlatform(
     quietPlatformLogs = context.quietLogs;
     // The terminal is the operator's own, so entries reach it unredacted — the
     // contract `logSinks.ts` documents for CLI output.
-    setLogSink(
-      quietPlatformLogs ? { write: () => undefined } : consoleLogSink,
-      {
-        trusted: true,
-      },
-    );
+    setLogSink(quietPlatformLogs ? silentLogSink : consoleLogSink, {
+      trusted: true,
+    });
 
     // The one Effect runtime of this process (PRD 7.7) comes first: the stores
     // below open as Effect programs, and the session graph and every
@@ -316,7 +304,6 @@ export function initCliPlatform(
         const installed = tryPlatform();
         if (installed) return { globalState, platform: installed };
 
-        installLongRunningModelDispatcher();
         const stateStores = yield* openCliWorkspaceState({
           storageRoot: context.storageRoot,
           workspacePath: context.cwd,
@@ -380,10 +367,20 @@ export function initCliPlatform(
           ),
         );
 
-        // Seed first-install defaults (e.g. disabled tools). No-ops for anyone
-        // whose DISABLED_TOOLS list already exists, so upgrading users keep the
-        // tools they enabled.
-        yield* seedDisabledToolDefaults(globalState);
+        // Everything this process installs once beside its platform, in the
+        // order the shared bootstrap owns for all three hosts. Before
+        // `initPlatform` below, not after: its one fallible step (the
+        // first-install tool seed) must fail while the platform is still
+        // private, as the seed did when this body owned it.
+        yield* bootstrapHost({
+          host: 'cli',
+          roots,
+          secrets: cliSecrets,
+          skills: {
+            resourcesPath: context.resourcesPath,
+            skillSourceOptions: context.skillSourceOptions,
+          },
+        });
 
         // Kill agent-spawned OS children before the process dies, exactly as the
         // extension and desktop hosts do. Background `bash` runs are spawned
@@ -406,15 +403,8 @@ export function initCliPlatform(
         });
 
         initPlatform(platform);
-        // The logger's process-wide debug-mode read, over this host's
-        // configuration.
-        setDebugModeConfig(roots.config);
         installedRoots = roots;
         sessionOpen = openSession;
-        initProcessSettingHost('cli');
-        // TeXRA's account plane (ChatGPT / Grok sign-in). Without
-        // this the model layer is bring-your-own-key. See installTexraAccountProbes.
-        installTexraAccountProbes(cliSecrets);
         if (context.installSignalHandlers !== false) {
           installCliShutdownSignalHandlers(lifecycle);
         }
@@ -464,18 +454,13 @@ export function initCliPlatform(
               );
         }),
       lifecycle: services.lifecycle,
-      roots: installedRoots,
+      roots: settingSlots,
     };
 
     if (!supabaseAuthInitialized) {
       initializeCliSupabaseAuth(cliServices.secrets, cliPlatformLog);
       supabaseAuthInitialized = true;
     }
-
-    initializeNodeRuntimeSkills({
-      resourcesPath: context.resourcesPath,
-      skillSourceOptions: context.skillSourceOptions,
-    });
 
     return cliServices;
   });

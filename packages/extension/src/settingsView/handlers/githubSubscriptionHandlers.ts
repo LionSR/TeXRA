@@ -21,7 +21,11 @@ import {
   revealProgressRun,
 } from '@progressView/progressNavigation';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import { SETTINGS_VIEW_CMD, type SettingsMessageFor } from '@shared/schemas';
+import {
+  SETTINGS_VIEW_CMD,
+  type SettingsMessageFor,
+  type SettingsViewInboundHandlerRegistry,
+} from '@shared/schemas';
 import {
   GITHUB_TOKEN_CREATE_URL,
   GITHUB_TOKEN_PROMPT,
@@ -36,12 +40,41 @@ import {
   type SettingsHandlerContext,
 } from './SettingsHandlerContext';
 
+/** The Git tab's inbound arms, spread into the settings-view registry. */
+type GitTabHandlers = Pick<
+  SettingsViewInboundHandlerRegistry,
+  | typeof SETTINGS_VIEW_CMD.GET_GITHUB_TOKEN_STATUS
+  | typeof SETTINGS_VIEW_CMD.SET_GITHUB_TOKEN
+  | typeof SETTINGS_VIEW_CMD.REMOVE_GITHUB_TOKEN
+  | typeof SETTINGS_VIEW_CMD.OPEN_GITHUB_TOKEN_URL
+  | typeof SETTINGS_VIEW_CMD.GET_PR_SUBSCRIPTIONS
+  | typeof SETTINGS_VIEW_CMD.UNSUBSCRIBE_PR
+  | typeof SETTINGS_VIEW_CMD.OPEN_PR_SUBSCRIPTION_STREAM
+>;
+
 /** GitHub token and subscription handler delegate. */
 export class GitHubSubscriptionHandlers {
+  readonly handlers: GitTabHandlers;
+
   constructor(
     private readonly ctx: SettingsHandlerContext,
     private readonly secrets: PlatformSecrets,
-  ) {}
+  ) {
+    // Each arm is a settings-view message, so its program settles on the
+    // view's boundary here rather than in the view's own registry.
+    this.handlers = {
+      getGitHubTokenStatus: () =>
+        ctx.run(ctx.withActiveWebview((w) => this.sendGitHubTokenStatus(w))),
+      setGitHubToken: () => ctx.run(this.handleSetGitHubToken()),
+      removeGitHubToken: () => ctx.run(this.handleRemoveGitHubToken()),
+      openGitHubTokenUrl: () => ctx.run(this.openGitHubTokenUrl()),
+      getPRSubscriptions: () =>
+        ctx.run(ctx.withActiveWebview((w) => this.sendPRSubscriptions(w))),
+      unsubscribePR: (message) => ctx.run(this.handleUnsubscribePR(message)),
+      openPRSubscriptionStream: (message) =>
+        ctx.run(this.handleOpenPRSubscriptionStream(message)),
+    };
+  }
 
   sendGitHubTokenStatus(webview: vscode.Webview) {
     return Effect.flatMap(resolveGitHubTokenSource(this.secrets), (status) =>
@@ -52,7 +85,7 @@ export class GitHubSubscriptionHandlers {
     );
   }
 
-  handleSetGitHubToken() {
+  private handleSetGitHubToken() {
     return Effect.gen({ self: this }, function* () {
       const token = yield* Effect.promise(() =>
         vscode.window.showInputBox({
@@ -81,7 +114,7 @@ export class GitHubSubscriptionHandlers {
     });
   }
 
-  handleRemoveGitHubToken() {
+  private handleRemoveGitHubToken() {
     return withHandlerErrorHandling(
       this.ctx,
       'Failed to remove GitHub token',
@@ -93,31 +126,37 @@ export class GitHubSubscriptionHandlers {
     );
   }
 
-  openGitHubTokenUrl() {
+  private openGitHubTokenUrl() {
     return Effect.promise(() =>
       vscode.env.openExternal(vscode.Uri.parse(GITHUB_TOKEN_CREATE_URL)),
     ).pipe(Effect.asVoid);
   }
 
   sendPRSubscriptions(webview: vscode.Webview) {
-    return postToWebview(webview, {
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_PR_SUBSCRIPTIONS,
-      subscriptions: listGitHubSubscriptionEntries(getProgressRunLabel),
+    return Effect.flatMap(
+      listGitHubSubscriptionEntries(getProgressRunLabel),
+      (subscriptions) =>
+        postToWebview(webview, {
+          command: SETTINGS_VIEW_COMMANDS.UPDATE_PR_SUBSCRIPTIONS,
+          subscriptions,
+        }),
+    );
+  }
+
+  private handleUnsubscribePR(
+    data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.UNSUBSCRIBE_PR>,
+  ) {
+    return Effect.gen(function* () {
+      const removed = yield* unsubscribeGitHubKey(data.key);
+      if (removed === 0) {
+        void vscode.window.showInformationMessage(
+          noActiveGitHubSubscriptionMessage(data.key),
+        );
+      }
     });
   }
 
-  handleUnsubscribePR(
-    data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.UNSUBSCRIBE_PR>,
-  ): void {
-    const removed = unsubscribeGitHubKey(data.key);
-    if (removed === 0) {
-      void vscode.window.showInformationMessage(
-        noActiveGitHubSubscriptionMessage(data.key),
-      );
-    }
-  }
-
-  handleOpenPRSubscriptionStream(
+  private handleOpenPRSubscriptionStream(
     data: SettingsMessageFor<
       typeof SETTINGS_VIEW_CMD.OPEN_PR_SUBSCRIPTION_STREAM
     >,

@@ -51,6 +51,22 @@ await build({
       },
     },
     {
+      // `@texra-ai/llm` is a workspace package of TypeScript sources that is
+      // never published, so leaving it external would ship a bundle importing
+      // a package no consumer can install. `packages: 'external'` externalizes
+      // every bare specifier, so the workspace source is pulled back in here.
+      name: 'bundle-workspace-llm',
+      setup(buildContext) {
+        buildContext.onResolve(
+          { filter: /^@texra-ai\/llm(?:\/|$)/ },
+          ({ path }) => ({
+            path: fileURLToPath(import.meta.resolve(path)),
+            external: false,
+          }),
+        );
+      },
+    },
+    {
       name: 'quickjs-wasm',
       setup(buildContext) {
         buildContext.onResolve(

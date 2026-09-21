@@ -13,7 +13,7 @@ import {
   PreparedHistorySchema,
   type MessageSchema,
   type ModelOrigin,
-} from '@llm/turn';
+} from '@texra-ai/llm/turn';
 import {
   aggregateId as qualifyAggregateId,
   type RunId,

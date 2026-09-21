@@ -16,9 +16,23 @@ describe('authCallback', () => {
     expect(
       parseAuthCallbackCode({
         path: '/auth-callback',
-        query: 'error=access_denied&error_description=Nope',
+        query: 'error=server_error&error_description=Nope',
       }),
     ).toEqual({ success: false, error: 'Nope', isAuthError: true });
+  });
+
+  it('marks a declined consent as a cancellation', () => {
+    expect(
+      parseAuthCallbackCode({
+        path: '/auth-callback',
+        query: 'error=access_denied&error_description=Nope',
+      }),
+    ).toEqual({
+      success: false,
+      error: 'Nope',
+      isAuthError: true,
+      cancelled: true,
+    });
   });
 
   it('reports a missing code', () => {

@@ -62,6 +62,9 @@ const mocks = vi.hoisted(() => ({
     storage: '/workspace/.texra/storage',
     config: { get: (_key: string, def: unknown) => def },
     workspaceState: {},
+    // The shared bootstrap seeds the first-install tool defaults through the
+    // roots' own `globalState` slot, which is the store the init opened.
+    globalState: mocks.cliGlobalState,
   })),
   initializeCliSupabaseAuth: vi.fn(),
   initializeNodeRuntimeSkills: vi.fn(),
@@ -70,10 +73,9 @@ const mocks = vi.hoisted(() => ({
   tryPlatform: vi.fn(),
   publishPlatform: vi.fn(),
   // Collects the programs registered via the (mocked) lifecycle host's
-  // onShutdown so a test can run them and assert the usage-log dispose was
-  // wired.
+  // onShutdown so a test can run them and assert the agent shutdown drain
+  // was wired.
   shutdownHandlers: [] as Array<Effect.Effect<void, unknown>>,
-  /** Records the usage-log dispose when its program runs. */
 }));
 
 vi.mock('@cli/runtime/supabaseAuth', async () => {
@@ -95,6 +97,9 @@ vi.mock('@cli/runtime/supabaseAuth', async () => {
 
 vi.mock('@logger/logSink', () => ({
   consoleLogSink: mocks.consoleLogSink,
+  // The sink a `--quiet` init picks instead; the double only has to be a
+  // distinct value, since `setLogSink` is a spy here.
+  silentLogSink: { write: () => undefined },
   setLogSink: vi.fn(),
 }));
 

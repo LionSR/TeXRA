@@ -198,10 +198,6 @@ export class Database extends Context.Service<
       Extract<SessionEvent, { type: 'flow.snapshot' }> | null,
       DatabaseReadFailed
     >;
-    /** Direct child creation edges and their labels from one captured prefix. */
-    readonly readRunChildren: (
-      id: AggregateId,
-    ) => Effect.Effect<readonly SessionEvent[], DatabaseReadFailed>;
     /** Bounded current CLI input rows, ordered oldest first. */
     readonly readInputHistory: () => Effect.Effect<
       readonly InputHistoryRecord[],

@@ -140,16 +140,26 @@ by what it reaches, not by how many tests it has:
 
 Membership is computed from the suite's source, not declared. A suite under a
 `pure` directory is `pure` unless it calls `vi.mock` / `vi.doMock` on a
-repository module, imports `@platform/*` or a support module that installs a
-host, or brings its own DOM (`lit`, `jsdom`) — then it is `kernel`. What a
-source scan cannot see — a module under test that reads `platform()` or the
-workspace roots itself, a pair of suites sharing terminal state — is found by
-running the suite alone with no host and kept by name in
-`config/ratchets/pure-tier-kernel-suites.json`, shrink-only. So the practical
+repository module, imports `@platform/*` or a support module that installs or
+reads a host, or brings its own DOM (`lit`, `jsdom`) — then it is `kernel`. What
+a source scan cannot see — a pair of suites sharing terminal state — is found by
+file-order shuffles and kept by name in
+`config/ratchets/pure-tier-kernel-suites.json`, shrink-only. A module under test
+that reads `platform()` or the workspace roots itself is not an entry there: it
+is a production defect, and the fix is to make it take its host as a layer or a
+value. So the practical
 rule for a new suite: test the module directly, provide dependencies as values
 or layers, and do not mock repository modules. A `vi.mock` is what moves your
 suite to the slow tier; removing it moves it back. The tier is not a target to
 opt into — write the suite the durable way and it lands there.
+
+`packages/llm` carries a third project, in its own
+`packages/llm/vitest.live.config.mjs`: one suite per HTTP protocol, run
+against the real provider (`npm run test:live`). It sits outside
+`vitest.config.mjs` on purpose — it spends money and needs the network, so it
+is never part of `npm test`. Each suite gates itself on its route's key and
+skips without it; CI runs it only on the `live-llm` label
+(`.github/workflows/live-llm.yml`).
 
 ### Scoping the test run
 
@@ -249,7 +259,7 @@ frozen deep-import lists, not another lint rule.
 
 Three of those baselines budget the code itself rather than an import edge, and all three run in the pure tier:
 
-- `file-size-baseline.json` — a per-file line budget for every production file over 500 lines (`fileSizeRatchet.vitest.ts`): growth fails, a new oversized file fails, and an entry whose file is gone or has fallen to the threshold fails; a file that merely shrank does not, so deleting lines is never the thing that breaks CI.
+- `file-size-baseline.json` — a per-file line budget for every production file over 500 lines (`fileSizeRatchet.vitest.ts`): growth fails, a new oversized file fails, and an entry whose file is gone or has fallen to the threshold fails, which is the one way deleting lines breaks the suite: drop the entry in the same PR. A file that shrank but stayed over the threshold keeps its budget.
 - `refuted-candidates.json` — the refactor candidates that were investigated, costed and refused, with their ruling anchors (`refutedCandidatesRatchet.vitest.ts` pins each symbol's shape; `.github/workflows/refuted-candidates.yml` fails a PR whose diff touches one without citing its ruling id in the body). Re-proposing a refused candidate as specified is what it stops; landing one on new evidence cites the id and rewrites the entry.
 - `unknown-error-baseline.json` — a per-file count of `Effect.Effect<..., unknown, ...>` signatures (`unknownErrorChannelRatchet.vitest.ts`), exact and shrink-only like the effect-migration ratchet: type the channel with the tagged error the path already raises and lower the entry in the same PR.
 
@@ -771,7 +781,7 @@ These rules were earned from a 2026-07 whole-repo simplification campaign, not d
 
 - **No bare module-level mutable singletons in tested code.** State that tests need to isolate belongs behind an injectable, resettable handle, not a bare module-level variable. The only test flake hit during the 2026-07 campaign was a module-level session singleton colliding across suites.
 
-- **Serialize asynchronous work through Effect.** Use Effect concurrency primitives or `withPerKeyLane` (`src/utils/core/perKeyQueue.ts`) when operations must run one at a time per key. Resource ownership must be released on success, failure, and interruption. Do not introduce `p-queue` orchestration or hand-written Promise chains; follow the TeXRA 1.0 direction above.
+- **Serialize asynchronous work through Effect.** Use Effect concurrency primitives or `withPerKeyLane` (`src/utils/core/perKeyQueue.ts`) when operations must run one at a time per key. Resource ownership must be released on success, failure, and interruption. Do not hand-write Promise chains for it; follow the TeXRA 1.0 direction above.
 
 ### Test fixtures and fakes
 

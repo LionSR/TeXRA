@@ -89,9 +89,8 @@ function isAgentRunEntry(
  *
  * Every host's history listing must apply this filter. Lookups by explicit id
  * (`texra history show <id>`, export, resume) must not: naming a child run is
- * an explicit request to see it. `listRuns()` itself stays unfiltered
- * because tool-facing callers like `ExecutionsTool` need the raw listing to
- * manage background processes and child runs.
+ * an explicit request to see it, and `listRuns()` itself therefore stays
+ * unfiltered.
  */
 export function isUserVisibleRun(
   entry: RunListingEntry,

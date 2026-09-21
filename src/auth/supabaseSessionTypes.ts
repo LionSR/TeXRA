@@ -66,6 +66,8 @@ interface SupabaseCallbackParseError {
   success: false;
   error: string;
   isAuthError?: boolean;
+  /** The user declined consent in the browser; see `AuthCallbackParseError`. */
+  cancelled?: boolean;
 }
 
 export type SupabaseCallbackResult =

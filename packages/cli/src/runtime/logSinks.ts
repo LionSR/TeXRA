@@ -10,6 +10,12 @@ import {
   CLI_NDJSON_CONTRACT,
   type CliNdjsonRecord,
 } from '@cli/schemas/cliOutput';
+import {
+  entryChannel,
+  entryMessage,
+  type LogEntry,
+  type LogSink as HostLogSink,
+} from '@logger/logSink';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { LogLevel } from '@shared/schemas';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
@@ -232,6 +238,25 @@ export function askCliQuestion(
       }),
   );
 }
+
+/**
+ * The host diagnostic sink of this process until a platform installs its own.
+ * `@logger/logSink`'s console fallback sends DEBUG and INFO to stdout, and
+ * the process runtime logs while its layers build (`UsageLogService started
+ * …`) — before `initCliPlatform` runs its own `setLogSink`, and for `clone`
+ * and `install-github-action` before a platform that never comes up. Under
+ * `--output-format ndjson` that line is the first thing on stdout and the
+ * stream stops being parseable. This renders the same line `consoleLogSink`
+ * does, with every level on stderr: nothing is dropped, and stdout stays the
+ * command's result. Installed by `bin/texra.ts` as its first statement and
+ * again by `defineCliCommand` once the context has answered `--quiet`.
+ */
+export const prePlatformDiagnosticSink: HostLogSink = Object.freeze({
+  write(entry: LogEntry) {
+    const channel = entryChannel(entry);
+    writeTextStderr(`${channel ? `[${channel}] ` : ''}${entryMessage(entry)}`);
+  },
+});
 
 class StderrTextSink implements LogSink {
   write(record: LogRecord): void {

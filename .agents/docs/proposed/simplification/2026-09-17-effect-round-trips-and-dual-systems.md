@@ -424,10 +424,6 @@ recorded above. What is left is a short list, and none of it is a round trip.
   it. Beside it: `isCodexSignedIn` reports signed-out on an unreadable secret
   store with a loud warn, and turning that into a hard failure belongs in
   `getSubscriptionSessionStatus` for both providers, not in the probe.
-- **`extractScratchpad`'s `Effect` wrapper.** The function is pure since the
-  pandoc tier was retired (#12863), so the wrapper buys nothing. Unwrapping it
-  is a one-line edit in `src/agent/runtime/loop/reflection.ts`, deferred only
-  so that file had one owner during wave 8.
 - **Seven stale `createNodePlatform` references** in
   `docs/architecture/2026-07-26-embedding-the-agent-runtime.md`. The export is
   gone; the published embedding recipe still names it. It needs its own PR

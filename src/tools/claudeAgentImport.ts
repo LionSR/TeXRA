@@ -13,6 +13,10 @@
  *    the local `node_modules`, the global npm prefix, and PATH (in that
  *    priority order) and pass the result as `pathToClaudeCodeExecutable` to
  *    `query()`. Results are cached for the session.
+ *
+ * 3. `getClaudeAgentConfig()` — the same lazy access for `claudeAgentConfig`,
+ *    which the tool-registration path must not pull in eagerly, plus the one
+ *    reading of the call's effective permission mode.
  */
 
 import { existsSync } from 'node:fs';
@@ -21,6 +25,8 @@ import * as path from 'node:path';
 import { Effect } from 'effect';
 
 import { isModuleNotFoundError } from '@common/errors';
+import type { StateStore } from '@platform/interfaces';
+import type { ClaudeAgentPermissionMode } from '@shared/schemas';
 import { ensureError } from '@utils/errors/errorMessage';
 import { IS_WINDOWS } from '@utils/system/platformPaths';
 import {
@@ -149,3 +155,24 @@ export const findClaudeBinaryPath = createCachedBinaryResolver(() => {
     pathCommand: 'claude',
   };
 });
+
+/** Lazy accessor for claudeAgentConfig.ts exports (loaded once, cached). */
+let configModule: typeof import('./claudeAgentConfig.js') | null = null;
+export const getClaudeAgentConfig = Effect.promise(
+  async () => (configModule ??= await import('./claudeAgentConfig.js')),
+);
+
+/**
+ * The permission mode a claude_code call runs under: its own override, else
+ * the workspace default. The approval prompt the loop opens and the launch
+ * that follows it read the same one from here.
+ */
+export const claudeAgentPermissionMode = (
+  input: { readonly permission_mode?: ClaudeAgentPermissionMode | null },
+  workspaceState: StateStore,
+): Effect.Effect<ClaudeAgentPermissionMode> =>
+  Effect.map(getClaudeAgentConfig, (config) =>
+    input.permission_mode == null
+      ? config.getClaudeAgentPermissionMode(workspaceState)
+      : input.permission_mode,
+  );

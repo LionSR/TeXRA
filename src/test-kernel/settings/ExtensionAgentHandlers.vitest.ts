@@ -98,6 +98,7 @@ async function createHandlerFixture(options: HandlerFixtureOptions = {}) {
       extensionContext: {} as never,
       withActiveWebview: () => Effect.void,
       postMessageToActiveWebview: () => Effect.void,
+      run: (program) => testRuntime().runPromise(program),
     },
     refreshAfterAgentMutation,
     { workspaceState, globalState },

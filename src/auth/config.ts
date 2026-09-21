@@ -125,7 +125,7 @@ export function getExtensionId(): string {
  *
  * Note: This returns the base URI. Hosts that must route web redirects through
  * their own environment (VS Code's `env.asExternalUri()` for Codespaces and
- * Remote SSH) wrap it themselves — see `SupabaseAuthProvider.buildOAuthOptions`.
+ * Remote SSH) wrap it themselves — see `SupabaseAuthProvider.buildCallbackUrl`.
  */
 export function getAuthCallbackUri(uriScheme: string): string {
   return `${uriScheme}://${getExtensionId()}/auth-callback`;

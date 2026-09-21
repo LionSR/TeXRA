@@ -240,9 +240,9 @@ export interface TerminalRunResult {
 type TerminalRunFailureReason = 'terminal-unavailable' | 'execution-failed';
 
 /**
- * The one failure of {@link TerminalRunner.runCommand}. Callers match the
- * tag and read `reason` instead of a message, so "this host would not give
- * us a terminal" and "the command's shell execution faulted" stay
+ * The one failure of a terminal run. Callers match the tag and read
+ * `reason` instead of a message, so "this host would not give us a
+ * terminal" and "the command's shell execution faulted" stay
  * distinguishable at the call site.
  */
 export class TerminalRunFailed extends Data.TaggedError('TerminalRunFailed')<{
@@ -251,26 +251,3 @@ export class TerminalRunFailed extends Data.TaggedError('TerminalRunFailed')<{
   readonly command: string;
   readonly cause?: unknown;
 }> {}
-
-/**
- * Integrated-terminal surface. The setup agent uses this for commands
- * the captured-stdio `bash` tool cannot handle: `sudo` password prompts,
- * other interactive TTY prompts, and any flow where the user must type
- * into the running process.
- *
- * Implementations should prefer VS Code's stable `Terminal.shellIntegration`
- * API (since 1.93) so the agent can read back exit code + output. When
- * shell integration is unavailable the implementation may return an
- * `undefined` exit code with empty output — the caller treats that the
- * same as "user interrupted", since neither path tells us anything
- * actionable.
- *
- * The member is an `Effect`: a host fault reaches the caller as
- * {@link TerminalRunFailed} rather than as `unknown`, and interrupting the
- * fiber that runs it abandons the wait instead of leaving it uninterruptible.
- */
-export interface TerminalRunner {
-  runCommand(
-    request: TerminalRunRequest,
-  ): Effect.Effect<TerminalRunResult, TerminalRunFailed>;
-}

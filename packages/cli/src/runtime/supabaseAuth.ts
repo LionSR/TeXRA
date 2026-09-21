@@ -5,19 +5,20 @@ import { Effect, FileSystem } from 'effect';
 import { invalidateRemoteAgentsAfterSignOut } from '@agent/index';
 import { unwrapAuthPortCause } from '@auth/authProgram';
 import { DEFAULT_OAUTH_PROVIDER, type OAuthProvider } from '@auth/config';
-import {
-  refreshRemoteAgentCatalogAfterSignOut,
-  requireOAuthRedirectUrl,
-} from '@auth/authFlowEffects';
+import { refreshRemoteAgentCatalogAfterSignOut } from '@auth/authFlowEffects';
 import { createSupabaseAuth, type SupabaseAuthShape } from '@auth/SupabaseAuth';
 import {
   toStorableSupabaseSession,
   type SupabaseSession,
-  type SupabaseSessionCoordinator,
   type SupabaseSessionLog,
 } from '@auth/SupabaseSession';
 import type { StoredSessionState } from '@auth/TokenProvider';
 import { completeDeviceSession } from '@auth/oauth/deviceAuthorization';
+import { SupabaseSignInCoordinator } from '@controllers/auth/supabaseSignIn';
+import {
+  memoryPendingOAuthSlots,
+  PendingOAuthStore,
+} from '@controllers/auth/pendingOAuthStore';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { GlobalStorageFs } from '@platform/rootedFs';
 import type { PlatformSecrets } from '@platform/secrets';
@@ -25,10 +26,7 @@ import { ensureError } from '@utils/errors/errorMessage';
 
 // Local file imports
 import { openBrowser } from './browser';
-import {
-  startLoopbackCallbackServer,
-  type LoopbackCallbackServer,
-} from './supabaseAuthCallbackServer';
+import { loopbackCallbackTransport } from './supabaseAuthCallbackServer';
 import {
   pollForDeviceSession,
   requestDeviceAuthorization,
@@ -121,94 +119,64 @@ function cliSupabaseAuth(): SupabaseAuthShape {
 }
 
 /**
- * The CLI's browser sign-in: hold the loopback callback server open for one
- * login attempt. Cancellation arrives as fiber interruption, so the caller's
- * own run edge owns it; the callback server's teardown is the release half of
- * the acquisition, which runs whether the attempt succeeds, fails, or is
- * cancelled.
+ * The CLI's browser sign-in: one shared sign-in attempt over the loopback
+ * callback transport. Cancellation arrives as fiber interruption from the
+ * command's own run edge, and the callback server's teardown is the release
+ * half of the transport's acquisition, which runs whether the attempt
+ * succeeds, fails, or is cancelled.
  */
 export const signInCliSupabase = Effect.fn('supabaseAuth.signInCliSupabase')(
   function* (runtime: ProcessRuntime, options: CliLoginOptions = {}) {
-    const authCoordinator = cliSupabaseAuth().coordinator;
-    const callbackServer = yield* Effect.acquireRelease(
-      startLoopbackCallbackServer(runtime, authCoordinator),
-      // A storage commit that began before cancellation still settles the
-      // sign-in (the historical `commitStarted` contract), so the teardown
-      // waits that commit out instead of closing the server under it: a
-      // release runs uninterruptibly, which is what the old Promise edge
-      // bought by re-awaiting on a fresh fiber. The wait is bounded by the
-      // attempt timeout the server arms in its own scope, so a commit that
-      // never settles cannot hold the teardown open. A close that cannot
-      // complete on a listening server is a defect, not a login failure — by
-      // then the session is already stored.
-      (server) =>
-        Effect.suspend(() =>
-          server.commitStarted
-            ? Effect.ignore(server.waitForSession)
-            : Effect.void,
-        ).pipe(Effect.andThen(Effect.orDie(server.close))),
-    );
-    return yield* loopbackSignIn(authCoordinator, callbackServer, options);
-  },
-  Effect.scoped,
-);
-
-/**
- * The loopback sign-in program: drive the OAuth redirect and browser launch,
- * then await the callback session. The caller's cancellation arrives as fiber
- * interruption (R5), which `LoopbackCallbackServer.cancel` turns into refused
- * callbacks; the server is closed by the acquisition's release on success,
- * failure, and cancellation alike.
- */
-const loopbackSignIn = (
-  authCoordinator: SupabaseSessionCoordinator,
-  callbackServer: LoopbackCallbackServer,
-  options: CliLoginOptions,
-): Effect.Effect<SupabaseSession, Error> => {
-  const provider = options.provider ?? DEFAULT_OAUTH_PROVIDER;
-  const queryParams = buildOAuthQueryParams(provider, options);
-  return Effect.gen(function* () {
+    const auth = cliSupabaseAuth();
+    const provider = options.provider ?? DEFAULT_OAUTH_PROVIDER;
+    // An account switch starts from no session at all, so the picker the
+    // provider shows is not shortcut by the one already signed in.
     if (options.selectAccount || options.loginHint) {
-      yield* authCoordinator
+      yield* auth.coordinator
         .clearSession()
         .pipe(Effect.mapError(unwrapAuthPortCause));
     }
-    const { data, error } = yield* Effect.tryPromise({
+    const coordinator = new SupabaseSignInCoordinator({
+      auth,
+      store: new PendingOAuthStore(memoryPendingOAuthSlots()),
+      transport: loopbackCallbackTransport({
+        runtime,
+        openBrowser: (url) => presentCliSignInUrl(url, options),
+        log: (message) => deferredAuthLog.warn?.('cli-auth', message),
+      }),
+    });
+    return yield* coordinator
+      .signIn({
+        provider,
+        queryParams: buildOAuthQueryParams(provider, options),
+      })
+      .pipe(Effect.mapError(ensureError));
+  },
+);
+
+/**
+ * Show the consent URL: print it when the terminal asked for no browser, and
+ * otherwise hand it to the platform launcher. The coordinator races this
+ * against the callback, so a launcher that never returns cannot strand a
+ * sign-in that already completed.
+ */
+function presentCliSignInUrl(
+  url: string,
+  options: CliLoginOptions,
+): Effect.Effect<void, Error> {
+  return Effect.suspend(() => {
+    options.onAuthUrl?.(url);
+    if (!(options.openBrowser ?? true)) return Effect.void;
+    return Effect.tryPromise({
       try: () =>
-        cliSupabaseAuth().client.auth.signInWithOAuth({
-          provider,
-          options: {
-            redirectTo: callbackServer.redirectTo,
-            ...(queryParams && { queryParams }),
-          },
-        }),
+        openBrowser(
+          url,
+          options.manualBrowserHint ?? 'texra login --no-browser',
+        ),
       catch: (cause) => ensureError(cause),
     });
-    const authUrl = yield* Effect.try({
-      try: () => requireOAuthRedirectUrl(data, error),
-      catch: (cause) => ensureError(cause),
-    });
-
-    options.onAuthUrl?.(authUrl);
-    if (options.openBrowser ?? true) {
-      // A completed callback supersedes the launcher result, while callback
-      // failure or cancellation still preempts a stalled launcher.
-      yield* Effect.raceFirst(
-        Effect.tryPromise({
-          try: () =>
-            openBrowser(
-              authUrl,
-              options.manualBrowserHint ?? 'texra login --no-browser',
-            ),
-          catch: (cause) => ensureError(cause),
-        }),
-        Effect.asVoid(callbackServer.waitForSession),
-      );
-    }
-
-    return yield* callbackServer.waitForSession;
-  }).pipe(Effect.onInterrupt(() => callbackServer.cancel));
-};
+  });
+}
 
 function buildOAuthQueryParams(
   provider: OAuthProvider,

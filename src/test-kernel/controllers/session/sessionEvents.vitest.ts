@@ -1041,14 +1041,17 @@ describe('Sessions owner', () => {
         });
         const release = yield* Deferred.make<void>();
         const untracked = yield* Deferred.make<void>();
-        handle.suspend(
+        const parkStopped = yield* Deferred.make<void>();
+        session.runs.track(handle);
+        yield* session.runs.park(
+          handle,
+          parkStopped,
           Effect.gen(function* () {
             session.runs.untrack(handle.runId);
             yield* Deferred.succeed(untracked, undefined);
             yield* Deferred.await(release);
           }),
         );
-        session.runs.track(handle);
         const closing = yield* Effect.forkChild(closeSession(root));
         yield* Deferred.await(untracked);
         expect(session.runs.getActiveIds()).toEqual([]);

@@ -196,7 +196,12 @@ async function startApproval(): Promise<StartedApproval> {
     '/workspace/notes.txt',
     'run-approval' as RunId,
   );
-  await vi.waitFor(() => expect(currentProposedUri()).toBeDefined());
+  // `present` carries staging through to the host opening its diff view — its
+  // `inFlight` deferred is only filled once `preview.present()` has returned —
+  // so the proposed URI is there the moment this resolves. Polling for that
+  // side effect instead raced the runner: `vi.waitFor` gives up after a second,
+  // and a loaded Windows shard stages slower than that.
+  await request.presented;
   return { ...harness, ...request };
 }
 

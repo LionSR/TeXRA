@@ -1,7 +1,7 @@
 /**
  * Setup-tool integrated-terminal runner.
  *
- * Implements the host-neutral `TerminalRunner.runCommand` contract.
+ * Implements the host-neutral `SetupPlatformShape.terminal` contract.
  * Prefers VS Code's stable `Terminal.shellIntegration` API (since 1.93)
  * so the agent gets exit code + output. When integration isn't available —
  * custom shell, user

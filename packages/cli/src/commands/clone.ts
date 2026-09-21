@@ -24,11 +24,6 @@ import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 // Local imports - runtime
 import { CliUsageError, type CliContext } from '../runtime/cliContext';
 
-import {
-  installCliProcessRuntime,
-  refusingGlobalDatabase,
-  refusingStateStore,
-} from '../runtime/cliProcessRuntime';
 import { getCliSecrets } from '../runtime/cliSecrets';
 import { CliExitCode } from '../runtime/exitCodes';
 import { askCliQuestion, writeTextStderr } from '../runtime/logSinks';
@@ -194,7 +189,17 @@ export const cloneCommand = withUsageSections(
         description: 'Directory to create or clone into (defaults to --cwd)',
       },
     },
-    run: async (context, ctx) => {
+    // `clone` runs without a platform, but its token ports are `CliSecrets`,
+    // whose reads and writes are Effect programs. The process runtime its
+    // entry installs for them serves a state store and a global-root handle
+    // that refuse: clone serves no application state and reads no record, and
+    // opening either would create the global storage directory and its
+    // database, which an env-token clone on a read-only storage root must
+    // not require.
+    install: 'noPlatform',
+    // The project and destination parses are the builder's, above the
+    // program: they refuse before anything is installed.
+    run: (context, ctx) => {
       const remote = parseLatexGitUrl(ctx.args.project);
       if (!remote) {
         throw new CliUsageError(
@@ -211,41 +216,28 @@ export const cloneCommand = withUsageSections(
         ? resolve(context.cwd, ctx.args.destination)
         : context.cwd;
 
-      // `clone` runs without a platform, but its token ports are
-      // `CliSecrets`, whose reads and writes are Effect programs run at this
-      // host edge. Install the process runtime before the first one, the same
-      // way the update check does for the entry that precedes any platform —
-      // but with a state store and a global-root handle that refuse: clone
-      // serves no application state and reads no record, and opening either
-      // would create the global storage directory and its database, which an
-      // env-token clone on a read-only storage root must not require.
-      const runtime = await installCliProcessRuntime(context.storageRoot, {
-        appState: refusingStateStore(),
-        globalDatabase: refusingGlobalDatabase,
-      });
-
-      const outcome = await runtime.runPromise(
-        cloneOverleafProject(
+      return Effect.gen(function* () {
+        const outcome = yield* cloneOverleafProject(
           remote,
           workspacePath,
           buildOverleafClonePorts(context, remote, workspacePath),
-        ),
-      );
-      switch (outcome.status) {
-        case 'success':
-          return CliExitCode.Success;
-        case 'cancelled':
-          writeTextStderr('Clone cancelled.');
-          return CliExitCode.Cancelled;
-        case 'invalidToken':
-          return CliExitCode.Usage;
-        case 'gitMissing':
-        case 'workspaceUnreadable':
-        case 'workspaceNotEmpty':
-        case 'authFailure':
-        case 'cloneFailed':
-          return CliExitCode.AgentError;
-      }
+        );
+        switch (outcome.status) {
+          case 'success':
+            return CliExitCode.Success;
+          case 'cancelled':
+            writeTextStderr('Clone cancelled.');
+            return CliExitCode.Cancelled;
+          case 'invalidToken':
+            return CliExitCode.Usage;
+          case 'gitMissing':
+          case 'workspaceUnreadable':
+          case 'workspaceNotEmpty':
+          case 'authFailure':
+          case 'cloneFailed':
+            return CliExitCode.AgentError;
+        }
+      });
     },
   }),
   [

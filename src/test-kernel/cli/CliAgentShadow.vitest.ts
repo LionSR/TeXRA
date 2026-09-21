@@ -4,12 +4,16 @@ import { resolve } from 'node:path';
 
 // Third-party imports
 import { Effect } from 'effect';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import { getAgentsByCategory } from '@agent/index';
 import { refresh } from '@agent/index/agentRegistry';
-import { chatToolUseAgentUsageError } from '@cli/chat/tui/commands/handlers/agentModelCommands';
+import {
+  applyInitialCliAgentSelection,
+  chatToolUseAgentUsageError,
+} from '@cli/chat/tui/commands/handlers/agentModelCommands';
+import { patchSessionMeta, sessionMeta } from '@cli/chat/tui/state/cliState';
 import {
   checkCliAgentLaunch,
   formatCliAgentList,
@@ -22,9 +26,16 @@ import { AgentCategory } from '@shared/schemas';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { REPO_ROOT } from '@test/support/repoScan';
+import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import { hostStores, installPlatform } from '@test/support/setupPlatform';
 import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
 import type { RootedFileSystem } from '@utils/files/rootedFileSystem';
+
+// The root-agent selection writes a local notice, whose sink reads the bound
+// session view. Nothing here renders a TUI, so the sink stands in for it.
+vi.mock('@cli/chat/tui/state/transcript', () => ({
+  appendLocalAssistantTranscript: vi.fn(),
+}));
 
 /**
  * A custom *workflow* agent named `assistant` shadows the bundled *tool-use*
@@ -199,5 +210,36 @@ describe('CLI agent validation with a shadowed name', () => {
         AgentCategory.ToolUse,
       ),
     ).toBeUndefined();
+  });
+
+  // Changing the root agent explicitly is a departure from a team preset, so
+  // the selection drops the team slots rather than leaving a preset name
+  // pointing at an agent the user replaced.
+  it('leaves team mode when the root agent is changed explicitly', () => {
+    patchSessionMeta({
+      teamName: 'Physicist',
+      cliMultiAgentPresetId: 'physicist',
+      delegationAgentScope: {
+        workflow: ['builtInWorkflow:polish'],
+        toolUse: ['builtInToolUse:assistant'],
+      },
+    });
+    const context = {
+      // The roster slots only gate visibility, which this registry leaves
+      // unconfigured, so empty chat slots resolve the same names as the host.
+      stores: makeFakeSettingsStores().stores,
+      session: {
+        runSettled: undefined,
+        runCompleted: false,
+        stopRequested: false,
+      },
+    } as Parameters<typeof applyInitialCliAgentSelection>[1];
+
+    applyInitialCliAgentSelection('assistant', context);
+
+    expect(sessionMeta.get()).toMatchObject({ agent: 'assistant' });
+    expect(sessionMeta.get().teamName).toBeUndefined();
+    expect(sessionMeta.get().cliMultiAgentPresetId).toBeUndefined();
+    expect(sessionMeta.get().delegationAgentScope).toBeUndefined();
   });
 });

@@ -18,7 +18,7 @@
 import { Deferred, Effect } from 'effect';
 
 // Local imports
-import { appSignals } from '@eventBus/AppSignals';
+import { emitAppSignal } from '@eventBus/AppSignals';
 import { createLog } from '@logger/logUtils';
 import type { StateStore } from '@platform/interfaces';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -305,7 +305,7 @@ export function getLastCheckResults(): ExternalToolCheckResult[] | null {
 export const refreshToolAvailability = Effect.fn('refreshToolAvailability')(
   function* (inputs: ToolProbeInputs) {
     yield* runExternalToolChecks(inputs);
-    appSignals.emit('toolAvailabilityChanged', undefined);
+    emitAppSignal('toolAvailabilityChanged', undefined);
   },
 );
 
