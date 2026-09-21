@@ -1,28 +1,21 @@
-import { Effect, Layer, ManagedRuntime } from 'effect';
+import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { globalDatabaseLayer } from '@controllers/session/Database';
-import { inquiryRecordsLayer } from '@controllers/session/inquiryRecords';
 
 import { DefaultDesktopAgentSettingsController } from '@desktop/main/desktopAgentSettingsController';
-import { processOwnerId } from '@platform/defaults/nodeProcesses';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
-import { ProcessIdentity } from '@shared/session/sessionEvents';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { assertSupported, isUnsupported } from '@shared/utils/dispatcher';
 import {
   initTestProcessRuntime,
   testRuntime,
 } from '@test/support/testProcessRuntime';
-import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
+import { bareProcessRuntime } from '@test/support/bareProcessRuntime';
 
 import {
   physicistCatalog,
   type AgentCatalog,
 } from '@test/support/agentCatalogFixtures';
 import { FakeStateStore } from '@test/support/FakePlatform';
-import { testHttpClientLayer } from '@test/support/fetchTestUtils';
-import { fakeProcessServices } from '@test/support/setupPlatform';
 
 import { commandOf } from './desktopSettingsTestSupport';
 
@@ -48,26 +41,7 @@ interface ControllerFixtureOptions {
 }
 
 beforeEach(() => {
-  const { globalStorage } = createFakeWorkspaceRoots();
-  initTestProcessRuntime(
-    ManagedRuntime.make(
-      Layer.mergeAll(
-        testHttpClientLayer,
-        Layer.mock(UpdateCheckRecords, {}),
-        fakeProcessServices(),
-        // Last, so this root's real handle wins over the fake host's
-        // mocked one.
-        inquiryRecordsLayer.pipe(
-          Layer.provideMerge(
-            globalDatabaseLayer(globalStorage).pipe(
-              Layer.provide(ProcessIdentity.layer(processOwnerId(undefined))),
-              Layer.orDie,
-            ),
-          ),
-        ),
-      ),
-    ),
-  );
+  initTestProcessRuntime(bareProcessRuntime());
 });
 
 function createControllerFixture(options: ControllerFixtureOptions = {}) {
