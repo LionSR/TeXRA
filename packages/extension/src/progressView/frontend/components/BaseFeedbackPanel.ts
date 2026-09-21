@@ -8,10 +8,10 @@ import { query, state } from 'lit/decorators.js';
 import '@awesome.me/webawesome/dist/components/textarea/textarea.js';
 
 // Local imports - shared utilities
+import type { PermissionPayload } from '@shared/schemas';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 
 // Local imports - the payload whose kind types the panel
-import type { PermissionPayload } from '@shared/schemas';
 
 // Local imports - base class
 import { BaseRequestPanel } from './BaseRequestPanel';

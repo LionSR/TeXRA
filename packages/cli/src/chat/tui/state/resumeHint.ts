@@ -8,8 +8,8 @@ import {
   type RunId,
   type TokenUsageStats,
 } from '@shared/schemas';
-import { usageCostLabel } from '@ui/copy/modelAccess';
 import { descendantRuns, type SessionView } from '@shared/session/sessionView';
+import { usageCostLabel } from '@ui/copy/modelAccess';
 
 import { runViewOf } from './sessionView';
 

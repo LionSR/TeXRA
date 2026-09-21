@@ -18,13 +18,13 @@ import '@awesome.me/webawesome/dist/components/button-group/button-group.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - shared styles
-import { designTokens, commonViewStyles } from '@ui/styles';
 import type { MemoryViewItem } from '@shared/settingsView/settingsViewMessages';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import { DetailsOpenController } from '@shared/litControllers/DetailsOpenController';
-import { markdownStyles } from '@ui/styles/markdownStyles';
 import { getLightweightMd } from '@shared/highlighting/lightweightMd';
+import { markdownStyles } from '@ui/styles/markdownStyles';
+import { designTokens, commonViewStyles } from '@ui/styles';
 import { renderIconActionButtonParts } from '@ui/wa/actionButtons';
 import type { TeXRAIconName } from '@ui/wa/iconNames';
 import { metaStripStyles, renderDotMeta } from '@ui/wa/metaStrip';

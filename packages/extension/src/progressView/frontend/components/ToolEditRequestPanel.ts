@@ -11,6 +11,8 @@ import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - shared styles
+import { SessionUiEvents } from '@shared/session/uiEvents';
+import type { RuntimeRequest } from '@shared/session/runtimeRequest';
 import {
   commonViewStyles,
   designTokens,
@@ -27,8 +29,6 @@ import {
   renderSplitButtonMenuParts,
   splitButtonTriggerStyles,
 } from '@ui/wa/splitButton';
-import { SessionUiEvents } from '@shared/session/uiEvents';
-import type { RuntimeRequest } from '@shared/session/runtimeRequest';
 import { pluralize } from '@utils/text/stringUtils';
 
 // Local imports - base class

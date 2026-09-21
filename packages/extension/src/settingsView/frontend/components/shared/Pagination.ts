@@ -9,10 +9,10 @@ import { LitElement, html, css, type TemplateResult, nothing } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles and utilities
+import { createEvent } from '@shared/utils/events';
 import { designTokens, commonViewStyles } from '@ui/styles';
 import type { TeXRAIconName } from '@ui/wa/iconNames';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
-import { createEvent } from '@shared/utils/events';
 import { clamp } from '@utils/core';
 
 /** Detail payload for the `page-change` custom event. */

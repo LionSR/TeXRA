@@ -10,7 +10,6 @@ import { customElement, property } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - shared styles
-import { commonViewStyles, designTokens } from '@ui/styles';
 import {
   type ClaudeAgentEffort,
   type ClaudeAgentModel,
@@ -27,11 +26,12 @@ import {
 } from '@shared/schemas';
 import { settingsViewSettingByKey } from '@shared/state/stateSettings';
 import { type ToolDashboardItem } from '@shared/settingsView/settingsViewMessages';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { commonViewStyles, designTokens } from '@ui/styles';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { renderEmptyState } from '@ui/wa/emptyState';
 import { renderLoadingState } from '@ui/wa/loadingState';
 
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { readSelectValue } from '@ui/wa/selectTemplates';
 
 // Local imports - catalog-driven settings rows

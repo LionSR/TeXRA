@@ -17,9 +17,17 @@ import {
   type RunId,
   type TaskGroup,
 } from '@shared/schemas';
+import type { TranscriptView } from '@shared/session/sessionView';
+import { isInFlightPhase } from '@shared/runs/runStatus';
+import { taskGroupDisplayStatus } from '@shared/runs/taskGroupProjection';
+import {
+  formatRoundStageLabel,
+  formatRunStatusLabel,
+} from '@shared/runs/runStatusDisplay';
+import { SessionUiEvents } from '@shared/session/uiEvents';
+import { compareBySeqNo } from '@shared/runs/runOrdering';
 import type { TranscriptRow } from '@ui/transcript';
 import { designTokens } from '@ui/styles';
-import type { TranscriptView } from '@shared/session/sessionView';
 import {
   formatWorkflowPhaseHeading,
   workflowPhaseHeadingOfGroup,
@@ -30,17 +38,9 @@ import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
-import { isInFlightPhase } from '@shared/runs/runStatus';
-import { taskGroupDisplayStatus } from '@shared/runs/taskGroupProjection';
-import {
-  formatRoundStageLabel,
-  formatRunStatusLabel,
-} from '@shared/runs/runStatusDisplay';
-import { SessionUiEvents } from '@shared/session/uiEvents';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { renderEmptyState } from '@ui/wa/emptyState';
 import { terminalStatusIcon } from '@ui/wa/statusIcons';
-import { compareBySeqNo } from '@shared/runs/runOrdering';
 import { groupBy } from '@utils/core';
 import { formatDuration, pluralize } from '@utils/text/stringUtils';
 

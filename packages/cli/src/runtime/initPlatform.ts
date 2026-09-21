@@ -33,10 +33,10 @@ import { createNodeWorkspaceRoots } from '@platform/defaults/nodeHost';
 import { DEFAULT_NODE_STORAGE_ROOT } from '@platform/defaults/nodeStorage';
 import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import { sessionStoreClearedMessage } from '@ui/copy/sessionStore';
 import type { SessionOpenError } from '@shared/session/database';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { registerRuntimeShutdownHandlers } from '@tools/agentCliSessionStores';
+import { sessionStoreClearedMessage } from '@ui/copy/sessionStore';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports

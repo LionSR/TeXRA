@@ -25,6 +25,12 @@ import {
   TOOL_OUTPUT_CORNER,
 } from '@cli/tui/ui/glyphs';
 import { TOOL_CALL_STATUS } from '@shared/schemas';
+import { type RunLabels } from '@shared/tools/executionsDisplay';
+import {
+  isMcpToolName,
+  normalizeToolName,
+} from '@shared/tools/toolDisplayName';
+import { toolDisplayKind } from '@shared/tools/toolKind';
 import {
   toolHeaderPreview,
   transcriptText,
@@ -33,12 +39,6 @@ import {
   type ToolSectionFile,
   type TranscriptText,
 } from '@ui/transcript';
-import { type RunLabels } from '@shared/tools/executionsDisplay';
-import {
-  isMcpToolName,
-  normalizeToolName,
-} from '@shared/tools/toolDisplayName';
-import { toolDisplayKind } from '@shared/tools/toolKind';
 import { buildDiffHunks } from '@utils/text/unifiedDiff';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 

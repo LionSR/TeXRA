@@ -16,20 +16,20 @@
 import { html, nothing, type TemplateResult } from 'lit';
 
 // Local imports - shared utilities
-import type { ToolRow } from '@ui/transcript';
 import { parseDelegationToolInput, TOOL_CALL_STATUS } from '@shared/schemas';
 import { SessionUiEvents } from '@shared/session/uiEvents';
 import {
   DELEGATE_MULTI_AGENTS_TOOL_NAME,
   DELEGATION_TOOL_CATEGORY,
 } from '@shared/constants/delegationTools';
-import type { TeXRAIconName } from '@ui/wa/iconNames';
-import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { toolDisplayKind } from '@shared/tools/toolKind';
 import {
   isMcpToolName,
   normalizeToolName,
 } from '@shared/tools/toolDisplayName';
+import type { TeXRAIconName } from '@ui/wa/iconNames';
+import { waIcon } from '@ui/wa/webAwesomeIcons';
+import type { ToolRow } from '@ui/transcript';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
 // Local imports - formatter helpers

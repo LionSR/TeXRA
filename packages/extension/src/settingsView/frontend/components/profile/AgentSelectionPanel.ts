@@ -14,7 +14,6 @@ import { customElement, property, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 
 // Local imports - shared styles
-import { commonViewStyles, designTokens } from '@ui/styles';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import type { AgentCategory, AgentSource } from '@shared/schemas';
@@ -24,6 +23,7 @@ import {
   agentKey as agentKeyFromSourceName,
   isPackagedAgentSource,
 } from '@shared/schemas';
+import { commonViewStyles, designTokens } from '@ui/styles';
 import {
   renderLabeledActionButton,
   type LabeledActionButtonOptions,

@@ -32,16 +32,16 @@ import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - shared styles
-import {
-  commonViewStyles,
-  designTokens,
-  requestPanelSharedStyles,
-} from '@ui/styles';
 
 // Local imports - shared schemas
 import type { PermissionPayload, RunId } from '@shared/schemas';
 import type { SessionView } from '@shared/session/sessionView';
 import type { Surface } from '@shared/session/surface';
+import {
+  commonViewStyles,
+  designTokens,
+  requestPanelSharedStyles,
+} from '@ui/styles';
 
 // Local imports - progress view helpers
 import type { TeXRAIconName } from '@ui/wa/iconNames';

@@ -28,9 +28,9 @@ import {
   type WorkflowDeclaredPlan,
   type WorkflowPlanMarker,
 } from '@shared/schemas';
-import type { TranscriptRow, WorkflowTaskRow } from '@ui/transcript';
 import { compareBySeqNo } from '@shared/runs/runOrdering';
 import { workflowRunSettled } from '@shared/runs/runStatus';
+import type { TranscriptRow, WorkflowTaskRow } from '@ui/transcript';
 import {
   TOKENS_GENERATED,
   formatWorkflowCallLine,

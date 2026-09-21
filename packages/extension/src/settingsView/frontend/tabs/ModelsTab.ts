@@ -4,13 +4,13 @@ import { LitElement, html, css, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles
-import { commonViewStyles, designTokens } from '@ui/styles';
-
-// Local imports - shared schemas
 import type {
   ModelSelectionItem,
   ProviderKeyStatus,
 } from '@shared/settingsView/settingsViewMessages';
+import { commonViewStyles, designTokens } from '@ui/styles';
+
+// Local imports - shared schemas
 
 // Local imports - settings view components (side-effect: register)
 import '../components/profile/ProviderKeyList';

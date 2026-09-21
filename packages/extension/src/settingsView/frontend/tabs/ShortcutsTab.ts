@@ -4,11 +4,6 @@ import { LitElement, css, html, nothing, type TemplateResult } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 
 import {
-  commonViewStyles,
-  designTokens,
-  settingsBannerStyles,
-} from '@ui/styles';
-import {
   detectBrowserPlatform,
   formatDesktopAccelerator,
 } from '@shared/commands/accelerators';
@@ -17,6 +12,11 @@ import {
   keyboardEventToAccelerator,
   type DesktopShortcutEntry,
 } from '@shared/commands/shortcutPreferences';
+import {
+  commonViewStyles,
+  designTokens,
+  settingsBannerStyles,
+} from '@ui/styles';
 import {
   renderIconActionButton,
   renderLabeledActionButton,

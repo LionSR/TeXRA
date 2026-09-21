@@ -26,11 +26,11 @@ import {
   type OutputFileInfo,
   type RunId,
 } from '@shared/schemas';
-import { designTokens, commonViewStyles } from '@ui/styles';
 import { formatRoundStageLabel } from '@shared/runs/runStatusDisplay';
 import type { HostRequest } from '@shared/session/hostRequest';
 import type { Surface } from '@shared/session/surface';
 import { SessionUiEvents } from '@shared/session/uiEvents';
+import { designTokens, commonViewStyles } from '@ui/styles';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
 import type { TeXRAIconName } from '@ui/wa/iconNames';
 import { waIcon } from '@ui/wa/webAwesomeIcons';

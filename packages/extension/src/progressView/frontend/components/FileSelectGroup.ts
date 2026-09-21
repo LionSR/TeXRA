@@ -7,7 +7,6 @@ import '@awesome.me/webawesome/dist/components/dropdown/dropdown.js';
 import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
-import { designTokens } from '@ui/styles';
 import {
   AgentCategory,
   ToolConfigFieldsSchema,
@@ -16,10 +15,11 @@ import {
   type FileSelectConfig,
   type SessionType,
 } from '@shared/schemas';
-import { dropCueStyles } from '@ui/styles/commonViewStyles';
 import { SortableController } from '@shared/litControllers/SortableController';
 import type { SurfaceAction } from '@shared/session/surface';
 import { SessionUiEvents } from '@shared/session/uiEvents';
+import { dropCueStyles } from '@ui/styles/commonViewStyles';
+import { designTokens } from '@ui/styles';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
 import type { TeXRAIconName } from '@ui/wa/iconNames';
 import { waIcon } from '@ui/wa/webAwesomeIcons';

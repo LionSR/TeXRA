@@ -9,9 +9,9 @@ import {
 } from '@cli/tui/ui/theme';
 import { fillRows, truncateToWidth } from '@cli/runtime/terminalText';
 import type { PlanApprovalPermission } from '@shared/schemas';
+import type { SurfaceDecision } from '@shared/session/approvalDecision';
 import { PLAN_GOAL_COPY } from '@ui/copy/delegationApproval';
 
-import type { SurfaceDecision } from '@shared/session/approvalDecision';
 import { ConfirmCard, CONFIRM_CARD_FEEDBACK_PLACEHOLDER } from './ConfirmCard';
 import { confirmCardFeedbackRows } from './confirmCardRowsBudget';
 import {

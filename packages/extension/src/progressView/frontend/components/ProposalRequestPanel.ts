@@ -16,14 +16,6 @@ import '@awesome.me/webawesome/dist/components/option/option.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - shared styles
-import {
-  commonViewStyles,
-  designTokens,
-  requestPanelSharedStyles,
-  selectStyles,
-} from '@ui/styles';
-
-// Local imports - shared utils
 import type {
   AgentProposalPermission,
   PermissionPayload,
@@ -32,12 +24,21 @@ import type {
 import { AgentCategory, getProposalFileGroups } from '@shared/schemas';
 import { SessionUiEvents } from '@shared/session/uiEvents';
 import { workflowRunModel } from '@shared/runs/workflowRunModel';
+import { getModelLabel } from '@shared/model/modelLabel';
+import { APPROVE_ALL_DELEGATED_WORK_ACTION } from '@shared/session/approvalDecision';
+import {
+  commonViewStyles,
+  designTokens,
+  requestPanelSharedStyles,
+  selectStyles,
+} from '@ui/styles';
+
+// Local imports - shared utils
 import {
   WORKFLOW_SCRIPT_PROPOSAL_COPY,
   workflowScriptPlanSummary,
 } from '@ui/copy/workflowScriptProposal';
 import { markdownStyles } from '@ui/styles/markdownStyles';
-import { getModelLabel } from '@shared/model/modelLabel';
 import {
   readSelectValue,
   renderAgentOptions,
@@ -47,7 +48,6 @@ import {
 // Local imports - shared utilities
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
-import { APPROVE_ALL_DELEGATED_WORK_ACTION } from '@shared/session/approvalDecision';
 import { getBasename } from '@utils/core';
 
 // Local imports - base class

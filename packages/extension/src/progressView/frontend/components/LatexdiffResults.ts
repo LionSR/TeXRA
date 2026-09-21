@@ -12,14 +12,14 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - shared styles
-import { designTokens, commonViewStyles } from '@ui/styles';
 import type { DiffResultDisplay, DiffStatus } from '@shared/schemas';
 import { formatRoundStageLabel } from '@shared/runs/runStatusDisplay';
+import { SessionUiEvents } from '@shared/session/uiEvents';
+import { designTokens, commonViewStyles } from '@ui/styles';
 import type { TeXRAIconName } from '@ui/wa/iconNames';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 // Local imports - progress view events
-import { SessionUiEvents } from '@shared/session/uiEvents';
 
 // Local imports - progress view helpers
 import { buildDetailsSummary } from '../formatters/htmlBuilders';

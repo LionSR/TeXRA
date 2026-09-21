@@ -44,9 +44,9 @@ import {
   type SettingsViewInboundHandlerRegistry,
   type UpdateSubscriptionAuthStatusMessage,
 } from '@shared/settingsView/settingsViewMessages';
-import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { SettingsStatePorts } from '@shared/settingsView/types';
+import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
 import { getProviderKeyUrl } from '@utils/config/providerConfig';
 import { allSettledVoid } from '@utils/core/allSettledVoid';
 import { toErrorMessage } from '@utils/errors/errorMessage';

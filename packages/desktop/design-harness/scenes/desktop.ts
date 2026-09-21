@@ -22,7 +22,6 @@ import {
 } from '@shared/session/sessionView';
 import type { Shell } from '@shared/session/shell';
 import { emptySurface, type Surface } from '@shared/session/surface';
-import { waIcon } from '@ui/wa/webAwesomeIcons';
 import {
   BOARD_NOW,
   buildScenario,
@@ -35,6 +34,7 @@ import {
   tail,
   withWaitingCall,
 } from '@test/shared/session/fanOutScenario';
+import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 // ── fixtures: three projects, three folded views ────────────────────────────
 

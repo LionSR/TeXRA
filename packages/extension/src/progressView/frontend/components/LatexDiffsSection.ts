@@ -15,11 +15,11 @@ import { customElement, property } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - main view
-import { compactFormControlStyles, designTokens } from '@ui/styles';
-import { buttonStyles } from '@ui/styles/controlStyles';
 import type { HostRequest } from '@shared/session/hostRequest';
 import type { SurfaceAction } from '@shared/session/surface';
 import { SessionUiEvents } from '@shared/session/uiEvents';
+import { buttonStyles } from '@ui/styles/controlStyles';
+import { compactFormControlStyles, designTokens } from '@ui/styles';
 import { readSelectValue } from '@ui/wa/selectTemplates';
 import {
   renderIconActionButton,

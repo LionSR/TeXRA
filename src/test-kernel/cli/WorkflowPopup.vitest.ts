@@ -12,10 +12,10 @@ import {
   type TaskGroup,
   type WorkflowCallProgress,
 } from '@shared/schemas';
-import type { TranscriptRow, WorkflowTaskRow } from '@ui/transcript';
 import { workflowRunModel } from '@shared/runs/workflowRunModel';
 import { loadInk, renderInteractive } from '@test/support/inkTestHarness.ts';
 import { waitForCondition as waitFor } from '@test/support/asyncTestUtils';
+import type { TranscriptRow, WorkflowTaskRow } from '@ui/transcript';
 import {
   bindTestSessionView,
   makeRunView,

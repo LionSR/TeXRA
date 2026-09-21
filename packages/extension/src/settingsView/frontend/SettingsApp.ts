@@ -12,7 +12,6 @@ import { SignalWatcher } from '@shared/signals';
 import { installToolbarTooltips } from '@shared/litControllers/TooltipController';
 
 // Local imports - shared styles
-import { commonViewStyles, designTokens } from '@ui/styles';
 
 // Local imports - shared schemas and constants
 import {
@@ -20,6 +19,7 @@ import {
   type SettingsTabPanelName,
 } from '@shared/settingsView/settingsViewMessages';
 import { isKnownUnsupported } from '@shared/utils/dispatcher';
+import { commonViewStyles, designTokens } from '@ui/styles';
 import { registerTeXRAWebAwesomeIcons, waIcon } from '@ui/wa/webAwesomeIcons';
 
 // Local imports - settings view

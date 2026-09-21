@@ -30,7 +30,6 @@ import {
   type SessionType,
   type RunId,
 } from '@shared/schemas';
-import { designTokens, commonViewStyles } from '@ui/styles';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import type { SessionView, RunView } from '@shared/session/sessionView';
 import {
@@ -47,6 +46,7 @@ import {
   readFileAsBase64,
   type ExtractedClipboardImage,
 } from '@shared/utils/clipboardImages';
+import { designTokens, commonViewStyles } from '@ui/styles';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
 import type { TeXRAIconName } from '@ui/wa/iconNames';
 import { waIcon } from '@ui/wa/webAwesomeIcons';

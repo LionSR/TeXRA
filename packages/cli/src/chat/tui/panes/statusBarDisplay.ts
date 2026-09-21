@@ -24,19 +24,19 @@ import {
   type TokenUsageStats,
   type UsageRoute,
 } from '@shared/schemas';
-import { APPROVAL_BYPASS_BADGE } from '@ui/copy/approvalBypass';
-import {
-  FOREGROUND_OWNERSHIP,
-  RUNNING_SESSION,
-  SESSION_LIST,
-  SUBAGENT,
-} from '@ui/copy/nestedRuns';
 import { isActivePhase } from '@shared/runs/runStatus';
 import {
   flowPosition,
   formatFlowPositionLabel,
 } from '@shared/runs/runStatusDisplay';
 import type { RunView, SessionView } from '@shared/session/sessionView';
+import {
+  FOREGROUND_OWNERSHIP,
+  RUNNING_SESSION,
+  SESSION_LIST,
+  SUBAGENT,
+} from '@ui/copy/nestedRuns';
+import { APPROVAL_BYPASS_BADGE } from '@ui/copy/approvalBypass';
 import { assertNever, filterNotNullish, unique } from '@utils/core';
 import {
   formatCompactDuration,

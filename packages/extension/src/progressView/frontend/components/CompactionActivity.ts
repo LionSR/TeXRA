@@ -2,11 +2,11 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import { LitElement, css, html, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
-import { designTokens, commonViewStyles } from '@ui/styles';
 import {
   COMPACTION_ACTIVITY_LABEL,
   type CompactionActivityStatus,
 } from '@shared/runs/compactionActivityProjection';
+import { designTokens, commonViewStyles } from '@ui/styles';
 import type { TeXRAIconName } from '@ui/wa/iconNames';
 import { stopSpinnerMotion } from '@ui/wa/spinner';
 import { waIcon } from '@ui/wa/webAwesomeIcons';

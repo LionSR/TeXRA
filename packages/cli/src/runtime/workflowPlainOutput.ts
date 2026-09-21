@@ -9,9 +9,9 @@ import { SubscriptionRef } from 'effect';
 import type { SessionHandle } from '@agent/runtime';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { RunId } from '@shared/schemas';
-import { formatWorkflowPhaseHeading } from '@ui/copy/workflowCall';
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import { descendantRuns, type RunView } from '@shared/session/sessionView';
+import { formatWorkflowPhaseHeading } from '@ui/copy/workflowCall';
 
 import { claimRootRun, followView } from './sessionViewFollow';
 

@@ -24,6 +24,10 @@ import {
   type RunPhase,
   type TaskGroup,
 } from '@shared/schemas';
+import { upsertTaskGroupFromStreamLog } from '@shared/runs/taskGroupProjection';
+import type { CompactionActivityStatus } from '@shared/runs/compactionActivityProjection';
+import { COMPACTION_ACTIVITY_LABEL } from '@shared/runs/compactionActivityProjection';
+import { toolRowModel } from '@ui/transcript/toolRowModel';
 import {
   projectTranscriptRow,
   transcriptText,
@@ -33,10 +37,6 @@ import {
   type FileListRow,
   type PhaseRow,
 } from '@ui/transcript';
-import { toolRowModel } from '@ui/transcript/toolRowModel';
-import { upsertTaskGroupFromStreamLog } from '@shared/runs/taskGroupProjection';
-import type { CompactionActivityStatus } from '@shared/runs/compactionActivityProjection';
-import { COMPACTION_ACTIVITY_LABEL } from '@shared/runs/compactionActivityProjection';
 
 /** A normalized tool-use payload with every field a caller did not name
  *  defaulted to its empty/successful value. */

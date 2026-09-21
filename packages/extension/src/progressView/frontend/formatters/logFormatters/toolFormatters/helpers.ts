@@ -17,12 +17,12 @@ import {
   buildCodeBlock,
   SPINNER_ICON_NAME,
 } from '@progressView/frontend/formatters/htmlBuilders';
-import type { TranscriptRowBase } from '@ui/transcript';
 import {
   BASH_TOOL_DEFAULT_TIMEOUT_MS,
   EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS,
   executionsWaitTimeoutSeconds,
 } from '@shared/toolUse';
+import type { TranscriptRowBase } from '@ui/transcript';
 import type { TeXRAIconName } from '@ui/wa/iconNames';
 import { isObject } from '@utils/core';
 

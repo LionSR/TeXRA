@@ -11,7 +11,6 @@ import {
 import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles, schemas, and templates
-import { commonViewStyles, designTokens } from '@ui/styles';
 import { CODING_PLAN_SUBSCRIPTIONS } from '@shared/codingPlanSubscriptions';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
@@ -24,6 +23,7 @@ import {
   type SubscriptionAuthStatuses,
 } from '@shared/settingsView/settingsViewMessages';
 import { TickerController } from '@shared/litControllers/TickerController';
+import { commonViewStyles, designTokens } from '@ui/styles';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 import { renderSettingsSectionHeading } from '@ui/wa/settingsSection';
 import { waIcon } from '@ui/wa/webAwesomeIcons';

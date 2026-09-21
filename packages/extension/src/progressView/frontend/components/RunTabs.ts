@@ -14,7 +14,6 @@ import { when } from 'lit/directives/when.js';
 
 // Local imports
 import type { RunId } from '@shared/schemas';
-import { designTokens, commonViewStyles } from '@ui/styles';
 import type { SessionView, RunView } from '@shared/session/sessionView';
 import { resolveSelected, type Surface } from '@shared/session/surface';
 import { SessionUiEvents } from '@shared/session/uiEvents';
@@ -22,6 +21,7 @@ import {
   RUN_GROUP_LABELS,
   RUN_GROUP_ORDER,
 } from '@shared/runs/runStatusDisplay';
+import { designTokens, commonViewStyles } from '@ui/styles';
 import { focusRingStyles } from '@ui/styles/controlStyles';
 import { AGENT_DECORATORS, getAgentCategoryDecorator } from '@ui/wa/icons';
 

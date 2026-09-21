@@ -17,9 +17,9 @@ import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import { type RunId } from '@shared/schemas';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import { OWN_API_KEYS } from '@ui/copy/modelAccess';
 import { RESEARCHER_ACCESS_AUTH } from '@ui/copy/accountAuth';
-import type { SettingsStores } from '@shared/config/settingsAccess';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { collapseWhitespace } from '@utils/text/stringUtils';
 

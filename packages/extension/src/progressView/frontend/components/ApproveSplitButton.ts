@@ -11,9 +11,9 @@ import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 // Local imports - shared styles + helpers
+import { createEvent } from '@shared/utils/events';
 import { commonViewStyles, designTokens } from '@ui/styles';
 import { DELEGATION_APPROVAL_COPY } from '@ui/copy/delegationApproval';
-import { createEvent } from '@shared/utils/events';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 import {
   renderSplitButtonMenuParts,

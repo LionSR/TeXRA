@@ -12,8 +12,8 @@ import { Cause } from 'effect';
 
 import { createLog } from '@logger/logUtils';
 import type { RunId } from '@shared/schemas';
-import { transcriptText, type TranscriptRow } from '@ui/transcript';
 import type { RequestError } from '@shared/session/requestErrors';
+import { transcriptText, type TranscriptRow } from '@ui/transcript';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   CLI_LOCAL_RUN_ID,

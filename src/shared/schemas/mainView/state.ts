@@ -5,8 +5,8 @@
  */
 import { z } from 'zod';
 
-import { CHATGPT_AUTH, GROK_AUTH } from '@ui/copy/accountAuth';
 import { AgentCategorySchema, AgentSourceSchema } from '@shared/schemas/agent';
+import { CHATGPT_AUTH, GROK_AUTH } from '@ui/copy/accountAuth';
 import {
   TEXRA_ICON_CANONICAL_NAMES,
   type TeXRAIconName,

@@ -2,8 +2,8 @@
 // display lines. Unlike the finalized scrollback and the live region, this
 // renders every tool-output line.
 
-import type { TranscriptRow } from '@ui/transcript';
 import type { RunLabels } from '@shared/tools/executionsDisplay';
+import type { TranscriptRow } from '@ui/transcript';
 
 import { isRenderableTranscriptEntry } from '../panes/transcriptEntries';
 import { fullTranscriptEntryLayout } from '../panes/transcriptEntryLayout';

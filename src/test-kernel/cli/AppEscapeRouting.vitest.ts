@@ -46,8 +46,6 @@ import {
   type RunPhase,
   type WorkflowCallProgress,
 } from '@shared/schemas';
-import type { WorkflowTaskRow } from '@ui/transcript';
-import type { TranscriptRow } from '@ui/transcript';
 import { runUnreadableMessage } from '@shared/runs/runStatusDisplay';
 import type { SessionView, RunView } from '@shared/session/sessionView';
 import { workflowRunModel } from '@shared/runs/workflowRunModel';
@@ -62,6 +60,8 @@ import {
   type InkRenderHandles,
 } from '@test/support/inkTestHarness.ts';
 import { waitForCondition as waitFor } from '@test/support/asyncTestUtils';
+import type { TranscriptRow } from '@ui/transcript';
+import type { WorkflowTaskRow } from '@ui/transcript';
 import {
   bindTestSessionView,
   makeRunView,

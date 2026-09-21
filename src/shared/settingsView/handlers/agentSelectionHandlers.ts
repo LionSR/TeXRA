@@ -11,15 +11,14 @@
 import { Effect } from 'effect';
 
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import type { AgentModePreset, ByCategory } from '@shared/schemas';
 import type {
-  AgentModePreset,
   AgentScanIssue,
   AgentSelectionItem,
-  ByCategory,
   UpdateAgentModePresetsMessage,
   UpdateAgentSelectionMessage,
   UpdateCustomAgentDirMessage,
-} from '@shared/schemas';
+} from '@shared/settingsView/settingsViewMessages';
 
 export interface AgentSelectionPorts {
   buildSelectionItems(): ByCategory<AgentSelectionItem[]>;

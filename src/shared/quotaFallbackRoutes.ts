@@ -1,4 +1,4 @@
-import { CHATGPT_AUTH, GROK_AUTH } from './copy/accountAuth';
+import { CHATGPT_AUTH, GROK_AUTH } from '@ui/copy/accountAuth';
 import {
   CODING_PLAN_SUBSCRIPTIONS,
   type CodingPlanSubscriptionId,

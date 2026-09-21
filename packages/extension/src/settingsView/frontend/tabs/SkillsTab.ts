@@ -11,8 +11,8 @@ import {
   type SkillDisplayIssue,
   type SkillDisplayItem,
 } from '@shared/schemas';
-import { commonViewStyles, designTokens } from '@ui/styles';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { commonViewStyles, designTokens } from '@ui/styles';
 import { renderEmptyState } from '@ui/wa/emptyState';
 import { renderSettingsSectionHeading } from '@ui/wa/settingsSection';
 import { groupBy } from '@utils/core';

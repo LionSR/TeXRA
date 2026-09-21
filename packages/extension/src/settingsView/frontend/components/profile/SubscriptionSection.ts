@@ -15,7 +15,6 @@ import { codexAccountLabel } from '@auth/codex/codexSessionTypes';
 import { xaiAccountLabel } from '@auth/xai/xaiSessionTypes';
 
 // Local imports - shared styles
-import { commonViewStyles, designTokens } from '@ui/styles';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import {
@@ -23,6 +22,7 @@ import {
   type SubscriptionUsageSnapshot,
 } from '@shared/schemas';
 import { type SubscriptionAuthStatus } from '@shared/settingsView/settingsViewMessages';
+import { commonViewStyles, designTokens } from '@ui/styles';
 import { CHATGPT_AUTH, GROK_AUTH } from '@ui/copy/accountAuth';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 import {

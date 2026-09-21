@@ -15,13 +15,13 @@ import {
   type AgentProposalPermission,
 } from '@shared/schemas';
 import { getModelLabel } from '@shared/model/modelLabel';
+import type { SurfaceDecision } from '@shared/session/approvalDecision';
 import { DELEGATION_APPROVAL_COPY } from '@ui/copy/delegationApproval';
 import {
   WORKFLOW_SCRIPT_PROPOSAL_COPY,
   workflowScriptPlanSummary,
 } from '@ui/copy/workflowScriptProposal';
 
-import type { SurfaceDecision } from '@shared/session/approvalDecision';
 import { ConfirmCard } from './ConfirmCard';
 import {
   ScrollableModalText,

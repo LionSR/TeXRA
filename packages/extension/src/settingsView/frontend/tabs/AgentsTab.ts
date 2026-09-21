@@ -12,11 +12,6 @@ import {
 import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles
-import {
-  commonViewStyles,
-  designTokens,
-  settingsBannerStyles,
-} from '@ui/styles';
 
 // Local imports - shared schemas
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
@@ -32,6 +27,11 @@ import {
   type AgentScanIssue,
   type AgentSelectionItem,
 } from '@shared/settingsView/settingsViewMessages';
+import {
+  commonViewStyles,
+  designTokens,
+  settingsBannerStyles,
+} from '@ui/styles';
 import {
   renderIconActionButton,
   renderLabeledActionButton,

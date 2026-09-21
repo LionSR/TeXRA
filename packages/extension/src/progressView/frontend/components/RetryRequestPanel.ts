@@ -10,11 +10,6 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
 
 // Local imports - shared styles
-import {
-  commonViewStyles,
-  designTokens,
-  requestPanelSharedStyles,
-} from '@ui/styles';
 
 // Local imports - shared schemas
 import {
@@ -23,6 +18,11 @@ import {
   type ProviderErrorPartial,
 } from '@shared/schemas';
 import { isKimiCodeSubscriptionRetryBlocked } from '@shared/model/kimiCodeRetryGate';
+import {
+  commonViewStyles,
+  designTokens,
+  requestPanelSharedStyles,
+} from '@ui/styles';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 import { renderDotMeta, type MetaPart } from '@ui/wa/metaStrip';
 import { tailWithEllipsis, toGraphemes } from '@utils/text/stringUtils';

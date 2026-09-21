@@ -2,13 +2,13 @@
 import { LitElement, css, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 // Local imports - shared modules
-import { commonViewStyles, designTokens } from '@ui/styles';
 import { DESKTOP_THEME_KIND, type Theme } from '@shared/schemas';
 import {
   loadMonaco,
   monacoThemeForHostTheme,
   type MonacoModule,
 } from '@shared/monaco/monacoLoader';
+import { commonViewStyles, designTokens } from '@ui/styles';
 
 // Local imports - shared Web Awesome helpers
 import { renderLoadingState } from '@ui/wa/loadingState';

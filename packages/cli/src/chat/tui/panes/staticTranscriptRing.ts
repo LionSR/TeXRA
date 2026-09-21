@@ -9,9 +9,9 @@ import { randomUUID } from 'node:crypto';
 
 import { createLog } from '@logger/logUtils';
 import type { RunPhase } from '@shared/schemas';
-import { transcriptText, type TranscriptRow } from '@ui/transcript';
 import { getModelLabel } from '@shared/model/modelLabel';
 import type { RunLabels } from '@shared/tools/executionsDisplay';
+import { transcriptText, type TranscriptRow } from '@ui/transcript';
 import { createBoundedIdSet } from '@utils/core/boundedIdSet';
 
 import { registerCliStateResetHook, type SessionMeta } from '../state/cliState';
