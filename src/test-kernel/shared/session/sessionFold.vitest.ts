@@ -30,10 +30,7 @@ import {
   type RunId,
 } from '@shared/schemas';
 
-import {
-  foldRunState,
-  unboundRequests,
-} from '@shared/session/runStateFold';
+import { foldRunState, unboundRequests } from '@shared/session/runStateFold';
 import { fold } from '@shared/session/sessionFold';
 import { redactTraceDraft } from '@shared/session/traceRedaction';
 import {

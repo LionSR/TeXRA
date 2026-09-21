@@ -1395,10 +1395,6 @@ function applyOwnArm(run: RunView, event: DisplaySessionEvent): RunView {
     case 'stream.end':
     case 'response.finalized':
     case 'domain':
-    // Existence cannot become more true (5.2, "Duplicates"): a second start
-    // for a run the view holds is a no-op. The rest move session slices
-    // alone, or are the shared rows `runRows.ts` owns, whose one effect on
-    // the run is the loop position the caller projects.
     case 'run.start':
     case 'approval.policy':
     case 'inquiryThreadUpdated':
@@ -1408,6 +1404,10 @@ function applyOwnArm(run: RunView, event: DisplaySessionEvent): RunView {
     case 'request.decided':
     case 'followup.queued':
     case 'followup.consumed':
+      // Existence cannot become more true (5.2, "Duplicates"): a second start
+      // for a run the view holds is a no-op. The rest move session slices
+      // alone, or are the shared rows `runRows.ts` owns, whose one effect on
+      // the run is the loop position the caller projects.
       return run;
     case 'run.activate': {
       // Every activation, the launch and each resume, opens a running
@@ -1614,7 +1614,8 @@ function applyRowFacts(
   const after: RunRows = { ...before, ...verdict.rows };
   rows.set(runId, after);
   if (verdict.rows.requests !== undefined) projectRequests(view, runId, after);
-  if (verdict.rows.followUps !== undefined) projectFollowUps(view, runId, after);
+  if (verdict.rows.followUps !== undefined)
+    projectFollowUps(view, runId, after);
   return verdict.rows.step === undefined ? null : after;
 }
 

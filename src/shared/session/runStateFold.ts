@@ -46,12 +46,7 @@ import {
   type ToolResultPayload,
 } from '@shared/schemas';
 import { isObject } from '@utils/core';
-import {
-  applyRunRow,
-  byId,
-  freshRunRows,
-  type RunRows,
-} from './runRows';
+import { applyRunRow, byId, freshRunRows, type RunRows } from './runRows';
 import type { z } from 'zod';
 
 /**

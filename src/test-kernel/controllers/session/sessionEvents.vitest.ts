@@ -2542,9 +2542,7 @@ describe('RunLedger', () => {
           approvalBinding,
         ]);
         expect(state.requests['req-1']?.resolved).toBe(false);
-        expect(state.pendingIntents['call-a']?.approvalRequestId).toBe(
-          'req-1',
-        );
+        expect(state.pendingIntents['call-a']?.approvalRequestId).toBe('req-1');
         // A real attachment carries loose keys and binary fields: accepted, and
         // the binary fields never reach the row.
         state = yield* run.appendBatch(RUN, state, [
