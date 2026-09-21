@@ -21,7 +21,7 @@ done fast where the file is a good candidate.
 ## 1. What this document adds
 
 Nearly every _rule_ the ask implies is already ratified and this document does not restate
-it. [The Effect 4 runtime migration PRD](./2026-08-26-effect-4-runtime-migration.md) owns
+it. [The Effect 4 runtime migration PRD](../../archived/architecture/2026-08-26-effect-4-runtime-migration.md) owns
 R1 (boundary kinds), R2 (service granularity), R3 (four lifetimes), R4 (plain-Effect
 loops), R5 (interruption), R6 (`Scope`), R7 (typed errors), R8 (`Schedule`), R9 (traces),
 R10 (delete-on-replace), the §8.1 one-carrier-per-lifetime table, the §8.7 collapse ledger,
@@ -31,7 +31,7 @@ plan](./2026-09-06-effect-runtime-delivery-plan.md) (the tree's only `accepted-d
 doc) owns the work order and two binding negatives: **no second runtime/session registry**
 and **no tag per existing class**. [The agent runtime
 proposal](../../implemented/architecture/2026-09-04-agent-runtime-on-effect.md) §2.4 owns the only concrete tag roster.
-[The promise-boundary audit](./2026-09-07-promise-boundary-audit.md) §6 forbids a new lint
+[The promise-boundary audit](../../archived/architecture/2026-09-07-promise-boundary-audit.md) §6 forbids a new lint
 rule, a `tryPromise` ratchet row, and any adapter. [The observability
 plane](./2026-09-09-observability-plane.md) owns fiber-derived identity and therefore owns
 the trace stage carrier. [The 1.0 implementation

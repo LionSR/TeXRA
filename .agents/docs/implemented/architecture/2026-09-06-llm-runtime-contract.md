@@ -1,12 +1,14 @@
 # TeXRA LLM and runtime: proposed joint contract
 
-Date: 2026-09-06. Status: design draft; no implementation or runtime cutover is
-authorized by this document.
+Date: 2026-09-06. Status: implemented — the contract it drafted is what
+`packages/llm` and `ModelInvoker` implement today; the open gaps are owned by
+the
+[hardening note](../../proposed/architecture/2026-09-20-llm-package-hardening.md).
 
 **Build TeXRA's own Effect-native LLM package, and make its boundary usable by
 both the reflection pipeline and the tool-use loop.** This draft proposes
 concrete resolutions to R1–R4 in the
-[architectural review](2026-09-06-agent-architecture-review.md). It refines the
+[architectural review](../../archived/architecture/2026-09-06-agent-architecture-review.md). It refines the
 [LLM package study](2026-09-06-llm-package-architecture-study.md) and supplies
 amendments for the [runtime proposal](../../implemented/architecture/2026-09-04-agent-runtime-on-effect.md); it
 does not introduce another runtime or persistence authority.

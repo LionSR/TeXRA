@@ -1,6 +1,8 @@
 # The persistence substrate: one event table, one cutover (2026-09-03)
 
-Status: proposed
+Status: archived — the substrate shipped; the SQLite session store and the run
+ledger are current architecture.
+Archived: 2026-09-21
 
 **Amendment (2026-09-09):** The accepted [TeXRA 1.0 direction](../../../../AGENTS.md#texra-10-direction)
 supersedes this proposal's legacy-state import and migration requirements.
@@ -981,7 +983,7 @@ on the same major (`4.0.0-beta.83`) and shows a shape worth copying exactly:
 ### Client selection at the approved host floor
 
 The September 6 comparison requested by the
-[delivery plan](2026-09-06-effect-runtime-delivery-plan.md#2-technology-choices-that-can-endure)
+[delivery plan](../../proposed/architecture/2026-09-06-effect-runtime-delivery-plan.md#2-technology-choices-that-can-endure)
 identified a host-floor constraint. The pinned official
 [`@effect/sql-sqlite-node` client](https://github.com/Effect-TS/effect/blob/effect%404.0.0-rc.112/packages/sql/sqlite-node/src/SqliteClient.ts#L32)
 statically imports `backup` from `node:sqlite`, and its ordinary statement path

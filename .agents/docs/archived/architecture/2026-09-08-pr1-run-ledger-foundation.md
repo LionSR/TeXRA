@@ -1,7 +1,10 @@
 # PR 1 of the runtime lane: the run ledger vocabulary, `RunLedger`, and `foldRunState` (2026-09-08)
 
-Status: this is a **proposal, adversarially reviewed once**, not a ratified
-plan. It specifies PR 1 of lane D of the runtime cutover
+Status: archived — PR 1 landed; the run ledger is current architecture.
+Archived: 2026-09-21
+
+Written as a **proposal, adversarially reviewed once**, not a ratified
+plan. It specified PR 1 of lane D of the runtime cutover
 ([the agent runtime on Effect](../../implemented/architecture/2026-09-04-agent-runtime-on-effect.md), §5
 PR plan), stacked on `cutover/native-runtime-llm-20260907`. The review found
 real defects and this document carries their corrections rather than the
@@ -17,7 +20,7 @@ eight rows are **not frozen** by this document and are flagged as such:
 reflection family persists, and `model.compaction`, whose `keepPrefix` can
 produce a history the LLM package refuses at prepare time.
 
-Companion to [the delivery plan](./2026-09-06-effect-runtime-delivery-plan.md)
+Companion to [the delivery plan](../../proposed/architecture/2026-09-06-effect-runtime-delivery-plan.md)
 and [the substrate decision](./2026-09-03-persistence-substrate-decision.md).
 It supersedes §2.1's payload sketches where they conflict; every deviation is
 argued at its schema and repeated in §8. Paths under `packages/llm/` are on the
@@ -251,7 +254,7 @@ event_sequence.owner_id = excluded.owner_id AND closed = 0`, reach the
 
 They do **not** join `AgentEvent` in `@agent/trace`. §2.1's "all carried as
 `AgentEvent` arms" is superseded by
-[the delivery plan, line 194](./2026-09-06-effect-runtime-delivery-plan.md):
+[the delivery plan, line 194](../../proposed/architecture/2026-09-06-effect-runtime-delivery-plan.md):
 _"Private ledger rows stay outside the public trace union."_ Only `flow.step`
 is display-visible, and it reaches the viewer through the session vocabulary.
 
@@ -1666,7 +1669,7 @@ total**, placed there by the repo's centralized-test convention rather than
 beside the package.
 
 Ruling cited: "Private ledger rows stay outside the public trace union", at
-[`2026-09-06-effect-runtime-delivery-plan.md`](./2026-09-06-effect-runtime-delivery-plan.md)
+[`2026-09-06-effect-runtime-delivery-plan.md`](../../proposed/architecture/2026-09-06-effect-runtime-delivery-plan.md)
 line 194.
 
 Not verified, and carried forward from the original spec as claims rather than

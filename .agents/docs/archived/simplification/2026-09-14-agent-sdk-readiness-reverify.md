@@ -1,6 +1,8 @@
 # Agent-SDK readiness — re-verification pass (2026-09-14)
 
 Status: implemented
+Archived: 2026-09-21 — superseded by the 2026-09-17 pass, the one current
+re-verification.
 
 > **Written 2026-09-14.** The scheduled audit routine re-ran the standing
 > question — "review the agent core, model handler, logger, and surface for

@@ -10,7 +10,7 @@ Archived: 2026-09-06
 > and unready surface; design subagent boundaries" — against the plan of record
 > ([`2026-07-09-agent-sdk-north-star.md`](../architecture/2026-07-09-agent-sdk-north-star.md))
 > and the two immediately-prior passes
-> ([`-08-19`](../../implemented/architecture/2026-08-19-agent-sdk-readiness-reverify.md) at `391033e`,
+> ([`-08-19`](../architecture/2026-08-19-agent-sdk-readiness-reverify.md) at `391033e`,
 > [`-08-20`](./2026-08-20-agent-sdk-readiness-reverify.md) at `74fab00`). This
 > pass re-derived the verdict from four independent area audits (core, model
 > handlers, logger/telemetry, surface + subagents) rather than a diff of the

@@ -1,12 +1,14 @@
 # From model handlers to TeXRA's own Effect-native LLM package
 
-Status: proposed
+Status: implemented — `packages/llm` exists and the model-handler hierarchy is
+gone; the remaining gaps are owned by the
+[hardening note](../../proposed/architecture/2026-09-20-llm-package-hardening.md).
 
 Date: 2026-09-06. Recommended design based on pinned source, not a completed extraction. The owner explicitly permits changing the model-handler design and wants **TeXRA's own package**, not a dependency on another Effect-native LLM package.
 
 **Create `packages/llm` from the useful provider code in `src/agent/modelHandlers`, give it a new Effect-native contract, and retire `IModelHandler` and its superclass.** Keep the runtime, document workflow, settings, subscription selection, and billing authorities outside it. Learn the latest designs from OpenCode, Pi, and Effect AI without inheriting their APIs or migration requirements.
 
-Read with the [architecture decision](../../proposed/architecture/2026-09-06-agent-architecture-study.md) and [runtime study](../../proposed/architecture/2026-09-06-agent-loop-architecture-study.md).
+Read with the [architecture decision](../../archived/architecture/2026-09-06-agent-architecture-study.md) and [runtime study](../../archived/architecture/2026-09-06-agent-loop-architecture-study.md).
 
 ## 1. The current boundary is an agent component, not an LLM library
 

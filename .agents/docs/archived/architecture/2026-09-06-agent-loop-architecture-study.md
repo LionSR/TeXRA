@@ -1,8 +1,10 @@
 # Agent loops: an explicit interpreter on Effect, with one durable authority
 
-Status: proposed
+Status: archived — the two Effect run programs over the run ledger are the
+explicit interpreter this study recommended.
+Archived: 2026-09-21
 
-Date: 2026-09-06. Research snapshot and recommendation; proposed states below are not existing production APIs. Read with the [decision document](./2026-09-06-agent-architecture-study.md) and [LLM package study](../../proposed/architecture/2026-09-06-llm-package-architecture-study.md).
+Date: 2026-09-06. Research snapshot and recommendation; proposed states below are not existing production APIs. Read with the [decision document](./2026-09-06-agent-architecture-study.md) and [LLM package study](../../implemented/architecture/2026-09-06-llm-package-architecture-study.md).
 
 **Replace PocketFlow with domain procedures over explicit durable phases, implemented in Effect 4.** Build TeXRA's own LLM package beneath that interpreter. Do not introduce another framework that owns tools, history, retries, or persistence alongside it.
 

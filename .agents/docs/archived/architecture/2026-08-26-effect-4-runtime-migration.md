@@ -1,10 +1,19 @@
 ---
 created: 2026-08-26
 updated: 2026-09-06
-status: proposed
+status: archived
+archived: 2026-09-21
 ---
 
 # PRD: Effect 4 as the TeXRA backend runtime
+
+**Archived 2026-09-21.** The ratified rules landed: the run ledger, the two
+Effect run programs and the Effect-native boundary are current architecture
+(CLAUDE.md describes them as such). The
+[delivery plan](../../proposed/architecture/2026-09-06-effect-runtime-delivery-plan.md)
+and the
+[completion protocol](../../proposed/architecture/2026-09-15-effect-native-completion-protocol.md)
+own the remaining work. Kept as the record of why the rules read as they do.
 
 **Amendment (2026-09-09):** The accepted [TeXRA 1.0 direction](../../../../AGENTS.md#texra-10-direction)
 sets the release target to 1.0 and confirms Effect-native implementation.
@@ -2068,7 +2077,7 @@ unless the repository owner explicitly amends it.
    are in the
    [rulings ledger](../../implemented/architecture/2026-08-01-architecture-rulings-ledger.md).
    It also supersedes the disposition recorded for injection carrier 11 in
-   [the injection note](2026-09-10-effect-native-injection-context-pipelines.md)
+   [the injection note](../../proposed/architecture/2026-09-10-effect-native-injection-context-pipelines.md)
    §5, which reads as a pending conversion; the conversion is done.
 3. Whether any run-owned capability has sufficiently independent acquisition,
    lifetime, or substitution to sit outside the otherwise cohesive `AgentRun`

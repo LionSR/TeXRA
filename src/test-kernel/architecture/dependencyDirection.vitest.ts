@@ -86,7 +86,7 @@ const HOST_LAYER_IMPORT_PREFIXES = [
 ] as const;
 
 /**
- * Effect run boundary (PRD R1, .agents/docs/proposed/architecture/2026-08-26-effect-4-runtime-migration.md
+ * Effect run boundary (PRD R1, .agents/docs/archived/architecture/2026-08-26-effect-4-runtime-migration.md
  * "Execution strategy" rule 3): production code enters Effect through the
  * runtime its composition root holds and threads to it, the SDK public
  * entry, and the composition roots that open a store the runtime they are
