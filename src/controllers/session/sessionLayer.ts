@@ -580,7 +580,7 @@ const sessionHandleLayer = (
               // `goalStateChanged` row goes with it.
               return event.type === 'run.removed' && target.kind === 'run'
                 ? Effect.sync(() => {
-                    runs.detachChildren(target.id);
+                    session.runs.detachChildren(target.id);
                     releaseRunResources(target.id, session);
                   })
                 : Effect.void;

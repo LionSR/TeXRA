@@ -29,10 +29,15 @@ vi.mock('execa', () => ({ execa: mocks.execa }));
 // and runs on what it gets back. Here it gets the harness's, so this suite
 // can spy on the runtime the command actually runs its program on. Clone is
 // the only entry these tests reach, so the omit shape is the only one.
-vi.mock('@cli/runtime/cliProcessRuntime', async () => {
+vi.mock('@cli/runtime/cliProcessRuntime', async (importOriginal) => {
   const { testRuntime } = await import('@test/support/testProcessRuntime');
   const { Effect: EffectModule } = await import('effect');
+  // `refusingStateStore` is the real one: what clone hands the install is
+  // part of what this suite covers.
+  const actual =
+    await importOriginal<typeof import('@cli/runtime/cliProcessRuntime')>();
   return {
+    ...actual,
     installCliProcessRuntime: () => Promise.resolve(testRuntime()),
     disposeCliProcessRuntime: EffectModule.void,
   };
