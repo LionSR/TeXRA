@@ -206,17 +206,39 @@ function registerProcessRun(instruction: string) {
   });
 }
 
-/** Register a multi-agent-workflow run and return its id. */
-function registerWorkflowRun(name: string) {
+/**
+ * Register a multi-agent-workflow run and return its id. A workflow-script
+ * run publishes its `run.config` the way `createChildRun` does at launch, so
+ * the fold sees the model the launch actually routed.
+ */
+function registerWorkflowRun(name: string, model?: string) {
   return Effect.gen(function* () {
     const runId = generateRunId();
     yield* registerRun(
       testDefaultSession(),
       runId,
-      { name, instruction: `Workflow script ${name}` },
+      {
+        name,
+        instruction: `Workflow script ${name}`,
+        ...(model === undefined ? {} : { model }),
+      },
       name,
       { identity: { kind: 'multiAgentWorkflow', workflowName: name } },
     );
+    if (model !== undefined) {
+      const session = testDefaultSession();
+      session.publishRunEvent(runId, {
+        type: 'run.config',
+        runId,
+        config: AgentConfigSchema.parse({
+          agent: name,
+          agentCategory: AgentCategory.Workflow,
+          model,
+          instruction: `Workflow script '${name}'`,
+        }),
+      });
+      yield* session.settlePublications();
+    }
     return runId;
   });
 }
@@ -736,10 +758,13 @@ describe('ExecutionsTool /executions/{id}/output', () => {
   );
 
   it.live(
-    'shows one category for a workflow run in both the listing and its summary',
+    'shows one model for a workflow run in both the listing and its summary',
     () =>
       Effect.gen(function* () {
-        const runId = yield* registerWorkflowRun('category-parity');
+        const runId = yield* registerWorkflowRun(
+          'model-parity',
+          'parity-model-1',
+        );
 
         const summary = yield* new ExecutionsTool().call({
           path: `/executions/${runId}`,
@@ -753,10 +778,11 @@ describe('ExecutionsTool /executions/{id}/output', () => {
         assert.equal(summary.status, 'executed');
         assert.equal(listing.status, 'executed');
         // Both surfaces read the same fold, so neither can disagree about
-        // what the run is or invent a model a non-agent identity suppresses.
+        // what the run is or what model it routed to.
+        assert.ok(listingOutput.includes('parity-model-1'));
+        assert.ok(summaryOutput.includes('Model: parity-model-1'));
         assert.ok(summaryOutput.includes('Category: multiAgentWorkflow'));
         assert.ok(listingOutput.includes('multiAgentWorkflow'));
-        assert.ok(!summaryOutput.includes('Model:'));
       }).pipe(
         Effect.provide(
           nativeToolTestLayer({
@@ -786,6 +812,9 @@ describe('ExecutionsTool /executions/{id}/output', () => {
         // The stamped identity, not the live wire's fabricated run mode.
         assert.ok(runningOutput.includes('Category: process'));
         assert.ok(!runningOutput.includes('Category: toolUse'));
+        // A shell command routes no model, so the synthetic config's
+        // prefaulted one must not reach the summary.
+        assert.ok(!runningOutput.includes('Model:'));
         // /output is readable while the process runs, so the running summary
         // must advertise it — the same path the completed row lists.
         assert.ok(

@@ -1424,7 +1424,12 @@ function applyOwnArm(run: RunView, event: DisplaySessionEvent): RunView {
       };
     }
     case 'run.config': {
-      const model = run.identity.kind === 'agent' ? event.config.model : null;
+      // A background process has no model: its `run.config` is the fabricated
+      // `AgentConfig` that feeds the live wire, and the `model` there is the
+      // schema's prefault, not a model the run ever calls. Every other
+      // identity — a native or CLI-driven agent, a workflow-script run —
+      // carries the model its launch actually routed, so it is shown.
+      const model = run.identity.kind === 'process' ? null : event.config.model;
       return {
         ...run,
         model,
