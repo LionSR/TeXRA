@@ -69,17 +69,29 @@ function checkSymbolsResolve() {
   }
 }
 
-/** `git show <rev>:<path>`, or undefined when that revision has no such file. */
+/** git's wording when the path is simply not in that revision. */
+const PATH_ABSENT = /does not exist in|exists on disk, but not in/;
+
+/**
+ * `git show <rev>:<path>`, or undefined when that revision has no such file.
+ * Only genuine absence returns undefined: any other `git` failure rethrows,
+ * because swallowing it would drop the base side of the gate silently, which
+ * is exactly the protection this function exists to provide.
+ */
 function showAtRevision(rev, file) {
   try {
     return execFileSync('git', ['show', `${rev}:${file}`], {
       cwd: rootDir,
       encoding: 'utf8',
       maxBuffer: 64 * 1024 * 1024,
-      stdio: ['ignore', 'pipe', 'ignore'],
+      stdio: ['ignore', 'pipe', 'pipe'],
     });
-  } catch {
-    return undefined;
+  } catch (error) {
+    const stderr = String(error.stderr ?? '');
+    if (PATH_ABSENT.test(stderr)) return undefined;
+    throw new Error(
+      `git show ${rev}:${file} failed: ${stderr.trim() || error.message}`,
+    );
   }
 }
 
