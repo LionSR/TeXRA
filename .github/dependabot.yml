@@ -11,6 +11,12 @@ updates:
     ignore:
       - dependency-name: '@types/node'
       - dependency-name: '@types/vscode'
+      # openai stays on the patched line: patches/openai@7.10.0.patch teaches
+      # the Responses accumulator response.metadata, and the shipped bundles
+      # carry that patched realization. A bump must port the patch and
+      # re-verify the accumulator contract (7.18.0 broke
+      # OpenaiResponses.vitest's cleanup-defect retention).
+      - dependency-name: 'openai'
       # Zod 4.5 throws for prefaulted discriminators (zod#6545) and can
       # silently accept obsolete keys through a strict piped union.
       - dependency-name: 'zod'
