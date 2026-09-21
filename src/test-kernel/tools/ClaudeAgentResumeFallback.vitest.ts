@@ -73,7 +73,8 @@ vi.mock('@tools/claudeAgentConfig', () => ({
   buildClaudeAgentEnv: mocks.buildClaudeAgentEnv,
 }));
 
-vi.mock('@tools/claudeAgentImport', () => ({
+vi.mock('@tools/claudeAgentImport', async (importActual) => ({
+  ...(await importActual<typeof import('@tools/claudeAgentImport')>()),
   importClaudeAgentSdk: () => Effect.succeed(mocks.query),
   findClaudeBinaryPath: mocks.findClaudeBinaryPath,
 }));

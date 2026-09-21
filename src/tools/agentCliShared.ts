@@ -21,7 +21,7 @@ import {
   FOLLOW_UP_WAKE_FAILED_MESSAGE,
   submitFollowUp,
 } from '@agent/followUp/ToolUseFollowUp';
-import { AgentResume } from '@platform/interfaces';
+import { AgentResume, type StateStore } from '@platform/interfaces';
 import {
   emptyUsageStats,
   sumUsageStats,
@@ -373,6 +373,25 @@ const withAgentCliRun = Effect.fn('agentCliShared.withAgentCliRun')(function* <
 
   return yield* run(activeRun);
 });
+
+/**
+ * The command an agent-CLI call gets approved, built the one way both
+ * providers build it: the child's effective mode — read from the call's own
+ * settings, so the prompt names the mode the launch will use — and the prompt
+ * it would be launched with. Each tool declares this as its loop-side guard,
+ * so the run loop opens the prompt and neither tool body does.
+ */
+export const agentCliApprovalCommand =
+  <T extends { readonly prompt: string }>(
+    agentName: string,
+    mode: (input: T, workspaceState: StateStore) => Effect.Effect<string>,
+  ) =>
+  (input: T): Effect.Effect<string, never, ToolCall> =>
+    Effect.gen(function* () {
+      const { roots } = yield* ToolCall;
+      const resolved = yield* mode(input, roots.workspaceState);
+      return `[${agentName} ${resolved}] ${input.prompt}`;
+    });
 
 /** Run context resolved for an agent-CLI launch, handed to the provider's
  * `launch` callback by {@link dispatchAgentCliTool}. */

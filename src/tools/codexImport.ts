@@ -12,6 +12,10 @@
  *    resources, local node_modules, the global npm prefix, and PATH (in that
  *    priority order), then return the path for `codexPathOverride`. Results
  *    are cached for the session.
+ *
+ * 3. `getCodexConfig()` — the same lazy access for `codexConfig`, which the
+ *    tool-registration path must not pull in eagerly, plus the one reading of
+ *    the call's effective sandbox mode.
  */
 
 import { existsSync } from 'node:fs';
@@ -20,6 +24,7 @@ import * as path from 'node:path';
 import { Effect } from 'effect';
 
 import { isModuleNotFoundError } from '@common/errors';
+import type { StateStore } from '@platform/interfaces';
 import { ensureError } from '@utils/errors/errorMessage';
 import { IS_WINDOWS } from '@utils/system/platformPaths';
 
@@ -32,6 +37,7 @@ import {
 // The native `Codex` class value; `typeof` gives its construct signature
 // (`new (options?: CodexOptions) => Codex`) so construction stays type-checked.
 type CodexConstructor = typeof import('@openai/codex-sdk').Codex;
+type SandboxMode = import('@openai/codex-sdk').SandboxMode;
 type PlatformInfo = { pkg: string; triple: string };
 
 // ---------------------------------------------------------------------------
@@ -165,3 +171,24 @@ export const findCodexBinaryPath = createCachedBinaryResolver(() => {
     pathCommand: 'codex',
   };
 });
+
+/** Lazy accessor for codexConfig.ts exports (loaded once, cached). */
+let configModule: typeof import('./codexConfig.js') | null = null;
+export const getCodexConfig = Effect.promise(
+  async () => (configModule ??= await import('./codexConfig.js')),
+);
+
+/**
+ * The sandbox mode a codex call runs under: its own override, else the
+ * user-configured default. The approval prompt the loop opens and the launch
+ * that follows it read the same one from here.
+ */
+export const codexSandboxMode = (
+  input: { readonly sandbox_mode?: SandboxMode | null },
+  workspaceState: StateStore,
+): Effect.Effect<SandboxMode> =>
+  Effect.map(getCodexConfig, (config) =>
+    input.sandbox_mode == null
+      ? config.getCodexSandboxMode(workspaceState)
+      : input.sandbox_mode,
+  );

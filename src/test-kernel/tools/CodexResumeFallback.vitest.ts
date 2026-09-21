@@ -67,7 +67,8 @@ vi.mock('@tools/codexConfig', () => ({
   CODEX_CLI_MODEL: 'gpt-5.2-codex',
 }));
 
-vi.mock('@tools/codexImport', () => ({
+vi.mock('@tools/codexImport', async (importActual) => ({
+  ...(await importActual<typeof import('@tools/codexImport')>()),
   importCodexClass: mocks.importCodexClass,
   findCodexBinaryPath: mocks.findCodexBinaryPath,
 }));

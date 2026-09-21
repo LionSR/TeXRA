@@ -58,10 +58,16 @@ import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { CODEX_CLI_MODEL } from './codexConfig';
 import { defineTool } from './core/define';
 import { buildAgentWorkspaceOptions } from './agentWorkspaceOptions';
-import { importCodexClass, findCodexBinaryPath } from './codexImport';
+import {
+  codexSandboxMode,
+  getCodexConfig,
+  importCodexClass,
+  findCodexBinaryPath,
+} from './codexImport';
 import { type ChildRun } from './delegation/childRun';
 import { codexThreadsFor } from './agentCliSessionStores';
 import {
+  agentCliApprovalCommand,
   agentCliCall,
   type AgentCliToolFailure,
   buildAgentCliLaunch,
@@ -101,12 +107,6 @@ import type {
 // codexConfig.ts at runtime to avoid pulling the heavy platform/SDK graph into
 // the tool-registration path.
 
-/** Lazy accessor for codexConfig.ts exports (loaded once, cached). */
-let _configModule: typeof import('./codexConfig.js') | null = null;
-const getCodexConfig = Effect.promise(
-  async () => (_configModule ??= await import('./codexConfig.js')),
-);
-
 // ============================================================================
 // Schema
 // ============================================================================
@@ -129,21 +129,6 @@ const CodexInputSchema = z.strictObject({
 });
 
 export type CodexInput = z.infer<typeof CodexInputSchema>;
-
-/**
- * The sandbox mode this call runs under: its own override, else the
- * user-configured default. The approval prompt and the launch must name the
- * same one, so the declared guard and the body both read it here.
- */
-const codexSandboxMode = Effect.fn('codex.sandboxMode')(function* (
-  input: CodexInput,
-) {
-  const { roots } = yield* ToolCall;
-  return (
-    input.sandbox_mode ??
-    (yield* getCodexConfig).getCodexSandboxMode(roots.workspaceState)
-  );
-});
 
 // ============================================================================
 // Run fact helpers
@@ -494,14 +479,7 @@ export class CodexTool extends defineTool({
     'Always async: returns immediately with a run ID; each turn is delivered back as a follow-up message (including the thread_id). ' +
     'Pass thread_id on a later call to send a follow-up instruction to an existing session, like delegate_agent(execution_id=…).',
   schema: CodexInputSchema,
-  // What the approval prompt names: the effective sandbox mode and the prompt
-  // this child would be launched with.
-  guard: {
-    bash: (input: CodexInput) =>
-      codexSandboxMode(input).pipe(
-        Effect.map((mode) => `[codex ${mode}] ${input.prompt}`),
-      ),
-  },
+  guard: { bash: agentCliApprovalCommand(CODEX_AGENT_NAME, codexSandboxMode) },
 }) {
   protected execute(input: CodexInput) {
     return Effect.gen({ self: this }, function* () {
@@ -520,11 +498,14 @@ export class CodexTool extends defineTool({
     AgentCliToolFailure,
     ToolCall | Runs | AgentResume
   > {
-    const sandboxMode = yield* codexSandboxMode(input);
+    const sandboxMode = yield* codexSandboxMode(
+      input,
+      toolCall.roots.workspaceState,
+    );
 
     return yield* dispatchAgentCliTool({
       toolCall,
-      agentName: 'codex',
+      agentName: CODEX_AGENT_NAME,
       store: codexThreadsFor,
       resumeId: input.thread_id ?? undefined,
       prompt: input.prompt,

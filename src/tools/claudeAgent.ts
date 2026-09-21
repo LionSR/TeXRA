@@ -67,12 +67,15 @@ import { defineTool } from './core/define';
 import { buildAgentWorkspaceOptions } from './agentWorkspaceOptions';
 import { ClaudeBackgroundTaskTracker } from './claudeAgentBackgroundTasks';
 import {
+  claudeAgentPermissionMode,
+  getClaudeAgentConfig,
   importClaudeAgentSdk,
   findClaudeBinaryPath,
 } from './claudeAgentImport';
 import { type ChildRun } from './delegation/childRun';
 import { claudeAgentSessionsFor } from './agentCliSessionStores';
 import {
+  agentCliApprovalCommand,
   agentCliCall,
   type AgentCliToolFailure,
   buildAgentCliLaunch,
@@ -96,12 +99,6 @@ import type {
   SDKAssistantMessage,
   SDKUserMessage,
 } from '@anthropic-ai/claude-agent-sdk';
-
-/** Lazy accessor for claudeAgentConfig.ts exports (loaded once, cached). */
-let _configModule: typeof import('./claudeAgentConfig.js') | null = null;
-const getClaudeAgentConfig = Effect.promise(
-  async () => (_configModule ??= await import('./claudeAgentConfig.js')),
-);
 
 // ============================================================================
 // Schema
@@ -148,23 +145,6 @@ const ClaudeAgentInputSchema = z
   });
 
 export type ClaudeAgentInput = z.infer<typeof ClaudeAgentInputSchema>;
-
-/**
- * The permission mode this call runs under: its own override, else the
- * workspace default. The approval prompt and the launch must name the same
- * one, so the declared guard and the body both read it here.
- */
-const claudeAgentPermissionMode = Effect.fn('claudeAgent.permissionMode')(
-  function* (input: ClaudeAgentInput) {
-    const { roots } = yield* ToolCall;
-    return (
-      input.permission_mode ??
-      (yield* getClaudeAgentConfig).getClaudeAgentPermissionMode(
-        roots.workspaceState,
-      )
-    );
-  },
-);
 
 // ============================================================================
 // Result formatting
@@ -562,15 +542,8 @@ export class ClaudeAgentTool extends defineTool({
     'Pass session_id on a later call to send a follow-up to an existing session, like delegate_agent(execution_id=…). ' +
     'Set fork_session to branch from that session while leaving the original unchanged.',
   schema: ClaudeAgentInputSchema,
-  // What the approval prompt names: the effective permission mode and the
-  // prompt this child would be launched with.
   guard: {
-    bash: (input: ClaudeAgentInput) =>
-      claudeAgentPermissionMode(input).pipe(
-        Effect.map(
-          (mode) => `[${CLAUDE_AGENT_NAME} ${mode}] ${input.prompt}`,
-        ),
-      ),
+    bash: agentCliApprovalCommand(CLAUDE_AGENT_NAME, claudeAgentPermissionMode),
   },
 }) {
   protected execute(input: ClaudeAgentInput) {
@@ -592,7 +565,10 @@ export class ClaudeAgentTool extends defineTool({
   > {
     const config = yield* getClaudeAgentConfig;
     const { workspaceState } = toolCall.roots;
-    const permissionMode = yield* claudeAgentPermissionMode(input);
+    const permissionMode = yield* claudeAgentPermissionMode(
+      input,
+      workspaceState,
+    );
     const model = input.model ?? config.getClaudeAgentModel(workspaceState);
     const effort = input.effort ?? config.getClaudeAgentEffort(workspaceState);
     const sessionId = input.session_id ?? undefined;
