@@ -68,10 +68,8 @@ function reflectionSnapshot(
       modelId: config.model,
       modelCompatibilityKey: null,
       lastError: null,
-      pendingRetry: null,
       declinedRoutes: [],
     },
-    references: { pendingIntents: [], pendingResponse: null },
     state: {
       currentRound: 0,
       totalRounds: 4,

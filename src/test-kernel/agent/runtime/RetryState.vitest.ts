@@ -4,7 +4,7 @@
  * Owner A is automatic and route-scoped: `classifyModelFailure` decides
  * whether an attempt repeats at all and what the session's recovery gate is
  * told about the wire route. Owner B is a human and durable: a
- * `request.opened` row, a `pendingRetry` gate that walks
+ * `request.opened` row, a `model.retry` permit that walks
  * `waiting` -> `authorized` -> `started`, and a decision that is a retry, a
  * denial (failed, never cancelled — #7331) or a cancellation.
  */

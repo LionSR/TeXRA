@@ -37,6 +37,7 @@ import {
   type InvocationRef,
   type ModelCompatibilityKey,
   type NormalizedUsage,
+  type PendingRetry,
   type PermissionPayload,
   type RequestDecision,
   type RetryErrorInfo,
@@ -57,7 +58,7 @@ import type { z } from 'zod';
  * display arms a batch has to commit atomically with them. A tool call's card
  * settles with its `tool.result` — `tool.end` for a card the dispatcher
  * already opened, both card rows for a fast tool whose card opens and closes
- * in that one batch; an approval's recovery binding is the `flow.snapshot`
+ * in that one batch; an approval's recovery binding is the `tool.binding`
  * committed in the same batch; a streaming row still open when the loop
  * parks closes with the `waiting` step, in that step's batch. Publishing
  * those companions separately is the
@@ -75,7 +76,9 @@ export type RunLedgerDraft = Extract<
       | 'model.message'
       | 'model.compaction'
       | 'tool.intent'
+      | 'tool.binding'
       | 'tool.result'
+      | 'model.retry'
       | 'flow.snapshot'
       | 'tool.start'
       | 'tool.end'
@@ -91,10 +94,8 @@ export class RunLedgerInconsistent extends Data.TaggedError(
 )<{
   readonly reason:
     | 'out-of-order' // commits not strictly increasing, or a row before the row it presupposes
-    | 'stale-snapshot' // a snapshot contradicts rows already folded
     | 'orphan-settlement' // a tool.result under no pending response
     | 'unknown-run-row' // an unrecognized type on the run aggregate
-    | 'dangling-binding' // a request binding names no row
     | 'mismatched-delivery' // a delivering append does not settle its response
     | 'invalid-mutation'; // a tool.result state operation names no slice or leaves an invalid state
   readonly detail: string;
@@ -151,7 +152,7 @@ type PendingIntent = {
   readonly attempt: number;
   readonly responseId: string;
   /** The approval that guards this call, when one was raised: the
-   *  `flow.snapshot` in the approval's batch is its only carrier. */
+   *  `tool.binding` row in the approval's batch is its only carrier. */
   readonly approvalRequestId: string | null;
 };
 
@@ -178,8 +179,8 @@ export type RunState = {
   /** The last folded row. */
   readonly commit: CommitOrdinal;
   readonly snapshotCommit: CommitOrdinal | null;
-  /** Ledger rows folded into this state: zero means a snapshot restores its
-   *  references, anything else means the snapshot is checked against them. */
+  /** Ledger rows folded into this state: zero means nothing but queued
+   *  input has folded, which is what tells an unopened run from a broken one. */
   readonly rowsBeforeSnapshot: number;
   readonly family: RunFamily | null;
   readonly step: FlowStep | null;
@@ -193,7 +194,8 @@ export type RunState = {
   readonly modelId: string | null;
   readonly modelCompatibilityKey: ModelCompatibilityKey | null;
   readonly lastError: RetryErrorInfo | null;
-  readonly pendingRetry: SnapshotRuntime['pendingRetry'];
+  /** The human retry permit, as the last `model.retry` row left it. */
+  readonly pendingRetry: PendingRetry | null;
   /** Subscription routes this run declines: the retries the user answered
    *  with their own API key, plus the launch's seed. */
   readonly declinedRoutes: SnapshotRuntime['declinedRoutes'];
@@ -326,8 +328,8 @@ export const freshRunState = (commit: CommitOrdinal): RunState => ({
   flow: null,
 });
 
-/** The recovery bindings a snapshot carries (R5): the retry permit's request
- *  and the approval request of every pending intent. */
+/** The recovery bindings the rows carry (R5): the `model.retry` permit's
+ *  request and every pending intent's `tool.binding`. */
 function requestBindings(state: RunState): ReadonlySet<string> {
   const bindings = new Set<string>();
   if (state.pendingRetry !== null) bindings.add(state.pendingRetry.requestId);
@@ -344,9 +346,8 @@ function requestBindings(state: RunState): ReadonlySet<string> {
  * they are not the one kind that outlives the process that asked. A request
  * the session opened for a tool (a command, an edit, a plan, a delegation,
  * a question) parks that tool, so a new owner can neither answer it nor
- * re-ask it — the snapshot arm below refuses to be authored over one, and a
- * resume retires them as cancelled before it authors a snapshot
- * (`RunLedger.acquire`). An `externalInquiry` is the exception by contract:
+ * re-ask it, so a resume retires them as cancelled before it continues the
+ * run (`RunLedger.acquire`). An `externalInquiry` is the exception by contract:
  * its tool returns at once and its answer arrives as a follow-up, whichever
  * process is running the run by then, so it stands unbound across every
  * snapshot its run writes.
@@ -542,118 +543,23 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
       });
     }
     case 'flow.snapshot': {
+      // Family state and the coordinates the loop owns, and nothing else: no
+      // reference set to reconcile, so there is no way for a snapshot to
+      // disagree with the rows below it (single-owner note, section 3.3).
       const p = row.payload;
       const state = current ?? freshRunState(commit);
       if (state.family !== null && state.family !== p.family) {
-        return refuse('stale-snapshot', 'a snapshot of another family', commit);
+        return refuse('out-of-order', 'a snapshot of another family', commit);
       }
-      const { pendingIntents: intents, pendingResponse: response } =
-        p.references;
-      // The snapshot's own intents, restored or checked against the folded
-      // ones below; either way it is the snapshot that carries the approval
-      // binding, so these entries are what the next state holds.
-      const pendingIntents = byId(
-        intents.map((intent) => [
-          intent.callId,
-          {
-            attempt: intent.attempt,
-            responseId: intent.responseId,
-            approvalRequestId: intent.approvalRequestId,
-          },
-        ]),
-      );
-      let pendingResponse: PendingResponse | null;
-      if (state.rowsBeforeSnapshot === 0) {
-        // Nothing folded before it: the snapshot restores its references.
-        // A pending response cannot be restored from a reference alone (its
-        // turn and dispatch facts live in the response row below it), so an
-        // anchored read must start at or below that row.
-        if (response !== null) {
-          return refuse(
-            'dangling-binding',
-            `pending response ${response.responseId} names no folded response row`,
-            commit,
-          );
-        }
-        pendingResponse = null;
-      } else {
-        // Rows were folded before it: the snapshot is checked against them
-        // and contributes only the approval bindings, its one carrier.
-        const folded = state.pendingIntents;
-        const foldedIds = Object.keys(folded);
-        const stale =
-          intents.length !== foldedIds.length ||
-          intents.some((intent) => {
-            const known = folded[intent.callId];
-            return (
-              known === undefined ||
-              known.attempt !== intent.attempt ||
-              known.responseId !== intent.responseId
-            );
-          });
-        if (stale) {
-          return refuse(
-            'stale-snapshot',
-            'pending intents disagree with the folded rows',
-            commit,
-          );
-        }
-        const pending = state.pendingResponse;
-        const responseStale = (() => {
-          if (pending === null || response === null) {
-            return pending !== response;
-          }
-          const settledIds = Object.keys(pending.settled).sort();
-          const claimed = response.settled.toSorted();
-          return (
-            pending.responseId !== response.responseId ||
-            settledIds.length !== claimed.length ||
-            settledIds.some((id, index) => id !== claimed[index])
-          );
-        })();
-        if (responseStale) {
-          return refuse(
-            'stale-snapshot',
-            'pending response disagrees with the folded rows',
-            commit,
-          );
-        }
-        pendingResponse = pending;
-      }
-      const next: RunState = {
+      return Result.succeed({
         ...state,
         commit,
         snapshotCommit: commit,
         rowsBeforeSnapshot: state.rowsBeforeSnapshot + 1,
         family: p.family,
         ...p.runtime,
-        pendingIntents,
-        pendingResponse,
         flow: flowOf(p),
-      };
-      // Every binding names an opened request, and every undecided request
-      // a new owner would have to recover is bound: one with nothing to
-      // recover it by can only be retired as interrupted, which is forbidden
-      // for these purposes. The inquiry {@link unboundRequests} exempts is
-      // not that case: it is answered from the thread, not from the run.
-      for (const requestId of requestBindings(next)) {
-        if (!Object.hasOwn(next.requests, requestId)) {
-          return refuse(
-            'dangling-binding',
-            `binding ${requestId} names no request`,
-            commit,
-          );
-        }
-      }
-      const [unbound] = unboundRequests(next);
-      if (unbound !== undefined) {
-        return refuse(
-          'dangling-binding',
-          `request ${unbound} has no recovery binding`,
-          commit,
-        );
-      }
-      return Result.succeed(next);
+      });
     }
     case 'model.message': {
       const p = row.payload;
@@ -711,7 +617,7 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
           const open = state.openAttempt;
           if (open === null || !sameInvocation(open.invocation, p.invocation)) {
             return refuse(
-              'dangling-binding',
+              'out-of-order',
               `${p.kind} names no open attempt`,
               commit,
             );
@@ -842,7 +748,7 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
       const pending = current.pendingResponse;
       if (pending === null || pending.responseId !== p.responseId) {
         return refuse(
-          'dangling-binding',
+          'out-of-order',
           `intent names response ${p.responseId}, pending is ${pending?.responseId ?? 'none'}`,
           commit,
         );
@@ -852,7 +758,7 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
         const call = pending.calls.find((fact) => fact.callId === callId);
         if (call === undefined || call.parallelSafe) {
           return refuse(
-            'dangling-binding',
+            'out-of-order',
             `intent names ${callId}, which is not a barrier call of ${p.responseId}`,
             commit,
           );
@@ -879,6 +785,52 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
         commit,
         rowsBeforeSnapshot: current.rowsBeforeSnapshot + 1,
         pendingIntents,
+      });
+    }
+    case 'tool.binding': {
+      if (!opened(current)) {
+        return refuse(
+          'out-of-order',
+          `${row.type} before the opening flow.snapshot`,
+          commit,
+        );
+      }
+      // The approval that guards one outcome-unknown call, committed with
+      // the `request.opened` it names: the intent it binds is the one the
+      // rows already hold, at the attempt the approval admits.
+      const p = row.payload;
+      const intent = current.pendingIntents[p.callId];
+      if (intent === undefined || intent.attempt !== p.attempt) {
+        return refuse(
+          'out-of-order',
+          `binding ${p.requestId} names no pending intent for ${p.callId} at attempt ${p.attempt}`,
+          commit,
+        );
+      }
+      return Result.succeed({
+        ...current,
+        commit,
+        rowsBeforeSnapshot: current.rowsBeforeSnapshot + 1,
+        pendingIntents: byId([
+          ...Object.entries(current.pendingIntents),
+          [p.callId, { ...intent, approvalRequestId: p.requestId }],
+        ]),
+      });
+    }
+    case 'model.retry': {
+      if (!opened(current)) {
+        return refuse(
+          'out-of-order',
+          `${row.type} before the opening flow.snapshot`,
+          commit,
+        );
+      }
+      // The retry owner's durable gate, its one carrier: `null` retires it.
+      return Result.succeed({
+        ...current,
+        commit,
+        rowsBeforeSnapshot: current.rowsBeforeSnapshot + 1,
+        pendingRetry: row.payload.permit,
       });
     }
     case 'tool.result': {
@@ -997,7 +949,7 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
       const request = current.requests[row.requestId];
       if (request === undefined) {
         return refuse(
-          'dangling-binding',
+          'out-of-order',
           `decision names no request ${row.requestId}`,
           commit,
         );

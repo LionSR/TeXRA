@@ -70,10 +70,8 @@ const SNAPSHOT_RUNTIME = {
   modelId: 'deepseekT',
   modelCompatibilityKey: null,
   lastError: null,
-  pendingRetry: null,
   declinedRoutes: [],
 };
-const SNAPSHOT_REFERENCES = { pendingIntents: [], pendingResponse: null };
 
 /** The opening `flow.snapshot` of a run of either family. */
 function snapshotPayload(
@@ -82,7 +80,6 @@ function snapshotPayload(
   return FlowSnapshotPayloadSchema.parse({
     family,
     runtime: SNAPSHOT_RUNTIME,
-    references: SNAPSHOT_REFERENCES,
     state:
       family === 'toolUse'
         ? { shouldSkipCycle: false, stateSlices: null }

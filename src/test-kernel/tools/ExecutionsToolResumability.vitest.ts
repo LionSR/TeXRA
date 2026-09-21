@@ -27,10 +27,8 @@ function openingSnapshot(runId: RunId): RunLedgerDraft {
         modelId: 'test-model',
         modelCompatibilityKey: null,
         lastError: null,
-        pendingRetry: null,
         declinedRoutes: [],
       },
-      references: { pendingIntents: [], pendingResponse: null },
       state: { shouldSkipCycle: false, stateSlices: null },
     },
   };

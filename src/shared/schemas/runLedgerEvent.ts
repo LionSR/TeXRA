@@ -309,6 +309,20 @@ export const ToolIntentPayloadSchema = z.strictObject({
   attempt: z.int().positive(),
 });
 
+/* ----------------------------------------------------------- tool.binding */
+
+/**
+ * The approval that guards one outcome-unknown call: the single carrier of an
+ * intent's `approvalRequestId`, committed beside the `request.opened` it
+ * names. `attempt` is the intent attempt the approval admits, so a later
+ * dispatch of the same call needs its own binding.
+ */
+export const ToolBindingPayloadSchema = z.strictObject({
+  callId: CallIdSchema,
+  attempt: z.int().positive(),
+  requestId: z.string().min(1),
+});
+
 /* ------------------------------------------------------------ tool.result */
 
 /** `ToolFileAttachment.bytes` is a `Uint8Array`, which JSON does not
@@ -473,6 +487,8 @@ const RunLoopPhaseSchema = z.enum([
 ]);
 export type RunLoopPhase = z.infer<typeof RunLoopPhaseSchema>;
 
+/* ------------------------------------------------------------ model.retry */
+
 const PendingRetrySchema = z.strictObject({
   requestId: z.string().min(1),
   invocation: InvocationRefSchema,
@@ -489,25 +505,13 @@ const PendingRetrySchema = z.strictObject({
    */
   substate: z.enum(['waiting', 'authorized', 'started']),
 });
+export type PendingRetry = z.infer<typeof PendingRetrySchema>;
 
-/** Reference fields the fold reconciles rather than replaces. */
-const SnapshotReferencesSchema = z.strictObject({
-  pendingIntents: z
-    .array(
-      z.strictObject({
-        callId: CallIdSchema,
-        attempt: z.int().positive(),
-        responseId: ResponseIdSchema,
-        approvalRequestId: z.string().min(1).nullable(),
-      }),
-    )
-    .readonly(),
-  pendingResponse: z
-    .strictObject({
-      responseId: ResponseIdSchema,
-      settled: z.array(CallIdSchema).readonly(),
-    })
-    .nullable(),
+/** The durable human retry permit: the one carrier of the gate the retry
+ *  owner (`ModelInvoker`) walks through `waiting` -> `authorized` ->
+ *  `started`. `null` retires it, which a denial or a cancellation writes. */
+export const ModelRetryPayloadSchema = z.strictObject({
+  permit: PendingRetrySchema.nullable(),
 });
 
 /** Coordinates and runtime-owned failure state, which no row carries. */
@@ -524,7 +528,6 @@ const SnapshotRuntimeSchema = z.strictObject({
    * policy. Deliberately NOT derived from the package's `ModelError` (D3).
    */
   lastError: RetryErrorInfoSchema.nullable(),
-  pendingRetry: PendingRetrySchema.nullable(),
   /**
    * Subscription routes this run must not bind again: one per retry the user
    * answered with their own API key, plus the launch's own seed. Durable so a
@@ -545,9 +548,11 @@ const LedgerRunStateSnapshotSchema = AgentRunStateSnapshotSchema.omit({
   usageAccumulator: true,
 });
 
+/** A snapshot restates nothing the rows carry (single-owner note, 3.3): the
+ *  pending response, its intents and their approval bindings are folded from
+ *  `model.message`, `tool.intent` and `tool.binding`. */
 const SnapshotArmFields = {
   runtime: SnapshotRuntimeSchema,
-  references: SnapshotReferencesSchema,
 };
 
 export const FlowSnapshotPayloadSchema = z.discriminatedUnion('family', [

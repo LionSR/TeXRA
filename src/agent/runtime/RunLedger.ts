@@ -38,12 +38,10 @@ import { SessionEvents } from '@shared/session/sessionEvents';
 import type { z } from 'zod';
 
 /**
- * Rows that may follow a `flow.snapshot` in its batch. `request.opened` is
- * deliberately absent: the snapshot is the request's recovery binding and the
- * fold resolves that binding against the requests folded below it, so a
- * request committed after the snapshot that binds it is `dangling-binding`.
- * The batch is `[request.opened, flow.snapshot]`, one order, checked here.
- * A `stream.end` closes a streaming row the `waiting` step parks beside.
+ * Rows that may follow a `flow.snapshot` in its batch: a snapshot is the
+ * loop's position, so the batch that writes one is closing, not opening,
+ * work. A `stream.end` closes a streaming row the `waiting` step parks
+ * beside.
  */
 const AFTER_SNAPSHOT = new Set<RunLedgerDraft['type']>([
   'flow.step',
@@ -285,11 +283,11 @@ export const runLedgerLayer: Layer.Layer<
       );
       // A request the previous owner opened for a tool (a command, an edit,
       // a plan, a delegation, a question) carries no recovery binding: only
-      // the loop authors the snapshot that binds one, and the tool that
+      // the loop writes the `tool.binding` that makes one, and the tool that
       // asked died with that owner. Taking the claim retires exactly those
-      // as cancelled, so the surfaces still offering them settle and the
-      // next snapshot this run authors is not refused over them. Rows that
-      // do not fold are `load`'s refusal, one call below every caller.
+      // as cancelled, so the surfaces still offering them settle instead of
+      // outliving the process that asked. Rows that do not fold are `load`'s
+      // refusal, one call below every caller.
       const folded = foldRunState(null, yield* log.readAggregate(aggregate, 1));
       if (Result.isFailure(folded) || folded.success === null) return;
       const unbound = unboundRequests(folded.success);
