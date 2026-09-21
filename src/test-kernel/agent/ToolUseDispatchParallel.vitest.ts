@@ -513,7 +513,7 @@ describe('tool-use dispatch', () => {
         > {
           const context = yield* ToolCall;
           observedInstruction = context?.userInstruction;
-          observedTrace = context?.trace;
+          observedTrace = context?.run?.logger;
           return { status: 'executed', output: 'ok' };
         }),
       } as ITool;
