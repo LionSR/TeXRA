@@ -170,7 +170,7 @@ export class LatexMediaManager {
       const fs = yield* FileSystem.FileSystem;
       const buildDir = path.join(path.dirname(file.absolutePath), 'build');
       yield* fs.makeDirectory(buildDir, { recursive: true });
-      const compiled = yield* compileLatex2Pdf(file, this.roots.config, {
+      const compiled = yield* compileLatex2Pdf(file, this.roots, {
         outputDirectory: buildDir,
       });
       if (!compiled.ok) {

@@ -84,7 +84,7 @@ export const runExecuteCommand = Effect.fn('runExecuteCommand')(function* (
   yield* runAgent(request, {
     session,
     openWorkflowOutput: (result) =>
-      openFinalOutputIfAvailable(session.roots.config, result),
+      openFinalOutputIfAvailable(session.roots, result),
     // Set only by the "fix LaTeX" actions (see handleFixCompilation and the
     // progress-view compile fixer); a direct main-view launch omits it and
     // keeps the user's selected model.

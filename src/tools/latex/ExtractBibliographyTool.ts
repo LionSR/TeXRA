@@ -21,7 +21,6 @@ import { defineTool } from '@tools/core/define';
 import { executed } from '@tools/core/result';
 import { pathExists } from '@utils/files/fsDurability';
 import { formatResultCount } from '@utils/text/stringUtils';
-import { readConfig } from '@utils/config/configUtils';
 import {
   emptyExtractionResult,
   resolveLatexFile,
@@ -70,7 +69,7 @@ const extractBibliography = Effect.fn('ExtractBibliographyTool.execute')(
 
     // Use provided bibPath, or fall back to configured default
     const effectiveBibPath =
-      bibPath || readConfig<string>(call.roots.config, 'texra.bib.defaultPath');
+      bibPath || call.roots.config.get<string>('texra.bib.defaultPath');
 
     if (effectiveBibPath) {
       const { path: resolved } = resolveAndFormat(

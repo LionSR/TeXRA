@@ -45,7 +45,7 @@ function compile(
   const roots = testWorkspaceRoots();
   return compileLatex2Pdf(
     pathToLocationIn(roots.workspace, path.join(workspacePath, sourceFile)),
-    roots.config,
+    roots,
     { outputDirectory },
   ).pipe(Effect.provide(rootedFsLayer(roots)));
 }

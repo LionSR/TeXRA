@@ -7,13 +7,13 @@ import { z } from 'zod';
 
 // Local imports
 import { createLog } from '@logger/logUtils';
-import type { ConfigProvider } from '@platform/interfaces';
 import { WorkspaceFs } from '@platform/rootedFs';
+import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { ExecResult, FileLocation } from '@shared/schemas';
 import { SUPPORTED_LATEX_COMPILERS } from '@shared/constants/latexToolchain';
 import { runToolWithCheck } from '@utils/system/toolUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { readConfig } from '@utils/config/configUtils';
+import { readSettingFrom } from '@utils/config/platformSettings';
 import { splitContentLines } from '@utils/text/stringUtils';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from './latexLogging';
 
@@ -156,20 +156,20 @@ export type CompileLatex2PdfResult =
  * The compiler runs in the session's workspace root and, when
  * `texra.latex.includeWorkspaceInTexinputs` is on, searches it: the root is
  * the {@link WorkspaceFs} in context, and the two LaTeX settings come from
- * `config`, that same session's configuration held as data, so a compile
+ * `roots`, that same session's setting slots held as data, so a compile
  * never reads whichever roots the calling fiber happens to carry. The build
  * directory and the engine log are absolute paths (run storage, a build
  * folder, an external file) and go through the process `FileSystem`.
  *
  * @param latexLocation FileLocation for the LaTeX file
- * @param config The session's configuration
+ * @param roots The session's setting slots
  * @param options Compilation options (channel defaults to module CHANNEL)
  * @returns `{ ok: true, pdfPath } | { ok: false, logTail }` -- `pdfPath` is the
  * absolute path the engine wrote to; `logTail` is always populated on failure.
  */
 export const compileLatex2Pdf = Effect.fn('compileLatex2Pdf')(function* (
   latexLocation: FileLocation,
-  config: ConfigProvider,
+  roots: WorkspaceRoots,
   options: LaTeXCompileOptions = {},
 ): Effect.fn.Return<
   CompileLatex2PdfResult,
@@ -205,12 +205,11 @@ export const compileLatex2Pdf = Effect.fn('compileLatex2Pdf')(function* (
     // revised sibling wins over the original source fallback.
     const documentDir = path.dirname(latexFile);
 
-    const tikzInputDirectory = readConfig<string>(
-      config,
+    const tikzInputDirectory = roots.config.get<string>(
       'texra.latex.tikzInputDirectory',
     );
-    const includeWorkspace = readConfig<boolean>(
-      config,
+    const includeWorkspace = readSettingFrom<boolean>(
+      roots,
       'texra.latex.includeWorkspaceInTexinputs',
     );
     const { texInputParts, bibSearchParts } = buildLatexSearchParts({
@@ -249,9 +248,7 @@ export const compileLatex2Pdf = Effect.fn('compileLatex2Pdf')(function* (
       runToolWithCheck(tool, args, {
         channel,
         cwd: workspacePath,
-        // A compile holds this session's `ConfigProvider` alone, not the
-        // three setting slots, and a TeX engine spawns no git command that
-        // an identity could mark.
+        // A TeX engine spawns no git command that an identity could mark.
         settings: undefined,
         env,
         timeout,

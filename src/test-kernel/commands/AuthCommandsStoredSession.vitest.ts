@@ -45,10 +45,6 @@ vi.mock('@frontend/ui/errorHandlingUtils', () => ({
   showLoggedMessage: authMocks.showLoggedMessage,
 }));
 
-vi.mock('@utils/config/configUtils', () => ({
-  getConfig: () => false,
-}));
-
 // Local imports
 import { SupabaseAuth, type SupabaseAuthShape } from '@auth/SupabaseAuth';
 import { signIn, signOut } from '@commands/auth/authCommands';

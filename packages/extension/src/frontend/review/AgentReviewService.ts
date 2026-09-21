@@ -358,7 +358,7 @@ class AgentReviewServiceImpl {
           { kind: 'fresh', config },
           {
             openWorkflowOutput: (result) =>
-              openFinalOutputIfAvailable(run.session.roots.config, result),
+              openFinalOutputIfAvailable(run.session.roots, result),
             stopAfterCycle: true,
             session: run.session,
             onRun: (handle) => this.reviewRuns.bind(run, handle),

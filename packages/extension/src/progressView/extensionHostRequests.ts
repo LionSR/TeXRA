@@ -240,7 +240,7 @@ export function createExtensionHostRequests(
       {
         session,
         openWorkflowOutput: (result) =>
-          openFinalOutputIfAvailable(session.roots.config, result),
+          openFinalOutputIfAvailable(session.roots, result),
         preferHelperModel: runOptions.preferHelperModel ?? false,
         ownApiKeyFallback: runOptions.ownApiKeyFallback,
         onRun: runOptions.onRun,

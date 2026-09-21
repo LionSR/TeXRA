@@ -380,16 +380,12 @@ const compileOne = Effect.fn('reflection.compileOne')(function* (
 
     // execa's timeout option kills the child process on expiry, so we don't
     // orphan hanging latexmk/pdflatex runs.
-    const result = yield* compileLatex2Pdf(
-      outputFile.location,
-      ctx.roots.config,
-      {
-        channel: ctx.runId,
-        outputDirectory: buildDir,
-        timeout: opts.timeoutMs,
-        extraInputDirs,
-      },
-    );
+    const result = yield* compileLatex2Pdf(outputFile.location, ctx.roots, {
+      channel: ctx.runId,
+      outputDirectory: buildDir,
+      timeout: opts.timeoutMs,
+      extraInputDirs,
+    });
     return { kind: 'compiled', result };
   }).pipe(
     // A per-file failure here (fs read error, compiler crash, …) means we

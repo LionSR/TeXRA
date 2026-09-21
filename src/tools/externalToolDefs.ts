@@ -47,7 +47,6 @@ import {
 } from '@tools/lean/leanServerRegistry';
 import { SetupPlatform } from '@tools/setup/platform';
 import { ZOTERO_PORT_KEY } from '@tools/zotero/bbtClient';
-import { readConfig } from '@utils/config/configUtils';
 import { IS_WINDOWS, findToolInCommonPaths } from '@utils/system/platformPaths';
 import { isWSL } from '@utils/system/wslDetect';
 import {
@@ -521,8 +520,7 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
     configNotes:
       'Zotero must be running with Better BibTeX installed. Port configurable via texra.bib.zoteroPort.',
     toggleable: true,
-    probe: ({ config }) =>
-      Effect.succeed(readConfig<number>(config, ZOTERO_PORT_KEY)),
+    probe: ({ config }) => Effect.succeed(config.get<number>(ZOTERO_PORT_KEY)),
     check: (probeResult) => probeZoteroBbt(zoteroProbePort(probeResult)),
     detailCheck: Effect.fn('externalToolDefs.zoteroDetail')(function* (
       probeResult?: unknown,

@@ -19,7 +19,7 @@ import type { ProcessRuntime } from '@platform/processRuntime';
 import { createFlushableDebounce } from '@utils/core';
 import { isPathWithin } from '@utils/core/pathCore';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { readConfig } from '@utils/config/configUtils';
+import { readSettingFrom } from '@utils/config/platformSettings';
 
 import { AgentReviewService } from './AgentReviewService';
 
@@ -48,7 +48,7 @@ function watchRepository(
   // Read from the watched session's own configuration, not the roots the
   // calling context carries: the watcher outlives the call that registered it.
   const runOnCommit = () =>
-    readConfig<boolean>(session.roots.config, 'agentReview.runOnCommit', false);
+    readSettingFrom<boolean>(session.roots, 'texra.agentReview.runOnCommit');
 
   let lastName = repository.state.HEAD?.name;
   let lastCommit = repository.state.HEAD?.commit;

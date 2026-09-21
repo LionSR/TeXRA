@@ -182,7 +182,7 @@ export class ChatExportController {
 
       const compiled = yield* compileLatex2Pdf(
         pathToLocationIn(this.deps.session.roots.workspace, absolutePath),
-        this.deps.session.roots.config,
+        this.deps.session.roots,
       );
 
       return {

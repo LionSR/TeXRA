@@ -25,7 +25,7 @@ import { refusalCopy, refusalOf } from '@shared/session/approvalDecision';
 import { recordToolFileRead } from '@tools/fileInteractions';
 import { errorResult } from '@tools/core/result';
 import { clamp, generateShortId } from '@utils/core';
-import { readConfig } from '@utils/config/configUtils';
+import { readSettingFrom } from '@utils/config/platformSettings';
 import { entryExists } from '@utils/files/fsEntryExists';
 import { readNormalizedFile } from '@utils/files/fsDurability';
 import { workspaceRelativePath } from '@utils/files/workspaceFS';
@@ -206,8 +206,8 @@ export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
     request: Omit<ToolEditApprovalRequest, 'permission' | 'roots'>,
   ): Effect.fn.Return<ToolEditApprovalResult, Error, ToolCall> {
     const call = yield* ToolCall;
-    const approvalsEnabled = readConfig<boolean>(
-      call.roots.config,
+    const approvalsEnabled = readSettingFrom<boolean>(
+      call.roots,
       TOOL_EDIT_APPROVAL_CONFIG_KEY,
     );
     const run = call.run;

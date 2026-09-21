@@ -1,12 +1,11 @@
-// Suites for src/utils/config (configUtils + platformSettings + providerConfig).
+// Suites for src/utils/config (platformSettings + providerConfig).
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { platform } from '@platform/platform';
 import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latexConfig';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
-import { installedHost, installPlatform } from '@test/support/setupPlatform';
-import { readConfig } from '@utils/config/configUtils';
+import { installPlatform } from '@test/support/setupPlatform';
 import {
   getProviderEndpoint,
   getProviderKeyUrl,
@@ -14,32 +13,8 @@ import {
 } from '@utils/config/providerConfig';
 import { readSettingFrom } from '@utils/config/platformSettings';
 
-// ---------------------------------------------------------------------------
-// ConfigUtils
-// ---------------------------------------------------------------------------
-
 afterEach(() => {
   vi.restoreAllMocks();
-});
-
-describe('readConfig', () => {
-  it('reads a cataloged key through the provider and falls back only off-catalog', async () => {
-    // The catalog default is the provider's own resolution step
-    // (`ConfigProvider.get`); `defaultValue` is for keys the catalog does not
-    // own, which is the only thing this reader still contributes.
-    await installPlatform({});
-    const { config } = installedHost().roots;
-
-    expect(
-      readConfig<boolean>(
-        config,
-        'texra.model.useGoogleInteractionsServerState',
-      ),
-    ).toBe(true);
-    expect(readConfig(config, 'not.a.catalog.key', 'fallback')).toBe(
-      'fallback',
-    );
-  });
 });
 
 // ---------------------------------------------------------------------------

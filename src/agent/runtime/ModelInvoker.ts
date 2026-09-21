@@ -292,8 +292,8 @@ export const modelInvokerLayer = (): Layer.Layer<
        * Whether a turn runs as background work: a workflow turn on a binding
        * that supports it, under the provider's toggle. The binding owns the
        * rule (it decides the Responses transport by the same answer); this
-       * asks it per turn with the run's category, reading the toggle live
-       * from the session's own config provider.
+       * asks it per turn with the run's category, reading the toggles live
+       * from the session's own setting stores.
        */
       const backgroundRequested = (bound: BoundModel): boolean =>
         backgroundDelivery(
@@ -303,7 +303,7 @@ export const modelInvokerLayer = (): Layer.Layer<
             modelName: bound.config.name,
             agentCategory: run.config.agentCategory,
           },
-          session.roots.config,
+          session.roots,
         );
 
       /**

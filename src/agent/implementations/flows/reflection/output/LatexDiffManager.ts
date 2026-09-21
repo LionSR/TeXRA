@@ -448,16 +448,12 @@ export class LatexDiffManager {
         resolveWorkspaceSourceDir(this.roots, referenceLocation) ??
           path.dirname(referenceLocation.absolutePath),
       ].filter((dir): dir is string => dir !== null);
-      const compiled = yield* compileLatex2Pdf(
-        diffLocation,
-        this.roots.config,
-        {
-          channel: this.runId,
-          outputDirectory: buildDir,
-          timeout: timeoutMs,
-          extraInputDirs,
-        },
-      );
+      const compiled = yield* compileLatex2Pdf(diffLocation, this.roots, {
+        channel: this.runId,
+        outputDirectory: buildDir,
+        timeout: timeoutMs,
+        extraInputDirs,
+      });
 
       if (!compiled.ok) {
         // Keep the missing auxiliary PDF visible, but leave the compiler tail

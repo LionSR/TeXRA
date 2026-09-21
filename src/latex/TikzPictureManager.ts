@@ -9,7 +9,6 @@ import { createLog } from '@logger/logUtils';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { FileLocation } from '@shared/schemas';
 import { renderPrompt } from '@utils/prompt';
-import { readConfig } from '@utils/config/configUtils';
 import { pathToLocationIn } from '@utils/files/fileLocation';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 
@@ -125,7 +124,7 @@ const compile = Effect.fn('TikzPictureManager.compile')(function* (
   const labeledTikzPictures = yield* extract(latexFile);
   log.debug(`Found ${labeledTikzPictures.length} labeled TikZ pictures`);
 
-  const template = readConfig<string>(roots.config, 'texra.latex.tikzTemplate');
+  const template = roots.config.get<string>('texra.latex.tikzTemplate');
   const compiledFiles: FileLocation[] = [];
 
   for (const [label, tikzPictures] of labeledTikzPictures) {
@@ -143,7 +142,7 @@ const compile = Effect.fn('TikzPictureManager.compile')(function* (
         roots.workspace,
         suffix,
       );
-      const compiled = yield* compileLatex2Pdf(texLocation, roots.config, {
+      const compiled = yield* compileLatex2Pdf(texLocation, roots, {
         channel: CHANNEL,
         compiler: 'pdflatex',
       });
