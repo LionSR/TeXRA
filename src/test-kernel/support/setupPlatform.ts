@@ -43,6 +43,7 @@ import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { GlobalDatabase } from '@shared/session/database';
 import { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
 import { InquiryRecords } from '@shared/session/inquiryRecords';
+import { GitHubSubscriptions } from '@tools/github/subscriptionBindings';
 import {
   LeanLanguageServices,
   type LeanLanguageServicesShape,
@@ -77,6 +78,28 @@ export interface FakeHost {
 }
 
 type HostBuilder = () => FakeHost | Promise<FakeHost>;
+
+/**
+ * The bare runtime's subscription tables. A registry is a live ownership
+ * table over a polling source, so the harness serves none: a suite that
+ * exercises one provides `gitHubSubscriptionsLayer` innermost, and a read
+ * here is a test wiring error rather than an empty answer. Reaching for the
+ * real layer instead would load the follow-up module in this setup file,
+ * ahead of the suites that mock it.
+ */
+const unreadGitHubSubscriptions = new Proxy(
+  {} as GitHubSubscriptions['Service'],
+  {
+    get: (target, member) => {
+      if (member === 'pr' || member === 'repo' || member === 'issue') {
+        throw new Error(
+          `No GitHub subscriptions in this test: provide gitHubSubscriptionsLayer to read '${member}'.`,
+        );
+      }
+      return Reflect.get(target, member);
+    },
+  },
+);
 
 const unavailableLeanLanguageServices: LeanLanguageServicesShape = {
   listServers: () => [],
@@ -339,7 +362,6 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     { SetupPlatform },
     { ToolInjections },
     { SupabaseAuth },
-    { GitHubSubscriptions },
   ] = await Promise.all([
     import('@platform/platform'),
     import('@test/support/testWorkspaceRoots'),
@@ -353,10 +375,6 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     import('@tools/setup/platform'),
     import('@agent/runtime/toolInjection'),
     import('@auth/SupabaseAuth'),
-    // Imported here rather than statically for the reason the header gives:
-    // the registries pull in the follow-up module, and a setup-file import
-    // would cache it ahead of a suite that mocks it.
-    import('@tools/github/subscriptionBindings'),
   ]);
   current = host;
   // The process services, over whichever host is installed when a member is
@@ -379,10 +397,7 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     // The run-end stop is absent, as on a host whose Lean integration owns
     // server lifetime: the mock's placeholder for it would die on every run.
     Layer.mock(LeanLanguageServices, unavailableLeanLanguageServices),
-    // The ownership tables are plain in-memory registries built on demand,
-    // so the bare runtime carries the real ones: nothing polls until a
-    // suite binds a subscription.
-    GitHubSubscriptions.layer,
+    Layer.succeed(GitHubSubscriptions)(unreadGitHubSubscriptions),
     Secrets.layer(fakeHostSecrets),
     AppState.layer(fakeHostAppState),
     SupabaseAuth.layer(fakeHostAuth),
