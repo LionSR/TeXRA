@@ -55,7 +55,6 @@ import {
   referencedAggregates,
   type AggregateId,
   type JsonValue,
-  type OwnerId,
   type RunParent,
   type SessionEvent,
   type SessionEventDraft,
@@ -70,6 +69,7 @@ import {
   type DeletionMode,
   type AggregateState,
   Database,
+  GlobalDatabase,
   DatabaseOpenFailed,
   DatabaseClaimRefused,
   DatabaseNotOwner,
@@ -1270,24 +1270,20 @@ export const databaseLayer = (
   ).pipe(Layer.provide(Reactivity.layer));
 
 /**
- * Run one operation on a scoped persistent connection to `storage`, owned by
- * `ownerId`: the connection is acquired and released per operation, so no
- * caller holds one across a project the desktop closes. Every application
- * record in this directory reads its root and its identity here rather than
- * composing the layer itself.
+ * The process's handle on the global storage root, built once by
+ * `installProcessRuntime` and held for the process's life: the same
+ * connection, the same schema and the one `data_version` poll every
+ * application record of that root reads and writes through. The root is a
+ * value here because the process knows it before the runtime exists; the
+ * per-session `Database` takes its root from `WorkspaceRoots` instead.
  */
-export const withScopedDatabase = <A, E>(
+export const globalDatabaseLayer = (
   storage: string,
-  ownerId: OwnerId,
-  operation: Effect.Effect<A, E, Database>,
-) =>
-  Effect.scoped(
-    operation.pipe(
-      Effect.provide(
-        databaseLayer('persistent').pipe(
-          Layer.provide(Layer.succeed(WorkspaceRoots)({ storage })),
-          Layer.provide(ProcessIdentity.layer(ownerId)),
-        ),
+): Layer.Layer<GlobalDatabase, DatabaseOpenFailed, ProcessIdentity> =>
+  Layer.effect(GlobalDatabase, Database).pipe(
+    Layer.provide(
+      databaseLayer('persistent').pipe(
+        Layer.provide(Layer.succeed(WorkspaceRoots)({ storage })),
       ),
     ),
   );

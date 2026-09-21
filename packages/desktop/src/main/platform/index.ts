@@ -27,10 +27,7 @@ import type { ConfigStore } from '@platform/defaults/jsonConfigProvider';
 import { JsonStore, nodeFileServices } from '@platform/defaults/jsonStore';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { installLongRunningModelDispatcher } from '@platform/defaults/longRunningModelTransport';
-import {
-  nodeProcesses,
-  processOwnerId,
-} from '@platform/defaults/nodeProcesses';
+import { nodeProcesses } from '@platform/defaults/nodeProcesses';
 import {
   createNodeWorkspaceRoots,
   initializeNodeRuntimeSkills,
@@ -41,7 +38,6 @@ import {
   WorkspaceStorageProvider,
   resolveGlobalStoragePath,
 } from '@platform/defaults/workspaceStorage';
-import type { OwnerId } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { UsageLogService } from '@telemetry/UsageLogService';
 import { directLeanLanguageServices } from '@tools/lean/direct/directLspAdapter';
@@ -79,7 +75,6 @@ export interface ElectronPlatformInitResult {
    * `platform()` singleton: one owner, one place to substitute in a test.
    */
   globalState: StateStore;
-  ownerId: OwnerId;
   secrets: PlatformSecrets;
   /** The account plane served as `SupabaseAuth`, built beside `secrets`. */
   supabaseAuth: SupabaseAuthShape;
@@ -202,7 +197,6 @@ export async function initializeElectronPlatform(
   const runtime = installProcessRuntime({
     processStart: Effect.succeed(processStart),
     globalStorage: storage.getGlobalStoragePath(),
-    updateCheckStorage: resolveGlobalStoragePath(userDataPath),
     secrets,
     appState: globalStateStore,
     auth: supabaseAuth,
@@ -266,7 +260,6 @@ export async function initializeElectronPlatform(
     globalConfigStore: configStores.global,
     lifecycle,
     globalState: globalStateStore,
-    ownerId: processOwnerId(processStart),
     secrets,
     supabaseAuth,
     agentDirectories,

@@ -305,3 +305,18 @@ export class Database extends Context.Service<
     ) => Effect.Effect<readonly AggregateState[], DatabaseReadFailed>;
   }
 >()('@texra/session/Database') {}
+
+/**
+ * The process's one handle on the global storage root, built beside
+ * `GlobalStorageFs` in `installProcessRuntime` and held for the process's
+ * life. Every application record of that root — the inquiry threads, the
+ * update check, the CLI's input history, the desktop's remembered projects —
+ * reads and writes through it, so the root's `data_version` poll is forked
+ * once per process instead of once per operation, and the connection is
+ * neither opened nor torn down on a single-row read. The per-workspace
+ * {@link Database} of a session's root is unchanged and unrelated.
+ */
+export class GlobalDatabase extends Context.Service<
+  GlobalDatabase,
+  Context.Service.Shape<typeof Database>
+>()('@texra/session/GlobalDatabase') {}

@@ -157,7 +157,6 @@ export function installCliProcessRuntime(
     const runtime: ProcessRuntime = installProcessRuntime({
       processStart: Effect.succeed(processStart),
       globalStorage: globalStoragePath,
-      updateCheckStorage: globalStoragePath,
       secrets,
       appState: globalState,
       auth,

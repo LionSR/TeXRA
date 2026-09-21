@@ -305,9 +305,7 @@ export async function runChat(
     appendLocalAssistantTranscript(startupNotice);
   }
 
-  const inputHistory = await runtime.runPromise(
-    loadInputHistory(() => services.globalStorage),
-  );
+  const inputHistory = await runtime.runPromise(loadInputHistory);
 
   // DA1 sentinel discovery runs *before* Ink mounts so it owns the raw-mode
   // toggle exclusively, interleaving with Ink's own raw-mode lifecycle (set

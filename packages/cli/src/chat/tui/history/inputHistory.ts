@@ -1,18 +1,12 @@
 /** Global, bounded CLI input history. Older entries are replaced, not archived. */
 import { Clock, Effect, Result, Semaphore } from 'effect';
 
-import { withScopedDatabase } from '@controllers/session/Database';
 import {
-  nodeProcesses,
-  processOwnerId,
-} from '@platform/defaults/nodeProcesses';
-import {
-  Database,
+  GlobalDatabase,
   INPUT_HISTORY_LIMIT,
   INPUT_HISTORY_LINE_LIMIT,
   type InputHistoryRecord,
 } from '@shared/session/database';
-import { ensureError } from '@utils/errors/errorMessage';
 
 export interface InputHistory {
   /** Persist a nonempty entry, suppressing an adjacent duplicate. */
@@ -25,64 +19,49 @@ export interface InputHistory {
   length(): number;
 }
 
-/** Each I/O operation owns its database scope; browsing remains synchronous. */
-export const loadInputHistory = (
-  globalStorage: () => string,
-): Effect.Effect<InputHistory, Error> =>
-  Effect.gen(function* () {
-    const access = <A, E>(operation: Effect.Effect<A, E, Database>) =>
-      Effect.gen(function* () {
-        const ownerId = processOwnerId(yield* nodeProcesses.selfIdentity());
-        const storage = yield* Effect.try({
-          try: globalStorage,
-          catch: ensureError,
-        });
-        return yield* withScopedDatabase(storage, ownerId, operation);
-      });
-    const read = Effect.flatMap(Database, (database) =>
-      database.readInputHistory(),
-    );
-    // History failure must not prevent typing. A subsequent push may retry storage.
-    let records: readonly InputHistoryRecord[] = Result.getOrElse(
-      yield* Effect.result(access(read)),
-      () => [],
-    );
-    const pushes = Semaphore.makeUnsafe(1);
-    return {
-      push: (line) =>
-        pushes.withPermit(
-          Effect.gen(function* () {
-            const value = line.trim().slice(0, INPUT_HISTORY_LINE_LIMIT);
-            if (value.length === 0) return;
-            const record = { at: yield* Clock.currentTimeMillis, value };
-            // Keep submitted text browsable even when storage fails.
-            if (records.at(-1)?.value !== value)
-              records = [...records, record].slice(-INPUT_HISTORY_LIMIT);
-            // Global adjacency belongs to SQLite, not this CLI's cached view.
-            yield* access(
-              Effect.gen(function* () {
-                const database = yield* Database;
-                yield* database.appendInputHistory(record);
-              }),
-            );
-          }),
-        ),
-      reverseFind(needle, from) {
-        if (!needle) return undefined;
-        const start = from === undefined ? records.length - 1 : from - 1;
-        for (let i = start; i >= 0; i--) {
-          const record = records[i];
-          if (record?.value.includes(needle)) {
-            return { value: record.value, index: i };
-          }
+/** The process's global-root handle serves the history; browsing stays synchronous. */
+export const loadInputHistory: Effect.Effect<
+  InputHistory,
+  never,
+  GlobalDatabase
+> = Effect.gen(function* () {
+  const database = yield* GlobalDatabase;
+  // History failure must not prevent typing. A subsequent push may retry storage.
+  let records: readonly InputHistoryRecord[] = Result.getOrElse(
+    yield* Effect.result(database.readInputHistory()),
+    () => [],
+  );
+  const pushes = Semaphore.makeUnsafe(1);
+  return {
+    push: (line) =>
+      pushes.withPermit(
+        Effect.gen(function* () {
+          const value = line.trim().slice(0, INPUT_HISTORY_LINE_LIMIT);
+          if (value.length === 0) return;
+          const record = { at: yield* Clock.currentTimeMillis, value };
+          // Keep submitted text browsable even when storage fails.
+          if (records.at(-1)?.value !== value)
+            records = [...records, record].slice(-INPUT_HISTORY_LIMIT);
+          // Global adjacency belongs to SQLite, not this CLI's cached view.
+          yield* database.appendInputHistory(record);
+        }),
+      ),
+    reverseFind(needle, from) {
+      if (!needle) return undefined;
+      const start = from === undefined ? records.length - 1 : from - 1;
+      for (let i = start; i >= 0; i--) {
+        const record = records[i];
+        if (record?.value.includes(needle)) {
+          return { value: record.value, index: i };
         }
-        return undefined;
-      },
-      at(index) {
-        return records[index]?.value;
-      },
-      length() {
-        return records.length;
-      },
-    };
-  });
+      }
+      return undefined;
+    },
+    at(index) {
+      return records[index]?.value;
+    },
+    length() {
+      return records.length;
+    },
+  };
+});

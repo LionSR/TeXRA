@@ -52,7 +52,6 @@ initTestProcessRuntime(
       return 'vitest';
     }),
     globalStorage,
-    updateCheckStorage: globalStorage,
     secrets: fakeHostSecrets,
     appState: fakeHostAppState,
     // Suites swap the account plane with their host; the default host's

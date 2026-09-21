@@ -1941,13 +1941,7 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
           const warn = (message: string) =>
             console.warn(`[desktop] ${message}`);
           const projectRecords = await runtime.runPromise(
-            Scope.provide(
-              openDesktopProjectRecords(
-                app.getPath('userData'),
-                platformInit.ownerId,
-              ),
-              runtime.scope,
-            ),
+            openDesktopProjectRecords,
           );
           projects = await runtime.runPromise(
             openDesktopProjectRegistry({

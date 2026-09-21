@@ -96,6 +96,7 @@ import { SessionInputs } from '@shared/session/sessionInputs';
 
 import {
   Database,
+  GlobalDatabase,
   type DatabaseReadFailed,
   type SessionOpenError,
 } from '@shared/session/database';
@@ -105,7 +106,7 @@ import { SetupPlatform, type SetupPlatformShape } from '@tools/setup/platform';
 import { StreamLogStore } from '@transcript/StreamLogStore';
 import { inquiryRecordsLayer } from './inquiryRecords';
 import { updateCheckRecordsLayer } from './updateCheckRecords';
-import { databaseLayer } from './Database';
+import { databaseLayer, globalDatabaseLayer } from './Database';
 import { collectPendingDeletions } from './deletionCleanup';
 import { sessionRequests } from './SessionRequests';
 import { sweepLeftoverRuns } from './sweepLeftoverRuns';
@@ -977,7 +978,6 @@ const closeSession = (root: string) =>
 interface ProcessRuntimeOptions {
   readonly processStart: Effect.Effect<string | undefined>;
   readonly globalStorage: string;
-  readonly updateCheckStorage: string;
   readonly secrets: PlatformSecrets;
   /**
    * The root's agent-resume port, served as `AgentResume`. The same value
@@ -1031,7 +1031,6 @@ interface ProcessRuntimeOptions {
 export function installProcessRuntime({
   processStart,
   globalStorage,
-  updateCheckStorage,
   secrets,
   appState,
   auth,
@@ -1048,9 +1047,18 @@ export function installProcessRuntime({
     ProcessIdentity,
     Effect.map(processStart, (start) => ({ ownerId: processOwnerId(start) })),
   );
+  // The one handle on the global root, built here and held for the process's
+  // life: the records below are `Layer.effect`s over it, and it is provided
+  // outside the session family so the entry's `Layer.fresh` cannot rebuild it
+  // per root. A global root that will not open is a defect, not a per-record
+  // failure: nothing downstream has an answer for it.
+  const globalDatabase = globalDatabaseLayer(globalStorage).pipe(
+    Layer.provide(identity),
+    Layer.orDie,
+  );
   const services = Layer.mergeAll(
-    inquiryRecordsLayer(globalStorage),
-    updateCheckRecordsLayer(updateCheckStorage),
+    inquiryRecordsLayer,
+    updateCheckRecordsLayer,
     Secrets.layer(secrets),
     AppState.layer(appState),
     SupabaseAuth.layer(auth),
@@ -1089,6 +1097,9 @@ export function installProcessRuntime({
         // global-storage path against a root of its own.
         Layer.provideMerge(lean),
         Layer.provideMerge(globalStorageFsLayer(globalStorage)),
+        // The records' handle on that same root, for the same reason: one
+        // connection and one change poll per process, outside the entry.
+        Layer.provideMerge(globalDatabase),
         Layer.provideMerge(
           Layer.mergeAll(
             effectDiagnosticsLayer,

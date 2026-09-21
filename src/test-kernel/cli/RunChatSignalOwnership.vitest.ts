@@ -140,7 +140,13 @@ vi.mock(
 vi.mock('@cli/chat/tui/history/inputHistory', async (importOriginal) => {
   const actual =
     await importOriginal<typeof import('@cli/chat/tui/history/inputHistory')>();
-  return { ...actual, loadInputHistory: mocks.loadInputHistory };
+  // The history is a program now, not a factory: the mock suspends so each
+  // run still reads whatever the test staged on `mocks.loadInputHistory`.
+  const effect = await import('effect');
+  return {
+    ...actual,
+    loadInputHistory: effect.Effect.suspend(() => mocks.loadInputHistory()),
+  };
 });
 
 vi.mock('@cli/chat/tui/state/terminalCapabilities', async (importOriginal) => {

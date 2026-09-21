@@ -40,6 +40,7 @@ import type { Platform } from '@platform/platform';
 import { globalStorageFsLayer } from '@platform/rootedFs';
 import type { PlatformSecrets, Secrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
+import { GlobalDatabase } from '@shared/session/database';
 import { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
 import { InquiryRecords } from '@shared/session/inquiryRecords';
 import {
@@ -364,6 +365,9 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     NodeFileSystem.layer,
     NodePath.layer,
     Layer.mock(UpdateCheckRecords, {}),
+    // The records above are mocked, so the bare runtime's global-root handle
+    // is too: a suite that reads it provides its own innermost.
+    Layer.mock(GlobalDatabase, {}),
     Layer.mock(InquiryRecords, {}),
     // A suite that exercises a Lean tool provides its own port innermost.
     // The run-end stop is absent, as on a host whose Lean integration owns
