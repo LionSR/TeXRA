@@ -46,11 +46,10 @@ import {
   type RunOutcome,
   type RunUsageTotals,
 } from '@shared/schemas';
-import { RunLedger, RunLedgerRefused } from '@shared/session/runLedger';
+import { RunLedger } from '@shared/session/runLedger';
 import { freshRunState, type RunState } from '@shared/session/runStateFold';
 import { goalOf, pauseGoal, setGoalSessionAutoApproval } from '@tools/goal';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
-import { ensureError } from '@utils/errors/errorMessage';
 
 import { AgentRun } from '../run/AgentRun';
 import { compactIfNeeded } from '../run/compaction';
@@ -66,7 +65,6 @@ import { ModelInvoker } from '../ModelInvoker';
 import { Runs } from '../runRegistry';
 import {
   appendRow,
-  haltedStepRow,
   NOT_RESUMABLE_MESSAGE,
   rowAggregate,
   snapshotRow,
@@ -74,6 +72,7 @@ import {
   toolUseFlowState,
   type ToolUseFlowState,
 } from './rows';
+import { recordHalt, runStopError } from './runExit';
 import { dispatchPendingResponse, type TurnContext } from './toolUseDispatch';
 import type { HttpClient } from 'effect/unstable/http';
 import type { SessionHandle } from '../SessionHandle';
@@ -890,22 +889,8 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         // Every exit that ends the run writes its `halted` step; the state a
         // stop interrupted stays at the phase its rows left, so resume
         // continues it.
-        const halt = (outcome: RunOutcome) =>
-          state === null || state.phase === null
-            ? Effect.void
-            : ledger
-                .appendBatch(runId, state, [
-                  haltedStepRow(runId, state, outcome),
-                ])
-                .pipe(
-                  Effect.catch((error) =>
-                    Effect.sync(() =>
-                      logger.warn('Failed to record the run halt', {
-                        data: error,
-                      }),
-                    ),
-                  ),
-                );
+        // A tool-use step is stamped with the run state as folded.
+        const halt = recordHalt({ ledger, logger, runId }, state, (s) => s);
         const release = (next: 'recoverable' | 'terminal') =>
           Effect.sync(() => {
             detach();
@@ -932,17 +917,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       }),
     );
 
-  /** The caller's error for a run that ended in a failure cause. */
-  const failure = (error: unknown): Error => {
-    if (error instanceof RunLedgerRefused) {
-      return new Error(
-        `The run ledger refused a write (${error.reason}): ${error.detail}`,
-        { cause: error },
-      );
-    }
-    return ensureError(error);
-  };
-
   return yield* program.pipe(
     Effect.onExit(finalize),
     Effect.map((loop) =>
@@ -952,7 +926,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     ),
     Effect.catchCause((cause) => {
       if (Cause.hasInterrupts(cause)) return Effect.failCause(cause);
-      const stopped = failure(Cause.squash(cause));
+      const stopped = runStopError(Cause.squash(cause));
       logger.warn(`Tool-use run ${runId} stopped: ${stopped.message}`);
       return Effect.fail(stopped);
     }),

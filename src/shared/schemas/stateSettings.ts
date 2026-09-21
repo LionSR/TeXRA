@@ -929,6 +929,32 @@ const PROVIDER_ROUTING_SETTINGS = (
   }),
 );
 
+/**
+ * Copy for the provider toggles whose settings-view row and Models-tab
+ * control read identically, written once so the two cannot drift apart. Rows
+ * whose tab control needs its own shorter copy spell both out instead — see
+ * `modelProviderToggle`.
+ */
+const OPENROUTER_COPY = {
+  label: 'Use OpenRouter for all models',
+  description:
+    'Route all API calls through OpenRouter instead of direct provider APIs. Requires an OpenRouter API key; your OpenRouter key is always used directly.',
+} as const;
+
+const KIMI_CODE_COPY = {
+  label: 'Prefer Kimi Code',
+  description:
+    'Route dual-backend Kimi models (K3) through the Kimi Code coding endpoint when a Kimi Code API key is set. The two coding-only models always use the key. When off, K3 uses the Moonshot open platform.',
+} as const;
+
+const GLM_CODING_PLAN_COPY = {
+  label: 'GLM Coding Plan',
+  description:
+    'Use a Coding Plan subscription key instead of pay-as-you-go. Routes requests through the coding-specific endpoint with monthly quota limits.',
+  warningUrl: 'https://z.ai/subscribe',
+  warningUrlLabel: 'Subscribe',
+} as const;
+
 export const STATE_SETTINGS: readonly StateSettingEntry[] = [
   // --- Git commit author marking ---------------------------------------------
   surfacedSetting({
@@ -1288,9 +1314,8 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
   surfacedSetting({
     key: GlobalStateKey.USE_OPENROUTER,
     schema: z.boolean().prefault(false),
-    title: 'Use OpenRouter for all models',
-    description:
-      'Route all API calls through OpenRouter instead of direct provider APIs. Requires an OpenRouter API key; your OpenRouter key is always used directly.',
+    title: OPENROUTER_COPY.label,
+    description: OPENROUTER_COPY.description,
     category: 'model',
     slots: sameSlot('globalState'),
     honoredBy: everyHost(PROVIDER_CONFIG_READER),
@@ -1298,14 +1323,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     surfaces: {
       settingsView: 'profile',
       cliConfig: true,
-      models: [
-        {
-          provider: 'openRouter',
-          label: 'Use OpenRouter for all models',
-          description:
-            'Route all API calls through OpenRouter instead of direct provider APIs. Requires an OpenRouter API key; your OpenRouter key is always used directly.',
-        },
-      ],
+      models: [{ provider: 'openRouter', ...OPENROUTER_COPY }],
     },
   }),
 
@@ -1313,9 +1331,8 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
   surfacedSetting({
     key: GlobalStateKey.KIMI_CODE_PREFER,
     schema: z.boolean().prefault(false),
-    title: 'Prefer Kimi Code',
-    description:
-      'Route dual-backend Kimi models (K3) through the Kimi Code coding endpoint when a Kimi Code API key is set. The two coding-only models always use the key. When off, K3 uses the Moonshot open platform.',
+    title: KIMI_CODE_COPY.label,
+    description: KIMI_CODE_COPY.description,
     category: 'model',
     slots: sameSlot('globalState'),
     honoredBy: everyHost('src/agent/runtime/run/modelBinding.ts'),
@@ -1328,23 +1345,15 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     surfaces: {
       settingsView: 'profile',
       cliConfig: true,
-      models: [
-        {
-          provider: 'kimiCode',
-          label: 'Prefer Kimi Code',
-          description:
-            'Route dual-backend Kimi models (K3) through the Kimi Code coding endpoint when a Kimi Code API key is set. The two coding-only models always use the key. When off, K3 uses the Moonshot open platform.',
-        },
-      ],
+      models: [{ provider: 'kimiCode', ...KIMI_CODE_COPY }],
     },
   }),
   ...PROVIDER_ROUTING_SETTINGS,
   surfacedSetting({
     key: GlobalStateKey.GLM_CODING_PLAN,
     schema: z.boolean().prefault(false),
-    title: 'GLM Coding Plan',
-    description:
-      'Use a Coding Plan subscription key instead of pay-as-you-go. Routes requests through the coding-specific endpoint with monthly quota limits.',
+    title: GLM_CODING_PLAN_COPY.label,
+    description: GLM_CODING_PLAN_COPY.description,
     category: 'model',
     slots: sameSlot('globalState'),
     honoredBy: everyHost(ROUTE_ENDPOINT_READER),
@@ -1352,16 +1361,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     surfaces: {
       settingsView: 'profile',
       cliConfig: true,
-      models: [
-        {
-          provider: 'glm',
-          label: 'GLM Coding Plan',
-          description:
-            'Use a Coding Plan subscription key instead of pay-as-you-go. Routes requests through the coding-specific endpoint with monthly quota limits.',
-          warningUrl: 'https://z.ai/subscribe',
-          warningUrlLabel: 'Subscribe',
-        },
-      ],
+      models: [{ provider: 'glm', ...GLM_CODING_PLAN_COPY }],
     },
   }),
 
