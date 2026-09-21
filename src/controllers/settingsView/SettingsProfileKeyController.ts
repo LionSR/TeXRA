@@ -141,8 +141,8 @@ export class SettingsProfileKeyController<R = never> {
    * the process's API-key lookup cache — five seconds of TTL, in memory, gone
    * with the process — and repaints host surfaces. The credential is already
    * on disk, and everything that has to outlive the fiber belongs to the
-   * write path, where `saveProviderApiKey` and `UnsetApiKeyTool` carry their
-   * post-commit steps as `Effect.ensuring` finalizers.
+   * write path, where `UnsetApiKeyTool` carries its post-commit steps as an
+   * `Effect.ensuring` finalizer.
    */
   private run(
     provider: string,

@@ -1432,7 +1432,11 @@ if (SHOW_RETRY_APPROVAL) {
   await harnessRuntime.runPromise(
     // A fixture seed, not a product write: the harness only needs the key in
     // its fake store, with none of the notice or refresh a real key write
-    // carries.
+    // carries. Dropping the API-key lookup cache is part of that refresh, and
+    // the seed does not need it: this store is created by this script, and
+    // every read of it (`prepareRetry`'s card lookup, the retry gate,
+    // `/model`'s access rows) is driven by the approval requested below or by
+    // a keypress after it, so nothing can have cached `openai` as absent.
     HARNESS_PLATFORM_SERVICES.secrets.set(
       apiKeySecretName('openai'),
       'sk-harness-openai-key',
