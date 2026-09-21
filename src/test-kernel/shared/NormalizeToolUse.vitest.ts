@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { normalizeToolUseData } from '@shared/toolUse';
 
-describe('normalizeToolUseData', () => {
+describe('normalizeToolUseData (src/shared/toolUse.ts)', () => {
   it('returns null for non-object payloads', () => {
     expect(normalizeToolUseData('not an object')).toBeNull();
     expect(normalizeToolUseData(42)).toBeNull();

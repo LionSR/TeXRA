@@ -28,7 +28,7 @@ function createBeforeUnloadWindow() {
   };
 }
 
-describe('desktop control system', () => {
+describe('desktop control system (packages/desktop/src/renderer/desktopUnsavedClose.ts)', () => {
   it('vetoes renderer closes only while the editor has unsaved changes', () => {
     const dirtyWindow = createBeforeUnloadWindow();
     const dirtyEvent = { preventDefault: vi.fn(), returnValue: 'unchanged' };

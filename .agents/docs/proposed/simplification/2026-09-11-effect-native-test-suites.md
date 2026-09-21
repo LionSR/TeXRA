@@ -231,7 +231,7 @@ reason** (T06; about −78 lines proven, about −210 estimated).
 **6b. Supply the value through the seam that already exists** (T07; −46 lines
 proven over four members).
 
-- `FormTokenClient`, `CodexDeviceLogin` and `DeviceCodeAuth` do
+- `FormTokenClient`, `CodexDeviceLogin` and `SupabaseAuthDeviceCode` do
   `vi.stubGlobal('fetch')` and then
   `Effect.provideService(FetchHttpClient.Fetch, globalThis.fetch)`. In v4 `Fetch`
   is a `Context.Reference` read per request, so providing the mock directly is
