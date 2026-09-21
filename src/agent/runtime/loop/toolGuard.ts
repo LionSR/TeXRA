@@ -40,27 +40,27 @@ const guardRefusal = Effect.fn('toolUse.guard')(function* (
   // no path: the `call` below re-reads it and returns the validation error,
   // which is the report.
   const parsed = tool.definition.zodSchema?.safeParse(rawInput);
-  if (parsed?.success !== true) return undefined;
+  if (!parsed || !parsed.success) return undefined;
   const input = parsed.data as never;
   const call = yield* ToolCall;
 
-  const writes = guard.writes?.(input) ?? [];
-  if (writes.length > 0) {
-    yield* Effect.try({
-      try: () => {
-        for (const target of writes) {
-          const { path, display } = resolveAndFormat(
-            call.roots,
-            call.roots.workspace,
-            target,
-            call.workingDirectory,
-          );
-          assertWritable(path, display);
-        }
-      },
-      catch: (error) => error,
-    });
-  }
+  // Resolution and the read-only-root check both reject with a `ToolError`
+  // the dispatcher reports to the model, so they stay a failure rather than
+  // becoming a defect.
+  yield* Effect.try({
+    try: () => {
+      for (const target of guard.writes?.(input) ?? []) {
+        const { path, display } = resolveAndFormat(
+          call.roots,
+          call.roots.workspace,
+          target,
+          call.workingDirectory,
+        );
+        assertWritable(path, display);
+      }
+    },
+    catch: (error) => error,
+  });
 
   if (!guard.bash) return undefined;
   const command = yield* guard.bash(input);
@@ -80,7 +80,7 @@ const guardRefusal = Effect.fn('toolUse.guard')(function* (
 export const guardedToolCall = (
   tool: RuntimeTool,
   rawInput: unknown,
-): Effect.Effect<ToolResult, unknown, ToolServices> =>
+): ReturnType<RuntimeTool['call']> =>
   guardRefusal(tool, rawInput).pipe(
     Effect.flatMap((refusal) =>
       refusal ? Effect.succeed(refusal) : tool.call(rawInput),

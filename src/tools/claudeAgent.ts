@@ -103,23 +103,6 @@ const getClaudeAgentConfig = Effect.promise(
   async () => (_configModule ??= await import('./claudeAgentConfig.js')),
 );
 
-/**
- * The permission mode this call runs under: its own override, else the
- * workspace default. The approval prompt and the launch must name the same
- * one, so the declared guard and the body both read it here.
- */
-const claudeAgentPermissionMode = Effect.fn('claudeAgent.permissionMode')(
-  function* (input: ClaudeAgentInput) {
-    const { roots } = yield* ToolCall;
-    return (
-      input.permission_mode ??
-      (yield* getClaudeAgentConfig).getClaudeAgentPermissionMode(
-        roots.workspaceState,
-      )
-    );
-  },
-);
-
 // ============================================================================
 // Schema
 // ============================================================================
@@ -165,6 +148,23 @@ const ClaudeAgentInputSchema = z
   });
 
 export type ClaudeAgentInput = z.infer<typeof ClaudeAgentInputSchema>;
+
+/**
+ * The permission mode this call runs under: its own override, else the
+ * workspace default. The approval prompt and the launch must name the same
+ * one, so the declared guard and the body both read it here.
+ */
+const claudeAgentPermissionMode = Effect.fn('claudeAgent.permissionMode')(
+  function* (input: ClaudeAgentInput) {
+    const { roots } = yield* ToolCall;
+    return (
+      input.permission_mode ??
+      (yield* getClaudeAgentConfig).getClaudeAgentPermissionMode(
+        roots.workspaceState,
+      )
+    );
+  },
+);
 
 // ============================================================================
 // Result formatting

@@ -107,21 +107,6 @@ const getCodexConfig = Effect.promise(
   async () => (_configModule ??= await import('./codexConfig.js')),
 );
 
-/**
- * The sandbox mode this call runs under: its own override, else the
- * user-configured default. The approval prompt and the launch must name the
- * same one, so the declared guard and the body both read it here.
- */
-const codexSandboxMode = Effect.fn('codex.sandboxMode')(function* (
-  input: CodexInput,
-) {
-  const { roots } = yield* ToolCall;
-  return (
-    input.sandbox_mode ??
-    (yield* getCodexConfig).getCodexSandboxMode(roots.workspaceState)
-  );
-});
-
 // ============================================================================
 // Schema
 // ============================================================================
@@ -144,6 +129,21 @@ const CodexInputSchema = z.strictObject({
 });
 
 export type CodexInput = z.infer<typeof CodexInputSchema>;
+
+/**
+ * The sandbox mode this call runs under: its own override, else the
+ * user-configured default. The approval prompt and the launch must name the
+ * same one, so the declared guard and the body both read it here.
+ */
+const codexSandboxMode = Effect.fn('codex.sandboxMode')(function* (
+  input: CodexInput,
+) {
+  const { roots } = yield* ToolCall;
+  return (
+    input.sandbox_mode ??
+    (yield* getCodexConfig).getCodexSandboxMode(roots.workspaceState)
+  );
+});
 
 // ============================================================================
 // Run fact helpers
