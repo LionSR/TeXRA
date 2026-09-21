@@ -1,7 +1,7 @@
-import { it as effectIt } from '@effect/vitest';
+import { it } from '@effect/vitest';
 /** Completed conversation reads and task reads through the archive facade. */
 import { Effect, Layer, Stream, SubscriptionRef } from 'effect';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 const launchMocks = vi.hoisted(() => ({
   buildVars: vi.fn(),
@@ -232,102 +232,102 @@ describe('completedRunArchive facade', () => {
     vi.restoreAllMocks();
   });
 
-  it('keeps private metadata exact while public events and exports redact its secrets', async () => {
-    await Effect.runPromise(closeTestSession(taskSession));
-    taskSession = await Effect.runPromise(
-      createProcessSession({
-        transcriptMode: { kind: 'persistent' },
-      }),
-    );
-    const runId = 'abc654abc654' as RunId;
-    const secret = 'sk-private-export-key-1234567890';
-    const content = `  retained text ${secret}  `;
-    await stampRun(runId);
-    const records = getRunRecords(taskSession, runId);
-    const config = {
-      ...runConfig('orchestrator'),
-      instruction: content,
-      inputFiles: [`paper-${secret}.tex`],
-    };
-    await Effect.runPromise(records.writeRunRecord(config));
-    await Effect.runPromise(records.writeReport(content));
-    await Effect.runPromise(
-      taskSession.commit([
-        {
-          type: 'run.description',
-          aggregateId: aggregateId('run', runId),
-          description: content,
-        },
-        {
-          type: 'run.config',
-          aggregateId: aggregateId('run', runId),
-          config,
-        },
-        {
-          type: 'response.finalized',
-          aggregateId: aggregateId('run', runId),
-          text: 'A public proof.',
-        },
-      ]),
-    );
-    expect(await Effect.runPromise(records.readConfig())).toEqual(config);
-    expect(await Effect.runPromise(records.readReport())).toBe(content);
-    // The run's one `run.description` row is redacted on the way into the
-    // event table, so every reader of it — the view's fold included, asserted
-    // below — sees the redacted text; the private sidecars above stay exact.
-    const runAgentRequest = vi.fn(() => Effect.void);
-    const actions = await Effect.runPromise(
-      createHostRunActions({
-        session: taskSession,
-        runAgentRequest,
-        loadModelOptions: () => Effect.succeed([]),
-        promptForApiKey: () => Effect.void,
-        showInfo: () => Effect.void,
-        showWarning: () => Effect.void,
-      }).pipe(
-        Effect.provide(
-          Layer.merge(
-            Secrets.layer(installedHost().secrets),
-            nodePlatformLayer,
+  it.effect(
+    'keeps private metadata exact while public events and exports redact its secrets',
+    () =>
+      Effect.gen(function* () {
+        yield* closeTestSession(taskSession);
+        taskSession = yield* createProcessSession({
+          transcriptMode: { kind: 'persistent' },
+        });
+        const runId = 'abc654abc654' as RunId;
+        const secret = 'sk-private-export-key-1234567890';
+        const content = `  retained text ${secret}  `;
+        yield* Effect.promise(() => stampRun(runId));
+        const records = getRunRecords(taskSession, runId);
+        const config = {
+          ...runConfig('orchestrator'),
+          instruction: content,
+          inputFiles: [`paper-${secret}.tex`],
+        };
+        yield* records.writeRunRecord(config);
+        yield* records.writeReport(content);
+        yield* taskSession.commit([
+          {
+            type: 'run.description',
+            aggregateId: aggregateId('run', runId),
+            description: content,
+          },
+          {
+            type: 'run.config',
+            aggregateId: aggregateId('run', runId),
+            config,
+          },
+          {
+            type: 'response.finalized',
+            aggregateId: aggregateId('run', runId),
+            text: 'A public proof.',
+          },
+        ]);
+        expect(yield* records.readConfig()).toEqual(config);
+        expect(yield* records.readReport()).toBe(content);
+        // The run's one `run.description` row is redacted on the way into the
+        // event table, so every reader of it — the view's fold included, asserted
+        // below — sees the redacted text; the private sidecars above stay exact.
+        const runAgentRequest = vi.fn(() => Effect.void);
+        const actions = yield* createHostRunActions({
+          session: taskSession,
+          runAgentRequest,
+          loadModelOptions: () => Effect.succeed([]),
+          promptForApiKey: () => Effect.void,
+          showInfo: () => Effect.void,
+          showWarning: () => Effect.void,
+        }).pipe(
+          Effect.provide(
+            Layer.merge(
+              Secrets.layer(installedHost().secrets),
+              nodePlatformLayer,
+            ),
           ),
-        ),
-      ),
-    );
-    await Effect.runPromise(actions.runNew(runId));
-    expect(runAgentRequest).toHaveBeenCalledWith({ config });
-    const trace = await Effect.runPromise(assembleTrace(runId, taskSession));
-    expect(trace.status).toBe('ok');
-    if (trace.status !== 'ok') throw new Error('Expected trace export');
-    const exportInput = await loadChatExportInput(runId);
-    const details = await testRuntime().runPromise(
-      readCliHistoryDetails(Effect.succeed(taskSession), runId),
-    );
-    expect(details).not.toBeNull();
-    if (!details) throw new Error('Expected history details');
-    const publicRows = await Effect.runPromise(
-      Stream.runCollect(
-        taskSession.events.aggregate(aggregateId('run', runId), 1),
-      ),
-    );
-    const outputs = [
-      injectStandaloneTrace('<script type="module"></script>', trace.trace),
-      JSON.stringify(exportInput.exportInput),
-      formatCliHistoryDetailsText(details),
-      JSON.stringify(cliHistoryDetailNdjsonRecord(details)),
-      JSON.stringify(publicRows),
-      JSON.stringify(
-        SubscriptionRef.getUnsafe(taskSession.view).runs.get(runId)?.inputFiles,
-      ),
-      JSON.stringify(
-        SubscriptionRef.getUnsafe(taskSession.view).runs.get(runId)
-          ?.description,
-      ),
-    ];
-    for (const output of outputs) {
-      expect(output).not.toContain(secret);
-      expect(output).toContain('[redacted]');
-    }
-  });
+        );
+        yield* actions.runNew(runId);
+        expect(runAgentRequest).toHaveBeenCalledWith({ config });
+        const trace = yield* assembleTrace(runId, taskSession);
+        expect(trace.status).toBe('ok');
+        if (trace.status !== 'ok') throw new Error('Expected trace export');
+        const exportInput = yield* Effect.promise(() =>
+          loadChatExportInput(runId),
+        );
+        const details = yield* readCliHistoryDetails(
+          Effect.succeed(taskSession),
+          runId,
+        ).pipe(Effect.provide(fakeProcessServices()));
+        expect(details).not.toBeNull();
+        if (!details) throw new Error('Expected history details');
+        const publicRows = yield* Stream.runCollect(
+          taskSession.events.aggregate(aggregateId('run', runId), 1),
+        );
+        const outputs = [
+          injectStandaloneTrace('<script type="module"></script>', trace.trace),
+          JSON.stringify(exportInput.exportInput),
+          formatCliHistoryDetailsText(details),
+          JSON.stringify(cliHistoryDetailNdjsonRecord(details)),
+          JSON.stringify(publicRows),
+          JSON.stringify(
+            SubscriptionRef.getUnsafe(taskSession.view).runs.get(runId)
+              ?.inputFiles,
+          ),
+          JSON.stringify(
+            SubscriptionRef.getUnsafe(taskSession.view).runs.get(runId)
+              ?.description,
+          ),
+        ];
+        for (const output of outputs) {
+          expect(output).not.toContain(secret);
+          expect(output).toContain('[redacted]');
+        }
+      }),
+  );
 
   // it.live: the release at the end of this test closes both sessions through
   // `closeSession`, whose settlement budget is
@@ -337,7 +337,7 @@ describe('completedRunArchive facade', () => {
   // nothing advances that sleep, so a session that stopped settling could
   // never reach the `Test session did not close` failure and would surface as
   // a suite timeout instead of a named assertion.
-  effectIt.live(
+  it.live(
     'keeps concurrent exports of the same run isolated by session roots',
     () =>
       Effect.gen(function* () {
@@ -409,57 +409,69 @@ describe('completedRunArchive facade', () => {
       }),
   );
 
-  it('serves conversation and export from transcripts and tasks from committed events', async () => {
-    const runId = 'abc123abc123' as RunId;
-    await writeArchiveFixture(runId);
+  it.effect(
+    'serves conversation and export from transcripts and tasks from committed events',
+    () =>
+      Effect.gen(function* () {
+        const runId = 'abc123abc123' as RunId;
+        yield* Effect.promise(() => writeArchiveFixture(runId));
 
-    await Effect.runPromise(
-      getRunRecords(taskSession, runId).writeRunRecord({
-        ...runConfig('orchestrator'),
-        instruction: 'Fix the lemma.',
+        yield* getRunRecords(taskSession, runId).writeRunRecord({
+          ...runConfig('orchestrator'),
+          instruction: 'Fix the lemma.',
+        });
+        yield* Effect.promise(() => stampRun(runId));
+
+        const conversationResult = yield* Effect.promise(() =>
+          readCompletedRunConversation(runId),
+        );
+        expect(conversationResult.source).toBe('streamLog');
+        expect(hasCompletedRunConversationEvidence(conversationResult)).toBe(
+          true,
+        );
+        expect(conversationResult.conversation).toEqual([
+          {
+            kind: 'user-message',
+            parts: [
+              { type: 'text', text: 'Fix the lemma.' },
+              { type: 'attachment', attachmentType: 'image' },
+            ],
+          },
+          { kind: 'thinking', text: 'Consider the boundary terms.' },
+          { kind: 'web-search', query: 'sobolev constant' },
+          {
+            kind: 'web-search-results',
+            results: [{ url: 'https://example.org/a', title: 'Sobolev notes' }],
+          },
+          {
+            kind: 'tool-call',
+            name: 'write_file',
+            input: { path: 'notes/lemma.tex' },
+          },
+          { kind: 'tool-result', text: 'File written.' },
+          { kind: 'assistant-text', text: 'Done - the lemma is fixed.' },
+        ]);
+
+        // Chat export assembles from the same facade read — no conversation.json.
+        const exportResult = yield* Effect.promise(() =>
+          loadChatExportInput(runId),
+        );
+        expect(exportResult.exportInput).not.toBeNull();
+        expect(exportResult.exportInput?.nodes).toEqual(
+          conversationResult.conversation,
+        );
+
+        expect(yield* Effect.promise(() => completedRunTodos(runId))).toEqual([
+          {
+            content: 'Fix the bug',
+            status: 'completed',
+            activeForm: 'Fixing',
+          },
+        ]);
       }),
-    );
-    await stampRun(runId);
+  );
 
-    const conversationResult = await readCompletedRunConversation(runId);
-    expect(conversationResult.source).toBe('streamLog');
-    expect(hasCompletedRunConversationEvidence(conversationResult)).toBe(true);
-    expect(conversationResult.conversation).toEqual([
-      {
-        kind: 'user-message',
-        parts: [
-          { type: 'text', text: 'Fix the lemma.' },
-          { type: 'attachment', attachmentType: 'image' },
-        ],
-      },
-      { kind: 'thinking', text: 'Consider the boundary terms.' },
-      { kind: 'web-search', query: 'sobolev constant' },
-      {
-        kind: 'web-search-results',
-        results: [{ url: 'https://example.org/a', title: 'Sobolev notes' }],
-      },
-      {
-        kind: 'tool-call',
-        name: 'write_file',
-        input: { path: 'notes/lemma.tex' },
-      },
-      { kind: 'tool-result', text: 'File written.' },
-      { kind: 'assistant-text', text: 'Done - the lemma is fixed.' },
-    ]);
-
-    // Chat export assembles from the same facade read — no conversation.json.
-    const exportResult = await loadChatExportInput(runId);
-    expect(exportResult.exportInput).not.toBeNull();
-    expect(exportResult.exportInput?.nodes).toEqual(
-      conversationResult.conversation,
-    );
-
-    expect(await completedRunTodos(runId)).toEqual([
-      { content: 'Fix the bug', status: 'completed', activeForm: 'Fixing' },
-    ]);
-  });
-
-  effectIt.live(
+  it.live(
     'reconstructs both turns when the production resume launch reopens the canonical writer',
     () =>
       Effect.gen(function* () {
@@ -740,7 +752,7 @@ describe('completedRunArchive facade', () => {
     ]);
   });
 
-  effectIt.live('reports a diagnostic-only transcript as no conversation', () =>
+  it.live('reports a diagnostic-only transcript as no conversation', () =>
     Effect.gen(function* () {
       const runId = '0999cb0999cb' as RunId;
 

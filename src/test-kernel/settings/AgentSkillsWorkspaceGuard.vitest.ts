@@ -1,6 +1,7 @@
 // Third-party imports
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   // Both report helpers are Effects, so the doubles answer with one.
@@ -33,7 +34,10 @@ import {
   initializeDefaultSession,
   teardownDefaultSession,
 } from '@agent/runtime/sessionGraph';
-import type { ProcessServices } from '@platform/processRuntime';
+import {
+  withProcessServices,
+  type ProcessServices,
+} from '@platform/processRuntime';
 import { SettingsViewMessageHandler } from '@settingsView/SettingsViewMessageHandler';
 import { AGENT_SKILLS_CONFIG_KEY } from '@shared/schemas';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
@@ -91,77 +95,96 @@ describe('agent skills workspace guard', () => {
     vi.clearAllMocks();
   });
 
-  it('restores the switch without writing in an empty VS Code window', async () => {
-    const handler = createHarness();
+  it.effect(
+    'restores the switch without writing in an empty VS Code window',
+    () =>
+      Effect.gen(function* () {
+        const handler = createHarness();
 
-    await testRuntime().runPromise(
-      handler.updateStateSetting(AGENT_SKILLS_CONFIG_KEY, false),
-    );
+        yield* withProcessServices(
+          testRuntime(),
+          handler.updateStateSetting(AGENT_SKILLS_CONFIG_KEY, false),
+        );
 
-    expect(mocks.writeSetting).not.toHaveBeenCalled();
-    expect(mocks.showLoggedInfoMessage).toHaveBeenCalledWith(
-      'SettingsViewMessageHandler',
-      'Open a workspace folder before changing the “Enable skills for tool-use agents” setting.',
-    );
-    expect(handler.postStateSettingSnapshot).toHaveBeenCalledWith('skills');
-  });
-
-  it('writes user-wide telemetry in an empty VS Code window', async () => {
-    const handler = createHarness();
-
-    await testRuntime().runPromise(
-      handler.updateStateSetting('texra.telemetry.enabled', false),
-    );
-
-    expect(mocks.showLoggedInfoMessage).not.toHaveBeenCalled();
-    expect(mocks.writeSetting).toHaveBeenCalledWith(
-      expect.objectContaining({
-        key: 'texra.telemetry.enabled',
-        configTarget: 'global',
+        expect(mocks.writeSetting).not.toHaveBeenCalled();
+        expect(mocks.showLoggedInfoMessage).toHaveBeenCalledWith(
+          'SettingsViewMessageHandler',
+          'Open a workspace folder before changing the “Enable skills for tool-use agents” setting.',
+        );
+        expect(handler.postStateSettingSnapshot).toHaveBeenCalledWith('skills');
       }),
-      false,
-      expect.any(Object),
-      'vscode',
-    );
-    expect(handler.postStateSettingSnapshot).toHaveBeenCalledWith('telemetry');
-  });
+  );
 
-  it('surfaces write failures and restores the owning snapshot', async () => {
-    const handler = createHarness();
-    const error = new Error('write failed');
-    mocks.writeSetting.mockReturnValueOnce(Effect.fail(error));
+  it.effect('writes user-wide telemetry in an empty VS Code window', () =>
+    Effect.gen(function* () {
+      const handler = createHarness();
 
-    await testRuntime().runPromise(
-      handler.updateStateSetting(GlobalStateKey.DETACH_SUBAGENTS_ON_STOP, true),
-    );
+      yield* withProcessServices(
+        testRuntime(),
+        handler.updateStateSetting('texra.telemetry.enabled', false),
+      );
 
-    expect(mocks.showLoggedInfoMessage).not.toHaveBeenCalled();
-    expect(mocks.showLoggedErrorMessage).toHaveBeenCalledWith(
-      'SettingsViewMessageHandler',
-      'Failed to update “Keep subagents running”',
-      error,
-    );
-    expect(handler.postStateSettingSnapshot).toHaveBeenCalledWith(
-      'multi-agent',
-    );
-  });
+      expect(mocks.showLoggedInfoMessage).not.toHaveBeenCalled();
+      expect(mocks.writeSetting).toHaveBeenCalledWith(
+        expect.objectContaining({
+          key: 'texra.telemetry.enabled',
+          configTarget: 'global',
+        }),
+        false,
+        expect.any(Object),
+        'vscode',
+      );
+      expect(handler.postStateSettingSnapshot).toHaveBeenCalledWith(
+        'telemetry',
+      );
+    }),
+  );
 
-  it('surfaces rejected values and restores the owning snapshot', async () => {
-    const handler = createHarness();
+  it.effect('surfaces write failures and restores the owning snapshot', () =>
+    Effect.gen(function* () {
+      const handler = createHarness();
+      const error = new Error('write failed');
+      mocks.writeSetting.mockReturnValueOnce(Effect.fail(error));
 
-    await testRuntime().runPromise(
-      handler.updateStateSetting(
-        WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS,
-        1000.5,
-      ),
-    );
+      yield* withProcessServices(
+        testRuntime(),
+        handler.updateStateSetting(
+          GlobalStateKey.DETACH_SUBAGENTS_ON_STOP,
+          true,
+        ),
+      );
 
-    expect(mocks.writeSetting).not.toHaveBeenCalled();
-    expect(mocks.showLoggedErrorMessage).toHaveBeenCalledWith(
-      'SettingsViewMessageHandler',
-      `Invalid value for “${WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS}”`,
-      expect.any(Error),
-    );
-    expect(handler.postStateSettingSnapshot).toHaveBeenCalledWith('latex');
-  });
+      expect(mocks.showLoggedInfoMessage).not.toHaveBeenCalled();
+      expect(mocks.showLoggedErrorMessage).toHaveBeenCalledWith(
+        'SettingsViewMessageHandler',
+        'Failed to update “Keep subagents running”',
+        error,
+      );
+      expect(handler.postStateSettingSnapshot).toHaveBeenCalledWith(
+        'multi-agent',
+      );
+    }),
+  );
+
+  it.effect('surfaces rejected values and restores the owning snapshot', () =>
+    Effect.gen(function* () {
+      const handler = createHarness();
+
+      yield* withProcessServices(
+        testRuntime(),
+        handler.updateStateSetting(
+          WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS,
+          1000.5,
+        ),
+      );
+
+      expect(mocks.writeSetting).not.toHaveBeenCalled();
+      expect(mocks.showLoggedErrorMessage).toHaveBeenCalledWith(
+        'SettingsViewMessageHandler',
+        `Invalid value for “${WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS}”`,
+        expect.any(Error),
+      );
+      expect(handler.postStateSettingSnapshot).toHaveBeenCalledWith('latex');
+    }),
+  );
 });

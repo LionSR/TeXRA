@@ -18,7 +18,6 @@ import type {
   CodexTokenResponse,
 } from '@auth/codex/codexSessionTypes';
 import { codexAccountLabel } from '@auth/codex/codexSessionTypes';
-import { testRuntime } from '@test/support/testProcessRuntime';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import type { HttpClient } from 'effect/unstable/http';
 
@@ -377,20 +376,20 @@ describe('CodexSessionCoordinator', () => {
         const coordinator = makeCoordinator(storage, {
           exchangeAuthorizationCode,
         });
-        const controller = new AbortController();
 
-        // The loopback login's run boundary: the host signal interrupts the
-        // login's fiber while its session store is blocked mid-write.
-        const login = testRuntime().runPromiseExit(
+        // The login is forked and then interrupted while its session store is
+        // blocked mid-write, as the host's run boundary would interrupt it.
+        const login = yield* forkNow(
           coordinator.loginWithCode({
             code: 'new-code',
             verifier: 'new-verifier',
             redirectUri: 'http://localhost:1455/auth/callback',
           }),
-          { signal: controller.signal },
         );
         yield* gated.gateReached;
-        controller.abort();
+        const interrupting = yield* Effect.forkChild(Fiber.interrupt(login), {
+          startImmediately: true,
+        });
         const signOut = yield* forkNow(coordinator.signOut());
         yield* Effect.promise(() => delay(0));
 
@@ -399,9 +398,10 @@ describe('CodexSessionCoordinator', () => {
         expect(ops).toEqual(['store']);
         gated.release();
 
-        const loginExit = yield* Effect.promise(() => login);
+        const loginExit = yield* Fiber.await(login);
         expect(Exit.isSuccess(loginExit)).toBe(false);
         yield* Fiber.join(signOut);
+        yield* Fiber.join(interrupting);
         expect(ops).toEqual(['store', 'delete']);
         expect(gated.peek()).toBeUndefined();
       }),

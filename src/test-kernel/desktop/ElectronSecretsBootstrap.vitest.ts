@@ -204,31 +204,34 @@ describe('TEXRA_DISABLE_KEYCHAIN env var (Playwright e2e shim)', () => {
       }),
   );
 
-  it('ElectronSecrets.set() silently no-ops instead of throwing', async () => {
-    process.env.TEXRA_DISABLE_KEYCHAIN = '1';
-    const encryptSpy = vi.spyOn(await safeStorageStub(), 'encryptString');
+  it.effect('ElectronSecrets.set() silently no-ops instead of throwing', () =>
+    Effect.gen(function* () {
+      process.env.TEXRA_DISABLE_KEYCHAIN = '1';
+      const encryptSpy = vi.spyOn(
+        yield* Effect.promise(safeStorageStub),
+        'encryptString',
+      );
 
-    const { ElectronSecrets } = await loadElectronSecrets();
-    const writes: Array<[string, unknown]> = [];
-    const secrets = new ElectronSecrets(
-      stubStore({
-        get<T>(_key: string): T | undefined {
-          return undefined;
-        },
-        set(key: string, value: unknown): Effect.Effect<void> {
-          return Effect.sync(() => {
-            writes.push([key, value]);
-          });
-        },
-      }),
-    );
+      const { ElectronSecrets } = yield* Effect.promise(loadElectronSecrets);
+      const writes: Array<[string, unknown]> = [];
+      const secrets = new ElectronSecrets(
+        stubStore({
+          get<T>(_key: string): T | undefined {
+            return undefined;
+          },
+          set(key: string, value: unknown): Effect.Effect<void> {
+            return Effect.sync(() => {
+              writes.push([key, value]);
+            });
+          },
+        }),
+      );
 
-    await expect(
-      Effect.runPromise(secrets.set('a', 'b')),
-    ).resolves.toBeUndefined();
-    expect(writes).toEqual([]);
-    expect(encryptSpy).not.toHaveBeenCalled();
-  });
+      expect(yield* secrets.set('a', 'b')).toBeUndefined();
+      expect(writes).toEqual([]);
+      expect(encryptSpy).not.toHaveBeenCalled();
+    }),
+  );
 
   it('accepts the literal string "true" in addition to "1"', async () => {
     process.env.TEXRA_DISABLE_KEYCHAIN = 'true';

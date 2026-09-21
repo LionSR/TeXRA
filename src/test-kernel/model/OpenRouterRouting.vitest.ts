@@ -1,6 +1,7 @@
+import { it } from '@effect/vitest';
 import { Cause, Effect, Exit } from 'effect';
 import { MODEL_CONFIGS } from 'llm-zoo';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect } from 'vitest';
 
 import { bindModel } from '@agent/runtime/run/modelBinding';
 import { apiKeySecretName, invalidateApiKeyCache } from '@model/apiProviders';
@@ -102,32 +103,41 @@ describe('bindModel', () => {
       ),
     );
 
-  it('rejects a reasoning-mode model the live OpenRouter choice would discard', async () => {
-    // The route the picker already reports as unavailable: a saved agent or a
-    // CLI config must fail with the instruction, not run without the mode.
-    const exit = await bind(MODEL_CONFIGS['gpt56pro']);
+  it.effect(
+    'rejects a reasoning-mode model the live OpenRouter choice would discard',
+    () =>
+      Effect.gen(function* () {
+        // The route the picker already reports as unavailable: a saved agent or a
+        // CLI config must fail with the instruction, not run without the mode.
+        const exit = yield* Effect.promise(() =>
+          bind(MODEL_CONFIGS['gpt56pro']),
+        );
 
-    expect(Exit.isFailure(exit)).toBe(true);
-    if (!Exit.isFailure(exit)) return;
-    const message = String(Cause.squash(exit.cause));
-    expect(message).toContain('requires reasoning mode pro');
-    expect(message).toContain('Disable OpenRouter');
-  });
+        expect(Exit.isFailure(exit)).toBe(true);
+        if (!Exit.isFailure(exit)) return;
+        const message = String(Cause.squash(exit.cause));
+        expect(message).toContain('requires reasoning mode pro');
+        expect(message).toContain('Disable OpenRouter');
+      }),
+  );
 
-  it('sends the short model name when the preference is on', async () => {
-    await Effect.runPromise(
-      hostStores().globalState.update(GlobalStateKey.USE_OPENROUTER, false),
-    );
+  it.effect('sends the short model name when the preference is on', () =>
+    Effect.gen(function* () {
+      yield* hostStores().globalState.update(
+        GlobalStateKey.USE_OPENROUTER,
+        false,
+      );
 
-    const exit = await bind(MODEL_CONFIGS['gpt4o']);
+      const exit = yield* Effect.promise(() => bind(MODEL_CONFIGS['gpt4o']));
 
-    expect(Exit.isSuccess(exit)).toBe(true);
-    if (!Exit.isSuccess(exit)) return;
-    expect(MODEL_CONFIGS['gpt4o'].fullName).not.toBe(
-      MODEL_CONFIGS['gpt4o'].shortName,
-    );
-    expect(exit.value.origin.requestedModel).toBe(
-      MODEL_CONFIGS['gpt4o'].shortName,
-    );
-  });
+      expect(Exit.isSuccess(exit)).toBe(true);
+      if (!Exit.isSuccess(exit)) return;
+      expect(MODEL_CONFIGS['gpt4o'].fullName).not.toBe(
+        MODEL_CONFIGS['gpt4o'].shortName,
+      );
+      expect(exit.value.origin.requestedModel).toBe(
+        MODEL_CONFIGS['gpt4o'].shortName,
+      );
+    }),
+  );
 });

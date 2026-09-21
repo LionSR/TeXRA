@@ -6,14 +6,15 @@
  */
 
 // Third-party imports
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { it } from '@effect/vitest';
+import { Effect } from 'effect';
+import { beforeEach, describe, expect, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({ execa: vi.fn() }));
 
 vi.mock('execa', () => ({ execa: mocks.execa }));
 
 // Local imports
-import { testRuntime } from '@test/support/testProcessRuntime';
 import { runLakeCommand } from '@tools/lean/direct/lakeCommands';
 
 describe('runLakeCommand output failures', () => {
@@ -27,42 +28,50 @@ describe('runLakeCommand output failures', () => {
     mocks.execa.mockReset();
   });
 
-  it('keeps stderr empty for ordinary nonzero exits with stdout only', async () => {
-    mocks.execa.mockResolvedValue({
-      failed: true,
-      isMaxBuffer: false,
-      timedOut: false,
-      exitCode: 7,
-      stdout: 'build failed in target A',
-      stderr: '',
-      shortMessage: 'Command failed with exit code 7',
-    });
+  it.effect(
+    'keeps stderr empty for ordinary nonzero exits with stdout only',
+    () =>
+      Effect.gen(function* () {
+        mocks.execa.mockResolvedValue({
+          failed: true,
+          isMaxBuffer: false,
+          timedOut: false,
+          exitCode: 7,
+          stdout: 'build failed in target A',
+          stderr: '',
+          shortMessage: 'Command failed with exit code 7',
+        });
 
-    const result = await testRuntime().runPromise(runLakeCommand(LAKE_BUILD));
+        const result = yield* runLakeCommand(LAKE_BUILD);
 
-    expect(result).toEqual({
-      exitCode: 7,
-      stdout: 'build failed in target A',
-      stderr: '',
-    });
-  });
+        expect(result).toEqual({
+          exitCode: 7,
+          stdout: 'build failed in target A',
+          stderr: '',
+        });
+      }),
+  );
 
-  it('does not report maxBuffer overflow with partial stdout as success', async () => {
-    mocks.execa.mockResolvedValue({
-      failed: true,
-      isMaxBuffer: true,
-      exitCode: 0,
-      stdout: 'partial build output',
-      stderr: '',
-      shortMessage: 'Command failed: stdout maxBuffer exceeded',
-    });
+  it.effect(
+    'does not report maxBuffer overflow with partial stdout as success',
+    () =>
+      Effect.gen(function* () {
+        mocks.execa.mockResolvedValue({
+          failed: true,
+          isMaxBuffer: true,
+          exitCode: 0,
+          stdout: 'partial build output',
+          stderr: '',
+          shortMessage: 'Command failed: stdout maxBuffer exceeded',
+        });
 
-    const result = await testRuntime().runPromise(runLakeCommand(LAKE_BUILD));
+        const result = yield* runLakeCommand(LAKE_BUILD);
 
-    expect(result).toEqual({
-      exitCode: -1,
-      stdout: 'partial build output',
-      stderr: 'Command failed: stdout maxBuffer exceeded',
-    });
-  });
+        expect(result).toEqual({
+          exitCode: -1,
+          stdout: 'partial build output',
+          stderr: 'Command failed: stdout maxBuffer exceeded',
+        });
+      }),
+  );
 });

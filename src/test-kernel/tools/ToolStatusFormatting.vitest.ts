@@ -1,8 +1,9 @@
 // Test composition imports
 
 // Third-party imports
-import { describe, expect, it } from 'vitest';
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
+import { describe, expect } from 'vitest';
 
 // Local imports
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
@@ -43,49 +44,51 @@ describe('tool status formatting', () => {
     ]);
   });
 
-  it('renders bash run history as a process without a model', async () => {
-    const session = createTestSession();
-    const parentRunId = RunIdSchema.parse('fcf5150d37c6');
-    const runId = RunIdSchema.parse('16c0f3f748e4');
-    publishTestRunStart(session, parentRunId);
-    session.publish([
-      {
-        type: 'run.start',
-        aggregateId: aggregateId('run', runId),
-        identity: { kind: 'process', tool: 'bash' },
-        category: 'toolUse',
-        userFollowUpSupport: 'unsupported',
-        isRemote: false,
-        parent: { id: parentRunId },
-      },
-      {
-        type: 'run.config',
-        aggregateId: aggregateId('run', runId),
-        config: AgentConfigSchema.parse({
-          agent: 'bash',
-          model: 'gemini31p',
-          instruction: 'ls',
-          agentCategory: 'toolUse',
-        }),
-      },
-      {
-        type: 'run.end',
-        aggregateId: aggregateId('run', runId),
-        outcome: 'completed',
-        output: emptyRunEndOutput('toolUse'),
-      },
-    ]);
-    await Effect.runPromise(session.settlePublications());
-    const view = await Effect.runPromise(session.readView([runId]));
+  it.effect('renders bash run history as a process without a model', () =>
+    Effect.gen(function* () {
+      const session = createTestSession();
+      const parentRunId = RunIdSchema.parse('fcf5150d37c6');
+      const runId = RunIdSchema.parse('16c0f3f748e4');
+      publishTestRunStart(session, parentRunId);
+      session.publish([
+        {
+          type: 'run.start',
+          aggregateId: aggregateId('run', runId),
+          identity: { kind: 'process', tool: 'bash' },
+          category: 'toolUse',
+          userFollowUpSupport: 'unsupported',
+          isRemote: false,
+          parent: { id: parentRunId },
+        },
+        {
+          type: 'run.config',
+          aggregateId: aggregateId('run', runId),
+          config: AgentConfigSchema.parse({
+            agent: 'bash',
+            model: 'gemini31p',
+            instruction: 'ls',
+            agentCategory: 'toolUse',
+          }),
+        },
+        {
+          type: 'run.end',
+          aggregateId: aggregateId('run', runId),
+          outcome: 'completed',
+          output: emptyRunEndOutput('toolUse'),
+        },
+      ]);
+      yield* session.settlePublications();
+      const view = yield* session.readView([runId]);
 
-    // The row's recorded outcome is the status; the columns under test are
-    // the `process` category and the model a non-agent identity suppresses.
-    const line = formatListingLine(view.runs.get(runId)!);
-    await Effect.runPromise(session.dispose());
+      // The row's recorded outcome is the status; the columns under test are
+      // the `process` category and the model a non-agent identity suppresses.
+      const line = formatListingLine(view.runs.get(runId)!);
+      yield* session.dispose();
 
-    expect(line).toContain(`${runId}  `);
-    expect(line).toContain('bash  process  [completed]');
-    expect(line).toContain(`parent=${parentRunId}`);
-    expect(line).not.toContain('gemini31p');
-  });
+      expect(line).toContain(`${runId}  `);
+      expect(line).toContain('bash  process  [completed]');
+      expect(line).toContain(`parent=${parentRunId}`);
+      expect(line).not.toContain('gemini31p');
+    }),
+  );
 });

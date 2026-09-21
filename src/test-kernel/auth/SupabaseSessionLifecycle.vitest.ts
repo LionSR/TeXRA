@@ -3,8 +3,9 @@ import { strict as assert } from 'node:assert';
 import { setTimeout as delay } from 'node:timers/promises';
 
 // Third-party imports
-import { describe, it } from 'vitest';
-import { Effect, Exit } from 'effect';
+import { it } from '@effect/vitest';
+import { Effect, Exit, Fiber } from 'effect';
+import { describe } from 'vitest';
 
 // Local imports - auth
 import { callPort, settleFailure } from '@auth/authProgram';
@@ -276,333 +277,368 @@ describe('SupabaseSession', () => {
   });
 
   describe('SupabaseSessionCoordinator', () => {
-    it('exchanges a PKCE code from the query for a session', async () => {
-      const client = {
-        auth: {
-          exchangeCodeForSession: async () => ({
-            data: {
-              session: {
-                access_token: 'pkce-access',
-                refresh_token: 'pkce-refresh',
-                expires_at: Math.floor(Date.now() / 1000) + 3600,
-                user: { id: 'user-id', email: 'user@example.com' },
+    it.effect('exchanges a PKCE code from the query for a session', () =>
+      Effect.gen(function* () {
+        const client = {
+          auth: {
+            exchangeCodeForSession: async () => ({
+              data: {
+                session: {
+                  access_token: 'pkce-access',
+                  refresh_token: 'pkce-refresh',
+                  expires_at: Math.floor(Date.now() / 1000) + 3600,
+                  user: { id: 'user-id', email: 'user@example.com' },
+                },
               },
-            },
-            error: null,
-          }),
-        },
-      } as unknown as Client;
-      const { coordinator } = createCoordinator({ client });
+              error: null,
+            }),
+          },
+        } as unknown as Client;
+        const { coordinator } = createCoordinator({ client });
 
-      const result = await Effect.runPromise(
-        coordinator.createSessionFromCallback({
+        const result = yield* coordinator.createSessionFromCallback({
           path: '/auth-callback',
           query: 'code=pkce-code',
-        }),
-      );
+        });
 
-      assert.equal(result.success, true);
-      if (!result.success) return;
-      assert.equal(result.session.accessToken, 'pkce-access');
-      assert.equal(result.session.refreshToken, 'pkce-refresh');
-      assert.deepEqual(result.session.account, {
-        id: 'user-id',
-        label: 'user@example.com',
-      });
-      assert.ok(result.session.expiresAt > Date.now());
-    });
+        assert.equal(result.success, true);
+        if (!result.success) return;
+        assert.equal(result.session.accessToken, 'pkce-access');
+        assert.equal(result.session.refreshToken, 'pkce-refresh');
+        assert.deepEqual(result.session.account, {
+          id: 'user-id',
+          label: 'user@example.com',
+        });
+        assert.ok(result.session.expiresAt > Date.now());
+      }),
+    );
 
-    it('returns an auth error when PKCE code exchange fails', async () => {
-      const client = {
-        auth: {
-          exchangeCodeForSession: async () => ({
-            data: { session: null },
-            error: { message: 'invalid code' },
-          }),
-        },
-      } as unknown as Client;
-      const { coordinator } = createCoordinator({ client });
+    it.effect('returns an auth error when PKCE code exchange fails', () =>
+      Effect.gen(function* () {
+        const client = {
+          auth: {
+            exchangeCodeForSession: async () => ({
+              data: { session: null },
+              error: { message: 'invalid code' },
+            }),
+          },
+        } as unknown as Client;
+        const { coordinator } = createCoordinator({ client });
 
-      const result = await Effect.runPromise(
-        coordinator.createSessionFromCallback({
+        const result = yield* coordinator.createSessionFromCallback({
           path: '/auth-callback',
           query: 'code=bad-code',
-        }),
-      );
+        });
 
-      assert.equal(result.success, false);
-      if (result.success) return;
-      assert.equal(result.error, 'invalid code');
-      assert.equal(result.isAuthError, true);
-    });
+        assert.equal(result.success, false);
+        if (result.success) return;
+        assert.equal(result.error, 'invalid code');
+        assert.equal(result.isAuthError, true);
+      }),
+    );
 
-    it('rewrites a missing-verifier exchange failure as a dead link', async () => {
-      const client = {
-        auth: {
-          exchangeCodeForSession: async () => ({
-            data: { session: null },
-            error: {
-              code: 'pkce_code_verifier_not_found',
-              message:
-                'PKCE code verifier not found in storage. ... use @supabase/ssr ...',
+    it.effect(
+      'rewrites a missing-verifier exchange failure as a dead link',
+      () =>
+        Effect.gen(function* () {
+          const client = {
+            auth: {
+              exchangeCodeForSession: async () => ({
+                data: { session: null },
+                error: {
+                  code: 'pkce_code_verifier_not_found',
+                  message:
+                    'PKCE code verifier not found in storage. ... use @supabase/ssr ...',
+                },
+              }),
             },
-          }),
-        },
-      } as unknown as Client;
-      const { coordinator } = createCoordinator({ client });
+          } as unknown as Client;
+          const { coordinator } = createCoordinator({ client });
 
-      const result = await Effect.runPromise(
-        coordinator.createSessionFromCallback({
-          path: '/auth-callback',
-          query: 'code=stale-code',
+          const result = yield* coordinator.createSessionFromCallback({
+            path: '/auth-callback',
+            query: 'code=stale-code',
+          });
+
+          assert.equal(result.success, false);
+          if (result.success) return;
+          assert.match(result.error, /no longer valid/);
+          assert.doesNotMatch(result.error, /supabase\/ssr/);
+          assert.equal(result.isAuthError, true);
         }),
-      );
+    );
 
-      assert.equal(result.success, false);
-      if (result.success) return;
-      assert.match(result.error, /no longer valid/);
-      assert.doesNotMatch(result.error, /supabase\/ssr/);
-      assert.equal(result.isAuthError, true);
-    });
+    it.effect('rejects retired implicit-token callbacks', () =>
+      Effect.gen(function* () {
+        const { coordinator } = createCoordinator();
 
-    it('rejects retired implicit-token callbacks', async () => {
-      const { coordinator } = createCoordinator();
-
-      const result = await Effect.runPromise(
-        coordinator.createSessionFromCallback({
+        const result = yield* coordinator.createSessionFromCallback({
           path: '/auth-callback',
           query: new URLSearchParams({
             access_token: 'access-token',
             refresh_token: 'refresh-token',
           }).toString(),
-        }),
-      );
+        });
 
-      assert.deepEqual(result, {
-        success: false,
-        error: 'Missing authorization code in callback',
-      });
-    });
+        assert.deepEqual(result, {
+          success: false,
+          error: 'Missing authorization code in callback',
+        });
+      }),
+    );
 
-    it('returns refreshed session tokens without reloading storage', async () => {
-      const { coordinator, getReadCount } = createCoordinator({
-        initialSession: expiredSession(),
-      });
-      assert.deepEqual(
-        await Effect.runPromise(coordinator.getSessionTokens()),
-        {
+    it.live('returns refreshed session tokens without reloading storage', () =>
+      Effect.gen(function* () {
+        const { coordinator, getReadCount } = createCoordinator({
+          initialSession: expiredSession(),
+        });
+        assert.deepEqual(yield* coordinator.getSessionTokens(), {
           accessToken: 'refreshed-access',
           refreshToken: 'refreshed-refresh',
-        },
-      );
-      assert.equal(getReadCount(), 1);
-    });
+        });
+        assert.equal(getReadCount(), 1);
+      }),
+    );
 
-    it('does not return tokens cleared while loading the session', async () => {
-      const { coordinator, getReadCount } = createClearingStorageCoordinator({
-        initialSession: makeSession(),
-        onFirstRead: (c) => Effect.runPromise(c.clearSession()),
-      });
+    it.effect('does not return tokens cleared while loading the session', () =>
+      Effect.gen(function* () {
+        const { coordinator, getReadCount } = createClearingStorageCoordinator({
+          initialSession: makeSession(),
+          onFirstRead: (c) => Effect.runPromise(c.clearSession()),
+        });
 
-      assert.equal(
-        await Effect.runPromise(coordinator.getSessionTokens()),
-        null,
-      );
-      assert.equal(getReadCount(), 2);
-    });
+        assert.equal(yield* coordinator.getSessionTokens(), null);
+        assert.equal(getReadCount(), 2);
+      }),
+    );
 
-    it('does not return tokens when a clear is still pending after load', async () => {
-      const deleteStarted = createDeferred();
-      const allowDelete = createDeferred();
-      const { coordinator, getReadCount } = createClearingStorageCoordinator({
-        initialSession: makeSession(),
-        onFirstRead: (c) => {
-          void Effect.runPromise(c.clearSession());
-        },
-        onDelete: async () => {
-          deleteStarted.resolve();
-          await allowDelete.promise;
-        },
-      });
-
-      const tokensPromise = Effect.runPromise(coordinator.getSessionTokens());
-      await deleteStarted.promise;
-      allowDelete.resolve();
-
-      assert.equal(await tokensPromise, null);
-      assert.equal(getReadCount(), 2);
-    });
-
-    it('does not resurrect a cleared session when refresh finishes later', async () => {
-      const refreshStarted = createDeferred();
-      const allowRefresh = createDeferred();
-      const client = createClient({
-        refreshSession: async () => {
-          refreshStarted.resolve();
-          await allowRefresh.promise;
-          return {
-            data: {
-              session: {
-                access_token: 'refreshed-access',
-                refresh_token: 'refreshed-refresh',
-                expires_at: 456,
-                user: { id: 'user-id', email: 'user@example.com' },
+    it.effect(
+      'does not return tokens when a clear is still pending after load',
+      () =>
+        Effect.gen(function* () {
+          const deleteStarted = createDeferred();
+          const allowDelete = createDeferred();
+          const { coordinator, getReadCount } =
+            createClearingStorageCoordinator({
+              initialSession: makeSession(),
+              onFirstRead: (c) => {
+                void Effect.runPromise(c.clearSession());
               },
+              onDelete: async () => {
+                deleteStarted.resolve();
+                await allowDelete.promise;
+              },
+            });
+
+          const tokensFiber = yield* Effect.forkChild(
+            coordinator.getSessionTokens(),
+            { startImmediately: true },
+          );
+          yield* Effect.promise(() => deleteStarted.promise);
+          allowDelete.resolve();
+
+          assert.equal(yield* Fiber.join(tokensFiber), null);
+          assert.equal(getReadCount(), 2);
+        }),
+    );
+
+    it.live(
+      'does not resurrect a cleared session when refresh finishes later',
+      () =>
+        Effect.gen(function* () {
+          const refreshStarted = createDeferred();
+          const allowRefresh = createDeferred();
+          const client = createClient({
+            refreshSession: async () => {
+              refreshStarted.resolve();
+              await allowRefresh.promise;
+              return {
+                data: {
+                  session: {
+                    access_token: 'refreshed-access',
+                    refresh_token: 'refreshed-refresh',
+                    expires_at: 456,
+                    user: { id: 'user-id', email: 'user@example.com' },
+                  },
+                },
+                error: null,
+              };
             },
-            error: null,
+          } as unknown as Partial<Client['auth']>);
+          const { coordinator, read } = createCoordinator({
+            initialSession: expiredSession(),
+            client,
+          });
+
+          const tokenFiber = yield* Effect.forkChild(
+            coordinator.ensureFreshToken(),
+            { startImmediately: true },
+          );
+          yield* Effect.promise(() => refreshStarted.promise);
+          yield* coordinator.clearSession();
+          allowRefresh.resolve();
+
+          assert.equal(yield* Fiber.join(tokenFiber), null);
+          assert.equal(read(), null);
+        }),
+    );
+
+    it.live(
+      'does not return a refreshed token when a clear is queued behind its store',
+      () =>
+        Effect.gen(function* () {
+          const storeStarted = createDeferred();
+          const allowStore = createDeferred();
+          let value: string | undefined = JSON.stringify(expiredSession());
+          const storage: SupabaseSessionStorage = {
+            get: () => Effect.sync(() => value),
+            store: (sessionData) =>
+              Effect.gen(function* () {
+                storeStarted.resolve();
+                yield* Effect.promise(() => allowStore.promise);
+                value = sessionData;
+              }),
+            delete: () =>
+              Effect.sync(() => {
+                value = undefined;
+              }),
           };
-        },
-      } as unknown as Partial<Client['auth']>);
-      const { coordinator, read } = createCoordinator({
-        initialSession: expiredSession(),
-        client,
-      });
+          const coordinator = new SupabaseSessionCoordinator({
+            ...COORDINATOR_CONFIG,
+            storage,
+            getClient: () => createClient(),
+          });
 
-      const tokenPromise = Effect.runPromise(coordinator.ensureFreshToken());
-      await refreshStarted.promise;
-      await Effect.runPromise(coordinator.clearSession());
-      allowRefresh.resolve();
+          const tokenFiber = yield* Effect.forkChild(
+            coordinator.ensureFreshToken(),
+            { startImmediately: true },
+          );
+          yield* Effect.promise(() => storeStarted.promise);
+          // The refresh's store is blocked mid-write; the clear queues behind it.
+          const clearFiber = yield* Effect.forkChild(
+            coordinator.clearSession(),
+            { startImmediately: true },
+          );
+          yield* Effect.promise(() => delay(0));
+          allowStore.resolve();
 
-      assert.equal(await tokenPromise, null);
-      assert.equal(read(), null);
-    });
+          assert.equal(yield* Fiber.join(tokenFiber), null);
+          yield* Fiber.join(clearFiber);
+          assert.equal(parseStoredSupabaseSession(value), null);
+        }),
+    );
 
-    it('does not return a refreshed token when a clear is queued behind its store', async () => {
-      const storeStarted = createDeferred();
-      const allowStore = createDeferred();
-      let value: string | undefined = JSON.stringify(expiredSession());
-      const storage: SupabaseSessionStorage = {
-        get: () => Effect.sync(() => value),
-        store: (sessionData) =>
-          Effect.gen(function* () {
-            storeStarted.resolve();
-            yield* Effect.promise(() => allowStore.promise);
-            value = sessionData;
-          }),
-        delete: () =>
-          Effect.sync(() => {
-            value = undefined;
-          }),
-      };
-      const coordinator = new SupabaseSessionCoordinator({
-        ...COORDINATOR_CONFIG,
-        storage,
-        getClient: () => createClient(),
-      });
+    it.live(
+      'reclassifies when a new session replaces one whose refresh failed',
+      () =>
+        Effect.gen(function* () {
+          const refreshStarted = createDeferred();
+          const allowRefreshFailure = createDeferred();
+          const client = createClient({
+            refreshSession: async () => {
+              refreshStarted.resolve();
+              await allowRefreshFailure.promise;
+              return { data: { session: null }, error: { status: 401 } };
+            },
+          } as unknown as Partial<Client['auth']>);
+          const { coordinator, read } = createCoordinator({
+            initialSession: expiredSession(),
+            client,
+          });
 
-      const tokenPromise = Effect.runPromise(coordinator.ensureFreshToken());
-      await storeStarted.promise;
-      // The refresh's store is blocked mid-write; the clear queues behind it.
-      const clearPromise = Effect.runPromise(coordinator.clearSession());
-      await delay(0);
-      allowStore.resolve();
+          const stateFiber = yield* Effect.forkChild(
+            coordinator.getStoredSessionState(),
+            { startImmediately: true },
+          );
+          yield* Effect.promise(() => refreshStarted.promise);
+          const replacement = replacementSession();
+          yield* coordinator.storeSession(replacement);
+          allowRefreshFailure.resolve();
 
-      assert.equal(await tokenPromise, null);
-      await clearPromise;
-      assert.equal(parseStoredSupabaseSession(value), null);
-    });
+          assert.equal(yield* Fiber.join(stateFiber), 'authenticated');
+          assert.deepEqual(read(), replacement);
+        }),
+    );
 
-    it('reclassifies when a new session replaces one whose refresh failed', async () => {
-      const refreshStarted = createDeferred();
-      const allowRefreshFailure = createDeferred();
-      const client = createClient({
-        refreshSession: async () => {
-          refreshStarted.resolve();
-          await allowRefreshFailure.promise;
-          return { data: { session: null }, error: { status: 401 } };
-        },
-      } as unknown as Partial<Client['auth']>);
-      const { coordinator, read } = createCoordinator({
-        initialSession: expiredSession(),
-        client,
-      });
+    it.effect(
+      'does not clear a replacement session after stale validation',
+      () =>
+        Effect.gen(function* () {
+          const initialSession = makeSession({
+            accessToken: 'old-access',
+            refreshToken: 'old-refresh',
+          });
+          const { coordinator, read } = createCoordinator({ initialSession });
+          const replacement = replacementSession();
 
-      const statePromise = Effect.runPromise(
-        coordinator.getStoredSessionState(),
-      );
-      await refreshStarted.promise;
-      const replacement = replacementSession();
-      await Effect.runPromise(coordinator.storeSession(replacement));
-      allowRefreshFailure.resolve();
+          yield* coordinator.storeSession(replacement);
 
-      assert.equal(await statePromise, 'authenticated');
-      assert.deepEqual(read(), replacement);
-    });
+          assert.equal(
+            yield* coordinator.clearSessionIfCurrent(initialSession),
+            false,
+          );
+          assert.deepEqual(read(), replacement);
+          assert.equal(
+            yield* coordinator.clearSessionIfCurrent(replacement),
+            true,
+          );
+          assert.equal(read(), null);
+        }),
+    );
 
-    it('does not clear a replacement session after stale validation', async () => {
-      const initialSession = makeSession({
-        accessToken: 'old-access',
-        refreshToken: 'old-refresh',
-      });
-      const { coordinator, read } = createCoordinator({ initialSession });
-      const replacement = replacementSession();
-
-      await Effect.runPromise(coordinator.storeSession(replacement));
-
-      assert.equal(
-        await Effect.runPromise(
-          coordinator.clearSessionIfCurrent(initialSession),
-        ),
-        false,
-      );
-      assert.deepEqual(read(), replacement);
-      assert.equal(
-        await Effect.runPromise(coordinator.clearSessionIfCurrent(replacement)),
-        true,
-      );
-      assert.equal(read(), null);
-    });
-
-    it.each([
+    it.live.each([
       {
         status: 401,
         failure: 'invalid',
         request: (coordinator: SupabaseSessionCoordinator) =>
-          Effect.runPromise(coordinator.getSessionTokens()),
+          coordinator.getSessionTokens(),
       },
       {
         status: 503,
         failure: 'transient',
         request: (coordinator: SupabaseSessionCoordinator) =>
-          Effect.runPromise(coordinator.ensureFreshToken()),
+          coordinator.ensureFreshToken(),
       },
     ])(
       'classifies refresh HTTP $status as $failure and returns no token',
-      async ({ status, failure, request }) => {
-        const client = createClient({
-          refreshSession: async () => ({
-            data: { session: null },
-            error: { status },
-          }),
-        } as unknown as Partial<Client['auth']>);
-        const { coordinator } = createCoordinator({
-          initialSession: expiredSession(),
-          client,
-        });
+      ({ status, failure, request }) =>
+        Effect.gen(function* () {
+          const client = createClient({
+            refreshSession: async () => ({
+              data: { session: null },
+              error: { status },
+            }),
+          } as unknown as Partial<Client['auth']>);
+          const { coordinator } = createCoordinator({
+            initialSession: expiredSession(),
+            client,
+          });
 
-        assert.equal(await request(coordinator), null);
-        assert.equal(coordinator.getLastRefreshFailure(), failure);
-      },
+          assert.equal(yield* request(coordinator), null);
+          assert.equal(coordinator.getLastRefreshFailure(), failure);
+        }),
     );
   });
 
   describe('port failure identity', () => {
-    it('settles a port rejection unchanged, whatever its shape', async () => {
-      // The AuthPortError contract: `cause` is the caller's own error and the
-      // fold a Promise-facing host boundary applies (`settleFailure`) hands it
-      // back unchanged, so every `instanceof` and message check a host makes
-      // still holds. A non-Error cause is the case that coercion destroys.
-      const rejection = { status: 401, message: 'invalid_grant' };
-      const exit = await Effect.runPromiseExit(
-        callPort(async () => {
-          throw rejection;
-        }),
-      );
+    it.effect('settles a port rejection unchanged, whatever its shape', () =>
+      Effect.gen(function* () {
+        // The AuthPortError contract: `cause` is the caller's own error and the
+        // fold a Promise-facing host boundary applies (`settleFailure`) hands it
+        // back unchanged, so every `instanceof` and message check a host makes
+        // still holds. A non-Error cause is the case that coercion destroys.
+        const rejection = { status: 401, message: 'invalid_grant' };
+        const exit = yield* Effect.exit(
+          callPort(async () => {
+            throw rejection;
+          }),
+        );
 
-      assert.equal(
-        Exit.isFailure(exit) ? settleFailure(exit.cause) : null,
-        rejection,
-      );
-    });
+        assert.equal(
+          Exit.isFailure(exit) ? settleFailure(exit.cause) : null,
+          rejection,
+        );
+      }),
+    );
   });
 });

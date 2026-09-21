@@ -2,8 +2,9 @@
 import '@test/support/sessionGraphTestSetup';
 
 // Third-party imports
-import { Effect } from 'effect';
-import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
+import { it } from '@effect/vitest';
+import { Effect, Fiber } from 'effect';
+import { beforeEach, describe, expect, onTestFinished, vi } from 'vitest';
 
 // Local imports
 import { getRunRecords } from '@agent/storage';
@@ -214,216 +215,245 @@ describe('desktop process resume owner', () => {
     runAgent.mockReset().mockReturnValue(Effect.succeed(completedRunResult()));
   });
 
-  it('resumes while no BrowserWindow presentation exists', async () => {
-    await mockWorkflowResume();
-    const harness = await createResumeHarness();
+  it.effect('resumes while no BrowserWindow presentation exists', () =>
+    Effect.gen(function* () {
+      yield* Effect.promise(() => mockWorkflowResume());
+      const harness = yield* Effect.promise(() => createResumeHarness());
 
-    await expect(
-      testRuntime().runPromise(harness.owner.tryResumeRun(runId)),
-    ).resolves.toBe(true);
-    expect(runAgent).toHaveBeenCalledOnce();
-  });
+      expect(yield* harness.owner.tryResumeRun(runId)).toBe(true);
+      expect(runAgent).toHaveBeenCalledOnce();
+    }),
+  );
 
-  it('presents one error when workflow resume fails before lifecycle startup', async () => {
-    await mockWorkflowResume();
-    runAgent.mockReturnValue(Effect.fail(new Error('launch failed')));
-    const harness = await createResumeHarness();
-    const presenter = attachResultPresenter(harness.session);
+  it.effect(
+    'presents one error when workflow resume fails before lifecycle startup',
+    () =>
+      Effect.gen(function* () {
+        yield* Effect.promise(() => mockWorkflowResume());
+        runAgent.mockReturnValue(Effect.fail(new Error('launch failed')));
+        const harness = yield* Effect.promise(() => createResumeHarness());
+        const presenter = attachResultPresenter(harness.session);
 
-    await expect(
-      testRuntime().runPromise(harness.owner.tryResumeRun(runId)),
-    ).resolves.toBe(false);
-    expectOneErrorPresentation(presenter, 'Resume failed: launch failed');
-    expect(runAgent.mock.calls[0]?.[1].suppressErrorNotification).toBe(true);
+        expect(yield* harness.owner.tryResumeRun(runId)).toBe(false);
+        expectOneErrorPresentation(presenter, 'Resume failed: launch failed');
+        expect(runAgent.mock.calls[0]?.[1].suppressErrorNotification).toBe(
+          true,
+        );
 
-    presenter.detach();
-    const replacement = attachResultPresenter(harness.session);
-    expect(replacement.emit).not.toHaveBeenCalled();
-  });
-
-  it('presents one workflow failure after lifecycle startup', async () => {
-    await mockWorkflowResume();
-    const harness = await createResumeHarness();
-    failAfterLifecycle(
-      harness.session,
-      'workflow',
-      'workflow lifecycle failed',
-    );
-    const presenter = attachResultPresenter(harness.session);
-
-    await expect(
-      testRuntime().runPromise(harness.owner.tryResumeRun(runId)),
-    ).resolves.toBe(false);
-    expectOneErrorPresentation(
-      presenter,
-      'Resume failed: workflow lifecycle failed',
-    );
-  });
-
-  it('replays one detached post-lifecycle workflow failure on replacement', async () => {
-    await mockWorkflowResume();
-    const harness = await createResumeHarness();
-    failAfterLifecycle(
-      harness.session,
-      'workflow',
-      'detached lifecycle failed',
-    );
-    attachResultPresenter(harness.session).detach();
-
-    await expect(
-      testRuntime().runPromise(harness.owner.tryResumeRun(runId)),
-    ).resolves.toBe(false);
-    const replacement = attachResultPresenter(harness.session);
-    await Promise.resolve();
-    expectOneErrorPresentation(
-      replacement,
-      'Resume failed: detached lifecycle failed',
-    );
-    replacement.detach();
-
-    const secondReplacement = attachResultPresenter(harness.session);
-    await Promise.resolve();
-    expect(secondReplacement.emit).not.toHaveBeenCalled();
-  });
-
-  it('presents one tool-use failure after lifecycle startup and restores follow-ups', async () => {
-    await persistRunRecord('toolUse');
-    retrieveSessionResumeData.mockReturnValue(
-      Effect.succeed(createToolUseResumeData({ runId })),
-    );
-    const harness = await createResumeHarness();
-    const flow = harness.session.followUps.claimLive(runId, 'flow')!;
-    await Effect.runPromise(
-      harness.session.followUps.submit(
-        runId,
-        { text: 'keep this queued' },
-        'live_owner',
-      ),
-    );
-    harness.session.followUps.release(flow, 'recoverable');
-    resumeToolUseFromResumeData.mockImplementation((_resume, options) =>
-      Effect.tryPromise({
-        try: async () => {
-          await Effect.runPromise(options?.onRun?.({} as never) ?? Effect.void);
-          harness.session.publish([
-            failedRunEnd(AgentCategory.ToolUse, 'tool-use lifecycle failed'),
-          ]);
-          throw new Error('tool-use lifecycle failed');
-        },
-        catch: ensureError,
+        presenter.detach();
+        const replacement = attachResultPresenter(harness.session);
+        expect(replacement.emit).not.toHaveBeenCalled();
       }),
-    );
-    const presenter = attachResultPresenter(harness.session);
+  );
 
-    await expect(
-      testRuntime().runPromise(harness.owner.tryResumeRun(runId)),
-    ).resolves.toBe(false);
-    expectOneErrorPresentation(
-      presenter,
-      'Resume failed: tool-use lifecycle failed',
-    );
-    expect(
-      await Effect.runPromise(queuedFollowUps(harness.session, runId)),
-    ).toMatchObject([{ text: 'keep this queued' }]);
-  });
+  it.effect('presents one workflow failure after lifecycle startup', () =>
+    Effect.gen(function* () {
+      yield* Effect.promise(() => mockWorkflowResume());
+      const harness = yield* Effect.promise(() => createResumeHarness());
+      failAfterLifecycle(
+        harness.session,
+        'workflow',
+        'workflow lifecycle failed',
+      );
+      const presenter = attachResultPresenter(harness.session);
 
-  it('does not duplicate a terminal resume failure presentation', async () => {
-    await mockWorkflowResume();
-    const harness = await createResumeHarness();
-    failAfterLifecycle(
-      harness.session,
-      AgentCategory.Workflow,
-      'terminal resume failed',
-    );
+      expect(yield* harness.owner.tryResumeRun(runId)).toBe(false);
+      expectOneErrorPresentation(
+        presenter,
+        'Resume failed: workflow lifecycle failed',
+      );
+    }),
+  );
 
-    await expect(
-      testRuntime().runPromise(harness.owner.tryResumeRun(runId)),
-    ).resolves.toBe(false);
-    const presenter = attachResultPresenter(harness.session);
-    await Promise.resolve();
-    expectOneErrorPresentation(
-      presenter,
-      'Resume failed: terminal resume failed',
-    );
-  });
+  it.effect(
+    'replays one detached post-lifecycle workflow failure on replacement',
+    () =>
+      Effect.gen(function* () {
+        yield* Effect.promise(() => mockWorkflowResume());
+        const harness = yield* Effect.promise(() => createResumeHarness());
+        failAfterLifecycle(
+          harness.session,
+          'workflow',
+          'detached lifecycle failed',
+        );
+        attachResultPresenter(harness.session).detach();
 
-  it('reports a resume failure that follows a completed terminal result', async () => {
-    await mockWorkflowResume();
-    const harness = await createResumeHarness();
-    runAgent.mockImplementation((_request, options) =>
-      Effect.tryPromise({
-        try: async () => {
-          await Effect.runPromise(options.onRun?.({} as never) ?? Effect.void);
-          options.session?.publish([completedRunEnd()]);
-          throw new Error('final artifact flush failed');
-        },
-        catch: ensureError,
+        expect(yield* harness.owner.tryResumeRun(runId)).toBe(false);
+        const replacement = attachResultPresenter(harness.session);
+        yield* Effect.promise(() => Promise.resolve());
+        expectOneErrorPresentation(
+          replacement,
+          'Resume failed: detached lifecycle failed',
+        );
+        replacement.detach();
+
+        const secondReplacement = attachResultPresenter(harness.session);
+        yield* Effect.promise(() => Promise.resolve());
+        expect(secondReplacement.emit).not.toHaveBeenCalled();
       }),
-    );
+  );
 
-    await expect(
-      testRuntime().runPromise(harness.owner.tryResumeRun(runId)),
-    ).resolves.toBe(false);
-    const presenter = attachResultPresenter(harness.session);
-    await Promise.resolve();
-    expectOneErrorPresentation(
-      presenter,
-      'Resume failed: final artifact flush failed',
-    );
-  });
+  it.effect(
+    'presents one tool-use failure after lifecycle startup and restores follow-ups',
+    () =>
+      Effect.gen(function* () {
+        yield* Effect.promise(() => persistRunRecord('toolUse'));
+        retrieveSessionResumeData.mockReturnValue(
+          Effect.succeed(createToolUseResumeData({ runId })),
+        );
+        const harness = yield* Effect.promise(() => createResumeHarness());
+        const flow = harness.session.followUps.claimLive(runId, 'flow')!;
+        yield* harness.session.followUps.submit(
+          runId,
+          { text: 'keep this queued' },
+          'live_owner',
+        );
+        harness.session.followUps.release(flow, 'recoverable');
+        resumeToolUseFromResumeData.mockImplementation((_resume, options) =>
+          Effect.tryPromise({
+            try: async () => {
+              await Effect.runPromise(
+                options?.onRun?.({} as never) ?? Effect.void,
+              );
+              harness.session.publish([
+                failedRunEnd(
+                  AgentCategory.ToolUse,
+                  'tool-use lifecycle failed',
+                ),
+              ]);
+              throw new Error('tool-use lifecycle failed');
+            },
+            catch: ensureError,
+          }),
+        );
+        const presenter = attachResultPresenter(harness.session);
 
-  it('rejects a termination-triggered wake after shutdown disables resume', async () => {
-    const harness = await createResumeHarness();
+        expect(yield* harness.owner.tryResumeRun(runId)).toBe(false);
+        expectOneErrorPresentation(
+          presenter,
+          'Resume failed: tool-use lifecycle failed',
+        );
+        expect(yield* queuedFollowUps(harness.session, runId)).toMatchObject([
+          { text: 'keep this queued' },
+        ]);
+      }),
+  );
 
-    await harness.dispose();
-    await expect(
-      testRuntime().runPromise(harness.owner.tryResumeRun(runId)),
-    ).resolves.toBe(false);
-    expect(retrieveSessionResumeData).not.toHaveBeenCalled();
-  });
+  it.effect('does not duplicate a terminal resume failure presentation', () =>
+    Effect.gen(function* () {
+      yield* Effect.promise(() => mockWorkflowResume());
+      const harness = yield* Effect.promise(() => createResumeHarness());
+      failAfterLifecycle(
+        harness.session,
+        AgentCategory.Workflow,
+        'terminal resume failed',
+      );
 
-  it('cancels an in-flight resume before shutdown can launch it', async () => {
-    const retrieval = await gateWorkflowResume();
-    const harness = await createResumeHarness();
+      expect(yield* harness.owner.tryResumeRun(runId)).toBe(false);
+      const presenter = attachResultPresenter(harness.session);
+      yield* Effect.promise(() => Promise.resolve());
+      expectOneErrorPresentation(
+        presenter,
+        'Resume failed: terminal resume failed',
+      );
+    }),
+  );
 
-    const resume = testRuntime().runPromise(harness.owner.tryResumeRun(runId));
-    await retrieval.started;
-    await harness.dispose();
-    retrieval.release();
+  it.effect(
+    'reports a resume failure that follows a completed terminal result',
+    () =>
+      Effect.gen(function* () {
+        yield* Effect.promise(() => mockWorkflowResume());
+        const harness = yield* Effect.promise(() => createResumeHarness());
+        runAgent.mockImplementation((_request, options) =>
+          Effect.tryPromise({
+            try: async () => {
+              await Effect.runPromise(
+                options.onRun?.({} as never) ?? Effect.void,
+              );
+              options.session?.publish([completedRunEnd()]);
+              throw new Error('final artifact flush failed');
+            },
+            catch: ensureError,
+          }),
+        );
 
-    await expect(resume).resolves.toBe(false);
-    expect(runAgent).not.toHaveBeenCalled();
-  });
+        expect(yield* harness.owner.tryResumeRun(runId)).toBe(false);
+        const presenter = attachResultPresenter(harness.session);
+        yield* Effect.promise(() => Promise.resolve());
+        expectOneErrorPresentation(
+          presenter,
+          'Resume failed: final artifact flush failed',
+        );
+      }),
+  );
 
-  it('does not resume or recreate a run deleted during retrieval', async () => {
-    const retrieval = await gateWorkflowResume();
-    const harness = await createResumeHarness();
+  it.effect(
+    'rejects a termination-triggered wake after shutdown disables resume',
+    () =>
+      Effect.gen(function* () {
+        const harness = yield* Effect.promise(() => createResumeHarness());
 
-    const resume = testRuntime().runPromise(harness.owner.tryResumeRun(runId));
-    await retrieval.started;
-    harness.session.publish([
-      { type: 'run.removed', aggregateId: aggregateId('run', runId) },
-    ]);
-    await Effect.runPromise(harness.session.settlePublications());
-    retrieval.release();
+        yield* Effect.promise(() => harness.dispose());
+        expect(yield* harness.owner.tryResumeRun(runId)).toBe(false);
+        expect(retrieveSessionResumeData).not.toHaveBeenCalled();
+      }),
+  );
 
-    await expect(resume).resolves.toBe(false);
-    expect(runAgent).not.toHaveBeenCalled();
-    expect(harness.session.transcripts.has(runId)).toBe(false);
-  });
+  it.effect('cancels an in-flight resume before shutdown can launch it', () =>
+    Effect.gen(function* () {
+      const retrieval = yield* Effect.promise(() => gateWorkflowResume());
+      const harness = yield* Effect.promise(() => createResumeHarness());
 
-  it('rejects a stale process store after another process deletes the run', async () => {
-    await mockWorkflowResume();
-    const harness = await createResumeHarness();
-    vi.spyOn(harness.session.transcripts, 'readEvents').mockReturnValue(
-      Effect.succeed([]),
-    );
+      const resume = yield* Effect.forkChild(
+        harness.owner.tryResumeRun(runId),
+        { startImmediately: true },
+      );
+      yield* Effect.promise(() => retrieval.started);
+      yield* Effect.promise(() => harness.dispose());
+      retrieval.release();
 
-    await expect(
-      testRuntime().runPromise(harness.owner.tryResumeRun(runId)),
-    ).resolves.toBe(false);
-    expect(runAgent).not.toHaveBeenCalled();
-    expect(retrieveSessionResumeData).not.toHaveBeenCalled();
-    expect(harness.session.transcripts.has(runId)).toBe(true);
-  });
+      expect(yield* Fiber.join(resume)).toBe(false);
+      expect(runAgent).not.toHaveBeenCalled();
+    }),
+  );
+
+  it.effect('does not resume or recreate a run deleted during retrieval', () =>
+    Effect.gen(function* () {
+      const retrieval = yield* Effect.promise(() => gateWorkflowResume());
+      const harness = yield* Effect.promise(() => createResumeHarness());
+
+      const resume = yield* Effect.forkChild(
+        harness.owner.tryResumeRun(runId),
+        { startImmediately: true },
+      );
+      yield* Effect.promise(() => retrieval.started);
+      harness.session.publish([
+        { type: 'run.removed', aggregateId: aggregateId('run', runId) },
+      ]);
+      yield* harness.session.settlePublications();
+      retrieval.release();
+
+      expect(yield* Fiber.join(resume)).toBe(false);
+      expect(runAgent).not.toHaveBeenCalled();
+      expect(harness.session.transcripts.has(runId)).toBe(false);
+    }),
+  );
+
+  it.effect(
+    'rejects a stale process store after another process deletes the run',
+    () =>
+      Effect.gen(function* () {
+        yield* Effect.promise(() => mockWorkflowResume());
+        const harness = yield* Effect.promise(() => createResumeHarness());
+        vi.spyOn(harness.session.transcripts, 'readEvents').mockReturnValue(
+          Effect.succeed([]),
+        );
+
+        expect(yield* harness.owner.tryResumeRun(runId)).toBe(false);
+        expect(runAgent).not.toHaveBeenCalled();
+        expect(retrieveSessionResumeData).not.toHaveBeenCalled();
+        expect(harness.session.transcripts.has(runId)).toBe(true);
+      }),
+  );
 });

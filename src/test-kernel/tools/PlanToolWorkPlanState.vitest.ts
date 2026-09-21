@@ -12,7 +12,6 @@ import { platform, type Platform } from '@platform/platform';
 import { planSummaryLine, GOAL_FEATURE_FLAG_KEY } from '@shared/schemas';
 import type { Goal, Plan, RequestDecision, RunId } from '@shared/schemas';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
-import { testRuntime } from '@test/support/testProcessRuntime';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
@@ -97,11 +96,11 @@ function startPlanUpdate(
   runId: RunId,
   objective: string,
   /** Seed the run's session before the tool reads it (an in-flight goal). */
-  seed?: (session: SessionHandle) => Promise<void>,
+  seed?: (session: SessionHandle) => Effect.Effect<void, Error>,
 ) {
   return Effect.gen(function* () {
     const { session, awaitPlanRequest } = planSession(runId);
-    if (seed) yield* Effect.promise(() => seed(session));
+    if (seed) yield* seed(session);
     const workPlanState = new WorkPlanState();
     const tool = new PlanTool();
 
@@ -167,33 +166,33 @@ describe('PlanTool — update (plan approval)', () => {
           const { session, awaitPlanRequest } = planSession(runId);
           const workPlanState = new WorkPlanState();
 
-          try {
-            session.approvals.setDelegatedWorkBypasses(runId, true);
-            expect(proposalApprovals(session).isBypassed(runId)).toBe(true);
+          yield* Effect.addFinalizer(() =>
+            Effect.sync(() => releaseRunResources(runId, session)),
+          );
 
-            const resultFiber = yield* Effect.forkScoped(
-              new PlanTool().call({ command: 'update', ...followUpPlan }).pipe(
-                Effect.provide(
-                  nativeToolTestLayer({
-                    run: { runId, session, toolPolicy: {} },
-                    workPlanState,
-                  }),
-                ),
+          session.approvals.setDelegatedWorkBypasses(runId, true);
+          expect(proposalApprovals(session).isBypassed(runId)).toBe(true);
+
+          const resultFiber = yield* Effect.forkScoped(
+            new PlanTool().call({ command: 'update', ...followUpPlan }).pipe(
+              Effect.provide(
+                nativeToolTestLayer({
+                  run: { runId, session, toolPolicy: {} },
+                  workPlanState,
+                }),
               ),
-            );
+            ),
+          );
 
-            const { permission, decide } = yield* Effect.tryPromise(() =>
-              awaitPlanRequest(),
-            );
-            expect(permission.plan).toEqual(followUpPlan);
-            decide({ action: 'approve' });
-            expect(yield* Fiber.join(resultFiber)).toMatchObject({
-              status: 'executed',
-              summary: 'Plan approved: proceed with implementation',
-            });
-          } finally {
-            releaseRunResources(runId, session);
-          }
+          const { permission, decide } = yield* Effect.tryPromise(() =>
+            awaitPlanRequest(),
+          );
+          expect(permission.plan).toEqual(followUpPlan);
+          decide({ action: 'approve' });
+          expect(yield* Fiber.join(resultFiber)).toMatchObject({
+            status: 'executed',
+            summary: 'Plan approved: proceed with implementation',
+          });
         }),
       ),
   );
@@ -248,26 +247,28 @@ describe('PlanTool — update (plan approval)', () => {
 
           const { result, session, permission, decide } =
             yield* startPlanUpdate(runId, plan.objective);
-          try {
-            expect(permission.goalEnabled).toBe(true);
-            decide({ action: 'approve_and_goal' });
+          yield* Effect.addFinalizer(() =>
+            Effect.gen(function* () {
+              yield* clearGoal(session, runId);
+              releaseRunResources(runId, session);
+            }).pipe(Effect.orDie),
+          );
 
-            const outcome = yield* result;
-            expect(outcome.status).toBe('executed');
+          expect(permission.goalEnabled).toBe(true);
+          decide({ action: 'approve_and_goal' });
 
-            const goal = goalOf(session, runId);
-            expect(goal).not.toBeNull();
-            expect(goal!.status).toBe('active');
-            // The approved plan document seeds the goal verbatim.
-            expect(goal!.objective).toBe(plan.objective);
-            expect(session.approvals.bash.bypass.isBypassed(runId)).toBe(true);
-            expect(session.approvals.toolEdit.bypass.isBypassed(runId)).toBe(
-              false,
-            );
-          } finally {
-            yield* clearGoal(session, runId);
-            releaseRunResources(runId, session);
-          }
+          const outcome = yield* result;
+          expect(outcome.status).toBe('executed');
+
+          const goal = goalOf(session, runId);
+          expect(goal).not.toBeNull();
+          expect(goal!.status).toBe('active');
+          // The approved plan document seeds the goal verbatim.
+          expect(goal!.objective).toBe(plan.objective);
+          expect(session.approvals.bash.bypass.isBypassed(runId)).toBe(true);
+          expect(session.approvals.toolEdit.bypass.isBypassed(runId)).toBe(
+            false,
+          );
         }),
       ),
   );
@@ -284,21 +285,23 @@ describe('PlanTool — update (plan approval)', () => {
             runId,
             plan.objective,
           );
-          try {
-            decide({ action: 'approve_and_goal', autoApproveAll: true });
+          yield* Effect.addFinalizer(() =>
+            Effect.gen(function* () {
+              yield* clearGoal(session, runId);
+              releaseRunResources(runId, session);
+            }).pipe(Effect.orDie),
+          );
 
-            expect(yield* result).toMatchObject({
-              status: 'executed',
-            });
-            expect(session.approvals.bash.bypass.isBypassed(runId)).toBe(true);
-            expect(session.approvals.toolEdit.bypass.isBypassed(runId)).toBe(
-              true,
-            );
-            expect(session.approvals.proposal.isBypassed(runId)).toBe(true);
-          } finally {
-            yield* clearGoal(session, runId);
-            releaseRunResources(runId, session);
-          }
+          decide({ action: 'approve_and_goal', autoApproveAll: true });
+
+          expect(yield* result).toMatchObject({
+            status: 'executed',
+          });
+          expect(session.approvals.bash.bypass.isBypassed(runId)).toBe(true);
+          expect(session.approvals.toolEdit.bypass.isBypassed(runId)).toBe(
+            true,
+          );
+          expect(session.approvals.proposal.isBypassed(runId)).toBe(true);
         }),
       ),
   );
@@ -315,33 +318,34 @@ describe('PlanTool — update (plan approval)', () => {
           const { result, session, decide } = yield* startPlanUpdate(
             runId,
             followUpPlan.objective,
-            async (planned) => {
-              existing = await testRuntime().runPromise(
-                startGoal(planned, runId, 'Old objective'),
-              );
-            },
+            (planned) =>
+              Effect.gen(function* () {
+                existing = yield* startGoal(planned, runId, 'Old objective');
+              }),
           );
-          try {
-            decide({ action: 'approve_and_goal' });
+          yield* Effect.addFinalizer(() =>
+            Effect.gen(function* () {
+              yield* clearGoal(session, runId);
+              releaseRunResources(runId, session);
+            }).pipe(Effect.orDie),
+          );
 
-            const outcome = yield* result;
-            expect(outcome.status).toBe('executed');
-            expect(outcome.summary).toMatch(/retargeted/i);
+          decide({ action: 'approve_and_goal' });
 
-            const goal = goalOf(session, runId);
-            expect(goal).not.toBeNull();
-            expect(goal!.goalId).toBe(existing?.goalId);
-            expect(goal!.status).toBe('active');
-            expect(goal!.objective).toBe(followUpPlan.objective);
-            expect(goal!.objective).not.toContain('Old objective');
-            expect(session.approvals.bash.bypass.isBypassed(runId)).toBe(true);
-            expect(session.approvals.toolEdit.bypass.isBypassed(runId)).toBe(
-              false,
-            );
-          } finally {
-            yield* clearGoal(session, runId);
-            releaseRunResources(runId, session);
-          }
+          const outcome = yield* result;
+          expect(outcome.status).toBe('executed');
+          expect(outcome.summary).toMatch(/retargeted/i);
+
+          const goal = goalOf(session, runId);
+          expect(goal).not.toBeNull();
+          expect(goal!.goalId).toBe(existing?.goalId);
+          expect(goal!.status).toBe('active');
+          expect(goal!.objective).toBe(followUpPlan.objective);
+          expect(goal!.objective).not.toContain('Old objective');
+          expect(session.approvals.bash.bypass.isBypassed(runId)).toBe(true);
+          expect(session.approvals.toolEdit.bypass.isBypassed(runId)).toBe(
+            false,
+          );
         }),
       ),
   );
@@ -356,26 +360,26 @@ describe('PlanTool — update (plan approval)', () => {
 
           const { result, permission, decide, session } =
             yield* startPlanUpdate(runId, plan.objective);
-          try {
-            expect(permission.goalEnabled).toBe(true);
+          yield* Effect.addFinalizer(() =>
+            Effect.sync(() => releaseRunResources(runId, session)),
+          );
 
-            (testWorkspaceRoots().config as FakeConfigProvider).set(
-              GOAL_FEATURE_FLAG_KEY,
-              false,
-            );
-            decide({ action: 'approve_and_goal' });
+          expect(permission.goalEnabled).toBe(true);
 
-            const outcome = yield* result;
-            expect(outcome.status).toBe('executed');
-            expect(outcome.summary).toMatch(/autonomous run unavailable/i);
-            expect(outcome.output).toContain(
-              'feature flag is currently disabled',
-            );
-            yield* session.settlePublications();
-            expect(goalOf(session, runId)).toBeNull();
-          } finally {
-            releaseRunResources(runId, session);
-          }
+          (testWorkspaceRoots().config as FakeConfigProvider).set(
+            GOAL_FEATURE_FLAG_KEY,
+            false,
+          );
+          decide({ action: 'approve_and_goal' });
+
+          const outcome = yield* result;
+          expect(outcome.status).toBe('executed');
+          expect(outcome.summary).toMatch(/autonomous run unavailable/i);
+          expect(outcome.output).toContain(
+            'feature flag is currently disabled',
+          );
+          yield* session.settlePublications();
+          expect(goalOf(session, runId)).toBeNull();
         }),
       ),
   );
