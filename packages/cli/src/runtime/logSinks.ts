@@ -10,6 +10,11 @@ import {
   CLI_NDJSON_CONTRACT,
   type CliNdjsonRecord,
 } from '@cli/schemas/cliOutput';
+import {
+  entryChannel,
+  entryMessage,
+  type LogSink as HostLogSink,
+} from '@logger/logSink';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { LogLevel } from '@shared/schemas';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
@@ -232,6 +237,24 @@ export function askCliQuestion(
       }),
   );
 }
+
+/**
+ * The host diagnostic sink of a CLI entry that brings no platform up.
+ * `clone` and `install-github-action` never reach `initCliPlatform`, so
+ * nothing would replace `@logger/logSink`'s console fallback for them — and
+ * that fallback sends DEBUG and INFO to stdout, where the process runtime's
+ * own build diagnostics (`UsageLogService started …`) would land in the
+ * middle of the command's output. This renders the same line `consoleLogSink`
+ * does, with every level on stderr: nothing is dropped, and stdout stays the
+ * command's result. Installed by `defineCliCommand` before it builds the
+ * runtime for those two entries.
+ */
+export const platformlessDiagnosticSink: HostLogSink = {
+  write(entry) {
+    const channel = entryChannel(entry);
+    writeTextStderr(`${channel ? `[${channel}] ` : ''}${entryMessage(entry)}`);
+  },
+};
 
 class StderrTextSink implements LogSink {
   write(record: LogRecord): void {
