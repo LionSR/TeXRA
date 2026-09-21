@@ -24,7 +24,6 @@ import {
   refresh,
 } from '@agent/index';
 import type { SupabaseAuthShape } from '@auth/SupabaseAuth';
-import type { PendingOAuthStore } from '@controllers/auth/supabaseSignIn';
 import {
   classifyAgentError,
   primaryAgentError,
@@ -35,6 +34,7 @@ import {
   teamAvailabilityPrompt,
   type TeamAvailabilityPrompt,
 } from '@common/teams/TeamPlan';
+import type { PendingOAuthStore } from '@controllers/auth/supabaseSignIn';
 import { TranscriptExportFailed } from '@controllers/progressView/transcriptExportFailure';
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
 import { SubscriptionUsageService } from '@controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';

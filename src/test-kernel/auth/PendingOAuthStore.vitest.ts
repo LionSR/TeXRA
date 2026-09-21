@@ -38,7 +38,10 @@ describe('callback nonce', () => {
       name: 'two nonces (a smuggled second binding)',
       query: `app_nonce=${NONCE}&app_nonce=${OTHER_NONCE}`,
     },
-    { name: 'a nonce this process could not have minted', query: 'app_nonce=x' },
+    {
+      name: 'a nonce this process could not have minted',
+      query: 'app_nonce=x',
+    },
   ])('rejects a callback with $name', ({ query }) => {
     expect(callbackNonce(query)).toBeNull();
   });
@@ -75,9 +78,9 @@ describe('pending OAuth store', () => {
       createdAt: Date.now() - AUTH_CALLBACK_TIMEOUT_MS - 1_000,
     };
 
-    await expect(
-      Effect.runPromise(store.bind(stale, FLOW_ID)),
-    ).rejects.toThrow('no longer pending');
+    await expect(Effect.runPromise(store.bind(stale, FLOW_ID))).rejects.toThrow(
+      'no longer pending',
+    );
   });
 
   it('ignores a stored record that is not one of ours', async () => {

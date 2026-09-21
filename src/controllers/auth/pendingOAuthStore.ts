@@ -59,7 +59,9 @@ export class PendingOAuthStore {
       const parsed = parseJsonWith(stored, PendingOAuthStateSchema);
       if (Result.isFailure(parsed)) {
         // The fixed diagnostic deliberately excludes stored secret content.
-        log.warn('Stored OAuth callback state is malformed and will be ignored');
+        log.warn(
+          'Stored OAuth callback state is malformed and will be ignored',
+        );
         return null;
       }
       return parsed.success;

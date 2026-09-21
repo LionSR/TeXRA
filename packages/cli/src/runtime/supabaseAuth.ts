@@ -8,17 +8,17 @@ import { DEFAULT_OAUTH_PROVIDER, type OAuthProvider } from '@auth/config';
 import { refreshRemoteAgentCatalogAfterSignOut } from '@auth/authFlowEffects';
 import { createSupabaseAuth, type SupabaseAuthShape } from '@auth/SupabaseAuth';
 import {
-  memoryPendingOAuthSlots,
-  PendingOAuthStore,
-} from '@controllers/auth/pendingOAuthStore';
-import { SupabaseSignInCoordinator } from '@controllers/auth/supabaseSignIn';
-import {
   toStorableSupabaseSession,
   type SupabaseSession,
   type SupabaseSessionLog,
 } from '@auth/SupabaseSession';
 import type { StoredSessionState } from '@auth/TokenProvider';
 import { completeDeviceSession } from '@auth/oauth/deviceAuthorization';
+import { SupabaseSignInCoordinator } from '@controllers/auth/supabaseSignIn';
+import {
+  memoryPendingOAuthSlots,
+  PendingOAuthStore,
+} from '@controllers/auth/pendingOAuthStore';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { GlobalStorageFs } from '@platform/rootedFs';
 import type { PlatformSecrets } from '@platform/secrets';

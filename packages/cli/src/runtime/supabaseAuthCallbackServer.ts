@@ -21,13 +21,13 @@ import { Cause, Effect, Result } from 'effect';
 import { z } from 'zod';
 
 // Local imports
+import { parseJsonWith } from '@common/parsing/safeParseJson';
 import { withCallbackNonce } from '@controllers/auth/pendingOAuthStore';
 import type {
   AuthCallbackRoute,
   AuthCallbackTransport,
   SignInCallbackOutcome,
 } from '@controllers/auth/supabaseSignIn';
-import { parseJsonWith } from '@common/parsing/safeParseJson';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import { escapeHtml } from '@shared/utils/xmlEscape';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
