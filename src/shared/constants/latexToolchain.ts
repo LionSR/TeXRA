@@ -160,13 +160,16 @@ export const IMAGE_LATEX_TOOLS: readonly ImageLatexTool[] = LATEX_TOOLS.filter(
  */
 export const IMAGE_TOOL_LABEL = 'gm/magick';
 
+/** A dependency `texra doctor` renders a row for. */
+type DoctorLatexToolName = DoctorEntry['name'];
+
 /**
  * What one dependency means to `texra doctor`, flattened into the row it
  * renders. The doctor owns the rendering; this is the fact behind it.
  */
 export interface DoctorLatexTool {
   /** The binary name; the row's id is `latex.<name>`. */
-  readonly name: string;
+  readonly name: DoctorLatexToolName;
   /** A missing required tool fails the report and sets a nonzero exit code. */
   readonly required: boolean;
   readonly purpose: string;

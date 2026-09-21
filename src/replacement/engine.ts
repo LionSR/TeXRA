@@ -5,11 +5,9 @@
 import { LRUCache } from 'lru-cache';
 
 import { createLog } from '@logger/logUtils';
-import {
-  NON_REGEX_REPLACEMENT_CATEGORIES,
-  REGEX_REPLACEMENT_CATEGORIES,
-  type NonRegexReplacementCategory,
-  type RegexReplacementCategory,
+import type {
+  NonRegexReplacementCategory,
+  RegexReplacementCategory,
 } from '@shared/constants/replacementCategories';
 import { assertNever } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -140,12 +138,13 @@ const replacementEngine = {
 };
 
 /**
- * The rules behind every non-regex category name the config accepts. A
- * `Record` over that universe: a name with no rules here, or rules here under
- * a name the config rejects, fails to typecheck, so the engine can neither
- * accept a no-op category nor run one nobody can enable. Application order is
- * the universe's own order — see
- * {@link NON_REGEX_REPLACEMENT_CATEGORIES}.
+ * The rules behind every non-regex category name the config accepts, in the
+ * order the engine applies them. A `Record` over that universe: a name with no
+ * rules here, or rules here under a name the config rejects, fails to
+ * typecheck, so the engine can neither accept a no-op category nor run one
+ * nobody can enable. Application order is this declaration's key order, which
+ * is behavior — a category applied later wins a duplicated pattern key — so
+ * there is no second list to keep in step with it.
  */
 const NON_REGEX_RULES: Record<NonRegexReplacementCategory, NonRegexRuleSet> = {
   // LaTeX content formatting
@@ -167,7 +166,10 @@ const NON_REGEX_RULES: Record<NonRegexReplacementCategory, NonRegexRuleSet> = {
   latexdiff: LATEXDIFF_REPLACEMENTS,
 };
 
-/** The rules behind every regex category name, on the same contract. */
+/**
+ * The rules behind every regex category name, on the same contract; a regex
+ * category applied later rewrites what an earlier one produced.
+ */
 const REGEX_RULES: Record<RegexReplacementCategory, RegexRuleSet> = {
   equation_macros: EQUATION_MACRO_REPLACEMENTS,
   fenced_latex_blocks: FENCED_LATEX_BLOCK_REPLACEMENTS,
@@ -195,9 +197,9 @@ function getAllReplacements(read: ReplacementConfigRead): NonRegexRuleSet {
 
   const patterns: Record<string, string> = Object.assign(
     {},
-    ...NON_REGEX_REPLACEMENT_CATEGORIES.filter((name) => enabled.has(name)).map(
-      (name) => NON_REGEX_RULES[name].patterns,
-    ),
+    ...Object.entries(NON_REGEX_RULES)
+      .filter(([name]) => enabled.has(name))
+      .map(([, rules]) => rules.patterns),
     customReplacements,
   );
 
@@ -216,9 +218,9 @@ function getAllReplacementsRegex(read: ReplacementConfigRead): RegexRuleSet[] {
     'texra.latex.customReplacementsRegex',
   );
 
-  const enabledRules = REGEX_REPLACEMENT_CATEGORIES.filter((name) =>
-    enabled.has(name),
-  ).map((name) => REGEX_RULES[name]);
+  const enabledRules = Object.entries(REGEX_RULES)
+    .filter(([name]) => enabled.has(name))
+    .map(([, rules]) => rules);
   if (Object.keys(customReplacements).length === 0) {
     return enabledRules;
   }
