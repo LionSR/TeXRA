@@ -42,7 +42,6 @@ export const RunFactSchema = z.discriminatedUnion('key', [
     filesByRound: RoundKeyedOutputSidecarValueSchemas.compileFailures,
   }),
 ]);
-export type RunFact = z.infer<typeof RunFactSchema>;
 
 /** A stored value as the journal and the state store keep it: `undefined` is
  *  not JSON, so absence is an arm rather than a missing field. */

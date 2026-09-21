@@ -15,7 +15,6 @@ import {
   type BashPermission,
   type DisplaySessionEvent,
   type RequestDecision,
-  type RunFact,
   type RunId,
   type RunOutcome,
 } from '@shared/schemas';
@@ -122,6 +121,9 @@ export function traceEventsOfType<T extends AgentEvent['type']>(
     (event): event is Extract<AgentEvent, { type: T }> => event.type === type,
   );
 }
+
+/** The value a `run.fact` row carries, read off the trace arm itself. */
+type RunFact = Extract<AgentEvent, { type: 'run.fact' }>['fact'];
 
 /** The `run.fact` values of one key family, in emission order. */
 export function runFactsOfKey<K extends RunFact['key']>(
