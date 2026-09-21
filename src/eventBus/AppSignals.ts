@@ -125,13 +125,16 @@ export interface AppSignalPayloads {
 
 export type AppSignal = keyof AppSignalPayloads;
 
-/** One published signal: the key and the payload that key declares. */
-type AppSignalEvent = {
-  [K in AppSignal]: {
-    readonly signal: K;
-    readonly payload: AppSignalPayloads[K];
-  };
-}[AppSignal];
+/**
+ * One published signal. The key and its payload are correlated by the two
+ * public functions below, which is where a caller proves the pair; on the
+ * hub they travel as what every subscription reads, a key and one of the
+ * declared payloads.
+ */
+interface AppSignalEvent {
+  readonly signal: AppSignal;
+  readonly payload: AppSignalPayloads[AppSignal];
+}
 
 /**
  * The hub every signal is published to, opened by the first subscriber. A
@@ -156,11 +159,6 @@ const openHub: Effect.Effect<PubSub.PubSub<AppSignalEvent>> = Effect.suspend(
   },
 );
 
-const isSignal = <K extends AppSignal>(
-  event: AppSignalEvent,
-  signal: K,
-): event is Extract<AppSignalEvent, { signal: K }> => event.signal === signal;
-
 /**
  * Publish `signal` to every current subscriber and return. Synchronous by
  * construction: the publish is the enqueue, and the hub is unbounded, so it
@@ -172,9 +170,7 @@ export function emitAppSignal<K extends AppSignal>(
   payload: AppSignalPayloads[K],
 ): void {
   if (hub === undefined) return;
-  // The pair is the proof that this event is a member of the union; TypeScript
-  // cannot build a mapped-union member from a generic key on its own.
-  PubSub.publishUnsafe(hub, { signal, payload } as AppSignalEvent);
+  PubSub.publishUnsafe(hub, { signal, payload });
 }
 
 /**
@@ -192,8 +188,11 @@ export function onAppSignal<K extends AppSignal>(
       const subscription = yield* PubSub.subscribe(yield* openHub);
       while (true) {
         const event = yield* PubSub.take(subscription);
-        if (!isSignal(event, signal)) continue;
-        yield* Effect.sync(() => listener(event.payload)).pipe(
+        if (event.signal !== signal) continue;
+        // The key matched, so the payload is the one this key declares; a
+        // generic key cannot carry that pairing through the hub's type.
+        const payload = event.payload as AppSignalPayloads[K];
+        yield* Effect.sync(() => listener(payload)).pipe(
           Effect.catchCause((cause) =>
             Effect.logWarning(
               `An "${signal}" app-signal subscriber failed`,
