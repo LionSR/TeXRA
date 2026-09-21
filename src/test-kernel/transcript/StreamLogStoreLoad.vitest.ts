@@ -104,39 +104,41 @@ describe('StreamLogStore event reads', () => {
     }).pipe(Effect.provide(substrate)),
   );
 
-  it.effect('seeds a retained run from its rows and advances it from the tail', () =>
-    Effect.gen(function* () {
-      const database = yield* Database;
-      yield* database.appendAll(history);
-      const store = StreamLogStore.open(database);
-      const lease = yield* store.acquireRunResidency(RUN);
-      expect(store.get(RUN)?.toJSON()).toEqual(yield* store.readEntries(RUN));
+  it.effect(
+    'seeds a retained run from its rows and advances it from the tail',
+    () =>
+      Effect.gen(function* () {
+        const database = yield* Database;
+        yield* database.appendAll(history);
+        const store = StreamLogStore.open(database);
+        const lease = yield* store.acquireRunResidency(RUN);
+        expect(store.get(RUN)?.toJSON()).toEqual(yield* store.readEntries(RUN));
 
-      const appended = yield* database.appendAll([
-        {
-          type: 'log',
-          aggregateId: start.aggregateId,
-          level: 'info',
-          message: 'Committed after the seed',
-        },
-      ]);
-      for (const row of appended) store.acceptCommitted(row);
-      expect(store.get(RUN)?.toJSON()).toEqual(yield* store.readEntries(RUN));
-      expect(
-        store
-          .get(RUN)
-          ?.toJSON()
-          .filter((entry) => entry.text === 'Committed after the seed'),
-      ).toHaveLength(1);
+        const appended = yield* database.appendAll([
+          {
+            type: 'log',
+            aggregateId: start.aggregateId,
+            level: 'info',
+            message: 'Committed after the seed',
+          },
+        ]);
+        for (const row of appended) store.acceptCommitted(row);
+        expect(store.get(RUN)?.toJSON()).toEqual(yield* store.readEntries(RUN));
+        expect(
+          store
+            .get(RUN)
+            ?.toJSON()
+            .filter((entry) => entry.text === 'Committed after the seed'),
+        ).toHaveLength(1);
 
-      // A lease outranks an eviction request; the cache goes once it closes
-      // and the next request finds nothing holding the run.
-      store.requestEviction(RUN);
-      expect(store.get(RUN)).toBeDefined();
-      lease.close();
-      store.requestEviction(RUN);
-      expect(store.get(RUN)).toBeUndefined();
-    }).pipe(Effect.provide(substrate)),
+        // A lease outranks an eviction request; the cache goes once it closes
+        // and the next request finds nothing holding the run.
+        store.requestEviction(RUN);
+        expect(store.get(RUN)).toBeDefined();
+        lease.close();
+        store.requestEviction(RUN);
+        expect(store.get(RUN)).toBeUndefined();
+      }).pipe(Effect.provide(substrate)),
   );
 
   it.effect(
