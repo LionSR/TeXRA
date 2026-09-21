@@ -557,3 +557,118 @@ scope excludes `src/test-kernel/`.
 **Forbids.** Reintroducing a process-wide roots record, in production or in a
 host, including as a field on `Platform`. Making `SessionHandleInit.roots`
 optional again. Moving the `working_directory` gate back into the schema.
+
+---
+
+## A `SESSION_EVENT_FORMAT` bump is taken only when a real change forces one, and a forced bump carries the queued dead arms (ruled 2026-09-19; deferred in [#12858](https://github.com/LionSR/TeXRA/pull/12858), taken in [#12866](https://github.com/LionSR/TeXRA/pull/12866))
+
+**Question.** `src/test-kernel/schemas/sessionEventFormat.vitest.ts`
+fingerprints the JSON-schema shape of `SessionEventSchema`, and `Database`
+clears every store stamped with another version at open. So any deletion inside
+that schema costs every user their session history. May a deletion that buys no
+behavior buy its own bump?
+
+**Ruling.** No. A format bump is taken only when a change users actually get
+forces one. A deletion that cannot pay for a bump of its own is recorded with
+its evidence and rides the next forced bump, and the forced bump then takes
+every queued cut in a single move of the constant.
+
+**Evidence.** #12858 built the deletion of the two `StateOperation` arms
+(`delete` and `append`, never produced: `rg "op: '(delete|append)'"` over the
+tree and `rg '"op"\s*:\s*"(delete|append)"'` over every `.json`, `.jsonl` and
+`.ndjson` outside `node_modules` both return zero, so no stored row can carry
+either) and **dropped the commit**, recording the evidence under its `Left out`
+section. #12866 retired four never-read `UserVars` template names, which moves
+the same fingerprint through `StateSlicesSchema.userChannels`, and took both
+cuts on the single move from 5 to 6. The gate is mechanical: shape moved,
+version moves; what it cannot judge is whether the shape had to move at all.
+
+**Forbids.** Bumping `SESSION_EVENT_FORMAT` for a behavior-neutral deletion on
+its own. Taking a forced bump without folding in the cuts already queued
+against it. Working around the fingerprint suite instead of bumping when a real
+change does move the shape.
+
+---
+
+## `defineTool`'s default `R` is frozen SDK surface, not a simplification target (ruled 2026-09-19; [#12862](https://github.com/LionSR/TeXRA/pull/12862))
+
+**Question.** A wave-8 lane proposed folding `definition.ts` into `define.ts`
+and changing `defineTool`'s default `R` while unifying the tool run guards. May
+a simplification lane change it?
+
+**Ruling.** No. `packages/agent` is the frozen SDK surface and `defineTool`'s
+default `R` is an owner decision left open, so `definition.ts`, `define.ts` and
+`packages/agent/src/index.ts` stay untouched by simplification work. The lane
+landed its run-guard unification without opening them.
+
+**Evidence.** The SDK surface is built and fenced, not published: ESLint
+forbids production `src/**` and `packages/agent/src/**` from importing host
+layers, and `config/ratchets/host-agent-import-baseline` freezes the remaining
+edges. Publication is held until a named external consumer exists, which is
+exactly the point at which the default `R` stops being a free choice. Changing
+it before then would be a contract move made by a lane that had no stake in the
+contract.
+
+**Forbids.** Retyping `defineTool`'s default `R`, or merging its declaration
+and implementation modules, as part of a simplification, refactor or
+consolidation lane. That change needs its own owner decision and its own PR.
+
+---
+
+## The pandoc scratchpad conversion tier is retired; there is one conversion path (ruled 2026-09-19; [#12863](https://github.com/LionSR/TeXRA/pull/12863))
+
+**Question.** `src/utils/text/xmlConversion.ts` carried two converters for one
+string: a first tier that probed for a `pandoc` binary, spawned it, and rewrote
+pandoc's three reference shapes back to `\ref{}` / `\eqref{}` / `\cref{}`, and
+a second tier of Turndown plus a replacement table that ran when pandoc was
+absent. Keep the optional tier?
+
+**Ruling.** No. The pandoc tier is retired. `formatContent` is an ordinary
+synchronous function over Turndown and the LaTeX replacement table.
+`OutputFormat`, `detectInputFormat`, `isPandocAvailable`, `convertWithPandoc`,
+`PANDOC_REFERENCE_REWRITES`, `normalizePandocReferences`, the `pandoc`
+`TOOL_CONFIGS` entry and `PANDOC_INSTALL_GUIDE` are deleted.
+
+**Evidence.** The tier made the product's output depend on what was installed
+on the machine: a developer with pandoc rendered differently from CI, which
+only ever pinned the fallback, so the fallback is the behavior the project
+actually tests and ships. Markdown scratchpads, the overwhelming majority,
+short-circuited past both tiers already. A machine without pandoc re-spawned
+`pandoc --version` once per reflection round, because the cached negative from
+[#12805](https://github.com/LionSR/TeXRA/pull/12805) had a zero TTL. Pandoc
+appears nowhere in `docs/` or `packages/extension/resources/`; its only
+user-facing mention was a 0.x changelog bug-fix line. The full record is
+[`2026-09-19-retire-pandoc-scratchpad-tier.md`](../simplification/2026-09-19-retire-pandoc-scratchpad-tier.md).
+
+**Forbids.** Reintroducing an external-binary conversion tier for the model
+scratchpad, or any second converter selected by what the host machine happens
+to have installed. A conversion improvement is a change to the one path.
+
+---
+
+## The session close chain takes no `AbortSignal` (ruled 2026-09-19; [#12855](https://github.com/LionSR/TeXRA/pull/12855))
+
+**Question.** `SessionOwner.close`, `sessionGraph.closeSession`,
+`sessionLayer.closeSession`, `Sessions.close` and the `packages/agent`
+`closeSession` each took an optional `signal?: AbortSignal`, adapted into the
+drain by `aborted(signal)`. Keep the parameter on the SDK surface for an
+embedder who might want it?
+
+**Ruling.** No. `signal` is dropped from the whole close chain,
+`packages/agent` included, and `aborted(signal)` is deleted with it. A caller
+who needs to give up on a drain interrupts the fiber.
+
+**Evidence.** No external consumer exists: the package is built and fenced but
+deliberately unpublished until a named external consumer appears, so the
+parameter was speculative generality on a surface with no second party. No
+in-tree caller passed a signal. The drain itself is an Effect program, so fiber
+interruption is the cancellation mechanism the rest of the runtime already
+uses, and keeping a parallel `AbortSignal` channel would be a second
+cancellation vocabulary on the one path that most needs a single owner. The
+four permanent `AbortController` residents named in the ratchet are foreign
+contracts (execa, the Codex SDK, the Claude Agent SDK); a session close is not
+one of them.
+
+**Forbids.** Re-adding an `AbortSignal` parameter anywhere on the session close
+chain, on any host or on the SDK surface. Cancelling a drain by any mechanism
+other than interrupting the fiber that awaits it.
