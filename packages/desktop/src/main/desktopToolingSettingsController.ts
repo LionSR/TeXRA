@@ -112,13 +112,13 @@ export class DefaultDesktopToolingSettingsController implements DesktopToolingSe
     // what makes the dashboard follow availability instead of following the
     // one path that remembered to re-post.
     this.unsubscribeToolAvailability = subscribeDesktopAppSignal(
+      options.runtime,
       'toolAvailabilityChanged',
       () => {
         options.runtime.runFork(
           this.reportingFailure(this.postToolDashboardData()),
         );
       },
-      options.runtime,
     );
   }
 

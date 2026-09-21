@@ -15,7 +15,11 @@ vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
 }));
 
 // Local imports
-import { onAppSignal, type AppSignal, type AppSignalPayloads } from '@eventBus/AppSignals';
+import {
+  onAppSignal,
+  type AppSignal,
+  type AppSignalPayloads,
+} from '@eventBus/AppSignals';
 import type { RunId } from '@shared/schemas';
 import { testRuntime } from '@test/support/testProcessRuntime';
 

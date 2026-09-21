@@ -8,6 +8,7 @@ import {
 } from 'node:fs';
 import { join } from 'node:path';
 
+import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -18,8 +19,6 @@ import {
 import { createDesktopWorkspaceIpc } from '@desktop/main/desktopWorkspaceIpc';
 import type { DesktopBrowserViews } from '@desktop/main/desktopBrowserViews';
 import type { DesktopPtyHost } from '@desktop/main/desktopPtyHost';
-import { Effect } from 'effect';
-
 import { emitAppSignal } from '@eventBus/AppSignals';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';

@@ -75,18 +75,18 @@ export function registerFileDecorations(
     runtime,
   );
 
-  const unsubscribeWritten = subscribeAppSignal(
+  const writtenListener = subscribeAppSignal(
+    runtime,
     'workspaceFilesWritten',
     ({ absolutePaths }) => {
       provider.markTouched(absolutePaths);
     },
-    runtime,
   );
 
   context.subscriptions.push(
     vscode.window.registerFileDecorationProvider(provider),
     provider,
     { dispose: unsubscribeOutputFiles },
-    { dispose: unsubscribeWritten },
+    writtenListener,
   );
 }

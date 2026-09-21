@@ -2,10 +2,12 @@
  * The extension host's run edge for app-signal subscriptions (PRD R1: the
  * fork lives at the host entry, not in the bus). Mirrors
  * `runFactSubscriptions`: one fiber draining the signal's `PubSub`
- * subscription, an unsubscribe that interrupts it, and no other runtime
- * contact. Delivery and failure order belong to `AppSignals` itself.
+ * subscription and an unsubscribe that interrupts it — as a `Disposable`,
+ * because every caller hands it straight to `context.subscriptions`.
+ * Delivery and failure order belong to `AppSignals` itself.
  */
 import { Fiber } from 'effect';
+import type * as vscode from 'vscode';
 
 import {
   onAppSignal,
@@ -16,12 +18,14 @@ import type { ProcessRuntime } from '@platform/processRuntime';
 
 /** Read one app signal from now on. */
 export function subscribeAppSignal<K extends AppSignal>(
+  runtime: ProcessRuntime,
   signal: K,
   listener: (payload: AppSignalPayloads[K]) => void,
-  runtime: ProcessRuntime,
-): () => void {
+): vscode.Disposable {
   const fiber = runtime.runFork(onAppSignal(signal, listener));
-  return () => {
-    runtime.runFork(Fiber.interrupt(fiber));
+  return {
+    dispose: () => {
+      runtime.runFork(Fiber.interrupt(fiber));
+    },
   };
 }

@@ -242,62 +242,36 @@ export class SettingsViewMessageHandler {
     this.handlerRegistry = this.createHandlerRegistry(context);
 
     context.subscriptions.push(
-      {
-        dispose: subscribeAppSignal(
-          'githubSubscriptionsChanged',
-          () => {
-            this.runtime.runFork(
-              this.withActiveWebview((w) =>
-                this.githubHandlers.sendPRSubscriptions(w),
-              ),
-            );
-          },
-          this.runtime,
-        ),
-      },
-      {
-        dispose: subscribeAppSignal(
-          'toolAvailabilityChanged',
-          () => {
-            this.runtime.runFork(
-              this.withActiveWebview((w) =>
-                this.sendToolDashboardData(w, { skipChecks: true }),
-              ),
-            );
-          },
-          this.runtime,
-        ),
-      },
-      {
-        // `apply_team` writes the roster straight from the setup agent, so
-        // the open view is showing agents and a team it just replaced. The
-        // catalog is already fresh: a team change moves no agent files, and
-        // the agent-creator reloads before it emits. Without that flag this
-        // listener would rescan the YAML and re-fetch the remote catalog on
-        // every roster write.
-        dispose: subscribeAppSignal(
-          'agentRosterChanged',
-          () => {
-            this.runtime.runFork(
-              this.refreshAfterAgentMutation(undefined, true),
-            );
-          },
-          this.runtime,
-        ),
-      },
-      {
-        dispose: subscribeAppSignal(
-          'languageModelsChanged',
-          () => {
-            this.runtime.runFork(
-              this.withActiveWebview((webview) =>
-                this.sendModelSelectionData(webview),
-              ),
-            );
-          },
-          this.runtime,
-        ),
-      },
+      subscribeAppSignal(this.runtime, 'githubSubscriptionsChanged', () => {
+        this.runtime.runFork(
+          this.withActiveWebview((w) =>
+            this.githubHandlers.sendPRSubscriptions(w),
+          ),
+        );
+      }),
+      subscribeAppSignal(this.runtime, 'toolAvailabilityChanged', () => {
+        this.runtime.runFork(
+          this.withActiveWebview((w) =>
+            this.sendToolDashboardData(w, { skipChecks: true }),
+          ),
+        );
+      }),
+      // `apply_team` writes the roster straight from the setup agent, so the
+      // open view is showing agents and a team it just replaced. The catalog
+      // is already fresh: a team change moves no agent files, and the
+      // agent-creator reloads before it emits. Without that flag this listener
+      // would rescan the YAML and re-fetch the remote catalog on every roster
+      // write.
+      subscribeAppSignal(this.runtime, 'agentRosterChanged', () => {
+        this.runtime.runFork(this.refreshAfterAgentMutation(undefined, true));
+      }),
+      subscribeAppSignal(this.runtime, 'languageModelsChanged', () => {
+        this.runtime.runFork(
+          this.withActiveWebview((webview) =>
+            this.sendModelSelectionData(webview),
+          ),
+        );
+      }),
     );
     const unsubscribeGoals = subscribeGoalStateChanges(
       session,

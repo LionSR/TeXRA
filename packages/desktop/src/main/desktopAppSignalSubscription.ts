@@ -16,9 +16,9 @@ import type { ProcessRuntime } from '@platform/processRuntime';
 
 /** Read one app signal from now on. */
 export function subscribeDesktopAppSignal<K extends AppSignal>(
+  runtime: ProcessRuntime,
   signal: K,
   listener: (payload: AppSignalPayloads[K]) => void,
-  runtime: ProcessRuntime,
 ): () => void {
   const fiber = runtime.runFork(onAppSignal(signal, listener));
   return () => {

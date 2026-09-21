@@ -263,12 +263,12 @@ export function createDesktopWorkspaceIpc(
   options: DesktopWorkspaceIpcOptions,
 ): DesktopWorkspaceIpc {
   // Accepted run outputs and accepted LaTeX diffs write straight to disk, past
-  // the editor's own write path, and the file tree caches its listing — so
-  // before this the newly written files stayed invisible until the user hit
-  // Refresh. There is no filesystem watcher here; this signal is the only
-  // notice the main process gets. Writes outside the workspace root cannot
-  // appear in the tree, so they are not worth a re-list.
+  // the editor's own write path, and the file tree caches its listing with no
+  // watcher behind it — this signal is its only notice, and without it the
+  // tree stays stale until the user hits Refresh. A write outside the
+  // workspace root cannot appear in the tree, so it is not worth a re-list.
   const unsubscribeFilesWritten = subscribeDesktopAppSignal(
+    options.runtime,
     'workspaceFilesWritten',
     ({ absolutePaths }) => {
       const root = options.getWorkspacePath();
@@ -278,7 +278,6 @@ export function createDesktopWorkspaceIpc(
         command: DESKTOP_WORKSPACE_COMMANDS.FILES_CHANGED,
       });
     },
-    options.runtime,
   );
 
   /**

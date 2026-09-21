@@ -832,7 +832,8 @@ async function activateExtension(context: vscode.ExtensionContext) {
       );
     }),
   );
-  const disposeGitHubAuthListener = subscribeAppSignal(
+  const gitHubAuthListener = subscribeAppSignal(
+    runtime,
     'githubTokenInvalid',
     ({ message }) => {
       const rejected = gitHubTokenRejectedMessage(message);
@@ -845,9 +846,8 @@ async function activateExtension(context: vscode.ExtensionContext) {
           }
         });
     },
-    runtime,
   );
-  context.subscriptions.push({ dispose: disposeGitHubAuthListener });
+  context.subscriptions.push(gitHubAuthListener);
   registerInlineCriticism(context, runtime, runtimeSession);
   registerInlineComments(context);
 
@@ -972,10 +972,10 @@ async function activateExtension(context: vscode.ExtensionContext) {
   // Approval-policy setting updates emit on this signal; the subscription
   // here is what makes the refresh reachable, so a missed subscribe is a
   // missing behavior rather than a silent no-op.
-  const disposeApprovalPolicyTooltipRefresh = subscribeAppSignal(
+  const approvalPolicyTooltipRefresh = subscribeAppSignal(
+    runtime,
     'approvalPolicyChanged',
     updateStatusBarTooltip,
-    runtime,
   );
 
   // Surface curated research tools to VS Code's Language Model Tool API
@@ -984,7 +984,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
 
   context.subscriptions.push(
     { dispose: disposeStatusListener },
-    { dispose: disposeApprovalPolicyTooltipRefresh },
+    approvalPolicyTooltipRefresh,
     statusBarItem,
     // Registered here rather than through the shared command registry because
     // the handler closes over this activation's status-bar refresh queue.

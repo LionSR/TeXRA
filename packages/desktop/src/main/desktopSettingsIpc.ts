@@ -437,9 +437,8 @@ export function createDesktopSettingsIpc(
   // window-scoped and released in `dispose` below.
   //
   // App signals and goal changes deliver on their own fiber of this window's
-  // runtime, not on the emitter's stack. Every refresh a signal triggers
-  // reads this paper's own session, which each of these posters takes from
-  // `options.session` as data.
+  // runtime, not on the emitter's stack. Every refresh a signal triggers reads
+  // this paper's own session, which these posters take from `options.session`.
   const subscriptions = [
     subscribeDesktopGoalChanges(
       options.session,
@@ -515,32 +514,25 @@ export function createDesktopSettingsIpc(
   // releases a PR, repo or issue subscription changes the list the Git tab is
   // showing, which the desktop used to re-read only when the user asked.
   subscriptions.push(
-    subscribeDesktopAppSignal(
-      'githubSubscriptionsChanged',
-      () => runAsync(postGitHubSubscriptions()),
-      runtime,
+    subscribeDesktopAppSignal(runtime, 'githubSubscriptionsChanged', () =>
+      runAsync(postGitHubSubscriptions()),
     ),
     // `apply_team` writes the roster straight from the setup agent, so the
     // open view is showing agents and a team it just replaced. The signal
     // comes from whichever paper's run applied the team; the catalog is
     // rebuilt from this paper's presets, not the emitter's.
-    subscribeDesktopAppSignal(
-      'agentRosterChanged',
-      () => runAsync(options.agentSettingsController.refreshCatalogData()),
-      runtime,
+    subscribeDesktopAppSignal(runtime, 'agentRosterChanged', () =>
+      runAsync(options.agentSettingsController.refreshCatalogData()),
     ),
     // Outside VS Code a rejected token left the pollers failing in silence.
     // The dialog is the whole fix: `resolveGitHubTokenSource` reports only
     // which store holds a token, and rejection leaves the secret in place, so
     // re-posting the status would repaint the same "token set" badge. Marking
     // a stored token as rejected would need a new status on the wire.
-    subscribeDesktopAppSignal(
-      'githubTokenInvalid',
-      ({ message }) =>
-        runAsync(
-          options.ui.showErrorMessage(gitHubTokenRejectedMessage(message)),
-        ),
-      runtime,
+    subscribeDesktopAppSignal(runtime, 'githubTokenInvalid', ({ message }) =>
+      runAsync(
+        options.ui.showErrorMessage(gitHubTokenRejectedMessage(message)),
+      ),
     ),
   );
 
