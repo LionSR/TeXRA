@@ -173,8 +173,8 @@ export function createSessionExitController(
   // These TUI exit paths call process.exit() directly, so bin/texra.ts's
   // `finally` (which runs platform shutdown) never fires. Run the same
   // shutdown sequence the (suppressed) platform SIGINT/SIGTERM handlers
-  // would have run — lifecycle shutdown (notably UsageLogService.dispose(),
-  // which flushes any queued usage entries) then the NDJSON flush — so it
+  // would have run — lifecycle shutdown (which ends by disposing the process
+  // runtime, draining any queued usage entries) then the NDJSON flush — so it
   // still happens once before the process dies. runCliPlatformShutdownSequence
   // is idempotent-safe to call again, so the normal return path can still
   // rely on bin/texra.ts's own `finally`.

@@ -10,12 +10,8 @@ import { installProcessRuntime } from '@controllers/session/sessionLayer';
 import { NotificationFailed } from '@hosts/uiHosts';
 import { setDebugModeConfig } from '@logger/logUtils';
 import { initPlatform } from '@platform/platform';
-import {
-  withProcessServices,
-  type ProcessRuntime,
-} from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
-import { SHUTDOWN_PHASE } from '@platform/interfaces';
 import type {
   AgentDirectoriesPort,
   AgentResumePort,
@@ -39,7 +35,7 @@ import {
   resolveGlobalStoragePath,
 } from '@platform/defaults/workspaceStorage';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { UsageLogService } from '@telemetry/UsageLogService';
+import { usageLogLayer } from '@telemetry/UsageLogService';
 import { directLeanLanguageServices } from '@tools/lean/direct/directLspAdapter';
 import { seedDisabledToolDefaults } from '@tools/toolAvailability';
 import { initProcessSettingHost } from '@utils/config/platformSettings';
@@ -205,6 +201,14 @@ export async function initializeElectronPlatform(
     agentResume,
     setup: setupAuth.platform,
     lean: directLeanLanguageServices(),
+    // Desktop model traffic goes to the same Supabase usage log the extension
+    // and CLI write to, tagged with editorType 'desktop' and the app version.
+    // The runtime's disposal drains the queue, so a queue shorter than one
+    // batch is not lost at quit -- plan accounting included.
+    usageLog: usageLogLayer({
+      version: app.getVersion(),
+      editorType: 'desktop',
+    }),
   });
 
   repairLaunchPath();
@@ -233,20 +237,6 @@ export async function initializeElectronPlatform(
   // TeXRA's account plane (ChatGPT / Grok sign-in). Without this
   // the model layer is bring-your-own-key. See installTexraAccountProbes.
   installTexraAccountProbes(secrets);
-
-  // Route desktop model traffic to the same Supabase usage log the extension
-  // and CLI write to, tagged with editorType 'desktop' and the app version.
-  // Without this call the 30 s flush cadence never starts and every entry
-  // carries an undefined host/version, so a queue shorter than one batch is
-  // lost at quit — including plan accounting. `dispose()` drains it, from the
-  // same BEFORE phase the other two hosts use.
-  await runtime.runPromise(
-    UsageLogService.initialize(runtime.scope, {}, app.getVersion(), 'desktop'),
-  );
-  lifecycle.onShutdown(
-    SHUTDOWN_PHASE.BEFORE,
-    withProcessServices(runtime, UsageLogService.dispose()),
-  );
 
   // Seed first-install defaults (e.g. disabled tools). No-ops once
   // DISABLED_TOOLS exists, so upgrading users keep the tools they enabled.

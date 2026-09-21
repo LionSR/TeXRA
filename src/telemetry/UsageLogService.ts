@@ -5,10 +5,9 @@ import {
   Data,
   Duration,
   Effect,
-  Exit,
   Fiber,
+  Layer,
   Queue,
-  Scope,
   Semaphore,
 } from 'effect';
 import {
@@ -101,8 +100,8 @@ function isPlanAccounting(entry: Pick<UsageLogEntry, 'usageRoute'>): boolean {
 }
 
 /**
- * The user's usage-logging opt-out, read live rather than snapshotted at
- * {@link UsageLogServiceImpl.initialize}.
+ * The user's usage-logging opt-out, read live rather than snapshotted when
+ * the service starts.
  *
  * Reading it on each queue and send is what makes turning the setting off take
  * effect immediately instead of at the next launch — and lets the flush path
@@ -194,82 +193,60 @@ class UsageBatchUndelivered extends Data.TaggedError('UsageBatchUndelivered')<{
 class UsageLogServiceImpl {
   private queue: QueuedUsageEntry[] = [];
   private retryBatch: RetryBatch | null = null;
-  /** The ticker that schedules the periodic flush, forked by `initialize`
-   *  and interrupted by `dispose`. It only signals the sender, so interrupting
-   *  the ticker never touches a send. */
+  /** The ticker that schedules the periodic flush, forked into the runtime's
+   *  scope and interrupted before the drain. It only signals the sender, so
+   *  interrupting the ticker never touches a send. */
   private flushTimer: Fiber.Fiber<never> | null = null;
-  private sender: Fiber.Fiber<never> | null = null;
   private triggers: Queue.Queue<void> | null = null;
-  private owner: Scope.Scope | undefined;
-  private lifetime: Scope.Closeable | undefined;
-  /** One permit: batches leave in order, and disposal joins an active drain. */
+  /** One permit: batches leave in order, and the drain joins an active send. */
   private readonly flushLane = Semaphore.makeUnsafe(1);
   /** Coalesce triggers before they wait for the lane; failed sends wait for
    *  a later trigger instead of being retried by already waiting callers. */
   private backgroundFlushActive = false;
-  // Copied, never aliased: `dispose()` writes `config.enabled`, so a
-  // dispose-before-initialize would otherwise flip DEFAULT_CONFIG for good.
+  // Copied, never aliased: the drain writes `config.enabled`, so an unstarted
+  // service would otherwise flip DEFAULT_CONFIG for good.
   private config: UsageLogConfig = { ...DEFAULT_CONFIG };
   private extensionVersion: string | undefined;
   private editorType: string | undefined;
 
-  readonly initialize = Effect.fn('UsageLogService.initialize')(function* (
+  /**
+   * Start the sender and the flush ticker in the ambient scope, and register
+   * the drain that runs before they stop. The scope is the runtime's, so the
+   * lifetime is the process's and no host brackets it by hand.
+   */
+  readonly start = Effect.fn('UsageLogService.start')(function* (
     this: UsageLogServiceImpl,
-    owner: Scope.Scope,
-    config?: Partial<UsageLogConfig>,
-    extensionVersion?: string,
-    editorType?: string,
+    options: UsageLogOptions,
   ) {
-    if (this.owner && this.owner !== owner) yield* this.dispose();
-    this.config = { ...DEFAULT_CONFIG, ...config };
-    this.extensionVersion = extensionVersion;
-    this.editorType = editorType;
-    if (this.flushTimer) yield* Fiber.interrupt(this.flushTimer);
-    const freshLifetime = !this.lifetime;
-    const lifetime = this.lifetime ?? (yield* Scope.fork(owner));
-    this.lifetime = lifetime;
-    this.owner = owner;
-    if (!this.sender) {
-      this.triggers = yield* Queue.make<void>({
-        capacity: 1,
-        strategy: 'dropping',
-      });
-      const triggers = this.triggers;
-      this.sender = yield* Effect.forkIn(
-        Effect.forever(
-          Queue.take(triggers).pipe(Effect.andThen(this.backgroundFlush())),
-        ),
-        lifetime,
-      );
-    }
+    this.config = { ...DEFAULT_CONFIG, ...options.config };
+    this.extensionVersion = options.version;
+    this.editorType = options.editorType;
+    const triggers = yield* Queue.make<void>({
+      capacity: 1,
+      strategy: 'dropping',
+    });
+    this.triggers = triggers;
+    yield* Effect.forkScoped(
+      Effect.forever(
+        Queue.take(triggers).pipe(Effect.andThen(this.backgroundFlush())),
+      ),
+    );
     const tick = Clock.clockWith((clock) =>
       Effect.sleep(Duration.millis(this.config.flushIntervalMs)).pipe(
         Effect.provideService(Clock.Clock, unrefSleepClock(clock)),
       ),
     );
-    this.flushTimer = yield* Effect.forkIn(
+    this.flushTimer = yield* Effect.forkScoped(
       Effect.forever(
         tick.pipe(Effect.andThen(Effect.sync(() => this.requestFlush()))),
       ),
-      lifetime,
       { startImmediately: true },
     );
-    if (freshLifetime) {
-      // Run before the sender's interruption finalizer. Closing this child on
-      // dispose also removes its parent finalizer, so reinitialization neither
-      // retains old shutdown callbacks nor changes the drain-before-stop order.
-      // A scope finalizer runs with no context of its own, so the drain it
-      // performs carries the services this initialization was given.
-      const client = yield* HttpClient.HttpClient;
-      const auth = yield* SupabaseAuth;
-      yield* Scope.addFinalizer(
-        lifetime,
-        this.shutdown().pipe(
-          Effect.provideService(HttpClient.HttpClient, client),
-          Effect.provideService(SupabaseAuth, auth),
-        ),
-      );
-    }
+    // Added after the forks, so it runs before their interruption: finalizers
+    // unwind last-first, and the drain must finish while the sender is still
+    // alive. It carries this build's context, which is where its HTTP client
+    // and account plane come from.
+    yield* Effect.addFinalizer(() => this.drainAndStop());
 
     if (isTelemetryDisabledByEnv()) {
       log.info(
@@ -278,7 +255,7 @@ class UsageLogServiceImpl {
     }
 
     log.debug(
-      `UsageLogService initialized (batchSize=${this.config.batchSize}, flushIntervalMs=${this.config.flushIntervalMs}, enabled=${this.config.enabled})`,
+      `UsageLogService started (batchSize=${this.config.batchSize}, flushIntervalMs=${this.config.flushIntervalMs}, enabled=${this.config.enabled})`,
     );
   });
 
@@ -531,48 +508,64 @@ class UsageLogServiceImpl {
     },
   );
 
-  /** Close the active process child, draining its sender before interruption. */
-  dispose(): Effect.Effect<void, never, HttpClient.HttpClient | SupabaseAuth> {
-    return Effect.suspend(() =>
-      this.lifetime ? Scope.close(this.lifetime, Exit.void) : this.shutdown(),
-    );
-  }
+  /**
+   * Stop admitting entries, then send what is already queued. The scope
+   * interrupts the sender after this returns, so the drain runs with it
+   * still alive.
+   */
+  private readonly drainAndStop = Effect.fn('UsageLogService.drainAndStop')(
+    function* (this: UsageLogServiceImpl) {
+      if (this.flushTimer) {
+        yield* Fiber.interrupt(this.flushTimer);
+        this.flushTimer = null;
+      }
+      this.config.enabled = false;
 
-  private readonly shutdown = Effect.fn('UsageLogService.dispose')(function* (
-    this: UsageLogServiceImpl,
-  ) {
-    if (this.flushTimer) {
-      yield* Fiber.interrupt(this.flushTimer);
-      this.flushTimer = null;
-    }
-    this.config.enabled = false;
-
-    // An in-flight background flush is waited for without
-    // bound; past the deadline the wait is reported, not abandoned. The
-    // warning is withdrawn the moment the lane is ours.
-    const warning = yield* Effect.forkChild(
-      Effect.sleep(Duration.millis(DISPOSE_WARNING_TIMEOUT_MS)).pipe(
-        Effect.andThen(
-          Effect.sync(() => {
-            log.warn('Dispose timeout waiting for in-flight flush');
-          }),
+      // An in-flight background flush is waited for without
+      // bound; past the deadline the wait is reported, not abandoned. The
+      // warning is withdrawn the moment the lane is ours.
+      const warning = yield* Effect.forkChild(
+        Effect.sleep(Duration.millis(DISPOSE_WARNING_TIMEOUT_MS)).pipe(
+          Effect.andThen(
+            Effect.sync(() => {
+              log.warn('Dispose timeout waiting for in-flight flush');
+            }),
+          ),
         ),
-      ),
-    );
-    yield* this.flushLane.withPermit(
-      Fiber.interrupt(warning).pipe(Effect.andThen(this.drain())),
-    );
+      );
+      yield* this.flushLane.withPermit(
+        Fiber.interrupt(warning).pipe(Effect.andThen(this.drain())),
+      );
 
-    if (this.sender) {
-      yield* Fiber.interrupt(this.sender);
-      this.sender = null;
-    }
-    this.triggers = null;
-    this.backgroundFlushActive = false;
-    this.owner = undefined;
-    this.lifetime = undefined;
-    log.debug('UsageLogService disposed');
-  });
+      this.triggers = null;
+      this.backgroundFlushActive = false;
+      log.debug('UsageLogService drained');
+    },
+  );
 }
 
 export const UsageLogService = new UsageLogServiceImpl();
+
+/** What a host stamps on its entries, and the cadence a test overrides. */
+export interface UsageLogOptions {
+  /** This host's version, reported with every entry. */
+  readonly version: string | undefined;
+  /** The editor this process runs in: the CLI, the desktop app, or the
+   *  editor's own name on the extension host. */
+  readonly editorType: string | undefined;
+  /** Batch size, flush cadence and the host-side off switch; the shipped
+   *  defaults stand where a caller passes nothing. */
+  readonly config?: Partial<UsageLogConfig>;
+}
+
+/**
+ * The usage log as a lifetime, not a pair of calls: the process layer builds
+ * this, its sender and ticker run for the runtime's life, and its finalizer
+ * drains the queue on disposal. Every host used to bracket `initialize` and
+ * `dispose` itself, in a different shutdown phase each, which is how a queue
+ * shorter than one batch could be lost at quit on one host and not another.
+ */
+export const usageLogLayer = (
+  options: UsageLogOptions,
+): Layer.Layer<never, never, HttpClient.HttpClient | SupabaseAuth> =>
+  Layer.effectDiscard(UsageLogService.start(options));

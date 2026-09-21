@@ -36,7 +36,7 @@ import {
   type FileSystem,
   type Path,
 } from 'effect';
-import { FetchHttpClient } from 'effect/unstable/http';
+import { FetchHttpClient, type HttpClient } from 'effect/unstable/http';
 
 import { proveOwnerLiveness } from '@agent/storage/leaseOwnerLiveness';
 import { finalizeRun } from '@agent/storage/runLifecycle';
@@ -1026,6 +1026,18 @@ interface ProcessRuntimeOptions {
     never,
     FileSystem.FileSystem | Path.Path
   >;
+  /**
+   * The host's usage log (`usageLogLayer`), stamped with its version and
+   * editor. Built with this runtime and drained when it is disposed, so no
+   * root brackets the sender itself; `Layer.empty` is a composition that
+   * reports no usage at all. Passed as a layer for the same reason `lean`
+   * is: this module does not reach into the telemetry subsystem.
+   */
+  readonly usageLog: Layer.Layer<
+    never,
+    never,
+    HttpClient.HttpClient | SupabaseAuth
+  >;
 }
 
 export function installProcessRuntime({
@@ -1039,6 +1051,7 @@ export function installProcessRuntime({
   setup,
   editorModel,
   lean,
+  usageLog,
 }: ProcessRuntimeOptions): ProcessRuntime {
   // Non-failing by contract: `nodeProcesses.selfIdentity()` reports an
   // unreadable identity as undefined, and a root that already read one hands
@@ -1090,6 +1103,11 @@ export function installProcessRuntime({
   const runtime = withForkFailureReporting(
     ManagedRuntime.make(
       Sessions.layer(held, release).pipe(
+        // The usage log's own lifetime: its sender and ticker run for as long
+        // as this runtime does, and its finalizer drains the queue while the
+        // account plane below is still up. Ahead of `services` in the chain
+        // so that plane and the HTTP client reach it.
+        Layer.provideMerge(usageLog),
         Layer.provideMerge(services),
         // The Lean pool is one per process — its servers are shared across
         // roots — as is the cross-workspace storage view below it: every

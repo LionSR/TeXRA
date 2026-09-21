@@ -1,4 +1,4 @@
-import { Effect } from 'effect';
+import { Effect, Layer } from 'effect';
 
 import { installProcessRuntime } from '@controllers/session/sessionLayer';
 import { directLeanLanguageServices } from '@tools/lean/direct/directLspAdapter';
@@ -62,5 +62,7 @@ initTestProcessRuntime(
     setup: fakeSetupPlatform,
     // The Node hosts' layer: inert until a Lean tool is invoked.
     lean: directLeanLanguageServices(),
+    // The harness reports no usage; the telemetry suite starts its own.
+    usageLog: Layer.empty,
   }),
 );

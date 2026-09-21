@@ -1,4 +1,4 @@
-import { Effect, Exit, Scope } from 'effect';
+import { Effect, Exit, Layer, Scope } from 'effect';
 import {
   afterEach,
   beforeEach,
@@ -11,7 +11,11 @@ import {
 
 import * as logger from '@logger/logUtils';
 import { AgentCategory, TELEMETRY_ENABLED_KEY } from '@shared/schemas';
-import { UsageLogService } from '@telemetry/UsageLogService';
+import {
+  UsageLogService,
+  usageLogLayer,
+  type UsageLogOptions,
+} from '@telemetry/UsageLogService';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { createDeferred } from '@test/support/asyncTestUtils';
@@ -76,19 +80,44 @@ function stubBatchFetch(
 }
 
 describe('UsageLogService', () => {
+  // The service's lifetime is a layer the process runtime builds; a suite
+  // owns one scope in its place, and closing it is what the host's runtime
+  // disposal does.
+  let lifetime: Scope.Closeable | undefined;
+
+  const stopUsageLog = async (): Promise<void> => {
+    const scope = lifetime;
+    lifetime = undefined;
+    if (scope) await testRuntime().runPromise(Scope.close(scope, Exit.void));
+  };
+
+  const startUsageLog = async (
+    config: UsageLogOptions['config'],
+    scope?: Scope.Closeable,
+  ): Promise<void> => {
+    await stopUsageLog();
+    lifetime = scope ?? Scope.makeUnsafe();
+    await testRuntime().runPromise(
+      Scope.provide(
+        Layer.build(
+          usageLogLayer({ version: undefined, editorType: undefined, config }),
+        ),
+        lifetime,
+      ),
+    );
+  };
+
   beforeEach(async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
-    await testRuntime().runPromise(
-      UsageLogService.initialize(testRuntime().scope, {
-        batchSize: 1,
-        flushIntervalMs: 60_000,
-        enabled: true,
-      }),
-    );
+    await startUsageLog({
+      batchSize: 1,
+      flushIntervalMs: 60_000,
+      enabled: true,
+    });
   });
 
   afterEach(async () => {
-    await testRuntime().runPromise(UsageLogService.dispose());
+    await stopUsageLog();
     vi.useRealTimers();
     vi.unstubAllGlobals();
     vi.unstubAllEnvs();
@@ -135,7 +164,7 @@ describe('UsageLogService', () => {
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
 
     UsageLogService.log(usageEntry('second'), testWorkspaceRoots().config);
-    const disposal = testRuntime().runPromise(UsageLogService.dispose());
+    const disposal = stopUsageLog();
 
     releaseFirstFetch();
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
@@ -155,30 +184,15 @@ describe('UsageLogService', () => {
   });
 
   // The ticker only schedules; the process owns the sender independently.
-  // Interrupting the ticker on dispose must leave a send already in flight
-  // alone and wait behind it, not abort the request and lose the batch it
-  // had already taken from the queue.
+  // Closing the scope must leave a send already in flight alone and wait
+  // behind it, not abort the request and lose the batch it had already taken
+  // from the queue.
   it('process scope closure joins a timer-driven send before stopping admission', async () => {
     stubAccessToken();
     const owner = Scope.makeUnsafe();
-    // Reusing a process after explicit disposal must release its old child
-    // finalizers and preserve shutdown ordering for the next in-flight send.
-    for (let cycle = 0; cycle < 3; cycle++) {
-      await testRuntime().runPromise(
-        UsageLogService.initialize(owner, { enabled: true }),
-      );
-      await testRuntime().runPromise(UsageLogService.dispose());
-      if (owner.state._tag === 'Open') {
-        expect(owner.state.finalizer).toBeUndefined();
-        expect(owner.state.finalizers?.size ?? 0).toBe(0);
-      }
-    }
-    await testRuntime().runPromise(
-      UsageLogService.initialize(owner, {
-        batchSize: 100,
-        flushIntervalMs: 20,
-        enabled: true,
-      }),
+    await startUsageLog(
+      { batchSize: 100, flushIntervalMs: 20, enabled: true },
+      owner,
     );
 
     const { promise: fetchReleased, resolve: releaseFetch } = createDeferred();
@@ -190,7 +204,7 @@ describe('UsageLogService', () => {
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
 
-    const disposal = testRuntime().runPromise(Scope.close(owner, Exit.void));
+    const disposal = stopUsageLog();
     let disposed = false;
     void disposal.then(() => {
       disposed = true;
@@ -210,19 +224,17 @@ describe('UsageLogService', () => {
   });
 
   // The ticker must not keep a short-lived host alive by itself: a process
-  // that reaches initialize() and exits without dispose() still exits on an
-  // empty loop, so the ticker's timer is unref'd while the request a flush
-  // sends holds the loop on its own.
+  // that starts the log and exits without disposing its runtime still exits
+  // on an empty loop, so the ticker's timer is unref'd while the request a
+  // flush sends holds the loop on its own.
   it('schedules the ticker on a timer that does not hold the event loop', async () => {
     vi.useRealTimers();
     const timers = vi.spyOn(globalThis, 'setTimeout');
-    await testRuntime().runPromise(
-      UsageLogService.initialize(testRuntime().scope, {
-        batchSize: 100,
-        flushIntervalMs: 12_345,
-        enabled: true,
-      }),
-    );
+    await startUsageLog({
+      batchSize: 100,
+      flushIntervalMs: 12_345,
+      enabled: true,
+    });
 
     const tick = timers.mock.calls.findIndex(([, delay]) => delay === 12_345);
     expect(tick).toBeGreaterThanOrEqual(0);
@@ -242,7 +254,7 @@ describe('UsageLogService', () => {
     UsageLogService.log(usageEntry('slow'), testWorkspaceRoots().config);
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
 
-    const disposal = testRuntime().runPromise(UsageLogService.dispose());
+    const disposal = stopUsageLog();
     let disposed = false;
     void disposal.then(() => {
       disposed = true;
@@ -449,12 +461,7 @@ describe('UsageLogService', () => {
     // queued under the old value rather than letting the next flush ship them.
     it('discards entries queued before the setting was turned off', async () => {
       stubAccessToken();
-      await testRuntime().runPromise(
-        UsageLogService.initialize(testRuntime().scope, {
-          batchSize: 100,
-          flushIntervalMs: 60_000,
-        }),
-      );
+      await startUsageLog({ batchSize: 100, flushIntervalMs: 60_000 });
 
       const { batches, fetchMock } = stubBatchFetch();
 
@@ -541,12 +548,7 @@ describe('UsageLogService', () => {
 
     it('drops optional entries from a batch but keeps the accounted ones', async () => {
       stubAccessToken();
-      await testRuntime().runPromise(
-        UsageLogService.initialize(testRuntime().scope, {
-          batchSize: 100,
-          flushIntervalMs: 60_000,
-        }),
-      );
+      await startUsageLog({ batchSize: 100, flushIntervalMs: 60_000 });
 
       const { batches, fetchMock } = stubBatchFetch();
 

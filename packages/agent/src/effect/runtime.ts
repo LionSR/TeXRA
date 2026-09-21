@@ -214,6 +214,9 @@ export function composeProcess(platform: AgentPlatform): ProcessHold {
       globalStorage: platform.roots.globalStorage,
       ...processServices,
       lean: directLeanLanguageServices(),
+      // An embedder reports no usage: the package has no version or editor of
+      // its own to stamp entries with, and no account plane to send them on.
+      usageLog: Layer.empty,
     });
     installedHere = true;
   }

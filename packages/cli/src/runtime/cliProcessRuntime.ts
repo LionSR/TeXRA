@@ -57,9 +57,11 @@ import { nodeFileServices } from '@platform/defaults/jsonStore';
 import { DEFAULT_NODE_STORAGE_ROOT } from '@platform/defaults/nodeStorage';
 import { nodeProcesses } from '@platform/defaults/nodeProcesses';
 import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
+import { usageLogLayer } from '@telemetry/UsageLogService';
 import { directLeanLanguageServices } from '@tools/lean/direct/directLspAdapter';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
+import { readCliVersion } from './cliContext';
 import { getCliSecrets } from './cliSecrets';
 import { setCliLogRuntime } from './logSinks';
 import { cliAgentResume } from './cliAgentResume';
@@ -149,6 +151,7 @@ export function installCliProcessRuntime(
           return { processStart, globalStoragePath, globalState };
         }).pipe(Effect.provide(nodeFileServices)),
       );
+    const version = await readCliVersion();
     const secrets = getCliSecrets(storageRoot);
     // The account plane is built beside the runtime that serves it; the CLI's
     // sign-in surfaces settle it through the auth run edge, which
@@ -186,6 +189,11 @@ export function installCliProcessRuntime(
           ),
       },
       lean: directLeanLanguageServices(),
+      // CLI model traffic goes to the same Supabase usage log the extension
+      // writes to, tagged with editorType 'cli' and the CLI version. The
+      // runtime's disposal drains the queue, and that disposal is the last
+      // shutdown step of every exit path this process has.
+      usageLog: usageLogLayer({ version, editorType: 'cli' }),
     });
     // The output plane runs its Effects on this runtime from here on; the
     // disposal below hands it back the no-runtime state.
