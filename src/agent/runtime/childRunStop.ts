@@ -3,7 +3,7 @@
  *
  * The child-run loop (`childRunLoop.ts`) owns the run and the one controller
  * every turn of it is driven under; this module owns what is built on that
- * controller's signal — the two Effect races and the turn classification — so
+ * controller's signal: the two Effect races and the turn classification, so
  * the loop's body reads as turns and deliveries rather than as signal
  * bookkeeping. Everything here takes the signal itself, so the loop's
  * cancellation owner stays one object in one file.
@@ -18,7 +18,7 @@ import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
 import { onAbort } from '@utils/core';
 import { formatDuration } from '@utils/text/stringUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import type { ChildRunStrategy } from './childRunLoop';
+import type { ChildRunStrategy } from '@agent/runtime/childRunLoop';
 
 /** Minimal token usage shape consumed by the loop's turn summary. */
 export type TurnUsage = { input_tokens?: number; output_tokens?: number };
@@ -67,7 +67,7 @@ function logTurnSummary(
 }
 
 /** Outcome of a single turn attempt, flattening the loop's inner try/catch. */
-export type TurnAttempt<TTurn> =
+type TurnAttempt<TTurn> =
   | { kind: 'completed'; turn: TTurn; turnIsError: boolean }
   | { kind: 'failed'; err: unknown }
   | { kind: 'interrupted' };
