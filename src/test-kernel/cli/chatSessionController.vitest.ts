@@ -4,13 +4,21 @@
 // registry, event hub, run status, host interactions) are the real
 // runtime objects wherever a test asserts through them.
 
-import { Cause, Deferred, Effect, Exit, Scope, SubscriptionRef } from 'effect';
+import {
+  Cause,
+  Deferred,
+  Effect,
+  Exit,
+  Fiber,
+  Scope,
+  SubscriptionRef,
+} from 'effect';
+import { it } from '@effect/vitest';
 import {
   beforeAll,
   beforeEach,
   describe,
   expect,
-  it,
   onTestFinished,
   vi,
 } from 'vitest';
@@ -172,7 +180,10 @@ import {
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
-import { setupPlatform } from '@test/support/setupPlatform';
+import {
+  fakeProcessServices,
+  setupPlatform,
+} from '@test/support/setupPlatform';
 import { ensureError } from '@utils/errors/errorMessage';
 import {
   bindTestSessionView,
@@ -505,57 +516,61 @@ describe('CLI terminal outcome resolution', () => {
     mocks.getRunRecords.mockReset();
   });
 
-  it('prefers the persisted post-shutdown outcome', async () => {
-    mocks.getRunRecords.mockReturnValue({
-      readRunEnd: vi.fn().mockResolvedValue({
-        outcome: RUN_OUTCOME.CANCELLED,
-      }),
-    });
+  it.effect('prefers the persisted post-shutdown outcome', () =>
+    Effect.gen(function* () {
+      mocks.getRunRecords.mockReturnValue({
+        readRunEnd: vi.fn().mockResolvedValue({
+          outcome: RUN_OUTCOME.CANCELLED,
+        }),
+      });
 
-    await expect(
-      Effect.runPromise(
-        readCliRunOutcomeState(mocks.sessionStub(), {
+      expect(
+        yield* readCliRunOutcomeState(mocks.sessionStub(), {
           outcome: RUN_OUTCOME.COMPLETED,
           output: { category: 'toolUse', response: '', files: [] },
           runId: '5d0001' as RunId,
         }),
-      ),
-    ).resolves.toEqual({
-      outcome: RUN_OUTCOME.CANCELLED,
-      outcomePersisted: true,
-    });
-  });
+      ).toEqual({
+        outcome: RUN_OUTCOME.CANCELLED,
+        outcomePersisted: true,
+      });
+    }),
+  );
 
-  it('reports an outcome read failure and retains the completed run', async () => {
-    const reportReadFailure = vi.fn();
-    mocks.getRunRecords.mockReturnValue({
-      readRunEnd: vi.fn().mockRejectedValue(new Error('metadata read failed')),
-    });
+  it.effect(
+    'reports an outcome read failure and retains the completed run',
+    () =>
+      Effect.gen(function* () {
+        const reportReadFailure = vi.fn();
+        mocks.getRunRecords.mockReturnValue({
+          readRunEnd: vi
+            .fn()
+            .mockRejectedValue(new Error('metadata read failed')),
+        });
 
-    await expect(
-      Effect.runPromise(
-        readCliRunOutcomeState(
-          mocks.sessionStub(),
-          {
-            outcome: RUN_OUTCOME.COMPLETED,
-            output: { category: 'toolUse', response: '', files: [] },
-            runId: 'b0f001' as RunId,
-          },
-          reportReadFailure,
-        ),
-      ),
-    ).resolves.toEqual({
-      outcome: RUN_OUTCOME.COMPLETED,
-      outcomePersisted: false,
-    });
-    expect(reportReadFailure).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({
-        message:
-          'Could not verify the persisted outcome for run b0f001; using the current run outcome: metadata read failed',
-        cause: expect.any(Error),
+        expect(
+          yield* readCliRunOutcomeState(
+            mocks.sessionStub(),
+            {
+              outcome: RUN_OUTCOME.COMPLETED,
+              output: { category: 'toolUse', response: '', files: [] },
+              runId: 'b0f001' as RunId,
+            },
+            reportReadFailure,
+          ),
+        ).toEqual({
+          outcome: RUN_OUTCOME.COMPLETED,
+          outcomePersisted: false,
+        });
+        expect(reportReadFailure).toHaveBeenCalledExactlyOnceWith(
+          expect.objectContaining({
+            message:
+              'Could not verify the persisted outcome for run b0f001; using the current run outcome: metadata read failed',
+            cause: expect.any(Error),
+          }),
+        );
       }),
-    );
-  });
+  );
 });
 
 describe('createChatSessionController', () => {
@@ -680,127 +695,137 @@ describe('createChatSessionController', () => {
     });
   });
 
-  it('keeps detached-child approvals answerable after the stopped root finalizes', async () => {
-    const childRun = 'c00001' as RunId;
-    const { session: runtimeSession, runs } = installOwnerSession();
-    const disposeAdapter = vi.fn();
-    const detachResultToast = vi.fn();
-    const presentationHost = {
-      emit: vi.fn(),
-      close: mocks.presentationHostClose,
-      attachRunProgressRenderer: vi.fn(() => vi.fn()),
-    } as unknown as CliRuntimeHost;
-    mocks.createCliRuntimeHost.mockReturnValue(presentationHost);
-    mocks.createTuiHostInteractions.mockReturnValue({
-      dispose: disposeAdapter,
-    });
-    mocks.attachTerminalResultToast.mockReturnValue(detachResultToast);
+  it.live(
+    'keeps detached-child approvals answerable after the stopped root finalizes',
+    () =>
+      Effect.gen(function* () {
+        const childRun = 'c00001' as RunId;
+        const { session: runtimeSession, runs } = installOwnerSession();
+        const disposeAdapter = vi.fn();
+        const detachResultToast = vi.fn();
+        const presentationHost = {
+          emit: vi.fn(),
+          close: mocks.presentationHostClose,
+          attachRunProgressRenderer: vi.fn(() => vi.fn()),
+        } as unknown as CliRuntimeHost;
+        mocks.createCliRuntimeHost.mockReturnValue(presentationHost);
+        mocks.createTuiHostInteractions.mockReturnValue({
+          dispose: disposeAdapter,
+        });
+        mocks.attachTerminalResultToast.mockReturnValue(detachResultToast);
 
-    const rootRunResult =
-      createDeferred<ToolUseRunResult<typeof RUN_OUTCOME.CANCELLED>>();
-    // The launch mints the root run id, so the fixture takes it from the
-    // launch instead of naming one of its own.
-    mocks.executeAgent.mockImplementationOnce(
-      async (
-        _config: unknown,
-        runId: RunId,
-        options: ExecuteAgentMockOptions,
-      ) => {
-        const rootHandle = testRunHandle({
-          runId,
-          parent: null,
-          agent: 'root',
-        });
-        const childHandle = testRunHandle({
-          runId: childRun,
-          parent: runId,
-          agent: 'child',
-        });
-        rootHandle.attachInterruptHandler({
-          interrupt: () => {
-            runs.untrack(runId);
-            rootRunResult.resolve({
-              category: 'toolUse',
+        const rootRunResult =
+          createDeferred<ToolUseRunResult<typeof RUN_OUTCOME.CANCELLED>>();
+        // The launch mints the root run id, so the fixture takes it from the
+        // launch instead of naming one of its own.
+        mocks.executeAgent.mockImplementationOnce(
+          async (
+            _config: unknown,
+            runId: RunId,
+            options: ExecuteAgentMockOptions,
+          ) => {
+            const rootHandle = testRunHandle({
               runId,
-              outcome: RUN_OUTCOME.CANCELLED,
+              parent: null,
+              agent: 'root',
             });
+            const childHandle = testRunHandle({
+              runId: childRun,
+              parent: runId,
+              agent: 'child',
+            });
+            rootHandle.attachInterruptHandler({
+              interrupt: () => {
+                runs.untrack(runId);
+                rootRunResult.resolve({
+                  category: 'toolUse',
+                  runId,
+                  outcome: RUN_OUTCOME.CANCELLED,
+                });
+              },
+            });
+            // A launch states both runs in the plane before it tracks them: the
+            // stop publishes `run.detach` on the child's own aggregate, and a run
+            // aggregate opens with its `run.start` and nothing else.
+            publishTestRunStart(runtimeSession, runId);
+            publishTestRunStart(runtimeSession, childRun, { parent: runId });
+            runs.track(rootHandle);
+            runs.track(childHandle);
+            options.onRunResolved?.(runId);
+            return rootRunResult.promise;
           },
-        });
-        // A launch states both runs in the plane before it tracks them: the
-        // stop publishes `run.detach` on the child's own aggregate, and a run
-        // aggregate opens with its `run.start` and nothing else.
-        publishTestRunStart(runtimeSession, runId);
-        publishTestRunStart(runtimeSession, childRun, { parent: runId });
-        runs.track(rootHandle);
-        runs.track(childHandle);
-        options.onRunResolved?.(runId);
-        return rootRunResult.promise;
-      },
-    );
+        );
 
-    const session = makeSession();
-    const disposables = new DisposableStore();
-    const ctrl = createChatSessionController(
-      makeInit({ session, disposables }),
-    );
-    ctrl.startRootRun(makeRunRequest('Delegate the calculation.'));
-    const rootRun = session.runId;
-    if (!rootRun) throw new Error('startRootRun did not claim a run id');
-    await vi.waitFor(() => expect(runs.getHandle(childRun)).toBeDefined());
+        const session = makeSession();
+        const disposables = new DisposableStore();
+        const ctrl = createChatSessionController(
+          makeInit({ session, disposables }),
+        );
+        ctrl.startRootRun(makeRunRequest('Delegate the calculation.'));
+        const rootRun = session.runId;
+        if (!rootRun) throw new Error('startRootRun did not claim a run id');
+        yield* Effect.promise(() =>
+          vi.waitFor(() => expect(runs.getHandle(childRun)).toBeDefined()),
+        );
 
-    ctrl.stopRun(rootRun);
-    await awaitRunSettled(session);
+        ctrl.stopRun(rootRun);
+        yield* Effect.promise(() => awaitRunSettled(session));
 
-    expect(session.runCompleted).toBe(true);
-    // The local sever follows the committed `run.detach` now, so the
-    // promotion lands with that batch rather than with the stop's admission.
-    await vi.waitFor(() =>
-      expect(runs.getHandle(childRun)?.isChild).toBe(false),
-    );
-    expect(disposeAdapter).not.toHaveBeenCalled();
-    expect(detachResultToast).toHaveBeenCalledOnce();
-    expect(mocks.presentationHostClose).not.toHaveBeenCalled();
+        expect(session.runCompleted).toBe(true);
+        // The local sever follows the committed `run.detach` now, so the
+        // promotion lands with that batch rather than with the stop's admission.
+        yield* Effect.promise(() =>
+          vi.waitFor(() =>
+            expect(runs.getHandle(childRun)?.isChild).toBe(false),
+          ),
+        );
+        expect(disposeAdapter).not.toHaveBeenCalled();
+        expect(detachResultToast).toHaveBeenCalledOnce();
+        expect(mocks.presentationHostClose).not.toHaveBeenCalled();
 
-    // The request opens on the child's own aggregate, which the launch
-    // already stated in the plane.
-    const requestId = 'bash-detached-child';
-    const approval = Effect.runPromise(
-      runtimeSession.openRequest(childRun, {
-        kind: 'bash',
-        data: {
-          requestId,
-          command: 'printf child',
-          allowBypass: true,
-          runId: childRun,
-        },
+        // The request opens on the child's own aggregate, which the launch
+        // already stated in the plane.
+        const requestId = 'bash-detached-child';
+        const approval = yield* Effect.forkScoped(
+          runtimeSession.openRequest(childRun, {
+            kind: 'bash',
+            data: {
+              requestId,
+              command: 'printf child',
+              allowBypass: true,
+              runId: childRun,
+            },
+          }),
+        );
+        yield* Effect.promise(() =>
+          vi.waitFor(() =>
+            expect(
+              SubscriptionRef.getUnsafe(runtimeSession.view).requests.map(
+                (request) => request.requestId,
+              ),
+            ).toEqual([requestId]),
+          ),
+        );
+        runtimeSession.publish([
+          {
+            type: 'request.decided',
+            aggregateId: aggregateId('run', childRun),
+            requestId,
+            decision: { action: 'approve' },
+          },
+        ]);
+        expect(yield* Fiber.join(approval)).toEqual({ action: 'approve' });
+
+        // The host lives for the chat session, not for the runs it served.
+        runs.untrack(childRun);
+        expect(disposeAdapter).not.toHaveBeenCalled();
+
+        disposables.dispose();
+        expect(disposeAdapter).toHaveBeenCalledOnce();
+        expect(mocks.presentationHostClose).toHaveBeenCalledOnce();
+        runs.dispose();
       }),
-    );
-    await vi.waitFor(() =>
-      expect(
-        SubscriptionRef.getUnsafe(runtimeSession.view).requests.map(
-          (request) => request.requestId,
-        ),
-      ).toEqual([requestId]),
-    );
-    runtimeSession.publish([
-      {
-        type: 'request.decided',
-        aggregateId: aggregateId('run', childRun),
-        requestId,
-        decision: { action: 'approve' },
-      },
-    ]);
-    await expect(approval).resolves.toEqual({ action: 'approve' });
-
-    // The host lives for the chat session, not for the runs it served.
-    runs.untrack(childRun);
-    expect(disposeAdapter).not.toHaveBeenCalled();
-
-    disposables.dispose();
-    expect(disposeAdapter).toHaveBeenCalledOnce();
-    expect(mocks.presentationHostClose).toHaveBeenCalledOnce();
-    runs.dispose();
-  });
+  );
 
   it('does not overlap terminal-result presenters across root launches', async () => {
     const hostA = { emit: vi.fn() };
@@ -1240,41 +1265,49 @@ describe('createChatSessionController', () => {
     expect(chatTuiCanStartRootRun(session)).toBe(true);
   });
 
-  it('surfaces a defected follow-up request instead of an unhandled rejection', async () => {
-    // A collaborator rejecting inside `followUp.send` defects the request
-    // Effect, which `Effect.match` does not recover: without the defect arm
-    // the queued task rejects with no surfacing at all.
-    holdRun('a11111' as RunId);
-    installSession({
-      view: await testRuntime().runPromise(SubscriptionRef.make(currentView())),
-    });
-    mocks.request.mockReturnValueOnce(Effect.die(new Error('dispatch broke')));
-    const session = makeSession({
-      runId: 'a11111' as RunId,
-      runSettled: Effect.never,
-    });
-    const ctrl = createChatSessionController(
-      makeInit({
-        session,
-        // A non-slash line never reads the context.
-        getSlashCommandContext: () => ({}) as SlashCommandContext,
-      }),
-    );
+  it.live(
+    'surfaces a defected follow-up request instead of an unhandled rejection',
+    () =>
+      Effect.gen(function* () {
+        // A collaborator rejecting inside `followUp.send` defects the request
+        // Effect, which `Effect.match` does not recover: without the defect arm
+        // the queued task rejects with no surfacing at all.
+        holdRun('a11111' as RunId);
+        installSession({
+          view: yield* SubscriptionRef.make(currentView()),
+        });
+        mocks.request.mockReturnValueOnce(
+          Effect.die(new Error('dispatch broke')),
+        );
+        const session = makeSession({
+          runId: 'a11111' as RunId,
+          runSettled: Effect.never,
+        });
+        const ctrl = createChatSessionController(
+          makeInit({
+            session,
+            // A non-slash line never reads the context.
+            getSlashCommandContext: () => ({}) as SlashCommandContext,
+          }),
+        );
 
-    await testRuntime().runPromise(ctrl.submit('Deliver this if you can.'));
+        yield* ctrl.submit('Deliver this if you can.');
 
-    await vi.waitFor(() =>
-      expect(mocks.reportRequestDefect).toHaveBeenCalledOnce(),
-    );
-    expect(transientNotice.get()?.text).toContain(
-      'The request failed inside TeXRA',
-    );
-    expect(draftRestoreRequest.get().map((request) => request.text)).toContain(
-      'Deliver this if you can.',
-    );
-    // A defect is no refusal: the run is not marked stopped.
-    expect(session.stopRequested).toBe(false);
-  });
+        yield* Effect.promise(() =>
+          vi.waitFor(() =>
+            expect(mocks.reportRequestDefect).toHaveBeenCalledOnce(),
+          ),
+        );
+        expect(transientNotice.get()?.text).toContain(
+          'The request failed inside TeXRA',
+        );
+        expect(
+          draftRestoreRequest.get().map((request) => request.text),
+        ).toContain('Deliver this if you can.');
+        // A defect is no refusal: the run is not marked stopped.
+        expect(session.stopRequested).toBe(false);
+      }).pipe(Effect.provide(fakeProcessServices())),
+  );
 
   it('forwards a stop issued during manual resume helper-model setup', async () => {
     const helperModel = createDeferred<void>();

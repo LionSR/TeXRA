@@ -3,27 +3,18 @@ import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 
 import { it } from '@effect/vitest';
-import { Effect, Fiber, FileSystem, Layer, ManagedRuntime } from 'effect';
+import { Effect, Fiber, FileSystem } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
-import { globalDatabaseLayer } from '@controllers/session/Database';
-import { inquiryRecordsLayer } from '@controllers/session/inquiryRecords';
 
-import { processOwnerId } from '@platform/defaults/nodeProcesses';
 import { withProcessServices } from '@platform/processRuntime';
 import { AgentHandlers } from '@settingsView/handlers/agentHandlers';
 import type { AgentSource } from '@shared/schemas';
-import { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
-import { ProcessIdentity } from '@shared/session/sessionEvents';
 import {
   initTestProcessRuntime,
   testRuntime,
 } from '@test/support/testProcessRuntime';
-import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
-import { testHttpClientLayer } from '@test/support/fetchTestUtils';
-import {
-  fakeProcessServices,
-  installedHost,
-} from '@test/support/setupPlatform';
+import { bareProcessRuntime } from '@test/support/bareProcessRuntime';
+import { installedHost } from '@test/support/setupPlatform';
 
 const mocks = vi.hoisted(() => ({
   /** The custom agents directory, a real temp path per test. */
@@ -181,26 +172,7 @@ describe('AgentHandlers custom-agent file actions', () => {
     mocks.getAgent.mockReturnValue({
       path: path.join(customDir, 'my-agent.yaml'),
     });
-    const { globalStorage } = createFakeWorkspaceRoots();
-    initTestProcessRuntime(
-      ManagedRuntime.make(
-        Layer.mergeAll(
-          testHttpClientLayer,
-          Layer.mock(UpdateCheckRecords, {}),
-          fakeProcessServices(),
-          // Last, so this root's real handle wins over the fake host's
-          // mocked one.
-          inquiryRecordsLayer.pipe(
-            Layer.provideMerge(
-              globalDatabaseLayer(globalStorage).pipe(
-                Layer.provide(ProcessIdentity.layer(processOwnerId(undefined))),
-                Layer.orDie,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
+    initTestProcessRuntime(bareProcessRuntime());
   });
 
   afterEach(async () => {

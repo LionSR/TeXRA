@@ -396,9 +396,7 @@ throw new Error('script failed after replay')`;
         // Failure recovery excludes the pre-run journal from this invocation.
         expect(ports.recordCost).toHaveBeenCalledWith(0);
 
-        const errText = yield* Effect.promise(() =>
-          Promise.resolve(strategy.formatError(null, new Error('boom'))),
-        );
+        const errText = strategy.formatError(null, new Error('boom'));
         expect(errText).toContain(
           "journaled under meta.name 'retained-settlement'",
         );
@@ -479,9 +477,7 @@ throw new Error('current revision failed')`,
         const launchError = yield* Effect.flip(launchStrategy(strategy, ports));
         expect(launchError.message).toContain('current revision failed');
         expect(ports.recordCost.mock.calls).toEqual([[0.25], [0.25]]);
-        const errText = yield* Effect.promise(() =>
-          Promise.resolve(strategy.formatError(null, new Error('boom'))),
-        );
+        const errText = strategy.formatError(null, new Error('boom'));
         expect(errText).toContain('current.tex');
         expect(errText).not.toContain('stale.tex');
         expect(errText).toContain('"costUsd":0.25');
@@ -527,9 +523,7 @@ throw new Error('current revision failed')`,
         );
         expect(ports.recordCost.mock.calls).toEqual([[0.42], [0.42]]);
 
-        const errText = yield* Effect.promise(() =>
-          Promise.resolve(strategy.formatError(null, new Error('boom'))),
-        );
+        const errText = strategy.formatError(null, new Error('boom'));
         expect(errText).toContain('"outcome":"failed"');
         expect(errText).toContain('"taskDone":0');
         expect(errText).toContain('"taskTotal":0');
