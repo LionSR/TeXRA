@@ -2,21 +2,20 @@
  * What this process holds for a run, in one entry per run.
  *
  * One roster per session is the single in-process authority for "is a
- * generation of this run live here": the tracked handle, the native child
- * loop's activation, the fiber a WAITING generation parked on, the run's
- * serial lifecycle lane and the generations holding it are fields of one
- * entry, so admission, stop and deletion all answer from the same record and
- * no metadata can outlive or predate the liveness it describes. The registry
- * (`runRegistry.ts`) owns the session-facing surface; the stopper
- * (`runStopping.ts`) owns what a stop does with these records.
+ * generation of this run live here" ({@link RunRoster.isLive}, the one
+ * admission): the tracked handle, the native child loop's activation, the
+ * fiber a WAITING generation parked on, the run's serial lifecycle lane and
+ * the generations holding it are fields of one entry, so admission, stop and
+ * deletion all answer from the same record. The registry (`runRegistry.ts`)
+ * owns the session-facing surface; the stopper (`runStopping.ts`) owns what a
+ * stop does with these records.
  *
  * Serialization itself is `withPerKeyLane` (`@utils/core/perKeyQueue`): a
  * `Deferred` hand-off chain rather than a queue, which gives FIFO admission
  * for free and keeps the whole wait interruptible — a caller whose fiber is
- * interrupted while queued hands its successor the wait for whoever actually
- * holds the lane, instead of leaving a task behind in a queue nobody can
- * reach. The lane lives on the entry, so the generic helper's map is this
- * roster's own.
+ * interrupted while queued hands its successor the wait for whoever holds the
+ * lane, instead of leaving a task behind in a queue nobody can reach. The
+ * lane lives on the entry, so the helper's map is this roster's own.
  */
 
 import { Data, Deferred, Effect, type Scope } from 'effect';
@@ -28,10 +27,16 @@ import { RunChangeListeners } from './runChangeListeners';
 import type { RunHandle } from './RunHandle';
 import type { ChildRunActivation, ParkedRun } from './runRegistryTypes';
 
-/** A generation, a hold or a retained owner already has the run here. */
+/** A generation, a hold or a retained owner already has the run here: the one
+ *  refusal for that fact, wherever it is taken. Hosts word it from `message`;
+ *  a resume reads the tag to report the run unresumable, not failed. */
 export class RunLive extends Data.TaggedError('RunLive')<{
   readonly runId: string;
-}> {}
+}> {
+  override get message(): string {
+    return `Run is already running: ${this.runId}`;
+  }
+}
 
 /** Everything this process holds for one run. The entry exists exactly while
  *  one of its fields does, which is what makes it the liveness authority. */
@@ -41,11 +46,9 @@ interface RunEntry {
   parked?: ParkedRun;
   /** The run's hand-off chain while a fiber holds or waits on it. */
   lane?: PerKeyLane;
-  /**
-   * The completion of every generation of this run a caller is holding
-   * against local ownership — a set rather than one chained value because
-   * they end in no fixed order.
-   */
+  /** The completion of every generation of this run a caller is holding
+   *  against local ownership — a set rather than one chained value, because
+   *  they end in no fixed order. */
   readonly generations: Set<Deferred.Deferred<void>>;
 }
 
@@ -59,10 +62,8 @@ export class RunRoster {
    *  first to settle cannot admit a child the second's snapshot has already
    *  left behind. */
   private readonly stopping = new Map<RunId, Set<symbol>>();
-  /**
-   * Steps admitted but not yet started, across every run: session disposal
-   * fails all of them at once, so they need no per-run keying.
-   */
+  /** Steps admitted but not yet started, across every run: session disposal
+   *  fails all of them at once, so they need no per-run keying. */
   private readonly waiting = new Set<Deferred.Deferred<never, Error>>();
   /** The lane slots `withPerKeyLane` reads and writes: this roster's entries,
    *  so a lane is never a record of a run the entry map does not have. */
@@ -204,17 +205,23 @@ export class RunRoster {
   }
 
   /** A handle or a child activation this session still retains for `runId`. */
-  hasRetainedOwner(runId: RunId): boolean {
+  private isRetained(runId: RunId): boolean {
     const entry = this.entries.get(runId);
     return entry?.handle !== undefined || entry?.activation !== undefined;
   }
 
-  /**
-   * Every run live in this session: the tracked handles and the native child
-   * loops retained between turns, whose activation is the only record of them.
-   * This is what a close stops and waits on, so a child with a final delivery
-   * to do is never left running under a released session.
-   */
+  /** Whether a child may be admitted under `parentRunId` now. A stop of the
+   *  parent that has begun refuses a new child ({@link beginStop}); a child
+   *  this roster already holds is not a new admission — a native child's
+   *  activation and its turn handles re-enter while the detach runs. */
+  admitsChild(parentRunId: RunId, childRunId: RunId): boolean {
+    return !this.isStopping(parentRunId) || this.isRetained(childRunId);
+  }
+
+  /** Every run live in this session: the tracked handles and the native child
+   *  loops retained between turns, whose activation is the only record of
+   *  them. What a close stops and waits on, so a child with a final delivery
+   *  to do is never left running under a released session. */
   activeIds(): RunId[] {
     const ids: RunId[] = [];
     for (const [runId, entry] of this.entries)
@@ -258,16 +265,25 @@ export class RunRoster {
   // --------------------------------------------------------------- lifecycle
 
   /**
-   * Whether a generation of `runId` is live in this process: a step holding or
-   * waiting on its lane, a generation still unwinding, or a caller holding it
-   * against local ownership ({@link holdInactive}). A parked turn holds
-   * neither — its lane was released with its generation, which is what leaves
-   * it resumable.
+   * Whether a generation of `runId` is live in this process, read off the one
+   * entry: a step holding or waiting on its lane, a generation still
+   * unwinding, a caller holding it against local ownership
+   * ({@link holdInactive}), or a turn whose tool-use flow is still attached.
+   * A second generation is refused on it rather than queued on the run lane.
+   * A parked turn is none of them until a stop wakes it: a resume supersedes
+   * the fiber where it waits, but a woken park is the run unwinding, still
+   * owing its terminal row and its claim. Local ownership, never the durable
+   * phase: a crash leaves the phase RUNNING, and an orphaned run in that
+   * phase is what a resume takes over.
    */
-  isHeld(runId: RunId): boolean {
+  isLive(runId: RunId): boolean {
     const entry = this.entries.get(runId);
-    if (!entry) return false;
-    return entry.generations.size > 0 || (entry.lane?.fibers ?? 0) > 0;
+    if (entry === undefined) return false;
+    if (entry.generations.size > 0) return true;
+    if ((entry.lane?.fibers ?? 0) > 0) return true;
+    if (entry.parked !== undefined)
+      return Deferred.isDoneUnsafe(entry.parked.stopped);
+    return entry.handle?.getToolUseFlow() !== undefined;
   }
 
   /**
@@ -276,17 +292,18 @@ export class RunRoster {
    * until `operation` settles — including the finalizers it registered, since
    * `withPerKeyLane` releases the lane only once the whole effect leaves.
    *
-   * `refuseWhenLive` makes the claim conditional, and it is `withPerKeyLane`
-   * that runs it: the check reads the retained owners, the generation gate and
-   * the lane's occupant in the same synchronous step as the tail swap, so no
-   * launch can claim the lane between the two, and refusing leaves the lane
-   * exactly as it was found — nothing was acquired and nothing is released.
+   * The claim is conditional and `withPerKeyLane` runs the condition:
+   * {@link isLive} reads the entry in the same synchronous step as the tail
+   * swap, so no generation can take the run between the two, and refusing
+   * leaves the lane as it was found. This is the one admission, so no caller
+   * asks it beforehand. `refuseWhenLive` widens it to the retained owners,
+   * for callers that mean "only if nothing holds it at all".
    *
-   * A step is refusable from the moment it is admitted until the moment it
-   * starts, and {@link waiting} holds its refusal for exactly that window. The
-   * race is therefore around the lane, not inside it: a step still waiting for
-   * its predecessor is refused where it stands, and its interruption hands the
-   * lane on the same way any other interrupted waiter does.
+   * A step is refusable from the moment it is admitted until it starts, and
+   * {@link waiting} holds its refusal for exactly that window. The race is
+   * therefore around the lane, not inside it: a step still waiting for its
+   * predecessor is refused where it stands, and its interruption hands the
+   * lane on the way any other interrupted waiter does.
    */
   launch<A, E, R>(
     runId: RunId,
@@ -296,14 +313,10 @@ export class RunRoster {
     return Effect.suspend(() => {
       const refusal = Deferred.makeUnsafe<never, Error>();
       this.waiting.add(refusal);
-      const refuseClaim = refuseWhenLive
-        ? (occupant: PerKeyLane | undefined): RunLive | undefined =>
-            this.hasRetainedOwner(runId) ||
-            (this.entries.get(runId)?.generations.size ?? 0) > 0 ||
-            (occupant !== undefined && occupant.fibers > 0)
-              ? new RunLive({ runId })
-              : undefined
-        : undefined;
+      const refuseClaim = (): RunLive | undefined =>
+        this.isLive(runId) || (refuseWhenLive && this.isRetained(runId))
+          ? new RunLive({ runId })
+          : undefined;
       const step = Effect.gen({ self: this }, function* () {
         // Read the gate after the predecessor left: a generation it started
         // is exactly what this step must not overlap. One snapshot, as the
@@ -331,7 +344,7 @@ export class RunRoster {
    * when a generation, a step, or a retained handle already owns it here —
    * {@link launch}'s refusal, for a decision whose validity has to outlive
    * the step that took it. The hold is a generation like any other:
-   * {@link isHeld} reports it, so a resume refuses on it, a launch of the
+   * {@link isLive} reports it, so a resume refuses on it, a launch of the
    * same run waits for it, and a competing step is refused.
    */
   holdInactive(runId: RunId): Effect.Effect<void, RunLive, Scope.Scope> {
@@ -340,7 +353,7 @@ export class RunRoster {
         // The test and the registration are one synchronous step, as the
         // conditional lane claim is: nothing can take the run in between.
         Effect.suspend(() =>
-          this.isHeld(runId) || this.hasRetainedOwner(runId)
+          this.isLive(runId) || this.isRetained(runId)
             ? Effect.fail(new RunLive({ runId }))
             : Effect.sync(() => this.openGeneration(runId)),
         ),
@@ -349,11 +362,9 @@ export class RunRoster {
     );
   }
 
-  /**
-   * Register a live generation of `runId` and hand back its close. The
-   * registration is synchronous with the call, and the close is idempotent
-   * against a disposal that dropped the entry underneath it.
-   */
+  /** Register a live generation of `runId` and hand back its close. The
+   *  registration is synchronous with the call, and the close is idempotent
+   *  against a disposal that dropped the entry underneath it. */
   private openGeneration(runId: RunId): () => void {
     const completion = Deferred.makeUnsafe<void>();
     const entry = this.entryFor(runId);
@@ -385,7 +396,7 @@ export class RunRoster {
    * detaches the listeners with it. The re-check arm is load-bearing:
    * `raceAllFirst` starts its arms in order, so the wait registers first and
    * the re-check then sees a last run that left between the read above and
-   * those listeners, instead of waiting out the whole close budget for a
+   * those listeners, instead of waiting out the close budget for a
    * notification that can no longer come.
    */
   awaitDrained(): Effect.Effect<void> {
@@ -415,13 +426,12 @@ export class RunRoster {
    * commit is in flight would be in neither the durable nor the local sever
    * and would still resolve the just-stopped parent as its delivery target.
    * The mark closes that window at its start: from here until the stop
-   * settles, no new child is admitted under it.
-   * A cascading stop takes the same mark for the same reason.
+   * settles, no new child is admitted under it ({@link admitsChild}). A
+   * cascading stop takes the same mark for the same reason.
    *
    * The mark is the stop's, so {@link throughStop} owns its whole life: a
    * multi-turn parent tracking its next turn's handle mid-detach is not the
-   * stop ending, and a run whose next generation takes the lane has left the
-   * stop behind either way.
+   * stop ending, and a run whose next generation takes the lane has left it.
    */
   beginStop(runId: RunId): symbol {
     const token = Symbol('run-stop');
