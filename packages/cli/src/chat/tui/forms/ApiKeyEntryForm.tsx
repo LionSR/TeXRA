@@ -32,6 +32,10 @@ interface CredentialEntryFormProps {
   readonly helper?: ReactNode;
   readonly placeholder: string;
   readonly savedHint: ReactNode;
+  /** Hide the typed value. Defaults to on: every credential this form was
+   *  built for is secret, and the one caller that asks for plain text is the
+   *  `PromptHost.input` port, which carries the caller's own `password`. */
+  readonly masked?: boolean;
   readonly error?: string;
   readonly saving?: boolean;
   readonly onSubmit: (key: string) => void;
@@ -87,7 +91,7 @@ export function CredentialEntryForm(
         <Text>{`${POINTER} `}</Text>
         <BaseTextInput
           value={key}
-          masked
+          masked={props.masked ?? true}
           placeholder={props.placeholder}
           onChange={setKey}
           onSubmit={(value) => {
