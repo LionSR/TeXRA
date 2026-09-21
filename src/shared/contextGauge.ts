@@ -12,9 +12,13 @@ export function contextGaugeBand(percent: number): ContextGaugeBand {
 }
 
 /**
- * Rounds context-window utilization for display, flooring any genuinely
- * nonzero reading at 1% so it never reads as "0% context used".
+ * Rounds context-window utilization for display, floored at 1%. Both callers
+ * only report a context state once the run has occupied at least one input
+ * token (`ModelInvoker` gates `logger.contextState` on `inputTokens > 0`), so
+ * a reading here is never genuinely empty — only ever rounded down to `0.0`
+ * by the 1-decimal precision `roundedUtilizationPercent` stores it at. Floor
+ * unconditionally rather than treating that rounding artifact as "0% used".
  */
 export function roundedContextPercent(percent: number): number {
-  return percent > 0 ? Math.max(1, Math.round(percent)) : 0;
+  return Math.max(1, Math.round(percent));
 }
