@@ -83,7 +83,6 @@ import {
   type LocalRuntimeState,
   type DisplaySessionEvent,
   type StreamLogEntry,
-  type RunFact,
   type RunId,
   type TaskGroup,
   type TextChunk,
@@ -1386,41 +1385,10 @@ function foldTextChunk(view: SessionView, chunk: TextChunk): boolean {
 
 /** A tool-use fact on a run whose arm cannot hold it is a publisher or
  *  category defect, made loud at the fold's boundary. */
-function wrongArm(run: RunView, fact: string): never {
+function wrongArm(run: RunView, name: string): never {
   throw new Error(
-    `${fact} names ${run.id}, a ${run.category} run; the fact belongs to the ${AgentCategory.ToolUse} arm`,
+    `${name} names ${run.id}, a ${run.category} run; the fact belongs to the ${AgentCategory.ToolUse} arm`,
   );
-}
-
-/**
- * One `run.fact` row applied to its run. Every family is a latest-only
- * listing key of its own (the listing groups by the fact's `key` beside the
- * row type), so a cold read delivers exactly one row per family per run and
- * the commit guard drops the earlier rows an aggregate replay brings: each
- * row carries the run's whole value (the producer holds it), and the newest
- * row therefore replaces it rather than merging into it.
- */
-function applyRunFact(run: RunView, fact: RunFact): RunView {
-  switch (fact.key) {
-    case 'todos':
-      return run.category === AgentCategory.ToolUse
-        ? { ...run, todos: fact.todos }
-        : wrongArm(run, 'todos');
-    case 'plan':
-      return run.category === AgentCategory.ToolUse
-        ? { ...run, plan: fact.plan }
-        : wrongArm(run, 'plan');
-    case 'outputFiles':
-      return run.category === AgentCategory.Workflow
-        ? { ...run, files: nonEmptyRounds(fact.filesByRound) }
-        : { ...run, outputs: nonEmptyRounds(fact.filesByRound) };
-    case 'missingOutputs':
-      // An empty round here is a fact, not an absence: the round was checked
-      // and nothing was missing.
-      return { ...run, missingOutputs: { ...fact.filesByRound } };
-    case 'compileFailures':
-      return { ...run, compileFailures: nonEmptyRounds(fact.filesByRound) };
-  }
 }
 
 /** The event's own arm applied to its run (topology, session slices, and
@@ -1502,34 +1470,34 @@ function applyOwnArm(run: RunView, event: DisplaySessionEvent): RunView {
           ),
         },
       };
-    case 'run.fact':
-      return applyRunFact(run, event.fact);
+    case 'run.fact': {
+      // Every family is a latest-only listing key of its own, so a cold
+      // read delivers one row per family and each row carries the run's
+      // whole value: the newest row replaces what the view holds.
+      const fact = event.fact;
+      if (fact.key === 'missingOutputs')
+        // An empty round is a fact, not an absence: the round was checked.
+        return { ...run, missingOutputs: { ...fact.filesByRound } };
+      if (fact.key === 'compileFailures')
+        return { ...run, compileFailures: nonEmptyRounds(fact.filesByRound) };
+      if (fact.key === 'outputFiles')
+        return run.category === AgentCategory.Workflow
+          ? { ...run, files: nonEmptyRounds(fact.filesByRound) }
+          : { ...run, outputs: nonEmptyRounds(fact.filesByRound) };
+      if (run.category !== AgentCategory.ToolUse)
+        return wrongArm(run, `run.fact ${fact.key}`);
+      return fact.key === 'todos'
+        ? { ...run, todos: fact.todos }
+        : { ...run, plan: fact.plan };
+    }
     case 'goalStateChanged':
       return run.category === AgentCategory.ToolUse
         ? { ...run, goal: event.state }
         : wrongArm(run, 'goalStateChanged');
     case 'child.park':
-      // An agent-CLI child's park (one run model, 3.3): the same phase move
-      // `flow.step waiting` makes for a run with a loop of its own, on the
-      // row that child protocol owns. The run window closes with the park
-      // and reopens on the turn that leaves it; `flow` stays null, because
-      // a run with no ledger has no position to paint.
-      return event.phase === 'parked'
-        ? withSettledTranscript(
-            {
-              ...run,
-              status: RUN_PHASE.WAITING,
-              substate: null,
-              runStartedAt: null,
-            },
-            event.at,
-          )
-        : {
-            ...run,
-            status: RUN_PHASE.RUNNING,
-            substate: null,
-            runStartedAt: run.runStartedAt ?? event.at,
-          };
+      // An agent-CLI child's park, on the row the child protocol owns.
+      // `flow` stays null: a run with no ledger has no position to paint.
+      return parked(run, event.phase === 'parked', event.at);
     case 'run.detach':
       // The edge severed: the child is top level from here (one run model,
       // section 3.2). A run never acquires a new parent.
@@ -1557,33 +1525,28 @@ function applyOwnArm(run: RunView, event: DisplaySessionEvent): RunView {
     case 'run.removed':
       return run;
     case 'flow.step': {
-      // The loop's position (one run model, 3.3): `waiting` parks the run
-      // and closes its run window, any other step is running with the
-      // window kept open from the activation; `halted` is the loop's own
-      // word and moves nothing, the terminal phase is `run.end`'s alone.
+      // The loop's position (one run model, 3.3): `halted` is the loop's
+      // own word and moves nothing, the terminal phase is `run.end`'s
+      // alone; every other step carries the park.
       const { outcome: _outcome, ...flow } = event.payload;
-      if (flow.step === 'halted') return { ...run, flow };
-      if (flow.step === 'waiting') {
-        return withSettledTranscript(
-          {
-            ...run,
-            flow,
-            status: RUN_PHASE.WAITING,
-            substate: null,
-            runStartedAt: null,
-          },
-          event.at,
-        );
-      }
-      return {
-        ...run,
-        flow,
-        status: RUN_PHASE.RUNNING,
-        substate: null,
-        runStartedAt: run.runStartedAt ?? event.at,
-      };
+      return flow.step === 'halted'
+        ? { ...run, flow }
+        : parked({ ...run, flow }, flow.step === 'waiting', event.at);
     }
   }
+}
+
+/** The run window (3.3): a park closes it and settles the transcript, any
+ *  other move opens it. The one phase writer for both rows that park — a
+ *  loop's `flow.step waiting` and an agent-CLI child's `child.park`. */
+function parked(run: RunView, atRest: boolean, at: number): RunView {
+  const moved: RunView = {
+    ...run,
+    status: atRest ? RUN_PHASE.WAITING : RUN_PHASE.RUNNING,
+    substate: null,
+    runStartedAt: atRest ? null : (run.runStartedAt ?? at),
+  };
+  return atRest ? withSettledTranscript(moved, at) : moved;
 }
 
 /** Session-level slices, applied before the run arm so the arm's
@@ -1849,17 +1812,15 @@ function foldTraceEvent(
   if (!run) return false;
   const indexes = indexesOf(run.transcript);
   if (event.type === 'run.activate') indexes.trace.status(RUN_PHASE.RUNNING);
-  else if (event.type === 'flow.step') {
-    if (event.payload.step === 'waiting') {
-      indexes.trace.status(RUN_PHASE.WAITING);
-    } else if (event.payload.step !== 'halted') {
-      indexes.trace.status(RUN_PHASE.RUNNING);
-    }
-  } else if (event.type === 'child.park') {
+  else if (event.type === 'flow.step' && event.payload.step !== 'halted')
+    indexes.trace.status(
+      event.payload.step === 'waiting' ? RUN_PHASE.WAITING : RUN_PHASE.RUNNING,
+    );
+  else if (event.type === 'child.park')
     indexes.trace.status(
       event.phase === 'parked' ? RUN_PHASE.WAITING : RUN_PHASE.RUNNING,
     );
-  } else if (event.type === 'run.end') indexes.trace.status(event.outcome);
+  else if (event.type === 'run.end') indexes.trace.status(event.outcome);
   else if (isTranscriptEvent(event))
     indexes.trace.record(event, {
       at: event.at,

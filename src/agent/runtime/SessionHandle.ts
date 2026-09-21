@@ -1145,8 +1145,7 @@ export class SessionHandle {
           { discard: true },
         );
       }
-      // The rows that move a run's phase (one run model, 3.3): every
-      // activation, the park and the step that leaves it, the end.
+      // Every row that moves a run's phase (3.3): activation, park, wake, end.
       const phaseMoved =
         event.type === 'run.activate' ||
         event.type === 'run.end' ||

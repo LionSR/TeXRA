@@ -220,10 +220,8 @@ function publishCodexItemProgress(params: {
   const { item, status, logger, refs } = params;
 
   if (item.type === 'todo_list') {
-    logger.emit({
-      type: 'run.fact',
-      fact: { key: 'todos', todos: toProgressTodos(item) },
-    });
+    const todos = toProgressTodos(item);
+    logger.emit({ type: 'run.fact', fact: { key: 'todos', todos } });
   }
 
   const toolLog = buildCodexLiveToolLog(item, status);

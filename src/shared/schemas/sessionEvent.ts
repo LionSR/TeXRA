@@ -26,7 +26,6 @@ import { z } from 'zod';
 import { parseJsonWith } from '@common/parsing/safeParseJson';
 
 import { TexraApprovalPolicySchema } from '@shared/approvalPolicy';
-import { UpdateCheckRecordSchema } from './updateCheck';
 import { AgentCategorySchema } from './agent';
 import { AgentConfigFieldsSchema } from './agentConfig';
 import { GoalStateSchema } from './goal';
@@ -37,14 +36,14 @@ import {
   ResultMetaSchema,
 } from './runRecords';
 import { RunIdSchema, type RunId } from './identifiers';
-import { JsonValueSchema } from './jsonValue';
 import { WorkflowScriptFilesSchema } from './workflowScriptFiles';
-import {
-  InquiryThreadRecordSchema,
-  InquiryThreadUpdatedEventSchema,
-} from './inquiry';
-import { PlanSchema } from './plan';
+import { InquiryThreadUpdatedEventSchema } from './inquiry';
 import { PermissionPayloadSchema } from './progressView/data';
+import {
+  PersistedJsonValueSchema,
+  RunFactSchema,
+  StoredValueSchema,
+} from './rowValues';
 import { RequestDecisionSchema } from './request';
 import { RunIdentitySchema } from './runIdentity';
 import {
@@ -59,9 +58,7 @@ import { UserFollowUpSupportSchema, WorktreeInfoSchema } from './run';
 import {
   ApprovalBypassesSchema,
   ConversationProgressSchema,
-  RoundKeyedOutputSidecarValueSchemas,
 } from './runState';
-import { TodoItemSchema } from './todo';
 import { TranscriptEventSchemas } from './traceEvent';
 
 /**
@@ -313,33 +310,6 @@ const RunRemovedDraftSchema = RunRemovedEventSchema.omit({
 });
 
 /**
- * One durable run fact: the latest value of one key family on its run.
- * `key` is the whole discriminator — it names the family, ties it to that
- * family's own value schema, and is what the cold listing groups by beside
- * the row type, so one family's newest row never hides another's and a plan
- * can never be committed under the todos key. One row type, one aggregate
- * kind (the run), five families, and the database's parse still refuses a
- * corrupt value at the one boundary that reads stored bytes.
- */
-const RunFactSchema = z.discriminatedUnion('key', [
-  z.object({ key: z.literal('todos'), todos: z.array(TodoItemSchema) }),
-  z.object({ key: z.literal('plan'), plan: PlanSchema.nullable() }),
-  z.object({
-    key: z.literal('outputFiles'),
-    filesByRound: RoundKeyedOutputSidecarValueSchemas.outputFiles,
-  }),
-  z.object({
-    key: z.literal('missingOutputs'),
-    filesByRound: RoundKeyedOutputSidecarValueSchemas.missingOutputs,
-  }),
-  z.object({
-    key: z.literal('compileFailures'),
-    filesByRound: RoundKeyedOutputSidecarValueSchemas.compileFailures,
-  }),
-]);
-export type RunFact = z.infer<typeof RunFactSchema>;
-
-/**
  * The durable arms every renderer folds. This is the one declaration of the
  * run vocabulary: the trace's `AgentEvent` (`src/agent/trace/events.ts`) is
  * derived from these arms, minus the aggregate qualification. Session-scoped
@@ -507,13 +477,6 @@ const RunLedgerEventDraftSchema = z.discriminatedUnion('type', [
     phase: z.enum(['accepted', 'settled']),
   }),
 ]);
-/** A stored value as the journal and the state store keep it: `undefined` is
- *  not JSON, so absence is an arm rather than a missing field. */
-const PersistedJsonValueSchema = z.discriminatedUnion('kind', [
-  z.strictObject({ kind: z.literal('undefined') }),
-  z.strictObject({ kind: z.literal('json'), value: JsonValueSchema }),
-]);
-export type PersistedJsonValue = z.infer<typeof PersistedJsonValueSchema>;
 /**
  * A workflow script's durable journal (runtime on Effect, section 5, PR 4):
  * one row per completed `agent()` call on the checkpoint aggregate a
@@ -573,29 +536,6 @@ const WorkflowCheckpointDraftSchema = z.discriminatedUnion('type', [
     'workflow-checkpoint',
   ),
 ]);
-/**
- * One stored value, by the family that owns it: every host or application
- * state key, the desktop profile's remembered projects, one global inquiry
- * thread, and the update check. `key` is the aggregate kind the value lives
- * on, so the discriminator ties each family to its own value schema *and* to
- * its aggregate: an inquiry record cannot be committed under the update-check
- * aggregate, and the database's parse refuses a corrupt value where it reads
- * the bytes. `{ kind: 'undefined' }` on the `app-state` arm is the delete,
- * the `vscode.Memento` contract every host's store mirrors.
- */
-const StoredValueSchema = z.discriminatedUnion('key', [
-  z.object({ key: z.literal('app-state'), value: PersistedJsonValueSchema }),
-  z.object({
-    key: z.literal('desktop-projects'),
-    roots: z.array(z.string().min(1)),
-  }),
-  z.object({
-    key: z.literal('global-inquiry'),
-    record: InquiryThreadRecordSchema,
-  }),
-  z.object({ key: z.literal('update-check'), record: UpdateCheckRecordSchema }),
-]);
-export type StoredValue = z.infer<typeof StoredValueSchema>;
 /**
  * The latest value of one stored key: one aggregate per value, so
  * latest-per-key is latest-per-aggregate and no listing needs to group by
@@ -694,10 +634,9 @@ export function referencedAggregates(event: SessionEvent): AggregateId[] {
  * fold reads it over the whole aggregate, so listing it would pull the latest
  * one of every run into every renderer for no reader.
  *
- * A listing key is "latest per aggregate and type", so a type that carries a
- * discriminator needs the reader to group by that too: `run.fact` holds five
- * families on one type, and `Database`'s listing reads group by its `key`
- * beside the type. Every other listed type is one fact per aggregate.
+ * A listing key is "latest per aggregate and type", so `run.fact`, which
+ * holds five families on one type, is read grouped by its `key` as well
+ * ({@link listingKeyOf} and `Database`'s listing queries).
  */
 export function listingTypeOf(
   event: Pick<SessionEvent, 'type'>,

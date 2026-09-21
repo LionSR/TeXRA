@@ -158,14 +158,9 @@ const LISTING_TYPES = SessionEventDraftSchema.options
       type !== 'followup.consumed',
   )
   .map((type) => `${type}.1`);
-/**
- * A listing row is the latest of its type per aggregate, and of its
- * discriminator where the type carries one: `run.fact` holds five families
- * on one row type, so grouping by the type alone would keep only whichever
- * family wrote last and a reopened session would lose the other four. The
- * expression is `NULL` for every other type, which groups each of them
- * exactly as before.
- */
+/** Latest per aggregate and type, and per discriminator where the type
+ *  carries one: `run.fact` holds five families on one row type, and the
+ *  expression is `NULL` for every other type (`listingKeyOf`). */
 const LISTING_GROUP = `aggregate_id, type, json_extract(data, '$.fact.key')`;
 const READ_LISTING = `
 WITH latest AS (
@@ -254,8 +249,7 @@ RETURNING seq
  */
 const APP_STATE_ROWS = `SELECT ${EVENT_COLUMNS} FROM event e
 JOIN (SELECT aggregate_id, MAX(seq) AS seq FROM event
-  WHERE type = 'state.value.set.1'
-    AND json_extract(data, '$.state.key') = 'app-state'
+  WHERE type = 'state.value.set.1' AND json_extract(data, '$.state.key') = 'app-state'
   GROUP BY aggregate_id)
   latest USING (aggregate_id, seq)`;
 /** Insert one row and read back the ordinal SQLite assigned it. */
@@ -837,18 +831,12 @@ export const databaseLayer = (
             };
           }),
         );
-      /**
-       * The stored value one row carries, refused when the row is not that
-       * family's. The schema's own refinement already ties each family to
-       * its aggregate kind, so a row that reaches here under the wrong key
-       * is a corrupt store, and `decodeEvent` is the boundary that says so.
-       */
+      /** One row's stored value, refused when the row is not that family's:
+       *  the schema ties each family to its aggregate kind. */
       const storedValue = <K extends StoredValue['key']>(
         row: Readonly<Record<string, unknown>>,
         key: K,
-      ): Extract<SessionEvent, { type: 'state.value.set' }> & {
-        state: Extract<StoredValue, { key: K }>;
-      } => {
+      ) => {
         const event = decodeEvent(row);
         if (event.type !== 'state.value.set' || event.state.key !== key)
           throw new Error(`Stored row is not a ${key} value`);
@@ -870,33 +858,22 @@ export const databaseLayer = (
         );
         const values = new Map<string, JsonValue>();
         for (const row of rows) {
-          const event = storedValue(row, 'app-state');
-          if (event.state.value.kind === 'undefined') continue;
-          values.set(
-            aggregateTarget(event.aggregateId).id,
-            event.state.value.value,
-          );
+          const { aggregateId, state } = storedValue(row, 'app-state');
+          if (state.value.kind === 'undefined') continue;
+          values.set(aggregateTarget(aggregateId).id, state.value.value);
         }
         return values;
       });
-      const readUpdateCheck = (host: string) =>
-        Effect.gen(function* () {
-          const row = yield* latestEventRow(
-            qualifyAggregateId('update-check', host),
-          );
-          return row === undefined
-            ? null
-            : storedValue(row, 'update-check').state.record;
-        });
-      const readInquiryRecord = (id: string) =>
-        Effect.gen(function* () {
-          const row = yield* latestEventRow(
-            qualifyAggregateId('global-inquiry', id),
-          );
-          return row === undefined
-            ? null
-            : storedValue(row, 'global-inquiry').state.record;
-        });
+      /** The latest stored record on one keyed aggregate, or null. */
+      const latestRecord = <K extends 'update-check' | 'global-inquiry'>(
+        key: K,
+        id: string,
+      ) =>
+        latestEventRow(qualifyAggregateId(key, id)).pipe(
+          Effect.map((row) =>
+            row === undefined ? null : storedValue(row, key).state.record,
+          ),
+        );
       return {
         observedCommit,
         cleared,
@@ -931,11 +908,11 @@ export const databaseLayer = (
           ),
         readRunChildren: (id) => query(decodedRows(runChildren, [id, id, id])),
         readAppState: () => query(readAppState),
-        readUpdateCheck: (host) => query(readUpdateCheck(host)),
+        readUpdateCheck: (host) => query(latestRecord('update-check', host)),
         recordUpdateCheck: (host, change) =>
           transact(
             Effect.gen(function* () {
-              const current = yield* readUpdateCheck(host);
+              const current = yield* latestRecord('update-check', host);
               const record = {
                 lastCheckedAt:
                   change.type === 'checked'
@@ -959,7 +936,7 @@ export const databaseLayer = (
               );
             }),
           ),
-        readInquiryRecord: (id) => query(readInquiryRecord(id)),
+        readInquiryRecord: (id) => query(latestRecord('global-inquiry', id)),
         listInquiryRecords: () =>
           query(
             Effect.gen(function* () {
@@ -968,14 +945,14 @@ export const databaseLayer = (
                 [],
               );
               return rows.map(
-                (row) => storedValue(row, 'global-inquiry').state.record,
+                (r) => storedValue(r, 'global-inquiry').state.record,
               );
             }),
           ),
         updateInquiryRecord: (id, change) =>
           transact(
             Effect.gen(function* () {
-              const current = yield* readInquiryRecord(id);
+              const current = yield* latestRecord('global-inquiry', id);
               const result = change(current);
               if (Result.isSuccess(result) && result.success !== null) {
                 if (result.success.threadId !== id)
@@ -1324,10 +1301,8 @@ function prepareEventDraft(input: SessionEventDraft) {
   const draft = redactTraceDraft(SessionEventDraftSchema.parse(input));
   return { draft, payload: payloadOf(draft) };
 }
-/**
- * Profile-state writes hold their aggregate's claim only for the transaction
- * that carries them; a run's claim, by contrast, its sequence row keeps.
- */
+/** A stored-value write holds its aggregate's claim only for the transaction
+ *  that carries it; a run's claim, by contrast, its sequence row keeps. */
 function borrowsClaim(draft: SessionEventDraft): boolean {
   return draft.type === 'state.value.set';
 }

@@ -951,28 +951,21 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     const interactions = session.interactions;
     const { summary } = result;
     const compileFailures = compileFailuresOf(result.compileResult);
-    // Both facts are latest-only listing rows: each row carries the run's
-    // whole round map rather than the round that just finished.
+    // Latest-only listing rows: each carries the run's whole round map.
+    const files = { ...getOutputFilesByRound(outputState) };
+    files[round] = summary.fileInfos;
     logger.emit({
       type: 'run.fact',
-      fact: {
-        key: 'outputFiles',
-        filesByRound: {
-          ...getOutputFilesByRound(outputState),
-          [round]: summary.fileInfos,
-        },
-      },
+      fact: { key: 'outputFiles', filesByRound: files },
     });
     if (result.emitCompileFailures) {
+      const failures = {
+        ...getCompileFailuresByRound(outputState),
+        [round]: compileFailures,
+      };
       logger.emit({
         type: 'run.fact',
-        fact: {
-          key: 'compileFailures',
-          filesByRound: {
-            ...getCompileFailuresByRound(outputState),
-            [round]: compileFailures,
-          },
-        },
+        fact: { key: 'compileFailures', filesByRound: failures },
       });
     }
     for (const location of summary.filesToOpen) {
