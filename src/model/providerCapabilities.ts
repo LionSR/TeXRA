@@ -19,7 +19,10 @@ import type { SettingsStores } from '@shared/config/settingsAccess';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 
-import { resolveRuntimeModelConfig } from './runtimeModelRegistry';
+import {
+  getRuntimeModelConfig,
+  resolveRuntimeModelConfig,
+} from './runtimeModelRegistry';
 
 export interface ProviderCapabilityProfile {
   readonly contextWindow: number;
@@ -52,10 +55,19 @@ const CODEX_MODEL_DATE_PIN = /-\d{4}-\d{2}-\d{2}$/;
  * account.` — a message that reads as a subscription problem and sends users
  * to check their plan, when the id was simply not a model.
  */
-export function codexBackendModelId(config: {
-  readonly fullName: string;
-}): string {
-  return config.fullName.replace(CODEX_MODEL_DATE_PIN, '');
+export function codexBackendModelId(
+  config: Pick<ModelConfig, 'name' | 'fullName'>,
+): string {
+  // The canonical registry `fullName`, not the caller's. A bound config has
+  // already been through `withShortModelName`, which overwrites `fullName`
+  // with `shortName` when "Prefer short model names" is on — reinstating the
+  // exact `gpt-5.6` this function exists to never send (#12873). `name` is
+  // the persisted registry id and is not rewritten anywhere on this path, so
+  // it is the one field that still identifies the model. A config the
+  // registry does not know (a runtime-discovered entry) has no canonical name
+  // to read, so its own `fullName` is the only answer available.
+  const canonical = getRuntimeModelConfig(config.name)?.fullName;
+  return (canonical ?? config.fullName).replace(CODEX_MODEL_DATE_PIN, '');
 }
 
 /**

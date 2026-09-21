@@ -223,8 +223,19 @@ describe('codexBackendModelId', () => {
   });
 
   it('strips the llm-zoo date pin', () => {
-    expect(codexBackendModelId({ fullName: 'gpt-5.5-2026-04-23' })).toBe(
-      'gpt-5.5',
-    );
+    expect(
+      codexBackendModelId({
+        name: 'not-a-registry-id',
+        fullName: 'gpt-5.5-2026-04-23',
+      }),
+    ).toBe('gpt-5.5');
+  });
+
+  // #12873: "Prefer short model names" rewrites `fullName` to `shortName`
+  // before the binding reaches here, so the slug must come from the registry.
+  it('ignores a fullName the short-name preference already swapped', () => {
+    expect(
+      codexBackendModelId({ ...MODEL_CONFIGS.gpt56, fullName: 'gpt-5.6' }),
+    ).toBe('gpt-5.6-sol');
   });
 });
