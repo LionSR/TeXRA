@@ -2,7 +2,8 @@
  * Render a debug payload for display. Lives apart from both writers so an
  * entry carries its `data` payload raw all the way to the host: the sinks
  * that render annotations apply this at display time, and `createLog`'s own
- * writer applies it to the payload it writes.
+ * writer applies it to the payload it writes. The redaction pass shares the
+ * `Error` flattener, because raw is exactly what reaches it first.
  */
 // Third-party imports
 import safeStringify from 'safe-stable-stringify';
@@ -28,7 +29,7 @@ import safeStringify from 'safe-stable-stringify';
  * makes the identity it tests stable, and a self-referential property or a
  * `cause` cycle renders `"[Circular]"`.
  */
-function serializeError(
+export function flattenError(
   error: Error,
   flattened: WeakMap<Error, Record<string, unknown>>,
 ): Record<string, unknown> {
@@ -60,7 +61,7 @@ export function formatLogData(data: unknown): string {
     safeStringify(
       data,
       (_key, value) =>
-        value instanceof Error ? serializeError(value, flattened) : value,
+        value instanceof Error ? flattenError(value, flattened) : value,
       2,
     ) ?? String(data)
   );
