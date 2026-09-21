@@ -7,20 +7,23 @@
  * locally; the failure policy is consistent here (built around the `ky`
  * HTTP client).
  *
- * A deadline is `Effect.timeoutOrElse`, the retry is an exponential
- * `Schedule` with the [1, 2) jitter window the tools were tuned to
- * ({@link transientBackoff}), and cancellation is fiber interruption. Each
- * attempt owns a scope for the entire request, including the response body.
- * The request can acquire `Effect.abortSignal` there for its foreign HTTP
- * calls. The caller's signal enters once, as the `{ signal }` of the tool's
- * run edge.
+ * A deadline is `Effect.timeoutOrElse`, the retry is the shared
+ * {@link randomizedExponentialBackoff} `Schedule` — the [1, 2) jitter window
+ * the tools were tuned to under p-retry's `randomize: true`, and deliberately
+ * not `Schedule.jittered`, whose [0.8, 1.2] would cut the mean wait before a
+ * 429/5xx retry by a third — and cancellation is fiber interruption. Each
+ * attempt owns a scope for the entire request, including the response
+ * body. The request can acquire `Effect.abortSignal` there for its foreign
+ * HTTP calls. The caller's signal enters once, as the `{ signal }` of the
+ * tool's run edge.
  */
 
-import { Data, Duration, Effect, Random, Schedule, Scope } from 'effect';
+import { Data, Duration, Effect, Schedule, Scope } from 'effect';
 import isNetworkError from 'is-network-error';
 import { HTTPError, TimeoutError } from 'ky';
 
 import { ToolError } from '@shared/schemas';
+import { randomizedExponentialBackoff } from '@utils/core/backoffSchedule';
 import { isTransientHttpStatus } from '@utils/core/httpStatus';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -115,7 +118,7 @@ interface RetryTransientFetchOptions {
   readonly retries: number;
   /**
    * Base backoff before the first retry; doubles per retry, then scaled by
-   * a uniform factor in [1, 2) — see {@link transientBackoff}.
+   * a uniform factor in [1, 2) — see {@link randomizedExponentialBackoff}.
    */
   readonly minTimeout: number;
   /** Deadline for each attempt, connection and body read included. */
@@ -129,22 +132,6 @@ interface RetryTransientFetchOptions {
     error: RequestError,
     retriesLeft: number,
   ) => Effect.Effect<void>;
-}
-
-/**
- * Backoff before retry `n` (1-based): `minTimeout * 2^(n-1)` scaled by a
- * uniform factor in [1, 2). This is the window the tools were tuned to under
- * p-retry's `randomize: true`; `Schedule.jittered` scales by [0.8, 1.2]
- * instead, which would cut the mean wait before a 429/5xx retry by a third.
- */
-function transientBackoff(minTimeout: number) {
-  return Schedule.exponential(Duration.millis(minTimeout)).pipe(
-    Schedule.modifyDelay(({ duration }) =>
-      Effect.map(Random.next, (random) =>
-        Duration.millis(Duration.toMillis(duration) * (1 + random)),
-      ),
-    ),
-  );
 }
 
 /**
@@ -172,7 +159,9 @@ export const retryTransientFetch = Effect.fn('timeouts.retryTransientFetch')(
         }),
       ),
       Effect.retry({
-        schedule: transientBackoff(options.minTimeout),
+        schedule: randomizedExponentialBackoff(
+          Duration.millis(options.minTimeout),
+        ),
         times: options.retries,
         while: isTransientRequestError,
       }),
