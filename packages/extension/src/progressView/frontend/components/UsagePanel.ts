@@ -18,6 +18,7 @@ import {
 import { designTokens } from '@shared/styles';
 import { usageCostLabel, usageRouteBadge } from '@shared/copy/modelAccess';
 import { focusRingStyles } from '@shared/styles/controlStyles';
+import { contextGaugeBand, roundedContextPercent } from '@shared/contextGauge';
 
 // Local imports - shared icons and utils
 import type { TeXRAIconName } from '@shared/wa/iconNames';
@@ -46,9 +47,10 @@ function renderTokenStat(stat: TokenStat): TemplateResult {
 
 /** Solid fill color based on context utilization. */
 function fillColor(percent: number): string {
-  if (percent <= 65) return 'var(--color-success)';
-  if (percent <= 80) return 'var(--color-warning)';
-  return 'var(--color-status-error)';
+  const band = contextGaugeBand(percent);
+  if (band === 'error') return 'var(--color-status-error)';
+  if (band === 'warning') return 'var(--color-warning)';
+  return 'var(--color-success)';
 }
 
 @customElement('usage-panel')
@@ -289,8 +291,7 @@ export class UsagePanel extends LitElement {
     // used` — the rule `formatSubscriptionUsagePercent` sets and the CLI
     // status bar already applies to this same number.
     const clamped = clamp(utilizationPercent, 0, 100);
-    const roundedPercent =
-      utilizationPercent > 0 ? Math.max(1, Math.round(utilizationPercent)) : 0;
+    const roundedPercent = roundedContextPercent(utilizationPercent);
     const percentLabel = `${roundedPercent}% context used`;
 
     return html`

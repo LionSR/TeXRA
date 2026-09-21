@@ -13,6 +13,7 @@ import { STATUS_DIAMOND } from '@cli/tui/ui/glyphs';
 import { KEY_HINT_SEPARATOR, keyHintText } from '@cli/tui/ui/KeyHints';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import { codingPlanForUsageRoute } from '@shared/codingPlanSubscriptions';
+import { contextGaugeBand, roundedContextPercent } from '@shared/contextGauge';
 import {
   type ContextStateData,
   type SubscriptionUsageSnapshot,
@@ -290,14 +291,12 @@ function formatUsage(
   // tokens are the generated response, not part of the context, which is why
   // the run reports `inputTokens` here.
   const { inputTokens: used, contextWindow, utilizationPercent } = contextState;
-  const percent = Math.max(1, Math.round(utilizationPercent));
-  // Bands match the progress view's context gauge (`fillColor` in UsagePanel),
-  // and read the run's own `utilizationPercent` rather than re-dividing
-  // used/contextWindow — the same number told two ways drifts.
-  let color: StatusBarColor;
-  if (utilizationPercent > 80) color = COLOR_ERROR;
-  else if (utilizationPercent > 65) color = COLOR_WARNING;
-  else color = 'dim';
+  const percent = roundedContextPercent(utilizationPercent);
+  // Shared with the progress view's context gauge (`fillColor` in UsagePanel).
+  const band = contextGaugeBand(utilizationPercent);
+  let color: StatusBarColor = 'dim';
+  if (band === 'error') color = COLOR_ERROR;
+  else if (band === 'warning') color = COLOR_WARNING;
   return {
     ...base,
     text: `${formatCompactTokenCount(used)}/${formatCompactTokenCount(
