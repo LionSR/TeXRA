@@ -307,7 +307,7 @@ export const modelInvokerLayer = (): Layer.Layer<
             modelName: bound.config.name,
             agentCategory: run.config.agentCategory,
           },
-          session.roots.config,
+          session.roots,
         );
 
       /**
