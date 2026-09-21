@@ -19,7 +19,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "0.126.0",
     "@google/genai": "2.23.0",
-    "openai": "7.10.0",
+    "openai": "7.20.0",
     "ws": "8.21.3"
   },
   "peerDependencies": {
