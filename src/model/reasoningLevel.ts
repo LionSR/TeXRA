@@ -6,11 +6,10 @@ import {
 } from 'llm-zoo';
 import { ReasoningEffortSchema } from 'llm-zoo/schemas';
 
-import { createLog } from '@logger/logUtils';
 import type { StateStore } from '@platform/interfaces';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
-const log = createLog('reasoningLevel');
+import { warnModelAvailability } from './modelAvailabilityWarning';
 
 /**
  * The user's per-model reasoning effort overrides, in llm-zoo's vocabulary.
@@ -36,11 +35,11 @@ export function reasoningEffortOverrides(
       continue;
     }
     // A stored value outside llm-zoo's vocabulary cannot route a request, so
-    // the model falls back to its catalog default; say so rather than
-    // dropping the entry silently.
-    log.warn(
+    // the model falls back to its catalog default; say so through the
+    // module's host sink rather than dropping the entry silently.
+    warnModelAvailability(
       `Stored reasoning level "${value}" for model ${model} is not one of llm-zoo's efforts; using the model's default.`,
-      { data: parsed.error },
+      parsed.error,
     );
   }
   return overrides;

@@ -2,7 +2,6 @@ import { Data, Effect } from 'effect';
 import { MODEL_CONFIGS, type ModelConfig, type ReasoningEffort } from 'llm-zoo';
 import { z } from 'zod';
 
-import { createLog } from '@logger/logUtils';
 import {
   isCodexSignedIn,
   isPreferCodexSubscription,
@@ -40,6 +39,7 @@ import {
   reasoningEffortOverrides,
   supportsReasoningLevel,
 } from './reasoningLevel';
+import { warnModelAvailability } from './modelAvailabilityWarning';
 import {
   resolveCodexSubscriptionCapabilities,
   resolveXaiSubscriptionCapabilities,
@@ -70,8 +70,6 @@ import {
   getRuntimeModelConfig,
   copilotRouteForModel,
 } from './runtimeModelRegistry';
-
-const log = createLog('computeModelOptions');
 
 /**
  * Every store an availability answer here reads: the secret store behind the
@@ -456,9 +454,9 @@ function readProviderKeyStatuses(
       hasUsableApiKey(secrets, provider).pipe(
         Effect.catchTag('SecretsFailed', (failure) =>
           Effect.sync(() => {
-            log.warn(
+            warnModelAvailability(
               `Failed to read ${providerDisplayName(provider)} API key status; treating it as unavailable.`,
-              { data: failure.cause },
+              failure.cause,
             );
             return false;
           }),
@@ -611,9 +609,9 @@ function readModelSelection(state: Pick<StateStore, 'get'>): ModelSelection {
   if (stored === undefined) return EMPTY_MODEL_SELECTION;
   const parsed = ModelSelectionSchema.safeParse(stored);
   if (parsed.success) return parsed.data;
-  log.warn(
+  warnModelAvailability(
     `Invalid stored ${GlobalStateKey.MODEL_SELECTION}; showing the default models.`,
-    { data: z.prettifyError(parsed.error) },
+    z.prettifyError(parsed.error),
   );
   return EMPTY_MODEL_SELECTION;
 }
