@@ -7,6 +7,7 @@ import { RESEARCHER_ACCESS_AUTH } from '@ui/copy/accountAuth';
 import { isNonEmptyString } from '@utils/text/stringUtils';
 
 import { CliUsageError, type CliContext } from '../runtime/cliContext';
+import { disposeCliProcessRuntime } from '../runtime/cliProcessRuntime';
 import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform } from '../runtime/initPlatform';
 import {
@@ -97,6 +98,19 @@ function emitLoginResult(context: CliContext, session: SupabaseSession): void {
 }
 
 /**
+ * End `texra login` on one of the two paths that stop above
+ * `initCliPlatform`: a cancelled provider picker, and a provider this build
+ * cannot sign in with. `defineCliCommand` installs the process runtime before the program
+ * runs, and only `initCliPlatform` registers `disposeCliProcessRuntime` as a
+ * shutdown step, so a return from here would leave the global root's database
+ * handle and its 250ms poll fiber holding the event loop open for good
+ * (#12906). Disposing is safe from inside the program the runtime is running:
+ * it is the same position `initCliPlatform`'s own failure path disposes from.
+ */
+const exitBeforePlatform = (code: CliExitCode): Effect.Effect<CliExitCode> =>
+  disposeCliProcessRuntime.pipe(Effect.as(code));
+
+/**
  * The whole `texra login` flow: pick the transport when the command was not
  * told one, bring the platform up, and sign in over the device code or the
  * loopback browser callback. One program so the picker, the init and the
@@ -114,7 +128,7 @@ const runLoginCommand = Effect.fn('runLoginCommand')(function* (
     const choice = yield* promptForLoginProvider(context.stdoutColorEnabled);
     if (!choice) {
       writeTextStderr('Cancelled. No sign-in started.');
-      return CliExitCode.Success;
+      return yield* exitBeforePlatform(CliExitCode.Success);
     }
     init =
       choice === 'device'
@@ -147,7 +161,7 @@ const runLoginCommand = Effect.fn('runLoginCommand')(function* (
   const provider = init.provider;
   if (!isOAuthProvider(provider)) {
     writeTextStderr(unsupportedLoginProviderMessage(provider));
-    return CliExitCode.Usage;
+    return yield* exitBeforePlatform(CliExitCode.Usage);
   }
   const { runtime } = yield* initCliPlatform({ ...context, quietLogs: true });
   const accountWarning = githubSelectAccountWarning(init);
