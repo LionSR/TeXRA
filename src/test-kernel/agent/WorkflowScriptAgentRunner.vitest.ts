@@ -10,7 +10,8 @@ import { beforeEach, describe, expect, vi } from 'vitest';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
 import { noopTrace } from '@agent/trace';
-import { RunLanes } from '@agent/runtime/runLanes';
+import { createSessionApprovals } from '@agent/runtime/runApprovalQueue';
+import { RunRoster } from '@agent/runtime/runRoster';
 import { Runs } from '@agent/runtime/runRegistry';
 import type { WorkflowAgentInvocation } from '@agent/workflowScript/types';
 import type { AgentEntry } from '@agent/index/agentEntry';
@@ -229,9 +230,9 @@ const structuredResult: RunEnd = {
 // The in-process half of the fence, real: a case makes a run live here by
 // taking its lane, exactly as a launch or a resume of that run would. One
 // registry stub for every stub session, so sessions compare equal.
-let lanes = new RunLanes();
+let lanes = new RunRoster(createSessionApprovals());
 const runs = {
-  holdInactiveRun: (runId: RunId) => lanes.holdInactive(runId, () => false),
+  holdInactiveRun: (runId: RunId) => lanes.holdInactive(runId),
 };
 // The roots the stub session resolves workflow files against; a case may
 // point them at a real temporary tree.
@@ -391,7 +392,7 @@ function useToolUseAgentEntries(): void {
 describe('createWorkflowScriptAgentRunner', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    lanes = new RunLanes();
+    lanes = new RunRoster(createSessionApprovals());
     mocks.preparedOptions.length = 0;
     mocks.probedRunIds.length = 0;
     launchedRows.clear();

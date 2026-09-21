@@ -1,31 +1,57 @@
 /**
- * What this process holds for a run.
+ * What this process holds for a run, in one entry per run.
  *
- * One roster per session records every local record of a run — the tracked
- * handle, the native child loop's activation, the fiber a WAITING generation
- * parked on — together with the change waiters that read them and the stop
- * and detach gates that fence an admission while a stop is in flight. The
- * registry (`runRegistry.ts`) owns what a stop *does*; the roster owns who is
- * here to be stopped, so "is this run live in this process" is answered in
- * one place rather than by three maps a caller has to consult in order.
+ * One roster per session is the single in-process authority for "is a
+ * generation of this run live here": the tracked handle, the native child
+ * loop's activation, the fiber a WAITING generation parked on, the run's
+ * serial lifecycle lane and the generations holding it are fields of one
+ * entry, so admission, stop and deletion all answer from the same record and
+ * no metadata can outlive or predate the liveness it describes. The registry
+ * (`runRegistry.ts`) owns the session-facing surface; the stopper
+ * (`runStopping.ts`) owns what a stop does with these records.
+ *
+ * Serialization itself is `withPerKeyLane` (`@utils/core/perKeyQueue`): a
+ * `Deferred` hand-off chain rather than a queue, which gives FIFO admission
+ * for free and keeps the whole wait interruptible — a caller whose fiber is
+ * interrupted while queued hands its successor the wait for whoever actually
+ * holds the lane, instead of leaving a task behind in a queue nobody can
+ * reach. The lane lives on the entry, so the generic helper's map is this
+ * roster's own.
  */
 
-import { Deferred, Effect } from 'effect';
+import { Data, Deferred, Effect, type Scope } from 'effect';
 
 import type { SessionApprovals } from '@agent/runtime/runApprovalQueue';
 import type { RunId } from '@shared/schemas';
+import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 import type { RunHandle } from './RunHandle';
+import { RunChangeListeners } from './runChangeListeners';
 import type { ChildRunActivation, ParkedRun } from './runRegistryTypes';
 
+/** A generation, a hold or a retained owner already has the run here. */
+export class RunLive extends Data.TaggedError('RunLive')<{
+  readonly runId: string;
+}> {}
+
+/** Everything this process holds for one run. The entry exists exactly while
+ *  one of its fields does, which is what makes it the liveness authority. */
+interface RunEntry {
+  handle?: RunHandle;
+  activation?: ChildRunActivation;
+  parked?: ParkedRun;
+  /** The run's hand-off chain while a fiber holds or waits on it. */
+  lane?: PerKeyLane;
+  /**
+   * The completion of every generation of this run a caller is holding
+   * against local ownership — a set rather than one chained value because
+   * they end in no fixed order.
+   */
+  readonly generations: Set<Deferred.Deferred<void>>;
+}
+
 export class RunRoster {
-  private readonly handles = new Map<RunId, RunHandle>();
-  private readonly childActivations = new Map<RunId, ChildRunActivation>();
-  /** Every run parked at WAITING in this session. */
-  private readonly parked = new Map<RunId, ParkedRun>();
-  private readonly listeners = new Map<
-    string,
-    Set<(handle: RunHandle | undefined) => void>
-  >();
+  private readonly entries = new Map<RunId, RunEntry>();
+  private readonly listeners = new RunChangeListeners();
   /** The stops begun for each run ({@link beginStop}), one token apiece:
    *  the run admits no new child until every one of them has settled
    *  ({@link throughStop}) or a new generation of it takes the lane. Two
@@ -33,39 +59,81 @@ export class RunRoster {
    *  first to settle cannot admit a child the second's snapshot has already
    *  left behind. */
   private readonly stopping = new Map<RunId, Set<symbol>>();
-  /** The children a detach in flight has snapshotted, each held until that
-   *  detach settles ({@link throughDetach}). Its batch lands on the child's
-   *  own aggregate, which takes an append from its claim holder alone, so a
-   *  child that ends in this window keeps its claim until the batch has
-   *  committed instead of having it refused with nothing severed. */
-  private readonly detaching = new Map<RunId, Deferred.Deferred<void>>();
+  /**
+   * Steps admitted but not yet started, across every run: session disposal
+   * fails all of them at once, so they need no per-run keying.
+   */
+  private readonly waiting = new Set<Deferred.Deferred<never, Error>>();
+  /** The lane slots `withPerKeyLane` reads and writes: this roster's entries,
+   *  so a lane is never a record of a run the entry map does not have. */
+  private readonly lanes = {
+    get: (runId: RunId) => this.entries.get(runId)?.lane,
+    set: (runId: RunId, lane: PerKeyLane) => {
+      this.entryFor(runId).lane = lane;
+    },
+    delete: (runId: RunId) => {
+      const entry = this.entries.get(runId);
+      if (!entry) return;
+      entry.lane = undefined;
+      this.prune(runId, entry);
+    },
+  };
 
   constructor(private readonly approvals: SessionApprovals) {}
+
+  private entryFor(runId: RunId): RunEntry {
+    const existing = this.entries.get(runId);
+    if (existing) return existing;
+    const entry: RunEntry = { generations: new Set() };
+    this.entries.set(runId, entry);
+    return entry;
+  }
+
+  /** Drop an entry that records nothing: the run is not here any more. */
+  private prune(runId: RunId, entry: RunEntry): void {
+    if (
+      entry.handle !== undefined ||
+      entry.activation !== undefined ||
+      entry.parked !== undefined ||
+      entry.lane !== undefined ||
+      entry.generations.size > 0
+    ) {
+      return;
+    }
+    if (this.entries.get(runId) === entry) this.entries.delete(runId);
+  }
 
   // ---------------------------------------------------------------- handles
 
   handle(runId: RunId): RunHandle | undefined {
-    return this.handles.get(runId);
+    return this.entries.get(runId)?.handle;
   }
 
   allHandles(): RunHandle[] {
-    return [...this.handles.values()];
+    const handles: RunHandle[] = [];
+    for (const entry of this.entries.values())
+      if (entry.handle) handles.push(entry.handle);
+    return handles;
   }
 
   setHandle(handle: RunHandle): void {
-    this.handles.set(handle.runId, handle);
+    this.entryFor(handle.runId).handle = handle;
   }
 
   /** Remove a run handle and notify waiters; a run with no handle still
    *  wakes its waiters, since the call is the change they wait on. */
   deleteHandle(runId: RunId): void {
-    this.handles.delete(runId);
+    const entry = this.entries.get(runId);
+    if (entry) {
+      entry.handle = undefined;
+      this.prune(runId, entry);
+    }
     this.notifyWaiters(runId);
   }
 
   /** Remove `handle` only if it is still the current registration. */
   deleteHandleIfCurrent(handle: RunHandle): boolean {
-    if (this.handles.get(handle.runId) !== handle) return false;
+    if (this.handle(handle.runId) !== handle) return false;
     this.deleteHandle(handle.runId);
     return true;
   }
@@ -73,27 +141,31 @@ export class RunRoster {
   // ------------------------------------------------------- child activations
 
   activation(runId: RunId): ChildRunActivation | undefined {
-    return this.childActivations.get(runId);
+    return this.entries.get(runId)?.activation;
   }
 
-  /** Retain a native child loop's lineage. Answers `false` when this run
-   *  already has one, which is the caller's signal that it reserved nothing. */
-  addActivation(activation: ChildRunActivation): boolean {
-    if (this.childActivations.has(activation.runId)) return false;
-    this.childActivations.set(activation.runId, activation);
-    return true;
+  /** Retain a native child loop's lineage. */
+  addActivation(activation: ChildRunActivation): void {
+    this.entryFor(activation.runId).activation = activation;
   }
 
   removeActivation(runId: RunId, expected: ChildRunActivation): void {
-    if (this.childActivations.get(runId) !== expected) return;
-    this.childActivations.delete(runId);
+    const entry = this.entries.get(runId);
+    if (entry?.activation !== expected) return;
+    entry.activation = undefined;
+    this.prune(runId, entry);
     // The loop's last record is gone: a waiter on its settlement wakes.
     this.notifyWaiters(runId);
   }
 
   *activeChildActivations(parentRunId: RunId): Generator<ChildRunActivation> {
-    for (const activation of this.childActivations.values()) {
-      if (activation.parentRunId === parentRunId && !activation.isDetached()) {
+    for (const entry of this.entries.values()) {
+      const activation = entry.activation;
+      if (
+        activation !== undefined &&
+        activation.parentRunId === parentRunId &&
+        !activation.isDetached()
+      ) {
         yield activation;
       }
     }
@@ -106,7 +178,7 @@ export class RunRoster {
     const childRunIds = new Set<RunId>();
     for (const activation of this.activeChildActivations(parentRunId))
       childRunIds.add(activation.runId);
-    for (const handle of this.handles.values())
+    for (const handle of this.allHandles())
       if (handle.isOwnedBy(parentRunId)) childRunIds.add(handle.runId);
     return [...childRunIds];
   }
@@ -122,17 +194,18 @@ export class RunRoster {
     childRunIds: readonly RunId[] = this.childRunIds(parentRunId),
   ): void {
     for (const childRunId of childRunIds) {
-      const activation = this.childActivations.get(childRunId);
-      if (activation?.parentRunId === parentRunId) activation.detach();
+      const entry = this.entries.get(childRunId);
+      if (entry?.activation?.parentRunId === parentRunId)
+        entry.activation.detach();
       this.approvals.detachRunFromParent(childRunId);
-      const handle = this.handles.get(childRunId);
-      if (handle?.isOwnedBy(parentRunId) === true) handle.detach();
+      if (entry?.handle?.isOwnedBy(parentRunId) === true) entry.handle.detach();
     }
   }
 
   /** A handle or a child activation this session still retains for `runId`. */
   hasRetainedOwner(runId: RunId): boolean {
-    return this.handles.has(runId) || this.childActivations.has(runId);
+    const entry = this.entries.get(runId);
+    return entry?.handle !== undefined || entry?.activation !== undefined;
   }
 
   /**
@@ -142,112 +215,165 @@ export class RunRoster {
    * to do is never left running under a released session.
    */
   activeIds(): RunId[] {
-    return [
-      ...new Set([...this.handles.keys(), ...this.childActivations.keys()]),
-    ];
+    const ids: RunId[] = [];
+    for (const [runId, entry] of this.entries)
+      if (entry.handle !== undefined || entry.activation !== undefined)
+        ids.push(runId);
+    return ids;
   }
 
   // ----------------------------------------------------------------- parking
 
-  setParked(runId: RunId, entry: ParkedRun): void {
-    this.parked.set(runId, entry);
-    entry.fiber.addObserver(() => {
-      if (this.parked.get(runId) === entry) this.parked.delete(runId);
+  setParked(runId: RunId, parked: ParkedRun): void {
+    this.entryFor(runId).parked = parked;
+    parked.fiber.addObserver(() => {
+      const entry = this.entries.get(runId);
+      if (entry?.parked !== parked) return;
+      entry.parked = undefined;
+      this.prune(runId, entry);
     });
   }
 
   parkedRun(runId: RunId): ParkedRun | undefined {
-    return this.parked.get(runId);
+    return this.entries.get(runId)?.parked;
   }
 
   isParked(runId: RunId): boolean {
-    return this.parked.has(runId);
+    return this.entries.get(runId)?.parked !== undefined;
   }
 
-  /** Drop the park entry for `runId` and hand it back, so the caller decides
+  /** Drop the park record for `runId` and hand it back, so the caller decides
    *  whether the fiber is interrupted (a resume) or woken (a stop). */
   takeParked(runId: RunId): ParkedRun | undefined {
-    const entry = this.parked.get(runId);
-    if (entry) this.parked.delete(runId);
-    return entry;
+    const entry = this.entries.get(runId);
+    const parked = entry?.parked;
+    if (entry && parked) {
+      entry.parked = undefined;
+      this.prune(runId, entry);
+    }
+    return parked;
+  }
+
+  // --------------------------------------------------------------- lifecycle
+
+  /**
+   * Whether a generation of `runId` is live in this process: a step holding or
+   * waiting on its lane, a generation still unwinding, or a caller holding it
+   * against local ownership ({@link holdInactive}). A parked turn holds
+   * neither — its lane was released with its generation, which is what leaves
+   * it resumable.
+   */
+  isHeld(runId: RunId): boolean {
+    const entry = this.entries.get(runId);
+    if (!entry) return false;
+    return entry.generations.size > 0 || (entry.lane?.fibers ?? 0) > 0;
+  }
+
+  /**
+   * Run `operation` on `runId`'s lane: claim the lane synchronously, wait for
+   * the predecessor and then for the live generations, and hold the lane
+   * until `operation` settles — including the finalizers it registered, since
+   * `withPerKeyLane` releases the lane only once the whole effect leaves.
+   *
+   * `refuseWhenLive` makes the claim conditional, and it is `withPerKeyLane`
+   * that runs it: the check reads the retained owners, the generation gate and
+   * the lane's occupant in the same synchronous step as the tail swap, so no
+   * launch can claim the lane between the two, and refusing leaves the lane
+   * exactly as it was found — nothing was acquired and nothing is released.
+   *
+   * A step is refusable from the moment it is admitted until the moment it
+   * starts, and {@link waiting} holds its refusal for exactly that window. The
+   * race is therefore around the lane, not inside it: a step still waiting for
+   * its predecessor is refused where it stands, and its interruption hands the
+   * lane on the same way any other interrupted waiter does.
+   */
+  launch<A, E, R>(
+    runId: RunId,
+    operation: Effect.Effect<A, E, R>,
+    refuseWhenLive = false,
+  ): Effect.Effect<A, E | Error, R> {
+    return Effect.suspend(() => {
+      const refusal = Deferred.makeUnsafe<never, Error>();
+      this.waiting.add(refusal);
+      const refuseClaim = refuseWhenLive
+        ? (occupant: PerKeyLane | undefined): RunLive | undefined =>
+            this.hasRetainedOwner(runId) ||
+            (this.entries.get(runId)?.generations.size ?? 0) > 0 ||
+            (occupant !== undefined && occupant.fibers > 0)
+              ? new RunLive({ runId })
+              : undefined
+        : undefined;
+      const step = Effect.gen({ self: this }, function* () {
+        // Read the gate after the predecessor left: a generation it started
+        // is exactly what this step must not overlap. One snapshot, as the
+        // predecessor's own wait took one — a generation opened after this
+        // read belongs to the step that opened it, not to this one.
+        const generations = this.entries.get(runId)?.generations;
+        if (generations !== undefined && generations.size > 0) {
+          yield* Effect.all(
+            [...generations].map((generation) => Deferred.await(generation)),
+            { concurrency: 'unbounded', discard: true },
+          );
+        }
+        this.waiting.delete(refusal);
+        return yield* operation;
+      });
+      return Effect.raceFirst(
+        Deferred.await(refusal),
+        withPerKeyLane(this.lanes, runId, refuseClaim)(step),
+      ).pipe(Effect.ensuring(Effect.sync(() => this.waiting.delete(refusal))));
+    });
+  }
+
+  /**
+   * Hold `runId` against local ownership for the caller's scope, refusing
+   * when a generation, a step, or a retained handle already owns it here —
+   * {@link launch}'s refusal, for a decision whose validity has to outlive
+   * the step that took it. The hold is a generation like any other:
+   * {@link isHeld} reports it, so a resume refuses on it, a launch of the
+   * same run waits for it, and a competing step is refused.
+   */
+  holdInactive(runId: RunId): Effect.Effect<void, RunLive, Scope.Scope> {
+    return Effect.asVoid(
+      Effect.acquireRelease(
+        // The test and the registration are one synchronous step, as the
+        // conditional lane claim is: nothing can take the run in between.
+        Effect.suspend(() =>
+          this.isHeld(runId) || this.hasRetainedOwner(runId)
+            ? Effect.fail(new RunLive({ runId }))
+            : Effect.sync(() => this.openGeneration(runId)),
+        ),
+        (close) => Effect.sync(close),
+      ),
+    );
+  }
+
+  /**
+   * Register a live generation of `runId` and hand back its close. The
+   * registration is synchronous with the call, and the close is idempotent
+   * against a disposal that dropped the entry underneath it.
+   */
+  private openGeneration(runId: RunId): () => void {
+    const completion = Deferred.makeUnsafe<void>();
+    const entry = this.entryFor(runId);
+    entry.generations.add(completion);
+    return () => {
+      Deferred.doneUnsafe(completion, Effect.void);
+      entry.generations.delete(completion);
+      this.prune(runId, entry);
+    };
   }
 
   // --------------------------------------------------------------- waiters
 
-  /**
-   * Register a change waiter for `runId` and return its disposer.
-   *
-   * The full wake set, which is what an `executions wait` observes:
-   *
-   * - a status transition on this run;
-   * - a `track`, including a *replacement* handle for the same id (a resumed
-   *   generation taking over from its predecessor) — a `track` that skipped
-   *   this would strand a waiter across a resume;
-   * - an `untrack`, including for an id that holds no handle;
-   * - a `kill`, unconditionally, even when no live interrupt target was
-   *   reached;
-   * - session disposal, for every run still tracked at teardown.
-   *
-   * Private: the only caller is {@link waitForAnyChange}, which detaches
-   * inside the callback. The callback receives the current handle, or
-   * `undefined` once the run was untracked or the session disposed.
-   */
-  private addListener(
-    runId: RunId,
-    cb: (handle: RunHandle | undefined) => void,
-  ): () => void {
-    let set = this.listeners.get(runId);
-    if (!set) {
-      set = new Set();
-      this.listeners.set(runId, set);
-    }
-    set.add(cb);
-    return () => {
-      const s = this.listeners.get(runId);
-      if (!s) return;
-      s.delete(cb);
-      if (s.size === 0) this.listeners.delete(runId);
-    };
-  }
-
   notifyWaiters(runId: RunId): void {
-    const listeners = this.listeners.get(runId);
-    if (!listeners) return;
-
-    const handle = this.handles.get(runId);
-    // Iterate a snapshot so a listener disposing itself mid-fire is safe.
-    for (const cb of [...listeners]) cb(handle);
+    this.listeners.notify(runId, this.handle(runId));
   }
 
-  /**
-   * Wait for any of the given runs to change — see {@link addListener} for
-   * the full wake set — and succeed with the run id that changed first.
-   *
-   * A caller that wants a bounded wait races or times out this effect instead
-   * of passing a deadline in: interrupting the waiting fiber is what detaches
-   * the listeners, so an abandoned wait leaves nothing registered.
-   */
+  /** Wait for any of the given runs to change and succeed with the run id
+   *  that changed first. */
   waitForAnyChange(runIds: readonly RunId[]): Effect.Effect<RunId> {
-    return Effect.callback<RunId>((resume) => {
-      let resolved = false;
-      const detachListeners: Array<() => void> = [];
-      const cleanup = (): void => {
-        for (const detach of detachListeners) detach();
-      };
-
-      for (const id of runIds) {
-        detachListeners.push(
-          this.addListener(id, () => {
-            if (resolved) return;
-            resolved = true;
-            cleanup();
-            resume(Effect.succeed(id));
-          }),
-        );
-      }
-
-      return Effect.sync(cleanup);
-    });
+    return this.listeners.waitForAnyChange(runIds);
   }
 
   /**
@@ -336,45 +462,26 @@ export class RunRoster {
     this.stopping.delete(runId);
   }
 
-  /** The wait a child's lease release takes before it drops its claim
-   *  (`SessionHandle.releaseRunLease`, the one release): nothing unless a
-   *  detach of its parent is in flight over it, and that detach's settlement
-   *  otherwise. */
-  throughDetach(runId: RunId): Effect.Effect<void> {
-    const detached = this.detaching.get(runId);
-    return detached === undefined ? Effect.void : Deferred.await(detached);
-  }
-
-  /** Hold every named child until `detached` completes, and hand back the
-   *  release that stops holding them. */
-  markDetaching(
-    childRunIds: readonly RunId[],
-    detached: Deferred.Deferred<void>,
-  ): () => void {
-    for (const childRunId of childRunIds)
-      this.detaching.set(childRunId, detached);
-    return () => {
-      for (const childRunId of childRunIds)
-        if (this.detaching.get(childRunId) === detached)
-          this.detaching.delete(childRunId);
-      Deferred.doneUnsafe(detached, Effect.void);
-    };
-  }
-
   // --------------------------------------------------------------- teardown
 
   /**
-   * Drop every local record at session disposal and wake the waiters on the
-   * runs that held one. Parked fibers are interrupted where they wait: the
-   * session is gone, so no terminal row of theirs is this process's to write.
+   * Drop every local record at session disposal, refuse every step admitted
+   * but not yet started, and wake the waiters on the runs that held a handle.
+   * Parked fibers are interrupted where they wait: the session is gone, so no
+   * terminal row of theirs is this process's to write.
    */
-  clear(): void {
-    for (const parked of this.parked.values()) parked.fiber.interruptUnsafe();
-    this.parked.clear();
-    const runIds = [...this.handles.keys()];
-    this.handles.clear();
-    for (const runId of runIds) this.notifyWaiters(runId);
-    this.childActivations.clear();
+  clear(disposal: Error): void {
+    for (const refusal of this.waiting) {
+      Deferred.doneUnsafe(refusal, Effect.fail(disposal));
+    }
+    this.waiting.clear();
+    const tracked: RunId[] = [];
+    for (const [runId, entry] of this.entries) {
+      entry.parked?.fiber.interruptUnsafe();
+      if (entry.handle !== undefined) tracked.push(runId);
+    }
+    this.entries.clear();
+    for (const runId of tracked) this.notifyWaiters(runId);
     this.stopping.clear();
     this.listeners.clear();
   }

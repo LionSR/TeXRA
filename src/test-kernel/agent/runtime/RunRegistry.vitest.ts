@@ -13,7 +13,7 @@ import type {
 } from '@agent/runtime/RunHandle';
 import { finalizeRunTerminal } from '@agent/runtime/AgentRunLifecycle';
 import { RunRegistry, Runs } from '@agent/runtime/runRegistry';
-import { RunBusy } from '@agent/runtime/runLanes';
+import { RunLive } from '@agent/runtime/runRoster';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { createSessionApprovals } from '@agent/runtime/runApprovalQueue';
 import {
@@ -1456,9 +1456,9 @@ it.effect(
       const removal = registry.withInactiveRunStep(runId, Effect.sync(remove));
       try {
         // Admission before the launch callback begins must already see its slot.
-        expect(yield* Effect.flip(removal)).toBeInstanceOf(RunBusy);
+        expect(yield* Effect.flip(removal)).toBeInstanceOf(RunLive);
         yield* Deferred.await(started);
-        expect(yield* Effect.flip(removal)).toBeInstanceOf(RunBusy);
+        expect(yield* Effect.flip(removal)).toBeInstanceOf(RunLive);
         expect(remove).not.toHaveBeenCalled();
       } finally {
         yield* Deferred.succeed(finish, undefined);
@@ -1469,7 +1469,7 @@ it.effect(
       // A parked turn may have no running generation, but its handle retains ownership.
       const parked = createHandle(runId, generateRunId());
       registry.track(parked);
-      expect(yield* Effect.flip(removal)).toBeInstanceOf(RunBusy);
+      expect(yield* Effect.flip(removal)).toBeInstanceOf(RunLive);
       registry.untrack(runId);
 
       const admitted = yield* Deferred.make<void>();

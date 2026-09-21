@@ -1,12 +1,13 @@
 /**
  * Handle-based run registry.
  *
- * The session-facing surface: admission (lanes and the closing/disposed
- * gates), the launch-time bookkeeping a `track` does, the projections hosts
- * read, and the stop gestures they call. What this process holds for a run —
- * its handle, its child activation, the fiber a WAITING generation parked on,
- * the change waiters and the stop gates — lives in `runRoster.ts`; what a
- * stop does with those records lives in `runStopping.ts`.
+ * The session-facing surface: admission, the launch-time bookkeeping a
+ * `track` does, the projections hosts read, and the stop gestures they call.
+ * What this process holds for a run — its handle, its child activation, the
+ * fiber a WAITING generation parked on, its lifecycle lane and the
+ * generations holding it — is one entry in `runRoster.ts`, the single
+ * in-process liveness authority; what a stop does with those records lives in
+ * `runStopping.ts`.
  */
 
 import {
@@ -31,7 +32,6 @@ import {
   type RunStatusInfo,
   type LiveToolUseFlowContext,
 } from './RunHandle';
-import { RunLanes } from './runLanes';
 import { RunRoster } from './runRoster';
 import { RunStopper } from './runStopping';
 import type {
@@ -75,7 +75,6 @@ export class RunRegistry {
   /** The session's child-run concurrency budget, made on first use
    *  ({@link childRunBudget}). */
   private budget: Semaphore.Semaphore | undefined;
-  private readonly lanes = new RunLanes();
 
   constructor(options: RunRegistryInit) {
     this.runView = options.runView;
@@ -105,10 +104,9 @@ export class RunRegistry {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    this.lanes.disposeAll(
+    this.roster.clear(
       new Error('Cannot register run work after session disposal.'),
     );
-    this.roster.clear();
   }
 
   /**
@@ -126,7 +124,7 @@ export class RunRegistry {
   isActiveOrResuming(runId: RunId): boolean {
     const parked = this.roster.parkedRun(runId);
     return (
-      this.lanes.isHeld(runId) ||
+      this.roster.isHeld(runId) ||
       (parked !== undefined && Deferred.isDoneUnsafe(parked.stopped)) ||
       this.getToolUseFlowContext(runId) !== undefined
     );
@@ -139,9 +137,7 @@ export class RunRegistry {
   ): Effect.Effect<A, E | Error, R> {
     return Effect.suspend(() => {
       this.assertActive();
-      return this.lanes.launch(runId, operation, () =>
-        this.roster.hasRetainedOwner(runId),
-      );
+      return this.roster.launch(runId, operation, true);
     });
   }
 
@@ -153,9 +149,7 @@ export class RunRegistry {
   holdInactiveRun(runId: RunId): Effect.Effect<void, Error, Scope.Scope> {
     return Effect.suspend(() => {
       this.assertActive();
-      return this.lanes.holdInactive(runId, () =>
-        this.roster.hasRetainedOwner(runId),
-      );
+      return this.roster.holdInactive(runId);
     });
   }
 
@@ -174,7 +168,7 @@ export class RunRegistry {
       // replaces takes no lane, so it no longer reopens a window the stop is
       // still closing.
       this.roster.clearStops(runId);
-      return this.lanes.launch(runId, operation);
+      return this.roster.launch(runId, operation);
     });
   }
 
@@ -299,7 +293,7 @@ export class RunRegistry {
    *  detach of its parent is in flight over it, and that detach's settlement
    *  otherwise. */
   throughDetach(runId: RunId): Effect.Effect<void> {
-    return this.roster.throughDetach(runId);
+    return this.stopper.throughDetach(runId);
   }
 
   /** Remove a run handle and notify waiters. */

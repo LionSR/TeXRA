@@ -25,6 +25,13 @@ import type {
 import type { RunRoster } from './runRoster';
 
 export class RunStopper {
+  /** The children a detach in flight has snapshotted, each held until that
+   *  detach settles ({@link throughDetach}). Its batch lands on the child's
+   *  own aggregate, which takes an append from its claim holder alone, so a
+   *  child that ends in this window keeps its claim until the batch has
+   *  committed instead of having it refused with nothing severed. */
+  private readonly detaching = new Map<RunId, Deferred.Deferred<void>>();
+
   constructor(
     private readonly roster: RunRoster,
     private readonly commit: RunRegistryInit['commit'],
@@ -114,6 +121,15 @@ export class RunStopper {
     );
   }
 
+  /** The wait a child's lease release takes before it drops its claim
+   *  (`SessionHandle.releaseRunLease`, the one release): nothing unless a
+   *  detach of its parent is in flight over it, and that detach's settlement
+   *  otherwise. */
+  throughDetach(runId: RunId): Effect.Effect<void> {
+    const detached = this.detaching.get(runId);
+    return detached === undefined ? Effect.void : Deferred.await(detached);
+  }
+
   /**
    * Detach all active subagents from a parent, promoting them to top-level.
    * Subagents continue running independently and deliver results via the
@@ -139,19 +155,18 @@ export class RunStopper {
    * from its claim holder, and a child that ends while the batch waits would
    * release its claim and have the whole batch refused with nothing severed.
    * So every snapshotted child is claimed here, the way an ownerless stop
-   * claims its target ({@link stopAgentRun}), and held in the roster's detach
-   * gate until the commit and the local sever are done: a live child's own
+   * claims its target ({@link stopAgentRun}), and named in {@link detaching}
+   * until the commit and the local sever are done: a live child's own
    * claim is one this acquire retains nothing of, so what holds it is that
-   * child's lease release waiting there (`RunRoster.throughDetach`).
+   * child's lease release waiting there ({@link throughDetach}).
    */
   detachActiveChildren(parentRunId: RunId): Effect.Effect<void, Error> {
     const detachedChildRunIds = this.roster.childRunIds(parentRunId);
     if (detachedChildRunIds.length === 0) return Effect.void;
     return Effect.suspend(() => {
-      const releaseDetachGate = this.roster.markDetaching(
-        detachedChildRunIds,
-        Deferred.makeUnsafe<void>(),
-      );
+      const detached = Deferred.makeUnsafe<void>();
+      for (const childRunId of detachedChildRunIds)
+        this.detaching.set(childRunId, detached);
       return Effect.scoped(
         Effect.forEach(
           detachedChildRunIds,
@@ -180,7 +195,14 @@ export class RunStopper {
         // commit leaves both edges standing and a retry snapshots them again,
         // and a child holding its claim for a detach that will never commit
         // would never end.
-        Effect.ensuring(Effect.sync(releaseDetachGate)),
+        Effect.ensuring(
+          Effect.sync(() => {
+            for (const childRunId of detachedChildRunIds)
+              if (this.detaching.get(childRunId) === detached)
+                this.detaching.delete(childRunId);
+            Deferred.doneUnsafe(detached, Effect.void);
+          }),
+        ),
       );
     });
   }
