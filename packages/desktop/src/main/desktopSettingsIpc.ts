@@ -563,10 +563,17 @@ export function createDesktopSettingsIpc(
   }
 
   const settingsHandlers: SettingsViewInboundHandlerRegistry = {
-    // WEBVIEW_READY is intercepted in handleMessage below, before reaching
-    // the dispatcher, so this entry is never actually invoked — it exists
-    // only to satisfy the exhaustive registry type.
-    webviewReady: () => {},
+    // The settings webview announcing itself: answer with the capabilities
+    // this host's registry declares unsupported, then its opening data. The
+    // other views share the command and want neither.
+    webviewReady: (message) => {
+      if (message.view !== 'settings') return;
+      options.postToRenderer({
+        command: SETTINGS_VIEW_COMMANDS.SET_UNSUPPORTED_COMMANDS,
+        commands: unsupportedCommands(settingsHandlers),
+      });
+      runAsync(postInitialSettingsData());
+    },
     getMemoryData: () => onSessionFiles(postMemoryData()),
     getMemoryPreview: (message) =>
       onSessionFiles(postMemoryPreview(message.storagePath)),
@@ -648,25 +655,13 @@ export function createDesktopSettingsIpc(
     },
 
     handleMessage(message: DesktopCommandMessage) {
-      // WEBVIEW_READY is a broadcast: act on it but return false so sibling
-      // handlers (startup, onboarding) in the chain still receive it.
-      const parsed = SettingsViewInboundMessageSchema.safeParse(message);
-      if (!parsed.success) return false;
-      if (parsed.data.command === SETTINGS_VIEW_COMMANDS.WEBVIEW_READY) {
-        if (parsed.data.view === 'settings') {
-          options.postToRenderer({
-            command: SETTINGS_VIEW_COMMANDS.SET_UNSUPPORTED_COMMANDS,
-            commands: unsupportedCommands(settingsHandlers),
-          });
-          runAsync(postInitialSettingsData());
-        }
-        return false;
-      }
       // A successful parse conclusively identifies this as a settings
       // command, so claim it (true) even when the matched entry is
       // `unsupported(...)` — the dispatcher's `false` there means "no
       // function ran," not "not mine"; onError already surfaces the
       // unsupported reason as visible feedback (see `onError` above).
+      const parsed = SettingsViewInboundMessageSchema.safeParse(message);
+      if (!parsed.success) return false;
       dispatchSettingsViewInbound(message, settingsHandlers, onError);
       return true;
     },

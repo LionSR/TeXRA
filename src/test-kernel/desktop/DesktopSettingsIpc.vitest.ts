@@ -234,18 +234,20 @@ describe('desktop settings IPC', () => {
     });
 
     expect(posted).toEqual([]);
+    // Claimed either way — the settings surface owns the command — but only
+    // its own view's readiness posts anything.
     expect(
       settings.handleMessage({
         command: SETTINGS_VIEW_COMMANDS.WEBVIEW_READY,
       }),
-    ).toBe(false);
+    ).toBe(true);
     expect(posted).toEqual([]);
     expect(
       settings.handleMessage({
         command: SETTINGS_VIEW_COMMANDS.WEBVIEW_READY,
         view: 'settings',
       }),
-    ).toBe(false);
+    ).toBe(true);
     await flushAsyncWork();
     // First post is the derived capability broadcast (commands this host's
     // registry declares `unsupported(...)`); asserted structurally rather
@@ -689,7 +691,7 @@ describe('desktop settings IPC', () => {
         command: SETTINGS_VIEW_COMMANDS.WEBVIEW_READY,
         view: 'settings',
       }),
-    ).toBe(false);
+    ).toBe(true);
     await flushAsyncWork();
 
     expect(postLatexConfigValues).toHaveBeenCalledOnce();

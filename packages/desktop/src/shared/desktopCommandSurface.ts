@@ -19,10 +19,15 @@ import {
   type CommandHandler,
 } from '@shared/commands/registry';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
+import { DESKTOP_LOG_COMMANDS } from './desktopLogMessages.js';
+import { DESKTOP_ONBOARDING_COMMANDS } from './desktopOnboardingMessages.js';
+import { DESKTOP_PROJECT_COMMANDS } from './desktopProjectMessages.js';
+import { DESKTOP_PROMPT_COMMANDS } from './desktopPromptMessages.js';
 import {
   DESKTOP_SHELL_COMMANDS,
   type DesktopWorkbenchKind,
 } from './desktopShellMessages.js';
+import { DESKTOP_WORKSPACE_COMMANDS } from './desktopWorkspaceMessages.js';
 
 export const DESKTOP_LOCAL_COMMANDS = {
   SHOW_LOGS: 'texra.desktop.showLogs',
@@ -107,6 +112,59 @@ export const DESKTOP_HELP_COMMANDS = [
   DESKTOP_LOCAL_COMMANDS.SHOW_FIRST_RUN_WALKTHROUGH,
   DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS,
 ] as const satisfies readonly DesktopLocalCommandId[];
+
+/**
+ * The main process's inbound surfaces, one per renderer→main command
+ * namespace. A message's `command` names the surface that owns it, so the
+ * main process reads the route once and hands the message to that one
+ * handler instead of offering it to every handler in turn.
+ */
+export type DesktopInboundRoute =
+  | 'logs'
+  | 'onboarding'
+  | 'projects'
+  | 'prompt'
+  | 'settings'
+  | 'shell'
+  | 'workspace';
+
+/**
+ * Whole namespaces, not hand-listed inbound halves: the request/response
+ * pairs of one surface share a prefix, and the handler that owns the surface
+ * is also the one that would drop a reply the renderer posted back by
+ * mistake. The settings view keeps its own camelCase namespace
+ * (`SETTINGS_VIEW_COMMANDS`), which both hosts share.
+ */
+const DESKTOP_INBOUND_ROUTE_COMMANDS: Record<
+  DesktopInboundRoute,
+  readonly string[]
+> = {
+  logs: Object.values(DESKTOP_LOG_COMMANDS),
+  onboarding: Object.values(DESKTOP_ONBOARDING_COMMANDS),
+  projects: Object.values(DESKTOP_PROJECT_COMMANDS),
+  prompt: Object.values(DESKTOP_PROMPT_COMMANDS),
+  settings: Object.values(SETTINGS_VIEW_COMMANDS),
+  shell: DESKTOP_SHELL_IPC_COMMANDS,
+  workspace: Object.values(DESKTOP_WORKSPACE_COMMANDS),
+};
+
+const DESKTOP_ROUTE_BY_COMMAND = new Map<string, DesktopInboundRoute>(
+  (
+    Object.entries(DESKTOP_INBOUND_ROUTE_COMMANDS) as [
+      DesktopInboundRoute,
+      readonly string[],
+    ][]
+  ).flatMap(([route, commands]) =>
+    commands.map((command) => [command, route] as const),
+  ),
+);
+
+/** The surface a renderer command belongs to, or undefined for none. */
+export function desktopInboundRoute(
+  command: string,
+): DesktopInboundRoute | undefined {
+  return DESKTOP_ROUTE_BY_COMMAND.get(command);
+}
 
 type DesktopMenuCommandId = (typeof DESKTOP_MENU_GROUPS)[number][number];
 type DesktopFileCommandId = (typeof DESKTOP_FILE_COMMANDS)[number];
