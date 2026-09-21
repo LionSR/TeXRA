@@ -169,9 +169,13 @@ export const handleCompare = Effect.fn('compareCommands.handleCompare')(
 
     yield* executeVscodeCommand('vscode.diff', editedUri, baseUri, title);
 
-    setTimeout(() => {
-      registerDiffRefresh(editedUri, baseUri, title);
-    }, DIFF_REGISTRATION_DELAY_MS);
+    yield* Effect.forkDetach(
+      Effect.sleep(DIFF_REGISTRATION_DELAY_MS).pipe(
+        Effect.andThen(
+          Effect.sync(() => registerDiffRefresh(editedUri, baseUri, title)),
+        ),
+      ),
+    );
 
     log.info(
       `Opened diff comparison between ${baseFileName} and ${editedFileName}`,

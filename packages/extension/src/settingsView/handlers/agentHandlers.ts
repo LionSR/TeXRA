@@ -506,10 +506,7 @@ export class AgentHandlers {
   /** Refresh agent dir + selection after a directory change. */
   private refreshAgentDirUI() {
     return Effect.gen({ self: this }, function* () {
-      yield* Effect.tryPromise({
-        try: () => agentDirectories.refreshAfterDirChange(),
-        catch: ensureError,
-      });
+      yield* agentDirectories.refreshAfterDirChange();
       const { refreshCustomAgentRoot } = yield* Effect.promise(
         () => import('@frontend/setup'),
       );

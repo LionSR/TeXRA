@@ -3,7 +3,7 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
 // Third-party imports
-import { Cause, Effect, Exit, FileSystem } from 'effect';
+import { Effect, FileSystem } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
@@ -29,19 +29,6 @@ const CHANNEL = 'AgentLoad';
 const log = createLog(CHANNEL);
 
 const AGENT_WATCHER_REBUILD_LANE = 'agent-watcher-rebuild';
-
-/**
- * Settle one watcher-lane Effect back to this module's Promise surface: the
- * `Exit` fold re-throws the original error, as the queued rebuild did.
- */
-async function runSettledEffect<A>(
-  runtime: ProcessRuntime,
-  effect: Effect.Effect<A, unknown, GlobalStorageFs | FileSystem.FileSystem>,
-): Promise<A> {
-  const exit = await runtime.runPromiseExit(effect);
-  if (Exit.isSuccess(exit)) return exit.value;
-  throw Cause.squash(exit.cause);
-}
 
 /** The two host services `initialize()` hands the manager, kept together so
  *  one guard covers both. */
@@ -187,10 +174,14 @@ class AgentDirectoryManager {
    * Refresh file watchers after the custom agent directory changes.
    * Called by the settings view after updating CUSTOM_AGENT_DIR in global state.
    */
-  async refreshAfterDirChange(): Promise<void> {
-    if (this.onAgentYamlChange) {
-      await this.ensureAgentWatchers();
-    }
+  refreshAfterDirChange(): Effect.Effect<
+    void,
+    AgentDirectoriesFailed,
+    GlobalStorageFs | FileSystem.FileSystem
+  > {
+    return Effect.suspend(() =>
+      this.onAgentYamlChange ? this.ensureAgentWatchers() : Effect.void,
+    );
   }
 
   private sameDirectories(
@@ -216,28 +207,32 @@ class AgentDirectoryManager {
    * a rebuild that starts with no subscriber left has nothing to watch and
    * returns.
    */
-  private async ensureAgentWatchers(): Promise<void> {
-    const lane = this.watcherRebuildLanes.get(AGENT_WATCHER_REBUILD_LANE);
-    const { runtime } = this.getHost();
-    const onRebuildLane = withPerKeyLane(
-      this.watcherRebuildLanes,
-      AGENT_WATCHER_REBUILD_LANE,
-    );
+  private ensureAgentWatchers(): Effect.Effect<
+    void,
+    AgentDirectoriesFailed,
+    GlobalStorageFs | FileSystem.FileSystem
+  > {
+    return Effect.suspend(() => {
+      const lane = this.watcherRebuildLanes.get(AGENT_WATCHER_REBUILD_LANE);
+      const onRebuildLane = withPerKeyLane(
+        this.watcherRebuildLanes,
+        AGENT_WATCHER_REBUILD_LANE,
+      );
 
-    if (lane && lane.fibers > 1) {
-      // A rebuild is running and another is already waiting behind it, so the
-      // waiting one answers this request too. Claim the lane with no work to
-      // wait for both — what awaiting the queue's idle did.
-      await runSettledEffect(runtime, onRebuildLane(Effect.void));
-      return;
-    }
+      if (lane && lane.fibers > 1) {
+        // A rebuild is running and another is already waiting behind it, so the
+        // waiting one answers this request too. Claim the lane with no work to
+        // wait for both — what awaiting the queue's idle did.
+        return onRebuildLane(Effect.void);
+      }
 
-    await runSettledEffect(runtime, onRebuildLane(this.rebuildAgentWatchers()));
+      return onRebuildLane(this.rebuildAgentWatchers());
+    });
   }
 
   private rebuildAgentWatchers(): Effect.Effect<
     void,
-    unknown,
+    AgentDirectoriesFailed,
     GlobalStorageFs | FileSystem.FileSystem
   > {
     return Effect.gen({ self: this }, function* () {
@@ -255,56 +250,55 @@ class AgentDirectoryManager {
         return;
       }
 
-      yield* Effect.tryPromise({
-        try: () => this.buildAgentWatchers(directories),
-        catch: (error) => error,
-      });
+      yield* this.buildAgentWatchers(directories);
       if (!this.onAgentYamlChange) {
         this.disposeAgentWatchers();
       }
     });
   }
 
-  private async buildAgentWatchers(
+  private buildAgentWatchers(
     directories: AgentDirectoryEntry[],
-  ): Promise<void> {
-    // Dispose old watchers
-    const previousExternalWatcherDirectoryPaths = new Set(
-      this.externalWatcherDirectoryPaths,
-    );
-    this.watcherDisposables.forEach((watcher) => watcher.dispose());
-    this.watcherDisposables = [];
-    this.externalWatcherDirectoryPaths.clear();
+  ): Effect.Effect<void> {
+    return Effect.gen({ self: this }, function* () {
+      // Dispose old watchers
+      const previousExternalWatcherDirectoryPaths = new Set(
+        this.externalWatcherDirectoryPaths,
+      );
+      this.watcherDisposables.forEach((watcher) => watcher.dispose());
+      this.watcherDisposables = [];
+      this.externalWatcherDirectoryPaths.clear();
 
-    const watchedDirectories: string[] = [];
-    const skippedDirectories: string[] = [];
+      const watchedDirectories: string[] = [];
+      const skippedDirectories: string[] = [];
 
-    for (const entry of directories) {
-      const directoryUri = vscode.Uri.file(entry.directory);
+      for (const entry of directories) {
+        const directoryUri = vscode.Uri.file(entry.directory);
 
-      if (vscode.workspace.getWorkspaceFolder(directoryUri)) {
-        this.watchDirectoryTree(directoryUri, '**/*');
-      } else if (entry.source !== AGENT_SOURCE.CUSTOM) {
-        skippedDirectories.push(entry.directory);
-        continue;
-      } else {
-        await this.watchExternalCustomDirectory(
-          directoryUri,
-          previousExternalWatcherDirectoryPaths,
+        if (vscode.workspace.getWorkspaceFolder(directoryUri)) {
+          this.watchDirectoryTree(directoryUri, '**/*');
+        } else if (entry.source !== AGENT_SOURCE.CUSTOM) {
+          skippedDirectories.push(entry.directory);
+          continue;
+        } else {
+          yield* this.watchExternalCustomDirectory(
+            directoryUri,
+            previousExternalWatcherDirectoryPaths,
+          );
+        }
+        watchedDirectories.push(entry.directory);
+      }
+
+      log.info(
+        `Agent directory watchers enabled: ${watchedDirectories.join(', ')}`,
+      );
+
+      if (skippedDirectories.length > 0) {
+        log.debug(
+          `Skipped external built-in agent directory watchers: ${skippedDirectories.join(', ')}`,
         );
       }
-      watchedDirectories.push(entry.directory);
-    }
-
-    log.info(
-      `Agent directory watchers enabled: ${watchedDirectories.join(', ')}`,
-    );
-
-    if (skippedDirectories.length > 0) {
-      log.debug(
-        `Skipped external built-in agent directory watchers: ${skippedDirectories.join(', ')}`,
-      );
-    }
+    });
   }
 
   /**
@@ -318,7 +312,7 @@ class AgentDirectoryManager {
     onCreateOrDelete?: (
       type: 'create' | 'delete',
       uri: vscode.Uri,
-    ) => void | Promise<void>,
+    ) => Effect.Effect<void>,
   ): void {
     const watcher = vscode.workspace.createFileSystemWatcher(
       new vscode.RelativePattern(directoryUri, pattern),
@@ -328,96 +322,109 @@ class AgentDirectoryManager {
     );
     this.watcherDisposables.push(watcher);
 
+    const runOnCreateOrDelete = (
+      type: 'create' | 'delete',
+      uri: vscode.Uri,
+    ) => {
+      const program = onCreateOrDelete?.(type, uri);
+      if (program) this.getHost().runtime.runFork(program);
+    };
     watcher.onDidCreate((uri) => {
       this.notifyAgentYamlChange(uri);
-      void onCreateOrDelete?.('create', uri);
+      runOnCreateOrDelete('create', uri);
     });
     watcher.onDidChange((uri) => this.notifyAgentYamlChange(uri));
     watcher.onDidDelete((uri) => {
       this.notifyAgentYamlChange(uri);
-      void onCreateOrDelete?.('delete', uri);
+      runOnCreateOrDelete('delete', uri);
     });
   }
 
-  private async watchExternalCustomDirectory(
+  private watchExternalCustomDirectory(
     directoryUri: vscode.Uri,
     previousDirectoryPaths: ReadonlySet<string>,
-  ): Promise<void> {
-    const directories = await this.collectDirectoryUris(directoryUri);
-    const newlyWatchedDirectories: vscode.Uri[] = [];
+  ): Effect.Effect<void> {
+    return Effect.gen({ self: this }, function* () {
+      const directories = yield* this.collectDirectoryUris(directoryUri);
+      const newlyWatchedDirectories: vscode.Uri[] = [];
 
-    for (const dirUri of directories) {
-      const normalizedDirectoryPath = this.normalizeFsPath(dirUri.fsPath);
-      if (
-        previousDirectoryPaths.size > 0 &&
-        !previousDirectoryPaths.has(normalizedDirectoryPath)
-      ) {
-        newlyWatchedDirectories.push(dirUri);
+      for (const dirUri of directories) {
+        const normalizedDirectoryPath = this.normalizeFsPath(dirUri.fsPath);
+        if (
+          previousDirectoryPaths.size > 0 &&
+          !previousDirectoryPaths.has(normalizedDirectoryPath)
+        ) {
+          newlyWatchedDirectories.push(dirUri);
+        }
+        this.externalWatcherDirectoryPaths.add(normalizedDirectoryPath);
+        this.watchDirectoryTree(dirUri, '*', (type, uri) =>
+          this.handleExternalDirectoryTreeChange(type, uri),
+        );
       }
-      this.externalWatcherDirectoryPaths.add(normalizedDirectoryPath);
-      this.watchDirectoryTree(dirUri, '*', (type, uri) =>
-        this.handleExternalDirectoryTreeChange(type, uri),
-      );
-    }
 
-    await this.dispatchExistingYamlFiles(newlyWatchedDirectories);
+      yield* this.dispatchExistingYamlFiles(newlyWatchedDirectories);
+    });
   }
 
-  private async collectDirectoryUris(root: vscode.Uri): Promise<vscode.Uri[]> {
-    const directories: vscode.Uri[] = [];
-    const pending: vscode.Uri[] = [root];
-    const visitedRealPaths = new Set<string>();
+  private collectDirectoryUris(root: vscode.Uri): Effect.Effect<vscode.Uri[]> {
+    return Effect.gen({ self: this }, function* () {
+      const directories: vscode.Uri[] = [];
+      const pending: vscode.Uri[] = [root];
+      const visitedRealPaths = new Set<string>();
 
-    for (let i = 0; i < pending.length; i++) {
-      const uri = pending[i];
-      const realPath = await this.realDirectoryPath(uri);
-      if (visitedRealPaths.has(realPath)) {
-        continue;
-      }
+      for (let i = 0; i < pending.length; i++) {
+        const uri = pending[i];
+        const realPath = yield* this.realDirectoryPath(uri);
+        if (visitedRealPaths.has(realPath)) {
+          continue;
+        }
 
-      visitedRealPaths.add(realPath);
-      directories.push(uri);
+        visitedRealPaths.add(realPath);
+        directories.push(uri);
 
-      const listed = await this.getHost().runtime.runPromiseExit(
-        Effect.tryPromise({
+        const entries = yield* Effect.tryPromise({
           try: () => vscode.workspace.fs.readDirectory(uri),
           catch: (error) => error,
-        }),
-      );
-      if (Exit.isFailure(listed)) {
-        log.debug(
-          `Unable to scan agent directory ${uri.fsPath}: ${toErrorMessage(Cause.squash(listed.cause))}`,
+        }).pipe(
+          Effect.catch((error) =>
+            Effect.sync(() => {
+              log.debug(
+                `Unable to scan agent directory ${uri.fsPath}: ${toErrorMessage(error)}`,
+              );
+              return [] as Array<[string, vscode.FileType]>;
+            }),
+          ),
         );
-        continue;
-      }
-      const entries = listed.value;
 
-      for (const [name, type] of entries) {
-        if ((type & vscode.FileType.Directory) !== 0) {
-          pending.push(vscode.Uri.joinPath(uri, name));
+        for (const [name, type] of entries) {
+          if ((type & vscode.FileType.Directory) !== 0) {
+            pending.push(vscode.Uri.joinPath(uri, name));
+          }
         }
       }
-    }
 
-    return directories;
+      return directories;
+    });
   }
 
-  private async handleExternalDirectoryTreeChange(
+  private handleExternalDirectoryTreeChange(
     type: 'create' | 'delete',
     uri: vscode.Uri,
-  ): Promise<void> {
-    if (type === 'create') {
-      if (await this.isDirectoryUri(uri)) {
+  ): Effect.Effect<void> {
+    return Effect.gen({ self: this }, function* () {
+      if (type === 'create') {
+        if (yield* this.isDirectoryUri(uri)) {
+          this.requestAgentWatcherRebuild();
+        }
+        return;
+      }
+
+      if (
+        this.externalWatcherDirectoryPaths.has(this.normalizeFsPath(uri.fsPath))
+      ) {
         this.requestAgentWatcherRebuild();
       }
-      return;
-    }
-
-    if (
-      this.externalWatcherDirectoryPaths.has(this.normalizeFsPath(uri.fsPath))
-    ) {
-      this.requestAgentWatcherRebuild();
-    }
+    });
   }
 
   /**
@@ -431,37 +438,37 @@ class AgentDirectoryManager {
     this.scheduleAgentWatcherSetup();
   }
 
-  private async dispatchExistingYamlFiles(
+  private dispatchExistingYamlFiles(
     directories: readonly vscode.Uri[],
-  ): Promise<void> {
-    for (const directory of directories) {
-      const listed = await this.getHost().runtime.runPromiseExit(
-        Effect.tryPromise({
+  ): Effect.Effect<void> {
+    return Effect.gen({ self: this }, function* () {
+      for (const directory of directories) {
+        const entries = yield* Effect.tryPromise({
           try: () => vscode.workspace.fs.readDirectory(directory),
           catch: (error) => error,
-        }),
-      );
-      if (Exit.isFailure(listed)) {
-        log.debug(
-          `Unable to scan new agent directory ${directory.fsPath}: ${toErrorMessage(Cause.squash(listed.cause))}`,
+        }).pipe(
+          Effect.catch((error) =>
+            Effect.sync(() => {
+              log.debug(
+                `Unable to scan new agent directory ${directory.fsPath}: ${toErrorMessage(error)}`,
+              );
+              return [] as Array<[string, vscode.FileType]>;
+            }),
+          ),
         );
-        continue;
-      }
 
-      for (const [name, type] of listed.value) {
-        if ((type & vscode.FileType.File) !== 0 && name.endsWith('.yaml')) {
-          this.onAgentYamlChange?.();
+        for (const [name, type] of entries) {
+          if ((type & vscode.FileType.File) !== 0 && name.endsWith('.yaml')) {
+            this.onAgentYamlChange?.();
+          }
         }
       }
-    }
+    });
   }
 
   private scheduleAgentWatcherSetup(): void {
     this.getHost().runtime.runFork(
-      Effect.tryPromise({
-        try: () => this.ensureAgentWatchers(),
-        catch: (error) => error,
-      }).pipe(
+      this.ensureAgentWatchers().pipe(
         Effect.catch((error) =>
           Effect.sync(() => {
             log.error(
@@ -473,29 +480,21 @@ class AgentDirectoryManager {
     );
   }
 
-  private async isDirectoryUri(uri: vscode.Uri): Promise<boolean> {
-    const stat = await this.getHost().runtime.runPromiseExit(
-      Effect.tryPromise({
-        try: () => vscode.workspace.fs.stat(uri),
-        catch: (error) => error,
-      }),
-    );
-    return (
-      Exit.isSuccess(stat) &&
-      (stat.value.type & vscode.FileType.Directory) !== 0
+  private isDirectoryUri(uri: vscode.Uri): Effect.Effect<boolean> {
+    return Effect.tryPromise({
+      try: () => vscode.workspace.fs.stat(uri),
+      catch: (error) => error,
+    }).pipe(
+      Effect.map((stat) => (stat.type & vscode.FileType.Directory) !== 0),
+      Effect.orElseSucceed(() => false),
     );
   }
 
-  private async realDirectoryPath(uri: vscode.Uri): Promise<string> {
-    const realPath = await this.getHost().runtime.runPromiseExit(
-      Effect.tryPromise({
-        try: () => fs.realpath(uri.fsPath),
-        catch: (error) => error,
-      }),
-    );
-    return Exit.isSuccess(realPath)
-      ? realPath.value
-      : this.normalizeFsPath(uri.fsPath);
+  private realDirectoryPath(uri: vscode.Uri): Effect.Effect<string> {
+    return Effect.tryPromise({
+      try: () => fs.realpath(uri.fsPath),
+      catch: (error) => error,
+    }).pipe(Effect.orElseSucceed(() => this.normalizeFsPath(uri.fsPath)));
   }
 
   private normalizeFsPath(fsPath: string): string {
