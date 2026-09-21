@@ -49,6 +49,7 @@
     "check:desktop-package": "node scripts/verify-desktop-package.mjs",
     "check:dead-code-ratchet": "node scripts/check-dead-code-ratchet.mjs",
     "check:effect-migration-ratchet": "node scripts/check-effect-migration-ratchet.mjs",
+    "check:refuted-candidates": "node scripts/check-refuted-candidates.mjs",
     "check:unexecuted-effects": "node scripts/check-unexecuted-effects.mjs",
     "check:guidance-refs": "node scripts/check-guidance-refs.mjs",
     "check:proposal-status": "node scripts/check-proposal-status.mjs",

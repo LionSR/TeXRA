@@ -5,8 +5,8 @@
  * (edge kinds, per-binding type-space); the file walk, the parse call, and the
  * plain "which modules does this file load" scan live here.
  */
-import { readFileSync, readdirSync } from 'node:fs';
-import { join, relative, resolve } from 'node:path';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { join, posix, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import ts from 'typescript';
@@ -24,6 +24,20 @@ export const ALL_HOST_PRODUCTION_ROOTS = Object.freeze([
   'packages/extension/src',
   'src',
 ] as const);
+
+/**
+ * Every production source root: `src` plus each workspace package that has
+ * one, derived from the tree rather than listed, so a package added later is
+ * covered on the day it lands. Wider than ALL_HOST_PRODUCTION_ROOTS, which is
+ * the four host roots; the budget ratchets (file size, unknown error channel)
+ * scan this.
+ */
+export function productionRoots(): string[] {
+  const packages = readdirSync(resolve(REPO_ROOT, 'packages'))
+    .filter((name) => existsSync(resolve(REPO_ROOT, 'packages', name, 'src')))
+    .map((name) => posix.join('packages', name, 'src'));
+  return ['src', ...packages.toSorted((a, b) => a.localeCompare(b))];
+}
 
 export const SOURCE_FILE = /\.(?:ts|tsx|mts|cts)$/;
 

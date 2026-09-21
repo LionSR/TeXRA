@@ -1,0 +1,187 @@
+{
+  "semantics": "Refactor candidates that were investigated, costed and refused, as data rather than prose (.agents/docs/proposed/process/2026-09-20-agent-refactorability-gates.md section 2). Each candidate carries an `id`, the `symbols` that carry its shape, and a `ruling` anchor holding the evidence. Two enforcement points, because a pure-tier suite has no PR body. (1) src/test-kernel/architecture/refutedCandidatesRatchet.vitest.ts pins every symbol's `signature` — the declaration with its bodies elided as `{…}`, comments stripped, whitespace collapsed — so a symbol that changes shape fails until the baseline is updated in the same PR. (2) .github/workflows/refuted-candidates.yml fails a pull request whose diff touches a refuted symbol's declaration unless the PR body cites that candidate's `id`. Neither gate forbids the change: they require the author to have read the ruling and to say so. Re-proposing a refused candidate as originally specified is the failure this exists to stop; landing a candidate on NEW evidence is legal, and that PR cites the id, states what changed, and deletes or rewrites the entry.",
+  "candidates": [
+    {
+      "id": "EFF-ADOPT-per-key-lane-semaphore",
+      "candidate": "withPerKeyLane onto an Effect Semaphore",
+      "why": "Semaphore barges; the lane is FIFO and offers a synchronous refuse. The six lane maps are also self-pruning, so making them services is a pure net-add.",
+      "ruling": ".agents/docs/proposed/simplification/2026-09-20-effect-facility-adoption.md#3-not-re-proposed",
+      "symbols": [
+        {
+          "file": "src/utils/core/perKeyQueue.ts",
+          "symbol": "withPerKeyLane",
+          "signature": "export function withPerKeyLane<Key, RefusalE = never>( lanes: PerKeyLanes<Key>, key: Key, refuseClaim?: (occupant: PerKeyLane | undefined) => RefusalE | undefined, ): <A, E, R>( self: Effect.Effect<A, E, R>, ) => Effect.Effect<A, E | RefusalE, R> {…}"
+        }
+      ]
+    },
+    {
+      "id": "EFF-ADOPT-retry-gate-schedule",
+      "candidate": "ModelRetryGate onto Schedule",
+      "why": "The gate is a cross-fiber circuit breaker shared by every call on a route; Schedule is per-fiber.",
+      "ruling": ".agents/docs/proposed/simplification/2026-09-20-effect-facility-adoption.md#3-not-re-proposed",
+      "symbols": [
+        {
+          "file": "src/agent/runtime/ModelRetryGate.ts",
+          "symbol": "ModelRetryGate",
+          "signature": "export class ModelRetryGate { static readonly make: Effect.Effect<ModelRetryGate, never, Scope.Scope> = Effect.gen(function* () {…}); private readonly routes = new Map<string, RouteState>(); private closed = false; private constructor(private readonly scope: Scope.Scope) {…} withRoutes( routes: readonly [RoutePolicy, ...RoutePolicy[]], options: RouteOptions, ): <A, E, R>(attempt: Effect.Effect<A, E, R>) => Effect.Effect<A, E, R> {…} private settle( acquired: readonly AcquiredRoute[], exit: Exit.Exit<unknown, unknown>, baseBackoffMs: number, ): Effect.Effect<void> {…} private acquireAll( routes: readonly RoutePolicy[], onWait: RouteOptions['onWait'], ): Effect.Effect<AcquiredRoute[]> {…} private isCurrentPermit(route: string, permit: RetryPermit): boolean {…} private close(): Effect.Effect<void> {…} private acquire( route: string, onWait: RouteOptions['onWait'], ): Effect.Effect<RetryPermit> {…} private leave(state: RouteState, waiter: Waiter): Effect.Effect<void> {…} private acquireHealthy(route: string): RetryPermit | undefined {…} private markRouteFailure( route: string, permit: RetryPermit, baseBackoffMs: number, failure: RouteFailure, ): Effect.Effect<void> {…} private markReachable( route: string, permit: RetryPermit, ): Effect.Effect<void> {…} private abandonAll(acquired: readonly AcquiredRoute[]): Effect.Effect<void> {…} private abandon(route: string, permit: RetryPermit): Effect.Effect<void> {…} private abandonRoute( state: RouteState, permit: RetryPermit, ): Effect.Effect<void> {…} private cancelProbe(state: RouteState): Effect.Effect<void> {…} private scheduleProbe(state: RouteState): Effect.Effect<void> {…} }"
+        }
+      ]
+    },
+    {
+      "id": "EFF-ADOPT-timeouts-already-effect",
+      "candidate": "src/tools/timeouts.ts onto Effect timeouts and Schedule",
+      "why": "Already Effect.timeoutOrElse and Schedule. The one real item in this area is the duplicated [1, 2) backoff spelling, which moves to a host-neutral module; the module itself is not the candidate.",
+      "ruling": ".agents/docs/proposed/simplification/2026-09-20-effect-facility-adoption.md#3-not-re-proposed",
+      "symbols": [
+        {
+          "file": "src/tools/timeouts.ts",
+          "symbol": "retryTransientFetch",
+          "signature": "export const retryTransientFetch = Effect.fn('timeouts.retryTransientFetch')( <T, E, R>( request: Effect.Effect<T, E, R>, options: RetryTransientFetchOptions, ) => {…}, );"
+        }
+      ]
+    },
+    {
+      "id": "EFF-ADOPT-jitter-helper-stays",
+      "candidate": "Folding jitteredExponentialBackoffMs into the shared [1, 2) backoff Schedule",
+      "why": "A different contract: symmetric ±20 % jitter with a cap, used by ModelRetryGate and GitHub polling. Schedule.jittered over the [1, 2) contract would cut the mean wait by a third.",
+      "ruling": ".agents/docs/proposed/simplification/2026-09-20-effect-facility-adoption.md#2-changes",
+      "symbols": [
+        {
+          "file": "src/utils/core/index.ts",
+          "symbol": "jitteredExponentialBackoffMs",
+          "signature": "export function jitteredExponentialBackoffMs( baseMs: number, failures: number, maxMs: number, jitterFraction = 0.2, ): number {…}"
+        }
+      ]
+    },
+    {
+      "id": "RT-execute-command-lift",
+      "candidate": "executeCommand as one lifted round trip",
+      "why": "It is a program reached from 56 files, not a lane with a single foreign edge.",
+      "ruling": ".agents/docs/proposed/simplification/2026-09-17-effect-round-trips-and-dual-systems.md#8-refuted-candidates-do-not-re-mine",
+      "symbols": [
+        {
+          "file": "src/utils/system/execUtils.ts",
+          "symbol": "executeCommand",
+          "signature": "export function executeCommand( command: string | string[], options: ExecuteCommandBaseOptions, ): Effect.Effect<ExecResult> {…}"
+        }
+      ]
+    },
+    {
+      "id": "RT-install-cli-process-runtime",
+      "candidate": "installCliProcessRuntime as an Effect program",
+      "why": "It is the bootstrap edge itself, so there is no runtime to run it on; an Effect face forces a bare Effect.run* at every citty action and grows BARE_EFFECT_RUN_SITES from 7 to about 20.",
+      "ruling": ".agents/docs/proposed/simplification/2026-09-17-effect-round-trips-and-dual-systems.md#refuted-or-declined-at-implementation",
+      "symbols": [
+        {
+          "file": "packages/cli/src/runtime/cliProcessRuntime.ts",
+          "symbol": "installCliProcessRuntime",
+          "signature": "export function installCliProcessRuntime( storageRoot?: string, options?: { readonly appState: StateStore; readonly globalDatabase: Layer.Layer<GlobalDatabase>; }, ): Promise<ProcessRuntime> {…}"
+        }
+      ]
+    },
+    {
+      "id": "RT-define-cli-command-run",
+      "candidate": "defineCliCommand's run as an Effect",
+      "why": "It types 35 command handlers, two of them entirely Promise-native; installGithubAction.ts would become a runtime effect importer with try/catch and trip the catch:effect-importer row.",
+      "ruling": ".agents/docs/proposed/simplification/2026-09-17-effect-round-trips-and-dual-systems.md#refuted-or-declined-at-implementation",
+      "symbols": [
+        {
+          "file": "packages/cli/src/commands/_helpers/defineCliCommand.ts",
+          "symbol": "defineCliCommand",
+          "signature": "export function defineCliCommand<const A extends ArgsDef>( options: DefineCliCommandOptions<A>, ): CommandDef<A> {…}"
+        }
+      ]
+    },
+    {
+      "id": "RT-write-raw-and-wait",
+      "candidate": "writeRawAndWait as an Effect",
+      "why": "It runs after the process runtime is disposed, so its Effect form needed a bare Effect.runSync and was reverted; the CLI drops its last stderr line without it.",
+      "ruling": ".agents/docs/proposed/simplification/2026-09-17-effect-round-trips-and-dual-systems.md#refuted-or-declined-at-implementation",
+      "symbols": [
+        {
+          "file": "packages/cli/src/runtime/logSinks.ts",
+          "symbol": "writeRawAndWait",
+          "signature": "function writeRawAndWait(key: StreamKey, text: string): Promise<void> {…}"
+        }
+      ]
+    },
+    {
+      "id": "RT-run-resume-command",
+      "candidate": "runResumeCommand as a round trip",
+      "why": "Not a round trip: resume.ts's citty run(ctx) awaits the promise at an R1 entry.",
+      "ruling": ".agents/docs/proposed/simplification/2026-09-17-effect-round-trips-and-dual-systems.md#refuted-or-declined-at-implementation",
+      "symbols": [
+        {
+          "file": "packages/cli/src/commands/resumeRun.ts",
+          "symbol": "runResumeCommand",
+          "signature": "export async function runResumeCommand( context: CliContext, id: RunId, ): Promise<number> {…}"
+        }
+      ]
+    },
+    {
+      "id": "RT-corrupt-record-tag",
+      "candidate": "A corrupt-record tag on run-record reads",
+      "why": "decodeEvent already folds a Zod fault into DatabaseReadFailed, so there is no second condition to name. A per-row tag, if ever wanted, belongs in decodeEvent and changes every read of the store.",
+      "ruling": ".agents/docs/proposed/simplification/2026-09-17-effect-round-trips-and-dual-systems.md#refuted-or-declined-at-implementation",
+      "symbols": [
+        {
+          "file": "src/controllers/session/Database.ts",
+          "symbol": "decodeEvent",
+          "signature": "function decodeEvent(row: Record<string, unknown>): SessionEvent {…}"
+        }
+      ]
+    },
+    {
+      "id": "RT-subscription-usage-typed-failure",
+      "candidate": "A typed failure on the subscription-usage fetch",
+      "why": "SubscriptionUsageHttpError | UnknownError would reclassify a malformed body and a 401 as request_failed at the call sites, and handing the fetch the fiber's AbortSignal would drop requestTimeoutMs.",
+      "ruling": ".agents/docs/proposed/simplification/2026-09-17-effect-round-trips-and-dual-systems.md#refuted-or-declined-at-implementation",
+      "symbols": [
+        {
+          "file": "src/controllers/modelAccess/subscriptionUsage/subscriptionUsageParsing.ts",
+          "symbol": "fetchSubscriptionUsage",
+          "signature": "export function fetchSubscriptionUsage(request: { readonly url: string; readonly headers: Record<string, string>; readonly signal: AbortSignal; }): Effect.Effect<unknown, unknown> {…}"
+        }
+      ]
+    },
+    {
+      "id": "RT-desktop-pty-host-effect",
+      "candidate": "The desktop PTY host as an Effect",
+      "why": "Built, measured, reverted: the file would become a runtime effect importer whose catch sites two of five are irreducibly synchronous, so it needs Effect.runSync in a module holding no runtime. Measured +21 LoC for one lift removed.",
+      "ruling": ".agents/docs/proposed/simplification/2026-09-17-effect-round-trips-and-dual-systems.md#refuted-or-declined-at-implementation",
+      "symbols": [
+        {
+          "file": "packages/desktop/src/main/desktopPtyHost.ts",
+          "symbol": "createDesktopPtyHost",
+          "signature": "export function createDesktopPtyHost( options: DesktopPtyHostOptions, ): DesktopPtyHost {…}"
+        }
+      ]
+    },
+    {
+      "id": "SCOPE-held-sessions-as-effects",
+      "candidate": "current/held as Effects, deleting HeldSessions",
+      "why": "Zero production breaks, but 414 testDefaultSession() call sites in 45 suites and one dev harness, for about 35 LoC. Fails the tests-are-a-budget bar.",
+      "ruling": ".agents/docs/proposed/simplification/2026-09-20-service-scope-ownership-ledger.md#33-refuted-with-the-evidence",
+      "symbols": [
+        {
+          "file": "src/controllers/session/sessionLayer.ts",
+          "symbol": "HeldSessions",
+          "signature": "type HeldSessions = Map<SessionKey, SessionHandle>;"
+        }
+      ]
+    },
+    {
+      "id": "SCOPE-external-roots-standalone-service",
+      "candidate": "ExternalRoots as a standalone service",
+      "why": "One writer, four VS Code-free readers, keyed by kind not by session: a process-wide allowlist with a sound freeze rule. A process service is the correct shape but is +4 signatures for 0 deletions today; recorded as a hazard on #12071.",
+      "ruling": ".agents/docs/proposed/simplification/2026-09-20-service-scope-ownership-ledger.md#33-refuted-with-the-evidence",
+      "symbols": [
+        {
+          "file": "src/utils/files/externalRoots.ts",
+          "symbol": "registerExternalRoot",
+          "signature": "export function registerExternalRoot( absolutePath: string, options: { kind: ExternalRootKind; writable: boolean; label: string }, ): void {…}"
+        }
+      ]
+    }
+  ]
+}

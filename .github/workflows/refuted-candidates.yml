@@ -1,0 +1,60 @@
+# The pull-request half of the refuted-candidate gate
+# (.agents/docs/proposed/process/2026-09-20-agent-refactorability-gates.md
+# section 2). config/ratchets/refuted-candidates.json records the refactor
+# candidates that were investigated, costed and refused; the pure-tier suite
+# pins each symbol's shape, and this job adds the half a suite cannot do,
+# because it has no pull-request body: a diff that touches a refused
+# declaration must cite that candidate's ruling id.
+#
+# It runs beside the review workflows rather than inside `ci.yml`'s `checks`
+# job for two reasons: it needs the PR body and the full history the base
+# diff reads, and the script imports only Node built-ins, so this job installs
+# nothing.
+name: Refuted candidates
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+
+concurrency:
+  group: refuted-candidates-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  refuted-candidates:
+    name: refused refactor candidates
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          # The base diff needs both sides; a shallow clone has neither the
+          # base commit nor the merge base.
+          fetch-depth: 0
+
+      # setup-node@v5 caches the package manager named by package.json's
+      # `packageManager` (pnpm) by default and fails when pnpm is absent;
+      # this job installs nothing, so opt out.
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          package-manager-cache: false
+
+      # The base is the base BRANCH as it stands now, not
+      # `pull_request.base.sha`, which is the branch tip when the pull request
+      # was opened. Checkout gives us the merge ref, so a three-dot diff
+      # against a stale base sha would hand the gate every commit the base
+      # branch has landed since — and fail the PR over someone else's edit to
+      # a refused declaration.
+      #
+      # Both the body and the base ref go through the environment rather than
+      # into the command line, so neither can be read as shell.
+      - name: Check refused refactor candidates
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+          git fetch --no-tags origin "$BASE_REF"
+          node scripts/check-refuted-candidates.mjs --base "$(git rev-parse FETCH_HEAD)"
