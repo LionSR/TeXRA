@@ -454,9 +454,7 @@ export function App(props: AppProps): React.JSX.Element {
     pendingEscapeInterrupt.current = undefined;
   };
 
-  useEffect(() => {
-    return clearPendingEscapeInterrupt;
-  }, []);
+  useEffect(() => clearPendingEscapeInterrupt, []);
 
   const handleMetaShortcut = (value: string): boolean => {
     if (!/^[1-9]$/.test(value)) return false;
@@ -471,13 +469,10 @@ export function App(props: AppProps): React.JSX.Element {
 
   const parentIdOf = (runId: RunId): RunId | undefined =>
     runViewOf(currentView(), runId)?.parentId ?? undefined;
-  const bareEscapeActive = (runId: RunId): boolean => {
-    const state = escapeInterruptStateRef.current;
-    return (
-      appOwnsEscape() &&
-      (parentIdOf(runId) !== undefined || state.canInterruptRun(runId))
-    );
-  };
+  const bareEscapeActive = (runId: RunId): boolean =>
+    appOwnsEscape() &&
+    (parentIdOf(runId) !== undefined ||
+      escapeInterruptStateRef.current.canInterruptRun(runId));
 
   const handleBareEscape = (runId: RunId): boolean => {
     if (selectedRunIdSignal.get() !== runId || !bareEscapeActive(runId)) {
@@ -498,10 +493,7 @@ export function App(props: AppProps): React.JSX.Element {
   const handlePendingBareEscape = (
     runId: RunId,
     parentRunId: RunId | undefined,
-  ): boolean => {
-    if (parentIdOf(runId) !== parentRunId) return false;
-    return handleBareEscape(runId);
-  };
+  ): boolean => parentIdOf(runId) === parentRunId && handleBareEscape(runId);
 
   const scheduleBareEscape = (runId: RunId) => {
     clearPendingEscapeInterrupt();

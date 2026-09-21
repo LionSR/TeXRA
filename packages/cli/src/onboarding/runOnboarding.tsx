@@ -53,8 +53,7 @@ import {
   ONBOARDING_CHOICE_SKIP_LABEL,
 } from '@shared/copy/onboarding';
 import { assertNever } from '@utils/core';
-import { ensureError } from '@utils/errors/errorMessage';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { ApiKeyEntryForm } from '../chat/tui/forms/ApiKeyEntryForm';
 import { signInCliSubscription } from '../runtime/subscriptionLogin';
 import { commitOnboardingProviderApiKey } from '../chat/tui/hosts/cliProviderKeys';
@@ -332,25 +331,22 @@ function OnboardingApp(props: OnboardingAppProps): React.JSX.Element {
   }
 
   if (screen === 'chatgpt-progress') {
-    const onSuccess = (account: SubscriptionAccount): void => {
-      const label = account.label;
-      finish({
-        configured: true,
-        declined: false,
-        summary: `Signed in with ChatGPT as ${label}. ChatGPT subscription enabled for Codex models.`,
-      });
-    };
-    const onError = (message: string): void => {
-      setError(message);
-      setScreen('picker');
-    };
     return (
       <ChatGptProgressStep
         stores={props.stores}
         runtime={props.runtime}
         device={isLikelyRemoteSession()}
-        onSuccess={onSuccess}
-        onError={onError}
+        onSuccess={(account) =>
+          finish({
+            configured: true,
+            declined: false,
+            summary: `Signed in with ChatGPT as ${account.label}. ChatGPT subscription enabled for Codex models.`,
+          })
+        }
+        onError={(message) => {
+          setError(message);
+          setScreen('picker');
+        }}
       />
     );
   }
@@ -493,18 +489,13 @@ function PickerStep(props: {
   );
 }
 
-interface ChatGptProgressCallbacks {
+function ChatGptProgressStep(props: {
   readonly onSuccess: (account: SubscriptionAccount) => void;
   readonly onError: (message: string) => void;
-}
-
-function ChatGptProgressStep(
-  props: ChatGptProgressCallbacks & {
-    readonly stores: SettingsStores;
-    readonly runtime: ProcessRuntime;
-    readonly device: boolean;
-  },
-): React.JSX.Element {
+  readonly stores: SettingsStores;
+  readonly runtime: ProcessRuntime;
+  readonly device: boolean;
+}): React.JSX.Element {
   const { device, runtime, stores } = props;
   const [message, setMessage] = useState(
     device
