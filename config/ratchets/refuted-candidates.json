@@ -2,6 +2,24 @@
   "semantics": "Refactor candidates that were investigated, costed and refused, as data rather than prose (.agents/docs/proposed/process/2026-09-20-agent-refactorability-gates.md section 2). Each candidate carries an `id`, the `symbols` that carry its shape, and a `ruling` anchor holding the evidence. Two enforcement points, because a pure-tier suite has no PR body. (1) src/test-kernel/architecture/refutedCandidatesRatchet.vitest.ts pins every symbol's `signature` — the declaration with its bodies elided as `{…}`, comments stripped, whitespace collapsed — so a symbol that changes shape fails until the baseline is updated in the same PR. (2) .github/workflows/refuted-candidates.yml fails a pull request whose diff touches a refuted symbol's declaration unless the PR body cites that candidate's `id`. Neither gate forbids the change: they require the author to have read the ruling and to say so. Re-proposing a refused candidate as originally specified is the failure this exists to stop; landing a candidate on NEW evidence is legal, and that PR cites the id, states what changed, and deletes or rewrites the entry.",
   "candidates": [
     {
+      "id": "EFF-ADOPT-config-provider",
+      "candidate": "the platform config providers onto an Effect ConfigProvider",
+      "why": "Config<T> over the platform port's own get buys nothing: the read stays synchronous and answers for the workspace the caller was handed. Naming each row a second time as Config.Boolean/Config.Int beside the Zod catalog row that owns it is a dual schema system with a ConfigError where readSettingFrom's validation already stands. Settings stay synchronous by ruling; Effect Config is for process.env reads, a separate lane.",
+      "ruling": ".agents/docs/proposed/simplification/2026-09-20-effect-facility-adoption.md#3-not-re-proposed",
+      "symbols": [
+        {
+          "file": "src/platform/interfaces.ts",
+          "symbol": "ConfigProvider",
+          "signature": "export interface ConfigProvider { get<T>(key: string, defaultValue?: T): T; update<T>( key: string, value: T, target?: ConfigTarget, ): Effect.Effect<void, ConfigWriteFailed>; inspect<T = unknown>(key: string): ConfigInspection<T> | undefined; }"
+        },
+        {
+          "file": "src/platform/defaults/jsonConfigProvider.ts",
+          "symbol": "JsonConfigProvider",
+          "signature": "export class JsonConfigProvider implements ConfigProvider { private readonly workspaceStore: ConfigStore; private readonly globalStore: ConfigStore; constructor({ workspace, global }: JsonConfigProviderOptions) {\u2026} get<T>(key: string, defaultValue?: T): T {\u2026} update<T>( key: string, value: T, target: ConfigTarget = 'workspace', ): Effect.Effect<void, ConfigWriteFailed> {\u2026} inspect<T = unknown>(key: string): ConfigInspection<T> | undefined {\u2026} }"
+        }
+      ]
+    },
+    {
       "id": "EFF-ADOPT-per-key-lane-semaphore",
       "candidate": "withPerKeyLane onto an Effect Semaphore",
       "why": "Semaphore barges; the lane is FIFO and offers a synchronous refuse. The six lane maps are also self-pruning, so making them services is a pure net-add.",
