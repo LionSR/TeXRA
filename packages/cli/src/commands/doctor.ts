@@ -48,9 +48,6 @@ function doctorReport(context: CliContext): Effect.Effect<DoctorReport> {
       );
     }
     const services = init.value;
-    // Consent is read from the workspace configuration the init installed;
-    // without it the telemetry check reports the gap.
-    const roots = services.roots;
     // The healthy report settles on the root's own context — the provision
     // `services.runtime.runPromise` made before this became one program — so
     // the availability read takes the process's `LanguageModel` port from it
@@ -63,9 +60,9 @@ function doctorReport(context: CliContext): Effect.Effect<DoctorReport> {
           services.runtime,
           getCliModelAccessList({ stores: services }),
         ),
-        ...(roots && {
-          usageLoggingOptOut: () => usageLoggingOptOut(roots.config),
-        }),
+        // Consent is read from the workspace configuration the init
+        // installed.
+        usageLoggingOptOut: () => usageLoggingOptOut(services.roots.config),
       }),
     );
   });

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { addCdataToTagsMultiple, removeCDATA } from '@utils/text/xmlCdata';
 
-describe('xmlUtils CDATA handling', () => {
+describe('xmlCdata CDATA handling', () => {
   it.each([
     {
       tag: 'document',

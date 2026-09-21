@@ -9,7 +9,7 @@ import {
   selectIndexForHotkeyInput,
 } from '@cli/tui/ui/Select';
 
-describe('Select hotkeys', () => {
+describe('Select hotkeys (packages/cli/src/tui/ui/Select.tsx)', () => {
   it('numbers the first nine rows 1-9, then letters a-z for 10-35', () => {
     expect(selectHotkeyForIndex(0)).toBe('1');
     expect(selectHotkeyForIndex(8)).toBe('9');

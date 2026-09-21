@@ -50,9 +50,9 @@ export class RunLanes {
 
   /**
    * Whether a generation of `runId` is live in this process: a step holding or
-   * waiting on its lane, or a generation still unwinding. A parked turn holds
-   * neither — its lane was released with its generation, which is what leaves
-   * it resumable.
+   * waiting on its lane, or a caller holding it against local ownership
+   * ({@link holdInactive}). A parked turn holds neither — its lane was
+   * released with its generation, which is what leaves it resumable.
    */
   isHeld(runId: string): boolean {
     const lane = this.lanes.get(runId);

@@ -24,8 +24,7 @@ import { formatTimestamp } from '@utils/text/stringUtils';
  * (`workflow` / `toolUse`), every other run shows what it IS
  * (`process` / `multiAgentWorkflow`).
  */
-export type RunDisplayCategory =
-  AgentCategory | Exclude<RunIdentity['kind'], 'agent'>;
+type RunDisplayCategory = AgentCategory | Exclude<RunIdentity['kind'], 'agent'>;
 
 export function runDisplayCategory(run: RunView): RunDisplayCategory {
   return run.identity.kind === 'agent' ? run.category : run.identity.kind;

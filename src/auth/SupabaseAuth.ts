@@ -48,11 +48,12 @@ const log = createLog('SupabaseAuth');
  * This is the one shape `@supabase/auth-js` accepts, and it is only consulted
  * when `persistSession` is true — hence that flag below.
  *
- * Extension OAuth stores the flow id beside its application nonce and passes it
- * directly to code exchange, so concurrent attempts select separate verifier
- * slots without adding another callback query parameter. Hosts that omit a flow
- * id retain auth-js's fixed-verifier fallback. Flow-id slots are tracked in a
- * five-entry index; concurrent starts in separate hosts can race that index.
+ * The sign-in coordinator stores the flow id beside its application nonce on
+ * every host and passes it directly to code exchange, so concurrent attempts
+ * select separate verifier slots without adding another callback query
+ * parameter; a sign-in whose initialization returns no flow id fails rather
+ * than falling back to auth-js's fixed verifier. Flow-id slots are tracked in
+ * a five-entry index; concurrent starts in separate hosts can race that index.
  */
 function gotrueStorage(
   secrets: SessionSecretStore,

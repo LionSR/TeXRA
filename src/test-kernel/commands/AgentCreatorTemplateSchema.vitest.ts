@@ -37,7 +37,7 @@ function buildWithWorkflowPrompts(prompts: Record<string, unknown>) {
   });
 }
 
-describe('bundled agent-creator template loading', () => {
+describe('bundled agent-creator template loading (src/agent/implementations/agentCreator/agentCreatorFlow.ts)', () => {
   it.each(['systemPrompt', 'userRequest'])(
     'rejects empty or whitespace-only %s',
     (field) => {
