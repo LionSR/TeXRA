@@ -143,10 +143,9 @@ export class SupabaseSignInCoordinator {
   /** Serializes callback claims, so two windows cannot claim one attempt. */
   private readonly claims = new SerializedWrites();
   /**
-   * Every nonce this coordinator minted. A claimed callback whose nonce is
-   * not one of them belongs to another window or to an earlier process, so it
-   * completes unattended instead of being mistaken for this coordinator's own
-   * superseded attempt. One hex string per interactive sign-in.
+   * Every nonce this coordinator minted. A claimed callback carrying any
+   * other nonce is another window's, or an earlier process's, so it completes
+   * unattended instead of counting as this coordinator's superseded attempt.
    */
   private readonly minted = new Set<string>();
   private active: SignInAttempt | undefined;
@@ -318,9 +317,7 @@ export class SupabaseSignInCoordinator {
 
       const attempt = this.attemptFor(claimed.nonce);
       if (!attempt && this.minted.has(claimed.nonce)) {
-        log.debug(
-          'OAuth callback ignored after its sign-in attempt was superseded',
-        );
+        log.debug('OAuth callback ignored: attempt superseded');
         return { kind: 'ignored', reason: 'superseded' } as const;
       }
       if (!attempt && (yield* this.session.loadSession())) {
@@ -334,12 +331,11 @@ export class SupabaseSignInCoordinator {
         return yield* this.refuse(attempt, result);
       }
 
-      // The attempt can be superseded at any suspension point, and the code
-      // exchange above is the slowest of them. Ownership is therefore
-      // re-checked on the commit lane, before the store rather than after it:
-      // storing first would overwrite whatever session is current, and
-      // clearing it afterwards would leave the user signed out of a session
-      // this callback never owned.
+      // The attempt can be superseded at any suspension point, the code
+      // exchange above being the slowest, so ownership is re-checked on the
+      // commit lane before the store: storing first would overwrite whatever
+      // session is current, and clearing it afterwards would sign the user
+      // out of a session this callback never owned.
       const stored = yield* this.commits.run(
         Effect.gen({ self: this }, function* () {
           if (attempt && this.active !== attempt) return false;
@@ -348,9 +344,7 @@ export class SupabaseSignInCoordinator {
         }),
       );
       if (!stored) {
-        log.debug(
-          'OAuth callback dropped after its sign-in attempt was superseded',
-        );
+        log.debug('OAuth callback dropped: attempt superseded before commit');
         return { kind: 'ignored', reason: 'superseded' } as const;
       }
 
