@@ -35,9 +35,7 @@ const withRecords = <A, E>(program: Effect.Effect<A, E, UpdateCheckRecords>) =>
           updateCheckRecordsLayer.pipe(
             Layer.provide(
               globalDatabaseLayer(storage).pipe(
-                Layer.provide(
-                  ProcessIdentity.layer(processOwnerId(undefined)),
-                ),
+                Layer.provide(ProcessIdentity.layer(processOwnerId(undefined))),
                 Layer.orDie,
               ),
             ),

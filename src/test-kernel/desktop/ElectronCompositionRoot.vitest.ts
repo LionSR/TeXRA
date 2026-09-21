@@ -6,9 +6,9 @@ import { it as effectIt } from '@effect/vitest';
 
 import { describe, expect, it, vi } from 'vitest';
 import * as agentRuntime from '@agent/runtime';
+import { globalDatabaseLayer } from '@controllers/session/Database';
 import { openDesktopProjectRegistry } from '@desktop/main/desktopProjects.js';
 import { openDesktopProjectRecords } from '@desktop/main/desktopProjectRecords.js';
-import { globalDatabaseLayer } from '@controllers/session/Database';
 import { JsonStore } from '@platform/defaults/jsonStore';
 import {
   nodeProcesses,

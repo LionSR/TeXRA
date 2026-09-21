@@ -190,9 +190,7 @@ describe('AgentHandlers custom-agent file actions', () => {
           inquiryRecordsLayer.pipe(
             Layer.provideMerge(
               globalDatabaseLayer(globalStorage).pipe(
-                Layer.provide(
-                  ProcessIdentity.layer(processOwnerId(undefined)),
-                ),
+                Layer.provide(ProcessIdentity.layer(processOwnerId(undefined))),
                 Layer.orDie,
               ),
             ),

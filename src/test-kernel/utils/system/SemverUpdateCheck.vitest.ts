@@ -36,8 +36,14 @@ describe('runDailyUpdateCheck', () => {
         const storage = yield* fs.makeTempDirectoryScoped({
           prefix: 'texra-update-check-',
         });
-        yield* TestClock.setTime(nowMs);
-        return yield* program.pipe(
+        // The test clock governs the program alone, not the handle: the
+        // global-root handle is now held open for the process's life and
+        // polls `data_version` every 250ms, so a day advanced on a clock
+        // that fiber also sleeps on would step the poll a quarter-million
+        // times. Built outside, it ticks on the live clock and the
+        // throttle still sees whatever day the program says it is.
+        return yield* Effect.andThen(TestClock.setTime(nowMs), program).pipe(
+          Effect.provide(TestClock.layer()),
           Effect.provide(
             updateCheckRecordsLayer.pipe(
               Layer.provide(
@@ -52,10 +58,7 @@ describe('runDailyUpdateCheck', () => {
           ),
         );
       }),
-    ).pipe(
-      Effect.provide(NodeFileSystem.layer),
-      Effect.provide(TestClock.layer()),
-    );
+    ).pipe(Effect.provide(NodeFileSystem.layer));
 
   effectIt.live('notifies before stamping a successful live check', () =>
     withRecords(
