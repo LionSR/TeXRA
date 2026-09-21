@@ -46,6 +46,12 @@ interface RunEntry {
   parked?: ParkedRun;
   /** The run's hand-off chain while a fiber holds or waits on it. */
   lane?: PerKeyLane;
+  /**
+   * Generations of this run holding or waiting on that lane. An inactive-run
+   * step is not one of them: it is work a generation of the run queues behind
+   * (a deletion, a fence), so it takes the lane without making the run live.
+   */
+  launches: number;
   /** The completion of every generation of this run a caller is holding
    *  against local ownership — a set rather than one chained value, because
    *  they end in no fixed order. */
@@ -85,7 +91,7 @@ export class RunRoster {
   private entryFor(runId: RunId): RunEntry {
     const existing = this.entries.get(runId);
     if (existing) return existing;
-    const entry: RunEntry = { generations: new Set() };
+    const entry: RunEntry = { generations: new Set(), launches: 0 };
     this.entries.set(runId, entry);
     return entry;
   }
@@ -97,6 +103,7 @@ export class RunRoster {
       entry.activation !== undefined ||
       entry.parked !== undefined ||
       entry.lane !== undefined ||
+      entry.launches > 0 ||
       entry.generations.size > 0
     ) {
       return;
@@ -266,9 +273,11 @@ export class RunRoster {
 
   /**
    * Whether a generation of `runId` is live in this process, read off the one
-   * entry: a step holding or waiting on its lane, a generation still
+   * entry: a launch holding or waiting on its lane, a generation still
    * unwinding, a caller holding it against local ownership
    * ({@link holdInactive}), or a turn whose tool-use flow is still attached.
+   * An inactive-run step holds the lane without being one of them, which is
+   * what leaves a launch queued behind a deletion instead of refused by it.
    * A second generation is refused on it rather than queued on the run lane.
    * A parked turn is none of them until a stop wakes it: a resume supersedes
    * the fiber where it waits, but a woken park is the run unwinding, still
@@ -280,7 +289,7 @@ export class RunRoster {
     const entry = this.entries.get(runId);
     if (entry === undefined) return false;
     if (entry.generations.size > 0) return true;
-    if ((entry.lane?.fibers ?? 0) > 0) return true;
+    if (entry.launches > 0) return true;
     if (entry.parked !== undefined)
       return Deferred.isDoneUnsafe(entry.parked.stopped);
     return entry.handle?.getToolUseFlow() !== undefined;
@@ -296,8 +305,13 @@ export class RunRoster {
    * {@link isLive} reads the entry in the same synchronous step as the tail
    * swap, so no generation can take the run between the two, and refusing
    * leaves the lane as it was found. This is the one admission, so no caller
-   * asks it beforehand. `refuseWhenLive` widens it to the retained owners,
-   * for callers that mean "only if nothing holds it at all".
+   * asks it beforehand.
+   *
+   * `refuseWhenLive` marks the caller an inactive-run step rather than a
+   * generation of the run: it widens the refusal to the retained owners, for
+   * a caller that means "only if nothing holds it at all", and it keeps the
+   * step out of {@link isLive}, so the run's next generation queues behind
+   * the step on the lane instead of being refused by it.
    *
    * A step is refusable from the moment it is admitted until it starts, and
    * {@link waiting} holds its refusal for exactly that window. The race is
@@ -313,10 +327,29 @@ export class RunRoster {
     return Effect.suspend(() => {
       const refusal = Deferred.makeUnsafe<never, Error>();
       this.waiting.add(refusal);
-      const refuseClaim = (): RunLive | undefined =>
-        this.isLive(runId) || (refuseWhenLive && this.isRetained(runId))
-          ? new RunLive({ runId })
-          : undefined;
+      // Counted in the same synchronous step as the claim and dropped when
+      // the step leaves, so the entry reports this generation for exactly as
+      // long as it holds the run.
+      let counted = false;
+      const refuseClaim = (): RunLive | undefined => {
+        if (this.isLive(runId) || (refuseWhenLive && this.isRetained(runId))) {
+          return new RunLive({ runId });
+        }
+        if (!refuseWhenLive) {
+          counted = true;
+          this.entryFor(runId).launches += 1;
+        }
+        return undefined;
+      };
+      const leave = (): void => {
+        this.waiting.delete(refusal);
+        if (!counted) return;
+        counted = false;
+        const entry = this.entries.get(runId);
+        if (entry === undefined) return;
+        entry.launches -= 1;
+        this.prune(runId, entry);
+      };
       const step = Effect.gen({ self: this }, function* () {
         // Read the gate after the predecessor left: a generation it started
         // is exactly what this step must not overlap. One snapshot, as the
@@ -335,7 +368,7 @@ export class RunRoster {
       return Effect.raceFirst(
         Deferred.await(refusal),
         withPerKeyLane(this.lanes, runId, refuseClaim)(step),
-      ).pipe(Effect.ensuring(Effect.sync(() => this.waiting.delete(refusal))));
+      ).pipe(Effect.ensuring(Effect.sync(leave)));
     });
   }
 
