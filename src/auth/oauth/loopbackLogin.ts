@@ -87,30 +87,26 @@ const ERROR_HTML = `<!doctype html><html><head><meta charset="utf-8"><title>Sign
 <p>Return to TeXRA and try signing in again.</p>
 </body></html>`;
 
-/** One bind attempt; resolves undefined when the port is unavailable. */
+/** One bind attempt; succeeds with undefined when the port is unavailable. */
 function listenAttempt(port: number): Effect.Effect<http.Server | undefined> {
-  // Non-rejecting: the executor below resolves on `listening` or on `error`
-  // and calls no reject, and `listen` reports a bind failure through that
-  // `error` listener rather than throwing (every caller passes a fixed,
-  // in-range registered port).
-  return Effect.promise(
-    () =>
-      new Promise((resolve) => {
-        const server = http.createServer();
-        const onError = () => {
-          server.removeListener('listening', onListening);
-          server.close();
-          resolve(undefined);
-        };
-        const onListening = () => {
-          server.removeListener('error', onError);
-          resolve(server);
-        };
-        server.once('error', onError);
-        server.once('listening', onListening);
-        server.listen(port, '127.0.0.1');
-      }),
-  );
+  // Non-failing: the registration below resumes on `listening` or on `error`,
+  // and `listen` reports a bind failure through that `error` listener rather
+  // than throwing (every caller passes a fixed, in-range registered port).
+  return Effect.callback<http.Server | undefined>((resume) => {
+    const server = http.createServer();
+    const onError = () => {
+      server.removeListener('listening', onListening);
+      server.close();
+      resume(Effect.succeed(undefined));
+    };
+    const onListening = () => {
+      server.removeListener('error', onError);
+      resume(Effect.succeed(server));
+    };
+    server.once('error', onError);
+    server.once('listening', onListening);
+    server.listen(port, '127.0.0.1');
+  });
 }
 
 function bindLoopbackServer(
