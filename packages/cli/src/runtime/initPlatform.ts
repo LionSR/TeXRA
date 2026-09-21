@@ -159,12 +159,12 @@ const cliPlatformLog: SupabaseSessionLog = {
 /**
  * The canonical "shut down the CLI platform" sequence — lifecycle shutdown
  * hooks, then the NDJSON stdout flush, then the runtime disposal that drains
- * the usage log — shared by every process.exit()-ing teardown path: the headless signal
- * handlers below AND the interactive chat TUI's own signal handlers (see
- * `handOffCliShutdownSignalHandlers`), which take over SIGINT/SIGTERM
- * exclusively once mounted and must perform the same sequence the platform's
- * own (now handed-off) handlers would have. One definition means the two
- * paths can't drift.
+ * the usage log — shared by every process.exit()-ing teardown path: the
+ * headless signal handlers below AND the interactive chat TUI's own signal
+ * handlers (see `handOffCliShutdownSignalHandlers`), which take over
+ * SIGINT/SIGTERM exclusively once mounted and must perform the same sequence
+ * the platform's own (now handed-off) handlers would have. One definition
+ * means the two paths can't drift.
  *
  * Runs on the default runtime rather than the process runtime: the lifecycle
  * shutdown below disposes the process runtime (`disposeCliProcessRuntime`)

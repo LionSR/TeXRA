@@ -19,7 +19,8 @@ export interface InputHistory {
   length(): number;
 }
 
-/** The process's global-root handle serves the history; browsing stays synchronous. */
+/** The process's global-root handle serves the history; browsing stays
+ *  synchronous. */
 export const loadInputHistory: Effect.Effect<
   InputHistory,
   never,
