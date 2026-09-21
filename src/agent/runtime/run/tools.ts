@@ -11,7 +11,7 @@ import type { RuntimeToolRegistry as IToolRegistry } from '@agent/runtime/ToolSe
 import { partitionDuplicateCalls } from '@agent/core/tools/toolCallParsing';
 import type { AgentTrace } from '@agent/trace';
 import { safeParseJson } from '@common/parsing/safeParseJson';
-import { JsonObjectSchema, type TurnRequest, type TurnResult } from '@llm/turn';
+import { JsonObjectSchema, type TurnRequest, type TurnResult } from '@texra-ai/llm/turn';
 import type { DispatchFacts, ToolDefinition } from '@shared/schemas';
 
 import { convertToolSchema } from './toolSchema';

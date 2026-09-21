@@ -16,7 +16,7 @@ import {
   normalizeProviderError,
   type ModelRouteVerdict,
 } from '@common/errors/sdkError/providerErrorFormat';
-import { ModelError } from '@llm/turn';
+import { ModelError } from '@texra-ai/llm/turn';
 import {
   toRetryErrorInfo,
   type ProviderError,

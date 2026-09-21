@@ -28,14 +28,14 @@ import {
   type RouteCredential,
 } from '@agent/runtime/modelRoutes';
 import { OPENAI_DEFAULT_ENDPOINT } from '@agent/runtime/run/routeEndpoint';
-import { anthropicMessagesModel } from '@llm/anthropicMessages';
-import { googleInteractionsModel } from '@llm/googleInteractions';
-import { openaiChatModel } from '@llm/openaiChat';
+import { anthropicMessagesModel } from '@texra-ai/llm/anthropic-messages';
+import { googleInteractionsModel } from '@texra-ai/llm/google-interactions';
+import { openaiChatModel } from '@texra-ai/llm/openai-chat';
 import {
   openaiResponsesModel,
   openaiResponsesWebSocketModel,
-} from '@llm/openaiResponses';
-import { openrouterChatModel } from '@llm/openrouterChat';
+} from '@texra-ai/llm/openai-responses';
+import { openrouterChatModel } from '@texra-ai/llm/openrouter-chat';
 import {
   type ChatConfiguration,
   type Model,
@@ -43,7 +43,7 @@ import {
   type ModelError,
   type ModelOrigin,
   type VscodeLanguageModelConfiguration,
-} from '@llm/turn';
+} from '@texra-ai/llm/turn';
 import { type ModelOptionStores } from '@model/computeModelOptions';
 import {
   reasoningEffortOverrides,

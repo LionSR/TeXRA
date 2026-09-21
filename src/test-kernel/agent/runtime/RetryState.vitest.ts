@@ -57,7 +57,7 @@ import {
   type ResolvedTurn,
   type TurnEvent,
   type TurnResult,
-} from '@llm/turn';
+} from '@texra-ai/llm/turn';
 import {
   LanguageModel,
   UNAVAILABLE_LANGUAGE_MODEL_PORT,

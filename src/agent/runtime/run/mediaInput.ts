@@ -13,7 +13,7 @@
 import { Effect, FileSystem } from 'effect';
 
 import type { AgentTrace } from '@agent/trace';
-import type { MessageSchema } from '@llm/turn';
+import type { MessageSchema } from '@texra-ai/llm/turn';
 import type { ConfigProvider } from '@platform/interfaces';
 import {
   fileLocationDisplayPath,

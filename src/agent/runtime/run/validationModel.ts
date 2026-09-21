@@ -28,7 +28,7 @@ import type {
   ResolvedTurn,
   TurnEvent,
   TurnResult,
-} from '@llm/turn';
+} from '@texra-ai/llm/turn';
 import type { ModelConfig } from 'llm-zoo';
 
 const VALIDATION_OUTPUT = `\\section{Validated CLI Runtime}

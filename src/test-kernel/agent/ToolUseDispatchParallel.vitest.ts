@@ -66,7 +66,7 @@ import {
   type Model,
   type ModelOrigin,
   type TurnResult,
-} from '@llm/turn';
+} from '@texra-ai/llm/turn';
 import { DatabaseWriteFailed } from '@shared/session/database';
 import {
   AgentCategory,

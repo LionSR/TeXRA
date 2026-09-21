@@ -34,7 +34,7 @@ import { dispatchFactsFor } from '@agent/runtime/run/tools';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { UsageMonitor } from '@agent/runtime/UsageMonitor';
 import { TraceEmitter } from '@agent/trace';
-import type { Model, TurnResult } from '@llm/turn';
+import type { Model, TurnResult } from '@texra-ai/llm/turn';
 import {
   AgentCategory,
   AgentRunStateSnapshotSchema,

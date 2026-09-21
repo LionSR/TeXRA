@@ -5,7 +5,7 @@
  * reconcile-never-overwrite check hold on every write.
  */
 
-import type { MessageSchema } from '@llm/turn';
+import type { MessageSchema } from '@texra-ai/llm/turn';
 import { redactSecrets } from '@logger/redaction';
 import {
   aggregateId as qualifyAggregateId,

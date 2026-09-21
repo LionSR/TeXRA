@@ -48,7 +48,7 @@ import {
   type TurnEvent,
   type TurnRequest,
   type TurnResult,
-} from '@llm/turn';
+} from '@texra-ai/llm/turn';
 import { resolveRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import type { LanguageModel } from '@platform/languageModel';
 import { roundedUtilizationPercent } from '@shared/runs/contextUtilization';

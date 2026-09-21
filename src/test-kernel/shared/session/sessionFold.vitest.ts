@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest';
 
 import { Result } from 'effect';
 
-import { ModelOriginSchema } from '@llm/turn';
+import { ModelOriginSchema } from '@texra-ai/llm/turn';
 import {
   aggregateId as qualifyAggregateId,
   AgentCategory,

@@ -37,7 +37,7 @@ import { turnText } from '@agent/runtime/run/turnText';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { UsageMonitor } from '@agent/runtime/UsageMonitor';
 import { TraceEmitter } from '@agent/trace';
-import type { Model, TurnResult } from '@llm/turn';
+import type { Model, TurnResult } from '@texra-ai/llm/turn';
 import {
   LanguageModel,
   UNAVAILABLE_LANGUAGE_MODEL_PORT,

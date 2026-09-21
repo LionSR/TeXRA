@@ -7,7 +7,7 @@
 import { ModelProvider, type ModelConfig } from 'llm-zoo';
 
 import type { AgentTrace } from '@agent/trace';
-import type { TurnResult } from '@llm/turn';
+import type { TurnResult } from '@texra-ai/llm/turn';
 import type { NormalizedUsage } from '@shared/schemas';
 
 import type { BoundModel } from './modelBinding';

@@ -56,7 +56,7 @@ import {
   type ResolvedTurn,
   type TurnEvent,
   type TurnResult,
-} from '@llm/turn';
+} from '@texra-ai/llm/turn';
 import {
   AgentResume,
   AgentResumeFailed,

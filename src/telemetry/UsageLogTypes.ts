@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { TurnProtocolSchema } from '@llm/turn';
+import { TurnProtocolSchema } from '@texra-ai/llm/turn';
 import { AgentCategory, UsageRouteSchema } from '@shared/schemas';
 
 const UsageLogMetadataSchema = z.object({
