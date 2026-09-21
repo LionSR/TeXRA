@@ -41,9 +41,16 @@ import {
  */
 const { globalStorage } = createFakeWorkspaceRoots();
 
+/** Reads of this install's process start: the `ProcessIdentity` layer is a
+ *  process service, so it builds once however many sessions open. */
+export const identityReads = { count: 0 };
+
 initTestProcessRuntime(
   installProcessRuntime({
-    processStart: Effect.succeed('vitest'),
+    processStart: Effect.sync(() => {
+      identityReads.count += 1;
+      return 'vitest';
+    }),
     globalStorage,
     updateCheckStorage: globalStorage,
     secrets: fakeHostSecrets,

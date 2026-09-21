@@ -1,6 +1,6 @@
 /**
  * The session's requests: the run-scoped approval controllers and the
- * {@link Requests} service they are reached through.
+ * {@link SessionRequests} value they are reached through.
  *
  * The controllers encapsulate the shared concerns of bash and tool-edit
  * approvals:
@@ -9,12 +9,12 @@
  *
  * Controller instances live on {@link SessionApprovals}, one per session
  * (#8144) — there is no process-global controller, so two sessions queue,
- * resolve, and clean up approvals independently. {@link Requests} is that
- * per-session value as a Context service, so Effect code below a launch
- * takes it from context instead of resolving a session.
+ * resolve, and clean up approvals independently. A session's value is
+ * reached through the session itself (`SessionHandle.requests`), never from
+ * context: every holder of it already holds the session it belongs to.
  */
 
-import { Context, Effect } from 'effect';
+import { Effect } from 'effect';
 
 import type {
   ApprovalPolicySnapshot,
@@ -171,10 +171,9 @@ function createRunApprovalController(
 /**
  * Session-owned approval state: the tool-edit and bash controllers plus the
  * delegation-proposal (super-YOLO) bypass. One instance per session, built by
- * the session layer as the `approvals` of its {@link Requests}; run-scoped
- * code receives its session's instance as data, host code passes its own
- * session explicitly, and Effect code below a launch takes
- * {@link Requests} from context.
+ * the session layer as the `approvals` of its {@link SessionRequests};
+ * run-scoped code receives its session's instance as data and host code
+ * passes its own session explicitly.
  */
 export interface SessionApprovals {
   readonly toolEdit: RunApprovalController;
@@ -385,17 +384,3 @@ export interface SessionRequests {
     expectedStartCommit: CommitOrdinal,
   ) => Effect.Effect<Outcome, RequestError>;
 }
-
-/**
- * The session's requests (system design §2.1, §7.11), beside its `Runs`:
- * the approval queues and the request protocol of one session. Built by the
- * session layer in the session's scope and provided in the session entry
- * (`sessionLayer.ts`); the session record carries the same value
- * (`SessionHandle.requests`, `SessionHandle.approvals`) for a host that holds
- * the session. Effect code below a launch takes it from context: the session
- * layer's leftover-run sweep does, and the request handler provides it to
- * itself nowhere — it *is* this value, closing over the state it owns.
- */
-export class Requests extends Context.Service<Requests, SessionRequests>()(
-  '@texra/session/Requests',
-) {}

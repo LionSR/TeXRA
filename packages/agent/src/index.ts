@@ -148,7 +148,7 @@ export interface AgentRun extends AsyncIterable<AgentEvent> {
  * clears this, and `shutdownRan` refuses a run that arrives after it, so no
  * run composes a session with no shutdown path left to close and flush it.
  * The Effect surface has no such limit: there the owner is the scope, so a
- * new `Runtime.layer` scope composes the process again.
+ * new `Sessions.layer` scope composes the process again.
  */
 let composition:
   | {
@@ -163,7 +163,7 @@ let composition:
  * `composeProcess` is synchronous, so everything from the platform check to
  * the owner's registration of this run's root happens before `runAgent`
  * returns: a `closeSession` or a `runShutdown` issued right after it settles
- * this launch too. It is the same call `Runtime.layer` acquires, so
+ * this launch too. It is the same call `Sessions.layer` acquires, so
  * composition has one implementation with two entry paths.
  *
  * The composing call also puts the session on the embedder's shutdown path:
@@ -173,7 +173,7 @@ let composition:
  * and the owner on it go with that hold when it is the last one, so a later
  * `closeSession` answers as a process with none does, and they stay while an
  * Effect scope of the same process still holds them. An Effect embedder
- * reaches the same closure through `Runtime.layer`'s scope.
+ * reaches the same closure through `Sessions.layer`'s scope.
  */
 function agentServices(
   platform: AgentPlatform,

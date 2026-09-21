@@ -43,7 +43,7 @@ import type {
   SessionEventsShape,
 } from '@shared/session/sessionEvents';
 import type { SessionInputs } from '@shared/session/sessionInputs';
-import type { Requests } from './runApprovalQueue';
+import type { SessionRequests } from './runApprovalQueue';
 import type { Runs } from './runRegistry';
 import type { SessionHandle, SessionHandleInit } from './SessionHandle';
 
@@ -143,10 +143,10 @@ export interface SessionGraph {
   /** The session's runs (`Runs`): built by the session layer over the
    *  session's doors, disposed when the session's scope closes. */
   readonly runs: Context.Service.Shape<typeof Runs>;
-  /** The session's requests (`Requests`): its approval state and the one
-   *  handler of every request a surface issues to it (PRD 7.6, 8.2), built
-   *  by the session layer over this graph. */
-  readonly requests: Context.Service.Shape<typeof Requests>;
+  /** The session's requests: its approval state and the one handler of
+   *  every request a surface issues to it (PRD 7.6, 8.2), built by the
+   *  session layer over this graph. */
+  readonly requests: SessionRequests;
   /** The session's current commit ordinal: where a reader attaching now
    *  starts its `all` read (PRD 10.3). */
   readonly now: () => CommitOrdinal;

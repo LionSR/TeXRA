@@ -11,8 +11,6 @@
  * process holds (`self`) or whose owner is alive (`heldBy`) folds to
  * `waiting`; the same log with the owner gone folds to `interrupted`.
  */
-import '@test/support/sessionGraphTestSetup';
-
 // Node imports
 import * as childProcess from 'node:child_process';
 import {
@@ -102,6 +100,7 @@ import { DownMessageSchema } from '@shared/session/sessionFrames';
 import type { SessionView } from '@shared/session/sessionView';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
+import { identityReads } from '@test/support/sessionGraphTestSetup';
 import type { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import { StreamLogStore } from '@transcript/StreamLogStore';
 
@@ -730,13 +729,26 @@ describe('Sessions owner', () => {
 
   it.live('builds the process-wide Lean layer once, not per session', () =>
     Effect.gen(function* () {
-      // Each root's entry is built fresh over the process services; the Lean
-      // pool must stay outside that identity so its servers stay shared.
+      // Each root's entry is built fresh over the root-scoped layers; the
+      // Lean pool must stay outside that `fresh` so its servers stay shared.
       yield* open('/workspace/owner/lean-once-a');
       yield* open('/workspace/owner/lean-once-b');
       yield* closeSession('/workspace/owner/lean-once-a');
       yield* closeSession('/workspace/owner/lean-once-b');
       expect(leanBuilds.count).toBe(1);
+    }),
+  );
+
+  it.live('reads the process identity once, not per session', () =>
+    Effect.gen(function* () {
+      // `ProcessIdentity` is provided outside the entry's `Layer.fresh`, so
+      // its read is the process's and no open repeats it. Counted over the
+      // whole file: every session this module graph opened shares it.
+      yield* open('/workspace/owner/identity-once-a');
+      yield* open('/workspace/owner/identity-once-b');
+      yield* closeSession('/workspace/owner/identity-once-a');
+      yield* closeSession('/workspace/owner/identity-once-b');
+      expect(identityReads.count).toBe(1);
     }),
   );
 

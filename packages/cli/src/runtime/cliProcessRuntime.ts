@@ -11,9 +11,9 @@
  * still ends with exactly the runtime the platform's shutdown disposes.
  * Every entry but clone opens the global state store with the install, so
  * `AppState` answers from the first install on rather than only under
- * `initCliPlatform`; clone installs with `appState: 'omit'` (see the
- * function's docstring), so its runtime serves no `AppState` and its install
- * creates nothing under the storage root.
+ * `initCliPlatform`; clone hands over {@link refusingStateStore} instead (see
+ * the function's docstring), so its install creates nothing under the storage
+ * root and a read or write of application state there is loud.
  *
  * This module is the CLI's composition root for that runtime, and every
  * entry that awaits it holds the result in a local and threads it on: there
@@ -35,8 +35,8 @@
  * The process services every entry provides the same way, and every one of
  * them is a value this function already holds when it installs: `Secrets`
  * over the one `CliSecrets` of this storage root, `AppState` over the global
- * state store opened here, before the install (omitted by clone, the one
- * secrets-only entry), and `SetupPlatform` over the CLI's sign-in. The
+ * state store opened here, before the install (the refusing store for clone,
+ * the one secrets-only entry), and `SetupPlatform` over the CLI's sign-in. The
  * global store is served by the runtime as `AppState`, so `initCliPlatform`
  * opens only the workspace scope and no entry has to discover a store some
  * other entry opened.
@@ -50,13 +50,11 @@ import {
   disposeProcessRuntime,
   installProcessRuntime,
 } from '@controllers/session/sessionLayer';
+import { StateWriteFailed, type StateStore } from '@platform/interfaces';
 import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '@platform/languageModel';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import { nodeFileServices } from '@platform/defaults/jsonStore';
-import {
-  createNodeStorageProvider,
-  DEFAULT_NODE_STORAGE_ROOT,
-} from '@platform/defaults/nodeStorage';
+import { DEFAULT_NODE_STORAGE_ROOT } from '@platform/defaults/nodeStorage';
 import { nodeProcesses } from '@platform/defaults/nodeProcesses';
 import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
 import { directLeanLanguageServices } from '@tools/lean/direct/directLspAdapter';
@@ -69,6 +67,31 @@ import { ensureCliSupabaseAuth, signInCliSupabase } from './supabaseAuth';
 
 let pending: Promise<ProcessRuntime> | null = null;
 
+const NO_CLONE_APP_STATE =
+  'The `texra clone` entry serves no application state: it runs without a platform and its storage root may be read-only.';
+
+/**
+ * The `AppState` of the one CLI entry that has none. `clone` runs before any
+ * platform and may hold a read-only storage root, so opening the real store —
+ * which would create the global storage directory and its database — is what
+ * it must not do. A write is a tagged refusal the caller composes; a read is
+ * a defect, because a store that answered with the caller's fallback would
+ * read as absent state rather than as no store at all.
+ */
+export const refusingStateStore = (): StateStore => ({
+  get<T>(key: string): T {
+    throw new Error(`${NO_CLONE_APP_STATE} "${key}" cannot be read.`);
+  },
+  update: (key: string) =>
+    Effect.fail(
+      new StateWriteFailed({
+        key,
+        message: `${NO_CLONE_APP_STATE} "${key}" cannot be written.`,
+        cause: undefined,
+      }),
+    ),
+});
+
 /**
  * Install the process runtime, or join the one already installed: every entry
  * that awaits this holds it in a local and threads it on, so nothing below
@@ -80,20 +103,19 @@ let pending: Promise<ProcessRuntime> | null = null;
  * there is no second record beside the runtime for a joining caller (or a
  * second root, like the test kernel's) to keep in sync.
  *
- * `appState: 'omit'` is `clone`'s: the one platform-less, secrets-only entry,
- * whose token can come from the environment and whose storage root may be
+ * `appState` is `clone`'s: the one platform-less, secrets-only entry, whose
+ * token can come from the environment and whose storage root may be
  * read-only. Opening the global state store creates the global storage
- * directory and its database, so clone installs the runtime without it and
- * serves no `AppState`. Nothing in a clone process joins the install after
- * it, which is what makes omitting safe: a default caller joining an
- * omit-installed runtime would fail the `AppState` read loudly, and a CLI
- * process runs exactly one command.
+ * directory and its database, so clone hands over
+ * {@link refusingStateStore} and this install opens nothing. Nothing in a
+ * clone process joins the install after it, which is what makes that safe: a
+ * default caller joining a clone-installed runtime reads the refusal loudly,
+ * and a CLI process runs exactly one command.
  */
 export function installCliProcessRuntime(
   storageRoot?: string,
-  options?: { readonly appState: 'omit' },
+  options?: { readonly appState: StateStore },
 ): Promise<ProcessRuntime> {
-  const omitAppState = options?.appState === 'omit';
   const current = installedProcessRuntime();
   if (current) {
     // The output plane runs on whichever runtime this process ended up with,
@@ -102,7 +124,6 @@ export function installCliProcessRuntime(
     return Promise.resolve(current);
   }
   if (pending) return pending;
-  const storage = createNodeStorageProvider({ storageRoot });
   pending = (async () => {
     // The process identity and the state store this entry provides both exist
     // before the runtime that serves them, so both resolve on one bootstrap
@@ -116,17 +137,15 @@ export function installCliProcessRuntime(
         Effect.gen(function* () {
           const processStart = yield* nodeProcesses.selfIdentity();
           // The records layers take the path as a value, so it resolves here,
-          // at install. The default entry already pays the getter's `mkdirSync`
-          // opening the state store below; clone's omit entry must not — its
-          // storage root may be read-only and it runs no records operation —
-          // so it resolves the same path with the pure calculator, as
-          // `initCliPlatform` does.
-          const globalStoragePath = omitAppState
-            ? resolveGlobalStoragePath(storageRoot ?? DEFAULT_NODE_STORAGE_ROOT)
-            : storage.getGlobalStoragePath();
-          const globalState = omitAppState
-            ? undefined
-            : yield* openAppStateStore(globalStoragePath);
+          // at install, with the pure calculator: the directory is the state
+          // store's to create when it opens below, and clone — whose storage
+          // root may be read-only, and which runs no records operation — must
+          // not create it at all.
+          const globalStoragePath = resolveGlobalStoragePath(
+            storageRoot ?? DEFAULT_NODE_STORAGE_ROOT,
+          );
+          const globalState =
+            options?.appState ?? (yield* openAppStateStore(globalStoragePath));
           return { processStart, globalStoragePath, globalState };
         }).pipe(Effect.provide(nodeFileServices)),
       );
@@ -140,7 +159,7 @@ export function installCliProcessRuntime(
       globalStorage: globalStoragePath,
       updateCheckStorage: globalStoragePath,
       secrets,
-      ...(globalState === undefined ? {} : { appState: globalState }),
+      appState: globalState,
       auth,
       // A terminal has no editor language models; the CLI's platform installs
       // the same port.

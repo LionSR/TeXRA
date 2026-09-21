@@ -13,13 +13,12 @@
  * {@link ProcessHold} on it, and the last hold to be released is what closes
  * the owner's sessions and disposes the runtime under them.
  *
- * {@link Runtime.layer} is the Effect embedder's entry: it composes the
- * process once per scope and provides both this service and `Sessions`,
- * with the scope as the lifetime of its hold. A Promise embedder's hold is
- * the one `packages/agent/src/index.ts` takes, released by
- * `lifecycle.runShutdown`.
+ * `Sessions.layer` is the Effect embedder's entry: it composes the process
+ * once per scope and provides `Sessions` over it, with the scope as the
+ * lifetime of its hold. A Promise embedder's hold is the one
+ * `packages/agent/src/index.ts` takes, released by `lifecycle.runShutdown`.
  */
-import { Context, Effect, Layer } from 'effect';
+import { Effect, Layer, type Context } from 'effect';
 
 import {
   closeSession as closeOwnedSession,
@@ -46,8 +45,8 @@ import {
 } from '@tools/setup/platform';
 
 import { PlatformConflict } from './errors.js';
-import { Sessions } from './sessions.js';
 import { makeSessions } from './sessionPrograms.js';
+import type { Sessions } from './sessions.js';
 
 /**
  * The process platform together with the workspace roots the package's runs
@@ -206,9 +205,8 @@ export function composeProcess(platform: AgentPlatform): ProcessHold {
       setDebugModeConfig(platform.roots.config);
     }
     // The identity stays a pending read -- the package's composition root is
-    // synchronous, so it hands the program over rather than a value: the
-    // owner's map builds synchronously over it, so an open registers its
-    // root before the opener's first await and only the entry's build waits. The direct Lean
+    // synchronous, so it hands the program over rather than a value, and the
+    // runtime it installs reads it once for the process. The direct Lean
     // language services are a layer of this runtime, as on the CLI and
     // desktop roots.
     processRuntime = installProcessRuntime({
@@ -258,34 +256,4 @@ function closeOwnedSessions(): Effect.Effect<void> {
       { discard: true },
     ),
   );
-}
-
-/** The composed process. */
-export class Runtime extends Context.Service<Runtime, AgentRuntime>()(
-  '@texra-ai/agent/Runtime',
-) {
-  /** Compose the process once and provide both services, with this scope as
-   *  the lifetime of the hold it takes. */
-  static layer(
-    platform: AgentPlatform,
-  ): Layer.Layer<Runtime | Sessions, PlatformConflict> {
-    return Layer.effectContext(
-      Effect.gen(function* () {
-        const hold = yield* Effect.try({
-          try: () => composeProcess(platform),
-          catch: (thrown) => thrown,
-        }).pipe(
-          Effect.catch((thrown) =>
-            thrown instanceof PlatformConflict
-              ? Effect.fail(thrown)
-              : Effect.die(thrown),
-          ),
-        );
-        yield* Effect.addFinalizer(() => hold.release);
-        return Context.make(Runtime, hold.runtime).pipe(
-          Context.add(Sessions, hold.sessions),
-        );
-      }),
-    );
-  }
 }

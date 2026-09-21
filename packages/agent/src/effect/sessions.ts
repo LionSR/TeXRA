@@ -1,5 +1,5 @@
 /** Public Effect session and run capabilities for embedders. */
-import { Context, type Effect, type Stream, type Scope } from 'effect';
+import { Context, Effect, Layer, type Stream, type Scope } from 'effect';
 
 import type { AgentEvent } from '@agent/trace';
 import type { ITool } from '@agent/core/tools/ToolTypes';
@@ -19,7 +19,12 @@ import type {
   TranscriptView as RuntimeTranscriptView,
 } from '@shared/session/sessionView';
 
-import type { LaunchError, RunFailure } from './errors.js';
+import {
+  PlatformConflict,
+  type LaunchError,
+  type RunFailure,
+} from './errors.js';
+import { composeProcess, type AgentPlatform } from './runtime.js';
 
 /**
  * A runtime value as the embedder may hold it: read-only all the way down,
@@ -134,4 +139,33 @@ export class Sessions extends Context.Service<
     ) => Effect.Effect<SessionCloseReport>;
     readonly list: Effect.Effect<readonly Session[]>;
   }
->()('@texra-ai/agent/Sessions') {}
+>()('@texra-ai/agent/Sessions') {
+  /**
+   * The Effect embedder's entry: compose the process once and serve its
+   * session owner, with this scope as the lifetime of the hold it takes on
+   * that composition. A second, different platform in a process this package
+   * already composed fails with {@link PlatformConflict}; anything else
+   * `composeProcess` throws is a defect.
+   */
+  static layer(
+    platform: AgentPlatform,
+  ): Layer.Layer<Sessions, PlatformConflict> {
+    return Layer.effect(
+      Sessions,
+      Effect.gen(function* () {
+        const hold = yield* Effect.try({
+          try: () => composeProcess(platform),
+          catch: (thrown) => thrown,
+        }).pipe(
+          Effect.catch((thrown) =>
+            thrown instanceof PlatformConflict
+              ? Effect.fail(thrown)
+              : Effect.die(thrown),
+          ),
+        );
+        yield* Effect.addFinalizer(() => hold.release);
+        return hold.sessions;
+      }),
+    );
+  }
+}

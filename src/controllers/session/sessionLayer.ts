@@ -45,11 +45,8 @@ import {
   ToolInjections,
 } from '@agent/runtime/toolInjection';
 import { EditorModel } from '@agent/runtime/run/modelBinding';
-import {
-  createSessionApprovals,
-  Requests,
-} from '@agent/runtime/runApprovalQueue';
-import { RunRegistry, Runs } from '@agent/runtime/runRegistry';
+import { createSessionApprovals } from '@agent/runtime/runApprovalQueue';
+import { RunRegistry } from '@agent/runtime/runRegistry';
 import { runLedgerLayer } from '@agent/runtime/RunLedger';
 import { sessionEventsLayer, tailFrom } from '@agent/runtime/SessionEvents';
 import { ModelRetryGate } from '@agent/runtime/ModelRetryGate';
@@ -262,9 +259,9 @@ function unwindSession(session: SessionHandle): Effect.Effect<void> {
 }
 
 /**
- * The handle of one root and the session's `Runs` and `Requests`, over the
- * root's graph:
- * the last layer of the entry, so it is the first thing unwound when the
+ * The handle of one root, over the root's graph: the session is the entry's
+ * one service, and its `Runs` and requests are reached through it.
+ * The last layer of the entry, so it is the first thing unwound when the
  * entry closes and the graph outlives every publisher above it. Every
  * release goes through the entry: `close` and the runtime's disposal
  * invalidate it, and the handle's own `dispose` asks for the same through
@@ -565,7 +562,6 @@ const sessionHandleLayer = (
             ),
           ),
       );
-      const { runs, requests } = session;
       // Registered after the handle, so it is the first thing unwound when
       // the entry closes: `current` stops answering with this session before
       // its owners unwind.
@@ -584,7 +580,7 @@ const sessionHandleLayer = (
               // `goalStateChanged` row goes with it.
               return event.type === 'run.removed' && target.kind === 'run'
                 ? Effect.sync(() => {
-                    runs.detachChildren(target.id);
+                    session.runs.detachChildren(target.id);
                     releaseRunResources(target.id, session);
                   })
                 : Effect.void;
@@ -657,8 +653,6 @@ const sessionHandleLayer = (
         Effect.forkIn(consumerScope),
       );
       yield* sweepLeftoverRuns(session, initialListing).pipe(
-        Effect.provideService(Runs, runs),
-        Effect.provideService(Requests, requests),
         Effect.catch((error) =>
           Effect.sync(() =>
             log.warn('Background-shell cleanup failed.', {
@@ -681,10 +675,7 @@ const sessionHandleLayer = (
         Effect.repeat({ schedule: Schedule.spaced('30 seconds') }),
         Effect.forkScoped,
       );
-      return Context.make(Session, session).pipe(
-        Context.add(Runs, runs),
-        Context.add(Requests, requests),
-      );
+      return Context.make(Session, session);
     }),
   );
 
@@ -717,23 +708,20 @@ const sessionGraphLayer = (key: SessionKey) => {
  * The complete session of one root: the handle over the root's graph, the
  * handle alone being the entry's service. `Layer.fresh`: the layer map
  * builds every key's entry through one memo map, and layers memoize by
- * reference, so without it the static service layers would be built once
- * and every root on the process would share one log and one fold. The
- * process identity is provided here, per entry, rather than under the map:
- * the map then builds synchronously, so an open issued while the identity
- * is still being read (the package's) registers its entry with the map
- * before its first yield, and only the entry's build waits.
+ * reference, so without it the root-scoped layers would be built once and
+ * every root on the process would share one log and one fold. The `fresh`
+ * covers the sources and the database and nothing above them: every process
+ * service the entry reads — the identity first among them, a real effect —
+ * comes from the runtime's own context, built once for the process.
  */
 const sessionLayer = (
   key: SessionKey,
   held: HeldSessions,
   release: (key: SessionKey) => Effect.Effect<void>,
-  identity: Layer.Layer<ProcessIdentity | InquiryRecords>,
 ) =>
   Layer.fresh(
     sessionHandleLayer(key, held, release).pipe(
       Layer.provide(sessionGraphLayer(key)),
-      Layer.provide(identity),
     ),
   );
 
@@ -748,21 +736,19 @@ const sessionLayer = (
  */
 class Sessions extends Context.Service<
   Sessions,
-  LayerMap.LayerMap<SessionKey, Session | Runs | Requests, SessionOpenError>
+  LayerMap.LayerMap<SessionKey, Session, SessionOpenError>
 >()('@texra/session/Sessions') {
   /** The map, releasing an entry the handle asked to be released through
    *  the runtime that holds the map. */
   static layer(
     held: HeldSessions,
     release: (key: SessionKey) => Effect.Effect<void>,
-    identity: Layer.Layer<ProcessIdentity | InquiryRecords>,
   ) {
     return Layer.effect(
       Sessions,
-      LayerMap.make(
-        (key: SessionKey) => sessionLayer(key, held, release, identity),
-        { idleTimeToLive: Duration.infinity },
-      ),
+      LayerMap.make((key: SessionKey) => sessionLayer(key, held, release), {
+        idleTimeToLive: Duration.infinity,
+      }),
     );
   }
 }
@@ -822,13 +808,9 @@ const heldSession = (root: string) =>
     const held = yield* sessions
       .contextEffectOption(key)
       .pipe(Effect.scoped, Effect.catch(unopenedEntry(key)));
-    return Option.isNone(held)
-      ? undefined
-      : {
-          key,
-          session: Context.get(held.value, Session),
-          runs: Context.get(held.value, Runs),
-        };
+    if (Option.isNone(held)) return undefined;
+    const session = Context.get(held.value, Session);
+    return { key, session, runs: session.runs };
   });
 
 /**
@@ -974,19 +956,19 @@ const closeSession = (root: string) =>
  * last session has released its graph. The identity is a program for the
  * process start: already-resolved on a host that read it before installing,
  * still a pending read for a process whose composition root is its first
- * run (the package). The map itself never waits for it, so an open
- * registers its root with the owner before the caller's first await, and
- * only the entry's build does. The owner it installs answers in Effect, on
- * the opener's own fiber; its one synchronous face, `current`, reads the
- * held map and runs nothing.
+ * run (the package). It is one of the process services below, so it is read
+ * once for the process rather than again per session entry. The owner it
+ * installs answers in Effect, on the opener's own fiber; its one
+ * synchronous face, `current`, reads the held map and runs nothing.
  *
  * The process services (injection plan §3.1, the one process provide point)
  * are merged here from what the root hands over: `Secrets` and `AppState`
  * over the root's own stores, which every root now opens before it calls
  * this — the desktop and CLI roots open theirs on a bootstrap run rather
  * than on the runtime they are about to install, so both arrive as values
- * (the CLI's secrets-only `clone` entry is the one `AppState` omission);
- * `SupabaseAuth` over the root's account plane; `LanguageModel` over the
+ * (the CLI's secrets-only `clone` entry hands over a store that refuses
+ * instead of opening one); `SupabaseAuth` over the root's account plane;
+ * `LanguageModel` over the
  * root's editor language-model bridge (`UNAVAILABLE_LANGUAGE_MODEL_PORT`
  * where the host has none); `AgentResume` over the root's own resume port;
  * `SetupPlatform` over the root's host-varying setup capabilities; and
@@ -1006,12 +988,12 @@ interface ProcessRuntimeOptions {
   readonly agentResume: AgentResumePort;
   /**
    * The root's global state store, opened before this install and served as
-   * `AppState`. Omitted only by an entry that serves no application state at
-   * all — the CLI's platform-less `clone`, whose storage root may be
-   * read-only — which installs with no `AppState` layer; a program that
-   * yields `AppState` on such a runtime fails as a missing service.
+   * `AppState`. Every entry has one: an entry that serves no application
+   * state — the CLI's platform-less `clone`, whose storage root may be
+   * read-only — passes a store that refuses instead, so a read or a write
+   * of absent state is loud rather than a missing service.
    */
-  readonly appState?: StateStore;
+  readonly appState: StateStore;
   /**
    * The root's account plane, served as `SupabaseAuth`. Every shipped host
    * builds one from its secrets; a composition with no TeXRA account plane
@@ -1070,12 +1052,7 @@ export function installProcessRuntime({
     inquiryRecordsLayer(globalStorage),
     updateCheckRecordsLayer(updateCheckStorage),
     Secrets.layer(secrets),
-    // `Layer.empty` satisfies the `AppState` arm of the declared type without
-    // serving it — the one omitting entry (the CLI's `clone`) runs no program
-    // that yields `AppState`.
-    appState === undefined
-      ? (Layer.empty as Layer.Layer<AppState>)
-      : AppState.layer(appState),
+    AppState.layer(appState),
     SupabaseAuth.layer(auth),
     LanguageModel.layer(languageModel),
     AgentResume.layer(agentResume),
@@ -1104,16 +1081,13 @@ export function installProcessRuntime({
     onThisRuntime(Effect.flatMap(Sessions, (s) => s.invalidate(key)));
   const runtime = withForkFailureReporting(
     ManagedRuntime.make(
-      Sessions.layer(held, release, services).pipe(
+      Sessions.layer(held, release).pipe(
         Layer.provideMerge(services),
-        // The Lean port beside `services`, not among them: `services` is also
-        // each session entry's identity layer, rebuilt fresh per root, and the
-        // Lean pool is one per process — its servers are shared across roots.
+        // The Lean pool is one per process — its servers are shared across
+        // roots — as is the cross-workspace storage view below it: every
+        // session shares that root, so nothing below resolves a
+        // global-storage path against a root of its own.
         Layer.provideMerge(lean),
-        // The cross-workspace storage view, one per process: every session
-        // shares this root, so nothing below resolves a global-storage path
-        // against a root of its own. Beside `lean` rather than among
-        // `services` for the same reason — `services` is rebuilt per root.
         Layer.provideMerge(globalStorageFsLayer(globalStorage)),
         Layer.provideMerge(
           Layer.mergeAll(
