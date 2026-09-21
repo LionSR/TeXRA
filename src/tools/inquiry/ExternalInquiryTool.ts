@@ -33,7 +33,7 @@ import {
 } from '@shared/schemas';
 import { InquiryRecords } from '@shared/session/inquiryRecords';
 import { defineTool } from '@tools/core/define';
-import { commandUnion, nullishWithDefault } from '@tools/core/inputSchema';
+import { nullishWithDefault } from '@tools/core/inputSchema';
 import { executed } from '@tools/core/result';
 import { formatResultCount } from '@utils/text/stringUtils';
 
@@ -45,8 +45,8 @@ const CHANNEL = 'InquiryTool';
 // Schemas
 // ============================================================================
 
-const InquiryInputSchema = commandUnion([
-  {
+const InquiryInputSchema = z.discriminatedUnion('command', [
+  z.looseObject({
     command: z
       .literal('ask')
       .describe(
@@ -85,8 +85,8 @@ const InquiryInputSchema = commandUnion([
       .describe(
         'Workspace-relative paths the user should upload to the external model.',
       ),
-  },
-  {
+  }),
+  z.looseObject({
     command: z
       .literal('read')
       .describe(
@@ -95,8 +95,8 @@ const InquiryInputSchema = commandUnion([
           'or when revisiting an earlier thread.',
       ),
     thread_id: InquiryThreadIdSchema.describe('The thread to read.'),
-  },
-  {
+  }),
+  z.looseObject({
     command: z
       .literal('list')
       .describe(
@@ -116,7 +116,7 @@ const InquiryInputSchema = commandUnion([
     scope: nullishWithDefault(z.enum(['run', 'all']), 'run').describe(
       '"run" → only threads belonging to this run; "all" → every run\'s threads.',
     ),
-  },
+  }),
 ]);
 
 export type InquiryInput = z.infer<typeof InquiryInputSchema>;
