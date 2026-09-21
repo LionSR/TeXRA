@@ -5,10 +5,21 @@
  * notification, and subagent lineage tracking in a single module.
  */
 
-import { Context, Deferred, Effect, Semaphore, type Scope } from 'effect';
+import {
+  Context,
+  Deferred,
+  Effect,
+  Fiber,
+  Semaphore,
+  type Scope,
+} from 'effect';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { SessionApprovals } from '@agent/runtime/runApprovalQueue';
+import type {
+  FinalizeRunInput,
+  FinalizeRunResult,
+} from '@agent/storage/runLifecycle';
 import {
   aggregateId as qualifyAggregateId,
   RUN_OUTCOME,
@@ -27,28 +38,21 @@ import {
   type LiveToolUseFlowContext,
 } from './RunHandle';
 import { RunLanes } from './runLanes';
-import {
-  WaitingTermination,
-  type WaitingTerminationContext,
-} from './waitingTermination';
 
 /**
  * Child policy shared by `kill()` and `stopAgentRun()`. The caller owns the
  * decision because only it knows which gesture it is serving: the configured
  * stop surfaces resolve it through `detachSubagentsOnStop()`, the CLI's
- * focus-scoped bare-Escape stop always detaches, and process shutdown always
- * cascades. Omitting the field means cascade — the conservative reading, since
- * a child left running has no owner to report to.
+ * bare-Escape stop always detaches, and shutdown always cascades. Omitting
+ * the field means cascade, since a child left running has no owner.
  */
 interface RunStop {
   /** Whether a live interrupt target took the stop, asked rather than read:
    *  the two child policies decide it at different moments. A cascading stop
-   *  interrupts at admission and answers straight away. A detaching stop
+   *  interrupts at admission and answers straight away; a detaching one
    *  interrupts only after {@link settlement} has committed the detach batch
-   *  and severed the children locally — a child completing between the
-   *  interrupt and that sever would still resolve the just-stopped parent as
-   *  its delivery target — so it answers `false` until the settlement has run.
-   *  A caller that must decide synchronously is therefore a caller that
+   *  and severed the children locally, so it answers `false` until that has
+   *  run. A caller that must decide synchronously is therefore a caller that
    *  cascades (headless shutdown, session close). */
   readonly accepted: () => boolean;
   /** Fails when a durable fact the stop owed storage was refused: the detach
@@ -64,10 +68,9 @@ interface RunStopOptions {
 /**
  * A native child loop's lineage for the loop's whole life: from the
  * synchronous start of the loop, across every turn handle it tracks and
- * untracks, until its final result has been delivered to the parent. The
- * parent counts it as an active child throughout, so the parent's continuation
- * stays recoverable until the last delivery has landed. Child-run loops use
- * their persistent run handle for lineage instead.
+ * untracks, until its final result has reached the parent. The parent counts
+ * it as an active child throughout, so its continuation stays recoverable
+ * until the last delivery landed. Child-run loops use their run handle.
  */
 interface ChildRunActivation {
   readonly runId: RunId;
@@ -75,6 +78,17 @@ interface ChildRunActivation {
   readonly interrupt: () => void;
   readonly detach: () => void;
   readonly isDetached: () => boolean;
+}
+
+/**
+ * A run parked at WAITING: the fiber its generation stayed on, inside the
+ * scope that holds the run's teardown. Completing the latch ends the run
+ * through the lifecycle's terminal path; interrupting the fiber where it
+ * waits ends the park alone, which is what a resumed generation does.
+ */
+interface ParkedRun {
+  readonly fiber: Fiber.Fiber<void>;
+  readonly stopped: Deferred.Deferred<void>;
 }
 
 /**
@@ -122,13 +136,9 @@ interface RunRegistryInit {
     events: readonly SessionEventDraft[],
   ) => Effect.Effect<void, Error>;
   readonly approvals: SessionApprovals;
-  /**
-   * The session's one exit choreography (`SessionHandle.releaseRunLease`),
-   * required so no construction path can silently release a lease without
-   * settling the session's queued publications first.
-   */
-  readonly releaseRootRunLease: WaitingTerminationContext['releaseRootRunLease'];
-  readonly finalizeRun: WaitingTerminationContext['finalizeRun'];
+  readonly finalizeRun: (
+    input: FinalizeRunInput,
+  ) => Effect.Effect<FinalizeRunResult, Error>;
   /**
    * Admit one run's claim (`SessionHandle.acquireClaims`) and hand back its
    * release. A run aggregate takes an append from its claim holder alone, so
@@ -142,11 +152,9 @@ interface RunRegistryInit {
 }
 
 /**
- * Session-owned registry of active runs and their change listeners.
- *
- * One instance belongs to each session, built by the session layer in the
- * session's scope over that session's event hub, approvals, and lease-release
- * boundary, and provided as {@link Runs}.
+ * Session-owned registry of active runs and their change listeners. One
+ * instance belongs to each session, built by the session layer in that
+ * session's scope and provided as {@link Runs}.
  */
 export class RunRegistry {
   private readonly handles = new Map<RunId, RunHandle>();
@@ -171,43 +179,34 @@ export class RunRegistry {
     events: readonly SessionEventDraft[],
   ) => Effect.Effect<void, Error>;
   private readonly approvals: SessionApprovals;
-  private readonly releaseRootRunLease: WaitingTerminationContext['releaseRootRunLease'];
-  private readonly finalizeRun: WaitingTerminationContext['finalizeRun'];
+  private readonly finalizeRun: RunRegistryInit['finalizeRun'];
   private readonly acquireRunClaim: RunRegistryInit['acquireRunClaim'];
   private readonly listeners = new Map<
     string,
     Set<(handle: RunHandle | undefined) => void>
   >();
   private readonly childActivations = new Map<RunId, ChildRunActivation>();
+  /** Every run parked at WAITING in this session ({@link park}). */
+  private readonly parked = new Map<RunId, ParkedRun>();
   /** The session's child-run concurrency budget, made on first use
    *  ({@link childRunBudget}). */
   private budget: Semaphore.Semaphore | undefined;
   private readonly lanes = new RunLanes();
-  private readonly waitingTermination: WaitingTermination;
 
   constructor(options: RunRegistryInit) {
     this.commit = options.commit;
     this.runView = options.runView;
     this.approvals = options.approvals;
-    this.releaseRootRunLease = options.releaseRootRunLease;
     this.finalizeRun = options.finalizeRun;
     this.acquireRunClaim = options.acquireRunClaim;
-    this.waitingTermination = new WaitingTermination({
-      releaseRootRunLease: this.releaseRootRunLease,
-      finalizeRun: this.finalizeRun,
-      lanes: this.lanes,
-      getHandle: (runId) => this.handles.get(runId),
-      untrackIfCurrent: (handle) => this.untrackIfCurrent(handle),
-      untrackHandle: (handle) => this.untrackHandle(handle),
-    });
   }
 
   /**
-   * One phase-moving row this process committed (`run.activate`, the
-   * `waiting` step and the step that leaves it, `run.end`), from the
-   * session's fold-gated tail in commit order: notify the waiters on this
-   * run, which read the new phase from the view here — why the caller
-   * delivers the row only once the view has folded it.
+   * One phase-moving row this process committed (`run.activate`, the `waiting`
+   * step and the step that leaves it, `run.end`), from the session's
+   * fold-gated tail in commit order: notify the waiters on this run, which
+   * read the new phase from the view here — why the caller delivers the row
+   * only once the view has folded it.
    */
   handleStatus(runId: RunId): void {
     if (this.disposed) return;
@@ -223,6 +222,10 @@ export class RunRegistry {
       'Cannot register run work after session disposal.',
     );
     this.lanes.disposeAll(disposal);
+    // Parked fibers are interrupted where they wait: the session is gone, so
+    // no terminal row of theirs is this process's to write.
+    for (const parked of this.parked.values()) parked.fiber.interruptUnsafe();
+    this.parked.clear();
     const runIds = [...this.handles.keys()];
     this.handles.clear();
     for (const runId of runIds) this.notifyWaiters(runId);
@@ -233,17 +236,21 @@ export class RunRegistry {
 
   /**
    * Whether a generation of `runId` is live in this process — holding its
-   * lane, still unwinding, or parked with a live tool-use flow: the states in
+   * lane, still unwinding, or carrying a live tool-use flow: the states in
    * which a resume must be refused outright rather than queued on the run
    * lane, since it would otherwise start a fresh generation over a live one.
+   * A parked run ({@link park}) is not one of them until a stop wakes it: a
+   * resume supersedes the fiber where it waits, but a woken park is the run
+   * unwinding, still owing its terminal row and its claim release.
    *
    * Local ownership, never the durable phase: a crash leaves the phase RUNNING
-   * by design (owner loss is the fold's interrupted reading, 5.2), and an
-   * orphaned run in that phase is exactly what a resume exists to take over.
+   * by design, and an orphaned run in that phase is what a resume takes over.
    */
   isActiveOrResuming(runId: RunId): boolean {
+    const parked = this.parked.get(runId);
     return (
       this.lanes.isHeld(runId) ||
+      (parked !== undefined && Deferred.isDoneUnsafe(parked.stopped)) ||
       this.getToolUseFlowContext(runId) !== undefined
     );
   }
@@ -278,7 +285,7 @@ export class RunRegistry {
     return this.handles.has(runId) || this.childActivations.has(runId);
   }
 
-  /** Run a generation after earlier work and retain its lane through cleanup. */
+  /** Run a generation after earlier work, holding its lane through cleanup. */
   launchRun<A, E, R>(
     runId: RunId,
     operation: Effect.Effect<A, E, R>,
@@ -301,9 +308,8 @@ export class RunRegistry {
    * The session's one child-run concurrency budget: the cap on concurrently
    * live native child model conversations (`childRunBudget.ts` holds the
    * design and the configured value). Made at `permits` on first call and
-   * re-pinned to `permits` on every later call, so a settings change takes
-   * effect at the next child launch while loops already sharing the
-   * semaphore pick up the new limit on their next turn.
+   * re-pinned on every later one, so a settings change takes effect at the
+   * next child launch and sharing loops pick it up on their next turn.
    */
   childRunBudget(permits: number): Effect.Effect<Semaphore.Semaphore> {
     return Effect.suspend(() => {
@@ -313,6 +319,41 @@ export class RunRegistry {
       this.budget = budget;
       return Effect.succeed(budget);
     });
+  }
+
+  /**
+   * Park `handle`'s run on its own stop latch: the generation that reached
+   * WAITING stays here as a fiber holding the run's teardown, instead of
+   * leaving it behind for someone else to invoke. Completing the latch
+   * ({@link terminate}) runs `termination`, the run's own terminal path;
+   * interrupting the fiber where it waits ({@link track}, {@link dispose})
+   * ends the park alone. The fiber leaves the map when it ends.
+   */
+  park(
+    handle: RunHandle,
+    stopped: Deferred.Deferred<void>,
+    termination: Effect.Effect<void>,
+  ): Effect.Effect<void> {
+    const runId = handle.runId;
+    return Effect.forkDetach(
+      Deferred.await(stopped).pipe(Effect.andThen(termination)),
+    ).pipe(
+      Effect.tap((fiber) =>
+        Effect.sync(() => {
+          const entry: ParkedRun = { fiber, stopped };
+          this.parked.set(runId, entry);
+          fiber.addObserver(() => {
+            if (this.parked.get(runId) === entry) this.parked.delete(runId);
+          });
+        }),
+      ),
+      Effect.asVoid,
+    );
+  }
+
+  /** Whether a generation of `runId` is parked at WAITING ({@link park}). */
+  isParked(runId: RunId): boolean {
+    return this.parked.has(runId);
   }
 
   /** Register a run handle. */
@@ -331,23 +372,26 @@ export class RunRegistry {
     // swaps the handles is what stops a handle built before a `run.detach`
     // from restoring the edge that row removed.
     if (activation?.isDetached() || previous?.parent === null) handle.detach();
-    if (previous && previous.suspendedTerminationStarted) {
-      // A resumed lifecycle can replace its suspended predecessor while the
-      // predecessor's asynchronous teardown is still in progress. The
-      // stop already claimed that run, so carry it across the ownership
-      // handoff instead of allowing the successor to revive the run.
-      handle.interrupt();
+    // This registration is the run starting again, so the generation parked at
+    // WAITING is over: its fiber is interrupted where it waits and its
+    // termination never runs. A stop that already woke that fiber is past
+    // interrupting, so it crosses the handoff with the registration instead.
+    const parked = this.parked.get(handle.runId);
+    if (parked) {
+      this.parked.delete(handle.runId);
+      parked.fiber.interruptUnsafe();
     }
+    if (previous?.stopRequested === true) handle.interrupt();
     this.handles.set(handle.runId, handle);
     this.notifyWaiters(handle.runId);
   }
 
   /**
    * Refuse every run registered from here on: the session is closing
-   * (`Sessions.close`). The runs already tracked keep their handles,
-   * waiters, and status until they settle, and a native child loop keeps
-   * its activation until its final delivery, which is what the close waits
-   * for ({@link getActiveIds}); only new admissions are turned away.
+   * (`Sessions.close`). The runs already tracked keep their handles, waiters
+   * and status until they settle, and a native child loop keeps its activation
+   * until its final delivery, which is what the close waits for
+   * ({@link getActiveIds}); only new admissions are turned away.
    */
   closeAdmissions(): void {
     this.closing = true;
@@ -365,11 +409,10 @@ export class RunRegistry {
   /**
    * Refuse a child admitted under a parent whose stop has begun
    * ({@link beginStop}), the way {@link assertActive} refuses one admitted
-   * under a closing session.
-   *
-   * A child this registry already holds is not an admission: a native child's
-   * activation and every turn handle it tracks re-enter here while the detach
-   * runs, and those are the children the stop is severing, not new ones.
+   * under a closing session. A child this registry already holds is not an
+   * admission: a native child's activation and every turn handle it tracks
+   * re-enter here while the detach runs, and those are the children the stop
+   * is severing, not new ones.
    */
   private assertAdmitsChild(parentRunId: RunId, childRunId: RunId): void {
     if (!this.stopping.has(parentRunId)) return;
@@ -390,15 +433,12 @@ export class RunRegistry {
    * and would still resolve the just-stopped parent as its delivery target.
    * The mark closes that window at its start: from here until the stop
    * settles, no new child is admitted under it ({@link assertAdmitsChild}).
-   * A cascading stop takes the same mark for the same reason — it interrupts
-   * the children it can see at admission, and one admitted after that would
-   * outlive the parent that owns it.
+   * A cascading stop takes the same mark for the same reason.
    *
    * The mark is the stop's, so {@link throughStop} owns its whole life: a
    * multi-turn parent tracking its next turn's handle mid-detach is not the
    * stop ending, and a run whose next generation takes the lane
-   * ({@link launchRun}) has left the stop behind whether or not that stop
-   * ever settled.
+   * ({@link launchRun}) has left the stop behind either way.
    */
   private beginStop(runId: RunId): symbol {
     const token = Symbol('run-stop');
@@ -409,12 +449,10 @@ export class RunRegistry {
   }
 
   /** End this stop's admission gate when its settlement does, succeeded or
-   *  failed: a refused `run.detach` commit never reaches the interrupt, so
-   *  the parent generation it marked is still running and still owns the
-   *  children it launches next. The gate lifts when the last stop lets go:
-   *  one stop's settlement leaves another's window closed, since that other
-   *  stop is still committing over a snapshot taken before any child a lifted
-   *  gate would admit. */
+   *  failed: a refused `run.detach` commit never reaches the interrupt, so the
+   *  parent generation it marked is still running and still owns the children
+   *  it launches next. The gate lifts when the last stop lets go, since an
+   *  overlapping stop is still committing over an older snapshot. */
   private throughStop(
     runId: RunId,
     token: symbol,
@@ -447,7 +485,6 @@ export class RunRegistry {
       this.notifyWaiters(runId);
       return;
     }
-
     this.untrackHandle(handle);
   }
 
@@ -497,7 +534,6 @@ export class RunRegistry {
 
   /**
    * Request manual compaction from the active tool-use flow, if one exists.
-   *
    * Hosts own the user-facing message, but the registry owns the live-flow
    * lookup so CLI and extension do not rederive the same runtime facts.
    */
@@ -516,10 +552,8 @@ export class RunRegistry {
     };
   }
 
-  /**
-   * Decide how a tool-use follow-up should be admitted from one registry-owned
-   * snapshot of run status, active flow context, and child runs.
-   */
+  /** Decide how a tool-use follow-up is admitted, from one registry-owned
+   *  snapshot of run status, active flow context, and child runs. */
   getToolUseFollowUpTarget(runId: RunId): ToolUseFollowUpTarget {
     const run = this.runView(runId);
     const status: RunPhase | undefined =
@@ -549,12 +583,11 @@ export class RunRegistry {
   }
 
   /**
-   * Terminate a run via its handle, or, for a native child loop
-   * between turns (an activation with no turn handle), interrupt the loop
-   * itself. A cascading stop is admitted synchronously and a detaching one
-   * with its settlement, which is the order the stop itself requires
-   * ({@link RunStop.accepted}); either way the caller executes the returned
-   * settlement at its Effect boundary before releasing ownership.
+   * Terminate a run via its handle, or, for a native child loop between turns
+   * (an activation with no turn handle), interrupt the loop itself. A
+   * cascading stop is admitted synchronously and a detaching one with its
+   * settlement ({@link RunStop.accepted}); either way the caller executes the
+   * returned settlement at its Effect boundary before releasing ownership.
    */
   kill(runId: RunId, options: RunStopOptions = {}): RunStop {
     const stopToken = this.beginStop(runId);
@@ -606,11 +639,10 @@ export class RunRegistry {
   }
 
   /**
-   * Every run live in this session: the tracked handles and the
-   * native child loops retained between turns, whose activation is the
-   * only record of them. This is what a close stops and waits on, so a
-   * child with final delivery still to do is never left running under a
-   * released session.
+   * Every run live in this session: the tracked handles and the native child
+   * loops retained between turns, whose activation is the only record of them.
+   * This is what a close stops and waits on, so a child with a final delivery
+   * to do is never left running under a released session.
    */
   getActiveIds(): RunId[] {
     return [
@@ -619,17 +651,12 @@ export class RunRegistry {
   }
 
   /**
-   * Kill only background OS processes (bash, codex) without touching agent
-   * run status. Agent runs are left in RUNNING: whether one is
-   * resumable afterwards is decided from its durable facts (a `flow.snapshot`
-   * on the run aggregate, and no live run claim), never from a phase some
-   * later pass rewrites.
-   *
-   * Killing a background run's underlying OS process requires
-   * `interruptBackgroundProcess()`, which only fires for a handle whose
-   * attached interrupt handler declares itself as owning a live background
-   * process, leaving every other `RunHandle` (root/native-subagent
-   * runs, loop-level interrupts) untouched (#8155).
+   * Kill only background OS processes (bash, codex) without touching agent run
+   * status. Agent runs are left in RUNNING: whether one is resumable is
+   * decided from its durable facts, never from a phase a later pass rewrites.
+   * `interruptBackgroundProcess()` fires only for a handle whose interrupt
+   * handler declares itself as owning a live background process, leaving every
+   * other `RunHandle` untouched (#8155).
    */
   killBackgroundProcesses(): void {
     for (const handle of this.handles.values()) {
@@ -638,15 +665,12 @@ export class RunRegistry {
   }
 
   /**
-   * Wait for any of the given runs to change — see {@link addListener}
-   * for the full wake set — and succeed with the run id that changed
-   * first.
+   * Wait for any of the given runs to change — see {@link addListener} for
+   * the full wake set — and succeed with the run id that changed first.
    *
    * A caller that wants a bounded wait races or times out this effect instead
    * of passing a deadline in: interrupting the waiting fiber is what detaches
-   * the listeners, so an abandoned wait leaves nothing registered and no
-   * caller has to read a sentinel to learn that its deadline, rather than an
-   * run, ended the wait.
+   * the listeners, so an abandoned wait leaves nothing registered.
    */
   waitForAnyChange(runIds: readonly RunId[]): Effect.Effect<RunId> {
     return Effect.callback<RunId>((resume) => {
@@ -676,13 +700,10 @@ export class RunRegistry {
    * session close and a project close both wait on, over {@link getActiveIds}.
    *
    * Interrupting the waiting fiber — which is what a close budget does —
-   * detaches the registry listeners with it, so a bounded wait leaves none
-   * behind. The re-check arm is load-bearing rather than defensive: the
-   * registry is re-read once those listeners are attached, closing the window
-   * between the read above and a departure the fiber only reaches a scheduler
-   * step later. `raceAllFirst` starts its arms immediately and in order, so
-   * the wait registers first and the re-check then sees a last run that left
-   * inside the window, instead of waiting out the whole close budget for a
+   * detaches the registry listeners with it. The re-check arm is load-bearing:
+   * `raceAllFirst` starts its arms in order, so the wait registers first and
+   * the re-check then sees a last run that left between the read above and
+   * those listeners, instead of waiting out the whole close budget for a
    * notification that can no longer come.
    */
   awaitDrained(): Effect.Effect<void> {
@@ -740,33 +761,28 @@ export class RunRegistry {
    * children.
    *
    * The durable batch comes first and the local sever follows it, on the
-   * children that batch committed: a refused commit therefore leaves both the
-   * durable parent edges and the local relationships standing, so a retry
-   * still finds the children to detach. It carries every severed child at
-   * once — activations included, which is why a caller must not re-derive the
-   * set from the tracked handles alone and publish `run.detach` for
-   * the difference: a native child between turns would be published twice —
-   * and a batch spanning run ids belongs to no single run, so no run's own
-   * drain would ever hear it refused. A stop that reported done over a
-   * refused batch would leave the children durably parented, and a later
-   * delete of the parent would collect the children the user chose to keep
-   * running.
+   * children that batch committed: a refused commit leaves both the durable
+   * parent edges and the local relationships standing, so a retry still finds
+   * the children to detach. It carries every severed child at once,
+   * activations included, so a caller must not re-derive the set from the
+   * tracked handles and publish `run.detach` for the difference; and a batch
+   * spanning run ids belongs to no single run, so no run's drain would ever
+   * hear it refused. A stop that reported done over a refused batch would
+   * leave the children durably parented, and a later delete of the parent
+   * would collect the children the user chose to keep running.
    *
    * The set taken here stays the parent's whole child roster while the batch
    * commits: the stop marked the parent before reading it ({@link beginStop}),
    * so no child is admitted under it in the window this covers.
    *
    * Each row lands on its own child's aggregate, which takes an append only
-   * from its claim holder, and freezing admission does not stop a child from
-   * finishing: one that ends while this batch waits would release its claim,
-   * and the batch would then be refused as a whole with nothing severed. So
-   * every snapshotted child is claimed here, the way an ownerless stop claims
-   * its target ({@link stopAgentRun}), *and* named in {@link detaching} until
-   * the commit and the local sever are done: the claim a live child of this
-   * session already holds is one this acquire retains nothing of (the
-   * database hands back a release only where the owner changed), so what
-   * holds it is the child's own lease release waiting here
-   * ({@link throughDetach}) rather than a second claim over it.
+   * from its claim holder, and a child that ends while the batch waits would
+   * release its claim and have the whole batch refused with nothing severed.
+   * So every snapshotted child is claimed here, the way an ownerless stop
+   * claims its target ({@link stopAgentRun}), and named in {@link detaching}
+   * until the commit and the local sever are done: a live child's own claim is
+   * one this acquire retains nothing of, so what holds it is that child's
+   * lease release waiting here ({@link throughDetach}).
    */
   detachActiveChildren(parentRunId: RunId): Effect.Effect<void, Error> {
     const detachedChildRunIds = this.childRunIds(parentRunId);
@@ -817,8 +833,7 @@ export class RunRegistry {
 
   /** The children one parent's detach covers. A Set, not an array: a child
    *  detached mid-turn has both a per-turn handle and a ChildRunActivation
-   *  under one runId, so both loops reach the same child and it must still be
-   *  published (and severed) exactly once. */
+   *  under one runId, so both loops reach it and it is severed once. */
   private childRunIds(parentRunId: RunId): readonly RunId[] {
     const childRunIds = new Set<RunId>();
     for (const activation of this.activeChildActivations(parentRunId))
@@ -829,7 +844,7 @@ export class RunRegistry {
   }
 
   /** Apply parent removal to local handles and approval ancestry without
-   *  publishing, over the children a durable detach already covers: the batch
+   *  publishing, over children a durable detach already covers: the batch
    *  {@link detachActiveChildren} committed, or a committed `run.removed`. */
   detachChildren(
     parentRunId: RunId,
@@ -846,20 +861,17 @@ export class RunRegistry {
 
   /**
    * Stop a visible agent run and apply the caller's declared child policy.
-   *
-   * Hosts should call this instead of reconstructing stop behavior from
+   * Hosts call this instead of reconstructing stop behavior from
    * child-interrupts, root interrupts, and run-status writes.
    *
    * Fails when the run's terminal row could not be written: the run is still
-   * in flight, and a caller that reported the stop done would be lying about
-   * it.
+   * in flight, and a caller that reported the stop done would be lying.
    *
-   * A stop of a run no handle here owns writes that row from outside the
-   * run, so the run's claim fences the whole gesture — the descendant sweep
-   * included. Taken first, a refusal leaves the descendants running instead
-   * of detaching or killing them and then reporting the stop unavailable. A
-   * locally owned run is already this process's to stop and takes the direct
-   * path.
+   * A stop of a run no handle here owns writes that row from outside the run,
+   * so the run's claim fences the whole gesture, descendant sweep included:
+   * taken first, a refusal leaves the descendants running instead of severing
+   * them and then reporting the stop unavailable. A locally owned run is
+   * already this process's to stop and takes the direct path.
    */
   stopAgentRun(
     runId: RunId,
@@ -876,14 +888,11 @@ export class RunRegistry {
   /**
    * Apply one stop: the descendant policy the caller declared, the root
    * handle's own termination, and — when no live handle took it — the
-   * terminal row an ownerless stop must write itself.
-   *
-   * A detaching policy is the whole first step: the children leave the parent,
-   * durably and then locally, before anything interrupts it. A child that
-   * completes while that batch is still committing would otherwise resolve
-   * the just-stopped parent as its delivery target and enqueue its terminal
-   * result there, and the sever that arrives afterwards cannot take that
-   * routing back.
+   * terminal row an ownerless stop must write itself. A detaching policy is
+   * the whole first step: the children leave the parent, durably and then
+   * locally, before anything interrupts it, because a child completing while
+   * that batch commits would otherwise route its terminal result to the
+   * just-stopped parent, and the later sever cannot take that routing back.
    */
   private applyStop(
     runId: RunId,
@@ -947,11 +956,8 @@ export class RunRegistry {
    * - {@link dispose}, for every run still tracked at session teardown.
    *
    * Private: the only caller is {@link waitForAnyChange}, which detaches
-   * inside the callback, so nothing observes a second wake through the same
-   * callback.
-   *
-   * The callback receives the current handle, or `undefined` once the
-   * run has been untracked (terminal event) or the session disposed.
+   * inside the callback. The callback receives the current handle, or
+   * `undefined` once the run was untracked or the session disposed.
    */
   private addListener(
     runId: RunId,
@@ -971,10 +977,8 @@ export class RunRegistry {
     };
   }
 
-  /**
-   * Retain a native child loop's lineage until the returned disposer runs,
-   * which the loop does only after its final delivery to the parent.
-   */
+  /** Retain a native child loop's lineage until the returned disposer runs,
+   *  which the loop does only after its final delivery to the parent. */
   reserveChildActivation(activation: ChildRunActivation): () => void {
     this.assertActive();
     if (this.childActivations.has(activation.runId)) {
@@ -1014,12 +1018,15 @@ export class RunRegistry {
       }
     }
     const interrupted = handle.interrupt();
-    // A launch-stop latch attached to a parked predecessor makes
-    // `interrupt()` return true; WAITING teardown must still run, or a
-    // resume that then fails would leave the parked run live.
-    const settlement = this.waitingTermination.terminateWaitingHandle(handle);
-    if (settlement) {
-      settlements.push(settlement);
+    // A run parked at WAITING is stopped by completing the latch its fiber
+    // waits on: that fiber writes the run's terminal row through the same path
+    // a running generation takes, and this stop settles when it does. Read
+    // after `interrupt()`, whose handler may be a resume's launch stop rather
+    // than this run's, so the parked run is ended here either way.
+    const parked = this.parked.get(handle.runId);
+    if (parked) {
+      Deferred.doneUnsafe(parked.stopped, Effect.void);
+      settlements.push(Fiber.await(parked.fiber).pipe(Effect.asVoid));
       return true;
     }
     // The loop's own interrupt already carried the stop into the turn: the
@@ -1034,16 +1041,11 @@ export class RunRegistry {
   /**
    * Write the terminal fact for a stop that reached no live handle, through
    * the run's one writer. `keepExistingOutcome` leaves a run that already
-   * ended with its own verdict, which is what the status machine's refusal to
-   * leave a terminal phase used to express. The checkpoint is preserved: a
-   * cancelled run is exactly the one a user resumes.
-   *
-   * The row is an append on the run aggregate, which takes one only from its
-   * claim holder: {@link stopAgentRun} holds that claim around the whole
-   * ownerless stop, and a run this process still tracks is its own writer
-   * already. A refusal — a live foreign owner, a rolled-back transaction —
-   * fails the stop rather than being logged behind a caller that already
-   * reported it done.
+   * ended with its own verdict; the checkpoint is preserved, since a cancelled
+   * run is exactly the one a user resumes. The row is an append on the run
+   * aggregate, which takes one only from its claim holder: {@link stopAgentRun}
+   * holds that claim around the whole ownerless stop. A refusal fails the stop
+   * rather than being logged behind a caller that reported it done.
    */
   private finalizeOwnerlessStop(runId: RunId): Effect.Effect<void, Error> {
     return this.finalizeRun({
@@ -1086,17 +1088,15 @@ export class RunRegistry {
 
 /**
  * The session's runs (system design §2.1, §7.11): run admission and lanes,
- * the live handles, waiting termination, and the child roster of one
- * session. Built by the session layer in the session's scope and disposed
- * when that scope closes (`sessionLayer.ts`); the session record carries the
- * same value (`SessionHandle.runs`) for a host that holds the session.
- * Effect code below a launch takes it from context. It is provided where a
- * session is resolved into work, from the session that entry is handed:
- * `executeAgent` (which `runAgent` delegates to), `resumeRun`,
- * `resumeClaimedRun`, `resumeToolUseFromResumeData`, the session's request
- * handler (`SessionRequests`), the session layer's leftover-run sweep, and
- * the VS Code language-model tools that call a tool outside any run.
- * `closeSession` reads it from the session entry rather than providing it.
+ * the live handles, the parked fibers and the child roster of one session.
+ * Built by the session layer in the session's scope and disposed when that
+ * scope closes (`sessionLayer.ts`); the session record carries the same value
+ * (`SessionHandle.runs`) for a host that holds the session. Effect code below
+ * a launch takes it from context, provided where a session is resolved into
+ * work: `executeAgent` (which `runAgent` delegates to), `resumeRun`,
+ * `resumeClaimedRun`, `resumeToolUseFromResumeData`, `SessionRequests`, the
+ * leftover-run sweep, and the VS Code language-model tools that call a tool
+ * outside any run. `closeSession` reads it from the session entry.
  */
 export class Runs extends Context.Service<Runs, RunRegistry>()(
   '@texra/session/Runs',

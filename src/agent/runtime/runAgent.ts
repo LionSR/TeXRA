@@ -131,7 +131,7 @@ export const runAgent = Effect.fn('runAgent')(function* (
   if (
     !shouldRegister &&
     (runSession.runs.isActiveOrResuming(runId) ||
-      (existingHandle !== undefined && !existingHandle.isSuspended))
+      (existingHandle !== undefined && !runSession.runs.isParked(runId)))
   )
     return yield* Effect.fail(new Error(`Run is already running: ${runId}`));
   // The launch's one stop: the launch handle's interrupt completes it, the
@@ -148,19 +148,16 @@ export const runAgent = Effect.fn('runAgent')(function* (
     identity: { kind: 'agent' as const, agent: request.config.agent },
     category: request.config.agentCategory,
   };
-  // A parked WAITING predecessor is already the kill target: attach the
-  // latch there instead of replacing it. Only a genuinely suspended handle
-  // qualifies; a live launch handle must keep its own interrupt handler.
-  // A stop already claimed on that parked handle is inherited now, not
-  // after a later track().
-  const parkedHandle =
-    existingHandle?.isSuspended === true ? existingHandle : undefined;
-  if (
-    parkedHandle?.stopRequested === true ||
-    parkedHandle?.suspendedTerminationStarted === true
-  ) {
-    completeLaunchStop();
-  }
+  // A parked WAITING predecessor is already the kill target — its own stop
+  // is the registry's, which ends the parked run — so the launch latch rides
+  // on that handle instead of a second tracked one. Only a genuinely parked
+  // handle qualifies; a live launch handle must keep its own interrupt
+  // handler. A stop that already reached it is inherited now, not after a
+  // later track().
+  const parkedHandle = runSession.runs.isParked(runId)
+    ? existingHandle
+    : undefined;
+  if (parkedHandle?.stopRequested === true) completeLaunchStop();
   let launchHandle = parkedHandle
     ? undefined
     : new RunHandle(launchFacts, null);

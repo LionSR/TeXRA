@@ -488,7 +488,6 @@ const sessionHandleLayer = (
             finalizeRun: (input) => finalizeRun(session, input),
             acquireRunClaim: (runId) =>
               session.acquireClaims(qualifyAggregateId('run', runId)),
-            releaseRootRunLease: (runId) => session.releaseRunLease(runId),
           }),
           // The session's requests: the approval state above and the handler
           // that admits on the root graph's log.
