@@ -76,7 +76,10 @@ export interface ExternalOpener {
  * gone (`host-unavailable`), and VS Code's `showInputBox` rejects when the
  * host's own dialog machinery faults (`presentation-failed`). The CLI's Ink
  * dialog raises neither: it is a form in the app's own foreground slot, so
- * there is no foreign dialog to fault.
+ * there is no foreign dialog to fault. Its onboarding wizard, which renders
+ * no such slot, raises `host-unavailable` for the two members it has no
+ * surface for, so a caller that reached them there sees the fault rather than
+ * a dismissal the user never made.
  *
  * The message members answer to {@link NotificationFailed} instead: a message
  * the host would not show is the same fault whether or not it carried buttons,

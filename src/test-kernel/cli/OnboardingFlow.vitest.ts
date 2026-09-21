@@ -9,13 +9,13 @@ import { waitForCondition } from '@test/support/asyncTestUtils';
 import { FakeStdin, FakeStdout } from '@test/support/inkTestHarness.ts';
 
 const mocks = vi.hoisted(() => ({
-  commitCliProviderApiKey: vi.fn(),
+  commitOnboardingProviderApiKey: vi.fn(),
   writeTextStderr: vi.fn(),
   writeTextStdout: vi.fn(),
 }));
 
 vi.mock('@cli/chat/tui/hosts/cliProviderKeys', () => ({
-  commitCliProviderApiKey: mocks.commitCliProviderApiKey,
+  commitOnboardingProviderApiKey: mocks.commitOnboardingProviderApiKey,
 }));
 
 vi.mock('@cli/runtime/logSinks', () => ({
@@ -58,7 +58,7 @@ function restoreProcessRun(
 }
 
 beforeEach(() => {
-  mocks.commitCliProviderApiKey.mockReset().mockReturnValue(Effect.void);
+  mocks.commitOnboardingProviderApiKey.mockReset().mockReturnValue(Effect.void);
   mocks.writeTextStderr.mockReset();
   mocks.writeTextStdout.mockReset();
 });
@@ -134,7 +134,7 @@ describe('provider-key onboarding flow', () => {
         // The secret store is threaded in, so the onboarding flow writes
         // through the exact store this test handed it rather than an
         // ambient platform lookup.
-        expect(mocks.commitCliProviderApiKey).toHaveBeenCalledWith(
+        expect(mocks.commitOnboardingProviderApiKey).toHaveBeenCalledWith(
           platform.secrets,
           expect.anything(),
           'anthropic',
