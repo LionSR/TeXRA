@@ -11,11 +11,6 @@
  */
 // Third-party imports
 import safeStringify from 'safe-stable-stringify';
-// Serializes a thrown value (any value, not just an `Error`) into a plain
-// object. Unlike a naive `{ name, message, stack }` copy it keeps `cause`
-// chains and custom enumerable properties (e.g. `statusCode`, `requestId`),
-// and handles circular references.
-import { serializeError } from 'serialize-error';
 
 // Local imports
 import * as loggerSelf from '@logger/logUtils';
@@ -68,6 +63,24 @@ export function setDebugModeConfig(config: DebugModeConfig | null): void {
  */
 export function isDebugModeEnabled(): boolean {
   return debugModeConfig?.get('texra.logger.debugMode', false) ?? false;
+}
+
+/**
+ * Flatten an `Error` into the plain object `JSON.stringify` would otherwise
+ * render as `{}`: its three non-enumerable display fields, its `cause` (also
+ * non-enumerable when set through the constructor option), and its own
+ * enumerable properties (e.g. `statusCode`, `requestId`). A nested `cause`
+ * that is itself an `Error` reaches this function again through the replacer
+ * below, so a cause chain flattens whole.
+ */
+function serializeError(error: Error): Record<string, unknown> {
+  return {
+    name: error.name,
+    message: error.message,
+    stack: error.stack,
+    ...(error.cause === undefined ? {} : { cause: error.cause }),
+    ...error,
+  };
 }
 
 /**

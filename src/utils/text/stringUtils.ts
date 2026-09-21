@@ -1,7 +1,5 @@
 import { intlFormatDistance } from 'date-fns';
-import prettyBytes from 'pretty-bytes';
 import prettyMilliseconds from 'pretty-ms';
-import pluralizeWord from 'pluralize';
 
 const graphemeSegmenter = new Intl.Segmenter(undefined, {
   granularity: 'grapheme',
@@ -84,6 +82,18 @@ export function capitalize(str: string): string {
   return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
+/**
+ * Regular English plural of a noun phrase whose head noun is its last word:
+ * a consonant + `y` becomes `ies`, a sibilant ending takes `es`, everything
+ * else takes `s`. Irregular nouns are not guessed — a caller with one passes
+ * `plural` explicitly.
+ */
+function regularPlural(singular: string): string {
+  if (/[^aeiou]y$/i.test(singular)) return `${singular.slice(0, -1)}ies`;
+  if (/(?:s|x|z|ch|sh)$/i.test(singular)) return `${singular}es`;
+  return `${singular}s`;
+}
+
 /** Return the singular or plural form of `singular` based on `count`. */
 export function pluralize(
   count: number,
@@ -91,7 +101,7 @@ export function pluralize(
   plural?: string,
 ): string {
   if (plural !== undefined) return count === 1 ? singular : plural;
-  return pluralizeWord(singular, count);
+  return count === 1 ? singular : regularPlural(singular);
 }
 
 /**
@@ -289,7 +299,20 @@ export function formatRelativeTime(timestamp: number): string {
   return intlFormatDistance(timestamp, Date.now());
 }
 
-/** Human-readable byte size (binary units, e.g. `1.5 MiB`). */
+const BINARY_BYTE_UNITS = ['B', 'KiB', 'MiB', 'GiB', 'TiB', 'PiB'] as const;
+
+/**
+ * Human-readable byte size (binary units, e.g. `1.5 MiB`): the largest unit
+ * the value reaches, at three significant digits with trailing zeros dropped.
+ */
 export function formatBytes(bytes: number): string {
-  return prettyBytes(bytes, { binary: true });
+  const sign = bytes < 0 ? '-' : '';
+  const magnitude = Math.abs(bytes);
+  if (magnitude < 1) return `${sign}${magnitude} B`;
+  const exponent = Math.min(
+    Math.floor(Math.log(magnitude) / Math.log(1024)),
+    BINARY_BYTE_UNITS.length - 1,
+  );
+  const scaled = Number((magnitude / 1024 ** exponent).toPrecision(3));
+  return `${sign}${scaled} ${BINARY_BYTE_UNITS[exponent]}`;
 }

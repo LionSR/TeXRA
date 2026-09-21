@@ -161,9 +161,6 @@ export function assertNever(value: never, message: string): never {
 // async
 // ---------------------------------------------------------------------------
 
-// Re-export debounce from perfect-debounce for consistent usage across codebase
-export { debounce } from 'perfect-debounce';
-
 /**
  * Register an abort handler, firing it immediately if `signal` is already
  * aborted (an `addEventListener` after the fact never fires on its own).
@@ -210,9 +207,9 @@ export function linkAbortSignals(
 }
 
 /**
- * A trailing-edge timer batcher with a synchronous flush escape hatch —
- * perfect-debounce's `debounce()` only exposes `cancel()` (discard the
- * pending call), with no way to force the trailing call to run early.
+ * A trailing-edge timer batcher with a synchronous flush escape hatch. The
+ * library debounce this replaced exposed only `cancel()` (discard the pending
+ * call), with no way to force the trailing call to run early.
  * Several call sites need exactly that: run the pending work synchronously
  * right now (typically just before teardown/dispose), instead of either
  * waiting out the timer or dropping the work.
