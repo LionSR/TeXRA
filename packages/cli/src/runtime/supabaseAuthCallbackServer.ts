@@ -1,121 +1,91 @@
+// The CLI's callback transport: a loopback HTTP server held open for one
+// sign-in attempt.
+//
+// Protocol only. The nonce check, the pending record, the PKCE bind and the
+// session commit are the shared `SupabaseSignInCoordinator`'s; this file
+// carries the browser round trip and the pages the user sees. The served page
+// scrubs the one-time `?code=` out of the browser's address bar and history
+// before posting the query back, which is why the callback arrives as a POST
+// rather than being read straight off the GET.
+
 // Node imports
-import { randomBytes } from 'node:crypto';
 import {
   createServer,
   type IncomingMessage,
+  type Server,
   type ServerResponse,
 } from 'node:http';
 
 // Third-party imports
+import { Cause, Effect, Result } from 'effect';
 import { z } from 'zod';
-import { Cause, Deferred, Effect, Exit, Result, Scope } from 'effect';
 
 // Local imports
-import { unwrapAuthPortCause } from '@auth/authProgram';
-import { AUTH_CALLBACK_TIMEOUT_MS } from '@auth/config';
-import {
-  type SupabaseSession,
-  type SupabaseSessionCoordinator,
-} from '@auth/SupabaseSession';
 import { parseJsonWith } from '@common/parsing/safeParseJson';
-import type { ProcessRuntime } from '@platform/processRuntime';
+import { withCallbackNonce } from '@controllers/auth/pendingOAuthStore';
+import type {
+  AuthCallbackRoute,
+  AuthCallbackTransport,
+  SignInCallbackOutcome,
+} from '@controllers/auth/supabaseSignIn';
+import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import { escapeHtml } from '@shared/utils/xmlEscape';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 const LOOPBACK_HOST = '127.0.0.1';
 const CALLBACK_PATH = '/auth-callback';
-const CALLBACK_NONCE_BYTES = 24;
 const MAX_CALLBACK_BODY_BYTES = 8 * 1024;
 
-interface CallbackAttemptState {
-  acceptingCallbacks: boolean;
-  commitStarted: boolean;
-}
-
-class RecoverableCallbackRequestError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'RecoverableCallbackRequestError';
-  }
+/** How the CLI shows the consent URL and reports an unattended callback. */
+interface LoopbackTransportOptions {
+  /** The process runtime each inbound request's program is forked on. */
+  readonly runtime: ProcessRuntime;
+  /** Launch the browser; `false` prints the URL and waits. */
+  readonly openBrowser: (url: string) => Effect.Effect<void, Error>;
+  readonly log: (message: string) => void;
 }
 
 /**
- * The loopback server's surface is Effect-typed (PRD R1): the sign-in
- * program composes the waits and the close, and its host entry's run edge is
- * where a cancellation signal becomes fiber interruption.
+ * The loopback transport. `open` is scoped: the server is closed when the
+ * attempt's scope retires, on success, failure and cancellation alike.
  */
-export interface LoopbackCallbackServer {
-  readonly redirectTo: string;
-  /** Whether the storage commit has begun. A cancellation that lands after
-   *  this point still settles the sign-in: the sign-in's release half waits
-   *  the commit out before `close`, rather than closing the server under a
-   *  commit in flight. */
-  readonly commitStarted: boolean;
-  /** Await the completed session: the OAuth callback, a callback failure, or
-   *  the login-attempt timeout. Settles (success or failure) exactly when the
-   *  login attempt does and has no cancellation side effects, so it is also
-   *  the branch to race a browser launch against. Interruption is the caller
-   *  cancelling the login; `cancel` is what refuses further callbacks. */
-  readonly waitForSession: Effect.Effect<SupabaseSession, Error>;
-  /** Refuse further callbacks unless a commit is already underway. */
-  readonly cancel: Effect.Effect<void>;
-  readonly close: Effect.Effect<void, Error>;
+export function loopbackCallbackTransport(
+  options: LoopbackTransportOptions,
+): AuthCallbackTransport {
+  return {
+    open: (route) =>
+      Effect.map(
+        Effect.acquireRelease(
+          startLoopbackServer(options.runtime, route),
+          ({ server }) => Effect.orDie(closeServer(server)),
+        ),
+        ({ port }) =>
+          withCallbackNonce(
+            `http://${LOOPBACK_HOST}:${port}${CALLBACK_PATH}`,
+            route.nonce,
+          ),
+      ),
+    presentSignInUrl: (url) => options.openBrowser(url),
+    // The loopback route exists only for the life of one attempt, so an
+    // outcome with nothing waiting on it belongs to an attempt the terminal
+    // already abandoned; the browser page carries the wording the user needs.
+    announce: (outcome) =>
+      Effect.sync(() => {
+        options.log(
+          `Loopback sign-in callback ${outcome.kind} with no attempt waiting.`,
+        );
+      }),
+  };
 }
 
-export const startLoopbackCallbackServer = Effect.fn(
-  'supabaseAuthCallbackServer.startLoopbackCallbackServer',
-)(function* (
-  runtime: ProcessRuntime,
-  authCoordinator: SupabaseSessionCoordinator,
-) {
-  const nonce = randomBytes(CALLBACK_NONCE_BYTES).toString('base64url');
-  const sessionDeferred = yield* Deferred.make<SupabaseSession, Error>();
-  const attemptState: CallbackAttemptState = {
-    acceptingCallbacks: true,
-    commitStarted: false,
-  };
-  const refuseFurtherCallbacks = (): void => {
-    if (!attemptState.commitStarted) attemptState.acceptingCallbacks = false;
-  };
-
+const startLoopbackServer = Effect.fn(
+  'supabaseAuthCallbackServer.startLoopbackServer',
+)(function* (runtime: ProcessRuntime, route: AuthCallbackRoute) {
   const server = createServer((request, response) => {
     // Node's http callback is the foreign edge: each request's program is
-    // forked on the process runtime the sign-in hands in, and every outcome —
-    // success, typed failure, or defect — is folded into the response and the
-    // deferred by the program itself.
-    runtime.runFork(
-      handleCallbackRequest(
-        request,
-        response,
-        authCoordinator,
-        nonce,
-        attemptState,
-      ).pipe(
-        Effect.matchCause({
-          onFailure: (cause) => {
-            const error = Cause.squash(cause);
-            const recoverable =
-              error instanceof RecoverableCallbackRequestError;
-            if (!recoverable) {
-              Deferred.doneUnsafe(
-                sessionDeferred,
-                Effect.fail(ensureError(error)),
-              );
-            }
-            writeHtml(
-              response,
-              recoverable ? 400 : 500,
-              failureHtml(toErrorMessage(error)),
-            );
-          },
-          onSuccess: (session) => {
-            if (session) {
-              Deferred.doneUnsafe(sessionDeferred, Effect.succeed(session));
-            }
-          },
-        }),
-      ),
-    );
+    // forked on the process runtime, and every outcome — including a defect —
+    // is folded into the response by the program itself.
+    runtime.runFork(handleCallbackRequest(request, response, route));
   });
 
   yield* Effect.callback<void, Error>((resume) => {
@@ -137,103 +107,85 @@ export const startLoopbackCallbackServer = Effect.fn(
       new Error('Could not start CLI authentication callback server.'),
     );
   }
-
-  // The login-attempt timeout is a fiber in this scope, so `close` retiring
-  // the scope is the `clearTimeout` the p-defer version ran on cleanup.
-  const scope = yield* Scope.make();
-  yield* Effect.forkIn(
-    Effect.andThen(
-      Effect.sleep(AUTH_CALLBACK_TIMEOUT_MS),
-      Deferred.fail(
-        sessionDeferred,
-        new Error('Authentication timed out. Try again.'),
-      ),
-    ),
-    scope,
-  );
-
-  return {
-    redirectTo: `http://${LOOPBACK_HOST}:${address.port}${CALLBACK_PATH}`,
-    get commitStarted() {
-      return attemptState.commitStarted;
-    },
-    waitForSession: Deferred.await(sessionDeferred),
-    cancel: Effect.sync(refuseFurtherCallbacks),
-    close: Effect.andThen(Scope.close(scope, Exit.void), closeServer(server)),
-  };
+  return { server, port: address.port };
 });
 
-const assertAcceptingCallbacks = (
-  attemptState: CallbackAttemptState,
-): Effect.Effect<void, RecoverableCallbackRequestError> =>
-  attemptState.acceptingCallbacks
-    ? Effect.void
-    : Effect.fail(
-        new RecoverableCallbackRequestError(
-          'This authentication attempt was cancelled.',
-        ),
-      );
-
-const handleCallbackRequest = Effect.fn(
-  'supabaseAuthCallbackServer.handleCallbackRequest',
-)(function* (
+const handleCallbackRequest = (
   request: IncomingMessage,
   response: ServerResponse,
-  authCoordinator: SupabaseSessionCoordinator,
-  nonce: string,
-  attemptState: CallbackAttemptState,
-) {
-  yield* assertAcceptingCallbacks(attemptState);
-  const url = new URL(request.url ?? '/', `http://${LOOPBACK_HOST}`);
-  if (request.method === 'GET' && url.pathname === CALLBACK_PATH) {
-    writeHtml(response, 200, callbackHtml(nonce));
-    return undefined;
-  }
-
-  if (
-    request.method === 'POST' &&
-    url.pathname === `${CALLBACK_PATH}/complete`
-  ) {
-    const body = yield* parseCallbackBody(yield* readRequestBody(request));
-    if (body.nonce !== nonce) {
-      return yield* Effect.fail(
-        new RecoverableCallbackRequestError(
-          'Authentication callback did not match this login attempt.',
-        ),
-      );
+  route: AuthCallbackRoute,
+): Effect.Effect<void, never, ProcessServices> =>
+  Effect.gen(function* () {
+    const url = new URL(request.url ?? '/', `http://${LOOPBACK_HOST}`);
+    if (request.method === 'GET' && url.pathname === CALLBACK_PATH) {
+      writeHtml(response, 200, callbackHtml());
+      return;
     }
-    yield* assertAcceptingCallbacks(attemptState);
-    const result = yield* authCoordinator
-      .createSessionFromCallback({
-        path: CALLBACK_PATH,
-        query: body.query?.startsWith('?')
-          ? body.query.slice(1)
-          : (body.query ?? ''),
-      })
-      .pipe(Effect.mapError(unwrapAuthPortCause));
-    if (!result.success) return yield* Effect.fail(new Error(result.error));
-    yield* assertAcceptingCallbacks(attemptState);
+    if (
+      request.method !== 'POST' ||
+      url.pathname !== `${CALLBACK_PATH}/complete`
+    ) {
+      writeHtml(
+        response,
+        404,
+        failureHtml('Unknown authentication callback path.'),
+      );
+      return;
+    }
 
-    attemptState.commitStarted = true;
-    attemptState.acceptingCallbacks = false;
-    yield* authCoordinator
-      .storeSession(result.session)
-      .pipe(Effect.mapError(unwrapAuthPortCause));
-    writeHtml(response, 200, successHtml(result.session.account.label));
-    return result.session;
+    const parsed = parseJsonWith(
+      yield* readRequestBody(request),
+      CallbackBodySchema,
+    );
+    if (Result.isFailure(parsed)) {
+      writeHtml(
+        response,
+        400,
+        failureHtml('Authentication callback request was malformed.'),
+      );
+      return;
+    }
+
+    const query = parsed.success.query ?? '';
+    const outcome = yield* route.accept({
+      path: CALLBACK_PATH,
+      query: query.startsWith('?') ? query.slice(1) : query,
+    });
+    writeOutcome(response, outcome);
+  }).pipe(
+    Effect.catchCause((cause) =>
+      Effect.sync(() => {
+        writeHtml(
+          response,
+          400,
+          failureHtml(toErrorMessage(Cause.squash(cause))),
+        );
+      }),
+    ),
+  );
+
+function writeOutcome(
+  response: ServerResponse,
+  outcome: SignInCallbackOutcome,
+): void {
+  if (outcome.kind === 'committed') {
+    writeHtml(response, 200, successHtml(outcome.session.account.label));
+    return;
   }
-
   writeHtml(
     response,
-    404,
-    failureHtml('Unknown authentication callback path.'),
+    400,
+    failureHtml(
+      outcome.kind === 'failed'
+        ? outcome.message
+        : `this callback did not match the sign-in in progress (${outcome.reason}).`,
+    ),
   );
-  return undefined;
-});
+}
 
 function readRequestBody(
   request: IncomingMessage,
-): Effect.Effect<string, RecoverableCallbackRequestError> {
+): Effect.Effect<string, Error> {
   return Effect.callback((resume) => {
     let body = '';
     let bodyBytes = 0;
@@ -243,9 +195,7 @@ function readRequestBody(
       if (bodyBytes > MAX_CALLBACK_BODY_BYTES) {
         resume(
           Effect.fail(
-            new RecoverableCallbackRequestError(
-              'Authentication callback request body is too large.',
-            ),
+            new Error('Authentication callback request body is too large.'),
           ),
         );
         request.destroy();
@@ -257,8 +207,8 @@ function readRequestBody(
     request.on('error', (error) => {
       resume(
         Effect.fail(
-          new RecoverableCallbackRequestError(
-            `Authentication callback request failed: ${error.message}`,
+          new Error(
+            `Authentication callback request failed: ${ensureError(error).message}`,
           ),
         ),
       );
@@ -269,36 +219,15 @@ function readRequestBody(
 /**
  * The loopback callback body we accept. A non-object body is rejected; a
  * present-but-non-string field degrades to `undefined` (the `z.preprocess`
- * per-field policy, matching the previous manual `typeof === 'string'`
- * guards), written without `.catch` so this file stays at zero raw catches
- * (catch:effect-importer ratchet row).
+ * per-field policy), written without `.catch` so this file stays at zero raw
+ * catches (catch:effect-importer ratchet row).
  */
 const CallbackBodySchema = z.object({
   query: z.preprocess(
     (value) => (typeof value === 'string' ? value : undefined),
     z.string().nullish(),
   ),
-  nonce: z.preprocess(
-    (value) => (typeof value === 'string' ? value : undefined),
-    z.string().nullish(),
-  ),
 });
-
-function parseCallbackBody(
-  rawBody: string,
-): Effect.Effect<
-  z.infer<typeof CallbackBodySchema>,
-  RecoverableCallbackRequestError
-> {
-  const parsed = parseJsonWith(rawBody, CallbackBodySchema);
-  return Result.isFailure(parsed)
-    ? Effect.fail(
-        new RecoverableCallbackRequestError(
-          'Authentication callback request was malformed.',
-        ),
-      )
-    : Effect.succeed(parsed.success);
-}
 
 function writeHtml(
   response: ServerResponse,
@@ -312,7 +241,7 @@ function writeHtml(
   response.end(body);
 }
 
-function callbackHtml(nonce: string): string {
+function callbackHtml(): string {
   return `<!doctype html>
 <meta charset="utf-8">
 <title>TeXRA CLI sign-in</title>
@@ -324,10 +253,7 @@ function callbackHtml(nonce: string): string {
     fetch('/auth-callback/complete', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        query: callbackQuery,
-        nonce: ${JSON.stringify(nonce)}
-      })
+      body: JSON.stringify({ query: callbackQuery })
     })
       .then((response) => response.text())
       .then((html) => { document.documentElement.innerHTML = html; })
@@ -356,9 +282,7 @@ function failureHtml(message: string): string {
 </body>`;
 }
 
-function closeServer(
-  server: ReturnType<typeof createServer>,
-): Effect.Effect<void, Error> {
+function closeServer(server: Server): Effect.Effect<void, Error> {
   return Effect.callback((resume) => {
     if (!server.listening) {
       resume(Effect.void);

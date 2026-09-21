@@ -34,6 +34,7 @@ import {
   teamAvailabilityPrompt,
   type TeamAvailabilityPrompt,
 } from '@common/teams/TeamPlan';
+import type { PendingOAuthStore } from '@controllers/auth/pendingOAuthStore';
 import { TranscriptExportFailed } from '@controllers/progressView/transcriptExportFailure';
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
 import { SubscriptionUsageService } from '@controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
@@ -155,10 +156,8 @@ import {
   DESKTOP_RELEASES_PAGE_URL,
 } from './desktopUpdateChecker.js';
 import {
-  createDesktopAuthCallbackState,
+  createDesktopPendingOAuthStore,
   createDesktopSupabaseAuth,
-  type DesktopAuthCallbackState,
-  type DesktopAuthCoordinator,
   type DesktopSupabaseAuthHost,
 } from './desktopSupabaseAuth.js';
 import { buildDesktopMenuTemplate } from './desktopMenuTemplate.js';
@@ -300,11 +299,12 @@ const hostDraftRequests = new HostDraftRequests();
 
 function createWindow(options: {
   projects: DesktopProjectRegistry;
-  authCoordinator: DesktopAuthCoordinator;
   /** The account plane served as `SupabaseAuth`, for the window's direct
    *  sign-in probes and the OAuth client it drives. */
   supabaseAuth: SupabaseAuthShape;
-  authCallbackState: DesktopAuthCallbackState;
+  /** The pending sign-in records, opened before the window so a deep link
+   *  that launched the app can still be claimed. */
+  pendingOAuthStore: PendingOAuthStore;
   /**
    * The process services the composition root built (see
    * `ElectronPlatformInitResult`). Handed down so the window's controllers and
@@ -744,9 +744,8 @@ function createWindow(options: {
   const desktopAuth = windowResources.add(
     createDesktopSupabaseAuth({
       router: protocolLifecycle.router,
-      coordinator: options.authCoordinator,
-      oauthClient: options.supabaseAuth.client,
-      callbackState: options.authCallbackState,
+      auth: options.supabaseAuth,
+      store: options.pendingOAuthStore,
       host: desktopAuthHost,
       log: console,
       runtime,
@@ -1992,11 +1991,7 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
             },
           });
 
-          // The coordinator the account plane built: its surface is
-          // Effect-typed, so the auth flows compose it directly.
-          const authCoordinator = platformInit.supabaseAuth.coordinator;
-          const authCallbackState = createDesktopAuthCallbackState(
-            runtime,
+          const pendingOAuthStore = createDesktopPendingOAuthStore(
             console,
             platformInit.globalState,
           );
@@ -2004,9 +1999,8 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
           reopenMainWindow = () =>
             createWindow({
               projects,
-              authCoordinator,
               supabaseAuth: platformInit.supabaseAuth,
-              authCallbackState,
+              pendingOAuthStore,
               globalState: platformInit.globalState,
               secrets: platformInit.secrets,
               agentDirectories: platformInit.agentDirectories,

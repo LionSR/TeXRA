@@ -54,7 +54,10 @@ import {
 } from '@controllers/session/sessionLayer';
 import { StateWriteFailed, type StateStore } from '@platform/interfaces';
 import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '@platform/languageModel';
-import type { ProcessRuntime } from '@platform/processRuntime';
+import {
+  withProcessServices,
+  type ProcessRuntime,
+} from '@platform/processRuntime';
 import { nodeFileServices } from '@platform/defaults/jsonStore';
 import { DEFAULT_NODE_STORAGE_ROOT } from '@platform/defaults/nodeStorage';
 import { nodeProcesses } from '@platform/defaults/nodeProcesses';
@@ -214,9 +217,16 @@ export function installCliProcessRuntime(
         // one: signing in runs a program on it, long after this returns. The
         // account plane it reports on is the one built above, which is also
         // the plane this runtime serves as `SupabaseAuth`.
+        // The shared sign-in coordinator runs on the process services this
+        // install builds, and the setup port hands back a service-free
+        // program, so the services are provided from the runtime itself.
         signIn: () =>
-          signInCliSupabase(runtime, { openBrowser: true }).pipe(
-            Effect.andThen(auth.authenticated),
+          withProcessServices(
+            runtime,
+            signInCliSupabase(runtime, { openBrowser: true }).pipe(
+              Effect.andThen(auth.authenticated),
+            ),
+          ).pipe(
             Effect.mapError(
               (cause) =>
                 new SignInFailed({
