@@ -83,6 +83,7 @@ import {
   type LocalRuntimeState,
   type DisplaySessionEvent,
   type StreamLogEntry,
+  type RunFact,
   type RunId,
   type TaskGroup,
   type TextChunk,
@@ -1385,10 +1386,41 @@ function foldTextChunk(view: SessionView, chunk: TextChunk): boolean {
 
 /** A tool-use fact on a run whose arm cannot hold it is a publisher or
  *  category defect, made loud at the fold's boundary. */
-function wrongArm(run: RunView, event: DisplaySessionEvent): never {
+function wrongArm(run: RunView, fact: string): never {
   throw new Error(
-    `${event.type} names ${run.id}, a ${run.category} run; the fact belongs to the ${AgentCategory.ToolUse} arm`,
+    `${fact} names ${run.id}, a ${run.category} run; the fact belongs to the ${AgentCategory.ToolUse} arm`,
   );
+}
+
+/**
+ * One `run.fact` row applied to its run. Every family is a latest-only
+ * listing key of its own (the listing groups by the fact's `key` beside the
+ * row type), so a cold read delivers exactly one row per family per run and
+ * the commit guard drops the earlier rows an aggregate replay brings: each
+ * row carries the run's whole value (the producer holds it), and the newest
+ * row therefore replaces it rather than merging into it.
+ */
+function applyRunFact(run: RunView, fact: RunFact): RunView {
+  switch (fact.key) {
+    case 'todos':
+      return run.category === AgentCategory.ToolUse
+        ? { ...run, todos: fact.todos }
+        : wrongArm(run, 'todos');
+    case 'plan':
+      return run.category === AgentCategory.ToolUse
+        ? { ...run, plan: fact.plan }
+        : wrongArm(run, 'plan');
+    case 'outputFiles':
+      return run.category === AgentCategory.Workflow
+        ? { ...run, files: nonEmptyRounds(fact.filesByRound) }
+        : { ...run, outputs: nonEmptyRounds(fact.filesByRound) };
+    case 'missingOutputs':
+      // An empty round here is a fact, not an absence: the round was checked
+      // and nothing was missing.
+      return { ...run, missingOutputs: { ...fact.filesByRound } };
+    case 'compileFailures':
+      return { ...run, compileFailures: nonEmptyRounds(fact.filesByRound) };
+  }
 }
 
 /** The event's own arm applied to its run (topology, session slices, and
@@ -1470,36 +1502,34 @@ function applyOwnArm(run: RunView, event: DisplaySessionEvent): RunView {
           ),
         },
       };
-    case 'updateTodos':
-      return run.category === AgentCategory.ToolUse
-        ? { ...run, todos: event.todos }
-        : wrongArm(run, event);
-    case 'updatePlan':
-      return run.category === AgentCategory.ToolUse
-        ? { ...run, plan: event.plan }
-        : wrongArm(run, event);
+    case 'run.fact':
+      return applyRunFact(run, event.fact);
     case 'goalStateChanged':
       return run.category === AgentCategory.ToolUse
         ? { ...run, goal: event.state }
-        : wrongArm(run, event);
-    // The three round-keyed facts are latest-only listing keys, so a cold
-    // read delivers exactly one row of each per run and the commit guard
-    // drops the earlier rows an aggregate replay brings: each row carries
-    // the run's whole map (the producer holds it in `OutputState`), and the
-    // newest row therefore replaces the map rather than merging into it.
-    case 'addOutputFiles':
-      return run.category === AgentCategory.Workflow
-        ? { ...run, files: nonEmptyRounds(event.filesByRound) }
-        : { ...run, outputs: nonEmptyRounds(event.filesByRound) };
-    case 'updateMissingOutputs':
-      // An empty round here is a fact, not an absence: the round was checked
-      // and nothing was missing.
-      return { ...run, missingOutputs: { ...event.filesByRound } };
-    case 'updateCompileFailures':
-      return {
-        ...run,
-        compileFailures: nonEmptyRounds(event.filesByRound),
-      };
+        : wrongArm(run, 'goalStateChanged');
+    case 'child.park':
+      // An agent-CLI child's park (one run model, 3.3): the same phase move
+      // `flow.step waiting` makes for a run with a loop of its own, on the
+      // row that child protocol owns. The run window closes with the park
+      // and reopens on the turn that leaves it; `flow` stays null, because
+      // a run with no ledger has no position to paint.
+      return event.phase === 'parked'
+        ? withSettledTranscript(
+            {
+              ...run,
+              status: RUN_PHASE.WAITING,
+              substate: null,
+              runStartedAt: null,
+            },
+            event.at,
+          )
+        : {
+            ...run,
+            status: RUN_PHASE.RUNNING,
+            substate: null,
+            runStartedAt: run.runStartedAt ?? event.at,
+          };
     case 'run.detach':
       // The edge severed: the child is top level from here (one run model,
       // section 3.2). A run never acquires a new parent.
@@ -1724,6 +1754,7 @@ function foldDurable(
     (isTranscriptEvent(event) ||
       event.type === 'run.activate' ||
       event.type === 'flow.step' ||
+      event.type === 'child.park' ||
       event.type === 'run.end')
       ? foldTraceEvent(view, event, deferred)
       : false;
@@ -1823,6 +1854,10 @@ function foldTraceEvent(
     } else if (event.payload.step !== 'halted') {
       indexes.trace.status(RUN_PHASE.RUNNING);
     }
+  } else if (event.type === 'child.park') {
+    indexes.trace.status(
+      event.phase === 'parked' ? RUN_PHASE.WAITING : RUN_PHASE.RUNNING,
+    );
   } else if (event.type === 'run.end') indexes.trace.status(event.outcome);
   else if (isTranscriptEvent(event))
     indexes.trace.record(event, {

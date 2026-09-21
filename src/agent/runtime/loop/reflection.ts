@@ -75,7 +75,6 @@ import {
   getSystemPromptWithRules,
   PromptBuilder,
 } from '@agent/prompt/PromptBuilder';
-import { emitRunFact } from '@agent/runtime/runFactEvents';
 import { logUserMessage, type StageHandle } from '@agent/trace';
 import { isNotADirectoryError } from '@common/errors';
 import { LatexMediaManager } from '@latex/LatexMediaManager';
@@ -954,17 +953,25 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     const compileFailures = compileFailuresOf(result.compileResult);
     // Both facts are latest-only listing rows: each row carries the run's
     // whole round map rather than the round that just finished.
-    emitRunFact(logger, 'addOutputFiles', {
-      filesByRound: {
-        ...getOutputFilesByRound(outputState),
-        [round]: summary.fileInfos,
+    logger.emit({
+      type: 'run.fact',
+      fact: {
+        key: 'outputFiles',
+        filesByRound: {
+          ...getOutputFilesByRound(outputState),
+          [round]: summary.fileInfos,
+        },
       },
     });
     if (result.emitCompileFailures) {
-      emitRunFact(logger, 'updateCompileFailures', {
-        filesByRound: {
-          ...getCompileFailuresByRound(outputState),
-          [round]: compileFailures,
+      logger.emit({
+        type: 'run.fact',
+        fact: {
+          key: 'compileFailures',
+          filesByRound: {
+            ...getCompileFailuresByRound(outputState),
+            [round]: compileFailures,
+          },
         },
       });
     }

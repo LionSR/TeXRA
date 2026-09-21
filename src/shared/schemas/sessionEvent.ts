@@ -313,6 +313,33 @@ const RunRemovedDraftSchema = RunRemovedEventSchema.omit({
 });
 
 /**
+ * One durable run fact: the latest value of one key family on its run.
+ * `key` is the whole discriminator — it names the family, ties it to that
+ * family's own value schema, and is what the cold listing groups by beside
+ * the row type, so one family's newest row never hides another's and a plan
+ * can never be committed under the todos key. One row type, one aggregate
+ * kind (the run), five families, and the database's parse still refuses a
+ * corrupt value at the one boundary that reads stored bytes.
+ */
+const RunFactSchema = z.discriminatedUnion('key', [
+  z.object({ key: z.literal('todos'), todos: z.array(TodoItemSchema) }),
+  z.object({ key: z.literal('plan'), plan: PlanSchema.nullable() }),
+  z.object({
+    key: z.literal('outputFiles'),
+    filesByRound: RoundKeyedOutputSidecarValueSchemas.outputFiles,
+  }),
+  z.object({
+    key: z.literal('missingOutputs'),
+    filesByRound: RoundKeyedOutputSidecarValueSchemas.missingOutputs,
+  }),
+  z.object({
+    key: z.literal('compileFailures'),
+    filesByRound: RoundKeyedOutputSidecarValueSchemas.compileFailures,
+  }),
+]);
+export type RunFact = z.infer<typeof RunFactSchema>;
+
+/**
  * The durable arms every renderer folds. This is the one declaration of the
  * run vocabulary: the trace's `AgentEvent` (`src/agent/trace/events.ts`) is
  * derived from these arms, minus the aggregate qualification. Session-scoped
@@ -351,17 +378,21 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
    */
   durable('run.end', RunEndSchema.shape),
   durable('conversation.progress', { progress: ConversationProgressSchema }),
-  durable('updateTodos', { todos: z.array(TodoItemSchema) }),
-  durable('updatePlan', { plan: PlanSchema.nullable() }),
-  durable('addOutputFiles', {
-    filesByRound: RoundKeyedOutputSidecarValueSchemas.outputFiles,
-  }),
-  durable('updateMissingOutputs', {
-    filesByRound: RoundKeyedOutputSidecarValueSchemas.missingOutputs,
-  }),
-  durable('updateCompileFailures', {
-    filesByRound: RoundKeyedOutputSidecarValueSchemas.compileFailures,
-  }),
+  durable('run.fact', { fact: RunFactSchema }),
+  /**
+   * An agent-CLI child's park across its turns (one run model, 3.3):
+   * `parked` before the loop blocks on its queue, `resumed` when the taken
+   * batch starts the next turn. Its own row, because a run this loop is the
+   * only driver of has no ledger, no family and no rounds: borrowing
+   * `flow.step` meant inventing a `toolUse` family and a round that never
+   * existed. The phase is the whole of it — the fold parks the run on
+   * `parked` and runs it on `resumed`, which is what
+   * `getToolUseFollowUpTarget` reads to admit the next turn. A listing key
+   * of its own (`listingTypeOf`'s default), for the same reason `flow.step`
+   * is one: a cold listing that dropped it would paint every parked child
+   * as busy.
+   */
+  durable('child.park', { phase: z.enum(['parked', 'resumed']) }),
   RunRemovedDraftSchema,
   /** The AI-generated summary of what the run set out to do. */
   durable('run.description', { description: z.string() }),
@@ -542,41 +573,51 @@ const WorkflowCheckpointDraftSchema = z.discriminatedUnion('type', [
     'workflow-checkpoint',
   ),
 ]);
-const DesktopProjectsDraftSchema = durable(
-  'desktop.projects.changed',
-  { roots: z.array(z.string().min(1)) },
-  'desktop-projects',
-);
-const GlobalInquiryDraftSchema = durable(
-  'inquiry.recorded',
-  { record: InquiryThreadRecordSchema },
-  'global-inquiry',
-);
-const UpdateCheckDraftSchema = durable(
-  'update.check.recorded',
-  { record: UpdateCheckRecordSchema },
-  'update-check',
-);
 /**
- * One host or application state key's latest value: the row behind every
- * `StateStore`, one aggregate per key so latest-per-key is latest-per-
- * aggregate. `{ kind: 'undefined' }` is the delete, the `vscode.Memento`
- * contract every host's store mirrors.
+ * One stored value, by the family that owns it: every host or application
+ * state key, the desktop profile's remembered projects, one global inquiry
+ * thread, and the update check. `key` is the aggregate kind the value lives
+ * on, so the discriminator ties each family to its own value schema *and* to
+ * its aggregate: an inquiry record cannot be committed under the update-check
+ * aggregate, and the database's parse refuses a corrupt value where it reads
+ * the bytes. `{ kind: 'undefined' }` on the `app-state` arm is the delete,
+ * the `vscode.Memento` contract every host's store mirrors.
  */
-const AppStateDraftSchema = durable(
-  'state.value.set',
-  { value: PersistedJsonValueSchema },
-  'app-state',
-);
+const StoredValueSchema = z.discriminatedUnion('key', [
+  z.object({ key: z.literal('app-state'), value: PersistedJsonValueSchema }),
+  z.object({
+    key: z.literal('desktop-projects'),
+    roots: z.array(z.string().min(1)),
+  }),
+  z.object({
+    key: z.literal('global-inquiry'),
+    record: InquiryThreadRecordSchema,
+  }),
+  z.object({ key: z.literal('update-check'), record: UpdateCheckRecordSchema }),
+]);
+export type StoredValue = z.infer<typeof StoredValueSchema>;
+/**
+ * The latest value of one stored key: one aggregate per value, so
+ * latest-per-key is latest-per-aggregate and no listing needs to group by
+ * anything but the aggregate.
+ */
+const StateValueSetDraftSchema = z
+  .object({
+    aggregateId: AggregateIdSchema,
+    stageId: z.string().optional(),
+    type: z.literal('state.value.set'),
+    state: StoredValueSchema,
+  })
+  .refine(
+    (row) => aggregateTarget(row.aggregateId).kind === row.state.key,
+    'A stored value lives on the aggregate kind its key names',
+  );
 export const SessionEventDraftSchema = z.discriminatedUnion('type', [
   ...DisplaySessionEventDraftSchema.options,
   ...RunRecordEventDraftSchema.options,
   ...RunLedgerEventDraftSchema.options,
   ...WorkflowCheckpointDraftSchema.options,
-  DesktopProjectsDraftSchema,
-  GlobalInquiryDraftSchema,
-  UpdateCheckDraftSchema,
-  AppStateDraftSchema,
+  StateValueSetDraftSchema,
 ]);
 export const DisplaySessionEventSchema = z.discriminatedUnion('type', [
   RunStartEventSchema.extend(envelope),
@@ -605,7 +646,7 @@ export type DisplaySessionEvent = z.infer<typeof DisplaySessionEventSchema>;
  * to the stored shape of `SessionEventSchema`; `sessionEventFormat.vitest.ts`
  * pins that shape and fails a change that leaves the version alone.
  */
-export const SESSION_EVENT_FORMAT = 6;
+export const SESSION_EVENT_FORMAT = 7;
 
 export const SessionEventSchema = z.discriminatedUnion('type', [
   ...DisplaySessionEventSchema.options,
@@ -614,10 +655,7 @@ export const SessionEventSchema = z.discriminatedUnion('type', [
   ...WorkflowCheckpointDraftSchema.options.map((schema) =>
     schema.extend(envelope),
   ),
-  DesktopProjectsDraftSchema.extend(envelope),
-  GlobalInquiryDraftSchema.extend(envelope),
-  UpdateCheckDraftSchema.extend(envelope),
-  AppStateDraftSchema.extend(envelope),
+  StateValueSetDraftSchema.extend(envelope),
 ]);
 export type SessionEvent = z.infer<typeof SessionEventSchema>;
 
@@ -655,6 +693,11 @@ export function referencedAggregates(event: SessionEvent): AggregateId[] {
  * transcript tier alone: its display arm is a no-op and only the transcript
  * fold reads it over the whole aggregate, so listing it would pull the latest
  * one of every run into every renderer for no reader.
+ *
+ * A listing key is "latest per aggregate and type", so a type that carries a
+ * discriminator needs the reader to group by that too: `run.fact` holds five
+ * families on one type, and `Database`'s listing reads group by its `key`
+ * beside the type. Every other listed type is one fact per aggregate.
  */
 export function listingTypeOf(
   event: Pick<SessionEvent, 'type'>,
