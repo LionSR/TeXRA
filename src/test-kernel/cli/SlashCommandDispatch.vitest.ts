@@ -53,7 +53,7 @@ import * as apiStatus from '@cli/runtime/apiStatus';
 import * as subscriptionLogin from '@cli/runtime/subscriptionLogin';
 import type { CliContext } from '@cli/runtime/cliContext';
 import * as modelAccessSelection from '@cli/runtime/modelAccessSelection';
-import * as providerApiKey from '@cli/runtime/providerApiKey';
+import * as cliProviderKeys from '@cli/chat/tui/hosts/cliProviderKeys';
 import * as supabaseAuth from '@cli/runtime/supabaseAuth';
 import { TuiSession } from '@cli/chat/tui/state/sessionRunState';
 import * as codexSubscription from '@model/codex/codexSubscription';
@@ -613,14 +613,24 @@ describe('handleTuiSlashCommand', () => {
 
   it('explains the shared GLM key routes after saving it', async () => {
     const save = vi
-      .spyOn(providerApiKey, 'saveProviderApiKey')
+      .spyOn(cliProviderKeys, 'commitCliProviderApiKey')
       .mockReturnValue(Effect.void);
 
     const notice = await Effect.runPromise(
-      applyCliProviderApiKey(services.secrets, 'glm', 'glm-secret'),
+      applyCliProviderApiKey(
+        services.secrets,
+        services.stores,
+        'glm',
+        'glm-secret',
+      ),
     );
 
-    expect(save).toHaveBeenCalledWith(services.secrets, 'glm', 'glm-secret');
+    expect(save).toHaveBeenCalledWith(
+      services.secrets,
+      services.stores,
+      'glm',
+      'glm-secret',
+    );
     expect(notice).toBe(
       "Tip: the regular GLM endpoint is the default; enable 'Prefer GLM Coding Plan' with `/api glm-code` or in `/config` to use GLM Coding Plan.",
     );
