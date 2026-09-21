@@ -57,6 +57,9 @@ interface CachedRun {
   /** The committed prefix has been folded in; the tail advances it from here. */
   hydrated: boolean;
   leases: number;
+  /** An eviction was requested while a lease held the run; the entry goes
+   *  when the last lease closes. */
+  evictWhenIdle: boolean;
 }
 
 /** Apply one event with the same projection used by the live recorder. */
@@ -142,11 +145,19 @@ export class StreamLogStore {
       );
   }
 
-  /** Drop a run's cache once nothing retains it. An ephemeral transcript has
-   *  no durable rows to re-read, so it is never dropped. */
+  /** Drop a run's cache once nothing retains it. An eviction that arrives
+   *  while a lease still holds the run is deferred until the last lease
+   *  closes. An ephemeral transcript has no durable rows to re-read, so it
+   *  is never dropped. */
   requestEviction(runId: RunId): void {
     if (this.mode.kind === 'ephemeral') return;
-    if (this.runs.get(runId)?.leases === 0) this.runs.delete(runId);
+    const cached = this.runs.get(runId);
+    if (cached === undefined) return;
+    if (cached.leases > 0) {
+      cached.evictWhenIdle = true;
+      return;
+    }
+    this.runs.delete(runId);
   }
 
   /** Retain a run's transcript for the run itself, seeded from the rows it has
@@ -204,7 +215,12 @@ export class StreamLogStore {
         // A run nothing retains enters the cache only when it has rows: an
         // absent or removed run leaves nothing behind.
         if (seed !== undefined) {
-          this.runs.set(runId, { ...seed, hydrated: true, leases: 0 });
+          this.runs.set(runId, {
+            ...seed,
+            hydrated: true,
+            leases: 0,
+            evictWhenIdle: false,
+          });
         }
         return;
       }
@@ -225,6 +241,7 @@ export class StreamLogStore {
         fold: createTranscriptFold(log),
         hydrated: false,
         leases: 0,
+        evictWhenIdle: false,
       };
       this.runs.set(runId, cached);
     }
@@ -237,6 +254,9 @@ export class StreamLogStore {
         if (closed) return;
         closed = true;
         entry.leases -= 1;
+        if (entry.leases === 0 && entry.evictWhenIdle) {
+          this.runs.delete(runId);
+        }
       },
     };
   }

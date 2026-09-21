@@ -182,4 +182,18 @@ describe('StreamLogStore event reads', () => {
         expect(store.get(RUN)).toBeUndefined();
       }).pipe(Effect.provide(substrate)),
   );
+  it.effect(
+    'defers an eviction that arrives while a lease still holds the run',
+    () =>
+      Effect.gen(function* () {
+        const database = yield* Database;
+        yield* database.appendAll(history);
+        const store = StreamLogStore.open(database);
+        const lease = yield* store.acquireRunResidency(RUN);
+        store.requestEviction(RUN);
+        expect(store.get(RUN)).toBeDefined();
+        lease.close();
+        expect(store.get(RUN)).toBeUndefined();
+      }).pipe(Effect.provide(substrate)),
+  );
 });
