@@ -70,7 +70,7 @@ import { onTexraAuthSessionsChanged } from '@frontend/events/onTexraAuthSessions
 import { pushManualCriticism } from '@frontend/latex/inlineCriticism';
 import { getLinterMessages } from '@frontend/latex/linter';
 import { AgentReviewService } from '@frontend/review/AgentReviewService';
-import { createLog, isDebugModeEnabled } from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import type { StateStore, StateWriteFailed } from '@platform/interfaces';
 import type { LanguageModel } from '@platform/languageModel';
@@ -249,7 +249,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
           label: folder.name,
           value: folder.uri.fsPath,
         })) ?? [],
-      debugMode: isDebugModeEnabled,
       // Already an Effect program: the typed port lets the banner read it
       // directly instead of settling it on the runtime first.
       apiKeyBanner: () =>

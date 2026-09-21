@@ -77,7 +77,6 @@ function host(): HostSnapshot {
       ],
     },
     isGitRepo: true,
-    debugMode: true,
   };
 }
 

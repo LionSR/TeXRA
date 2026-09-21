@@ -82,7 +82,6 @@ interface HostSnapshotSourceOptions {
   >;
   /** The launcher's root picker; empty where a session has exactly one. */
   workspaceRoots?: () => HostSnapshot['workspaceRoots'];
-  debugMode?: () => boolean;
   /** Hosts that surface these outside Settings answer them; absent means
    *  never shown. */
   apiKeyBanner?: () => Effect.Effect<
@@ -175,7 +174,6 @@ export function createHostSnapshotSource(
       fileOptions: { ...fileOptions, commit: ['HEAD', ...commits.commits] },
       isGitRepo: commits.isGitRepo,
       recording,
-      debugMode: options.debugMode?.() ?? false,
       banners: {
         apiKey,
         agentConfig,
