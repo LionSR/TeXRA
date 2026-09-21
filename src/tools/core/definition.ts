@@ -1,5 +1,5 @@
 // Type imports
-import type { ToolHost } from '@agent/core/tools/ToolTypes';
+import type { ToolGuard, ToolHost } from '@agent/core/tools/ToolTypes';
 import type { ToolDefinition, ToolResult } from '@shared/schemas';
 
 // Local file imports
@@ -23,8 +23,9 @@ type DefinedToolFlags = {
  * interface would have to be exported to be referenced there (TS4058); an
  * anonymous type is inlined and needs no name.
  */
-type DefinedToolHosts = {
+type DefinedToolHosts<T, R> = {
   readonly unavailableHosts: readonly ToolHost[] | undefined;
+  readonly guard: ToolGuard<T, R> | undefined;
 };
 
 /**
@@ -42,7 +43,7 @@ type DefinedToolHosts = {
  */
 export type DefinedToolClass<T, R = never> = abstract new () => BaseTool<T, R> &
   DefinedToolFlags &
-  DefinedToolHosts;
+  DefinedToolHosts<T, R>;
 
 /**
  * The concrete counterpart, returned when the definition supplies `execute`:
@@ -51,7 +52,7 @@ export type DefinedToolClass<T, R = never> = abstract new () => BaseTool<T, R> &
  */
 export type ConcreteToolClass<T, R = never> = new () => BaseTool<T, R> &
   DefinedToolFlags &
-  DefinedToolHosts;
+  DefinedToolHosts<T, R>;
 
 /** The run body a tool definition may carry inline. */
 export type ToolExecute<T, R> = (
@@ -67,6 +68,12 @@ export type DefineToolOptions<T, R = never> = {
   availabilityCategory?: ToolDefinition['availabilityCategory'];
   /** Product hosts this tool definition statically excludes itself from. */
   unavailableHosts?: readonly ToolHost[];
+  /**
+   * What the run loop checks before this tool's body runs: the paths the call
+   * writes and the command it must get approved. Declared here, applied once
+   * in `agent/runtime/loop/toolGuard.ts`.
+   */
+  guard?: ToolGuard<T, R>;
   /**
    * The tool's run body. Supply it when the body needs nothing from the
    * instance; omit it to get an abstract class and implement `execute` in a
@@ -100,6 +107,7 @@ export function defineTool<T, R = never>(
     readonly requiresApproval = def.requiresApproval;
     readonly slow = def.slow;
     readonly unavailableHosts = def.unavailableHosts;
+    readonly guard = def.guard;
 
     constructor() {
       super(
