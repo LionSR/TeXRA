@@ -4,24 +4,12 @@ import { customElement, property } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { when } from 'lit/directives/when.js';
 
-import { IMAGE_TOOL_LABEL } from '@shared/constants/latexToolchain';
 import { designTokens, commonViewStyles, bannerStyles } from '@shared/styles';
 import type { DependencyBannerState } from '@shared/schemas';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { renderWarningBanner } from '@shared/wa/bannerFrame';
 import { SessionUiEvents } from '@shared/session/uiEvents';
 import { StateVisibleBanner } from './StateVisibleBanner';
-
-function getToolLabel(tool: string): string {
-  switch (tool) {
-    case 'gm':
-      return 'GraphicsMagick';
-    case 'magick':
-      return 'ImageMagick';
-    default:
-      return tool;
-  }
-}
 
 @customElement('dependency-banner')
 export class DependencyBanner extends StateVisibleBanner<DependencyBannerState> {
@@ -69,11 +57,7 @@ export class DependencyBanner extends StateVisibleBanner<DependencyBannerState> 
   }
 
   override render(): TemplateResult {
-    const missing = this.state.missingTools ?? [];
-    const tools = missing.flatMap((tool) =>
-      tool === IMAGE_TOOL_LABEL ? ['gm', 'magick'] : [tool],
-    );
-    const imageToolMissing = missing.includes(IMAGE_TOOL_LABEL);
+    const tools = this.state.missingTools ?? [];
 
     return renderWarningBanner({
       id: 'dependencyBanner',
@@ -87,32 +71,25 @@ export class DependencyBanner extends StateVisibleBanner<DependencyBannerState> 
             <ul class="missing-tools">
               ${repeat(
                 tools,
-                (tool) => tool,
-                (tool) => {
-                  const label = getToolLabel(tool);
-
-                  return html`
-                    <li class="dependency-item">
-                      <span
-                        ><bdi dir="auto">${label}</bdi>${
-                          imageToolMissing &&
-                          (tool === 'gm' || tool === 'magick')
-                            ? ' (choose one)'
-                            : ''
-                        }</span
-                      >
-                      <wa-button
-                        class="dependency-install-button"
-                        appearance="plain"
-                        size="s"
-                        aria-label=${`Open ${label} install guide`}
-                        @click=${() => this.handleInstall(tool)}
-                      >
-                        ${waIcon('book', { slot: 'start' })} Install guide
-                      </wa-button>
-                    </li>
-                  `;
-                },
+                (tool) => tool.id,
+                (tool) => html`
+                  <li class="dependency-item">
+                    <span
+                      ><bdi dir="auto">${tool.label}</bdi>${
+                        tool.interchangeable ? ' (choose one)' : ''
+                      }</span
+                    >
+                    <wa-button
+                      class="dependency-install-button"
+                      appearance="plain"
+                      size="s"
+                      aria-label=${`Open ${tool.label} install guide`}
+                      @click=${() => this.handleInstall(tool.id)}
+                    >
+                      ${waIcon('book', { slot: 'start' })} Install guide
+                    </wa-button>
+                  </li>
+                `,
               )}
             </ul>
           `,

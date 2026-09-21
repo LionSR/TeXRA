@@ -9,7 +9,7 @@ import { parse as shellParse } from 'shell-quote';
 // Local imports
 import { createLog } from '@logger/logUtils';
 import { platform } from '@platform/platform';
-import type { ExecResult } from '@shared/schemas';
+import type { ExecResult, MissingTool } from '@shared/schemas';
 import {
   PDFLATEX_INSTALL_GUIDE,
   LATEXDIFF_INSTALL_GUIDE,
@@ -22,8 +22,9 @@ import {
   LATEXMK_INSTALL_GUIDE,
   TEXFMT_INSTALL_GUIDE,
   WOLFRAM_INSTALL_GUIDE,
+  IMAGE_LATEX_TOOLS,
+  IMAGE_TOOL_DISPLAY_NAMES,
   getInstallGuide,
-  IMAGE_TOOL_LABEL,
 } from '@shared/constants/latexToolchain';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -413,18 +414,27 @@ export function getToolDocsCommand(tool: string): string | undefined {
  */
 export const checkCoreDependencies = Effect.fn(
   'toolUtils.checkCoreDependencies',
-)(function* (showError: boolean = true): Effect.fn.Return<string[]> {
+)(function* (showError: boolean = true): Effect.fn.Return<MissingTool[]> {
   // Check basic tools
   const basicTools = ['latexindent', 'perl', 'gs'];
   const basicResults = yield* Effect.all(
     basicTools.map((tool) => checkToolInstalled(tool, showError)),
     { concurrency: 'unbounded' },
   );
-  const missingBasicTools = basicTools.filter((_, i) => !basicResults[i]);
+  const missing: MissingTool[] = basicTools
+    .filter((_, i) => !basicResults[i])
+    .map((id) => ({ id, label: id, interchangeable: false }));
 
-  // One entry for the image capability, and only if neither tool is there.
+  // Check for either GraphicsMagick or ImageMagick; report both as
+  // interchangeable entries only if neither is installed.
   if (!(yield* detectImageTool())) {
-    missingBasicTools.push(IMAGE_TOOL_LABEL);
+    missing.push(
+      ...IMAGE_LATEX_TOOLS.map((id) => ({
+        id,
+        label: IMAGE_TOOL_DISPLAY_NAMES[id],
+        interchangeable: true,
+      })),
+    );
     if (showError) {
       const errorMsg =
         'Neither GraphicsMagick nor ImageMagick is installed. Please install either tool for image processing.\n' +
@@ -437,7 +447,7 @@ export const checkCoreDependencies = Effect.fn(
     }
   }
 
-  return missingBasicTools;
+  return missing;
 });
 
 /** Package managers TeXRA knows how to install dependencies with. */
