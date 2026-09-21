@@ -32,7 +32,6 @@ import { filterNotNull, unique } from '@utils/core';
 import { isNonEmptyString } from '@utils/text/stringUtils';
 import { getListOfFiles, getPromptFileName } from '@utils/prompt';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { readConfig } from '@utils/config/configUtils';
 import {
   listExternalRoots,
   type ExternalRootKind,
@@ -160,7 +159,7 @@ export const buildUserVars = Effect.fn('buildUserVars')(function* (
       // switch that skips discovery and leaves AVAILABLE_SKILLS empty.
       agentSetting.agentCategory === AgentCategory.ToolUse &&
       AgentSkillsEnabledSchema.parse(
-        readConfig<unknown>(options.config, AGENT_SKILLS_CONFIG_KEY),
+        options.config.get(AGENT_SKILLS_CONFIG_KEY),
       )
         ? loadRuntimeSkillCatalog(options.workspacePath, options.settings)
         : // A fresh object per call, not a shared constant: `skills` is handed
@@ -242,10 +241,7 @@ function getBasicVars(
   options: BuildUserVarsOptions,
 ): BasicVars {
   // Get default bib path from settings (empty string if not configured)
-  const defaultBibPath = readConfig<string>(
-    options.config,
-    'texra.bib.defaultPath',
-  );
+  const defaultBibPath = options.config.get<string>('texra.bib.defaultPath');
 
   return {
     MODEL: agentConfig.model,

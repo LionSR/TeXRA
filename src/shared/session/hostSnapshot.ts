@@ -75,7 +75,6 @@ export const HostSnapshotSchema = z.object({
   isGitRepo: z.boolean(),
   /** The one recorder per process and where its take is going. */
   recording: z.object({ session: z.string(), target: z.string() }).nullable(),
-  debugMode: z.boolean(),
   /** The five banners of the New-task state; host-owned visibility. */
   banners: z.object({
     apiKey: ApiKeyBannerDataSchema.extend(visible),
@@ -98,7 +97,6 @@ export function emptyHostSnapshot(project: ProjectDisplay): HostSnapshot {
     fileOptions: { baseFile: [], editedFile: [], commit: ['HEAD'] },
     isGitRepo: false,
     recording: null,
-    debugMode: false,
     banners: {
       apiKey: { visible: false },
       agentConfig: { visible: false },

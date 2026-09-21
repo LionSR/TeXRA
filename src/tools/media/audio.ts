@@ -10,7 +10,6 @@ import type { ApiKeyRouteCredential } from '@agent/runtime/modelRoutes';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 import { createLog } from '@logger/logUtils';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
-import { readConfig } from '@utils/config/configUtils';
 import {
   resolveOptionalCommand,
   type ResolvedBinaryCommand,
@@ -75,10 +74,7 @@ const activeRecording = Ref.makeUnsafe<ActiveRecording | null>(null);
 function resolveSoxCommand(
   roots: WorkspaceRoots,
 ): ResolvedBinaryCommand | null {
-  const configuredPath = readConfig<string>(
-    roots.config,
-    'texra.audio.soxPath',
-  );
+  const configuredPath = roots.config.get<string>('texra.audio.soxPath');
   if (configuredPath) {
     // The path is validated before being probed, so a non-absolute
     // `soxPath` throws "Path must be absolute: ..." and the recording

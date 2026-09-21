@@ -67,7 +67,6 @@ import {
   isKimiSubscriptionEligible,
 } from '@shared/model/kimiCodeRetryGate';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { readConfig } from '@utils/config/configUtils';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { ensureError } from '@utils/errors/errorMessage';
 import { validationModel } from './validationModel';
@@ -484,10 +483,7 @@ const PROTOCOL_DESCRIPTORS: {
         config.name.startsWith('gpt5') || config.fullName.startsWith('gpt-5');
       const summary: 'auto' | null =
         !isGpt5 ||
-        readConfig<boolean>(
-          input.stores.config,
-          'texra.model.gpt5ReasoningSummary',
-        )
+        input.stores.config.get<boolean>('texra.model.gpt5ReasoningSummary')
           ? 'auto'
           : null;
       if (credential.route === 'chatgpt-subscription') {
@@ -582,8 +578,7 @@ const PROTOCOL_DESCRIPTORS: {
         // holds the conversation and each round sends only the new turn
         // (and background execution becomes reachable); off, every round
         // resends the full transcript and nothing is retained.
-        store: readConfig<boolean>(
-          input.stores.config,
+        store: input.stores.config.get<boolean>(
           'texra.model.useGoogleInteractionsServerState',
         ),
         thinkingLevel:
@@ -788,8 +783,7 @@ function configurationFor(
       // OpenAI-descended arm, the DeepSeek, Kimi and GLM reasoning routes
       // included, matching what the retired OpenAI handler base sent. The
       // Anthropic arm never read the setting and keeps the provider default.
-      parallelToolCalls: readConfig<boolean>(
-        input.stores.config,
+      parallelToolCalls: input.stores.config.get<boolean>(
         'texra.model.openaiParallelToolCalls',
       ),
     },
@@ -865,14 +859,11 @@ export function backgroundDelivery(
   if (!bound.backgroundCapable) return false;
   if (bound.agentCategory !== AgentCategory.Workflow) return false;
   if (bound.protocol === 'google-interactions') {
-    return readConfig<boolean>(
-      config,
-      'texra.model.useGoogleBackgroundResponses',
-    );
+    return config.get<boolean>('texra.model.useGoogleBackgroundResponses');
   }
   return (
     bound.modelName.toLowerCase().startsWith('gpt') &&
-    readConfig<boolean>(config, 'texra.model.useBackgroundResponses')
+    config.get<boolean>('texra.model.useBackgroundResponses')
   );
 }
 

@@ -61,7 +61,7 @@ export function launchDesktopAgent(
       openWorkflowOutput: (result) =>
         Effect.suspend(() => {
           const output = selectAutoOpenFinalOutput(
-            context.session.roots.config,
+            context.session.roots,
             result,
           );
           if (!output) return Effect.void;

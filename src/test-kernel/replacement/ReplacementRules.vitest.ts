@@ -22,7 +22,6 @@ import {
   wrapCritiqueInAlign,
 } from '@replacement/advanced';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
-import { readConfig } from '@utils/config/configUtils';
 
 // ---------------------------------------------------------------------------
 // captionSpacing
@@ -438,7 +437,7 @@ describe('personal style contextual replacements', () => {
     ].join('\n');
 
     const result = replacementEngine.applyAll(input, (key) =>
-      readConfig(testWorkspaceRoots().config, key),
+      testWorkspaceRoots().config.get(key),
     );
 
     const expected = [

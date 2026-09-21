@@ -9,7 +9,7 @@ import {
 } from '@platform/defaults/workspaceStorage';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { RunId } from '@shared/schemas';
-import { readConfig } from '@utils/config/configUtils';
+import { readSettingFrom } from '@utils/config/platformSettings';
 import { runDirUnder } from '@utils/files/runStorageFs';
 import { workspaceAbsolutePath } from '@utils/files/workspaceFS';
 import { sanitizePathSegment } from '@utils/text/sanitizePathSegment';
@@ -26,7 +26,7 @@ interface DebugContext {
    * config provider is the session's own, so the `texra.debug.saveModelIO`
    * guard below cannot throw before platform init.
    */
-  roots: Pick<WorkspaceRoots, 'workspace' | 'storage' | 'config'>;
+  roots: WorkspaceRoots;
 }
 
 interface DebugSaveOptions {
@@ -63,7 +63,7 @@ export function maybeSaveDebugObject({
   // `texra.debug.saveModelIO` is the one setting covering request messages,
   // responses, and the final input prompt.
   if (
-    !readConfig<boolean>(context.roots.config, 'texra.debug.saveModelIO') ||
+    !readSettingFrom<boolean>(context.roots, 'texra.debug.saveModelIO') ||
     context.isRemote
   )
     return Effect.void;

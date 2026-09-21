@@ -1,6 +1,5 @@
 import type { ConfigProvider } from '@platform/interfaces';
 import replacementEngine from '@replacement/engine';
-import { readConfig } from '@utils/config/configUtils';
 import type { Effect } from 'effect';
 import type { HttpClient } from 'effect/unstable/http';
 
@@ -38,7 +37,7 @@ export function createTexraResponseTextProcessing(
   return Object.freeze<ResponseTextProcessing>({
     normalizeResponseText: (text) => text.trim(),
     postProcessResponse: (text, config) =>
-      replacementEngine.applyAll(text, (key) => readConfig(config, key)),
+      replacementEngine.applyAll(text, (key) => config.get(key)),
     connectResponseText,
   });
 }

@@ -209,7 +209,7 @@ export function createDesktopPreviewHost(
       );
       const built = yield* withSessionFs(
         roots,
-        compileLatex2Pdf(createExternalLocation(sourcePath), roots.config, {
+        compileLatex2Pdf(createExternalLocation(sourcePath), roots, {
           outputDirectory,
         }),
       );

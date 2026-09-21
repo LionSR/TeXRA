@@ -333,7 +333,7 @@ describe('desktop preview host', () => {
         .pipe(Effect.provide(nodePlatformLayer));
       expect(compileLatex2Pdf).toHaveBeenCalledWith(
         expect.objectContaining({ absolutePath: texPath }),
-        roots.config,
+        roots,
         { outputDirectory: dir },
       );
       expect(shell.openPath).toHaveBeenCalledWith(pdfPath);

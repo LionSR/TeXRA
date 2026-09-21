@@ -204,7 +204,7 @@ describe('workflow LaTeX compile input directories', () => {
 
         expect(mocks.compileLatex2Pdf).toHaveBeenCalledWith(
           expect.objectContaining({ absolutePath: texPath }),
-          sessionRoots.config,
+          sessionRoots,
           expect.objectContaining({
             extraInputDirs: [path.join(workspacePath, 'Draft')],
           }),

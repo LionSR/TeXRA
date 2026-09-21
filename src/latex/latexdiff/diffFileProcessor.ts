@@ -5,7 +5,6 @@ import replacementEngine, {
   type ReplacementConfigRead,
 } from '@replacement/engine';
 import type { FileLocation } from '@shared/schemas';
-import { readConfig } from '@utils/config/configUtils';
 import { readNormalizedFile } from '@utils/files/fsDurability';
 
 /** LaTeX starred math environments that need label removal during diff processing. */
@@ -61,7 +60,7 @@ export class DiffFileProcessor {
 
   /** `config`: the configuration of the workspace being diffed, held as data. */
   constructor(config: ConfigProvider) {
-    this.readReplacementConfig = (path) => readConfig(config, path);
+    this.readReplacementConfig = (path) => config.get(path);
   }
 
   // Intentionally does not swallow failures: a read/transform/write error here

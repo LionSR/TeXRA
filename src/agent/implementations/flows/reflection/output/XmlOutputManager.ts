@@ -22,7 +22,6 @@ import {
   getFileDirectory,
 } from '@utils/files/fileLocation';
 import { RunFileService } from '@utils/files/runStorage';
-import { readConfig } from '@utils/config/configUtils';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import {
   formatResultCount,
@@ -518,7 +517,7 @@ export class XmlOutputManager {
       let content = replacementEngine.applyFor(
         originalContent,
         'xml-content',
-        (key) => readConfig(this.config, key),
+        (key) => this.config.get(key),
       );
 
       const closeTag = `</${OUTPUT_DOCUMENTS_TAG}>`;

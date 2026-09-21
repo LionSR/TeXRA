@@ -72,11 +72,6 @@ async function pathExists(filePath: string): Promise<boolean> {
 
 async function loadApprovalModules(workspacePath = '/workspace') {
   vi.resetModules();
-  mocks.doMock('@utils/config/configUtils', () => ({
-    getConfig: vi.fn(() => 'sameDirectory'),
-    readConfig: vi.fn(() => 'sameDirectory'),
-  }));
-
   const { installPlatform } = await import('@test/support/setupPlatform');
   await installPlatform({ workspacePath });
   await import('@test/support/sessionGraphTestSetup');

@@ -79,6 +79,17 @@ inbox (already `Queue` and `SubscriptionRef`), `src/tools/timeouts.ts`
 an autonomous agent will suggest; the refactorability-gates proposal makes
 them machine-refused.
 
+The platform config providers onto an Effect `ConfigProvider` (design panel,
+2026-09-21): refused, and the step-1 branch that adopted it reverted. Wrapping
+the platform port's own `get` in an Effect `ConfigProvider` buys nothing, the
+read stays synchronous and answers for the workspace the caller was handed,
+and naming each row a second time as `Config.Boolean`/`Config.Int` beside the
+Zod catalog row that owns it is a dual schema system with a `ConfigError`
+where `readSettingFrom`'s validation already stands. Settings stay
+synchronous by ruling: `ConfigProvider.get` (`src/platform/interfaces.ts`)
+and `JsonConfigProvider.get` keep their signatures. Effect `Config` is for
+`process.env` reads, a separate lane.
+
 ## 4. Acceptance
 
 - `grep -r "Config\." src packages/*/src` is non-zero; the duplicated read

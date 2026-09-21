@@ -3,7 +3,6 @@
 // Local imports - formatter implementations
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import { readConfig } from '@utils/config/configUtils';
 import { readSettingFrom } from '@utils/config/platformSettings';
 
 // Local file imports
@@ -71,7 +70,7 @@ export function resolveLatexFormatter(
   const selected = LATEX_FORMATTERS[formatter] ?? LATEX_FORMATTERS.latexindent;
   return {
     ...selected,
-    configPath: readConfig<string>(stores.config, selected.configKey, ''),
+    configPath: stores.config.get(selected.configKey, ''),
     settings: stores,
   };
 }

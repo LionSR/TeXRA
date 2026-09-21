@@ -371,19 +371,6 @@ export class ProgressApp extends LitElement {
           >${waIcon('list-check', { slot: 'icon' })}Attach TeX
           Count</wa-dropdown-item
         >
-        ${
-          host.debugMode && run
-            ? html`<wa-divider></wa-divider>
-                <wa-dropdown-item value="pack"
-                  >${waIcon('box-archive', { slot: 'icon' })}Pack output to
-                  History</wa-dropdown-item
-                >
-                <wa-dropdown-item value="clean"
-                  >${waIcon('trash', { slot: 'icon' })}Delete output
-                  files</wa-dropdown-item
-                >`
-            : nothing
-        }
       </wa-dropdown>
       <wa-tooltip for="shell-more">More</wa-tooltip>
     `;

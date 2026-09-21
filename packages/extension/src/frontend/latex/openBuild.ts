@@ -260,13 +260,9 @@ const prepareLatexBuild = (
     const { roots } = session;
     const compiled = yield* withSessionFs(
       roots,
-      compileLatex2Pdf(
-        pathToLocationIn(roots.workspace, uri.fsPath),
-        roots.config,
-        {
-          outputDirectory: outDir,
-        },
-      ),
+      compileLatex2Pdf(pathToLocationIn(roots.workspace, uri.fsPath), roots, {
+        outputDirectory: outDir,
+      }),
     );
     if (!compiled.ok) {
       // Include the tail in the visible message itself, not just `data` —
