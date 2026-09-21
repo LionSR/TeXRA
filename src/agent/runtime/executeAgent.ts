@@ -58,8 +58,8 @@ import { modelInvokerLayer } from './ModelInvoker';
 import { agentRunLayer } from './run/AgentRun';
 import { runReflection } from './loop/reflection';
 import { runToolUse } from './loop/toolUse';
-import type { AgentRunServices } from './toolInjection';
 import { Runs } from './runRegistry';
+import type { AgentRunServices } from './toolInjection';
 import type { SessionHandle } from './SessionHandle';
 import type { RunHandle, AgentRunHandle } from './RunHandle';
 

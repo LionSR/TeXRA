@@ -368,14 +368,9 @@ describe('AgentLaunchContext', () => {
             session,
             modelCompatibilityKey: 'OpenAIResponse',
           });
-          expect(
-            batches.mock.calls[0]?.[0].map((event) => event.type),
-          ).toEqual([
-            'run.start',
-            'run.launchLabel',
-            'run.record',
-            'run.activate',
-          ]);
+          expect(batches.mock.calls[0]?.[0].map((event) => event.type)).toEqual(
+            ['run.start', 'run.launchLabel', 'run.record', 'run.activate'],
+          );
           expect(
             (yield* Effect.promise(() => recording.read()))
               .slice(0, 2)
