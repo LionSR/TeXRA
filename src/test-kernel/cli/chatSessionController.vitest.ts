@@ -245,6 +245,14 @@ function runResume(
   return testRuntime().runPromise(ctrl.resume(runId));
 }
 
+/** The composer's submit path, run the way the composer runs it. */
+function runSubmit(
+  ctrl: ReturnType<typeof createChatSessionController>,
+  line: string,
+): Promise<void> {
+  return testRuntime().runPromise(ctrl.submit(line));
+}
+
 /** An admitted interruption's settlement, as the composer awaits it. */
 function awaitAdmission<E>(
   completion: Deferred.Deferred<boolean, E>,
@@ -1315,7 +1323,7 @@ describe('createChatSessionController', () => {
     // "the conversation ended", not a failure that escapes the delivery and
     // skips both restore branches.
     installSession({
-      view: await testRuntime().runPromise(SubscriptionRef.make(currentView())),
+      view: Effect.runSync(SubscriptionRef.make(currentView())),
     });
     const session = makeSession({
       runId: 'a11111' as RunId,
@@ -1328,7 +1336,7 @@ describe('createChatSessionController', () => {
       }),
     );
 
-    await testRuntime().runPromise(ctrl.submit('Keep this for me.'));
+    await runSubmit(ctrl, 'Keep this for me.');
 
     await vi.waitFor(() =>
       expect(
