@@ -10,6 +10,7 @@ import {
   isPreferXaiSubscription,
   isXaiSignedIn,
 } from '@model/xai/xaiSubscription';
+import { createLog } from '@logger/logUtils';
 import { StateWriteFailed } from '@platform/interfaces';
 import type { StateStore } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
@@ -39,7 +40,6 @@ import {
   reasoningEffortOverrides,
   supportsReasoningLevel,
 } from './reasoningLevel';
-import { warnModelAvailability } from './modelAvailabilityWarning';
 import {
   resolveCodexSubscriptionCapabilities,
   resolveXaiSubscriptionCapabilities,
@@ -70,6 +70,8 @@ import {
   getRuntimeModelConfig,
   copilotRouteForModel,
 } from './runtimeModelRegistry';
+
+const log = createLog('computeModelOptions');
 
 /**
  * Every store an availability answer here reads: the secret store behind the
@@ -454,9 +456,9 @@ function readProviderKeyStatuses(
       hasUsableApiKey(secrets, provider).pipe(
         Effect.catchTag('SecretsFailed', (failure) =>
           Effect.sync(() => {
-            warnModelAvailability(
+            log.warn(
               `Failed to read ${providerDisplayName(provider)} API key status; treating it as unavailable.`,
-              failure.cause,
+              { data: failure.cause },
             );
             return false;
           }),
@@ -609,9 +611,9 @@ function readModelSelection(state: Pick<StateStore, 'get'>): ModelSelection {
   if (stored === undefined) return EMPTY_MODEL_SELECTION;
   const parsed = ModelSelectionSchema.safeParse(stored);
   if (parsed.success) return parsed.data;
-  warnModelAvailability(
+  log.warn(
     `Invalid stored ${GlobalStateKey.MODEL_SELECTION}; showing the default models.`,
-    z.prettifyError(parsed.error),
+    { data: z.prettifyError(parsed.error) },
   );
   return EMPTY_MODEL_SELECTION;
 }
