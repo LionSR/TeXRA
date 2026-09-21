@@ -22,7 +22,6 @@
     "packages/cli/src/runtime/executeCli.ts": 680,
     "packages/cli/src/runtime/history.ts": 601,
     "packages/cli/src/runtime/modelAccess.ts": 533,
-    "packages/cli/src/runtime/runProgressRenderer.ts": 525,
     "packages/desktop/src/main/desktopAgentSettingsController.ts": 735,
     "packages/desktop/src/main/desktopCredentialSettingsController.ts": 638,
     "packages/desktop/src/main/desktopHostRequests.ts": 851,

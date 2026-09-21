@@ -43,7 +43,7 @@ import {
   tryReadCliCwd,
   writeInterruptedResumeHint,
 } from './interruptedResumeHint';
-import { attachWorkflowPlainOutput } from './runProgressRenderer';
+import { attachWorkflowPlainOutput } from './workflowPlainOutput';
 import { attachCliSessionProgressProjection } from './sessionProgressSubscription';
 import { createCliRuntimeHost } from './cliPresentationHost';
 import { CliExitCode } from './exitCodes';
