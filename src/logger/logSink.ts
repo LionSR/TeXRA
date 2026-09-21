@@ -103,7 +103,9 @@ export const consoleLogSink: LogSink = {
  * platform init does it or — for the entries that bring no platform up —
  * `defineCliCommand` does.
  */
-export const silentLogSink: LogSink = { write: () => undefined };
+export const silentLogSink: LogSink = Object.freeze({
+  write: () => undefined,
+});
 
 let sink: LogSink = consoleLogSink;
 let sinkTrusted = false;

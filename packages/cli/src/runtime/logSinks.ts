@@ -13,6 +13,7 @@ import {
 import {
   entryChannel,
   entryMessage,
+  type LogEntry,
   type LogSink as HostLogSink,
 } from '@logger/logSink';
 import type { ProcessRuntime } from '@platform/processRuntime';
@@ -249,12 +250,12 @@ export function askCliQuestion(
  * command's result. Installed by `defineCliCommand` before it builds the
  * runtime for those two entries.
  */
-export const platformlessDiagnosticSink: HostLogSink = {
-  write(entry) {
+export const platformlessDiagnosticSink: HostLogSink = Object.freeze({
+  write(entry: LogEntry) {
     const channel = entryChannel(entry);
     writeTextStderr(`${channel ? `[${channel}] ` : ''}${entryMessage(entry)}`);
   },
-};
+});
 
 class StderrTextSink implements LogSink {
   write(record: LogRecord): void {

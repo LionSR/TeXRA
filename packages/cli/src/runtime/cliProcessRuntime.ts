@@ -86,7 +86,7 @@ const NO_PLATFORM_APP_STATE =
  * answered with the caller's fallback would read as absent state rather than
  * as no store at all.
  */
-const refusingStateStore: StateStore = {
+const refusingStateStore: StateStore = Object.freeze({
   get<T>(key: string): T {
     throw new Error(`${NO_PLATFORM_APP_STATE} "${key}" cannot be read.`);
   },
@@ -98,7 +98,7 @@ const refusingStateStore: StateStore = {
         cause: undefined,
       }),
     ),
-};
+});
 
 const NO_PLATFORM_GLOBAL_ROOT =
   'A platform-less TeXRA CLI entry reads and writes no global record: it runs without a platform and its storage root may be read-only.';
@@ -152,11 +152,17 @@ interface CliProcessRuntimeInstall {
  * global state store or the global root's database: the two refusals above
  * create nothing under the storage root and hold the event loop open past no
  * exit.
+ *
+ * Frozen, with its store frozen too: it crosses a module boundary and is read
+ * once per command, so a caller that decorated `appState.get` would change how
+ * every later platform-less run in the process refuses. `globalDatabase` is an
+ * Effect `Layer`, an immutable descriptor this module does not own, so it is
+ * left as Effect built it rather than frozen from here.
  */
-export const NO_PLATFORM_INSTALL: CliProcessRuntimeInstall = {
+export const NO_PLATFORM_INSTALL: CliProcessRuntimeInstall = Object.freeze({
   appState: refusingStateStore,
   globalDatabase: refusingGlobalDatabase,
-};
+});
 
 /**
  * Install the process runtime, or join the one already installed: every entry
