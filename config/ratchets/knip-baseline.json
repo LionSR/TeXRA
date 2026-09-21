@@ -779,18 +779,6 @@
       "file": "src/replacement/engine.ts",
       "category": "production-dead",
       "kind": "exports",
-      "name": "NON_REGEX_CATEGORIES"
-    },
-    {
-      "file": "src/replacement/engine.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "REGEX_CATEGORIES"
-    },
-    {
-      "file": "src/replacement/engine.ts",
-      "category": "production-dead",
-      "kind": "exports",
       "name": "applyReplacements"
     },
     {

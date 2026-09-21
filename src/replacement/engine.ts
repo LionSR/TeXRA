@@ -9,9 +9,16 @@ import { assertNever } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
-  ReplacementCategory,
-  NonRegexReplacementCategory,
-  RegexReplacementCategory,
+  NON_REGEX_REPLACEMENT_CATEGORIES,
+  REGEX_REPLACEMENT_CATEGORIES,
+  type NonRegexReplacementCategory,
+  type RegexReplacementCategory,
+} from '@shared/constants/replacementCategories';
+
+import {
+  ReplacementRuleSet,
+  NonRegexRuleSet,
+  RegexRuleSet,
   ReplacementValue,
 } from './types';
 import {
@@ -134,115 +141,92 @@ const replacementEngine = {
 };
 
 /**
- * Non-regex categories, applied in this order. Exported so a completeness test
- * can assert this registry stays in sync with the config-facing name universe
- * (`NON_REGEX_REPLACEMENT_CATEGORIES` in `@shared/constants/latex`): a category
- * missing from this list silently never runs, and a universe name without an
- * entry here makes the config accept a no-op.
+ * The rules behind every non-regex category name the config accepts. A
+ * `Record` over that universe: a name with no rules here, or rules here under
+ * a name the config rejects, fails to typecheck, so the engine can neither
+ * accept a no-op category nor run one nobody can enable. Application order is
+ * the universe's own order — see
+ * {@link NON_REGEX_REPLACEMENT_CATEGORIES}.
  */
-export const NON_REGEX_CATEGORIES: NonRegexReplacementCategory[] = [
+const NON_REGEX_RULES: Record<NonRegexReplacementCategory, NonRegexRuleSet> = {
   // LaTeX content formatting
-  EQUATION_REPLACEMENTS,
-  SECTION_REPLACEMENTS,
-  LATEX_FORBIDDEN_REPLACEMENTS,
-  CHARACTER_REPLACEMENTS,
-  FONT_COMMAND_REPLACEMENTS,
-  UNICODE_REPLACEMENTS,
-  HTML_ENTITY_REPLACEMENTS,
-  LATEX_SPACING_REPLACEMENTS,
+  equations: EQUATION_REPLACEMENTS,
+  sections: SECTION_REPLACEMENTS,
+  latex_forbidden_commands: LATEX_FORBIDDEN_REPLACEMENTS,
+  characters: CHARACTER_REPLACEMENTS,
+  font_commands: FONT_COMMAND_REPLACEMENTS,
+  unicode: UNICODE_REPLACEMENTS,
+  html_entities: HTML_ENTITY_REPLACEMENTS,
+  latex_spacing: LATEX_SPACING_REPLACEMENTS,
   // XML/structural formatting
-  LATEX_XML_REPLACEMENTS,
-  GPTNESS_REPLACEMENTS,
+  latex_xml: LATEX_XML_REPLACEMENTS,
+  gptness: GPTNESS_REPLACEMENTS,
   // Personal style
-  PERSONAL_STYLE_REPLACEMENTS,
-  MAX_STYLE_REPLACEMENTS,
+  personal_style: PERSONAL_STYLE_REPLACEMENTS,
+  max_style: MAX_STYLE_REPLACEMENTS,
   // LaTeXdiff specific fixes
-  LATEXDIFF_REPLACEMENTS,
-];
+  latexdiff: LATEXDIFF_REPLACEMENTS,
+};
 
-/**
- * Regex categories, applied in this order. Exported for the same
- * registry/universe completeness check as {@link NON_REGEX_CATEGORIES}.
- */
-export const REGEX_CATEGORIES: RegexReplacementCategory[] = [
-  EQUATION_MACRO_REPLACEMENTS,
-  FENCED_LATEX_BLOCK_REPLACEMENTS,
-  INLINE_MATH_REPLACEMENTS,
-  PARENTHESES_REPLACEMENTS,
-  LATEXDIFF_MARKUP_REPLACEMENTS,
-  EQUATION_STYLE_REPLACEMENTS,
-  PERSONAL_STYLE_CONTEXTUAL_REPLACEMENTS,
-  MAX_REGEX_REPLACEMENTS,
-];
+/** The rules behind every regex category name, on the same contract. */
+const REGEX_RULES: Record<RegexReplacementCategory, RegexRuleSet> = {
+  equation_macros: EQUATION_MACRO_REPLACEMENTS,
+  fenced_latex_blocks: FENCED_LATEX_BLOCK_REPLACEMENTS,
+  inline_math: INLINE_MATH_REPLACEMENTS,
+  parentheses: PARENTHESES_REPLACEMENTS,
+  latexdiff_markup: LATEXDIFF_MARKUP_REPLACEMENTS,
+  equation_style: EQUATION_STYLE_REPLACEMENTS,
+  personal_style_contextual: PERSONAL_STYLE_CONTEXTUAL_REPLACEMENTS,
+  max_style_regex: MAX_REGEX_REPLACEMENTS,
+};
 
 function shouldWrapCritiqueInAlign(read: ReplacementConfigRead): boolean {
   return read('texra.latex.wrapCritiqueInAlign');
-}
-
-function selectEnabledCategories<T extends ReplacementCategory>(
-  categories: T[],
-  enabledNames: string[],
-): T[] {
-  const enabled = new Set(enabledNames);
-  return categories.filter((category) => enabled.has(category.name));
 }
 
 /**
  * Combine every enabled non-regex category into a single category. Custom
  * replacements from user settings take precedence over predefined rules.
  */
-function getAllReplacements(
-  read: ReplacementConfigRead,
-): NonRegexReplacementCategory {
-  const enabledNames = read<string[]>('texra.latex.enabledReplacements');
+function getAllReplacements(read: ReplacementConfigRead): NonRegexRuleSet {
+  const enabled = new Set(read<string[]>('texra.latex.enabledReplacements'));
   const customReplacements = read<Record<string, string>>(
     'texra.latex.customReplacements',
   );
 
-  const enabledCategories = selectEnabledCategories(
-    NON_REGEX_CATEGORIES,
-    enabledNames,
-  );
   const patterns: Record<string, string> = Object.assign(
     {},
-    ...enabledCategories.map((c) => c.patterns),
+    ...NON_REGEX_REPLACEMENT_CATEGORIES.filter((name) =>
+      enabled.has(name),
+    ).map((name) => NON_REGEX_RULES[name].patterns),
     customReplacements,
   );
 
-  return {
-    name: 'all',
-    patterns,
-  };
+  return { patterns };
 }
 
 /**
  * Return every enabled regex category in application order, appending a custom
  * category built from user settings whenever custom regex replacements exist.
  */
-function getAllReplacementsRegex(
-  read: ReplacementConfigRead,
-): RegexReplacementCategory[] {
-  const enabledNames = read<string[]>('texra.latex.enabledReplacementsRegex');
+function getAllReplacementsRegex(read: ReplacementConfigRead): RegexRuleSet[] {
+  const enabled = new Set(
+    read<string[]>('texra.latex.enabledReplacementsRegex'),
+  );
   const customReplacements = read<Record<string, ReplacementValue>>(
     'texra.latex.customReplacementsRegex',
   );
 
-  const enabledCategories = selectEnabledCategories(
-    REGEX_CATEGORIES,
-    enabledNames,
-  );
+  const enabledRules = REGEX_REPLACEMENT_CATEGORIES.filter((name) =>
+    enabled.has(name),
+  ).map((name) => REGEX_RULES[name]);
   if (Object.keys(customReplacements).length === 0) {
-    return enabledCategories;
+    return enabledRules;
   }
 
   return [
-    ...enabledCategories,
-    {
-      name: 'custom_regex',
-      isRegex: true,
-      flags: 'g',
-      patterns: customReplacements,
-    },
+    ...enabledRules,
+    { isRegex: true, flags: 'g', patterns: customReplacements },
   ];
 }
 
@@ -281,7 +265,7 @@ function getCompiledRegex(pattern: string, flags?: string): RegExp {
  */
 export function applyReplacements(
   text: string,
-  replacements: ReplacementCategory | ReplacementCategory[],
+  replacements: ReplacementRuleSet | ReplacementRuleSet[],
   options?: {
     /** Whether to run trailing whole-document cleanup passes (defaults to true). */
     cleanupPasses?: boolean;

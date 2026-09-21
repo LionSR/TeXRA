@@ -9,21 +9,26 @@ export type ReplacementFunction = (
 
 export type ReplacementValue = string | ReplacementFunction;
 
+/**
+ * A rule set carries patterns only. Its category name is the key it sits
+ * under in the engine's rule table, which is typed over
+ * `@shared/constants/replacementCategories` — so a rule set cannot name
+ * itself something the config does not accept, and the name is not restated
+ * beside the rules.
+ */
+
 /** Plain string substitution, applied via `String.prototype.replaceAll`. */
-export interface NonRegexReplacementCategory {
-  name: string;
+export interface NonRegexRuleSet {
   patterns: Record<string, string>;
   isRegex?: false;
 }
 
 /** Regex-based substitution; patterns may be a replacement string or callback. */
-export interface RegexReplacementCategory {
-  name: string;
+export interface RegexRuleSet {
   patterns: Record<string, ReplacementValue>;
   isRegex: true;
   /** Regex flags such as 'g'. */
   flags?: string;
 }
 
-export type ReplacementCategory =
-  NonRegexReplacementCategory | RegexReplacementCategory;
+export type ReplacementRuleSet = NonRegexRuleSet | RegexRuleSet;
