@@ -116,9 +116,9 @@ vi.mock('@cli/runtime/sessionProgressSubscription', () => ({
   ),
 }));
 
-vi.mock('@cli/runtime/runProgressRenderer', async (importOriginal) => ({
+vi.mock('@cli/runtime/workflowPlainOutput', async (importOriginal) => ({
   ...(await importOriginal<
-    typeof import('@cli/runtime/runProgressRenderer')
+    typeof import('@cli/runtime/workflowPlainOutput')
   >()),
   attachWorkflowPlainOutput: mocks.attachWorkflowPlainOutput,
 }));
