@@ -5,10 +5,6 @@
       "count": 2,
       "reason": "The body forks the subject's own body-local ManagedRuntime and asserts that the lifecycle shutdown disposes that runtime (Fiber.await expects a Failure for exactly that reason), so the receiver is the assertion subject and cannot disappear; the suite is otherwise it.live + Effect.gen."
     },
-    "src/test-kernel/cli/chatSessionController.vitest.ts": {
-      "count": 5,
-      "reason": "The CLI chat controller's command harness (p-queue serialization plus p-defer gates and vi.waitFor settling) is what these bodies drive, and that harness retires with the production serialization it mirrors (effect-native test-suites survey, trailing indicators: chatSessionController's PQueue/pDefer makeInit); converting the five runs here would pin the harness being deleted."
-    },
     "src/test-kernel/desktop/JsonStore.vitest.ts": {
       "count": 2,
       "reason": "The Effect run belongs to the module under test: the body builds an esbuild bundle and imports it, so `bundledEffect` is that bundle's own Effect instance, which the test's tester cannot run; JsonStore is also on the 1.0 retirement boundary."
