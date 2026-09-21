@@ -118,12 +118,14 @@ export function defineTool<T, R = never>(
     }
   }
 
-  const run = def.execute;
-  if (!run) return GeneratedTool;
+  if (!def.execute) return GeneratedTool;
+  // Re-declared with the narrowed type: a class field initializer does not
+  // inherit the control-flow narrowing of the captured binding.
+  const run: ToolExecute<T, R> = def.execute;
 
+  // The definition's body *is* the tool's `execute`, bound as a field rather
+  // than a method that forwards to it: a call reaches the body directly.
   return class DefinedTool extends GeneratedTool {
-    protected execute(input: T): Effect.Effect<ToolResult, unknown, R> {
-      return run(input);
-    }
+    protected readonly execute = run;
   };
 }
