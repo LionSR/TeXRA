@@ -7,7 +7,6 @@ import { imageSize } from 'image-size';
 
 // Local imports - log
 import { withLogChannel } from '@logger/effectLog';
-import { createLog } from '@logger/logUtils';
 import type { ConfigProvider } from '@platform/interfaces';
 import { getMimeType, isImageMimeType } from '@utils/files/mimeUtils';
 import { detectImageTool } from '@utils/system/toolUtils';
@@ -17,7 +16,6 @@ import { executeCommand } from '@utils/system/execUtils';
 import { countPdfPagesInBuffer } from './pdfPageCount';
 
 const CHANNEL = 'ImgUtils';
-const log = createLog(CHANNEL);
 
 /** DPI/density used when rasterizing a PDF page to PNG. */
 const PDF_RASTER_DENSITY = 300;
@@ -63,9 +61,9 @@ function removeTemporary(
     .remove(target, { recursive: true, force: true })
     .pipe(
       Effect.catchTag('PlatformError', (error) =>
-        Effect.sync(() =>
-          log.warn(`Failed to remove ${what} ${target}: ${error.message}`),
-        ),
+        Effect.logWarning(
+          `Failed to remove ${what} ${target}: ${error.message}`,
+        ).pipe(withLogChannel(CHANNEL)),
       ),
     );
 }

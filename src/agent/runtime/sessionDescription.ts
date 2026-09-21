@@ -13,7 +13,6 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { helperCompletion, helperModel } from '@agent/runtime/helperModel';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 import { withLogChannel } from '@logger/effectLog';
-import { createLog } from '@logger/logUtils';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { LanguageModel } from '@platform/languageModel';
 import { aggregateId as qualifyAggregateId, type RunId } from '@shared/schemas';
@@ -24,7 +23,6 @@ import {
 import type { HttpClient } from 'effect/unstable/http';
 
 const CHANNEL = 'SessionDescription';
-const log = createLog(CHANNEL);
 const MAX_DESCRIPTION_LENGTH = 80;
 const MAX_DESCRIPTION_WORDS = 12;
 
@@ -145,9 +143,7 @@ export const generateSessionDescription = Effect.fn(
 });
 
 function warnFailure(cause: unknown): Effect.Effect<void> {
-  return Effect.sync(() =>
-    log.warn(
-      `Failed to generate session description: ${getSdkErrorMessage(cause)}`,
-    ),
-  );
+  return Effect.logWarning(
+    `Failed to generate session description: ${getSdkErrorMessage(cause)}`,
+  ).pipe(withLogChannel(CHANNEL));
 }

@@ -192,8 +192,8 @@ function readYamlDefinition(
       });
     }),
     Effect.tapError((error) =>
-      Effect.sync(() =>
-        log.warn(`Failed to scan ${yamlPath}: ${error.message}`),
+      Effect.logWarning(`Failed to scan ${yamlPath}: ${error.message}`).pipe(
+        withLogChannel(CHANNEL),
       ),
     ),
   );

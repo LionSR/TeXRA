@@ -7,8 +7,10 @@ import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 import { LATEX_COMMANDS_CHANNEL } from '@latex/latexLogging';
 import { compileLatex2Pdf, type CompileLatex2PdfResult } from '@latex/texTools';
-import * as logger from '@logger/logUtils';
+import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
+import { setLogSink } from '@logger/logSink';
 import type { ExecResult } from '@shared/schemas';
+import { captureLogEntries } from '@test/support/logSinkCapture';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { fakePath } from '@test/support/FakePlatform';
 import { rootedFsLayer } from '@test/support/fsTestUtils';
@@ -186,9 +188,9 @@ describe('compileLatex2Pdf structured return', () => {
   );
 });
 
-// #10635: compileLatex2Pdf resolves its logger per call from the threaded
-// channel option (defaulting to the module channel) — a logger-namespace spy
-// must observe the resolved channel.
+// #10635: compileLatex2Pdf resolves its channel per call from the threaded
+// option (defaulting to the module channel) — the entries the host sink
+// receives must carry the resolved channel.
 describe('compileLatex2Pdf logger seam', () => {
   beforeEach(async () => {
     mocks.runToolWithCheck.mockReset();
@@ -196,6 +198,7 @@ describe('compileLatex2Pdf logger seam', () => {
   });
 
   afterEach(() => {
+    setLogSink(null);
     vi.restoreAllMocks();
   });
 
@@ -206,15 +209,16 @@ describe('compileLatex2Pdf logger seam', () => {
         mocks.runToolWithCheck
           .mockReturnValueOnce(Effect.succeed(false))
           .mockReturnValueOnce(Effect.succeed(execResult(true)));
-        const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+        const logs = captureLogEntries();
 
-        const result = yield* compile();
+        const result = yield* compile().pipe(
+          Effect.provide(effectDiagnosticsLayer),
+        );
 
         expect(result.ok).toBe(true);
-        expect(warn).toHaveBeenCalledWith(
-          LATEX_COMMANDS_CHANNEL,
-          expect.stringContaining('latexmk not found'),
-        );
+        expect(
+          logs.has('WARN', LATEX_COMMANDS_CHANNEL, 'latexmk not found'),
+        ).toBe(true);
       }),
   );
 });
