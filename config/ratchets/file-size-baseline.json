@@ -18,7 +18,7 @@
     "packages/cli/src/commands/_helpers/dispatch.ts": 670,
     "packages/cli/src/commands/workflow.ts": 516,
     "packages/cli/src/onboarding/runOnboarding.tsx": 589,
-    "packages/cli/src/runtime/doctor.ts": 603,
+    "packages/cli/src/runtime/doctor.ts": 626,
     "packages/cli/src/runtime/executeCli.ts": 680,
     "packages/cli/src/runtime/history.ts": 601,
     "packages/cli/src/runtime/modelAccess.ts": 533,
