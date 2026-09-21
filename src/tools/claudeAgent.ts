@@ -81,10 +81,7 @@ import {
   launchAgentCliSession,
   reraiseAgentCliCallFailure,
 } from './agentCliShared';
-import {
-  formatDelivery,
-  toDeliveryUsage,
-} from './delegation/deliveryEnvelope';
+import { formatDelivery, toDeliveryUsage } from './delegation/deliveryEnvelope';
 import {
   aggregateClaudeModelUsage,
   buildClaudeToolUseLog,
