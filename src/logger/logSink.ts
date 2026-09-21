@@ -31,6 +31,10 @@ export type LogEntry = ReturnType<typeof Logger.formatStructured.log>;
 /** Annotation naming the logical channel an entry belongs to. */
 export const LOG_CHANNEL = 'channel';
 
+/** Annotation carrying a debug payload. `withLogData` attaches the value raw,
+ * so the sinks that render annotations decide whether a surface shows it. */
+export const LOG_DATA = 'data';
+
 export interface LogSink {
   write(entry: LogEntry): void;
   dispose?(): void;

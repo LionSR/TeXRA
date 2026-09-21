@@ -1,13 +1,8 @@
 /**
  * The one Supabase (TeXRA account) sign-in state machine, shared by all three
- * hosts.
- *
- * Every host used to carry its own copy: an attempt nonce, an ownership
- * token, a claim lane, a commit lane and a callback deadline, written three
- * ways although only the callback transport genuinely differs. This is that
- * machine, written once; a host supplies an {@link AuthCallbackTransport} and
- * nothing else. The record store and the login-CSRF nonce check it composes
- * live beside it in `pendingOAuthStore.ts`.
+ * hosts: a host supplies an {@link AuthCallbackTransport} and nothing else.
+ * The record store and the login-CSRF nonce check it composes live beside it
+ * in `pendingOAuthStore.ts`.
  *
  * Lives in `src/controllers/` rather than `src/auth/` for the same reason
  * `subscriptionProviders.ts` does: it composes the auth subsystem with the
@@ -33,14 +28,16 @@ import type {
   SupabaseSessionCoordinator,
 } from '@auth/SupabaseSession';
 import { withLogChannel } from '@logger/effectLog';
-import { createLog } from '@logger/logUtils';
 import type { ProcessServices } from '@platform/processRuntime';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
-import { callbackNonce, type PendingOAuthStore } from './pendingOAuthStore';
+import {
+  callbackNonce,
+  mintCallbackNonce,
+  type PendingOAuthStore,
+} from './pendingOAuthStore';
 
 const CHANNEL = 'supabaseSignIn';
-const log = createLog(CHANNEL);
 
 /**
  * The user declined consent in the browser. `signIn` fails with this rather
@@ -110,7 +107,6 @@ export interface AuthCallbackTransport {
  */
 interface SignInAttempt {
   readonly nonce: string;
-  readonly createdAt: number;
   /**
    * Settled once: the committed session, `null` when the attempt was
    * superseded or cancelled, or the callback's failure.
@@ -232,7 +228,7 @@ export class SupabaseSignInCoordinator {
       );
       yield* refreshRemoteAgentCatalogAfterSignOut(
         invalidateRemoteAgentsAfterSignOut(),
-        (message) => log.warn(message),
+        (message) => Effect.logWarning(message).pipe(withLogChannel(CHANNEL)),
       );
       return signedIn;
     });
@@ -312,12 +308,11 @@ export class SupabaseSignInCoordinator {
   ): Effect.Effect<SignInCallbackOutcome, Error, ProcessServices> {
     return Effect.gen({ self: this }, function* () {
       const claimed = yield* this.claimCallback(nonce);
-      if (!claimed) {
+      if (!claimed)
         return {
           kind: 'ignored',
           reason: 'the callback did not match a pending sign-in',
         } as const;
-      }
 
       const attempt = this.attemptFor(claimed.nonce);
       if (!attempt && this.minted.has(claimed.nonce)) {
@@ -390,10 +385,9 @@ export class SupabaseSignInCoordinator {
     const outcome: SignInCallbackOutcome = result.cancelled
       ? { kind: 'ignored', reason: 'the sign-in was cancelled in the browser' }
       : { kind: 'failed', message: result.error };
-    const settlement: Effect.Effect<SupabaseSession | null, Error> =
-      result.cancelled
-        ? Effect.fail(new SignInCancelled())
-        : Effect.fail(new Error(`OAuth error: ${result.error}. Try again.`));
+    const settlement = result.cancelled
+      ? Effect.fail(new SignInCancelled())
+      : Effect.fail(new Error(`OAuth error: ${result.error}. Try again.`));
     return Effect.gen({ self: this }, function* () {
       yield* (
         result.cancelled
@@ -417,26 +411,22 @@ export class SupabaseSignInCoordinator {
   ): Effect.Effect<PendingOAuthState | null, Error> {
     return this.claims.run(
       Effect.gen({ self: this }, function* () {
-        if (!nonce) {
-          yield* Effect.logWarning(
-            'OAuth callback rejected: invalid or stale attempt binding',
-          ).pipe(withLogChannel(CHANNEL));
-          return null;
-        }
-        const pending = yield* this.options.store.read(nonce);
-        if (
-          !pending?.flowId ||
-          pending.nonce !== nonce ||
-          !isPendingOAuthStateFresh(pending)
-        ) {
+        if (nonce) {
+          const pending = yield* this.options.store.read(nonce);
+          if (
+            pending?.flowId &&
+            pending.nonce === nonce &&
+            isPendingOAuthStateFresh(pending)
+          ) {
+            yield* this.options.store.clear(nonce);
+            return pending;
+          }
           if (pending) yield* this.options.store.clear(nonce);
-          yield* Effect.logWarning(
-            'OAuth callback rejected: invalid or stale attempt binding',
-          ).pipe(withLogChannel(CHANNEL));
-          return null;
         }
-        yield* this.options.store.clear(nonce);
-        return pending;
+        yield* Effect.logWarning(
+          'OAuth callback rejected: invalid or stale attempt binding',
+        ).pipe(withLogChannel(CHANNEL));
+        return null;
       }).pipe(
         Effect.catch((error) =>
           Effect.fail(
@@ -458,7 +448,6 @@ export class SupabaseSignInCoordinator {
     this.invalidate();
     const attempt: SignInAttempt = {
       nonce: mintCallbackNonce(),
-      createdAt: Date.now(),
       outcome: Deferred.makeUnsafe<SupabaseSession | null, Error>(),
     };
     this.minted.add(attempt.nonce);
@@ -501,11 +490,4 @@ export class SupabaseSignInCoordinator {
       ).pipe(withLogChannel(CHANNEL)),
     );
   }
-}
-
-/** A sign-in nonce: 16 random bytes, hex, as `OAUTH_NONCE_PATTERN` spells it. */
-function mintCallbackNonce(): string {
-  const bytes = new Uint8Array(16);
-  crypto.getRandomValues(bytes);
-  return [...bytes].map((byte) => byte.toString(16).padStart(2, '0')).join('');
 }

@@ -166,3 +166,10 @@ export function memoryPendingOAuthSlots(): PendingOAuthSlots {
     nonces: () => Effect.sync(() => [...records.keys()]),
   };
 }
+
+/** A sign-in nonce: 16 random bytes, hex, as `OAUTH_NONCE_PATTERN` spells it. */
+export function mintCallbackNonce(): string {
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  return [...bytes].map((byte) => byte.toString(16).padStart(2, '0')).join('');
+}

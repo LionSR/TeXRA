@@ -24,23 +24,22 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /**
  * Best-effort remote-agent-catalog refresh after sign-out. Failures are
- * logged through the caller's `warn`, never thrown — a stale local catalog
- * must not block sign-out from completing. Takes the invalidation program as
+ * logged through the caller's `warn` — an Effect, so the caller's own channel
+ * reaches the entry — never thrown: a stale local catalog must not block
+ * sign-out from completing. Takes the invalidation program as
  * a parameter (rather than importing `invalidateRemoteAgentsAfterSignOut`
  * directly from `@agent/index`) so `src/auth/` doesn't take on a dependency
  * on the `agent` subsystem — the reverse edge is the only one baselined.
  */
 export function refreshRemoteAgentCatalogAfterSignOut<R = never>(
   invalidateCatalog: Effect.Effect<void, never, R>,
-  warn: (message: string) => void,
+  warn: (message: string) => Effect.Effect<void>,
 ): Effect.Effect<void, never, R> {
   return invalidateCatalog.pipe(
     Effect.catchCause((cause) =>
-      Effect.sync(() => {
-        warn(
-          `Local agent catalog refresh failed after sign-out: ${toErrorMessage(Cause.squash(cause))}`,
-        );
-      }),
+      warn(
+        `Local agent catalog refresh failed after sign-out: ${toErrorMessage(Cause.squash(cause))}`,
+      ),
     ),
   );
 }

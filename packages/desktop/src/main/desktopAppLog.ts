@@ -17,7 +17,9 @@ import {
   type WebContentsConsoleMessageEventParams,
 } from 'electron';
 
-import { setLogSink, type LogEntry } from '@logger/logSink';
+import { formatLogData } from '@logger/formatLogData';
+import { LOG_DATA, setLogSink, type LogEntry } from '@logger/logSink';
+import { isDebugModeEnabled } from '@logger/logUtils';
 import { redactSecrets } from '@logger/redaction';
 import { normalizeFilePath } from '@utils/core';
 
@@ -154,12 +156,28 @@ function appendDesktopLogLine(level: ConsoleLevel, ...args: unknown[]): void {
 }
 
 /** One entry, one JSON line. */
+/** Shape one entry for the file. The `data` payload arrives raw: it stays
+ * debug-mode-only, and is flattened here so an `Error` inside it survives the
+ * line's `JSON.stringify`. Every other annotation keeps the value it carried. */
+function entryForFile(entry: LogEntry): LogEntry {
+  const data = entry.annotations[LOG_DATA];
+  if (data === undefined) return entry;
+  const annotations = { ...entry.annotations };
+  if (isDebugModeEnabled()) {
+    annotations[LOG_DATA] =
+      typeof data === 'string' ? data : formatLogData(data);
+  } else {
+    delete annotations[LOG_DATA];
+  }
+  return { ...entry, annotations };
+}
+
 function appendDesktopLogEntry(entry: LogEntry): void {
   const path = resolveActiveLogFilePath();
   if (path == null) return;
 
   try {
-    appendFileSync(path, `${JSON.stringify(entry)}\n`);
+    appendFileSync(path, `${JSON.stringify(entryForFile(entry))}\n`);
   } catch {
     // Logging must never become a startup dependency.
   }

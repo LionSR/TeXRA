@@ -506,7 +506,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   ): Effect.Effect<void, never, GlobalStorageFs | FileSystem.FileSystem> {
     return refreshRemoteAgentCatalogAfterSignOut(
       invalidateRemoteAgentsAfterSignOut(),
-      log.warn,
+      (message) => Effect.sync(() => log.warn(message)),
     ).pipe(
       Effect.andThen(
         Effect.sync(() => {
