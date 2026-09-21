@@ -1,7 +1,15 @@
 import { defineCommand, type ArgsDef, type CommandDef } from 'citty';
+// Type-only: this file's one `catch` is the command boundary below, and an
+// `effect` value import would make it a raw catch in an effect importer.
+import type { Effect } from 'effect';
 
+import {
+  installCliProcessRuntime,
+  type CliProcessRuntimeInstall,
+} from '@cli/runtime/cliProcessRuntime';
 import { writeErrorStderr } from '@cli/runtime/logSinks';
 import type { ParsedGlobalArgs } from '@cli/runtime/globalArgs';
+import type { ProcessServices } from '@platform/processRuntime';
 
 import type { CliContext } from '@cli/runtime/cliContext';
 
@@ -15,19 +23,35 @@ type CliCommandRunContext<A extends ArgsDef> = Parameters<
   NonNullable<CommandDef<A>['run']>
 >[0];
 
-interface DefineCliCommandOptions<A extends ArgsDef> {
+interface DefineCliCommandOptions<A extends ArgsDef, E> {
   readonly meta: CommandDef<A>['meta'];
   readonly args?: A;
   /**
    * Core handler. Receives the already-built `CliContext` (with config
    * warnings surfaced by `contextFromArgs`) and citty's run context, and
-   * returns the process exit code. The return value is forwarded to
-   * `setExitCode`, so a handler reduces to "do the work, return a code".
+   * returns the command as the program it is: one Effect ending in the
+   * process exit code, which this helper runs on the process runtime below.
+   * The value it settles on is forwarded to `setExitCode`, so a handler
+   * reduces to "do the work, return a code".
+   *
+   * It is called to BUILD that program, before the runtime is installed, so a
+   * command whose usage guard must settle before anything is installed keeps
+   * that guard in the builder and returns a program that is already decided
+   * (`texra clone`'s project-id parse, `texra history`'s id and limit parses,
+   * `texra config edit`'s terminal check, `texra login`'s transport check).
    */
   readonly run: (
     context: CliContext,
     ctx: CliCommandRunContext<A>,
-  ) => Promise<number>;
+  ) => Effect.Effect<number, E, ProcessServices>;
+  /**
+   * The process-runtime install this command's program runs on. Omitted by
+   * every command that brings a platform up, whose shutdown disposes the
+   * runtime this install opens the global state store and global-root handle
+   * for. The two entries that bring no platform up pass
+   * `NO_PLATFORM_INSTALL`, which opens neither — see its docstring.
+   */
+  readonly install?: CliProcessRuntimeInstall;
   /**
    * When set, the handler is wrapped in a try/catch that writes the error
    * message to stderr and assigns this exit code — replacing the per-command
@@ -39,13 +63,20 @@ interface DefineCliCommandOptions<A extends ArgsDef> {
 }
 
 /**
- * Folds the `contextFromArgs` → `setExitCode(await handler(...))` boilerplate
- * (optionally with the error→stderr+exit-code catch) that every headless
- * command repeats into one declaration. Behavior is identical to the manual
- * form; only the scaffolding moves here.
+ * Folds the `contextFromArgs` → install the process runtime → run the
+ * command's program → `setExitCode` boilerplate (optionally with the
+ * error→stderr+exit-code catch) that every headless command repeats into one
+ * declaration.
+ *
+ * The runtime install and the run are this helper's, not each command's: a
+ * command is one program on the process runtime, and this is the one place
+ * the CLI enters it. `texra doctor` is the one command that cannot use this —
+ * its report runs before the runtime exists and, when the platform init
+ * fails, after that init has disposed the runtime it installed, so it has
+ * none to borrow at either end.
  */
-export function defineCliCommand<const A extends ArgsDef>(
-  options: DefineCliCommandOptions<A>,
+export function defineCliCommand<const A extends ArgsDef, E>(
+  options: DefineCliCommandOptions<A, E>,
 ): CommandDef<A> {
   return defineCommand<A>({
     meta: options.meta,
@@ -60,12 +91,20 @@ export function defineCliCommand<const A extends ArgsDef>(
         ctx.rawArgs,
       );
       const runCtx = ctx as CliCommandRunContext<A>;
+      const exitCode = async (): Promise<number> => {
+        const program = options.run(context, runCtx);
+        const runtime = await installCliProcessRuntime(
+          context.storageRoot,
+          options.install,
+        );
+        return runtime.runPromise(program);
+      };
       if (options.catchExitCode === undefined) {
-        setExitCode(await options.run(context, runCtx));
+        setExitCode(await exitCode());
         return;
       }
       try {
-        setExitCode(await options.run(context, runCtx));
+        setExitCode(await exitCode());
       } catch (error) {
         writeErrorStderr(error);
         setExitCode(options.catchExitCode);

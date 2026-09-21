@@ -18,7 +18,6 @@ import {
   type InitAnswers,
   type InitConfigShape,
 } from '../runtime/initConfig';
-import { installCliProcessRuntime } from '../runtime/cliProcessRuntime';
 import { initCliPlatform } from '../runtime/initPlatform';
 import { writeTextStderr } from '../runtime/logSinks';
 import {
@@ -233,17 +232,13 @@ export const initCommand = defineCliCommand({
       description: 'Add .texra/ to .gitignore (non-interactive default: false)',
     },
   },
-  run: async (context, ctx) => {
-    const runtime = await installCliProcessRuntime(context.storageRoot);
-    return runtime.runPromise(
-      runInit(context, {
-        yes: ctx.args.yes === true,
-        force: ctx.args.force === true,
-        gitignore:
-          typeof ctx.args.gitignore === 'boolean'
-            ? ctx.args.gitignore
-            : undefined,
-      }),
-    );
-  },
+  run: (context, ctx) =>
+    runInit(context, {
+      yes: ctx.args.yes === true,
+      force: ctx.args.force === true,
+      gitignore:
+        typeof ctx.args.gitignore === 'boolean'
+          ? ctx.args.gitignore
+          : undefined,
+    }),
 });

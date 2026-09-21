@@ -2,7 +2,6 @@ import { defineCommand } from 'citty';
 import { Cause, Effect, Exit } from 'effect';
 
 import { getEnabledModels } from '@model/computeModelOptions';
-import type { ProcessServices } from '@platform/processRuntime';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { knownCliModelIds } from '../runtime/cliConfig';
@@ -10,7 +9,6 @@ import {
   listCliEnabledModelCatalog,
   setCliModelEnabled,
 } from '../runtime/enabledModels';
-import { installCliProcessRuntime } from '../runtime/cliProcessRuntime';
 import { CliExitCode } from '../runtime/exitCodes';
 import {
   initCliPlatform,
@@ -46,106 +44,92 @@ function reportModelPlatformFailure(cause: unknown): number {
   return CliExitCode.ModelOrNetworkError;
 }
 
-/**
- * Run one model-listing program on the process runtime this entry installs or
- * joins, as an `Exit`. A runtime that cannot be built arrives as a die rather
- * than as a rejection past the fold: building or joining it is the init's own
- * first step, so it belongs to the same "could not list models" report every
- * other init failure gets, exactly as it did while the init was a Promise
- * that did the install inside itself.
- */
-function runModelCommandExit<A>(
-  context: CliContext,
-  program: Effect.Effect<A, unknown, ProcessServices>,
-): Promise<Exit.Exit<A, unknown>> {
-  return installCliProcessRuntime(context.storageRoot).then(
-    (runtime) => runtime.runPromiseExit(program),
-    (cause: unknown) => Exit.die(cause),
+function listModels(context: CliContext, options: CliModelListOptions) {
+  // The init and the access read are one program on the process runtime the
+  // command entry installs; the whole of it stays inside the fetch-log
+  // suppression window the access read needs. Any cause counts, defects and
+  // interruption included, exactly as the `runPromiseExit` this replaces
+  // reported them.
+  return suppressCliFetchStackLogs(
+    Effect.gen(function* () {
+      const outcome = yield* Effect.exit(
+        Effect.gen(function* () {
+          const services = yield* initCliPlatform({
+            ...context,
+            quietLogs: true,
+          });
+          return yield* getCliModelAccessList({
+            stores: services,
+            models:
+              options.includeUnavailable === true
+                ? knownCliModelIds()
+                : undefined,
+          });
+        }),
+      );
+      if (Exit.isFailure(outcome)) {
+        return reportModelPlatformFailure(Cause.squash(outcome.cause));
+      }
+      const models: readonly CliModelAccess[] = outcome.value;
+
+      const listedModels = listableModelAccessEntries(models, options);
+      if (context.outputFormat === 'text' && listedModels.length === 0) {
+        writeTextStderr(formatNoListableModelsMessage(options));
+      }
+      const records = listedModels.map(({ model }) => cliModelRecord(model));
+      emitCliResult(
+        context,
+        {
+          json: records,
+          ndjson: records.map((model) => ({ kind: 'model', model })),
+          text: listedModels
+            .map(
+              ({ model, status }) =>
+                `${model.value}\t${model.label}\t${status}`,
+            )
+            .join('\n'),
+        },
+        { paged: true },
+      );
+      return CliExitCode.Success;
+    }),
   );
 }
 
-async function listModels(
-  context: CliContext,
-  options: CliModelListOptions,
-): Promise<number> {
-  // The init and the access read are one program on the process runtime this
-  // entry installs or joins; the whole of it stays inside the fetch-log
-  // suppression window the access read needs.
-  const outcome = await suppressCliFetchStackLogs(() =>
-    runModelCommandExit(
-      context,
-      Effect.gen(function* () {
-        const services = yield* initCliPlatform({
-          ...context,
-          quietLogs: true,
-        });
-        return yield* getCliModelAccessList({
-          stores: services,
-          models:
-            options.includeUnavailable === true
-              ? knownCliModelIds()
-              : undefined,
-        });
-      }),
-    ),
-  );
-  if (Exit.isFailure(outcome)) {
-    return reportModelPlatformFailure(Cause.squash(outcome.cause));
-  }
-  const models: readonly CliModelAccess[] = outcome.value;
-
-  const listedModels = listableModelAccessEntries(models, options);
-  if (context.outputFormat === 'text' && listedModels.length === 0) {
-    writeTextStderr(formatNoListableModelsMessage(options));
-  }
-  const records = listedModels.map(({ model }) => cliModelRecord(model));
-  emitCliResult(
-    context,
-    {
-      json: records,
-      ndjson: records.map((model) => ({ kind: 'model', model })),
-      text: listedModels
-        .map(({ model, status }) => `${model.value}\t${model.label}\t${status}`)
-        .join('\n'),
-    },
-    { paged: true },
-  );
-  return CliExitCode.Success;
-}
-
-async function showModel(context: CliContext, id: string): Promise<number> {
+function showModel(context: CliContext, id: string) {
   // One program for the init and the entry lookup: the lookup loads the
   // access list itself, so `show` settles neither the init nor the list into
   // a Promise only to hand it straight back to a second run.
-  const outcome = await suppressCliFetchStackLogs(() =>
-    runModelCommandExit(
-      context,
-      Effect.gen(function* () {
-        const services = yield* initCliPlatform({
-          ...context,
-          quietLogs: true,
-        });
-        return yield* loadCliModelAccessEntry(id, { stores: services });
-      }),
-    ),
+  return suppressCliFetchStackLogs(
+    Effect.gen(function* () {
+      const outcome = yield* Effect.exit(
+        Effect.gen(function* () {
+          const services = yield* initCliPlatform({
+            ...context,
+            quietLogs: true,
+          });
+          return yield* loadCliModelAccessEntry(id, { stores: services });
+        }),
+      );
+      if (Exit.isFailure(outcome)) {
+        return reportModelPlatformFailure(Cause.squash(outcome.cause));
+      }
+      const entry: CliModelAccess | undefined = outcome.value;
+
+      if (!entry) {
+        writeTextStderr(`Model not found: ${id}`);
+        return CliExitCode.Usage;
+      }
+
+      const record = cliModelRecord(entry.model);
+      emitCliResult(context, {
+        json: record,
+        ndjson: { kind: 'model', model: record },
+        text: formatCliModelDetails(entry),
+      });
+      return CliExitCode.Success;
+    }),
   );
-  if (Exit.isFailure(outcome)) {
-    return reportModelPlatformFailure(Cause.squash(outcome.cause));
-  }
-  const entry: CliModelAccess | undefined = outcome.value;
-
-  if (!entry) {
-    writeTextStderr(`Model not found: ${id}`);
-    return CliExitCode.Usage;
-  }
-
-  const record = cliModelRecord(entry.model);
-  emitCliResult(context, {
-    json: record,
-    ndjson: { kind: 'model', model: record },
-    text: formatCliModelDetails(entry),
-  });
-  return CliExitCode.Success;
 }
 
 const modelsListCommand = defineCliCommand({
@@ -192,86 +176,66 @@ function initModelCommandPlatform(
   );
 }
 
-function listEnabledModels(context: CliContext): Promise<number> {
-  return installCliProcessRuntime(context.storageRoot).then(
-    (runtime) =>
-      runtime.runPromise(
-        Effect.gen(function* () {
-          const services = yield* initModelCommandPlatform(context);
-          if ('exitCode' in services) return services.exitCode;
-          const catalog = listCliEnabledModelCatalog(services.globalState);
-          const enabled = getEnabledModels(services.globalState);
-          emitCliResult(
-            context,
-            {
-              json: { enabled, catalog },
-              ndjson: [
-                { kind: 'models-enabled' as const, models: enabled },
-                ...catalog.map((model) => ({
-                  kind: 'model-catalog' as const,
-                  model,
-                })),
-              ],
-              text: catalog
-                .map(
-                  (model) =>
-                    `${model.enabled ? 'on' : 'off'}\t${model.id}\t${model.label}\t${model.provider}`,
-                )
-                .join('\n'),
-            },
-            { paged: true },
-          );
-          return CliExitCode.Success;
-        }),
-      ),
-    reportModelPlatformFailure,
-  );
+function listEnabledModels(context: CliContext) {
+  return Effect.gen(function* () {
+    const services = yield* initModelCommandPlatform(context);
+    if ('exitCode' in services) return services.exitCode;
+    const catalog = listCliEnabledModelCatalog(services.globalState);
+    const enabled = getEnabledModels(services.globalState);
+    emitCliResult(
+      context,
+      {
+        json: { enabled, catalog },
+        ndjson: [
+          { kind: 'models-enabled' as const, models: enabled },
+          ...catalog.map((model) => ({
+            kind: 'model-catalog' as const,
+            model,
+          })),
+        ],
+        text: catalog
+          .map(
+            (model) =>
+              `${model.enabled ? 'on' : 'off'}\t${model.id}\t${model.label}\t${model.provider}`,
+          )
+          .join('\n'),
+      },
+      { paged: true },
+    );
+    return CliExitCode.Success;
+  });
 }
 
-function setModelEnabled(
-  context: CliContext,
-  id: string,
-  enabled: boolean,
-): Promise<number> {
-  return installCliProcessRuntime(context.storageRoot).then(
-    (runtime) =>
-      runtime.runPromise(
-        Effect.gen(function* () {
-          const services = yield* initModelCommandPlatform(context);
-          if ('exitCode' in services) return services.exitCode;
-          return yield* setCliModelEnabled(
-            services.globalState,
-            id,
-            enabled,
-          ).pipe(
-            Effect.map((result) => {
-              emitCliResult(context, {
-                json: result,
-                ndjson: {
-                  kind: 'model-enabled',
-                  model: {
-                    id: result.model,
-                    enabled: result.enabled,
-                    list: result.list,
-                  },
-                },
-                text: result.enabled
-                  ? `Enabled ${result.model} in the model picker.`
-                  : `Disabled ${result.model} in the model picker.`,
-              });
-              return CliExitCode.Success;
-            }),
-            Effect.catchCause((cause) =>
-              Effect.sync(() => {
-                writeTextStderr(toErrorMessage(Cause.squash(cause)));
-                return CliExitCode.Usage;
-              }),
-            ),
-          );
+function setModelEnabled(context: CliContext, id: string, enabled: boolean) {
+  return Effect.gen(function* () {
+    const services = yield* initModelCommandPlatform(context);
+    if ('exitCode' in services) return services.exitCode;
+    return yield* setCliModelEnabled(services.globalState, id, enabled).pipe(
+      Effect.map((result) => {
+        emitCliResult(context, {
+          json: result,
+          ndjson: {
+            kind: 'model-enabled',
+            model: {
+              id: result.model,
+              enabled: result.enabled,
+              list: result.list,
+            },
+          },
+          text: result.enabled
+            ? `Enabled ${result.model} in the model picker.`
+            : `Disabled ${result.model} in the model picker.`,
+        });
+        return CliExitCode.Success;
+      }),
+      Effect.catchCause((cause) =>
+        Effect.sync(() => {
+          writeTextStderr(toErrorMessage(Cause.squash(cause)));
+          return CliExitCode.Usage;
         }),
       ),
-    reportModelPlatformFailure,
-  );
+    );
+  });
 }
 
 const modelsEnabledCommand = defineCliCommand({

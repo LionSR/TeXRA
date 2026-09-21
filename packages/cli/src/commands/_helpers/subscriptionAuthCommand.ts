@@ -3,7 +3,6 @@ import { Effect } from 'effect';
 
 import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
-import { installCliProcessRuntime } from '@cli/runtime/cliProcessRuntime';
 import { initCliPlatform } from '@cli/runtime/initPlatform';
 import {
   shouldUseSubscriptionDeviceCode,
@@ -52,50 +51,47 @@ export function defineSubscriptionAuthCommand(
   /** Registered ndjson discriminator; the status record appends '-status'. */
   const ndjsonKind = `${options.providerId}-auth` as const;
 
-  async function runLogin(
+  function runLogin(
     context: CliContext,
     init: { device: boolean; noBrowser: boolean },
-  ): Promise<number> {
-    const runtime = await installCliProcessRuntime(context.storageRoot);
+  ) {
     const writeProgress = cliProgressWriter(context);
 
-    return runtime.runPromise(
-      Effect.gen(function* () {
-        const services = yield* initCliPlatform({
-          ...context,
-          quietLogs: true,
-        });
-        const signInResult = yield* withCliAuthError(
-          signInCliSubscription(
-            options.providerId,
-            { ...init, device: shouldUseSubscriptionDeviceCode(context, init) },
-            { writeProgress },
-          ),
-        );
-        if (!signInResult.ok) return CliExitCode.ModelOrNetworkError;
+    return Effect.gen(function* () {
+      const services = yield* initCliPlatform({
+        ...context,
+        quietLogs: true,
+      });
+      const signInResult = yield* withCliAuthError(
+        signInCliSubscription(
+          options.providerId,
+          { ...init, device: shouldUseSubscriptionDeviceCode(context, init) },
+          { writeProgress },
+        ),
+      );
+      if (!signInResult.ok) return CliExitCode.ModelOrNetworkError;
 
-        const update = yield* provider.setPreferSubscription(services, true);
-        const account = signInResult.value;
-        const payload = {
-          authenticated: true,
-          email: account.email ?? null,
-          ...options.loginPayloadExtras?.(account),
-          preferSubscription: update.effective,
-        };
-        const signedIn = ACCOUNT_OUTCOME.signedInAs(
-          provider.displayName,
-          account.label,
-        );
-        emitCliResult(context, {
-          json: payload,
-          ndjson: { kind: ndjsonKind, ...payload },
-          text: update.effective
-            ? `${signedIn}\n${provider.displayName} subscription enabled for ${provider.modelFamily}.`
-            : `${signedIn}\n${provider.displayName} subscription preference could not be enabled because a more specific setting overrides the config.`,
-        });
-        return CliExitCode.Success;
-      }),
-    );
+      const update = yield* provider.setPreferSubscription(services, true);
+      const account = signInResult.value;
+      const payload = {
+        authenticated: true,
+        email: account.email ?? null,
+        ...options.loginPayloadExtras?.(account),
+        preferSubscription: update.effective,
+      };
+      const signedIn = ACCOUNT_OUTCOME.signedInAs(
+        provider.displayName,
+        account.label,
+      );
+      emitCliResult(context, {
+        json: payload,
+        ndjson: { kind: ndjsonKind, ...payload },
+        text: update.effective
+          ? `${signedIn}\n${provider.displayName} subscription enabled for ${provider.modelFamily}.`
+          : `${signedIn}\n${provider.displayName} subscription preference could not be enabled because a more specific setting overrides the config.`,
+      });
+      return CliExitCode.Success;
+    });
   }
 
   const loginCommand = defineCliCommand({
@@ -129,35 +125,31 @@ export function defineSubscriptionAuthCommand(
       description: options.logoutDescription,
     },
     args: { ...GLOBAL_ARGS },
-    async run(context) {
-      const runtime = await installCliProcessRuntime(context.storageRoot);
-      return runtime.runPromise(
-        Effect.gen(function* () {
-          const services = yield* initCliPlatform({
-            ...context,
-            quietLogs: true,
-          });
-          const signOutResult = yield* withCliAuthError(
-            signOutCliSubscription(services, options.providerId),
-          );
-          if (!signOutResult.ok) return CliExitCode.ModelOrNetworkError;
-          const update = signOutResult.value;
-          const payload = {
-            authenticated: false,
-            preferSubscription: update.preferenceUpdate?.effective ?? null,
-            ...(update.preferenceError
-              ? { preferenceError: update.preferenceError }
-              : {}),
-          };
-          emitCliResult(context, {
-            json: payload,
-            ndjson: { kind: ndjsonKind, ...payload },
-            text: subscriptionSignOutOutcomeMessage(options.providerId, update),
-          });
-          return CliExitCode.Success;
-        }),
-      );
-    },
+    run: (context) =>
+      Effect.gen(function* () {
+        const services = yield* initCliPlatform({
+          ...context,
+          quietLogs: true,
+        });
+        const signOutResult = yield* withCliAuthError(
+          signOutCliSubscription(services, options.providerId),
+        );
+        if (!signOutResult.ok) return CliExitCode.ModelOrNetworkError;
+        const update = signOutResult.value;
+        const payload = {
+          authenticated: false,
+          preferSubscription: update.preferenceUpdate?.effective ?? null,
+          ...(update.preferenceError
+            ? { preferenceError: update.preferenceError }
+            : {}),
+        };
+        emitCliResult(context, {
+          json: payload,
+          ndjson: { kind: ndjsonKind, ...payload },
+          text: subscriptionSignOutOutcomeMessage(options.providerId, update),
+        });
+        return CliExitCode.Success;
+      }),
   });
 
   const statusCommand = defineCliCommand({
@@ -166,30 +158,26 @@ export function defineSubscriptionAuthCommand(
       description: options.statusDescription,
     },
     args: { ...GLOBAL_ARGS },
-    async run(context) {
-      const runtime = await installCliProcessRuntime(context.storageRoot);
-      return runtime.runPromise(
-        Effect.gen(function* () {
-          const services = yield* initCliPlatform({
-            ...context,
-            quietLogs: true,
-          });
-          const statusResult = yield* withCliAuthError(
-            provider.getStatus(services.secrets),
-          );
-          if (!statusResult.ok) return CliExitCode.ModelOrNetworkError;
-          const { label, ...status } = statusResult.value;
-          emitCliResult(context, {
-            json: status,
-            ndjson: { kind: `${ndjsonKind}-status`, ...status },
-            text: status.signedIn
-              ? ACCOUNT_OUTCOME.signedInAs(provider.displayName, label)
-              : `Not signed in with ${provider.displayName}.`,
-          });
-          return CliExitCode.Success;
-        }),
-      );
-    },
+    run: (context) =>
+      Effect.gen(function* () {
+        const services = yield* initCliPlatform({
+          ...context,
+          quietLogs: true,
+        });
+        const statusResult = yield* withCliAuthError(
+          provider.getStatus(services.secrets),
+        );
+        if (!statusResult.ok) return CliExitCode.ModelOrNetworkError;
+        const { label, ...status } = statusResult.value;
+        emitCliResult(context, {
+          json: status,
+          ndjson: { kind: `${ndjsonKind}-status`, ...status },
+          text: status.signedIn
+            ? ACCOUNT_OUTCOME.signedInAs(provider.displayName, label)
+            : `Not signed in with ${provider.displayName}.`,
+        });
+        return CliExitCode.Success;
+      }),
   });
 
   return defineCommand({

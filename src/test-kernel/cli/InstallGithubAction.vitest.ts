@@ -19,6 +19,20 @@ vi.mock('@cli/runtime/browser', () => ({
   tryOpenBrowser: browserMocks.tryOpenBrowser,
 }));
 
+// The command brings no platform up, but its entry still installs the process
+// runtime its program runs on. Here that is the harness's, so the suite never
+// builds a real one; `NO_PLATFORM_INSTALL` stays the real value the entry
+// hands that install.
+vi.mock('@cli/runtime/cliProcessRuntime', async (importOriginal) => {
+  const { testRuntime } = await import('@test/support/testProcessRuntime');
+  const actual =
+    await importOriginal<typeof import('@cli/runtime/cliProcessRuntime')>();
+  return {
+    ...actual,
+    installCliProcessRuntime: () => Promise.resolve(testRuntime()),
+  };
+});
+
 const repos: string[] = [];
 
 function git(cwd: string, ...args: readonly string[]): string {
