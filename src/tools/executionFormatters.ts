@@ -76,14 +76,14 @@ export function formatListingLine(run: RunView): string {
   const ts = formatTimestamp(new Date(run.launchedAt).toISOString());
   const modelTag = run.model === null ? '' : `  ${run.model}`;
   const parentSuffix = run.parentId === null ? '' : `  parent=${run.parentId}`;
-  const descSuffix = run.description === null ? '' : `: ${run.description}`;
+  const descSuffix = run.description ? `: ${run.description}` : '';
   return `${run.id}  ${ts}  ${run.label}  ${runDisplayCategory(run)}${modelTag}  [${formatRunStatus(run)}]${parentSuffix}${descSuffix}`;
 }
 
 /** Format a single child run as a summary line. */
 export function formatChildLine(child: RunView): string {
   const ts = formatTimestamp(new Date(child.launchedAt).toISOString());
-  const desc = child.description === null ? '' : `: ${child.description}`;
+  const desc = child.description ? `: ${child.description}` : '';
   return `${child.id}  ${ts}  ${child.label}  [${formatRunStatus(child)}]${desc}`;
 }
 
@@ -117,7 +117,7 @@ export function buildSummaryLines(run: RunView): string[] {
     `Status: ${formatRunStatus(run)}`,
   ];
 
-  if (run.description !== null) {
+  if (run.description) {
     lines.push(`Description: ${run.description}`);
   }
 
