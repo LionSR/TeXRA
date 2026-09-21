@@ -116,8 +116,7 @@ in `npm test`.
 `test-live/` is the wire evidence: one key-gated suite per HTTP protocol,
 eleven of the twelve, behind `vitest.live.config.mjs`. Each suite skips itself
 unless its own key is in the environment, so a run with one key exercises one
-protocol and skips the other ten, MiniMax's incremental streaming route
-included. It is deliberately not part of `npm test`: reach it by name
+protocol and skips the other ten. It is deliberately not part of `npm test`: reach it by name
 (`npm run test:live`) or through the labelled job in
 `.github/workflows/live-llm.yml`. `vscode-lm`, the twelfth protocol, has no
 suite there — it is acquired through the extension host's `vscode.lm` API, so

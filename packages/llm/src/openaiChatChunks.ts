@@ -164,7 +164,7 @@ export const MiniMaxUsageSchema = z.strictObject({
     .strictObject({ reasoning_tokens: z.int().nonnegative().optional() })
     .optional(),
 });
-export const MiniMaxReasoningDetailsSchema = z
+const MiniMaxReasoningDetailsSchema = z
   .array(
     z.strictObject({
       type: z.string().optional(),
