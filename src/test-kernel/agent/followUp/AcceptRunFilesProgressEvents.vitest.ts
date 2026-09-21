@@ -227,7 +227,7 @@ function runAccept(
 function recordWrittenFiles(): Effect.Effect<string[][]> {
   return Effect.gen(function* () {
     const written: string[][] = [];
-    yield* Effect.fork(
+    yield* Effect.forkChild(
       onAppSignal('workspaceFilesWritten', ({ absolutePaths }) => {
         written.push(absolutePaths);
       }),

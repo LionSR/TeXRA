@@ -76,7 +76,7 @@ describe('tool availability app signals', () => {
       const events: undefined[] = [];
       // The subscriber drains on its own fiber: the yield lets it register
       // before the probe publishes, and the wait lets the delivery land.
-      const fiber = yield* Effect.fork(
+      const fiber = yield* Effect.forkChild(
         onAppSignal('toolAvailabilityChanged', (payload) => {
           events.push(payload);
         }),
