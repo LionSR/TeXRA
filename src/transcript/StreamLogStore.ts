@@ -20,7 +20,9 @@
  * a fresh run's registration batch, every member of which is a no-op in
  * `applyEvent` or idempotent (`run.activate` re-sets the status the seed
  * already set). So no permit or sequence comparison decides where the two
- * meet.
+ * meet. The contract is one-process: a foreign process committing rows
+ * during a seed read's async window can duplicate or drop a display-cache
+ * row, which the durable rows, the one authority, are immune to.
  */
 import { Effect, type Context } from 'effect';
 
@@ -105,6 +107,11 @@ function foldEntries(events: readonly SessionEvent[]):
 export class StreamLogStore {
   private readonly runs = new Map<RunId, CachedRun>();
 
+  /** Eviction requests that landed while a run's seed read was still in
+   *  flight, so there was no entry to mark; `hydrate` honors them instead of
+   *  installing, and a fresh `retain` voids the stale request. */
+  private readonly pendingEvictions = new Set<RunId>();
+
   private constructor(
     readonly mode: StreamLogStoreMode,
     private readonly database: TranscriptDatabase,
@@ -147,12 +154,16 @@ export class StreamLogStore {
 
   /** Drop a run's cache once nothing retains it. An eviction that arrives
    *  while a lease still holds the run is deferred until the last lease
-   *  closes. An ephemeral transcript has no durable rows to re-read, so it
-   *  is never dropped. */
+   *  closes, and one that arrives during a seed read with no entry yet is
+   *  honored when that read resolves instead of installing. An ephemeral
+   *  transcript has no durable rows to re-read, so it is never dropped. */
   requestEviction(runId: RunId): void {
     if (this.mode.kind === 'ephemeral') return;
     const cached = this.runs.get(runId);
-    if (cached === undefined) return;
+    if (cached === undefined) {
+      this.pendingEvictions.add(runId);
+      return;
+    }
     if (cached.leases > 0) {
       cached.evictWhenIdle = true;
       return;
@@ -212,6 +223,9 @@ export class StreamLogStore {
       );
       const cached = this.runs.get(runId);
       if (cached === undefined) {
+        // An eviction requested while the read above was in flight wins over
+        // the seed: nothing is installed for a run the session just cleared.
+        if (this.pendingEvictions.delete(runId)) return;
         // A run nothing retains enters the cache only when it has rows: an
         // absent or removed run leaves nothing behind.
         if (seed !== undefined) {
@@ -233,6 +247,9 @@ export class StreamLogStore {
   }
 
   private retain(runId: RunId): TranscriptResidencyLease {
+    // A fresh residency supersedes an eviction requested before the run had
+    // an entry: the launch is using the run again.
+    this.pendingEvictions.delete(runId);
     let cached = this.runs.get(runId);
     if (cached === undefined) {
       const log = new StreamLog();

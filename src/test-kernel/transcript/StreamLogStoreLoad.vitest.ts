@@ -1,6 +1,6 @@
 /** Event-backed transcript reads fold the same entries the live recorder does. */
 import { it } from '@effect/vitest';
-import { Effect, Layer } from 'effect';
+import { Deferred, Effect, Fiber, Layer } from 'effect';
 import { describe, expect, vi } from 'vitest';
 
 import { databaseLayer } from '@controllers/session/Database';
@@ -9,6 +9,7 @@ import {
   aggregateId,
   isTranscriptEvent,
   type RunId,
+  type SessionEvent,
   type SessionEventDraft,
 } from '@shared/schemas';
 import { Database, DatabaseReadFailed } from '@shared/session/database';
@@ -195,5 +196,28 @@ describe('StreamLogStore event reads', () => {
         lease.close();
         expect(store.get(RUN)).toBeUndefined();
       }).pipe(Effect.provide(substrate)),
+  );
+
+  it.effect('honors an eviction requested during a cold seed read', () =>
+    Effect.gen(function* () {
+      const database = yield* Database;
+      yield* database.appendAll(history);
+      const store = StreamLogStore.open(database);
+      // The read announces that it started and then waits to be released, so
+      // the eviction below lands while the seed read is in flight.
+      const reached = yield* Deferred.make<void>();
+      const release = yield* Deferred.make<readonly SessionEvent[]>();
+      vi.spyOn(database, 'readAggregate').mockImplementationOnce(() =>
+        Deferred.succeed(reached, undefined).pipe(
+          Effect.andThen(Deferred.await(release)),
+        ),
+      );
+      const fiber = yield* Effect.forkChild(store.ensureLoaded(RUN));
+      yield* Deferred.await(reached);
+      store.requestEviction(RUN);
+      yield* Deferred.succeed(release, []);
+      yield* Fiber.join(fiber);
+      expect(store.get(RUN)).toBeUndefined();
+    }).pipe(Effect.provide(substrate)),
   );
 });
