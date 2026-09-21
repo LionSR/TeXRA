@@ -60,8 +60,11 @@ route, helper, tool-use and reflection call goes through `ModelInvoker`.
    `tsconfig.json`: `scripts/aliasUtils.mjs` expands every tsconfig alias to
    an absolute filesystem path, so an `exports` map is never consulted while
    the alias exists. Callers import `@texra-ai/llm/<subpath>` through the
-   workspace package instead, export the four cross-imported modules or
-   inline them, and add the missing root export the study named.
+   workspace package instead, and export the four cross-imported modules or
+   inline them. The root export the 2026-09-06 study named is not part of
+   this: `packages/llm/src` has no root module, no caller imports the bare
+   specifier, and a barrel written to carry one is the convenience barrel
+   CLAUDE.md forbids.
 5. Rewrite the README against the tree; move the two 09-06 docs to
    `implemented/`.
 

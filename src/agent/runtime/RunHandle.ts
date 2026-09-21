@@ -22,7 +22,7 @@ export interface RunStatusInfo {
   /**
    * Why the status reads the way it does, when the phase alone would mislead:
    * a run another process holds, or one interrupted with a checkpoint still
-   * on disk. Rendered after the status by `formatStatusInfo`.
+   * on disk.
    */
   detail?: string;
 }

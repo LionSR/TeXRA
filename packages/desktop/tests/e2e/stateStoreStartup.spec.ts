@@ -29,7 +29,8 @@ test('desktop main bundle completes its startup state write', async () => {
     try {
       const row = database
         .prepare(
-          "SELECT COUNT(*) AS written FROM event WHERE type = 'state.value.set.1'",
+          "SELECT COUNT(*) AS written FROM event WHERE type = 'state.value.set.1'" +
+            " AND json_extract(data, '$.state.key') = 'app-state'",
         )
         .get() as { written: number } | undefined;
       expect(Number(row?.written ?? 0)).toBeGreaterThan(0);
