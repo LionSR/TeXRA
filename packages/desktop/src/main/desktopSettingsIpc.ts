@@ -655,13 +655,13 @@ export function createDesktopSettingsIpc(
     },
 
     handleMessage(message: DesktopCommandMessage) {
+      if (!SettingsViewInboundMessageSchema.safeParse(message).success)
+        return false;
       // A successful parse conclusively identifies this as a settings
       // command, so claim it (true) even when the matched entry is
       // `unsupported(...)` — the dispatcher's `false` there means "no
       // function ran," not "not mine"; onError already surfaces the
       // unsupported reason as visible feedback (see `onError` above).
-      const parsed = SettingsViewInboundMessageSchema.safeParse(message);
-      if (!parsed.success) return false;
       dispatchSettingsViewInbound(message, settingsHandlers, onError);
       return true;
     },
