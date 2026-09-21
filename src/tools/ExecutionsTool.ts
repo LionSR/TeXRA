@@ -416,7 +416,9 @@ Delegated subagent and workflow results are delivered automatically as follow-up
    * The view is folded cold rather than read off the live projection, which
    * deliberately keeps only a bounded transcript for inactive runs: a
    * workflow's board would otherwise lose its terminal cards and its
-   * board-level opened state.
+   * board-level opened state. That board is why this is the one read on the
+   * surface that names its run's aggregate; every other path here takes the
+   * listing tier alone.
    */
   private readonly showSummary = Effect.fn('ExecutionsTool.showSummary')(
     function* (
@@ -558,7 +560,9 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     context: RunToolContext,
     runId: RunId,
   ) {
-    const run = (yield* context.session.readView([runId])).runs.get(runId);
+    // A task list is a listing fact (`run.fact` keyed `todos`), so this names
+    // no aggregate: reading a task list never folds a transcript.
+    const run = (yield* context.session.readView([])).runs.get(runId);
     const todos = run === undefined ? [] : runTodos(run);
 
     if (todos.length === 0) {
@@ -617,7 +621,9 @@ Delegated subagent and workflow results are delivered automatically as follow-up
 
   private readonly showChildren = Effect.fn('ExecutionsTool.showChildren')(
     function* (context: RunToolContext, runId: RunId) {
-      const view = yield* context.session.readView([runId]);
+      // Parentage and a child's line are listing facts, so this names no
+      // aggregate: no transcript is folded to list children.
+      const view = yield* context.session.readView([]);
       const children = childRunViews(view, runId);
       if (children.length === 0) {
         return executed(`No child runs found for ${runId}.`);
@@ -641,8 +647,10 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       }
 
       // Filter out fields irrelevant to this run's display category, which
-      // the fold decides from the stamped identity.
-      const run = context.session.runView(runId);
+      // the fold decides from the stamped identity. Read from the fold's
+      // listing tier rather than the live view, so a run no port holds is
+      // filtered by the same rule as one that is.
+      const run = (yield* context.session.readView([])).runs.get(runId);
       return executed(
         serializeFilteredConfig(
           record,
@@ -747,17 +755,23 @@ Delegated subagent and workflow results are delivered automatically as follow-up
         .pipe(Effect.mapError((cause) => new ExecutionsReadFailed({ cause })));
 
       const { lines, chars } = projectProcessOutput(entries);
+      // The row above was read before the transcript, and a command that
+      // finished during that read must not be judged against it: the view is
+      // in memory, so one read of one run can afford a fresh row. Only a
+      // tombstone takes a run out of the view, and then the row this call
+      // already holds is the last honest reading of it.
+      const current = context.session.runView(runId) ?? run;
       // The footer states the same reading as the header, and both come from
       // the fold: "no handle in this process" alone never justifies calling a
       // command finished, and a run whose owner is gone reads as interrupted
       // rather than as one that recorded how it ended.
-      const lead = isTerminalOutcomePhase(run.status)
+      const lead = isTerminalOutcomePhase(current.status)
         ? 'finished:'
-        : (run.statusDetail ??
+        : (current.statusDetail ??
           `still running: re-read for more output, or use action='wait' on /executions/${runId} to block until it finishes;`);
       const footer = `[${lead} this is the retained log; /executions/${runId}/report has the result summary]`;
       const out: string[] = [
-        `Output for ${runId} (process, ${formatRunStatus(run)}): ${chars.toLocaleString()} retained transcript chars; command-output cap ${BASH_BACKGROUND_LOG_CAP_CHARS.toLocaleString()} chars, ${lines.length.toLocaleString()} lines.`,
+        `Output for ${runId} (process, ${formatRunStatus(current)}): ${chars.toLocaleString()} retained transcript chars; command-output cap ${BASH_BACKGROUND_LOG_CAP_CHARS.toLocaleString()} chars, ${lines.length.toLocaleString()} lines.`,
       ];
 
       if (lines.length === 0) {
