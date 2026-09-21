@@ -9,7 +9,7 @@ Baseline: `main` at `3378a967`. Parent survey:
 [post-refactor architecture survey](./2026-09-20-post-refactor-architecture-survey.md).
 Follows the 2026-09-06 [package study](../../implemented/architecture/2026-09-06-llm-package-architecture-study.md)
 and [runtime contract](../../implemented/architecture/2026-09-06-llm-runtime-contract.md), both of which are
-substantially executed and should move to `implemented/` with this note.
+substantially executed and moved to `implemented/` with this note.
 
 ## 1. What is done
 
