@@ -211,6 +211,13 @@ export class RunRoster {
     }
   }
 
+  /** Whether any fiber holds or waits on `runId`'s lane, a generation of the
+   *  run or an inactive-run step alike: what a caller that means "only if
+   *  nothing holds it at all" adds to {@link isLive}. */
+  private isLaneOccupied(runId: RunId): boolean {
+    return (this.entries.get(runId)?.lane?.fibers ?? 0) > 0;
+  }
+
   /** A handle or a child activation this session still retains for `runId`. */
   private isRetained(runId: RunId): boolean {
     const entry = this.entries.get(runId);
@@ -308,10 +315,11 @@ export class RunRoster {
    * asks it beforehand.
    *
    * `refuseWhenLive` marks the caller an inactive-run step rather than a
-   * generation of the run: it widens the refusal to the retained owners, for
-   * a caller that means "only if nothing holds it at all", and it keeps the
-   * step out of {@link isLive}, so the run's next generation queues behind
-   * the step on the lane instead of being refused by it.
+   * generation of the run: it widens the refusal to the retained owners and
+   * to whoever else holds the lane, for a caller that means "only if nothing
+   * holds it at all", and it keeps the step itself out of {@link isLive}, so
+   * the run's next generation queues behind the step on the lane instead of
+   * being refused by it.
    *
    * A step is refusable from the moment it is admitted until it starts, and
    * {@link waiting} holds its refusal for exactly that window. The race is
@@ -332,7 +340,11 @@ export class RunRoster {
       // long as it holds the run.
       let counted = false;
       const refuseClaim = (): RunLive | undefined => {
-        if (this.isLive(runId) || (refuseWhenLive && this.isRetained(runId))) {
+        if (
+          this.isLive(runId) ||
+          (refuseWhenLive &&
+            (this.isRetained(runId) || this.isLaneOccupied(runId)))
+        ) {
           return new RunLive({ runId });
         }
         if (!refuseWhenLive) {
@@ -374,7 +386,7 @@ export class RunRoster {
 
   /**
    * Hold `runId` against local ownership for the caller's scope, refusing
-   * when a generation, a step, or a retained handle already owns it here —
+   * when a generation, a step on its lane, or a retained handle owns it here —
    * {@link launch}'s refusal, for a decision whose validity has to outlive
    * the step that took it. The hold is a generation like any other:
    * {@link isLive} reports it, so a resume refuses on it, a launch of the
@@ -386,7 +398,9 @@ export class RunRoster {
         // The test and the registration are one synchronous step, as the
         // conditional lane claim is: nothing can take the run in between.
         Effect.suspend(() =>
-          this.isLive(runId) || this.isRetained(runId)
+          this.isLive(runId) ||
+          this.isRetained(runId) ||
+          this.isLaneOccupied(runId)
             ? Effect.fail(new RunLive({ runId }))
             : Effect.sync(() => this.openGeneration(runId)),
         ),
