@@ -54,10 +54,10 @@ import {
   presentRun,
   resolveChildListTarget,
 } from './state/childControls';
+import { activeForm, closeActiveForm } from './state/formSlot';
 import {
   selectedRunId as selectedRunIdSignal,
   sessionViewFailure as sessionViewFailureSignal,
-  activeForm as activeFormSignal,
   closeInfoPane,
   closeForegroundReader,
   foregroundReader as foregroundReaderSignal,
@@ -171,7 +171,7 @@ export function App(props: AppProps): React.JSX.Element {
   // (their signals own that rule), so render derives from settled values.
   const activeRunId = useSignal(selectedRunIdSignal);
   const sessionViewFailure = useSignal(sessionViewFailureSignal);
-  const activeForm = useSignal(activeFormSignal);
+  const foregroundForm = useSignal(activeForm);
   const formProgress = useSignal(formProgressSignal);
   const goalAutoApproveAll = useSignal(goalAutoApproveAllSignal);
   const infoPane = useSignal(infoPaneSignal);
@@ -202,7 +202,7 @@ export function App(props: AppProps): React.JSX.Element {
   // `kind`), so nothing derives that fact a second time and the two can never
   // disagree.
   const foregroundKind = foregroundSurfaceKind({
-    activeFormOpen: activeForm !== undefined,
+    activeFormOpen: foregroundForm !== undefined,
     formBusy,
     infoPaneOpen: infoPane !== undefined,
     pendingApproval: activeApprovalVisible,
@@ -338,16 +338,15 @@ export function App(props: AppProps): React.JSX.Element {
   function renderForegroundSurface(availableRows: number): React.ReactNode {
     switch (foregroundKind) {
       case 'form':
-        return activeForm?.render(() => {
+        return foregroundForm?.render(() => {
           formProgressSignal.set(undefined);
-          // Only the occupant releases the one foreground slot, exactly as
-          // the host dialog's finalizer in `tuiUiHost` does. A form that was
-          // displaced from the slot can still run this from an in-flight
-          // operation, and clearing the slot from there would unmount
-          // whatever took its place — leaving a host dialog's fiber with no
-          // form to answer it and its lane permit held for the session.
-          if (activeFormSignal.get() === activeForm)
-            activeFormSignal.set(undefined);
+          // Through the slot owner, which hands the slot to whichever form
+          // queued behind this one. A form that already lost the slot can
+          // still run this from an in-flight operation, and the owner ignores
+          // that close rather than unmounting whatever took its place, which
+          // would leave a host dialog's fiber with no form to answer it and
+          // its lane permit held for the session.
+          closeActiveForm(foregroundForm);
         }, availableRows);
       case 'infoPane':
         return infoPane ? (
@@ -669,7 +668,7 @@ export function App(props: AppProps): React.JSX.Element {
               foregroundEscapeAction={foregroundEscapeAction({
                 activeFormEscapeAction: formBusy
                   ? 'cancel'
-                  : activeForm?.escapeAction,
+                  : foregroundForm?.escapeAction,
                 approvalKind,
                 foregroundKind,
               })}
