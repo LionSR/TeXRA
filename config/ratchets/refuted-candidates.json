@@ -36,7 +36,7 @@
         {
           "file": "src/tools/timeouts.ts",
           "symbol": "retryTransientFetch",
-          "signature": "export const retryTransientFetch = Effect.fn('timeouts.retryTransientFetch')( <T, E, R>( request: Effect.Effect<T, E, R>, options: RetryTransientFetchOptions, ) => withRequestTimeout(options.timeoutMs, request).pipe( Effect.tapError((error) => Effect.gen(function* () {…}), ), Effect.retry({ schedule: transientBackoff(options.minTimeout), times: options.retries, while: isTransientRequestError, }), ), );"
+          "signature": "export const retryTransientFetch = Effect.fn('timeouts.retryTransientFetch')( <T, E, R>( request: Effect.Effect<T, E, R>, options: RetryTransientFetchOptions, ) => withRequestTimeout(options.timeoutMs, request).pipe( Effect.tapError((error) => Effect.gen(function* () {…}), ), Effect.retry({ schedule: randomizedExponentialBackoff( Duration.millis(options.minTimeout), ), times: options.retries, while: isTransientRequestError, }), ), );"
         }
       ]
     },
@@ -75,7 +75,7 @@
         {
           "file": "packages/cli/src/runtime/cliProcessRuntime.ts",
           "symbol": "installCliProcessRuntime",
-          "signature": "export function installCliProcessRuntime( storageRoot?: string, options?: { readonly appState: 'omit' }, ): Promise<ProcessRuntime> {…}"
+          "signature": "export function installCliProcessRuntime( storageRoot?: string, options?: { readonly appState: StateStore }, ): Promise<ProcessRuntime> {…}"
         }
       ]
     },
