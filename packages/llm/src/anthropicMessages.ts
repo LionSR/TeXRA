@@ -669,16 +669,6 @@ export function anthropicMessagesModel(
                   responseId = event.message.id;
                   returnedModel = event.message.model;
                   usage = event.message.usage;
-                  if (
-                    Object.values(usage.server_tool_use ?? {}).some(
-                      (count) => count !== 0,
-                    )
-                  )
-                    return yield* new ModelError({
-                      kind: 'unsupported',
-                      message:
-                        'Anthropic hosted-tool accounting is not supported by this codec.',
-                    });
                   return [
                     {
                       kind: 'identified',
@@ -695,17 +685,10 @@ export function anthropicMessagesModel(
                       'Anthropic emitted content before message identity.',
                   });
                 if (event.type === 'message_delta') {
-                  if (
-                    open ||
-                    event.delta.container != null ||
-                    Object.values(event.usage.server_tool_use ?? {}).some(
-                      (count) => count !== 0,
-                    )
-                  )
+                  if (open || event.delta.container != null)
                     return yield* new ModelError({
                       kind: 'unsupported',
-                      message:
-                        'Anthropic returned unsettled content or unsupported hosted execution.',
+                      message: 'Anthropic returned unsettled content.',
                     });
                   stop = event.delta;
                   // These counters are cumulative; null/omission means no update, never zero or addition.
