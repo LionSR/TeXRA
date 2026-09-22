@@ -52,6 +52,22 @@ describe('bump-workspace-version script', () => {
     });
   });
 
+  it('rolls a patch train over .10 to an even minor from 1.0 on, keeping 0.x on minor + 1', async () => {
+    await withTempDir('texra-version-bump-', async (root) => {
+      await writeWorkspaceManifests(root, '1.2.0');
+
+      const stable = runVersionBump(['--from', 'v1.0.10', '--check'], root);
+      expect(stable.status).toBe(0);
+      expect(stable.stdout).toBe('1.2.0\n');
+
+      await writeWorkspaceManifests(root, '0.39.0');
+
+      const zero = runVersionBump(['--from', 'v0.38.10', '--check'], root);
+      expect(zero.status).toBe(0);
+      expect(zero.stdout).toBe('0.39.0\n');
+    });
+  });
+
   it('propagates a preview suffix to every manifest and rejects any other prerelease form', async () => {
     await withTempDir('texra-version-bump-', async (root) => {
       await writeWorkspaceManifests(root, '1.0.0-preview.1');
