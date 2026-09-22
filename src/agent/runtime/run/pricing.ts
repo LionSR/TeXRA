@@ -83,19 +83,19 @@ const XAI_DOCUMENTED_PRICING: DocumentedTierPricing = {
  */
 const OPENAI_DOCUMENTED_PRICING: DocumentedTierPricing = {
   'gpt-6-astra': {
-    thresholdTokens: 272_000,
+    thresholdTokens: 272_001,
     inputPrice: 20,
     outputPrice: 75,
     cacheDiscountFactor: 0.1,
   },
   'gpt-6-sol': {
-    thresholdTokens: 272_000,
+    thresholdTokens: 272_001,
     inputPrice: 4,
     outputPrice: 15,
     cacheDiscountFactor: 0.1,
   },
   'gpt-6-luna': {
-    thresholdTokens: 272_000,
+    thresholdTokens: 272_001,
     inputPrice: 0.2,
     outputPrice: 0.75,
     cacheDiscountFactor: 0.1,

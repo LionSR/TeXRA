@@ -128,16 +128,22 @@ describe('priceTurnUsage on a GPT-6 turn', () => {
     inputTokens,
     outputTokens: 1000,
     totalTokens: inputTokens + 1000,
-    cachedInputTokens: 0,
+    cachedInputTokens: 100_000,
     reasoningTokens: null,
     providerUsage: undefined,
   });
 
   it('bills the whole request at the long-context tier above 272K', () => {
-    const below = priceTurnUsage(boundSol, usageAt(272_000 - 1), 1, noopTrace);
-    const above = priceTurnUsage(boundSol, usageAt(300_000), 1, noopTrace);
+    const below = priceTurnUsage(boundSol, usageAt(272_000), 1, noopTrace);
+    const above = priceTurnUsage(boundSol, usageAt(272_001), 1, noopTrace);
 
-    expect(below?.cost).toBeCloseTo((271_999 * 2 + 1000 * 10) / 1e6, 12);
-    expect(above?.cost).toBeCloseTo((300_000 * 4 + 1000 * 15) / 1e6, 12);
+    expect(below?.cost).toBeCloseTo(
+      (172_000 * 2 + 100_000 * 0.2 + 1000 * 10) / 1e6,
+      12,
+    );
+    expect(above?.cost).toBeCloseTo(
+      (172_001 * 4 + 100_000 * 0.4 + 1000 * 15) / 1e6,
+      12,
+    );
   });
 });
