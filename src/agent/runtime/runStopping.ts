@@ -367,19 +367,19 @@ export class RunStopper {
       }
     }
     // The run's stop is its fiber's interruption, settled with the fiber
-    // itself. The fiber exists from the instant the run is admitted, so a
-    // launch has no pre-fiber window a stop could miss. A child loop's
-    // activation already carried the stop into its turns above, so it spends
-    // the fiber target before we reach it. The handle's interrupt remains
-    // the stop of a generation admitted before its fiber registered.
+    // itself. The fiber exists from the instant the run is admitted
+    // (`RunRoster.launch` forks inside the lane claim), so a launch has no
+    // pre-fiber window a stop could miss, and a handle whose fiber is not
+    // registered yet is one the roster's lane has not admitted — the
+    // activation arm above or the handle-less `kill` branch is its stop. A
+    // child loop's activation already carried the stop into its turns above,
+    // so it spends the fiber target before we reach it.
     let interrupted = activationInterrupted;
     if (!activationInterrupted) {
       const fiber = this.roster.fiber(handle.runId);
       if (fiber !== undefined) {
         fiber.interruptUnsafe();
         settlements.push(Fiber.await(fiber).pipe(Effect.asVoid));
-        interrupted = true;
-      } else if (handle.interrupt()) {
         interrupted = true;
       }
     }

@@ -1084,6 +1084,7 @@ describe('Sessions owner', () => {
         releaseChild = session.runs.reserveChildActivation({
           runId: RunIdSchema.parse('aa0002'),
           parent: { current: null },
+          retainsTerminalParent: true,
           interrupt,
         });
 

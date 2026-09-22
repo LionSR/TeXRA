@@ -1,5 +1,5 @@
 import { it } from '@effect/vitest';
-import { Cause, Deferred, Effect, Exit, Fiber } from 'effect';
+import { Cause, Effect, Exit, Fiber } from 'effect';
 
 import { beforeEach, describe, expect, vi } from 'vitest';
 
@@ -45,10 +45,7 @@ vi.mock('@agent/storage/runLifecycle', async (importActual) => ({
     }),
 }));
 
-vi.mock('@agent/runtime/AgentLaunchContext', async (importActual) => ({
-  failIfLaunchStopped: (
-    await importActual<typeof import('@agent/runtime/AgentLaunchContext')>()
-  ).failIfLaunchStopped,
+vi.mock('@agent/runtime/AgentLaunchContext', () => ({
   prepareAgentDefinition: (...args: unknown[]) =>
     Effect.sync(() => mocks.prepareAgentDefinition(...args)),
 }));
@@ -170,6 +167,26 @@ function launch({ kind = 'resume', ...options }: RunOptions = {}) {
   );
 }
 
+/** A real registry whose lane, liveness and stop the launch answers to. */
+function realRunRegistry(): RunRegistry {
+  return new RunRegistry({
+    runView: () => undefined,
+    commit: () => Effect.void,
+    approvals: createSessionApprovals(),
+    finalizeRun: ((input: { readonly outcome: string }) =>
+      Effect.succeed({ ok: true, outcome: input.outcome })) as never,
+    acquireRunClaim: () => Effect.succeed(Effect.void),
+  });
+}
+
+/** Launches on a real registry, the session's own runs replaced by it. */
+function launchOn(runs: RunRegistry) {
+  return launchRun(
+    { kind: 'resume', config: CONFIG, runId: RUN_ID },
+    { session: { ...(SESSION as object), runs } as never },
+  );
+}
+
 /** Runs the launch's own `onRun` lifecycle hook, as the mocked host would. */
 function runOnRun(options: {
   readonly onRun?: () => Effect.Effect<void>;
@@ -196,32 +213,6 @@ describe('runAgent run ownership', () => {
   });
 
   it.effect(
-    'cleans up a partially tracked launch when run tracking throws',
-    () =>
-      Effect.gen(function* () {
-        const trackError = new Error('run tracking failed');
-        let partiallyTrackedHandle: RunHandle | undefined;
-        trackRun.mockImplementationOnce((handle) => {
-          trackedHandle = handle;
-          partiallyTrackedHandle = handle;
-          throw trackError;
-        });
-
-        const exit = yield* Effect.exit(launch({ kind: 'fresh' }));
-        expect(Exit.isFailure(exit)).toBe(true);
-        expect(Exit.isFailure(exit) && Cause.squash(exit.cause)).toBe(
-          trackError,
-        );
-
-        expect(untrackRun).toHaveBeenCalledOnce();
-        expect(untrackRun).toHaveBeenCalledWith(RUN_ID);
-        expect(trackedHandle).toBeUndefined();
-        expect(partiallyTrackedHandle).toBeDefined();
-        expect(partiallyTrackedHandle?.interrupt()).toBe(false);
-      }),
-  );
-
-  it.effect(
     'refuses a resume of a run this session already runs before any snapshot',
     () =>
       Effect.gen(function* () {
@@ -240,9 +231,13 @@ describe('runAgent run ownership', () => {
   );
 
   it.effect.each(['fresh', 'resume'] as const)(
-    'refuses a %s launch while the first has only tracked its launch handle',
+    'refuses a %s launch while the first is still in its lineage reads',
     (kind) =>
       Effect.gen(function* () {
+        // A real registry: the first launch's admission is its fiber on the
+        // roster, so the duplicate is refused against it wherever the first
+        // launch has got to — here, mid-lineage-read.
+        const runs = realRunRegistry();
         let finishRead!: (value: null) => void;
         mocks.readRunEnd.mockImplementationOnce(
           () =>
@@ -250,40 +245,46 @@ describe('runAgent run ownership', () => {
               finishRead = resolve;
             }),
         );
-        const first = yield* Effect.forkChild(launch(), {
+        const first = yield* Effect.forkChild(launchOn(runs), {
           startImmediately: true,
         });
-        expect(yield* Effect.flip(launch({ kind }))).toMatchObject({
-          message: `Run is already running: ${RUN_ID}`,
-        });
-        const firstHandler = trackedHandle;
-        expect(firstHandler?.interrupt()).toBe(true);
-        finishRead(null);
-        expect(yield* Effect.flip(Fiber.join(first))).toMatchObject({
-          name: 'AbortError',
-        });
-      }),
-  );
-
-  it.effect(
-    'refuses a resume of a missing run and untracks its launch handle',
-    () =>
-      Effect.gen(function* () {
-        mocks.runExists.mockReturnValueOnce(false);
         expect(
           yield* Effect.flip(
             launchRun(
-              { kind: 'resume', config: CONFIG, runId: RUN_ID },
-              { session: SESSION },
+              { kind, config: CONFIG, runId: RUN_ID },
+              { session: { ...(SESSION as object), runs } as never },
             ),
           ),
         ).toMatchObject({
-          message: `Run not found: ${RUN_ID}`,
+          message: `Run is already running: ${RUN_ID}`,
         });
-        expect(trackRun).toHaveBeenCalledOnce();
-        expect(untrackRun).toHaveBeenCalledWith(RUN_ID);
-        expect(trackedHandle).toBeUndefined();
+        // The first launch's stop is its fiber's interruption.
+        expect(runs.interrupt(RUN_ID)).toBe(true);
+        finishRead(null);
+        const exit = yield* Fiber.await(first);
+        expect(Exit.isFailure(exit) && Cause.hasInterrupts(exit.cause)).toBe(
+          true,
+        );
       }),
+  );
+
+  it.effect('refuses a resume of a missing run', () =>
+    Effect.gen(function* () {
+      mocks.runExists.mockReturnValueOnce(false);
+      expect(
+        yield* Effect.flip(
+          launchRun(
+            { kind: 'resume', config: CONFIG, runId: RUN_ID },
+            { session: SESSION },
+          ),
+        ),
+      ).toMatchObject({
+        message: `Run not found: ${RUN_ID}`,
+      });
+      // The launch owns no handle: tracking is the lifecycle's, which the
+      // refusal never reaches.
+      expect(trackRun).not.toHaveBeenCalled();
+    }),
   );
 
   it.effect(
@@ -291,28 +292,20 @@ describe('runAgent run ownership', () => {
     () =>
       Effect.gen(function* () {
         persistedRuns.set(RUN_ID, { parentId: PARENT_RUN_ID });
-        // What the registry does to a child of a parent whose stop has begun
-        // (`assertAdmitsChild`): a resume is refused where any other child
-        // launch is, instead of installing its parent after that stop ended.
-        const refusal = new Error(
-          `Cannot launch child run ${RUN_ID} under run ${PARENT_RUN_ID} while that run is stopping.`,
+
+        yield* launch();
+
+        // The persisted edge — never a caller's word — is what the run's
+        // lifecycle launches under, so the registry's child admission (and a
+        // parent's stop) reaches the child through it.
+        expect(mocks.executeAgent).toHaveBeenCalledWith(
+          expect.anything(),
+          RUN_ID,
+          expect.objectContaining({
+            parentRunId: PARENT_RUN_ID,
+            resumed: true,
+          }),
         );
-        let admittedParent: RunId | null | undefined;
-        trackRun.mockImplementation((handle) => {
-          if (handle.parent === PARENT_RUN_ID) {
-            admittedParent = handle.parent;
-            throw refusal;
-          }
-          trackedHandle = handle;
-        });
-
-        const exit = yield* Effect.exit(launch());
-
-        expect(Exit.isFailure(exit) && Cause.squash(exit.cause)).toBe(refusal);
-        // The edge is on the handle before launch preparation begins, so the
-        // parent's stop reaches this child instead of missing it.
-        expect(admittedParent).toBe(PARENT_RUN_ID);
-        expect(mocks.executeAgent).not.toHaveBeenCalled();
       }),
   );
 
@@ -321,28 +314,34 @@ describe('runAgent run ownership', () => {
     () =>
       Effect.gen(function* () {
         persistedRuns.set(RUN_ID, { parentId: PARENT_RUN_ID });
-        // The foreign `run.detach` folds before this launch owns the run; a
-        // foreign row never reaches the handle this session tracked.
+        // The foreign `run.detach` folds before this launch owns the run.
         mocks.acquireClaims.mockImplementationOnce(() =>
           Effect.sync(() => {
             persistedRuns.delete(RUN_ID);
             return Effect.void;
           }),
         );
-        let launched: RunHandle | undefined;
-        trackRun.mockImplementation((handle) => {
-          trackedHandle = handle;
-          launched = handle;
-        });
 
         yield* launch();
 
-        expect(launched?.parent).toBeNull();
+        // The severed edge crossed the launch: the registry applied it to
+        // every local record it names, and the run's lifecycle launches
+        // parentless.
+        expect(SESSION.runs.detachChildren).toHaveBeenCalledWith(
+          PARENT_RUN_ID,
+          [RUN_ID],
+        );
+        expect(mocks.executeAgent).toHaveBeenCalledWith(
+          expect.anything(),
+          RUN_ID,
+          expect.not.objectContaining({ parentRunId: expect.anything() }),
+        );
       }),
   );
 
   it.effect('stops a resumed launch killed during its lineage read', () =>
     Effect.gen(function* () {
+      const runs = realRunRegistry();
       let finishRead!: (value: null) => void;
       mocks.readRunEnd.mockImplementationOnce(
         () =>
@@ -351,14 +350,17 @@ describe('runAgent run ownership', () => {
           }),
       );
 
-      const fiber = yield* Effect.forkChild(launch(), {
+      const fiber = yield* Effect.forkChild(launchOn(runs), {
         startImmediately: true,
       });
-      expect(trackedHandle?.interrupt()).toBe(true);
+      // The launch's fiber exists from its first instant — the lineage reads
+      // run inside the forked operation — so a stop by run id reaches it.
+      expect(runs.interrupt(RUN_ID)).toBe(true);
       finishRead(null);
-      expect(yield* Effect.flip(Fiber.join(fiber))).toMatchObject({
-        name: 'AbortError',
-      });
+      const exit = yield* Fiber.await(fiber);
+      expect(Exit.isFailure(exit) && Cause.hasInterrupts(exit.cause)).toBe(
+        true,
+      );
       expect(mocks.executeAgent).not.toHaveBeenCalled();
     }),
   );
@@ -367,6 +369,7 @@ describe('runAgent run ownership', () => {
     'makes a fresh launch interruptible before registration settles',
     () =>
       Effect.gen(function* () {
+        const runs = realRunRegistry();
         let finishRegistration!: () => void;
         mocks.registerRun.mockImplementationOnce(
           () =>
@@ -375,15 +378,21 @@ describe('runAgent run ownership', () => {
             }),
         );
 
-        const fiber = yield* Effect.forkChild(launch({ kind: 'fresh' }), {
-          startImmediately: true,
-        });
-        expect(trackedHandle?.interrupt()).toBe(true);
+        const fiber = yield* Effect.forkChild(
+          launchRun(
+            { kind: 'fresh', config: CONFIG, runId: RUN_ID },
+            { session: { ...(SESSION as object), runs } as never },
+          ),
+          { startImmediately: true },
+        );
+        expect(runs.interrupt(RUN_ID)).toBe(true);
         finishRegistration();
-        yield* Fiber.join(fiber);
+        const exit = yield* Fiber.await(fiber);
 
-        const executeOptions = mocks.executeAgent.mock.calls[0]?.[2];
-        expect(Deferred.isDoneUnsafe(executeOptions?.launchStopped)).toBe(true);
+        expect(Exit.isFailure(exit) && Cause.hasInterrupts(exit.cause)).toBe(
+          true,
+        );
+        expect(mocks.executeAgent).not.toHaveBeenCalled();
       }),
   );
 

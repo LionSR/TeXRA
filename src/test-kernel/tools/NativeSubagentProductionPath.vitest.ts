@@ -44,7 +44,6 @@ import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
 import { noopTrace } from '@agent/trace';
-import { RunHandle } from '@agent/runtime/RunHandle';
 import type { BoundModel } from '@agent/runtime/run/modelBinding';
 import type { Message } from '@agent/runtime/loop/rows';
 import { executeAgent } from '@agent/runtime/executeAgent';
@@ -385,8 +384,7 @@ function childRunId(resultOutput: string | undefined): RunId {
 
 function interruptActiveRuns(session: SessionHandle): void {
   for (const runId of session.runs.getActiveIds()) {
-    const handle = session.runs.getHandle(runId);
-    if (handle instanceof RunHandle) handle.interrupt();
+    session.runs.interrupt(runId);
   }
 }
 

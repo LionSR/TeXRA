@@ -172,7 +172,6 @@ function resumeToolUseFromResumeData(
 
 /** Minimal launch context for a resumed tool-use run that reaches the flow. */
 function buildResumeContext(runId: RunId): AgentLaunchContext {
-  const abortController = new AbortController();
   return {
     setting: { agentCategory: AgentCategory.ToolUse },
     runId,
@@ -181,7 +180,6 @@ function buildResumeContext(runId: RunId): AgentLaunchContext {
     userVarChannels: { MODEL: 'test-model' },
     attachedMemoryMisses: [],
     usageMonitor: { recordUsage: vi.fn() },
-    interrupt: () => abortController.abort(),
   } as unknown as AgentLaunchContext;
 }
 

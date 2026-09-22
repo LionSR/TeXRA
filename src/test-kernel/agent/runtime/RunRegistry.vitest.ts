@@ -30,7 +30,10 @@ import {
 import type { RunView } from '@shared/session/sessionView';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
-import { testRunHandle } from '@test/support/runHandleFixtures';
+import {
+  admitInterruptibleRun,
+  testRunHandle,
+} from '@test/support/runHandleFixtures';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { generateRunId } from '@utils/core';
 import { ensureError } from '@utils/errors/errorMessage';
@@ -191,7 +194,9 @@ function recordSessionEvents(events: PublishedEvents): {
   };
 }
 
-/** Tracks a handle with a live interrupt handler attached. */
+/** Tracks a handle whose run a stop reaches the way production stops a run:
+ * a live generation fiber on the roster, interrupted by run id. The
+ * interrupt has observably landed once the stop's settlement resolves. */
 function trackInterruptibleHandle(
   registry: RunRegistry,
   ids: {
@@ -202,8 +207,8 @@ function trackInterruptibleHandle(
   overrides?: HandleOverrides,
 ): RunHandle {
   const handle = createHandle(ids.runId, ids.parent ?? null, overrides);
-  handle.attachInterruptHandler({ interrupt });
   registry.track(handle);
+  admitInterruptibleRun(registry, ids.runId, interrupt);
   return handle;
 }
 
@@ -251,6 +256,7 @@ describe('runRegistry', () => {
         registry.reserveChildActivation({
           runId,
           parent: { current: parentRunId },
+          retainsTerminalParent: true,
           interrupt: vi.fn(),
         });
 
@@ -341,45 +347,38 @@ describe('runRegistry', () => {
   it('drains a background-bash RunHandle on shutdown without disturbing a resumable agent run (issue #8155)', () => {
     // A background `bash` run is registered as an RunHandle (see
     // createChildRun in tools/bash.ts) with its OS-process kill reachable
-    // only via the interrupt handler a background-process child attaches. The two
-    // RunHandles below are tracked concurrently, mirroring the real
-    // interleaving at shutdown: a background bash child run alongside an
-    // ordinary resumable agent run (e.g. a native subagent loop, whose
-    // own loop-level interrupt handler must stay untouched so restart recovery
-    // can resume it). Drain must reach only the former.
+    // only via the `backgroundProcess` slot a background-process child's
+    // loop sets. The two RunHandles below are tracked concurrently,
+    // mirroring the real interleaving at shutdown: a background bash child
+    // run alongside an ordinary resumable agent run (e.g. a native subagent
+    // loop, whose own run must stay untouched so restart recovery can resume
+    // it). Drain must reach only the former.
     const { phases, registry } = createRegistry();
     const bashParentRunId = generateRunId();
     const bashRunId = generateRunId();
     const agentParentRunId = generateRunId();
     const agentRunId = generateRunId();
-    const bashInterrupt = vi.fn();
-    const agentInterrupt = vi.fn();
+    const bashKill = vi.fn();
 
     try {
-      // Background bash: an RunHandle whose attached interrupt
-      // handler owns a live OS process (mirrors background bash's child run).
+      // Background bash: an RunHandle whose strategy declared a live OS
+      // process (mirrors background bash's child run).
       const bashHandle = createHandle(bashRunId, bashParentRunId, {
         agentName: 'bash',
       });
-      bashHandle.attachInterruptHandler({
-        interrupt: bashInterrupt,
-        ownsBackgroundProcess: true,
-      });
+      bashHandle.backgroundProcess = { kill: bashKill };
       registry.track(bashHandle);
       phases.set(bashRunId, RUN_PHASE.RUNNING);
 
-      // Ordinary agent run (e.g. a native-subagent loop's own
-      // loop-level interrupt handler): no ownsBackgroundProcess flag, so
-      // shutdown drain must leave it alone for restart recovery.
+      // Ordinary agent run: no background-process slot, so shutdown drain
+      // must leave it alone for restart recovery.
       const agentHandle = createHandle(agentRunId, agentParentRunId);
-      agentHandle.attachInterruptHandler({ interrupt: agentInterrupt });
       registry.track(agentHandle);
       phases.set(agentRunId, RUN_PHASE.RUNNING);
 
       registry.killBackgroundProcesses();
 
-      expect(bashInterrupt).toHaveBeenCalledOnce();
-      expect(agentInterrupt).not.toHaveBeenCalled();
+      expect(bashKill).toHaveBeenCalledOnce();
       // Neither handle is untracked: killing a background OS process
       // bypasses the generic terminate()/kill() path, so restart recovery
       // still finds both handles exactly as it would have before shutdown.
@@ -390,26 +389,30 @@ describe('runRegistry', () => {
     }
   });
 
-  it('uses the handle interrupt target when terminating agent handles', () => {
-    const { phases, registry } = createRegistry();
-    const parentRunId = generateRunId();
-    const runId = generateRunId();
-    const interrupt = vi.fn();
+  it.effect('interrupts the run fiber when terminating agent handles', () =>
+    Effect.gen(function* () {
+      const { registry } = createRegistry();
+      const parentRunId = generateRunId();
+      const runId = generateRunId();
+      const interrupt = vi.fn();
 
-    try {
-      trackInterruptibleHandle(
-        registry,
-        { runId, parent: parentRunId },
-        interrupt,
-      );
+      try {
+        trackInterruptibleHandle(
+          registry,
+          { runId, parent: parentRunId },
+          interrupt,
+        );
 
-      expect(killRegistry(registry, runId)).toBe(true);
+        const stop = registry.kill(runId);
+        expect(stop.accepted()).toBe(true);
+        yield* stop.settlement;
 
-      expect(interrupt).toHaveBeenCalledOnce();
-    } finally {
-      registry.dispose();
-    }
-  });
+        expect(interrupt).toHaveBeenCalledOnce();
+      } finally {
+        registry.dispose();
+      }
+    }),
+  );
 
   it('reports a failed kill for a tracked handle with neither an interrupt nor a suspension', () => {
     // Guards the fallback above: a handle that never parked must still no-op,
@@ -454,155 +457,179 @@ describe('runRegistry', () => {
     }
   });
 
-  it('owns visible run stop policy for root and children', () => {
-    const { events, phases, registry } = createRegistry();
-    const recorded = recordSessionEvents(events);
-    const rootRunId = generateRunId();
-    const childRunId = generateRunId();
-    const rootInterrupt = vi.fn();
-    const childInterrupt = vi.fn();
-    const queuedChildInterrupt = vi.fn();
+  it.effect('owns visible run stop policy for root and children', () =>
+    Effect.gen(function* () {
+      const { registry } = createRegistry();
+      const rootRunId = generateRunId();
+      const childRunId = generateRunId();
+      const rootInterrupt = vi.fn();
+      const childInterrupt = vi.fn();
+      const queuedChildInterrupt = vi.fn();
 
-    try {
-      registry.reserveChildActivation({
-        runId: generateRunId(),
-        parent: { current: rootRunId },
-        interrupt: queuedChildInterrupt,
-      });
-      trackInterruptibleHandle(registry, { runId: rootRunId }, rootInterrupt, {
-        agentName: 'test-root',
-      });
-      trackInterruptibleHandle(
-        registry,
-        { runId: childRunId, parent: rootRunId },
-        childInterrupt,
-      );
+      try {
+        registry.reserveChildActivation({
+          runId: generateRunId(),
+          parent: { current: rootRunId },
+          retainsTerminalParent: true,
+          interrupt: queuedChildInterrupt,
+        });
+        trackInterruptibleHandle(
+          registry,
+          { runId: rootRunId },
+          rootInterrupt,
+          {
+            agentName: 'test-root',
+          },
+        );
+        trackInterruptibleHandle(
+          registry,
+          { runId: childRunId, parent: rootRunId },
+          childInterrupt,
+        );
 
-      stopRegistry(registry, rootRunId);
+        yield* registry.stopAgentRun(rootRunId);
 
-      expect(rootInterrupt).toHaveBeenCalledOnce();
-      expect(childInterrupt).toHaveBeenCalledOnce();
-      expect(queuedChildInterrupt).toHaveBeenCalledOnce();
-    } finally {
-      registry.dispose();
-    }
-  });
+        expect(rootInterrupt).toHaveBeenCalledOnce();
+        expect(childInterrupt).toHaveBeenCalledOnce();
+        expect(queuedChildInterrupt).toHaveBeenCalledOnce();
+      } finally {
+        registry.dispose();
+      }
+    }),
+  );
 
-  it('interrupts grandchildren when killing a subagent chain', () => {
-    const { phases, registry } = createRegistry();
-    const rootRunId = generateRunId();
-    const childRunId = generateRunId();
-    const grandchildRunId = generateRunId();
-    const childInterrupt = vi.fn();
-    const grandchildInterrupt = vi.fn();
+  it.effect('interrupts grandchildren when killing a subagent chain', () =>
+    Effect.gen(function* () {
+      const { registry } = createRegistry();
+      const rootRunId = generateRunId();
+      const childRunId = generateRunId();
+      const grandchildRunId = generateRunId();
+      const childInterrupt = vi.fn();
+      const grandchildInterrupt = vi.fn();
 
-    try {
-      trackInterruptibleHandle(
-        registry,
-        { runId: childRunId, parent: rootRunId },
-        childInterrupt,
-      );
-      trackInterruptibleHandle(
-        registry,
-        { runId: grandchildRunId, parent: childRunId },
-        grandchildInterrupt,
-        { agentName: 'test-grandchild' },
-      );
+      try {
+        trackInterruptibleHandle(
+          registry,
+          { runId: childRunId, parent: rootRunId },
+          childInterrupt,
+        );
+        trackInterruptibleHandle(
+          registry,
+          { runId: grandchildRunId, parent: childRunId },
+          grandchildInterrupt,
+          { agentName: 'test-grandchild' },
+        );
 
-      expect(killRegistry(registry, childRunId)).toBe(true);
+        const stop = registry.kill(childRunId);
+        expect(stop.accepted()).toBe(true);
+        yield* stop.settlement;
 
-      expect(childInterrupt).toHaveBeenCalledOnce();
-      expect(grandchildInterrupt).toHaveBeenCalledOnce();
-    } finally {
-      registry.dispose();
-    }
-  });
+        expect(childInterrupt).toHaveBeenCalledOnce();
+        expect(grandchildInterrupt).toHaveBeenCalledOnce();
+      } finally {
+        registry.dispose();
+      }
+    }),
+  );
 
-  it('detaches descendants when killing with detached subagents', () => {
-    const { events, phases, registry } = createRegistry();
-    const recorded = recordSessionEvents(events);
-    const rootRunId = generateRunId();
-    const childRunId = generateRunId();
-    const grandchildRunId = generateRunId();
-    const childInterrupt = vi.fn();
-    const grandchildInterrupt = vi.fn();
+  it.effect('detaches descendants when killing with detached subagents', () =>
+    Effect.gen(function* () {
+      const { events, registry } = createRegistry();
+      const recorded = recordSessionEvents(events);
+      const rootRunId = generateRunId();
+      const childRunId = generateRunId();
+      const grandchildRunId = generateRunId();
+      const childInterrupt = vi.fn();
+      const grandchildInterrupt = vi.fn();
 
-    try {
-      trackInterruptibleHandle(
-        registry,
-        { runId: childRunId, parent: rootRunId },
-        childInterrupt,
-      );
-      trackInterruptibleHandle(
-        registry,
-        { runId: grandchildRunId, parent: childRunId },
-        grandchildInterrupt,
-        { agentName: 'test-grandchild' },
-      );
+      try {
+        trackInterruptibleHandle(
+          registry,
+          { runId: childRunId, parent: rootRunId },
+          childInterrupt,
+        );
+        trackInterruptibleHandle(
+          registry,
+          { runId: grandchildRunId, parent: childRunId },
+          grandchildInterrupt,
+          { agentName: 'test-grandchild' },
+        );
 
-      expect(
-        killRegistry(registry, childRunId, {
+        const stop = registry.kill(childRunId, {
           detachActiveChildren: true,
-        }),
-      ).toBe(true);
+        });
+        // A detaching stop admits the interrupt only once its detach batch
+        // has committed, so the acceptance reads after the settlement.
+        yield* stop.settlement;
+        expect(stop.accepted()).toBe(true);
 
-      expect(childInterrupt).toHaveBeenCalledOnce();
-      expect(grandchildInterrupt).not.toHaveBeenCalled();
-      expect(registry.getHandle(grandchildRunId)?.parent).toBeNull();
-      expect(eventsOfType(recorded.events, 'run.detach')).toContainEqual({
-        type: 'run.detach',
-        aggregateId: qualifyAggregateId('run', grandchildRunId),
-      });
-    } finally {
-      registry.dispose();
-    }
-  });
+        expect(childInterrupt).toHaveBeenCalledOnce();
+        expect(grandchildInterrupt).not.toHaveBeenCalled();
+        expect(registry.getHandle(grandchildRunId)?.parent).toBeNull();
+        expect(eventsOfType(recorded.events, 'run.detach')).toContainEqual({
+          type: 'run.detach',
+          aggregateId: qualifyAggregateId('run', grandchildRunId),
+        });
+      } finally {
+        registry.dispose();
+      }
+    }),
+  );
 
-  it('detaches children when stopping a run with detached subagents', () => {
-    const { events, phases, registry } = createRegistry();
-    const recorded = recordSessionEvents(events);
-    const rootRunId = generateRunId();
-    const childRunId = generateRunId();
-    const grandchildRunId = generateRunId();
-    const rootInterrupt = vi.fn();
-    const childInterrupt = vi.fn();
-    const grandchildInterrupt = vi.fn();
+  it.effect(
+    'detaches children when stopping a run with detached subagents',
+    () =>
+      Effect.gen(function* () {
+        const { events, registry } = createRegistry();
+        const recorded = recordSessionEvents(events);
+        const rootRunId = generateRunId();
+        const childRunId = generateRunId();
+        const grandchildRunId = generateRunId();
+        const rootInterrupt = vi.fn();
+        const childInterrupt = vi.fn();
+        const grandchildInterrupt = vi.fn();
 
-    try {
-      trackInterruptibleHandle(registry, { runId: rootRunId }, rootInterrupt, {
-        agentName: 'test-root',
-      });
-      trackInterruptibleHandle(
-        registry,
-        { runId: childRunId, parent: rootRunId },
-        childInterrupt,
-      );
-      trackInterruptibleHandle(
-        registry,
-        { runId: grandchildRunId, parent: childRunId },
-        grandchildInterrupt,
-        { agentName: 'test-grandchild' },
-      );
+        try {
+          trackInterruptibleHandle(
+            registry,
+            { runId: rootRunId },
+            rootInterrupt,
+            {
+              agentName: 'test-root',
+            },
+          );
+          trackInterruptibleHandle(
+            registry,
+            { runId: childRunId, parent: rootRunId },
+            childInterrupt,
+          );
+          trackInterruptibleHandle(
+            registry,
+            { runId: grandchildRunId, parent: childRunId },
+            grandchildInterrupt,
+            { agentName: 'test-grandchild' },
+          );
 
-      stopRegistry(registry, rootRunId, {
-        detachActiveChildren: true,
-      });
+          yield* registry.stopAgentRun(rootRunId, {
+            detachActiveChildren: true,
+          });
 
-      expect(rootInterrupt).toHaveBeenCalledOnce();
-      expect(childInterrupt).not.toHaveBeenCalled();
-      expect(grandchildInterrupt).not.toHaveBeenCalled();
-      expect(registry.hasActiveChildren(rootRunId)).toBe(false);
-      expect(registry.getHandle(childRunId)?.parent).toBeNull();
-      expect(registry.getHandle(grandchildRunId)?.parent).toBe(childRunId);
-      expect(registry.hasActiveChildren(childRunId)).toBe(true);
-      expect(eventsOfType(recorded.events, 'run.detach')).toContainEqual({
-        type: 'run.detach',
-        aggregateId: qualifyAggregateId('run', childRunId),
-      });
-    } finally {
-      registry.dispose();
-    }
-  });
+          expect(rootInterrupt).toHaveBeenCalledOnce();
+          expect(childInterrupt).not.toHaveBeenCalled();
+          expect(grandchildInterrupt).not.toHaveBeenCalled();
+          expect(registry.hasActiveChildren(rootRunId)).toBe(false);
+          expect(registry.getHandle(childRunId)?.parent).toBeNull();
+          expect(registry.getHandle(grandchildRunId)?.parent).toBe(childRunId);
+          expect(registry.hasActiveChildren(childRunId)).toBe(true);
+          expect(eventsOfType(recorded.events, 'run.detach')).toContainEqual({
+            type: 'run.detach',
+            aggregateId: qualifyAggregateId('run', childRunId),
+          });
+        } finally {
+          registry.dispose();
+        }
+      }),
+  );
 
   it.effect('fails the stop when the detach batch is refused', () =>
     Effect.gen(function* () {
@@ -713,6 +740,7 @@ describe('runRegistry', () => {
         ).toThrow(/while that run is stopping/);
         expect(() =>
           registry.reserveChildActivation({
+            retainsTerminalParent: true,
             runId: lateChildRunId,
             parent: { current: rootRunId },
             interrupt: vi.fn(),
@@ -783,6 +811,7 @@ describe('runRegistry', () => {
           ).toThrow(/stop has already folded/);
           expect(() =>
             registry.reserveChildActivation({
+              retainsTerminalParent: true,
               runId: postFoldChildRunId,
               parent: { current: rootRunId },
               interrupt: vi.fn(),
@@ -795,55 +824,59 @@ describe('runRegistry', () => {
       }),
   );
 
-  it('stops one child while preserving its owner, sibling, and agent descendants', () => {
-    const { phases, registry } = createRegistry();
-    const rootRunId = generateRunId();
-    const childRunId = generateRunId();
-    const siblingRunId = generateRunId();
-    const descendantRunId = generateRunId();
-    const rootInterrupt = vi.fn();
-    const childInterrupt = vi.fn();
-    const siblingInterrupt = vi.fn();
-    const descendantInterrupt = vi.fn();
+  it.effect(
+    'stops one child while preserving its owner, sibling, and agent descendants',
+    () =>
+      Effect.gen(function* () {
+        const { registry } = createRegistry();
+        const rootRunId = generateRunId();
+        const childRunId = generateRunId();
+        const siblingRunId = generateRunId();
+        const descendantRunId = generateRunId();
+        const rootInterrupt = vi.fn();
+        const childInterrupt = vi.fn();
+        const siblingInterrupt = vi.fn();
+        const descendantInterrupt = vi.fn();
 
-    try {
-      const rootHandle = trackInterruptibleHandle(
-        registry,
-        { runId: rootRunId },
-        rootInterrupt,
-        { agentName: 'test-root' },
-      );
-      trackInterruptibleHandle(
-        registry,
-        { runId: childRunId, parent: rootRunId },
-        childInterrupt,
-      );
-      const siblingHandle = trackInterruptibleHandle(
-        registry,
-        { runId: siblingRunId, parent: rootRunId },
-        siblingInterrupt,
-      );
-      trackInterruptibleHandle(
-        registry,
-        { runId: descendantRunId, parent: childRunId },
-        descendantInterrupt,
-      );
+        try {
+          const rootHandle = trackInterruptibleHandle(
+            registry,
+            { runId: rootRunId },
+            rootInterrupt,
+            { agentName: 'test-root' },
+          );
+          trackInterruptibleHandle(
+            registry,
+            { runId: childRunId, parent: rootRunId },
+            childInterrupt,
+          );
+          const siblingHandle = trackInterruptibleHandle(
+            registry,
+            { runId: siblingRunId, parent: rootRunId },
+            siblingInterrupt,
+          );
+          trackInterruptibleHandle(
+            registry,
+            { runId: descendantRunId, parent: childRunId },
+            descendantInterrupt,
+          );
 
-      stopRegistry(registry, childRunId, {
-        detachActiveChildren: true,
-      });
+          yield* registry.stopAgentRun(childRunId, {
+            detachActiveChildren: true,
+          });
 
-      expect(childInterrupt).toHaveBeenCalledOnce();
-      expect(rootInterrupt).not.toHaveBeenCalled();
-      expect(siblingInterrupt).not.toHaveBeenCalled();
-      expect(descendantInterrupt).not.toHaveBeenCalled();
-      expect(registry.getHandle(rootRunId)).toBe(rootHandle);
-      expect(registry.getHandle(siblingRunId)).toBe(siblingHandle);
-      expect(registry.getHandle(descendantRunId)?.parent).toBeNull();
-    } finally {
-      registry.dispose();
-    }
-  });
+          expect(childInterrupt).toHaveBeenCalledOnce();
+          expect(rootInterrupt).not.toHaveBeenCalled();
+          expect(siblingInterrupt).not.toHaveBeenCalled();
+          expect(descendantInterrupt).not.toHaveBeenCalled();
+          expect(registry.getHandle(rootRunId)).toBe(rootHandle);
+          expect(registry.getHandle(siblingRunId)).toBe(siblingHandle);
+          expect(registry.getHandle(descendantRunId)?.parent).toBeNull();
+        } finally {
+          registry.dispose();
+        }
+      }),
+  );
 
   it.effect(
     'stops a child driver before it has a handle and leaves finalization to it',
@@ -855,6 +888,7 @@ describe('runRegistry', () => {
         const interrupt = vi.fn();
         const runId = generateRunId();
         registry.reserveChildActivation({
+          retainsTerminalParent: true,
           runId,
           parent: { current: generateRunId() },
           interrupt,

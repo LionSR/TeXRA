@@ -91,10 +91,9 @@ export interface InBandSubagentLaunchOptions {
   /** The run this attempt executes under; the caller owns its derivation. */
   readonly runId: RunId;
   readonly parentRunId: RunId;
-  readonly signal?: AbortSignal;
   /** Resolve mutable launch prerequisites only when a launch actually happens. */
   readonly prepare: () => Effect.Effect<
-    Omit<InBandSubagentRunBaseOptions, 'signal'>,
+    InBandSubagentRunBaseOptions,
     Error,
     AgentRunServices
   >;
@@ -122,12 +121,10 @@ type SettledInBandTurn = Parameters<
 const prepareInBandDefinition = Effect.fn('prepareInBandDefinition')(function* (
   options: InBandSubagentDeliveryOptions,
 ) {
-  options.signal?.throwIfAborted();
   return yield* prepareAgentDefinition({
     config: AgentConfigSchema.parse(options.configPayload),
     session: options.session,
     enforceCategory: true,
-    signal: options.signal,
     suppressErrorNotification: true,
   });
 });
@@ -357,10 +354,9 @@ const executeInBand = Effect.fn('executeInBand')(
       };
     });
 
-    // Post-run cancellation deliberately observes a terminal record: the
-    // child's rows were committed inside its own lease boundary, then the
-    // awaiting caller rejects without rewriting them.
-    options.signal?.throwIfAborted();
+    // A caller stop landing here interrupts the join, not the child: the
+    // child's rows were committed inside its own lease boundary and the
+    // detached loop owns its terminal record.
     return completed;
   },
   // Interruptible: the registration is one durable commit and the detached
@@ -383,8 +379,7 @@ export const executeSubagentInBand = Effect.fn('executeSubagentInBand')(
     options: InBandSubagentLaunchOptions,
   ): Effect.fn.Return<InBandSubagentRunResult, Error, AgentRunServices> {
     const prepared = yield* options.prepare();
-    const launch = { ...prepared, signal: options.signal };
-    const definition = yield* prepareInBandDefinition(launch);
+    const definition = yield* prepareInBandDefinition(prepared);
     // Validate the current definition, not metadata left by an earlier
     // catalog load.
     if (
@@ -394,14 +389,14 @@ export const executeSubagentInBand = Effect.fn('executeSubagentInBand')(
     ) {
       return yield* Effect.fail(
         new WorkflowRunAbortError(
-          `Workflow agent '${launch.agentName}' edits files: pass options.inputFiles ` +
+          `Workflow agent '${prepared.agentName}' edits files: pass options.inputFiles ` +
             `with files that still exist (its result carries output files and ` +
             `diffs, not response text).`,
         ),
       );
     }
     const completed = yield* executeInBand(
-      launch,
+      prepared,
       definition,
       'required-result',
       options.runId,

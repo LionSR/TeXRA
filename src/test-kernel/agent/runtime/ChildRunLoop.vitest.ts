@@ -308,6 +308,14 @@ const startLoop = (
     }),
   );
 
+/** The host's stop gesture on a child run: kill it, and settle the stop. */
+const stopChildRun = (runId: RunId): Effect.Effect<void, Error> =>
+  Effect.gen(function* () {
+    const stop = session.runs.kill(runId);
+    expect(stop.accepted()).toBe(true);
+    yield* stop.settlement;
+  });
+
 beforeEach(async () => {
   session = await Effect.runPromise(createProcessSession());
   publishTestRunStart(session, PARENT_RUN_ID);
@@ -415,8 +423,8 @@ describe('childRunLoop E2E fixtures', () => {
         const releaseSessionOwnership = vi.fn(() =>
           registry.releaseByRunId(runId),
         );
-        const handle = trackChildHandle(runId, PARENT_RUN_ID);
-        const interruptHandle = vi.spyOn(handle, 'interrupt');
+        trackChildHandle(runId, PARENT_RUN_ID);
+        const interruptRun = vi.spyOn(session.runs, 'interrupt');
         const registerLoop = vi
           .spyOn(session.followUps, 'claimChildRun')
           .mockImplementationOnce(() => {
@@ -442,14 +450,16 @@ describe('childRunLoop E2E fixtures', () => {
 
           expect(releaseSessionOwnership).toHaveBeenCalledOnce();
           expect(session.followUps.hasLiveOwner(runId)).toBe(false);
-          expect(handle.interrupt()).toBe(false);
-          interruptHandle.mockClear();
+          // The failed setup left no generation fiber behind, and the CLI
+          // registry's interrupt sweep reaches nothing of it.
+          expect(session.runs.interrupt(runId)).toBe(false);
+          interruptRun.mockClear();
           registry.interruptAll();
-          expect(interruptHandle).not.toHaveBeenCalled();
+          expect(interruptRun).not.toHaveBeenCalled();
           expect(yield* queuedFollowUps(session, runId)).toEqual([]);
         } finally {
           registerLoop.mockRestore();
-          interruptHandle.mockRestore();
+          interruptRun.mockRestore();
           registry.releaseByRunId(runId);
         }
       }),
@@ -701,6 +711,7 @@ describe('childRunLoop E2E fixtures', () => {
           const releaseNativeChild = session.runs.reserveChildActivation({
             runId: 'da7a01' as RunId,
             parent: { current: PARENT_RUN_ID },
+            retainsTerminalParent: true,
             interrupt: vi.fn(),
           });
           try {
@@ -864,19 +875,20 @@ describe('childRunLoop E2E fixtures', () => {
       Effect.gen(function* () {
         const runId = loopRunId();
         const { strategy, rejectTurn, turnStarted } = createFakeStrategy();
-        const handle = trackChildHandle(runId, PARENT_RUN_ID);
+        trackChildHandle(runId, PARENT_RUN_ID);
 
         const loop = yield* startLoop(runId, strategy);
 
         expect(session.followUps.hasLiveOwner(runId)).toBe(true);
         yield* turnStarted(1);
 
-        expect(handle.interrupt()).toBe(true);
-        // Simulate the in-flight call failing with an AbortError-shaped
-        // failure, matching what a real strategy's abortController produces.
+        yield* stopChildRun(runId);
+        // Releasing the aborted call's gate is cleanup: the stop interrupted
+        // the fiber awaiting it.
         yield* rejectTurn(1, createAbortError());
 
-        yield* Fiber.join(loop);
+        const exit = yield* Fiber.await(loop);
+        expect(Exit.isFailure(exit)).toBe(true);
         expect(mocks.submitFollowUp).not.toHaveBeenCalled();
         expect(session.runs.getHandle(runId)).toBeUndefined();
       }),
@@ -1045,21 +1057,35 @@ describe('childRunLoop E2E fixtures', () => {
     'late result after parent stop: a turn that resolves after interruption is persisted but not delivered',
     () =>
       Effect.gen(function* () {
+        // A process child (agent-CLI): its loop's own fiber survives the
+        // stop — the ruled permanent resident — so an in-flight turn that
+        // was already past its own interruption checkpoints can resolve
+        // normally after the stop landed.
         const runId = loopRunId();
         const { strategy, resolveTurn, turnStarted } = createFakeStrategy();
-        const handle = trackChildHandle(runId, PARENT_RUN_ID);
+        const childRun = yield* createChildRun(session, runId, PARENT_RUN_ID, {
+          run: { kind: 'agent', agent: 'fake-cli', tool: 'codex' },
+          userFollowUpSupport: 'terminalBacked',
+          description: 'Keep an agent-CLI child running',
+          config: childRunConfig,
+        }).pipe(Effect.provideService(Runs, session.runs));
+        trackedRunIds.add(runId);
         const releaseSessionOwnership = vi.fn();
-        const loop = yield* startLoop(runId, {
-          ...strategy,
-          releaseSessionOwnership,
-        });
+        const loop = yield* startLoop(
+          runId,
+          {
+            ...strategy,
+            releaseSessionOwnership,
+          },
+          { childRun },
+        );
 
         expect(session.followUps.hasLiveOwner(runId)).toBe(true);
         yield* turnStarted(1);
-        // Interrupt the loop, then let the in-flight turn resolve normally
-        // (not aborted) — mirrors a turn that was already past its own
+        // Stop the loop, then let the in-flight turn resolve normally (not
+        // aborted) — mirrors a turn that was already past its own
         // interruption checkpoints when the stop landed.
-        expect(handle.interrupt()).toBe(true);
+        yield* stopChildRun(runId);
         yield* resolveTurn(1, { kind: 'terminal', value: 'late' });
 
         yield* Fiber.join(loop);
@@ -1078,7 +1104,7 @@ describe('childRunLoop E2E fixtures', () => {
       Effect.gen(function* () {
         const runId = loopRunId();
         const { strategy, resolveTurn } = createFakeStrategy();
-        const handle = trackChildHandle(runId, PARENT_RUN_ID);
+        trackChildHandle(runId, PARENT_RUN_ID);
         const delivered = yield* Deferred.make<void>();
         mocks.submitFollowUp.mockImplementation(() =>
           Effect.as(Deferred.succeed(delivered, undefined), { status: 'sent' }),
@@ -1093,11 +1119,12 @@ describe('childRunLoop E2E fixtures', () => {
         // One macrotask lets the loop enter its queue wait; either way
         // the loop ends with exactly one delivery.
         yield* settle;
-        // The loop is now blocked in its queue wait; the loop's handler on
-        // the run handle is the live stop target.
-        expect(handle.interrupt()).toBe(true);
+        // The loop is now blocked in its queue wait; its stop target is the
+        // activation its start reserved on the run's roster entry.
+        yield* stopChildRun(runId);
 
-        yield* Fiber.join(loop);
+        const exit = yield* Fiber.await(loop);
+        expect(Exit.isFailure(exit)).toBe(true);
         expect(session.followUps.hasLiveOwner(runId)).toBe(false);
         // Only the one interim delivery — the kill did not spawn another turn.
         expect(mocks.submitFollowUp).toHaveBeenCalledTimes(1);
@@ -1117,7 +1144,6 @@ describe('childRunLoop E2E fixtures', () => {
           config: childRunConfig,
         }).pipe(Effect.provideService(Runs, session.runs));
         trackedRunIds.add(runId);
-        const handle = session.runs.getHandle(runId)!;
         const delivered = yield* Deferred.make<void>();
         mocks.submitFollowUp.mockImplementation(() =>
           Effect.as(Deferred.succeed(delivered, undefined), { status: 'sent' }),
@@ -1140,10 +1166,12 @@ describe('childRunLoop E2E fixtures', () => {
         // One macrotask lets the loop reach its queue wait before the stop lands.
         yield* settle;
 
-        // Loop is now between turns. Interrupt it through the run handle.
-        expect(handle.interrupt()).toBe(true);
+        // Loop is now between turns; the stop reaches it through its roster
+        // activation and the run's fiber.
+        yield* stopChildRun(runId);
 
-        yield* Fiber.join(loop);
+        const exit = yield* Fiber.await(loop);
+        expect(Exit.isFailure(exit)).toBe(true);
         expect(session.followUps.hasLiveOwner(runId)).toBe(false);
 
         // Metadata failure must not retain the child handle or queue ownership.
@@ -1170,7 +1198,7 @@ describe('childRunLoop E2E fixtures', () => {
         // stop/kill landing in that window finds nothing left to interrupt. The
         // test inspects the run handle while delivery is deliberately held open.
         const runId = loopRunId();
-        const handle = trackChildHandle(runId, PARENT_RUN_ID);
+        trackChildHandle(runId, PARENT_RUN_ID);
         const deliveryStarted = yield* Deferred.make<void>();
         const deliveryGate = yield* Deferred.make<void>();
         mocks.submitFollowUp.mockImplementation(() =>
@@ -1188,11 +1216,19 @@ describe('childRunLoop E2E fixtures', () => {
         // Wait until delivery is mid-flight (blocked on our gate).
         yield* Deferred.await(deliveryStarted);
 
-        expect(handle.interrupt()).toBe(false);
+        // A stop landing in that window reaches the loop's activation, but
+        // the terminal it would interrupt is uninterruptible: the delivery
+        // completes exactly once and the queue releases — there is no live
+        // continuation the stop could tear down.
+        const stop = session.runs.kill(runId);
+        expect(stop.accepted()).toBe(true);
 
         yield* Deferred.succeed(deliveryGate, undefined);
-        yield* Fiber.join(loop);
+        const exit = yield* Fiber.await(loop);
+        expect(Exit.isFailure(exit)).toBe(true);
+        expect(mocks.submitFollowUp).toHaveBeenCalledTimes(1);
         expect(session.followUps.hasLiveOwner(runId)).toBe(false);
+        yield* stop.settlement;
       }),
   );
 
@@ -1338,10 +1374,10 @@ describe('childRunLoop E2E fixtures', () => {
       }),
   );
 
-  // The handle's stop latch is the one precedence authority
-  // (`finalizeRunTerminal`): a stop that reached the run before its exit
-  // outranks the turn's own report, so the terminal row says cancelled even
-  // though the turn failed first.
+  // The loop's own stop observation is the one precedence authority: a stop
+  // that reached the run before its exit outranks the turn's own report
+  // (`stopped` on `finalizeRunTerminal`), so the terminal row says cancelled
+  // even though the turn failed first.
   it.effect(
     'lets a stop landing after a turn failure win the terminal outcome',
     () =>

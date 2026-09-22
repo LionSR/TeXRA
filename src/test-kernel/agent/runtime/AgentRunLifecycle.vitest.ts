@@ -1,5 +1,5 @@
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Fiber } from 'effect';
+import { Cause, Deferred, Effect, Exit, Fiber } from 'effect';
 
 import { beforeEach, describe, expect, vi, type Mock } from 'vitest';
 
@@ -309,40 +309,44 @@ describe('runFlowWithLifecycle', () => {
       }),
   );
 
-  it.effect('carries a stop requested by onRun into the run stop', () =>
+  it.effect('interrupts a run whose stop landed before its first turn', () =>
     Effect.gen(function* () {
       const { runId, ctx } = lifecycleFixture();
 
-      // A live handle's kill settles to nothing, so the settlement is driven
-      // here rather than inside the `onRun` seam.
-      let stop: ReturnType<SessionHandle['runs']['kill']> | undefined;
-      const result = yield* runFlow(
-        ctx,
-        (handle) =>
-          Effect.sync(() => {
-            expect(handle.stopRequested).toBe(true);
-            expect(Deferred.isDoneUnsafe(ctx.stopped)).toBe(true);
-            return toolUseResult(runId, RUN_OUTCOME.CANCELLED);
-          }),
-        {
-          onRun: () =>
-            Effect.sync(() => {
-              stop = testDefaultSession().runs.kill(runId);
-              expect(stop.accepted()).toBe(true);
-            }),
-        },
+      // The run's stop is its fiber's interruption: the flow runs on the
+      // registry's lane, so an interrupt by run id finds that fiber wherever
+      // the run has got to — here, parked before its first turn — and the
+      // run's only fact is the cancelled terminal row.
+      const runnerParked = yield* Deferred.make<void>();
+      const flow = runFlow(ctx, () =>
+        Deferred.succeed(runnerParked, undefined).pipe(
+          Effect.andThen(Effect.never<never>),
+        ),
       );
-      if (!stop) throw new Error('onRun never ran');
-      yield* stop.settlement;
+      const run = yield* Effect.forkChild(
+        ctx.session.runs.launchRun(runId, flow),
+        { startImmediately: true },
+      );
+      yield* Deferred.await(runnerParked);
 
-      expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
+      expect(testDefaultSession().runs.interrupt(runId)).toBe(true);
+      const exit = yield* Fiber.await(run);
+
+      expect(Exit.isFailure(exit) && Cause.hasInterrupts(exit.cause)).toBe(
+        true,
+      );
+      expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
+        testDefaultSession(),
+        expect.objectContaining({ outcome: RUN_OUTCOME.CANCELLED }),
+      );
     }),
   );
 
-  // A stop that beat run start is this run's outcome: the run never runs a
-  // turn, and the only fact it leaves is the cancelled terminal row.
+  // A run that aborts before its first turn is this run's outcome: the run
+  // never runs a turn, and the only fact it leaves is the cancelled terminal
+  // row with the abort's own error facts on it.
   it.effect(
-    'writes the cancelled terminal fact when the stop beat run start',
+    'writes the cancelled terminal fact when the run aborts before its first turn',
     () =>
       Effect.gen(function* () {
         const { runId, ctx } = lifecycleFixture();
@@ -351,22 +355,9 @@ describe('runFlowWithLifecycle', () => {
           aggregateId: qualifyAggregateId('run', runId),
         });
 
-        // A live handle's kill settles to nothing, so the settlement is driven
-        // here rather than inside the `onRun` seam.
-        let stop: ReturnType<SessionHandle['runs']['kill']> | undefined;
-        const result = yield* runFlow(
-          ctx,
-          () => Effect.fail(new DOMException('Request aborted', 'AbortError')),
-          {
-            onRun: () =>
-              Effect.sync(() => {
-                stop = testDefaultSession().runs.kill(runId);
-                expect(stop.accepted()).toBe(true);
-              }),
-          },
+        const result = yield* runFlow(ctx, () =>
+          Effect.fail(new DOMException('Request aborted', 'AbortError')),
         );
-        if (!stop) throw new Error('onRun never ran');
-        yield* stop.settlement;
 
         expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
         yield* ctx.session.settlePublications();
@@ -395,68 +386,11 @@ describe('runFlowWithLifecycle', () => {
       }),
   );
 
-  // The stop latch owns the outcome: a run a stop reached ends cancelled,
-  // even when its own report reached completion first.
-  it.effect('relabels a stopped run whose report says completed', () =>
-    Effect.gen(function* () {
-      const { runId, ctx } = lifecycleFixture();
-
-      const result = yield* runFlow(ctx, (handle) =>
-        Effect.gen(function* () {
-          const stop = testDefaultSession().runs.kill(runId);
-          expect(stop.accepted()).toBe(true);
-          yield* stop.settlement;
-          expect(handle.stopRequested).toBe(true);
-          return toolUseResult(runId, RUN_OUTCOME.COMPLETED);
-        }),
-      );
-
-      // The caller receives the same verdict persistence carries: the stop
-      // won on the run, so the flow's COMPLETED report is relabeled.
-      expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
-      expect(storageMocks.finalizeRun).toHaveBeenCalledExactlyOnceWith(
-        testDefaultSession(),
-        expect.objectContaining({
-          outcome: RUN_OUTCOME.CANCELLED,
-        }),
-      );
-    }),
-  );
-
   // The parent's delivery is a projection of the same terminal fact as the
-  // persisted history, so a stopped child never arrives formatted as a failure.
-  it.effect(
-    'delivers a stopped subagent as cancelled when its flow reports a failure',
-    () =>
-      Effect.gen(function* () {
-        const { runId, ctx } = lifecycleFixture();
-        const onError = vi.fn();
-
-        const result = yield* runFlow(
-          ctx,
-          () =>
-            Effect.gen(function* () {
-              const stop = testDefaultSession().runs.kill(runId);
-              expect(stop.accepted()).toBe(true);
-              yield* stop.settlement;
-              return yield* Effect.fail(
-                new Error('child exited with code 143'),
-              );
-            }),
-          { parentRunId: PARENT_RUN_ID, onError },
-        );
-
-        expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
-        expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
-          testDefaultSession(),
-          expect.objectContaining({
-            outcome: RUN_OUTCOME.CANCELLED,
-          }),
-        );
-        expect(onError).toHaveBeenCalledOnce();
-        expect(onError.mock.calls[0][1]).toEqual(result);
-      }),
-  );
+  // persisted history, so a delivery never contradicts the row. (A stop's
+  // relabel — a failure report the stop says never happened — is now the
+  // fiber interruption's verdict, asserted on the finalizer's `stopped` arm
+  // below; the latch that carried it mid-report is gone.)
 
   it.effect(
     'projects returned outcomes to the terminal row and stage end',
@@ -972,18 +906,17 @@ describe('finalizeRunTerminal', () => {
       }),
   );
 
-  // The handle's stop latch is the single owner of a run's terminal outcome.
-  // A stop/kill trips the latch behind the run's back, and the run it killed
-  // then reports its own non-zero exit as a failure — so the latch, not the
-  // report, has to decide, and no caller may cross-check it for itself.
+  // The stop's verdict is the single owner of a run's terminal outcome: the
+  // finalizer's `stopped` arm, set by the fiber interruption's exit protocol
+  // or the child loop's own stop, outranks the run's report — the run it
+  // killed reports its own non-zero exit as a failure, and no caller
+  // cross-checks the verdict for itself.
   it.effect(
-    'resolves the terminal outcome from a stop that reached the handle',
+    'resolves the terminal outcome from a stop that reached the finalizer',
     () =>
       Effect.gen(function* () {
         const { runId, session, handle } = finalizeFixture();
         const stage = { end: vi.fn() };
-
-        handle.interrupt();
 
         const finalized = yield* finalize({
           session,
@@ -991,6 +924,7 @@ describe('finalizeRunTerminal', () => {
           outcome: RUN_OUTCOME.FAILED,
           error: { kind: 'unexpected', message: 'exited with code 143' },
           stage,
+          stopped: true,
         });
 
         expect(finalized?.event).toMatchObject({
@@ -1024,12 +958,11 @@ describe('finalizeRunTerminal', () => {
           Effect.fail(new Error('artifact flush failed')),
         );
 
-        handle.interrupt();
-
         const finalized = yield* finalize({
           session,
           handle,
           outcome: RUN_OUTCOME.COMPLETED,
+          stopped: true,
         });
 
         // The stop still owns the outcome, but a lost drain is not a fact about

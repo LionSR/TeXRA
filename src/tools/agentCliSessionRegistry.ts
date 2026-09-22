@@ -126,10 +126,10 @@ export class AgentCliSessionRegistry {
     const interrupted = new Set<RunId>();
     const interrupt = (entry: AgentCliSessionEntry): void => {
       if (interrupted.has(entry.runId)) return;
-      const handle = this.runs.getHandle(entry.runId);
-      if (!handle) return;
+      // The run's stop is its fiber's interruption; the registry reaches a
+      // live target wherever the run currently is (fiber, launch, or loop).
+      if (!this.runs.interrupt(entry.runId)) return;
       interrupted.add(entry.runId);
-      handle.interrupt();
     };
 
     for (const entry of this.inFlight.values()) interrupt(entry);

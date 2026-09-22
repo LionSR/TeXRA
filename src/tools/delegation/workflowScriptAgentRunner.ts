@@ -534,7 +534,6 @@ const recoverOrLaunchWorkflowChild = Effect.fn('recoverOrLaunchWorkflowChild')(
           session,
           runId,
           parentRunId: call.parentRunId,
-          signal: call.signal,
           prepare: call.prepare,
         });
         // The child's loop released its claim and its run lane as it ended, so

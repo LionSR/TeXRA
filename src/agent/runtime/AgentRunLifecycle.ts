@@ -108,6 +108,13 @@ interface FinalizeRunTerminalParams {
    * guarded by `Effect.try`: a throwing hook cannot abort finalization.
    */
   readonly deliver?: (outcome: RunOutcome) => void;
+  /**
+   * Stop precedence: a stop that reached the run before this finalizer —
+   * `Cause.hasInterrupts` on the cause that brought the run here, or the
+   * child loop's own interrupted signal — outranks the run's own report, so
+   * the stage and the `run.end` row say cancelled.
+   */
+  readonly stopped?: boolean;
 }
 
 interface FinalizeRunTerminalResult {
@@ -127,16 +134,26 @@ interface FinalizeRunTerminalResult {
  * win — the catch arm after the success arm finalized, a concurrent finalize
  * racing across an await point, or a stop while the run waits for input.
  */
-export const finalizeRunTerminal = Effect.fn('finalizeRunTerminal')(function* (
+export const finalizeRunTerminal = Effect.fn('finalizeRunTerminal')(
+  (
+    params: FinalizeRunTerminalParams,
+  ): Effect.Effect<FinalizeRunTerminalResult | undefined, Error, Runs> =>
+    // The run's terminal is atomic: the run's stop is its fiber's
+    // interruption, and one landing mid-drain must not strand the run with
+    // its exactly-once claim spent and no `run.end` row. A stop then lands
+    // either before this finalizer or after its row, never inside it.
+    Effect.uninterruptible(finalizeRunTerminalBody(params)),
+);
+const finalizeRunTerminalBody = Effect.fn('finalizeRunTerminal.body')(function* (
   params: FinalizeRunTerminalParams,
 ): Effect.fn.Return<FinalizeRunTerminalResult | undefined, Error, Runs> {
   const { session, handle } = params;
   if (!handle.claimTerminalFinalize()) return undefined;
   const runs = yield* Runs;
-  // The handle's stop latch, read once: a stop that landed before the run's
-  // exit outranks a child whose process then exits non-zero, on the stage
-  // here as on the row below, so no caller cross-checks the latch itself.
-  const stopped = handle.stopRequested;
+  // Stop precedence, read once: a stop that reached the run before its own
+  // exit outranks the report the flow makes of that exit, on the stage here
+  // as on the row below, so no caller cross-checks the stop itself.
+  const stopped = params.stopped === true;
   // Close the transcript stage before the drain, not after it: `stage.end`
   // queues one more publication, and a terminal row that called itself the
   // post-drain fact while the run's last queued fact was still unsettled
@@ -350,16 +367,10 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
       options?.parentRunId ?? null,
       ctx.logger,
     );
-    // The host's stop: the run's one stop latch, which the runner races. The
-    // requests this run left open close with the fibers waiting on them
-    // (`SessionHandle.openRequest`).
-    const runInterruptHandler = {
-      interrupt(): void {
-        ctx.interrupt();
-      },
-    };
-    const detachRunInterrupt =
-      handle.attachInterruptHandler(runInterruptHandler);
+    // The host's stop is this run fiber's interruption
+    // (`RunRegistry.interrupt`): the exit protocol and the arms below record
+    // it. The requests this run left open close with the fibers waiting on
+    // them (`SessionHandle.openRequest`).
     runs.track(handle);
     // A claim moved out from under this run is not watched: the next append
     // refuses with `DatabaseNotOwner` and the run aborts dirty.
@@ -388,6 +399,7 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
       error?: ResultEvent['error'];
       output?: RunEndOutput;
       deliver?: (outcome: RunOutcome) => void;
+      stopped?: boolean;
     }) =>
       finalizeRunTerminal({
         session,
@@ -530,9 +542,7 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
       // what makes the terminal phase a verdict about this run. The flow is an
       // Effect: a fiber interruption reaches its provider work directly, and
       // its finalizers settle before the resources below are disposed.
-      const result = yield* Effect.suspend(() => runner(handle)).pipe(
-        Effect.ensuring(Effect.sync(detachRunInterrupt)),
-      );
+      const result = yield* Effect.suspend(() => runner(handle));
       // Provider/runtime failures carry structured error metadata and use the
       // classified failure path. A domain failure may report FAILED without this
       // field and is finalized below as an outcome-only terminal result.
@@ -589,13 +599,15 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
         return finalizeFailedRun(err, undefined);
       }),
       Effect.onInterrupt(() =>
-        // The run has joined its interrupted children. Complete the
-        // owned terminal result before cleanup while retaining interruption.
-        finalizeTerminal({ outcome: RUN_OUTCOME.CANCELLED }).pipe(Effect.orDie),
+        // The run's stop is its fiber's interruption, and this is its
+        // verdict: complete the owned terminal result before cleanup while
+        // retaining interruption.
+        finalizeTerminal({ outcome: RUN_OUTCOME.CANCELLED, stopped: true }).pipe(
+          Effect.orDie,
+        ),
       ),
       Effect.ensuring(
         Effect.gen(function* () {
-          detachRunInterrupt();
           yield* runOnRunEnd;
         }),
       ),
