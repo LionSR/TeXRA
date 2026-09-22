@@ -57,6 +57,24 @@ describe('workflow prompt file names', () => {
       }).pipe(Effect.provide(fakeProcessServices())),
   );
 
+  // #12803: with no workspace root, a relative entry makes
+  // `workspaceAbsolutePath` throw. Resolved as an argument that throw was a
+  // defect outside the per-file recovery and failed the whole batch; it must
+  // skip the one file and keep the readable ones.
+  it.effect(
+    'skips a relative entry with no workspace root instead of failing the batch',
+    () =>
+      Effect.gen(function* () {
+        const { xml, skipped } = yield* getXmlFormatFromReadableFiles(
+          undefined,
+          ['relative.tex', fakePath('outside/absolute.tex')],
+        );
+
+        expect(xml).toContain('<document name="absolute.tex">');
+        expect(skipped.map((entry) => entry.file)).toEqual(['relative.tex']);
+      }).pipe(Effect.provide(fakeProcessServices())),
+  );
+
   it('keeps extracted outputs inside the round directory for absolute document names', () => {
     expect(getExtractedDocOutputFileName('chapter/main.tex', 'r0')).toBe(
       'r0/chapter/main.tex',

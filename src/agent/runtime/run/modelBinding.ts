@@ -55,7 +55,7 @@ import {
   resolveKimiCodeRoutingFacts,
 } from '@model/kimiCodeSubscriptionRouting';
 import { isOpenRouterRoutingUnsupported } from '@model/openRouterRouting';
-import type { ConfigProvider, StateStore } from '@platform/interfaces';
+import type { StateStore } from '@platform/interfaces';
 import {
   AgentCategory,
   type DeclinableUsageRoute,
@@ -67,6 +67,7 @@ import {
   isKimiSubscriptionEligible,
 } from '@shared/model/kimiCodeRetryGate';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { ensureError } from '@utils/errors/errorMessage';
 import { validationModel } from './validationModel';
@@ -483,7 +484,10 @@ const PROTOCOL_DESCRIPTORS: {
         config.name.startsWith('gpt5') || config.fullName.startsWith('gpt-5');
       const summary: 'auto' | null =
         !isGpt5 ||
-        input.stores.config.get<boolean>('texra.model.gpt5ReasoningSummary')
+        readSettingFrom<boolean>(
+          input.stores,
+          'texra.model.gpt5ReasoningSummary',
+        )
           ? 'auto'
           : null;
       if (credential.route === 'chatgpt-subscription') {
@@ -578,7 +582,8 @@ const PROTOCOL_DESCRIPTORS: {
         // holds the conversation and each round sends only the new turn
         // (and background execution becomes reachable); off, every round
         // resends the full transcript and nothing is retained.
-        store: input.stores.config.get<boolean>(
+        store: readSettingFrom<boolean>(
+          input.stores,
           'texra.model.useGoogleInteractionsServerState',
         ),
         thinkingLevel:
@@ -783,7 +788,8 @@ function configurationFor(
       // OpenAI-descended arm, the DeepSeek, Kimi and GLM reasoning routes
       // included, matching what the retired OpenAI handler base sent. The
       // Anthropic arm never read the setting and keeps the provider default.
-      parallelToolCalls: input.stores.config.get<boolean>(
+      parallelToolCalls: readSettingFrom<boolean>(
+        input.stores,
         'texra.model.openaiParallelToolCalls',
       ),
     },
@@ -843,9 +849,9 @@ function responsesWebSocketSelected(
  * Whether a binding delivers its turns as background work: the run's
  * category and the provider's own toggle over a configuration that supports
  * it. One owner for the choice — the loop asks it per turn, and the binding
- * asks it to decide whether the Responses WebSocket applies. The toggles read
- * live from `config` on every call, so a flip mid-run takes effect on the
- * next turn.
+ * asks it to decide whether the Responses WebSocket applies. The toggles are
+ * read live on every call through the catalog reader, so a flip mid-run takes
+ * effect on the next turn, on the scope the Models tab shows (#12710).
  */
 export function backgroundDelivery(
   bound: {
@@ -854,16 +860,19 @@ export function backgroundDelivery(
     readonly modelName: string;
     readonly agentCategory: AgentCategory;
   },
-  config: ConfigProvider,
+  stores: SettingsStores,
 ): boolean {
   if (!bound.backgroundCapable) return false;
   if (bound.agentCategory !== AgentCategory.Workflow) return false;
   if (bound.protocol === 'google-interactions') {
-    return config.get<boolean>('texra.model.useGoogleBackgroundResponses');
+    return readSettingFrom<boolean>(
+      stores,
+      'texra.model.useGoogleBackgroundResponses',
+    );
   }
   return (
     bound.modelName.toLowerCase().startsWith('gpt') &&
-    config.get<boolean>('texra.model.useBackgroundResponses')
+    readSettingFrom<boolean>(stores, 'texra.model.useBackgroundResponses')
   );
 }
 
@@ -1125,7 +1134,7 @@ export const bindModel = Effect.fn('bindModel')(function* (
         modelName: config.name,
         agentCategory: input.agentCategory,
       },
-      input.stores.config,
+      input.stores,
     ) &&
     responsesWebSocketSelected(credential, input.stores.globalState);
   const model =

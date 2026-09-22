@@ -16,7 +16,10 @@ import {
 } from '@common/errors/agentErrorClassification';
 import { prepareSurfaceLaunch } from '@controllers/mainView/backend/MainViewRunLaunchController';
 import type { ChatExportController } from '@controllers/progressView/ChatExportController';
-import { exportRunTranscript } from '@controllers/progressView/exportTranscript';
+import {
+  ChatExportInputUnreadable,
+  exportRunTranscript,
+} from '@controllers/progressView/exportTranscript';
 import { TranscriptExportFailed } from '@controllers/progressView/transcriptExportFailure';
 import { ApiKeyPromptFailed } from '@controllers/progressView/ProgressApiKeyRetryController';
 import { ProgressWorkflowFileActionsController } from '@controllers/progressView/ProgressWorkflowFileActionsController';
@@ -475,8 +478,8 @@ export function createDesktopHostRequests(
    * graph — the formatters, the trace assembler, the LaTeX compiler — stays
    * out of app startup. The memo is the library's: a successful load is kept
    * for the window's life, and a failed one expires at once so the next
-   * export retries. `runSync` only allocates the memo here; the load itself
-   * runs inside the export's own program.
+   * export retries. `runSync` only allocates the memo; the load runs inside
+   * the export's own program.
    */
   const getChatExportController: Effect.Effect<
     ChatExportController,
@@ -544,9 +547,8 @@ export function createDesktopHostRequests(
    * The sheet's commit verbs, the dock's "latexdiff vs last commit" among
    * them: latexdiff-vc over the base file against a commit, and the pack
    * and clean housekeeping of what it produced. The diff opens in the PDF
-   * tab through the build display, as a run's outputs do. The math markup
-   * is left to `diffCommandExecutor`, which reads the workspace's saved
-   * `LATEXDIFF_MATH_MARKUP` for every host.
+   * tab through the build display, as a run's outputs do. The math markup is
+   * left to `diffCommandExecutor`, which reads `LATEXDIFF_MATH_MARKUP`.
    */
   const latexdiffAgainstCommit = (
     action: 'latexdiffvc' | 'packLatexdiffvc' | 'cleanLatexdiffvc',
@@ -693,8 +695,7 @@ export function createDesktopHostRequests(
    * answer with a promise are lifted once through `fromHost`, so the failure
    * channel is the value the arm failed or rejected with and no dispatch arm
    * re-enters the runtime between here and the bridge that runs this program
-   * (a lifted capability may still run its own program behind its promise
-   * face).
+   * (a lifted capability may still run its own program behind its face).
    */
   function dispatch(
     request: HostRequest,
@@ -791,9 +792,8 @@ export function createDesktopHostRequests(
   /**
    * The bridge's host-request port: the dispatch program plus the one dialog
    * a failed request presents before it is answered. The cause is squashed to
-   * word the dialog and then re-raised unchanged, so the bridge's
-   * refusal-versus-defect fold sees exactly what the failing arm produced —
-   * a refusal as a refusal, a defect still a defect.
+   * word the dialog and re-raised unchanged, so the bridge's
+   * refusal-versus-defect fold sees what the failing arm produced.
    */
   function handleHostRequest(
     request: HostRequest,
@@ -808,16 +808,16 @@ export function createDesktopHostRequests(
         // Request-scoped operations do not present. Every rejection, including
         // a capability refusal, reaches this one dialog before the response.
         // A lifted member is presented as what it rejected with: the tag names
-        // the member, the classification reads the cause it carried.
-        // A tag that named an untyped channel carries the value it named, so
-        // the dialog classifies and words the launcher's or the record read's
-        // own error, as it did when that value reached here bare.
+        // the member, the classification reads the cause it carried, so the
+        // dialog words the launcher's or the record read's own error exactly
+        // as it did when that value reached here bare.
         const primaryError = primaryAgentError(
           error instanceof HostCallFailed ||
             error instanceof OnboardingCallFailed ||
             error instanceof RunLaunchFailed ||
             error instanceof RunConfigUnreadable ||
-            error instanceof TranscriptExportFailed
+            error instanceof TranscriptExportFailed ||
+            error instanceof ChatExportInputUnreadable
             ? error.cause
             : error,
         );

@@ -146,11 +146,18 @@ export function runGuardedLatexCommand<R = never>(
   }).pipe(
     // The command's one terminal boundary, as the `try`/`catch` it replaces
     // was: a failed guard step and a failed operation alike are squashed
-    // back to the value the `catch` clause bound.
+    // back to the value the `catch` clause bound. An interrupt is not one of
+    // them: an extension-host reload or deactivation while a guarded LaTeX
+    // command runs is a cancellation, and re-raising it keeps a spurious
+    // "Failed to ..." toast off the screen (#12841).
     Effect.catchCause((cause) =>
-      showLoggedErrorMessage(channel, errorMessage, Cause.squash(cause)).pipe(
-        Effect.asVoid,
-      ),
+      Cause.hasInterruptsOnly(cause)
+        ? Effect.interrupt
+        : showLoggedErrorMessage(
+            channel,
+            errorMessage,
+            Cause.squash(cause),
+          ).pipe(Effect.asVoid),
     ),
   );
 }

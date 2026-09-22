@@ -3,7 +3,10 @@ import { Effect } from 'effect';
 
 // Local imports
 import type { MissingTool } from '@shared/schemas';
-import { IMAGE_LATEX_TOOLS } from '@shared/constants/latexToolchain';
+import {
+  CORE_DEPENDENCY_TOOLS,
+  IMAGE_LATEX_TOOLS,
+} from '@shared/constants/latexToolchain';
 
 // Local file imports
 import {
@@ -27,14 +30,14 @@ function missingTool(id: string, interchangeable: boolean): MissingTool {
 export const checkCoreDependencies = Effect.fn(
   'toolUtils.checkCoreDependencies',
 )(function* (showError: boolean = true): Effect.fn.Return<MissingTool[]> {
-  const basicTools = ['latexindent', 'perl', 'gs'];
-  const basicResults = yield* Effect.all(
-    basicTools.map((tool) => checkToolInstalled(tool, showError)),
+  const probes = yield* Effect.all(
+    // The catalog's core set, not a second list beside it.
+    CORE_DEPENDENCY_TOOLS.map((tool) => checkToolInstalled(tool, showError)),
     { concurrency: 'unbounded' },
   );
-  const missing: MissingTool[] = basicTools
-    .filter((_, i) => !basicResults[i])
-    .map((id) => missingTool(id, false));
+  const missing: MissingTool[] = CORE_DEPENDENCY_TOOLS.filter(
+    (_, i) => !probes[i],
+  ).map((id) => missingTool(id, false));
 
   // Report both image tools as interchangeable only if neither is installed.
   if (!(yield* detectImageTool())) {

@@ -16,6 +16,7 @@ import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
 import { openAppStateStore } from '@controllers/session/appStateStore';
 import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import type { ModelOptionStores } from '@model/computeModelOptions';
+import type { PlatformSecrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { ConfigStore } from '@platform/defaults/jsonConfigProvider';
 import { createNodeWorkspaceRoots } from '@platform/defaults/nodeHost';
@@ -190,13 +191,18 @@ const stopProjectRuns = Effect.fn('desktopProjects.stopProjectRuns')(function* (
 function openProjectSession(
   root: string | undefined,
   roots: WorkspaceRoots,
-  stores: ModelOptionStores,
+  secrets: PlatformSecrets,
 ): Effect.Effect<DesktopProject, Error> {
   return Effect.gen(function* () {
     const session = yield* openSessionEffect({
       roots,
       responseTextProcessing: createTexraResponseTextProcessing(
-        createAgentResponseTextConnector(stores),
+        // This project's own roots, plus the process secret store — not the
+        // process-level stores, which carry no workspace config layer and so
+        // answered every project with the global value (#12773). Taking
+        // `secrets` alone rather than a whole `ModelOptionStores` is what
+        // makes the wrong pair unrepresentable here.
+        createAgentResponseTextConnector({ ...roots, secrets }),
       ),
     });
     return yield* Effect.try({
@@ -234,7 +240,11 @@ export function openDesktopProjectRegistry(
     const listeners = new Set<() => void>();
     let activeRoot: string | undefined;
     const fallback = yield* Effect.uninterruptible(
-      openProjectSession(undefined, options.processRoots, options.stores),
+      openProjectSession(
+        undefined,
+        options.processRoots,
+        options.stores.secrets,
+      ),
     );
     const notify = () => {
       for (const listener of [...listeners]) listener();
@@ -285,7 +295,7 @@ export function openDesktopProjectRegistry(
           // Acquire the session and install its registry owner before
           // interruption can leave this operation.
           return yield* Effect.uninterruptible(
-            openProjectSession(root, roots, options.stores).pipe(
+            openProjectSession(root, roots, options.stores.secrets).pipe(
               Effect.tap((project) =>
                 Effect.sync(() => {
                   projects.set(root, project);

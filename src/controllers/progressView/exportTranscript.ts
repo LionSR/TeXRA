@@ -12,7 +12,7 @@ import * as path from 'node:path';
 import { Effect, type FileSystem, type PlatformError } from 'effect';
 
 // Local imports
-import type { ChatExportInputUnreadable } from '@agent/export/loadChatExportInput';
+import { ChatExportInputUnreadable } from '@agent/export/loadChatExportInput';
 import type { ChatExportInput } from '@agent/export/schemas';
 import type {
   ExternalOpenFailed,
@@ -107,6 +107,15 @@ type TranscriptExportFailure =
   | PlatformError.PlatformError
   | Rejected
   | TranscriptExportFailed;
+
+/**
+ * The run-read tag of {@link TranscriptExportFailure}, re-exported here
+ * because this module is where a host meets that union. `src/agent/export`'s
+ * own barrel is not on any host's approved deep-import surface
+ * (`config/ratchets/host-agent-import-baseline.json`), and a host that
+ * unwraps the tag to classify its `cause` must be able to name it.
+ */
+export { ChatExportInputUnreadable };
 
 /** Message for a failed {@link ChatExportController.buildExportInput} status. */
 function exportInputErrorMessage(

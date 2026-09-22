@@ -66,12 +66,17 @@ import {
   LATEX_CONFIG_KEYS,
 } from '@shared/constants/latexConfig';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
+import {
+  FakeScopedConfigProvider,
+  FakeStateStore,
+} from '@test/support/FakePlatform';
 import { REPO_ROOT } from '@test/support/repoScan';
 import { installPlatform } from '@test/support/setupPlatform';
 import {
   isStored,
   makeFakeSettingsStores,
 } from '@test/support/settingsStoresFake';
+import { readSettingFrom } from '@utils/config/platformSettings';
 
 const VALID_STORES: ReadonlySet<SettingStore> = new Set<SettingStore>([
   'config',
@@ -597,6 +602,37 @@ describe('settingsAccess', () => {
       }
     } finally {
       warn.mockRestore();
+    }
+  });
+
+  // #12710: the five Models-tab provider toggles declare `configTarget:
+  // 'global'`, so `readSetting` resolves them on the global scope alone. The
+  // run now reads them through the same catalog reader (`readSettingFrom` in
+  // `src/agent/runtime/run/modelBinding.ts`), where it used to read the
+  // merged config and could therefore honor a workspace override the tab had
+  // no way to show. One scope, one answer, both sides.
+  it('resolves the Models-tab provider toggles on the global scope alone', () => {
+    const rows = [
+      'texra.model.gpt5ReasoningSummary',
+      'texra.model.useGoogleInteractionsServerState',
+      'texra.model.useGoogleBackgroundResponses',
+      'texra.model.useBackgroundResponses',
+      'texra.model.openaiParallelToolCalls',
+    ];
+    for (const key of rows) {
+      const entry = settingByKey(key);
+      assert.ok(entry, `missing catalog entry ${key}`);
+      assert.equal(entry.configTarget, 'global', `${key} configTarget`);
+      const config = new FakeScopedConfigProvider();
+      config.seedGlobal(key, true);
+      config.seedWorkspace(key, false);
+      const stores = {
+        config,
+        workspaceState: new FakeStateStore(),
+        globalState: new FakeStateStore(),
+      };
+      assert.equal(readSetting(entry, stores, 'vscode'), true, key);
+      assert.equal(readSettingFrom<boolean>(stores, key), true, key);
     }
   });
 
