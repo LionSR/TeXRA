@@ -1,8 +1,9 @@
 // Unit tests for the chat-session controller's run-slot ownership, stop and
-// resume paths, and presentation-host lifecycle. Agent run itself is
-// mocked; the session surfaces the controller reasons about (run
-// registry, event hub, run status, host interactions) are the real
-// runtime objects wherever a test asserts through them.
+// resume paths, and presentation-host lifecycle. The agent run boundary
+// (launch, resume, result toast, record reads) is injected through the
+// controller's own `agentRuns` init seam; the session surfaces the controller
+// reasons about (run registry, event hub, run status, host interactions) are
+// the real runtime objects wherever a test asserts through them.
 
 import {
   Cause,
@@ -49,46 +50,6 @@ const mocks = vi.hoisted(() => ({
   moveLocalTranscriptToRun: vi.fn(),
   reportRequestDefect: vi.fn(),
   followUpSubmit: vi.fn(),
-}));
-
-vi.mock('@agent/storage', () => ({
-  getRunRecords: (...args: unknown[]) => {
-    const records = mocks.getRunRecords(...args);
-    return {
-      readRunEnd: () =>
-        Effect.tryPromise({
-          try: () => records.readRunEnd(),
-          catch: ensureError,
-        }),
-      readConfig: () =>
-        Effect.tryPromise({
-          try: () => records.readConfig(),
-          catch: ensureError,
-        }),
-      exists: () =>
-        Effect.tryPromise({
-          try: () => records.exists(),
-          catch: ensureError,
-        }),
-    };
-  },
-}));
-
-vi.mock('@agent/runtime/resumeRun', () => ({
-  resumeRun: mocks.resumeRun,
-}));
-
-vi.mock('@agent/runtime/executeAgent', () => ({
-  executeAgent: mocks.executeAgent,
-  ResumeSessionUnavailableError: class ResumeSessionUnavailableError extends Error {},
-}));
-
-vi.mock('@agent/runtime/runAgent', () => ({
-  runAgent: mocks.runAgent,
-}));
-
-vi.mock('@agent/runtime/terminalResultToast', () => ({
-  attachTerminalResultToast: mocks.attachTerminalResultToast,
 }));
 
 vi.mock('@cli/runtime/initPlatform', () => ({
@@ -162,11 +123,14 @@ import { DisposableStore } from '@platform/disposable';
 import type { RecoveryContinuation } from '@platform/interfaces';
 import {
   aggregateId,
+  AgentCategory,
+  emptyRunEndOutput,
   RUN_OUTCOME,
   RUN_PHASE,
   type RunId,
 } from '@shared/schemas';
 import { TEXRA_APPROVAL_POLICY_DEFAULT } from '@shared/approvalPolicy';
+import { DatabaseReadFailed } from '@shared/session/database';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
 import { createDeferred } from '@test/support/asyncTestUtils';
@@ -340,6 +304,35 @@ function makeInit(
     secrets: new FakeSecrets(),
     stores: makeFakeSettingsStores().stores,
     runtime: testRuntime(),
+    // The agent boundary, injected the way the init seam intends: the bag is
+    // the suite's own, so assertions read the same `mocks` entries the old
+    // module mocks fed.
+    agentRuns: {
+      launch: (...args: unknown[]) => mocks.runAgent(...args),
+      resume: (...args: unknown[]) => mocks.resumeRun(...args),
+      attachResultToast: (...args: unknown[]) =>
+        mocks.attachTerminalResultToast(...args),
+      records: (...args: unknown[]) => {
+        const records = mocks.getRunRecords(...args);
+        return {
+          readRunEnd: () =>
+            Effect.tryPromise({
+              try: () => records.readRunEnd(),
+              catch: ensureError,
+            }),
+          readConfig: () =>
+            Effect.tryPromise({
+              try: () => records.readConfig(),
+              catch: ensureError,
+            }),
+          exists: () =>
+            Effect.tryPromise({
+              try: () => records.exists(),
+              catch: ensureError,
+            }),
+        };
+      },
+    } as ChatSessionControllerInit['agentRuns'],
     ...overrides,
   };
 }
@@ -525,23 +518,29 @@ async function expectInterruptedRetry(
 }
 
 describe('CLI terminal outcome resolution', () => {
-  beforeEach(() => {
-    mocks.getRunRecords.mockReset();
-  });
-
+  // The persisted outcome is a committed `run.end` row on a real session over
+  // the fake platform's storage; the read path under test folds it, so no
+  // record store is stubbed.
   it.effect('prefers the persisted post-shutdown outcome', () =>
     Effect.gen(function* () {
-      mocks.getRunRecords.mockReturnValue({
-        readRunEnd: vi.fn().mockResolvedValue({
+      const session = createTestSession();
+      const runId = '5d0001' as RunId;
+      publishTestRunStart(session, runId);
+      session.publish([
+        {
+          type: 'run.end',
+          aggregateId: aggregateId('run', runId),
           outcome: RUN_OUTCOME.CANCELLED,
-        }),
-      });
+          output: emptyRunEndOutput(AgentCategory.ToolUse),
+        },
+      ]);
+      yield* session.settlePublications();
 
       expect(
-        yield* readCliRunOutcomeState(mocks.sessionStub(), {
+        yield* readCliRunOutcomeState(session, {
           outcome: RUN_OUTCOME.COMPLETED,
           output: { category: 'toolUse', response: '', files: [] },
-          runId: '5d0001' as RunId,
+          runId,
         }),
       ).toEqual({
         outcome: RUN_OUTCOME.CANCELLED,
@@ -554,20 +553,29 @@ describe('CLI terminal outcome resolution', () => {
     'reports an outcome read failure and retains the completed run',
     () =>
       Effect.gen(function* () {
+        const session = createTestSession();
+        const runId = 'b0f001' as RunId;
+        publishTestRunStart(session, runId);
+        yield* session.settlePublications();
         const reportReadFailure = vi.fn();
-        mocks.getRunRecords.mockReturnValue({
-          readRunEnd: vi
-            .fn()
-            .mockRejectedValue(new Error('metadata read failed')),
-        });
+        // The read fails the way a corrupt store fails it: through the
+        // session's own records port, typed.
+        vi.spyOn(session, 'readRunRecords').mockReturnValue(
+          Effect.fail(
+            new DatabaseReadFailed({
+              path: 'run-records',
+              cause: new Error('metadata read failed'),
+            }),
+          ),
+        );
 
         expect(
           yield* readCliRunOutcomeState(
-            mocks.sessionStub(),
+            session,
             {
               outcome: RUN_OUTCOME.COMPLETED,
               output: { category: 'toolUse', response: '', files: [] },
-              runId: 'b0f001' as RunId,
+              runId,
             },
             reportReadFailure,
           ),
