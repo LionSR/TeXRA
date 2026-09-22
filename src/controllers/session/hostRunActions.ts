@@ -1,10 +1,4 @@
-/**
- * The host request arms that relaunch or retry a run (PRD
- * one-fold-three-renderers, 8.3): `resume`, `runNew`, `runCompileFixer`,
- * `useOwnApiKey`, and the launcher restore of a settled run's setup. The
- * host binds its launcher, catalog, key prompt, and notifications. Both the VS
- * Code extension and desktop use one body.
- */
+/** Host-neutral relaunch and retry actions shared by extension and desktop. */
 import {
   Data,
   Deferred,

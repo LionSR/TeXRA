@@ -620,6 +620,7 @@ describe('session events and view', () => {
         chunks: [],
         local: null,
         host: null,
+        debug: false,
         replayComplete: true,
         existence: {
           checkedAggregateIds: rows.map(({ aggregateId }) => aggregateId),

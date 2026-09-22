@@ -278,12 +278,9 @@ async function initVscodePlatform(
     // threads, the update check and the CLI-shared input history read
     // through it for as long as this runtime lives.
     globalDatabase: globalDatabaseLayer(storage.getGlobalStoragePath()),
-    // The Output channel filters for itself (its own level selector and the
-    // Output view's filter), so the runtime emits everything it is handed.
+    // The Output channel owns filtering, so emit every level.
     minimumLogLevel: 'Trace',
   });
-  // Recorded the moment it exists: every step below runs on it and can fail,
-  // and `shutdownExtension` is what disposes it when activation does.
   processRuntime = runtime;
   const scope = Scope.makeUnsafe();
   projectScope = scope;
