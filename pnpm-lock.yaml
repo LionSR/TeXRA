@@ -189,7 +189,7 @@ catalogs:
 
 patchedDependencies:
   ink@7.1.1: db8f5740efe4e780f6517316175dfed1e68d62e76e533c06bf0b8f5e94b48aa6
-  openai@7.20.0: 4c08dc91afbfc9124b4f92f16eb687ab9ff671d2138de7569f82ff99dc492009
+  openai@7.20.0: cfbfaa7a311d8ae96988e3e2e56de12fd1296b84a11b2a85c8408679a7b684e5
 
 importers:
 
@@ -353,7 +353,7 @@ importers:
         version: 3.2.4(chokidar@3.6.0)
       openai:
         specifier: 'catalog:'
-        version: 7.20.0(patch_hash=4c08dc91afbfc9124b4f92f16eb687ab9ff671d2138de7569f82ff99dc492009)(undici@8.10.2)(ws@8.21.3)(zod@4.4.3)
+        version: 7.20.0(patch_hash=cfbfaa7a311d8ae96988e3e2e56de12fd1296b84a11b2a85c8408679a7b684e5)(undici@8.10.2)(ws@8.21.3)(zod@4.4.3)
       pathe:
         specifier: 'catalog:'
         version: 2.0.3
@@ -639,7 +639,7 @@ importers:
         version: 3.2.4(chokidar@3.6.0)
       openai:
         specifier: 'catalog:'
-        version: 7.20.0(patch_hash=4c08dc91afbfc9124b4f92f16eb687ab9ff671d2138de7569f82ff99dc492009)(undici@8.10.2)(ws@8.21.3)(zod@4.4.3)
+        version: 7.20.0(patch_hash=cfbfaa7a311d8ae96988e3e2e56de12fd1296b84a11b2a85c8408679a7b684e5)(undici@8.10.2)(ws@8.21.3)(zod@4.4.3)
       pathe:
         specifier: 'catalog:'
         version: 2.0.3
@@ -869,7 +869,7 @@ importers:
         version: 2.23.0(@modelcontextprotocol/sdk@1.30.0(supports-color@10.2.2)(zod@4.4.3))(supports-color@10.2.2)
       openai:
         specifier: 7.20.0
-        version: 7.20.0(patch_hash=4c08dc91afbfc9124b4f92f16eb687ab9ff671d2138de7569f82ff99dc492009)(undici@8.10.2)(ws@8.21.3)(zod@4.4.3)
+        version: 7.20.0(patch_hash=cfbfaa7a311d8ae96988e3e2e56de12fd1296b84a11b2a85c8408679a7b684e5)(undici@8.10.2)(ws@8.21.3)(zod@4.4.3)
       ws:
         specifier: 8.21.3
         version: 8.21.3
@@ -9680,7 +9680,7 @@ snapshots:
       is-inside-container: 1.0.0
       wsl-utils: 0.1.0
 
-  openai@7.20.0(patch_hash=4c08dc91afbfc9124b4f92f16eb687ab9ff671d2138de7569f82ff99dc492009)(undici@8.10.2)(ws@8.21.3)(zod@4.4.3):
+  openai@7.20.0(patch_hash=cfbfaa7a311d8ae96988e3e2e56de12fd1296b84a11b2a85c8408679a7b684e5)(undici@8.10.2)(ws@8.21.3)(zod@4.4.3):
     optionalDependencies:
       undici: 8.10.2
       ws: 8.21.3

@@ -219,3 +219,81 @@ index 534b58405aee234942b241136d05719745d45c69..3c2c74db08fa3c9c6b91c44f2822b3b4
    snapshot?: Response,
  ): Response {
    return accumulateResponseWithContext(event, snapshot, createResponseContext());
+diff --git a/core/streaming.js b/core/streaming.js
+index e77303371399b9b8061e55d6138aa4df35182825..ccc5608da2dc52a9cfb664600565b7472aaa233f 100644
+--- a/core/streaming.js
++++ b/core/streaming.js
+@@ -87,17 +87,11 @@ class Stream {
+             consumed = true;
+             let done = false;
+             let receivedCompletionSentinel = false;
+-            const messages = _iterSSEMessages(response, controller);
+-            const closeMessages = messages.return.bind(messages);
+-            messages.return = (value) => {
+-                // Abort before nested iterator cleanup can wait on the response body's cancellation.
+-                if (!receivedCompletionSentinel) {
+-                    controller.abort();
+-                }
+-                return closeMessages(value);
+-            };
++            // TeXRA patch: keep the pre-7.13.0 close-before-abort ordering so a
++            // body-cancel rejection during nested SSE cleanup stays observable
++            // to the caller instead of being swallowed after controller.abort().
+             try {
+-                for await (const sse of messages) {
++                for await (const sse of _iterSSEMessages(response, controller)) {
+                     if (sse.data === '[DONE]') {
+                         receivedCompletionSentinel = true;
+                         break;
+diff --git a/core/streaming.mjs b/core/streaming.mjs
+index 65a5031829d5089e4dbc7cca90605ae22898dff5..c1715e9c5098716fe8c233cc0830befe0c67b438 100644
+--- a/core/streaming.mjs
++++ b/core/streaming.mjs
+@@ -83,17 +83,11 @@ export class Stream {
+             consumed = true;
+             let done = false;
+             let receivedCompletionSentinel = false;
+-            const messages = _iterSSEMessages(response, controller);
+-            const closeMessages = messages.return.bind(messages);
+-            messages.return = (value) => {
+-                // Abort before nested iterator cleanup can wait on the response body's cancellation.
+-                if (!receivedCompletionSentinel) {
+-                    controller.abort();
+-                }
+-                return closeMessages(value);
+-            };
++            // TeXRA patch: keep the pre-7.13.0 close-before-abort ordering so a
++            // body-cancel rejection during nested SSE cleanup stays observable
++            // to the caller instead of being swallowed after controller.abort().
+             try {
+-                for await (const sse of messages) {
++                for await (const sse of _iterSSEMessages(response, controller)) {
+                     if (sse.data === '[DONE]') {
+                         receivedCompletionSentinel = true;
+                         break;
+diff --git a/src/core/streaming.ts b/src/core/streaming.ts
+index 1f7cd25898e3712d9706082ea85a83b8503002d6..351b514a369746b932d7d308b860f65b4a485c85 100644
+--- a/src/core/streaming.ts
++++ b/src/core/streaming.ts
+@@ -119,17 +119,11 @@ export class Stream<Item> implements AsyncIterable<Item> {
+       consumed = true;
+       let done = false;
+       let receivedCompletionSentinel = false;
+-      const messages = _iterSSEMessages(response, controller);
+-      const closeMessages = messages.return.bind(messages);
+-      messages.return = (value) => {
+-        // Abort before nested iterator cleanup can wait on the response body's cancellation.
+-        if (!receivedCompletionSentinel) {
+-          controller.abort();
+-        }
+-        return closeMessages(value);
+-      };
++      // TeXRA patch: keep the pre-7.13.0 close-before-abort ordering so a
++      // body-cancel rejection during nested SSE cleanup stays observable to
++      // the caller instead of being swallowed after controller.abort().
+       try {
+-        for await (const sse of messages) {
++        for await (const sse of _iterSSEMessages(response, controller)) {
+           if (sse.data === '[DONE]') {
+             receivedCompletionSentinel = true;
+             break;
