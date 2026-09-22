@@ -45,7 +45,7 @@ import {
   INSTRUCTION_ACTION,
   RUN_OUTCOME,
 } from '@shared/schemas';
-import { UsageLog } from '@telemetry/UsageLogService';
+import { UsageLog } from '@shared/usageLog';
 import { createRunTrace, type RunTrace } from '@transcript';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 

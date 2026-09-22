@@ -5,8 +5,8 @@ import { afterEach, beforeEach, describe, expect, vi, type Mock } from 'vitest';
 import { SupabaseAuth } from '@auth/SupabaseAuth';
 import * as logger from '@logger/logUtils';
 import { AgentCategory, TELEMETRY_ENABLED_KEY } from '@shared/schemas';
+import { UsageLog } from '@shared/usageLog';
 import {
-  UsageLog,
   usageLogLayer,
   type UsageLogOptions,
 } from '@telemetry/UsageLogService';

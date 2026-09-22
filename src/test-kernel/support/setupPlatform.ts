@@ -52,7 +52,7 @@ import {
 } from '@shared/session/database';
 import { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
 import { InquiryRecords } from '@shared/session/inquiryRecords';
-import { UsageLog } from '@telemetry/UsageLogService';
+import { UsageLog } from '@shared/usageLog';
 import { GitHubSubscriptions } from '@tools/github/subscriptionBindings';
 import {
   LeanLanguageServices,

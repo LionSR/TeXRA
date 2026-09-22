@@ -3,7 +3,7 @@ import { Effect } from 'effect';
 import { installProcessRuntime } from '@controllers/session/sessionLayer';
 import { globalDatabaseLayer } from '@controllers/session/Database';
 import { AppState, AgentDirectories } from '@platform/interfaces';
-import { UsageLog } from '@telemetry/UsageLogService';
+import { UsageLog } from '@shared/usageLog';
 import { directLeanLanguageServices } from '@tools/lean/direct/directLspAdapter';
 import { initTestProcessRuntime } from './testProcessRuntime';
 import { createFakeWorkspaceRoots } from './FakePlatform';

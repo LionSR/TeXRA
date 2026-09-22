@@ -40,7 +40,7 @@ import type { LanguageModelPort } from '@platform/languageModel';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { nodeProcesses } from '@platform/defaults/nodeProcesses';
-import { UsageLog } from '@telemetry/UsageLogService';
+import { UsageLog } from '@shared/usageLog';
 import { directLeanLanguageServices } from '@tools/lean/direct/directLspAdapter';
 import {
   SetupCommandFailed,

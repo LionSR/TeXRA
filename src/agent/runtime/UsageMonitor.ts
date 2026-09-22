@@ -8,8 +8,7 @@ import type {
   UsageRoute,
 } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
-import type { UsageLog } from '@telemetry/UsageLogService';
-import type { UsageLogStats } from '@telemetry/UsageLogTypes';
+import type { UsageLog, UsageLogStats } from '@shared/usageLog';
 import { roundTo } from '@utils/core';
 import type { ModelCapabilities, ModelConfig } from 'llm-zoo';
 

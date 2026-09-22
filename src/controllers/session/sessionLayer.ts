@@ -105,7 +105,7 @@ import {
   type GlobalDatabase,
   type SessionOpenError,
 } from '@shared/session/database';
-import type { UsageLog } from '@telemetry/UsageLogService';
+import type { UsageLog } from '@shared/usageLog';
 import { releaseRunResources } from '@tools/approval';
 import { InlineComments } from '@tools/comment/InlineCommentTool';
 import type { InlineCommentProvider } from '@tools/comment/InlineCommentTool';

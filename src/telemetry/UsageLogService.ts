@@ -2,7 +2,6 @@ import { randomUUID } from 'node:crypto';
 
 import {
   Clock,
-  Context,
   Data,
   Duration,
   Effect,
@@ -27,19 +26,18 @@ import {
   TELEMETRY_ENABLED_KEY,
 } from '@shared/schemas';
 import { CODING_PLAN_SUBSCRIPTIONS } from '@shared/codingPlanSubscriptions';
+import { UsageLog, UsageLogResponseSchema } from '@shared/usageLog';
+import type {
+  UsageLogEntry,
+  UsageLogBatch,
+  UsageLogResponse,
+} from '@shared/usageLog';
 import {
   extractErrorMessage,
   toErrorMessage,
 } from '@utils/errors/errorMessage';
 import { isEnvFlagEnabled } from '@utils/system/envFlags';
 import { unrefSleepClock } from '@utils/system/unrefSleepClock';
-
-import { UsageLogResponseSchema } from './UsageLogTypes';
-import type {
-  UsageLogEntry,
-  UsageLogBatch,
-  UsageLogResponse,
-} from './UsageLogTypes';
 
 const log = createLog('UsageLogService');
 
@@ -535,14 +533,6 @@ class UsageLogServiceImpl {
       log.debug('UsageLogService drained');
     },
   );
-}
-
-/** The producer of the usage queue owned by this process runtime. */
-export class UsageLog extends Context.Service<
-  UsageLog,
-  Pick<UsageLogServiceImpl, 'log'>
->()('@texra/UsageLog') {
-  static readonly disabled = Layer.succeed(UsageLog)({ log: () => {} });
 }
 
 /** What a host stamps on its entries, and the cadence a test overrides. */
