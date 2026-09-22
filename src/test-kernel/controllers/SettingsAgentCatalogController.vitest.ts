@@ -5,21 +5,27 @@ import { Effect } from 'effect';
 
 import { describe, expect } from 'vitest';
 
+import { AgentRosterController } from '@agent/roster/AgentRosterController';
 import {
   findTeamPreset,
   planTeamRun,
   teamPresets,
 } from '@common/teams/TeamPlan';
+import { SettingsAgentCatalogController } from '@controllers/settingsView/SettingsAgentCatalogController';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
-  SettingsAgentCatalogController,
-  type SettingsAgentCatalogState,
-} from '@controllers/settingsView/SettingsAgentCatalogController';
-import { AGENT_MODE_PRESETS_BY_ID } from '@shared/schemas';
+  AGENT_MODE_PRESETS_BY_ID,
+  agentKeyOf,
+  agentMatchesIdentifier,
+  byCategory,
+  parseAgentModePresets,
+} from '@shared/schemas';
 import type { AgentCategory, AgentModePreset } from '@shared/schemas';
+import { FakeStateStore } from '@test/support/FakePlatform';
 
-/** The entry is file-local; derive it from the exported catalog state port. */
+/** The catalog consumes the native roster and the same entry lookup. */
 type SettingsAgentCatalogEntry = ReturnType<
-  SettingsAgentCatalogState['getAgents']
+  ConstructorParameters<typeof SettingsAgentCatalogController>[0]['getAgents']
 >[0];
 
 const AGENTS: Record<AgentCategory, SettingsAgentCatalogEntry[]> = {
@@ -74,52 +80,50 @@ function createController(options?: {
   visible?: Partial<Record<AgentCategory, SettingsAgentCatalogEntry[]>>;
   customPresets?: unknown;
   now?: number;
-}): {
-  controller: SettingsAgentCatalogController;
-  enabled: Partial<Record<AgentCategory, string[] | undefined>>;
-  committedTeams: string[];
-  customPresets: unknown[];
-} {
-  const enabled = { ...(options?.enabled ?? {}) };
-  const committedTeams: string[] = [];
-  let customPresetsRaw: unknown = options?.customPresets ?? [];
+}) {
+  const workspaceState = new FakeStateStore({
+    [WorkspaceStateKey.CUSTOM_AGENT_PRESETS]: options?.customPresets ?? [],
+    ...(options?.enabled || options?.visible
+      ? {
+          [WorkspaceStateKey.AGENT_ROSTER_SELECTION]: {
+            kind: 'custom',
+            agentKeys: byCategory(
+              (category) =>
+                options.visible?.[category]?.map(agentKeyOf) ??
+                options.enabled?.[category] ??
+                'all',
+            ),
+          },
+        }
+      : {}),
+  });
+  const getAgents = (category: AgentCategory) =>
+    options?.agents?.[category] ?? AGENTS[category];
+  const roster = new AgentRosterController({
+    workspaceState,
+    globalState: new FakeStateStore(),
+    getAgents,
+    resolveAgent: (category, identifier) =>
+      getAgents(category).find((entry) =>
+        agentMatchesIdentifier(entry, identifier),
+      ),
+    getPresets: () =>
+      workspaceState
+        .get(WorkspaceStateKey.CUSTOM_AGENT_PRESETS, [])
+        .pipe(Effect.map(parseAgentModePresets)),
+  });
   return {
     controller: new SettingsAgentCatalogController({
+      workspaceState,
+      roster,
+      getAgents,
       now: () => options?.now ?? 123,
-      state: {
-        getEnabledAgentKeys: (category) => Effect.succeed(enabled[category]),
-        setEnabledAgentKeys: (category, enabledKeys) =>
-          Effect.sync(() => {
-            enabled[category] = enabledKeys;
-          }),
-        setTeamRoster: (preset) =>
-          Effect.sync(() => {
-            committedTeams.push(preset.id);
-          }),
-        getAgents: (category) =>
-          options?.agents?.[category] ?? AGENTS[category],
-        getVisibleAgents: (category) =>
-          Effect.succeed(
-            options?.visible?.[category] ??
-              options?.agents?.[category] ??
-              AGENTS[category],
-          ),
-        getCustomPresetsRaw: () => Effect.succeed(customPresetsRaw),
-        setCustomPresets: (presets) =>
-          Effect.sync(() => {
-            customPresetsRaw = presets;
-          }),
-        removeCustomPreset: (_presetId, remaining) =>
-          Effect.sync(() => {
-            customPresetsRaw = remaining;
-          }),
-      },
     }),
-    enabled,
-    committedTeams,
-    get customPresets() {
-      return Array.isArray(customPresetsRaw) ? customPresetsRaw : [];
-    },
+    workspaceState,
+    customPresets: workspaceState.get<unknown[]>(
+      WorkspaceStateKey.CUSTOM_AGENT_PRESETS,
+      [],
+    ),
   };
 }
 
@@ -198,7 +202,7 @@ describe('SettingsAgentCatalogController', () => {
           },
           texraHostedAgents: [],
         };
-        const { controller, enabled, committedTeams } = createController({
+        const { controller, workspaceState } = createController({
           customPresets: [persistedPreset],
         });
 
@@ -219,9 +223,10 @@ describe('SettingsAgentCatalogController', () => {
 
         // The commit stores the team reference, not a frozen key snapshot: the
         // roster re-resolves it against the catalog on every read.
-        assert.deepEqual(committedTeams, ['custom-team']);
-        assert.deepEqual(enabled.workflow, undefined);
-        assert.deepEqual(enabled.toolUse, undefined);
+        assert.deepEqual(
+          yield* workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
+          { kind: 'team', teamId: 'custom-team' },
+        );
       }),
   );
 
@@ -437,7 +442,7 @@ describe('SettingsAgentCatalogController', () => {
           texraHostedAgents: [],
         },
       );
-      assert.equal(state.customPresets.length, 1);
+      assert.equal((yield* state.customPresets).length, 1);
     }),
   );
 
@@ -451,12 +456,12 @@ describe('SettingsAgentCatalogController', () => {
 
         yield* state.controller.saveCurrentPreset('New Team');
 
-        assert.deepEqual(state.customPresets.slice(0, 2), [
+        assert.deepEqual((yield* state.customPresets).slice(0, 2), [
           LEGACY_ICON_PRESET,
           MALFORMED_PRESET,
         ]);
         assert.equal(
-          (state.customPresets[2] as AgentModePreset | undefined)?.id,
+          ((yield* state.customPresets)[2] as AgentModePreset | undefined)?.id,
           'custom-123',
         );
       }),
@@ -481,7 +486,7 @@ describe('SettingsAgentCatalogController', () => {
         yield* state.controller.deleteCustomPreset('custom-team'),
         preset,
       );
-      assert.deepEqual(state.customPresets, []);
+      assert.deepEqual(yield* state.customPresets, []);
       assert.equal(yield* state.controller.deleteCustomPreset('missing'), null);
     }),
   );
@@ -507,7 +512,7 @@ describe('SettingsAgentCatalogController', () => {
         yield* state.controller.deleteCustomPreset(target.id),
         target,
       );
-      assert.deepEqual(state.customPresets, [
+      assert.deepEqual(yield* state.customPresets, [
         LEGACY_ICON_PRESET,
         MALFORMED_PRESET,
       ]);

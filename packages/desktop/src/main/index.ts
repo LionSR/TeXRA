@@ -19,7 +19,7 @@ import { presentAgentFailure } from '@agent/runtime';
 import {
   agentSourceDirectory,
   getAgentsByCategory,
-  getVisibleAgents,
+  createWorkspaceAgentRosterController,
   loadAgents,
   refresh,
 } from '@agent/index';
@@ -1254,23 +1254,16 @@ function createWindow(options: {
       installDesktopWindowTitle(window, project.session, project.root, runtime),
     );
     const agentSettingsController = new DefaultDesktopAgentSettingsController({
+      roster: createWorkspaceAgentRosterController({
+        workspaceState: project.roots.workspaceState,
+        globalState: options.globalState,
+      }),
       workspaceState: project.roots.workspaceState,
       globalState: options.globalState,
       registry: {
         loadAgents,
         refreshAgents: refresh,
         getAgents: getAgentsByCategory,
-        // One window, many papers: the roster this settings surface shows is
-        // the attached project's, so the slots are bound here rather than
-        // resolved from whichever fiber asks.
-        getVisibleAgents: (category: AgentCategory) =>
-          getVisibleAgents(
-            {
-              workspaceState: project.roots.workspaceState,
-              globalState: options.globalState,
-            },
-            category,
-          ),
       },
       directory: {
         getCustomAgentDirectory: () => options.agentDirectories.custom(),

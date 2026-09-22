@@ -169,16 +169,6 @@ export class RunRegistry {
     if (handle.parent !== null)
       this.assertAdmitsChild(handle.parent, handle.runId);
     const previous = this.roster.handle(handle.runId);
-    const activation = this.roster.activation(handle.runId);
-    // A handle replacing this run's registration takes the lineage that
-    // registration holds now. `detach` is the only write to a parent edge and
-    // no run grows one it did not start with, so a tracked handle (or a child
-    // activation) without one has been severed by its parent's detaching stop
-    // — possibly while this successor was being prepared, from a parent edge
-    // the successor was built with. Carrying the sever in the same step that
-    // swaps the handles is what stops a handle built before a `run.detach`
-    // from restoring the edge that row removed.
-    if (activation?.isDetached() || previous?.parent === null) handle.detach();
     if (previous?.stopRequested === true) handle.interrupt();
     this.roster.setHandle(handle);
     this.roster.notifyWaiters(handle.runId);
@@ -397,7 +387,8 @@ export class RunRegistry {
     if (this.roster.activation(activation.runId)) {
       return () => {};
     }
-    this.assertAdmitsChild(activation.parentRunId, activation.runId);
+    if (activation.parent.current !== null)
+      this.assertAdmitsChild(activation.parent.current, activation.runId);
     this.roster.addActivation(activation);
     return () => this.roster.removeActivation(activation.runId, activation);
   }

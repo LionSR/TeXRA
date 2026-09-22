@@ -299,6 +299,7 @@ function agentRun(
         runId,
         runStageId: undefined,
         config: testWorkspaceRoots().config,
+        usageLog: { log: () => {} },
       },
       { agentName: CONFIG.agent, agentCategory: SETTING.agentCategory },
     ),

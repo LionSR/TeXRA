@@ -52,6 +52,7 @@ import {
 } from '@shared/session/database';
 import { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
 import { InquiryRecords } from '@shared/session/inquiryRecords';
+import { UsageLog } from '@telemetry/UsageLogService';
 import { GitHubSubscriptions } from '@tools/github/subscriptionBindings';
 import {
   LeanLanguageServices,
@@ -418,6 +419,7 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
   // `testRuntime().runSync` callers, so a lazily imported (asynchronous)
   // layer here fails every one of them.
   processServices ??= Layer.mergeAll(
+    UsageLog.disabled,
     ProcessIdentity.layer(processOwnerId('test')),
     testHttpClientLayer,
     // The same standard-library filesystem and path services the process

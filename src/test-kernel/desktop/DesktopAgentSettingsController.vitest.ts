@@ -2,8 +2,15 @@ import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
+import { AgentRosterController } from '@agent/roster/AgentRosterController';
 import { DefaultDesktopAgentSettingsController } from '@desktop/main/desktopAgentSettingsController';
 import { withProcessServices } from '@platform/processRuntime';
+import {
+  agentKeyOf,
+  agentMatchesIdentifier,
+  byCategory,
+  parseAgentModePresets,
+} from '@shared/schemas';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { assertSupported, isUnsupported } from '@shared/utils/dispatcher';
@@ -47,7 +54,20 @@ beforeEach(() => {
 });
 
 function createControllerFixture(options: ControllerFixtureOptions = {}) {
-  const workspaceState = options.workspaceState ?? new FakeStateStore();
+  const workspaceState =
+    options.workspaceState ??
+    new FakeStateStore(
+      options.visibleCatalog
+        ? {
+            [WorkspaceStateKey.AGENT_ROSTER_SELECTION]: {
+              kind: 'custom',
+              agentKeys: byCategory((category) =>
+                options.visibleCatalog![category].map(agentKeyOf),
+              ),
+            },
+          }
+        : {},
+    );
   const globalState = options.globalState ?? new FakeStateStore();
   const posted: unknown[] = [];
   /** One entry per catalog change: the applied team's tool-use root, else undefined. */
@@ -58,15 +78,26 @@ function createControllerFixture(options: ControllerFixtureOptions = {}) {
   const confirmed: string[] = [];
   const emptyCatalog: AgentCatalog = { workflow: [], toolUse: [] };
   const catalog = options.catalog ?? emptyCatalog;
-  const visibleCatalog = options.visibleCatalog ?? catalog;
   const controller = new DefaultDesktopAgentSettingsController({
+    roster: new AgentRosterController({
+      workspaceState,
+      globalState,
+      getAgents: (category) => catalog[category],
+      resolveAgent: (category, identifier) =>
+        catalog[category].find((entry) =>
+          agentMatchesIdentifier(entry, identifier),
+        ),
+      getPresets: () =>
+        workspaceState
+          .get(WorkspaceStateKey.CUSTOM_AGENT_PRESETS, [])
+          .pipe(Effect.map(parseAgentModePresets)),
+    }),
     workspaceState,
     globalState,
     registry: {
       loadAgents: options.loadAgents ?? (() => Effect.void),
       refreshAgents: options.refreshAgents ?? (() => Effect.void),
       getAgents: (category) => catalog[category],
-      getVisibleAgents: (category) => Effect.succeed(visibleCatalog[category]),
     },
     directory: {
       getCustomAgentDirectory: () => Effect.succeed('/agents/custom'),

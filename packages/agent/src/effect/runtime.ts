@@ -40,6 +40,7 @@ import type { LanguageModelPort } from '@platform/languageModel';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { nodeProcesses } from '@platform/defaults/nodeProcesses';
+import { UsageLog } from '@telemetry/UsageLogService';
 import { directLeanLanguageServices } from '@tools/lean/direct/directLspAdapter';
 import {
   SetupCommandFailed,
@@ -220,7 +221,7 @@ export function composeProcess(platform: AgentPlatform): ProcessHold {
       lean: directLeanLanguageServices(),
       // An embedder reports no usage: the package has no version or editor of
       // its own to stamp entries with, and no account plane to send them on.
-      usageLog: Layer.empty,
+      usageLog: UsageLog.disabled,
       // The embedder's global root is a root like any host's: one handle for
       // the life of the runtime this composition installs.
       globalDatabase: globalDatabaseLayer(platform.roots.globalStorage),

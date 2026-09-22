@@ -1,8 +1,9 @@
-import { Effect, Layer } from 'effect';
+import { Effect } from 'effect';
 
 import { installProcessRuntime } from '@controllers/session/sessionLayer';
 import { globalDatabaseLayer } from '@controllers/session/Database';
 import { AppState, AgentDirectories } from '@platform/interfaces';
+import { UsageLog } from '@telemetry/UsageLogService';
 import { directLeanLanguageServices } from '@tools/lean/direct/directLspAdapter';
 import { initTestProcessRuntime } from './testProcessRuntime';
 import { createFakeWorkspaceRoots } from './FakePlatform';
@@ -69,7 +70,7 @@ initTestProcessRuntime(
     // The Node hosts' layer: inert until a Lean tool is invoked.
     lean: directLeanLanguageServices(),
     // The harness reports no usage; the telemetry suite starts its own.
-    usageLog: Layer.empty,
+    usageLog: UsageLog.disabled,
     globalDatabase: globalDatabaseLayer(globalStorage),
   }),
 );

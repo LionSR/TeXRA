@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import {
   Clock,
+  Context,
   Data,
   Duration,
   Effect,
@@ -193,9 +194,7 @@ class UsageBatchUndelivered extends Data.TaggedError('UsageBatchUndelivered')<{
 class UsageLogServiceImpl {
   private queue: QueuedUsageEntry[] = [];
   private retryBatch: RetryBatch | null = null;
-  /** The ticker that schedules the periodic flush, forked into the runtime's
-   *  scope and interrupted before the drain. It only signals the sender, so
-   *  interrupting the ticker never touches a send. */
+  /** Scoped ticker; interrupting it never interrupts an active send. */
   private flushTimer: Fiber.Fiber<never> | null = null;
   private triggers: Queue.Queue<void> | null = null;
   /** One permit: batches leave in order, and the drain joins an active send. */
@@ -203,17 +202,11 @@ class UsageLogServiceImpl {
   /** Coalesce triggers before they wait for the lane; failed sends wait for
    *  a later trigger instead of being retried by already waiting callers. */
   private backgroundFlushActive = false;
-  // Copied, never aliased: the drain writes `config.enabled`, so an unstarted
-  // service would otherwise flip DEFAULT_CONFIG for good.
   private config: UsageLogConfig = { ...DEFAULT_CONFIG };
   private extensionVersion: string | undefined;
   private editorType: string | undefined;
 
-  /**
-   * Start the sender and the flush ticker in the ambient scope, and register
-   * the drain that runs before they stop. The scope is the runtime's, so the
-   * lifetime is the process's and no host brackets it by hand.
-   */
+  /** Start this instance's sender and ticker, then register its final drain. */
   readonly start = Effect.fn('UsageLogService.start')(function* (
     this: UsageLogServiceImpl,
     options: UsageLogOptions,
@@ -544,7 +537,13 @@ class UsageLogServiceImpl {
   );
 }
 
-export const UsageLogService = new UsageLogServiceImpl();
+/** The producer of the usage queue owned by this process runtime. */
+export class UsageLog extends Context.Service<
+  UsageLog,
+  Pick<UsageLogServiceImpl, 'log'>
+>()('@texra/UsageLog') {
+  static readonly disabled = Layer.succeed(UsageLog)({ log: () => {} });
+}
 
 /** What a host stamps on its entries, and the cadence a test overrides. */
 export interface UsageLogOptions {
@@ -558,14 +557,15 @@ export interface UsageLogOptions {
   readonly config?: Partial<UsageLogConfig>;
 }
 
-/**
- * The usage log as a lifetime, not a pair of calls: the process layer builds
- * this, its sender and ticker run for the runtime's life, and its finalizer
- * drains the queue on disposal. Every host used to bracket `initialize` and
- * `dispose` itself, in a different shutdown phase each, which is how a queue
- * shorter than one batch could be lost at quit on one host and not another.
- */
+/** Allocate and drain one queue for this layer's lifetime. */
 export const usageLogLayer = (
   options: UsageLogOptions,
-): Layer.Layer<never, never, HttpClient.HttpClient | SupabaseAuth> =>
-  Layer.effectDiscard(UsageLogService.start(options));
+): Layer.Layer<UsageLog, never, HttpClient.HttpClient | SupabaseAuth> =>
+  Layer.effect(
+    UsageLog,
+    Effect.gen(function* () {
+      const usageLog = new UsageLogServiceImpl();
+      yield* usageLog.start(options);
+      return usageLog;
+    }),
+  );

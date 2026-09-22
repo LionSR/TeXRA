@@ -358,7 +358,7 @@ export class RunStopper {
     // to the parent as a completed one.
     const activation = this.roster.activation(handle.runId);
     let activationInterrupted = false;
-    if (activation && !activation.isDetached()) {
+    if (activation && activation.parent.current !== null) {
       const key = `activation:${activation.runId}`;
       if (!visited.has(key)) {
         visited.add(key);

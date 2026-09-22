@@ -8,7 +8,7 @@ import type {
   UsageRoute,
 } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
-import { UsageLogService } from '@telemetry/UsageLogService';
+import type { UsageLog } from '@telemetry/UsageLogService';
 import type { UsageLogStats } from '@telemetry/UsageLogTypes';
 import { roundTo } from '@utils/core';
 import type { ModelCapabilities, ModelConfig } from 'llm-zoo';
@@ -68,6 +68,7 @@ interface UsageMonitorContext {
   runStageId: string | undefined;
   /** The run's workspace configuration, which usage logging reads consent from. */
   config: ConfigProvider;
+  usageLog: UsageLog['Service'];
 }
 
 /** Label for the run flavor named in this monitor's diagnostics. */
@@ -249,7 +250,7 @@ export class UsageMonitor {
     try {
       const cachedInputTokens = usage.cachedInputTokens ?? 0;
 
-      UsageLogService.log(
+      this.context.usageLog.log(
         {
           model: model.fullName,
           provider,

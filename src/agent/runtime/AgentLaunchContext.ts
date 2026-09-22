@@ -45,6 +45,7 @@ import {
   INSTRUCTION_ACTION,
   RUN_OUTCOME,
 } from '@shared/schemas';
+import { UsageLog } from '@telemetry/UsageLogService';
 import { createRunTrace, type RunTrace } from '@transcript';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -60,11 +61,8 @@ import type {
 const CHANNEL = 'AgentLaunchContext';
 
 /**
- * The run's own facts, declared once on {@link AgentRunShape}: the launch
- * resolves them and the run's `AgentRun` service carries them for the rest of
- * the run's life, so neither side can drift from the other. The run narrows
- * `setting` to its resolved tool list; every other fact reaches the service
- * exactly as the launch resolved it.
+ * The launch facts carried by {@link AgentRunShape}. The run narrows `setting`
+ * to its resolved tool list; every other fact reaches it unchanged.
  */
 type LaunchResolvedRunFacts = Pick<
   AgentRunShape,
@@ -389,7 +387,7 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
   ): Effect.fn.Return<
     AgentLaunchContext,
     Error,
-    Secrets | AppState | FileSystem.FileSystem | Scope.Scope
+    Secrets | AppState | UsageLog | FileSystem.FileSystem | Scope.Scope
   > {
     yield* failIfLaunchStopped(input.stopped);
     const { config, setting, prompt, agentEntry, modelConfig } =
@@ -549,6 +547,7 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
         runId,
         runStageId: parentStage.id,
         config: session.roots.config,
+        usageLog: yield* UsageLog,
       },
       {
         agentName: config.agent,

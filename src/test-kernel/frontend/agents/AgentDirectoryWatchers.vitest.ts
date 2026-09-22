@@ -5,8 +5,8 @@ import { beforeEach, describe, expect, vi } from 'vitest';
 
 // Type imports
 import type { AgentDirectoryEntry } from '@agent/index';
-import { createSettingsAgentControllers } from '@controllers/settingsView/SettingsAgentControllerFactory';
 import { withProcessServices } from '@platform/processRuntime';
+import { buildCustomAgentDirMessage } from '@shared/settingsView/handlers/agentSelectionHandlers';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { FakeStateStore } from '@test/support/FakePlatform';
 import { createDeferred } from '@test/support/asyncTestUtils';
@@ -189,12 +189,6 @@ describe('agent directory watcher rebuilds', () => {
       Effect.gen(function* () {
         const globalState = new FakeStateStore();
         agentDirectories.initialize(globalState, '/resources', testRuntime());
-        const { directory } = createSettingsAgentControllers({
-          globalState,
-          workspaceState: new FakeStateStore(),
-          getCustomAgentDirectory: () => agentDirectories.custom(),
-          getSourceDirectory: (source) => agentDirectories.getDirectory(source),
-        });
         mocks.selectFolder.mockReturnValue(Effect.succeed(EXTERNAL_FIRST));
         yield* agentDirectories
           .promptCustom()
@@ -209,20 +203,22 @@ describe('agent directory watcher rebuilds', () => {
         expect(
           yield* withProcessServices(
             testRuntime(),
-            directory.getCustomDirStatus(),
+            buildCustomAgentDirMessage(globalState, agentDirectories.custom()),
           ),
         ).toEqual({
+          command: 'updateCustomAgentDir',
           path: EXTERNAL_FIRST,
           isDefault: false,
         });
 
-        yield* directory.resetCustomDir();
+        yield* globalState.update(GlobalStateKey.CUSTOM_AGENT_DIR, undefined);
         expect(
           yield* withProcessServices(
             testRuntime(),
-            directory.getCustomDirStatus(),
+            buildCustomAgentDirMessage(globalState, agentDirectories.custom()),
           ),
         ).toEqual({
+          command: 'updateCustomAgentDir',
           path: '/agents/custom',
           isDefault: true,
         });

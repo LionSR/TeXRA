@@ -28,6 +28,7 @@ import type {
 } from '@shared/session/database';
 import type { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
 import type { InquiryRecords } from '@shared/session/inquiryRecords';
+import type { UsageLog } from '@telemetry/UsageLogService';
 import type { GitHubSubscriptions } from '@tools/github/subscriptionBindings';
 import type { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import type { SetupPlatform } from '@tools/setup/platform';
@@ -79,6 +80,7 @@ export type ProcessServices =
   | ToolInjections
   | LeanLanguageServices
   | GitHubSubscriptions
+  | UsageLog
   | SupabaseAuth;
 
 export type ProcessRuntime = ManagedRuntime.ManagedRuntime<

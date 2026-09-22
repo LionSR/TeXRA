@@ -39,6 +39,11 @@ export interface RunFacts {
   readonly category: AgentCategory;
 }
 
+/** One live parent edge, retained by a native activation and its handles. */
+export interface RunParent {
+  current: RunId | null;
+}
+
 /** Live run-owned capability that can receive a user stop request. */
 export interface RunInterruptHandler {
   interrupt(): void;
@@ -95,12 +100,8 @@ export class RunHandle<
    * Durable run creation time is `RunView.launchedAt`.
    */
   readonly startedAt = Date.now();
-  /**
-   * The parent edge, the same value the run's `run.start` carries; null for
-   * a root. `detach` is its one write, so "is a child", the delivery target,
-   * and caller ownership can never disagree.
-   */
-  private _parent: RunId | null;
+  /** @internal The roster shares this cell across one activation's handles. */
+  parentState: RunParent;
   private interruptHandler?: RunInterruptHandler;
   private toolUseFlowContext?: LiveToolUseFlowContext;
 
@@ -127,7 +128,7 @@ export class RunHandle<
      *  run's handle, which the type parameter records. */
     readonly trace: Trace = undefined as Trace,
   ) {
-    this._parent = parent;
+    this.parentState = { current: parent };
   }
 
   get runId(): RunId {
@@ -163,24 +164,19 @@ export class RunHandle<
 
   /** The launching run, or null for a root and for a detached child. */
   get parent(): RunId | null {
-    return this._parent;
+    return this.parentState.current;
   }
 
   get isChild(): boolean {
-    return this._parent !== null;
+    return this.parentState.current !== null;
   }
 
   /**
    * The parent this run's results route to, or `undefined` once the run has
-   * none (a root run, or a subagent promoted by {@link detach}).
+   * none (a root run, or a child detached by the roster).
    */
   get deliveryTarget(): RunId | undefined {
-    return this._parent ?? undefined;
-  }
-
-  /** Promote this subagent to a top-level run (detach from parent). */
-  detach(): void {
-    this._parent = null;
+    return this.parentState.current ?? undefined;
   }
 
   /**
@@ -190,7 +186,7 @@ export class RunHandle<
    * orchestrator.
    */
   isOwnedBy(callerRunId: RunId | null | undefined): boolean {
-    return callerRunId != null && this._parent === callerRunId;
+    return callerRunId != null && this.parentState.current === callerRunId;
   }
 
   attachToolUseFlow(context: LiveToolUseFlowContext): void {

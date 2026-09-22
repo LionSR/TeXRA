@@ -123,7 +123,7 @@ const SESSION = {
     // handle this fixture tracks.
     detachChildren: vi.fn((_parent: RunId, children: readonly RunId[]) => {
       if (trackedHandle && children.includes(trackedHandle.runId))
-        trackedHandle.detach();
+        trackedHandle.parentState.current = null;
     }),
     // No competing generation exists in this fixture; the lane is a passthrough.
     launchRun: vi.fn(

@@ -24,17 +24,19 @@ import {
 import {
   templateAgentCategoryLabel,
   templateAgentNamePrompt,
+  validateTemplateAgentName,
   writeTemplateAgentFile,
 } from '@controllers/settingsView/backend/templateAgentCreation';
-import { createSettingsAgentControllers } from '@controllers/settingsView/SettingsAgentControllerFactory';
+import { SettingsAgentCatalogController } from '@controllers/settingsView/SettingsAgentCatalogController';
 import { fetchRemoteAgentPromptYaml } from '@controllers/settingsView/remoteAgentPrompt';
 import { applySettingsTeamRoster } from '@controllers/settingsView/SettingsTeamRosterController';
 import { ExternalOpenFailed, type MessageHost } from '@hosts/uiHosts';
-import type { StateReadFailed } from '@platform/interfaces';
+import type { StateStore } from '@platform/interfaces';
 import type { AgentDirectoriesFailed } from '@platform/interfaces';
 import type { ProcessServices } from '@platform/processRuntime';
 import type { GlobalStorageFs } from '@platform/rootedFs';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import { agentKey } from '@shared/schemas';
 import type { AgentCategory, AgentSource } from '@shared/schemas';
 import type {
@@ -98,14 +100,12 @@ type DesktopAgentHandlers = Pick<
 >;
 
 interface DefaultDesktopAgentSettingsControllerOptions extends SettingsStatePorts {
+  readonly roster: AgentRosterController<AgentEntry>;
   /** The composition root's runtime serves registry and roster programs. */
   readonly registry: {
     readonly loadAgents: typeof loadAgents;
     readonly refreshAgents: typeof refresh;
     readonly getAgents: (category: AgentCategory) => AgentEntry[];
-    readonly getVisibleAgents: (
-      category: AgentCategory,
-    ) => Effect.Effect<AgentEntry[], StateReadFailed>;
   };
   readonly directory: {
     /** The host's agent directories as `AgentDirectoriesPort` declares them:
@@ -192,8 +192,8 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
   readonly handlers: DesktopAgentHandlers;
 
   private readonly catalogController;
-  private readonly directoryController;
-  private readonly roster: AgentRosterController;
+  private readonly globalState: StateStore;
+  private readonly roster: AgentRosterController<AgentEntry>;
   private readonly registry: DefaultDesktopAgentSettingsControllerOptions['registry'];
   private readonly directory: DefaultDesktopAgentSettingsControllerOptions['directory'];
   private readonly renderer: DefaultDesktopAgentSettingsControllerOptions['renderer'];
@@ -225,19 +225,14 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
     this.remoteCatalog = remoteCatalog;
     this.notifications = notifications;
     this.resourcesPath = resourcesPath;
-    const controllers = createSettingsAgentControllers({
+    this.globalState = globalState;
+    this.roster = options.roster;
+    this.catalogController = new SettingsAgentCatalogController({
       workspaceState,
-      globalState,
-      getCustomAgentDirectory: directory.getCustomAgentDirectory,
-      getSourceDirectory: directory.getSourceDirectory,
+      roster: this.roster,
       getAgents: registry.getAgents,
-      getVisibleAgents: registry.getVisibleAgents,
     });
-    this.catalogController = controllers.catalog;
-    this.directoryController = controllers.directory;
-    this.roster = controllers.roster;
     this.agentActions = createSettingsAgentActions({
-      directoryController: this.directoryController,
       findAgent: (source, name) => getAgent(agentKey(source, name)),
       getCustomAgentDirectory: directory.getCustomAgentDirectory,
       getSourceDirectory: directory.getSourceDirectory,
@@ -391,9 +386,10 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
 
   private postCustomAgentDir(): Effect.Effect<void, Error, ProcessServices> {
     return Effect.map(
-      buildCustomAgentDirMessage({
-        getCustomDirStatus: () => this.directoryController.getCustomDirStatus(),
-      }),
+      buildCustomAgentDirMessage(
+        this.globalState,
+        this.directory.getCustomAgentDirectory(),
+      ),
       (message) => {
         this.renderer.postToRenderer(message);
       },
@@ -441,13 +437,15 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
       });
       if (!selectedPath) return;
 
-      yield* this.directoryController.setCustomDir(selectedPath).pipe(
-        Effect.andThen(
-          Effect.all([this.postCustomAgentDir(), this.refreshCatalogData()], {
-            concurrency: 'unbounded',
-          }),
-        ),
-      );
+      yield* this.globalState
+        .update(GlobalStateKey.CUSTOM_AGENT_DIR, selectedPath)
+        .pipe(
+          Effect.andThen(
+            Effect.all([this.postCustomAgentDir(), this.refreshCatalogData()], {
+              concurrency: 'unbounded',
+            }),
+          ),
+        );
     });
   }
 
@@ -467,27 +465,28 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
   }
 
   private resetCustomAgentDir() {
-    return this.directoryController.resetCustomDir().pipe(
-      Effect.andThen(
-        Effect.all([this.postCustomAgentDir(), this.refreshCatalogData()], {
-          concurrency: 'unbounded',
-        }),
-      ),
-      Effect.asVoid,
-    );
+    return this.globalState
+      .update(GlobalStateKey.CUSTOM_AGENT_DIR, undefined)
+      .pipe(
+        Effect.andThen(
+          Effect.all([this.postCustomAgentDir(), this.refreshCatalogData()], {
+            concurrency: 'unbounded',
+          }),
+        ),
+        Effect.asVoid,
+      );
   }
 
   private openAgentFolder() {
     return Effect.gen({ self: this }, function* () {
-      const result =
-        yield* this.directoryController.planOpenAgentFolder('custom');
-      if (!result.ok) {
+      const directory = yield* this.directory.getSourceDirectory('custom');
+      if (!directory) {
         yield* this.notifications.showErrorMessage(
           'No custom agent directory is available',
         );
         return;
       }
-      yield* this.directory.openPath(result.path);
+      yield* this.directory.openPath(directory);
     });
   }
 
@@ -514,7 +513,7 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
       });
       if (!name) return;
 
-      const invalid = this.directoryController.validateTemplateName(name);
+      const invalid = validateTemplateAgentName(name);
       if (invalid) {
         yield* this.notifications.showErrorMessage(invalid);
         return;
@@ -529,14 +528,8 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
           const fs = yield* FileSystem.FileSystem;
           yield* fs.makeDirectory(customDir, { recursive: true });
 
-          const plan = this.directoryController.planTemplateAgent({
-            category: data.category,
-            name,
-            customDir,
-          });
-
           const written = yield* writeTemplateAgentFile(
-            plan,
+            { category: data.category, name, customDir },
             this.resourcesPath,
           ).pipe(
             Effect.mapError(
@@ -553,19 +546,19 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
             return;
           }
 
-          yield* this.directory.openPath(plan.filePath).pipe(
+          yield* this.directory.openPath(written.filePath).pipe(
             Effect.mapError(
               (cause) =>
                 new ExternalOpenFailed({
                   kind: 'path',
-                  target: plan.filePath,
+                  target: written.filePath,
                   message: `The new agent definition could not be opened: ${toErrorMessage(cause)}`,
                   cause,
                 }),
             ),
           );
           yield* this.notifications.showInfoMessage(
-            `Created custom agent: ${plan.fileName}`,
+            `Created custom agent: ${path.basename(written.filePath)}`,
           );
           yield* this.refreshAfterAgentMutation().pipe(
             Effect.mapError(
