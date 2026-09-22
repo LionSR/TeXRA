@@ -386,7 +386,10 @@ Git worktree support: resolved from the active workspace at runtime.`,
             Effect.catch((error) =>
               Effect.logWarning(
                 'Could not deliver the subagent wake failure.',
-              ).pipe(Effect.annotateLogs({ data: error }), withLogChannel(CHANNEL)),
+              ).pipe(
+                Effect.annotateLogs({ data: error }),
+                withLogChannel(CHANNEL),
+              ),
             ),
           ),
         );

@@ -98,7 +98,11 @@ const searchArxiv = Effect.fn('ArxivSearchTool.execute')(function* (
       Effect.catch((error) =>
         Effect.logWarning(
           `Ignoring invalid arxiv category filter "${trimmed}"`,
-        ).pipe(withLogChannel(CHANNEL), Effect.annotateLogs({ data: error }), Effect.as(null)),
+        ).pipe(
+          withLogChannel(CHANNEL),
+          Effect.annotateLogs({ data: error }),
+          Effect.as(null),
+        ),
       ),
     );
     if (filter != null) categoryFilters.push(filter);

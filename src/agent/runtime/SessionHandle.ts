@@ -1433,7 +1433,10 @@ export const settleLiveSessionRuns: Effect.Effect<void> = Effect.gen(
             ? Effect.interrupt
             : Effect.logWarning(
                 `Failed to settle run ${runId} at host exit; a later launch classifies it from its checkpoint`,
-              ).pipe(Effect.annotateLogs({ data: Cause.squash(cause) }), withLogChannel(CHANNEL)),
+              ).pipe(
+                Effect.annotateLogs({ data: Cause.squash(cause) }),
+                withLogChannel(CHANNEL),
+              ),
         ),
       );
     }

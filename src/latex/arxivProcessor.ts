@@ -376,10 +376,12 @@ class ArxivSourceProcessor {
             Effect.logDebug(
               'Ignoring malformed Content-Disposition header from arXiv source download',
             ).pipe(
-              Effect.annotateLogs({ data: {
-                header: disposition,
-                error: toErrorMessage(error),
-              } }),
+              Effect.annotateLogs({
+                data: {
+                  header: disposition,
+                  error: toErrorMessage(error),
+                },
+              }),
               Effect.as(undefined),
             ),
           ),

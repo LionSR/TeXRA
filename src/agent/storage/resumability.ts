@@ -86,7 +86,11 @@ export const checkpointExists = Effect.fn('checkpointExists')(function* (
     Effect.catch((error) =>
       Effect.logWarning(
         `Could not read the checkpoint of ${runId}: ${toErrorMessage(error)}`,
-      ).pipe(Effect.annotateLogs({ data: error }), withLogChannel(CHANNEL), Effect.as(false)),
+      ).pipe(
+        Effect.annotateLogs({ data: error }),
+        withLogChannel(CHANNEL),
+        Effect.as(false),
+      ),
     ),
   );
 });

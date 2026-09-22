@@ -163,12 +163,14 @@ const probeXhighSupport = Effect.fn('codexConfig.probeXhighSupport')(function* (
     yield* Effect.logWarning(
       'Codex xhigh capability probe failed; not caching the result',
     ).pipe(
-      Effect.annotateLogs({ data: {
-        binaryPath,
-        timedOut: result.timedOut,
-        exitCode: result.exitCode,
-        stderr: result.stderr,
-      } }),
+      Effect.annotateLogs({
+        data: {
+          binaryPath,
+          timedOut: result.timedOut,
+          exitCode: result.exitCode,
+          stderr: result.stderr,
+        },
+      }),
       withLogChannel(CHANNEL),
     );
     return false;
@@ -181,7 +183,10 @@ const probeXhighSupport = Effect.fn('codexConfig.probeXhighSupport')(function* (
   if (supported == null) {
     yield* Effect.logWarning(
       'Codex xhigh capability probe returned unreadable catalog',
-    ).pipe(Effect.annotateLogs({ data: { binaryPath } }), withLogChannel(CHANNEL));
+    ).pipe(
+      Effect.annotateLogs({ data: { binaryPath } }),
+      withLogChannel(CHANNEL),
+    );
     return false;
   }
   codexXhighSupportByBinary.set(binaryPath, supported);

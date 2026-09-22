@@ -171,7 +171,11 @@ const readMemoryMeta = Effect.fn('memoryFileSystem.readMemoryMeta')(
       Effect.catch((cause) =>
         Effect.logDebug(
           `Skipping attribution for unreadable memory file ${storagePath}`,
-        ).pipe(withLogChannel(CHANNEL), Effect.annotateLogs({ data: cause }), Effect.as(null)),
+        ).pipe(
+          withLogChannel(CHANNEL),
+          Effect.annotateLogs({ data: cause }),
+          Effect.as(null),
+        ),
       ),
     ),
 );

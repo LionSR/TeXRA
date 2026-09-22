@@ -359,7 +359,11 @@ export const createHostRunActions = (
       (cause: unknown): Effect.Effect<boolean> =>
         Effect.logWarning(
           `Retry request ${requestId} of run ${runId} could not be settled`,
-        ).pipe(Effect.annotateLogs({ data: cause }), withLogChannel(CHANNEL), Effect.as(false));
+        ).pipe(
+          Effect.annotateLogs({ data: cause }),
+          withLogChannel(CHANNEL),
+          Effect.as(false),
+        );
 
     const settleRetry = (
       runId: RunId,

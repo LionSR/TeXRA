@@ -454,7 +454,10 @@ const sessionHandleLayer = (
                     Effect.catch((error) =>
                       Effect.logWarning(
                         'Registration claims were not released after its settle failed.',
-                      ).pipe(Effect.annotateLogs({ data: error }), withLogChannel(CHANNEL)),
+                      ).pipe(
+                        Effect.annotateLogs({ data: error }),
+                        withLogChannel(CHANNEL),
+                      ),
                     ),
                   ),
                 ),
@@ -561,7 +564,10 @@ const sessionHandleLayer = (
                   Effect.catch((error) =>
                     Effect.logWarning(
                       `Session ${key.storage} left a failed publication behind as it closed.`,
-                    ).pipe(Effect.annotateLogs({ data: error }), withLogChannel(CHANNEL)),
+                    ).pipe(
+                      Effect.annotateLogs({ data: error }),
+                      withLogChannel(CHANNEL),
+                    ),
                   ),
                 ),
             ),

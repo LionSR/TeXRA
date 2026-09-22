@@ -621,7 +621,10 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
           if (!finalization.ok)
             yield* Effect.logWarning(
               'Failed to persist the launch failure',
-            ).pipe(Effect.annotateLogs({ data: finalization.error }), withLogChannel(CHANNEL));
+            ).pipe(
+              Effect.annotateLogs({ data: finalization.error }),
+              withLogChannel(CHANNEL),
+            );
         }),
       ),
     );

@@ -18,13 +18,7 @@ const MAX_ATTRIBUTE_LENGTH = 512;
  * setting for a whole session.
  */
 export type MinimumLogLevel =
-  | 'Trace'
-  | 'Debug'
-  | 'Info'
-  | 'Warn'
-  | 'Error'
-  | 'Fatal'
-  | 'None';
+  'Trace' | 'Debug' | 'Info' | 'Warn' | 'Error' | 'Fatal' | 'None';
 
 /**
  * Route native log levels through the shared host sink. `formatStructured`

@@ -49,7 +49,11 @@ export const setVarFromFile = Effect.fn('varsUtils.setVarFromFile')(function* (
       // absence.
       Effect.logWarning(
         `Failed to read ${varName} from file ${filePath}: ${toErrorMessage(error)}`,
-      ).pipe(withLogChannel(CHANNEL), Effect.annotateLogs({ data: error }), Effect.as(null)),
+      ).pipe(
+        withLogChannel(CHANNEL),
+        Effect.annotateLogs({ data: error }),
+        Effect.as(null),
+      ),
     ),
   );
 });

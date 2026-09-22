@@ -73,7 +73,8 @@ export const GLOBAL_ARGS: CliGlobalArgsDef = {
   },
   verbose: {
     type: 'boolean',
-    description: 'Emit debug-level diagnostics (the terminal has no level filter of its own)',
+    description:
+      'Emit debug-level diagnostics (the terminal has no level filter of its own)',
   },
   cwd: {
     type: 'string',

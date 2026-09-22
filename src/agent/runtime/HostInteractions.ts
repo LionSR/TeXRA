@@ -170,7 +170,9 @@ function presentOn<K extends RuntimePresentationEvent>(
       presented.pipe(
         Effect.catchCause((cause) =>
           Effect.logWarning('A host presentation notice failed').pipe(
-            Effect.annotateLogs({ data: { event, cause: Cause.squash(cause) } }),
+            Effect.annotateLogs({
+              data: { event, cause: Cause.squash(cause) },
+            }),
             withLogChannel(CHANNEL),
           ),
         ),
@@ -378,7 +380,10 @@ export class SessionHostInteractions implements HostInteractions {
           Effect.catch((failure) =>
             Effect.logWarning(
               'Failed to replay a session presentation notice',
-            ).pipe(Effect.annotateLogs({ data: failure.cause }), withLogChannel(CHANNEL)),
+            ).pipe(
+              Effect.annotateLogs({ data: failure.cause }),
+              withLogChannel(CHANNEL),
+            ),
           ),
         );
       }

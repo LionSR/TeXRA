@@ -144,7 +144,9 @@ export class StreamLogStore {
     return this.database
       .readAggregate(aggregateId('run', runId), 0)
       .pipe(
-        Effect.map((events) => foldEntries(events, this.debug)?.log.toJSON() ?? []),
+        Effect.map(
+          (events) => foldEntries(events, this.debug)?.log.toJSON() ?? [],
+        ),
       );
   }
 

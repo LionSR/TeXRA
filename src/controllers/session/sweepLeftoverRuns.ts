@@ -49,7 +49,10 @@ export const sweepLeftoverRuns = Effect.fn('sweepLeftoverRuns')(function* (
         Effect.catch((error) =>
           Effect.logWarning(
             'A background shell was retained because automatic deletion was refused.',
-          ).pipe(Effect.annotateLogs({ data: { runId, error } }), withLogChannel(CHANNEL)),
+          ).pipe(
+            Effect.annotateLogs({ data: { runId, error } }),
+            withLogChannel(CHANNEL),
+          ),
         ),
       );
   }

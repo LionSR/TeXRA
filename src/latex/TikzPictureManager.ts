@@ -156,10 +156,12 @@ const compile = Effect.fn('TikzPictureManager.compile')(function* (
         yield* Effect.logWarning(
           `Failed to compile TikZ picture ${texLocation.absolutePath}:\n${compiled.logTail}`,
         ).pipe(
-          Effect.annotateLogs({ data: {
-            texFile: texLocation.absolutePath,
-            logTail: compiled.logTail,
-          } }),
+          Effect.annotateLogs({
+            data: {
+              texFile: texLocation.absolutePath,
+              logTail: compiled.logTail,
+            },
+          }),
           withLogChannel(CHANNEL),
         );
       }

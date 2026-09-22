@@ -86,7 +86,10 @@ export const collectPendingDeletions = Effect.fn('collectPendingDeletions')(
           Effect.catch((error) =>
             Effect.logWarning(
               `Deletion cleanup remains pending for ${event.aggregateId}`,
-            ).pipe(Effect.annotateLogs({ data: error }), withLogChannel(CHANNEL)),
+            ).pipe(
+              Effect.annotateLogs({ data: error }),
+              withLogChannel(CHANNEL),
+            ),
           ),
         );
     }
