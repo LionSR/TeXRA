@@ -42,6 +42,8 @@ import type { Platform } from '@platform/platform';
 import { globalStorageFsLayer } from '@platform/rootedFs';
 import type { PlatformSecrets, Secrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
+import { processOwnerId } from '@platform/defaults/nodeProcesses';
+import { ProcessIdentity } from '@shared/session/sessionEvents';
 import { GlobalDatabase } from '@shared/session/database';
 import { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
 import { InquiryRecords } from '@shared/session/inquiryRecords';
@@ -246,8 +248,10 @@ export const fakeHostSecrets: PlatformSecrets = {
 };
 
 export const fakeHostAppState: StateStore = {
-  get: <T>(key: string, defaultValue?: T): T =>
-    installedHost().roots.globalState.get<T>(key, defaultValue),
+  get: <T>(key: string, defaultValue?: T) =>
+    Effect.suspend(() =>
+      installedHost().roots.globalState.get<T>(key, defaultValue),
+    ),
   update: (key, value) => installedHost().roots.globalState.update(key, value),
 };
 
@@ -409,6 +413,7 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
   // `testRuntime().runSync` callers, so a lazily imported (asynchronous)
   // layer here fails every one of them.
   processServices ??= Layer.mergeAll(
+    ProcessIdentity.layer(processOwnerId('test')),
     testHttpClientLayer,
     // The same standard-library filesystem and path services the process
     // roots provide, over the real temp roots the harness runs on.

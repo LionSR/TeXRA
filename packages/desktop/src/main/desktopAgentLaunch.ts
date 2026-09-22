@@ -59,12 +59,12 @@ export function launchDesktopAgent(
       onRunResolved: options.onRunResolved,
       suppressErrorNotification: true,
       openWorkflowOutput: (result) =>
-        Effect.suspend(() => {
-          const output = selectAutoOpenFinalOutput(
+        Effect.gen(function* () {
+          const output = yield* selectAutoOpenFinalOutput(
             context.session.roots,
             result,
           );
-          if (!output) return Effect.void;
+          if (!output) return;
           let location: RequestOpenFilePayload['location'];
           if (output.location === 'workspace') {
             location = createWorkspaceLocation(
@@ -80,7 +80,7 @@ export function launchDesktopAgent(
           } else {
             location = createExternalLocation(output.absolutePath);
           }
-          return context.session.interactions.emit(
+          yield* context.session.interactions.emit(
             'requestOpenFile',
             { location, preserveFocus: false },
             { replayWhenAttached: true },

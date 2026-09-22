@@ -84,8 +84,8 @@ describe('tool-use follow-up progress events', () => {
     handle.attachToolUseFlow({
       ownerSession: owner,
       requestImmediateCompaction: () => {},
-      modelSwitchDisabledReason: () => undefined,
-      switchModel: async () => {},
+      modelSwitchDisabledReason: () => Effect.succeed(undefined),
+      switchModel: () => Effect.void,
       interrupt: () => {},
     });
     owner.runs.track(handle);

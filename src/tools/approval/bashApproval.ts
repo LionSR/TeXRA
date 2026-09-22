@@ -66,7 +66,7 @@ export const requestBashApproval = Effect.fn('requestBashApproval')(function* (
   request: BashApprovalRequest,
 ): Effect.fn.Return<BashDecision, Error, ToolCall> {
   const call = yield* ToolCall;
-  const approvalsEnabled = readSettingFrom<boolean>(
+  const approvalsEnabled = yield* readSettingFrom<boolean>(
     call.roots,
     BASH_APPROVAL_CONFIG_KEY,
   );

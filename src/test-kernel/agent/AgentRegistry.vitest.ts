@@ -465,7 +465,9 @@ describe('agent registry', () => {
       Effect.gen(function* () {
         yield* onGlobalStorage(refresh({ includeRemote: false }));
         expect(
-          getVisibleAgents(hostStores(), 'toolUse').map((agent) => agent.name),
+          (yield* getVisibleAgents(hostStores(), 'toolUse')).map(
+            (agent) => agent.name,
+          ),
         ).not.toContain('orchestrator');
 
         const options = yield* onGlobalStorage(

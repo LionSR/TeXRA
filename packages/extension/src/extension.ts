@@ -75,6 +75,7 @@ import * as logger from '@logger/logUtils';
 import { setLogSink } from '@logger/logSink';
 import { formatFatalErrorDetail } from '@logger/redaction';
 import { invalidateRuntimeModelRegistry } from '@model/runtimeModelRegistry';
+import { AppState, AgentDirectories } from '@platform/interfaces';
 import type { AgentResumePort, LifecycleHost } from '@platform/interfaces';
 import { initPlatform, type Platform } from '@platform/platform';
 import type { ProcessRuntime } from '@platform/processRuntime';
@@ -246,13 +247,13 @@ async function initVscodePlatform(
     processStart: Effect.succeed(processStart),
     globalStorage: storage.getGlobalStoragePath(),
     secrets,
-    appState: globalState,
+    appState: AppState.layer(globalState),
     auth,
     // The editor's LM API on the workspace path, unavailable on the
     // credential-only one. The one defaulting site for this host.
     languageModel: extras.languageModel ?? UNAVAILABLE_LANGUAGE_MODEL_PORT,
     agentResume,
-    agentDirectories,
+    agentDirectories: AgentDirectories.layer(agentDirectories),
     lifecycle,
     toolMissingReporter: extras.toolMissingHandler,
     setup: vscodeSetupPlatform,
@@ -733,9 +734,11 @@ async function activateExtension(context: vscode.ExtensionContext) {
     afterRunSettlement: [Effect.sync(() => disposeDiffRefresh())],
   });
   runtimeSession.setApprovalPolicy(
-    readSettingFrom<TexraApprovalPolicy>(
-      runtimeSession.roots,
-      TEXRA_APPROVAL_POLICY_CONFIG_KEY,
+    await runtime.runPromise(
+      readSettingFrom<TexraApprovalPolicy>(
+        runtimeSession.roots,
+        TEXRA_APPROVAL_POLICY_CONFIG_KEY,
+      ),
     ),
   );
   // The run-storage directory of the session just initialized, through that

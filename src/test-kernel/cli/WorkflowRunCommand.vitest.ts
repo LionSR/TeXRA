@@ -718,12 +718,14 @@ describe('CLI run command, workflow agents', () => {
           true,
           ['slides.tex'],
         );
-        agentCatalogMock.resolveAgentForLaunch.mockReturnValue({
-          name: 'polish',
-          source: 'remote',
-          path: '',
-          category: AgentCategory.Workflow,
-        });
+        agentCatalogMock.resolveAgentForLaunch.mockReturnValue(
+          Effect.succeed({
+            name: 'polish',
+            source: 'remote',
+            path: '',
+            category: AgentCategory.Workflow,
+          }),
+        );
 
         const exitCode = yield* workflowProgram(
           { outputDir: 'out' },

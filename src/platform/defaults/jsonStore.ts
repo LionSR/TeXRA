@@ -11,8 +11,6 @@ import { isFileNotFoundError } from '@common/errors';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 
-import { StateWriteFailed, type StateStore } from '../interfaces';
-
 type JsonRecord = Record<string, unknown>;
 
 /**
@@ -163,11 +161,10 @@ const flush = Effect.fn('JsonStore.flush')(function* (
  * `set` is the store's own write and is an `Effect`, requirement-free: it
  * provides the Node filesystem services its flush reads and writes through, so
  * a port that composes it (the config store; the secret stores) needs no
- * filesystem in its own type. `update` is {@link StateStore}'s own method and
- * composes that same write, raising the port's {@link StateWriteFailed} for
- * the store's error.
+ * filesystem in its own type. Application state is owned by SQLite; this
+ * store serves deliberate configuration and secret files.
  */
-export class JsonStore implements StateStore {
+export class JsonStore {
   private constructor(
     private readonly filePath: string,
     private data: JsonRecord,
@@ -211,9 +208,8 @@ export class JsonStore implements StateStore {
    * (`ElectronSecrets` answers `getStored`/`listStoredKeys` from here), so a
    * mutation applied ahead of the wait would survive a cancellation that
    * wrote nothing and read as committed until the process restarts. There is
-   * one mutator: a removal is `set(key, undefined)` and `update` is `set` run
-   * by the opener's runner, so both inherit this region rather than carrying
-   * one of their own. That is also where the credential stores' Q2 guarantee
+   * one mutator: removal uses `set(key, undefined)` in this same region.
+   * That is also where the credential stores' Q2 guarantee
    * lives — this store owns the lane, so it owns the mask too, and a caller
    * must not wrap `set` in one of its own.
    */
@@ -240,23 +236,6 @@ export class JsonStore implements StateStore {
             nodeFileServices,
           );
         }),
-      ),
-    );
-  }
-
-  /**
-   * {@link StateStore} conformance: same persistence semantics as {@link set},
-   * which a caller that already holds this store writes through.
-   */
-  update(key: string, value: unknown): Effect.Effect<void, StateWriteFailed> {
-    return this.set(key, value).pipe(
-      Effect.mapError(
-        (cause) =>
-          new StateWriteFailed({
-            key,
-            message: `The JSON store at ${this.filePath} refused the write of "${key}": ${toErrorMessage(cause)}`,
-            cause,
-          }),
       ),
     );
   }

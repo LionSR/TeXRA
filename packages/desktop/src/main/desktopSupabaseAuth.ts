@@ -23,7 +23,7 @@ import {
   type SignInCallbackOutcome,
 } from '@controllers/auth/supabaseSignIn';
 import type { MessageHost } from '@hosts/uiHosts';
-import type { StateStore, StateWriteFailed } from '@platform/interfaces';
+import type { StateStore, StateReadFailed } from '@platform/interfaces';
 import {
   withProcessServices,
   type ProcessRuntime,
@@ -92,52 +92,50 @@ export function createDesktopPendingOAuthStore(
   log: DesktopAuthLog,
   store?: Pick<StateStore, 'get' | 'update'>,
 ): PendingOAuthStore {
-  let records = readPendingRecords(log, store);
+  let memoryRecords: Record<string, string> = {};
   const writes = new SerializedWrites();
-  // With no store handed down there is nothing to persist, and the store's
-  // own refusal is the caller's failure.
-  const persist = (): Effect.Effect<void, StateWriteFailed> =>
+  const read = (): Effect.Effect<Record<string, string>, StateReadFailed> =>
+    store ? readPendingRecords(log, store) : Effect.sync(() => memoryRecords);
+  const change = (
+    transform: (records: Record<string, string>) => Record<string, string>,
+  ) =>
     writes.run(
-      store
-        ? Effect.suspend(() =>
-            store.update(DESKTOP_PENDING_OAUTH_STATE_KEY, records),
-          )
-        : Effect.void,
+      Effect.gen(function* () {
+        const next = transform(yield* read());
+        if (store) yield* store.update(DESKTOP_PENDING_OAUTH_STATE_KEY, next);
+        else memoryRecords = next;
+      }),
     );
-
   return new PendingOAuthStore({
-    read: (nonce) => Effect.sync(() => records[nonce]),
+    read: (nonce) => Effect.map(read(), (records) => records[nonce]),
     write: (nonce, value) =>
-      Effect.suspend(() => {
-        records = { ...records, [nonce]: value };
-        return persist();
-      }),
+      change((records) => ({ ...records, [nonce]: value })),
     erase: (nonce) =>
-      Effect.suspend(() => {
-        if (!(nonce in records)) return Effect.void;
+      change((records) => {
         const { [nonce]: _dropped, ...rest } = records;
-        records = rest;
-        return persist();
+        return rest;
       }),
-    nonces: () => Effect.sync(() => Object.keys(records)),
+    nonces: () => Effect.map(read(), Object.keys),
   });
 }
 
-function readPendingRecords(
-  log: DesktopAuthLog,
-  store: Pick<StateStore, 'get' | 'update'> | undefined,
-): Record<string, string> {
-  const persisted = store?.get<unknown>(DESKTOP_PENDING_OAUTH_STATE_KEY, null);
-  if (persisted == null) return {};
-  const parsed = PendingRecordsSchema.safeParse(persisted);
-  if (!parsed.success) {
-    log.warn(
-      'Stored desktop OAuth callback state is malformed and will be ignored',
+const readPendingRecords = Effect.fn('desktopAuth.readPendingRecords')(
+  function* (log: DesktopAuthLog, store: Pick<StateStore, 'get' | 'update'>) {
+    const persisted = yield* store.get<unknown>(
+      DESKTOP_PENDING_OAUTH_STATE_KEY,
+      null,
     );
-    return {};
-  }
-  return parsed.data;
-}
+    if (persisted == null) return {};
+    const parsed = PendingRecordsSchema.safeParse(persisted);
+    if (!parsed.success) {
+      log.warn(
+        'Stored desktop OAuth callback state is malformed and will be ignored',
+      );
+      return {};
+    }
+    return parsed.data;
+  },
+);
 
 export function createDesktopSupabaseAuth(
   options: DesktopSupabaseAuthOptions,

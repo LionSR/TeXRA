@@ -264,7 +264,7 @@ describe('runFlowWithLifecycle', () => {
         );
 
         expect(
-          fake.globalState.get(GlobalStateKey.ONBOARDING_FIRST_RUN_DONE),
+          yield* fake.globalState.get(GlobalStateKey.ONBOARDING_FIRST_RUN_DONE),
         ).toBe(expectedDone);
       }),
     );

@@ -357,7 +357,7 @@ export class AgentHandlers {
       this.ctx,
       'Failed to apply agent team',
       withAgentCatalogAuthRefreshDeferred(
-        applySettingsTeamRoster(data.presetId, {
+        applySettingsTeamRoster<ProcessServices>(data.presetId, {
           catalog: this.catalogController,
           loadLocalCatalog: () => loadAgents({ includeRemote: false }),
           canAccessRemoteCatalog: () => supabaseAuthenticated,
@@ -418,7 +418,9 @@ export class AgentHandlers {
       this.ctx,
       'Failed to delete agent team',
       Effect.gen({ self: this }, function* () {
-        const target = this.catalogController.getCustomPreset(data.presetId);
+        const target = yield* this.catalogController.getCustomPreset(
+          data.presetId,
+        );
         if (!target) return;
 
         const confirmed = yield* vscodeUi.confirm(

@@ -13,28 +13,16 @@ import { WorkspaceStateKey } from '@shared/state/stateKeys';
  * presets are re-read on each call and the agent/auth ports stay live
  * functions. Hosts add only their dialog glue (choose/signIn) on top.
  */
-export function createTeamCatalogPorts(workspaceState: StateStore): {
-  readonly customPresetsRaw: unknown;
-  readonly ensureCatalogLoaded: () => Effect.Effect<
-    void,
-    unknown,
-    GlobalStorageFs | FileSystem.FileSystem | AgentDirectories
-  >;
-  readonly getAgents: typeof getAgentsByCategory;
-  readonly canAccessRemoteCatalog: () => Effect.Effect<boolean>;
-  readonly refreshRemote: () => Effect.Effect<
-    void,
-    unknown,
-    GlobalStorageFs | FileSystem.FileSystem | AgentDirectories
-  >;
-} {
-  return {
-    customPresetsRaw: workspaceState.get<unknown>(
-      WorkspaceStateKey.CUSTOM_AGENT_PRESETS,
-    ),
-    ensureCatalogLoaded: () => loadAgents(),
-    getAgents: getAgentsByCategory,
-    canAccessRemoteCatalog: () => supabaseAuthenticated,
-    refreshRemote: () => refresh({ includeRemote: true }),
-  };
+export function createTeamCatalogPorts(workspaceState: StateStore) {
+  return Effect.gen(function* () {
+    return {
+      customPresetsRaw: yield* workspaceState.get<unknown>(
+        WorkspaceStateKey.CUSTOM_AGENT_PRESETS,
+      ),
+      ensureCatalogLoaded: () => loadAgents(),
+      getAgents: getAgentsByCategory,
+      canAccessRemoteCatalog: () => supabaseAuthenticated,
+      refreshRemote: () => refresh({ includeRemote: true }),
+    };
+  });
 }

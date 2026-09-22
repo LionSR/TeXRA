@@ -287,7 +287,7 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
     // resolver validation uses, else the full set for internal agents. Never
     // blind source-priority on a bare name, so launch can't diverge from
     // what was validated.
-    const resolved = resolveAgentForLaunch(
+    const resolved = yield* resolveAgentForLaunch(
       input.session.roots,
       fullConfig.agentCategory,
       fullConfig.agent,

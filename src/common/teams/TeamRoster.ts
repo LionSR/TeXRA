@@ -41,7 +41,9 @@ export type TeamRosterPresetResolution =
   | { readonly ok: false; readonly reason: 'unknownPreset' };
 
 export interface TeamRosterCatalog {
-  resolvePreset(presetId: string): TeamRosterPresetResolution;
+  resolvePreset(
+    presetId: string,
+  ): Effect.Effect<TeamRosterPresetResolution, Error>;
   /**
    * Persist the symbolic preset. The resolution {@link resolvePreset} computed
    * is preflight evidence only: the roster stores the team reference and

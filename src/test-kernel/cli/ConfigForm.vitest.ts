@@ -196,6 +196,7 @@ async function renderConfigFormProps(): Promise<ConfigFormProps> {
   const rendered = await renderInkElement(
     activeForm.get()?.render(() => undefined, 20),
   );
+  await waitFor(() => configFormProps.current !== undefined);
   rendered.instance.unmount();
   if (!configFormProps.current) {
     throw new TypeError('Expected /config to render ConfigForm');
@@ -585,8 +586,10 @@ describe('/config slash command wiring', () => {
       const markCommits = entryByKey(WorkspaceStateKey.GIT_MARK_COMMITS);
       yield* props.writeValue(markCommits, false);
 
-      expect(isStored(config, WorkspaceStateKey.GIT_MARK_COMMITS)).toBe(true);
-      expect(props.readValue(markCommits)).toBe(false);
+      expect(yield* isStored(config, WorkspaceStateKey.GIT_MARK_COMMITS)).toBe(
+        true,
+      );
+      expect(config.get(WorkspaceStateKey.GIT_MARK_COMMITS)).toBe(false);
     }),
   );
 
@@ -620,12 +623,18 @@ describe('/config slash command wiring', () => {
       const authorName = entryByKey(WorkspaceStateKey.GIT_AUTHOR_NAME);
 
       yield* props.writeValue(authorName, 'someone-else');
-      expect(isStored(config, WorkspaceStateKey.GIT_AUTHOR_NAME)).toBe(true);
+      expect(yield* isStored(config, WorkspaceStateKey.GIT_AUTHOR_NAME)).toBe(
+        true,
+      );
 
       yield* props.resetValue(authorName);
       // The key is deleted, so reads fall back to the default identity.
-      expect(isStored(config, WorkspaceStateKey.GIT_AUTHOR_NAME)).toBe(false);
-      expect(props.readValue(authorName)).toBe(DEFAULT_GIT_AUTHOR_NAME);
+      expect(yield* isStored(config, WorkspaceStateKey.GIT_AUTHOR_NAME)).toBe(
+        false,
+      );
+      expect(
+        config.get(WorkspaceStateKey.GIT_AUTHOR_NAME, DEFAULT_GIT_AUTHOR_NAME),
+      ).toBe(DEFAULT_GIT_AUTHOR_NAME);
     }),
   );
 
@@ -637,15 +646,15 @@ describe('/config slash command wiring', () => {
       const preferKimiCode = entryByKey(GlobalStateKey.KIMI_CODE_PREFER);
       yield* props.writeValue(preferKimiCode, true);
 
-      expect(globalState.get(GlobalStateKey.KIMI_CODE_PREFER)).toBe(true);
-      expect(props.readValue(entryByKey(GlobalStateKey.USE_OPENROUTER))).toBe(
-        false,
+      expect(yield* globalState.get(GlobalStateKey.KIMI_CODE_PREFER)).toBe(
+        true,
       );
+      expect(yield* globalState.get(GlobalStateKey.USE_OPENROUTER)).toBe(false);
 
       // Disabling the preference leaves the OpenRouter toggle untouched.
       yield* globalState.update(GlobalStateKey.USE_OPENROUTER, true);
       yield* props.writeValue(preferKimiCode, false);
-      expect(globalState.get(GlobalStateKey.USE_OPENROUTER)).toBe(true);
+      expect(yield* globalState.get(GlobalStateKey.USE_OPENROUTER)).toBe(true);
     }),
   );
 });

@@ -1,5 +1,6 @@
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, vi } from 'vitest';
 
 import { resetAgentCatalogAuthRefreshScopeForTests } from '@frontend/auth/agentCatalogRefreshScope';
 import type { AgentCategory } from '@shared/schemas';
@@ -43,7 +44,8 @@ vi.mock('@agent/index', async () => ({
   loadAgents: registry.loadAgents,
   refresh: registry.refreshAgents,
   getAgentsByCategory: (category: AgentCategory) => registry.catalog[category],
-  getVisibleAgents: (category: AgentCategory) => registry.catalog[category],
+  getVisibleAgents: (category: AgentCategory) =>
+    Effect.succeed(registry.catalog[category]),
 }));
 
 const { AgentHandlers } = await import('@settingsView/handlers/agentHandlers');
@@ -138,34 +140,40 @@ describe('extension settings AgentHandlers', () => {
     resetAgentCatalogAuthRefreshScopeForTests();
   });
 
-  it('applies source-qualified teams without awaiting notification dismissal', async () => {
-    const notified = createDeferred();
-    const {
-      handlers,
-      notifications,
-      refreshAfterAgentMutation,
-      workspaceState,
-    } = await createHandlerFixture({
-      catalog: physicistCatalog(),
-      modalChoice: 'Continue with Available Members',
-      infoMessageResult: new Promise(() => {}),
-      onInfoMessage: () => notified.resolve(),
-    });
+  it.effect(
+    'applies source-qualified teams without awaiting notification dismissal',
+    () =>
+      Effect.gen(function* () {
+        const notified = createDeferred();
+        const {
+          handlers,
+          notifications,
+          refreshAfterAgentMutation,
+          workspaceState,
+        } = yield* Effect.promise(() =>
+          createHandlerFixture({
+            catalog: physicistCatalog(),
+            modalChoice: 'Continue with Available Members',
+            infoMessageResult: new Promise(() => {}),
+            onInfoMessage: () => notified.resolve(),
+          }),
+        );
 
-    await applyPreset(handlers, 'physicist');
+        yield* Effect.promise(() => applyPreset(handlers, 'physicist'));
 
-    expect(
-      workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
-    ).toEqual({ kind: 'team', teamId: 'physicist' });
-    expect(refreshAfterAgentMutation).toHaveBeenCalledWith(
-      'orchestrator',
-      true,
-    );
-    await notified.promise;
-    expect(notifications).toEqual([
-      'Applied "Physicist" with 7 members still unavailable',
-    ]);
-  });
+        expect(
+          yield* workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
+        ).toEqual({ kind: 'team', teamId: 'physicist' });
+        expect(refreshAfterAgentMutation).toHaveBeenCalledWith(
+          'orchestrator',
+          true,
+        );
+        yield* Effect.promise(() => notified.promise);
+        expect(notifications).toEqual([
+          'Applied "Physicist" with 7 members still unavailable',
+        ]);
+      }),
+  );
 
   it('does not write roster state when team preflight is cancelled', async () => {
     const workspaceState = new FakeStateStore(REMOTE_TEAM_STATE);

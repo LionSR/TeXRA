@@ -243,9 +243,10 @@ export function createDesktopSettingsIpc(
   };
 
   /** Post one catalog-derived snapshot. */
-  function postSettingsSnapshot(snapshot: DerivedSettingsSnapshot): void {
-    options.postToRenderer(
+  function postSettingsSnapshot(snapshot: DerivedSettingsSnapshot) {
+    return Effect.map(
       buildSettingsSnapshotMessage(snapshot, settingsStores, 'desktop'),
+      (message) => options.postToRenderer(message),
     );
   }
 
@@ -311,18 +312,18 @@ export function createDesktopSettingsIpc(
 
   function postInitialSettingsData() {
     return Effect.gen(function* () {
-      postSettingsSnapshot('git-author');
-      options.toolingSettingsController.postLatexConfigValues();
+      yield* postSettingsSnapshot('git-author');
+      yield* options.toolingSettingsController.postLatexConfigValues();
       // Forked, not yielded: `runFork` runs the goal read on this turn, so the
       // list still repaints ahead of the snapshots below, and the dialog a
       // failed read raises does not hold them up. Nothing waits on it, as
       // nothing waited on the eagerly started promise it replaces.
       runAsync(postGoalList());
-      postSettingsSnapshot('multi-agent');
-      postSettingsSnapshot('approval');
-      postSettingsSnapshot('skills');
-      postSettingsSnapshot('telemetry');
-      postSettingsSnapshot('memory');
+      yield* postSettingsSnapshot('multi-agent');
+      yield* postSettingsSnapshot('approval');
+      yield* postSettingsSnapshot('skills');
+      yield* postSettingsSnapshot('telemetry');
+      yield* postSettingsSnapshot('memory');
       yield* Effect.all(
         [
           postSkillsList(),
@@ -361,22 +362,16 @@ export function createDesktopSettingsIpc(
   const stateSettingSnapshotPosters: SettingsSnapshotPosters<
     Effect.Effect<void, Error, ProcessServices>
   > = {
-    approval: () => Effect.sync(() => postSettingsSnapshot('approval')),
-    'git-author': () => Effect.sync(() => postSettingsSnapshot('git-author')),
-    latex: () =>
-      Effect.sync(() =>
-        options.toolingSettingsController.postLatexConfigValues(),
-      ),
-    memory: () => Effect.sync(() => postSettingsSnapshot('memory')),
+    approval: () => postSettingsSnapshot('approval'),
+    'git-author': () => postSettingsSnapshot('git-author'),
+    latex: () => options.toolingSettingsController.postLatexConfigValues(),
+    memory: () => postSettingsSnapshot('memory'),
     models: () => postModelSelectionData(),
-    'multi-agent': () => Effect.sync(() => postSettingsSnapshot('multi-agent')),
+    'multi-agent': () => postSettingsSnapshot('multi-agent'),
     profile: () => options.credentialSettingsController.postProfileData(),
     skills: () =>
-      Effect.andThen(
-        Effect.sync(() => postSettingsSnapshot('skills')),
-        postSkillsList(),
-      ),
-    telemetry: () => Effect.sync(() => postSettingsSnapshot('telemetry')),
+      Effect.andThen(postSettingsSnapshot('skills'), postSkillsList()),
+    telemetry: () => postSettingsSnapshot('telemetry'),
   };
 
   /**

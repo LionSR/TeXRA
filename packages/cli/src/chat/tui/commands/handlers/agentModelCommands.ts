@@ -29,40 +29,56 @@ import {
 export function chatToolUseAgentUsageError(
   stores: AgentRosterStores,
   agentName: string,
-): string | undefined {
-  const launch = checkCliAgentLaunch(
-    stores,
-    agentName,
-    resolveCliAgentInCategory(stores, agentName, AgentCategory.ToolUse),
-    'chat',
-  );
-  return launch instanceof CliUsageError ? launch.message : undefined;
+) {
+  return Effect.gen(function* () {
+    const launch = yield* checkCliAgentLaunch(
+      stores,
+      agentName,
+      yield* resolveCliAgentInCategory(
+        stores,
+        agentName,
+        AgentCategory.ToolUse,
+      ),
+      'chat',
+    );
+    return launch instanceof CliUsageError ? launch.message : undefined;
+  });
 }
 
 export function applyInitialCliAgentSelection(
   agentName: string,
   context: SlashCommandContext,
-): void {
-  if (!chatTuiCanStartRootRun(context.session)) {
-    setTransientNotice(
-      'The agent is fixed for this chat session. Start a new chat to use a different agent.',
-    );
-    return;
-  }
+) {
+  return Effect.gen(function* () {
+    const fixedAgentNotice =
+      'The agent is fixed for this chat session. Start a new chat to use a different agent.';
+    if (!chatTuiCanStartRootRun(context.session)) {
+      setTransientNotice(fixedAgentNotice);
+      return;
+    }
 
-  const nextAgent = agentName.trim();
-  const usageError = chatToolUseAgentUsageError(context.stores, nextAgent);
-  if (usageError) {
-    setTransientNotice(usageError);
-    return;
-  }
-  patchSessionMeta({
-    agent: nextAgent,
-    teamName: undefined,
-    cliMultiAgentPresetId: undefined,
-    delegationAgentScope: undefined,
+    const nextAgent = agentName.trim();
+    const usageError = yield* chatToolUseAgentUsageError(
+      context.stores,
+      nextAgent,
+    );
+    if (usageError) {
+      setTransientNotice(usageError);
+      return;
+    }
+    // State validation can yield while another input claims the root run.
+    if (!chatTuiCanStartRootRun(context.session)) {
+      setTransientNotice(fixedAgentNotice);
+      return;
+    }
+    patchSessionMeta({
+      agent: nextAgent,
+      teamName: undefined,
+      cliMultiAgentPresetId: undefined,
+      delegationAgentScope: undefined,
+    });
+    appendLocalAssistantTranscript(`Root agent set to ${nextAgent}.`);
   });
-  appendLocalAssistantTranscript(`Root agent set to ${nextAgent}.`);
 }
 
 export const applyCliModelSelection = Effect.fn('applyCliModelSelection')(
@@ -103,7 +119,7 @@ export const applyCliModelSelection = Effect.fn('applyCliModelSelection')(
       return;
     }
 
-    activeFlow.switchModel(nextModel);
+    yield* activeFlow.switchModel(nextModel);
     setCliSessionModelOverride(nextModel);
     // The switch already reached the live run; only the persisted default is
     // at stake here, so a write failure is reported beside the switch rather

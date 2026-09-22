@@ -55,7 +55,7 @@ export interface TeamAvailabilityPreflightOptions<T, R = never> {
   /** Force a remote catalog refresh; the failure channel is the refresh's own. */
   readonly refreshRemote: () => Effect.Effect<void, unknown, R>;
   /** Recompute the planned value against the refreshed catalog. */
-  readonly replan: () => T;
+  readonly replan: () => Effect.Effect<T, Error, R>;
   /** The caller already forced a remote catalog fetch for `initial`. */
   readonly remoteCatalogRefreshAttempted?: boolean;
 }
@@ -80,10 +80,7 @@ export function preflightTeamAvailability<T, R = never>(
   return Effect.gen(function* () {
     const refreshAndRecheck = Effect.gen(function* () {
       yield* options.refreshRemote();
-      const refreshed = yield* Effect.try({
-        try: () => options.replan(),
-        catch: (error) => error,
-      });
+      const refreshed = yield* options.replan();
       const unavailableNames = unavailableTexraHostedNames(refreshed, options);
       return unavailableNames.length === 0
         ? { status: 'proceed' as const, value: refreshed, partial: false }

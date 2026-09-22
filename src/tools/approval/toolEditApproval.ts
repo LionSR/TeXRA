@@ -206,7 +206,7 @@ export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
     request: Omit<ToolEditApprovalRequest, 'permission' | 'roots'>,
   ): Effect.fn.Return<ToolEditApprovalResult, Error, ToolCall> {
     const call = yield* ToolCall;
-    const approvalsEnabled = readSettingFrom<boolean>(
+    const approvalsEnabled = yield* readSettingFrom<boolean>(
       call.roots,
       TOOL_EDIT_APPROVAL_CONFIG_KEY,
     );

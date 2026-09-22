@@ -11,9 +11,8 @@ interface CliWorkspaceStateInit {
 /**
  * The CLI's workspace state scope, in the `texra.db` of the project's storage
  * directory, beside the storage provider that named it. The global scope is
- * not opened here: it is the store `installCliProcessRuntime` opens before it
- * installs the runtime that serves it as `AppState`, and this root takes it
- * from there.
+ * not opened here: the process runtime derives AppState from GlobalDatabase.
+ * The caller owns this workspace store through its explicit Scope.
  */
 export const openCliWorkspaceState = Effect.fn(
   'cliStateStores.openCliWorkspaceState',

@@ -509,9 +509,11 @@ describe('completedRunArchive facade', () => {
         const launchFailure = new Error(
           'stop after resumed writer acquisition',
         );
-        launchMocks.resolveAgent.mockReturnValue({
-          path: '/agents/orchestrator.yaml',
-        });
+        launchMocks.resolveAgent.mockReturnValue(
+          Effect.succeed({
+            path: '/agents/orchestrator.yaml',
+          }),
+        );
         launchMocks.loadAgent.mockReturnValue(
           Effect.succeed([{ agentCategory: AgentCategory.ToolUse }, {}]),
         );

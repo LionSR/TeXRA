@@ -1,5 +1,6 @@
-import { Context, Layer } from 'effect';
+import { Context, Effect, Layer } from 'effect';
 
+import type { StateReadFailed } from '@platform/interfaces';
 import type { ProcessServices } from '@platform/processRuntime';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -23,7 +24,9 @@ interface ConditionalToolInjection {
   readonly toolName: RegisteredToolName;
   /** Whether the run resolving its tools, in the workspace whose settings
    *  slots `settings` are, gets this tool. */
-  shouldInject(settings: SettingsStores): boolean;
+  shouldInject(
+    settings: SettingsStores,
+  ): Effect.Effect<boolean, StateReadFailed>;
 }
 
 /**
@@ -49,7 +52,8 @@ export const AGENT_TOOL_INJECTIONS: readonly ConditionalToolInjection[] = [
   // is no idle-continuation registry — goal was its only consumer.
   {
     toolName: 'plan',
-    shouldInject: (settings) => isGoalEnabled(settings.config),
+    shouldInject: (settings) =>
+      Effect.sync(() => isGoalEnabled(settings.config)),
   },
 ];
 

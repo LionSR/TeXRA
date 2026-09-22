@@ -21,6 +21,7 @@ import {
 } from 'effect';
 import type { ToolInjections } from '@agent/runtime/toolInjection';
 import type { SupabaseAuth } from '@auth/SupabaseAuth';
+import type { ProcessIdentity } from '@shared/session/sessionEvents';
 import type { GlobalDatabase } from '@shared/session/database';
 import type { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
 import type { InquiryRecords } from '@shared/session/inquiryRecords';
@@ -54,6 +55,7 @@ import type { Secrets } from './secrets';
  * the settings Git tab share.
  */
 export type ProcessServices =
+  | ProcessIdentity
   | FileSystem.FileSystem
   | Path.Path
   | GlobalStorageFs

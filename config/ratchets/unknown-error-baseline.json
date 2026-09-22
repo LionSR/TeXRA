@@ -38,7 +38,6 @@
     "src/common/teams/TeamPlan.ts": 8,
     "src/common/teams/TeamRosterApplication.ts": 3,
     "src/controllers/approval/ToolEditApprovalController.ts": 15,
-    "src/controllers/mainView/teamCatalogPorts.ts": 2,
     "src/controllers/modelAccess/subscriptionProviders.ts": 3,
     "src/controllers/modelAccess/subscriptionUsage/codexUsageAdapter.ts": 1,
     "src/controllers/modelAccess/subscriptionUsage/glmCodingPlanUsageAdapter.ts": 1,

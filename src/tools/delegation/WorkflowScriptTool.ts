@@ -163,7 +163,7 @@ const persistWorkflowScript = Effect.fn('persistWorkflowScript')(function* (
   roots: WorkspaceRoots,
   workingDirectory: string | undefined,
 ) {
-  const directory = resolveWorkspaceRelativePath(
+  const directory = yield* resolveWorkspaceRelativePath(
     roots,
     roots.workspace,
     WORKFLOW_SCRIPT_DIRECTORY,
@@ -177,7 +177,7 @@ const persistWorkflowScript = Effect.fn('persistWorkflowScript')(function* (
   const stem = workflowScriptDraftStem(submissionId);
   for (let suffix = 0; ; suffix += 1) {
     const filename = suffix === 0 ? `${stem}.mjs` : `${stem}-${suffix + 1}.mjs`;
-    const resolved = resolveWorkspaceRelativePath(
+    const resolved = yield* resolveWorkspaceRelativePath(
       roots,
       roots.workspace,
       `${WORKFLOW_SCRIPT_DIRECTORY}/${filename}`,
@@ -304,7 +304,7 @@ Durability: the journal is keyed by meta.name and the agent field within this se
       let scriptPath: string;
       let script: string;
       if (input.scriptPath != null) {
-        const resolved = resolveWorkspaceRelativePath(
+        const resolved = yield* resolveWorkspaceRelativePath(
           parent.roots,
           parent.roots.workspace,
           input.scriptPath!,
@@ -347,17 +347,14 @@ Durability: the journal is keyed by meta.name and the agent field within this se
           catch: (error) => workflowScriptToolError(error, scriptPath),
         });
 
-      const { meta, defaultAgent } = yield* runSyncPhase(() => {
-        const { meta } = parseWorkflowScript(script);
-        return {
-          meta,
-          defaultAgent: requireWorkflowOrToolUseAgent(
-            parent.roots,
-            input.agent,
-            parent.run.delegationAgentScope ?? undefined,
-          ),
-        };
-      });
+      const { meta } = yield* runSyncPhase(() => parseWorkflowScript(script));
+      const defaultAgent = yield* requireWorkflowOrToolUseAgent(
+        parent.roots,
+        input.agent,
+        parent.run.delegationAgentScope ?? undefined,
+      ).pipe(
+        Effect.mapError((error) => workflowScriptToolError(error, scriptPath)),
+      );
       // Named checkpoint, not content- or toolCallId-keyed: a retrying model
       // rewrites its script, so any key derived from call identity or source
       // text orphans the journal exactly when resume matters (#8666). meta.name

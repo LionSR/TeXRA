@@ -120,14 +120,14 @@ const WORKTREE_DISABLED_MESSAGE =
  * its transform could only ever answer for whichever workspace the process
  * came up in.
  */
-export function rejectDisabledWorktreeDirectory(
+export const rejectDisabledWorktreeDirectory = Effect.fn(function* (
   stores: SettingsStores,
   workingDirectory: string | undefined,
-): Extract<ToolResult, { status: 'error' }> | null {
+) {
   if (!workingDirectory) return null;
-  if (isWorktreeSupportEnabled(stores)) return null;
+  if (yield* isWorktreeSupportEnabled(stores)) return null;
   return errorResult(WORKTREE_DISABLED_MESSAGE);
-}
+});
 const TOOL_USE_SUBAGENT_HANDOFF_INSTRUCTION = [
   'The delegated instruction above is your full task contract. This includes any tool, network, file, approval, output-format, or scope constraints it states. If a requested action conflicts with those constraints or needs missing context, report the conflict instead of assuming permission.',
   'Your final response is delivered verbatim to the parent orchestrator. End with the substantive result (answer, findings, evidence, unresolved caveats), never only a status note such as "done".',

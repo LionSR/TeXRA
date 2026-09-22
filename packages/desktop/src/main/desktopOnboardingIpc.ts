@@ -1,7 +1,11 @@
 import { Data, Effect } from 'effect';
 import { OnboardingFunnelRefresher } from '@controllers/onboarding/onboardingFunnel';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
-import type { StateStore, StateWriteFailed } from '@platform/interfaces';
+import type {
+  StateStore,
+  StateWriteFailed,
+  StateReadFailed,
+} from '@platform/interfaces';
 import type { LanguageModel } from '@platform/languageModel';
 import type { OnboardingFunnelState } from '@shared/schemas';
 import {
@@ -53,7 +57,7 @@ export class OnboardingCallFailed extends Data.TaggedError(
  *  sign-in program failed with. */
 type OnboardingAction<E = never, R = LanguageModel> = Effect.Effect<
   void,
-  StateWriteFailed | E,
+  StateWriteFailed | StateReadFailed | E,
   R
 >;
 
@@ -122,13 +126,13 @@ export function createDesktopOnboardingIpc(
     },
   });
 
-  function postCurrentState(): void {
-    const dismissed = state.get<boolean>(
+  const postCurrentState = Effect.gen(function* () {
+    const dismissed = yield* state.get<boolean>(
       DESKTOP_ONBOARDING_DISMISSED_STATE_KEY,
       false,
     );
     renderer.postToRenderer(buildDesktopOnboardingSetStateMessage(!dismissed));
-  }
+  });
 
   // Single guarded entry point for launching setup. The explicit "Run Setup"
   // card action routes through here so a setup run can't be started twice
@@ -205,7 +209,13 @@ export function createDesktopOnboardingIpc(
     handleMessage(message: DesktopCommandMessage): boolean {
       switch (message.command) {
         case DESKTOP_ONBOARDING_COMMANDS.REQUEST_STATE:
-          postCurrentState();
+          options.runtime.runFork(
+            postCurrentState.pipe(
+              Effect.catch((failure) =>
+                Effect.sync(() => options.onAsyncError(failure)),
+              ),
+            ),
+          );
           return true;
         case DESKTOP_ONBOARDING_COMMANDS.DISMISS:
           options.runtime.runFork(

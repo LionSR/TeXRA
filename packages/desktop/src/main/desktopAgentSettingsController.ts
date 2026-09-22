@@ -29,6 +29,7 @@ import { createSettingsAgentControllers } from '@controllers/settingsView/Settin
 import { fetchRemoteAgentPromptYaml } from '@controllers/settingsView/remoteAgentPrompt';
 import { applySettingsTeamRoster } from '@controllers/settingsView/SettingsTeamRosterController';
 import { ExternalOpenFailed, type MessageHost } from '@hosts/uiHosts';
+import type { StateReadFailed } from '@platform/interfaces';
 import type { AgentDirectoriesFailed } from '@platform/interfaces';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import type { GlobalStorageFs } from '@platform/rootedFs';
@@ -97,14 +98,15 @@ type DesktopAgentHandlers = Pick<
 >;
 
 interface DefaultDesktopAgentSettingsControllerOptions extends SettingsStatePorts {
-  /** The process runtime the composition root built; the registry and roster
-   *  programs below run on it. */
+  /** The composition root's runtime serves registry and roster programs. */
   readonly runtime: ProcessRuntime;
   readonly registry: {
     readonly loadAgents: typeof loadAgents;
     readonly refreshAgents: typeof refresh;
     readonly getAgents: (category: AgentCategory) => AgentEntry[];
-    readonly getVisibleAgents: (category: AgentCategory) => AgentEntry[];
+    readonly getVisibleAgents: (
+      category: AgentCategory,
+    ) => Effect.Effect<AgentEntry[], StateReadFailed>;
   };
   readonly directory: {
     /** The host's agent directories as `AgentDirectoriesPort` declares them:
@@ -346,9 +348,7 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
 
   postStartupData(): Effect.Effect<void, Error, ProcessServices> {
     return Effect.andThen(
-      Effect.sync(() => {
-        this.postAgentModePresets();
-      }),
+      this.postAgentModePresets(),
       Effect.all([this.postAgentSelectionData(), this.postCustomAgentDir()], {
         concurrency: 'unbounded',
       }).pipe(Effect.asVoid),
@@ -357,10 +357,8 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
 
   refreshCatalogData(): Effect.Effect<void, Error, ProcessServices> {
     return Effect.gen({ self: this }, function* () {
-      // Presets ride along because every roster mutation can move the
-      // effective team: enabling one agent rewrites the selection as
-      // `custom`, which retires whatever team was applied.
-      this.postAgentModePresets();
+      // Roster mutations also change the effective team.
+      yield* this.postAgentModePresets();
       yield* Effect.all(
         [this.postAgentSelectionData(), this.catalogChanged()],
         { concurrency: 'unbounded' },
@@ -386,7 +384,7 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
     return Effect.gen({ self: this }, function* () {
       yield* this.registry.loadAgents();
       this.renderer.postToRenderer(
-        buildAgentSelectionMessage({
+        yield* buildAgentSelectionMessage({
           buildSelectionItems: () =>
             this.catalogController.buildSelectionItems(),
           getCustomAgentScanIssues,
@@ -406,14 +404,15 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
     );
   }
 
-  private postAgentModePresets(): void {
-    this.renderer.postToRenderer(
+  private postAgentModePresets(): Effect.Effect<void, Error> {
+    return Effect.map(
       buildAgentModePresetsMessage({
         getCustomPresets: () => this.catalogController.getCustomPresets(),
         getOrchestratorAgentNames: () =>
           this.catalogController.getOrchestratorAgentNames(),
         getActiveTeamId: () => this.roster.getActiveTeamId(),
       }),
+      (message) => this.renderer.postToRenderer(message),
     );
   }
 
@@ -673,7 +672,7 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
         },
         refreshAfterApply: (selectedToolUseAgent) =>
           Effect.gen({ self: this }, function* () {
-            this.postAgentModePresets();
+            yield* this.postAgentModePresets();
             yield* Effect.all(
               [
                 this.postAgentSelectionData(),
@@ -698,7 +697,7 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
     const preset = await this.runtime.runPromise(
       this.catalogController.saveCurrentPreset(name),
     );
-    this.postAgentModePresets();
+    await this.runtime.runPromise(this.postAgentModePresets());
     await this.runtime.runPromise(this.onCatalogChanged());
     await this.runtime.runPromise(
       this.notifications.showInfoMessage(`Saved team "${preset.name}"`),
@@ -711,7 +710,9 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
     >,
   ): Promise<void> {
     const { presetId } = message;
-    const target = this.catalogController.getCustomPreset(presetId);
+    const target = await this.runtime.runPromise(
+      this.catalogController.getCustomPreset(presetId),
+    );
     if (!target) {
       await this.runtime.runPromise(
         this.notifications.showErrorMessage(`Unknown custom team: ${presetId}`),
@@ -728,7 +729,7 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
     await this.runtime.runPromise(
       this.catalogController.deleteCustomPreset(presetId),
     );
-    this.postAgentModePresets();
+    await this.runtime.runPromise(this.postAgentModePresets());
     await this.runtime.runPromise(this.onCatalogChanged());
   }
 }

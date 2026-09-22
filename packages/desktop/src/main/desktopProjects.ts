@@ -5,7 +5,7 @@
 
 import { stat } from 'node:fs/promises';
 
-import { Data, Effect, type FileSystem, type Path } from 'effect';
+import { Data, Effect, Exit, Scope, type FileSystem, type Path } from 'effect';
 
 import {
   createAgentResponseTextConnector,
@@ -27,6 +27,7 @@ import {
   TEXRA_APPROVAL_POLICY_CONFIG_KEY,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
+import type { ProcessIdentity } from '@shared/session/sessionEvents';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { readSettingFrom } from '@utils/config/platformSettings';
@@ -76,7 +77,11 @@ export interface DesktopProjectRegistry {
    */
   open(
     root: string,
-  ): Effect.Effect<DesktopProject, Error, FileSystem.FileSystem | Path.Path>;
+  ): Effect.Effect<
+    DesktopProject,
+    Error,
+    FileSystem.FileSystem | Path.Path | ProcessIdentity
+  >;
   /** Open projects in the order they were opened; the no-workspace session is not one. */
   list(): readonly DesktopProject[];
   /** The project the window shows: the active folder, else the no-workspace session. */
@@ -205,23 +210,20 @@ function openProjectSession(
         createAgentResponseTextConnector({ ...roots, secrets }),
       ),
     });
-    return yield* Effect.try({
-      try: () => {
-        session.setApprovalPolicy(
-          readSettingFrom<TexraApprovalPolicy>(
-            roots,
-            TEXRA_APPROVAL_POLICY_CONFIG_KEY,
-          ),
-        );
-        return {
-          key: roots.storage,
-          root,
+    return yield* Effect.gen(function* () {
+      session.setApprovalPolicy(
+        yield* readSettingFrom<TexraApprovalPolicy>(
           roots,
-          session,
-          dispose: () => session.dispose(),
-        };
-      },
-      catch: ensureError,
+          TEXRA_APPROVAL_POLICY_CONFIG_KEY,
+        ),
+      );
+      return {
+        key: roots.storage,
+        root,
+        roots,
+        session,
+        dispose: () => session.dispose(),
+      };
     }).pipe(Effect.onError(() => session.dispose()));
   });
 }
@@ -274,34 +276,48 @@ export function openDesktopProjectRegistry(
             root,
           );
           const storage = storageProvider.getStoragePath();
-          const [workspaceState, workspaceConfig] = yield* Effect.all(
-            [
-              openAppStateStore(storage),
-              openTexraWorkspaceConfigStore(storage, root, options.warn),
-            ],
-            { concurrency: 'unbounded' },
-          );
-          const roots = createNodeWorkspaceRoots({
-            workspacePath: root,
-            storage,
-            globalStorage: storageProvider.getGlobalStoragePath(),
-            config: {
-              workspace: workspaceConfig,
-              global: options.globalConfigStore,
-            },
-            workspaceState,
-            globalState: options.stores.globalState,
-          });
-          // Acquire the session and install its registry owner before
-          // interruption can leave this operation.
-          return yield* Effect.uninterruptible(
-            openProjectSession(root, roots, options.stores.secrets).pipe(
-              Effect.tap((project) =>
-                Effect.sync(() => {
-                  projects.set(root, project);
-                  notify();
-                }).pipe(withPerKeyLane(lanes, selection)),
+          const stateScope = yield* Scope.make();
+          return yield* Effect.gen(function* () {
+            const [workspaceState, workspaceConfig] = yield* Effect.all(
+              [
+                openAppStateStore(storage).pipe(Scope.provide(stateScope)),
+                openTexraWorkspaceConfigStore(storage, root, options.warn),
+              ],
+              { concurrency: 'unbounded' },
+            );
+            const roots = createNodeWorkspaceRoots({
+              workspacePath: root,
+              storage,
+              globalStorage: storageProvider.getGlobalStoragePath(),
+              config: {
+                workspace: workspaceConfig,
+                global: options.globalConfigStore,
+              },
+              workspaceState,
+              globalState: options.stores.globalState,
+            });
+            // Acquire the session and install its registry owner before
+            // interruption can leave this operation.
+            return yield* Effect.uninterruptible(
+              openProjectSession(root, roots, options.stores.secrets).pipe(
+                Effect.tap((project) =>
+                  Effect.sync(() => {
+                    const disposeSession = project.dispose;
+                    project.dispose = () =>
+                      disposeSession().pipe(
+                        Effect.ensuring(Scope.close(stateScope, Exit.void)),
+                      );
+                    projects.set(root, project);
+                    notify();
+                  }).pipe(withPerKeyLane(lanes, selection)),
+                ),
               ),
+            );
+          }).pipe(
+            Effect.onError(() =>
+              projects.has(root)
+                ? Effect.void
+                : Scope.close(stateScope, Exit.void),
             ),
           );
         }).pipe(withPerKeyLane(lanes, root), Effect.mapError(ensureError));

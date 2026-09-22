@@ -25,7 +25,7 @@ describe('tool-use tool resolution', () => {
   // rather than taken from the process list.
   let injected: readonly {
     readonly toolName: 'update_config';
-    readonly shouldInject: () => boolean;
+    readonly shouldInject: () => Effect.Effect<boolean>;
   }[] = [];
   const toolInjections = { list: () => injected };
 
@@ -135,7 +135,12 @@ describe('tool-use tool resolution', () => {
     'filters injected approval-gated tools when approval prompts are unavailable',
     () =>
       Effect.gen(function* () {
-        injected = [{ toolName: 'update_config', shouldInject: () => true }];
+        injected = [
+          {
+            toolName: 'update_config',
+            shouldInject: () => Effect.succeed(true),
+          },
+        ];
 
         expect(
           yield* resolveNames(['grep'], { approvalPromptsUnavailable: true }),

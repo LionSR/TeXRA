@@ -210,16 +210,10 @@ export class Database extends Context.Service<
     readonly readDesktopProjects: (
       id: AggregateId,
     ) => Effect.Effect<SessionEvent | undefined, DatabaseReadFailed>;
-    /**
-     * Every application-state key's latest value in this root, as one map:
-     * the whole store's open-time snapshot in one query, keyed by the state
-     * key its aggregate is named for. A key whose latest row is the delete is
-     * absent from the map.
-     */
-    readonly readAppState: () => Effect.Effect<
-      ReadonlyMap<string, JsonValue>,
-      DatabaseReadFailed
-    >;
+    /** Latest committed value of one key; a missing or deleted key is absent. */
+    readonly readAppStateKey: (
+      key: string,
+    ) => Effect.Effect<JsonValue | undefined, DatabaseReadFailed>;
     readonly readUpdateCheck: (
       host: UpdateCheckHost,
     ) => Effect.Effect<UpdateCheckRecord | null, DatabaseReadFailed>;
@@ -323,6 +317,7 @@ export class GlobalDatabase extends Context.Service<
   Pick<
     Context.Service.Shape<typeof Database>,
     | 'appendAll'
+    | 'readAppStateKey'
     | 'readInputHistory'
     | 'appendInputHistory'
     | 'readDesktopProjects'

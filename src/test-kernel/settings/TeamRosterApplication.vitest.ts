@@ -45,7 +45,8 @@ function makeDeps(
   const { catalog, ...rest } = overrides;
   return {
     catalog: {
-      resolvePreset: () => ({ ok: true, preset, resolution: unresolved }),
+      resolvePreset: () =>
+        Effect.succeed({ ok: true, preset, resolution: unresolved }),
       commitPreset: vi.fn(() => Effect.void),
       ...catalog,
     },
@@ -73,11 +74,12 @@ describe('team roster application', () => {
         'research',
         makeDeps({
           catalog: {
-            resolvePreset: () => ({
-              ok: true,
-              preset,
-              resolution: refreshed ? resolved : unresolved,
-            }),
+            resolvePreset: () =>
+              Effect.succeed({
+                ok: true,
+                preset,
+                resolution: refreshed ? resolved : unresolved,
+              }),
             commitPreset,
           },
           loadLocalCatalog: () =>
@@ -149,11 +151,14 @@ describe('team roster application', () => {
     () =>
       Effect.gen(function* () {
         const calls: string[] = [];
-        const getPresetToolUseRoot = vi.fn(() => 'orchestrator');
+        const getPresetToolUseRoot = vi.fn(() =>
+          Effect.succeed('orchestrator'),
+        );
 
         yield* applySettingsTeamRoster('research', {
           catalog: {
-            resolvePreset: () => ({ ok: true, preset, resolution: resolved }),
+            resolvePreset: () =>
+              Effect.succeed({ ok: true, preset, resolution: resolved }),
             commitPreset: () =>
               Effect.sync(() => {
                 calls.push('apply');
@@ -197,7 +202,8 @@ describe('team roster application', () => {
 
       yield* applySettingsTeamRoster('research', {
         catalog: {
-          resolvePreset: () => ({ ok: true, preset, resolution: unresolved }),
+          resolvePreset: () =>
+            Effect.succeed({ ok: true, preset, resolution: unresolved }),
           commitPreset: vi.fn(() => Effect.void),
           getPresetToolUseRoot: vi.fn(),
         },

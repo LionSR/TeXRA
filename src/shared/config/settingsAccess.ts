@@ -8,6 +8,7 @@ import type {
   ConfigTarget,
   ConfigWriteFailed,
   StateStore,
+  StateReadFailed,
 } from '@platform/interfaces';
 import type {
   SettingHost,
@@ -22,9 +23,8 @@ const log = createLog('settingsAccess');
 /**
  * Host-aware read/write for {@link StateSettingEntry} rows.
  *
- * Both `ConfigProvider` and `StateStore` expose the same `get(key, default)`
- * read surface, so reads dispatch uniformly. Writes differ (`ConfigProvider`
- * takes a target; `StateStore` does not), so they branch on the resolved slot.
+ * Catalog reads compose application-state Effects and synchronous config
+ * reads through the one host-aware slot selection.
  *
  * The slot is whatever the row's `slots` map declares for the calling host —
  * there is no fallback chain, so a host that does not store a setting cannot
@@ -61,18 +61,21 @@ export function settingDefault(entry: StateSettingEntry): unknown {
 
 /**
  * Read a state-backed setting, falling back to (and validating against) the
- * entry's schema. Both `ConfigProvider` and `StateStore` expose the same
- * `get(key, default)`, so the read dispatches uniformly on the resolved slot.
+ * entry's schema after the authoritative read completes.
  */
 export function readSetting(
   entry: StateSettingEntry,
   stores: SettingsStores,
   host: SettingHost = 'vscode',
-): unknown {
-  const slot = settingSlot(entry, host);
-  return slot === 'config'
-    ? readConfigSetting(entry, stores.config)
-    : validateStored(entry, stores[slot].get<unknown>(entry.key));
+): Effect.Effect<unknown, StateReadFailed> {
+  return Effect.suspend(() => {
+    const slot = settingSlot(entry, host);
+    return slot === 'config'
+      ? Effect.sync(() => readConfigSetting(entry, stores.config))
+      : Effect.map(stores[slot].get<unknown>(entry.key), (raw) =>
+          validateStored(entry, raw),
+        );
+  });
 }
 
 /**

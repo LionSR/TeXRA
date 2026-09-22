@@ -82,7 +82,6 @@ function buildOverleafClonePorts(
           // slots.
           executeCommandSync(['git', '--version'], {
             cwd: context.cwd,
-            settings: undefined,
             quiet: true,
           }).success,
       ),

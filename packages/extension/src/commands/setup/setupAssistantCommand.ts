@@ -18,7 +18,11 @@ import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
 import { withLogChannel, withLogData } from '@logger/effectLog';
 import { createLog } from '@logger/logUtils';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
-import type { StateStore, StateWriteFailed } from '@platform/interfaces';
+import type {
+  StateReadFailed,
+  StateStore,
+  StateWriteFailed,
+} from '@platform/interfaces';
 import type { LanguageModel } from '@platform/languageModel';
 import type { PlatformSecrets } from '@platform/secrets';
 import { presentLaunchedProgressRun } from '@progressView/progressNavigation';
@@ -50,7 +54,7 @@ interface LaunchModelResolution {
 function selectLaunchModel(
   stores: SettingsStores,
   secrets: PlatformSecrets,
-): Effect.Effect<LaunchModelResolution | null, never, LanguageModel> {
+): Effect.Effect<LaunchModelResolution | null, StateReadFailed, LanguageModel> {
   return resolveSetupLaunchModel(stores, secrets, true).pipe(
     Effect.map((resolution) =>
       resolution
@@ -77,33 +81,37 @@ function selectLaunchModel(
 function withOpenRouterFlagOn<A, E, R>(
   globalState: StateStore,
   program: Effect.Effect<A, E, R>,
-): Effect.Effect<A, E, R> {
-  const prior =
-    globalState.get<boolean>(GlobalStateKey.USE_OPENROUTER) === true;
-  if (prior) return program;
+): Effect.Effect<A, E | StateReadFailed, R> {
+  return Effect.gen(function* () {
+    const prior =
+      (yield* globalState.get<boolean>(GlobalStateKey.USE_OPENROUTER)) === true;
+    if (prior) return yield* program;
 
-  return Effect.acquireUseRelease(
-    // The acquisition's failure is the launch's own, and it is uninterruptible
-    // here — so it dies with the program that could not start rather than
-    // joining an error channel the caller does not carry.
-    globalState.update(GlobalStateKey.USE_OPENROUTER, true).pipe(Effect.orDie),
-    () => program,
-    () =>
-      // The restore write's own failure never leaves this module: the
-      // finalizer logs it and continues, so a failed restore never masks the
-      // launch's own outcome. The handler names the whole channel, so a
-      // widened one fails to compile rather than escaping unlogged.
+    return yield* Effect.acquireUseRelease(
+      // The acquisition's failure is the launch's own, and it is uninterruptible
+      // here — so it dies with the program that could not start rather than
+      // joining an error channel the caller does not carry.
       globalState
-        .update(GlobalStateKey.USE_OPENROUTER, false)
-        .pipe(
-          Effect.catch((error: StateWriteFailed) =>
-            Effect.logError('Failed to restore useOpenRouter flag.').pipe(
-              withLogData(error),
-              withLogChannel(CHANNEL),
+        .update(GlobalStateKey.USE_OPENROUTER, true)
+        .pipe(Effect.orDie),
+      () => program,
+      () =>
+        // The restore write's own failure never leaves this module: the
+        // finalizer logs it and continues, so a failed restore never masks the
+        // launch's own outcome. The handler names the whole channel, so a
+        // widened one fails to compile rather than escaping unlogged.
+        globalState
+          .update(GlobalStateKey.USE_OPENROUTER, false)
+          .pipe(
+            Effect.catch((error: StateWriteFailed) =>
+              Effect.logError('Failed to restore useOpenRouter flag.').pipe(
+                withLogData(error),
+                withLogChannel(CHANNEL),
+              ),
             ),
           ),
-        ),
-  );
+    );
+  });
 }
 
 /**
@@ -185,11 +193,11 @@ const ensureCredentialOrPrompt = Effect.fn('ensureCredentialOrPrompt')(
 function isRoutingConfigured(
   stores: SettingsStores,
   secrets: PlatformSecrets,
-): Effect.Effect<boolean, never, LanguageModel> {
-  if (!getUseOpenRouter(stores)) return Effect.succeed(true);
-  return resolveSetupLaunchModel(stores, secrets, false).pipe(
-    Effect.map((resolution) => resolution !== null),
-  );
+): Effect.Effect<boolean, StateReadFailed, LanguageModel> {
+  return Effect.gen(function* () {
+    if (!(yield* getUseOpenRouter(stores))) return true;
+    return (yield* resolveSetupLaunchModel(stores, secrets, false)) !== null;
+  });
 }
 
 /**

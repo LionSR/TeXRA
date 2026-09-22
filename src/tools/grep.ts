@@ -119,7 +119,7 @@ const runGrep = Effect.fn('GrepTool.execute')(function* (
   input: GrepInput,
 ): Effect.fn.Return<ToolResult, unknown, FileSystem.FileSystem> {
   const root = ports.toolRoot();
-  const { path, display } = resolveAndFormat(
+  const { path, display } = yield* resolveAndFormat(
     ports.settings,
     ports.workspaceRoot,
     input.path ?? undefined,

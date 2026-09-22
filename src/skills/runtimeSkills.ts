@@ -85,14 +85,19 @@ function isSkillDisabled(
  * the roots its prompt is being built for, so the answer is that project's
  * rather than the calling context's.
  */
-export function readDisabledSkills(stores: SettingsStores): DisabledSkills {
-  return {
-    names: readSettingFrom<string[]>(stores, WorkspaceStateKey.DISABLED_SKILLS),
-    scopes: readSettingFrom<ActiveSkillSourceScope[]>(
-      stores,
-      WorkspaceStateKey.DISABLED_SKILL_SOURCES,
-    ),
-  };
+export function readDisabledSkills(stores: SettingsStores) {
+  return Effect.gen(function* () {
+    return {
+      names: yield* readSettingFrom<string[]>(
+        stores,
+        WorkspaceStateKey.DISABLED_SKILLS,
+      ),
+      scopes: yield* readSettingFrom<ActiveSkillSourceScope[]>(
+        stores,
+        WorkspaceStateKey.DISABLED_SKILL_SOURCES,
+      ),
+    };
+  });
 }
 
 /**
@@ -118,7 +123,7 @@ export function skillDisplayItem(
 /** Discover the complete inventory for host settings displays. */
 export const loadRuntimeSkillDisplay = Effect.fn('skills.runtimeDisplay')(
   function* (workspaceRoot: string | undefined, stores: SettingsStores) {
-    const disabled = readDisabledSkills(stores);
+    const disabled = yield* readDisabledSkills(stores);
     const result = yield* discoverRuntimeSkills(workspaceRoot);
     return {
       skills: result.skills.map((entry) => skillDisplayItem(entry, disabled)),
@@ -146,10 +151,11 @@ export function filterDiscoveredSkills(
 export function loadEnabledRuntimeSkills(
   workspaceRoot: string | undefined,
   stores: SettingsStores,
-): Effect.Effect<DiscoverSkillSourcesResult> {
-  return Effect.map(discoverRuntimeSkills(workspaceRoot), (result) =>
-    filterDiscoveredSkills(result, readDisabledSkills(stores)),
-  );
+) {
+  return Effect.gen(function* () {
+    const result = yield* discoverRuntimeSkills(workspaceRoot);
+    return filterDiscoveredSkills(result, yield* readDisabledSkills(stores));
+  });
 }
 
 function formatRuntimeSkillCatalog(skills: readonly SourcedSkill[]): string {
@@ -181,10 +187,7 @@ export function formatRuntimeSkillActivation({
 }
 
 export const loadRuntimeSkillCatalog = Effect.fn('skills.runtimeCatalog')(
-  function* (
-    workspaceRoot: string | undefined,
-    stores: SettingsStores,
-  ): Effect.fn.Return<RuntimeSkillCatalogResult> {
+  function* (workspaceRoot: string | undefined, stores: SettingsStores) {
     // The same enabled set the hosts list, projected for the prompt: an empty
     // source registry discovers nothing and formats to the empty catalog, so
     // no separate zero-source arm decides that answer.
@@ -201,6 +204,6 @@ export const loadRuntimeSkillCatalog = Effect.fn('skills.runtimeCatalog')(
         source: source.scope,
       })),
       issues: result.errors,
-    };
+    } satisfies RuntimeSkillCatalogResult;
   },
 );

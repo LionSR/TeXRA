@@ -77,6 +77,7 @@ import {
 import type {
   AgentDirectories,
   StateStore,
+  StateReadFailed,
   StateWriteFailed,
 } from '@platform/interfaces';
 import type { LanguageModel } from '@platform/languageModel';
@@ -160,7 +161,7 @@ interface ExtensionHostRequestsOptions {
    *  inputs (a key stored, a sign-in, the setup assistant run). */
   refreshOnboardingFunnel(): Effect.Effect<
     void,
-    StateWriteFailed,
+    StateReadFailed | StateWriteFailed,
     LanguageModel
   >;
 }
@@ -440,7 +441,7 @@ export function createExtensionHostRequests(
     request: Extract<HostRequest, { kind: 'launch' }>,
   ): Effect.Effect<
     void,
-    HostCallFailed | RequestRefusal,
+    HostCallFailed | RequestRefusal | StateReadFailed,
     GlobalStorageFs | FileSystem.FileSystem | AgentDirectories
   > {
     return Effect.gen(function* () {
@@ -734,16 +735,18 @@ export function createExtensionHostRequests(
         yield* refreshOnboardingFunnel;
       }),
     openApiKeyGuide: (provider) =>
-      Effect.asVoid(
-        fromHost('env.openExternal', () =>
+      Effect.gen(function* () {
+        const url = provider
+          ? yield* getProviderKeyUrl(session.roots, provider)
+          : undefined;
+        yield* fromHost('env.openExternal', () =>
           vscode.env.openExternal(
             vscode.Uri.parse(
-              (provider && getProviderKeyUrl(session.roots, provider)) ||
-                'https://texra.ai/guide/installation#setting-up-api-keys',
+              url || 'https://texra.ai/guide/installation#setting-up-api-keys',
             ),
           ),
-        ),
-      ),
+        );
+      }),
     openAgentSettings: (sessionType) =>
       commandVerb(
         'texra.showAgents',

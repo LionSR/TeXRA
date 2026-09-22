@@ -22,9 +22,9 @@ export const promptToAddAgentToConfig = Effect.fnUntraced(function* (
   // The extension host holds one session; its roots are the workspace the
   // agent-creator wrote into.
   const roster = createWorkspaceAgentRosterController(session.roots);
-  const alreadyVisible = roster
-    .getVisibleAgents(category)
-    .some((entry) => entry.name === agentName);
+  const alreadyVisible = (yield* roster.getVisibleAgents(category)).some(
+    (entry) => entry.name === agentName,
+  );
 
   if (alreadyVisible) {
     yield* Effect.logDebug(

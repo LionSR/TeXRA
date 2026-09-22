@@ -135,7 +135,9 @@ const captureStartedLaunch = Effect.fn(function* (
         const recordedSession = recordSessionEvents(session);
         const trace = new TraceEmitter();
 
-        mocks.resolve.mockReturnValueOnce({ path: '/agents/chat.yaml' });
+        mocks.resolve.mockReturnValueOnce(
+          Effect.succeed({ path: '/agents/chat.yaml' }),
+        );
         mocks.load.mockReturnValueOnce(
           Effect.succeed([{ agentCategory: AgentCategory.ToolUse }, {}]),
         );
@@ -322,7 +324,9 @@ describe('native agent launch activation', () => {
             Effect.andThen(Effect.fail(RUN_FAILURE)),
           ),
         );
-        mocks.resolve.mockReturnValueOnce({ path: '/agents/chat.yaml' });
+        mocks.resolve.mockReturnValueOnce(
+          Effect.succeed({ path: '/agents/chat.yaml' }),
+        );
         mocks.load.mockReturnValueOnce(
           Effect.succeed([{ agentCategory: AgentCategory.ToolUse }, {}]),
         );

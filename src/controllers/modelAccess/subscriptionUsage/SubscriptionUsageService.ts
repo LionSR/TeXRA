@@ -150,8 +150,7 @@ export class SubscriptionUsageService {
           ),
       },
       glmCodingPlan: {
-        resolveVariant: () =>
-          Effect.sync(() => useChinaRegion(this.stores, 'glm')),
+        resolveVariant: () => useChinaRegion(this.stores, 'glm'),
         fetch: (useChina) =>
           Effect.flatMap(this.loadApiKey('glm'), (apiKey) =>
             apiKey

@@ -218,8 +218,8 @@ function createLiveToolUseFlowContext(
   return {
     ownerSession: {} as SessionHandle,
     requestImmediateCompaction: vi.fn(),
-    modelSwitchDisabledReason: vi.fn(),
-    switchModel: vi.fn(),
+    modelSwitchDisabledReason: vi.fn(() => Effect.succeed(undefined)),
+    switchModel: vi.fn(() => Effect.void),
     interrupt: vi.fn(),
     ...overrides,
   };

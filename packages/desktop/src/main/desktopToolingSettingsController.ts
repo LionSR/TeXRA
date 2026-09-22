@@ -65,7 +65,7 @@ interface DefaultDesktopToolingSettingsControllerOptions extends SettingsStatePo
 export interface DesktopToolingSettingsController {
   readonly toolHandlers: DesktopToolHandlers;
   readonly latexHandlers: DesktopLatexHandlers;
-  postLatexConfigValues(): void;
+  postLatexConfigValues(): Effect.Effect<void, Error>;
   postStartupData(): Effect.Effect<void, Error, ProcessServices>;
   /**
    * Releases the app-signal subscription. Scoped to the window that built this
@@ -126,8 +126,8 @@ export class DefaultDesktopToolingSettingsController implements DesktopToolingSe
     this.unsubscribeToolAvailability();
   }
 
-  postLatexConfigValues(): void {
-    this.options.renderer.postToRenderer(
+  postLatexConfigValues(): Effect.Effect<void, Error> {
+    return Effect.map(
       buildSettingsSnapshotMessage(
         'latex',
         {
@@ -137,6 +137,7 @@ export class DefaultDesktopToolingSettingsController implements DesktopToolingSe
         },
         'desktop',
       ),
+      (message) => this.options.renderer.postToRenderer(message),
     );
   }
 

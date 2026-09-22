@@ -153,17 +153,9 @@ export async function runChat(
     return { exitCode: CliExitCode.Usage };
   }
 
-  // The platform's own SIGINT/SIGTERM handler stays live through onboarding
-  // and model resolution below, this function does not suppress it (it never
-  // passes `installSignalHandlers: false`). Once Ink actually mounts (below),
-  // handOffCliShutdownSignalHandlers() removes it immediately before this
-  // function installs its own process.on pair, so exactly one owner is ever
-  // registered for a given signal; see `initCliPlatform`'s doc comment for
-  // the full handoff design.
-  //
-  // The entry's runtime, in a local: the chat is the first thing that opens
-  // the process session, and the Effects below settle on the same runtime.
-  // The init and that first session open are one program on it.
+  // Platform signal handling owns onboarding; handoff immediately before Ink
+  // mounts leaves exactly one signal owner. Initialization and chat use the
+  // entry runtime throughout.
   const runtime = await installCliProcessRuntime(context.storageRoot, {
     resourcesPath: context.resourcesPath,
   });
@@ -189,32 +181,34 @@ export async function runChat(
     // the no-models resolution error, the dead-end this feature exists to fix.
     return { exitCode: CliExitCode.Success };
   }
-  // State 1 continuation (.agents/docs/archived/feature/2026-06-11-agent-native-onboarding.md): on a true
-  // first run the post-picker session starts with the setup agent. Threaded
-  // through the same override slot resolveChatDefaults already honors, and
-  // only when the user didn't pin an agent (--agent, resume, or env), an
-  // explicit choice always wins.
+  // First-run setup yields to an explicitly selected agent.
   const explicitAgent = initialResume?.config.agent ?? init.agentOverride;
   const setupAgentOverride = firstRunSetupAgentOverride({
     onboardingConfigured: onboarding.configured,
-    firstRunDone: getFirstRunDone(services.globalState),
+    firstRunDone: await runtime.runPromise(
+      getFirstRunDone(services.globalState),
+    ),
     pinnedAgent: explicitAgent ?? context.envAgent,
   });
-  // The visible agent list only exists once the registry has loaded, so the
-  // load and the defaults resolution are one program rather than two runs.
   const defaults = await runtime.runPromise(
-    Effect.map(loadAgents(), () =>
-      resolveChatDefaults({
+    Effect.gen(function* () {
+      yield* loadAgents();
+      return resolveChatDefaults({
         stores: services,
         agentOverride: explicitAgent ?? setupAgentOverride,
         modelOverride: initialResume?.config.model ?? init.modelOverride,
         envAgent: context.envAgent,
         envModel: context.envModel,
-        visibleToolUseAgents: getVisibleAgents(services, AgentCategory.ToolUse),
-      }),
-    ),
+        visibleToolUseAgents: yield* getVisibleAgents(
+          services,
+          AgentCategory.ToolUse,
+        ),
+      });
+    }),
   );
-  const agentUsageError = chatToolUseAgentUsageError(services, defaults.agent);
+  const agentUsageError = await runtime.runPromise(
+    chatToolUseAgentUsageError(services, defaults.agent),
+  );
   if (agentUsageError) {
     writeTextStderr(agentUsageError);
     return { exitCode: CliExitCode.Usage };
@@ -387,14 +381,17 @@ export async function runChat(
     });
   const getModelSwitchDisabledReason = (
     candidateModel: string,
-  ): string | undefined => {
+  ): Effect.Effect<string | undefined, Error> => {
     if (chatTuiCanStartRootRun(session) || !canSelectCurrentModel()) {
-      return undefined;
+      return Effect.succeed(undefined);
     }
     const activeFlow = session.runId
       ? runtimeSession.runs.getToolUseFlowContext(session.runId)
       : undefined;
-    return activeFlow?.modelSwitchDisabledReason(candidateModel);
+    return (
+      activeFlow?.modelSwitchDisabledReason(candidateModel) ??
+      Effect.succeed(undefined)
+    );
   };
   const canInterruptActiveRun = (): boolean =>
     chatTuiCanInterruptActiveRun(session);
@@ -478,9 +475,7 @@ export async function runChat(
     runtimeSession,
     canSelectAgent: () => chatTuiCanStartRootRun(session),
     onAgentSelect: (nextAgent) =>
-      Effect.sync(() =>
-        applyInitialCliAgentSelection(nextAgent, slashCommandContext()),
-      ),
+      applyInitialCliAgentSelection(nextAgent, slashCommandContext()),
     getApprovalPolicy,
     onApprovalPolicySelect: (policy) => {
       setApprovalPolicy(policy);
@@ -538,18 +533,20 @@ export async function runChat(
       onCtrlC={() => exitController.handleSigint()}
       onSuspend={() => exitController.handleSigtstp()}
       onKillRun={(runId) => {
-        const stop = runtimeSession.runs.kill(runId, {
-          detachActiveChildren: detachSubagentsOnStop(runtimeSession.roots),
-        });
-        // A refused detach commit leaves the run alive: the parent's
-        // interrupt runs only after the detach batch commits. Surface that
-        // failure instead of discarding the forked settlement's exit.
         runtime.runFork(
-          stop.settlement.pipe(
+          Effect.gen(function* () {
+            const detachActiveChildren = yield* detachSubagentsOnStop(
+              runtimeSession.roots,
+            );
+            const stop = runtimeSession.runs.kill(runId, {
+              detachActiveChildren,
+            });
+            yield* stop.settlement;
+          }).pipe(
             Effect.catch((error) =>
-              Effect.sync(() => {
-                appendLocalAssistantTranscript(toErrorMessage(error));
-              }),
+              Effect.sync(() =>
+                appendLocalAssistantTranscript(toErrorMessage(error)),
+              ),
             ),
           ),
         );

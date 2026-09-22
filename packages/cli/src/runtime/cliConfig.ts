@@ -26,10 +26,7 @@ import {
 } from '@shared/state/stateSettings';
 
 // Local imports - utilities
-import {
-  readSettingFrom,
-  writeSettingTo,
-} from '@utils/config/platformSettings';
+import { writeSettingTo } from '@utils/config/platformSettings';
 import { isObject } from '@utils/core';
 
 // Local file imports
@@ -147,14 +144,21 @@ export function cliCommandDefaults(
 ): CliCommandDefaults {
   const sectionKey = canonicalConfigKey(role);
   const section =
-    readSettingFrom<CliCommandDefaults | undefined>(stores, sectionKey) ?? {};
+    readCliConfigSetting<CliCommandDefaults | undefined>(
+      stores.config,
+      sectionKey,
+    ) ?? {};
   const modelKey = section.model ? sectionKey : canonicalConfigKey('model');
   const model =
-    section.model ?? readSettingFrom<string | undefined>(stores, modelKey);
+    section.model ??
+    readCliConfigSetting<string | undefined>(stores.config, modelKey);
   return {
     agent:
       section.agent ??
-      readSettingFrom<string | undefined>(stores, canonicalConfigKey('agent')),
+      readCliConfigSetting<string | undefined>(
+        stores.config,
+        canonicalConfigKey('agent'),
+      ),
     model,
     ...(model === undefined
       ? {}

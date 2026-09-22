@@ -133,7 +133,7 @@ export function createStubDesktopToolingSettingsController(
       ),
       runInstallCommand: noOp,
     },
-    postLatexConfigValues: () => undefined,
+    postLatexConfigValues: () => Effect.void,
     postStartupData: noOpEffect,
     dispose: () => undefined,
     ...overrides,

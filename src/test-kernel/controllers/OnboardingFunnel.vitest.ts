@@ -1,4 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { Effect } from 'effect';
+import { it } from '@effect/vitest';
+import { describe, expect } from 'vitest';
 
 import { planOnboardingFunnelTransition } from '@controllers/onboarding/onboardingFunnel';
 import type { OnboardingFunnelState } from '@shared/schemas';
@@ -121,16 +123,17 @@ describe('planOnboardingFunnelTransition', () => {
 });
 
 describe('onboarding flags', () => {
-  it.each([7, ''])(
+  it.effect.each([7, ''])(
     'treats a non-team-id defaultTeamId %j as unset',
-    (value) => {
-      expect(
-        getDefaultTeamId(
-          new FakeStateStore({
-            [GlobalStateKey.ONBOARDING_DEFAULT_TEAM_ID]: value,
-          }),
-        ),
-      ).toBeUndefined();
-    },
+    (value) =>
+      Effect.gen(function* () {
+        expect(
+          yield* getDefaultTeamId(
+            new FakeStateStore({
+              [GlobalStateKey.ONBOARDING_DEFAULT_TEAM_ID]: value,
+            }),
+          ),
+        ).toBeUndefined();
+      }),
   );
 });

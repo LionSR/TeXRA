@@ -63,15 +63,17 @@ export function compileFailuresOf(
 }
 
 /** Workflow auto-compile timeout, floored at the config-range minimum. */
-export function getWorkflowAutoCompileTimeoutMs(roots: WorkspaceRoots): number {
+export const getWorkflowAutoCompileTimeoutMs = Effect.fn(
+  'getWorkflowAutoCompileTimeoutMs',
+)(function* (roots: WorkspaceRoots) {
   return Math.max(
     MIN_TIMEOUT_MS,
-    readSettingFrom<number>(
+    yield* readSettingFrom<number>(
       roots,
       WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS,
     ),
   );
-}
+});
 
 /**
  * Return a human-readable display name for an output file in compile messages.
@@ -126,10 +128,10 @@ export const runCompileCheck = Effect.fn('reflection.runCompileCheck')(
   function* (ctx: CompileCheckContext, currentRound: number) {
     const empty: CompileCheckResult = { artifacts: [] };
     if (
-      !readSettingFrom<boolean>(
+      !(yield* readSettingFrom<boolean>(
         ctx.roots,
         WorkspaceStateKey.WORKFLOW_AUTO_COMPILE,
-      )
+      ))
     ) {
       return empty;
     }
@@ -151,7 +153,7 @@ export const runCompileCheck = Effect.fn('reflection.runCompileCheck')(
       return empty;
     }
 
-    const timeoutMs = getWorkflowAutoCompileTimeoutMs(ctx.roots);
+    const timeoutMs = yield* getWorkflowAutoCompileTimeoutMs(ctx.roots);
     // compileRoot is created lazily on first failure so successful rounds
     // leave no trace — the orchestrator can use "no compile/*.log entries" as
     // proof the build succeeded.

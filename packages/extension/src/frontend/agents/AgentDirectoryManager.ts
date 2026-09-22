@@ -67,7 +67,9 @@ class AgentDirectoryManager {
         resourcesPath,
         customDirectoryStore: {
           get: () =>
-            globalState.get<string>(GlobalStateKey.CUSTOM_AGENT_DIR, ''),
+            Effect.sync(() =>
+              globalState.get<string>(GlobalStateKey.CUSTOM_AGENT_DIR, ''),
+            ),
         },
         issueReporter: {
           report: (message, docsId) =>

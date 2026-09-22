@@ -53,8 +53,9 @@ async function createController(options?: {
       prompt: hosts.prompt,
       externalOpener: hosts.externalOpener,
       getProviderDisplayName: (provider) =>
-        provider === 'openai' ? 'OpenAI' : provider,
-      getProviderKeyUrl: (provider) => options?.urls?.[provider],
+        Effect.succeed(provider === 'openai' ? 'OpenAI' : provider),
+      getProviderKeyUrl: (provider) =>
+        Effect.succeed(options?.urls?.[provider]),
       refreshAfterKeyChange: () =>
         Effect.sync(() => {
           refreshCount += 1;

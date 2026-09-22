@@ -7,11 +7,12 @@
 import { Effect } from 'effect';
 
 import type { ConfigTarget, ConfigWriteFailed } from '@platform/interfaces';
-import type { SettingsStores } from '@shared/config/settingsAccess';
 import {
-  readSettingFrom,
-  writeSettingTo,
-} from '@utils/config/platformSettings';
+  readConfigSetting,
+  type SettingsStores,
+} from '@shared/config/settingsAccess';
+import { settingByKey } from '@shared/state/stateSettings';
+import { writeSettingTo } from '@utils/config/platformSettings';
 
 export interface SubscriptionPreferenceUpdate {
   readonly effective: boolean;
@@ -40,7 +41,10 @@ export function createSubscriptionPreference(
   configKey: string,
 ): SubscriptionPreference {
   function isPrefer(stores: SettingsStores): boolean {
-    return readSettingFrom<boolean>(stores, configKey);
+    const entry = settingByKey(configKey);
+    if (!entry)
+      throw new Error(`No setting catalog entry for key: ${configKey}`);
+    return readConfigSetting(entry, stores.config) as boolean;
   }
 
   function setPrefer(

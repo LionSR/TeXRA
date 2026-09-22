@@ -4,7 +4,9 @@
  * those parsers to the workspace state of the session the call works on.
  */
 
-import type { StateStore } from '@platform/interfaces';
+import { Effect } from 'effect';
+
+import type { StateStore, StateReadFailed } from '@platform/interfaces';
 
 /**
  * Build a workspace-state accessor for an enum setting: reads the persisted
@@ -17,7 +19,7 @@ export function createEnumStateGetter<T extends string>(
   key: string,
   fallback: T,
   parse: (raw: string) => T,
-): (workspaceState: StateStore) => T {
-  return (workspaceState): T =>
-    parse(workspaceState.get<string>(key, fallback));
+): (workspaceState: StateStore) => Effect.Effect<T, StateReadFailed> {
+  return (workspaceState) =>
+    workspaceState.get<string>(key, fallback).pipe(Effect.map(parse));
 }

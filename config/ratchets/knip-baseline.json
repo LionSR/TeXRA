@@ -374,12 +374,6 @@
       "name": "runHistoryExport"
     },
     {
-      "file": "packages/cli/src/commands/init.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "defaultInitAnswers"
-    },
-    {
       "file": "packages/cli/src/commands/multiAgent.ts",
       "category": "production-dead",
       "kind": "exports",

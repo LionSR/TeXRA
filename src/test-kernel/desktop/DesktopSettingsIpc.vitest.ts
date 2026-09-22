@@ -136,11 +136,13 @@ function createSettingsFixture(overrides: SettingsFixtureOverrides = {}) {
       overrides.toolingSettingsController ??
       createStubDesktopToolingSettingsController({
         postLatexConfigValues: () =>
-          postToRenderer({
-            command: SETTINGS_VIEW_COMMANDS.UPDATE_SETTINGS_SNAPSHOT,
-            snapshot: 'latex',
-            values: {},
-          }),
+          Effect.sync(() =>
+            postToRenderer({
+              command: SETTINGS_VIEW_COMMANDS.UPDATE_SETTINGS_SNAPSHOT,
+              snapshot: 'latex',
+              values: {},
+            }),
+          ),
       }),
     globalState,
     secrets,
@@ -186,7 +188,7 @@ function findSnapshot(
 function createFailureReportingFixture(workspaceState: FakeStateStore) {
   const onError = vi.fn();
   const showErrorMessage = vi.fn(() => Effect.void);
-  const postLatexConfigValues = vi.fn();
+  const postLatexConfigValues = vi.fn(() => Effect.void);
   const { settings } = createCapturedSettingsFixture({
     workspaceState,
     toolingSettingsController: createStubDesktopToolingSettingsController({
@@ -340,103 +342,132 @@ describe('desktop settings IPC', () => {
     );
   });
 
-  it('round-trips Git author writes through workspace state and refreshes the renderer', async () => {
-    const workspaceState = new FakeStateStore();
+  it.live(
+    'round-trips Git author writes through workspace state and refreshes the renderer',
+    () =>
+      Effect.gen(function* () {
+        const workspaceState = new FakeStateStore();
 
-    const { settings, posted } = createCapturedSettingsFixture({
-      workspaceState,
-    });
+        const { settings, posted } = createCapturedSettingsFixture({
+          workspaceState,
+        });
 
-    expect(
-      settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING,
-        key: WorkspaceStateKey.GIT_AUTHOR_NAME,
-        value: 'Desktop TeXRA',
+        expect(
+          settings.handleMessage({
+            command: SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING,
+            key: WorkspaceStateKey.GIT_AUTHOR_NAME,
+            value: 'Desktop TeXRA',
+          }),
+        ).toBe(true);
+        yield* Effect.promise(() => flushAsyncWork());
+
+        expect(
+          yield* withProcessServices(
+            testRuntime(),
+            workspaceState.get(WorkspaceStateKey.GIT_AUTHOR_NAME),
+          ),
+        ).toBe('Desktop TeXRA');
+        expect(posted.at(-1)).toMatchObject({
+          command: SETTINGS_VIEW_COMMANDS.UPDATE_SETTINGS_SNAPSHOT,
+          snapshot: 'git-author',
+          values: { [WorkspaceStateKey.GIT_AUTHOR_NAME]: 'Desktop TeXRA' },
+        });
+
+        expect(
+          settings.handleMessage({
+            command: SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING,
+            key: WorkspaceStateKey.GIT_MARK_COMMITS,
+            value: false,
+          }),
+        ).toBe(true);
+        yield* Effect.promise(() => flushAsyncWork());
+        expect(
+          yield* withProcessServices(
+            testRuntime(),
+            workspaceState.get(WorkspaceStateKey.GIT_MARK_COMMITS),
+          ),
+        ).toBe(false);
+
+        expect(
+          settings.handleMessage({
+            command: SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING,
+            key: WorkspaceStateKey.GIT_WORKTREE_SUPPORT,
+            value: true,
+          }),
+        ).toBe(true);
+        yield* Effect.promise(() => flushAsyncWork());
+        expect(
+          yield* withProcessServices(
+            testRuntime(),
+            workspaceState.get(WorkspaceStateKey.GIT_WORKTREE_SUPPORT),
+          ),
+        ).toBe(true);
       }),
-    ).toBe(true);
-    await flushAsyncWork();
+  );
 
-    expect(workspaceState.get(WorkspaceStateKey.GIT_AUTHOR_NAME)).toBe(
-      'Desktop TeXRA',
-    );
-    expect(posted.at(-1)).toMatchObject({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_SETTINGS_SNAPSHOT,
-      snapshot: 'git-author',
-      values: { [WorkspaceStateKey.GIT_AUTHOR_NAME]: 'Desktop TeXRA' },
-    });
+  it.live('round-trips tool path protection through workspace state', () =>
+    Effect.gen(function* () {
+      const workspaceState = new FakeStateStore();
+      const { settings, posted } = createCapturedSettingsFixture({
+        workspaceState,
+      });
 
-    expect(
-      settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING,
-        key: WorkspaceStateKey.GIT_MARK_COMMITS,
-        value: false,
+      expect(
+        settings.handleMessage({
+          command: SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING,
+          key: WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED,
+          value: false,
+        }),
+      ).toBe(true);
+      yield* Effect.promise(() => flushAsyncWork());
+
+      expect(
+        yield* withProcessServices(
+          testRuntime(),
+          workspaceState.get(WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED),
+        ),
+      ).toBe(false);
+      expect(posted.at(-1)).toMatchObject({
+        command: SETTINGS_VIEW_COMMANDS.UPDATE_SETTINGS_SNAPSHOT,
+        snapshot: 'approval',
+        values: {
+          [WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED]: false,
+        },
+      });
+    }),
+  );
+
+  it.live(
+    'round-trips multi-agent coordination and refreshes its snapshot',
+    () =>
+      Effect.gen(function* () {
+        const globalState = new FakeStateStore();
+        const { settings, posted } = createCapturedSettingsFixture({
+          globalState,
+        });
+
+        expect(
+          settings.handleMessage({
+            command: SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING,
+            key: GlobalStateKey.DETACH_SUBAGENTS_ON_STOP,
+            value: true,
+          }),
+        ).toBe(true);
+        yield* Effect.promise(() => flushAsyncWork());
+
+        expect(
+          yield* withProcessServices(
+            testRuntime(),
+            globalState.get(GlobalStateKey.DETACH_SUBAGENTS_ON_STOP),
+          ),
+        ).toBe(true);
+        expect(posted.at(-1)).toMatchObject({
+          command: SETTINGS_VIEW_COMMANDS.UPDATE_SETTINGS_SNAPSHOT,
+          snapshot: 'multi-agent',
+          values: { [GlobalStateKey.DETACH_SUBAGENTS_ON_STOP]: true },
+        });
       }),
-    ).toBe(true);
-    await flushAsyncWork();
-    expect(workspaceState.get(WorkspaceStateKey.GIT_MARK_COMMITS)).toBe(false);
-
-    expect(
-      settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING,
-        key: WorkspaceStateKey.GIT_WORKTREE_SUPPORT,
-        value: true,
-      }),
-    ).toBe(true);
-    await flushAsyncWork();
-    expect(workspaceState.get(WorkspaceStateKey.GIT_WORKTREE_SUPPORT)).toBe(
-      true,
-    );
-  });
-
-  it('round-trips tool path protection through workspace state', async () => {
-    const workspaceState = new FakeStateStore();
-    const { settings, posted } = createCapturedSettingsFixture({
-      workspaceState,
-    });
-
-    expect(
-      settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING,
-        key: WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED,
-        value: false,
-      }),
-    ).toBe(true);
-    await flushAsyncWork();
-
-    expect(
-      workspaceState.get(WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED),
-    ).toBe(false);
-    expect(posted.at(-1)).toMatchObject({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_SETTINGS_SNAPSHOT,
-      snapshot: 'approval',
-      values: {
-        [WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED]: false,
-      },
-    });
-  });
-
-  it('round-trips multi-agent coordination and refreshes its snapshot', async () => {
-    const globalState = new FakeStateStore();
-    const { settings, posted } = createCapturedSettingsFixture({
-      globalState,
-    });
-
-    expect(
-      settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING,
-        key: GlobalStateKey.DETACH_SUBAGENTS_ON_STOP,
-        value: true,
-      }),
-    ).toBe(true);
-    await flushAsyncWork();
-
-    expect(globalState.get(GlobalStateKey.DETACH_SUBAGENTS_ON_STOP)).toBe(true);
-    expect(posted.at(-1)).toMatchObject({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_SETTINGS_SNAPSHOT,
-      snapshot: 'multi-agent',
-      values: { [GlobalStateKey.DETACH_SUBAGENTS_ON_STOP]: true },
-    });
-  });
+  );
 
   it('serves the goal list instead of the desktop "not available" stub (issue #7751 FS6)', async () => {
     const { settings, posted } = createCapturedSettingsFixture();
@@ -557,108 +588,136 @@ describe('desktop settings IPC', () => {
     expect(onError).toHaveBeenCalledWith(failure);
   });
 
-  it('round-trips the LaTeX formatter through workspace state and refreshes config values', async () => {
-    const postLatexConfigValues = vi.fn();
-    const toolingSettingsController =
-      createStubDesktopToolingSettingsController({ postLatexConfigValues });
-    const { settings, workspaceState } = createSettingsFixture({
-      toolingSettingsController,
-    });
+  it.live(
+    'round-trips the LaTeX formatter through workspace state and refreshes config values',
+    () =>
+      Effect.gen(function* () {
+        const postLatexConfigValues = vi.fn(() => Effect.void);
+        const toolingSettingsController =
+          createStubDesktopToolingSettingsController({ postLatexConfigValues });
+        const { settings, workspaceState } = createSettingsFixture({
+          toolingSettingsController,
+        });
 
-    expect(
-      settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING,
-        key: WorkspaceStateKey.LATEX_FORMATTER,
-        value: 'none',
+        expect(
+          settings.handleMessage({
+            command: SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING,
+            key: WorkspaceStateKey.LATEX_FORMATTER,
+            value: 'none',
+          }),
+        ).toBe(true);
+        yield* Effect.promise(() => flushAsyncWork());
+
+        expect(
+          yield* withProcessServices(
+            testRuntime(),
+            workspaceState.get(WorkspaceStateKey.LATEX_FORMATTER),
+          ),
+        ).toBe('none');
+        expect(postLatexConfigValues).toHaveBeenCalledOnce();
+
+        expect(
+          settings.handleMessage({
+            command: SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING,
+            key: WorkspaceStateKey.LATEX_FORMATTER,
+            value: null,
+          }),
+        ).toBe(true);
+        yield* Effect.promise(() => flushAsyncWork());
+        expect(
+          yield* withProcessServices(
+            testRuntime(),
+            workspaceState.get(WorkspaceStateKey.LATEX_FORMATTER),
+          ),
+        ).toBeUndefined();
+        expect(postLatexConfigValues).toHaveBeenCalledTimes(2);
       }),
-    ).toBe(true);
-    await flushAsyncWork();
+  );
 
-    expect(workspaceState.get(WorkspaceStateKey.LATEX_FORMATTER)).toBe('none');
-    expect(postLatexConfigValues).toHaveBeenCalledOnce();
+  it.live('persists model settings through global state', () =>
+    Effect.gen(function* () {
+      const workspaceState = new FakeStateStore();
+      const globalState = new FakeStateStore({
+        [GlobalStateKey.MODEL_SELECTION]: {
+          enabledExtras: ['gpt55'],
+          disabledDefaults: [],
+        },
+        [GlobalStateKey.HELPER_MODEL]: 'gpt55',
+      });
 
-    expect(
-      settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING,
-        key: WorkspaceStateKey.LATEX_FORMATTER,
-        value: null,
-      }),
-    ).toBe(true);
-    await flushAsyncWork();
-    expect(
-      workspaceState.get(WorkspaceStateKey.LATEX_FORMATTER),
-    ).toBeUndefined();
-    expect(postLatexConfigValues).toHaveBeenCalledTimes(2);
-  });
+      const errors: unknown[] = [];
+      const refreshModelOptions = vi.fn(() => Effect.void);
+      const credentialSettingsController =
+        createStubDesktopCredentialSettingsController(
+          { globalState, workspaceState },
+          { refreshModelOptions },
+        );
 
-  it('persists model settings through global state', async () => {
-    const workspaceState = new FakeStateStore();
-    const globalState = new FakeStateStore({
-      [GlobalStateKey.MODEL_SELECTION]: {
-        enabledExtras: ['gpt55'],
+      const { settings, posted } = createCapturedSettingsFixture({
+        workspaceState,
+        globalState,
+        credentialSettingsController,
+        ui: { onError: (error) => errors.push(error) },
+      });
+
+      expect(
+        settings.handleMessage({
+          command: SETTINGS_VIEW_COMMANDS.SET_MODEL_ENABLED,
+          modelName: 'gpt55',
+          enabled: false,
+        }),
+      ).toBe(true);
+      yield* Effect.promise(() => flushAsyncWork());
+
+      expect(
+        yield* withProcessServices(
+          testRuntime(),
+          globalState.get(GlobalStateKey.MODEL_SELECTION),
+        ),
+      ).toEqual({
+        enabledExtras: [],
         disabledDefaults: [],
-      },
-      [GlobalStateKey.HELPER_MODEL]: 'gpt55',
-    });
+      });
+      expect(
+        yield* withProcessServices(
+          testRuntime(),
+          globalState.get(GlobalStateKey.HELPER_MODEL),
+        ),
+      ).toBe(DEFAULT_HELPER_MODEL);
+      expect(errors).toEqual([]);
+      expect(
+        posted.findLast(
+          (message) =>
+            commandOf(message) ===
+            SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
+        ),
+      ).toMatchObject({
+        command: SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
+        helperModel: DEFAULT_HELPER_MODEL,
+      });
+      expect(refreshModelOptions).toHaveBeenCalledOnce();
 
-    const errors: unknown[] = [];
-    const refreshModelOptions = vi.fn(() => Effect.void);
-    const credentialSettingsController =
-      createStubDesktopCredentialSettingsController(
-        { globalState, workspaceState },
-        { refreshModelOptions },
-      );
+      expect(
+        settings.handleMessage({
+          command: SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING,
+          key: GlobalStateKey.PREFER_SHORT_MODEL_NAMES,
+          value: true,
+        }),
+      ).toBe(true);
+      yield* Effect.promise(() => flushAsyncWork());
 
-    const { settings, posted } = createCapturedSettingsFixture({
-      workspaceState,
-      globalState,
-      credentialSettingsController,
-      ui: { onError: (error) => errors.push(error) },
-    });
-
-    expect(
-      settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.SET_MODEL_ENABLED,
-        modelName: 'gpt55',
-        enabled: false,
-      }),
-    ).toBe(true);
-    await flushAsyncWork();
-
-    expect(globalState.get(GlobalStateKey.MODEL_SELECTION)).toEqual({
-      enabledExtras: [],
-      disabledDefaults: [],
-    });
-    expect(globalState.get(GlobalStateKey.HELPER_MODEL)).toBe(
-      DEFAULT_HELPER_MODEL,
-    );
-    expect(errors).toEqual([]);
-    expect(
-      posted.findLast(
-        (message) =>
-          commandOf(message) === SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
-      ),
-    ).toMatchObject({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
-      helperModel: DEFAULT_HELPER_MODEL,
-    });
-    expect(refreshModelOptions).toHaveBeenCalledOnce();
-
-    expect(
-      settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING,
-        key: GlobalStateKey.PREFER_SHORT_MODEL_NAMES,
-        value: true,
-      }),
-    ).toBe(true);
-    await flushAsyncWork();
-
-    expect(globalState.get(GlobalStateKey.PREFER_SHORT_MODEL_NAMES)).toBe(true);
-    expect(posted.at(-1)).toMatchObject({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
-      preferShortModelNames: true,
-    });
-  });
+      expect(
+        yield* withProcessServices(
+          testRuntime(),
+          globalState.get(GlobalStateKey.PREFER_SHORT_MODEL_NAMES),
+        ),
+      ).toBe(true);
+      expect(posted.at(-1)).toMatchObject({
+        command: SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
+        preferShortModelNames: true,
+      });
+    }),
+  );
 
   it('delegates domain startup and posts approval settings on readiness', async () => {
     const workspaceState = new FakeStateStore({
@@ -670,7 +729,7 @@ describe('desktop settings IPC', () => {
     const postAgentStartupData = vi.fn(() => Effect.void);
     agentSettingsController.postStartupData = postAgentStartupData;
     const postToolingStartupData = vi.fn(() => Effect.void);
-    const postLatexConfigValues = vi.fn();
+    const postLatexConfigValues = vi.fn(() => Effect.void);
     const toolingSettingsController =
       createStubDesktopToolingSettingsController({
         postLatexConfigValues,

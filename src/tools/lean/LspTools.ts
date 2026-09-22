@@ -176,7 +176,7 @@ Tips:
     function* (file: string, command: 'list' | 'count') {
       const call = yield* ToolCall;
       const services = yield* LeanLanguageServices;
-      const absoluteFile = leanFilePath(file, call);
+      const absoluteFile = yield* leanFilePath(file, call);
       const result = yield* services.fetchDiagnosticsForFile(
         absoluteFile,
         call.run?.runId,
@@ -252,7 +252,7 @@ In VS Code, these commands use the Lean 4 extension. CLI and desktop provide the
       const services = yield* LeanLanguageServices;
       const success = yield* services.executeFileCommand(
         command,
-        leanFilePath(file, call),
+        yield* leanFilePath(file, call),
         call.run?.runId,
       );
       if (!success) {
@@ -351,7 +351,7 @@ In VS Code, this uses the Lean 4 extension. CLI and desktop provide the correspo
         const services = yield* LeanLanguageServices;
         const { data, error } = yield* request(
           services,
-          leanFilePath(file, call),
+          yield* leanFilePath(file, call),
           call,
         );
         if (!data)
@@ -437,11 +437,13 @@ function noPositionData(
 }
 
 /** Resolve a Lean file once in the invoking project before the host program runs. */
-function leanFilePath(file: string, call: ToolCallShape): string {
-  return resolveAndFormat(
-    call.roots,
-    call.roots.workspace,
-    file,
-    call.workingDirectory,
-  ).path.absolute;
+function leanFilePath(file: string, call: ToolCallShape) {
+  return Effect.gen(function* () {
+    return (yield* resolveAndFormat(
+      call.roots,
+      call.roots.workspace,
+      file,
+      call.workingDirectory,
+    )).path.absolute;
+  });
 }

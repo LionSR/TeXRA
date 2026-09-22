@@ -112,7 +112,9 @@ async function loadRosterData(
   const record = await runtime.runPromise(readCliAgentRoster(roots));
   return {
     record,
-    presets: createWorkspaceAgentRosterController(roots).allPresets(),
+    presets: await runtime.runPromise(
+      createWorkspaceAgentRosterController(roots).allPresets(),
+    ),
     agents: byCategory((category) => getAgentsByCategory(category)),
   };
 }

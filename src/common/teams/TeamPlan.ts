@@ -331,7 +331,7 @@ export function resolveTeamLaunch<T extends TeamCatalogAgent, R = never>(args: {
       choose: args.choose,
       signIn: args.signIn,
       refreshRemote: args.refreshRemote,
-      replan: planCurrent,
+      replan: () => Effect.sync(planCurrent),
       remoteCatalogRefreshAttempted: refreshed.remoteCatalogRefreshAttempted,
     });
 

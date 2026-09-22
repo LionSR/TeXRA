@@ -1,7 +1,9 @@
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, vi } from 'vitest';
 
 import { DefaultDesktopAgentSettingsController } from '@desktop/main/desktopAgentSettingsController';
+import { withProcessServices } from '@platform/processRuntime';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { assertSupported, isUnsupported } from '@shared/utils/dispatcher';
@@ -65,7 +67,7 @@ function createControllerFixture(options: ControllerFixtureOptions = {}) {
       loadAgents: options.loadAgents ?? (() => Effect.void),
       refreshAgents: options.refreshAgents ?? (() => Effect.void),
       getAgents: (category) => catalog[category],
-      getVisibleAgents: (category) => visibleCatalog[category],
+      getVisibleAgents: (category) => Effect.succeed(visibleCatalog[category]),
     },
     directory: {
       getCustomAgentDirectory: () => Effect.succeed('/agents/custom'),
@@ -165,32 +167,41 @@ function remoteTeamPreset(): Record<string, unknown> {
 }
 
 describe('DefaultDesktopAgentSettingsController', () => {
-  it('updates source-qualified visibility state and both renderer surfaces', async () => {
-    const { catalogChanges, controller, posted, workspaceState } =
-      createControllerFixture({
-        catalog: physicistCatalog(),
-      });
-    const setEnabled = assertSupported(controller.handlers.setAgentEnabled);
+  it.live(
+    'updates source-qualified visibility state and both renderer surfaces',
+    () =>
+      Effect.gen(function* () {
+        const { catalogChanges, controller, posted, workspaceState } =
+          createControllerFixture({
+            catalog: physicistCatalog(),
+          });
+        const setEnabled = assertSupported(controller.handlers.setAgentEnabled);
 
-    await setEnabled({
-      category: 'workflow',
-      command: SETTINGS_VIEW_COMMANDS.SET_AGENT_ENABLED,
-      agentSource: 'builtInWorkflow',
-      agentName: 'polish',
-      enabled: false,
-    });
+        yield* Effect.promise(async () =>
+          setEnabled({
+            category: 'workflow',
+            command: SETTINGS_VIEW_COMMANDS.SET_AGENT_ENABLED,
+            agentSource: 'builtInWorkflow',
+            agentName: 'polish',
+            enabled: false,
+          }),
+        );
 
-    expect(
-      workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
-    ).toEqual({
-      kind: 'custom',
-      agentKeys: { workflow: ['builtInWorkflow:correct'], toolUse: 'all' },
-    });
-    expect(postedCommands(posted)).toContain(
-      SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION,
-    );
-    expect(catalogChanges).toEqual([undefined]);
-  });
+        expect(
+          yield* withProcessServices(
+            testRuntime(),
+            workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
+          ),
+        ).toEqual({
+          kind: 'custom',
+          agentKeys: { workflow: ['builtInWorkflow:correct'], toolUse: 'all' },
+        });
+        expect(postedCommands(posted)).toContain(
+          SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION,
+        );
+        expect(catalogChanges).toEqual([undefined]);
+      }),
+  );
 
   it('reports a catalog change when the custom agent directory changes', async () => {
     const { catalogChanges, controller, posted } = createControllerFixture({
@@ -209,76 +220,97 @@ describe('DefaultDesktopAgentSettingsController', () => {
     expect(catalogChanges).toEqual([undefined]);
   });
 
-  it('applies source-qualified teams and selects the tool-use root', async () => {
-    const { catalogChanges, controller, infoMessages, posted, workspaceState } =
-      createControllerFixture({
+  it.live('applies source-qualified teams and selects the tool-use root', () =>
+    Effect.gen(function* () {
+      const {
+        catalogChanges,
+        controller,
+        infoMessages,
+        posted,
+        workspaceState,
+      } = createControllerFixture({
         catalog: physicistCatalog(),
         chooseTeamAvailability: () => Effect.succeed('continue'),
       });
 
-    await applyAgentPreset(controller, 'physicist');
+      yield* Effect.promise(async () =>
+        applyAgentPreset(controller, 'physicist'),
+      );
 
-    expect(
-      workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
-    ).toEqual({ kind: 'team', teamId: 'physicist' });
-    expect(catalogChanges).toContain('orchestrator');
-    expect(postedCommands(posted)).toContain(
-      SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION,
-    );
-    // The fixture catalog is missing the preset's hosted members, so the
-    // notification must say the team is only partially applied.
-    expect(infoMessages).toEqual([
-      'Applied "Physicist" with 7 members still unavailable',
-    ]);
-  });
+      expect(
+        yield* withProcessServices(
+          testRuntime(),
+          workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
+        ),
+      ).toEqual({ kind: 'team', teamId: 'physicist' });
+      expect(catalogChanges).toContain('orchestrator');
+      expect(postedCommands(posted)).toContain(
+        SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION,
+      );
+      // The fixture catalog is missing the preset's hosted members, so the
+      // notification must say the team is only partially applied.
+      expect(infoMessages).toEqual([
+        'Applied "Physicist" with 7 members still unavailable',
+      ]);
+    }),
+  );
 
-  it('signs in before one forced remote refresh and commits the team once', async () => {
-    const workspaceState = customTeamState(remoteTeamPreset());
-    const catalog: AgentCatalog = { workflow: [], toolUse: [] };
-    const order: string[] = [];
-    const refreshAgents = vi.fn(() =>
-      Effect.sync(() => {
-        order.push('refresh');
-        catalog.toolUse = [
-          {
-            source: 'remote',
-            name: 'orchestrator',
-            path: '/remote/orchestrator.yaml',
-            category: 'toolUse',
-            tools: ['delegate_agent'],
-          },
-        ];
+  it.live(
+    'signs in before one forced remote refresh and commits the team once',
+    () =>
+      Effect.gen(function* () {
+        const workspaceState = customTeamState(remoteTeamPreset());
+        const catalog: AgentCatalog = { workflow: [], toolUse: [] };
+        const order: string[] = [];
+        const refreshAgents = vi.fn(() =>
+          Effect.sync(() => {
+            order.push('refresh');
+            catalog.toolUse = [
+              {
+                source: 'remote',
+                name: 'orchestrator',
+                path: '/remote/orchestrator.yaml',
+                category: 'toolUse',
+                tools: ['delegate_agent'],
+              },
+            ];
+          }),
+        );
+        const update = vi.spyOn(workspaceState, 'update');
+        const { controller } = createControllerFixture({
+          workspaceState,
+          catalog,
+          canAccessRemoteCatalog: Effect.succeed(false),
+          chooseTeamAvailability: () => Effect.succeed('sign-in'),
+          signInForRemoteCatalog: () =>
+            Effect.sync(() => {
+              order.push('sign-in');
+              return true;
+            }),
+          refreshAgents,
+        });
+        update.mockClear();
+
+        yield* Effect.promise(async () =>
+          applyAgentPreset(controller, 'remote-team'),
+        );
+
+        expect(order).toEqual(['sign-in', 'refresh']);
+        expect(refreshAgents).toHaveBeenCalledOnce();
+        expect(refreshAgents).toHaveBeenCalledWith({ includeRemote: true });
+        expect(
+          update.mock.calls.filter(
+            ([key]) => key === WorkspaceStateKey.AGENT_ROSTER_SELECTION,
+          ),
+        ).toHaveLength(1);
+        expect(
+          yield* withProcessServices(
+            testRuntime(),
+            workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
+          ),
+        ).toEqual({ kind: 'team', teamId: 'remote-team' });
       }),
-    );
-    const update = vi.spyOn(workspaceState, 'update');
-    const { controller } = createControllerFixture({
-      workspaceState,
-      catalog,
-      canAccessRemoteCatalog: Effect.succeed(false),
-      chooseTeamAvailability: () => Effect.succeed('sign-in'),
-      signInForRemoteCatalog: () =>
-        Effect.sync(() => {
-          order.push('sign-in');
-          return true;
-        }),
-      refreshAgents,
-    });
-    update.mockClear();
-
-    await applyAgentPreset(controller, 'remote-team');
-
-    expect(order).toEqual(['sign-in', 'refresh']);
-    expect(refreshAgents).toHaveBeenCalledOnce();
-    expect(refreshAgents).toHaveBeenCalledWith({ includeRemote: true });
-    expect(
-      update.mock.calls.filter(
-        ([key]) => key === WorkspaceStateKey.AGENT_ROSTER_SELECTION,
-      ),
-    ).toHaveLength(1);
-    expect(
-      workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
-    ).toEqual({ kind: 'team', teamId: 'remote-team' });
-  });
+  );
 
   it('does not write roster state when team preflight is cancelled', async () => {
     const workspaceState = customTeamState(remoteTeamPreset());
@@ -301,40 +333,56 @@ describe('DefaultDesktopAgentSettingsController', () => {
     ).toBe(false);
   });
 
-  it('saves visible agents as a custom team', async () => {
-    const catalog = physicistCatalog();
-    const visibleCatalog: AgentCatalog = {
-      workflow: [catalog.workflow[0]],
-      toolUse: [catalog.toolUse[3]],
-    };
-    const { catalogChanges, controller, infoMessages, posted, workspaceState } =
-      createControllerFixture({
+  it.live('saves visible agents as a custom team', () =>
+    Effect.gen(function* () {
+      const catalog = physicistCatalog();
+      const visibleCatalog: AgentCatalog = {
+        workflow: [catalog.workflow[0]],
+        toolUse: [catalog.toolUse[3]],
+      };
+      const {
+        catalogChanges,
+        controller,
+        infoMessages,
+        posted,
+        workspaceState,
+      } = createControllerFixture({
         catalog,
         visibleCatalog,
         promptText: () => Effect.succeed('  Paper Team  '),
       });
-    const savePreset = assertSupported(controller.handlers.saveAgentModePreset);
+      const savePreset = assertSupported(
+        controller.handlers.saveAgentModePreset,
+      );
 
-    await savePreset({
-      command: SETTINGS_VIEW_COMMANDS.SAVE_AGENT_MODE_PRESET,
-    });
+      yield* Effect.promise(async () =>
+        savePreset({
+          command: SETTINGS_VIEW_COMMANDS.SAVE_AGENT_MODE_PRESET,
+        }),
+      );
 
-    expect(workspaceState.get(WorkspaceStateKey.CUSTOM_AGENT_PRESETS)).toEqual([
-      expect.objectContaining({
-        name: 'Paper Team',
-        agents: { workflow: ['correct'], toolUse: ['review'] },
-      }),
-    ]);
-    expect(infoMessages).toEqual(['Saved team "Paper Team"']);
-    expect(catalogChanges.at(-1)).toBeUndefined();
-    expect(catalogChanges.length).toBeGreaterThan(0);
-    expect(posted).toContainEqual(
-      expect.objectContaining({
-        command: SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_MODE_PRESETS,
-        customPresets: [expect.objectContaining({ name: 'Paper Team' })],
-      }),
-    );
-  });
+      expect(
+        yield* withProcessServices(
+          testRuntime(),
+          workspaceState.get(WorkspaceStateKey.CUSTOM_AGENT_PRESETS),
+        ),
+      ).toEqual([
+        expect.objectContaining({
+          name: 'Paper Team',
+          agents: { workflow: ['correct'], toolUse: ['review'] },
+        }),
+      ]);
+      expect(infoMessages).toEqual(['Saved team "Paper Team"']);
+      expect(catalogChanges.at(-1)).toBeUndefined();
+      expect(catalogChanges.length).toBeGreaterThan(0);
+      expect(posted).toContainEqual(
+        expect.objectContaining({
+          command: SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_MODE_PRESETS,
+          customPresets: [expect.objectContaining({ name: 'Paper Team' })],
+        }),
+      );
+    }),
+  );
 
   function savedTeamState(): FakeStateStore {
     return customTeamState({
@@ -347,55 +395,78 @@ describe('DefaultDesktopAgentSettingsController', () => {
     });
   }
 
-  it('keeps a custom team when its delete confirmation is declined', async () => {
-    const workspaceState = savedTeamState();
-    const { confirmed, controller } = createControllerFixture({
-      workspaceState,
-      confirm: async () => false,
-    });
-
-    await deleteAgentPreset(controller, 'custom-team');
-
-    expect(confirmed).toEqual(['Delete team "Custom Team"?']);
-    expect(
-      workspaceState.get(WorkspaceStateKey.CUSTOM_AGENT_PRESETS),
-    ).toHaveLength(1);
-  });
-
-  it('deletes custom teams and reports unknown team ids', async () => {
-    const workspaceState = savedTeamState();
-    const { catalogChanges, controller, errorMessages, posted } =
-      createControllerFixture({
+  it.live('keeps a custom team when its delete confirmation is declined', () =>
+    Effect.gen(function* () {
+      const workspaceState = savedTeamState();
+      const { confirmed, controller } = createControllerFixture({
         workspaceState,
+        confirm: async () => false,
       });
 
-    await deleteAgentPreset(controller, 'custom-team');
+      yield* Effect.promise(async () =>
+        deleteAgentPreset(controller, 'custom-team'),
+      );
 
-    expect(workspaceState.get(WorkspaceStateKey.CUSTOM_AGENT_PRESETS)).toEqual(
-      [],
-    );
-    expect(catalogChanges.length).toBeGreaterThan(0);
-    expect(posted).toContainEqual(
-      expect.objectContaining({
-        command: SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_MODE_PRESETS,
-        customPresets: [],
-      }),
-    );
+      expect(confirmed).toEqual(['Delete team "Custom Team"?']);
+      expect(
+        yield* withProcessServices(
+          testRuntime(),
+          workspaceState.get(WorkspaceStateKey.CUSTOM_AGENT_PRESETS),
+        ),
+      ).toHaveLength(1);
+    }),
+  );
 
-    await deleteAgentPreset(controller, 'missing-team');
+  it.live('deletes custom teams and reports unknown team ids', () =>
+    Effect.gen(function* () {
+      const workspaceState = savedTeamState();
+      const { catalogChanges, controller, errorMessages, posted } =
+        createControllerFixture({
+          workspaceState,
+        });
 
-    expect(errorMessages).toEqual(['Unknown custom team: missing-team']);
-  });
+      yield* Effect.promise(async () =>
+        deleteAgentPreset(controller, 'custom-team'),
+      );
 
-  it('reports unknown presets without writing roster state', async () => {
-    const { controller, errorMessages, workspaceState } =
-      createControllerFixture();
+      expect(
+        yield* withProcessServices(
+          testRuntime(),
+          workspaceState.get(WorkspaceStateKey.CUSTOM_AGENT_PRESETS),
+        ),
+      ).toEqual([]);
+      expect(catalogChanges.length).toBeGreaterThan(0);
+      expect(posted).toContainEqual(
+        expect.objectContaining({
+          command: SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_MODE_PRESETS,
+          customPresets: [],
+        }),
+      );
 
-    await applyAgentPreset(controller, 'missing-team');
+      yield* Effect.promise(async () =>
+        deleteAgentPreset(controller, 'missing-team'),
+      );
 
-    expect(errorMessages).toEqual(['Unknown team "missing-team".']);
-    expect(
-      workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
-    ).toBeUndefined();
-  });
+      expect(errorMessages).toEqual(['Unknown custom team: missing-team']);
+    }),
+  );
+
+  it.live('reports unknown presets without writing roster state', () =>
+    Effect.gen(function* () {
+      const { controller, errorMessages, workspaceState } =
+        createControllerFixture();
+
+      yield* Effect.promise(async () =>
+        applyAgentPreset(controller, 'missing-team'),
+      );
+
+      expect(errorMessages).toEqual(['Unknown team "missing-team".']);
+      expect(
+        yield* withProcessServices(
+          testRuntime(),
+          workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
+        ),
+      ).toBeUndefined();
+    }),
+  );
 });

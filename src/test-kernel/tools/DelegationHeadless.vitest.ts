@@ -515,14 +515,16 @@ describe('headless delegation', () => {
           catch: ensureError,
         }),
     });
-    mocks.getVisibleAgents.mockReturnValue([
-      {
-        name: 'review',
-        source: 'builtInToolUse',
-        description: 'Review work.',
-        tools: [],
-      },
-    ]);
+    mocks.getVisibleAgents.mockReturnValue(
+      Effect.succeed([
+        {
+          name: 'review',
+          source: 'builtInToolUse',
+          description: 'Review work.',
+          tools: [],
+        },
+      ]),
+    );
     mocks.readModelAvailabilityInputs.mockReturnValue(
       Effect.succeed([
         {

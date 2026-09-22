@@ -229,7 +229,7 @@ describe('DefaultDesktopToolingSettingsController', () => {
         },
       );
 
-      controller.postLatexConfigValues();
+      yield* controller.postLatexConfigValues();
       yield* withProcessServices(testRuntime(), controller.postStartupData());
 
       const startup = posted.map(commandOf);
@@ -281,49 +281,60 @@ describe('DefaultDesktopToolingSettingsController', () => {
       }),
   );
 
-  it('persists a toggle before refreshing caches and posting cached data', async () => {
-    const events: string[] = [];
-    const cachedResults: ExternalToolCheckResult[] = [];
-    const globalState = spyOnUpdate(new FakeStateStore(), () =>
-      events.push('state:update'),
-    );
-    toolData.buildItems.mockImplementation(async (_host, results) => {
-      expect(results).toBe(cachedResults);
-      events.push('dashboard:build');
-      return [DASHBOARD_ITEM];
-    });
-    toolData.lastCheckResults.mockImplementation(() => {
-      events.push('dashboard:cached');
-      return cachedResults;
-    });
-    const posted = createDeferred();
-    const { controller } = createFixture({
-      globalState,
-      renderer: {
-        postToRenderer: () => {
-          events.push('renderer:post');
-          posted.resolve();
-        },
-      },
-    });
+  it.live(
+    'persists a toggle before refreshing caches and posting cached data',
+    () =>
+      Effect.gen(function* () {
+        const events: string[] = [];
+        const cachedResults: ExternalToolCheckResult[] = [];
+        const globalState = spyOnUpdate(new FakeStateStore(), () =>
+          events.push('state:update'),
+        );
+        toolData.buildItems.mockImplementation(async (_host, results) => {
+          expect(results).toBe(cachedResults);
+          events.push('dashboard:build');
+          return [DASHBOARD_ITEM];
+        });
+        toolData.lastCheckResults.mockImplementation(() => {
+          events.push('dashboard:cached');
+          return cachedResults;
+        });
+        const posted = createDeferred();
+        const { controller } = createFixture({
+          globalState,
+          renderer: {
+            postToRenderer: () => {
+              events.push('renderer:post');
+              posted.resolve();
+            },
+          },
+        });
 
-    await assertSupported(controller.toolHandlers.toggleTool)({
-      command: SETTINGS_VIEW_COMMANDS.TOGGLE_TOOL,
-      toolId: 'zotero',
-      enabled: false,
-    });
+        yield* Effect.promise(async () =>
+          assertSupported(controller.toolHandlers.toggleTool)({
+            command: SETTINGS_VIEW_COMMANDS.TOGGLE_TOOL,
+            toolId: 'zotero',
+            enabled: false,
+          }),
+        );
 
-    expect(globalState.get(GlobalStateKey.DISABLED_TOOLS)).toEqual(['zotero']);
-    // The repaint the toggle's re-probe triggers runs on the subscriber's own
-    // fiber, so the order below settles a turn after the toggle resolves.
-    await posted.promise;
-    expect(events).toEqual([
-      'state:update',
-      'dashboard:cached',
-      'dashboard:build',
-      'renderer:post',
-    ]);
-  });
+        expect(
+          yield* withProcessServices(
+            testRuntime(),
+            globalState.get(GlobalStateKey.DISABLED_TOOLS),
+          ),
+        ).toEqual(['zotero']);
+        // The repaint the toggle's re-probe triggers runs on the subscriber's own
+        // fiber, so the order below settles a turn after the toggle resolves.
+        yield* Effect.promise(() => posted.promise);
+        expect(events).toEqual([
+          'state:update',
+          'dashboard:cached',
+          'dashboard:build',
+          'renderer:post',
+        ]);
+      }),
+  );
 
   it('completes a fresh availability check before rebuilding the dashboard', async () => {
     const events: string[] = [];

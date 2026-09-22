@@ -93,8 +93,10 @@ export interface ToolUseFlowContext {
   readonly ownerSession: SessionHandle;
   interrupt(): void;
   requestImmediateCompaction(): void;
-  modelSwitchDisabledReason(model: string): string | undefined;
-  switchModel(model: string): void;
+  modelSwitchDisabledReason(
+    model: string,
+  ): Effect.Effect<string | undefined, Error>;
+  switchModel(model: string): Effect.Effect<void, Error>;
 }
 
 export interface ToolUseStart {
@@ -217,34 +219,40 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         followUps.appendSynthetic(IMMEDIATE_COMPACTION_FOLLOW_UP);
       }
     },
-    modelSwitchDisabledReason(model: string): string | undefined {
-      const current = SynchronizedRef.getUnsafe(run.model);
-      if (current.modelId === model) return undefined;
-      const nextConfig = getRuntimeModelConfig(model);
-      if (!nextConfig) return `Model ${model} is not registered`;
-      const nextKey = resolveModelCompatibilityKey(
-        nextConfig,
-        run.stores.globalState,
-        getUseOpenRouter(run.stores),
-      );
-      if (!nextKey) return `Unsupported model provider: ${nextConfig.provider}`;
-      return current.compatibilityKey === nextKey
-        ? undefined
-        : MODEL_SWITCH_DIFFERENT_FORMAT_REASON;
-    },
-    switchModel(model: string): void {
-      const disabledReason = flowContext.modelSwitchDisabledReason(model);
+    modelSwitchDisabledReason: Effect.fn('toolUse.modelSwitchDisabledReason')(
+      function* (model: string) {
+        const current = SynchronizedRef.getUnsafe(run.model);
+        if (current.modelId === model) return undefined;
+        const nextConfig = getRuntimeModelConfig(model);
+        if (!nextConfig) return `Model ${model} is not registered`;
+        const nextKey = yield* resolveModelCompatibilityKey(
+          nextConfig,
+          run.stores.globalState,
+          yield* getUseOpenRouter(run.stores),
+        );
+        if (!nextKey)
+          return `Unsupported model provider: ${nextConfig.provider}`;
+        return current.compatibilityKey === nextKey
+          ? undefined
+          : MODEL_SWITCH_DIFFERENT_FORMAT_REASON;
+      },
+    ),
+    switchModel: Effect.fn('toolUse.switchModel')(function* (model: string) {
+      const disabledReason =
+        yield* flowContext.modelSwitchDisabledReason(model);
       if (disabledReason !== undefined) {
-        throw new Error(
-          disabledReason === MODEL_SWITCH_DIFFERENT_FORMAT_REASON
-            ? MODEL_SWITCH_DIFFERENT_FORMAT_ERROR
-            : disabledReason,
+        return yield* Effect.fail(
+          new Error(
+            disabledReason === MODEL_SWITCH_DIFFERENT_FORMAT_REASON
+              ? MODEL_SWITCH_DIFFERENT_FORMAT_ERROR
+              : disabledReason,
+          ),
         );
       }
       // Bound and recorded by the loop at its next model boundary: the rows
       // that record the switch belong to the fiber holding the run's state.
       run.pendingModelSwitch.value = model;
-    },
+    }),
   };
   const attach = (): void => {
     if (live) return;

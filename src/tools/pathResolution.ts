@@ -1,11 +1,13 @@
 // Node imports
 import * as path from 'node:path';
+import { Effect } from 'effect';
 
 // Local imports
 import { relativeToRoot } from '@platform/defaults/nodeWorkspace';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { ToolError } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { ensureError } from '@utils/errors/errorMessage';
 import { normalizeFilePath } from '@utils/core';
 import { locateInWorkspace } from '@utils/files/workspaceFS';
 import {
@@ -113,111 +115,116 @@ export function resolveWorkspaceRelativePath(
   workspaceRoot: string | undefined,
   targetPath?: string,
   root?: string,
-): WorkspacePathResolution {
-  const trimmed = targetPath?.trim();
-  const input = !trimmed || trimmed === '.' ? '' : trimmed;
-
-  /**
-   * Resolve an absolute path that sits outside the containing root: honour a
-   * registered external root when one matches, pass the path through when
-   * containment is switched off, and otherwise reject with `outsideMessage`.
-   *
-   * `relative` is set to the full absolute path so the display (rendered via
-   * `toPosixPath(relative)`) unambiguously signals an external operation —
-   * agents and users should never confuse an external write with a workspace
-   * write, even when file basenames collide.
-   */
-  const resolveOutsideRoot = (
-    absolutePath: string,
-    match: MatchedExternalRoot | null | undefined,
-    outsideMessage: string,
-  ): WorkspacePathResolution => {
-    // This setting deliberately uses the same workspaceState slot in every
-    // host. Do not add a CLI-specific store without also making host identity
-    // explicit at this enforcement boundary.
-    if (
-      !match &&
-      readSettingFrom<boolean>(
-        settings,
-        WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED,
-      )
-    ) {
-      throw new ToolError(outsideMessage);
-    }
-    return {
-      relative: normalizeFilePath(absolutePath),
-      absolute: absolutePath,
-      fsPath: absolutePath,
-      ...(match ? { external: externalInfo(match) } : {}),
-    };
-  };
-
-  if (root) {
-    // Absolute paths need special handling — locatePathInRoot only works with relative paths.
-    if (input && path.isAbsolute(input)) {
-      // `relativeToRoot` is the shared symlink-aware absolute-path containment
-      // helper: it tries a lexical pass, then compares realpaths, so a root and
-      // path that name the same directory through different symlink spellings
-      // resolve rather than being rejected.
-      const relative = relativeToRoot(root, input);
-      if (relative === undefined) {
-        return resolveOutsideRoot(
-          input,
-          findExternalRoot(input),
-          'Path must stay within the working directory.',
-        );
-      }
-      return annotateExternalPermission({
-        relative: relative || '.',
-        absolute: input,
-        fsPath: input,
-      });
-    }
-    const resolved = locatePathInRoot(root, input);
-    if (resolved.kind === 'external') {
-      // `annotateExternal` in `locatePathInRoot` already consulted the
-      // registry, so reuse that match instead of paying for a second lookup.
-      return resolveOutsideRoot(
-        resolved.absolutePath,
-        resolved.allowed,
-        'Path must stay within the working directory.',
-      );
-    }
-    const relative = resolved.relativePath || '.';
-    return annotateExternalPermission({
-      relative,
-      absolute: resolved.absolutePath,
-      fsPath: resolved.absolutePath,
-    });
-  }
-
-  if (!workspaceRoot) {
-    // No workspace — fall back to the allowlist so agent-dir calls still work.
-    if (input && path.isAbsolute(input)) {
-      return resolveOutsideRoot(
-        input,
-        findExternalRoot(input),
-        'Workspace path is not available.',
-      );
-    }
-    throw new ToolError('Workspace path is not available.');
-  }
-
-  const resolved = locateInWorkspace(workspaceRoot, input);
-
-  if (resolved.kind === 'external') {
-    return resolveOutsideRoot(
-      resolved.absolutePath,
-      resolved.allowed,
-      'Path must stay within the workspace.',
+) {
+  return Effect.gen(function* () {
+    const protectPaths = yield* readSettingFrom<boolean>(
+      settings,
+      WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED,
     );
-  }
+    return yield* Effect.try({
+      try: () => {
+        const trimmed = targetPath?.trim();
+        const input = !trimmed || trimmed === '.' ? '' : trimmed;
 
-  const relative = resolved.relativePath || '.';
-  return annotateExternalPermission({
-    relative,
-    absolute: resolved.absolutePath,
-    fsPath: relative,
+        /**
+         * Resolve an absolute path that sits outside the containing root: honour a
+         * registered external root when one matches, pass the path through when
+         * containment is switched off, and otherwise reject with `outsideMessage`.
+         *
+         * `relative` is set to the full absolute path so the display (rendered via
+         * `toPosixPath(relative)`) unambiguously signals an external operation —
+         * agents and users should never confuse an external write with a workspace
+         * write, even when file basenames collide.
+         */
+        const resolveOutsideRoot = (
+          absolutePath: string,
+          match: MatchedExternalRoot | null | undefined,
+          outsideMessage: string,
+        ): WorkspacePathResolution => {
+          // This setting deliberately uses the same workspaceState slot in every
+          // host. Do not add a CLI-specific store without also making host identity
+          // explicit at this enforcement boundary.
+          if (!match && protectPaths) {
+            throw new ToolError(outsideMessage);
+          }
+          return {
+            relative: normalizeFilePath(absolutePath),
+            absolute: absolutePath,
+            fsPath: absolutePath,
+            ...(match ? { external: externalInfo(match) } : {}),
+          };
+        };
+
+        if (root) {
+          // Absolute paths need special handling — locatePathInRoot only works with relative paths.
+          if (input && path.isAbsolute(input)) {
+            // `relativeToRoot` is the shared symlink-aware absolute-path containment
+            // helper: it tries a lexical pass, then compares realpaths, so a root and
+            // path that name the same directory through different symlink spellings
+            // resolve rather than being rejected.
+            const relative = relativeToRoot(root, input);
+            if (relative === undefined) {
+              return resolveOutsideRoot(
+                input,
+                findExternalRoot(input),
+                'Path must stay within the working directory.',
+              );
+            }
+            return annotateExternalPermission({
+              relative: relative || '.',
+              absolute: input,
+              fsPath: input,
+            });
+          }
+          const resolved = locatePathInRoot(root, input);
+          if (resolved.kind === 'external') {
+            // `annotateExternal` in `locatePathInRoot` already consulted the
+            // registry, so reuse that match instead of paying for a second lookup.
+            return resolveOutsideRoot(
+              resolved.absolutePath,
+              resolved.allowed,
+              'Path must stay within the working directory.',
+            );
+          }
+          const relative = resolved.relativePath || '.';
+          return annotateExternalPermission({
+            relative,
+            absolute: resolved.absolutePath,
+            fsPath: resolved.absolutePath,
+          });
+        }
+
+        if (!workspaceRoot) {
+          // No workspace — fall back to the allowlist so agent-dir calls still work.
+          if (input && path.isAbsolute(input)) {
+            return resolveOutsideRoot(
+              input,
+              findExternalRoot(input),
+              'Workspace path is not available.',
+            );
+          }
+          throw new ToolError('Workspace path is not available.');
+        }
+
+        const resolved = locateInWorkspace(workspaceRoot, input);
+
+        if (resolved.kind === 'external') {
+          return resolveOutsideRoot(
+            resolved.absolutePath,
+            resolved.allowed,
+            'Path must stay within the workspace.',
+          );
+        }
+
+        const relative = resolved.relativePath || '.';
+        return annotateExternalPermission({
+          relative,
+          absolute: resolved.absolutePath,
+          fsPath: relative,
+        });
+      },
+      catch: ensureError,
+    });
   });
 }
 
@@ -284,16 +291,15 @@ export function resolveAndFormat(
   workspaceRoot: string | undefined,
   targetPath?: string,
   root?: string,
-): {
-  path: WorkspacePathResolution;
-  display: string;
-} {
-  const path = resolveWorkspaceRelativePath(
-    settings,
-    workspaceRoot,
-    targetPath,
-    parseWorkingDirectory(root),
-  );
-  const display = toPosixPath(path.relative);
-  return { path, display };
+) {
+  return Effect.gen(function* () {
+    const path = yield* resolveWorkspaceRelativePath(
+      settings,
+      workspaceRoot,
+      targetPath,
+      parseWorkingDirectory(root),
+    );
+    const display = toPosixPath(path.relative);
+    return { path, display };
+  });
 }

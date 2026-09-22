@@ -178,8 +178,8 @@ function activeTarget(): ToolUseFollowUpTarget {
     context: {
       ownerSession: {} as SessionHandle,
       requestImmediateCompaction: () => {},
-      modelSwitchDisabledReason: () => undefined,
-      switchModel: async () => {},
+      modelSwitchDisabledReason: () => Effect.succeed(undefined),
+      switchModel: () => Effect.void,
       interrupt: () => {},
     },
   };

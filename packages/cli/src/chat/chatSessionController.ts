@@ -502,16 +502,17 @@ export function createChatSessionController(
     const runId = session.runId;
     if (!runId || !runViewOf(currentView(), runId)) return;
     session.interruptedRunId = runId;
-    // Ctrl-C is a configured stop surface: the user stopped the root run, so
-    // the detach-on-stop toggle decides whether active subagents survive it.
-    // `stopRun` below is the other gesture and answers deliberately
-    // differently.
+    // Ctrl-C honors the configured child-detach policy.
     runtime.runFork(
-      request({
-        kind: 'run.stop',
-        runId,
-        detachActiveChildren: detachSubagentsOnStop(runtimeSession.roots),
-      }),
+      Effect.flatMap(
+        detachSubagentsOnStop(runtimeSession.roots),
+        (detachActiveChildren) =>
+          request({
+            kind: 'run.stop',
+            runId,
+            detachActiveChildren,
+          }),
+      ),
     );
   };
 

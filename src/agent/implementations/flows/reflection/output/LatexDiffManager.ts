@@ -242,7 +242,7 @@ export class LatexDiffManager {
         }
       }
 
-      const generateBetweenRoundDiffs = readSettingFrom<boolean>(
+      const generateBetweenRoundDiffs = yield* readSettingFrom<boolean>(
         this.roots,
         WorkspaceStateKey.LATEXDIFF_BETWEEN_ROUNDS,
       );
@@ -433,7 +433,7 @@ export class LatexDiffManager {
       );
       // Reuse the workflow compile-check timeout so a hanging diff build
       // gets killed by execa instead of orphaning latexmk/pdflatex.
-      const timeoutMs = getWorkflowAutoCompileTimeoutMs(this.roots);
+      const timeoutMs = yield* getWorkflowAutoCompileTimeoutMs(this.roots);
       // The diff `.tex` is written to `diff/r{round}/`, away from both the
       // revised round output and the live workspace source. Search the revised
       // round directory first so same-round sibling edits win, then fall back

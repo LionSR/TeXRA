@@ -338,17 +338,16 @@ export class FakeStateStore implements StateStore {
     }
   }
 
-  get<T>(key: string, defaultValue?: T): T {
-    if (!this.values.has(key)) {
-      return defaultValue as T;
-    }
-    return this.values.get(key) as T;
+  get<T>(key: string, defaultValue?: T): Effect.Effect<T> {
+    return Effect.sync(() =>
+      this.values.has(key) ? (this.values.get(key) as T) : (defaultValue as T),
+    );
   }
 
   /**
    * A map write cannot fail, so the port's error channel stays empty.
    *
-   * The write happens INSIDE the returned Effect, like the real `JsonStore`.
+   * The write happens INSIDE the returned Effect, like the SQLite store.
    * A double that applied it eagerly would let a caller which awaits or
    * discards the effect look correct here while silently writing nothing
    * against the real store — the exact class this port's conversion exists to

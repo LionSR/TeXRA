@@ -192,9 +192,6 @@ const UpdateSettingsSnapshotMessageSchema = z.discriminatedUnion('snapshot', [
   ...otherDerivedSnapshots.map(snapshotMessage),
 ]);
 
-/** A catalog-derived snapshot payload, keyed by canonical `texra.*` key. */
-export type SettingsSnapshotValues = Readonly<Record<string, unknown>>;
-
 // ============================================================
 // Agent selection data schema
 // ============================================================

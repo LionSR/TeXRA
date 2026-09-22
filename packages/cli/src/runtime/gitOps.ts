@@ -1,16 +1,13 @@
 // Thin wrappers over `git` and `gh` for the `install-github-action` command.
 // Every call captures output and never throws — callers branch on `success`.
 //
-// `settings: undefined`: the command runs before any platform init, so it
-// holds no setting slots to name, and its one commit is the user's own rather
-// than an agent's.
+// These commands run before platform init and use the user's Git identity.
 import type { ExecResult } from '@shared/schemas';
 import { executeCommandSync } from '@utils/system/execCore';
 
 export function git(cwd: string, ...args: readonly string[]): ExecResult {
   return executeCommandSync(['git', ...args], {
     cwd,
-    settings: undefined,
     quiet: true,
   });
 }
@@ -18,7 +15,6 @@ export function git(cwd: string, ...args: readonly string[]): ExecResult {
 export function gh(cwd: string, ...args: readonly string[]): ExecResult {
   return executeCommandSync(['gh', ...args], {
     cwd,
-    settings: undefined,
     quiet: true,
   });
 }

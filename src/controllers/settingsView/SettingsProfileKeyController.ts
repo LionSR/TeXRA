@@ -12,6 +12,7 @@ import type {
 } from '@hosts/uiHosts';
 // Local imports - model
 import { apiKeySecretName, isApiProvider } from '@model/apiProviders';
+import type { StateReadFailed } from '@platform/interfaces';
 // Local imports - platform
 import type { PlatformSecrets } from '@platform/secrets';
 
@@ -20,14 +21,21 @@ interface SettingsProfileKeyControllerDeps<R> {
   secrets: PlatformSecrets;
   prompt: Pick<PromptHost, 'input' | 'info' | 'confirm'>;
   externalOpener: Pick<ExternalOpener, 'openExternal'>;
-  getProviderDisplayName(provider: string): string;
-  getProviderKeyUrl(provider: string): string | undefined;
+  getProviderDisplayName(
+    provider: string,
+  ): Effect.Effect<string, StateReadFailed>;
+  getProviderKeyUrl(
+    provider: string,
+  ): Effect.Effect<string | undefined, StateReadFailed>;
   refreshAfterKeyChange(provider: string): Effect.Effect<void, Error, R>;
   /**
    * Show a failed key action to the user. Required: a rejected placeholder or
    * an unknown provider must never fail silently on any host.
    */
-  reportFailure(message: string, error: unknown): Effect.Effect<void, never, R>;
+  reportFailure(
+    message: string,
+    error: unknown,
+  ): Effect.Effect<void, StateReadFailed, R>;
 }
 
 /**
@@ -55,13 +63,13 @@ interface SettingsProfileKeyControllerDeps<R> {
 export class SettingsProfileKeyController<R = never> {
   constructor(private readonly deps: SettingsProfileKeyControllerDeps<R>) {}
 
-  setProviderKey(provider: string): Effect.Effect<void, never, R> {
+  setProviderKey(provider: string): Effect.Effect<void, StateReadFailed, R> {
     return this.run(
       provider,
       'set',
       Effect.gen({ self: this }, function* () {
         const apiKey = yield* this.deps.prompt.input({
-          prompt: `Enter ${this.deps.getProviderDisplayName(provider)} API key`,
+          prompt: `Enter ${yield* this.deps.getProviderDisplayName(provider)} API key`,
           password: true,
           placeHolder: '************************************',
         });
@@ -74,16 +82,16 @@ export class SettingsProfileKeyController<R = never> {
   commitProviderKey(
     provider: string,
     apiKey: string,
-  ): Effect.Effect<void, never, R> {
+  ): Effect.Effect<void, StateReadFailed, R> {
     return this.run(provider, 'set', this.storeProviderKey(provider, apiKey));
   }
 
-  removeProviderKey(provider: string): Effect.Effect<void, never, R> {
+  removeProviderKey(provider: string): Effect.Effect<void, StateReadFailed, R> {
     return this.run(
       provider,
       'remove',
       Effect.gen({ self: this }, function* () {
-        const displayName = this.deps.getProviderDisplayName(provider);
+        const displayName = yield* this.deps.getProviderDisplayName(provider);
         const confirmed = yield* this.deps.prompt.confirm(
           `Remove the ${displayName} API key? This cannot be undone.`,
           { confirmLabel: 'Remove', cancelLabel: 'Cancel', modal: false },
@@ -99,9 +107,14 @@ export class SettingsProfileKeyController<R = never> {
 
   openProviderKeyUrl(
     provider: string,
-  ): Effect.Effect<void, ExternalOpenFailed> {
-    const url = this.deps.getProviderKeyUrl(provider);
-    return url ? this.deps.externalOpener.openExternal(url) : Effect.void;
+  ): Effect.Effect<void, ExternalOpenFailed | StateReadFailed> {
+    return this.deps
+      .getProviderKeyUrl(provider)
+      .pipe(
+        Effect.flatMap((url) =>
+          url ? this.deps.externalOpener.openExternal(url) : Effect.void,
+        ),
+      );
   }
 
   private storeProviderKey(
@@ -109,7 +122,7 @@ export class SettingsProfileKeyController<R = never> {
     apiKey: string,
   ): Effect.Effect<boolean, Error> {
     return Effect.gen({ self: this }, function* () {
-      const displayName = this.deps.getProviderDisplayName(provider);
+      const displayName = yield* this.deps.getProviderDisplayName(provider);
       yield* storeCredential(this.deps.secrets, {
         secretName: yield* secretNameFor(provider),
         value: apiKey,
@@ -148,13 +161,13 @@ export class SettingsProfileKeyController<R = never> {
     provider: string,
     verb: 'set' | 'remove',
     action: Effect.Effect<boolean, Error | PromptFailed>,
-  ): Effect.Effect<void, never, R> {
+  ): Effect.Effect<void, StateReadFailed, R> {
     return Effect.gen({ self: this }, function* () {
       const changed = yield* Effect.exit(action);
       if (Exit.isFailure(changed)) {
         if (Cause.hasInterrupts(changed.cause)) return yield* Effect.interrupt;
         yield* this.deps.reportFailure(
-          `Failed to ${verb} ${this.deps.getProviderDisplayName(provider)} API key`,
+          `Failed to ${verb} ${yield* this.deps.getProviderDisplayName(provider)} API key`,
           Cause.squash(changed.cause),
         );
         return;
@@ -170,7 +183,7 @@ export class SettingsProfileKeyController<R = never> {
         }
         const gerund = verb === 'set' ? 'setting' : 'removing';
         yield* this.deps.reportFailure(
-          `Failed to refresh after ${gerund} ${this.deps.getProviderDisplayName(provider)} API key`,
+          `Failed to refresh after ${gerund} ${yield* this.deps.getProviderDisplayName(provider)} API key`,
           Cause.squash(refreshed.cause),
         );
       }

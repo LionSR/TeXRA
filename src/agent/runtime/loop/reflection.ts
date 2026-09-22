@@ -338,16 +338,16 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     });
 
   /** Disabling rejection is an explicit acceptance decision. */
-  const normalizeCompileRejectionPolicy = (): void => {
+  const normalizeCompileRejectionPolicy = Effect.fn(function* () {
     if (
-      getRejectOnCompileFailure() ||
+      (yield* getRejectOnCompileFailure()) ||
       (!flow.unresolvedCompileRejection && !flow.compileFailureContext)
     ) {
       return;
     }
     delete flow.unresolvedCompileRejection;
     delete flow.compileFailureContext;
-  };
+  });
   const terminalCompileRejection = (): boolean =>
     flow.unresolvedCompileRejection === true &&
     flow.currentRound + 1 >= flow.totalRounds;
@@ -977,7 +977,10 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     }
     if (
       endTurn &&
-      readSettingFrom<boolean>(roots, WorkspaceStateKey.WORKFLOW_AUTO_OPEN_PDF)
+      (yield* readSettingFrom<boolean>(
+        roots,
+        WorkspaceStateKey.WORKFLOW_AUTO_OPEN_PDF,
+      ))
     ) {
       // A failed compile opens its log; a clean round opens what it produced.
       const locationsToOpen =
@@ -1008,7 +1011,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
       }).pipe(recoverWarn('Validate expected outputs'));
     }
     if (result.compileResult) {
-      const compileFailureContext = getRejectOnCompileFailure()
+      const compileFailureContext = (yield* getRejectOnCompileFailure())
         ? formatCompileFailureRoundContext(result.compileResult)
         : undefined;
       if (compileFailureContext) {
@@ -1196,7 +1199,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
           }),
         ),
       );
-    normalizeCompileRejectionPolicy();
+    yield* normalizeCompileRejectionPolicy();
 
     /**
      * Advance onto the next round: reset the per-round flow facts and
@@ -1235,7 +1238,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
       current: RunState,
       roundEnded: boolean,
     ): Effect.fn.Return<LoopExit, Error> {
-      normalizeCompileRejectionPolicy();
+      yield* normalizeCompileRejectionPolicy();
       const outcome = resolveOutcome();
       const state = yield* commit(
         yield* ledger.appendBatch(runId, current, [
