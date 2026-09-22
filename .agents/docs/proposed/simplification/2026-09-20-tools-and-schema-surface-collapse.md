@@ -134,3 +134,77 @@ decisions for the owner; neither is fixed by a refactor.
 - The tool-call path has five layers; `core/define.ts` stays (step 6).
 - `src/tools` has no module-level mutable ownership state; the surviving
   memo caches are listed by name in the ledger.
+
+## 5. Landed
+
+Re-checked against the current tree (2026-09-22). Most of the plan above has
+already shipped, in smaller PRs that never came back to update this note:
+
+- **Step 1 (barrel).** The UI toolkit (`wa/`, `styles/`, `transcript/`,
+  `markdown/`, `copy/`) moved out to `src/ui/`, as CLAUDE.md now documents.
+  `stateSettings.ts`, `settingsViewMessages.ts`, `memoryViewMessages.ts` and
+  `profileViewMessages.ts` are no longer exported from
+  `src/shared/schemas/index.ts` — they live in `src/shared/state/` and
+  `src/shared/settingsView/` as standalone modules. `stateSettings.ts` is now
+  imported only from the settings view frontend (`LaTeXTab.ts`, `GitTab.ts`,
+  `AIAgentsTab.ts`, `settingsState.ts`, `stateSettingRows.ts`) — the first
+  Acceptance bullet holds. `src/shared/schemas/` is down to ~6.9k lines
+  (from the ~9.5k cited above); `mainView/` and `progressView/` remain, as
+  wire-contract state for those views rather than settings surface.
+- **Step 2 (LaTeX/image probe).** One catalog, `LATEX_TOOLS` in
+  `@shared/constants/latexToolchain`, consumed by `@latex/latexToolchain`,
+  `@tools/setup/toolProbing`, `@controllers/settingsView/LatexToolingController`
+  and the CLI doctor (`@latex/latexToolchain` → `probeLatexToolchain`) — one
+  spelling, not five. No "kept in sync" comment remains anywhere in the tree.
+  The per-consumer roles (doctor required/optional, probe required/image,
+  `drivesCompile`) landed as designed, including the stated `latexmk`
+  residual.
+- **Step 3 (rows).** `sessionEvent.ts` has a single `run.fact` row
+  (discriminated by `fact.key`) and a single `state.value.set` row;
+  `updateTodos`/`updatePlan`/`addOutputFiles`/`updateMissingOutputs`/
+  `updateCompileFailures` and the three singleton record types no longer
+  exist as separate schema arms. `runFactEvents.ts` is gone.
+  `src/agent/storage/runRecords.ts` has no restated latest-row readers.
+- **Step 4 (`ExecutionsTool`).** Its own module docstring now states the
+  invariant directly: "every fact about a run... is read off the session
+  fold (`SessionView`)... this surface never resolves liveness, parentage
+  or a task list a second time."
+- **Step 5 (replacement categories).** `NON_REGEX_REPLACEMENT_CATEGORIES` /
+  `REGEX_REPLACEMENT_CATEGORIES` in
+  `@shared/constants/replacementCategories` are the one declaration;
+  `@replacement/engine` keys its rule tables off them so a name with no
+  rules fails to typecheck, exactly as proposed.
+- **Step 6.** The `execute` forwarder inlined (#12891, as already noted
+  above); `core/define.ts` stays, per the ruling already recorded in this
+  step.
+- **Step 7 (module-global state), partially.** The Lean server roster
+  (`leanServerRegistry.ts`) is now a per-adapter factory
+  (`createLeanServerRoster`) rather than a module map. GitHub subscription
+  bindings (`GitHubSubscriptions`) and the inline-comment provider
+  (`InlineComments`) are both `Context.Service` tags resolved from process
+  scope, not module slots.
+
+## 6. Still open
+
+- **Step 7, the agent-engine slot.** `src/tools/delegation/nativeSubagentStrategy.ts`
+  still holds `let agentEngine: AgentEngine | undefined;` at module scope —
+  unchanged, and still correctly gated on the #12888 ruling as stated above.
+  This is the one piece of the "module-global state" finding this pass found
+  still true.
+- **Step 7, the remaining slots.** The Codex config module
+  (`src/tools/codexConfig.ts`) now reads settings entirely through
+  `StateStore`/`createEnumStateGetter`; its only module-level state is an
+  xhigh-capability probe cache keyed by binary path
+  (`codexXhighSupportByBinary`, `codexXhighProbeLanes`), which reads as the
+  kind of lazy memo of an immutable fact this step's own carve-out says
+  should stay, not the mutable "config slot" this step meant to move. Not
+  independently reverified this pass: `registry.ts`'s memo cache and
+  `support/rateLimiter.ts` staying as intentional (they were already ruled
+  to stay); whether the service-scope ledger lists the survivors by name;
+  the tool-call-path's five-layer count and the setup/GitHub-polling
+  feature-scope questions in §3, which are unchanged product questions, not
+  layering.
+- Steps 1–6 above are re-verified against the tree but not exhaustively —
+  e.g. the exact "400 to 600 lines" / "250 to 400 lines" savings estimates
+  in §2 were not re-measured, only the structural claims (one spelling, no
+  duplicate schema arms, one reader).
