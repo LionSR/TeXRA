@@ -15,15 +15,10 @@ import type { AgentRunServices } from '@agent/runtime/toolInjection';
 import { Runs } from '@agent/runtime/runRegistry';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import { formatError } from '@common/errors';
-import { withLogChannel } from '@logger/effectLog';
 import type { AppState } from '@platform/interfaces';
 import type { LanguageModel } from '@platform/languageModel';
 import type { Secrets } from '@platform/secrets';
-import {
-  aggregateId as qualifyAggregateId,
-  AgentCategory,
-  RUN_OUTCOME,
-} from '@shared/schemas';
+import { AgentCategory, RUN_OUTCOME } from '@shared/schemas';
 import type { RunEnd, RunId } from '@shared/schemas';
 import { configureDelegatedChildApprovals } from '@tools/approval';
 import {
@@ -45,8 +40,6 @@ import {
 } from './inputFields';
 import { selectAvailableDelegationModel } from './delegationAvailability';
 import { requireVisibleAgent, type DelegationParent } from './proposalFlow';
-
-const CHANNEL = 'workflowScriptAgentRunner';
 
 function workflowRunnerError(error: unknown): Error {
   return error instanceof SubagentDurabilityError
@@ -340,43 +333,20 @@ function probeJournal<A>(
  * it is logged rather than failing a call whose child already answered.
  */
 const fenceSupersededRun = (
-  session: InBandSubagentLaunchOptions['session'],
   runId: RunId,
 ): Effect.Effect<void, Error, Runs | Scope.Scope> =>
-  Effect.gen(function* () {
-    yield* (yield* Runs)
-      .holdInactiveRun(runId)
-      .pipe(
-        Effect.mapError(
-          (cause) =>
-            new WorkflowRunAbortError(
-              `Workflow child ${runId} is live in this session; refusing to repeat it.`,
-              { cause },
-            ),
+  // One hold fences both: the in-process owner and the run's DB claim ride
+  // the same hold fiber's lifetime (`RunRoster.holdInactive`), so the two
+  // can never disagree about whether this run is fenced.
+  Effect.flatMap(Runs, (runs) => runs.holdInactiveRun(runId)).pipe(
+    Effect.mapError(
+      (cause) =>
+        new WorkflowRunAbortError(
+          `Workflow child ${runId} is live in this session or held by a concurrent resume; refusing to repeat it.`,
+          { cause },
         ),
-      );
-    yield* Effect.acquireRelease(
-      session
-        .acquireClaims(qualifyAggregateId('run', runId))
-        .pipe(
-          Effect.mapError(
-            (cause) =>
-              new WorkflowRunAbortError(
-                `Workflow child ${runId} could not be claimed against a concurrent resume; refusing to repeat it.`,
-                { cause },
-              ),
-          ),
-        ),
-      (release) =>
-        release.pipe(
-          Effect.catch((error) =>
-            Effect.logWarning(
-              `Workflow child ${runId} kept its claim after the call that fenced it: ${formatError('claim release failed', error)}`,
-            ).pipe(withLogChannel(CHANNEL)),
-          ),
-        ),
-    );
-  });
+    ),
+  );
 
 /** Runaway backstop on the attempt probe, not a retry policy. */
 const MAX_WORKFLOW_CALL_ATTEMPTS = 1_024;
@@ -577,7 +547,7 @@ const recoverOrLaunchWorkflowChild = Effect.fn('recoverOrLaunchWorkflowChild')(
         // refused here, and one that ran to its own end leaves a row this
         // reading no longer recognizes (an activate after the row reads as no
         // terminal row at all).
-        yield* fenceSupersededRun(session, runId);
+        yield* fenceSupersededRun(runId);
         const launched = yield* probeChild(runId, records.readRunEnd());
         // The outcome does not identify the lifecycle: a resume that reached
         // its own end usually ends `completed`, exactly as this one did, so a
@@ -625,7 +595,7 @@ const recoverOrLaunchWorkflowChild = Effect.fn('recoverOrLaunchWorkflowChild')(
       // true when they were read, and a completed row is resumable too, so
       // every decision below has to hold against a resume that starts one
       // instant later, here or in another process.
-      yield* fenceSupersededRun(session, runId);
+      yield* fenceSupersededRun(runId);
       // A user's retry of this child is the one authorization that closes an
       // attempt which already started work: the engine journals the next
       // attempt's mark naming this id before it asks for the replacement, so

@@ -3,11 +3,10 @@
  *
  * The session-facing surface: admission, the launch-time bookkeeping a
  * `track` does, the projections hosts read, and the stop gestures they call.
- * What this process holds for a run — its handle, its child activation, the
- * its lifecycle lane and the
- * generations holding it — is one entry in `runRoster.ts`, the single
- * in-process liveness authority; what a stop does with those records lives in
- * `runStopping.ts`.
+ * What this process holds for a run — the fiber running it, its handle, its
+ * child activation and its lifecycle lane — is one entry in `runRoster.ts`,
+ * the single in-process liveness authority; what a stop does with those
+ * records lives in `runStopping.ts`.
  */
 
 import { Context, Effect, Semaphore, type Scope } from 'effect';
@@ -54,7 +53,7 @@ export class RunRegistry {
 
   constructor(options: RunRegistryInit) {
     this.runView = options.runView;
-    this.roster = new RunRoster(options.approvals);
+    this.roster = new RunRoster(options.approvals, options.acquireRunClaim);
     this.stopper = new RunStopper(
       this.roster,
       options.commit,
@@ -101,6 +100,18 @@ export class RunRegistry {
    */
   isLive(runId: RunId): boolean {
     return this.roster.isLive(runId);
+  }
+
+  /**
+   * The run's stop, by run id: interrupt the fiber the roster's entry names
+   * ({@link RunRoster.interrupt}). Synchronously callable from every host
+   * surface, and answered straight away: the entry has a fiber or it does
+   * not. This is the one stop for a running generation; a child loop's own
+   * signal ({@link ChildRunActivation.interrupt}) covers the inter-turn gap
+   * the fiber's turn settlement must survive.
+   */
+  interrupt(runId: RunId): boolean {
+    return this.roster.interrupt(runId);
   }
 
   /** Reserve an inactive run for deletion; never wait for a live owner. */

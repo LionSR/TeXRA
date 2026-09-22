@@ -130,8 +130,7 @@ export const runAgent = Effect.fn('runAgent')(function* (
   // The launch's one stop: the launch handle's interrupt completes it, the
   // launch fails at its next preparation step once it has, and the run
   // adopts it as its own stop, so a stop reaches the run wherever the launch
-  // has got to. Created before any await so a kill during the resume lineage
-  // reads has a latch to complete.
+  // has got to.
   const launchStopped = Deferred.makeUnsafe<void>();
   const completeLaunchStop = (): void => {
     Deferred.doneUnsafe(launchStopped, Effect.void);
@@ -151,47 +150,52 @@ export const runAgent = Effect.fn('runAgent')(function* (
   };
   attachLaunchStop(launchHandle);
 
-  return yield* Effect.gen(function* () {
-    // Track before the first resume read so `runs.kill` finds a handle. The
-    // persisted parent is installed below, once the lineage read returns,
-    // by replacing this parentless handle in the same synchronous turn.
-    if (launchHandle) runSession.runs.track(launchHandle);
-    yield* failIfLaunchStopped(launchStopped);
-    // A resumed run's prior terminal fact: what a launch that fails before
-    // its lifecycle starts restores, so the run does not read as still
-    // running.
-    const priorEnd = shouldRegister
-      ? null
-      : yield* getRunRecords(runSession, runId).readRunEnd();
-    const priorEndStable = stableStringify(priorEnd);
-    yield* failIfLaunchStopped(launchStopped);
-    if (!shouldRegister && !(yield* getRunRecords(runSession, runId).exists()))
-      return yield* Effect.fail(new Error(`Run not found: ${runId}`));
-    yield* failIfLaunchStopped(launchStopped);
-    // From the moment the parented handle is tracked, a stop of the parent
-    // sees this child, so it cascades into the launch or detaches it, and a
-    // parent whose stop has already begun refuses the admission outright.
-    // The launch reads the edge back off the handle instead of deriving it
-    // a second time, so nothing can install a parent after its stop finished.
-    const resumedParentRunId = shouldRegister
-      ? undefined
-      : yield* persistedParentRunId(runSession, runId);
-    yield* failIfLaunchStopped(launchStopped);
-    if (
-      launchHandle !== undefined &&
-      resumedParentRunId !== undefined &&
-      launchHandle.parent === null
-    ) {
-      if (runSession.runs.getHandle(runId) === launchHandle) {
-        runSession.runs.untrack(runId);
-      }
-      launchHandle = new RunHandle(launchFacts, resumedParentRunId);
-      attachLaunchStop(launchHandle);
+  return yield* runSession.runs.launchRun(
+    runId,
+    Effect.gen(function* () {
+      // The lineage reads run inside the operation the lane forks, so the
+      // launch's fiber exists — and is the stop's target — from the first
+      // instant the run is admitted. A kill landing during them interrupts
+      // the fiber rather than missing a launch that has not started. The
+      // launch handle is tracked first so a stop also finds the latch.
       runSession.runs.track(launchHandle);
-    }
-    return yield* runSession.runs.launchRun(
-      runId,
-      Effect.gen(function* () {
+      yield* failIfLaunchStopped(launchStopped);
+      // A resumed run's prior terminal fact: what a launch that fails before
+      // its lifecycle starts restores, so the run does not read as still
+      // running.
+      const priorEnd = shouldRegister
+        ? null
+        : yield* getRunRecords(runSession, runId).readRunEnd();
+      const priorEndStable = stableStringify(priorEnd);
+      yield* failIfLaunchStopped(launchStopped);
+      if (
+        !shouldRegister &&
+        !(yield* getRunRecords(runSession, runId).exists())
+      )
+        return yield* Effect.fail(new Error(`Run not found: ${runId}`));
+      yield* failIfLaunchStopped(launchStopped);
+      // From the moment the parented handle is tracked, a stop of the parent
+      // sees this child, so it cascades into the launch or detaches it, and a
+      // parent whose stop has already begun refuses the admission outright.
+      // The launch reads the edge back off the handle instead of deriving it
+      // a second time, so nothing can install a parent after its stop finished.
+      const resumedParentRunId = shouldRegister
+        ? undefined
+        : yield* persistedParentRunId(runSession, runId);
+      yield* failIfLaunchStopped(launchStopped);
+      if (
+        launchHandle !== undefined &&
+        resumedParentRunId !== undefined &&
+        launchHandle.parent === null
+      ) {
+        if (runSession.runs.getHandle(runId) === launchHandle) {
+          runSession.runs.untrack(runId);
+        }
+        launchHandle = new RunHandle(launchFacts, resumedParentRunId);
+        attachLaunchStop(launchHandle);
+        runSession.runs.track(launchHandle);
+      }
+      return yield* Effect.gen(function* () {
         // Resolve the selected model before registering the run. The helper
         // model swap reads the enabled-model list, the routing switches and
         // the provider keys, so it takes this session's setting slots and the
@@ -335,16 +339,19 @@ export const runAgent = Effect.fn('runAgent')(function* (
             ),
           ),
         );
-      }),
+      });
+    })
+  ).pipe(
+      Effect.ensuring(
+        Effect.sync(() => {
+          detachLaunchInterrupt?.();
+          if (
+            launchHandle &&
+            runSession.runs.getHandle(runId) === launchHandle
+          ) {
+            runSession.runs.untrack(runId);
+          }
+        }),
+      ),
     );
-  }).pipe(
-    Effect.ensuring(
-      Effect.sync(() => {
-        detachLaunchInterrupt?.();
-        if (launchHandle && runSession.runs.getHandle(runId) === launchHandle) {
-          runSession.runs.untrack(runId);
-        }
-      }),
-    ),
-  );
 });
