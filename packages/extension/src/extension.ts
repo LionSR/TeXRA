@@ -3,7 +3,7 @@ import * as path from 'node:path';
 
 // Third-party imports
 import * as vscode from 'vscode';
-import { Cause, Data, Effect, Exit } from 'effect';
+import { Cause, Data, Effect, Exit, Layer, Scope } from 'effect';
 
 // Local imports
 import { loadAgents } from '@agent/index';
@@ -33,6 +33,10 @@ import {
   installProcessRuntime,
 } from '@controllers/session/sessionLayer';
 import { globalDatabaseLayer } from '@controllers/session/Database';
+import {
+  appStateStoreFromDatabase,
+  openProjectStateStore,
+} from '@controllers/session/appStateStore';
 import { bootstrapHost } from '@controllers/hostBootstrap';
 import { emitAppSignal } from '@eventBus/AppSignals';
 import { subscribeAppSignal } from '@frontend/events/appSignalSubscriptions';
@@ -85,10 +89,7 @@ import {
 } from '@platform/languageModel';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
-import {
-  createNodeWorkspaceRoots,
-  type NodeWorkspaceRootsInit,
-} from '@platform/defaults/nodeHost';
+import { createNodeWorkspaceRoots } from '@platform/defaults/nodeHost';
 import { nodeProcesses } from '@platform/defaults/nodeProcesses';
 import { createNodeStorageProvider } from '@platform/defaults/nodeStorage';
 import { openTexraConfigStores } from '@platform/defaults/nodeStores';
@@ -105,6 +106,7 @@ import {
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
 import type { CommandId } from '@shared/commands/catalog';
+import { GlobalDatabase } from '@shared/session/database';
 import { usageLogLayer } from '@telemetry/UsageLogService';
 import { registerRuntimeShutdownHandlers } from '@tools/agentCliSessionStores';
 import { refreshToolAvailability } from '@tools/toolAvailability';
@@ -118,7 +120,6 @@ import { sessionStoreClearedMessage } from '@ui/copy/sessionStore';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
-import { mementoStateStore } from './frontend/vscodeStateStore';
 
 // Local file imports
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';
@@ -156,13 +157,10 @@ let apiKeyStatusBarItem: vscode.StatusBarItem | undefined;
 // idempotency flag, so a stale module-level instance would silently swallow
 // handlers registered by a second activate() in the same process.
 let lifecycleHost: LifecycleHost | undefined;
-// This entry's hold on the process runtime it installed (rulings ledger,
-// #12720). VS Code calls `activate` and `deactivate` separately, so the
-// entry's local is module-scoped like `lifecycleHost` above; every surface
-// below `activate` is handed the runtime rather than reading it back, and
-// only `deactivate`'s shutdown, which runs outside any activation frame,
-// reads it here.
+// VS Code invokes activation and deactivation separately. Only this entry
+// reads back their shared runtime and project scope; consumers receive values.
 let processRuntime: ProcessRuntime | undefined;
+let projectScope: Scope.Closeable | undefined;
 let extensionShutdownPromise: Promise<void> | undefined;
 
 /**
@@ -170,16 +168,13 @@ let extensionShutdownPromise: Promise<void> | undefined;
  * both activation paths: the credential-only path without a folder and the
  * workspace path, which adds the ports only a folder can answer.
  *
- * Returns the secrets port, the process runtime and the process roots it
- * built, so the surfaces registered below take them as arguments instead of
- * reading either back off an ambient locator (PRD R1: each composition root
- * holds its runtime).
+ * Registered surfaces receive the ports and roots this entry owns.
  */
 async function initVscodePlatform(
   context: vscode.ExtensionContext,
   lifecycle: LifecycleHost,
   workspaceRoot: string | undefined,
-  workspaceState: NodeWorkspaceRootsInit['workspaceState'],
+  gitRepoRoot: string | undefined,
   /** The session a resume request targets, read at request time: the
    *  platform must exist before `initializeDefaultSession` can run, so the
    *  session cannot be a value here. */
@@ -198,10 +193,13 @@ async function initVscodePlatform(
   // The process runtime comes first: the config stores below are opened as
   // Effect programs, so it must exist before the platform this host wires.
   const storage = createNodeStorageProvider({ workspacePath: workspaceRoot });
-  // Both process stores exist before the runtime here: VS Code hands the
-  // extension its SecretStorage and Memento at activation.
   const secrets = new VscodeSecrets(context);
-  const globalState = mementoStateStore(context.globalState);
+  const appState = Layer.effect(
+    AppState,
+    Effect.map(GlobalDatabase, (database) =>
+      appStateStoreFromDatabase(storage.getGlobalStoragePath(), database),
+    ),
+  );
   const authReadiness: AuthReadinessGate = { uriHandlerInstalled: false };
   // A construction failure degrades to the unavailable plane instead of
   // failing activation: registration below records and reports the error, and
@@ -247,7 +245,7 @@ async function initVscodePlatform(
     processStart: Effect.succeed(processStart),
     globalStorage: storage.getGlobalStoragePath(),
     secrets,
-    appState: AppState.layer(globalState),
+    appState,
     auth,
     // The editor's LM API on the workspace path, unavailable on the
     // credential-only one. The one defaulting site for this host.
@@ -268,8 +266,9 @@ async function initVscodePlatform(
     // from module load; nothing about it waits on that registration.
     inlineComments: getInlineCommentProvider(),
     // Lean through the Lean 4 extension, not a direct `lake` pool.
-    lean: LeanLanguageServices.layer(
-      createVscodeLeanLanguageServices(globalState),
+    lean: Layer.effect(
+      LeanLanguageServices,
+      Effect.map(AppState, createVscodeLeanLanguageServices),
     ),
     usageLog: usageLogLayer({
       version: extensionVersion,
@@ -283,6 +282,22 @@ async function initVscodePlatform(
   // Recorded the moment it exists: every step below runs on it and can fail,
   // and `shutdownExtension` is what disposes it when activation does.
   processRuntime = runtime;
+  const scope = Scope.makeUnsafe();
+  projectScope = scope;
+  const { globalState, workspaceState } = await runtime.runPromise(
+    Effect.gen(function* () {
+      const globalState = yield* AppState;
+      const projectState = yield* openProjectStateStore(
+        storage.getStoragePath(),
+      );
+      return {
+        globalState,
+        workspaceState: gitRepoRoot
+          ? new WorktreeStateStore(projectState, globalState, gitRepoRoot)
+          : projectState,
+      };
+    }).pipe(Scope.provide(scope)),
+  );
   // VS Code restarts the extension host when the first workspace folder
   // changes, so the configuration stores stay pinned for this process.
   const config = new JsonConfigProvider(
@@ -322,6 +337,8 @@ function shutdownExtension(): Promise<void> {
   if (extensionShutdownPromise) return extensionShutdownPromise;
 
   const host = lifecycleHost;
+  const runtime = processRuntime;
+  const scope = projectScope;
   // `deactivate` is this host's R1 entry: one run for the drain and the
   // teardown that follows it however it ends. Not on the process runtime —
   // this is the path that disposes it.
@@ -330,17 +347,17 @@ function shutdownExtension(): Promise<void> {
       Effect.ensuring(
         Effect.suspend(() => {
           if (lifecycleHost === host) lifecycleHost = undefined;
-          // No runtime: activation failed before building one, so there is
-          // nothing here to tear down. A runtime with no session behind it
-          // still gets disposed; the session teardown is a no-op then.
-          const runtime = processRuntime;
+          // Activation can fail before installing a runtime or a session.
           if (!runtime) return Effect.void;
           return teardownDefaultSession().pipe(
-            // After the session: its graph releases on the runtime it ran on.
-            Effect.andThen(disposeProcessRuntime(runtime)),
-            Effect.andThen(
+            Effect.ensuring(
+              scope ? Scope.close(scope, Exit.void) : Effect.void,
+            ),
+            Effect.ensuring(disposeProcessRuntime(runtime)),
+            Effect.ensuring(
               Effect.sync(() => {
                 if (processRuntime === runtime) processRuntime = undefined;
+                if (projectScope === scope) projectScope = undefined;
               }),
             ),
           );
@@ -571,11 +588,12 @@ async function activateExtension(context: vscode.ExtensionContext) {
     runtime: ProcessRuntime,
     auth: SupabaseAuthShape,
     authReadiness: AuthReadinessGate,
+    roots: WorkspaceRoots,
   ): void => {
     // After the platform above, which built the runtime the manager settles
     // its watcher rebuilds on.
     agentDirectories.initialize(
-      context.globalState,
+      roots.globalState,
       path.join(context.extensionPath, 'resources'),
       runtime,
     );
@@ -594,7 +612,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
         context,
         lifecycle,
         undefined,
-        mementoStateStore(context.workspaceState),
+        undefined,
         // The credential-only path never initializes a session; a resume
         // request cannot arrive here because every run belongs to one.
         () => {
@@ -603,7 +621,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
           );
         },
       );
-    wirePostPlatform(secrets, runtime, auth, authReadiness);
+    wirePostPlatform(secrets, runtime, auth, authReadiness, roots);
     // The full command surface (including the workspace-backed
     // `texra.createSampleProject`) is only registered on the single-folder
     // path below, so the welcome view registers its own standalone variant:
@@ -662,13 +680,6 @@ async function activateExtension(context: vscode.ExtensionContext) {
   // Deactivation releases the output channels with the sink, so a reload does
   // not leave a disposed host surface installed.
   context.subscriptions.push({ dispose: () => setLogSink(null) });
-  // The editor's Mementos behind the platform's `StateStore` port; the
-  // worktree store shares selected keys of the workspace one through global.
-  const globalState = mementoStateStore(context.globalState);
-  const workspaceMemento = mementoStateStore(context.workspaceState);
-  const workspaceState = gitRepoRoot
-    ? new WorktreeStateStore(workspaceMemento, globalState, gitRepoRoot)
-    : workspaceMemento;
   const languageModel = createLanguageModelPort(context);
   // Shared `~/.texra` storage root (one history across CLI/desktop/extension,
   // #8622).
@@ -677,7 +688,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
       context,
       lifecycle,
       workspaceRoot,
-      workspaceState,
+      gitRepoRoot,
       // `runtimeSession` is created below; resume requests only arrive after
       // activation has composed it.
       () => runtimeSession,
@@ -697,7 +708,8 @@ async function activateExtension(context: vscode.ExtensionContext) {
         },
       },
     );
-  wirePostPlatform(secrets, runtime, auth, authReadiness);
+  const { globalState } = roots;
+  wirePostPlatform(secrets, runtime, auth, authReadiness, roots);
   // That registration precedes the fire-and-forget remote agent refresh below,
   // which reads the account plane's access token: with the provider in place
   // the refresh fetches the real catalog instead of short-circuiting on a null
@@ -857,7 +869,9 @@ async function activateExtension(context: vscode.ExtensionContext) {
     },
   );
   context.subscriptions.push(gitHubAuthListener);
-  registerInlineCriticism(context, runtime, runtimeSession);
+  await runtime.runPromise(
+    registerInlineCriticism(context, runtime, runtimeSession, globalState),
+  );
   registerInlineComments(context);
 
   statusBarItem = vscode.window.createStatusBarItem(
@@ -1023,7 +1037,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
   await vscode.commands.executeCommand('setContext', 'texra.activated', true);
 
   const welcomeKey = 'texra.welcomeShown';
-  if (!context.globalState.get<boolean>(welcomeKey)) {
+  if (!(await runtime.runPromise(globalState.get<boolean>(welcomeKey)))) {
     // Land first-run users on the main welcome card so the credential choice
     // (ChatGPT subscription first) is the first real action, then open the
     // walkthrough alongside for the rest of the onboarding tips.
@@ -1032,7 +1046,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
       .then(() =>
         vscode.commands.executeCommand(EXTENSION_COMMANDS.OPEN_GETTING_STARTED),
       )
-      .then(() => context.globalState.update(welcomeKey, true));
+      .then(() => runtime.runPromise(globalState.update(welcomeKey, true)));
   }
 }
 

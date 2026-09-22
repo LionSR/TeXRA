@@ -724,8 +724,79 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
           waitForPersistedResult(runId, 'Recovered result C.'),
         );
         yield* waitForParentTurns(3);
+        expect(
+          yield* Fiber.join(recovered).pipe(Effect.timeout('5 seconds')),
+        ).toEqual({
+          started: true,
+          delivered: true,
+          outcome: RUN_PHASE.WAITING,
+        });
+        const recoveredHandle = session.runs.getHandle(runId);
+        expect(recoveredHandle).toBeDefined();
+        expect(session.followUps.hasLiveOwner(runId)).toBe(true);
+        childTurns.push({ text: 'Recovered result D.' });
+        parentTurns.push({ text: 'Parent received recovered result D.' });
+        yield* submitFollowUp(runId, 'Continue in the recovered run.', {
+          session,
+        }).pipe(Effect.provide(AgentResume.layer(fakeHostAgentResume)));
+        yield* Effect.promise(() =>
+          waitForPersistedResult(runId, 'Recovered result D.'),
+        );
+        yield* waitForParentTurns(4);
+        expect(session.runs.getHandle(runId)).toBe(recoveredHandle);
         yield* session.runs.kill(runId).settlement;
-        yield* Fiber.join(recovered);
+        yield* Effect.promise(() => waitForClaimRelease(runId));
+
+        // An already idle saved run needs no new input or model turn to
+        // acknowledge recovery, and its live driver still owns later input.
+        expect(
+          yield* withProcessServices(
+            testRuntime(),
+            resumeRun(runId, {
+              session,
+              executeWorkflow: () =>
+                Effect.fail(new Error('Expected a tool-use child.')),
+            }),
+          ).pipe(Effect.timeout('5 seconds')),
+        ).toEqual({
+          started: true,
+          delivered: true,
+          outcome: RUN_PHASE.WAITING,
+        });
+        expect(session.runs.getHandle(runId)).toBeDefined();
+        yield* session.viewChanges.pipe(
+          Stream.filter(
+            (view) => view.runs.get(runId)?.status === RUN_PHASE.WAITING,
+          ),
+          Stream.runHead,
+          Effect.timeout('5 seconds'),
+        );
+        expect((yield* readChildTurnState(session, runId)).active).toBeNull();
+        expect(childTurns).toHaveLength(0);
+        yield* session.runs.kill(runId).settlement;
+        yield* Effect.promise(() => waitForClaimRelease(runId));
+        modelBindingMocks.bindModel.mockReturnValueOnce(
+          Effect.fail(new Error('Recovered model binding failed.')),
+        );
+        parentTurns.push({ text: 'Parent received failed recovery.' });
+        expect(
+          yield* withProcessServices(
+            testRuntime(),
+            resumeRun(runId, {
+              session,
+              extraFollowUps: [
+                { text: 'Keep this unconsumed input.', origin: 'user' },
+              ],
+              executeWorkflow: () =>
+                Effect.fail(new Error('Expected a tool-use child.')),
+            }),
+          ),
+        ).toEqual({
+          started: true,
+          delivered: false,
+          outcome: RUN_OUTCOME.FAILED,
+        });
+        yield* waitForParentTurns(5);
       }),
     60_000,
   );

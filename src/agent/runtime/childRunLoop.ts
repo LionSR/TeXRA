@@ -94,12 +94,8 @@ export interface ChildRunPorts {
 }
 
 /**
- * Presentation/lifecycle port for agent-CLI child runs. The concrete
- * tool-layer stream satisfies this structurally, but the generic driver
- * declares the handful of hooks it needs here so it never imports a concrete
- * tools type. Native strategies have no stream tab of their own and omit it
- * entirely; `executeAgent`/`resumeToolUseFromResumeData` own handle creation,
- * tracking, and terminal finalization for their whole lifetime.
+ * Agent-CLI presentation and finalization. Native engines own their run
+ * handle and terminal finalization and omit this port.
  */
 interface ChildRunPort {
   readonly logger: AgentTrace;
@@ -274,13 +270,9 @@ export interface ChildRunStrategy<TTurn, R = never> {
 export interface ChildRunLoopParams<TTurn, R = never> {
   readonly session: SessionHandle;
   /** The recovery boundary already claimed this queue before loading its rows. */
-  readonly queueLease?: FollowUpConsumerLease;
+  readonly queueLease?: FollowUpRecoveryLease;
   /**
-   * Presentation/lifecycle wrapper for agent-CLI child runs. Native
-   * strategies omit this; `executeAgent`/`resumeToolUseFromResumeData`
-   * already own handle creation, tracking, and terminal finalization for
-   * every turn via `runFlowWithLifecycle`, so there is no separate run tab
-   * for this loop to finalize.
+   * Agent-CLI presentation. Native engines finalize their own run handle.
    */
   readonly childRun?: ChildRunPort;
   readonly parentRunId: RunId;
@@ -329,14 +321,8 @@ export interface ChildRunLoopParams<TTurn, R = never> {
 }
 
 /**
- * Interrupt handler attached to the child's run handle for the child's
- * whole lifetime, so the stop button always finds a live target; including
- * the inter-turn WAITING gap, when no flow-owned context is attached.
- *
- * Carries no flow-owned session view, so flow-only commands such as context
- * compaction ignore it. Follow-ups route through the queue-owned submission
- * path, which joins this loop's live lease instead of creating a competing
- * continuation.
+ * Agent-CLI interrupt handler spanning active turns and idle queue waits.
+ * Follow-ups join its queue; flow-only controls such as compaction ignore it.
  *
  * A running turn and the between-turn wait are reached through `signal`
  * alone: every strategy binds the turn it launches to it, a native turn's
@@ -459,16 +445,8 @@ function turnDeliveryId(
 type ChildLoopTerminationCause = 'interrupted' | 'turn_failed' | 'terminal';
 
 /**
- * Structured turn-lifecycle diagnostic (#9531): ties the run, the turn's
- * logical identity, the follow-up queue owner/generation, and the interruption
- * cause into one event so a resumed/interrupted child's state is auditable.
- * Emitted at turn acceptance, delivery, and loop termination.
- *
- * Debug level: this is the loop's own bookkeeping, not the child's narrative.
- * A child stream tab renders what its provider produced; for a background
- * shell that tab IS the terminal, and `/executions/{id}/output` states that it
- * projects command output rather than run bookkeeping. Debug mode keeps the
- * audit trail for the case that motivated it.
+ * Debug-only turn identity, owner and interruption facts (#9531). These are
+ * driver diagnostics; the child's output remains its provider's narrative.
  */
 function emitTurnDiagnostic(
   logger: AgentTrace,
@@ -910,9 +888,7 @@ export function startChildRunLoop<TTurn, R = never>(
     let queueLease: FollowUpConsumerLease | undefined;
     let detachLoopInterrupt: (() => void) | undefined;
     let sessionStage: StageHandle | undefined;
-    // Preserve the setup error while unwinding every resource acquired so far.
-    // Used when setup throws and when the lane refuses the run before it
-    // starts; in both cases `run` never executes, so nothing else unwinds.
+    // Unwind setup and lane refusals before the run body takes ownership.
     const unwindSetup = (error: unknown): Effect.Effect<Error> =>
       Effect.gen(function* () {
         const cleanupErrors: unknown[] = [];
@@ -940,10 +916,8 @@ export function startChildRunLoop<TTurn, R = never>(
       });
 
     const created = yield* RunInput.make;
-    // Claim and attach before any startup read: an admission that lands while
-    // this loop is starting then finds the live owner and is held behind the
-    // seed, instead of being refused against a run the registry already shows
-    // active, or committing behind the snapshot the seed is about to read.
+    // Fresh children already own their DB claim. Recovery retains its pending
+    // queue until the run lane acquires the claim and transfers it below.
     const claimed = yield* Effect.exit(
       Effect.sync(() => {
         queueLease =
@@ -953,7 +927,8 @@ export function startChildRunLoop<TTurn, R = never>(
             `Follow-up continuation already has an owner for child ${runId}.`,
           );
         }
-        input = runSession.followUps.attachInput(runId, created, queueLease)!;
+        if (!params.queueLease)
+          input = runSession.followUps.attachInput(runId, created, queueLease)!;
       }),
     );
     if (Exit.isFailure(claimed)) {
@@ -1003,9 +978,7 @@ export function startChildRunLoop<TTurn, R = never>(
     }
 
     const attemptId = randomUUID();
-    // Keep the child-stream handle itself, not a target snapshot. Finalization
-    // untracks the handle before terminal delivery, while detachment still
-    // mutates this object's live delivery target.
+    // The handle retains live detachment through finalization and delivery.
     const childRunHandle = childRun ? runs.getHandle(runId) : undefined;
 
     let bestCostUsd: number | undefined;
@@ -1063,9 +1036,7 @@ export function startChildRunLoop<TTurn, R = never>(
     // Terminal delivery wakes only after the child's finalization and claim
     // release. Interim delivery wakes immediately, while the child stays live.
     let pendingDelivery: PendingChildDelivery | undefined;
-    // One slot per live turn: acquired here; the single boundary that drives
-    // every detached native child turn; and nowhere above or below (design:
-    // .agents/docs/implemented/architecture/2026-08-15-child-run-concurrency-budget.md).
+    // Acquire the concurrency slot only while a turn runs.
     const gateTurn = (
       base: (signal: AbortSignal) => Effect.Effect<TTurn, Error, R>,
     ): ((signal: AbortSignal) => Effect.Effect<TTurn, Error, R>) =>
@@ -1091,6 +1062,24 @@ export function startChildRunLoop<TTurn, R = never>(
       const body = yield* Effect.exit(
         Effect.scoped(
           Effect.gen(function* () {
+            if (params.queueLease) {
+              // Only this lane's driver can adopt recovery; its terminal
+              // cleanup releases the DB claim after final delivery preparation.
+              yield* runSession.acquireClaims(aggregateId('run', runId));
+              queueLease = runSession.followUps.claimChildRun(
+                runId,
+                params.queueLease,
+              );
+              if (!queueLease)
+                return yield* Effect.fail(
+                  new Error(`Child recovery ownership was lost for ${runId}.`),
+                );
+              input = runSession.followUps.attachInput(
+                runId,
+                created,
+                queueLease,
+              )!;
+            }
             const runNotice = (notice: Effect.Effect<void, Error>) =>
               notice.pipe(
                 Effect.catch((error) =>
@@ -1190,13 +1179,11 @@ export function startChildRunLoop<TTurn, R = never>(
                   },
                 });
               });
-            let nativeTurnStarted = false;
             const turns: ChildRunTurns<TTurn, R> = {
               run: (operation) =>
                 Effect.gen(function* () {
-                  if (nativeTurnStarted) yield* beginTurn;
-                  nativeTurnStarted = true;
                   if (loop.isInterrupted()) return yield* Effect.interrupt;
+                  yield* beginTurn;
                   return yield* budget
                     ? budget.withPermit(operation)
                     : operation;
@@ -1217,7 +1204,7 @@ export function startChildRunLoop<TTurn, R = never>(
             ) => Effect.Effect<TTurn, Error, R> = (signal) =>
               strategy.launch(ports, signal, turns);
             while (!loop.isInterrupted()) {
-              yield* beginTurn;
+              if (!strategy.continuous) yield* beginTurn;
               const attempt = yield* attemptTurn(
                 strategy,
                 strategy.continuous ? runner : gateTurn(runner),
@@ -1241,6 +1228,12 @@ export function startChildRunLoop<TTurn, R = never>(
                 turn == null ||
                 strategy.isTerminal(turn) ||
                 !strategy.runTurn;
+              // A launch failure can terminate before its first model cycle.
+              if (turnIndex === 0) {
+                if (err != null && !(yield* runSession.ownsRun(runId)))
+                  return yield* Effect.fail(ensureError(err));
+                yield* beginTurn;
+              }
               const delivery = yield* settleTurn(
                 turn,
                 err,
@@ -1271,11 +1264,7 @@ export function startChildRunLoop<TTurn, R = never>(
                 break;
               }
 
-              // Interim turn continuing: no finalize is pending, so wake now; the
-              // loop's interrupt handler is already attached (immediately above,
-              // the instant this turn settled); then just drain the next batch. A
-              // follow-up already raced into the queue resumes immediately instead
-              // of genuinely waiting.
+              // Process strategies wake the parent before waiting for input.
               yield* submitPendingDelivery(delivery, runSession, runId, logger);
               if (loop.isInterrupted()) break;
 
@@ -1364,6 +1353,18 @@ export function startChildRunLoop<TTurn, R = never>(
                       }
                     : undefined,
               });
+            } else if (
+              (loop.isInterrupted() || sawTurnFailure) &&
+              (yield* runSession.ownsRun(runId))
+            ) {
+              // Failure or cancellation can precede the engine's first handle.
+              const finalized = yield* finalizeRun(runSession, {
+                runId,
+                outcome,
+                keepExistingOutcome: true,
+              });
+              if (!finalized.ok)
+                return yield* Effect.fail(ensureError(finalized.error));
             }
           }
         }),

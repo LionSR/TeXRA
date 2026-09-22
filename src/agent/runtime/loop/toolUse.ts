@@ -718,6 +718,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       state = yield* commit(loaded);
     }
 
+    let restoring = start.resume;
     for (;;) {
       const parked =
         state.phase === 'waiting' ||
@@ -732,12 +733,21 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         // Its delivery callback has already committed the preceding turn.
         if (isChild() && afterError && !followUps.hasQueued())
           return finish(state, RUN_OUTCOME.FAILED);
+        // Activation clears the visible step. Restore an already idle cursor
+        // before acknowledging it; no new model turn is needed to park it.
+        if (restoring && !followUps.hasQueued()) {
+          state = yield* commit(
+            yield* ledger.appendBatch(runId, state, [
+              stepRow(runId, state, 'waiting'),
+            ]),
+          );
+        }
         let batch: FollowUpBatch | null = null;
         if (batch === null) {
           if (afterError) {
             if (!isChild()) yield* pauseActiveGoal();
           } else {
-            run.callbacks.onIdle?.();
+            run.callbacks.onIdle?.(state);
           }
           if (run.toolPolicy.stopAfterCycle) {
             return finish(
@@ -778,6 +788,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         }
         lastError = undefined;
       }
+      restoring = false;
       const turn: TurnExit = yield* start.turns
         ? start.turns.run(runTurn(state))
         : runTurn(state);

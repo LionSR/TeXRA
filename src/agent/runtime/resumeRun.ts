@@ -1,13 +1,10 @@
-import { Effect, Fiber, Result } from 'effect';
+import { Deferred, Effect, Fiber, Result } from 'effect';
 
 /**
  * The one resume entry point. Every host continues a persisted run through
- * it: the extension toolbar, the desktop bridge, the CLI `/resume` command and
- * `texra resume`, and the implicit follow-up wake. It resolves persisted
- * state, claims the stream's follow-up recovery lease, and launches the run
- * as a generation on its run lane (`resumeToolUseFromResumeData` for
- * tool-use, the host's workflow launcher for workflows). Recovered children
- * use the same continuous delivery driver as newly launched children.
+ * it, including implicit follow-up wakes. It claims recovery and launches
+ * on the run lane. Recovered children use the same continuous delivery driver
+ * as newly launched children and acknowledge each resumed turn separately.
  */
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
@@ -26,6 +23,7 @@ import {
   aggregateId,
   AgentCategory,
   ownerPid,
+  RUN_PHASE,
   USER_FOLLOW_UP_SUPPORT,
   type ModelCompatibilityKey,
   type RunId,
@@ -58,12 +56,12 @@ import {
 import type { SessionHandle } from './SessionHandle';
 import type { AgentRunServices } from './toolInjection';
 
-/** A settled resume reports whether it consumed the admitted input. Unexpected failures fail the Effect. */
+/** A resume settles at a child's idle turn or at run termination, after admitted input is consumed. */
 export type ResumeRunResult =
   | {
       readonly started: true;
       readonly delivered: boolean;
-      readonly outcome?: AgentFlowResult['outcome'];
+      readonly outcome?: AgentFlowResult['outcome'] | typeof RUN_PHASE.WAITING;
     }
   | { readonly failed: FollowUpFailureReason };
 
@@ -80,14 +78,9 @@ export interface ResumeRunOptions extends Pick<
   /** Monotone per-attempt cancellation signal: once true it stays true. */
   readonly isCancellationRequested?: () => boolean;
   /**
-   * Follow-ups to queue for the run behind what its rows already queue (e.g.
-   * an explicit follow-up typed alongside a manual resume).
-   *
-   * The batch stays the caller's until {@link onFollowUpQueueReady} fires:
-   * every refusal before that point returns it unqueued, and the caller must
-   * put it back where it came from or the user's input is lost. Once queued
-   * it belongs to the run: a generation that returns without taking it
-   * leaves it queued (`delivered: false`) rather than back with the caller.
+   * Input behind the run's existing queue. It remains the caller's until
+   * {@link onFollowUpQueueReady}; refusals before that point must restore it.
+   * Afterwards untaken input stays durable on the run (`delivered: false`).
    */
   readonly extraFollowUps?: readonly FollowUpQueueInput[];
   /**
@@ -97,17 +90,8 @@ export interface ResumeRunOptions extends Pick<
    */
   readonly onFollowUpQueueReady?: (recovery: FollowUpRecoveryLease) => void;
   /**
-   * Fires once this run's persisted state has been retrieved and its launch
-   * is the next step. It is the last point at which a refusal costs the
-   * caller nothing, so a host that must rearrange itself onto the resumed run
-   * (clearing a transcript, switching the focused stream) does it here rather
-   * than reading the same checkpoint first to decide whether it may: a
-   * history listing advertises a row from its checkpoint file alone (one
-   * `stat`, never a parse) and inspects no lease per row, so both an unusable
-   * checkpoint and a run another TeXRA process holds refuse above this hook
-   * with the user's window untouched. A failure propagates to the caller; a
-   * stop requested while it runs is honored, because
-   * {@link isCancellationRequested} is re-read once it returns.
+   * Rearrange the host only after state retrieval and ownership checks have
+   * accepted this run. Failures propagate; cancellation is re-read afterwards.
    */
   readonly onResumeResolved?: () => Effect.Effect<void, Error, ProcessServices>;
 
@@ -155,12 +139,8 @@ const REFUSED: ResumeRunResult = { failed: 'not_resumable' };
 const WORKFLOW_STARTED: ResumeRunResult = { started: true, delivered: true };
 
 /**
- * Positive evidence that the run's saved state itself is what failed, walking
- * the cause chain the launch wraps its failures in: the ledger refused the
- * run's rows (`inconsistent`, `unprepared-history`) at the fold that would
- * continue them. A `not-owner` refusal and every other failure on the resume
- * path — a KV or metadata read, a lease read — stay the operational error
- * the host words with its cause.
+ * Only a ledger refusal of the saved rows names an unusable checkpoint.
+ * Ownership, metadata and lease failures remain operational errors.
  */
 function namesUnusableCheckpoint(error: unknown): boolean {
   for (let current = error, depth = 0; depth < 8; depth++) {
@@ -198,9 +178,7 @@ const resumeRunWithRecoveryProvenance = Effect.fn(
 ): Effect.fn.Return<ResumeRunResult, Error, AgentRunServices> {
   const session = options.session;
   const cancelled = () => options.isCancellationRequested?.() === true;
-  // `releaseUnstartedRecovery` revalidates the continuation against the
-  // boundary itself, so a lease that stopped being the entry's owner while
-  // this program was reading the run gives back nothing, as before.
+  // Revalidate the continuation when abandoning a lease after storage reads.
   const supplied = options.recovery;
   const abandonSupplied = (provisional = recoveryIsProvisional) =>
     supplied
@@ -279,9 +257,7 @@ const resumeRunWithRecoveryProvenance = Effect.fn(
       return REFUSED;
     }
   }
-  // The lease above and the resume type below are the same fact read twice:
-  // both come from `config.agentCategory`, so a tool-use run always holds a
-  // lease here and the workflow arm is the fallthrough.
+  // The category check above ensures every tool-use resume holds a lease.
   if (resume.type === 'toolUse' && queueLease) {
     return yield* resumeQueuedToolUse(session, resume, queueLease, options);
   }
@@ -301,13 +277,8 @@ const resumeRunWithRecoveryProvenance = Effect.fn(
 });
 
 /**
- * Give back a recovery lease no generation took over. A provisional lease
- * (one this attempt claimed for itself) over a run whose rows queue nothing
- * ends the run's entry; a run with queued follow-ups stays recoverable, so
- * the next wake can deliver them. The rows are read from the run-state fold,
- * not from memory: follow-ups an earlier generation left queued are there
- * and nowhere else. A fold that cannot be read keeps the run recoverable,
- * and says so.
+ * Give back recovery no generation took over. Empty provisional leases end
+ * the entry; durable queued input or an unreadable fold keeps it recoverable.
  */
 const releaseUnstartedRecovery = Effect.fn('releaseUnstartedRecovery')(
   function* (
@@ -377,11 +348,8 @@ function refusalFor(
 }
 
 /**
- * Resume a tool-use run under its recovery lease: queue the caller's extra
- * follow-ups on the run, then launch the resumed generation, which seeds its
- * queue from the run's rows. The phase is the fold's: the resume's
- * `run.activate` reads as resuming, and a resume that never reached the
- * lifecycle leaves the run to read as interrupted once its claim is released.
+ * Admit input under recovery, then launch. Child drivers take queue ownership;
+ * their first idle turn acknowledges this batch without ending their lifetime.
  */
 const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
   session: SessionHandle,
@@ -392,9 +360,7 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
   const runId = resume.runId;
   const followUps = session.followUps;
 
-  // A stop already reached the generation this resume would replace:
-  // the run is ending, and a resume over it would revive what that stop is
-  // settling.
+  // Do not revive a generation while its stop is settling.
   if ((yield* Runs).getHandle(resume.runId)?.stopRequested === true) {
     followUps.release(queueLease, 'recoverable');
     return REFUSED;
@@ -404,11 +370,20 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
   let refusedElsewhere = false;
   let runResult: AgentFlowResult | undefined;
   let undelivered = false;
+  let childOwnsQueue = false;
+  let childWaiting = false;
+  let admittedInputIds: ReadonlySet<string> | undefined;
+  const queuedInput = Effect.gen(function* () {
+    const folded = foldRunState(
+      null,
+      yield* session.readAggregate(aggregateId('run', runId)),
+    );
+    if (Result.isFailure(folded)) return yield* Effect.fail(folded.failure);
+    return folded.success?.followUps ?? [];
+  });
   const resumed = yield* Effect.result(
     Effect.gen(function* () {
-      // The batch is one admission and one transaction: queued whole, or
-      // refused (another process holds the run) with nothing written, so it
-      // stays the caller's.
+      // Admit the whole batch atomically, or leave it with the caller.
       const extra = options.extraFollowUps ?? [];
       if (extra.length > 0) {
         const submitted = yield* followUps.submitBatch(
@@ -438,6 +413,10 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
       const parentRunId = yield* persistedParentRunId(session, runId);
       if (parentRunId === undefined)
         return yield* resumeToolUseFromResumeData(resume, launchOptions);
+      admittedInputIds = new Set(
+        (yield* queuedInput).map((input) => input.followUpId),
+      );
+      const idle = yield* Deferred.make<void>();
       const completion = yield* startChildRunLoop({
         session,
         runId,
@@ -453,10 +432,37 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
           startedAt: Date.now(),
           workingDirectory: resume.agentConfig.workingDirectory ?? undefined,
           userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
-          resume: { identity: resume, options: launchOptions },
+          resume: {
+            identity: resume,
+            options: {
+              ...launchOptions,
+              onIdle: (state) => {
+                if (
+                  !state.followUps.some((input) =>
+                    admittedInputIds!.has(input.followUpId),
+                  )
+                )
+                  Deferred.doneUnsafe(idle, Effect.void);
+              },
+            },
+          },
         }),
       });
-      return yield* Fiber.join(completion);
+      // The driver owns this queue until termination. Interrupting either
+      // observation below cannot interrupt that transferred run lifetime.
+      childOwnsQueue = true;
+      return yield* Effect.raceFirst(
+        Deferred.await(idle).pipe(
+          Effect.as(undefined),
+          Effect.tap(() =>
+            Effect.sync(() => {
+              childWaiting = true;
+            }),
+          ),
+          Effect.interruptible,
+        ),
+        Fiber.join(completion).pipe(Effect.interruptible),
+      );
     }),
   ).pipe(
     Effect.tap((result) =>
@@ -466,6 +472,7 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
     ),
     Effect.ensuring(
       Effect.sync(() => {
+        if (childOwnsQueue) return;
         undelivered = followUps.hasQueued(queueLease);
         followUps.release(
           queueLease,
@@ -479,14 +486,15 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
     if (refusal) return refusal;
     return yield* Effect.fail(resumed.failure);
   }
-  // Another live process holds the run: nothing was queued or launched.
   if (refusedElsewhere) return { failed: 'owned_elsewhere' };
-  // Cancellation at flow attachment means the run was never reached; input
-  // left queued means it ran and returned before taking it.
   if (cancelledAtFlowAttachment) return REFUSED;
+  if (childOwnsQueue && !childWaiting)
+    undelivered = (yield* queuedInput).some((input) =>
+      admittedInputIds!.has(input.followUpId),
+    );
   return {
     started: true,
     delivered: !undelivered,
-    outcome: runResult?.outcome,
+    outcome: childWaiting ? RUN_PHASE.WAITING : runResult?.outcome,
   };
 });

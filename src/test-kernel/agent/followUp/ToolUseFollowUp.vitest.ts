@@ -850,9 +850,9 @@ describe('ToolUseFollowUpQueue delivery identity (#9531)', () => {
     }),
   );
 
-  it.effect(
-    'a deferred admission writes the row without offering it to the live consumer until resubmitted',
-    () =>
+  it.effect.each(['flow', 'recovered-child', 'recovered-root'] as const)(
+    'a deferred admission waits for resubmission before offering to %s',
+    (consumer) =>
       Effect.gen(function* () {
         // #8093: a child whose own finalize must land first admits its result
         // deferred; the row is durable but the parent's live input is not
@@ -861,7 +861,16 @@ describe('ToolUseFollowUpQueue delivery identity (#9531)', () => {
         // the consumer.
         const { followUps, queued } = recordedFollowUps();
         const id = generateRunId();
-        const lease = followUps.claimLive(id, 'flow')!;
+        const recovery =
+          consumer === 'flow' ? undefined : followUps.claimRecovery(id, true);
+        let lease = recovery ?? followUps.claimLive(id, 'flow')!;
+        if (consumer === 'recovered-child') {
+          lease = followUps.claimChildRun(id, recovery!)!;
+          expect(followUps.useRecovery(recovery!)).toBeUndefined();
+          expect(followUps.release(recovery!, 'recoverable')).toBe(false);
+        }
+        if (consumer !== 'recovered-root')
+          expect(followUps.hasLiveOwner(id)).toBe(true);
         const input = followUps.attachInput(id, yield* RunInput.make, lease)!;
         input.seed([]);
         const delivery = childResult('d1');

@@ -355,10 +355,10 @@ export class RunRegistry {
   }
 
   /**
-   * Every run live in this session: the tracked handles and the native child
+   * Every run with an interrupt target: the tracked handles and native child
    * activations still preparing or delivering outside their engine handle.
-   * This is what a close stops and waits on, so a child with a final delivery
-   * to do is never left running under a released session.
+   * This is what a close stops; {@link awaitDrained} also waits for ownership
+   * retained beyond handle removal, through the run's final resource release.
    */
   getActiveIds(): RunId[] {
     return this.roster.activeIds();

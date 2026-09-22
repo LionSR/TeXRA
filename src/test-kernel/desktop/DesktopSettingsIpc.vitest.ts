@@ -561,32 +561,46 @@ describe('desktop settings IPC', () => {
     expect(onError).not.toHaveBeenCalled();
   });
 
-  it('reports a failure to show an unsupported-command reason', async () => {
-    const failure = new Error('notification failed');
-    const showInfoMessage = vi.fn(() =>
-      Effect.fail(
+  it.live.each([
+    SETTINGS_VIEW_COMMANDS.INSTALL_LATEX_WORKSHOP,
+    SETTINGS_VIEW_COMMANDS.SIGN_IN_CHATGPT,
+  ])('reports the underlying notification failure from %s', (command) =>
+    Effect.gen(function* () {
+      const failure = new Error('window is gone');
+      const notice = Effect.fail(
         new NotificationFailed({
-          member: 'showInfoMessage',
+          member: 'showErrorMessage',
           message: 'notification failed',
           cause: failure,
         }),
-      ),
-    );
-    const onError = vi.fn();
-    const { settings } = createSettingsFixture({
-      ui: { showInfoMessage, onError },
-    });
+      );
+      const onError = vi.fn();
+      const credentialSettingsController =
+        createStubDesktopCredentialSettingsController(
+          {
+            globalState: new FakeStateStore(),
+            workspaceState: new FakeStateStore(),
+          },
+          {
+            chatGptHandlers: {
+              signInChatGpt: () => notice,
+              signOutChatGpt: () => Effect.void,
+              setChatGptPreferSubscription: () => Effect.void,
+            },
+          },
+        );
+      const { settings } = createSettingsFixture({
+        credentialSettingsController,
+        ui: { showInfoMessage: () => notice, onError },
+      });
 
-    expect(
-      settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.INSTALL_LATEX_WORKSHOP,
-      }),
-    ).toBe(true);
-    await flushAsyncWork();
+      expect(settings.handleMessage({ command })).toBe(true);
+      yield* Effect.promise(() => flushAsyncWork());
 
-    expect(onError).toHaveBeenCalledOnce();
-    expect(onError).toHaveBeenCalledWith(failure);
-  });
+      expect(onError).toHaveBeenCalledOnce();
+      expect(onError).toHaveBeenCalledWith(failure);
+    }),
+  );
 
   it.live(
     'round-trips the LaTeX formatter through workspace state and refreshes config values',

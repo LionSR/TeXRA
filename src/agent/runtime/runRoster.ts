@@ -95,7 +95,10 @@ export class RunRoster {
   private prune(runId: RunId, entry: RunEntry): void {
     if (entry.handle ?? entry.activation ?? entry.lane) return;
     if (entry.launches > 0 || entry.generations.size > 0) return;
-    if (this.entries.get(runId) === entry) this.entries.delete(runId);
+    if (this.entries.get(runId) === entry) {
+      this.entries.delete(runId);
+      this.notifyWaiters(runId);
+    }
   }
 
   // ---------------------------------------------------------------- handles
@@ -217,10 +220,9 @@ export class RunRoster {
     return !this.isStopping(parentRunId) || this.isRetained(childRunId);
   }
 
-  /** Every run live in this session: the tracked handles and the native child
-   *  activations preparing or delivering without an engine handle. What
-   *  a close stops and waits on, so a child with a final delivery to do is
-   *  never left running under a released session. */
+  /** Runs with a live interrupt target: tracked handles and native child
+   *  activations. A lane still releasing resources can outlive both; the
+   *  drain waits for its entry without trying to stop it again. */
   activeIds(): RunId[] {
     const ids: RunId[] = [];
     for (const [runId, entry] of this.entries)
@@ -355,8 +357,8 @@ export class RunRoster {
     return this.listeners.waitForAnyChange(runIds);
   }
 
-  /** Resolve once every run this roster holds has left it: the drain a session
-   *  close and a project close both wait on, over {@link activeIds}.
+  /** Resolve once every owner has left: handles, child activations, lanes and
+   *  scoped holds. Terminal handle removal can precede a lane's final writes.
    *  Interrupting the waiting fiber — what a close budget does — detaches the
    *  listeners with it. The re-check arm is load-bearing: `raceAllFirst`
    *  starts its arms in order, so the wait registers first and the re-check
@@ -366,12 +368,12 @@ export class RunRoster {
   awaitDrained(): Effect.Effect<void> {
     return Effect.gen({ self: this }, function* () {
       for (;;) {
-        const active = this.activeIds();
+        const active = [...this.entries.keys()];
         if (active.length === 0) return;
         yield* Effect.raceAllFirst([
           this.waitForAnyChange(active).pipe(Effect.asVoid),
           Effect.suspend(() =>
-            this.activeIds().length === 0 ? Effect.void : Effect.never,
+            this.entries.size === 0 ? Effect.void : Effect.never,
           ),
         ]);
       }
@@ -443,10 +445,7 @@ export class RunRoster {
       Deferred.doneUnsafe(refusal, Effect.fail(disposal));
     }
     this.waiting.clear();
-    const tracked: RunId[] = [];
-    for (const [runId, entry] of this.entries) {
-      if (entry.handle !== undefined) tracked.push(runId);
-    }
+    const tracked = [...this.entries.keys()];
     this.entries.clear();
     for (const runId of tracked) this.notifyWaiters(runId);
     this.stopping.clear();

@@ -91,8 +91,16 @@ excluded here: `withPerKeyLane` onto `Semaphore`, `ModelRetryGate` onto
 `Schedule`, `SessionOwner` onto the `Sessions` tag (D5), `SessionHandle`'s
 `DisposableStore` onto a plain `Scope` finalizer as specified (D26; the
 single-owner proposal restates it under the fiber-scope change that makes it
-viable), cutting `src/auth` out of the SDK graph, the `MessageHandler`
-dispatcher contract, and `DesktopPtyHost.create` as an Effect.
+viable), cutting `src/auth` out of the SDK graph, and `DesktopPtyHost.create`
+as an Effect.
+
+The `MessageHandler` dispatcher exclusion was revised on 2026-09-22 in
+[#13009](https://github.com/LionSR/TeXRA/pull/13009#issuecomment-5779248081): one
+native host execution boundary may replace the backend Promise dispatcher
+and all per-arm runners together, while frontend handlers remain synchronous.
+The [host-collapse update](../simplification/2026-09-20-host-layer-collapse.md#dispatcher-decision-update--2026-09-22)
+reconciles the old #12880/#12884 instructions with the explicit shared-contract
+ruling; it does not claim that the PR or those trackers are complete.
 
 ## 6. Two live defects found in passing
 

@@ -39,6 +39,7 @@ import {
   type UserVariableChannels,
 } from '@shared/schemas';
 import { RunLedger } from '@shared/session/runLedger';
+import type { RunState } from '@shared/session/runStateFold';
 import { getDefaultToolRegistry } from '@tools/registry';
 import {
   buildOverlayToolRegistry,
@@ -82,8 +83,8 @@ export interface ToolPolicy {
 interface RunCallbacks {
   /** Fires on meaningful progress: todo changes, tool call milestones. */
   readonly onProgress?: (update: SubagentProgressUpdate) => void;
-  /** Root-run-only: fires at every turn boundary before the follow-up wait. */
-  readonly onIdle?: () => void;
+  /** Current folded state at an idle turn boundary, after child delivery. */
+  readonly onIdle?: (state: RunState) => void;
   /** Fires once the run's model changed and the cell holds the new binding. */
   readonly onModelChanged: (model: string) => void;
 }

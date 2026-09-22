@@ -105,7 +105,7 @@ export class RunStopper {
    * Fails when the run's terminal row could not be written: the run is still
    * in flight, and a caller that reported the stop done would be lying.
    *
-   * A stop of a run no handle here owns writes that row from outside the run,
+   * A stop of a run no handle or child driver owns writes from outside the run,
    * so the run's claim fences the whole gesture, descendant sweep included:
    * taken first, a refusal leaves the descendants running instead of severing
    * them and then reporting the stop unavailable. A locally owned run is
@@ -115,7 +115,8 @@ export class RunStopper {
     runId: RunId,
     options: RunStopOptions = {},
   ): Effect.Effect<void, Error> {
-    if (this.roster.handle(runId)) return this.applyStop(runId, options);
+    if (this.roster.handle(runId) || this.roster.activation(runId))
+      return this.applyStop(runId, options);
     return Effect.acquireUseRelease(
       this.acquireRunClaim(runId),
       () => this.applyStop(runId, options),
@@ -211,7 +212,7 @@ export class RunStopper {
 
   /**
    * Apply one stop: the descendant policy the caller declared, the root
-   * handle's own termination, and — when no live handle took it — the
+   * handle or child driver's termination, and — when neither took it — the
    * terminal row an ownerless stop must write itself. A detaching policy is
    * the whole first step: the children leave the parent, durably and then
    * locally, before anything interrupts it, because a child completing while
@@ -243,7 +244,7 @@ export class RunStopper {
               this.interruptActiveChildren(runId, visited, true, settlements);
             }
 
-            const stopped = rootHandle
+            let stopped = rootHandle
               ? this.terminate(
                   rootHandle,
                   visited,
@@ -251,10 +252,15 @@ export class RunStopper {
                   settlements,
                 )
               : false;
-            // `terminate()` already finalizes a run it owned; an ownerless (or
-            // already-untracked) run still needs the `run.end` row, which is the
-            // run's terminal fact: without the finalize below the fold, history
-            // and every other host would keep the stopped run in flight.
+            if (!rootHandle) {
+              const activation = this.roster.activation(runId);
+              if (activation) {
+                activation.interrupt();
+                stopped = true;
+              }
+            }
+            // A reached handle or child driver owns terminal finalization.
+            // Only an ownerless stop needs to write the terminal fact here.
             const all: Effect.Effect<void, Error>[] = stopped
               ? settlements
               : [...settlements, this.finalizeOwnerlessStop(runId)];

@@ -598,17 +598,16 @@ export class SettingsViewMessageHandler {
   }
 
   private sendInlineCriticismEnabled(webview: vscode.Webview) {
-    return postToWebview(webview, {
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_INLINE_CRITICISM_ENABLED,
-      enabled: isInlineCriticismEnabled(),
-    });
+    return Effect.flatMap(isInlineCriticismEnabled(), (enabled) =>
+      postToWebview(webview, {
+        command: SETTINGS_VIEW_COMMANDS.UPDATE_INLINE_CRITICISM_ENABLED,
+        enabled,
+      }),
+    );
   }
 
   private handleSetInlineCriticismEnabled(enabled: boolean) {
-    return Effect.tryPromise({
-      try: () => setInlineCriticismEnabled(enabled),
-      catch: ensureError,
-    }).pipe(
+    return setInlineCriticismEnabled(enabled).pipe(
       Effect.andThen(
         this.withActiveWebview((w) => this.sendInlineCriticismEnabled(w)),
       ),

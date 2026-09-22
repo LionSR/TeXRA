@@ -26,6 +26,7 @@ import {
 } from '@shared/schemas';
 import { RunLedger } from '@shared/session/runLedger';
 import { emptyRunEndOutput } from '@shared/schemas';
+import type { RunState } from '@shared/session/runStateFold';
 import { provideAgentEngine } from '@tools/delegation/nativeSubagentStrategy';
 import { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import { ensureRunDirUnder } from '@utils/files/runStorageFs';
@@ -78,12 +79,12 @@ export class ResumeSessionUnavailableError extends Error {
 type ToolUseLaunchVariant =
   | {
       readonly kind: 'fresh';
-      /** Root-run-only; resume has no caller-supplied equivalent. */
-      readonly onIdle?: () => void;
+      readonly onIdle?: (state: RunState) => void;
     }
   | {
       readonly kind: 'resume';
       readonly resume: ToolUseResumeData;
+      readonly onIdle?: (state: RunState) => void;
       /** Queried once the resumed flow is attached and interruptible. */
       readonly isCancellationRequested?: () => boolean;
       readonly onCancellationAtFlowAttachment?: () => void;
@@ -103,7 +104,7 @@ type ToolUseLaunchVariant =
 function runLayerFor(
   ctx: AgentLaunchContext,
   shared: SubagentRunOptions,
-  onIdle: (() => void) | undefined,
+  onIdle: ((state: RunState) => void) | undefined,
 ) {
   const runSession = ctx.session;
   return modelInvokerLayer().pipe(
@@ -230,13 +231,7 @@ function launchToolUseRun(
       // The follow-up lease is the tool-use loop's alone; its finalizer is
       // what releases it.
       followUpsLayer.pipe(
-        Layer.provideMerge(
-          runLayerFor(
-            ctx,
-            shared,
-            variant.kind === 'fresh' ? variant.onIdle : undefined,
-          ),
-        ),
+        Layer.provideMerge(runLayerFor(ctx, shared, variant.onIdle)),
       ),
     ),
     Effect.map(toResult),
@@ -426,8 +421,8 @@ export interface ExecuteAgentOptions extends SubagentRunOptions {
    * event, for a consumer that must hear every trace event.
    */
   onRunResolved?: (runId: RunId, trace: AgentTrace) => void;
-  /** Root-run-only: fires at every cycle boundary — see `AgentRun.callbacks.onIdle`. */
-  onIdle?: () => void;
+  /** Fires at every cycle boundary — see `AgentRun.callbacks.onIdle`. */
+  onIdle?: (state: RunState) => void;
   /** Stop a tool-use run after one model/tool cycle instead of waiting for follow-up input. */
   stopAfterCycle?: boolean;
   /** Resume using this persisted provider-message format instead of today's default route. */
@@ -591,6 +586,8 @@ export type ResumeTurnIdentity = Pick<
 >;
 
 export interface ResumeToolUseFromResumeDataOptions extends SubagentRunOptions {
+  /** A resumed cycle is idle after its child delivery, while its run stays live. */
+  readonly onIdle?: (state: RunState) => void;
   /** Query caller-owned cancellation once the resumed flow is interruptible. */
   readonly isCancellationRequested?: () => boolean;
   /** Observe cancellation accepted at the live-flow attachment boundary. */
@@ -657,6 +654,7 @@ const resumeToolUseWithOwnedLease = Effect.fn('resumeToolUseWithOwnedLease')(
                     {
                       kind: 'resume',
                       resume,
+                      onIdle: options.onIdle,
                       isCancellationRequested: options.isCancellationRequested,
                       onCancellationAtFlowAttachment:
                         options.onCancellationAtFlowAttachment,
@@ -695,7 +693,9 @@ const resumeToolUse = Effect.fn('resumeToolUse')(function* (
   options: ResumeToolUseFromResumeDataOptions & { session: SessionHandle },
 ) {
   const session = options.session;
-  const rollback = yield* acquireResumedRunOwnership(session, identity.runId);
+  const rollback = options.turns
+    ? Effect.void
+    : yield* acquireResumedRunOwnership(session, identity.runId);
   const retrieval = yield* Effect.exit(
     retrieveSessionResumeData(
       identity.runId,

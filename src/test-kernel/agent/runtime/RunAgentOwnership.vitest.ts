@@ -238,9 +238,9 @@ describe('runAgent run ownership', () => {
       }),
   );
 
-  it.effect(
-    'refuses a second resume while the first has only tracked its launch handle',
-    () =>
+  it.effect.each(['fresh', 'resume'] as const)(
+    'refuses a %s launch while the first has only tracked its launch handle',
+    (kind) =>
       Effect.gen(function* () {
         let finishRead!: (value: null) => void;
         mocks.readRunEnd.mockImplementationOnce(
@@ -252,7 +252,7 @@ describe('runAgent run ownership', () => {
         const first = yield* Effect.forkChild(launch(), {
           startImmediately: true,
         });
-        expect(yield* Effect.flip(launch())).toMatchObject({
+        expect(yield* Effect.flip(launch({ kind }))).toMatchObject({
           message: `Run is already running: ${RUN_ID}`,
         });
         const firstHandler = trackedHandle;

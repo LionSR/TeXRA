@@ -297,6 +297,52 @@ describe('runRegistry', () => {
     { timeout: 2000 },
   );
 
+  it.effect(
+    'keeps shutdown draining after terminal untrack until run cleanup releases its lane',
+    () =>
+      Effect.gen(function* () {
+        const { registry } = createRegistry();
+        yield* Effect.addFinalizer(() => Effect.sync(() => registry.dispose()));
+        const runId = generateRunId();
+        const untracked = yield* Deferred.make<void>();
+        const release = yield* Deferred.make<void>();
+        const drained = yield* Deferred.make<void>();
+        const generation = yield* Effect.forkChild(
+          registry.launchRun(
+            runId,
+            Effect.sync(() => registry.track(createHandle(runId))).pipe(
+              Effect.ensuring(
+                Effect.gen(function* () {
+                  registry.untrack(runId);
+                  yield* Deferred.succeed(untracked, undefined);
+                  yield* Deferred.await(release);
+                }),
+              ),
+            ),
+          ),
+        );
+        yield* Deferred.await(untracked);
+        registry.closeAdmissions();
+        expect(registry.getActiveIds()).toEqual([]);
+        expect(registry.isLive(runId)).toBe(true);
+        const drain = yield* Effect.forkChild(
+          registry
+            .awaitDrained()
+            .pipe(Effect.andThen(Deferred.succeed(drained, undefined))),
+          { startImmediately: true },
+        );
+        try {
+          yield* Effect.yieldNow;
+          expect(yield* Deferred.isDone(drained)).toBe(false);
+        } finally {
+          yield* Deferred.succeed(release, undefined);
+        }
+        yield* Fiber.join(generation);
+        yield* Fiber.join(drain);
+        expect(registry.isLive(runId)).toBe(false);
+      }),
+  );
+
   it('drains a background-bash RunHandle on shutdown without disturbing a resumable agent run (issue #8155)', () => {
     // A background `bash` run is registered as an RunHandle (see
     // createChildRun in tools/bash.ts) with its OS-process kill reachable
@@ -809,6 +855,31 @@ describe('runRegistry', () => {
       registry.dispose();
     }
   });
+
+  it.effect(
+    'stops a child driver before it has a handle and leaves finalization to it',
+    () =>
+      Effect.gen(function* () {
+        storageMocks.finalizeRun.mockClear();
+        const { registry } = createRegistry();
+        yield* Effect.addFinalizer(() => Effect.sync(() => registry.dispose()));
+        const interrupt = vi.fn();
+        const runId = generateRunId();
+        registry.reserveChildActivation({
+          runId,
+          parentRunId: generateRunId(),
+          interrupt,
+          detach: vi.fn(),
+          isDetached: () => false,
+        });
+
+        yield* registry.stopAgentRun(runId);
+
+        expect(interrupt).toHaveBeenCalledOnce();
+        expect(storageMocks.finalizeRun).not.toHaveBeenCalled();
+        expect(registry.getActiveIds()).toContain(runId);
+      }),
+  );
 
   it.effect('cancels an ownerless run', () =>
     Effect.gen(function* () {

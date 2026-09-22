@@ -83,6 +83,7 @@ import { SessionViewService } from '@controllers/session/SessionView';
 import { sessionInputsLayer } from '@controllers/session/sessionInputs';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
 import { withProcessServices } from '@platform/processRuntime';
+import { AppState, type StateStore } from '@platform/interfaces';
 import { SHUTDOWN_PHASE_DEADLINE_MS } from '@platform/defaults/lifecycleHost';
 import {
   aggregateId as qualifyAggregateId,
@@ -119,17 +120,22 @@ vi.mock('node:child_process', async (importOriginal) => {
   return { ...actual, execFileSync: vi.fn(actual.execFileSync) };
 });
 /** Builds of the process runtime's Lean layer, which every root shares. */
-const leanBuilds = vi.hoisted(() => ({ count: 0 }));
+const leanBuilds = vi.hoisted(() => ({
+  count: 0,
+  state: undefined as StateStore | undefined,
+}));
 vi.mock('@tools/lean/direct/directLspAdapter', async () => {
   const { Effect, Layer } = await import('effect');
+  const { AppState } = await import('@platform/interfaces');
   const { LeanLanguageServices } =
     await import('@tools/lean/leanLanguageServices');
   return {
     directLeanLanguageServices: () =>
       Layer.effect(
         LeanLanguageServices,
-        Effect.sync(() => {
+        Effect.gen(function* () {
           leanBuilds.count += 1;
+          leanBuilds.state = yield* AppState;
           return {} as LeanLanguageServices['Service'];
         }),
       ),
@@ -805,6 +811,9 @@ describe('Sessions owner', () => {
       yield* closeSession('/workspace/owner/lean-once-a');
       yield* closeSession('/workspace/owner/lean-once-b');
       expect(leanBuilds.count).toBe(1);
+      expect(leanBuilds.state).toBe(
+        yield* withProcessServices(testRuntime(), AppState),
+      );
     }),
   );
 

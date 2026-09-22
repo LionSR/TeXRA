@@ -1029,7 +1029,7 @@ interface ProcessRuntimeOptions {
   readonly lean: Layer.Layer<
     LeanLanguageServices,
     never,
-    FileSystem.FileSystem | Path.Path
+    FileSystem.FileSystem | Path.Path | AppState
   >;
   /**
    * The host's usage log (`usageLogLayer`), stamped with its version and
@@ -1144,12 +1144,10 @@ export function installProcessRuntime({
         // account plane below is still up. Ahead of `services` in the chain so
         // that plane and the HTTP client reach it.
         Layer.provideMerge(usageLog),
-        Layer.provideMerge(services),
-        // The Lean pool is one per process — its servers are shared across
-        // roots — as is the cross-workspace storage view below it: every
-        // session shares that root, so nothing below resolves a global-storage
-        // path against a root of its own.
+        // The editor's Lean port also reads this process's AppState.
         Layer.provideMerge(lean),
+        Layer.provideMerge(services),
+        // Every session shares this process's global-storage view.
         Layer.provideMerge(globalStorageFsLayer(globalStorage)),
         // The records' handle on that same root, for the same reason: one
         // connection and one change poll per process, outside the entry.

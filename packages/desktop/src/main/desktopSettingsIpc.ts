@@ -401,25 +401,23 @@ export function createDesktopSettingsIpc(
   ): void {
     runtime.runFork(
       withSessionFs(roots, work).pipe(
+        Effect.catchCause(
+          (cause): Effect.Effect<void, E | NotificationFailed> => {
+            if (Cause.hasInterruptsOnly(cause)) return Effect.void;
+            const error = Cause.squash(cause);
+            return error instanceof UnsupportedCommandError
+              ? options.ui.showInfoMessage(error.reason)
+              : Effect.failCause(cause);
+          },
+        ),
         Effect.catchCause((cause) => {
           if (Cause.hasInterruptsOnly(cause)) return Effect.void;
           const error = Cause.squash(cause);
-          if (error instanceof UnsupportedCommandError) {
-            return options.ui.showInfoMessage(error.reason).pipe(
-              Effect.catchCause((noticeCause) => {
-                if (Cause.hasInterruptsOnly(noticeCause)) return Effect.void;
-                const noticeError = Cause.squash(noticeCause);
-                return Effect.sync(() =>
-                  options.ui.onError(
-                    noticeError instanceof NotificationFailed
-                      ? noticeError.cause
-                      : noticeError,
-                  ),
-                );
-              }),
-            );
-          }
-          return Effect.sync(() => options.ui.onError(error));
+          return Effect.sync(() =>
+            options.ui.onError(
+              error instanceof NotificationFailed ? error.cause : error,
+            ),
+          );
         }),
       ),
     );

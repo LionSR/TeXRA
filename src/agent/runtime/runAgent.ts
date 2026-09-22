@@ -121,19 +121,11 @@ export const runAgent = Effect.fn('runAgent')(function* (
   const runId = request.runId ?? generateRunId();
   const shouldRegister = request.kind === 'fresh';
   const runSession = executeAgentOptions.session;
-  // A resume of a run this session already runs is a duplicate, refused here
-  // before any snapshot is taken: queued behind the live generation it would
-  // wake without a handle of its own and restore a prior terminal fact over
-  // the one that generation is about to write. The lane takes the same
-  // refusal (`RunRegistry.launchRun`), but this launch tracks a provisional
-  // handle before it claims the lane, and tracking one over a live
-  // generation would overwrite its interrupt handler and leave the first
-  // launch unstoppable — so the one decision is read once, here, first.
+  // Refuse duplicates before tracking: either request kind can supply a run
+  // id, and replacing its live handle would steal the original stop target
+  // before the lane could refuse the second launch.
   const existingHandle = runSession.runs.getHandle(runId);
-  if (
-    !shouldRegister &&
-    (runSession.runs.isLive(runId) || existingHandle !== undefined)
-  )
+  if (runSession.runs.isLive(runId) || existingHandle !== undefined)
     return yield* Effect.fail(new RunLive({ runId }));
   // The launch's one stop: the launch handle's interrupt completes it, the
   // launch fails at its next preparation step once it has, and the run

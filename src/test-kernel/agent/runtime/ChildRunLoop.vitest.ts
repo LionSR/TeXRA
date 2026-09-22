@@ -52,6 +52,9 @@ vi.mock(
 import { getRunRecords } from '@agent/storage';
 import { readChildTurnState } from '@agent/storage/runRecords';
 import type { WorkflowJournalEntry } from '@agent/workflowScript/types';
+const { finalizeRun: realFinalizeRun } = await vi.importActual<
+  typeof import('@agent/storage/runLifecycle')
+>('@agent/storage/runLifecycle');
 const { submitFollowUp: realSubmitFollowUp } = await vi.importActual<
   typeof import('@agent/followUp/ToolUseFollowUp')
 >('@agent/followUp/ToolUseFollowUp');
@@ -328,6 +331,53 @@ afterEach(() => {
 });
 
 describe('childRunLoop E2E fixtures', () => {
+  it.effect.each([RUN_OUTCOME.CANCELLED, RUN_OUTCOME.FAILED])(
+    'persists %s when the run ends before its engine handle exists',
+    (outcome) =>
+      Effect.gen(function* () {
+        const runId = loopRunId();
+        yield* session.settlePublications();
+        yield* session.acquireClaims(qualifyAggregateId('run', runId));
+        mocks.finalizeRun.mockImplementation(realFinalizeRun);
+        const launch = vi.fn(() =>
+          Effect.fail(new Error('Engine startup failed')),
+        );
+        let stop: ReturnType<typeof session.runs.kill> | undefined;
+        const loop = yield* startLoop(runId, {
+          ...createTerminalStrategy('Engine startup', launch),
+          continuous: true,
+          onLoopStart: () => {
+            if (outcome === RUN_OUTCOME.CANCELLED)
+              stop = session.runs.kill(runId);
+          },
+        });
+        if (stop) {
+          expect(stop.accepted()).toBe(true);
+          yield* stop.settlement;
+        }
+        yield* Fiber.join(loop);
+
+        if (outcome === RUN_OUTCOME.CANCELLED) {
+          expect(launch).not.toHaveBeenCalled();
+          expect(mocks.submitFollowUp).not.toHaveBeenCalled();
+          expect(yield* readChildTurnState(session, runId)).toEqual({
+            active: null,
+            lastCompleted: null,
+          });
+        }
+        const rows = yield* session.readAggregate(
+          qualifyAggregateId('run', runId),
+        );
+        expect(rows.filter((row) => row.type === 'run.end')).toMatchObject([
+          { outcome },
+        ]);
+        expect(mocks.releaseRunLeaseAfterArtifacts).toHaveBeenCalledWith(
+          session,
+          runId,
+        );
+      }),
+  );
+
   it.effect(
     'a turn refused as DatabaseNotOwner stops the loop instead of taking another turn',
     () =>
