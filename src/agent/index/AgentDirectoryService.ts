@@ -34,10 +34,7 @@ export interface AgentDirectoryEntry {
 }
 
 export interface AgentDirectoryIssueReporter {
-  report(
-    message: string,
-    docsId: AgentDirectoryDocsId,
-  ): Effect.Effect<void, unknown>;
+  report(message: string, docsId: AgentDirectoryDocsId): Effect.Effect<void>;
 }
 
 export interface AgentDirectoryServiceOptions {
