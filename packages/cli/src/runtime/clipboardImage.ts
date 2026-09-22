@@ -38,10 +38,10 @@ const execFileAsync = promisify(execFile);
 const MAX_IMAGE_BYTES = 64 * 1024 * 1024;
 
 /**
- * The clipboard probe failed at a foreign edge (an OS clipboard tool or a
- * temp-file read): the untagged value that edge threw, wrapped here so the
- * channel stays typed. `message` is the cause's own message, which is what
- * the input bar's error hook prints.
+ * The clipboard probe failed at a foreign edge (an OS clipboard tool, a
+ * temp-dir creation, or a temp-file read): the untagged value that edge
+ * threw, wrapped here so the channel stays typed. `message` is the cause's
+ * own message, which is what the input bar's error hook prints.
  */
 export class ClipboardImageProbeFailed extends Data.TaggedError(
   'ClipboardImageProbeFailed',
@@ -131,7 +131,11 @@ function readClipboardPngLinux(): Effect.Effect<ClipboardRead> {
               encoding: 'buffer',
               maxBuffer: MAX_IMAGE_BYTES,
             }),
-          catch: probeFailed,
+          // Raw passthrough: `Effect.result` absorbs the rejection into the
+          // value channel, and the classifiers below (`isMaxBufferError`,
+          // `isFileNotFoundError`) read the raw error's `code`, which a
+          // tagged wrapper would strip.
+          catch: (error: unknown) => error,
         }),
       );
       if (outcome._tag === 'Success') {
