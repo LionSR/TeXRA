@@ -18,6 +18,7 @@ import { unique } from '@utils/core';
 type CliGlobalArgsDef = {
   print: { type: 'boolean'; alias: 'p'; description: string };
   quiet: { type: 'boolean'; alias: 'q'; description: string };
+  verbose: { type: 'boolean'; description: string };
   cwd: { type: 'string'; valueHint: string; description: string };
   'output-format': {
     type: 'enum';
@@ -69,6 +70,11 @@ export const GLOBAL_ARGS: CliGlobalArgsDef = {
     type: 'boolean',
     alias: 'q',
     description: 'Suppress progress output and informational logs',
+  },
+  verbose: {
+    type: 'boolean',
+    description:
+      'Emit debug-level diagnostics (the terminal has no level filter of its own)',
   },
   cwd: {
     type: 'string',
@@ -140,6 +146,7 @@ export const INTERACTIVE_GLOBAL_ARGS: Omit<
   HeadlessOnlyGlobalArgName
 > = {
   quiet: GLOBAL_ARGS.quiet,
+  verbose: GLOBAL_ARGS.verbose,
   cwd: GLOBAL_ARGS.cwd,
   'approval-policy': GLOBAL_ARGS['approval-policy'],
   color: GLOBAL_ARGS.color,

@@ -23,7 +23,7 @@ import {
   FOLLOW_UP_WAKE_FAILED_MESSAGE,
   submitFollowUp,
 } from '@agent/followUp/ToolUseFollowUp';
-import { withLogChannel, withLogData } from '@logger/effectLog';
+import { withLogChannel } from '@logger/effectLog';
 import { AgentResume } from '@platform/interfaces';
 import type { RunId } from '@shared/schemas';
 import {
@@ -386,7 +386,10 @@ Git worktree support: resolved from the active workspace at runtime.`,
             Effect.catch((error) =>
               Effect.logWarning(
                 'Could not deliver the subagent wake failure.',
-              ).pipe(withLogData(error), withLogChannel(CHANNEL)),
+              ).pipe(
+                Effect.annotateLogs({ data: error }),
+                withLogChannel(CHANNEL),
+              ),
             ),
           ),
         );

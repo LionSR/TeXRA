@@ -15,6 +15,7 @@ export class SessionInputs extends Context.Service<
     readonly read: (
       aggregates: readonly TranscriptSubscription[],
       fromCommit: CommitOrdinal,
+      previousDebug: boolean,
     ) => Stream.Stream<readonly FoldInput[]>;
   }
 >()('@texra/session/SessionInputs') {}

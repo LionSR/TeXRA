@@ -2,7 +2,7 @@ import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports - agent config
-import { withLogChannel, withLogData } from '@logger/effectLog';
+import { withLogChannel } from '@logger/effectLog';
 import type { StateReadFailed } from '@platform/interfaces';
 import type { StateStore } from '@platform/interfaces';
 import type { CodexReasoningEffort } from '@shared/schemas';
@@ -167,11 +167,13 @@ const probeXhighSupport = Effect.fn('codexConfig.probeXhighSupport')(function* (
     yield* Effect.logWarning(
       'Codex xhigh capability probe failed; not caching the result',
     ).pipe(
-      withLogData({
-        binaryPath,
-        timedOut: result.timedOut,
-        exitCode: result.exitCode,
-        stderr: result.stderr,
+      Effect.annotateLogs({
+        data: {
+          binaryPath,
+          timedOut: result.timedOut,
+          exitCode: result.exitCode,
+          stderr: result.stderr,
+        },
       }),
       withLogChannel(CHANNEL),
     );
@@ -185,7 +187,10 @@ const probeXhighSupport = Effect.fn('codexConfig.probeXhighSupport')(function* (
   if (supported == null) {
     yield* Effect.logWarning(
       'Codex xhigh capability probe returned unreadable catalog',
-    ).pipe(withLogData({ binaryPath }), withLogChannel(CHANNEL));
+    ).pipe(
+      Effect.annotateLogs({ data: { binaryPath } }),
+      withLogChannel(CHANNEL),
+    );
     return false;
   }
   codexXhighSupportByBinary.set(binaryPath, supported);

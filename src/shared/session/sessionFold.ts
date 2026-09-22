@@ -141,6 +141,7 @@ import {
 import { createTranscriptFold } from './traceFold';
 import { isRunningStreamingTextEntry, StreamLog } from './traceEntries';
 
+import { emptySessionView } from './sessionView';
 import type { SessionView, RunView, TranscriptView } from './sessionView';
 
 type RunStartEvent = Extract<DisplaySessionEvent, { type: 'run.start' }>;
@@ -156,10 +157,6 @@ const WORKFLOW_DASHBOARD_KINDS = new Set<TranscriptRowKind>([
 
 /** Residency cap on one run model's dashboard rows (PRD 5.2). */
 const MAX_RUN_MODEL_DASHBOARD_ROWS = 2_000;
-
-// ---------------------------------------------------------------------------
-// Entry
-// ---------------------------------------------------------------------------
 
 /** One input, or a frame of them (the transport's unit, 7.4 and 8.1) or a
  *  replay: every input in order, with each touched workflow board's run
@@ -192,6 +189,9 @@ function foldWith(
   // are shared with the previous value until this call first writes one.
   const next: SessionView = { ...view };
   switch (input._tag) {
+    case 'debug':
+      if (next.debug === input.enabled) return view;
+      return emptySessionView(view.key, 0, input.enabled);
     case 'event': {
       if (input.read === 'listing') {
         sessionIndexesOf(next).listed.add(input.event.aggregateId);
@@ -1825,7 +1825,7 @@ function foldTraceEvent(
     indexes.trace.record(event, {
       at: event.at,
       id: JSON.stringify([event.aggregateId, event.seq]),
-      debug: event.transcriptDebug ?? false,
+      debug: view.debug,
     });
   const change = indexes.source.drainEmission();
   for (const entry of [...change.appended, ...change.dirtied]) {

@@ -84,6 +84,7 @@ export async function runResumeCommand(
   // handler, and `runChat` hands ownership over once Ink mounts.
   const runtime = await installCliProcessRuntime(context.storageRoot, {
     resourcesPath: context.resourcesPath,
+    minimumLogLevel: context.minimumLogLevel,
   });
 
   const decision = await runtime.runPromise(

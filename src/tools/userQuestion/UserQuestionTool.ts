@@ -2,7 +2,7 @@ import { Effect } from 'effect';
 import { z } from 'zod';
 
 import { ToolCall } from '@agent/runtime/ToolCall';
-import { withLogChannel, withLogData } from '@logger/effectLog';
+import { withLogChannel } from '@logger/effectLog';
 import {
   UserQuestionAnswersSchema,
   UserQuestionPromptSchema,
@@ -47,7 +47,9 @@ const askUserQuestion = Effect.fn('AskUserQuestionTool.execute')(function* (
   const requestId = `user-question-${generateShortId()}`;
 
   yield* Effect.logInfo('User question requested').pipe(
-    withLogData(input.questions[0]?.question.slice(0, 100) ?? ''),
+    Effect.annotateLogs({
+      data: input.questions[0]?.question.slice(0, 100) ?? '',
+    }),
     withLogChannel(CHANNEL),
   );
 

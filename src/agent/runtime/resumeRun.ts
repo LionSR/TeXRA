@@ -16,7 +16,7 @@ import type {
   FollowUpRecoveryLease,
 } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import { getRunRecords, persistedParentRunId } from '@agent/storage/runRecords';
-import { withLogChannel, withLogData } from '@logger/effectLog';
+import { withLogChannel } from '@logger/effectLog';
 import type { RecoveryContinuation } from '@platform/interfaces';
 import type { ProcessServices } from '@platform/processRuntime';
 import {
@@ -290,7 +290,7 @@ const releaseUnstartedRecovery = Effect.fn('releaseUnstartedRecovery')(
     const warnUnreadable = (failure: unknown): Effect.Effect<void> =>
       Effect.logWarning(
         `Run ${recovery.runId}: its queued follow-ups could not be read; keeping it recoverable`,
-      ).pipe(withLogData(failure), withLogChannel(CHANNEL));
+      ).pipe(Effect.annotateLogs({ data: failure }), withLogChannel(CHANNEL));
     let queued = true;
     if (provisional) {
       const rows = yield* Effect.result(
@@ -339,7 +339,7 @@ function refusalFor(
     return Effect.logWarning(
       `Refusing to resume ${runId}: its saved state cannot be continued: ${toErrorMessage(error)}`,
     ).pipe(
-      withLogData(error),
+      Effect.annotateLogs({ data: error }),
       withLogChannel(CHANNEL),
       Effect.as({ failed: 'unusable_checkpoint' } as const),
     );

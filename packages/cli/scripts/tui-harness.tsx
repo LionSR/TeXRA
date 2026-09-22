@@ -246,6 +246,7 @@ const HARNESS_CLI_CONTEXT: CliContext = {
   mode: 'interactive',
   outputFormat: 'text',
   quietLogs: true,
+  minimumLogLevel: 'None',
   resourcesPath: HARNESS_RESOURCES_PATH,
   skillSourceOptions: {},
   stderrColorEnabled: HARNESS_COLOR_ENABLED,
@@ -320,7 +321,9 @@ if (SHOW_PROJECT_SKILL) {
 
 const HARNESS_STORAGE_ROOT = path.join(HARNESS_CWD, '.texra-storage');
 const HARNESS_PLATFORM_SERVICES = await (
-  await installCliProcessRuntime(HARNESS_STORAGE_ROOT)
+  await installCliProcessRuntime(HARNESS_STORAGE_ROOT, {
+    minimumLogLevel: HARNESS_CLI_CONTEXT.minimumLogLevel,
+  })
 ).runPromise(
   initCliPlatform({
     // The same provider the harness context resolves its rows through,
@@ -329,6 +332,7 @@ const HARNESS_PLATFORM_SERVICES = await (
     cwd: HARNESS_CWD,
     installSignalHandlers: false,
     quietLogs: true,
+    minimumLogLevel: HARNESS_CLI_CONTEXT.minimumLogLevel,
     resourcesPath: HARNESS_RESOURCES_PATH,
     storageRoot: HARNESS_STORAGE_ROOT,
     skillSourceOptions: {},

@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import { Cause, Effect, Exit, Result } from 'effect';
 
-import { withLogChannel, withLogData } from '@logger/effectLog';
+import { withLogChannel } from '@logger/effectLog';
 import { createLog } from '@logger/logUtils';
 import type { RecoveryContinuation } from '@platform/interfaces';
 import {
@@ -482,7 +482,7 @@ export class ToolUseFollowUpQueue {
         }
         yield* Effect.logWarning(
           `Follow-up for run ${runId} was not queued: another process holds the run.`,
-        ).pipe(withLogData(error), withLogChannel(CHANNEL));
+        ).pipe(Effect.annotateLogs({ data: error }), withLogChannel(CHANNEL));
         return { kind: 'refused', reason: 'owned_elsewhere' };
       }
 
@@ -683,7 +683,7 @@ export class ToolUseFollowUpQueue {
       Effect.catch((error) =>
         Effect.logWarning(
           `Run ${runId}: the claim taken to queue a follow-up was not released`,
-        ).pipe(withLogData(error), withLogChannel(CHANNEL)),
+        ).pipe(Effect.annotateLogs({ data: error }), withLogChannel(CHANNEL)),
       ),
     );
   }

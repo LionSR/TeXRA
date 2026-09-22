@@ -119,6 +119,7 @@ export function renderSessionHarnessBridge({
         chunks: [],
         local: harnessLocal,
         host: harnessSession.host,
+        debug: subscribe.debug,
         replayComplete: true,
         existence: {
           checkedAggregateIds: [...new Set(harnessSession.events.map(event => event.aggregateId))],

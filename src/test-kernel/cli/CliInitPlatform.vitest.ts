@@ -120,8 +120,6 @@ vi.mock('@logger/logUtils', () => ({
   debug: vi.fn(),
   error: vi.fn(),
   info: vi.fn(),
-  isDebugModeEnabled: vi.fn(() => false),
-  setDebugModeConfig: vi.fn(),
   warn: vi.fn(),
 }));
 
@@ -193,6 +191,7 @@ function cliContext(
     resourcesPath: '/tmp/resources',
     version: '0.0.0-test',
     quietLogs: true,
+    minimumLogLevel: 'Info',
     skillSourceOptions: {},
     // The provider the startup read opens and this init installs as the
     // roots' config, handed over rather than opened a second time here.

@@ -27,7 +27,7 @@ import {
   hasErrorPresentationClaimed,
 } from '@common/errors/sdkError/errorMetadata';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
-import { withLogChannel, withLogData } from '@logger/effectLog';
+import { withLogChannel } from '@logger/effectLog';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import { resolveRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import { AppState } from '@platform/interfaces';
@@ -278,10 +278,6 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
     yield* failIfLaunchStopped(input.stopped);
     const fullConfig = input.config;
     const interactions = input.session.interactions;
-    // Resolve by the source the delegation captured at validation time, so launch
-    // lands on the exact entry validation/display resolved. When no source is
-    // pinned (direct launches, restored records), resolution falls to the
-    // category-scoped rule validation uses; never blind name resolution.
     // Single launch resolution rule (see resolveAgentForLaunch): exact
     // (source, name) when the delegation pinned one, else the same visible-set
     // resolver validation uses, else the full set for internal agents. Never
@@ -621,7 +617,10 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
           if (!finalization.ok)
             yield* Effect.logWarning(
               'Failed to persist the launch failure',
-            ).pipe(withLogData(finalization.error), withLogChannel(CHANNEL));
+            ).pipe(
+              Effect.annotateLogs({ data: finalization.error }),
+              withLogChannel(CHANNEL),
+            );
         }),
       ),
     );

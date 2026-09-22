@@ -8,7 +8,7 @@ import type { SessionHandle } from '@agent/runtime';
 import { isLatexFile } from '@common/files/fileTypeUtils';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import { compileLatex2Pdf } from '@latex/texTools';
-import { withLogChannel, withLogData } from '@logger/effectLog';
+import { withLogChannel } from '@logger/effectLog';
 import { createLog } from '@logger/logUtils';
 import { withSessionFs } from '@platform/rootedFs';
 import type { FileLocation } from '@shared/schemas';
@@ -265,14 +265,14 @@ const prepareLatexBuild = (
       }),
     );
     if (!compiled.ok) {
-      // Include the tail in the visible message itself, not just `data` —
-      // writeLine only shows `data` when texra.logger.debugMode is on
-      // (default off), and this failure's whole point is to be visible
-      // without needing to enable debug logging.
+      // Include the tail in the visible message itself, not just structured
+      // data, because this failure must be visible at the default log level.
       yield* Effect.logWarning(
         `Internal LaTeX compilation failed for ${uri.fsPath}:\n${compiled.logTail}`,
       ).pipe(
-        withLogData({ sourceFile: uri.fsPath, logTail: compiled.logTail }),
+        Effect.annotateLogs({
+          data: { sourceFile: uri.fsPath, logTail: compiled.logTail },
+        }),
         withLogChannel(CHANNEL),
       );
       return false;

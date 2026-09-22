@@ -31,7 +31,7 @@ import {
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
 import type { AgentRunServices } from '@agent/runtime/toolInjection';
-import { withLogChannel, withLogData } from '@logger/effectLog';
+import { withLogChannel } from '@logger/effectLog';
 import {
   RUN_OUTCOME,
   AgentCategory,
@@ -250,7 +250,7 @@ const executeInBand = Effect.fn('executeInBand')(
         : undefined;
       if (endFailure !== undefined)
         yield* Effect.logWarning('Failed to read the terminal run fact').pipe(
-          withLogData({ runId, error: endFailure }),
+          Effect.annotateLogs({ data: { runId, error: endFailure } }),
           withLogChannel(CHANNEL),
         );
       const childFailed =
@@ -285,7 +285,7 @@ const executeInBand = Effect.fn('executeInBand')(
           yield* Effect.logWarning(
             'Failed to read the persisted result manifest',
           ).pipe(
-            withLogData({ runId, error: readFailure }),
+            Effect.annotateLogs({ data: { runId, error: readFailure } }),
             withLogChannel(CHANNEL),
           );
         const persisted = Exit.isSuccess(persistedExit)

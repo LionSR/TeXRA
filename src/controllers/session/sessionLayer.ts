@@ -58,8 +58,11 @@ import {
   type SessionGraph,
 } from '@agent/runtime/sessionGraph';
 import { SupabaseAuth, type SupabaseAuthShape } from '@auth/SupabaseAuth';
-import { withLogChannel, withLogData } from '@logger/effectLog';
-import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
+import { withLogChannel } from '@logger/effectLog';
+import {
+  effectDiagnosticsLayer,
+  type MinimumLogLevel,
+} from '@logger/effectDiagnostics';
 import {
   withForkFailureReporting,
   type ProcessRuntime,
@@ -83,6 +86,7 @@ import { RunLedger } from '@shared/session/runLedger';
 import {
   aggregateId as qualifyAggregateId,
   aggregateTarget,
+  DEBUG_MODE_KEY,
   isDisplaySessionEvent,
   ownerIdentity,
   TOOL_CALL_STATUS,
@@ -112,6 +116,7 @@ import { gitHubSubscriptionsLayer } from '@tools/github/subscriptionRegistries';
 import type { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import { SetupPlatform, type SetupPlatformShape } from '@tools/setup/platform';
 import { StreamLogStore } from '@transcript/StreamLogStore';
+import { readConfigSettingFrom } from '@utils/config/platformSettings';
 import { inquiryRecordsLayer } from './inquiryRecords';
 import { updateCheckRecordsLayer } from './updateCheckRecords';
 import { databaseLayer } from './Database';
@@ -319,9 +324,8 @@ const sessionHandleLayer = (
           Stream.runHead,
           Effect.raceFirst(
             Deferred.await(tailEnded).pipe(
-              // Invariant: the tail outlives every publication it settles.
-              // A wait on a tail that ended can never be answered, so it
-              // dies, with the read failure that ended the tail, if any.
+              // The tail outlives every publication it settles; if it ends,
+              // pending waits die with its read failure.
               Effect.orDie,
               Effect.andThen(
                 Effect.die(
@@ -346,11 +350,8 @@ const sessionHandleLayer = (
       };
       const now = () => SubscriptionRef.getUnsafe(eventLog.observedCommit);
       const graph = (session: SessionHandle): SessionGraph => {
-        // The session's approval state, built here rather than by the handle
-        // so that its runs and its request handler share the one instance and
-        // the session's scope owns it. The authority publishes a stream's full
-        // policy snapshot on every effective bypass change, as does
-        // `SessionHandle.setApprovalPolicy` when the policy half moves.
+        // The session scope owns one approval state shared by its runs and
+        // request handler. Effective changes publish the full policy snapshot.
         const approvals = createSessionApprovals((runId) =>
           session.publishApprovalPolicy(runId),
         );
@@ -449,7 +450,10 @@ const sessionHandleLayer = (
                     Effect.catch((error) =>
                       Effect.logWarning(
                         'Registration claims were not released after its settle failed.',
-                      ).pipe(withLogData(error), withLogChannel(CHANNEL)),
+                      ).pipe(
+                        Effect.annotateLogs({ data: error }),
+                        withLogChannel(CHANNEL),
+                      ),
                     ),
                   ),
                 ),
@@ -499,10 +503,8 @@ const sessionHandleLayer = (
             agentResume,
           ),
           now,
-          // The teardown runs at once, before the release: an entry another
-          // open or close is still borrowing is released only when that borrow
-          // ends, and the session refuses new runs from the moment it is asked
-          // to close. A teardown failure still releases the entry.
+          // Teardown immediately refuses new runs; release waits for borrowers.
+          // A teardown failure still releases the entry.
           close: () =>
             unwindSession(session).pipe(Effect.ensuring(release(key))),
         };
@@ -521,6 +523,7 @@ const sessionHandleLayer = (
       const transcripts = StreamLogStore.open(
         eventLog,
         key.open.transcriptMode,
+        readConfigSettingFrom<boolean>(key.open.roots.config, DEBUG_MODE_KEY),
       );
       // The gate's probe fibers and waiting calls end with this scope, after
       // the handle below has unwound its runs.
@@ -543,10 +546,8 @@ const sessionHandleLayer = (
         }),
         (session) =>
           unwindSession(session).pipe(
-            // Settlement reports what the session's own publications left
-            // behind. The release still has to finish, so that report is logged
-            // here rather than escaping `Scope.close` and failing the
-            // `invalidate` or `close` that asked for it.
+            // Log settlement residue here so release still finishes instead of
+            // failing the `invalidate` or `close` that asked for it.
             Effect.ensuring(
               session
                 .settlePublications()
@@ -554,7 +555,10 @@ const sessionHandleLayer = (
                   Effect.catch((error) =>
                     Effect.logWarning(
                       `Session ${key.storage} left a failed publication behind as it closed.`,
-                    ).pipe(withLogData(error), withLogChannel(CHANNEL)),
+                    ).pipe(
+                      Effect.annotateLogs({ data: error }),
+                      withLogChannel(CHANNEL),
+                    ),
                   ),
                 ),
             ),
@@ -625,7 +629,7 @@ const sessionHandleLayer = (
         Effect.tapError((error) =>
           Effect.logError(
             `Session ${key.storage} stopped delivering committed rows: the log could not be read.`,
-          ).pipe(withLogData(error), withLogChannel(CHANNEL)),
+          ).pipe(Effect.annotateLogs({ data: error }), withLogChannel(CHANNEL)),
         ),
         Effect.onExit((exit) => Deferred.done(tailEnded, exit)),
         Effect.forkIn(consumerScope),
@@ -640,14 +644,14 @@ const sessionHandleLayer = (
         Effect.tapError((error) =>
           Effect.logError(
             `Session ${key.storage} stopped delivering folded rows: the log could not be read.`,
-          ).pipe(withLogData(error), withLogChannel(CHANNEL)),
+          ).pipe(Effect.annotateLogs({ data: error }), withLogChannel(CHANNEL)),
         ),
         Effect.forkIn(consumerScope),
       );
       yield* sweepLeftoverRuns(session, initialListing).pipe(
         Effect.catch((error) =>
           Effect.logWarning('Background-shell cleanup failed.').pipe(
-            withLogData(error),
+            Effect.annotateLogs({ data: error }),
             withLogChannel(CHANNEL),
           ),
         ),
@@ -658,7 +662,7 @@ const sessionHandleLayer = (
         Effect.catch((error) =>
           Effect.logWarning(
             'Deletion records could not be read; cleanup remains pending.',
-          ).pipe(withLogData(error), withLogChannel(CHANNEL)),
+          ).pipe(Effect.annotateLogs({ data: error }), withLogChannel(CHANNEL)),
         ),
         Effect.repeat({ schedule: Schedule.spaced('30 seconds') }),
         Effect.forkScoped,
@@ -783,7 +787,7 @@ const unopenedEntry =
     Effect.logWarning(
       `Session ${key.storage} failed to open; it holds no session.`,
     ).pipe(
-      withLogData(error),
+      Effect.annotateLogs({ data: error }),
       withLogChannel(CHANNEL),
       Effect.as(Option.none()),
     );
@@ -1057,6 +1061,17 @@ interface ProcessRuntimeOptions {
     DatabaseOpenFailed,
     ProcessIdentity
   >;
+  /**
+   * The runtime's emission threshold for Effect diagnostics, from facts the
+   * composition root holds that cannot change mid-process: the surface kind
+   * (the extension's `LogOutputChannel` filters for itself, so it passes
+   * `'Trace'`; the desktop's rotated log file passes `'Debug'`) or the CLI's
+   * `--quiet` / `--verbose` argv. The reference it feeds is fiberCached and
+   * read before any logger runs, which is exactly why a live user setting
+   * must arrive by another road (the transcript fold's `debug` flag) and not
+   * here.
+   */
+  readonly minimumLogLevel: MinimumLogLevel;
 }
 
 export function installProcessRuntime({
@@ -1076,6 +1091,7 @@ export function installProcessRuntime({
   lean,
   usageLog,
   globalDatabase: globalDatabaseOption,
+  minimumLogLevel,
 }: ProcessRuntimeOptions): ProcessRuntime {
   // Non-failing by contract: `nodeProcesses.selfIdentity()` reports an
   // unreadable identity as undefined, and a root that already read one hands
@@ -1154,7 +1170,7 @@ export function installProcessRuntime({
         Layer.provideMerge(globalDatabase),
         Layer.provideMerge(
           Layer.mergeAll(
-            effectDiagnosticsLayer,
+            effectDiagnosticsLayer(minimumLogLevel),
             FetchHttpClient.layer,
             // The standard library's filesystem and path services, provided
             // once per process here rather than by each program that needs

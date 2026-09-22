@@ -45,8 +45,7 @@ const usage = { inputTokens: 10, outputTokens: 20, cost: 0.01 };
 /**
  * Version 2 carries the session row itself: `event` is the row's `type`,
  * `payload` the rest of the row under its own field names, so each case
- * expects the fact it published back, envelope aside (the row may carry
- * fields the publisher filled in, such as a trace arm's `transcriptDebug`).
+ * expects the fact it published back, envelope aside.
  */
 const PASS_THROUGH_CASES: ReadonlyArray<{
   readonly source: Source;

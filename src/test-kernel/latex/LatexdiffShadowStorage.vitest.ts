@@ -473,7 +473,7 @@ describe('LaTeXdiffService logger channel', () => {
         ),
       ).toBe(true);
     }).pipe(
-      Effect.provide(effectDiagnosticsLayer),
+      Effect.provide(effectDiagnosticsLayer('Trace')),
       Effect.provide(nodePlatformLayer),
     ),
   );

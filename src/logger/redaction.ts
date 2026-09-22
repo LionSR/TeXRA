@@ -81,14 +81,14 @@ export function redactSecrets(text: string): string {
 /** Scrub a constructed JSON-shaped display value without changing its field structure.
  * Persisted execution records and provider inputs must retain their original values.
  *
- * A payload reaches this raw: `withLogData` attaches `data` to the entry
- * unrendered, so this pass is the first walk over it. An `Error` in a payload
- * is flattened exactly as a render would (its fields are non-enumerable, so
- * the plain walk below would collapse it to `{}`), through one `errors` map
- * per call so a `cause` cycle terminates. An object cycle meets `seen` and
- * keeps the reference it already carries, so the render's
- * `safe-stable-stringify` still reports it as `"[Circular]"` instead of this
- * walk recursing to a stack overflow.
+ * A log payload reaches the write path rendered, but this walk's other
+ * callers hand it raw values, so it is built for both. An `Error` in a raw
+ * payload is flattened exactly as a render would (its fields are
+ * non-enumerable, so the plain walk below would collapse it to `{}`),
+ * through one `errors` map per call so a `cause` cycle terminates. An object
+ * cycle meets `seen` and keeps the reference it already carries, so a later
+ * render's `safe-stable-stringify` still reports it as `"[Circular]"`
+ * instead of this walk recursing to a stack overflow.
  */
 export function redactDisplayValue<T>(value: T): T {
   return redactValue(value, new WeakMap(), new WeakSet()) as T;

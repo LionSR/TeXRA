@@ -1,10 +1,12 @@
 import type {
+  ConfigProvider,
   ConfigTarget,
   ConfigWriteFailed,
   StateReadFailed,
 } from '@platform/interfaces';
 import { settingByKey, type SettingHost } from '@shared/state/stateSettings';
 import {
+  readConfigSetting,
   readSetting,
   writeSetting,
   type SettingsStores,
@@ -48,6 +50,14 @@ export function readSettingFrom<T>(
     stores,
     processSettingHost,
   ) as Effect.Effect<T, StateReadFailed>;
+}
+
+/** Read and validate one catalog-backed value from its config slot. */
+export function readConfigSettingFrom<T>(
+  config: ConfigProvider,
+  key: string,
+): T {
+  return readConfigSetting(requireEntry(key), config) as T;
 }
 
 /**

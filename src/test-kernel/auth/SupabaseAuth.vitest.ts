@@ -21,7 +21,7 @@ function createAuth(
 ): SupabaseAuthShape {
   return Effect.runSync(
     createSupabaseAuth({ secrets, ...(whenReady ? { whenReady } : {}) }).pipe(
-      Effect.provide(effectDiagnosticsLayer),
+      Effect.provide(effectDiagnosticsLayer('Trace')),
     ),
   );
 }

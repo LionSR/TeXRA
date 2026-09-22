@@ -153,11 +153,10 @@ export async function runChat(
     return { exitCode: CliExitCode.Usage };
   }
 
-  // Platform signal handling owns onboarding; handoff immediately before Ink
-  // mounts leaves exactly one signal owner. Initialization and chat use the
-  // entry runtime throughout.
+  // Platform signals hand off before Ink mounts; chat keeps the entry runtime.
   const runtime = await installCliProcessRuntime(context.storageRoot, {
     resourcesPath: context.resourcesPath,
+    minimumLogLevel: context.minimumLogLevel,
   });
   const { services, runtimeSession } = await runtime.runPromise(
     Effect.gen(function* () {

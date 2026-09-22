@@ -1,9 +1,9 @@
 /**
- * Render a debug payload for display. Lives apart from both writers so an
- * entry carries its `data` payload raw all the way to the host: the sinks
- * that render annotations apply this at display time, and `createLog`'s own
- * writer applies it to the payload it writes. The redaction pass shares the
- * `Error` flattener, because raw is exactly what reaches it first.
+ * Render a debug payload for display. The write path in `@logger/logSink`
+ * applies this once to each entry's raw `data` annotation, before redaction,
+ * so every host surface shows the same bounded rendering and no producer
+ * decides how much detail a surface shows. The redaction pass shares the
+ * `Error` flattener for the raw values its other callers hand it.
  */
 // Third-party imports
 import safeStringify from 'safe-stable-stringify';
