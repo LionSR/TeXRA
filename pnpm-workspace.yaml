@@ -4,7 +4,7 @@ packages:
 # own dependency names (pnpm links a workspace package before any build script
 # runs), and both manifests take the version from here through `catalog:`.
 catalog:
-  '@anthropic-ai/claude-agent-sdk': '^0.3.276'
+  '@anthropic-ai/claude-agent-sdk': '^0.3.278'
   '@anthropic-ai/sdk': '^0.125.0'
   '@cantoo/pdf-lib': '^2.9.2'
   '@date-fns/tz': '^1.5.0'
@@ -15,8 +15,8 @@ catalog:
   '@jitl/quickjs-wasmfile-release-sync': '0.32.0'
   '@octokit/request': '^10.0.16'
   '@octokit/request-error': '^7.1.2'
-  '@openai/codex-sdk': '^0.155.0'
-  '@openrouter/sdk': '^1.2.145'
+  '@openai/codex-sdk': '^0.155.1'
+  '@openrouter/sdk': '^1.3.5'
   '@supabase/supabase-js': '2.116.0'
   '@typescript/native': 'npm:typescript@^7.0.2'
   acorn: '^8.18.0'
@@ -42,7 +42,7 @@ catalog:
   is-wsl: '^3.1.1'
   ky: '^2.1.0'
   llm-zoo: '^1.36.0'
-  lru-cache: '^11.5.2'
+  lru-cache: '^11.5.3'
   mime-types: '^3.0.1'
   nanoid: '^6.0.1'
   nunjucks: '^3.2.4'
