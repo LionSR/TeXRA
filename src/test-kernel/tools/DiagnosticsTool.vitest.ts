@@ -83,7 +83,7 @@ describe('DiagnosticsTool', () => {
           const readDiagnostics = vi.fn((_path: string) =>
             Effect.succeed([] as GenericDiagnostic[]),
           );
-          Effect.runSync(session.interactions.use({ readDiagnostics }));
+          yield* session.interactions.use({ readDiagnostics });
 
           const result = yield* new DiagnosticsTool()
             .call({ command: 'list', path: 'paper.tex' })
@@ -116,11 +116,9 @@ describe('DiagnosticsTool', () => {
       Effect.gen(function* () {
         yield* withSession((session) =>
           Effect.gen(function* () {
-            Effect.runSync(
-              session.interactions.use({
-                addCriticism: () => ({ accepted: false, resolvedPath: '' }),
-              }),
-            );
+            yield* session.interactions.use({
+              addCriticism: () => ({ accepted: false, resolvedPath: '' }),
+            });
 
             const result = yield* new DiagnosticsTool()
               .call(addCriticismCall())
@@ -148,14 +146,12 @@ describe('DiagnosticsTool', () => {
       yield* withSession((session) =>
         Effect.gen(function* () {
           const entries: unknown[] = [];
-          Effect.runSync(
-            session.interactions.use({
-              addCriticism: (entry) => {
-                entries.push(entry);
-                return { accepted: true, resolvedPath: entry.absolutePath };
-              },
-            }),
-          );
+          yield* session.interactions.use({
+            addCriticism: (entry) => {
+              entries.push(entry);
+              return { accepted: true, resolvedPath: entry.absolutePath };
+            },
+          });
 
           const result = yield* new DiagnosticsTool()
             .call(addCriticismCall())
@@ -202,7 +198,7 @@ describe('DiagnosticsTool', () => {
             accepted: true,
             resolvedPath: entry.absolutePath,
           }));
-          Effect.runSync(session.interactions.use({ addCriticism }));
+          yield* session.interactions.use({ addCriticism });
 
           const result = yield* new DiagnosticsTool()
             .call(addCriticismCall())
