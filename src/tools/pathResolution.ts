@@ -35,6 +35,13 @@ export interface WorkspacePathResolution {
   external?: { root: string; writable: boolean; label: string };
 }
 
+interface OutsideRootCandidate {
+  readonly kind: 'outside-root';
+  readonly absolutePath: string;
+  readonly match: MatchedExternalRoot | null | undefined;
+  readonly outsideMessage: string;
+}
+
 /** Trim and validate a working_directory value. Must be absolute if provided. */
 export function parseWorkingDirectory(
   raw: string | null | undefined,
@@ -117,11 +124,7 @@ export function resolveWorkspaceRelativePath(
   root?: string,
 ) {
   return Effect.gen(function* () {
-    const protectPaths = yield* readSettingFrom<boolean>(
-      settings,
-      WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED,
-    );
-    return yield* Effect.try({
+    const resolution = yield* Effect.try({
       try: () => {
         const trimmed = targetPath?.trim();
         const input = !trimmed || trimmed === '.' ? '' : trimmed;
@@ -140,20 +143,12 @@ export function resolveWorkspaceRelativePath(
           absolutePath: string,
           match: MatchedExternalRoot | null | undefined,
           outsideMessage: string,
-        ): WorkspacePathResolution => {
-          // This setting deliberately uses the same workspaceState slot in every
-          // host. Do not add a CLI-specific store without also making host identity
-          // explicit at this enforcement boundary.
-          if (!match && protectPaths) {
-            throw new ToolError(outsideMessage);
-          }
-          return {
-            relative: normalizeFilePath(absolutePath),
-            absolute: absolutePath,
-            fsPath: absolutePath,
-            ...(match ? { external: externalInfo(match) } : {}),
-          };
-        };
+        ): OutsideRootCandidate => ({
+          kind: 'outside-root',
+          absolutePath,
+          match,
+          outsideMessage,
+        });
 
         if (root) {
           // Absolute paths need special handling — locatePathInRoot only works with relative paths.
@@ -225,6 +220,27 @@ export function resolveWorkspaceRelativePath(
       },
       catch: ensureError,
     });
+
+    if (!('kind' in resolution)) return resolution;
+    // This setting deliberately uses the same workspaceState slot in every
+    // host. Do not add a CLI-specific store without also making host identity
+    // explicit at this enforcement boundary. Registered external roots need no
+    // containment override, so keep their resolution independent of the store.
+    if (
+      !resolution.match &&
+      (yield* readSettingFrom<boolean>(
+        settings,
+        WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED,
+      ))
+    ) {
+      return yield* Effect.fail(new ToolError(resolution.outsideMessage));
+    }
+    return {
+      relative: normalizeFilePath(resolution.absolutePath),
+      absolute: resolution.absolutePath,
+      fsPath: resolution.absolutePath,
+      ...(resolution.match ? { external: externalInfo(resolution.match) } : {}),
+    };
   });
 }
 

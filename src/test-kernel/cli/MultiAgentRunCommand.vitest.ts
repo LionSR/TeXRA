@@ -58,7 +58,7 @@ vi.mock('@cli/runtime/multiAgentPresets', () => ({
     mocks.formatCliMultiAgentPresetRunWarnings,
   formatCliMultiAgentTeamLaunchBlockMessage:
     mocks.formatCliMultiAgentTeamLaunchBlockMessage,
-  readCliMultiAgentPresets: vi.fn(() => []),
+  readCliMultiAgentPresets: vi.fn(() => Effect.succeed([])),
 }));
 
 vi.mock('@common/teams/TeamPlan', async (importOriginal) => {

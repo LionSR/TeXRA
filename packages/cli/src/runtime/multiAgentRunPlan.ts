@@ -73,7 +73,7 @@ export function loadCliMultiAgentRunPlan(
     // agent catalog, never the workspace's team presets, so a preset that was
     // found here cannot go missing under it.
     const preset = findTeamPreset(
-      readCliMultiAgentPresets(workspaceState),
+      yield* readCliMultiAgentPresets(workspaceState),
       init.preset,
     );
     if (!preset) {

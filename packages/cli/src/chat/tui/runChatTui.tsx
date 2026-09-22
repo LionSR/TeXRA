@@ -273,16 +273,19 @@ export async function runChat(
   // that never carried a preset lands `null` where `SessionMeta` wants absent.
   const initialPresetId =
     initialResume?.config.cli?.multiAgentPresetId ?? undefined;
+  const initialPresetName = await runtime.runPromise(
+    readCliMultiAgentPresetName(
+      runtimeSession.roots.workspaceState,
+      initialPresetId,
+    ),
+  );
   sessionMetaSignal.set({
     agent,
     model,
     modelSource: defaults.modelSource,
     cwd: context.cwd,
     approvalPolicy: runtimeSession.approvalPolicy,
-    teamName: readCliMultiAgentPresetName(
-      runtimeSession.roots.workspaceState,
-      initialPresetId,
-    ),
+    teamName: initialPresetName,
     cliMultiAgentPresetId: initialPresetId,
     delegationAgentScope:
       initialResume?.config.delegationAgentScope ?? undefined,

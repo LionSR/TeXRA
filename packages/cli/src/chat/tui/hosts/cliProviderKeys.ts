@@ -160,7 +160,7 @@ export const promptForCliProviderApiKey = Effect.fn(
   stores: SettingsStores,
   provider: ApiProvider,
 ) {
-  const label = getProviderDisplayName(
+  const label = yield* getProviderDisplayName(
     stores,
     provider,
     providerDisplayName(provider),

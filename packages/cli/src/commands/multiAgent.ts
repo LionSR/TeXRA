@@ -88,7 +88,7 @@ const runMultiAgentList = Effect.fn('runMultiAgentList')(function* (
 ) {
   const { plans, remoteCatalogRefreshAttempted } =
     yield* loadCliMultiAgentPresetPlanSet(
-      readCliMultiAgentPresets(services.workspaceState),
+      yield* readCliMultiAgentPresets(services.workspaceState),
     );
 
   emitCliResult(context, {

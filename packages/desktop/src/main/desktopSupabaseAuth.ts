@@ -97,11 +97,14 @@ export function createDesktopPendingOAuthStore(
   const read = (): Effect.Effect<Record<string, string>, StateReadFailed> =>
     store ? readPendingRecords(log, store) : Effect.sync(() => memoryRecords);
   const change = (
-    transform: (records: Record<string, string>) => Record<string, string>,
+    transform: (
+      records: Record<string, string>,
+    ) => Record<string, string> | undefined,
   ) =>
     writes.run(
       Effect.gen(function* () {
         const next = transform(yield* read());
+        if (!next) return;
         if (store) yield* store.update(DESKTOP_PENDING_OAUTH_STATE_KEY, next);
         else memoryRecords = next;
       }),
@@ -112,6 +115,7 @@ export function createDesktopPendingOAuthStore(
       change((records) => ({ ...records, [nonce]: value })),
     erase: (nonce) =>
       change((records) => {
+        if (!Object.hasOwn(records, nonce)) return undefined;
         const { [nonce]: _dropped, ...rest } = records;
         return rest;
       }),
