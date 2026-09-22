@@ -1280,11 +1280,11 @@ packages:
     resolution: {integrity: sha512-CfiSoaVQO8pZgaMZGw5VvMvRGybsJ2LaSDoLYaqiVGvo/YYPYVR2GzUKY0h1NtIweq/+SQ5XLrvtzPIttWQ0GQ==}
     hasBin: true
 
-  '@effect/platform-node-shared@4.0.0-rc.117':
-    resolution: {integrity: sha512-GyRkEfLBG49MwJe+/XDPiXYcQ44RA9p2z0AurlsWhR1cd1PqOUMEZU1pORL+/R5hR8aH6ZuqoJYD8lAc6h+wlA==}
+  '@effect/platform-node-shared@4.0.0-rc.116':
+    resolution: {integrity: sha512-4FB6UriGqArWFUaFqVchhfCRmmtOVzmD/k/bH6LErlKY8a9amt5dk6c3Arsi7AvUpChsdO+3jsG+P85HsxMkNA==}
     engines: {node: '>=18.0.0'}
     peerDependencies:
-      effect: ^4.0.0-rc.117
+      effect: ^4.0.0-rc.116
 
   '@effect/platform-node@4.0.0-rc.116':
     resolution: {integrity: sha512-uA66Nh998OcChBVX83tQDkBDvQQcVaMXodP9gNGWVeIwWWquy7bzIkAq/fMZGKs/BVFhFQ0XCp3VIqYjnXu5ng==}
@@ -6348,7 +6348,7 @@ snapshots:
 
   '@effect/language-service@0.87.2': {}
 
-  '@effect/platform-node-shared@4.0.0-rc.117(effect@4.0.0-rc.116)':
+  '@effect/platform-node-shared@4.0.0-rc.116(effect@4.0.0-rc.116)':
     dependencies:
       '@types/ws': 8.18.1
       effect: 4.0.0-rc.116
@@ -6359,7 +6359,7 @@ snapshots:
 
   '@effect/platform-node@4.0.0-rc.116(effect@4.0.0-rc.116)(redis@6.2.1(@opentelemetry/api@1.9.1))':
     dependencies:
-      '@effect/platform-node-shared': 4.0.0-rc.117(effect@4.0.0-rc.116)
+      '@effect/platform-node-shared': 4.0.0-rc.116(effect@4.0.0-rc.116)
       effect: 4.0.0-rc.116
       redis: 6.2.1(@opentelemetry/api@1.9.1)
       undici: 8.10.2
