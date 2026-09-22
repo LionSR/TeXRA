@@ -1154,7 +1154,7 @@ export class SessionHandle {
           (event.payload.step === 'waiting' ||
             event.payload.step === 'turn.begin'));
       if (!phaseMoved) return;
-      this.runs.handleStatus(target.id);
+      yield* this.runs.handleStatus(target.id);
     });
   }
 

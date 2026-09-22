@@ -85,6 +85,7 @@ export class RunRegistry {
       options.commit,
       options.finalizeRun,
       options.acquireRunClaim,
+      options.runView,
     );
   }
 
@@ -94,11 +95,18 @@ export class RunRegistry {
    * fold-gated tail in commit order: notify the waiters on this run, which
    * read the new phase from the view here — why the caller delivers the row
    * only once the view has folded it.
+   *
+   * A `run.end` folded to `cancelled` also closes the admission window its
+   * stop left, which is why the caller runs what this returns: the stop's
+   * in-flight token lifts when its settlement does, before this fold
+   * ({@link RunStopper.sweepChildrenOfFoldedStop}).
    */
-  handleStatus(runId: RunId): void {
-    if (this.disposed) return;
-    if (!this.roster.handle(runId)) return;
+  handleStatus(runId: RunId): Effect.Effect<void> {
+    if (this.disposed) return Effect.void;
+    const sweep = this.stopper.sweepChildrenOfFoldedStop(runId);
+    if (!this.roster.handle(runId)) return sweep;
     this.roster.notifyWaiters(runId);
+    return sweep;
   }
 
   dispose(): void {
@@ -266,14 +274,23 @@ export class RunRegistry {
 
   /**
    * Refuse a child admitted under a parent whose stop has begun, the way
-   * {@link assertActive} refuses one admitted under a closing session. Who is
-   * admissible is the roster's ({@link RunRoster.admitsChild}).
+   * {@link assertActive} refuses one admitted under a closing session, and one
+   * admitted under a parent whose stop has already folded
+   * ({@link RunStopper.assertStopNotFolded}). Who is admissible during a stop
+   * is the roster's ({@link RunRoster.admitsChild}): a child this registry
+   * already holds is not an admission — a native child's activation and every
+   * turn handle it tracks re-enter here while the detach runs, and those are
+   * the children the stop is severing, not new ones — so it takes no
+   * folded-stop refusal either.
    */
   private assertAdmitsChild(parentRunId: RunId, childRunId: RunId): void {
-    if (this.roster.admitsChild(parentRunId, childRunId)) return;
-    throw new Error(
-      `Cannot launch child run ${childRunId} under run ${parentRunId} while that run is stopping.`,
-    );
+    if (!this.roster.admitsChild(parentRunId, childRunId)) {
+      throw new Error(
+        `Cannot launch child run ${childRunId} under run ${parentRunId} while that run is stopping.`,
+      );
+    }
+    if (this.roster.isStopping(parentRunId)) return;
+    this.stopper.assertStopNotFolded(parentRunId, childRunId);
   }
 
   /** The wait a child's lease release takes before it drops its claim

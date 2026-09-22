@@ -3,8 +3,9 @@
  *
  * One stopper per session turns a stop gesture into the work it owes: the
  * descendant policy the caller declared, the root handle's own termination,
- * the durable `run.detach` batch a detaching stop commits, and the terminal
- * row a stop that reached no live handle has to write itself. Who is here to
+ * the durable `run.detach` batch a detaching stop commits, the terminal
+ * row a stop that reached no live handle has to write itself, and the
+ * children the stop's own fold catches behind it. Who is here to
  * be stopped is the roster's (`runRoster.ts`); the registry
  * (`runRegistry.ts`) is what hosts call.
  */
@@ -14,6 +15,7 @@ import { Deferred, Effect, Fiber } from 'effect';
 import {
   aggregateId as qualifyAggregateId,
   RUN_OUTCOME,
+  RUN_PHASE,
   type RunId,
 } from '@shared/schemas';
 import type { RunHandle } from './RunHandle';
@@ -37,6 +39,7 @@ export class RunStopper {
     private readonly commit: RunRegistryInit['commit'],
     private readonly finalizeRun: RunRegistryInit['finalizeRun'],
     private readonly acquireRunClaim: RunRegistryInit['acquireRunClaim'],
+    private readonly runView: RunRegistryInit['runView'],
   ) {}
 
   /**
@@ -261,6 +264,54 @@ export class RunStopper {
         ),
       ),
     );
+  }
+
+  /**
+   * Whether this run's stop has landed: the fold's own `cancelled`, read from
+   * the session's view rather than remembered here. The in-flight token
+   * ({@link RunRoster.beginStop}) covers the stop that is still settling, this
+   * covers the stop that landed, and a resume that folds the parent back to
+   * running reopens admission with nothing to clear.
+   */
+  private stopFolded(runId: RunId): boolean {
+    return this.runView(runId)?.status === RUN_PHASE.CANCELLED;
+  }
+
+  /**
+   * Refuse a child admitted under a parent whose stop has already folded
+   * ({@link stopFolded}), the way the registry's admission refuses one under a
+   * session that is closing. The registry asks this after its own roster
+   * checks, so a child it already holds is never reached here.
+   */
+  assertStopNotFolded(parentRunId: RunId, childRunId: RunId): void {
+    if (!this.stopFolded(parentRunId)) return;
+    throw new Error(
+      `Cannot launch child run ${childRunId} under run ${parentRunId}: that run's stop has already folded.`,
+    );
+  }
+
+  /**
+   * Stop every child still registered under a run whose stop has folded,
+   * through the same cascade the stop ran at admission. The stop itself
+   * handled the children it could see — a child it detached is no longer
+   * owned here, so its sever is preserved exactly, and one it interrupted
+   * takes the same interrupt again, which its already-latched stop absorbs —
+   * so the only child this reaches is one registered in the window between
+   * the stop's settlement and the fold ({@link assertStopNotFolded} refuses
+   * every later one). The scan itself runs here, at the fold, where the row
+   * that closed the window reads its children; the settlements it collects
+   * are composed, never run: the caller executes the returned program on the
+   * runtime that delivered the fold, and forks the parked-child teardowns it
+   * collects, which cannot fail (their recovery is logged inside).
+   */
+  sweepChildrenOfFoldedStop(runId: RunId): Effect.Effect<void> {
+    if (!this.stopFolded(runId)) return Effect.void;
+    const settlements: Effect.Effect<void, Error>[] = [];
+    this.interruptActiveChildren(runId, new Set(), true, settlements);
+    if (settlements.length === 0) return Effect.void;
+    return Effect.forkDetach(
+      Effect.all(settlements, { concurrency: 'unbounded', discard: true }),
+    ).pipe(Effect.asVoid);
   }
 
   /** Interrupt all active subagents of a parent run, including descendants. */
