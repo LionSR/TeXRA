@@ -10,7 +10,7 @@
  * (`runRegistry.ts`) is what hosts call.
  */
 
-import { Deferred, Effect } from 'effect';
+import { Deferred, Effect, Fiber } from 'effect';
 
 import {
   aggregateId as qualifyAggregateId,
@@ -366,14 +366,26 @@ export class RunStopper {
         activationInterrupted = true;
       }
     }
-    const interrupted = handle.interrupt();
-    // The loop's own interrupt already carried the stop into the turn: the
-    // native-subagent strategy links the loop signal to this handle, so
-    // aborting the loop spends the handle's interrupt target before we reach
-    // it. The delivered stop is the admission, exactly as the handle-less
+    // The run's stop is its fiber's interruption, settled with the fiber
+    // itself. The fiber exists from the instant the run is admitted, so a
+    // launch has no pre-fiber window a stop could miss. A child loop's
+    // activation already carried the stop into its turns above, so it spends
+    // the fiber target before we reach it. The handle's interrupt remains
+    // the stop of a generation admitted before its fiber registered.
+    let interrupted = activationInterrupted;
+    if (!activationInterrupted) {
+      const fiber = this.roster.fiber(handle.runId);
+      if (fiber !== undefined) {
+        fiber.interruptUnsafe();
+        settlements.push(Fiber.await(fiber).pipe(Effect.asVoid));
+        interrupted = true;
+      } else if (handle.interrupt()) {
+        interrupted = true;
+      }
+    }
+    // The delivered stop is the admission, exactly as the handle-less
     // branch of `kill` reports an activation-only stop.
-    if (interrupted || activationInterrupted) return true;
-    return false;
+    return interrupted;
   }
 
   /**

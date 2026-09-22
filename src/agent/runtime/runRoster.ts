@@ -3,12 +3,11 @@
  *
  * One roster per session is the single in-process authority for "is a
  * generation of this run live here" ({@link RunRoster.isLive}, the one
- * admission): the tracked handle, the native child loop's activation, the
- * the run's serial lifecycle lane and
- * the generations holding it are fields of one entry, so admission, stop and
- * deletion all answer from the same record. The registry (`runRegistry.ts`)
- * owns the session-facing surface, the stopper (`runStopping.ts`) what a stop
- * does with these records.
+ * admission): the fiber running it, the tracked handle, the native child
+ * loop's activation and the run's serial lifecycle lane are fields of one
+ * entry, so admission, stop and deletion all answer from the same record.
+ * The registry (`runRegistry.ts`) owns the session-facing surface, the
+ * stopper (`runStopping.ts`) what a stop does with these records.
  *
  * Serialization itself is `withPerKeyLane` (`@utils/core/perKeyQueue`): a
  * `Deferred` hand-off chain rather than a queue, which gives FIFO admission
@@ -18,7 +17,7 @@
  * entry, so the helper's map is this roster's own.
  */
 
-import { Data, Deferred, Effect, type Scope } from 'effect';
+import { Data, Deferred, Effect, Fiber, Latch, type Scope } from 'effect';
 
 import type { SessionApprovals } from '@agent/runtime/runApprovalQueue';
 import type { RunId } from '@shared/schemas';
@@ -41,17 +40,18 @@ export class RunLive extends Data.TaggedError('RunLive')<{
 /** Everything this process holds for one run. The entry exists exactly while
  *  one of its fields does, which is what makes it the liveness authority. */
 interface RunEntry {
+  /** The fiber running this run here: its in-process liveness, its stop
+   *  target and its terminal owner, one value. Written in the same
+   *  synchronous turn as the fork that admits the run and erased by that
+   *  fiber's own exit, so it can neither outlive the run nor predate it. */
+  fiber?: Fiber.Fiber<unknown, unknown>;
   handle?: RunHandle;
   activation?: ChildRunActivation;
   /** The run's hand-off chain while a fiber holds or waits on it. */
   lane?: PerKeyLane;
-  /** Generations of this run holding or waiting on that lane; an inactive-run
+  /** Fibers of this run holding or waiting on that lane; an inactive-run
    *  step takes the lane without being one ({@link RunRoster.isLive}). */
   launches: number;
-  /** The completion of every generation of this run a caller is holding
-   *  against local ownership — a set rather than one chained value, because
-   *  they end in no fixed order. */
-  readonly generations: Set<Deferred.Deferred<void>>;
 }
 
 export class RunRoster {
@@ -81,24 +81,62 @@ export class RunRoster {
     },
   };
 
-  constructor(private readonly approvals: SessionApprovals) {}
+  constructor(
+    private readonly approvals: SessionApprovals,
+    /** Admit one run's DB claim, for a hold that fences the claim together
+     *  with the in-process owner ({@link holdInactive}). */
+    private readonly claimRun?: (
+      runId: RunId,
+    ) => Effect.Effect<Effect.Effect<void, Error>, Error>,
+  ) {}
 
   private entryFor(runId: RunId): RunEntry {
     const existing = this.entries.get(runId);
     if (existing) return existing;
-    const entry: RunEntry = { generations: new Set(), launches: 0 };
+    const entry: RunEntry = { launches: 0 };
     this.entries.set(runId, entry);
     return entry;
   }
 
   /** Drop an entry that records nothing: the run is not here any more. */
   private prune(runId: RunId, entry: RunEntry): void {
-    if (entry.handle ?? entry.activation ?? entry.lane) return;
-    if (entry.launches > 0 || entry.generations.size > 0) return;
+    if (entry.fiber ?? entry.handle ?? entry.activation ?? entry.lane) return;
+    if (entry.launches > 0) return;
     if (this.entries.get(runId) === entry) {
       this.entries.delete(runId);
       this.notifyWaiters(runId);
     }
+  }
+
+  // ------------------------------------------------------------------ fiber
+
+  /** The fiber the entry names for `runId`, when a generation runs it here. */
+  fiber(runId: RunId): Fiber.Fiber<unknown, unknown> | undefined {
+    return this.entries.get(runId)?.fiber;
+  }
+
+  /** Register the run's fiber on its entry: admission, stop and drain all
+   *  read the one value, and the fiber's own exit erases it. */
+  private setFiber(runId: RunId, fiber: Fiber.Fiber<unknown, unknown>): void {
+    const entry = this.entryFor(runId);
+    entry.fiber = fiber;
+    fiber.addObserver(() => {
+      if (entry.fiber === fiber) {
+        entry.fiber = undefined;
+        this.prune(runId, entry);
+        this.notifyWaiters(runId);
+      }
+    });
+  }
+
+  /** The run's stop, by run id: interrupt the fiber the entry names.
+   *  Synchronously callable from every host surface, and answered straight
+   *  away: the entry has a fiber or it does not. */
+  interrupt(runId: RunId): boolean {
+    const fiber = this.entries.get(runId)?.fiber;
+    if (fiber === undefined) return false;
+    fiber.interruptUnsafe();
+    return true;
   }
 
   // ---------------------------------------------------------------- handles
@@ -237,18 +275,21 @@ export class RunRoster {
 
   // ----------------------------------------------------------------- parking
 
-  /** Whether this process holds a live generation of the run. */
+  /** Whether this process holds a live generation of the run: the fiber
+   *  running it, a launch admitted for it, or a live tool-use flow on its
+   *  handle. */
   isLive(runId: RunId): boolean {
     const entry = this.entries.get(runId);
     if (entry === undefined) return false;
-    if (entry.generations.size > 0 || entry.launches > 0) return true;
+    if (entry.fiber !== undefined || entry.launches > 0) return true;
     return entry.handle?.getToolUseFlow() !== undefined;
   }
 
-  /** Run `operation` on `runId`'s lane: claim the lane synchronously, wait for
-   *  the predecessor and then for the live generations, and hold the lane
-   *  until `operation` settles — including the finalizers it registered, since
-   *  `withPerKeyLane` releases the lane only once the whole effect leaves.
+  /** Run `operation` on `runId`'s lane: claim the lane synchronously, fork
+   *  the operation and register the fiber on the entry in the same turn, and
+   *  hold the lane until that fiber settles — including the finalizers it
+   *  registered, since `withPerKeyLane` releases the lane only once the
+   *  whole effect leaves.
    *
    *  The claim is conditional and `withPerKeyLane` runs the condition: {@link
    *  isLive} reads the entry in the same synchronous step as the tail swap, so
@@ -293,19 +334,15 @@ export class RunRoster {
         this.prune(runId, entry);
       };
       const step = Effect.gen({ self: this }, function* () {
-        // Read the gate after the predecessor left: a generation it started
-        // is exactly what this step must not overlap. One snapshot, as the
-        // predecessor's own wait took one — a generation opened after this
-        // read belongs to the step that opened it, not to this one.
-        const generations = this.entries.get(runId)?.generations;
-        if (generations !== undefined && generations.size > 0) {
-          yield* Effect.all(
-            [...generations].map((generation) => Deferred.await(generation)),
-            { concurrency: 'unbounded', discard: true },
-          );
-        }
         this.waiting.delete(refusal);
-        return yield* operation;
+        // Admission is the fork: the fiber is registered on the entry in the
+        // same synchronous turn it is created, so a stop by run id reaches
+        // the run from its first instant — there is no pre-fiber window a
+        // stop could miss — and the lane is held until the fiber settles,
+        // which is what serializes the next generation behind this one.
+        const fiber = yield* Effect.forkChild(operation);
+        this.setFiber(runId, fiber);
+        return yield* Fiber.join(fiber);
       });
       return Effect.raceFirst(
         Deferred.await(refusal),
@@ -317,37 +354,46 @@ export class RunRoster {
   /** Hold `runId` against local ownership for the caller's scope, refusing
    *  when a generation, a step on its lane, or a retained handle owns it here
    *  — an inactive-run step's refusal ({@link launch}), for a decision whose
-   *  validity has to outlive the step that took it. The hold is a generation
-   *  like any other: {@link isLive} reports it, so a resume refuses on it, a
-   *  launch of the same run waits for it, and a competing step is refused. */
-  holdInactive(runId: RunId): Effect.Effect<void, RunLive, Scope.Scope> {
+   *  validity has to outlive the step that took it. The hold is a fiber that
+   *  owns the run and does nothing: {@link isLive} reports it, so a resume
+   *  refuses on it, a launch of the same run waits for it, and a competing
+   *  step is refused. The run's DB claim rides the same fiber's lifetime, so
+   *  the in-process owner and the claim are fenced by one construct. */
+  holdInactive(runId: RunId): Effect.Effect<void, RunLive | Error, Scope.Scope> {
     return Effect.asVoid(
       Effect.acquireRelease(
-        // The test and the registration are one synchronous step, as the
-        // conditional lane claim is: nothing can take the run in between.
-        Effect.suspend(() =>
-          this.isLive(runId) ||
-          this.isRetained(runId) ||
-          this.isLaneOccupied(runId)
-            ? Effect.fail(new RunLive({ runId }))
-            : Effect.sync(() => this.openGeneration(runId)),
-        ),
-        (close) => Effect.sync(close),
+        Effect.suspend(() => {
+          // The test and the registration are one synchronous step, as the
+          // conditional lane claim is: nothing can take the run in between.
+          if (
+            this.isLive(runId) ||
+            this.isRetained(runId) ||
+            this.isLaneOccupied(runId)
+          )
+            return Effect.fail(new RunLive({ runId }));
+          return Effect.gen({ self: this }, function* () {
+            // The claim gates the hold itself: a run another owner holds is
+            // refused here, synchronously with the admission.
+            const releaseClaim = self.claimRun
+              ? yield* self.claimRun(runId)
+              : undefined;
+            const latch = yield* Latch.make(false);
+            const fiber = yield* Effect.forkChild(
+              Latch.await(latch).pipe(
+                Effect.ensuring(
+                  releaseClaim === undefined
+                    ? Effect.void
+                    : releaseClaim.pipe(Effect.orDie),
+                ),
+              ),
+            );
+            this.setFiber(runId, fiber);
+            return latch;
+          });
+        }),
+        (latch) => Latch.open(latch),
       ),
     );
-  }
-
-  /** Register a live generation of `runId` and hand back its close: synchronous
-   *  with the call, idempotent against a disposal that dropped the entry. */
-  private openGeneration(runId: RunId): () => void {
-    const completion = Deferred.makeUnsafe<void>();
-    const entry = this.entryFor(runId);
-    entry.generations.add(completion);
-    return () => {
-      Deferred.doneUnsafe(completion, Effect.void);
-      entry.generations.delete(completion);
-      this.prune(runId, entry);
-    };
   }
 
   // --------------------------------------------------------------- waiters
@@ -361,17 +407,25 @@ export class RunRoster {
     return this.listeners.waitForAnyChange(runIds);
   }
 
-  /** Resolve once every owner has left: handles, child activations, lanes and
-   *  scoped holds. Terminal handle removal can precede a lane's final writes.
-   *  Interrupting the waiting fiber — what a close budget does — detaches the
-   *  listeners with it. The re-check arm is load-bearing: `raceAllFirst`
-   *  starts its arms in order, so the wait registers first and the re-check
-   *  then sees a last run that left between the read above and those
-   *  listeners, rather than waiting out the close budget for a notification
-   *  that can no longer come. */
+  /** Resolve once every owner has left: fibers first — `Fiber.await` on the
+   *  entry's head is the generation's own completion, the shape of
+   *  `FiberMap.awaitEmpty` — then handles, child activations and lanes
+   *  through the change listeners. Interrupting the waiting fiber — what a
+   *  close budget does — detaches the listeners with it. The re-check arm is
+   *  load-bearing: `raceAllFirst` starts its arms in order, so the wait
+   *  registers first and the re-check then sees a last run that left between
+   *  the read above and those listeners, rather than waiting out the close
+   *  budget for a notification that can no longer come. */
   awaitDrained(): Effect.Effect<void> {
     return Effect.gen({ self: this }, function* () {
       for (;;) {
+        const head = this.entries.values().next();
+        if (head.done) return;
+        const fiber = head.value.fiber;
+        if (fiber !== undefined) {
+          yield* Fiber.await(fiber);
+          continue;
+        }
         const active = [...this.entries.keys()];
         if (active.length === 0) return;
         yield* Effect.raceAllFirst([
