@@ -18,6 +18,7 @@ import { CliExitCode } from '@cli/runtime/exitCodes';
 import { aggregateId } from '@shared/schemas';
 import type { FlowSnapshotPayload, RunId } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
+import { DatabaseReadFailed } from '@shared/session/database';
 import { RunLedgerRefused } from '@shared/session/runLedger';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { createProcessSession } from '@test/support/sessionTestUtils';
@@ -478,7 +479,12 @@ describe('runResumeCommand', () => {
       (runId) =>
         ++snapshotReads === 1
           ? realLatestSnapshot(runId)
-          : Effect.fail(new Error('KV timeout')),
+          : Effect.fail(
+              new DatabaseReadFailed({
+                path: 'run-ledger',
+                cause: new Error('KV timeout'),
+              }),
+            ),
     );
 
     await expect(run(cliContext())).resolves.toBe(1);

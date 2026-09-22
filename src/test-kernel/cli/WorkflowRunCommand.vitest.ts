@@ -31,6 +31,7 @@ import {
   RUN_OUTCOME,
   type FlowSnapshotPayload,
   type RunId,
+  type SessionEventDraft,
   AgentCategory,
 } from '@shared/schemas';
 import { createRunCommandCliContext } from '@test/cli/fixtures/cliContext';
@@ -417,9 +418,12 @@ const seedResumableCheckpoint = (session: SessionHandle, runId: string) =>
   });
 
 /** The commit the command's result-metadata write makes, for ordering. */
-const resultMetaCommitOrder = (
-  commitSpy: ReturnType<typeof vi.spyOn<SessionHandle, 'commit'>>,
-): number => {
+const resultMetaCommitOrder = (commitSpy: {
+  readonly mock: {
+    readonly calls: readonly (readonly [readonly SessionEventDraft[]])[];
+    readonly invocationCallOrder: readonly number[];
+  };
+}): number => {
   const index = commitSpy.mock.calls.findIndex(([drafts]) =>
     drafts.some((draft) => draft.type === 'run.result'),
   );

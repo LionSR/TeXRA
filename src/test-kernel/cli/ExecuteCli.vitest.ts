@@ -76,21 +76,11 @@ async function installStoragePlatform(): Promise<void> {
  * resumability read all land in the suite's mock bag.
  */
 const agentRunsFake = {
-  launch: (...args: unknown[]) =>
-    Effect.tryPromise({
-      try: () => mocks.runAgent(...args),
-      catch: (error) => error,
-    }),
+  launch: (...args: unknown[]) => Effect.promise(() => mocks.runAgent(...args)),
   finalize: (_session: unknown, input: unknown) =>
-    Effect.tryPromise({
-      try: () => mocks.finalizeRun(input),
-      catch: (error) => error,
-    }),
+    Effect.promise(() => mocks.finalizeRun(input)),
   resumability: (...args: unknown[]) =>
-    Effect.tryPromise({
-      try: () => mocks.deriveResumability(...args),
-      catch: (error) => error,
-    }),
+    Effect.promise(() => mocks.deriveResumability(...args)),
 } as NonNullable<Parameters<typeof executeCliRequest>[2]['agentRuns']>;
 
 vi.mock('@cli/runtime/cliPresentationHost', () => ({
