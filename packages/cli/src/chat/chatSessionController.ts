@@ -1312,7 +1312,9 @@ export function createChatSessionController(
           awaitRunFolded(session.runId),
           runSettled === undefined
             ? Effect.succeed(undefined)
-            : runSettled.pipe(Effect.as(undefined)),
+            : // Settled is settled: a run that failed or was interrupted wins
+              // this race with `undefined` so the draft is restored below.
+              runSettled.pipe(Effect.exit, Effect.as(undefined)),
         ));
       if (session.stopRequested) {
         requestDraftRestore(line, images);

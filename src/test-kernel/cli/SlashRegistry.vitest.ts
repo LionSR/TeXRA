@@ -26,13 +26,13 @@ import { type AccountAccessFormValue } from '@cli/chat/tui/forms/AccountAccessFo
 import { transcriptRowHeadline } from '@cli/chat/tui/panes/transcriptEntries';
 import {
   CLI_LOCAL_RUN_ID,
-  activeForm,
   formProgress,
   resetCliState,
   sessionMeta,
   transientNotice,
   type SessionMeta,
 } from '@cli/chat/tui/state/cliState';
+import { activeForm } from '@cli/chat/tui/state/formSlot';
 import { notices, noticesFor } from '@cli/chat/tui/state/transcript';
 import type { CliModelAccessSelection } from '@cli/runtime/modelAccessRoute';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';

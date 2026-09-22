@@ -7,7 +7,8 @@
 // A dialog is a foreground form: it takes the App's one `activeForm` slot, so
 // a host dialog obeys the same one-modal-at-a-time promotion the approval
 // queue does, and a second one waits on this module's lane rather than
-// painting over the first. Cancelling is a value, never a failure: `confirm`
+// painting over the first. A slash form already in that slot is waited on
+// too, through the slot owner in `cliState`. Cancelling is a value, never a failure: `confirm`
 // answers `false`, `input` and an answerable message answer `undefined`,
 // exactly as the two graphical hosts do.
 
@@ -29,7 +30,7 @@ import type {
 
 import { CredentialEntryForm } from '../forms/ApiKeyEntryForm';
 import { ListForm } from '../forms/_shared/ListForm';
-import { activeForm } from '../state/cliState';
+import { closeActiveForm, openActiveForm } from '../state/formSlot';
 import {
   appendLocalAssistantTranscript,
   appendLocalErrorTranscript,
@@ -49,10 +50,12 @@ function labelOf<T extends string>(item: PromptMessageItem<T>): T {
 
 /**
  * Put one form in the App's foreground slot and wait for the answer it
- * resolves. The slot is released on every exit: the App clears it itself when
- * the form closes, and the finalizer clears it only while this dialog is
- * still the occupant, so an interruption takes down its own form without
- * evicting whatever opened after it.
+ * resolves. The slot is claimed through `openActiveForm`, the one owner both
+ * this and the slash-command forms write through, so a dialog opened while a
+ * slash form is still on screen waits behind it rather than unmounting it and
+ * throwing away what the user typed. The slot is released on every exit: the
+ * App closes the form itself when it answers, and the finalizer closes it
+ * from here, which gives up a queued place just as it gives up the slot.
  */
 function openDialog<T>(
   commandName: string,
@@ -79,10 +82,8 @@ function openDialog<T>(
             resume(Effect.succeed(value));
           }, availableRows),
       };
-      activeForm.set(form);
-      return Effect.sync(() => {
-        if (activeForm.get() === form) activeForm.set(undefined);
-      });
+      openActiveForm(form);
+      return Effect.sync(() => closeActiveForm(form));
     }),
   );
 }

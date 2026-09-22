@@ -35,11 +35,11 @@ import {
   registerSlashCommand,
   unregisterSlashCommand,
 } from '@cli/chat/tui/commands/slashRegistry';
+import { tuiUi } from '@cli/chat/tui/hosts/tuiUiHost';
 import { transcriptRowHeadline } from '@cli/chat/tui/panes/transcriptEntries';
 import { notices, noticesFor } from '@cli/chat/tui/state/transcript';
 import {
   CLI_LOCAL_RUN_ID,
-  activeForm,
   activeRunId,
   closeForegroundReader,
   closeInfoPane,
@@ -49,6 +49,7 @@ import {
   resetCliState,
   transientNotice,
 } from '@cli/chat/tui/state/cliState';
+import { activeForm } from '@cli/chat/tui/state/formSlot';
 import * as apiStatus from '@cli/runtime/apiStatus';
 import * as subscriptionLogin from '@cli/runtime/subscriptionLogin';
 import type { CliContext } from '@cli/runtime/cliContext';
@@ -462,6 +463,30 @@ describe('handleTuiSlashCommand', () => {
         { kind: 'user', text: '/custom-form' },
       ]);
     }),
+  );
+
+  it.effect(
+    'queues a host dialog behind an open slash form instead of evicting it',
+    () =>
+      Effect.gen(function* () {
+        registerSlashCommand({
+          name: 'custom-form',
+          description: 'Custom form',
+          formComponent: () => null,
+        });
+        yield* dispatchSlash('/custom-form', createContext());
+
+        // The host dialog reachable from a retry card ('k' with no stored
+        // key). It must wait for the slot, not overwrite the form the user
+        // is filling.
+        const dialog = yield* Effect.forkChild(
+          tuiUi.input({ prompt: 'API key', password: true }),
+        );
+        yield* started;
+        expect(activeForm.get()?.commandName).toBe('custom-form');
+
+        yield* Fiber.interrupt(dialog);
+      }),
   );
 
   it.effect(

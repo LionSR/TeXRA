@@ -25,7 +25,8 @@ import {
 import { registerBuiltinSlashCommands } from '@cli/chat/tui/commands/registerBuiltins';
 import { openCliSlashCommandForm } from '@cli/chat/tui/commands/slashForms';
 import { ConfigApp } from '@cli/config/runConfigTui';
-import { activeForm, resetCliState } from '@cli/chat/tui/state/cliState';
+import { resetCliState } from '@cli/chat/tui/state/cliState';
+import { activeForm } from '@cli/chat/tui/state/formSlot';
 import {
   API_PROVIDERS,
   type ApiKeyStatus,

@@ -7,7 +7,8 @@ import { LoadingIndicator } from '@cli/tui/ui/LoadingIndicator';
 import { COLOR_ERROR } from '@cli/tui/ui/colors';
 import { textDisplayWidth } from '@cli/runtime/terminalText';
 import { FormFrame, formFrameWidth } from '../forms/_shared/FormFrame';
-import { activeForm, formProgress, type FormProgress } from '../state/cliState';
+import { formProgress, type FormProgress } from '../state/cliState';
+import { takeActiveForm } from '../state/formSlot';
 import { appendLocalUserTranscript } from '../state/transcript';
 
 import {
@@ -119,7 +120,7 @@ export function openRegisteredCliSlashForm(
     onPersist?.();
   };
   formProgress.set(undefined);
-  activeForm.set({
+  takeActiveForm({
     commandName: command.name,
     escapeAction: command.formEscapeAction,
     render: (close, availableRows) => {

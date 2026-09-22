@@ -235,24 +235,6 @@ export const claimedRunId = signal<RunId | undefined>(undefined);
 // slash-command palette, and reverse search. These view-level toggles live
 // here as signal state rather than local component state.
 
-/** Active inline slash form, or `undefined` when the chat input owns the
- *  screen. The form's `onDone` clears this slot. Kept opaque (the form
- *  carries its own state) so the registry stays declarative. */
-interface ActiveSlashForm {
-  /** The slash command that mounted the form (for the header strip). */
-  readonly commandName: string;
-  /** Status-bar verb for Escape while the form owns input. Defaults to close. */
-  readonly escapeAction?: string;
-  /** Render the form body. Receives the close callback. */
-  readonly render: (
-    onDone: () => void,
-    availableRows: number,
-  ) => React.ReactNode;
-}
-export const activeForm: Signal.State<ActiveSlashForm | undefined> = signal<
-  ActiveSlashForm | undefined
->(undefined);
-
 /** Session-local approval scope captured by the next Run as Goal action. */
 export const goalAutoApproveAll = signal(false);
 
@@ -590,7 +572,6 @@ export function resetCliState(
   expandedRuns.set(new Map());
   rootRunPending.set(false);
   claimedRunId.set(undefined);
-  activeForm.set(undefined);
   goalAutoApproveAll.set(false);
   INFO_PANE_QUEUE.set([]);
   FOREGROUND_READER.set(undefined);
