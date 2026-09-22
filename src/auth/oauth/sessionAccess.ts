@@ -72,7 +72,7 @@ export function createSecretBackedCoordinator<C>(init: {
 
 /** Minimal coordinator surface used for the status probe. */
 export interface SessionAccessCoordinator {
-  getStatus(): Effect.Effect<SubscriptionSessionStatus, unknown>;
+  getStatus(): Effect.Effect<SubscriptionSessionStatus, Error>;
 }
 
 /**

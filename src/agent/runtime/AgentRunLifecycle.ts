@@ -69,7 +69,7 @@ export interface RunFlowLifecycleOptions {
    * Kept injected so this module does not statically reach tool-domain
    * services such as the Lean language adapter.
    */
-  onRunEnd?: (runId: RunId) => Effect.Effect<void, unknown, AgentRunServices>;
+  onRunEnd?: (runId: RunId) => Effect.Effect<void, never, AgentRunServices>;
 }
 
 interface FinalizeRunTerminalParams {

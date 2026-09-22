@@ -552,7 +552,7 @@ export class ToolUseFollowUpQueue {
       readonly wrote: boolean;
       readonly releaseClaim: Effect.Effect<void, Error> | null;
     },
-    unknown
+    Error
   > {
     const port = this.port;
     return Effect.gen({ self: this }, function* () {

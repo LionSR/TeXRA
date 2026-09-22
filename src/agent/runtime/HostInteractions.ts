@@ -135,7 +135,7 @@ export interface HostInteractions {
    * staged, run only if that one case arrives, so the body of this call
    * stages nothing and undoes nothing on its own.
    */
-  releaseToolEdit?(requestId: string): Effect.Effect<void, unknown>;
+  releaseToolEdit?(requestId: string): Effect.Effect<void>;
   dispose?(): void;
 }
 
@@ -298,7 +298,7 @@ export class SessionHostInteractions implements HostInteractions {
    */
   presentToolEdit(
     request: ToolEditApprovalRequest,
-  ): Effect.Effect<void, unknown> | undefined {
+  ): Effect.Effect<void> | undefined {
     const { requestId } = request.permission;
     const active = this.activeAttachment;
     if (!active?.interactions.presentToolEdit) {
