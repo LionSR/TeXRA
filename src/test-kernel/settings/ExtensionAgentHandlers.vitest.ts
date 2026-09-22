@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetAgentCatalogAuthRefreshScopeForTests } from '@frontend/auth/agentCatalogRefreshScope';
 import type { AgentCategory } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { createDeferred } from '@test/support/asyncTestUtils';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import {
   physicistCatalog,
@@ -64,6 +65,8 @@ interface HandlerFixtureOptions {
   /** Button label returned by the modal "members unavailable" prompt. */
   readonly modalChoice?: string | undefined;
   readonly infoMessageResult?: Promise<string | undefined>;
+  /** Fired after an information message is recorded. */
+  readonly onInfoMessage?: (message: string) => void;
 }
 
 async function createHandlerFixture(options: HandlerFixtureOptions = {}) {
@@ -76,6 +79,7 @@ async function createHandlerFixture(options: HandlerFixtureOptions = {}) {
   const modalPrompts: string[] = [];
   host.showInformationMessage.mockImplementation((message: string) => {
     notifications.push(message);
+    options.onInfoMessage?.(message);
     return options.infoMessageResult;
   });
   host.showWarningMessage.mockImplementation(async (message: string) => {
@@ -135,6 +139,7 @@ describe('extension settings AgentHandlers', () => {
   });
 
   it('applies source-qualified teams without awaiting notification dismissal', async () => {
+    const notified = createDeferred();
     const {
       handlers,
       notifications,
@@ -144,6 +149,7 @@ describe('extension settings AgentHandlers', () => {
       catalog: physicistCatalog(),
       modalChoice: 'Continue with Available Members',
       infoMessageResult: new Promise(() => {}),
+      onInfoMessage: () => notified.resolve(),
     });
 
     await applyPreset(handlers, 'physicist');
@@ -155,11 +161,10 @@ describe('extension settings AgentHandlers', () => {
       'orchestrator',
       true,
     );
-    await vi.waitFor(() =>
-      expect(notifications).toEqual([
-        'Applied "Physicist" with 7 members still unavailable',
-      ]),
-    );
+    await notified.promise;
+    expect(notifications).toEqual([
+      'Applied "Physicist" with 7 members still unavailable',
+    ]);
   });
 
   it('does not write roster state when team preflight is cancelled', async () => {

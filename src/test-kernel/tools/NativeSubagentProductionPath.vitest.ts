@@ -1,7 +1,7 @@
 import { writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
-import { Effect, Fiber, Layer, Stream } from 'effect';
+import { Deferred, Effect, Fiber, Layer, Stream } from 'effect';
 
 /**
  * Production-shaped regression for #9531. Agent registration, launch, child
@@ -107,6 +107,18 @@ let session: SessionHandle;
 let childId: RunId | undefined;
 let resumedRuns: RunId[];
 let completedResumes: RunId[];
+const completedResumeWaiters: Array<{
+  count: number;
+  deferred: Deferred.Deferred<void>;
+}> = [];
+
+function notifyCompletedResumes(): void {
+  for (const waiter of [...completedResumeWaiters]) {
+    if (completedResumes.length >= waiter.count) {
+      Deferred.doneUnsafe(waiter.deferred, Effect.void);
+    }
+  }
+}
 
 interface ScriptedTurn {
   readonly text: string;
@@ -299,6 +311,7 @@ function resumePersistedRun(
         }),
       );
       completedResumes.push(runId);
+      notifyCompletedResumes();
       return 'started' in resumed && resumed.delivered;
     },
     catch: (cause) =>
@@ -382,9 +395,12 @@ function interruptActiveRuns(session: SessionHandle): void {
   }
 }
 
-async function waitForCompletedResumes(count: number): Promise<void> {
-  await vi.waitFor(() => expect(completedResumes).toHaveLength(count), {
-    timeout: 10_000,
+function waitForCompletedResumes(count: number): Effect.Effect<void> {
+  return Effect.gen(function* () {
+    if (completedResumes.length >= count) return;
+    const deferred = yield* Deferred.make<void>();
+    completedResumeWaiters.push({ count, deferred });
+    yield* Deferred.await(deferred);
   });
 }
 
@@ -578,6 +594,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     childId = undefined;
     resumedRuns = [];
     completedResumes = [];
+    completedResumeWaiters.length = 0;
   });
 
   afterEach(async () => {
@@ -604,7 +621,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
           );
 
         yield* Effect.promise(() => waitForPersistedResult(runId, 'Result A.'));
-        yield* Effect.promise(() => waitForCompletedResumes(1));
+        yield* waitForCompletedResumes(1);
 
         const resumed = yield* Effect.promise(() =>
           queueSecondAssertionFollowUp(parentContext, runId),
@@ -612,7 +629,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         expect(resumed.summary).toContain('Follow-up queued');
 
         yield* Effect.promise(() => waitForPersistedResult(runId, 'Result B.'));
-        yield* Effect.promise(() => waitForCompletedResumes(2));
+        yield* waitForCompletedResumes(2);
 
         // The resumed turn asks the model with the follow-up as its last message
         // and turn 1's answer still in the history it carries.
@@ -687,7 +704,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         );
 
         yield* Effect.promise(() => waitForPersistedResult(runId, 'Result A.'));
-        yield* Effect.promise(() => waitForCompletedResumes(1));
+        yield* waitForCompletedResumes(1);
 
         const resumed = yield* Effect.promise(() =>
           queueSecondAssertionFollowUp(parentContext, runId),
@@ -716,7 +733,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
             { timeout: 10_000 },
           ),
         );
-        yield* Effect.promise(() => waitForCompletedResumes(2));
+        yield* waitForCompletedResumes(2);
 
         yield* session.settlePublications();
         const archivedChild = yield* readCompletedRunConversation(
@@ -768,7 +785,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         );
 
         yield* Effect.promise(() => waitForPersistedResult(runId, 'Result A.'));
-        yield* Effect.promise(() => waitForCompletedResumes(1));
+        yield* waitForCompletedResumes(1);
 
         // Submit two follow-ups concurrently, before the child drains the queue.
         // The resumed child takes the whole queued batch and runs one turn
@@ -792,7 +809,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         expect(second.status).toBe('executed');
 
         yield* Effect.promise(() => waitForPersistedResult(runId, 'Result B.'));
-        yield* Effect.promise(() => waitForCompletedResumes(2));
+        yield* waitForCompletedResumes(2);
 
         // The child transcript has turn 1 (Result A) and the batch turn (Result B),
         // with BOTH follow-up instructions recorded as user messages in the batch.
@@ -837,7 +854,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
           }),
         );
         yield* Effect.promise(() => waitForPersistedResult(runId, 'Result A.'));
-        yield* Effect.promise(() => waitForCompletedResumes(1));
+        yield* waitForCompletedResumes(1);
 
         // The loop minted a stable logical identity for turn 1's delivery.
         const turnState = yield* readChildTurnState(session, runId);
@@ -880,7 +897,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
           },
           { session },
         ).pipe(Effect.provideService(AgentResume, fakeHostAgentResume));
-        yield* Effect.promise(() => waitForCompletedResumes(2));
+        yield* waitForCompletedResumes(2);
         yield* session.settlePublications();
         const afterDistinct = JSON.stringify(
           (yield* readCompletedRunConversation(PARENT_RUN_ID, session))
@@ -912,7 +929,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
           }),
         );
         yield* Effect.promise(() => waitForPersistedResult(runId, 'Result A.'));
-        yield* Effect.promise(() => waitForCompletedResumes(1));
+        yield* waitForCompletedResumes(1);
 
         const completed1 = (yield* readChildTurnState(session, runId))
           .lastCompleted;

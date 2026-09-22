@@ -4,7 +4,7 @@
 // with `session.openRequest`; the surface answers with `request.decide`.
 
 import { it } from '@effect/vitest';
-import { Effect, Fiber, SubscriptionRef } from 'effect';
+import { Deferred, Effect, Fiber, SubscriptionRef } from 'effect';
 import { afterEach, beforeAll, beforeEach, describe, expect, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -791,6 +791,7 @@ describe('TUI request decisions', () => {
     (stage) =>
       Effect.gen(function* () {
         let finishLookup: (() => void) | undefined;
+        const lookupCaptured = Deferred.makeUnsafe<void>();
         if (stage === 'decision') {
           // The card's lookup answers at once; the switch's own gate is what
           // this case holds open past the host's disposal.
@@ -802,6 +803,7 @@ describe('TUI request decisions', () => {
                   new Promise<boolean>((_resolve, reject) => {
                     finishLookup = () =>
                       reject(new Error('Keychain unavailable'));
+                    Deferred.doneUnsafe(lookupCaptured, Effect.void);
                   }),
               ),
             );
@@ -811,6 +813,7 @@ describe('TUI request decisions', () => {
               () =>
                 new Promise<boolean>((resolve) => {
                   finishLookup = () => resolve(true);
+                  Deferred.doneUnsafe(lookupCaptured, Effect.void);
                 }),
             ),
           );
@@ -828,7 +831,7 @@ describe('TUI request decisions', () => {
           );
           decideRetry(PERSONAL_KEY_RETRY);
         }
-        yield* waitFor(() => expect(finishLookup).toBeDefined());
+        yield* Deferred.await(lookupCaptured);
         attached.dispose();
         if (stage === 'presentation') {
           // A replacement attachment has already prepared its own card.
@@ -1014,11 +1017,13 @@ describe('TUI request decisions', () => {
     () =>
       Effect.gen(function* () {
         let resolveLookup: ((value: boolean) => void) | undefined;
+        const lookupCaptured = Deferred.makeUnsafe<void>();
         mocks.hasUsableApiKey.mockImplementation(() =>
           Effect.promise(
             () =>
               new Promise<boolean>((resolve) => {
                 resolveLookup = resolve;
+                Deferred.doneUnsafe(lookupCaptured, Effect.void);
               }),
           ),
         );
@@ -1037,7 +1042,7 @@ describe('TUI request decisions', () => {
         yield* waitForApproval('bash', { runId: bashRunId });
         // The retry is listed from the moment it opens, but it is not a
         // request the user can act on until its key lookup finishes.
-        yield* waitFor(() => expect(resolveLookup).toBeDefined());
+        yield* Deferred.await(lookupCaptured);
         resolveLookup?.(false);
         yield* settle();
         // It joined behind the modal the user is already answering.

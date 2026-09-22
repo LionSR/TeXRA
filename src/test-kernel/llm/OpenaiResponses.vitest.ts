@@ -17,6 +17,7 @@ import {
 } from '@texra-ai/llm/openai-responses';
 import { admittedFingerprint } from '@texra-ai/llm/prefix-fingerprint';
 import { openaiChatModel } from '@texra-ai/llm/openai-chat';
+import { createDeferred } from '@test/support/asyncTestUtils';
 import type {
   BackgroundEvent,
   ModelError,
@@ -2036,16 +2037,9 @@ describe('native OpenAI Responses protocol', () => {
     'joins an interrupted cancellation body and retains its cleanup failure',
     () =>
       Effect.gen(function* () {
-        const gate = () => {
-          let release!: () => void;
-          const promise = new Promise<void>((resolve) => {
-            release = resolve;
-          });
-          return { promise, release };
-        };
-        const entered = gate();
-        const aborted = gate();
-        const released = gate();
+        const entered = createDeferred();
+        const aborted = createDeferred();
+        const released = createDeferred();
         const failure = new Error('Late cancellation body failure');
         const fetch = vi.fn<typeof globalThis.fetch>().mockImplementation(
           async (_url, init) =>
@@ -2056,7 +2050,7 @@ describe('native OpenAI Responses protocol', () => {
                     init!.signal!.addEventListener(
                       'abort',
                       () => {
-                        aborted.release();
+                        aborted.resolve();
                         void released.promise.then(() =>
                           controller.error(failure),
                         );
@@ -2065,7 +2059,7 @@ describe('native OpenAI Responses protocol', () => {
                     );
                   },
                   pull() {
-                    entered.release();
+                    entered.resolve();
                   },
                 },
                 { highWaterMark: 0 },
@@ -2095,7 +2089,7 @@ describe('native OpenAI Responses protocol', () => {
         );
         yield* Effect.promise(() => aborted.promise);
         const finishedBeforeRelease = finished;
-        released.release();
+        released.resolve();
         yield* Fiber.join(interruption);
         const exit = yield* Fiber.await(fiber);
         expect(finishedBeforeRelease).toBe(false);

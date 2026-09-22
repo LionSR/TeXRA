@@ -19,8 +19,13 @@ const mocks = vi.hoisted(() => ({
   watchedDirectories: [] as string[],
   /** Directory listings keyed by fsPath, standing in for the disk. */
   tree: new Map<string, [string, number][]>(),
-  /** Reads parked until the test releases them, keyed by fsPath. */
-  heldReads: new Map<string, { promise: Promise<void> }>(),
+  /** Reads parked until the test releases them, keyed by fsPath. `onReached`
+   *  fires the moment the mock consumes the parked read (so a test can await
+   *  that instead of polling the map), before the read parks on `promise`. */
+  heldReads: new Map<
+    string,
+    { promise: Promise<void>; onReached?: () => void }
+  >(),
   createHandlers: new Map<string, (uri: { fsPath: string }) => void>(),
 }));
 
@@ -42,6 +47,7 @@ vi.mock('vscode', () => ({
         const held = mocks.heldReads.get(uri.fsPath);
         if (held) {
           mocks.heldReads.delete(uri.fsPath);
+          held.onReached?.();
           await held.promise;
         }
         return entries;
@@ -271,16 +277,18 @@ describe('agent directory watcher rebuilds', () => {
 
   it('disposes watchers built after the last subscription is removed', async () => {
     const scan = createDeferred<void>();
+    const readReached = createDeferred<void>();
     mocks.getAllLocal.mockResolvedValue([
       { directory: EXTERNAL_FIRST, source: 'custom' },
     ]);
     mocks.tree.set(EXTERNAL_FIRST, []);
-    mocks.heldReads.set(EXTERNAL_FIRST, scan);
+    mocks.heldReads.set(EXTERNAL_FIRST, {
+      promise: scan.promise,
+      onReached: () => readReached.resolve(),
+    });
 
     const handle = subscribe();
-    await vi.waitFor(() => {
-      expect(mocks.heldReads.has(EXTERNAL_FIRST)).toBe(false);
-    });
+    await readReached.promise;
 
     handle.dispose();
     subscription = undefined;

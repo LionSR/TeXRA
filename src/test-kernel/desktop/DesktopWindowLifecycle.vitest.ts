@@ -7,6 +7,7 @@ import {
   bootstrapDesktopWindowLifecycle,
   installDesktopBeforeQuitWiring,
 } from '@desktop/main/desktopWindowLifecycle';
+import { createDeferred } from '@test/support/asyncTestUtils';
 
 class FakeWebContents extends EventEmitter {}
 
@@ -77,8 +78,10 @@ describe('desktop window lifecycle', () => {
       isDestroyed: () => false,
     };
     const sequence: string[] = [];
+    const shutdownRan = createDeferred();
     const ranShutdown = vi.fn(() => {
       sequence.push('shutdown');
+      shutdownRan.resolve();
     });
     const runShutdown = Effect.sync(ranShutdown);
     let continueQuit: (() => void) | undefined;
@@ -102,7 +105,8 @@ describe('desktop window lifecycle', () => {
     continueQuit?.();
     const second = { preventDefault: vi.fn() };
     listener?.(second);
-    await vi.waitFor(() => expect(ranShutdown).toHaveBeenCalledOnce());
+    await shutdownRan.promise;
+    expect(ranShutdown).toHaveBeenCalledOnce();
     expect(second.preventDefault).toHaveBeenCalledOnce();
     expect(app.quit).toHaveBeenCalledTimes(2);
     expect(sequence).toEqual(['shutdown']);
