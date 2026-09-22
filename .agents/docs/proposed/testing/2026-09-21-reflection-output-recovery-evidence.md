@@ -5,12 +5,16 @@ status: proposed
 
 # Reflection raw-output recovery: shipped behavior and verification
 
-This note closes the reflection half of
+This note is the evidence record for the reflection half of
 [#12427](https://github.com/LionSR/TeXRA/issues/12427): what the shipped
 reflection loop actually does for complete, partial, and conflicting raw
 output across a process reopen, which existing test pins each case, and what
-remains unpinned. It is source-based and suite-verified against `origin/main`
-at `6eb322f83e75b81602a7f4fdcfede2d329af29f9` (2026-09-21). No durable shape
+remains unpinned. It does not by itself close that half: the completion
+protocol requires the treatment to be verified across a process reopen in the
+existing reflection suite
+(`2026-09-15-effect-native-completion-protocol.md:396-399`), and that reopen
+remains unpinned in section 4. It is source-based and suite-verified against
+`origin/main` at `6eb322f83e75b81602a7f4fdcfede2d329af29f9` (2026-09-21). No durable shape
 changes: the recommendation at the end is stated, not landed.
 
 ## 1. The mechanism, as shipped
@@ -96,8 +100,9 @@ content. The case is `it.effect.each` over four seeds at `:1190-1235`,
 
 The fourth row is the important one: its seed has exactly the fragment's byte
 length, so the writer takes the COMPLETE branch and leaves the debris in
-place; the assertion `expect(content).toBe('stale 0 output')` (`:1233`)
-pins that equal-length conflicting content is **not** repaired. The test's own
+place; the assertion at `:1233` is `expect(content).toBe(expected)`, where
+`expected` is the per-row parameter and is `'stale 0 output'` for this row —
+it pins that equal-length conflicting content is **not** repaired. The test's own
 doc comment says this explicitly (`:1185-1188`).
 
 The suite runs against a real SQLite session database
@@ -150,3 +155,12 @@ bump `SESSION_EVENT_FORMAT` (`sessionEvent.ts:588`), regenerate the
 `sessionEventFormat.json` snapshot, and accept that every existing `texra.db`
 is cleared by the bump — the session-format version rule. That is not done
 here, and the issue does not ask for it.
+
+The verification the protocol's reopen requirement still owes: drive a literal
+process reopen — resume the interrupted run in a second `SessionHandle`
+opened over the same on-disk store. The C15 case cannot serve as that test
+today because `createProcessSession` defaults to an ephemeral transcript
+(`src/test-kernel/support/sessionTestUtils.ts:63-82`), which makes the
+database layer use `:memory:` (`src/controllers/session/Database.ts:271-288`);
+a persistent-mode variant of the same seed is the one suite addition this
+half needs before #12427's reflection half can close.

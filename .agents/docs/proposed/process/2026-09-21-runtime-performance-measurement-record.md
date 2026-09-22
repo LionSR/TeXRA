@@ -54,10 +54,19 @@ never merged.
 - **Units.** Milliseconds, wall-clock, reported as p50 and p95 over launches.
 - **Method.** Launch the built host binary as a child process —
   `packages/cli/dist/bin/texra.js` or `packages/desktop/dist/main/index.js` —
-  and time from `spawn` to the host's first signal that a run can be
-  accepted (the moment the session store is open and the runtime installed).
-  Measure cold (OS page cache dropped) and warm; 20 launches each. The timer
-  must stop at the "session ready" boundary, with nothing after it included.
+  and time from `spawn` to an observable endpoint at the "session ready"
+  boundary (the session store open and the runtime installed), with nothing
+  after it included. Neither binary emits a dedicated ready signal today: the
+  CLI caches `initializeDefaultSession` and opens the store lazily, only when
+  a command evaluates `services.session`
+  (`packages/cli/src/runtime/initPlatform.ts:343-368`, `:407`, `:444-455`),
+  so the measurable proxy is a trivial command that touches the session,
+  timed `spawn` → process exit, with the command doing no work after the
+  open; the desktop's only readiness marker fires after renderer startup and
+  includes work beyond this boundary
+  (`packages/desktop/tests/e2e/electronApp.ts:120-129`), so the desktop
+  reading needs an instrumented probe or harness event before it can be
+  taken. Measure cold (OS page cache dropped) and warm; 20 launches each.
 - **Proposed budget (unvalidated).** p95 cold open ≤ **1,000 ms** on the
   populated store and ≤ **500 ms** on the fresh store, on the reference
   machine. A p95 above its bound fails.
@@ -67,11 +76,18 @@ never merged.
 ## 2. Stop latency with controlled non-zero work
 
 - **Machine.** The table above.
-- **Dataset.** A fixture run whose model invocation takes a fixed 100 ms per
-  response and whose single tool takes a fixed 100 ms, stopped while that
-  work is in flight. "Controlled non-zero work" means the in-flight work must
-  actually run for its configured duration — the stop path joins it, it does
-  not restart or drop it.
+- **Dataset.** A fixture run whose model invocation would take 100 ms per
+  response and whose single tool would take 100 ms if left uninterrupted,
+  stopped while that work is in flight. The controlled work must be
+  abort-aware: the shipped stop contract interrupts the run and propagates
+  cancellation into the in-flight model and tool work
+  (`2026-09-04-agent-runtime-on-effect.md:767-775`;
+  `src/agent/runtime/AgentLaunchContext.ts:500-507`), and the fixture must let
+  that happen. The 100 ms figures size the work; they are not a floor the
+  stop waits out. A fixture that runs to its full configured duration after
+  the stop would measure an artificial mandatory wait and would not detect
+  regressions in cancellation propagation, which is the user-visible part of
+  stop latency.
 - **Revision.** `6eb322f83e75b81602a7f4fdcfede2d329af29f9`.
 - **Units.** Milliseconds, from the stop request to the run's `halted` step
   committed and every admitted child joined (resources released only after
@@ -80,9 +96,10 @@ never merged.
   the stop signal mid-flight; time stop-request → full settlement. 100
   trials. The measured window ends at settlement, not at the process's later
   teardown.
-- **Proposed budget (unvalidated).** p95 stop latency ≤ **500 ms** with
-  100 ms of controlled in-flight work (stop overhead ≤ ~400 ms over the
-  work's own completion). A p95 above the bound fails.
+- **Proposed budget (unvalidated).** p95 stop latency ≤ **500 ms** from stop
+  request to full settlement with one in-flight model/tool operation cancelled
+  by the stop. The budget bounds cancellation propagation plus settlement; it
+  does not bound the work's uninterrupted duration. A p95 above the bound fails.
 - **Reading.** NOT TAKEN — needs a live run with a controlled-delay
   model/tool and a real stop signal, which is an interactive/maintainer
   session (or a dedicated harness not on `main`).
@@ -90,9 +107,16 @@ never merged.
 ## 3. Commit latency under contention
 
 - **Machine.** The table above.
-- **Dataset.** Two projects committing to one shared SQLite `texra.db` in
-  WAL mode — the two-root scenario, named for projects (not papers, per the
-  issue comment).
+- **Dataset.** Two processes committing session-event rows to one project's
+  SQLite `texra.db` in WAL mode — the shared-writer scenario, named for
+  projects (not papers, per the issue comment). Each project root gets its
+  own storage provider, its own storage directory, and its own `texra.db`
+  (`packages/desktop/src/main/desktopProjects.ts:256-277`,
+  `src/platform/defaults/workspaceStorage.ts:41-50`,
+  `src/controllers/session/Database.ts:271-281`), so "two projects, one
+  store" is not a topology the application composes. The contention being
+  measured is SQLite's single writer, exercised by two processes on the same
+  project root's store.
 - **Revision.** `6eb322f83e75b81602a7f4fdcfede2d329af29f9`.
 - **Units.** Milliseconds per commit, reported as p95; plus a hard deadline
   no single commit may exceed.
