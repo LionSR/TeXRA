@@ -370,6 +370,11 @@ function installResumeRunStore(
  * object swaps just that surface in. `sessionStub` is a bare mock, so the
  * override map is untyped here exactly as the returned session is.
  */
+/** The session's view ref, as a value the harness can install. The run lives
+ *  in this helper; a test body composes with `yield*` instead. */
+const installableViewRef = () =>
+  Effect.runSync(SubscriptionRef.make(currentView()));
+
 function installSession(overrides: Record<string, unknown> = {}): void {
   const runs = {
     getActiveIds: mocks.getActiveRunIds,
@@ -1323,7 +1328,7 @@ describe('createChatSessionController', () => {
     // "the conversation ended", not a failure that escapes the delivery and
     // skips both restore branches.
     installSession({
-      view: Effect.runSync(SubscriptionRef.make(currentView())),
+      view: installableViewRef(),
     });
     const session = makeSession({
       runId: 'a11111' as RunId,
