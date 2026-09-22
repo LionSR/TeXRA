@@ -45,20 +45,20 @@ export function createStubDesktopSettingsUiHost(
 export function createStubDesktopAgentSettingsController(): DesktopAgentSettingsController {
   return {
     handlers: {
-      setAgentEnabled: noOp,
-      setAllAgentsEnabled: noOp,
-      openAgentYaml: noOp,
-      openAgentFolder: noOp,
-      createAgent: noOp,
-      customizeAgent: noOp,
-      deleteCustomAgent: noOp,
-      revealAgentFile: noOp,
-      viewRemoteAgentPrompt: noOp,
-      setCustomAgentDir: noOp,
-      resetCustomAgentDir: noOp,
-      applyAgentModePreset: noOp,
-      saveAgentModePreset: noOp,
-      deleteAgentModePreset: noOp,
+      setAgentEnabled: noOpEffect,
+      setAllAgentsEnabled: noOpEffect,
+      openAgentYaml: noOpEffect,
+      openAgentFolder: noOpEffect,
+      createAgent: noOpEffect,
+      customizeAgent: noOpEffect,
+      deleteCustomAgent: noOpEffect,
+      revealAgentFile: noOpEffect,
+      viewRemoteAgentPrompt: noOpEffect,
+      setCustomAgentDir: noOpEffect,
+      resetCustomAgentDir: noOpEffect,
+      applyAgentModePreset: noOpEffect,
+      saveAgentModePreset: noOpEffect,
+      deleteAgentModePreset: noOpEffect,
     },
     postStartupData: noOpEffect,
     refreshCatalogData: () => Effect.void,
@@ -71,22 +71,22 @@ export function createStubDesktopCredentialSettingsController(
 ): DesktopCredentialSettingsController {
   return {
     profileHandlers: {
-      signIn: noOp,
-      signOut: noOp,
-      setProviderKey: noOp,
-      removeProviderKey: noOp,
-      openProviderKeyUrl: noOp,
-      openExternalUrl: noOp,
+      signIn: noOpEffect,
+      signOut: noOpEffect,
+      setProviderKey: noOpEffect,
+      removeProviderKey: noOpEffect,
+      openProviderKeyUrl: noOpEffect,
+      openExternalUrl: noOpEffect,
     },
     chatGptHandlers: {
-      signInChatGpt: noOp,
-      signOutChatGpt: noOp,
-      setChatGptPreferSubscription: noOp,
+      signInChatGpt: noOpEffect,
+      signOutChatGpt: noOpEffect,
+      setChatGptPreferSubscription: noOpEffect,
     },
     grokHandlers: {
-      signInGrok: noOp,
-      signOutGrok: noOp,
-      setGrokPreferSubscription: noOp,
+      signInGrok: noOpEffect,
+      signOutGrok: noOpEffect,
+      setGrokPreferSubscription: noOpEffect,
     },
     // The same wiring the desktop root does: the reads are the programs the
     // window settles at its own message boundary.
@@ -116,13 +116,13 @@ export function createStubDesktopToolingSettingsController(
 ): DesktopToolingSettingsController {
   return {
     toolHandlers: {
-      openToolInstallUrl: noOp,
+      openToolInstallUrl: noOpEffect,
       installToolExtension: unsupported(
         'Desktop cannot host VS Code extensions.',
       ),
-      recheckToolStatus: noOp,
-      toggleTool: noOp,
-      runToolCommand: noOp,
+      recheckToolStatus: noOpEffect,
+      toggleTool: noOpEffect,
+      runToolCommand: noOpEffect,
     },
     latexHandlers: {
       applyLatexSettings: unsupported(
@@ -131,9 +131,9 @@ export function createStubDesktopToolingSettingsController(
       installLatexWorkshop: unsupported(
         'Desktop cannot host VS Code extensions.',
       ),
-      runInstallCommand: noOp,
+      runInstallCommand: noOpEffect,
     },
-    postLatexConfigValues: () => Effect.void,
+    postLatexConfigValues: noOpEffect,
     postStartupData: noOpEffect,
     dispose: () => undefined,
     ...overrides,

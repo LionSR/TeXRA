@@ -156,16 +156,17 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
 
   constructor(
     private readonly context: vscode.ExtensionContext,
-    /** The platform state port, wrapped once by the extension root from the
-     *  editor's global `Memento`. */
     private readonly globalState: StateStore,
     private readonly secrets: PlatformSecrets,
-    /** This view's handle on the process runtime, handed down by the host
-     *  entry for the session edges below. */
+    /** Process runtime shared with every extension surface. */
     private readonly runtime: ProcessRuntime,
-    /** The extension host's one session, created in `activate` and handed
-     *  down to every surface that needs it. */
+    /** Session created by the extension entry. */
     session: SessionHandle,
+    public readonly refreshApiKeyStatus: Effect.Effect<
+      void,
+      Error,
+      ProcessServices
+    >,
   ) {
     this.logger = createChannelTrace('ProgressViewProvider');
     this.session = session;
@@ -339,6 +340,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       popOutToEditor: () => this.popOutToEditor(),
       showInSidebar: () => this.showInSidebar(),
       refreshOnboardingFunnel: () => this.refreshOnboardingFunnel(),
+      refreshApiKeyStatus: this.refreshApiKeyStatus,
     });
     this.disposables.push({ dispose: () => hostRequests.dispose() });
 
@@ -495,9 +497,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   private refreshAfterCredentialChange() {
     return Effect.gen({ self: this }, function* () {
       yield* refresh();
-      // `Promise.all` semantics, which is what this fan-out had: a failed
-      // repaint must not take the other three with it, and a half-repainted
-      // view is not an improvement on a failed one.
+      // Let every surface finish repainting even when another one fails.
       yield* allSettledVoid<
         StateReadFailed | StateWriteFailed,
         ProcessServices

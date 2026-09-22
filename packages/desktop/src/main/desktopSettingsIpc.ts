@@ -5,13 +5,21 @@ import { Cause, Effect, Exit } from 'effect';
 import type { SessionHandle } from '@agent/runtime';
 import { formatError } from '@common/errors';
 import { storeCredential } from '@common/secrets/storeCredential';
+import {
+  settingsViewProgram,
+  type SettingsViewInboundHandlerRegistry,
+} from '@controllers/settingsView/settingsViewDispatch';
 import { SettingsMemoryController } from '@controllers/settingsView/SettingsMemoryController';
 import {
   listGitHubSubscriptionEntries,
   noActiveGitHubSubscriptionMessage,
   unsubscribeGitHubKey,
 } from '@controllers/settingsView/githubSubscriptions';
-import { catchNotice, PromptFailed, type MessageHost } from '@hosts/uiHosts';
+import {
+  NotificationFailed,
+  PromptFailed,
+  type MessageHost,
+} from '@hosts/uiHosts';
 import type { StateStore } from '@platform/interfaces';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import { StorageFs, withSessionFs } from '@platform/rootedFs';
@@ -21,10 +29,8 @@ import { codingPlanForUsageSetting } from '@shared/codingPlanSubscriptions';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { type RunId } from '@shared/schemas';
 import {
-  dispatchSettingsViewInbound,
   SettingsViewInboundMessageSchema,
   type DerivedSettingsSnapshot,
-  type SettingsViewInboundHandlerRegistry,
 } from '@shared/settingsView/settingsViewMessages';
 import {
   applyStateSettingUpdate,
@@ -49,6 +55,7 @@ import {
   gitHubTokenRejectedMessage,
   resolveGitHubTokenSource,
 } from '@tools/github/githubAuth';
+import { ensureError } from '@utils/errors/errorMessage';
 import { subscribeDesktopAppSignal } from './desktopAppSignalSubscription.js';
 import { subscribeDesktopGoalChanges } from './desktopGoalSubscription.js';
 import type {
@@ -63,7 +70,7 @@ export interface DesktopSettingsUiHost extends Pick<
   MessageHost,
   'showInfoMessage' | 'showErrorMessage'
 > {
-  openPath(filePath: string): Effect.Effect<void, unknown>;
+  openPath(filePath: string): Effect.Effect<void, Error>;
   /**
    * Select the run as the window's active run. `'unavailable'` covers a
    * presentation that could not be reached at all; the reveal is then reported
@@ -136,29 +143,6 @@ export function createDesktopSettingsIpc(
   const { globalState, runtime } = options;
   const { roots } = options.session;
   const { workspaceState, config } = roots;
-  /** A settings program over this project's rooted filesystems, settled as an
-   *  IPC handler answers: the one provision of the IPC surface, taken at the
-   *  window's edge rather than at the depth that reads. */
-  const onSessionFiles = <A, E>(
-    program: Effect.Effect<A, E, StorageFs | ProcessServices>,
-  ): Promise<A> => runtime.runPromise(withSessionFs(roots, program));
-  // Commands declared `unsupported(...)` in settingsHandlers below surface as
-  // a visible info dialog instead of a console-only error log.
-  const onError = (error: unknown): void => {
-    if (!(error instanceof UnsupportedCommandError)) {
-      options.ui.onError(error);
-      return;
-    }
-    runtime.runFork(
-      options.ui.showInfoMessage(error.reason).pipe(
-        catchNotice((failure) =>
-          Effect.sync(() => {
-            options.ui.onError(failure.cause);
-          }),
-        ),
-      ),
-    );
-  };
   // The memory controller's prompts are the window's own dialogs; a window
   // that has gone away rejects them, and that reaches the controller as a typed
   // failure rather than as an unknown rejection — `PromptFailed` for the
@@ -228,7 +212,7 @@ export function createDesktopSettingsIpc(
         // A disposed runtime interrupts this read; the view it would repaint
         // is going away with it, so there is no placeholder to post.
         if (Cause.hasInterrupts(previewed.cause)) return;
-        onError(Cause.squash(previewed.cause));
+        options.ui.onError(Cause.squash(previewed.cause));
         options.postToRenderer(
           memoryController.getMemoryPreviewErrorMessage(storagePath),
         );
@@ -265,23 +249,21 @@ export function createDesktopSettingsIpc(
   // Memory lives under this project's storage root: the paths the OS opens are
   // joined onto that root as data, and the folder is created through the
   // session's storage view.
-  async function openMemoryFile(input: { storagePath: string }): Promise<void> {
-    const resolvedPath = resolveMemoryStoragePath(input.storagePath);
-    await runtime.runPromise(
-      options.ui.openPath(join(roots.storage, resolvedPath)),
-    );
+  function openMemoryFile(input: { storagePath: string }) {
+    return Effect.gen(function* () {
+      const resolvedPath = resolveMemoryStoragePath(input.storagePath);
+      yield* options.ui.openPath(join(roots.storage, resolvedPath));
+    });
   }
 
-  async function openMemoryFolder(): Promise<void> {
-    const memoryPath = resolveMemoryStoragePath();
-    await onSessionFiles(
-      StorageFs.use((storage) =>
+  function openMemoryFolder() {
+    return Effect.gen(function* () {
+      const memoryPath = resolveMemoryStoragePath();
+      yield* StorageFs.use((storage) =>
         storage.makeDirectory(memoryPath, { recursive: true }),
-      ),
-    );
-    await runtime.runPromise(
-      options.ui.openPath(join(roots.storage, memoryPath)),
-    );
+      );
+      yield* options.ui.openPath(join(roots.storage, memoryPath));
+    });
   }
 
   function postGoalList() {
@@ -419,9 +401,24 @@ export function createDesktopSettingsIpc(
   ): void {
     runtime.runFork(
       withSessionFs(roots, work).pipe(
-        Effect.catchCause((cause) =>
-          Effect.sync(() => onError(Cause.squash(cause))),
+        Effect.catchCause(
+          (cause): Effect.Effect<void, E | NotificationFailed> => {
+            if (Cause.hasInterruptsOnly(cause)) return Effect.void;
+            const error = Cause.squash(cause);
+            return error instanceof UnsupportedCommandError
+              ? options.ui.showInfoMessage(error.reason)
+              : Effect.failCause(cause);
+          },
         ),
+        Effect.catchCause((cause) => {
+          if (Cause.hasInterruptsOnly(cause)) return Effect.void;
+          const error = Cause.squash(cause);
+          return Effect.sync(() =>
+            options.ui.onError(
+              error instanceof NotificationFailed ? error.cause : error,
+            ),
+          );
+        }),
       ),
     );
   }
@@ -536,69 +533,67 @@ export function createDesktopSettingsIpc(
    * it. A run deleted since the entry was written has nothing to show, so
    * say so instead of leaving the click with no visible effect.
    */
-  async function revealRun(runId: RunId): Promise<void> {
-    const result = await options.ui.revealRun(runId);
-    if (result === 'missing') {
-      await runtime.runPromise(
-        options.ui.showInfoMessage('The agent run is no longer available.'),
-      );
-    }
+  function revealRun(runId: RunId) {
+    return Effect.gen(function* () {
+      const result = yield* Effect.tryPromise({
+        try: () => options.ui.revealRun(runId),
+        catch: ensureError,
+      });
+      if (result === 'missing') {
+        yield* options.ui.showInfoMessage(
+          'The agent run is no longer available.',
+        );
+      }
+    });
   }
 
-  async function unsubscribeGitHub(data: { key: string }): Promise<void> {
-    await runtime.runPromise(
-      Effect.gen(function* () {
+  function unsubscribeGitHub(data: { key: string }) {
+    return Effect.gen(function* () {
+      yield* Effect.gen(function* () {
         const removed = yield* unsubscribeGitHubKey(data.key);
         const absent = noActiveGitHubSubscriptionMessage(data.key);
         yield* removed === 0
           ? options.ui.showInfoMessage(absent)
           : postGitHubSubscriptions();
-      }),
-    );
+      });
+    });
   }
 
-  const settingsHandlers: SettingsViewInboundHandlerRegistry = {
+  const settingsHandlers: SettingsViewInboundHandlerRegistry<
+    ProcessServices | StorageFs
+  > = {
     // The settings webview announcing itself: answer with the capabilities
     // this host's registry declares unsupported, then its opening data. The
     // other views share the command and want neither.
-    webviewReady: (message) => {
-      if (message.view !== 'settings') return;
-      options.postToRenderer({
-        command: SETTINGS_VIEW_COMMANDS.SET_UNSUPPORTED_COMMANDS,
-        commands: unsupportedCommands(settingsHandlers),
-      });
-      runAsync(postInitialSettingsData());
-    },
-    getMemoryData: () => onSessionFiles(postMemoryData()),
-    getMemoryPreview: (message) =>
-      onSessionFiles(postMemoryPreview(message.storagePath)),
+    webviewReady: (message) =>
+      Effect.gen(function* () {
+        if (message.view !== 'settings') return;
+        options.postToRenderer({
+          command: SETTINGS_VIEW_COMMANDS.SET_UNSUPPORTED_COMMANDS,
+          commands: unsupportedCommands(settingsHandlers),
+        });
+        yield* postInitialSettingsData();
+      }),
+    getMemoryData: () => postMemoryData(),
+    getMemoryPreview: (message) => postMemoryPreview(message.storagePath),
     openMemoryFile,
     openMemoryFolder,
     deleteMemory: (message) =>
-      onSessionFiles(
-        postMemoryMutation(memoryController.deleteMemory(message)),
-      ),
+      postMemoryMutation(memoryController.deleteMemory(message)),
     pinMemory: (message) =>
-      onSessionFiles(
-        postMemoryMutation(
-          memoryController.setMemoryPinned(message.storagePath, true),
-        ),
+      postMemoryMutation(
+        memoryController.setMemoryPinned(message.storagePath, true),
       ),
     unpinMemory: (message) =>
-      onSessionFiles(
-        postMemoryMutation(
-          memoryController.setMemoryPinned(message.storagePath, false),
-        ),
+      postMemoryMutation(
+        memoryController.setMemoryPinned(message.storagePath, false),
       ),
     ...options.credentialSettingsController.profileHandlers,
-    setModelEnabled: (message) =>
-      runtime.runPromise(updateModelEnabled(message)),
+    setModelEnabled: (message) => updateModelEnabled(message),
     setModelReasoningLevel: (message) =>
-      runtime.runPromise(
-        Effect.andThen(
-          modelSelectionController.setReasoningLevel(message),
-          postModelSelectionData(),
-        ),
+      Effect.andThen(
+        modelSelectionController.setReasoningLevel(message),
+        postModelSelectionData(),
       ),
     requestModelAccess: unsupported('Copilot models require VS Code.'),
     clearCopilotRoute: unsupported('Copilot models require VS Code.'),
@@ -606,25 +601,25 @@ export function createDesktopSettingsIpc(
     // Mirrors the extension's `GitHubSubscriptionHandlers`. The token store and
     // the subscription registry are host-agnostic (`@tools/github`); only the
     // secret prompt, the browser hand-off, and the run reveal differ here.
-    getGitHubTokenStatus: () => runtime.runPromise(postGitHubTokenStatus()),
-    setGitHubToken: () => runtime.runPromise(setGitHubToken()),
-    removeGitHubToken: () => runtime.runPromise(removeGitHubToken()),
-    openGitHubTokenUrl: async () => {
-      await options.ui.openExternal(GITHUB_TOKEN_CREATE_URL);
-    },
-    getPRSubscriptions: () => runtime.runPromise(postGitHubSubscriptions()),
+    getGitHubTokenStatus: () => postGitHubTokenStatus(),
+    setGitHubToken: () => setGitHubToken(),
+    removeGitHubToken: () => removeGitHubToken(),
+    openGitHubTokenUrl: () =>
+      Effect.tryPromise({
+        try: () => options.ui.openExternal(GITHUB_TOKEN_CREATE_URL),
+        catch: ensureError,
+      }),
+    getPRSubscriptions: () => postGitHubSubscriptions(),
     unsubscribePR: unsubscribeGitHub,
     openPRSubscriptionStream: (message) => revealRun(message.runId),
     ...options.credentialSettingsController.chatGptHandlers,
     ...options.credentialSettingsController.grokHandlers,
     getSubscriptionUsage: (message) =>
-      runtime.runPromise(
-        options.credentialSettingsController.postSubscriptionUsage(
-          message.forceRefresh ?? false,
-        ),
+      options.credentialSettingsController.postSubscriptionUsage(
+        message.forceRefresh ?? false,
       ),
     updateStateSetting: (message) =>
-      runtime.runPromise(updateStateSetting(message.key, message.value)),
+      updateStateSetting(message.key, message.value),
     ...options.toolingSettingsController.toolHandlers,
     ...options.toolingSettingsController.latexHandlers,
     // Inline criticism renders `\criticize{...}` annotations as editor
@@ -637,7 +632,7 @@ export function createDesktopSettingsIpc(
     setInlineCriticismEnabled: unsupported(
       'Inline criticism needs the VS Code editor and Problems panel.',
     ),
-    getGoalList: () => runtime.runPromise(postGoalList()),
+    getGoalList: () => postGoalList(),
     revealGoalRun: (message) => revealRun(message.runId),
   };
 
@@ -650,14 +645,11 @@ export function createDesktopSettingsIpc(
     },
 
     handleMessage(message: DesktopCommandMessage) {
-      if (!SettingsViewInboundMessageSchema.safeParse(message).success)
-        return false;
-      // A successful parse conclusively identifies this as a settings
-      // command, so claim it (true) even when the matched entry is
-      // `unsupported(...)` — the dispatcher's `false` there means "no
-      // function ran," not "not mine"; onError already surfaces the
-      // unsupported reason as visible feedback (see `onError` above).
-      dispatchSettingsViewInbound(message, settingsHandlers, onError);
+      const parsed = SettingsViewInboundMessageSchema.safeParse(message);
+      if (!parsed.success) return false;
+      runAsync(
+        settingsViewProgram(parsed.data, settingsHandlers).pipe(Effect.asVoid),
+      );
       return true;
     },
   };

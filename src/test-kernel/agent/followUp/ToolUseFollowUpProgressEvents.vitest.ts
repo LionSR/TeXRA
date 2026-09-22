@@ -116,7 +116,7 @@ describe('tool-use follow-up progress events', () => {
           lease,
         )!;
         input.seed([]);
-        expect(yield* input.poll).toMatchObject({
+        expect(yield* input.take).toMatchObject({
           followUps: [{ content: { text: 'please continue', origin: 'user' } }],
         });
         expect(sent.sent).toEqual([runId]);

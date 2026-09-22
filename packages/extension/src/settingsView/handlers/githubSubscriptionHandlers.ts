@@ -9,6 +9,7 @@ import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 import { storeCredential } from '@common/secrets/storeCredential';
+import type { SettingsViewInboundHandlerRegistry } from '@controllers/settingsView/settingsViewDispatch';
 import {
   listGitHubSubscriptionEntries,
   noActiveGitHubSubscriptionMessage,
@@ -24,7 +25,6 @@ import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   SETTINGS_VIEW_CMD,
   type SettingsMessageFor,
-  type SettingsViewInboundHandlerRegistry,
 } from '@shared/settingsView/settingsViewMessages';
 import {
   GITHUB_TOKEN_CREATE_URL,
@@ -64,15 +64,15 @@ export class GitHubSubscriptionHandlers {
     // view's boundary here rather than in the view's own registry.
     this.handlers = {
       getGitHubTokenStatus: () =>
-        ctx.run(ctx.withActiveWebview((w) => this.sendGitHubTokenStatus(w))),
-      setGitHubToken: () => ctx.run(this.handleSetGitHubToken()),
-      removeGitHubToken: () => ctx.run(this.handleRemoveGitHubToken()),
-      openGitHubTokenUrl: () => ctx.run(this.openGitHubTokenUrl()),
+        ctx.withActiveWebview((w) => this.sendGitHubTokenStatus(w)),
+      setGitHubToken: () => this.handleSetGitHubToken(),
+      removeGitHubToken: () => this.handleRemoveGitHubToken(),
+      openGitHubTokenUrl: () => this.openGitHubTokenUrl(),
       getPRSubscriptions: () =>
-        ctx.run(ctx.withActiveWebview((w) => this.sendPRSubscriptions(w))),
-      unsubscribePR: (message) => ctx.run(this.handleUnsubscribePR(message)),
+        ctx.withActiveWebview((w) => this.sendPRSubscriptions(w)),
+      unsubscribePR: (message) => this.handleUnsubscribePR(message),
       openPRSubscriptionStream: (message) =>
-        ctx.run(this.handleOpenPRSubscriptionStream(message)),
+        this.handleOpenPRSubscriptionStream(message),
     };
   }
 

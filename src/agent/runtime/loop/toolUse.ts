@@ -39,7 +39,6 @@ import {
   AgentRunStateSnapshotSchema,
   EMPTY_RUN_USAGE_TOTALS,
   RUN_OUTCOME,
-  RUN_PHASE,
   type JsonValue,
   type NormalizedUsage,
   type RetryErrorInfo,
@@ -77,6 +76,7 @@ import { recordHalt, runStopError } from './runExit';
 import { dispatchPendingResponse, type TurnContext } from './toolUseDispatch';
 import type { HttpClient } from 'effect/unstable/http';
 import type { SessionHandle } from '../SessionHandle';
+import type { ChildRunTurns } from '../childRunLoop';
 
 const IMMEDIATE_COMPACTION_FOLLOW_UP =
   'The user requested immediate context compaction. Do not start a new task; continue only far enough for the runtime to process any available context compaction, and do not claim that compaction has completed.';
@@ -102,6 +102,8 @@ export interface ToolUseFlowContext {
 export interface ToolUseStart {
   /** The caller launched this as a resume; the ledger decides what it is. */
   readonly resume: boolean;
+  /** Awaited child-turn accounting and delivery, within this run's scope. */
+  readonly turns?: ChildRunTurns<ToolUseResult, ProcessServices | Runs>;
   /** Host wiring that is live while the loop can accept an interrupt. */
   readonly attachment?: {
     attach(context: ToolUseFlowContext): void;
@@ -110,7 +112,7 @@ export interface ToolUseStart {
 }
 
 interface ToolUseResult {
-  readonly outcome: RunOutcome | typeof RUN_PHASE.WAITING;
+  readonly outcome: RunOutcome;
   readonly response: string;
   /** Workspace-relative paths of files edited by tool calls. */
   readonly files: readonly string[];
@@ -139,7 +141,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   const invoker = yield* ModelInvoker;
   const followUps = yield* FollowUps;
   const { runId, session, logger } = run;
-  const isChild = run.parentRunId !== null;
+  const isChild = () => runs.getHandle(runId)?.isChild === true;
 
   // ---------------------------------------------------------------- state
   // The latest folded state, for the halt finalizer and the host controls.
@@ -353,7 +355,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         settings: session.roots,
         resolvedToolNames,
         hasDelegationTools: hasDelegationTool(resolvedToolNames),
-        isChild,
+        isChild: isChild(),
       },
     );
     systemPrompt = prompts.systemPrompt
@@ -444,13 +446,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     readonly state: RunState;
     readonly outcome: 'completed' | 'failed' | 'cancelled';
   };
-  type LoopExit =
-    | { readonly state: RunState; readonly waiting: true }
-    | {
-        readonly state: RunState;
-        readonly waiting: false;
-        readonly outcome: RunOutcome;
-      };
+  type LoopExit = { readonly state: RunState; readonly outcome: RunOutcome };
   const usageSnapshot = (
     state: RunState,
     latestUsage: NormalizedUsage | null,
@@ -503,6 +499,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         state.phase === 'waiting' ||
         state.phase === 'halted'
       ) {
+        response = '';
         workspace.assembly.lastResponse = '';
         workspace.assembly.accumulatedOutput = '';
         state = yield* commit(
@@ -721,6 +718,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       state = yield* commit(loaded);
     }
 
+    let restoring = start.resume;
     for (;;) {
       const parked =
         state.phase === 'waiting' ||
@@ -731,28 +729,25 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           state.step === 'waiting');
       const afterError = lastError !== undefined;
       if (parked) {
-        // Input for the next turn: what the queue holds (a child's loop
-        // resumes this run once its queue has input), else (root only) a
-        // blocking wait.
-        let batch: FollowUpBatch | null = null;
-        if (isChild) {
-          if (!run.toolPolicy.stopAfterCycle) batch = yield* followUps.drain;
-          if (batch === null) {
-            if (afterError) return finish(state, RUN_OUTCOME.FAILED);
-            // A one-cycle launch stops here rather than suspending: the
-            // headless in-band child has no orchestrator to resume it, so
-            // a WAITING park would leave the run hanging.
-            if (run.toolPolicy.stopAfterCycle) {
-              return finish(state, RUN_OUTCOME.COMPLETED);
-            }
-            return { state, waiting: true } as const satisfies LoopExit;
-          }
+        // A native child waits in this same run scope, just like its root.
+        // Its delivery callback has already committed the preceding turn.
+        if (isChild() && afterError && !followUps.hasQueued())
+          return finish(state, RUN_OUTCOME.FAILED);
+        // Activation clears the visible step. Restore an already idle cursor
+        // before acknowledging it; no new model turn is needed to park it.
+        if (restoring && !followUps.hasQueued()) {
+          state = yield* commit(
+            yield* ledger.appendBatch(runId, state, [
+              stepRow(runId, state, 'waiting'),
+            ]),
+          );
         }
+        let batch: FollowUpBatch | null = null;
         if (batch === null) {
           if (afterError) {
-            yield* pauseActiveGoal();
+            if (!isChild()) yield* pauseActiveGoal();
           } else {
-            run.callbacks.onIdle?.();
+            run.callbacks.onIdle?.(state);
           }
           if (run.toolPolicy.stopAfterCycle) {
             return finish(
@@ -760,7 +755,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
               afterError ? RUN_OUTCOME.FAILED : RUN_OUTCOME.COMPLETED,
             );
           }
-          if (!afterError && !followUps.hasQueued()) {
+          if (!isChild() && !afterError && !followUps.hasQueued()) {
             const continuation = yield* maybeBuildGoalContinuation(
               session,
               runId,
@@ -793,7 +788,10 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         }
         lastError = undefined;
       }
-      const turn: TurnExit = yield* runTurn(state);
+      restoring = false;
+      const turn: TurnExit = yield* start.turns
+        ? start.turns.run(runTurn(state))
+        : runTurn(state);
       state = turn.state;
       if (turn.outcome === 'cancelled') {
         return finish(state, RUN_OUTCOME.CANCELLED);
@@ -837,30 +835,18 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           cost: cost > 0 ? cost : undefined,
         });
       }
-      if (isChild && turn.outcome === 'completed') {
-        // A one-cycle launch ends here rather than parking: its caller
-        // treats a WAITING result as an invariant failure, because the
-        // headless in-band child has no orchestrator to resume it. Checked
-        // before the park, not at the top of the next iteration, which a
-        // child never reaches.
-        if (run.toolPolicy.stopAfterCycle) {
-          return finish(state, RUN_OUTCOME.COMPLETED);
-        }
-        // One child cycle per invocation: the child loop delivers this
-        // turn's facts and owns the next wait.
-        return { state, waiting: true } as const satisfies LoopExit;
-      }
+      if (run.toolPolicy.stopAfterCycle && turn.outcome === 'completed')
+        return finish(state, turn.outcome);
+      if (turn.outcome === 'failed') continue;
+      if (start.turns) yield* start.turns.complete(result(turn.outcome, state));
     }
   });
 
   /** The terminal step of a run that ends here, then the caller's result. */
   const finish = (state: RunState, outcome: RunOutcome): LoopExit =>
-    ({ state, waiting: false, outcome }) as const;
+    ({ state, outcome }) as const;
 
-  const result = (
-    outcome: RunOutcome | typeof RUN_PHASE.WAITING,
-    at: RunState | null,
-  ): ToolUseResult => ({
+  const result = (outcome: RunOutcome, at: RunState | null): ToolUseResult => ({
     outcome,
     response,
     files: workspace.interactions.toSnapshot().edits.map((e) => e.path),
@@ -897,7 +883,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
             );
           });
         if (Exit.isSuccess(exit)) {
-          if (exit.value.waiting) return yield* release('recoverable');
           const outcome = exit.value.outcome;
           yield* halt(exit.value.state, outcome);
           return yield* release(
@@ -916,11 +901,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
 
   return yield* program.pipe(
     Effect.onExit(finalize),
-    Effect.map((loop) =>
-      loop.waiting
-        ? result(RUN_PHASE.WAITING, loop.state)
-        : result(loop.outcome, loop.state),
-    ),
+    Effect.map((loop) => result(loop.outcome, loop.state)),
     Effect.catchCause((cause) => {
       if (Cause.hasInterrupts(cause)) return Effect.failCause(cause);
       const stopped = runStopError(Cause.squash(cause));

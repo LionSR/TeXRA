@@ -1,9 +1,4 @@
-/**
- * Agent selection, directory, and team handlers.
- *
- * Handles agent enable/disable, create/customize/delete, YAML editing,
- * custom agent directories, and agent teams.
- */
+/** Agent settings: selection, files, directories, and teams. */
 import * as path from 'node:path';
 
 import { Effect, FileSystem } from 'effect';
@@ -75,6 +70,11 @@ export class AgentHandlers {
       agentCatalogAlreadyFresh?: boolean,
     ) => Effect.Effect<void, Error, ProcessServices>,
     roots: Pick<WorkspaceRoots, 'workspaceState' | 'globalState'>,
+    private readonly refreshCatalogs: () => Effect.Effect<
+      void,
+      Error,
+      ProcessServices
+    >,
   ) {
     const controllers = createSettingsAgentControllers({
       workspaceState: roots.workspaceState,
@@ -520,10 +520,7 @@ export class AgentHandlers {
             this.sendAgentSelectionData(w),
           ]),
         ),
-        Effect.tryPromise({
-          try: () => vscode.commands.executeCommand('texra.refreshAllOptions'),
-          catch: ensureError,
-        }).pipe(Effect.asVoid),
+        this.refreshCatalogs(),
       ]);
     });
   }

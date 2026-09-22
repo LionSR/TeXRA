@@ -129,17 +129,4 @@ export class RunInput {
       return { synthetic: false, followUps } as const;
     }).pipe(Effect.catchTag('Done', () => Effect.succeed(null))),
   );
-
-  /** Take a queued batch without blocking; null when none is queued. */
-  readonly poll: Effect.Effect<FollowUpBatch | null> = Effect.suspend(() =>
-    Queue.sizeUnsafe(this.queue) > 0 ? this.take : Effect.succeed(null),
-  );
-
-  /** Block until input is queued, taking nothing; false once ended. */
-  readonly ready: Effect.Effect<boolean> = Effect.suspend(() =>
-    Queue.peek(this.queue).pipe(
-      Effect.as(true),
-      Effect.catchTag('Done', () => Effect.succeed(false)),
-    ),
-  );
 }

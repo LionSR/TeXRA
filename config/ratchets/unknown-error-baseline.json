@@ -19,7 +19,7 @@
     "packages/desktop/src/main/desktopOnboardingIpc.ts": 2,
     "packages/desktop/src/main/desktopPreviewHost.ts": 5,
     "packages/desktop/src/main/desktopProgressFileActions.ts": 7,
-    "packages/desktop/src/main/desktopSettingsIpc.ts": 2,
+    "packages/desktop/src/main/desktopSettingsIpc.ts": 1,
     "packages/desktop/src/main/desktopShellIpc.ts": 2,
     "packages/desktop/src/main/desktopSupabaseAuth.ts": 2,
     "packages/desktop/src/main/desktopToolEditApproval.ts": 9,

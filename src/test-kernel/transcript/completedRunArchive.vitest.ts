@@ -39,6 +39,7 @@ import {
   cliHistoryDetailNdjsonRecord,
 } from '@cli/runtime/history';
 import { createHostRunActions } from '@controllers/session/hostRunActions';
+import { withProcessServices } from '@platform/processRuntime';
 import { Secrets } from '@platform/secrets';
 import {
   LOG_LEVELS,
@@ -682,9 +683,9 @@ describe('completedRunArchive facade', () => {
         expect(lineRange.error).toContain(
           'Conversation pagination is message-based. Use offset and limit',
         );
-        // The production resume path resolves tools from `ToolInjections`, a
-        // process service this program does not inherit from the test runtime.
-      }).pipe(Effect.provide(fakeProcessServices())),
+        // Use the installed session owner's services, including its persistent
+        // project database map and the resume path's ToolInjections.
+      }).pipe((program) => withProcessServices(testRuntime(), program)),
   );
 
   it('reports none, with no conversation evidence, when the run has no transcript', async () => {

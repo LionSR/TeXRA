@@ -39,6 +39,7 @@ import {
   type UserVariableChannels,
 } from '@shared/schemas';
 import { RunLedger } from '@shared/session/runLedger';
+import type { RunState } from '@shared/session/runStateFold';
 import { getDefaultToolRegistry } from '@tools/registry';
 import {
   buildOverlayToolRegistry,
@@ -82,16 +83,14 @@ export interface ToolPolicy {
 interface RunCallbacks {
   /** Fires on meaningful progress: todo changes, tool call milestones. */
   readonly onProgress?: (update: SubagentProgressUpdate) => void;
-  /** Root-run-only: fires at every turn boundary before the follow-up wait. */
-  readonly onIdle?: () => void;
+  /** Current folded state at an idle turn boundary, after child delivery. */
+  readonly onIdle?: (state: RunState) => void;
   /** Fires once the run's model changed and the cell holds the new binding. */
   readonly onModelChanged: (model: string) => void;
 }
 
 export interface AgentRunShape {
   readonly runId: RunId;
-  /** The launching run, or null for a root. */
-  readonly parentRunId: RunId | null;
   readonly session: SessionHandle;
   readonly config: AgentConfig;
   /** The setting with the run's resolved tool list; the loop of the run's
@@ -159,7 +158,6 @@ export class AgentRun extends Context.Service<AgentRun, AgentRunShape>()(
 ) {}
 
 interface AgentRunLayerInput {
-  readonly parentRunId: RunId | null;
   /** Caller-supplied tools available only to this run. */
   readonly tools?: readonly ITool[];
   readonly callbacks: RunCallbacks;
@@ -301,7 +299,6 @@ export const agentRunLayer = (
 
       return {
         runId,
-        parentRunId: input.parentRunId,
         session,
         config,
         setting: { ...setting, tools: resolvedTools },

@@ -2,7 +2,7 @@ import type { z } from 'zod';
 
 type CommandMessage = { command: string };
 
-type MessageHandler<T> = (data: T) => Promise<void> | void;
+type MessageHandler<T, A = void> = (data: T) => A;
 
 /**
  * Marks a command as a deliberate per-host decision rather than an
@@ -70,9 +70,9 @@ export class UnsupportedCommandError extends Error {
  * explicit {@link Unsupported} marker. There is no missing/optional case:
  * omitting a command is a compile error, not a silent runtime drop.
  */
-export type HandlerRegistry<TMessage extends CommandMessage> = {
+export type HandlerRegistry<TMessage extends CommandMessage, A = void> = {
   [K in TMessage['command']]:
-    MessageHandler<Extract<TMessage, { command: K }>> | Unsupported;
+    MessageHandler<Extract<TMessage, { command: K }>, A> | Unsupported;
 };
 
 export type DispatcherFn<TMessage extends CommandMessage> = (
@@ -178,10 +178,7 @@ export function createDispatcher<TMessage extends CommandMessage>(
       return false;
     }
 
-    const handlerResult = entry(message);
-    if (handlerResult instanceof Promise) {
-      handlerResult.catch((error) => onError?.(error));
-    }
+    entry(message);
     return true;
   };
 }

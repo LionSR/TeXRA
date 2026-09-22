@@ -1,5 +1,5 @@
 // Third-party imports
-import { Data, Effect } from 'effect';
+import { Data, type Effect } from 'effect';
 
 export interface DiffSource {
   filePath: string;
@@ -124,23 +124,6 @@ export class NotificationFailed extends Data.TaggedError('NotificationFailed')<{
   readonly message: string;
   readonly cause: unknown;
 }> {}
-
-/**
- * Recover a message-surface member from {@link NotificationFailed}. The pipe
- * target's error channel is named as exactly `NotificationFailed`, so a second
- * tag added to a member fails to compile here instead of being dropped at a
- * forked recovery.
- */
-export const catchNotice =
-  <A, R, A2, R2>(
-    onFailure: (failure: NotificationFailed) => Effect.Effect<A2, never, R2>,
-  ): ((
-    effect: Effect.Effect<A, NotificationFailed, R>,
-  ) => Effect.Effect<A | A2, never, R | R2>) =>
-  (effect) =>
-    effect.pipe(
-      Effect.catch((failure: NotificationFailed) => onFailure(failure)),
-    );
 
 /**
  * A host capable of surfacing simple, non-blocking notifications to the

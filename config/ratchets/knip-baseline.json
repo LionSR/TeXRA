@@ -824,12 +824,6 @@
       "name": "assertSupported"
     },
     {
-      "file": "src/shared/utils/dispatcher.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "isUnsupported"
-    },
-    {
       "file": "src/tools/claudeAgent.ts",
       "category": "production-dead",
       "kind": "exports",

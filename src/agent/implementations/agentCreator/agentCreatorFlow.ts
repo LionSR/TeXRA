@@ -302,7 +302,7 @@ export interface AgentCreatorUI {
   ): Effect.Effect<
     void,
     AgentCreatorUiFailed,
-    GlobalStorageFs | FileSystem.FileSystem | AgentDirectories
+    GlobalStorageFs | FileSystem.FileSystem | AgentDirectories | LanguageModel
   >;
   openCreatedFile(filePath: string): Effect.Effect<void, AgentCreatorUiFailed>;
   renderTemplate(template: string, vars: Record<string, unknown>): string;

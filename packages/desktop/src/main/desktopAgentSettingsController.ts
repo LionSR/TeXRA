@@ -16,6 +16,7 @@ import type {
 } from '@common/teams/TeamAvailabilityPreflight';
 import { type TeamAvailabilityPrompt } from '@common/teams/TeamPlan';
 import type { SignInFailed } from '@common/errors/signInFailed';
+import type { SettingsViewInboundHandlerRegistry } from '@controllers/settingsView/settingsViewDispatch';
 import {
   createSettingsAgentActions,
   FAILURE_MESSAGES,
@@ -31,14 +32,13 @@ import { applySettingsTeamRoster } from '@controllers/settingsView/SettingsTeamR
 import { ExternalOpenFailed, type MessageHost } from '@hosts/uiHosts';
 import type { StateReadFailed } from '@platform/interfaces';
 import type { AgentDirectoriesFailed } from '@platform/interfaces';
-import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
+import type { ProcessServices } from '@platform/processRuntime';
 import type { GlobalStorageFs } from '@platform/rootedFs';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { agentKey } from '@shared/schemas';
 import type { AgentCategory, AgentSource } from '@shared/schemas';
 import type {
   SettingsMessageFor,
-  SettingsViewInboundHandlerRegistry,
   SettingsViewInboundMessage,
 } from '@shared/settingsView/settingsViewMessages';
 import {
@@ -99,7 +99,6 @@ type DesktopAgentHandlers = Pick<
 
 interface DefaultDesktopAgentSettingsControllerOptions extends SettingsStatePorts {
   /** The composition root's runtime serves registry and roster programs. */
-  readonly runtime: ProcessRuntime;
   readonly registry: {
     readonly loadAgents: typeof loadAgents;
     readonly refreshAgents: typeof refresh;
@@ -204,7 +203,6 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
   private readonly notifications: DefaultDesktopAgentSettingsControllerOptions['notifications'];
   private readonly resourcesPath: string;
   private readonly agentActions;
-  private readonly runtime: ProcessRuntime;
 
   constructor(options: DefaultDesktopAgentSettingsControllerOptions) {
     const {
@@ -219,7 +217,6 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
       notifications,
       resourcesPath,
     } = options;
-    this.runtime = options.runtime;
     this.registry = registry;
     this.directory = directory;
     this.renderer = renderer;
@@ -313,7 +310,8 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
       viewRemoteAgentPrompt: (message) => this.viewRemoteAgentPrompt(message),
       setCustomAgentDir: () => this.setCustomAgentDir(),
       resetCustomAgentDir: () => this.resetCustomAgentDir(),
-      applyAgentModePreset: (message) => this.applyAgentModePreset(message),
+      applyAgentModePreset: (message) =>
+        this.applyAgentModePreset(message).pipe(Effect.mapError(ensureError)),
       saveAgentModePreset: () => this.saveAgentModePreset(),
       deleteAgentModePreset: (message) => this.deleteAgentModePreset(message),
     };
@@ -332,16 +330,14 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
   private runReported(
     failureMessage: string,
     action: Effect.Effect<void, Error, ProcessServices>,
-  ): Promise<void> {
-    return this.runtime.runPromise(
-      action.pipe(
-        Effect.catchCause((cause) =>
-          Cause.hasInterruptsOnly(cause)
-            ? Effect.failCause(cause)
-            : this.notifications.showErrorMessage(
-                `${failureMessage}: ${toErrorMessage(Cause.squash(cause))}`,
-              ),
-        ),
+  ) {
+    return action.pipe(
+      Effect.catchCause((cause) =>
+        Cause.hasInterruptsOnly(cause)
+          ? Effect.failCause(cause)
+          : this.notifications.showErrorMessage(
+              `${failureMessage}: ${toErrorMessage(Cause.squash(cause))}`,
+            ),
       ),
     );
   }
@@ -418,42 +414,41 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
 
   private updateAgentEnabled(
     message: AgentMessage<typeof SETTINGS_VIEW_COMMANDS.SET_AGENT_ENABLED>,
-  ): Promise<void> {
-    return this.runtime.runPromise(
-      this.roster
-        .setAgentEnabled({
-          category: message.category,
-          source: message.agentSource,
-          name: message.agentName,
-          enabled: message.enabled,
-        })
-        .pipe(Effect.andThen(this.refreshCatalogData())),
-    );
+  ) {
+    return this.roster
+      .setAgentEnabled({
+        category: message.category,
+        source: message.agentSource,
+        name: message.agentName,
+        enabled: message.enabled,
+      })
+      .pipe(Effect.andThen(this.refreshCatalogData()));
   }
 
   private updateAllAgentsEnabled(
     message: AgentMessage<typeof SETTINGS_VIEW_COMMANDS.SET_ALL_AGENTS_ENABLED>,
-  ): Promise<void> {
-    return this.runtime.runPromise(
-      this.catalogController
-        .setAllAgentsEnabled(message)
-        .pipe(Effect.andThen(this.refreshCatalogData())),
-    );
+  ) {
+    return this.catalogController
+      .setAllAgentsEnabled(message)
+      .pipe(Effect.andThen(this.refreshCatalogData()));
   }
 
-  private async setCustomAgentDir(): Promise<void> {
-    const selectedPath = await this.directory.selectCustomAgentDirectory();
-    if (!selectedPath) return;
+  private setCustomAgentDir() {
+    return Effect.gen({ self: this }, function* () {
+      const selectedPath = yield* Effect.tryPromise({
+        try: () => this.directory.selectCustomAgentDirectory(),
+        catch: ensureError,
+      });
+      if (!selectedPath) return;
 
-    await this.runtime.runPromise(
-      this.directoryController.setCustomDir(selectedPath).pipe(
+      yield* this.directoryController.setCustomDir(selectedPath).pipe(
         Effect.andThen(
           Effect.all([this.postCustomAgentDir(), this.refreshCatalogData()], {
             concurrency: 'unbounded',
           }),
         ),
-      ),
-    );
+      );
+    });
   }
 
   /**
@@ -471,32 +466,29 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
       .pipe(Effect.andThen(this.refreshCatalogData()));
   }
 
-  private resetCustomAgentDir(): Promise<void> {
-    return this.runtime.runPromise(
-      this.directoryController.resetCustomDir().pipe(
-        Effect.andThen(
-          Effect.all([this.postCustomAgentDir(), this.refreshCatalogData()], {
-            concurrency: 'unbounded',
-          }),
-        ),
-        Effect.asVoid,
+  private resetCustomAgentDir() {
+    return this.directoryController.resetCustomDir().pipe(
+      Effect.andThen(
+        Effect.all([this.postCustomAgentDir(), this.refreshCatalogData()], {
+          concurrency: 'unbounded',
+        }),
       ),
+      Effect.asVoid,
     );
   }
 
-  private async openAgentFolder(): Promise<void> {
-    const result = await this.runtime.runPromise(
-      this.directoryController.planOpenAgentFolder('custom'),
-    );
-    if (!result.ok) {
-      await this.runtime.runPromise(
-        this.notifications.showErrorMessage(
+  private openAgentFolder() {
+    return Effect.gen({ self: this }, function* () {
+      const result =
+        yield* this.directoryController.planOpenAgentFolder('custom');
+      if (!result.ok) {
+        yield* this.notifications.showErrorMessage(
           'No custom agent directory is available',
-        ),
-      );
-      return;
-    }
-    await this.runtime.runPromise(this.directory.openPath(result.path));
+        );
+        return;
+      }
+      yield* this.directory.openPath(result.path);
+    });
   }
 
   /**
@@ -505,93 +497,89 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
    * agent-creator flow. Only the template path is wired here; AI creation needs
    * the creator flow's own UI, which this host does not present yet.
    */
-  private async createAgent(
+  private createAgent(
     data: AgentMessage<typeof SETTINGS_VIEW_COMMANDS.CREATE_AGENT>,
-  ): Promise<void> {
-    if (data.mode !== 'template') {
-      await this.runtime.runPromise(
-        this.notifications.showErrorMessage(
+  ) {
+    return Effect.gen({ self: this }, function* () {
+      if (data.mode !== 'template') {
+        yield* this.notifications.showErrorMessage(
           'Creating an agent with AI is not available in the desktop app yet. Choose "From template" instead.',
-        ),
-      );
-      return;
-    }
+        );
+        return;
+      }
 
-    const name = await this.runtime.runPromise(
-      this.prompts.promptText({
+      const name = yield* this.prompts.promptText({
         title: `New ${templateAgentCategoryLabel(data.category)} agent`,
         prompt: templateAgentNamePrompt(data.category),
-      }),
-    );
-    if (!name) return;
+      });
+      if (!name) return;
 
-    const invalid = this.directoryController.validateTemplateName(name);
-    if (invalid) {
-      await this.runtime.runPromise(
-        this.notifications.showErrorMessage(invalid),
+      const invalid = this.directoryController.validateTemplateName(name);
+      if (invalid) {
+        yield* this.notifications.showErrorMessage(invalid);
+        return;
+      }
+
+      // The custom agent directory is the user's choice, outside every root,
+      // so it is created through the process filesystem.
+      yield* this.runReported(
+        'Failed to create custom agent',
+        Effect.gen({ self: this }, function* () {
+          const customDir = yield* this.directory.getCustomAgentDirectory();
+          const fs = yield* FileSystem.FileSystem;
+          yield* fs.makeDirectory(customDir, { recursive: true });
+
+          const plan = this.directoryController.planTemplateAgent({
+            category: data.category,
+            name,
+            customDir,
+          });
+
+          const written = yield* writeTemplateAgentFile(
+            plan,
+            this.resourcesPath,
+          ).pipe(
+            Effect.mapError(
+              (cause) =>
+                new AgentSettingsActionFailed({
+                  member: 'writeTemplateAgentFile',
+                  message: `The agent template could not be written: ${toErrorMessage(cause)}`,
+                  cause,
+                }),
+            ),
+          );
+          if (!written.ok) {
+            yield* this.notifications.showErrorMessage(written.message);
+            return;
+          }
+
+          yield* this.directory.openPath(plan.filePath).pipe(
+            Effect.mapError(
+              (cause) =>
+                new ExternalOpenFailed({
+                  kind: 'path',
+                  target: plan.filePath,
+                  message: `The new agent definition could not be opened: ${toErrorMessage(cause)}`,
+                  cause,
+                }),
+            ),
+          );
+          yield* this.notifications.showInfoMessage(
+            `Created custom agent: ${plan.fileName}`,
+          );
+          yield* this.refreshAfterAgentMutation().pipe(
+            Effect.mapError(
+              (cause) =>
+                new AgentSettingsActionFailed({
+                  member: 'refreshAfterMutation',
+                  message: `The agent catalog could not be reloaded: ${toErrorMessage(cause)}`,
+                  cause,
+                }),
+            ),
+          );
+        }),
       );
-      return;
-    }
-
-    // The custom agent directory is the user's choice, outside every root,
-    // so it is created through the process filesystem.
-    await this.runReported(
-      'Failed to create custom agent',
-      Effect.gen({ self: this }, function* () {
-        const customDir = yield* this.directory.getCustomAgentDirectory();
-        const fs = yield* FileSystem.FileSystem;
-        yield* fs.makeDirectory(customDir, { recursive: true });
-
-        const plan = this.directoryController.planTemplateAgent({
-          category: data.category,
-          name,
-          customDir,
-        });
-
-        const written = yield* writeTemplateAgentFile(
-          plan,
-          this.resourcesPath,
-        ).pipe(
-          Effect.mapError(
-            (cause) =>
-              new AgentSettingsActionFailed({
-                member: 'writeTemplateAgentFile',
-                message: `The agent template could not be written: ${toErrorMessage(cause)}`,
-                cause,
-              }),
-          ),
-        );
-        if (!written.ok) {
-          yield* this.notifications.showErrorMessage(written.message);
-          return;
-        }
-
-        yield* this.directory.openPath(plan.filePath).pipe(
-          Effect.mapError(
-            (cause) =>
-              new ExternalOpenFailed({
-                kind: 'path',
-                target: plan.filePath,
-                message: `The new agent definition could not be opened: ${toErrorMessage(cause)}`,
-                cause,
-              }),
-          ),
-        );
-        yield* this.notifications.showInfoMessage(
-          `Created custom agent: ${plan.fileName}`,
-        );
-        yield* this.refreshAfterAgentMutation().pipe(
-          Effect.mapError(
-            (cause) =>
-              new AgentSettingsActionFailed({
-                member: 'refreshAfterMutation',
-                message: `The agent catalog could not be reloaded: ${toErrorMessage(cause)}`,
-                cause,
-              }),
-          ),
-        );
-      }),
-    );
+    });
   }
 
   /**
@@ -599,65 +587,67 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
    * the desktop has no editor surface, so the config is written to a temporary
    * file and opened with the OS handler.
    */
-  private async viewRemoteAgentPrompt(
+  private viewRemoteAgentPrompt(
     data: AgentMessage<typeof SETTINGS_VIEW_COMMANDS.VIEW_REMOTE_AGENT_PROMPT>,
-  ): Promise<void> {
-    await this.runReported(
-      'Failed to view remote agent prompt',
-      Effect.gen({ self: this }, function* () {
-        const config = yield* fetchRemoteAgentPromptYaml(data.agentName).pipe(
-          Effect.mapError(
-            (cause) =>
-              new AgentSettingsActionFailed({
-                member: 'getRemoteAgentPrompt',
-                message: `The hosted agent prompt could not be fetched: ${toErrorMessage(cause)}`,
-                cause,
-              }),
-          ),
-        );
-        if (config == null) {
-          yield* this.notifications.showErrorMessage(
-            'Authentication required. Sign in using "TeXRA: Sign In".',
+  ) {
+    return Effect.gen({ self: this }, function* () {
+      yield* this.runReported(
+        'Failed to view remote agent prompt',
+        Effect.gen({ self: this }, function* () {
+          const config = yield* fetchRemoteAgentPromptYaml(data.agentName).pipe(
+            Effect.mapError(
+              (cause) =>
+                new AgentSettingsActionFailed({
+                  member: 'getRemoteAgentPrompt',
+                  message: `The hosted agent prompt could not be fetched: ${toErrorMessage(cause)}`,
+                  cause,
+                }),
+            ),
           );
-          return;
-        }
+          if (config == null) {
+            yield* this.notifications.showErrorMessage(
+              'Authentication required. Sign in using "TeXRA: Sign In".',
+            );
+            return;
+          }
 
-        const target = path.join(
-          yield* Effect.tryPromise({
-            try: () => createTexraTempDir('texra-agent-prompt-'),
-            catch: (cause) =>
-              new AgentSettingsActionFailed({
-                member: 'createTempDir',
-                message: `A temporary directory could not be created: ${toErrorMessage(cause)}`,
-                cause,
-              }),
-          }),
-          `${data.agentName}.yaml`,
-        );
-        const fs = yield* FileSystem.FileSystem;
-        yield* fs.writeFileString(target, config);
-        yield* this.directory.openPath(target).pipe(
-          Effect.mapError(
-            (cause) =>
-              new ExternalOpenFailed({
-                kind: 'path',
-                target,
-                message: `The hosted agent prompt could not be opened: ${toErrorMessage(cause)}`,
-                cause,
-              }),
-          ),
-        );
-      }),
-    );
+          const target = path.join(
+            yield* Effect.tryPromise({
+              try: () => createTexraTempDir('texra-agent-prompt-'),
+              catch: (cause) =>
+                new AgentSettingsActionFailed({
+                  member: 'createTempDir',
+                  message: `A temporary directory could not be created: ${toErrorMessage(cause)}`,
+                  cause,
+                }),
+            }),
+            `${data.agentName}.yaml`,
+          );
+          const fs = yield* FileSystem.FileSystem;
+          yield* fs.writeFileString(target, config);
+          yield* this.directory.openPath(target).pipe(
+            Effect.mapError(
+              (cause) =>
+                new ExternalOpenFailed({
+                  kind: 'path',
+                  target,
+                  message: `The hosted agent prompt could not be opened: ${toErrorMessage(cause)}`,
+                  cause,
+                }),
+            ),
+          );
+        }),
+      );
+    });
   }
 
-  private async applyAgentModePreset(
+  private applyAgentModePreset(
     message: AgentMessage<
       typeof SETTINGS_VIEW_COMMANDS.APPLY_AGENT_MODE_PRESET
     >,
-  ): Promise<void> {
-    await this.runtime.runPromise(
-      applySettingsTeamRoster(message.presetId, {
+  ) {
+    return Effect.gen({ self: this }, function* () {
+      yield* applySettingsTeamRoster(message.presetId, {
         catalog: this.catalogController,
         loadLocalCatalog: () =>
           this.registry.loadAgents({ includeRemote: false }),
@@ -681,55 +671,53 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
               { concurrency: 'unbounded' },
             );
           }),
-      }),
-    );
+      });
+    });
   }
 
-  private async saveAgentModePreset(): Promise<void> {
-    const name = await this.runtime.runPromise(
-      this.prompts.promptText({
+  private saveAgentModePreset() {
+    return Effect.gen({ self: this }, function* () {
+      const name = yield* this.prompts.promptText({
         title: 'Save agent team',
         prompt: 'Name for the new team',
-      }),
-    );
-    if (!name?.trim()) return;
-    await this.runtime.runPromise(this.registry.loadAgents());
-    const preset = await this.runtime.runPromise(
-      this.catalogController.saveCurrentPreset(name),
-    );
-    await this.runtime.runPromise(this.postAgentModePresets());
-    await this.runtime.runPromise(this.onCatalogChanged());
-    await this.runtime.runPromise(
-      this.notifications.showInfoMessage(`Saved team "${preset.name}"`),
-    );
+      });
+      if (!name?.trim()) return;
+      yield* this.registry.loadAgents();
+      const preset = yield* this.catalogController.saveCurrentPreset(name);
+      yield* this.postAgentModePresets();
+      yield* this.onCatalogChanged();
+      yield* this.notifications.showInfoMessage(`Saved team "${preset.name}"`);
+    });
   }
 
-  private async deleteAgentModePreset(
+  private deleteAgentModePreset(
     message: AgentMessage<
       typeof SETTINGS_VIEW_COMMANDS.DELETE_AGENT_MODE_PRESET
     >,
-  ): Promise<void> {
-    const { presetId } = message;
-    const target = await this.runtime.runPromise(
-      this.catalogController.getCustomPreset(presetId),
-    );
-    if (!target) {
-      await this.runtime.runPromise(
-        this.notifications.showErrorMessage(`Unknown custom team: ${presetId}`),
-      );
-      return;
-    }
+  ) {
+    return Effect.gen({ self: this }, function* () {
+      const { presetId } = message;
+      const target = yield* this.catalogController.getCustomPreset(presetId);
+      if (!target) {
+        yield* this.notifications.showErrorMessage(
+          `Unknown custom team: ${presetId}`,
+        );
+        return;
+      }
 
-    const confirmed = await this.prompts.confirm({
-      title: 'Delete team?',
-      message: `Delete team "${target.name}"?`,
+      const confirmed = yield* Effect.tryPromise({
+        try: () =>
+          this.prompts.confirm({
+            title: 'Delete team?',
+            message: `Delete team "${target.name}"?`,
+          }),
+        catch: ensureError,
+      });
+      if (!confirmed) return;
+
+      yield* this.catalogController.deleteCustomPreset(presetId);
+      yield* this.postAgentModePresets();
+      yield* this.onCatalogChanged();
     });
-    if (!confirmed) return;
-
-    await this.runtime.runPromise(
-      this.catalogController.deleteCustomPreset(presetId),
-    );
-    await this.runtime.runPromise(this.postAgentModePresets());
-    await this.runtime.runPromise(this.onCatalogChanged());
   }
 }

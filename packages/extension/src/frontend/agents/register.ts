@@ -9,6 +9,7 @@ import { createWorkspaceAgentRosterController, refresh } from '@agent/index';
 import type { SessionHandle } from '@agent/runtime';
 import { emitAppSignal } from '@eventBus/AppSignals';
 import { withLogChannel } from '@logger/effectLog';
+import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import type { AgentSource } from '@shared/schemas';
 
 const CHANNEL = 'AgentRegister';
@@ -59,12 +60,8 @@ export const promptToAddAgentToConfig = Effect.fnUntraced(function* (
   // The write above rewrites the selection as `custom`, retiring any applied
   // team, so an open settings view needs the same notice `apply_team` sends.
   emitAppSignal('agentRosterChanged', undefined);
-  yield* Effect.tryPromise({
-    try: async () =>
-      vscode.commands.executeCommand('texra.refreshAllOptions', {
-        agentCatalogAlreadyFresh: true,
-      }),
-    catch: (cause: unknown) => cause,
-  });
+  yield* ProgressViewProvider.getInstance()?.refreshCatalogs({
+    agentCatalogAlreadyFresh: true,
+  }) ?? Effect.void;
   vscode.window.showInformationMessage(`Agent "${agentName}" is now visible`);
 });

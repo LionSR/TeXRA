@@ -280,7 +280,6 @@ function agentRunTestLayer(init: LoopInit) {
       const scope = yield* Effect.scope;
       return {
         runId: init.runId,
-        parentRunId: null,
         session: init.session,
         config: AgentConfigSchema.parse({
           agent: 'chat',

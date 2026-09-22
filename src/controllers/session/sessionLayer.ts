@@ -45,7 +45,7 @@ import {
 } from '@agent/runtime/toolInjection';
 import { EditorModel } from '@agent/runtime/run/modelBinding';
 import { createSessionApprovals } from '@agent/runtime/runApprovalQueue';
-import { makeParkedRuns, RunRegistry } from '@agent/runtime/runRegistry';
+import { RunRegistry } from '@agent/runtime/runRegistry';
 import { runLedgerLayer } from '@agent/runtime/RunLedger';
 import { sessionEventsLayer, tailFrom } from '@agent/runtime/SessionEvents';
 import { ModelRetryGate } from '@agent/runtime/ModelRetryGate';
@@ -99,6 +99,7 @@ import { SessionInputs } from '@shared/session/sessionInputs';
 
 import {
   Database,
+  ProjectDatabases,
   type DatabaseOpenFailed,
   type DatabaseReadFailed,
   type GlobalDatabase,
@@ -114,6 +115,7 @@ import { StreamLogStore } from '@transcript/StreamLogStore';
 import { inquiryRecordsLayer } from './inquiryRecords';
 import { updateCheckRecordsLayer } from './updateCheckRecords';
 import { databaseLayer } from './Database';
+import { projectDatabaseLayer } from './projectDatabase';
 import { collectPendingDeletions } from './deletionCleanup';
 import { sessionRequests } from './SessionRequests';
 import { sweepLeftoverRuns } from './sweepLeftoverRuns';
@@ -343,7 +345,6 @@ const sessionHandleLayer = (
           : settleTo(last.commit).pipe(Effect.as(rows));
       };
       const now = () => SubscriptionRef.getUnsafe(eventLog.observedCommit);
-      const parkedRuns = yield* makeParkedRuns();
       const graph = (session: SessionHandle): SessionGraph => {
         // The session's approval state, built here rather than by the handle
         // so that its runs and its request handler share the one instance and
@@ -486,7 +487,6 @@ const sessionHandleLayer = (
             finalizeRun: (input) => finalizeRun(session, input),
             acquireRunClaim: (runId) =>
               session.acquireClaims(qualifyAggregateId('run', runId)),
-            parked: parkedRuns,
           }),
           // The session's requests: the approval state above and the handler
           // that admits on the root graph's log.
@@ -670,17 +670,24 @@ const sessionHandleLayer = (
 /** The runtime graph of one root (PRD 7.3): the root-scoped services the
  *  handle is built over. */
 const sessionGraphLayer = (key: SessionKey) => {
+  const database: Layer.Layer<
+    Database,
+    DatabaseOpenFailed,
+    ProjectDatabases | ProcessIdentity | WorkspaceRoots
+  > =
+    key.open.transcriptMode?.kind === 'ephemeral'
+      ? databaseLayer('ephemeral')
+      : Layer.effect(
+          Database,
+          Effect.flatMap(ProjectDatabases, (databases) =>
+            RcMap.get(databases, key.storage),
+          ),
+        );
   return ownerLiveness.pipe(
     Layer.provideMerge(SessionViewService.layer),
     Layer.provideMerge(sessionInputsLayer),
     Layer.provideMerge(runLedgerLayer),
-    Layer.provideMerge(
-      sessionEventsLayer.pipe(
-        Layer.provideMerge(
-          databaseLayer(key.open.transcriptMode?.kind ?? 'persistent'),
-        ),
-      ),
-    ),
+    Layer.provideMerge(sessionEventsLayer.pipe(Layer.provideMerge(database))),
     Layer.provideMerge(
       Layer.mergeAll(
         LocalRuntimeSource.layer,
@@ -696,11 +703,10 @@ const sessionGraphLayer = (key: SessionKey) => {
  * The complete session of one root: the handle over the root's graph, the
  * handle alone being the entry's service. `Layer.fresh`: the layer map builds
  * every key's entry through one memo map, and layers memoize by reference, so
- * without it the root-scoped layers would be built once and every root on the
- * process would share one log and one fold. The `fresh` covers the sources and
- * the database and nothing above them: every process service the entry reads —
- * the identity first among them, a real effect — comes from the runtime's own
- * context, built once for the process.
+ * without it every root would share one log and one fold. The graph's sources
+ * and ephemeral database are fresh; a persistent graph retains its database
+ * from `ProjectDatabases`, shared with the project's application state. That
+ * resource family and the process identity come from the runtime's context.
  */
 const sessionLayer = (
   key: SessionKey,
@@ -1023,7 +1029,7 @@ interface ProcessRuntimeOptions {
   readonly lean: Layer.Layer<
     LeanLanguageServices,
     never,
-    FileSystem.FileSystem | Path.Path
+    FileSystem.FileSystem | Path.Path | AppState
   >;
   /**
    * The host's usage log (`usageLogLayer`), stamped with its version and
@@ -1132,17 +1138,16 @@ export function installProcessRuntime({
   const runtime = withForkFailureReporting(
     ManagedRuntime.make(
       Sessions.layer(held, release).pipe(
+        Layer.provideMerge(projectDatabaseLayer),
         // The usage log's own lifetime: its sender and ticker run as long as
         // this runtime does, and its finalizer drains the queue while the
         // account plane below is still up. Ahead of `services` in the chain so
         // that plane and the HTTP client reach it.
         Layer.provideMerge(usageLog),
-        Layer.provideMerge(services),
-        // The Lean pool is one per process — its servers are shared across
-        // roots — as is the cross-workspace storage view below it: every
-        // session shares that root, so nothing below resolves a global-storage
-        // path against a root of its own.
+        // The editor's Lean port also reads this process's AppState.
         Layer.provideMerge(lean),
+        Layer.provideMerge(services),
+        // Every session shares this process's global-storage view.
         Layer.provideMerge(globalStorageFsLayer(globalStorage)),
         // The records' handle on that same root, for the same reason: one
         // connection and one change poll per process, outside the entry.

@@ -82,7 +82,6 @@ import {
   RUN_OUTCOME,
   type RunId,
 } from '@shared/schemas';
-import { testParkedFibers } from '@test/support/runHandleFixtures';
 import { fakeProcessServices } from '@test/support/setupPlatform';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -120,7 +119,6 @@ const SESSION = {
     isLive: () => mocks.runActive(),
     // This fixture never parks a run at WAITING; the cases that do build a
     // real registry of their own.
-    isParked: () => false,
     // The registry's local application of a durable detach, over the one
     // handle this fixture tracks.
     detachChildren: vi.fn((_parent: RunId, children: readonly RunId[]) => {
@@ -240,9 +238,9 @@ describe('runAgent run ownership', () => {
       }),
   );
 
-  it.effect(
-    'refuses a second resume while the first has only tracked its launch handle',
-    () =>
+  it.effect.each(['fresh', 'resume'] as const)(
+    'refuses a %s launch while the first has only tracked its launch handle',
+    (kind) =>
       Effect.gen(function* () {
         let finishRead!: (value: null) => void;
         mocks.readRunEnd.mockImplementationOnce(
@@ -254,7 +252,7 @@ describe('runAgent run ownership', () => {
         const first = yield* Effect.forkChild(launch(), {
           startImmediately: true,
         });
-        expect(yield* Effect.flip(launch())).toMatchObject({
+        expect(yield* Effect.flip(launch({ kind }))).toMatchObject({
           message: `Run is already running: ${RUN_ID}`,
         });
         const firstHandler = trackedHandle;
@@ -362,72 +360,6 @@ describe('runAgent run ownership', () => {
       });
       expect(mocks.executeAgent).not.toHaveBeenCalled();
     }),
-  );
-
-  it.effect(
-    'stops a resume through a kill of its parked predecessor, which still tears down',
-    () =>
-      Effect.gen(function* () {
-        // A real registry: the kill goes through `runs.kill`, the parked
-        // handle carries the launch's stop, and the parked fiber's
-        // termination must still run before the stop settles.
-        const runs = new RunRegistry({
-          runView: () => undefined,
-          commit: () => Effect.void,
-          approvals: createSessionApprovals(),
-          finalizeRun: ((input: { readonly outcome: string }) =>
-            Effect.succeed({ ok: true, outcome: input.outcome })) as never,
-          acquireRunClaim: () => Effect.succeed(Effect.void),
-          parked: testParkedFibers(),
-        });
-        const parked = new RunHandle(
-          {
-            runId: RUN_ID,
-            identity: { kind: 'agent', agent: CONFIG.agent },
-            category: 'toolUse',
-          },
-          null,
-        );
-        runs.track(parked);
-        let tornDown = false;
-        const parkStopped = yield* Deferred.make<void>();
-        yield* runs.park(
-          parked,
-          parkStopped,
-          Effect.sync(() => {
-            tornDown = true;
-          }),
-        );
-        let finishRead!: (value: null) => void;
-        mocks.readRunEnd.mockImplementationOnce(
-          () =>
-            new Promise<null>((resolve) => {
-              finishRead = resolve;
-            }),
-        );
-
-        const fiber = yield* Effect.forkChild(
-          launchRun(
-            { kind: 'resume', config: CONFIG, runId: RUN_ID },
-            { session: { ...(SESSION as object), runs } as never },
-          ),
-          { startImmediately: true },
-        );
-        const stop = runs.kill(RUN_ID);
-        yield* stop.settlement;
-        finishRead(null);
-        const exit = yield* Effect.exit(Fiber.join(fiber));
-
-        expect({
-          accepted: stop.accepted(),
-          tornDown,
-          launch: Exit.isFailure(exit) && Cause.squash(exit.cause),
-        }).toMatchObject({
-          accepted: true,
-          tornDown: true,
-          launch: { name: 'AbortError' },
-        });
-      }),
   );
 
   it.effect(

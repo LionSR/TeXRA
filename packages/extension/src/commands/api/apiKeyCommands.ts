@@ -52,8 +52,6 @@ function createProfileKeyController(
       ),
     getProviderKeyUrl: (provider) => getProviderKeyUrl(stores, provider),
     refreshAfterKeyChange,
-    reportFailure: (message, error) =>
-      showLoggedErrorMessage(CHANNEL, message, error).pipe(Effect.asVoid),
   });
 }
 
@@ -148,11 +146,13 @@ export function setApiKey(
       );
       if (!apiKey) return;
 
-      yield* createProfileKeyController(
-        stores,
-        secrets,
-        refreshAfterKeyChange,
-      ).commitProviderKey(target, apiKey);
+      yield* createProfileKeyController(stores, secrets, refreshAfterKeyChange)
+        .commitProviderKey(target, apiKey)
+        .pipe(
+          Effect.catchTag('ProviderKeyActionFailed', (error) =>
+            showLoggedErrorMessage(CHANNEL, error.message, error.cause),
+          ),
+        );
     }),
   );
 }
@@ -179,10 +179,12 @@ export function removeApiKey(
       return;
     }
 
-    yield* createProfileKeyController(
-      stores,
-      secrets,
-      refreshAfterKeyChange,
-    ).removeProviderKey(provider);
+    yield* createProfileKeyController(stores, secrets, refreshAfterKeyChange)
+      .removeProviderKey(provider)
+      .pipe(
+        Effect.catchTag('ProviderKeyActionFailed', (error) =>
+          showLoggedErrorMessage(CHANNEL, error.message, error.cause),
+        ),
+      );
   });
 }

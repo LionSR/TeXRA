@@ -5,7 +5,10 @@ import { Cause, Effect, Exit, Layer, Scope } from 'effect';
 import { createPlatformAgentDirectories } from '@agent/index';
 import { createSupabaseAuth, type SupabaseAuthShape } from '@auth/SupabaseAuth';
 import { bootstrapHost } from '@controllers/hostBootstrap';
-import { openAppStateStore } from '@controllers/session/appStateStore';
+import {
+  openAppStateStore,
+  openProjectStateStore,
+} from '@controllers/session/appStateStore';
 import {
   disposeProcessRuntime,
   installProcessRuntime,
@@ -99,8 +102,8 @@ export interface ElectronPlatformInitResult {
    * anchor its dialogs to and no window exists at install time.
    */
   setupAuth: DesktopSetupAuth;
-  /** Release fallback state after the fallback session is disposed. */
-  closeProcessState: Effect.Effect<void>;
+  /** The fallback project scope, holding its state and its eventual session. */
+  processScope: Scope.Closeable;
 }
 
 export async function initializeElectronPlatform(
@@ -202,14 +205,14 @@ export async function initializeElectronPlatform(
     globalDatabase: globalDatabaseLayer(storage.getGlobalStoragePath()),
   });
 
-  const stateScope = Scope.makeUnsafe();
+  const processScope = Scope.makeUnsafe();
   const initialized = await runtime.runPromiseExit(
     Effect.gen(function* () {
       const globalStateStore = yield* AppState;
       const agentDirectories = yield* AgentDirectories;
-      const workspaceStateStore = yield* openAppStateStore(
+      const workspaceStateStore = yield* openProjectStateStore(
         storage.getStoragePath(),
-      ).pipe(Scope.provide(stateScope));
+      ).pipe(Scope.provide(processScope));
       repairLaunchPath();
       const processRoots = createNodeWorkspaceRoots({
         workspacePath: undefined,
@@ -238,13 +241,13 @@ export async function initializeElectronPlatform(
         resourcesPath,
         runtime,
         setupAuth,
-        closeProcessState: Scope.close(stateScope, Exit.void),
+        processScope,
       };
     }),
   );
   if (Exit.isSuccess(initialized)) return initialized.value;
   await Effect.runPromise(
-    Scope.close(stateScope, initialized).pipe(
+    Scope.close(processScope, initialized).pipe(
       Effect.ensuring(disposeProcessRuntime(runtime)),
     ),
   );

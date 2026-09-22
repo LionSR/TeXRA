@@ -1,12 +1,13 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join, relative } from 'node:path';
-import { Cause, Effect, Exit, FileSystem, Layer } from 'effect';
+import { Cause, Effect, Exit, FileSystem, Layer, Scope } from 'effect';
 import { it as effectIt } from '@effect/vitest';
 
 import { describe, expect, it, vi } from 'vitest';
 import * as agentRuntime from '@agent/runtime';
 import { globalDatabaseLayer } from '@controllers/session/Database';
+import { projectDatabaseLayer } from '@controllers/session/projectDatabase';
 import { openDesktopProjectRegistry } from '@desktop/main/desktopProjects.js';
 import { openDesktopProjectRecords } from '@desktop/main/desktopProjectRecords.js';
 import { JsonStore } from '@platform/defaults/jsonStore';
@@ -94,6 +95,7 @@ describe('desktop composition root and launch environment', () => {
         }),
       ).pipe(
         Effect.provide(nodePlatformLayer),
+        Effect.provide(projectDatabaseLayer),
         Effect.provide(ProcessIdentity.layer(processOwnerId(undefined))),
       ),
   );
@@ -133,6 +135,7 @@ describe('desktop composition root and launch environment', () => {
           const registry = yield* openDesktopProjectRegistry({
             dataRoot: profile,
             processRoots: host.roots,
+            processScope: yield* Scope.make(),
             globalConfigStore: config,
             records,
             stores: { ...host.roots, secrets: host.secrets },
@@ -171,9 +174,14 @@ describe('desktop composition root and launch environment', () => {
           ).toBe(true);
           expect(registry.active()).toBe(successor);
           expect(yield* records.read).toEqual([successor.root]);
+          const reopened = yield* registry.open(root);
+          expect(yield* reopened.roots.workspaceState.get('scope-test')).toBe(
+            'live',
+          );
         }),
       ).pipe(
         Effect.provide(nodePlatformLayer),
+        Effect.provide(projectDatabaseLayer),
         Effect.provide(ProcessIdentity.layer(processOwnerId(undefined))),
       ),
   );
@@ -215,6 +223,7 @@ describe('desktop composition root and launch environment', () => {
         const registry = yield* openDesktopProjectRegistry({
           dataRoot: profile,
           processRoots: host.roots,
+          processScope: yield* Scope.make(),
           globalConfigStore: config,
           records,
           stores: { ...host.roots, secrets: host.secrets },
@@ -257,6 +266,7 @@ describe('desktop composition root and launch environment', () => {
       }),
     ).pipe(
       Effect.provide(nodePlatformLayer),
+      Effect.provide(projectDatabaseLayer),
       Effect.provide(ProcessIdentity.layer(processOwnerId(undefined))),
     ),
   );
