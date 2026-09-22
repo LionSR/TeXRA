@@ -140,7 +140,12 @@ each settling its runs and flushing its artifacts, and then disposes the
 runtime they ran on. So two overlapping scopes over one platform are safe,
 the first one out ends nothing the second is still using, and a later program
 in the same process composes again over the platform already installed. A
-composition that found a host's own installation ends nothing however its
+scope arriving during the last holder's shutdown waits for disposal to finish
+before composing the next runtime. Acquisition and its release registration
+are uninterruptible, so cancellation while waiting completes that handoff and
+releases the hold through the scope.
+
+A composition that found a host's own installation ends nothing however its
 holds end: those sessions are the host's, and killing its live runs is not
 this package's to do.
 
