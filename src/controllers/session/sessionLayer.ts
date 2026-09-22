@@ -323,9 +323,8 @@ const sessionHandleLayer = (
           Stream.runHead,
           Effect.raceFirst(
             Deferred.await(tailEnded).pipe(
-              // Invariant: the tail outlives every publication it settles.
-              // A wait on a tail that ended can never be answered, so it
-              // dies, with the read failure that ended the tail, if any.
+              // The tail outlives every publication it settles; if it ends,
+              // pending waits die with its read failure.
               Effect.orDie,
               Effect.andThen(
                 Effect.die(
@@ -351,11 +350,8 @@ const sessionHandleLayer = (
       const now = () => SubscriptionRef.getUnsafe(eventLog.observedCommit);
       const parkedRuns = yield* makeParkedRuns();
       const graph = (session: SessionHandle): SessionGraph => {
-        // The session's approval state, built here rather than by the handle
-        // so that its runs and its request handler share the one instance and
-        // the session's scope owns it. The authority publishes a stream's full
-        // policy snapshot on every effective bypass change, as does
-        // `SessionHandle.setApprovalPolicy` when the policy half moves.
+        // The session scope owns one approval state shared by its runs and
+        // request handler. Effective changes publish the full policy snapshot.
         const approvals = createSessionApprovals((runId) =>
           session.publishApprovalPolicy(runId),
         );
@@ -508,10 +504,8 @@ const sessionHandleLayer = (
             agentResume,
           ),
           now,
-          // The teardown runs at once, before the release: an entry another
-          // open or close is still borrowing is released only when that borrow
-          // ends, and the session refuses new runs from the moment it is asked
-          // to close. A teardown failure still releases the entry.
+          // Teardown immediately refuses new runs; release waits for borrowers.
+          // A teardown failure still releases the entry.
           close: () =>
             unwindSession(session).pipe(Effect.ensuring(release(key))),
         };
@@ -553,10 +547,8 @@ const sessionHandleLayer = (
         }),
         (session) =>
           unwindSession(session).pipe(
-            // Settlement reports what the session's own publications left
-            // behind. The release still has to finish, so that report is logged
-            // here rather than escaping `Scope.close` and failing the
-            // `invalidate` or `close` that asked for it.
+            // Log settlement residue here so release still finishes instead of
+            // failing the `invalidate` or `close` that asked for it.
             Effect.ensuring(
               session
                 .settlePublications()

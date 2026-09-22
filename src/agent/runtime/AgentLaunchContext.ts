@@ -278,15 +278,9 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
     yield* failIfLaunchStopped(input.stopped);
     const fullConfig = input.config;
     const interactions = input.session.interactions;
-    // Resolve by the source the delegation captured at validation time, so launch
-    // lands on the exact entry validation/display resolved. When no source is
-    // pinned (direct launches, restored records), resolution falls to the
-    // category-scoped rule validation uses; never blind name resolution.
-    // Single launch resolution rule (see resolveAgentForLaunch): exact
-    // (source, name) when the delegation pinned one, else the same visible-set
-    // resolver validation uses, else the full set for internal agents. Never
-    // blind source-priority on a bare name, so launch can't diverge from
-    // what was validated.
+    // Resolve the exact source captured by delegation. Otherwise use the same
+    // category-visible set as validation, or the full set for internal agents;
+    // never use source priority on a bare name and diverge from validation.
     const resolved = resolveAgentForLaunch(
       input.session.roots,
       fullConfig.agentCategory,

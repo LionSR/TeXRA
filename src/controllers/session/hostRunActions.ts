@@ -302,8 +302,7 @@ export const createHostRunActions = (
       function* (runId: RunId) {
         const config = yield* readConfig(runId);
         if (!config) {
-          // No messaging port here, so the refusal is at least recorded
-          // rather than dropped: the toolbar action does nothing.
+          // Record the refusal because this toolbar path has no messaging port.
           yield* Effect.logWarning(
             `Workflow action skipped for stream ${runId}: the run has no persisted config.`,
           ).pipe(withLogChannel(CHANNEL));
@@ -393,8 +392,7 @@ export const createHostRunActions = (
       providers: API_PROVIDERS,
       readKey: (provider) => lookupApiKeyUncached(secrets, provider),
       hasUsableKey: (provider) => hasUsableApiKey(secrets, provider),
-      // A host that could not ask reaches the controller as
-      // `ApiKeyPromptFailed`, the port's own failure.
+      // A host that could not ask returns the port's `ApiKeyPromptFailed`.
       promptForApiKey: (provider) => ports.promptForApiKey(provider),
       isRetryPending,
       triggerRetry: (runId, requestId) =>

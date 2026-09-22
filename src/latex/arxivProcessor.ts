@@ -42,10 +42,8 @@ interface ExtractOptions {
   timeout?: number;
 }
 
-// The per-attempt deadline covers the entire request including body
-// streaming, unlike the old axios timeout which only covered header receipt.
-// Use a generous deadline so large tarballs (10s+ on a slow link) can
-// complete.
+// Cover the entire request, including body streaming, while allowing large
+// tarballs to complete on a slow link.
 const DOWNLOAD_TIMEOUT_MS = 120_000; // 2 min
 
 /** Retries after the first download attempt. */
