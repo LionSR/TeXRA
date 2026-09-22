@@ -328,7 +328,7 @@ describe('native agent launch activation', () => {
         trace: new TraceEmitter(),
         dispose: vi.fn(),
       });
-      mocks.buildVars.mockResolvedValueOnce({});
+      mocks.buildVars.mockReturnValueOnce(Effect.succeed({}));
 
       const session = createTestSession();
       yield* Effect.addFinalizer(() => session.dispose());
